@@ -1,0 +1,23 @@
+{
+  "name": "@reticlehq/vibe-builder-demo",
+  "version": "2.14.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "preview": "vite",
+    "build": "vite build",
+    "verify": "node qa/verify-live.mjs",
+    "bench": "node qa/bench.mjs",
+    "repair": "node qa/repair-loop.mjs",
+    "live": "node qa/qa-agent-live.mjs",
+    "self-test": "node qa/self-test.mjs",
+    "demo:all": "node qa/demo-all.mjs"
+  },
+  "dependencies": {
+    "@reticlehq/browser": "workspace:*"
+  },
+  "devDependencies": {
+    "@reticlehq/server": "workspace:*",
+    "vite": "^8.2.1"
+  }
+}

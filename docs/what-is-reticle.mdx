@@ -1,0 +1,63 @@
+---
+title: What is Reticle?
+sidebarTitle: What is Reticle
+description: Reticle is a verification layer for AI coding agents. It runs a dev-only SDK inside your running web app so an agent can prove a change works, instead of guessing. What it is, what it is not, and what it needs.
+icon: circle-question
+---
+
+**Reticle is a verification layer for AI coding agents.** It embeds a dev-only SDK inside your running web application and exposes what that application is actually doing, its DOM, network calls, routing, console, and framework state, as structured tools an agent can call over MCP. The agent names the consequence it expects, performs an action, and gets back a verdict: pass, fail, or an honest "couldn't tell", with the evidence and the `file:line` to open.
+
+It exists because an agent that writes code cannot otherwise tell whether that code works. Reading the diff proves nothing. Unit tests do not run the application. A screenshot shows a page that renders perfectly over a failed request.
+
+## How it works, in three parts
+
+1. **An SDK inside the app.** Dev-only, stripped from production builds, added by a build plugin. It instruments the DOM, network, routing, console, animations, and your state library.
+2. **A local bridge.** The SDK connects over a WebSocket to a daemon on your machine. The daemon never starts or manages your dev server. It attaches to the app that is running. If none is, the agent is the one told to start it, using your project's own dev script, in the background, and saying so.
+3. **An MCP server.** The daemon exposes the app to your agent as tools. `reticle_snapshot` to look, `reticle_act_and_wait` to act and prove in one call, `reticle_state` and `reticle_network` to observe, `reticle_assert` to check.
+
+Everything stays on your machine. No application code, DOM, network traffic, or console output leaves it.
+
+## What Reticle is not
+
+This is the section most people need, because Reticle sits next to several familiar categories without being any of them.
+
+**Not a browser automation framework.** Playwright, Cypress and Selenium drive a browser from the outside and are excellent at it. Reticle runs inside the page you already have open. If you want to script a browser, use Playwright. Reticle is what an agent uses to answer "did the thing I just changed actually work?"
+
+**Not a replacement for your test suite.** Unit and integration tests still do their job. Reticle covers the layer they structurally cannot reach: behaviour that only exists when the whole application runs. Many teams use both, and Reticle is often the thing that catches a suite passing over a broken app.
+
+**Not a screenshot or visual regression tool.** It can take screenshots, but the point is that it does not need to. Verdicts come from predicates over real events, a request with a status, a state path, a signal your code fired, so they do not break when a button moves four pixels. If pixel-perfect visual diffing is your goal, a dedicated visual testing service fits better.
+
+**Not a monitoring or observability product.** Reticle is a development-time tool aimed at localhost. It is not an APM, not error tracking, and it does not watch production.
+
+**Not an accessibility auditor.** `reticle_snapshot` addresses elements by role and name, which is not the same as auditing contrast, focus order, or screen reader behaviour. Use a dedicated accessibility tool for that.
+
+**Not an AI model, and not an agent.** Reticle has no model of its own and makes no decisions. It gives an agent you already use a way to see the running app. Your agent, your model, your keys.
+
+**Not a hosted service that receives your application data.** The daemon runs on your machine and the SDK runs in your browser. Anonymous product analytics are sent unless you opt out, and they never include your code or your application's data. See the [Telemetry Policy](https://www.reticle.sh/legal/telemetry).
+
+**Not a way to make a failing check pass.** A verdict of `unknown` means Reticle drove the app and could not tell. It is deliberately not rounded up to a pass, because a verification tool that flatters you is worse than none.
+
+## What Reticle needs
+
+Honest constraints, so you can tell in a minute whether it fits:
+
+- **A web application you can run locally**, with its dev server. Reticle attaches; it does not start one.
+- **A build step it can hook**, or two lines added by hand. Vite, Next.js, Remix and Astro are proven by gates in the repository. The SDK is framework agnostic and usually connects elsewhere, with reduced source mapping.
+- **An agent that speaks MCP.** Claude Code, Cursor, Codex, Copilot, Windsurf, OpenCode and others.
+- **Node 20 or newer.**
+
+Electron and Tauri desktop applications are supported, including the IPC boundary a browser-based tool cannot observe at all.
+
+## How it compares
+
+Side by side with the tools people ask about most:
+
+- [Reticle vs Playwright MCP](/vs-playwright-mcp)
+- [Reticle vs Chrome DevTools MCP](/vs-chrome-devtools-mcp)
+- [Reticle vs screenshots](/vs-screenshots)
+
+## Where to go next
+
+- [Quickstart](/quickstart) gets a real verdict out of your own app in about five minutes.
+- [Why Reticle](/why-reticle) is the argument, with the evidence and the cases where it loses.
+- [For agents](/for-agents) is written for the agent rather than for you.

@@ -1,0 +1,64 @@
+---
+title: reticle stop
+description: Stop the Reticle daemon on a port, escalating from SIGTERM to SIGKILL if it will not go.
+icon: circle-stop
+---
+
+`reticle stop` reads the pid recorded for the port and stops that process.
+
+```bash
+npx @reticlehq/server stop [--port N] [--quiet]
+```
+
+## Flags
+
+| Flag | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `--port N` | number | `4400` (or `RETICLE_PORT`, or the port in `.reticle.json`) | Which daemon to stop |
+| `--quiet` | boolean | `false` | Print nothing. For scripts that stop a daemon that may not be running |
+
+## How it stops
+
+1. `SIGTERM` first, then poll every 100ms.
+2. Still alive after 5 seconds: `SIGKILL`. A daemon that ignores `SIGTERM` is wedged, which is the one situation this command exists for, and giving up there left the port held and a human reaching for `kill -9`.
+3. Still alive 2 seconds after that: report `reticle_daemon_stop_timeout` with the pid and exit `1`. Surviving `SIGKILL` means the pid is not yours to kill, or it is an unkillable zombie. Neither is retryable.
+
+## What it prints
+
+| Event | When |
+| --- | --- |
+| `reticle_daemon_stopped` | It stopped. Carries `port`, `pid`, and `escalated: true` if it took a `SIGKILL` |
+| `reticle_daemon_not_running` | No live pid for that port. The stale pid file is removed |
+| `reticle_daemon_stop_timeout` | It survived everything. Exits `1` |
+
+Real capture, stopping a port with no live pid recorded for it. It exits `0`, because "already not running" is the state you asked for:
+
+```
+{"t":"2026-08-15T18:43:43.943Z","event":"reticle_daemon_not_running","port":4499}
+```
+
+With `--quiet` that same run prints nothing at all and still exits `0`.
+
+## Exit codes
+
+| Code | Meaning                        |
+| ---- | ------------------------------ |
+| `0`  | Stopped, or was not running    |
+| `1`  | The process survived `SIGKILL` |
+
+<Warning>
+  Do not stop a daemon with `lsof -ti tcp:4400 | xargs kill -9`. That pattern matches the agent's
+  own `reticle mcp` proxy as well as the daemon and takes both down. Use this command, or [`reticle
+  kill`](/cli/kill).
+</Warning>
+
+## When this is not enough
+
+`stop` needs the pid Reticle recorded. If the pid file is stale, was never written, or the port is held by a daemon from another checkout, `stop` reports `reticle_daemon_not_running` about a port that is demonstrably occupied. [`reticle kill`](/cli/kill) asks the **port** instead and is the command for that case.
+
+## Worked example
+
+```bash
+npx @reticlehq/server stop --port 4400 --quiet && npx @reticlehq/server serve --port 4400
+npx @reticlehq/server restart --port 4400   # the same thing, honest about each half
+```

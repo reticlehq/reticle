@@ -1,0 +1,109 @@
+---
+title: 'Why Reticle: seeing is not believing'
+sidebarTitle: Why Reticle
+description: AI-written code fails by looking correct. Reticle reads the running program instead of the pixels, so a silent failure stops being invisible.
+icon: lightbulb
+---
+
+**Use Reticle because AI-written code fails by looking correct.** A screenshot cannot show you whether a request fired, what status it returned, whether application state changed, or whether one click sent one request or two. Reticle reads the running program instead of the pixels, so those silent failures stop being invisible.
+
+Software has always had bugs. What changed is the _kind_ of bug that reaches you.
+
+A human writing code by hand produces errors that announce themselves: a stack trace, a red screen, a test that goes red. An agent writing code produces something more dangerous: a change that looks completely correct, renders beautifully, and does nothing. The page is fine. The data never saved.
+
+We call it a **false green**, and it is the defining failure mode of the AI-coding era.
+
+## What a false green actually looks like
+
+<CardGroup cols={2}>
+  <Card title="Mock data" icon="ghost">
+    The POST returns `200`. The row appears in the table. Reload the page and it's gone. Nothing was
+    ever persisted.
+  </Card>
+  <Card title="Dead handler" icon="plug-circle-xmark">
+    The button has an `onClick`. The `onClick` calls a function. The function was never wired to the
+    store. It looks connected all the way down.
+  </Card>
+  <Card title="Double submit" icon="clone">
+    One click, two POSTs. The user gets charged twice. Nothing on screen is wrong.
+  </Card>
+  <Card title="Silent validation" icon="triangle-exclamation">
+    The form accepts `"abc"` as a quantity and cheerfully sends it to your database.
+  </Card>
+</CardGroup>
+
+Every one of these renders as a perfectly nice page. A screenshot approves them all. So does an agent that just took the screenshot, and the agent is the one telling you it's done.
+
+## Why looking harder doesn't fix it
+
+The instinct is to give the agent better eyes: a screenshot, a vision model, a full accessibility tree. This does not work, for a reason that has nothing to do with model quality.
+
+**The information is not in the picture.** Whether a request fired, what status it returned, whether application state changed, whether the console logged an error, whether one click sent one request or two, none of that is visible. You cannot see a network call. You cannot photograph a state mutation. Asking a better model to look more carefully at a screenshot of a page whose bug is non-visual is asking it to hallucinate more confidently.
+
+Reticle takes the other route. It runs **inside** your app and reads the program: network, state, console, routing, framework internals, and the app's own success signals. The answer is not interpreted from pixels. It is read from the running program, which means it is deterministic and the same every time.
+
+## The evidence
+
+We built eleven scenarios: ten bugs, plus a control where nothing is wrong, so anything flagged on the control counts as a false positive. Each tool got the same app, the same moment, the same task.
+
+| Tool | Bugs caught | Detection accuracy | Avg tokens per look | Verification efficiency |
+| --- | --- | --- | --- | --- |
+| **Reticle** | **10 / 10** | **1.00** | **815** | **12.27** |
+| Playwright MCP | 9 / 10 | 0.91 | 1,292 | 6.97 |
+| Chrome DevTools MCP | 8 / 10 | 0.82 | 758 | 10.55 |
+
+Observing one real dashboard once, with no bug involved:
+
+| Tool | Snapshot | Network | Observe total | Can it assert success? |
+| --- | --- | --- | --- | --- |
+| **Reticle** | 678 | 345 | **1,023** | Yes, via the app's own signal. 46 tokens, un-fakeable |
+| Chrome DevTools MCP | 1,105 | 252 | 1,357 | No. DOM and network only |
+| Playwright MCP | 1,522 | 671 | 2,193 | No. DOM and network only |
+
+That last column is the one that matters more than the token counts. The other tools can _describe_ what a page looks like. Only Reticle can check whether the thing the app itself considers success actually happened.
+
+<Card title="How every number was measured" icon="chart-column" href="/benchmarks">
+  The full method, the raw data, and the scenarios where Reticle comes second.
+</Card>
+
+## Where Reticle loses
+
+A benchmark that only shows you the wins is an advertisement wearing a lab coat. Ours doesn't.
+
+- **Sites you don't own.** Reticle needs a dev-only SDK inside the app. If you're driving a third party's website, use Playwright. That is what it's for, and it's excellent at it.
+- **Pixels.** Reticle reads the program, not the screen. If your bug is "the button is three pixels too far left", Reticle is the wrong instrument.
+- **Chrome DevTools MCP is cheaper per look.** 758 tokens against our 815. It catches fewer bugs, so the efficiency works out in our favour, but on raw cost per glance it wins.
+
+## What we have not proven
+
+Being honest here costs us something, and we'd rather pay it than have you find out later.
+
+We ran a controlled test of whether an agent equipped with Reticle _fixes_ more bugs than one without it. **It did not show a fix-rate improvement.** The benchmark was confounded in ways we can point at, and we don't consider the question settled. But we are not going to claim a number we didn't measure.
+
+What Reticle demonstrably does is catch failures that are invisible to the alternatives, and hand back the file and line to go fix. Whether that translates into a better fix rate is a separate question, and we're still working on measuring it properly.
+
+## When you should use it
+
+<CardGroup cols={2}>
+  <Card title="A good fit" icon="circle-check">
+    You own the app. An agent edits it. You want the agent to prove its work rather than assure you
+    of it. React gets you source pointers on top.
+  </Card>
+  <Card title="A bad fit" icon="circle-xmark">
+    You're testing a site you don't control, you need pixel-level visual regression, or your app has
+    no dev build to instrument.
+  </Card>
+</CardGroup>
+
+## The one-sentence version
+
+Your agent already tells you it works. Reticle is the part that checks. And, more usefully, the part that says "I couldn't tell" instead of guessing.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Five minutes to your first real verdict.
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/architecture">
+    How it reads the program without slowing your app down.
+  </Card>
+</CardGroup>

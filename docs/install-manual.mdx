@@ -1,0 +1,196 @@
+---
+title: 'Manual install: by hand, on purpose'
+sidebarTitle: Manual install
+description: Wire Reticle by hand. Register the MCP server for your agent, add the SDK, and connect it. Every step init automates, written out.
+icon: screwdriver-wrench
+---
+
+**Installing Reticle by hand is two independent halves: register the MCP server so your agent gets the `reticle_*` tools, then add the SDK to your app so there is something for those tools to talk to.** You need both. `npx @reticlehq/server init` automates all of it, so use this page for the steps it marked `⚠`, or for an agent it does not know how to register.
+
+Do only the first half and the tools appear but every call reports no session. Do only the second and your app connects to a daemon nobody is asking questions.
+
+You want both. Take them in that order.
+
+<Tip>
+  You only need this page for steps [`reticle init`](/install-agentic) marked `⚠`, or for an agent
+  it doesn't register automatically. It handles Claude Code and Cursor on its own.
+</Tip>
+
+## Part 1. Register the MCP server
+
+There is no config file that all agents share. Each harness has its own path and its own schema, so write only the one you actually use.
+
+| Tool | File | Root key | `type` needed? |
+| --- | --- | --- | --- |
+| Claude Code | `~/.claude.json` (prefer the CLI below) | `mcpServers` | no |
+| Cursor | `~/.cursor/mcp.json` | `mcpServers` | no |
+| VS Code | `.vscode/mcp.json` | `servers` | no |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` | `mcpServers` | no |
+| OpenCode | `opencode.json` | `mcp` | `"local"` required |
+| Codex CLI | `.codex/config.toml` | `[mcp_servers.reticle]` | no |
+| Zed | `~/.config/zed/settings.json` | `context_servers` | no |
+
+### Claude Code
+
+Register once, globally, and every project has it:
+
+```bash
+claude mcp add reticle -s user -- npx @reticlehq/server mcp
+```
+
+Confirm with `claude mcp list`. `reticle` should be there.
+
+If the `claude` CLI isn't available, merge one key into `mcpServers` in `~/.claude.json`. It is a large stateful file, so **merge, never rewrite**:
+
+```json
+{
+  "mcpServers": {
+    "reticle": {
+      "command": "npx",
+      "args": ["@reticlehq/server", "mcp"]
+    }
+  }
+}
+```
+
+### Cursor, VS Code, Windsurf
+
+Same shape, different file and root key. Cursor and Windsurf use `mcpServers`; VS Code uses `servers`:
+
+```json
+{
+  "mcpServers": {
+    "reticle": {
+      "command": "npx",
+      "args": ["@reticlehq/server", "mcp"]
+    }
+  }
+}
+```
+
+### Codex CLI
+
+TOML, in `.codex/config.toml`. This is the one `init` cannot write for you:
+
+```toml
+[mcp_servers.reticle]
+command = "npx"
+args = ["@reticlehq/server", "mcp"]
+```
+
+### OpenCode
+
+Note the flat command array and the required `type`:
+
+```json
+{
+  "mcp": {
+    "reticle": {
+      "type": "local",
+      "command": ["npx", "@reticlehq/server", "mcp"]
+    }
+  }
+}
+```
+
+<Warning>
+  **Restart your agent afterwards.** It read its server list at startup and nothing re-reads it.
+  `/mcp` manages servers that are already loaded, so it cannot discover a new one. Restart Claude
+  Code, reload the Cursor window, or press Start in `.vscode/mcp.json`.
+</Warning>
+
+## Part 2. Wire the SDK into your app
+
+### Vite
+
+```bash
+npm i -D @reticlehq/react @reticlehq/vite-plugin
+```
+
+```ts
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { reticle } from '@reticlehq/vite-plugin';
+
+export default defineConfig({
+  plugins: [reticle(), react()],
+});
+```
+
+That's the whole web install. The plugin stamps source locations onto elements. The thing that turns a DOM node into `src/components/Login.tsx:81`. And injects `connect()` so you can't forget it.
+
+### Anything without the plugin
+
+If you're not on Vite or Next, call `connect()` yourself, guarded so it never reaches production:
+
+```ts
+import { reticle } from '@reticlehq/browser';
+
+if (import.meta.env.DEV) reticle.connect();
+```
+
+<Note>
+  `connect()` is dev-only by design. Guard it with whatever your bundler gives you:
+  `import.meta.env.DEV`, `process.env.NODE_ENV !== 'production'`, or a build flag. Reticle also
+  self-guards, but two locks on a door that leads to your users is a reasonable number.
+</Note>
+
+### Tauri. and the step whose failure is silent
+
+The frontend is identical to any web app. The CSP is not optional:
+
+```json
+{
+  "app": {
+    "security": {
+      "csp": "default-src 'self' ipc: http://ipc.localhost; connect-src 'self' ipc: http://ipc.localhost ws://localhost:4400 ws://127.0.0.1:4400"
+    }
+  }
+}
+```
+
+<Warning>
+  Tauri's default CSP blocks the bridge WebSocket **before it opens**. Your app runs perfectly and
+  simply never connects, with no error to go on. Keep `ipc: http://ipc.localhost` in `connect-src`,
+  Tauri v2 needs it for `invoke` itself. And drop the `ws://` entries from your release config.
+</Warning>
+
+Screenshots and headless mode need the Rust crate, which is versioned independently of the npm packages:
+
+```toml
+[dependencies]
+reticle-tauri = "2.14"
+```
+
+```rust
+tauri::Builder::default()
+    .invoke_handler(tauri::generate_handler![reticle_tauri::reticle_capture])
+    .on_page_load(reticle_tauri::on_page_load)
+```
+
+IPC observation needs nothing on the Rust side. An `invoke('load_todos')` already reaches Reticle as `ipc://load_todos`.
+
+<Card title="Electron, and the rest of desktop" icon="display" href="/desktop">
+  Main-process and renderer wiring, IPC observation, and what differs from the web install.
+</Card>
+
+## Part 3. Prove it
+
+```bash
+npx @reticlehq/server status
+```
+
+A session in the output means the app connected. That. Not a tick in a checklist, is the install finished.
+
+If it says nothing connected, the usual cause is a port disagreement between your app and the daemon. The browser console will carry `[Reticle] this page could not open a websocket to …` naming the exact address it tried; set it explicitly with `VITE_RETICLE_WS_URL=ws://localhost:4400/reticle` or `reticle.connect({ url })`.
+
+Still stuck? `npx @reticlehq/server doctor` checks Chromium, the daemon and the port in one command.
+
+<CardGroup cols={2}>
+  <Card title="Instrument your app" icon="wrench" href="/instrumentation">
+    Register stores, signals and testids so your verdicts get stronger than "the DOM changed".
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Drive your first flow and read a real verdict.
+  </Card>
+</CardGroup>

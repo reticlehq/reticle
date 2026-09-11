@@ -1,0 +1,121 @@
+---
+title: reticle init
+description: Wire Reticle into the project in the current directory, registering the MCP server and installing the SDK.
+icon: wand-magic-sparkles
+---
+
+`reticle init` is the one command a person runs before anything else. It inspects the directory it is standing in, works out the framework, and writes every piece of wiring Reticle needs: the MCP server registration, the agent rule files, the dev dependencies, `.reticle.json`, and the bundler plugin.
+
+```bash
+npx @reticlehq/server init [--dry-run] [--port N] [--no-mcp] [--no-install] [--app <dir>] [--yes]
+```
+
+## Flags
+
+| Flag | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `--dry-run` | boolean | `false` | Print the full plan and write nothing |
+| `--port N` | number | unset (resolves to `4400`) | Bridge port to write into the config |
+| `--no-mcp` | boolean | `false` (MCP is registered) | Skip the MCP registration **and** the agent rule files (`CLAUDE.md`, `AGENTS.md`, `.cursor`) and the `/reticle` command |
+| `--no-install` | boolean | `false` (deps are installed) | Do not run the install. The step becomes `[⚠]` and prints the `add -D` command for you to run by hand, rather than vanishing from the plan |
+| `--app <dir>` | string | unset | Pick which app to wire in a monorepo, without changing directory |
+| `--yes` | boolean | `false` | Accepted for scripting. `init` has no interactive prompts today, so it is a no-op |
+
+<Warning>
+  `--no-mcp` skips more than the server registration. The agent rule files and the `/reticle`
+  command go with it, because all three only make sense once the tools are reachable.
+</Warning>
+
+## What it prints
+
+A plan, one line per step, each with a status mark: `✓` written, `·` already in place or left alone, `⚠` needs a hand, `–` deliberately skipped by a flag. Captured from a real `--dry-run` inside `apps/bench-app`:
+
+```
+reticle init (dry run, no files written)
+  in /Users/you/reticle/apps/bench-app
+
+  [·] MCP server (Claude, global) → global (claude user scope)
+      reticle already registered (install once, used by every project)
+  [·] MCP server (Cursor, global) → /Users/you/.cursor/mcp.json
+      reticle already in Cursor global config
+  [⚠] MCP server (Codex CLI) → /Users/you/.codex/config.toml
+      add this to /Users/you/.codex/config.toml by hand:
+      [mcp_servers.reticle]
+      command = "npx"
+      args = ["@reticlehq/server", "mcp"]
+
+  [✓] Agent verification rule → CLAUDE.md
+      teach the agent to verify features with Reticle after building them
+  [✓] Agent verification rule → AGENTS.md
+      teach the agent to verify features with Reticle after building them
+  [✓] Full agent rules → RETICLE.md
+      the reference the always-loaded rule points at (when NOT to verify, recovery, feedback)
+  [✓] The /reticle command → .claude/commands/reticle.md
+      type /reticle to verify one flow in the browser
+  [✓] Install dependencies → package.json
+      pnpm add -D @reticlehq/react@2.8.0 @reticlehq/vite-plugin@2.8.0
+  [✓] Reticle config → .reticle.json
+      write project config (framework + port)
+  [✓] Vite plugin → vite.config.ts
+      add reticle() to plugins (also injects connect())
+  [·] Capabilities + store → src/reticle-dev.ts
+      file exists, left alone, it is yours to edit
+
+Restart `vite`.
+```
+
+Below the plan it also prints the two things that actually finish the install: restart your agent so it re-reads its MCP server list, then run `npx @reticlehq/server status` to confirm the app connected.
+
+With `--no-mcp`, the whole MCP and rules group collapses into one skipped line:
+
+```
+  [–] MCP server (global) → global (claude user scope)
+      --no-mcp ... also skips the agent rule files (CLAUDE.md / AGENTS.md / .cursor) and the /reticle command
+```
+
+Run from a workspace root with several apps, it refuses to guess, names them, and exits `1`:
+
+```
+Several apps found in this workspace. Re-run `reticle init` inside the one you want:
+  packages/next
+  packages/vite-plugin
+  apps/atlas
+  apps/bench-app
+  apps/electron-smoke
+  apps/large-dom-bench
+  apps/next-smoke
+  apps/tauri-smoke
+  apps/vibe-builder-demo
+
+Or name one without changing directory:  reticle init --app packages/next
+```
+
+Given `--app`, it says which directory it moved to before printing the plan:
+
+```
+No app in this directory ... wiring apps/bench-app instead.
+```
+
+In the two captures above, the punctuation that separates the two halves of the sentence is shown as `...`.
+
+## Exit codes
+
+| Code | Meaning                                                                                 |
+| ---- | --------------------------------------------------------------------------------------- |
+| `0`  | The plan ran. Steps marked `⚠` still need a hand, and do not change the code            |
+| `1`  | Init failed, an unknown flag was passed, or several apps were found and none was chosen |
+
+An unknown flag is rejected by name: `reticle init --bogus` prints `unknown argument '--bogus'`, then the full usage block, and exits `1`.
+
+## Worked example
+
+```bash
+cd apps/web
+npx @reticlehq/server init --dry-run     # read the plan first
+npx @reticlehq/server init               # then run it
+npx @reticlehq/server status             # confirm the app actually connected
+```
+
+<Card title="The install, step by step" icon="wand-magic-sparkles" href="/install-agentic">
+  What each step writes and how to read the four status marks.
+</Card>

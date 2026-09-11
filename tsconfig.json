@@ -1,0 +1,13 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/init" },
+    { "path": "packages/browser" },
+    { "path": "packages/server" },
+    { "path": "packages/test" },
+    { "path": "packages/react" },
+    { "path": "packages/babel-plugin" },
+    { "path": "packages/vite-plugin" }
+  ]
+}

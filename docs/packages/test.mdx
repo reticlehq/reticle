@@ -1,0 +1,119 @@
+---
+title: '@reticlehq/test'
+description: The Reticle spec runner for CI, driving the tools directly with no MCP or stdio in the loop.
+icon: vial
+---
+
+`@reticlehq/test` is Reticle's spec runner for CI. It turns an interactive session into a suite that runs on every pull request, without an agent and without paying model tokens to re-derive the same checks. Install it when you want unattended verification; skip it if you only ever drive Reticle interactively through MCP.
+
+**Licensed under `SEE LICENSE IN LICENSE`. Depends on `@reticlehq/core` and `@reticlehq/server`. Optional peer dependency: `vitest ^3.2.6`.**
+
+```bash
+npm i -D @reticlehq/test
+```
+
+## Why it exists
+
+Driving interactively is reconnaissance. At some point you want the same checks to run unattended. This package invokes the tool layer directly, so a spec is the same evidence an agent would have gathered, minus the model.
+
+## Booting a session
+
+```ts
+import { bootSession, createTestContext, runSpecs, printSummary } from '@reticlehq/test';
+
+const run = await bootSession({ driveUrl: 'http://localhost:5173' });
+const { results, summary } = await runSpecs({
+  invoke: run.invoke,
+  buildContext: (invoke) => createTestContext(invoke),
+  now: () => Date.now(),
+});
+printSummary(summary, results, (line) => process.stdout.write(`${line}\n`));
+await run.close();
+```
+
+### `BootOptions`
+
+| Option        | Type                                  | Default                 |
+| ------------- | ------------------------------------- | ----------------------- |
+| `driveUrl`    | `string`                              | required                |
+| `headless`    | `boolean`                             | `true`                  |
+| `port`        | `number`                              | the default bridge port |
+| `reticleRoot` | `string`                              | `cwd()/.reticle`        |
+| `now`         | `() => number`                        | `Date.now`              |
+| `buildDeps`   | `(server: RunningServer) => ToolDeps` | built in                |
+
+`bootSession` resolves to `BootedRun`: `{ invoke: ToolInvoker; close: () => Promise<void> }`.
+
+## Writing specs
+
+```ts
+import { reticleTest, type TestContext } from '@reticlehq/test';
+
+reticleTest('login grants a session', async (spec) => {
+  const t = spec as TestContext;
+  await t.fill('email', 'user@example.com');
+  await t.fill('password', 'hunter2');
+  await t.actAndWait('login-submit', 'click', { kind: 'signal', name: 'auth:granted' });
+  await t.expectNet('POST', '/api/session', 200);
+  await t.expectNoConsoleErrors();
+});
+```
+
+`reticleTest(name: string, fn: SpecFn): void` registers into a module-level registry. `register`, `getRegistered` and `clearRegistry` are exported for anyone driving it themselves.
+
+<Note>
+  `SpecFn` types its argument as `SpecContext`, which declares only `invoke`. The runner actually
+  hands the spec whatever `buildContext` returned, which is a `TestContext`. In plain JavaScript
+  this is invisible; in TypeScript you get `Property 'fill' does not exist on type 'SpecContext'`
+  unless you narrow it as above.
+</Note>
+
+## The test context
+
+`createTestContext(invoke: ToolInvoker, options?: TestContextOptions): TestContext`, where `TestContextOptions` is `{ sessionId?: string; defaultTimeoutMs?: number }` and the timeout defaults to `DEFAULT_ASSERT_TIMEOUT_MS`.
+
+| Method | Signature |
+| --- | --- |
+| `act` | `(testid: string, action: ActionType, args?: Record<string, unknown>) => Promise<void>` |
+| `fill` | `(testid: string, value: string) => Promise<void>` |
+| `actAndWait` | `(testid: string, action: ActionType, until: Predicate) => Promise<void>` |
+| `expectSignal` | `(name: string, dataMatches?: Record<string, unknown>) => Promise<void>` |
+| `expectNet` | `(method: string, urlContains: string, status?: number) => Promise<void>` |
+| `expectElement` | `(query: ElementQuery, state?: ElementState) => Promise<void>` |
+| `expectText` | `(contains: string) => Promise<void>` |
+| `expectAbsent` | `(query: ElementQuery) => Promise<void>` |
+| `expectNoConsoleErrors` | `() => Promise<void>` |
+| `state` | `(storeOrRef: string) => Promise<unknown>` |
+| `expectInputModeReal` | `() => Promise<void>` |
+| `invoke` | The raw `ToolInvoker` |
+| `clock` | `TestClock` |
+
+## Running and reporting
+
+| Export | Signature |
+| --- | --- |
+| `runOne` | `(spec: ReticleSpec, opts: RunnerOptions) => Promise<SpecResult>` |
+| `runSpecs` | `(opts: RunnerOptions) => Promise<{ results: SpecResult[]; summary: RunSummary }>` |
+| `summarize` | `(results: readonly SpecResult[]) => RunSummary` |
+| `printSummary` | `(summary: RunSummary, results: readonly SpecResult[], print: (line: string) => void) => void`. The sink is injected, never `console` |
+| `toJUnitXml` / `writeJUnit` | JUnit output for CI |
+
+`RunnerOptions` is `{ invoke; buildContext; now; print?; specs? }`. `RunSummary` is `{ total, passed, failed, skipped, ok }`.
+
+## Saved flows as specs
+
+A recorded flow becomes a spec without being rewritten:
+
+`flowToSpec`, `flowsAsSpecs`, `registerFlowSpecs`, with `assertSuccess`, `successToPredicate`, and the `FlowSpec`, `FlowSpecOptions` and `FlowsAsSpecsOptions` types. Malformed flows raise `FlowMalformedError`.
+
+## Errors and control flow
+
+`ReticleSkip` and `isSkip` for skipping, `ReticleAssertionError` with an `AssertionDetail`, `ReticleQueryEmptyError` when a query matched nothing.
+
+Constants: `TestStatus`, `SpecKind`, `SpecOutcome`, `SpecMessage`, `PredicateKind`, `STATUS_GLYPH`, `SUMMARY_FOOTER_PREFIX`, `JUnit`, `DEFAULT_JUNIT_SUITE_NAME`, `SKIP_REASON_REAL_INPUT`, `PROBE_TESTID`, `FLOW_LOAD_ERROR_PREFIX`, `DEFAULT_ASSERT_TIMEOUT_MS`.
+
+Also exported: `resolveTestid`, and the standalone `expectInputModeReal`, `InputModeTracker` and `readInputMode`.
+
+<Card title="Turning a session into a suite" icon="flask" href="/testing">
+  Writing specs that bind to signals rather than DOM structure.
+</Card>

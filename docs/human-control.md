@@ -1,0 +1,69 @@
+---
+title: 'Human-in-the-loop control'
+description: 'Watch the agent’s live transcript, steer it mid-run, or end the session, all from inside the page itself.'
+icon: hand
+---
+
+With the presenter on (`reticle.connect({ present: true })`), the floating panel in your page lets you watch the agent's live transcript and steer it: **pause** it (its next action tool refuses and returns your guidance), **send** it a correction that rides back on its next tool result, or **end** the session. You can also point at a broken element with **Flag a bug** and hand the agent the element plus its source `file:line`.
+
+When you run with the presenter on (`reticle.connect({ present: true })`), the floating panel is a **two-way control surface**. You watch the agent's live transcript _and_ can steer it (pause it, send it a correction, or end the session) without leaving the page. There's also a clean, unmistakable "session ended" signal for both you and the agent.
+
+## Watch the testing score climb (the live verdict tally)
+
+The panel header shows a running **✓N ✗M** tally: the verdict score, live. It's hidden until the first verdict lands, then climbs as the agent verifies: every `reticle_assert`, every replayed flow step, every pass/fail outcome bumps it, and the side that just grew **pops** so you _feel_ the green (or red) arrive. The cursor flies, the log streams the journey, and the score ticks up. You see the agent working and the result landing, not just a final checkmark. It persists when the session ends, so the last thing on screen is what this run actually verified. Green that's earned, not asserted.
+
+## The constraint that shapes the design
+
+MCP is **pull-based**: the agent only receives data when it calls a tool. Reticle can't freeze the model mid-thought, but it **intercepts the agent's next tool call**, which is exactly when the agent would touch the page. That makes steering reliable:
+
+- **Nudge** (a message, no pause). Your text is queued and rides back on the agent's **next** tool result as `guidance` (delivered once). The agent reads it and adjusts.
+- **Pause.** The agent's next `reticle_act` / `reticle_act_and_wait` / `reticle_act_sequence` **refuses to execute** and returns `{ paused: true, guidance: ["<your message>"], hint: "…" }`. The page is untouched until resume. _Read-only tools (snapshot/query/observe) still work_, so the agent can look while paused.
+- **End.** The session is over; the panel shows "Session ended" and clears.
+
+## From the panel (the human)
+
+The floating panel (bottom-center, `present: true`) gives you:
+
+- **Pause / Resume**: one toggle. Paused turns the panel + page border **amber** with a `PAUSED` badge.
+- **Message box + send.** Type a correction ("check the error state first"), hit Send (or Enter). Your message shows as a `🧑 you:` bubble in the transcript **and** is delivered to the agent.
+- **End** ends the session: panel turns **emerald**, shows `Session ended · <summary>`, then fades away.
+- **Minimise (▾)** collapses the panel to a bar that streams only the live line; click the bar to restore.
+- **Flag a bug**, the button in the corner. Toggle it on, click the element that looks wrong, type what's wrong (⌘/Ctrl+Enter to send, Esc to back out). Reticle pins a numbered marker, logs your flag in the panel, and hands the agent a structured mark.
+
+## Flag a bug: annotate the mistake where you see it
+
+You don't have to describe a bug in prose. **Point at it.** The flag captures the element's re-resolvable anchor _and_ the source `file:line` (when the framework stamped one), so the agent fixes the exact element and code, not a guess. The loop:
+
+1. **You** flag the element and type the problem → Reticle emits a `HUMAN_MARK`.
+2. **The agent** drains it with `reticle_session {action:"review"}`, getting note + element label + `source: { file, line }` + a ready-to-act `fix` hint. `reticle_sessions` also reports `pendingMarks` so the agent notices flags.
+3. **The agent** opens the file, fixes it, and calls `reticle_session {action:"review"}({ resolve: "m1" })`.
+4. **You** see **"✓ fixed: \<your note\>"** land in the panel. Flag → fix → confirmation.
+
+See [`reticle_session {action:"review"}` in the usage guide](/usage) for the tool shape. Suppress the button with `annotate: false` if you don't want it.
+
+## From the agent (the tools)
+
+| Tool | Args | Effect |
+| --- | --- | --- |
+| `reticle_session {action:"end"}` | `{ summary?, sessionId? }` | end the session; the panel shows "Session ended · summary" |
+| `reticle_session {action:"resume"}` | `{ sessionId? }` | clear a pause and continue |
+| `reticle_session {action:"messages"}` | `{ sessionId? }` | drain + read pending human messages (explicit poll) |
+| `reticle_session {action:"review"}` | `{ resolve?, all?, sessionId? }` | list the bugs the human flagged; resolve one once fixed |
+
+When paused, every action tool short-circuits with the human's guidance, so the agent learns of the pause on its very next action. The agent's expected behavior: **read the guidance, adjust the plan, then call `reticle_session {action:"resume"}`** (or wait for the human to click Resume). The agent can also end the run itself with `reticle_session {action:"end"}({ summary })` when it's done. Either path shows the same "ended" state.
+
+## Piggybacked guidance
+
+Even without a pause, action/observe/assert results carry a `control` block when there's something to tell the agent:
+
+```jsonc
+{ since, dispatched, settled, result, control: { state: "active", guidance: ["looks good, keep going"] } }
+```
+
+`guidance` is drained (delivered once), so a hint never repeats. When the session is clean and the inbox empty, no `control` field is added: zero overhead on the happy path.
+
+## Tell your agent to honor it
+
+Add this to your operating prompt / `CLAUDE.md` (see the [agent cheat-sheet](agent-cheatsheet.md)):
+
+> The human may pause you or send guidance from the Reticle panel. On any `reticle_act` result with `paused: true`, stop, read `guidance`, adjust, then call `reticle_session {action:"resume"}`. Treat a `control.guidance` field on any result as a live instruction from the human.

@@ -1,0 +1,126 @@
+# Research never ships — plan/ is always ignored
+plan/
+
+# Cloud control plane — the paid app (moat + tenant/billing) lives OUTSIDE this repo, at the
+# sibling ReticleHQ/app/, with its own git per service. This entry is a belt-and-suspenders guard
+# so a stray app/ dir can never be committed into the Apache OSS repo by accident.
+#
+# ROOT-ANCHORED on purpose. A bare `app/` matches a directory called `app` at ANY depth, which
+# silently swallowed the Next.js App Router routes in apps/next-smoke/app/ — the server-actions,
+# RSC and idle-stream routes the e2e battery drives. They existed locally, so every gate passed,
+# while a fresh clone got a next-smoke app missing the routes its own spec tests. Only files
+# already tracked before the rule landed (layout.tsx, page.tsx) survived, which is what made it
+# invisible.
+/app/
+
+# Marketing: keep the source (HTML/CSS/mjs) reproducible, but never commit the heavy
+# render outputs or raw footage — host those on a CDN / GitHub Releases. The curated
+# README media lives in assets/readme/ (a separate dir) and IS committed.
+assets/clips/
+assets/*.png
+assets/marketing/**/*.mp4
+assets/marketing/**/*.mov
+assets/marketing/**/*.gif
+assets/marketing/**/*.png
+
+# Image-generation SOURCE split: the benchmark card generators (assets/benchmarks/render.mjs +
+# src/bench-*.html) and the shared design system (assets/marketing/src/_system.css) are PUBLIC —
+# they generate the committed README/docs images. The GTM/marketing source stays LOCAL (design
+# reference, never shipped to the public repo).
+assets/marketing/render.mjs
+assets/marketing/demo/
+assets/marketing/reels/
+assets/marketing/video/
+assets/marketing/landscape/
+assets/marketing/v0.5.0/
+assets/marketing/src/*.html
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Dependencies
+# No trailing slash, deliberately. `node_modules/` matches DIRECTORIES only, and a package manager
+# that links a workspace's modules leaves a SYMLINK of that name, which is a file. Those were not
+# ignored, so `git add -A` committed them, and the branch then carried a file where CI needed a
+# directory: every job died at install with ENOTDIR before reaching the change.
+node_modules
+.pnpm-store/
+
+# Build output
+dist/
+build/
+.next/
+.turbo/
+*.tsbuildinfo
+# Rust build output for the Tauri smoke app (multi-GB; never committed)
+apps/tauri-smoke/src-tauri/target/
+packages/tauri/target/
+apps/tauri-smoke/src-tauri/Cargo.lock
+apps/tauri-smoke/src-tauri/gen/
+
+# Test / coverage
+coverage/
+
+# Python (not used here, kept for parity with the foundation skill)
+__pycache__/
+.venv/
+.mypy_cache/
+.ruff_cache/
+
+# Graphify artifacts
+graph.json
+graph.html
+graphify-out/
+GRAPH_REPORT.md
+
+# Reticle: commit the shareable project config (cloud binding, flows, baselines); ignore local runtime
+# artifacts at ANY depth (root app + apps/*/). The SECRET api key is never here — it lives in
+# ~/.reticle/credentials.json (outside the repo). `**/` so nested demo apps are covered too.
+**/.reticle/runs/
+**/.reticle/project.json
+**/.reticle/*.log
+
+# Logs / OS
+*.log
+.DS_Store
+
+# local registry auth token (never commit)
+.npmrc
+
+# Issuer signing keys — the license-minting private key NEVER touches git.
+# (Public keys are baked into a release via env, not committed here either.)
+*.pem
+*.key
+issuer-*.json
+
+# Playwright MCP session dumps (written to cwd during benchmark runs)
+.playwright-mcp/
+
+# Agent git worktrees (never track — they are live checkouts)
+.claude/worktrees/
+.cursor/worktrees/
+leads/
+
+# Playwright CLI benchmark disk artifacts (snapshots/console logs)
+.playwright-cli/
+/docs-api/
+
+# local reticle workspace (session artifacts, visual baselines, run residue)
+.reticle/
+
+# Complex app fixtures now live in their own repo, reticle-fixtures — see docs/fixtures.md.
+# They are somebody else's apps at real scale, with their own package managers (react-admin is a
+# yarn monorepo, which breaks this pnpm workspace the moment it sits under apps/*), and they need
+# a branch model this repo cannot give them: a pristine `clean` branch to install into, because a
+# fresh install is only meaningful on a surface that has never seen Reticle.
+
+# Copied into packages/server at prepack so the skill and docs ship with the CLI users npx.
+# The originals at the repo root are the only editable copies.
+/packages/server/SKILL.md
+/packages/server/docs/
+
+# Maintainer rules for GitHub conduct — issues, PRs, releases. Deliberately private: it names the
+# mistakes that produced each rule, and those belong to the people who made them, not to the repo.
+/GITHUB.md

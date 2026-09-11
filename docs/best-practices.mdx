@@ -1,0 +1,216 @@
+---
+title: 'Best practices: how to earn a green'
+sidebarTitle: Best practices
+description: The habits that make a verdict worth trusting, and the specific mistakes that produce a confident, wrong pass.
+icon: star
+---
+
+A green is worth trusting when you named the consequence **before** you acted, ended the run on `reticle_act_and_wait` or `reticle_assert` (nothing else produces a verdict), scoped the assertion with `since`, and read `verified` rather than `pass`. Everything below is one of those habits, or the specific mistake that breaks it.
+
+Everything here comes from driving Reticle against real apps and getting it wrong first. None of it is theoretical, and several entries exist because they bit us while writing these docs.
+
+## Name the consequence before you act
+
+```json
+{ "ref": "e5", "action": "click", "until": { "kind": "signal", "name": "auth:granted" } }
+```
+
+Not this:
+
+```json
+{ "ref": "e5", "action": "click" }
+```
+
+...followed by looking around for something that seems fine.
+
+An agent that acts first and then decides what counts as success will always find something that counts. Stating the expectation up front is the entire difference between a check and a rationalisation, and it costs no extra calls: [`reticle_act_and_wait`](/tools-act-and-wait) does both in one hop.
+
+## A drive that ends on `reticle_act` proved nothing
+
+Only `reticle_act_and_wait` and `reticle_assert` produce a verdict. Everything else moves or reads the app.
+
+This is not pedantry. Here is a real `act_sequence` response:
+
+```json
+{ "ok": true, "count": 3, "effects": [ … "appeared": "Signing in… | Invalid email or password | Sign in" ] }
+```
+
+`ok: true`, and the login **failed**. `ok` means the actions were dispatched, which they were. If your run ends there, you have a green tick attached to a broken flow.
+
+**Batch the setup, prove the outcome.** Use `act_sequence` for the fills, then `act_and_wait` on the final click.
+
+## Treat `unknown` as unknown
+
+`verified: "unknown"` is not a pass, not a failure, and not a rounding error. It means Reticle drove the app and could not tell.
+
+We hit one writing the instrumentation page: a login that genuinely succeeded, signal fired, state changed, `verdict.pass: true`. And still came back `unknown`, because the page never settled inside the observation window.
+
+```json
+{ "verified": "unknown", "verifiedReason": "unsettled", "verdict": { "pass": true } }
+```
+
+Report it as unknown. If you believe it is wrong, [say so](/tools-session-and-feedback). Reticle calls an unknown verdict its own defect, and the response literally invites the report.
+
+## Focus the tab
+
+A backgrounded tab has its timers throttled, which suppresses the quiescence detection Reticle uses to decide a page has settled. Symptoms: actions that appear to do nothing, and `unknown` verdicts on things that plainly worked.
+
+Every response tells you when this is happening:
+
+```json
+"warning": "tab throttled; timer/rAF/pointer gestures may silently no-op; refocus before driving"
+```
+
+Believe it. Pass `refuseWhenThrottled: true` if you would rather fail loudly than act into a throttled tab.
+
+## Read the buffer note before trusting a negative
+
+```json
+"buffer": { "held": 15, "dropped": 529, "note": "…a negative result here may be a false negative…" }
+```
+
+"No requests found" and "I no longer have the requests you asked about" are different answers. Reticle distinguishes them; make sure your conclusion does. Grade sooner, or widen the buffer.
+
+## Assert exact counts, not vague ones
+
+```json
+{ "until": { "kind": "net", "method": "POST", "count": 1 } }
+```
+
+"A POST fired" passes when two fired. Double-submit is one of the most expensive bugs on this list. It charges customers twice. And it is completely invisible on screen. The exact count is free to ask for.
+
+## Scope assertions with `since`
+
+Without a cursor, an assertion evaluates against the recent buffer, which may contain events from before your action. That passes for the wrong reason: the request you asserted did fire, two clicks ago.
+
+Every `act` response returns a `since`. Use it.
+
+## Climb the grade ladder
+
+Every verdict reports `honesty.grade`. Aim for `signal`.
+
+| Grade      | What it means                 | How much it proves          |
+| ---------- | ----------------------------- | --------------------------- |
+| `presence` | Something appeared            | A mock does this too        |
+| `state`    | A registered store changed    | The app accepted it         |
+| `net`      | A request fired and came back | The app talked to the world |
+| `signal`   | The app fired a named signal  | The app declared success    |
+
+Ranked weakest to strongest, that is `presence` < `state` < `net` < `signal`. A predicate with no consequence at all grades `none`.
+
+Getting from `presence` to `signal` is roughly ten minutes of [instrumentation](/instrumentation) per flow, and it is the highest-leverage work available.
+
+**Emit failure signals too.** With `auth:denied` defined, a failed login reports `signals seen in this window: auth:denied` instead of just "never fired". The app names its own outcome and the diagnosis lands in one response.
+
+## A signal-grade pass can still miss the bug
+
+This is the subtlest entry on the page, and it comes from a controlled A/B run against the same app minutes apart.
+
+Same login, same predicate, `until: { kind: "signal", name: "auth:granted" }`, run twice. Once against a healthy build, once against a build with a persistence bug injected, where the auth token is never written to storage.
+
+**Healthy:**
+
+```json
+{
+  "verified": "yes",
+  "honesty": { "grade": "signal", "integrity": { "clean": true } },
+  "summary": {
+    "signals": ["auth:granted"],
+    "stateDiffs": [{ "path": "auth", "from": null, "to": "{…}" }],
+    "storageKeysChanged": ["reticle.bench.authToken", "reticle.bench.sessionId"]
+  }
+}
+```
+
+**Broken:**
+
+```json
+{
+  "verified": "yes",
+  "honesty": { "grade": "signal", "integrity": { "clean": true } },
+  "summary": {
+    "signals": ["auth:granted"],
+    "stateDiffs": [{ "path": "auth", "from": null, "to": "{…}" }],
+    "storageKeysChanged": []
+  }
+}
+```
+
+Identical verdict. Identical grade. The signal fired in both, because the login genuinely did succeed, in memory. Reload the page and the second one is logged out.
+
+The only difference in the entire response is `storageKeysChanged`, and the assertion never asked about it.
+
+<Warning>
+  The lesson is not that signals are unreliable. It is that **a verdict answers the question you
+  asked**. `auth:granted` asked "did the app authenticate", and the honest answer was yes. Nobody
+  asked "does it survive a reload".
+</Warning>
+
+If persistence is part of what "it worked" means, assert it:
+
+```json
+{
+  "until": {
+    "kind": "allOf",
+    "predicates": [
+      { "kind": "signal", "name": "auth:granted" },
+      { "kind": "state", "store": "app", "path": "auth.email", "equals": "admin@reticle.dev" }
+    ]
+  }
+}
+```
+
+Reticle put the evidence in the response either way. `storageKeysChanged: []` was right there. Read the `summary` block, not just `verified`.
+
+## Never weaken a check to make it pass
+
+The temptation, when an assertion fails, is to loosen it until it goes green. Sometimes the assertion really was wrong. Usually the app is.
+
+If you relax a predicate, you should be able to say why the _original_ expectation was incorrect. "It kept failing" is not that reason.
+
+## Ask narrowly
+
+| Instead of | Use | Why |
+| --- | --- | --- |
+| `snapshot` on every turn | `snapshot { mode: "status" }` | 25 tokens to answer "where am I?" |
+| `snapshot` then reading it | `query { by: "testid" }` | Retrieval, not orientation |
+| `query` to count rows | `query { count_only: true }` | Around 30x smaller |
+| `observe` for one question | `network` or `console` | The summary block is usually enough |
+| Re-snapshotting after each act | Reuse the `ref` | Refs stay valid until the element leaves the DOM |
+
+Every response carries `cost: { bytes, tokens }`. If a loop is expensive, that field tells you which call to fix.
+
+## Bind to meaning, not structure
+
+Query by testid, role or label. Assert on signals and state. Both survive the refactor that moves your markup around; a CSS selector does not.
+
+## End your sessions
+
+Sessions accumulate. Four stale ones pointing at dev servers you restarted an hour ago look completely plausible in a list, and one of them will get picked.
+
+```json
+{ "action": "yield", "mode": "waiting" }
+```
+
+`yield` when you are pausing, `end` when you are done. Both revive on your next action, so neither is destructive. The difference is what the human watching the panel is told. The panel reads "live" until you say otherwise.
+
+## Confirm a navigation landed
+
+`reticle_navigate` returns `confirmed: false` by design. A navigation destroys the document the SDK lives in, so it can only report dispatch. Check [`reticle_sessions`](/tools-sessions) for a session at the new URL before acting, and re-snapshot: refs do not survive a new document.
+
+## Start with what the app says about itself
+
+```json
+{ "tool": "reticle_capabilities" }
+```
+
+On an unfamiliar app this beats snapshotting and guessing. It returns the testids, signals, stores and named flows the app advertises. What the team considered testable, rather than what you inferred from element names.
+
+<CardGroup cols={2}>
+  <Card title="Instrument your app" icon="wrench" href="/instrumentation">
+    Where most of the quality actually comes from.
+  </Card>
+  <Card title="Lock it into CI" icon="vial" href="/testing">
+    So the habits survive the week you are not looking.
+  </Card>
+</CardGroup>

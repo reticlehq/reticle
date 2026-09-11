@@ -1,0 +1,153 @@
+---
+title: reticle_act_sequence
+description: Run several actions in order in one round trip. Fill, fill, submit. Instead of paying a full turn for each step.
+icon: layer-group
+---
+
+`reticle_act_sequence` runs several actions in order in a single round trip. Reach for it whenever a journey needs more than one step, such as fill, fill, submit, and then prove the outcome once with [`reticle_act_and_wait`](/tools-act-and-wait), because a sequence itself produces no verdict.
+
+A login is three actions. Driving it one call at a time costs three round trips and three turns of context. `reticle_act_sequence` does it in one.
+
+This tool exists because of a measured problem: agents were driving forms one call at a time, over and over. Those repeats were not retries. The calls succeeded and got repeated, because the batching tool was not advertised and so nobody knew it was there.
+
+## Example
+
+```json
+{
+  "steps": [
+    { "ref": "e603", "action": "fill", "args": { "value": "admin@reticle.dev" } },
+    { "ref": "e604", "action": "fill", "args": { "value": "correct-horse-battery-staple" } },
+    { "ref": "e605", "action": "click" }
+  ]
+}
+```
+
+Steps may also name a `target` instead of a `ref`, the same locator [`reticle_act`](/tools-act) takes. The sequence resolves each one before dispatch, so a login does not need a query round trip per field:
+
+```json
+{
+  "steps": [
+    { "target": { "label": "Email" }, "action": "fill", "args": { "value": "admin@reticle.dev" } },
+    {
+      "target": { "label": "Password" },
+      "action": "fill",
+      "args": { "value": "correct-horse-battery-staple" }
+    },
+    { "target": { "testid": "login-submit" }, "action": "click" }
+  ]
+}
+```
+
+Real response. Each `effects[]` entry also carries `targetMatched`, `visible`, `enabled`, `defaultPrevented`, `occluded`, `occludedBy` and `scrolledIntoView`, and each `steps[]` entry also carries `dispatched`, `settled`, `settleReason`, `component`, `role` and `name`. Those are trimmed here for length:
+
+```json
+{
+  "since": 3915,
+  "dispatched": true,
+  "result": {
+    "ok": true,
+    "count": 3,
+    "effects": [
+      {
+        "dispatched": true,
+        "focusMoved": "null->e603",
+        "valueChanged": false,
+        "domMutatedWithin": 0
+      },
+      {
+        "dispatched": true,
+        "focusMoved": "e603->e604",
+        "valueChanged": true,
+        "domMutatedWithin": 9
+      },
+      {
+        "dispatched": true,
+        "focusMoved": "e604->null",
+        "domMutatedWithin": 15,
+        "appeared": "Signing in… | Invalid email or password | Sign in"
+      }
+    ],
+    "steps": [
+      {
+        "ref": "e603",
+        "action": "fill",
+        "testid": "login-email",
+        "source": { "file": "src/components/Login.tsx", "line": 48 }
+      },
+      {
+        "ref": "e604",
+        "action": "fill",
+        "testid": "login-password",
+        "source": { "file": "src/components/Login.tsx", "line": 59 }
+      },
+      {
+        "ref": "e605",
+        "action": "click",
+        "testid": "login-submit",
+        "source": { "file": "src/components/Login.tsx", "line": 81 }
+      }
+    ]
+  }
+}
+```
+
+## Read that response again
+
+`ok: true`. `count: 3`. Every step dispatched. And the login **failed**, look at `appeared`:
+
+```
+"appeared": "Signing in… | Invalid email or password | Sign in"
+```
+
+That password was wrong. The app rejected it. And this tool still reported `ok: true`, correctly, because `ok` means _the three actions were dispatched_, which they were.
+
+<Warning>
+  This is the whole reason `act` and `act_sequence` do not produce verdicts. `ok: true` is a
+  statement about the input, not about the outcome. Follow a sequence with
+  [`reticle_act_and_wait`](/tools-act-and-wait) on the final step, or with an
+  [`reticle_assert`](/tools-assert), or you have proved nothing.
+</Warning>
+
+The honest pattern is: batch the setup, prove the outcome.
+
+```json
+{
+  "steps": [
+    { "ref": "e603", "action": "fill", "args": { "value": "admin@reticle.dev" } },
+    { "ref": "e604", "action": "fill", "args": { "value": "correct-password" } }
+  ]
+}
+```
+
+then
+
+```json
+{ "ref": "e605", "action": "click", "until": { "kind": "signal", "name": "auth:granted" } }
+```
+
+which returns the verdict the sequence could not:
+
+```json
+{
+  "verified": "yes",
+  "verifiedReason": "proved",
+  "because": "assertion held at signal grade over a clean capture with no channel disagreeing",
+  "verdict": {
+    "pass": true,
+    "evidence": { "name": "auth:granted", "data": { "email": "admin@reticle.dev" } }
+  },
+  "honesty": { "grade": "signal", "coverage": { "pct": 100, "partial": false } }
+}
+```
+
+Two calls instead of four, and the last one returns a verdict. Note `grade: "signal"`, the strongest Reticle awards, because the app said so itself.
+
+## What each step reports
+
+Every step comes back with the same `effect` fields as [`reticle_act`](/tools-act): `valueChanged`, `focusMoved`, `domMutatedWithin`, `occluded`. Plus its `testid`, `component` and `source`. When a sequence goes wrong, that per-step detail tells you which step, and which line of which file.
+
+<Note>
+  Steps run in order and do not stop on a soft failure, because "the field rejected the value" is
+  not an exception. It's a result you need to see. Read `effects[]` rather than assuming `ok: true`
+  means all three did what you wanted.
+</Note>

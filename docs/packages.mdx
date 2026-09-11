@@ -1,0 +1,232 @@
+---
+title: 'Packages: what is in the box'
+sidebarTitle: Packages
+description: Every Reticle package. What it does, why it exists, when you actually need it, and what it depends on.
+icon: cubes
+---
+
+Reticle is twelve packages, and most people install two. This page exists so you can tell which two, and so that the ones you skip stop looking mysterious.
+
+<Note>
+  Everything ships together at one version: whatever `npm view @reticlehq/core version` says, every
+  other `@reticlehq/*` package says too, and so does the `reticle-tauri` crate on crates.io.
+
+It was versioned independently until 2.12.0, and that turned out to mean _stuck_: the crate sat at `0.1.0` from the day it was written, the publish job skipped it every release because that version already existed, and no Rust-side fix reached anybody. Lockstep costs one line in the bump script and cannot fail that way.
+
+</Note>
+
+## Which ones do I need?
+
+<CardGroup cols={2}>
+  <Card title="A React app on Vite" icon="bolt">
+    `@reticlehq/react` + `@reticlehq/vite-plugin`. That's it, two dev dependencies.
+  </Card>
+  <Card title="A React app on Next.js" icon="n">
+    `@reticlehq/react` + `@reticlehq/next`. Keeps SWC; no Babel migration.
+  </Card>
+  <Card title="Not React, or no bundler plugin" icon="code">
+    `@reticlehq/browser` alone, and call `connect()` yourself.
+  </Card>
+  <Card title="Electron or Tauri" icon="display">
+    The web packages, plus `@reticlehq/electron` or the `reticle-tauri` crate.
+  </Card>
+</CardGroup>
+
+You never install `@reticlehq/server`. Your agent runs it with `npx`.
+
+## The architecture in one rule
+
+The package split is not cosmetic. Each boundary enforces something:
+
+| Package   | Runs in     | Hard rule                                              |
+| --------- | ----------- | ------------------------------------------------------ |
+| `core`    | both        | Depends only on `zod`. Sits at the bottom of the graph |
+| `browser` | the browser | Never imports a Node API                               |
+| `server`  | Node        | Never imports a DOM API                                |
+| `react`   | the browser | Optional. Core must work without it                    |
+
+Those rules are why the browser SDK cannot accidentally pull in a filesystem call, and why the server cannot accidentally depend on `window`. They are enforced by the dependency graph, not by discipline.
+
+---
+
+## @reticlehq/core
+
+**The wire contract.** Every constant and zod schema that crosses a boundary. Browser to bridge, bridge to agent, is defined here.
+
+**Why it exists:** without one shared definition, the browser and the server drift. One renames a field, the other keeps reading the old one, and the failure is silent. A verdict that quietly stops carrying evidence. Core makes that a type error instead.
+
+**Depends on:** `zod`, and nothing else. That is the whole point; it sits at the bottom of the graph so everything can depend on it without cycles.
+
+**Do you install it?** No. It arrives as a dependency of whatever you did install.
+
+<Note>
+  Before 2.0, `@reticlehq/core` was an umbrella package re-exporting everything under subpaths. That
+  was retired: the umbrella meant every consumer pulled the whole world to get one constant.
+</Note>
+
+---
+
+## @reticlehq/browser
+
+**The SDK that lives in your page.** It installs the observers (DOM, network, console, routing, animations), builds semantic snapshots, executes actions, and talks to the bridge.
+
+**Why it exists:** this is the part that makes Reticle different from a browser-automation tool. Because it runs _inside_ the app rather than driving it from outside, it can see a state mutation and a fired signal, not just a rendered pixel.
+
+**Depends on:** `@reticlehq/core`. [`reticle_query`](/tools-query) speaks role, label and testid rather than CSS selectors through its own local accessibility engine, so what a snapshot reports is exactly what a query matches.
+
+**Install it directly when** you are not on React, or you want `connect()` under your own control:
+
+```ts
+import { reticle } from '@reticlehq/browser';
+if (import.meta.env.DEV) reticle.connect();
+```
+
+---
+
+## @reticlehq/server
+
+**The bridge, the MCP server, and the `reticle` CLI.** Hosts the WebSocket your app dials into and exposes the tools your agent calls.
+
+**Why it exists:** agents speak MCP; browsers speak WebSocket; somebody has to be fluent in both and own the `.reticle/` directory where flows, baselines and runs are stored.
+
+**Depends on:** `@modelcontextprotocol/sdk`, `@reticlehq/core`, `@reticlehq/init`, `ws`, `zod`.
+
+**Do you install it?** Not into your project. Your agent launches it:
+
+```bash
+npx @reticlehq/server mcp
+```
+
+---
+
+## @reticlehq/init
+
+**The project scaffolder behind `reticle init`.** Detects the framework and package manager, writes `.reticle.json`, patches the build config, generates the connect snippet and the agent rules, and registers the MCP server with whichever clients are on the machine.
+
+**Why it exists:** nothing in it observes a running app. It is a build-time codemod that runs once. While it lived inside `@reticlehq/server`, a typo in a generated snippet forced a republish of the MCP server, and every MCP user downloaded a scaffolder they run once or never. It reaches back into the daemon for nothing: the version it stamps, the tracer, the outcome reporter and the bridge pairing token all arrive through one injected `InitHost`.
+
+**Depends on:** `@reticlehq/core`, and nothing else.
+
+**Do you install it?** No. `@reticlehq/server` depends on it at the same version, and the `reticle` CLI drives it.
+
+---
+
+## @reticlehq/react
+
+**The kit most React users install.** It re-exports the browser sensor, so one install gives you `reticle`, `registerCapabilities` and everything else, and it maps a DOM node to its React component and source file through the fiber tree.
+
+**Why it exists:** this is the package that turns "the button is broken" into `src/components/Login.tsx:81`. Finding a bug is half the job. Reticle's answer to the other half lives here.
+
+**Depends on:** `@reticlehq/browser`, `@reticlehq/core`. **Peer:** `react`.
+
+```bash
+npm i -D @reticlehq/react
+```
+
+---
+
+## @reticlehq/vite-plugin
+
+**One line in `vite.config.ts`, two jobs.** It stamps source locations onto your JSX and injects `connect()` so you cannot forget to.
+
+**Why it exists:** the two things everyone forgets are wiring the SDK and enabling source mapping. This does both, and `apply: 'serve'` guarantees it never reaches a production build.
+
+**Depends on:** `@babel/core`, `@reticlehq/babel-plugin`, `@reticlehq/core`. **Peer:** `vite`.
+
+```ts
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { reticle } from '@reticlehq/vite-plugin';
+
+export default defineConfig({ plugins: [reticle(), react()] });
+```
+
+---
+
+## @reticlehq/babel-plugin
+
+**Stamps `data-reticle-source="file:line:col"` onto JSX host elements.**
+
+**Why it exists:** React 19 dropped `_debugSource`, which is what source mapping used to rely on. This plugin puts the information back, at build time, in dev only. Without it, `reticle_inspect` can still tell you the component name but not the file.
+
+**Depends on:** nothing. **Peer:** `@babel/core`.
+
+**Do you install it?** Only directly if you are wiring Babel yourself. The Vite and Next packages both pull it in.
+
+---
+
+## @reticlehq/next
+
+**Next.js source mapping without giving up SWC.**
+
+**Why it exists:** Next users are on SWC, and telling them to switch to Babel for a dev tool would be a rude trade. This adds a dev-only webpack pre-loader that stamps the same attribute, and leaves your build pipeline alone.
+
+**Depends on:** `@babel/core`, `@reticlehq/babel-plugin`. **Peer:** `next`.
+
+```js
+const { withReticle } = require('@reticlehq/next');
+module.exports = withReticle({/* your config */});
+```
+
+<Note>
+  This one is CommonJS on purpose. `next.config.js` is loaded by Node before any ESM transform, so
+  an ESM-only helper would fail at the least helpful moment.
+</Note>
+
+---
+
+## @reticlehq/test
+
+**The spec runner for CI.** `reticleTest` registers declarative specs and runs them against Reticle's tools directly, with no MCP or stdio in the loop.
+
+**Why it exists:** driving interactively is reconnaissance. At some point you want the same checks to run on every pull request without an agent. And without paying model tokens to re-derive them.
+
+**Depends on:** `@reticlehq/core`, `@reticlehq/server`. **Peer:** `vitest`.
+
+<Card title="Turn a session into a suite" icon="vial" href="/testing">
+  Writing specs that bind to signals rather than DOM structure.
+</Card>
+
+---
+
+## @reticlehq/eslint-plugin
+
+**Two rules, the main one being: state changed, so a signal must fire.**
+
+**Why it exists:** signals are the strongest evidence Reticle can use, and they rot the way all conventions rot. Someone adds a mutation, forgets the signal, and every verdict for that flow quietly drops a grade. Nothing breaks. The tests still pass. The evidence just gets weaker.
+
+A lint rule makes the signal layer self-enforcing, which is the only way a convention survives contact with a deadline.
+
+**Depends on:** `@typescript-eslint/utils`. **Peer:** `eslint`.
+
+---
+
+## @reticlehq/electron
+
+**Reaches the two places the renderer cannot.**
+
+**Why it exists:** in Electron, the interesting failures often happen across the IPC boundary. The renderer asks the main process for something and the main process quietly fails. The renderer-side SDK cannot see that. This package makes main-process IPC observable and the window screenshottable.
+
+**Depends on:** `@reticlehq/core`. **Peer:** `electron`.
+
+---
+
+## reticle-tauri
+
+**The Rust crate**, on crates.io. Versioned in lockstep with the npm packages, so `2.11` here and `2.11` there mean the same release.
+
+**Why it exists:** Tauri IPC observation needs nothing on the Rust side; an `invoke('load_todos')` already reaches Reticle as `ipc://load_todos`. You only need this crate for screenshots and headless mode.
+
+```toml
+[dependencies]
+reticle-tauri = "2.14"
+```
+
+<Warning>
+  Do not expect this to match the npm version. Doing so would imply a release cadence the crate does
+  not have, and it would make every npm release a crates.io release for no reason.
+</Warning>
+
+<Card title="Desktop setup in full" icon="display" href="/desktop">
+  Electron and Tauri wiring, including the Tauri CSP whose failure is silent.
+</Card>

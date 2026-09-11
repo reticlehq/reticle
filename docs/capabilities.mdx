@@ -1,0 +1,534 @@
+---
+title: Beyond the verify loop
+description: Coverage, storage, fake clocks, autonomous crawling, visual diffing and network mocking. What Reticle does once look-act-observe-assert is not enough.
+icon: sparkles
+---
+
+These are the Reticle tools that do something other than look, act, observe and assert: control coverage, client storage, a fake clock, autonomous crawling, semantic and visual baselines, network mocking, flow recording and replay, and the CI artifact. Reach for them when the verify loop is not the shape of the question. None of them live in the default advertised surface, so all of them are called through [`reticle_run`](/tools-tools-and-run).
+
+Most of the time you want the verify loop. Look, act, observe, assert. These are the tools for the times you want something else, and they are the ones people are most surprised exist.
+
+## Available anywhere
+
+These work through the always-on SDK, in any connected session.
+
+### Coverage: what you have not driven yet
+
+```json
+{ "tool": "reticle_verify", "args": { "action": "coverage" } }
+```
+
+```json
+{
+  "total": 43,
+  "exercised": 2,
+  "untouched": [
+    { "ref": "e619", "label": "button \"Overview\"" },
+    { "ref": "e627", "label": "button \"Compose\"" },
+    { "ref": "e632", "label": "textbox \"Filter by service…\"" },
+    { "ref": "e635", "label": "button \"Row actions\"" }
+  ]
+}
+```
+
+That is a real capture with 39 of the 41 untouched entries trimmed out. Two controls driven out of forty-three.
+
+Not code coverage. Control coverage: which interactive elements this session has actually touched.
+
+Useful at the end of a drive, when the agent is about to report success. "I verified the page" reads differently next to `exercised: 0`.
+
+### Storage: the persistence layer
+
+```json
+{ "tool": "reticle_storage" }
+```
+
+```json
+{
+  "local": { "reticle.bench.authToken": "[REDACTED]" },
+  "session": {
+    "__reticle_ref_base": "700",
+    "__reticle_session": "s223e0fad-e012-43f9-a23d-6d585470c90d",
+    "reticle.bench.sessionId": "[REDACTED]"
+  },
+  "cookies": { "bench_session": "724fa5c2-d913-4d19-8a90-3a4d85dc09a0" }
+}
+```
+
+Note the token redaction. Credential-shaped values are stripped here exactly as they are in [`reticle_network`](/tools-network), so reading storage never puts a session token in your context.
+
+localStorage, sessionStorage and readable cookies.
+
+This is where the "logged in but nothing persisted" bug lives. A login can fire its success signal, mutate state, and write nothing. Reload, and you are back at the login screen.
+
+<Tip>
+  `storageKeysChanged` already appears in every `act_and_wait` summary, so you often do not need
+  this tool. Read it there first.
+</Tip>
+
+### Clock: freeze time, skip the wait
+
+```json
+{ "tool": "reticle_clock", "args": { "freeze": true } }
+```
+
+```json
+{ "frozen": true }
+```
+
+```json
+{ "tool": "reticle_clock", "args": { "advanceMs": 5000 } }
+{ "tool": "reticle_clock", "args": { "reset": true } }
+```
+
+`advanceMs` answers `{ "frozen": true }`, because advancing keeps the clock frozen at the new time. `reset` answers `{ "frozen": false }` and hands time back to the browser.
+
+Toasts that auto-dismiss, debounced search, polling, session timeouts, retry backoff. All of these are normally verified by sleeping, which is slow and flaky in equal measure.
+
+Freeze the clock, advance it by exactly the interval, assert the consequence. No sleeping, no guessing, and the same result on a fast laptop and a loaded CI runner.
+
+### Crawl: click everything, report anomalies
+
+```json
+{ "tool": "reticle_verify", "args": { "action": "crawl", "maxSteps": 6 } }
+```
+
+```json
+{
+  "interactiveFound": 43,
+  "stepsRun": 6,
+  "anomalies": [],
+  "counts": { "consoleErrors": 0, "failedRequests": 0, "deadControls": 0, "contradictions": 0 },
+  "visited": [
+    "- button \"Overview\"",
+    "- button \"Deployments40\"",
+    "- button \"Compose\"",
+    "- button \"Diagnostics\"",
+    "- button \"Hostile\"",
+    "- button \"Search or jump to…⌘K\""
+  ],
+  "truncated": true,
+  "coverageNote": "the page changed as you clicked: 7 control(s) that did not exist when this crawl started were never visited, interactiveFound is a floor, not a total; re-run the crawl from the state you are now in to cover them"
+}
+```
+
+Read `coverageNote` before you read the counts. `interactiveFound` is measured when the crawl starts, so on any app where clicking reveals new controls it is a floor rather than a total, and the tool says so rather than letting `43` read as complete.
+
+Autonomously clicks every reachable control and reports what went wrong. No script, no plan. The counts are the useful part: `deadControls` and `contradictions` are the two that indicate a real problem rather than a busy page.
+
+This is the tool for an app you did not write and do not understand yet.
+
+<Warning>
+  It clicks **everything**, so point it at a dev environment. `maxSteps` bounds it, defaulting to
+  25.
+</Warning>
+
+### Reconcile: what the API said versus what rendered
+
+```json
+{ "tool": "reticle_reconcile" }
+```
+
+```json
+{
+  "mismatches": [],
+  "compared": 2,
+  "note": "compared 2 response(s); nothing on screen contradicts them"
+}
+```
+
+Compares the data an endpoint returned against what the page actually displays. `compared` is the field that makes the empty `mismatches` meaningful: `compared: 0` would mean it had nothing to check, not that everything agreed.
+
+The bug it catches is specific and common: the API returned ten rows, the table shows nine, and nothing errored. Neither the network log nor the DOM is wrong on its own. Only the comparison is.
+
+### Domain: which of your flows actually prove anything
+
+The most useful tool nobody knows about.
+
+```json
+{ "tool": "reticle_domain" }
+```
+
+```json
+{
+  "flowCount": 47,
+  "coverage": { "asserted": 14, "presenceOnly": 2, "assertionFree": 31 },
+  "gaps": {
+    "declaredUntestedSignals": [
+      "deploy:created",
+      "deploy:shipped",
+      "modal:opened",
+      "toast:shown",
+      "…"
+    ],
+    "declaredUntestedTestids": ["deploy-submit", "drawer", "palette", "…"]
+  },
+  "summary": "47 flows: 14 asserted, 2 presence-only, 31 assertion-free. test first: asserted-demo2 (last run drifted). 13 declared signal(s) no flow asserts. 33 flow(s) assert no consequence."
+}
+```
+
+Read that summary again. Thirty-one of forty-seven flows **assert no consequence**, which means they replay green whatever the app does. That is a suite that looks like coverage and is not.
+
+Each flow comes back graded, with the consequence that must hold and a risk level:
+
+```json
+{
+  "name": "deploy-journey",
+  "grade": "asserted",
+  "mustHold": "nav:changed",
+  "risk": { "level": "high", "reason": "last run drifted", "lastStatus": "drift" }
+}
+```
+
+```json
+{
+  "name": "console-compose",
+  "grade": "assertion-free",
+  "warning": "This flow performs actions but asserts no observable consequence, so it will pass even if the feature is broken. Add a consequence assertion with reticle_annotate (assert-signal / assert-net) or a success-state."
+}
+```
+
+`declaredUntestedSignals` is the other half: signals your app emits that no flow ever checks. It is a to-do list for your test suite, generated from what the app says about itself. The full response also carries `declared` (the app's registered testids, signals and stores), `riskRanked` (every flow ordered worst first) and `unassertedFlows`.
+
+<Tip>
+  Run this before writing a new flow. It tells you what is already covered, what is covered badly,
+  and which declared signal has never been asserted. All three are better starting points than
+  guessing.
+</Tip>
+
+### Baselines: semantic snapshots, not pixels
+
+```json
+{ "tool": "reticle_baseline", "args": { "action": "save", "name": "checkout-empty" } }
+```
+
+```json
+{ "baseline": "checkout-empty", "lineCount": 174 }
+```
+
+```json
+{ "tool": "reticle_baseline", "args": { "action": "diff", "name": "checkout-empty" } }
+```
+
+```json
+{
+  "baseline": "checkout-empty",
+  "removed": [],
+  "added": [],
+  "consoleErrors": 0,
+  "routeChanged": false
+}
+```
+
+Records the meaningful state of a page and compares later. Structure and content rather than pixels, so a font change does not fail your check and a missing row does. `action: "list"` returns the saved names.
+
+## Needs a driven browser
+
+Four tools apply their effects through the Chrome DevTools Protocol. The always-on SDK cannot do that, so they need a browser Reticle is driving.
+
+<Warning>
+**A pooled lease is not enough.** Re-verified on 2026-08-16: acquire one with `reticle_lease` and
+`reticle_screenshot` answers
+
+```json
+{
+  "ok": false,
+  "reason": "no-visual-provider",
+  "recommendation": "visual capture needs a driven browser, start with `reticle drive <url>` or set RETICLE_CDP_URL; the always-on SDK does not ship a screenshotter"
+}
+```
+
+while `reticle_network_mock` answers `{ "applied": false, "count": 0, "ok": false, "reason": "no-cdp-provider" }`. Under a driven browser, all four work: the captures below were taken that way.
+
+Run `reticle drive <url>`, or point `RETICLE_CDP_URL` at a Chrome started with `--remote-debugging-port`.
+
+</Warning>
+
+### Screenshots and visual diffing
+
+```json
+{ "tool": "reticle_screenshot", "args": { "name": "login-baseline" } }
+```
+
+```json
+{
+  "ok": true,
+  "saved": true,
+  "name": "login-baseline",
+  "path": ".reticle/visual/login-baseline.png",
+  "bytes": 191150
+}
+```
+
+```json
+{ "tool": "reticle_visual_diff", "args": { "baseline": "login-baseline" } }
+```
+
+```json
+{
+  "ok": true,
+  "matched": true,
+  "changedPixels": 0,
+  "totalPixels": 921600,
+  "ratio": 0,
+  "dimensionMismatch": false,
+  "baseline": { "width": 1280, "height": 720 },
+  "current": { "width": 1280, "height": 720 },
+  "diffPath": ".reticle/visual/login-baseline.diff.png"
+}
+```
+
+`dimensionMismatch` is the field that saves an afternoon. A diff between two different viewport sizes is meaningless, and this says so rather than reporting a huge `ratio`.
+
+<Warning>
+  Note the asymmetry. `reticle_screenshot` names the baseline with **`name`**; `reticle_visual_diff`
+  refers to it with **`baseline`**. Passing `name` to the diff is rejected, and it is an easy
+  mistake to make twice.
+</Warning>
+
+`fullPage` captures the whole scroll height. `ref` or `clip` scopes to one element or region. `threshold` sets the pixel-difference tolerance, defaulting to `0.01`, `maxRatio` caps the acceptable changed fraction, and `masks` excludes regions that are expected to change.
+
+Reticle reads program truth, not pixels, so this is the deliberate exception: a font that failed to load or a compositing glitch is only visible in the actual frame.
+
+### Viewport pinning
+
+```json
+{ "tool": "reticle_viewport", "args": { "width": 1280, "height": 800 } }
+```
+
+```json
+{ "applied": true, "width": 1280, "height": 800 }
+```
+
+Fixes the viewport so a visual baseline is reproducible across machines. Without it, a diff taken on a laptop and re-run in CI compares two different layouts and fails for a reason nobody wants to debug.
+
+### Network mocking
+
+```json
+{
+  "tool": "reticle_network_mock",
+  "args": { "mocks": [{ "urlContains": "/api/deploys", "status": 500 }] }
+}
+```
+
+```json
+{ "applied": true, "count": 1 }
+```
+
+Return a 500, force offline, or delay a response. First matching rule wins. `clear: true` turns it off and answers `{ "applied": true, "count": 0 }`.
+
+Most error states have never actually run. This is how you find out whether yours works, without touching the backend or waiting for a real outage to tell you.
+
+## Flows: record once, replay forever
+
+The loop closer, and the reason Reticle is not only an interactive tool.
+
+```json
+{ "tool": "reticle_record", "args": { "action": "start", "recordingName": "ship-a-deploy" } }
+{ "tool": "reticle_record", "args": { "action": "stop", "recordingName": "ship-a-deploy" } }
+{ "tool": "reticle_flow_save", "args": { "flowName": "ship-a-deploy" } }
+{ "tool": "reticle_verify", "args": { "action": "flows" } }
+```
+
+<Warning>
+  The argument names are not interchangeable. `reticle_record` takes **`recordingName`**,
+  `reticle_flow_save` takes **`flowName`**, and neither accepts `name`. Reticle rejects the call
+  rather than guessing, which is the right call and still costs you a turn.
+</Warning>
+
+Stopping a recording used to return a very large payload, almost all of it the raw `events` array. It no longer does. The timeline is omitted and replaced with a pointer, so a stop is under a kilobyte. This is a real capture of a one-click recording, complete rather than trimmed:
+
+```json
+{
+  "recordingName": "docs-check",
+  "program": {
+    "name": "docs-check",
+    "version": 1,
+    "steps": [{ "tool": "reticle_act", "stable": true, "args": { … } }]
+  },
+  "timeline_omitted": "445 event(s) were recorded and are not included here. Call reticle_observe { since: 11445 } for the raw timeline.",
+  "proposedConsequences": [
+    { "predicate": { "kind": "signal", "name": "auth:granted" }, "tier": 0, "label": "signal \"auth:granted\" fires", "weak": false },
+    { "predicate": { "kind": "state", "store": "app", "path": "auth" }, "tier": 1, "label": "state \"app\" changes", "weak": false },
+    { "predicate": { "kind": "net", "method": "POST", "urlContains": "/api/login", "status": 200 }, "tier": 1, "label": "POST /api/login responds", "weak": false }
+  ],
+  "window_ms": 17387,
+  "summary": { "total": 445, "network": 1, "domChanged": 304, "consoleErrors": 0, "animations": 12, "signals": 1 },
+  "cost": { "events": 445, "bytes": 953 }
+}
+```
+
+Each step's `args` is elided above because a recorded step is an anchor, not a call you make by hand: it resolves a testid at replay time rather than a `ref`, so copying it into [`reticle_act`](/tools-act) would not work.
+
+Nine hundred and fifty-three bytes for 445 recorded events. `timeline_omitted` hands you the exact `reticle_observe` call to make if you want them, so nothing is lost, it is only not charged for by default.
+
+<Note>
+  `reticle_record` takes `action`, `recordingName` and `sessionId` and nothing else. `max_events`
+  and `filters` are rejected, which no longer matters now that the timeline is omitted anyway.
+</Note>
+
+`proposedConsequences` is the useful part and the reason to record at all. Reticle watched the interaction and worked out what would have proved it, ranked by strength. Tier 0 is the app's own signal. You do not have to invent the assertion; you pick one.
+
+### Saving and replaying
+
+```json
+{ "tool": "reticle_flow_save", "args": { "flowName": "ship-a-deploy" } }
+```
+
+```json
+{
+  "name": "ship-a-deploy",
+  "stepCount": 1,
+  "degraded": 0,
+  "empty": false,
+  "assertions": {
+    "grade": "assertion-free",
+    "hasConsequenceAssertion": false,
+    "totalSteps": 1,
+    "consequenceSteps": 0,
+    "weakSteps": 0,
+    "successIsConsequence": false,
+    "intentVerified": false,
+    "warning": "This flow performs actions but asserts no observable consequence, so it will pass even if the feature is broken. Add a consequence assertion with reticle_annotate (assert-signal / assert-net) or a success-state."
+  }
+}
+```
+
+Reticle grades the flow as you save it, and tells you when you have just created a test that cannot fail. Take the warning seriously: an assertion-free flow replays green whatever the app does.
+
+A replay against a drifted app names what moved and where. This is `reticle_verify {action:"flows"}` reporting the same flow after the app changed underneath it:
+
+```json
+{
+  "status": "fail",
+  "total": 1,
+  "passed": 0,
+  "failed": 1,
+  "failures": [
+    {
+      "flow": "docs-check",
+      "verdict": "drift",
+      "whatChanged": "testid \"login-submit\" not found",
+      "whereInSource": "src/components/Login.tsx:81",
+      "nextAction": "rebind the anchor to \"sign-out\" (closest survivor), or update the flow if the change was intended."
+    }
+  ],
+  "flaky": ["suite-500", "suite-route", "drift-demo", "stitch-probe"]
+}
+```
+
+Passing flows are counted, not described. Only failures carry detail, because the detail is the actionable part. `flaky` lists flows seen to both pass and fail on unchanged code, which is a bug in the flow rather than in the app.
+
+`reticle_flow_heal` proposes the rebind. It refuses when it is not confident:
+
+```json
+{
+  "status": "unhealable",
+  "applied": false,
+  "message": "drift found, but no nearest match cleared the confidence floor (HEAL_CONFIDENCE_MIN=0.5); file left untouched; add a data-testid or fix the flow by hand"
+}
+```
+
+Flows live in `.reticle/` as human-readable files, so they are reviewed in pull requests and diffed like code. They anchor on meaning, a testid plus a signal, rather than volatile refs or coordinates.
+
+<Card title="Flows in full" icon="repeat" href="/flows">
+  Recording, replay, self-healing, and what lives in `.reticle/`.
+</Card>
+
+## Handing results to something else
+
+### The CI artifact
+
+```json
+{ "tool": "reticle_run_export" }
+```
+
+```json
+{
+  "run": {
+    "schemaVersion": 1,
+    "runId": "1f49b2d8-e402-4629-b202-819566fcace5",
+    "createdAt": 1786817831460,
+    "durationMs": 4,
+    "profile": "dev",
+    "project": { "name": "reticle", "framework": "other" },
+    "agent": { "id": "reticle-mcp", "kind": "coding-agent" },
+    "trigger": { "kind": "manual" },
+    "changedFiles": [],
+    "flows": [
+      {
+        "name": "sweep-flow",
+        "status": "fail",
+        "steps": 0,
+        "durationMs": 4,
+        "failureReason": "no such flow on disk, run reticle_flow{action:\"list\"} to see saved flows"
+      }
+    ],
+    "checks": [],
+    "risks": [],
+    "evidence": {
+      "consoleErrors": [],
+      "networkAnomalies": [],
+      "stateAssertions": [],
+      "timeline": []
+    },
+    "verdict": {
+      "status": "fail",
+      "reasons": ["flow sweep-flow: no such flow on disk"],
+      "confidence": "medium",
+      "blockingRisks": 0
+    }
+  }
+}
+```
+
+Note the `run` wrapper. The artifact is nested one level down, which matters if you are parsing it in CI.
+
+A versioned, machine-readable record of a verification run. This is what you hand to CI, a dashboard, or a platform embedding Reticle in its pipeline. A passing flow additionally carries `oracle`, the consequence that made it a pass, so a green row says what it proved rather than only that it was green.
+
+### The capability contract
+
+```json
+{ "tool": "reticle_contract_save" }
+```
+
+```json
+{ "saved": true, "path": ".reticle/contract.json", "testidCount": 49, "signalCount": 16 }
+```
+
+Read it back with `reticle_capabilities { "fromDisk": true }`, which needs no browser at all.
+
+Persists the app's live capability registry to a git-checked file. A fresh agent can read it without booting the app, and a diff shows when someone removes a signal something depended on.
+
+### Talking to the human
+
+```json
+{ "tool": "reticle_session", "args": { "action": "narrate", "text": "Checking the deploy flow." } }
+{ "tool": "reticle_session", "args": { "action": "review" } }
+```
+
+`narrate` writes a line into the presenter panel, so the person watching knows what you are doing. `review` drains the bugs they pinned on elements from that panel:
+
+```json
+{ "marks": [], "pendingCount": 0 }
+```
+
+An empty list here is a real reading, not a missing one.
+
+## Discovering the rest
+
+```json
+{ "tool": "reticle_tools" }
+```
+
+Returns every tool with a one-line summary, and the profile currently in force. Load the full argument grammar for the ones you want before calling them:
+
+```json
+{ "names": ["reticle_network_mock", "reticle_clock"] }
+```
+
+<Tip>
+  Do this rather than guessing at arguments. Reticle refuses a call with unknown parameters rather
+  than running it, and says why: *"NOT applied, so any result would be an answer to a different
+  question."* Good behaviour, but a wasted turn you can skip.
+</Tip>

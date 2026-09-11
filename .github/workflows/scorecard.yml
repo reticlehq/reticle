@@ -1,0 +1,44 @@
+name: OpenSSF Scorecard
+
+# Runs the OpenSSF Scorecard supply-chain security analysis and publishes the results to the Security
+# tab + the Scorecard badge, so the project's security posture is externally verifiable rather than
+# asserted. Weekly + on push to main. Read the results at https://securityscorecards.dev.
+
+on:
+  branch_protection_rule:
+  schedule:
+    - cron: '18 5 * * 2' # Tuesdays
+  push:
+    branches: [main]
+
+# Least privilege at the top; the job below adds only what it needs.
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write # upload SARIF to the Security tab
+      id-token: write # publish results (OIDC) so the badge can read them
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Run analysis
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true # feeds the badge + the public deps.dev entry
+      - name: Upload artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: SARIF file
+          path: results.sarif
+          retention-days: 5
+      - name: Upload to code-scanning
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          sarif_file: results.sarif

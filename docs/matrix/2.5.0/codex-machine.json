@@ -1,0 +1,20 @@
+{
+  "reticle": {
+    "version": "2.5.0",
+    "commit": "33629413"
+  },
+  "client": {
+    "id": "codex"
+  },
+  "host": {
+    "os": "darwin 25.5.0",
+    "node": "v22.14.0"
+  },
+  "checks": {
+    "writes": false,
+    "snippet": true
+  },
+  "verdict": "manual-snippet",
+  "by": "machine (client-compat.mjs)",
+  "note": "machine-checkable half only — nobody has run this client"
+}

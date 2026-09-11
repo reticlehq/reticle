@@ -1,0 +1,111 @@
+---
+title: reticle doctor
+description: 'Diagnose the Reticle setup in one command: Chromium, daemon, bridge port, logs, and desktop wiring.'
+icon: stethoscope
+---
+
+`reticle doctor` collapses the setup failure modes into one command. It is the first thing to run when something is wrong.
+
+```bash
+npx @reticlehq/server doctor [--port N]
+```
+
+## Flags
+
+| Flag | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `--port N` | number | `4400` (or `RETICLE_PORT`, or the port in `.reticle.json`) | Which bridge port to diagnose |
+
+## What it prints
+
+Human-readable lines on stdout, not the JSON log. Real capture:
+
+```
+reticle doctor
+  node         v22.14.0
+  chromium     ✓ installed (chromium-1234)
+  daemon       ✓ running on :4400 (pid 72698, v2.8.0)
+  sessions     ✓ 1 page connected
+  bridge port  4400  (your app must dial THIS port, not your dev-server port)
+  daemon log   /Users/you/.reticle/daemon-4400.log
+  tracing      RETICLE_TRACE=1 on the daemon for per-stage timings in that log
+```
+
+When nothing has connected, the `sessions` line fails and the daemon's own diagnosis is appended under the checklist. Real capture, against a daemon on a scratch port that no app had dialled, with the diagnosis wrapped for width and trimmed at the ellipsis:
+
+```
+  sessions     ✗ no page has connected to this daemon
+  bridge port  4499  (your app must dial THIS port, not your dev-server port)
+  daemon log   /Users/you/.reticle/daemon-4499.log
+  tracing      RETICLE_TRACE=1 on the daemon for per-stage timings in that log
+
+  nothing has connected. What the daemon can tell from here:
+    no browser session connected. Two things to weigh, and neither of them is proof. (1) Nothing is
+    listening on the ports Reticle scans (3000, 3001, 4200, 4321, 5000, 5173, 5174, 8000, 8080, 8100,
+    9000, 1420, 3100, 4173, 5175, 7860, 8501), so the dev server may not be running ...
+```
+
+| Line | What it checks |
+| --- | --- |
+| `node` | The Node version running the CLI |
+| `chromium` | Whether the exact Chromium revision the bundled Playwright wants is on disk. The most common silent failure |
+| `daemon` | Whether the port holds a Reticle daemon, a foreign process (named where possible), or nothing. Adds a `version` line when the daemon's version or contract fingerprint disagrees with the CLI's |
+| `sessions` | Whether any page has actually connected. Zero is a FAILING check rather than a neutral note, because it is the state the setup most often stalls in: wired correctly, daemon up, nothing dialled in. When it is zero the daemon's own no-session diagnosis prints below the checklist |
+| `agent link` | Whether an MCP client has listed Reticle's tools on this port **and actually called one**. Every other row here checks a component; this one checks the hop between your agent and the daemon. It is possible for the SDK to be injected, a session to be live, and your client to show every tool enabled, while no request has ever crossed from the agent. That state passes every other check and is the one people lose hours to |
+| `bridge port` | The port your app must dial, spelled out because mixing it up with the dev server port is the most common setup failure |
+| `port check` | Only when your project's configured port disagrees with the one the daemon is on. Prints the mismatch rather than leaving you to spot it across two lines |
+| `sibling` | Only when a well-known Reticle port other than this daemon's has a listener. An observation, not a diagnosis: that listener may or may not be related |
+| `daemon log` | Where the structured daemon log lives |
+| `tracing` | How to turn that log into a per-stage trace |
+| `desktop` | Only on a desktop project. Every Electron and Tauri misconfiguration here fails silently, so it is diagnosed explicitly |
+
+## The chromium line
+
+Playwright pins one Chromium revision per version, and the daemon launches that one and no other. So the check is not "is a Chromium there" but "is _this_ revision there", and the three answers have three different fixes.
+
+All three captures below are real, taken by pointing `PLAYWRIGHT_BROWSERS_PATH` at a full root, a stale root, and an empty one.
+
+**`✓ installed`** means the wanted revision is on disk. Nothing to do.
+
+```
+  chromium     ✓ installed (chromium-1234)
+```
+
+**`✗ wrong revision`** means builds are installed and none of them is the wanted one. One pinned download away. The line names the revision Playwright wants, then every revision the root actually holds, then the exact command:
+
+```
+  chromium     ✗ wrong revision ... the bundled playwright wants chromium-1234;
+  /tmp/pwroot holds chromium-1194, chromium-1208. run: npx playwright@1.62.1 install chromium
+```
+
+**`✗ missing`** means the browsers root holds no Chromium at all. It prints the full executable path it looked for, so you can see which root it searched. If that is not where your browsers live, `PLAYWRIGHT_BROWSERS_PATH` is what moves it:
+
+```
+  chromium     ✗ missing ... looked for /tmp/emptyroot/chromium-1234/chrome-mac-arm64/Google Chrome
+  for Testing.app/Contents/MacOS/Google Chrome for Testing; run: npx playwright@1.62.1 install chromium
+```
+
+Both failing lines are one line in the terminal, wrapped here for width, and the punctuation that separates the verdict from its explanation is shown as `...`. The revision number and the pinned Playwright version come from the build you are running, so yours may differ from these; use the ones your own `doctor` prints.
+
+The wanted revision and the root are both read back off the path Playwright itself resolves, so `PLAYWRIGHT_BROWSERS_PATH` and every platform default (including `%LOCALAPPDATA%\ms-playwright` on Windows) are honoured without this command keeping its own table of roots.
+
+<Warning>
+  Run the command `doctor` prints, not `npx playwright install chromium`. The unpinned form resolves
+  the newest Playwright, downloads *its* revision, and leaves the check saying exactly what it said
+  before. That loop is why the line names the version to pin to.
+</Warning>
+
+## Exit codes
+
+Always `0`. `doctor` reports; it does not gate.
+
+## Worked example
+
+```bash
+npx @reticlehq/server doctor
+# then run the chromium command doctor printed, verbatim
+```
+
+<Card title="Deeper debugging" icon="bug" href="/debugging">
+  Reading the daemon log, and what `RETICLE_TRACE=1` adds to it.
+</Card>

@@ -1,0 +1,89 @@
+---
+title: '@reticlehq/next'
+description: Next.js source mapping for Reticle without giving up SWC, via a dev-only loader.
+icon: n
+---
+
+`@reticlehq/next` gives a Next.js app the same `data-reticle-source` stamping the Vite plugin does, without asking it to migrate off SWC to Babel. Install it if your app is Next.js; on Vite use [`@reticlehq/vite-plugin`](/packages/vite-plugin) instead. Unlike the Vite plugin it does **not** inject `connect()`, so you still call that yourself.
+
+**Apache 2.0. CommonJS, no build step. Depends on `@babel/core` and `@reticlehq/babel-plugin`. Peer dependency: `next >= 13`.**
+
+## Why it exists
+
+Next users are on SWC. Telling them to switch to Babel for a dev tool would be a rude trade, and it would slow down every build they run. This adds a dev-only pre-loader for `.jsx` and `.tsx` and leaves the rest of the pipeline alone.
+
+## Install and use
+
+```bash
+npm i -D @reticlehq/next @reticlehq/react
+```
+
+```js
+// next.config.js
+const { withReticle } = require('@reticlehq/next');
+
+module.exports = withReticle({/* your config */});
+```
+
+<Note>
+  This package is CommonJS on purpose. `next.config.js` is loaded by Node before any ESM transform,
+  so an ESM-only helper would fail at the least helpful possible moment.
+</Note>
+
+## Exports
+
+### `.`
+
+```ts
+function withReticle<T = unknown>(nextConfig?: T): T;
+```
+
+Returns the config unchanged when `NODE_ENV === 'production'`. Otherwise it merges in:
+
+| Addition | What it does |
+| --- | --- |
+| `webpack` | Pushes an `enforce: 'pre'` rule for `/\.(t\|j)sx$/`, excluding `node_modules`, using this package's loader. Your own `webpack` function still runs afterwards |
+| `turbopack` | On Next 15.3 and above only: rules for `*.tsx` and `*.jsx` pointing at `@reticlehq/next/loader` |
+| `env.NEXT_PUBLIC_RETICLE_TOKEN` | The pairing token, when one exists on disk |
+| `env.NEXT_PUBLIC_RETICLE_ROOT` | `process.cwd()`, so source paths come back repository-relative |
+| `env.NEXT_PUBLIC_RETICLE_SDK_VERSION` | The version of the app's installed `@reticlehq/react` |
+
+`readPairingToken()` is also exported at runtime. It is not declared in `index.d.ts`, so TypeScript will not see it.
+
+### `./loader`
+
+```ts
+declare function reticleNextLoader(this: unknown, source: string, inputMap?: unknown): void;
+export = reticleNextLoader;
+```
+
+An async webpack loader. It skips anything that is not `.jsx` or `.tsx`, and anything under `node_modules`. It lazily imports `@reticlehq/babel-plugin` and runs `babel.transformAsync` with `configFile: false`, `babelrc: false`, `retainLines`, and source maps on.
+
+<Note>
+  The loader never fails the build. Any error falls back to the original source, because a dev-only
+  source stamp is not worth breaking someone's `next dev` over.
+</Note>
+
+## What it does not do
+
+It does not inject `connect()`. On Next you call it yourself, once, in a client component:
+
+```tsx
+'use client';
+import { useEffect } from 'react';
+import { reticle, install } from '@reticlehq/react';
+
+export function ReticleDev() {
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'production') {
+      install();
+      reticle.connect();
+    }
+  }, []);
+  return null;
+}
+```
+
+<Card title="Framework by framework" icon="layer-group" href="/frameworks">
+  What each supported stack needs, and what it gets for free.
+</Card>

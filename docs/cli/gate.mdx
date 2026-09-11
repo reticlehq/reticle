@@ -1,0 +1,64 @@
+---
+title: reticle gate
+description: Exit non-zero unless passing verification artifacts cover every flow the changed files affect.
+icon: shield-halved
+---
+
+`reticle gate` is what makes verification unavoidable. It computes the [affected](/cli/affected) flows, looks for a passing artifact for each, and fails the command if any is missing. An agent that edits a covered file cannot call itself finished without re-verifying.
+
+```bash
+npx @reticlehq/server gate [--since <ref>] [file...]
+```
+
+## Arguments and flags
+
+| Argument | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `file...` | strings, positional | none | Explicit changed files |
+| `--since <ref>` | string | `HEAD` when no files are given | Also include files git reports as changed since this ref |
+
+## What blocks and what does not
+
+| Category | Blocking | Why |
+| --- | --- | --- |
+| `uncovered` | Yes | An affected flow with no passing artifact |
+| `downgraded` | Yes | A flow whose assertions were weakened since its last passing run. A green bought by weakening the test is the gaming move this exists to stop |
+| `deletedCoverage` | Yes | A flow that covered a changed file and has since vanished. Coverage deleted, not satisfied |
+| `quarantined` | No | Flows the flake ledger has quarantined. Surfaced, never blocking, because one unexplained flake that blocks a merge destroys trust in the red |
+
+## What it prints
+
+One `reticle_gate` line. Real capture from this repository, with the flow lists trimmed for length:
+
+```json
+{
+  "t": "2026-08-15T18:42:58.434Z",
+  "event": "reticle_gate",
+  "pass": false,
+  "uncovered": ["WEB-flow", "deploy-journey", "verify-route", "verify-500"],
+  "quarantined": ["asserted-demo", "blast-radius-compose", "drift-demo", "qa2-flow"],
+  "coverage": { "pct": 0, "covered": 0, "total": 47 }
+}
+```
+
+`downgraded` and `deletedCoverage` appear only when they are non-empty, and neither was present in that run. The CLI prints this as a single line of JSON; it is pretty-printed here to be readable.
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Every affected, non-flaky flow has a passing artifact and nothing was weakened or deleted |
+| `1` | Something is uncovered, downgraded or deleted. Also `1` on any internal fault: the gate fails closed |
+
+Measured on this repository, `npx @reticlehq/server gate --since HEAD~1` exited `1` with the output above: 0 of 47 flows covered, 39 uncovered and 8 quarantined.
+
+## Worked example
+
+```yaml
+- run: npx @reticlehq/server verify http://localhost:4173
+- run: npx @reticlehq/server gate --since ${{ github.event.pull_request.base.sha }}
+```
+
+<Card title="Wiring this into CI" icon="rocket" href="/deploy-checks">
+  Where the gate sits relative to build, verify, and merge.
+</Card>

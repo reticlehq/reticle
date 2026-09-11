@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <body style="font: 13px system-ui; margin: 8px">
+    <p data-testid="frame-sla">Carrier SLA: 94.2% on time</p>
+    <button data-testid="frame-escalate">Escalate</button>
+    <script>
+      // The frame reacts on its own — a DOM change AND a network call, both in its own document.
+      // A verifier watching only the top document sees neither, which is what this fixture is for.
+      document.querySelector('[data-testid="frame-escalate"]').addEventListener('click', () => {
+        document.querySelector('[data-testid="frame-sla"]').textContent = 'Carrier SLA: escalated';
+        fetch('/api/shipments?status=held&page=1&size=1');
+      });
+    </script>
+  </body>
+</html>

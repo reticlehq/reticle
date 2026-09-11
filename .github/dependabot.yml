@@ -1,0 +1,85 @@
+version: 2
+updates:
+  # npm dependencies across the pnpm workspace. Grouped so a routine week is one PR, not twenty.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    groups:
+      # Non-breaking bumps land together; majors come as individual PRs so they're reviewed on purpose.
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    # The published SDK carries zod as a real dependency; treat its majors as deliberate, reviewed changes.
+    ignore:
+      - dependency-name: zod
+        update-types:
+          - version-update:semver-major
+      # astro 7.2 stops the Astro example connecting to the bridge; 7.0.3 works, and the SDK is not at
+      # fault (the connect script runs and dials). Measured and written up in #347. Held here rather
+      # than pinned in each grouped PR, because pinning inside the group makes Dependabot supersede
+      # the whole PR and take any review work on it with them. Remove this once #347 is resolved.
+      - dependency-name: astro
+
+  # Keep the GitHub Actions themselves current AND pinned — Dependabot updates the pinned SHAs for us.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        update-types:
+          - minor
+          - patch
+  # Rust. `reticle-tauri` is PUBLISHED to crates.io, so its dependency tree reaches users directly
+  # and was the only shipped surface nothing watched: the npm ecosystem above cannot see a Cargo
+  # manifest, and CodeQL does not scan Rust at all. Its Cargo.lock is committed, so Dependabot
+  # resolves against the exact versions a consumer builds.
+  - package-ecosystem: cargo
+    directory: /packages/tauri
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    # These four are NOT ours to move. Each one also reaches us through `tauri` itself — the Windows
+    # pair via `webview2-com`, the GTK pair via `wry` -> `gdk` — and Cargo keeps both versions when a
+    # direct dependency runs ahead of a transitive one. Two copies of the same crate do not share
+    # types, so the build fails with "expected COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT, found a
+    # different COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT", which reads like our bug and is not.
+    #
+    # Verified rather than assumed: bumping `windows` and `webview2-com` TOGETHER still fails, because
+    # tauri 2.11.5 holds webview2-com 0.38.2 underneath. There is no combination of these PRs that
+    # compiles until the tauri/wry tree moves first.
+    #
+    # So they are ignored until then, rather than reopened weekly as PRs that cannot merge and cost a
+    # full CI run each. Drop the entry for a crate once tauri ships a release that has moved it.
+    ignore:
+      - dependency-name: windows
+      - dependency-name: webview2-com
+      - dependency-name: cairo-rs
+      - dependency-name: gdk
+
+  # The Tauri smoke app. Not published, but it is compiled and RUN by the desktop battery, so a
+  # vulnerable dependency here still executes on a runner. Its Cargo.lock is gitignored, so
+  # Dependabot works from the manifest.
+  - package-ecosystem: cargo
+    directory: /apps/tauri-smoke/src-tauri
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch

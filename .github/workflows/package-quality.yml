@@ -1,0 +1,85 @@
+name: Package quality
+
+# Gates the PUBLISHED artifacts on every PR so an exports/types/size regression can never ship:
+#   publint  — package.json correctness (exports conditions, types-first ordering, files hygiene)
+#   attw     — "are the types wrong": resolves the .d.ts in node10/node16(CJS+ESM)/bundler modes
+#   size     — the embedded browser SDK's own packed dist stays under budget
+# publint/attw already pass locally; this stops them from silently regressing.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  package-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      - name: publint (every published package)
+        run: |
+          set -e
+          for dir in packages/*/; do
+            name=$(node -p "try{require('./$dir/package.json').private?'':require('./$dir/package.json').name}catch(e){''}")
+            [ -z "$name" ] && continue
+            echo "::group::publint $name"
+            (cd "$dir" && npx --yes publint --strict)
+            echo "::endgroup::"
+          done
+
+      - name: Are the types wrong (every published package)
+        run: |
+          set -e
+          for dir in packages/*/; do
+            name=$(node -p "try{require('./$dir/package.json').private?'':require('./$dir/package.json').name}catch(e){''}")
+            [ -z "$name" ] && continue
+            echo "::group::attw $name"
+            # Two justified ignores: cjs-resolves-to-esm (packages are ESM-first, no CJS entry by design) and
+            # no-resolution (the legacy node10 resolver doesn't read exports maps — modern packages skip it).
+            (cd "$dir" && npx --yes @arethetypeswrong/cli --pack --ignore-rules cjs-resolves-to-esm no-resolution)
+            echo "::endgroup::"
+          done
+
+      - name: Embedded SDK size budget
+        run: |
+          # The browser SDK is embedded in users' apps — guard its own dist from ballooning. This is the
+          # package's shipped code (source maps included), NOT the bundled+deps figure; for that, add
+          # size-limit later.
+          #
+          # 950KB was raised from 900KB in 2.9.0, and only AFTER taking the waste out rather than to
+          # paper over it: the artwork, the icon set and the HUD's style strings were each being
+          # copied a second time into the emitted .d.ts as literal types — 19.6KB of type information
+          # no caller can use — and annotating them `: string` gave that back.
+          #
+          # 1000KB in 2.13.0, on the same terms. The waste came out first: MCP_DOCS_URL,
+          # HUD_DRAG_IGNORE_SEL and HUD_LOG_WELL_CSS had reacquired exactly the defect above and were
+          # annotated, which returned ~1.3KB. What remained is code somebody chose to ship, and the
+          # release names it:
+          #
+          #   - registry/auto-testids.ts, new
+          #   - registry/capabilities.ts, extended
+          #   - the HUD's unreachable state — an instrumented page whose bridge never answered used to
+          #     be indistinguishable from a page with no Reticle in it
+          #   - desktop capture for the Electron and Tauri shells
+          #
+          # The package is ~954KB after that, so this leaves ~46KB of headroom — the same shape of
+          # margin 2.9.0 left, and the same rule: the next 5% stops here and gets explained. A raise
+          # to make a red check green is the thing this comment exists to prevent, so if the reason
+          # above is not in the diff, do not move the number.
+          bytes=$(cd packages/browser && npm pack --dry-run --json 2>/dev/null | node -e "process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d)[0].unpackedSize))")
+          echo "browser SDK unpacked: $bytes bytes"
+          if [ "$bytes" -gt 1000000 ]; then
+            echo "::error::@reticlehq/browser unpacked size $bytes exceeds the 1000KB budget"
+            exit 1
+          fi

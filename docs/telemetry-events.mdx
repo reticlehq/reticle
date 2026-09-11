@@ -1,0 +1,442 @@
+---
+title: Telemetry events reference
+description: Every Reticle telemetry event, its payload schema, where it is emitted from, and the question it exists to answer.
+icon: database
+---
+
+<Warning>
+  **This page is for contributors, not users.** It documents the internal event *schema* so that
+  somebody changing Reticle's code emits the right shape. It contains no data and no measurements.
+
+If you want to know what Reticle collects about you and how to turn it off, read [Telemetry](/telemetry) instead. That is the user-facing page, and it is the one with the opt-out.
+
+</Warning>
+
+Every event Reticle emits is listed below with the same three things: **when it fires**, **what it carries**, and **why it exists**. The authoritative list is `TelemetryEventKind` in `packages/core/src/telemetry.ts`; if this page and that file disagree, the file wins and this page is a bug.
+
+Source of truth for everything below:
+
+| File | Defines |
+| --- | --- |
+| `packages/core/src/telemetry.ts` | `TelemetryEventKind`, the envelope, and most payload blocks |
+| `packages/core/src/telemetry-session.ts` | `SessionSummarySchema`, `ProjectProfileSchema`, `MachineSnapshotSchema` |
+| `packages/core/src/telemetry-feedback.ts` | `FeedbackSchema`, `IdentitySchema`, and the enums they use |
+
+## The shared envelope
+
+`TelemetryEventSchema` wraps every event. These fields are on every event kind, whatever it is.
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `v` | literal `3` | yes | `TELEMETRY_EVENT_VERSION`. Bumped when the shape changes, so the analytics side can segment old senders |
+| `anonymousId` | string, 1 to 128 | yes | Random UUID persisted at `~/.reticle/telemetry-id`. Distinct count of this is users |
+| `projectId` | string, 1 to 128 | no | One-way hash of the git remote, repo root, package root, or cwd. Counts distinct projects without revealing one |
+| `sessionId` | string, 1 to 64 | no | One daemon run. Present only on session-scoped events |
+| `event` | `TelemetryEventKind` | yes | Which kind this is. The full list is `TelemetryEventKind` in `packages/core/src/telemetry.ts` |
+| `ts` | int, epoch ms | yes | Client time. The server stamps its own receive time too |
+| `version` | string, 1 to 64 | yes | The Reticle version emitting |
+| `ci` | boolean | yes | Running inside CI. Separates human activity from pipeline traffic |
+| `os` | string, 1 to 32 | yes | `process.platform` |
+| `projectIdSource` | `ProjectIdSource` | no | `git_origin`, `git_root`, `package_root` or `cwd`. Only `git_origin` rows are comparable across machines |
+| `tzOffsetMin` | int, -900 to 900 | no | Minutes offset from UTC. Turns a time-of-day chart from "which continent" into "9am or 11pm" |
+| `actor` | `TelemetryActor` | no | `human` or `agent`. Absent on events that are neither |
+
+Then exactly one payload block, keyed by event. The keys are `feedback`, `command` plus `flags`, `session`, `project`, `verification`, `versionChange`, `crash`, `identity`, `connection`, `init`, `bug`, `refusal`, `outage`, `instrumentation`, `stall`.
+
+Plus `installSource`, which is not a block. It is resolved once per process and stamped on **every** event, so it is the one attribution field you can group any chart by.
+
+<Warning>
+  `emit()` builds its wire event from an explicit allowlist of keys. A payload block that is not on
+  that list is dropped without an error, which is how two deliberately different MCP outages once
+  produced byte-identical events. Adding a block means adding it to the allowlist as well.
+</Warning>
+
+## Session scope
+
+`isSessionScoped(kind)` decides whether `sessionId` is attached. Twelve kinds are session-scoped:
+
+`daemon_started`, `daemon_stopped`, `session_progress`, `mcp_client_connected`, `app_instrumented`, `project_profiled`, `verification_completed`, `bug_found`, `tool_refused`, `runtime_crashed`, `feedback_submitted`.
+
+`mcp_connection_lost` is deliberately **not** on that list even though it feels session-shaped. It fires from the proxy process rather than the daemon, so it carries no `sessionId` and cannot be joined to a session at all.
+
+The other six are one-shot. A per-process id on `reticle status` is not a session: it joins to nothing and inflates every session count that runs a distinct count over the field.
+
+---
+
+## reticle_installed
+
+**Wire name:** `reticle_installed`. **Emitted from:** `packages/server/src/telemetry/cli-telemetry.ts:51`. **Session-scoped:** no. **Payload block:** none.
+
+Fires on the first ever run on a machine. Carries `installSource`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `installSource` | `InstallSource`, optional | Which published route brought this install in: `skill_file`, `npx_skill`, `plugin`, `docs_site`, `readme`, `cli_direct`, `unknown` |
+
+`installSource` is **declared, never detected**. A channel sets `RETICLE_INSTALL_SOURCE` on the process that runs the install and anything unrecognised reports `unknown`, so `unknown` is expected to be the largest bucket while the marker spreads across four separately published artifacts. Read a small `unknown` as a marker that spread, never as success. Nothing infers it: `npm_config_user_agent` only says npx ran us and every route goes through npx; the presence of a plugin directory or a skill folder says a route exists rather than that it ran the install. `installSource` is **not** limited to this event. It is resolved once per process (`packages/server/src/telemetry/telemetry.ts:392`) and stamped on every event that process sends (`:453`), so any chart can group by it. It is also sourced **config first, then environment**: `projectInstallSource()` prefers the value recorded in `.reticle.json`, because the environment variable exists for exactly one command and is gone by the next, which is why the field originally reached a handful of events and nothing else.
+
+**The question it answers:** how many machines have installed this, and what does the new-user curve look like? There is deliberately no uninstall event, because npm 7 and pnpm run no uninstall lifecycle script. Churn is inferred server-side from inactivity instead.
+
+---
+
+## cli_command_run
+
+**Wire name:** `cli_command_run`. **Emitted from:** `packages/server/src/telemetry/cli-telemetry.ts:58`. **Session-scoped:** no. **Payload:** two envelope fields.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `command` | string, 1 to 32 | The subcommand, from the closed `KNOWN_COMMANDS` vocabulary. Anything unrecognised reports `unknown` |
+| `flags` | array of strings, up to 16, each up to 32 chars | Which flags were **present**, by name only |
+
+**The question it answers:** what do humans actually do with the CLI? `verify` and `gate` mean something very different from `status`, and that ratio is the closest honest read on intent available.
+
+<Note>
+  Flag **values** are never sent. A value is a port, a URL, a file path, or in `--http-token`'s case
+  a secret. Names alone answer "does anybody use `--storage-state`" with none of that risk.
+</Note>
+
+<Warning>
+  The internal `_daemon` spawn is excluded. `reticle mcp` and `reticle serve` start the daemon by
+  re-running the same binary, so counting the child doubled what a person experienced as one action,
+  and doubled it worst on exactly the agent-driven sessions that matter most.
+</Warning>
+
+---
+
+## daemon_started
+
+**Wire name:** `daemon_started`. **Emitted from:** `packages/server/src/telemetry/daemon-telemetry.ts:75`. **Session-scoped:** yes. **Payload block:** none.
+
+**The question it answers:** how many active daemon runs are there? This is the numerator of daily, weekly and monthly actives, and the first step of the install funnel.
+
+---
+
+## daemon_stopped
+
+**Wire name:** `daemon_stopped`. **Emitted from:** `packages/server/src/telemetry/daemon-telemetry.ts:138`. **Session-scoped:** yes. **Payload block:** `session`, a `SessionSummary` with `final: true`.
+
+The rich one. One event carries the entire session rolled up, replacing the hundreds a per-tool-call event would send. PostHog bills per ingested event and a single verification loop is a great many tool calls, so aggregation here is a design decision, not an optimisation.
+
+### `SessionSummarySchema`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `durationMs` | int | How long the daemon was up |
+| `toolCalls` | int | Total MCP tool calls served |
+| `toolCounts` | record of string to int | Calls per tool name. The shape of the session, not just its size |
+| `toolErrors` | int | Calls that ended in an error |
+| `errors` | array of `ErrorShape`, up to 40 | Distinct error shapes: `fingerprint`, `count`, variable-stripped `message`, and the `tool` that produced it |
+| `sdkFailures` | int, optional | Failures reported by the in-page half |
+| `sdkErrors` | array of `ErrorShape`, up to 40 | The distinct SDK failure shapes |
+| `verifications` | int | Verdicts produced |
+| `bugsFound` | int, optional | Defects found in the app under test |
+| `bugKinds` | record of string to int | Those bugs by kind, so the headline can always be broken down |
+| `toolParams` | record of tool to record of param to int | Which parameters were passed. Names only, with an allowlist exception for values that are enums we define |
+| `connections` | record of kind to `ConnectionStats` | `attempts`, `successes`, and classified `failures` |
+| `toolTiming` | record of tool to `ToolTiming` | `totalMs` and `maxMs`. An average hides the outlier that made someone give up |
+| `busyMs` | int, optional | Total ms inside tool calls |
+| `browserMs` / `browserCommands` | int, optional | Time waiting on the browser, and how many commands. Subtracting separates our overhead from the app's |
+| `peakConcurrentTools` | int, optional | Most calls in flight at once |
+| `unknownToolCalls` | int, optional | Calls for a tool that does not exist |
+| `unknownTools` | record of name to int | Which ones. A guess is a feature request in the agent's own vocabulary |
+| `noSessionErrors` | int, optional | Calls that failed because there was no app to reach. Absent when it never happened, so presence is the signal |
+| `consecutiveRepeats` | record of tool to int | Longest back-to-back run per tool. The shape of a retry loop |
+| `abandonedActions` | int, optional | Actions driven with no verdict after them |
+| `machine` | `MachineSnapshot`, optional | `rssMb`, `heapUsedMb`, `freeMemMb`, `totalMemMb`, `load1x100`, `cpuCount` |
+| `clients` | array of strings, up to 8 | Distinct MCP clients seen |
+| `clientVersions` | record of client to version | The half of `clients` that explains regressions. Never a model: MCP's `clientInfo` has no concept of one |
+| `surface` | string, optional | Which tool surface was live |
+| `appConnects` | int, optional | How many times an app's SDK dialled this daemon. **Session lifetime, never windowed** |
+| `msToFirstApp` | int, optional | Ms from daemon start to the first app connecting |
+| `endReason` | `never_used` \| `explored` \| `abandoned` \| `verified` \| `client_left` | What state the agent's work was in |
+| `endedWithVerdict` | boolean, final only | Did this session ever produce a verdict. Sent as `false` rather than omitted: a session that drove an app and never asked whether it worked is the finding |
+| `feedbackPrompted` | int, optional | How often Reticle invited feedback. The denominator for `feedback_submitted` |
+| `errorClasses` | record of string to int | Errors bucketed as `schema`, `state`, `refusal` or `other`. Only `schema` is fixable by writing better descriptions |
+| `errorsRecovered` / `errorsRepeated` | int, optional | Whether the agent's next call succeeded. The best measure of an error message is what happens next |
+| `final` | boolean | `true` here, `false` on a progress flush |
+| `exit` | `idle` \| `signal` \| `unknown` | Why the process ended. Absent on a flush |
+
+**The question it answers:** what did a whole session look like, and how did it end? `endReason` and `exit` answer different questions on purpose: a daemon can exit tidily on idle while the agent's work was abandoned mid-task.
+
+---
+
+## session_progress
+
+**Wire name:** `session_progress`. **Emitted from:** `packages/server/src/telemetry/daemon-telemetry.ts:116`. **Session-scoped:** yes. **Payload block:** `session`, the same `SessionSummary` shape with `final: false` and no `exit`.
+
+A periodic roll-up from a daemon that is still running.
+
+**The question it answers:** what work is happening in sessions that have not ended yet?
+
+<Warning>
+  This used to be emitted **as** `daemon_stopped`, so an event named for an exit fired while the
+  process was alive. Count sessions with `daemon_stopped`. Sum work with both. The two populations
+  are close to opposites: a daemon that served a tool call does not idle-exit, so the flushes and
+  the clean exits describe different kinds of session.
+</Warning>
+
+---
+
+## verification_completed
+
+**Wire name:** `verification_completed`. **Emitted from:** `packages/server/src/tools/invoke-tool.ts:144` and `packages/server/src/telemetry/run-telemetry.ts:39`. **Session-scoped:** yes. **Payload block:** `verification`.
+
+### `VerificationSchema`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `via` | string, 1 to 64 | Which tool produced the verdict |
+| `verified` | string, 1 to 16 | `yes`, `no` or `unknown`. Reticle's honesty grade, not pass or fail |
+| `passed` | boolean | Did the underlying assertion hold? Distinct from `verified` on purpose |
+| `falseGreenCaught` | boolean | The assertion passed and Reticle refused to call it verified. The thesis as one boolean |
+| `durationMs` | int, optional |  |
+| `browser` | string, optional | `headless`, `headed` or `attached`. Three different products, previously one number |
+| `brand` | `BrowserBrand`, optional | `chrome`, `edge`, `arc`, `dia`, `brave`, `opera`, `firefox`, `safari`, `other`. Absent rather than `unknown` when the page did not say |
+| `reason` | `VerifiedReason`, optional | Which clause of the honesty rule decided this. Absent means unclassified, never guessed |
+| `uncleanLoss` | `CaptureLoss`, optional | What was lost when `reason` is `unclean_capture`. One value, not a list, so a dashboard can group by it |
+
+**The question it answers:** was an app actually verified, and how often did that catch something a green test would have missed? This is the product's reason to exist expressed as an event.
+
+---
+
+## project_profiled
+
+**Wire name:** `project_profiled`. **Emitted from:** `packages/server/src/telemetry/daemon-telemetry.ts:91`. **Session-scoped:** yes. **Payload block:** `project`. Once per daemon start, so it is cheap.
+
+### `ProjectProfileSchema`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `stack` | string, optional | Framework detected from package.json |
+| `stackSource` | `cwd` \| `workspace` | Where it was found, and therefore how much to trust its absence |
+| `stackMajor` | int, optional | Major version only. A full semver is a fingerprint |
+| `size` | `ProjectSize` | `tiny`, `small`, `medium`, `large`, `huge`. A bucket answers "toy or real codebase"; an exact file count starts to identify |
+| `monorepo` | boolean, optional |  |
+| `git` | `GitState` | `none`, `local_only`, `remote` |
+| `forge` | `RepoForge`, optional | `github`, `gitlab`, `bitbucket`, `azure`, `sourcehut`, `codeberg`, `self_hosted`. Never the hostname of a private host |
+| `ageWeeks` | int, optional | Whole weeks since the first commit. Weeks, not a date: a date plus a stack narrows to a repo |
+| `flowCount`, `baselineCount`, `visualBaselineCount`, `runCount`, `capsuleCount` | int | Adoption of each artifact type |
+| `hasContract` | boolean | A checked-in `.reticle/contract.json` |
+| `featuresUsed` | array of strings, up to 24 | Which feature families this project has touched |
+| `featureDepth` | number 0 to 1 | The fraction of shipped feature families in use |
+
+**The question it answers:** are they using all of Reticle or three tools of it? That is the difference between a retention problem and an activation problem, and both look identical in a DAU chart.
+
+---
+
+## version_changed
+
+**Wire name:** `version_changed`. **Emitted from:** `packages/server/src/update/updater.ts:35`. **Session-scoped:** no. **Payload block:** `versionChange`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `from` | string, 1 to 64 |  |
+| `to` | string, 1 to 64 |  |
+| `direction` | string, 1 to 16 | `update` or `rollback`. A rollback is a release-quality alarm |
+| `nudged` | boolean, optional | An agent had been told about exactly this version recently, so the nudge plausibly caused it |
+
+**The question it answers:** are people upgrading, and did our nudge do anything? Without `nudged`, "the nudge never fired" and "the nudge fired and nobody acted" are indistinguishable, and they need opposite responses.
+
+---
+
+## runtime_crashed
+
+**Wire name:** `runtime_crashed`. **Emitted from:** `packages/server/src/daemon/daemon-resilience.ts:155`. **Session-scoped:** yes. **Payload block:** `crash`.
+
+### `CrashSchema`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `kind` | string, 1 to 32 | `uncaught_exception` or `unhandled_rejection` |
+| `errorType` | string, optional | The constructor name. Coarse, safe, enough to triage |
+| `fingerprint` | string, optional | Hash of the type plus our own frames. Groups the same crash everywhere |
+| `message` | string, up to 300 | Every variable part replaced by `*`. This is what turns the fingerprint from an opaque key into a readable defect |
+| `frames` | array of strings, up to 12 | **Reticle-owned** frames only, innermost first, as `function@file:line`. User and Node frames are dropped before this is built |
+| `tool` | string, optional | The MCP tool in flight |
+| `breadcrumb` | array of strings, up to 12 | The tool calls immediately before. Names only, from our fixed vocabulary |
+| `nodeVersion`, `arch` | string, optional | Crashes cluster hard by runtime version and architecture |
+| `machine` | `MachineSnapshot`, optional | "Out of memory" and "our bug" look identical in a stack trace |
+| `syscall`, `errno` | string, optional | `connect`, `write`, `ECONNREFUSED`. The symbolic name, never the platform number |
+| `loopback` | boolean, optional | Was the target this machine? Refused on loopback is our lifecycle problem; refused off-box is not |
+| `port` | `CrashPort` | `reticle` or `other`. The number itself is never sent |
+| `internalFrame` | string, optional | The innermost Node source frame, only when no Reticle frame survived |
+
+**The question it answers:** what is crashing, where, and can we fix it without asking the user for a repro? The first version of this carried only a fingerprint, which made crashes rankable and completely undiagnosable.
+
+---
+
+## feedback_submitted
+
+**Wire name:** `feedback_submitted`. **Emitted from:** `packages/server/src/telemetry/feedback.ts:256` and `:270`. **Session-scoped:** yes. **Payload block:** `feedback`.
+
+The one kind that carries author-written free text, which is exactly why it is never emitted passively. It exists only because an agent called `reticle_feedback` or a human ran [`reticle feedback`](/cli/feedback). It has its own kill switch.
+
+### `FeedbackSchema`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `source` | `FeedbackSource` | `agent` or `human` |
+| `kind` | `FeedbackKind` | `bug`, `gap`, `ambiguity`, `feature_request`, `improvement`, `experience` |
+| `text` | string, 1 to 4000 | The author's account |
+| `trace` | string, up to 8000 | Agent only: the call and response trail behind the report |
+| `rating` | int 1 to 5, optional | Human only |
+| `need` | string, up to 1000 | Why it is wanted. The goal, not the proposed solution |
+| `impact` | string, up to 1000 | What measurably gets better |
+| `currentApproach` | string, up to 1000 | How the author works around it today. Often the most valuable field in the report |
+| `model` | string, optional | The agent's model, self-reported. MCP cannot report it, so asking is the only mechanism |
+| `client`, `clientVersion` | string, optional | The MCP client and its version |
+| `stack`, `stackMajor` | string, int, optional | Framework and its major version |
+| `runtime` | `AppRuntime` | `web`, `electron`, `tauri` |
+| `engine` | `BrowserEngine` | `blink`, `gecko`, `webkit` |
+| `driver` | `PageDriver` | `cdp` or `sdk` |
+| `mcpScope` | `McpScope` | `user` or `project` |
+
+**The question it answers:** what is broken, missing or awkward, in the words of the person or agent who hit it? The three agent kinds are kept distinct on purpose: a bug is our defect, a gap is a thing we cannot see at all, and an ambiguity is a verdict the agent could not act on.
+
+`text` and `trace` are the only free-text fields Reticle ever sends. They are capped and redacted client-side before the wire, and the CLI prints the payload before sending it.
+
+---
+
+## identified
+
+**Wire name:** `identified`. **Emitted from:** `packages/server/src/telemetry/identify.ts:77`. **Session-scoped:** no. **Payload block:** `identity`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `context` | `UsageContextKind` | `company`, `side_project`, `open_source`, `learning`. Required |
+| `company` | string, 1 to 128, optional |  |
+| `email` | string, 3 to 254, optional |  |
+
+**The question it answers:** who is this, when they have chosen to say? The only personal data Reticle ever transmits, and it transmits it only because a human ran [`reticle identify`](/cli/identify). Reticle never infers an identity from a git remote, a git config email, or anything else. That refusal is deliberate.
+
+---
+
+## mcp_client_connected
+
+**Wire name:** `mcp_client_connected`. **Emitted from:** `packages/server/src/telemetry/mcp-connection.ts:29`. **Session-scoped:** yes. **Payload block:** `connection`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `reconnect` | boolean | False on the first attach to this daemon, true for every attach after |
+| `daemonAgeMs` | int | How long the daemon had been up first |
+| `client` | string, optional | **Never populated today.** The schema defines it and `mcp-connection.ts:35` would spread it, but the only caller (`http-server.ts:202`) passes no argument, so it is absent on every event ever sent. The client name and version _are_ captured, at `mcp/mcp.ts:461` and `:471` on `oninitialized`, and land in `session.clients` / `session.clientVersions`. Per-connect client attribution is therefore only reachable by joining to the session summary on `sessionId`. |
+
+**The question it answers:** is somebody actually using this, as opposed to having it installed and running? A daemon can sit up for days with no agent attached. A large `daemonAgeMs` on the **first** connect is the interesting case: Reticle was started and then sat unused, which is an onboarding failure nobody would otherwise report. Reconnect churn is visible here too, and a client reattaching every few minutes looks identical to healthy usage in every other metric.
+
+---
+
+## app_instrumented
+
+**Wire name:** `app_instrumented`. **Emitted from:** `packages/server/src/telemetry/app-instrumented.ts:55`. **Session-scoped:** yes. **Payload block:** `instrumentation`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `initialized` | boolean | Whether `reticle init` had been run here, that is, whether a projectId is stamped |
+| `agentAttached` | boolean | Whether an MCP client was already attached when the app arrived |
+| `msToFirstApp` | int | How long the daemon had been up. Large values mean Reticle sat there with nothing wired |
+
+**The question it answers:** did the second half of the install ever happen? Reticle's install has two halves, registering the MCP server and getting the SDK into a running page, done at different times by different commands and often in different directories. Almost everyone completes the first.
+
+Fired **once per daemon run**, on the first connect only, so `daemon_started` to `app_instrumented` is a real rate and a reconnecting page cannot inflate it. It deliberately carries no stack and no framework: `project_profiled` reports both for the same daemon run, and the two join on `sessionId`.
+
+---
+
+## mcp_connection_lost
+
+**Wire name:** `mcp_connection_lost`. **Emitted from:** `packages/server/src/mcp/mcp-outage.ts:53`. **Session-scoped:** no. **Payload block:** `outage`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `stage` | `OutageStage` | `first` or `budget_spent` |
+| `reason` | `OutageReason` | `sse_ended`, `sse_error`, `sse_aborted`, `sse_closed`, `connect_error`, `other` |
+| `attempts` | int | Consecutive reconnects tried when this was reported |
+| `pendingLost` | int, optional | In-flight tool calls this drop actually killed |
+
+**The question it answers:** how often does a real user's MCP server go down, and does it come back? Capped at **two per proxy process**: once on the first outage of a session, and once if the retry budget is spent. An event per reconnect would bill for the pathology instead of measuring it.
+
+`pendingLost` is the part an agent can feel. Zero means nobody noticed. Non-zero is the number of calls that came back an error, and the count worth driving down. `OutageReason.OTHER` exists so a new proxy reason string can arrive without raw free text reaching the wire.
+
+---
+
+## init_completed
+
+**Wire name:** `init_completed`. **Emitted from:** `packages/server/src/telemetry/init-telemetry.ts:32`. **Session-scoped:** no. **Payload block:** `init`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `ok` | boolean |  |
+| `reason` | string, up to 64, optional | Classified cause on failure. Our vocabulary, never a raw error or a path |
+| `stack` | string, up to 64, optional | The framework it detected, so we can see which stacks fail to set up |
+| `mcpRegistered` | boolean, optional | Whether the registration step succeeded. The step most likely to fail silently |
+
+**The question it answers:** does the onboarding work? Before this event existed, a setup that failed on a missing dependency was indistinguishable from a user who never tried.
+
+---
+
+## bug_found
+
+**Wire name:** `bug_found`. **Emitted from:** `packages/server/src/tools/invoke-tool.ts:166` and `packages/server/src/telemetry/run-telemetry.ts:59`. **Session-scoped:** yes. **Payload block:** `bug`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `source` | `BugSource` | `contradiction`, `crawl`, `replay`, `assertion`, in descending order of "a human would have missed this" |
+| `kind` | string, 1 to 64 | The classified kind from Reticle's own findings vocabulary, for example `signal-contradicted` |
+| `falseGreen` | boolean | The defect **presented as success**: the screen advanced, the click looked fine, and another channel showed it had not |
+| `tool` | string, optional | Which tool surfaced it |
+| `repeat` | boolean | This kind was already reported in this session, so this is another instance of a defect already counted |
+| `attribution` | `BugAttribution` | `app`, `request`, `reticle` or `unclassified`. **Always present**, because absence and "we looked and could not tell" are different facts |
+
+**The question it answers:** does Reticle work? Everything else here measures whether Reticle is used.
+
+Three properties of this schema exist to stop the number being wrong in a way that only shows up after it has been published:
+
+- `falseGreen` is defined by the **presentation**, not by "an assertion passed", because the same defect arrives both ways: through `reticle_assert` there is a passing assertion to contradict, and through a crawl there is no assertion at all.
+- `repeat` separates distinct defects from instances. Count `repeat: false` for distinct, count everything for frequency. Scoped to the session, because the payload deliberately carries no selector or URL, so the same defect in two sessions cannot be recognised as one, and must not be.
+- `attribution` separates a defect in the app under test from the agent's own bad predicate and from Reticle's own blind spot. Only `attribution: 'app'` belongs in a published defect count, and `app` requires **positive evidence**: something the app itself did, taken from core's `ABSENCE_DERIVED_CONTRADICTIONS` line, never "nothing else explained it". Everything the evidence cannot settle is `unclassified`, which is a value rather than a gap.
+
+The payload never carries a selector, a URL, an element, or any description of the user's app. It reports **that** a class of defect was found, never what it was in.
+
+---
+
+## tool_refused
+
+**Wire name:** `tool_refused`. **Emitted from:** `packages/server/src/telemetry/tool-refused.ts:49`, reached from four call sites in `packages/server/src/tools/invoke-tool.ts` (`:285` a handler threw, `:325` the wrong-tab guard, `:346` a message-shaped refusal, `:376` the `{error}` return convention). **Session-scoped:** yes. **Payload block:** `refusal`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `tool` | string, 1 to 64 | Which tool refused. A name from Reticle's own namespace, never app data |
+| `reason` | `RefusalReason` | `no_session`, `no_match`, `unsupported`, `bad_args`, `not_ready`, `other` |
+| `retried` | boolean | The call immediately before this one was the same tool, also refused |
+
+**The question it answers:** why does the largest cohort in the funnel go quiet? The refusal path already computes a precise diagnosis and hands it to the agent as prose; until this event it then threw it away, so a user who hit a wall on their first call emitted nothing at all.
+
+- The reason is a bucket over the recovery table in `error-recovery.ts`, not a second list of patterns, so a recovery added without a reason does not compile.
+- `retried` lands on the **retry**, not the first refusal. Reporting it the other way round means holding the first event back until a next call reveals whether one came, which loses it entirely for the agent that gives up, the population the event exists to describe.
+- Capped at 50 per daemon run. A stuck agent is the shape that produces hundreds, and `consecutiveRepeats` on the session summary still reports how long the loop ran.
+
+The message itself never leaves. It interpolates whatever the caller asked for (a baseline name, a selector, a testid), so only the tool name and the bucket are sent.
+
+---
+
+## Adding a new event
+
+Read [`docs/telemetry-contract.md`](/telemetry-contract) before you touch anything that emits. The short version:
+
+1. Add the kind to `TelemetryEventKind` in `packages/core/src/telemetry.ts`, with a doc comment saying what question it answers.
+2. Define its payload schema in the same file, or in `telemetry-session.ts` if it is a rollup.
+3. Add the payload key to `TelemetryEventSchema`.
+4. Add it to the emitter's key allowlist, or it will be silently dropped.
+5. Decide whether it is session-scoped and add it to `SESSION_SCOPED` if so.
+6. If it produces a verdict, add the tool to `VERDICT_TOOLS` (`packages/server/src/tools/feedback-tools.ts`). If it introduces a finding kind, add that to core's enum and never re-list it locally.
+
+`telemetry-contract.test.ts` enforces the parts that can be enforced, and `pnpm test:e2e` runs a spec that fires every event kind against a real capture endpoint and asserts each one lands.
+
+<Warning>
+  **Telemetry fails silently.** Nothing throws, no test reddens, and the data is simply gone. An
+  event that is never emitted looks exactly like a feature nobody uses, and you will not find out
+  for months. That is the whole reason this contract is written down instead of remembered.
+</Warning>
+
+<Card title="What users see" icon="shield-check" href="/telemetry">
+  The plain-language version, and every way to switch it off.
+</Card>

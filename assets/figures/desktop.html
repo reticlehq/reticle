@@ -1,0 +1,75 @@
+<!doctype html><meta charset="utf-8">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{background:#0b0d12}
+  body{width:1400px;background:#0b0d12;color:#eef0f6;
+       font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Inter,sans-serif;padding:52px 58px}
+  h2{font-size:30px;font-weight:660;letter-spacing:-.6px;margin-bottom:7px}
+  .lede{color:#9aa0b2;font-size:17px;margin-bottom:32px}
+  .row{display:flex;gap:26px;align-items:stretch}
+  .col{flex:1;display:flex;flex-direction:column}
+  .tag{font-size:13.5px;font-weight:680;letter-spacing:.09em;text-transform:uppercase;margin-bottom:11px}
+  .tag.a{color:#7d8496}.tag.b{color:#ff9d86}
+  .panel{background:#11141c;border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:20px 22px;flex:1}
+  .panel.win{background:#141821;padding:0;overflow:hidden}
+  .bar{background:#1b202b;padding:10px 14px;display:flex;gap:7px;align-items:center;border-bottom:1px solid rgba(255,255,255,.07)}
+  .dot{width:11px;height:11px;border-radius:50%}
+  .bar span{margin-left:9px;font-size:13px;color:#8b91a3}
+  .app{padding:26px 24px}
+  .app h3{font-size:19px;font-weight:640;margin-bottom:4px}
+  .app p{font-size:14px;color:#868da0;margin-bottom:18px}
+  .item{display:flex;justify-content:space-between;align-items:center;padding:11px 13px;
+        border:1px solid rgba(255,255,255,.07);border-radius:9px;margin-bottom:8px;font-size:14.5px}
+  .ok{color:#6fd08c;font-size:12.5px;font-weight:640}
+  .muted{color:#7d8496}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14.5px;line-height:1.85;display:block;white-space:pre}
+  .k{color:#8fb4ff}.s{color:#9ce6b4}.n{color:#f0c674}.r{color:#ff8f8f}
+  .hl{background:rgba(255,120,120,.12);box-shadow:inset 3px 0 0 #ff8f8f;margin:0 -22px;padding:0 19px}
+  .verdict{margin-top:16px;border-left:3px solid #ff9d86;padding:2px 0 2px 15px}
+  .verdict b{display:block;font-size:15px;color:#ffbcac;margin-bottom:3px;font-family:ui-monospace,Menlo,monospace}
+  .verdict span{font-size:14.5px;color:#a3a9bb;line-height:1.55}
+  .foot{margin-top:30px;font-size:15px;color:#8b91a3}
+  .foot b{color:#eef0f6;font-weight:620}
+</style>
+<h2>The window looks fine. The IPC call did not.</h2>
+<p class="lede">A desktop app's most interesting failures happen where the renderer cannot see them.</p>
+<div class="row">
+  <div class="col">
+    <div class="tag a">What you see</div>
+    <div class="panel win">
+      <div class="bar">
+        <span class="dot" style="background:#ff5f57"></span>
+        <span class="dot" style="background:#febc2e"></span>
+        <span class="dot" style="background:#28c840"></span>
+        <span>Todos</span>
+      </div>
+      <div class="app">
+        <h3>Your tasks</h3>
+        <p>3 items · synced</p>
+        <div class="item"><span>Ship the release</span><span class="ok">done</span></div>
+        <div class="item"><span>Write the changelog</span><span class="muted">open</span></div>
+        <div class="item"><span>Archive old items</span><span class="ok">done</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="tag b">What Reticle sees</div>
+    <div class="panel">
+      <code><span class="k">"signals"</span>: [<span class="s">"todos:loaded"</span>],
+<span class="hl"><span class="k">"network"</span>: [{ <span class="k">"method"</span>: <span class="s">"ipc"</span>,</span>
+<span class="hl">  <span class="k">"url"</span>: <span class="s">"ipc://todos:archive"</span>,</span>
+<span class="hl">  <span class="k">"status"</span>: <span class="r">500</span>, <span class="k">"ms"</span>: <span class="n">82</span> }],</span>
+<span class="k">"contradictions"</span>: [{
+  <span class="k">"kind"</span>: <span class="s">"signal-contradicted"</span>,
+  <span class="k">"claim"</span>: <span class="s">"the app fired</span>
+<span class="s">           \"todos:loaded\"</span>,
+  <span class="k">"counter"</span>: <span class="s">"1 request(s) in the</span>
+<span class="s">           same window failed"</span>,
+  <span class="k">"detail"</span>: <span class="s">"IPC ipc://todos:archive</span>
+<span class="s">           → 500"</span>
+}]</code>
+      <div class="verdict"><b>signal-contradicted</b><span>The app said it loaded. One IPC call in the same window returned 500. Reticle reports both instead of believing the happier one.</span></div>
+    </div>
+  </div>
+</div>
+<p class="foot">Electron and Tauri. <b>No browser, no screenshot, no URL to open.</b> Your app dials the daemon, and the agent drives it with the same tools it uses on the web.</p>

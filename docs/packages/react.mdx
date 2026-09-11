@@ -1,0 +1,91 @@
+---
+title: '@reticlehq/react'
+description: The React kit for Reticle, mapping a DOM node to its component stack, its hook state, and its source file.
+icon: react
+---
+
+`@reticlehq/react` is the Reticle kit for React apps, and usually the only SDK package a React user needs: it re-exports the whole browser SDK and adds fiber-tree work that maps a DOM node to its component stack, its hook state, and its source file. If your app is React, install this one and not `@reticlehq/browser`.
+
+**Apache 2.0. Depends on `@reticlehq/browser` and `@reticlehq/core`. Peer dependency: `react >= 18`.**
+
+## Why it exists
+
+This is the package that turns "the button is broken" into `src/components/Login.tsx:81`. Finding a bug is half the job; Reticle's answer to the other half lives here.
+
+```bash
+npm i -D @reticlehq/react
+```
+
+## It re-exports the browser SDK
+
+`export * from '@reticlehq/browser'` is in the barrel, so one install gives you `reticle`, `registerCapabilities`, every store adapter, and everything else on the [browser page](/packages/browser). You do not add `@reticlehq/browser` separately.
+
+```ts
+import { reticle, install } from '@reticlehq/react';
+install();
+reticle.connect();
+```
+
+## Exports
+
+### Setup
+
+| Export | Signature | What it does |
+| --- | --- | --- |
+| `install` | `(): void` | Idempotent. Registers the `react` adapter and installs the render meter. Call it once, before `connect()` |
+
+The [Vite plugin](/packages/vite-plugin) injects `install()` and `reticle.connect()` for you, so a Vite user never writes either line.
+
+### Mapping a node to its component
+
+| Export             | Signature                                |
+| ------------------ | ---------------------------------------- |
+| `identify`         | `(el: Element) => ComponentInfo \| null` |
+| `readState`        | `(el: Element) => ComponentStateResult`  |
+| `hasHoverHandlers` | `(el: Element) => boolean`               |
+| `relativeToRoot`   | `(file: string) => string`               |
+
+`identify` walks the fiber tree to build the component stack and source location. `readState` reads hook state, bounded. `relativeToRoot` turns an absolute source path into a repository-relative one using the root the plugin stamped.
+
+### Render measurement
+
+`installRenderMeter`, `resetRenderMeter`, `getRenderStats`, and the `RenderStats` type. This is what makes a render loop visible as a number rather than a hunch.
+
+### Hydration
+
+`HYDRATION_COMPLETE_SIGNAL`, `createHydrationTracker`, type `HydrationTracker`.
+
+### Error boundaries
+
+`buildErrorBoundaryData`, `reticleOnCaughtError`, type `ErrorBoundaryData`. Wire `reticleOnCaughtError` into React's `onCaughtError` and a boundary that swallows an error stops being invisible.
+
+### Hydration mismatches
+
+`buildHydrationErrorData`, `isHydrationMismatch`, `reticleOnRecoverableError`, type `HydrationErrorData`.
+
+### Commits and CDP
+
+`createCommitAggregator`, type `CommitAggregator`. `readComponentAt`, `buildReaderExpression`, `parseComponentRead`, type `CdpComponentRead`.
+
+## The `./store` subpath
+
+One export, and the only module in the package that imports React:
+
+```ts
+import { useReticleStore } from '@reticlehq/react/store';
+
+function Cart() {
+  const [items, setItems] = useState([]);
+  useReticleStore('cart', items); // now readable via reticle_state
+}
+```
+
+`useReticleStore(name: string, value: unknown): void`.
+
+## Source mapping needs a build step
+
+React 19 dropped `_debugSource`, so `identify` can name the component but not the file unless something stamps the source at build time. That is [`@reticlehq/babel-plugin`](/packages/babel-plugin), pulled in for you by [`@reticlehq/vite-plugin`](/packages/vite-plugin) or [`@reticlehq/next`](/packages/next).
+
+<Card title="Reading component state" icon="layer-group" href="/state-management">
+  What `reticle_state` can see, and how to widen it.
+</Card>

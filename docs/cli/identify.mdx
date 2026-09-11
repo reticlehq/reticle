@@ -1,0 +1,76 @@
+---
+title: reticle identify
+description: Opt in to telling the Reticle maintainers who you are, and undo it at any time.
+icon: id-card
+---
+
+`reticle identify` attaches a name, a company, an email and a usage context to this machine's Reticle install and sends them to the maintainers, so support or an enterprise trial has someone to talk to. It is off unless you run it, and `reticle identify --forget` undoes it.
+
+It is opt-in and deliberately not interactive. A prompt in the middle of someone's work is pressure, and this is the one command where the choice has to be free. You type what you want to share, or you never run it at all.
+
+```bash
+npx @reticlehq/server identify --context <company|side_project|open_source|learning> [--company "Acme"] [--email you@acme.com] [--forget]
+```
+
+## Flags
+
+| Flag | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `--context K` | one of `company`, `side_project`, `open_source`, `learning` | none. Required unless `--forget` | What Reticle is being used for |
+| `--company N` | string | unset | Your company name. Optional |
+| `--email E` | string | unset | An address to reach you on. Optional |
+| `--forget` | boolean | `false` | Delete the local identity file and stop sending it |
+
+Every field except the context is optional, so you can say "this is a company" without saying which, or name the company without leaving an address.
+
+## What it prints
+
+The consent notice, then the exact payload, then the result:
+
+```
+sending      {"context":"company","company":"Acme","email":"you@acme.com"}
+thanks       saved and sent. we may reach out; `reticle identify --forget` undoes this.
+```
+
+`not sent` replaces the last line when telemetry is disabled on the machine, in which case the identity is saved locally only.
+
+With `--forget`:
+
+```
+forgotten    the local identity file is deleted; nothing further is sent.
+             to have what was already sent removed, email support@reticlehq.com
+```
+
+Run with no valid `--context`, it prints the current identity (if any), the usage, and the full consent notice, and exits `1`. Real capture on a machine with no identity on file:
+
+```
+usage: reticle identify --context <company|side_project|open_source|learning>
+       [--company "Acme"] [--email you@acme.com] [--forget]
+
+This sends the details you type here to the Reticle maintainers, so we can contact you and
+understand how teams use Reticle. It is linked to this machine's anonymous id, which means it
+also connects the anonymous usage already recorded from this machine to what you enter now.
+Nothing about your app, your code, or your repository is included, and nothing else changes.
+Undo it any time with `reticle identify --forget` (that stops future sends and deletes the local file;
+email support@reticlehq.com to have what was already sent removed).
+```
+
+<Warning>
+  Identifying links this machine's anonymous id to what you type, which also connects the anonymous
+  usage already recorded from this machine to that identity. The command says so before it sends
+  anything. Nothing about your app, your code, or your repository is ever included.
+</Warning>
+
+## Exit codes
+
+| Code | Meaning                                                                        |
+| ---- | ------------------------------------------------------------------------------ |
+| `0`  | Identity saved, or forgotten, or usage printed when an identity already exists |
+| `1`  | No valid `--context` and no identity on file                                   |
+
+## Worked example
+
+```bash
+npx @reticlehq/server identify --context open_source --email maintainer@example.com
+npx @reticlehq/server identify --forget
+```

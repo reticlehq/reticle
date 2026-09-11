@@ -1,0 +1,98 @@
+---
+title: '@reticlehq/server'
+description: The Reticle bridge, MCP server, and the reticle CLI, all in one Node package.
+icon: server
+---
+
+`@reticlehq/server` is the Reticle bridge, MCP server and CLI in one Node package. It hosts the WebSocket your app dials into, exposes the MCP tools your agent calls, and ships the `reticle` binary. **You do not add it to your project**: your agent runs it with `npx @reticlehq/server mcp`.
+
+**Licensed under `SEE LICENSE IN LICENSE`, not Apache 2.0 like the rest.** This is the package the enterprise terms apply to.
+
+## Why it exists
+
+Agents speak MCP. Browsers speak WebSocket. Somebody has to be fluent in both, and own the `.reticle/` directory where flows, baselines, capsules and runs are stored. It never imports a DOM API.
+
+## Do you install it?
+
+Not into your project. Your agent launches it:
+
+```bash
+npx @reticlehq/server mcp
+```
+
+The `bin` entry is `reticle`, so `npx @reticlehq/server <command>` works once it is on disk.
+
+## Dependencies
+
+**Runtime:** `@modelcontextprotocol/sdk`, `@reticlehq/core`, `ws`, `zod`.
+
+**Optional:** `playwright`, `pixelmatch`, `pngjs`. Optional on purpose: Reticle observes the browser you already have. You only need Playwright for the paths that launch or diff one, which is `reticle drive`, `reticle verify`, and visual baselines.
+
+## Exports map
+
+| Subpath | What it is                                                                             |
+| ------- | -------------------------------------------------------------------------------------- |
+| `.`     | The programmatic API                                                                   |
+| `./cli` | The CLI entry, which also exports `parseCliArgs`, `CLI_USAGE` and the `CliResult` type |
+
+## Starting a server in process
+
+```ts
+import { start, startDaemon, type StartOptions, type RunningServer } from '@reticlehq/server';
+
+const server: RunningServer = await start({ port: 4400, headless: true });
+await server.close();
+```
+
+`start(options?: StartOptions): Promise<RunningServer>` boots the bridge plus the MCP stdio transport. `startDaemon(options?: StartOptions): Promise<RunningServer>` is what the detached daemon runs.
+
+### `StartOptions`
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `port` | `number` | `RETICLE_PORT`, else `4400` |
+| `host` | `string` | `RETICLE_HOST`, else loopback. A non-loopback host requires a token |
+| `token` | `string` | `RETICLE_TOKEN` |
+| `allowedOrigins` | `string[]` | `RETICLE_ALLOWED_ORIGINS` |
+| `mcp` | `boolean` | `true`. `false` skips the stdio transport |
+| `cdpUrl` | `string` | `RETICLE_CDP_URL`. Attach to a running browser instead of launching one |
+| `driveUrl` | `string` | unset |
+| `headless` | `boolean` | `true` |
+| `realInputFactory` | `(opts) => OwnedRealInputProvider` | built in |
+| `injectConnect` | `InjectConnectOptions` | unset |
+| `storageState` | `string` | unset |
+| `reticleRoot` | `string` | `cwd()/.reticle` |
+| `pairingTokenDir` | `string` | `~/.reticle` |
+| `now` | `() => number` | `Date.now` |
+| `toolProfile` | `string` | retired names (`core`/`full`/…) still map. Live switch is `RETICLE_ADVERTISE_ALL_TOOLS=1`. Default is the lean surface |
+| `httpVerify` | `boolean` | `false` |
+| `httpVerifyPort` | `number` | `RETICLE_VERIFY_DEFAULT_PORT` (`7331`) |
+| `httpVerifyToken` | `string` | `RETICLE_VERIFY_TOKEN` |
+
+### `RunningServer`
+
+`bridge: Bridge`, `close(): Promise<void>`, and the optional `realInput`, `verifyPort`, `isIdle()`, `agentAttached()`, `token`.
+
+## What else the barrel exports
+
+A large surface, because the test runner and the CI paths are built on it. The families:
+
+| Family | Representative exports |
+| --- | --- |
+| Tools | `TOOLS`, `ReticleTool`, `runTool`, `createToolInvoker`, `filterTools`, `resolveToolSurface`, `CORE_TOOL_NAMES`, `SESSION_BOUND_TOOLS`, `SESSION_EXEMPT_TOOLS` |
+| Bridge and sessions | `Bridge`, `Session`, `SessionManager`, `RingBuffer`, `resolveBridgeSecurity`, `buildSessionRecommendation` |
+| Stores on disk | `FlowStore`, `BaselineStore`, `VisualStore`, `RecordingStore`, `RunStore`, `ProjectStore`, `AnnotationStore`, `createNodeFileSystem`, `reticleDirPaths`, `readContract`, `writeContract` |
+| Flow replay | `replayFlow`, `assertSuccess`, `successToPredicate`, `classifyFlowAssertions`, `FlowAssertionGrade`, `nearestTestid` |
+| Runs and CI | `ReticleRunner`, `buildVerificationRun`, `computeVerdict`, `renderRunReport`, `buildRepairPacket`, `classifyChangedFiles`, `buildRisks`, `redactForProfile` |
+| HTTP verify | `handleVerifyRequest`, `createVerifyRequestListener`, `startVerifyServer`, `VERIFY_PATH`, `TOKEN_HEADER`, `tokenOk` |
+| Predicates | `evaluatePredicate`, `waitForPredicate`, `PredicateSchema`, `buildReactionReport` |
+| Browser pool | `BrowserPool`, `playwrightLauncher`, `resolveMaxContexts`, `DEFAULT_LEASE_TTL_MS` |
+| Real input | `CdpRealInputProvider`, `LaunchedRealInputProvider`, `performGesture`, `boxCenter`, `isPointerAction`, `DriveError` |
+| Daemon lifecycle | `writePid`, `readPid`, `removePid`, `isRunning`, `isAlive`, `logPath`, `classifyDaemonLife`, `DAEMON_HEARTBEAT_MS` |
+| Crawl and scroll | `crawl`, `scrollToFind` |
+| Visual | `diffPng` |
+| Domain model | `buildDomainModel` |
+
+<Card title="Every CLI command" icon="terminal" href="/cli">
+  The commands this package installs, one page each.
+</Card>

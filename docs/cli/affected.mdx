@@ -1,0 +1,53 @@
+---
+title: reticle affected
+description: List which saved flows must re-verify for a set of changed files.
+icon: code-branch
+---
+
+`reticle affected` answers one question: given these changed files, which saved flows cover them? It is the foundation the [gate](/cli/gate) and [watch](/cli/watch) are built on, and it costs your agent nothing per turn because it runs in the environment.
+
+```bash
+npx @reticlehq/server affected [--since <ref>] [file...]
+```
+
+## Arguments and flags
+
+| Argument | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `file...` | strings, positional | none | Explicit changed files |
+| `--since <ref>` | string | `HEAD` when no files are given | Also include files git reports as changed since this ref |
+
+With nothing after it, `reticle affected` means the working tree against `HEAD`. It used to be a usage error, while the rule `reticle init` writes into the agent's own instruction file told the agent to run it.
+
+## What it prints
+
+One `reticle_affected` line. Real capture from this repository, with the file and flow lists trimmed for length:
+
+```json
+{
+  "t": "2026-08-15T18:42:58.072Z",
+  "event": "reticle_affected",
+  "changedFiles": ["docs/cli.mdx"],
+  "affected": ["WEB-flow", "console-compose", "deploy-journey", "verify-route"],
+  "unknownProvenance": ["WEB-flow", "console-compose", "deploy-journey", "verify-route"]
+}
+```
+
+The real run named 47 flows in each list. The CLI prints this as a single line of JSON; it is pretty-printed here to be readable.
+
+| Field | Meaning |
+| --- | --- |
+| `changedFiles` | The resolved file set: your positional arguments plus whatever `--since` added |
+| `affected` | Saved flows that cover at least one of those files |
+| `unknownProvenance` | Flows with no recorded source mapping. They are listed as affected because the safe assumption is that they might be |
+
+## Exit codes
+
+Always `0`. A load error is logged as `reticle_affected_failed`, not thrown. Use [`reticle gate`](/cli/gate) when you want a non-zero exit.
+
+## Worked example
+
+```bash
+npx @reticlehq/server affected --since origin/main
+npx @reticlehq/server affected src/components/Login.tsx
+```

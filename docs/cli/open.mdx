@@ -1,0 +1,74 @@
+---
+title: reticle open
+description: Show the app in a browser, reusing the already-connected tab when there is one.
+icon: window-maximize
+---
+
+`reticle open` is the one-command "show me the app". It resolves the port, makes sure a daemon is up, and then either reuses the tab that is already connected or opens a new one.
+
+```bash
+npx @reticlehq/server open [url] [--port N]
+```
+
+## Arguments and flags
+
+| Argument | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `url` | string, positional, optional | unset | The URL to open. Omit it to reuse a connected tab |
+| `--port N` | number | `4400` (or `RETICLE_PORT`, or the port in `.reticle.json`) | Bridge port. If nothing is on it, `open` discovers a running daemon rather than making you hunt |
+
+It is idempotent. Re-running never piles up duplicate tabs.
+
+## What it prints
+
+One `reticle_open` line, whose fields say which of four things happened.
+
+| Fields | Meaning |
+| --- | --- |
+| `reusing` | A connected tab was already on the right page. Nothing was opened |
+| `reusing` + `requested` + `note` | A tab is connected on that origin but sitting on a different page. It was **left there**, not navigated. Drive it with `reticle_navigate` or open the URL yourself |
+| `opened` + `connected: true` | A browser was launched and a Reticle session appeared |
+| `opened` + `connected: false` + `note` | The URL went to the system default browser and no session showed up within 8 seconds. Almost always means the app carries no SDK, or dials a different port |
+| `error` | No app connected and no URL given, or the browser could not be launched |
+
+<Note>
+  `connected` is measured, not assumed. This command polls for a **new** session rather than printing
+  `{"opened": url}` unconditionally, so a run where nothing opened no longer looks like one where it did.
+  When the launcher itself cannot run, there is no `opened` field at all. Real capture:
+
+```
+{"event":"reticle_open","port":4499,"error":"could not launch a browser: spawn open ENOENT","recovery":"Nothing was opened. This command asks the OS to open a url in your default browser (`open` on this platform) and that failed, so the fix is on the OS side: open the url yourself, or set a default browser."}
+```
+
+Calling it with no URL when nothing has connected is the other `error` shape. It exits `0`, because reporting "there is nothing to show you" is a complete answer. Real capture, with the sentence break shown as `...`:
+
+```
+{"t":"2026-08-15T18:43:41.651Z","event":"reticle_open","port":4499,"error":"no app connected ... pass a url: reticle open <url>. Desktop app (Electron/Tauri)? There is no url to open: start it as you normally would and it connects to this bridge itself."}
+```
+
+</Note>
+
+<Warning>
+  This command does **not** use Reticle's own Chromium. It hands the URL to your system default
+  browser, so a `chromium` warning from `reticle doctor` has nothing to do with an `open` that came
+  back `connected: false`. That misread cost a reporter an afternoon in their bridge config.
+</Warning>
+
+<Warning>
+  For an Electron or Tauri app there is no URL to open. Start the app the way you normally would; it
+  dials the bridge itself.
+</Warning>
+
+## Exit codes
+
+| Code | Meaning                                                             |
+| ---- | ------------------------------------------------------------------- |
+| `0`  | Reused, opened, or reported that no app is connected                |
+| `1`  | A browser could not be launched, or the daemon could not be reached |
+
+## Worked example
+
+```bash
+npx @reticlehq/server open http://localhost:5173
+npx @reticlehq/server status    # confirm the session is really there
+```

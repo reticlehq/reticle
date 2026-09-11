@@ -1,0 +1,70 @@
+---
+title: reticle capsules
+description: List the saved fail-to-pass bug capsules recorded from failed assertions.
+icon: capsules
+---
+
+`reticle capsules` lists what is in `.reticle/capsules`. A capsule is a minimal failing reproduction plus the consequence that should have held. Replay one with the `reticle_flow_replay` tool.
+
+```bash
+npx @reticlehq/server capsules
+```
+
+No flags.
+
+## What it prints
+
+One `reticle_capsules` line: a `count` and an array. Real capture from this repository, trimmed to three of the seventy-nine entries and pretty-printed (the CLI prints it as a single line):
+
+```json
+{
+  "t": "2026-08-15T18:42:48.790Z",
+  "event": "reticle_capsules",
+  "count": 79,
+  "capsules": [
+    {
+      "id": "1786793143459-e5",
+      "origin": "failed-assert",
+      "expected": "signal auth:granted",
+      "observed": "signal \"auth:granted\" never fired",
+      "steps": 1
+    },
+    {
+      "id": "1786791565180-e12",
+      "origin": "failed-assert",
+      "expected": "declared consequence",
+      "observed": "route is '/actions', expected '/server-actions'",
+      "steps": 1
+    },
+    {
+      "id": "1785653101906-e3",
+      "origin": "failed-assert",
+      "expected": "declared consequence",
+      "observed": "not settled: 236 request(s) still in flight",
+      "steps": 1
+    }
+  ]
+}
+```
+
+| Field      | Meaning                                          |
+| ---------- | ------------------------------------------------ |
+| `id`       | Capsule id, timestamp plus a cursor              |
+| `flow`     | Present when the capsule came from a named flow  |
+| `origin`   | How it was captured, for example `failed-assert` |
+| `expected` | The consequence that was declared                |
+| `observed` | What actually happened                           |
+| `steps`    | How many steps the reproduction is               |
+
+## Exit codes
+
+| Code | Meaning                                                                  |
+| ---- | ------------------------------------------------------------------------ |
+| `0`  | Listed, even when the count is zero                                      |
+| `1`  | The capsule store could not be read. Logged as `reticle_capsules_failed` |
+
+## Worked example
+
+```bash
+npx @reticlehq/server capsules | jq '.capsules[] | select(.origin == "failed-assert") | .observed'
+```

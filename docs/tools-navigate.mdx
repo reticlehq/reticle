@@ -1,0 +1,107 @@
+---
+title: reticle_navigate
+description: Move the connected tab to a URL or reload it, and understand why ok does not mean the page arrived.
+icon: compass
+---
+
+`reticle_navigate` moves the connected browser tab to a URL, or reloads it in place with `{ "reload": true }`. Reach for it for a genuine document load: a deep link, a hard refresh, or the first visit. Clicking a link inside a single-page app is a route change, not a navigation, and does not need this tool.
+
+```json
+{ "url": "/deployments" }
+```
+
+Real response, with the throttled-tab `session` and `warning` fields trimmed off:
+
+```json
+{
+  "ok": true,
+  "url": "http://localhost:4310/deployments",
+  "confirmed": false,
+  "waitedMs": 5000,
+  "note": "ok means the navigation was DISPATCHED, not that the page arrived. The SDK is torn down by the navigation itself, so nothing here can see the new document, and no session reconnected at the new URL within 5000ms. A slow app may still be on its way (an SPA reattaching under HMR can take 30-60s): navigate again with a larger timeout_ms, or call reticle_sessions to confirm a session reconnected before acting; if none appears, the page did not load or is not instrumented."
+}
+```
+
+## `confirmed: true` when the page comes back in time
+
+The daemon waits up to `timeout_ms` (default 5000) for the SDK to re-announce itself. When it does, you are told so and can act immediately without a `reticle_sessions` round trip. This is a real reload response:
+
+```json
+{
+  "ok": true,
+  "confirmed": true,
+  "note": "the page came back and re-announced itself under the same session id, so this session is live again. Anything captured before the reload is gone with the old document."
+}
+```
+
+Read the second sentence, which is the one that costs people a turn. `confirmed: true` restores the session, not the evidence: every event, network call and console line captured before the reload went with the old document.
+
+## `confirmed: false` is the honest part
+
+A full navigation destroys the document the SDK was living in. Reticle cannot report on the new page from inside the old one, because the old one no longer exists. So it tells you what it actually knows: the navigation was dispatched.
+
+Most tools would return `ok: true` and let you assume arrival. When the page then fails to load, or loads without instrumentation, you get a confusing cascade of "element not found" errors several calls later, with nothing pointing at the real cause.
+
+`waitedMs` says which of two things you are looking at. Reticle stopped waiting at the budget it had, or the page never came back. The first is fixed by asking for more: a single-page app reattaching under HMR has been measured at 30–60s, which no default should wait for on every call, but which the caller who knows the app can grant.
+
+```json
+{ "url": "/deployments", "timeout_ms": 45000 }
+```
+
+## The pattern after navigating
+
+```json
+{ "url": "/deployments" }
+```
+
+then confirm a session reconnected:
+
+```json
+{}
+```
+
+with [`reticle_sessions`](/tools-sessions), and only then snapshot. If no session appears at the new URL, the page did not load or is not instrumented. And you know that immediately rather than three calls later.
+
+<Warning>
+  **Refs do not survive a navigation.** A new document means new refs. Across one afternoon on the
+  same fixture, the same "Sign in" button was `e105`, then `e305`, then `e3`. Re-snapshot; never
+  carry refs across. Reticle refuses a stale ref rather than clicking whatever now occupies the
+  slot, so the failure is loud, but it still costs you a turn.
+</Warning>
+
+## Arguments
+
+| Argument | What it does |
+| --- | --- |
+| `url` | Where to go. Relative paths work |
+| `reload` | Reload in place instead of navigating |
+| `hard` | With `reload`, bypass the cache |
+| `timeout_ms` | How long to wait for the page to come back before `confirmed: false`. Default 5000; 0 looks once |
+
+## Client-side routing is different
+
+In a single-page app, clicking a link usually changes the route without destroying the document. That is a route change, not a navigation. Refs survive, and you can assert it directly:
+
+```json
+{ "ref": "e618", "action": "click", "until": { "kind": "route", "pathname": "/deployments" } }
+```
+
+That is a verified call. Its verdict quotes the transition itself:
+
+```json
+{
+  "verified": "yes",
+  "verdict": {
+    "pass": true,
+    "evidence": {
+      "from": "http://localhost:4310/",
+      "to": "http://localhost:4310/deployments",
+      "pathname": "/deployments",
+      "search": "",
+      "hash": ""
+    }
+  }
+}
+```
+
+Use `reticle_navigate` for a genuine document load. A deep link, a hard reload, or the first visit.

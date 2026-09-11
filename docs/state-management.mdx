@@ -1,0 +1,199 @@
+---
+title: State management
+description: Register any store so Reticle can read what your app believes. Zustand and Redux work natively, and eight more have adapters.
+icon: database
+---
+
+**Reticle reads any store that has `getState()` and `subscribe()`, which covers Zustand and Redux with no adapter at all. TanStack Query, Pinia, Svelte stores, Jotai, Valtio, MobX, XState and Recoil each have a one-line adapter, and `pushStore` covers anything else.** Register one with `registerStore('app', myStore)` in your dev-only `src/reticle-dev.ts`.
+
+Reading application state is what separates a verdict from a screenshot. A `200` proves the server was reachable. A rendered row proves React ran. Only state proves your app accepted the change.
+
+Reticle needs one thing from your store: a way to read it, and a way to know when it changed.
+
+## The contract
+
+```ts
+interface StoreLike {
+  getState(): unknown;
+  subscribe(listener: () => void): () => void;
+}
+```
+
+Anything with that shape registers directly, with no adapter.
+
+```ts
+import { registerStore } from '@reticlehq/browser';
+
+registerStore('app', myStore);
+```
+
+<Warning>
+Pass the **store**, not `() => store.getState()`. The store form wires `subscribe`, so every mutation
+emits a state diff. The getter form still works for compatibility but leaves the store on pull-only
+reads: no change events, and an empty `stateDiffs` in every verdict.
+
+That reads as "nothing changed" and actually means "I was never watching". It is the most common instrumentation mistake there is.
+
+</Warning>
+
+## Works natively
+
+<CardGroup cols={2}>
+  <Card title="Zustand" icon="bolt">
+    A zustand hook already has `getState` and `subscribe`. Pass it straight in.
+  </Card>
+  <Card title="Redux" icon="boxes-stacked">
+    A Redux store is `StoreLike` by definition. Same one-liner.
+  </Card>
+</CardGroup>
+
+```ts
+registerStore('app', useApp); // zustand
+registerStore('app', store); // redux
+```
+
+This is what the Reticle fixture app does, and it is why its verdicts carry `stateDiffs: [{ "path": "auth", "from": null, "to": "…" }]`.
+
+## Adapters
+
+Eight libraries do not fit `StoreLike` for a reason specific to each. Every adapter returns a `StoreLike` you hand straight to `registerStore`.
+
+Each example below is the one documented in the adapter's own source.
+
+### TanStack Query
+
+```ts
+import { tanstackQueryStore } from '@reticlehq/browser';
+
+registerStore('queries', tanstackQueryStore(queryClient));
+```
+
+<Tip>
+  Register your server cache even if you already register a client store. "The screen is plausible
+  and the network is silent" is the normal failure with query caches: a mutation forgets to
+  invalidate, the UI keeps rendering a number that was true a minute ago, and nothing fires for
+  anyone to notice. The cache's freshness metadata is the only witness.
+</Tip>
+
+### Pinia
+
+```ts
+import { piniaStore } from '@reticlehq/browser';
+
+registerStore('cart', piniaStore(useCartStore()));
+```
+
+### Svelte stores
+
+```ts
+import { svelteStore } from '@reticlehq/browser';
+
+registerStore('cart', svelteStore(cartStore));
+```
+
+### Jotai
+
+Atoms are not a store, so you name the ones you care about.
+
+```ts
+import { jotaiStore } from '@reticlehq/browser';
+import { getDefaultStore } from 'jotai';
+
+registerStore('app', jotaiStore(getDefaultStore(), { cart: cartAtom, user: userAtom }));
+```
+
+### Valtio
+
+```ts
+import { valtioStore } from '@reticlehq/browser';
+import { snapshot, subscribe } from 'valtio/vanilla';
+
+registerStore('app', valtioStore(state, snapshot, subscribe));
+```
+
+### MobX
+
+```ts
+import { mobxStore } from '@reticlehq/browser';
+import { reaction, toJS } from 'mobx';
+
+registerStore('app', mobxStore(store, toJS, reaction));
+```
+
+You pass `toJS` and `reaction` in rather than Reticle importing MobX. The SDK stays free of your state library, and your bundle stays free of a copy it did not ask for.
+
+### XState
+
+```ts
+import { xstateStore } from '@reticlehq/browser';
+
+registerStore('machine', xstateStore(actor));
+```
+
+An XState actor's `subscribe` returns a subscription object rather than an unsubscribe function, which is the single reason it does not satisfy `StoreLike` already.
+
+### Recoil
+
+The most involved, because Recoil has no store object to hand over.
+
+```ts
+import { recoilStore } from '@reticlehq/browser';
+
+const latest = useRef(snapshot_UNSTABLE());
+const listeners = useRef(new Set<() => void>()).current;
+
+useRecoilTransactionObserver_UNSTABLE(({ snapshot }) => {
+  latest.current = snapshot;
+  for (const l of listeners) l();
+});
+
+registerStore(
+  'recoil',
+  recoilStore(
+    { cart: cartAtom },
+    () => latest.current,
+    (l) => {
+      listeners.add(l);
+      return () => listeners.delete(l);
+    },
+  ),
+);
+```
+
+### Anything else
+
+`pushStore` gives you a store plus the `push` that updates it, so you own the write side. Useful for state that lives somewhere Reticle cannot reach: a web worker, a websocket, a third-party SDK.
+
+```ts
+import { pushStore } from '@reticlehq/browser';
+
+const { store, push } = pushStore({ status: 'idle' });
+registerStore('worker', store);
+
+worker.onmessage = (e) => push(e.data);
+```
+
+## Reading it back
+
+```json
+{ "store": "app", "path": "cart.items.0.qty" }
+```
+
+`reticle_state` walks a dot-path with numeric array indices. `depth` collapses anything deeper to a size marker, which is the difference between a cheap look and a very expensive one on a large store.
+
+You can also assert on it directly, which is stronger than reading it afterwards:
+
+```json
+{ "kind": "state", "store": "app", "path": "deployments.0.status", "equals": "live" }
+```
+
+That catches a UI-versus-store desync, a deploy that only looks shipped, deterministically and with no model involved.
+
+<CardGroup cols={2}>
+  <Card title="reticle_state" icon="database" href="/tools-state">
+    Arguments, depth control, and reading a component's hook state.
+  </Card>
+  <Card title="Instrument your app" icon="wrench" href="/instrumentation">
+    Stores are one of three things worth registering. The other two are signals and testids.
+  </Card>
+</CardGroup>

@@ -1,0 +1,60 @@
+---
+title: reticle restart
+description: Free the bridge port and put a daemon back on it, reporting each half separately.
+icon: rotate
+---
+
+`reticle restart` is [`reticle kill`](/cli/kill) followed by a daemon start that waits for a real bind.
+
+```bash
+npx @reticlehq/server restart [--port N] [--force]
+```
+
+## Flags
+
+| Flag | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `--port N` | number | `4400` (or `RETICLE_PORT`, or the port in `.reticle.json`) | Which port to restart on |
+| `--force` | boolean | `false` | Passed to the kill half: clear a listener that is not a Reticle daemon |
+
+## The two halves are reported separately
+
+A restart that killed the old daemon and then could not start a new one leaves you somewhere quite different from one that could not kill anything at all, and a single `ok: false` cannot tell you which happened. So each half prints its own line.
+
+Real capture, restarting over a running daemon (exit `0`), with the long `note` trimmed at the ellipsis:
+
+```
+{"t":"2026-08-15T18:43:41.949Z","event":"reticle_killed","port":4499,"pid":78137,"escalated":false,"listenerIdentified":true,"note":"only the listener was signalled. Any `reticle mcp` proxy on this port holds a client connection, not the port, and was left alone ..."}
+{"t":"2026-08-15T18:43:42.258Z","event":"reticle_daemon_spawned","port":4499}
+```
+
+Real capture, when the port is held by something that is not ours (exit `1`). Both `reason` strings are trimmed at the ellipsis:
+
+```
+{"t":"2026-08-15T18:43:57.317Z","event":"reticle_kill_refused","port":4498,"reason":"pid 78795 (\"Python\") is listening, and it is not a Reticle daemon ... it never answered /status and it is not the pid Reticle recorded. Killing it would be killing someone else's process. Run it again with --force if that is what you meant, or start Reticle on another port.","holder":"Python"}
+{"t":"2026-08-15T18:43:57.318Z","event":"reticle_restart_aborted","port":4498,"reason":"the port was not freed, so nothing was started ... the old holder is still there"}
+```
+
+<Note>
+  The start half is `serve`'s, which waits for the daemon to **answer** before claiming it started
+  and exits non-zero when it does not. A restart never reports success for a daemon that never
+  bound.
+</Note>
+
+## Exit codes
+
+| Code | Meaning                                                   |
+| ---- | --------------------------------------------------------- |
+| `0`  | The port was freed and a daemon is answering on it        |
+| `1`  | The port was not freed, or the new daemon did not come up |
+
+## Worked example
+
+```bash
+npx @reticlehq/server restart         # after an upgrade, so the new version is the one serving
+npx @reticlehq/server status
+```
+
+<Card title="Why not lsof" icon="skull" href="/cli/kill">
+  The pipeline everyone reaches for kills the agent's own MCP proxy along with the daemon.
+</Card>

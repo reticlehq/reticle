@@ -1,0 +1,22 @@
+{
+  "reticle": {
+    "version": "2.5.0",
+    "commit": "33629413"
+  },
+  "client": {
+    "id": "gemini"
+  },
+  "host": {
+    "os": "darwin 25.5.0",
+    "node": "v22.14.0"
+  },
+  "checks": {
+    "writes": true,
+    "parses": true,
+    "initialize": true,
+    "tools": 17
+  },
+  "verdict": "runnable-unverified",
+  "by": "machine (client-compat.mjs)",
+  "note": "machine-checkable half only — nobody has run this client"
+}

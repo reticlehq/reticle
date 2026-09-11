@@ -1,0 +1,129 @@
+---
+title: reticle_snapshot
+description: A semantic accessibility snapshot of the page or a subtree, in three sizes. From the full tree down to a 25-token route check.
+icon: camera
+---
+
+`reticle_snapshot` is how an agent gets its bearings. It returns the page as semantic structure, not pixels and not raw HTML, and it comes in three sizes so you can pay for only what you need.
+
+## Three modes, three prices
+
+| Mode          | Returns                               | Real cost on one page |
+| ------------- | ------------------------------------- | --------------------- |
+| `status`      | Route and title only                  | **25 tokens**         |
+| `interactive` | Only clickable and focusable elements | **65 tokens**         |
+| `full`        | Every element                         | Depends on the page   |
+
+### `status`. the cheapest possible check
+
+```json
+{ "mode": "status" }
+```
+
+```json
+{
+  "tree": "",
+  "nodes": 0,
+  "truncated": false,
+  "status": { "route": "/", "title": "Reticle · Mission Control" },
+  "cost": { "bytes": 98, "tokens": 25 }
+}
+```
+
+Ninety-eight bytes to answer "where am I?". Use it after a navigation instead of re-reading the page.
+
+### `interactive`. the default working view
+
+```json
+{ "mode": "interactive" }
+```
+
+```json
+{
+  "tree": "- textbox \"Email\" (ref=e303) [value=\"admin@reticle.dev\"]\n- textbox \"Password\" (ref=e304) [value=\"[REDACTED]\"]\n- button \"Sign in\" (ref=e305)",
+  "nodes": 3,
+  "truncated": false,
+  "status": { "route": "/deployments", "title": "Reticle · Mission Control" },
+  "cost": { "bytes": 260, "tokens": 65 }
+}
+```
+
+Everything you can act on, with a `ref` for each, for 65 tokens. Note the password arrives `[REDACTED]` without anyone configuring it.
+
+## Arguments
+
+| Argument | What it does                                                                 |
+| -------- | ---------------------------------------------------------------------------- |
+| `mode`   | `full` · `interactive` · `status`                                            |
+| `scope`  | CSS selector or ref, to snapshot one subtree                                 |
+| `diff`   | Return only what changed since your last snapshot of the same scope and mode |
+
+## `diff` is how you keep a long session cheap
+
+```json
+{ "mode": "interactive", "diff": true }
+```
+
+When nothing moved since your last look of the same scope and mode, that costs 20 tokens and says so:
+
+```json
+{
+  "mode": "unchanged",
+  "status": { "route": "/", "title": "Reticle · Mission Control" },
+  "cost": { "bytes": 79, "tokens": 20 }
+}
+```
+
+When something did move, you get only what changed. This is the same call after a login replaced the form with the app shell:
+
+```json
+{
+  "mode": "delta",
+  "delta": {
+    "added": [
+      "- button \"Overview\" (ref=e17)",
+      "- button \"Deployments40\" (ref=e18)",
+      "- button \"Compose\" (ref=e19)",
+      "- button \"Diagnostics\" (ref=e20)",
+      "- button \"Hostile\" (ref=e21)",
+      "- button \"Search or jump to…⌘K\" (ref=e22)",
+      "- button \"Sign out\" (ref=e23)"
+    ],
+    "removed": [
+      "- textbox \"Email\" (ref=e4) [value=\"admin@reticle.dev\"]",
+      "- textbox \"Password\" (ref=e5) [value=\"[REDACTED]\"]",
+      "- button \"Sign in\" (ref=e3)"
+    ],
+    "addedCount": 7,
+    "removedCount": 3
+  },
+  "status": { "route": "/", "title": "Reticle · Mission Control" },
+  "cost": { "bytes": 545, "tokens": 137 }
+}
+```
+
+A route change resets it: the next call after one returns a full snapshot rather than a delta against a page that no longer exists.
+
+<Tip>
+  Reach for [`reticle_query`](/tools-query) instead when you already know what you're looking for.
+  Snapshot is for orientation; query is for retrieval, and it's almost always cheaper.
+</Tip>
+
+## Refs change across documents
+
+Refs are stable while the element is in the DOM. A full navigation builds a new document, so refs are re-issued. Across the captures on this page the same "Sign in" button was `e105`, then `e305`, then `e3`, because each reload built a new document. Snapshot after navigating; don't reuse refs across one.
+
+Reticle refuses a stale ref rather than clicking whatever now occupies that slot:
+
+```json
+{
+  "error": "ref 'e303' no longer resolves to an element",
+  "recovery": "That ref is stale: refs are invalidated whenever the DOM re-renders, so any action that navigated, opened a modal, re-sorted a list or changed the page invalidates every ref taken before it. Call reticle_query again for a fresh ref and retry the action."
+}
+```
+
+<Note>
+  That `recovery` string is trimmed. The full text also recommends
+  [`reticle_act_and_wait`](/tools-act-and-wait) with `until`, so the next ref is taken after the
+  page settles.
+</Note>

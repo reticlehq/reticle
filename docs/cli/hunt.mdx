@@ -1,0 +1,73 @@
+---
+title: reticle hunt
+description: Aggregate many crawl reports into one false-green rate across already-merged changes.
+icon: crosshairs
+---
+
+`reticle hunt` is arithmetic, not driving. You point it at a directory of crawl reports (one JSON file per checkout, each produced by `reticle_verify {action:"crawl"}`) and it turns the pile into the one number the core claim needs: across N already-merged, already-green changes, how many carried a candidate false green?
+
+```bash
+npx @reticlehq/server hunt <dir-of-crawl-reports>
+```
+
+No control arm is needed. Those changes shipped, so the counterfactual is already established.
+
+## Arguments
+
+| Argument | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `<dir>` | string, positional, **required** | none | Directory of `*.json` crawl reports. Each file is one crawl over one checkout |
+
+Each input file is read for `label` (falling back to the filename), `anomalies[]`, and `stepsRun`.
+
+## What it prints
+
+One `reticle_hunt` line with the summary. Real capture over a directory of two reports, one of them carrying a contradiction and a console error, with the `headline` sentence trimmed at the ellipsis:
+
+```json
+{
+  "t": "2026-08-15T18:43:18.333Z",
+  "event": "reticle_hunt",
+  "runs": 2,
+  "runsWithCoverage": 2,
+  "runsWithContradictions": 1,
+  "contradictions": 1,
+  "singleChannelFaults": 1,
+  "byKind": { "ui-advanced-request-failed": 1, "console-error": 1 },
+  "flagged": ["abc123"],
+  "headline": "1 of 2 merged, already-green changes carried a candidate false green (1 contradictions) ..."
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `runs` | Report files read |
+| `runsWithCoverage` | Runs that drove at least one control. The only honest denominator: a run that drove nothing is not evidence of cleanliness |
+| `runsWithContradictions` | Runs with at least one cross-channel contradiction |
+| `contradictions` | Total contradictions. The kinds are `ui-advanced-request-failed`, `signal-contradicted`, `response-ignored`, `duplicate-request`, `request-never-settled`, `failure-misattributed` |
+| `singleChannelFaults` | Everything else: console errors, failed requests, dead controls. Context, not the claim |
+| `byKind` | Counts per anomaly kind |
+| `flagged` | The labels with contradictions, so each can be confirmed by hand |
+| `headline` | A sentence phrased so it cannot overstate itself. It says "candidate", because every flag still needs manual confirmation |
+
+## Exit codes
+
+Always `0`. A read failure is logged as `reticle_hunt_failed`. Omitting the directory is a usage error:
+
+```
+{"t":"2026-08-15T18:43:06.525Z","event":"reticle_usage_error","message":"usage: reticle hunt <dir-of-crawl-reports>"}
+usage: reticle hunt <dir-of-crawl-reports>
+```
+
+That path exits `1`.
+
+## Worked example
+
+```bash
+for sha in $(git log --format=%H -n 30 main); do
+  git checkout "$sha" && npm run dev &
+  # drive reticle_verify {action:"crawl"} over the app, write the JSON:
+  # .../reports/$sha.json
+done
+npx @reticlehq/server hunt ./reports
+```

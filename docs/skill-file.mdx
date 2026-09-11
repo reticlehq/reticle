@@ -1,0 +1,107 @@
+---
+title: 'The SKILL file: paste and go'
+sidebarTitle: SKILL file
+description: One URL you paste into any coding agent to teach it Reticle. How it works, what it contains, and when you need it at all.
+icon: graduation-cap
+---
+
+Paste `https://raw.githubusercontent.com/reticlehq/reticle/main/SKILL.md` into any coding agent and say "read this and set up Reticle". The document tells the agent to run `npx @reticlehq/server init --flow "<what>"`, which does the whole install and ends with a verdict, and gives it the rules for verifying afterwards. You often do not need the file at all: that one command configures Claude Code, Cursor and nine other agents directly, and the file mostly exists to tell an agent which journey to prove and how to read what comes back.
+
+`SKILL.md` is a single document you hand to a coding agent. It teaches the agent to install Reticle, wire it into your app, and then drive a verification loop properly. Without you explaining any of it.
+
+```
+https://raw.githubusercontent.com/reticlehq/reticle/main/SKILL.md
+```
+
+That URL is live and returns the current version. Paste it into your agent and say "read this and set up Reticle".
+
+<Note>
+  You often do not need it. `npx @reticlehq/server init` writes a `/reticle` slash command for
+  Claude Code automatically, and installs agent rule files for Claude and Cursor. The SKILL file is
+  for agents that `init` cannot configure, for a from-scratch install, or when you want the agent to
+  have the full protocol in context rather than a summary.
+</Note>
+
+## It has two modes, and it picks one itself
+
+The first thing the document tells an agent to do is check which situation it is in:
+
+```bash
+cat .reticle.json 2>/dev/null || echo "NOT_FOUND"
+```
+
+- **Not found** → run **Setup mode**: register the MCP server, install the SDK, wire the entry point, validate the connection, and prove it on one flow while the user watches.
+- **Found** → run **Test mode**: connect, orient, decide what to test, drive it, report.
+
+One document, two jobs, no flag for you to remember. The second time you invoke it, it skips straight to the useful part.
+
+## What Setup mode actually does
+
+| Phase | What the agent does |
+| --- | --- |
+| Save the skill | Store it as `/reticle` so the loop is one word away from then on |
+| Run `init --flow` | Without asking you questions it can answer itself, passing the journey worth proving |
+| Manual fallbacks | Only when `init` could not run: an older CLI that stops after writing files, or the same failure twice |
+| Validate | Confirm a session actually connected. Not that a checklist went green |
+| Prove it | Drive one real flow while you watch, so the install ends in evidence |
+
+That last row is the one that matters. Plenty of installs "succeed" and then nothing works. The skill does not consider itself finished until a real flow has produced a real verdict.
+
+## What Test mode actually does
+
+Five phases: connect, orient, decide what to test, run the tests, report. The reporting format is specified, which matters more than it sounds. An agent left to summarise freely will summarise optimistically.
+
+The rules it operates under are the same ones these docs keep repeating:
+
+- Only `reticle_act_and_wait` and `reticle_assert` produce a verdict.
+- `verified: "unknown"` is not a pass.
+- Never weaken a check to make it pass.
+
+## Feedback is the first section, on purpose
+
+Before setup, before anything, the document tells the agent that reporting problems is part of the job. And that this applies **during** setup, which is where Reticle is most likely to break and least likely to hear about it.
+
+It even covers the case where nothing is installed yet:
+
+```bash
+npx @reticlehq/server feedback --agent --kind gap "init finished but no session ever connected"
+```
+
+That works with no daemon running, which is the entire point. The install that failed halfway is the one worth hearing about, and in that state the MCP tools do not exist.
+
+<Tip>
+  It also draws a line that saves everyone time: report defects in **Reticle**. A bug found in the
+  app under test is Reticle working correctly, and belongs in the answer to the user.
+</Tip>
+
+## It ships inside the package too
+
+`SKILL.md` is bundled into `@reticlehq/server` at publish time, alongside a copy of this entire documentation site. So an agent that has already installed Reticle can read it from disk without a network round trip:
+
+```
+node_modules/@reticlehq/server/SKILL.md
+node_modules/@reticlehq/server/docs/
+```
+
+Handy in a sandbox with no outbound network, which is an increasingly common place for an agent to live.
+
+## Should you read it?
+
+Probably not, unless you are curious. It is roughly 60 KB and written for an agent, which means it is exhaustive in the way a runbook is exhaustive. Every fallback, every framework, every failure mode spelled out rather than summarised.
+
+If you want the human version of the same material, you are already in it:
+
+<CardGroup cols={2}>
+  <Card title="Agentic install" icon="wand-magic-sparkles" href="/install-agentic">
+    What `reticle init` does, with real output.
+  </Card>
+  <Card title="Manual install" icon="screwdriver-wrench" href="/install-manual">
+    Every step `init` cannot automate.
+  </Card>
+  <Card title="Agent cheat sheet" icon="bolt" href="/agent-cheatsheet">
+    The one-screen version of the drive loop.
+  </Card>
+  <Card title="Best practices" icon="star" href="/best-practices">
+    The habits that make verdicts worth trusting.
+  </Card>
+</CardGroup>

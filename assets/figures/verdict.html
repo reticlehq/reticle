@@ -1,0 +1,61 @@
+<!doctype html><meta charset="utf-8">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{background:#0b0d12}
+  body{width:1400px;background:#0b0d12;color:#eef0f6;
+       font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Inter,sans-serif;
+       padding:52px 58px}
+  h2{font-size:30px;font-weight:660;letter-spacing:-.6px;margin-bottom:7px}
+  .lede{color:#9aa0b2;font-size:17px;margin-bottom:30px}
+  .lede code{font-family:ui-monospace,Menlo,monospace;color:#ffbcac}
+  .row{display:flex;gap:32px;align-items:flex-start}
+  .code{background:#11141c;border:1px solid rgba(255,255,255,.09);border-radius:14px;
+        padding:22px 0;flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+        font-size:16px;line-height:1.85}
+  .l{white-space:pre;padding:0 26px}
+  .l.hl{background:rgba(255,157,134,.15);box-shadow:inset 3px 0 0 #ff9d86}
+  .k{color:#8fb4ff}.s{color:#9ce6b4}.n{color:#f0c674}.p{color:#c58af9}
+  .notes{width:420px;display:flex;flex-direction:column;gap:19px;padding-top:4px}
+  .note{box-shadow:inset 3px 0 0 #ff9d86;padding:2px 0 2px 16px}
+  .note b{display:block;font-size:16px;font-weight:640;margin-bottom:4px;
+          font-family:ui-monospace,Menlo,monospace;color:#ffbcac}
+  .note span{font-size:15px;color:#a3a9bb;line-height:1.6}
+</style>
+<h2>One response, six things proved</h2>
+<p class="lede">A real <code>reticle_act_and_wait</code> verdict, captured from a running app.</p>
+<div class="row">
+  <div class="code">
+    <div class="l">{</div>
+    <div class="l hl">  <span class="k">"verified"</span>: <span class="s">"yes"</span>,</div>
+    <div class="l">  <span class="k">"because"</span>: <span class="s">"assertion held at presence grade</span></div>
+    <div class="l">              <span class="s">over a clean capture"</span>,</div>
+    <div class="l">  <span class="k">"effect"</span>: {</div>
+    <div class="l">    <span class="k">"testid"</span>: <span class="s">"login-submit"</span>,</div>
+    <div class="l hl">    <span class="k">"source"</span>: { <span class="k">"file"</span>: <span class="s">"src/components/Login.tsx"</span>,</div>
+    <div class="l hl">                <span class="k">"line"</span>: <span class="n">81</span> }</div>
+    <div class="l">  },</div>
+    <div class="l">  <span class="k">"verdict"</span>: {</div>
+    <div class="l hl">    <span class="k">"evidence"</span>: { <span class="k">"method"</span>: <span class="s">"POST"</span>,</div>
+    <div class="l hl">      <span class="k">"url"</span>: <span class="s">"/api/login"</span>, <span class="k">"status"</span>: <span class="n">200</span>,</div>
+    <div class="l hl">      <span class="k">"requestBody"</span>: <span class="s">"{…\"password\":\"[REDACTED]\"}"</span> }</div>
+    <div class="l">  },</div>
+    <div class="l">  <span class="k">"summary"</span>: {</div>
+    <div class="l hl">    <span class="k">"net"</span>: { <span class="k">"total"</span>: <span class="n">1</span>, <span class="k">"errors"</span>: <span class="n">0</span> },</div>
+    <div class="l">    <span class="k">"consoleErrors"</span>: <span class="n">0</span>,</div>
+    <div class="l hl">    <span class="k">"stateDiffs"</span>: [{ <span class="k">"path"</span>: <span class="s">"auth"</span>,</div>
+    <div class="l hl">        <span class="k">"from"</span>: <span class="p">null</span>, <span class="k">"to"</span>: <span class="s">"{…}"</span> }],</div>
+    <div class="l hl">    <span class="k">"signals"</span>: [<span class="s">"auth:granted"</span>]</div>
+    <div class="l">  },</div>
+    <div class="l">  <span class="k">"honesty"</span>: { <span class="k">"grade"</span>: <span class="s">"presence"</span>,</div>
+    <div class="l">    <span class="k">"integrity"</span>: { <span class="k">"clean"</span>: <span class="p">true</span> } }</div>
+    <div class="l">}</div>
+  </div>
+  <div class="notes">
+    <div class="note"><b>verified</b><span>The consequence you named happened — not "the page changed".</span></div>
+    <div class="note"><b>source</b><span>The file and line to open. Finding the bug is only half the job.</span></div>
+    <div class="note"><b>evidence</b><span>The actual request, not a summary. Credentials redacted automatically.</span></div>
+    <div class="note"><b>net.total: 1</b><span>Exactly one request. Double-submit fails here at two.</span></div>
+    <div class="note"><b>stateDiffs</b><span>The app accepted it. A mock returning 200 is caught right here.</span></div>
+    <div class="note"><b>signals</b><span>The app declared its own success. The strongest evidence there is.</span></div>
+  </div>
+</div>

@@ -1,0 +1,85 @@
+---
+title: '@reticlehq/electron'
+description: The Reticle adapter for Electron, making main-process IPC observable and the window screenshottable.
+icon: display
+---
+
+`@reticlehq/electron` reaches the two places the renderer-side SDK cannot: the IPC boundary, and `capturePage()`. Install it if your app is Electron and you want main-process IPC observable or the window screenshottable. A web app never needs it.
+
+**Apache 2.0. Depends on `@reticlehq/core`. Peer dependency: `electron >= 22`. No build step.**
+
+## Why it exists
+
+In Electron the interesting failures happen across IPC. The renderer asks the main process for something, the main process quietly fails, and the renderer-side SDK sees nothing at all. That reads as "this app makes no backend calls" rather than "you are blind to them".
+
+```bash
+npm i -D @reticlehq/electron
+```
+
+## Exports map
+
+There is no `.` export. Two subpaths only.
+
+| Subpath     | File          | Shape                             |
+| ----------- | ------------- | --------------------------------- |
+| `./preload` | `preload.cjs` | Side effect only. Exports nothing |
+| `./main`    | `main.cjs`    | `{ installReticleCapture }`       |
+
+## The preload
+
+```js
+// preload.js: this line must be FIRST
+require('@reticlehq/electron/preload');
+
+const { contextBridge, ipcRenderer } = require('electron');
+// ... your own bridge setup
+```
+
+<Warning>
+  It must run before `require('electron')` and before any `contextBridge.exposeInMainWorld` call. It
+  patches `ipcRenderer` while those methods are still writable, so ordering is not a style
+  preference.
+</Warning>
+
+It patches three methods, and each IPC call then surfaces to Reticle as a network record on `ipc://<channel>` with `initiator: 'ipc'`:
+
+| Method                 | Recorded as                          |
+| ---------------------- | ------------------------------------ |
+| `ipcRenderer.invoke`   | Two-way, with its outcome            |
+| `ipcRenderer.sendSync` | Two-way, with its outcome            |
+| `ipcRenderer.send`     | One-way, dispatched, with no outcome |
+
+It then exposes `window.__reticleIpc` through the context bridge, with three members used by the SDK rather than by you:
+
+| Member | Signature | Notes |
+| --- | --- | --- |
+| `subscribe` | `(callback) => number` | Returns a token, or `-1` if the argument is not a function |
+| `unsubscribe` | `(token) => void` | Real removal |
+| `capture` | `(fullPage) => Promise<string \| null>` | Resolves to a capture file path, `null` when no main handler is installed, and propagates the explicit full-page refusal |
+
+## The main process
+
+```js
+const { installReticleCapture } = require('@reticlehq/electron/main');
+
+const win = new BrowserWindow({/* ... */});
+installReticleCapture(win);
+```
+
+`installReticleCapture(win): void` is a no-op on `null` or `undefined`, tracks the window until it closes, and registers the capture handler once for the whole app.
+
+The handler calls `webContents.capturePage()`, writes the PNG into a per-process `0700` captures directory as `reticle-capture-<n>.png`, and **returns the file path rather than the bytes**, because the transport has a 64KB cap. It refuses `fullPage: true` explicitly rather than silently returning a viewport shot, and it throws named reasons rather than one blanket silence: `full-page-unsupported` for that refusal, `window-not-composited` when the window had nothing painted yet, `no usable webContents to capture` when the window is gone. The preload re-throws the full-page refusal and turns everything else into `null`.
+
+## Renderer wiring
+
+The renderer still needs the SDK. A packaged app is a production build, so the connect call has to opt in:
+
+```ts
+reticle.connect({ allowInProduction: true });
+```
+
+Or, with the Vite plugin, `reticle({ desktop: true })`.
+
+<Card title="Desktop setup in full" icon="display" href="/desktop">
+  Electron and Tauri wiring, and what `reticle doctor` checks for each.
+</Card>

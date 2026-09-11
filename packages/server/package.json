@@ -1,0 +1,81 @@
+{
+  "name": "@reticlehq/server",
+  "version": "2.14.0",
+  "description": "Reticle bridge + MCP server. Hosts the browser WS endpoint and exposes MCP tools to the coding agent.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "reticle": "./bin/reticle.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./cli": {
+      "types": "./dist/cli.d.ts",
+      "default": "./dist/cli.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -b --watch",
+    "typecheck": "tsc -b",
+    "lint": "eslint src",
+    "test:unit": "node ../../scripts/guard-tests.mjs unit",
+    "test:guards": "node ../../scripts/guard-tests.mjs guards",
+    "test:coverage": "vitest run src --passWithNoTests --coverage.enabled --coverage.provider=v8 --coverage.reporter=text-summary --coverage.include='src/**/*.ts' --coverage.exclude='src/**/*.test.ts'",
+    "prepack": "node ../../scripts/prepare-dist.mjs --clean dist && tsc -b --force && node ../../scripts/prepare-dist.mjs dist && node ../../scripts/stamp-issuer-key.mjs && node ../../scripts/pack-docs.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@reticlehq/core": "workspace:*",
+    "@reticlehq/init": "workspace:*",
+    "ws": "^8.21.3",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/pngjs": "^6.0.5",
+    "@types/ws": "^8.5.13",
+    "yaml": "^2.9.0"
+  },
+  "optionalDependencies": {
+    "pixelmatch": "^7.2.0",
+    "playwright": "^1.62.1",
+    "pngjs": "^7.0.0"
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "Reticle contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reticlehq/reticle.git",
+    "directory": "packages/server"
+  },
+  "homepage": "https://github.com/reticlehq/reticle#readme",
+  "bugs": "https://github.com/reticlehq/reticle/issues",
+  "files": [
+    "bin",
+    "dist",
+    "README.md",
+    "LICENSE-ENTERPRISE",
+    "SKILL.md",
+    "docs"
+  ],
+  "keywords": [
+    "mcp",
+    "ai-agents",
+    "testing",
+    "cli"
+  ],
+  "reticle": {
+    "changelog": "An MCP server that stays up when the daemon dies, one tool surface instead of five profiles (`RETICLE_TOOL_PROFILE` retired for `RETICLE_ADVERTISE_ALL_TOOLS`), and tools that refuse instead of answering wrongly.",
+    "breakingChanges": []
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

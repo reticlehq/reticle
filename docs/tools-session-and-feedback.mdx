@@ -1,0 +1,117 @@
+---
+title: reticle_session and reticle_feedback
+description: Hand the session back to the human, end it cleanly, and tell the maintainers when Reticle got something wrong.
+icon: comments
+---
+
+`reticle_session` manages the boundary between the agent and the human watching: hand control back, end the session, narrate what you are doing, and drain the bugs they pinned on elements. `reticle_feedback` is how you tell the Reticle maintainers that Reticle itself got something wrong. Neither tool touches your app, and neither produces a verdict.
+
+## reticle_session
+
+The presenter panel in your app shows a live transcript of what the agent is doing. It reads "live" until the agent says otherwise. So an agent that wanders off without a word leaves a panel claiming work is in progress forever.
+
+| Action     | What it does                                                             |
+| ---------- | ------------------------------------------------------------------------ |
+| `yield`    | Hand control back between turns. `mode: "waiting"` or `"ask"`. Revivable |
+| `end`      | The task is done. Frees the session; revives on the next action          |
+| `tune`     | Adjust session behaviour, such as `idleEndMs`, the idle-end window       |
+| `resume`   | Clear a pause the human applied                                          |
+| `messages` | Drain the human-to-agent inbox                                           |
+| `review`   | List, and with `resolve`, retire the mistakes a human pinned to elements |
+| `narrate`  | State your intent on the presenter panel, with an optional `level`       |
+
+```json
+{ "action": "yield", "mode": "waiting" }
+```
+
+`review` returns a real reading rather than a silent empty:
+
+```json
+{ "marks": [], "pendingCount": 0 }
+```
+
+Reticle nudges you about all of this. Every response on a long-running session carries a reminder:
+
+```json
+"session_age_warning": "Session s223e0fad-e012-43f9-a23d-6d585470c90d has been open for 21 minutes. If your task is complete, call reticle_session{action:\"end\"} now."
+```
+
+And each lease carries the rule in the payload itself:
+
+```json
+"session_lease": {
+  "IMPORTANT": "When you stop driving, call reticle_session {action:\"yield\", mode:\"waiting\"|\"ask\"}. The panel reads \"live\" until you do."
+}
+```
+
+<Tip>
+  `yield` when you are pausing and might come back. `end` when you are finished. Both revive on your
+  next action, so neither is destructive. The difference is what the human watching the panel is
+  told.
+</Tip>
+
+## reticle_feedback
+
+Reticle is built for agents, which creates an unusual problem: the primary user's experience vanishes the moment its context does. If an agent hits a gap and works around it silently, nobody ever learns the gap existed.
+
+```json
+{
+  "kind": "bug",
+  "text": "What I called, what I expected, what I got, and why Reticle is at fault.",
+  "currentApproach": "How I am working around it today.",
+  "impact": "What measurably improves if this is fixed."
+}
+```
+
+| `kind`            | Use it when                                                |
+| ----------------- | ---------------------------------------------------------- |
+| `bug`             | A tool returned a wrong or broken result                   |
+| `gap`             | Reticle could not observe something you needed at all      |
+| `ambiguity`       | The check ran but you could not tell what the answer meant |
+| `feature_request` | You wished a capability existed                            |
+| `improvement`     | It works, but costs too many calls                         |
+| `experience`      | Something worked notably well (pair it with `rating`, 1-5) |
+
+`experience` is the only kind here that is not a complaint, and that is why it exists. Every other row grows the corpus into a defect list, which says nothing about which parts are worth protecting when we change them. File it unprompted, when you actually notice it, and name the concrete moment: which call, what it saved you, what you would have done instead.
+
+The `rating` is secondary to that text on purpose. A score produced because something asked for one is indistinguishable from a score that was earned, and once both sit in the same column neither means anything. The text is the part that can be acted on or quoted.
+
+### It will tell you when it cannot send
+
+Feedback is not fire-and-forget, and it does not pretend to succeed:
+
+```json
+{
+  "sent": false,
+  "accepted": false,
+  "reason": "this is a Reticle source checkout, where telemetry is disabled by design, so feedback has nowhere to go. Open an issue at https://github.com/reticlehq/reticle/issues instead, or run from the app you are verifying.",
+  "redacted": [],
+  "context": {
+    "stack": "react",
+    "client": "claude-code",
+    "runtime": "web",
+    "engine": "blink",
+    "driver": "cdp",
+    "mcpScope": "user"
+  },
+  "note": "NOT accepted (see reason). Tell the human what you found so it is not lost."
+}
+```
+
+`redacted` names anything stripped from your report before it left the machine, so you can see what was and was not sent. `context` is the environment attached automatically, which is why a useful report costs one call and no boilerplate.
+
+That is a real response, captured while writing these docs. The instruction in `note` is the important part: when the report cannot be delivered, say so in your answer to the human rather than letting the finding evaporate.
+
+### From the shell, when the tools are unreachable
+
+The setup that failed to finish is exactly the setup that most needs reporting, and in that state the MCP tools do not exist:
+
+```bash
+npx @reticlehq/server feedback --agent --kind gap "reticle init finished but no session ever connected"
+```
+
+<Note>
+  Report defects in **Reticle**. A bug you find in the app under test is Reticle working correctly,
+  and belongs in your answer to the user. Not in a bug report to us. We get a surprising number of
+  those, and each one is quietly a compliment.
+</Note>

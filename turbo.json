@@ -1,0 +1,78 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["packages/browser/src/**/*.ts", "tsconfig.base.json", "eslint.config.mjs"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "dependsOn": ["^build"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "dependsOn": ["^build"]
+    },
+    "test:unit": {
+      "dependsOn": ["^build"]
+    },
+    "test:coverage": {
+      "dependsOn": ["^build"]
+    },
+    "@reticlehq/core#test:unit": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/tauri/src/**"]
+    },
+    "test:guards": {
+      "dependsOn": ["^build"]
+    },
+    "@reticlehq/server#test:guards": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/*/src/**",
+        "$TURBO_ROOT$/packages/*/package.json",
+        "$TURBO_ROOT$/apps/**",
+        "$TURBO_ROOT$/bench/**",
+        "$TURBO_ROOT$/scripts/**",
+        "$TURBO_ROOT$/docs/**",
+        "$TURBO_ROOT$/skills/**",
+        "$TURBO_ROOT$/.claude-plugin/**",
+        "$TURBO_ROOT$/plugin/**",
+        "$TURBO_ROOT$/.github/**",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/test/**",
+        "$TURBO_ROOT$/README.md",
+        "$TURBO_ROOT$/SKILL.md",
+        "$TURBO_ROOT$/CHANGELOG.md",
+        "$TURBO_ROOT$/CONTRIBUTING.md",
+        "$TURBO_ROOT$/turbo.json"
+      ]
+    },
+    "@reticlehq/init#test:unit": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/SKILL.md",
+        "$TURBO_ROOT$/skills/**",
+        "$TURBO_ROOT$/docs/**",
+        "$TURBO_ROOT$/.claude-plugin/**",
+        "$TURBO_ROOT$/plugin/**"
+      ]
+    },
+    "@reticlehq/server#test:unit": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/*/src/**",
+        "$TURBO_ROOT$/scripts/guard-tests.mjs"
+      ]
+    }
+  }
+}

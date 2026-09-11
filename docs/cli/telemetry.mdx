@@ -1,0 +1,57 @@
+---
+title: reticle telemetry
+description: Show, enable, or disable Reticle's anonymous usage metrics on this machine.
+icon: chart-line
+---
+
+`reticle telemetry` is the user-facing control for anonymous usage metrics.
+
+```bash
+npx @reticlehq/server telemetry [status|enable|disable]
+```
+
+## Sub-actions
+
+| Action | Default | What it does |
+| --- | --- | --- |
+| `status` | yes, when nothing is given | Report the current state, why it is that state, and where the policy lives |
+| `enable` |  | Turn metrics on for this machine |
+| `disable` |  | Persist a machine-wide opt-out. Unlike `RETICLE_TELEMETRY=0`, this survives shells |
+
+Any other word is a usage error: `unknown telemetry action: <word>`, exit `1`.
+
+## What it prints
+
+Human-readable lines on stdout, like [`doctor`](/cli/doctor). Real capture inside a Reticle source checkout:
+
+```
+telemetry    disabled  (this is a Reticle source checkout; developing it is not using it)
+policy       https://github.com/reticlehq/reticle/blob/main/docs/telemetry.md
+```
+
+When it is enabled, a third line names every way to turn it off:
+
+```
+opt out      reticle telemetry disable  (or RETICLE_TELEMETRY=0 / DO_NOT_TRACK=1)
+```
+
+## Exit codes
+
+| Code | Meaning                              |
+| ---- | ------------------------------------ |
+| `0`  | Status shown, or the setting changed |
+| `1`  | Unknown sub-action                   |
+
+## Worked example
+
+```bash
+npx @reticlehq/server telemetry status
+npx @reticlehq/server telemetry disable
+```
+
+<Card title="Exactly what is collected" icon="shield-check" href="/telemetry">
+  The complete list, in plain language, and every way to switch it off.
+</Card>
+<Card title="Every event, in schema detail" icon="database" href="/telemetry-events">
+  The contributor reference: payload blocks, field types, and what each event exists to answer.
+</Card>

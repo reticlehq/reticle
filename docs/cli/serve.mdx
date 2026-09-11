@@ -1,0 +1,71 @@
+---
+title: reticle serve
+description: Start the Reticle daemon on the bridge port and wait until it has actually bound.
+icon: play
+---
+
+`reticle serve` starts the daemon: the WebSocket bridge your app dials into, plus the tool engine behind it. It spawns a detached child and then waits for that child to answer `/status` before reporting success.
+
+```bash
+npx @reticlehq/server serve [--port N] [--drive <url>] [--headless] [--headed] [--http] [--http-port N] [--http-token T]
+```
+
+Most people never type this. Your agent runs [`reticle mcp`](/cli/mcp), which starts a daemon itself if one is not already up.
+
+## Flags
+
+| Flag | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `--port N` | number | `4400` (or `RETICLE_PORT`, or the port in `.reticle.json`) | Bridge port to bind |
+| `--drive <url>` | string | unset | Launch Reticle's own browser at this URL instead of waiting for your tab |
+| `--headless` | boolean | `true` for `serve` | Hide the browser |
+| `--headed` | boolean | `false` | Show it. `serve` owns the pooled browser behind leases, which is batch work, so it hides by default |
+| `--http` | boolean | `false` | Also expose the HTTP verify endpoint |
+| `--http-port N` | number | unset (`7331`) | Port for that endpoint. Requires `--http`. |
+| `--http-token T` | string | unset | Bearer token the endpoint requires. Requires `--http`. |
+
+The HTTP flags are honoured or refused, never silently dropped: against an already-running daemon that does not serve the requested verify port, `serve --http` exits 1 and names both ports. A running daemon keeps the flags it was started with, so `reticle stop`, then serve again. A verify port that cannot be bound fails the daemon start with a `reticle_daemon_start_failed` line naming that port.
+
+## What it prints
+
+One structured line. When a daemon already owns the port, it says so and does nothing:
+
+```json
+{ "t": "2026-08-15T18:43:33.065Z", "event": "reticle_daemon_already_running", "port": 4499 }
+```
+
+A successful spawn logs `reticle_daemon_spawned` with the port:
+
+```json
+{ "t": "2026-08-15T18:43:32.604Z", "event": "reticle_daemon_spawned", "port": 4499 }
+```
+
+A port held by something that is not a Reticle daemon is refused up front rather than spawned into. The reason is repeated as plain text on stderr for the person who typed the command. Real capture, with `python3 -m http.server 4498` holding the port and the punctuation between the two halves of the reason shown as `...`:
+
+```
+{"t":"2026-08-15T18:43:57.478Z","event":"reticle_daemon_start_refused","port":4498,"presence":"foreign","reason":"port 4498 is held by another process that is not a Reticle daemon ... a daemon cannot bind it. Stop that process, or run Reticle on a different port (`--port`), then retry."}
+port 4498 is held by another process that is not a Reticle daemon ... a daemon cannot bind it. Stop that process, or run Reticle on a different port (`--port`), then retry.
+```
+
+## Exit codes
+
+| Code | Meaning                                                                           |
+| ---- | --------------------------------------------------------------------------------- |
+| `0`  | A daemon is up on the port, whether this run started it or found it               |
+| `1`  | The port is held by a foreign process, or the child never bound within 15 seconds |
+
+<Note>
+  `serve` reports the **bind**, not the spawn. It used to exit `0` the moment it forked, while the
+  child died on an `EADDRINUSE` nobody joined back up. It now waits for the daemon to answer.
+</Note>
+
+## Worked example
+
+```bash
+npx @reticlehq/server serve --port 4400
+npx @reticlehq/server status
+```
+
+<Card title="What the daemon is" icon="sitemap" href="/architecture">
+  The bridge, the tool engine, and where `.reticle/` lives.
+</Card>

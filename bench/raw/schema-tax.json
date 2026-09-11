@@ -1,0 +1,27 @@
+{
+  "metric": "per-request MCP tool-schema tax (tokens paid on every request before any work)",
+  "measured_at_utc": "2026-08-12",
+  "results": {
+    "reticle_default": {
+      "tool_count": 18,
+      "schema_chars": 21222,
+      "schema_tokens": 4930
+    },
+    "reticle_all": {
+      "tool_count": 48,
+      "schema_chars": 130994,
+      "schema_tokens": 30228
+    },
+    "playwright_mcp": {
+      "tool_count": 23,
+      "schema_chars": 17084,
+      "schema_tokens": 3725
+    },
+    "chrome_devtools_mcp": {
+      "tool_count": 29,
+      "schema_chars": 23291,
+      "schema_tokens": 5116
+    }
+  },
+  "finding": "competitor not measured in this run \u2014 no ratio claimed"
+}

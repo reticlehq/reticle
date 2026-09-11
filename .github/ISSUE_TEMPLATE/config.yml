@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discord — questions, ideas, what we're building
+    url: https://discord.gg/BwAbzv9ZRz
+    about: Fastest way to get an answer, see the current cycle, or claim an issue before you start.
+  - name: Documentation
+    url: https://github.com/reticlehq/reticle/tree/main/docs
+    about: Getting started, integration, and the benchmark explainer.
+  - name: Security vulnerability
+    url: https://github.com/reticlehq/reticle/blob/main/SECURITY.md
+    about: Please report security issues privately — do not open a public issue.

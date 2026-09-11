@@ -1,0 +1,21 @@
+{
+  "name": "reticle",
+  "displayName": "Reticle",
+  "version": "2.14.0",
+  "description": "Verify a running web app from the inside. Installs the Reticle skill and registers the Reticle MCP server so the agent can look, act, observe and assert against the real app.",
+  "author": {
+    "name": "Reticle contributors",
+    "url": "https://github.com/reticlehq"
+  },
+  "homepage": "https://www.reticle.sh",
+  "repository": "https://github.com/reticlehq/reticle",
+  "license": "Apache-2.0",
+  "keywords": ["mcp", "ai-agents", "testing", "verification", "instrumentation"],
+  "mcpServers": {
+    "reticle": {
+      "command": "npx",
+      "args": ["-y", "@reticlehq/server", "mcp"],
+      "env": { "RETICLE_INSTALL_SOURCE": "plugin" }
+    }
+  }
+}

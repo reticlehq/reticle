@@ -1,0 +1,85 @@
+import { SessionState } from '@reticlehq/core';
+import { z } from 'zod';
+import type { Session } from './session.js';
+
+/** Live-control: the control block spliced onto tool results so the agent sees human steering. */
+interface ControlEnvelope {
+  state: SessionState;
+  /** Drained inbox text, delivered to the agent exactly once. */
+  guidance: string[];
+}
+
+/**
+ * Agent-readable hint returned when an action is refused mid-pause. Named, not free — the agent's
+ * recovery path (address the guidance, then reticle_session{action:"resume"}) lives here in exactly one place.
+ */
+export const PAUSE_HINT =
+  'Paused by the human. Address the guidance, then call reticle_session{action:"resume"} (or wait for the human to resume).';
+
+/**
+ * `because` for the verdict a paused verification returns. Nothing was driven and nothing was
+ * asserted, which is the definition of unknown — never `no`, which would report the human's own
+ * pause as the app failing.
+ */
+export const PAUSED_NO_VERDICT =
+  'the human paused this session, so nothing was driven and nothing was asserted';
+
+/** Shape returned by the short-circuit when an action tool refuses while paused. */
+interface PausedResult {
+  paused: true;
+  guidance: string[];
+  hint: string;
+}
+
+/**
+ * outputSchema fields every action tool that can short-circuit on pause MUST declare, or a validating
+ * profile strips the WHOLE pause payload — and because `guidance` is drained-once, that loses the
+ * human's message entirely (not merely hides it). Declared here beside PausedResult so the schema and
+ * the runtime shape are the same source; spread into each act tool's outputSchema.
+ */
+export const pausedOutputShape: z.ZodRawShape = {
+  paused: z.boolean().optional(),
+  guidance: z.array(z.string()).optional(),
+  hint: z.string().optional(),
+};
+
+/** The optional `control` key `withControl` may add — keeps callers' return types honest. */
+type ControlSpread = { control?: ControlEnvelope };
+
+/**
+ * Build the piggyback control block for the agent's next tool result.
+ *
+ * Returns `undefined` iff the session is a CLEAN active one (state === ACTIVE AND inbox empty) —
+ * i.e. there is nothing to tell the agent. Otherwise returns `{ state, guidance }`.
+ *
+ * DRAINS the inbox (the only read path) so a human message is delivered exactly once. Pure: it
+ * reads no clock, so the piggyback is deterministic and unit-testable without a fake clock.
+ */
+export function buildControlEnvelope(session: Session): ControlEnvelope | undefined {
+  const state = session.getState();
+  const guidance = session.drainInbox().map((m) => m.text);
+  if (state === SessionState.ACTIVE && 0 === guidance.length) return undefined;
+  return { state, guidance };
+}
+
+/**
+ * PAUSE short-circuit. When the session is paused, drain the inbox and refuse the action so the
+ * human's pause cannot be driven through. Returns undefined when the action may proceed.
+ *
+ * `drainInbox` is the SOLE sink for guidance — draining here means the same message can never
+ * also surface in a piggyback, guaranteeing delivered-once.
+ */
+export function pausedShortCircuit(session: Session): PausedResult | undefined {
+  if (session.getState() !== SessionState.PAUSED) return undefined;
+  return { paused: true, guidance: session.drainInbox().map((m) => m.text), hint: PAUSE_HINT };
+}
+
+/**
+ * PIGGYBACK. Spread a `control` block onto a result object whenever the session is non-active OR
+ * the inbox has messages (drained, so guidance is delivered exactly once). When the session is
+ * clean (active + empty) nothing is added, keeping the result shape unchanged.
+ */
+export function withControl<T extends object>(session: Session, result: T): T & ControlSpread {
+  const control = buildControlEnvelope(session);
+  return control === undefined ? result : { ...result, control };
+}

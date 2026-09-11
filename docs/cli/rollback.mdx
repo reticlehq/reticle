@@ -1,0 +1,35 @@
+---
+title: reticle rollback
+description: Restore the previously installed Reticle server version and restart.
+icon: arrow-rotate-left
+---
+
+`reticle rollback` is the undo for [`reticle update`](/cli/update). It restores the previous server version and restarts.
+
+```bash
+npx @reticlehq/server rollback
+```
+
+No flags.
+
+## What it prints
+
+Nothing on the happy path: `rollback()` replaces the process. A failure logs `reticle_rollback_failed` with the error message.
+
+Telemetry records the move as a `version_changed` event with `direction: "rollback"`, which is treated as a release-quality alarm rather than a routine version move.
+
+## Exit codes
+
+| Code | Meaning                                                     |
+| ---- | ----------------------------------------------------------- |
+| `0`  | The previous version was restored (the process is replaced) |
+| `1`  | There was nothing to roll back to, or the restore threw     |
+
+## Worked example
+
+```bash
+npx @reticlehq/server update
+# the new build misbehaves:
+npx @reticlehq/server rollback
+npx @reticlehq/server version
+```

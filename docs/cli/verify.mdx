@@ -1,0 +1,75 @@
+---
+title: reticle verify
+description: Drive a URL once, replay every saved flow, and exit zero only on a real pass.
+icon: circle-check
+---
+
+`reticle verify` is the CI command: no model in the loop, no MCP. It boots the engine in drive mode, waits for the in-page SDK to dial back, replays every saved flow, renders the verdict, and exits.
+
+```bash
+npx @reticlehq/server verify <url> [--headed] [--timeout N] [--storage-state <file>]
+```
+
+It uses the same runner and the same verdict as the MCP and HTTP paths, so a platform agent that can only run a shell command gets a byte-identical artifact.
+
+## Arguments and flags
+
+| Argument | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `url` | string, positional, **required** | none | The preview URL to drive |
+| `--headed` | boolean | `false` (headless) | Show the browser |
+| `--timeout N` | number, ms | `15000` | How long to wait for a browser session to dial back |
+| `--storage-state <file>` | string | unset | A Playwright storage state file. This is how you verify flows behind a login without scripting the login every time |
+
+## What it prints
+
+The rendered run report on stdout. On failure it names the cause on stderr instead, and there are two refusals worth knowing:
+
+```
+No app connected: Reticle drove the URL but no @reticlehq/browser session dialed back.
+  Make sure the SDK is in the build and reticle.connect() runs on the preview page (for a non-localhost preview: allowNonLocalhost + a pairing token).
+```
+
+```
+No saved flows to verify (.reticle/flows is empty), so refusing to report a pass for verifying nothing.
+  Flows are recorded interactively by an agent (reticle_record{action:"start"} → act → reticle_flow_save via the
+  MCP tools), then committed to .reticle/flows/. In CI, check those files in and re-run `reticle verify`.
+```
+
+<Warning>
+  Both of those are honesty guards, and both exit `1`. Verifying nothing is never a pass.
+</Warning>
+
+A URL that does not answer is not one of those two. It surfaces as the underlying Playwright error, prefixed with `verify failed:`, and also exits `1`. Real capture:
+
+```
+verify failed: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:59999/
+Call log:
+  - navigating to "http://localhost:59999/", waiting until "domcontentloaded"
+```
+
+<Warning>
+  `verify` binds the bridge port itself and has **no `--port` flag**: passing one is rejected as
+  `unknown argument '--port'`. If a daemon is already on the port, `verify` does not start a second
+  one: it prints three ways out (ask the running daemon via `reticle_run`, stop it, or move with
+  `RETICLE_PORT`) rather than a raw listen error. This bites most often on a developer machine,
+  where an agent has usually left a daemon running; in CI the port is normally free.
+</Warning>
+
+## Exit codes
+
+| Code | Meaning                                                           |
+| ---- | ----------------------------------------------------------------- |
+| `0`  | The verdict was a pass                                            |
+| `1`  | Failed, or no session, or no flows, or the engine could not start |
+
+## Worked example
+
+```bash
+npm run build && npm run preview &
+npx @reticlehq/server verify http://localhost:4173 --timeout 60000
+```
+
+<Card title="Recording the flows this replays" icon="vial" href="/testing">
+  Flows are recorded interactively, then committed to `.reticle/flows/`.
+</Card>

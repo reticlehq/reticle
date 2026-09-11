@@ -1,0 +1,203 @@
+{
+  "metric": "Reticle cost and latency as the app scales (same app, three sizes)",
+  "app": "http://localhost:4313/",
+  "tiers": [
+    {
+      "tier": "normal",
+      "rows": 800,
+      "daemon_rss_mb": 51,
+      "calls": [
+        {
+          "tool": "reticle_query",
+          "ms": 8,
+          "bytes": 558,
+          "tokens": 165
+        },
+        {
+          "tool": "reticle_query",
+          "ms": 14,
+          "bytes": 13927,
+          "tokens": 3566
+        },
+        {
+          "tool": "reticle_query",
+          "ms": 8,
+          "bytes": 61,
+          "tokens": 20
+        },
+        {
+          "tool": "reticle_state",
+          "ms": 5,
+          "bytes": 99,
+          "tokens": 29
+        },
+        {
+          "tool": "reticle_state",
+          "ms": 3,
+          "bytes": 63,
+          "tokens": 19
+        },
+        {
+          "tool": "reticle_observe",
+          "ms": 3,
+          "bytes": 201,
+          "tokens": 63
+        },
+        {
+          "tool": "reticle_snapshot",
+          "ms": 7,
+          "bytes": 10566,
+          "tokens": 3505
+        }
+      ],
+      "total_tokens_to_drive": 7367,
+      "slowest_ms": 14
+    },
+    {
+      "tier": "medium",
+      "rows": 5000,
+      "daemon_rss_mb": 66,
+      "calls": [
+        {
+          "tool": "reticle_query",
+          "ms": 16,
+          "bytes": 244,
+          "tokens": 70
+        },
+        {
+          "tool": "reticle_query",
+          "ms": 11,
+          "bytes": 13927,
+          "tokens": 3566
+        },
+        {
+          "tool": "reticle_query",
+          "ms": 6,
+          "bytes": 61,
+          "tokens": 20
+        },
+        {
+          "tool": "reticle_state",
+          "ms": 2,
+          "bytes": 99,
+          "tokens": 29
+        },
+        {
+          "tool": "reticle_state",
+          "ms": 1,
+          "bytes": 63,
+          "tokens": 19
+        },
+        {
+          "tool": "reticle_observe",
+          "ms": 1,
+          "bytes": 201,
+          "tokens": 63
+        },
+        {
+          "tool": "reticle_snapshot",
+          "ms": 4,
+          "bytes": 10566,
+          "tokens": 3505
+        }
+      ],
+      "total_tokens_to_drive": 7272,
+      "slowest_ms": 16
+    },
+    {
+      "tier": "hard",
+      "rows": 20000,
+      "daemon_rss_mb": 70,
+      "calls": [
+        {
+          "tool": "reticle_query",
+          "ms": 11,
+          "bytes": 244,
+          "tokens": 70
+        },
+        {
+          "tool": "reticle_query",
+          "ms": 9,
+          "bytes": 13927,
+          "tokens": 3566
+        },
+        {
+          "tool": "reticle_query",
+          "ms": 7,
+          "bytes": 61,
+          "tokens": 20
+        },
+        {
+          "tool": "reticle_state",
+          "ms": 2,
+          "bytes": 99,
+          "tokens": 29
+        },
+        {
+          "tool": "reticle_state",
+          "ms": 2,
+          "bytes": 63,
+          "tokens": 19
+        },
+        {
+          "tool": "reticle_observe",
+          "ms": 2,
+          "bytes": 201,
+          "tokens": 63
+        },
+        {
+          "tool": "reticle_snapshot",
+          "ms": 4,
+          "bytes": 10566,
+          "tokens": 3505
+        }
+      ],
+      "total_tokens_to_drive": 7272,
+      "slowest_ms": 11
+    }
+  ],
+  "scaling_normal_to_hard": {
+    "reticle_query#0": {
+      "normal_tokens": 165,
+      "hard_tokens": 70,
+      "token_ratio": 0.42,
+      "ms_ratio": 1.38
+    },
+    "reticle_query#1": {
+      "normal_tokens": 3566,
+      "hard_tokens": 3566,
+      "token_ratio": 1,
+      "ms_ratio": 0.64
+    },
+    "reticle_query#2": {
+      "normal_tokens": 20,
+      "hard_tokens": 20,
+      "token_ratio": 1,
+      "ms_ratio": 0.88
+    },
+    "reticle_state#3": {
+      "normal_tokens": 29,
+      "hard_tokens": 29,
+      "token_ratio": 1,
+      "ms_ratio": 0.4
+    },
+    "reticle_state#4": {
+      "normal_tokens": 19,
+      "hard_tokens": 19,
+      "token_ratio": 1,
+      "ms_ratio": 0.67
+    },
+    "reticle_observe#5": {
+      "normal_tokens": 63,
+      "hard_tokens": 63,
+      "token_ratio": 1,
+      "ms_ratio": 0.67
+    },
+    "reticle_snapshot#6": {
+      "normal_tokens": 3505,
+      "hard_tokens": 3505,
+      "token_ratio": 1,
+      "ms_ratio": 0.57
+    }
+  }
+}

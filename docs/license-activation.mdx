@@ -1,0 +1,145 @@
+---
+title: 'Activating a license key'
+description: 'Set your key, confirm it worked, and fix it when it did not. Everything an activation needs, with no account and no call.'
+icon: key
+---
+
+If your organisation has a Reticle license key, this page is everything you need to put it in place. There is no account to create, no login, and no call with us required.
+
+Do not have a key? Write to [hey@reticle.sh](mailto:hey@reticle.sh).
+
+## One key per organisation
+
+A key covers your whole organisation. Every developer and every machine uses the same one, so share it the way you would share any other build-time credential: your secrets manager, your onboarding doc, your CI configuration.
+
+## Set it
+
+Reticle reads one environment variable, `RETICLE_LICENSE_KEY`. Set it everywhere Reticle runs, which is usually more than one place.
+
+<CodeGroup>
+
+```bash macOS / Linux
+# In ~/.zshrc, ~/.bashrc, or your team's equivalent.
+export RETICLE_LICENSE_KEY="your-key-here"
+```
+
+```powershell Windows
+[Environment]::SetEnvironmentVariable('RETICLE_LICENSE_KEY', 'your-key-here', 'User')
+```
+
+```yaml GitHub Actions
+env:
+  RETICLE_LICENSE_KEY: ${{ secrets.RETICLE_LICENSE_KEY }}
+```
+
+```bash Docker
+docker run -e RETICLE_LICENSE_KEY="your-key-here" your-image
+```
+
+</CodeGroup>
+
+An export only affects shells started after it, so open a new terminal or `source` your profile.
+
+### Editors and agents that launch Reticle themselves
+
+<Warning>
+  This is the step teams most often miss. Claude Desktop, Cursor and similar tools launch from the
+  desktop rather than from a terminal, so they never read your shell profile. An `export` that
+  plainly works in your terminal is invisible to them, and Reticle reports itself unlicensed.
+</Warning>
+
+Put the key in the MCP server's own `env` block instead, then restart the editor. Configuration is read at startup.
+
+```json
+{
+  "mcpServers": {
+    "reticle": {
+      "command": "npx",
+      "args": ["@reticlehq/server", "mcp"],
+      "env": {
+        "RETICLE_LICENSE_KEY": "your-key-here"
+      }
+    }
+  }
+}
+```
+
+## Confirm it worked
+
+```bash
+npx @reticlehq/server license
+```
+
+You do not need `NODE_ENV` set, a project, a dev server, or a running app. This reads the key and nothing else.
+
+| `status` | What it means | What to do |
+| --- | --- | --- |
+| `active` | Valid and in date. | Nothing. You are done. |
+| `missing` | Reticle found no key in its environment. | The variable is not visible to this process. See below. |
+| `expired` | The key was valid and its term has ended. | Contact us to renew. |
+| `invalid` | The key was not accepted. | Usually a copy or paste problem. See below. |
+| `eval` | This build has no licensing configured. | You are on a build older than licensing. Update. |
+
+## Over time
+
+Your key carries an expiry, shown in the `license` output. A renewal is a new key for the same organisation: replace the value everywhere you set it, and nothing else changes.
+
+Nothing breaks without warning. An expired key reports `expired` rather than failing silently, and you can check at any time with the command above.
+
+Activation is **offline**. Reticle verifies your key cryptographically on your own machine, so there is no license server to reach. It works behind a firewall, on an air-gapped machine, and during any outage on our side.
+
+## When it does not work
+
+<AccordionGroup>
+
+<Accordion title="It says missing, but the variable is definitely set">
+The commonest cause by a distance is that Reticle is being launched by something that does not
+inherit your shell environment: an editor, a desktop agent, a systemd unit, a container. Run
+`echo $RETICLE_LICENSE_KEY` in the same context Reticle runs in, not just in your own terminal. If
+an editor launches it, use the MCP `env` block above.
+
+Second commonest: the variable was set in a shell that was already open. Environment variables are read when a process starts, so open a new terminal and restart anything long-running.
+
+</Accordion>
+
+<Accordion title="It says invalid">
+The key changed between us sending it and Reticle reading it. Almost always one of:
+
+- truncated, most often by a line wrap when pasted into a config file or a chat client
+- a character dropped or added while copying by hand
+- quoted in a way that swallowed a character
+
+Surrounding whitespace and a trailing newline are tolerated, so neither is the cause. Copy the key again in one piece. If it still reports `invalid`, write to us and we will re-issue it.
+
+</Accordion>
+
+<Accordion title="command not found: reticle">
+  Use the `npx @reticlehq/server ...` form shown on this page. It runs without a global install, and
+  it is the form we support.
+</Accordion>
+
+</AccordionGroup>
+
+## What a licensed deployment reports
+
+Stated plainly, because a security review will ask.
+
+Activation itself makes **no network request**. Your key is verified on your machine with public key cryptography.
+
+Separately, Reticle sends anonymous usage metrics, as it does for every user. On a licensed deployment these carry your **license id**, an opaque identifier that means nothing without our own records, so we can tell your organisation's usage apart from everyone else's and know when to talk to you about renewal.
+
+Never sent, licensed or not: your source code, your application's data, your users' data, URLs, selectors, page content, file contents, or your organisation's name.
+
+The kill switch has no exception for licensed installations:
+
+```bash
+export RETICLE_TELEMETRY=0
+```
+
+`DO_NOT_TRACK=1` is honoured identically. If your policy forbids outbound telemetry, set it. Your activation is unaffected, because activation never needed the network. To keep your own usage data without sending it, `RETICLE_TELEMETRY_FILE=/path/to/file.jsonl` records the same stream locally and sends nothing.
+
+## Getting help
+
+[hey@reticle.sh](mailto:hey@reticle.sh) for activation problems, renewals and re-issues.
+
+Include the output of `npx @reticlehq/server license`. It carries your license id and no secrets, and it usually tells us the answer immediately.

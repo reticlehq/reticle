@@ -1,0 +1,94 @@
+---
+title: reticle help
+description: Print the complete Reticle command grammar, every command and every flag, on one screen.
+icon: circle-question
+---
+
+`reticle help` prints the whole usage block to stdout and exits `0`.
+
+```bash
+npx @reticlehq/server help
+npx @reticlehq/server --help
+npx @reticlehq/server -h
+```
+
+All three are the same command.
+
+<Warning>
+  There is no per-command help. `reticle init --help` is not a help request, it is an unknown
+  argument: the parser rejects it, prints `unknown argument '--help'` followed by this same block,
+  and exits `1`. This page and the rest of this section are the per-command reference.
+</Warning>
+
+## What it prints
+
+Real capture, in full:
+
+```
+usage:  npx @reticlehq/server <command>   (or `reticle <command>` once the bin is on your PATH)
+
+  reticle init  [--dry-run] [--port N] [--no-mcp] [--no-install] [--app <dir>]  (wire Reticle into the project in this directory)
+                --app picks WHICH app in a monorepo, when several are found
+                --no-mcp skips MORE than the server registration: also the agent rule files
+                (CLAUDE.md / AGENTS.md / .cursor) and the /reticle command, because all three
+                only make sense once the tools are reachable.
+  reticle serve [--port N] [--drive <url>] [--headless] [--http] [--http-port N] [--http-token T]
+  reticle stop  [--port N] [--quiet]                    (stop the daemon we started, by its recorded pid)
+  reticle kill  [--port N] [--force]                   (free the port by its LISTENER, never the agent's mcp proxy)
+  reticle restart [--port N] [--force]                 (kill, then start a daemon and wait for a real bind)
+  reticle status [--port N]
+  reticle doctor [--port N]                            (one command to diagnose setup: Chromium, daemon, port)
+  reticle open  [url] [--port N]                        (show the app: reuse the connected tab, else open one)
+  reticle verify <url> [--headed] [--timeout N] [--storage-state <file>]  (one-shot: drive the URL, verify saved flows, exit 0=pass)
+  reticle affected [--since <ref>] [file...]           (which saved flows must re-verify for the changed files)
+  reticle gate [--since <ref>] [file...]               (exit non-zero unless passing artifacts cover the affected flows)
+  reticle watch [url]                                  (on save, report which saved flows must re-verify)
+  reticle drive <url> [--headless]                     (foreground mode, for debugging)
+  reticle mcp   [--port N] [--drive <url>] [--headless] (MCP stdio proxy; auto-starts daemon if needed)
+  reticle update                                       (install the latest server version and restart)
+  reticle rollback                                     (restore the previous server version and restart)
+  reticle license                                      (show enterprise license status: active | eval | missing)
+  reticle telemetry [status|enable|disable]            (anonymous usage metrics; status shows what's sent + the policy)
+  reticle feedback [--rating 1-5] [--bug] "message"    (tell us what worked and what didn't; prints exactly what it sends)
+  reticle feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement> "message"
+                                                       (agents: file from anywhere, including a setup that never finished)
+  reticle identify --context company|side_project|open_source|learning [--company N] [--email E] [--forget]
+                                                       (OPT-IN: tell us who you are, e.g. for support or an enterprise trial)
+
+Cloud (link this project to Reticle Cloud; runs/flows recorded on the dashboard):
+  reticle login --email <e> [--code <c>] [--org <n>]   (sign in: mails a code, then exchanges it)
+  reticle link  [--project <name|id>]                  (bind this repo: mints a scoped key, writes .reticle/cloud.json)
+  reticle whoami                                        (who am I signed in as, and is this repo attached?)
+  reticle project <ls|create <name>>                   (list or create cloud projects)
+  reticle config [--runs on|off] [--memory on|off] [--flows on|off] [--verify local|server]
+  reticle push                                          (send local run artifacts to the dashboard)
+  reticle runs | regression | share <runId>            (read cloud state; regression exits 3 if any flow broke)
+
+'drive' shows the browser; everything else is hidden (serve/mcp own the pool behind leases, replay
+and the spec runner: batch work). --headed opts any of them in, --headless hides drive, CI hides it.
+```
+
+## Errors print it too
+
+Any usage error prints the offending thing first, then this same block on stderr, and exits `1`:
+
+```
+{"t":"2026-08-15T18:42:48.476Z","event":"reticle_usage_error","message":"unknown command 'nonsense-cmd'"}
+unknown command 'nonsense-cmd'
+
+usage:  npx @reticlehq/server <command>   (or `reticle <command>` once the bin is on your PATH)
+  ... the whole block above ...
+```
+
+Two audiences, two channels: the structured line for logs and scripts, the plain text for the person who just typed the command.
+
+## Exit codes
+
+| Code | Meaning                                           |
+| ---- | ------------------------------------------------- |
+| `0`  | Help was requested                                |
+| `1`  | Help was printed because something else was wrong |
+
+<Note>
+  A bare `reticle` with no arguments is **not** help. It is [`reticle serve`](/cli/serve).
+</Note>

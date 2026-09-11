@@ -1,0 +1,19 @@
+{
+  "reticle": {
+    "version": "2.5.0",
+    "commit": "33629413"
+  },
+  "client": {
+    "id": "claude-code"
+  },
+  "host": {
+    "os": "darwin 25.5.0",
+    "node": "v22.14.0"
+  },
+  "checks": {
+    "snippet": true
+  },
+  "verdict": "runnable-unverified",
+  "by": "machine (client-compat.mjs)",
+  "note": "machine-checkable half only — nobody has run this client"
+}

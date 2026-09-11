@@ -1,0 +1,52 @@
+---
+title: reticle update
+description: Install the latest Reticle server version, sync the project SDK to match, and restart.
+icon: arrow-up
+---
+
+`reticle update` moves the installed server forward and brings the app's SDK with it.
+
+```bash
+npx @reticlehq/server update
+```
+
+No flags.
+
+## What it does, in order
+
+1. Ask the registry what is available.
+2. Compare by **direction**, not inequality. A registry version that merely differs is not a newer one, and the old check happily installed a downgrade.
+3. Nothing newer: log `reticle_update` with `ok: false` and `message: "already on the latest version"`, then stop.
+4. Otherwise sync the **app's SDK first**. `reticle update` used to swap only the CLI, so the command whose job is keeping an install current was itself a way to produce a version-skewed pair.
+5. Then apply the CLI update, which execs and exits. Your agent client restarts it.
+
+## What it prints
+
+| Event | Fields |
+| --- | --- |
+| `reticle_update` | `ok`, and either `from` and `to`, or `message` and `version` |
+| `reticle_update_sdk` | `synced`, `packages`, `to`, `packageManager`. Or `synced: false` with `reason: "no @reticlehq packages in this project"` |
+| `reticle_update_sdk_failed` | A `hint` naming the exact command to run by hand |
+| `reticle_update_failed` | The error |
+
+The SDK sync is best effort and non-fatal on purpose. This command gets run from wherever the human happens to be standing, which is often not an app at all.
+
+## Exit codes
+
+| Code | Meaning                                                              |
+| ---- | -------------------------------------------------------------------- |
+| `0`  | Already current, or the update was applied (the process is replaced) |
+| `1`  | The update check or install threw                                    |
+
+## Worked example
+
+```bash
+npx @reticlehq/server version     # 2.8.0
+npx @reticlehq/server update
+```
+
+<Warning>
+  Attaching to a running daemon is what a daemon is for, which means an upgrade does not take effect
+  until that daemon dies. Run [`reticle stop`](/cli/stop) afterwards if you need the new build
+  serving immediately.
+</Warning>

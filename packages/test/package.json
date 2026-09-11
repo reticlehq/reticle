@@ -1,0 +1,59 @@
+{
+  "name": "@reticlehq/test",
+  "version": "2.14.0",
+  "description": "Reticle test runner: reticleTest spec registry + a runner that drives Reticle tools without MCP/stdio.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "lint": "eslint src",
+    "test:unit": "vitest run src --passWithNoTests",
+    "test:coverage": "vitest run src --passWithNoTests --coverage.enabled --coverage.provider=v8 --coverage.reporter=text-summary --coverage.include='src/**/*.ts' --coverage.exclude='src/**/*.test.ts'",
+    "prepack": "tsc -b && node ../../scripts/prepare-dist.mjs dist"
+  },
+  "dependencies": {
+    "@reticlehq/core": "workspace:*",
+    "@reticlehq/server": "workspace:*"
+  },
+  "peerDependencies": {
+    "vitest": "^3.2.6"
+  },
+  "peerDependenciesMeta": {
+    "vitest": {
+      "optional": true
+    }
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "Reticle contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reticlehq/reticle.git",
+    "directory": "packages/test"
+  },
+  "homepage": "https://github.com/reticlehq/reticle#readme",
+  "bugs": "https://github.com/reticlehq/reticle/issues",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "keywords": [
+    "mcp",
+    "ai-agents",
+    "testing"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

@@ -1,0 +1,154 @@
+---
+title: reticle_tools and reticle_run
+description: Discover the tools that are not advertised, load their argument grammar on demand, and invoke any of them by name.
+icon: boxes-stacked
+---
+
+`reticle_tools` lists every Reticle tool and, on request, returns the full argument grammar for the ones you name. `reticle_run` then invokes any of them. Reach for the pair whenever you need a capability that is not in the default advertised surface, which is most of what Reticle can do.
+
+`reticle_tools` discovers. `reticle_run` invokes. Together they cost two tool definitions instead of the rest of the catalog.
+
+## Discovering what exists
+
+```json
+{}
+```
+
+Returns every tool with a one-line summary. A sample of what lives in the cold tail:
+
+| Tool | What it does |
+| --- | --- |
+| `reticle_capabilities` | The app's advertised testable surface, testids, signals, stores, flows |
+| `reticle_verify` (`flows`) | Replay every saved flow, return one consolidated suite verdict |
+| `reticle_screenshot` | Pixel screenshot of the driven page, saved as a visual baseline |
+| `reticle_visual_diff` | Perceptually diff the live page against that baseline |
+| `reticle_network_mock` | Force a 500, go offline, or delay a response |
+| `reticle_viewport` | Pin the viewport so screenshots are reproducible across machines |
+| `reticle_verify` (`crawl`) | Click every reachable control and report anomalies, with no script |
+| `reticle_clock` | Freeze time or fast-forward timers, toasts, debounces, auto-dismiss |
+| `reticle_storage` | localStorage, sessionStorage and readable cookies |
+| `reticle_verify` (`coverage`) | Which controls you have driven this session, and which you have not |
+| `reticle_verify` (`change`) | Give it the files you edited; it replays the flows that cover them |
+| `reticle_reconcile` | Compare what the API returned against what the page actually renders |
+| `reticle_scroll_to` | Find a row in a virtualised list that has not rendered yet |
+
+The response also tells you which surface is active:
+
+```json
+{
+  "profile": {
+    "active": "all",
+    "source": "RETICLE_ADVERTISE_ALL_TOOLS set in the DAEMON's environment at startup",
+    "note": "The surface is read once at daemon startup: set RETICLE_ADVERTISE_ALL_TOOLS=1 and restart the daemon, or it has no effect. No surface advertises every tool: the advertised count is capped because editors budget tools across all connected MCP servers. Every tool listed here is callable through reticle_run { tool, args } whether or not it is advertised."
+  },
+  "next": "Load params with reticle_tools { names:[…] }, then call reticle_run { tool, args }."
+}
+```
+
+That capture is from a daemon started with `RETICLE_ADVERTISE_ALL_TOOLS=1`. On a default daemon, `active` reads `default` and names the environment variable as unset.
+
+<Warning>
+  "Read once at daemon startup" is doing real work in that sentence. Setting the environment
+  variable in a shell where a daemon is already running changes nothing, and the resulting "I set it
+  and nothing happened" is very hard to debug from the outside.
+</Warning>
+
+## Loading argument grammar
+
+Summaries are enough to choose a tool, not to call one. Load the full parameters for the ones you want:
+
+```json
+{ "names": ["reticle_network_mock", "reticle_clock"] }
+```
+
+Each named tool comes back with its full description and a `params` array of `{ name, required, description }`. This is the point of the design. Schemas arrive when they are needed, rather than on every turn forever.
+
+<Warning>
+  Do this rather than guessing. `reticle_run` refuses an unknown parameter instead of running the
+  call, and hands you the real parameter list so the retry is one turn rather than three:
+
+```json
+{
+  "error": "unknown parameter for reticle_flow_save: name",
+  "tool": "reticle_flow_save",
+  "params": [
+    { "name": "flow", "required": false, "description": "Alias for `flowName`." },
+    { "name": "flowName", "required": true, "description": "Name for the flow file." }
+  ],
+  "hint": "fix the arguments and call reticle_run again"
+}
+```
+
+The full `error` string continues: _"NOT applied, so any result would be an answer to a different question."_
+
+</Warning>
+
+## Invoking
+
+```json
+{ "tool": "reticle_capabilities" }
+```
+
+Real response from an instrumented app, trimmed:
+
+```json
+{
+  "testids": [
+    "nav-overview",
+    "nav-deployments",
+    "login-email",
+    "login-password",
+    "login-submit",
+    "deploy-table",
+    "new-deploy",
+    "deploy-submit",
+    "…"
+  ],
+  "signals": [
+    "nav:changed",
+    "auth:granted",
+    "auth:denied",
+    "deploy:created",
+    "deploy:shipped",
+    "modal:opened",
+    "toast:shown",
+    "…"
+  ],
+  "stores": ["app"],
+  "flows": [
+    {
+      "name": "ship-a-deploy",
+      "steps": ["nav-deployments", "new-deploy", "deploy-name", "deploy-submit"]
+    },
+    { "name": "generate-a-script", "steps": ["nav-compose", "compose-prompt", "compose-generate"] },
+    { "name": "find-old-deploy", "steps": ["nav-deployments", "scroll-to row-3600"] }
+  ],
+  "source": "live"
+}
+```
+
+The full response on this fixture carries 49 testids and 16 signals. `source: "live"` means it was read from the running app; pass `{ "fromDisk": true }` to read the git-checked `.reticle/contract.json` instead, which works with no browser attached at all.
+
+## Start here, not with a snapshot
+
+That `reticle_capabilities` output is the single best first call on an unfamiliar app. It is the app telling you what it considers testable: the elements worth driving, the signals that mean success, and the flows somebody already thought were important.
+
+Compared with snapshotting the page and guessing from element names, it is both cheaper and more truthful. `auth:granted` is what the app means by "logged in", and no amount of looking at the DOM will tell you that.
+
+```json
+{
+  "tool": "reticle_network_mock",
+  "args": { "mocks": [{ "urlContains": "/api/deploys", "status": 500 }] }
+}
+```
+
+```json
+{ "applied": true, "count": 1 }
+```
+
+Then drive the flow and see whether your error state actually works. Most do not, which is the point. `{ "clear": true }` turns it off and answers `{ "applied": true, "count": 0 }`.
+
+<Note>
+  `reticle_run` returns whatever the invoked tool returns, unchanged. It is a transport, not a
+  wrapper. So a tool that produces a verdict still produces one through `run`.
+</Note>

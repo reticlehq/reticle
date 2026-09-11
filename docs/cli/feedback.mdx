@@ -1,0 +1,67 @@
+---
+title: reticle feedback
+description: Send a report to the Reticle maintainers from the shell, including from a setup that never finished.
+icon: comment
+---
+
+`reticle feedback` is the feedback channel as a command: no prompts, no editor, no account. It exists so the cost of telling the maintainers something is lower than the cost of shrugging and moving on.
+
+```bash
+npx @reticlehq/server feedback [--rating 1-5] [--bug] "what worked, what didn't"
+npx @reticlehq/server feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement> "what happened"
+```
+
+The `--agent` form is for an agent that cannot reach the `reticle_feedback` tool: during `init`, while instrumentation is half wired, or when the daemon will not start. Those are the reports that are hardest to hear and most needed, because every other path requires the tool surface to already work.
+
+## Flags
+
+| Flag | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `--rating N` | integer 1 to 5 | unset | A human's overall take. A bare rating with no words is a valid report |
+| `--bug` | boolean | `false` | Shorthand for `--kind bug` |
+| `--kind K` | one of `bug`, `gap`, `ambiguity`, `feature_request`, `improvement`, `experience` | `experience`, or `bug` with `--bug` | The report's class. Wins over `--bug` |
+| `--agent` | boolean | `false` | File as the agent, so agent reports never dilute the human rating signal |
+
+Everything that is not a flag or a flag's value becomes the message, joined with spaces. Quoting is still your job for shell reasons.
+
+## What it prints
+
+The payload is printed **before** it is sent, every time. A channel that carries free text and does not show you what it sends is asking for trust it has not earned.
+
+```
+sending      {"source":"human","kind":"experience","stack":"vite","runtime":"web"}
+redacted     email (removed before sending)
+thanks       your feedback is in. it genuinely changes what gets built next.
+```
+
+`not sent` replaces the last line when the send failed or telemetry is off, and names the reason. Humans who have never identified also get an offer of a reply route, printed after the receipt rather than as a prompt.
+
+Run with no message and no rating, it prints usage and exits `1`. Real capture:
+
+```
+usage: reticle feedback [--rating 1-5] [--bug] "what worked, what didn't"
+       agents: reticle feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement|experience> "what happened"
+       your words go to the maintainers; nothing from your app is ever included.
+```
+
+## Exit codes
+
+| Code | Meaning                                                         |
+| ---- | --------------------------------------------------------------- |
+| `0`  | The report was submitted, or attempted and reported as not sent |
+| `1`  | No message and no rating, or an invalid `--rating` or `--kind`  |
+
+## Worked example
+
+```bash
+npx @reticlehq/server feedback --agent --kind gap \
+  "no way to drive a contenteditable rich-text editor; had to skip the flow"
+```
+
+<Card
+  title="The same channel from inside a session"
+  icon="comments"
+  href="/tools-session-and-feedback"
+>
+  `reticle_feedback` when the tools are reachable.
+</Card>

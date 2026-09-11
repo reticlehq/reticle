@@ -1,0 +1,428 @@
+import { describe, expect, it } from 'vitest';
+import {
+  snapshotDelta,
+  snapshotGrowthNote,
+  SnapshotCache,
+  applySnapshotDelta,
+  snapshotCacheKey,
+  SnapshotDeltaMode,
+} from './snapshot-delta.js';
+
+const TREE_A = '- button "Save" (ref=e1)\n- button "Cancel" (ref=e2)';
+const TREE_B = '- button "Save" (ref=e9)\n- button "Cancel" (ref=e2)\n- alert "Saved!" (ref=e3)';
+
+describe('snapshotDelta (pure)', () => {
+  it('returns full when there is no previous snapshot', () => {
+    expect(snapshotDelta(undefined, TREE_A).mode).toBe(SnapshotDeltaMode.FULL);
+  });
+
+  it('returns unchanged when only ref ids differ (refs are normalized out)', () => {
+    const refsOnlyChanged = '- button "Save" (ref=e7)\n- button "Cancel" (ref=e8)';
+    expect(snapshotDelta(TREE_A, refsOnlyChanged).mode).toBe(SnapshotDeltaMode.UNCHANGED);
+  });
+
+  it('returns only the added/removed lines on a real change', () => {
+    const d = snapshotDelta(TREE_A, TREE_B);
+    if (d.mode !== SnapshotDeltaMode.DELTA) throw new Error('expected delta');
+    // The ref is CARRIED, because a delta without one cannot be acted on and the agent has to take
+    // the full snapshot anyway. Identity for the diff is still the ref-stripped line — see the test
+    // above, where only the refs change and the answer is still `unchanged`.
+    expect(d.delta.added).toEqual(['- alert "Saved!" (ref=e3)']);
+    expect(d.delta.removed).toEqual([]);
+    expect(d.delta.addedCount).toBe(1);
+  });
+});
+
+describe('SnapshotCache (route-invalidated)', () => {
+  it('recalls the last tree only when the route matches', () => {
+    const c = new SnapshotCache();
+    c.remember('k', '/a', TREE_A);
+    expect(c.recall('k', '/a')).toBe(TREE_A);
+    expect(c.recall('k', '/b')).toBeUndefined(); // route changed → invalidated
+  });
+
+  it('evicts the oldest entry past the cap', () => {
+    const c = new SnapshotCache(1);
+    c.remember('k1', '/a', 'x');
+    c.remember('k2', '/a', 'y');
+    expect(c.recall('k1', '/a')).toBeUndefined();
+    expect(c.recall('k2', '/a')).toBe('y');
+  });
+
+  it('is LRU: a recalled (hot) key survives eviction of a colder one', () => {
+    const c = new SnapshotCache(2);
+    c.remember('a', '/', 'A');
+    c.remember('b', '/', 'B');
+    expect(c.recall('a', '/')).toBe('A'); // touch a -> most-recently-used
+    c.remember('c', '/', 'C'); // must evict b (least-recently-used), not a
+    expect(c.recall('a', '/')).toBe('A'); // survived
+    expect(c.recall('b', '/')).toBeUndefined(); // evicted
+    expect(c.recall('c', '/')).toBe('C');
+  });
+});
+
+describe('applySnapshotDelta', () => {
+  const raw = (tree: string, route = '/'): unknown => ({
+    tree,
+    status: { route, title: 'T' },
+    nodes: 2,
+  });
+  const opts = (diff: boolean) => ({ sessionId: 's', scope: '', mode: 'full', diff });
+
+  it('passes the full snapshot through when diff is off (but caches it)', () => {
+    const c = new SnapshotCache();
+    const out = applySnapshotDelta(raw(TREE_A), opts(false), c) as { tree?: string };
+    expect(out.tree).toBe(TREE_A);
+    expect(c.recall(snapshotCacheKey('s', '', 'full'), '/')).toBe(TREE_A);
+  });
+
+  it('first diff call returns full (no prior), second returns only the delta', () => {
+    const c = new SnapshotCache();
+    const first = applySnapshotDelta(raw(TREE_A), opts(true), c) as {
+      tree?: string;
+      mode?: string;
+    };
+    expect(first.tree).toBe(TREE_A); // first look → full
+    expect(first.mode).toBe(SnapshotDeltaMode.FULL);
+    const second = applySnapshotDelta(raw(TREE_B), opts(true), c) as {
+      mode?: string;
+      delta?: { added: string[] };
+      tree?: string;
+    };
+    expect(second.mode).toBe(SnapshotDeltaMode.DELTA);
+    expect(second.tree).toBeUndefined(); // no full tree on a delta → tokens saved
+    expect(second.delta?.added).toEqual(['- alert "Saved!" (ref=e3)']);
+  });
+
+  it('returns unchanged (no tree, no delta) when nothing changed', () => {
+    const c = new SnapshotCache();
+    applySnapshotDelta(raw(TREE_A), opts(true), c);
+    const again = applySnapshotDelta(raw(TREE_A), opts(true), c) as {
+      mode?: string;
+      tree?: string;
+    };
+    expect(again.mode).toBe(SnapshotDeltaMode.UNCHANGED);
+    expect(again.tree).toBeUndefined();
+  });
+
+  it('a route change yields full again (never a cross-page delta)', () => {
+    const c = new SnapshotCache();
+    applySnapshotDelta(raw(TREE_A, '/a'), opts(true), c);
+    const onB = applySnapshotDelta(raw(TREE_B, '/b'), opts(true), c) as {
+      tree?: string;
+      mode?: string;
+      reason?: string;
+    };
+    expect(onB.tree).toBe(TREE_B); // different route → full, not a delta
+    expect(onB.mode).toBe(SnapshotDeltaMode.FULL);
+    expect(onB.reason).toBe('route changed');
+  });
+
+  it('passes an error envelope through untouched', () => {
+    const c = new SnapshotCache();
+    expect(applySnapshotDelta({ error: 'no session' }, opts(true), c)).toEqual({
+      error: 'no session',
+    });
+  });
+});
+
+/**
+ * `diff:true` is the token-saving path the snapshot tool actively recommends, which makes it the
+ * path most worth being honest on.
+ *
+ * The walk stops at a node cap and returns a document-order PREFIX. So on a page bigger than the cap,
+ * two snapshots taken either side of a real change are byte-identical whenever the change happened
+ * past the cap — and the agent is told `mode: 'unchanged'`, i.e. "your click did nothing". That is a
+ * false green produced entirely by our own bound.
+ */
+describe('a diff over a capped tree does not claim the page is unchanged', () => {
+  const opts = { sessionId: 's1', scope: '', mode: 'full', diff: true };
+
+  it('flags truncation on an unchanged verdict', () => {
+    const cache = new SnapshotCache();
+    const raw = { tree: 'a\nb', status: { route: '/' }, truncated: true };
+    applySnapshotDelta(raw, opts, cache); // prime
+    const out = applySnapshotDelta(raw, opts, cache) as {
+      mode: string;
+      truncated?: boolean;
+      note?: string;
+    };
+    expect(out.mode).toBe('unchanged');
+    expect(out.truncated).toBe(true);
+    expect(out.note).toBeDefined();
+  });
+
+  it('flags truncation on a delta verdict too — a partial diff is still partial', () => {
+    const cache = new SnapshotCache();
+    applySnapshotDelta({ tree: 'a\nb', status: { route: '/' }, truncated: true }, opts, cache);
+    const out = applySnapshotDelta(
+      { tree: 'a\nb\nc', status: { route: '/' }, truncated: true },
+      opts,
+      cache,
+    ) as { mode: string; truncated?: boolean };
+    expect(out.mode).toBe('delta');
+    expect(out.truncated).toBe(true);
+  });
+
+  it('stays silent when the whole page fitted — silence must keep meaning complete', () => {
+    const cache = new SnapshotCache();
+    const raw = { tree: 'a\nb', status: { route: '/' }, truncated: false };
+    applySnapshotDelta(raw, opts, cache);
+    const out = applySnapshotDelta(raw, opts, cache) as {
+      mode: string;
+      truncated?: boolean;
+      note?: string;
+    };
+    expect(out.mode).toBe('unchanged');
+    expect(out.truncated).toBeUndefined();
+    expect(out.note).toBeUndefined();
+  });
+});
+
+describe('value changes surface as `changed`, not as remove+add of the same element', () => {
+  it('typing into a textbox reports the element as changed (same ref, different text)', () => {
+    const before = '- textbox "Filter" (ref=e29)\n- button "Submit" (ref=e30)';
+    const after = '- textbox "Filter" (ref=e29) [value="billing"]\n- button "Submit" (ref=e30)';
+    const d = snapshotDelta(before, after);
+    if (d.mode !== SnapshotDeltaMode.DELTA) throw new Error('expected delta');
+    expect(d.delta.changed).toEqual(['- textbox "Filter" (ref=e29) [value="billing"]']);
+    expect(d.delta.changed).toHaveLength(1);
+    expect(d.delta.added).toEqual([]);
+    expect(d.delta.removed).toEqual([]);
+  });
+
+  it('a ref-only difference (re-render re-mint) is still unchanged', () => {
+    const before = '- button "Save" (ref=e1)\n- button "Cancel" (ref=e2)';
+    const after = '- button "Save" (ref=e7)\n- button "Cancel" (ref=e8)';
+    expect(snapshotDelta(before, after).mode).toBe(SnapshotDeltaMode.UNCHANGED);
+  });
+
+  it('multiple value changes on the same page all surface', () => {
+    const before = [
+      '- textbox "Name" (ref=e1)',
+      '- textbox "Email" (ref=e2)',
+      '- button "Submit" (ref=e3)',
+    ].join('\n');
+    const after = [
+      '- textbox "Name" (ref=e1) [value="Alice"]',
+      '- textbox "Email" (ref=e2) [value="a@b.c"]',
+      '- button "Submit" (ref=e3)',
+    ].join('\n');
+    const d = snapshotDelta(before, after);
+    if (d.mode !== SnapshotDeltaMode.DELTA) throw new Error('expected delta');
+    expect(d.delta.changed).toHaveLength(2);
+    expect(d.delta.changed).toContain('- textbox "Name" (ref=e1) [value="Alice"]');
+    expect(d.delta.changed).toContain('- textbox "Email" (ref=e2) [value="a@b.c"]');
+    expect(d.delta.added).toEqual([]);
+    expect(d.delta.removed).toEqual([]);
+  });
+
+  it('a structural add alongside a value change reports both correctly', () => {
+    const before = '- textbox "Search" (ref=e5)';
+    const after = '- textbox "Search" (ref=e5) [value="q"]\n- alert "Results" (ref=e6)';
+    const d = snapshotDelta(before, after);
+    if (d.mode !== SnapshotDeltaMode.DELTA) throw new Error('expected delta');
+    expect(d.delta.changed).toEqual(['- textbox "Search" (ref=e5) [value="q"]']);
+    expect(d.delta.added).toEqual(['- alert "Results" (ref=e6)']);
+    expect(d.delta.removed).toEqual([]);
+  });
+
+  it('different roles sharing a re-minted ref stay as separate add/remove, not paired', () => {
+    const before = '- button "Delete" (ref=e1)\n- textbox "Name" (ref=e2)';
+    const after = '- textbox "Email" (ref=e1)\n- textbox "Name" (ref=e2)';
+    const d = snapshotDelta(before, after);
+    if (d.mode !== SnapshotDeltaMode.DELTA) throw new Error('expected delta');
+    expect(d.delta.changed).toEqual([]);
+    expect(d.delta.removed).toEqual(['- button "Delete" (ref=e1)']);
+    expect(d.delta.added).toEqual(['- textbox "Email" (ref=e1)']);
+  });
+});
+
+describe('full-tree fallback carries mode and reason', () => {
+  const raw = (tree: string, route = '/'): unknown => ({
+    tree,
+    status: { route, title: 'T' },
+    nodes: 2,
+  });
+  const opts = (diff: boolean) => ({ sessionId: 's', scope: '', mode: 'full', diff });
+
+  it('first snapshot reports mode:full with reason', () => {
+    const c = new SnapshotCache();
+    const out = applySnapshotDelta(raw(TREE_A), opts(true), c) as {
+      tree?: string;
+      mode?: string;
+      reason?: string;
+    };
+    expect(out.tree).toBe(TREE_A);
+    expect(out.mode).toBe(SnapshotDeltaMode.FULL);
+    expect(out.reason).toBe('first snapshot for this route');
+  });
+
+  it('route change reports mode:full with reason', () => {
+    const c = new SnapshotCache();
+    applySnapshotDelta(raw(TREE_A, '/a'), opts(true), c);
+    const out = applySnapshotDelta(raw(TREE_B, '/b'), opts(true), c) as {
+      tree?: string;
+      mode?: string;
+      reason?: string;
+    };
+    expect(out.tree).toBe(TREE_B);
+    expect(out.mode).toBe(SnapshotDeltaMode.FULL);
+    expect(out.reason).toBe('route changed');
+  });
+
+  it('no mode field when diff is off (not a delta response)', () => {
+    const c = new SnapshotCache();
+    const out = applySnapshotDelta(raw(TREE_A), opts(false), c) as {
+      tree?: string;
+      mode?: string;
+    };
+    expect(out.tree).toBe(TREE_A);
+    expect(out.mode).toBeUndefined();
+  });
+
+  it('changed field surfaces through applySnapshotDelta', () => {
+    const c = new SnapshotCache();
+    const before = '- textbox "Q" (ref=e1)';
+    const after = '- textbox "Q" (ref=e1) [value="hi"]';
+    applySnapshotDelta(raw(before), opts(true), c);
+    const out = applySnapshotDelta(raw(after), opts(true), c) as {
+      mode?: string;
+      changed?: string[];
+      changedCount?: number;
+    };
+    expect(out.mode).toBe(SnapshotDeltaMode.DELTA);
+    expect(out.changed).toEqual(['- textbox "Q" (ref=e1) [value="hi"]']);
+    expect(out.changedCount).toBe(1);
+  });
+});
+
+/**
+ * #787: a route predicate can go green over a skeleton, and the natural next move — a snapshot — is
+ * exactly as misleading in that window. `snapshotGrowthNote` catches it after the fact: a scope that
+ * was SMALLER moments ago and has since grown means the earlier reading was very likely taken
+ * mid-load, which is precisely when a wrong "renders nothing" conclusion gets drawn.
+ */
+describe('snapshotGrowthNote (pure)', () => {
+  const SMALL = '- navigation "breadcrumb" (ref=e1)\n- heading "Loading" (ref=e2)';
+  const GROWN = [
+    '- navigation "breadcrumb" (ref=e1)',
+    '- heading "Loading" (ref=e2)',
+    '- paragraph "Row one" (ref=e3)',
+    '- paragraph "Row two" (ref=e4)',
+    '- paragraph "Row three" (ref=e5)',
+  ].join('\n');
+
+  it('undefined when there is no prior snapshot', () => {
+    expect(snapshotGrowthNote(undefined, GROWN, 1000)).toBeUndefined();
+  });
+
+  it('undefined when the page did not grow', () => {
+    const prior = { tree: GROWN, atMs: 0 };
+    expect(snapshotGrowthNote(prior, SMALL, 500)).toBeUndefined();
+  });
+
+  it('undefined when the prior snapshot is stale — old growth is not a mid-load trap', () => {
+    const prior = { tree: SMALL, atMs: 0 };
+    expect(snapshotGrowthNote(prior, GROWN, 60_000)).toBeUndefined();
+  });
+
+  it('names the earlier count and elapsed time when a recent, smaller snapshot grew', () => {
+    const prior = { tree: SMALL, atMs: 1000 };
+    const note = snapshotGrowthNote(prior, GROWN, 3400);
+    expect(note).toBeDefined();
+    expect(note).toContain('2'); // the earlier (smaller) node count
+    expect(note).toContain('2400'); // elapsed ms
+  });
+
+  it('a custom window is honoured — just past the default window still counts under a wider one', () => {
+    const prior = { tree: SMALL, atMs: 0 };
+    expect(snapshotGrowthNote(prior, GROWN, 5001)).toBeUndefined(); // past default 5000ms
+    expect(snapshotGrowthNote(prior, GROWN, 5001, 10_000)).toBeDefined(); // widened window
+  });
+});
+
+describe('SnapshotCache tracks WHEN each entry was remembered (injected clock)', () => {
+  it('priorEntry carries the tree and the timestamp it was remembered at', () => {
+    let now = 1000;
+    const c = new SnapshotCache(50, () => now);
+    c.remember('k', '/', TREE_A);
+    now = 1250;
+    expect(c.priorEntry('k', '/')).toEqual({ tree: TREE_A, atMs: 1000 });
+  });
+
+  it('priorEntry is route-gated, same as recall', () => {
+    const c = new SnapshotCache();
+    c.remember('k', '/a', TREE_A);
+    expect(c.priorEntry('k', '/b')).toBeUndefined();
+  });
+});
+
+describe('applySnapshotDelta surfaces the growth note (#787)', () => {
+  it('flags a recently-smaller snapshot on a plain (non-diff) call', () => {
+    let now = 0;
+    const c = new SnapshotCache(50, () => now);
+    const small = { tree: 'a\nb', status: { route: '/' } };
+    const grown = { tree: 'a\nb\nc\nd\ne', status: { route: '/' } };
+    applySnapshotDelta(small, { sessionId: 's', scope: '', mode: 'full', diff: false }, c);
+    now = 2000;
+    const out = applySnapshotDelta(
+      grown,
+      { sessionId: 's', scope: '', mode: 'full', diff: false },
+      c,
+    ) as { growthWarning?: string };
+    expect(out.growthWarning).toBeDefined();
+  });
+
+  it('flags it on a diff:true call too, alongside the delta', () => {
+    let now = 0;
+    const c = new SnapshotCache(50, () => now);
+    applySnapshotDelta(
+      { tree: TREE_A, status: { route: '/' } },
+      { sessionId: 's', scope: '', mode: 'full', diff: true },
+      c,
+    );
+    now = 1500;
+    const out = applySnapshotDelta(
+      { tree: TREE_B, status: { route: '/' } },
+      { sessionId: 's', scope: '', mode: 'full', diff: true },
+      c,
+    ) as { growthWarning?: string; mode?: string };
+    expect(out.mode).toBe(SnapshotDeltaMode.DELTA);
+    expect(out.growthWarning).toBeDefined();
+  });
+
+  it('stays silent when the prior snapshot was not recent', () => {
+    let now = 0;
+    const c = new SnapshotCache(50, () => now);
+    applySnapshotDelta(
+      { tree: 'a\nb', status: { route: '/' } },
+      { sessionId: 's', scope: '', mode: 'full', diff: false },
+      c,
+    );
+    now = 60_000;
+    const out = applySnapshotDelta(
+      { tree: 'a\nb\nc\nd\ne', status: { route: '/' } },
+      { sessionId: 's', scope: '', mode: 'full', diff: false },
+      c,
+    ) as { growthWarning?: string };
+    expect(out.growthWarning).toBeUndefined();
+  });
+
+  it('stays silent when the page did not grow', () => {
+    let now = 0;
+    const c = new SnapshotCache(50, () => now);
+    applySnapshotDelta(
+      { tree: 'a\nb\nc\nd\ne', status: { route: '/' } },
+      { sessionId: 's', scope: '', mode: 'full', diff: false },
+      c,
+    );
+    now = 500;
+    const out = applySnapshotDelta(
+      { tree: 'a\nb', status: { route: '/' } },
+      { sessionId: 's', scope: '', mode: 'full', diff: false },
+      c,
+    ) as { growthWarning?: string };
+    expect(out.growthWarning).toBeUndefined();
+  });
+});

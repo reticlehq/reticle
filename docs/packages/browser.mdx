@@ -1,0 +1,111 @@
+---
+title: '@reticlehq/browser'
+description: The Reticle instrumentation SDK that runs inside your page, observing the DOM, network, console, routing and state.
+icon: window
+---
+
+`@reticlehq/browser` is the Reticle SDK that runs inside your page. It installs the observers, builds semantic snapshots, executes actions, and talks to the bridge. Install it directly only if you are **not** on React or want to call `connect()` yourself, because [`@reticlehq/react`](/packages/react) already re-exports all of it.
+
+**Apache 2.0. Depends on `@reticlehq/core`.**
+
+## Why it exists
+
+This is what makes Reticle different from a browser-automation tool. Because it runs _inside_ the app rather than driving it from outside, it can see a state mutation and a fired signal, not just a rendered pixel. It never imports a Node API; that boundary is enforced by the dependency graph.
+
+[`reticle_query`](/tools-query) speaks role, label and testid instead of CSS selectors through its own local accessibility engine: one engine computes both what elements are called and what they match by, so a reported identity always round-trips.
+
+## When you need it directly
+
+Install it yourself when you are not on React, or when you want `connect()` under your own control. React users install [`@reticlehq/react`](/packages/react) instead, which re-exports everything here.
+
+```bash
+npm i -D @reticlehq/browser
+```
+
+```ts
+import { reticle } from '@reticlehq/browser';
+if (import.meta.env.DEV) reticle.connect();
+```
+
+## The `reticle` singleton
+
+One instance, memoized on `globalThis` so hot module replacement does not create a second one.
+
+| Method         | Signature                                                |
+| -------------- | -------------------------------------------------------- |
+| `connect`      | `(options?: ReticleConnectOptions) => void`              |
+| `connected`    | `get connected(): boolean`                               |
+| `signal`       | `(name: string, data?: Record<string, unknown>) => void` |
+| `state`        | `(name: string, value: unknown) => void`                 |
+| `renderCommit` | `(commits: number) => void`                              |
+| `describe`     | `(input: CapabilitiesInput) => void`                     |
+| `endSession`   | `() => void`                                             |
+| `disconnect`   | `() => void`                                             |
+
+Everything else on the class is private. `Reticle` itself is exported for typing.
+
+## `ReticleConnectOptions`
+
+Every field is optional.
+
+| Option | Type | What it controls |
+| --- | --- | --- |
+| `url` | `string` | Bridge URL, when you are not on the default port |
+| `session` | `string` | Session id. Defaults to the auto id (`SESSION_AUTO` is re-exported here) |
+| `projectId` | `string` | Project identity stamped on the handshake |
+| `token` | `string` | Pairing token, required for a non-loopback page |
+| `allowNonLocalhost` | `boolean` | Opt in to connecting from a non-localhost origin |
+| `allowInProduction` | `boolean` | Opt in to connecting from a production build. Desktop apps need this |
+| `overlay` | `boolean` | The in-page overlay |
+| `captureNetworkBodies` | `boolean` | Record request and response bodies |
+| `root` | `string` | Repository root, so source paths come back relative |
+| `sdkVersion` | `string` | Reported on the handshake for skew detection |
+| `present` | `boolean` | Presenter mode |
+| `pace` | `number` | Presenter pacing |
+| `narrationDwellMs` | `number` | Presenter narration dwell |
+| `border` | `'session' \| 'busy'` | Which border the overlay draws |
+| `logMax` | `number` | Console buffer cap |
+| `recorder` | `boolean` | Enable flow recording |
+| `annotate` | `boolean` | Enable the human annotation layer |
+| `endedFadeMs` | `number` | Fade after a session ends |
+| `idleEndMs` | `number` | Idle timeout before the session ends itself |
+| `redact` | `RedactionConfig` | Redaction policy, from core |
+
+## Capabilities
+
+Declaring a capability surface is what lets an agent discover what your app can do without guessing.
+
+```ts
+import { registerCapabilities } from '@reticlehq/browser';
+
+registerCapabilities({
+  testids: ['login-submit'],
+  signals: ['auth:granted'],
+  stores: ['session'],
+  flows: [{ name: 'login', steps: ['fill email', 'fill password', 'submit'] }],
+});
+```
+
+Also exported: `getCapabilities()`, `hasCapabilities()`, `setCapabilitiesListener(cb?)`, and the `Capabilities`, `CapabilitiesInput` and `CapabilityFlow` types.
+
+## State adapters
+
+Register a store and its contents become readable through [`reticle_state`](/tools-state).
+
+`registerStore`, `unregisterStore`, `storeNames`, `readStores`, `readStoresWithTruncation`.
+
+Ready-made adapters ship for TanStack Query, Jotai, XState, Valtio, MobX, Recoil, Svelte, Pinia, and a plain push store: `tanstackQueryStore`, `jotaiStore`, `xstateStore`, `valtioStore`, `mobxStore`, `recoilStore`, `svelteStore`, `piniaStore`, `pushStore`.
+
+## Framework adapters
+
+`registerAdapter`, `identifyComponent`, `readComponentState`, `elementHasHoverHandlers`, `adapterNames`, with the `ReticleAdapter`, `ComponentInfo` and `ComponentSource` types. [`@reticlehq/react`](/packages/react) registers the React one.
+
+## Lower-level building blocks
+
+Exported because the server and the test runner use them, and because an integration may need them: `buildSnapshot`, `matchQuery`, `runQuery`, `executeAction`, `executeSequence`, `describe`, `getRole`, `getAccessibleName`, `getStates`, `isVisible`, `refs`, `RefRegistry`, `setIgnoreSelectors`, `Annotator`, `installAnnotator`, `resolveMarkAnchor`, `inspectChart`, `canvasChartData`.
+
+Signal helpers: `createReticleEmitter`, `commitAndSignal`, `registerReticleDomain`.
+
+<Card title="Instrumenting an app properly" icon="plug" href="/instrumentation">
+  Signals, stores, and what makes evidence strong rather than circumstantial.
+</Card>

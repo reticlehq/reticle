@@ -1,0 +1,27 @@
+{
+  "name": "@reticlehq/atlas",
+  "version": "2.14.0",
+  "private": true,
+  "description": "The hard fixture: a logistics console with server-authoritative state, push updates, virtualization and a branching flow — built to find what Reticle cannot see.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@reticlehq/browser": "workspace:*",
+    "@reticlehq/react": "workspace:*",
+    "@reticlehq/vite-plugin": "workspace:*",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.1.0",
+    "typescript": "^5.7.3",
+    "vite": "^8.2.1"
+  }
+}

@@ -1,0 +1,74 @@
+name: DCO
+
+# Developer Certificate of Origin check. Every commit in a PR must carry a `Signed-off-by:` trailer
+# matching its author — the contributor's affirmation that they wrote the change and can submit it under
+# the project's license (https://developercertificate.org). Sign off with `git commit -s`.
+#
+# On failure it prints the exact remedy for both shapes (one commit vs several) rather than a link:
+# three of three external contributors were blocked here while CONTRIBUTING.md did not mention sign-off,
+# so the old "see CONTRIBUTING.md" pointed at a document that could not answer it. Both now say it:
+# CONTRIBUTING.md step 3 of the PR flow, and the first line of the PR template checklist.
+#
+# This runs and reports on every PR; it only BLOCKS merges once a maintainer adds "DCO" to the required
+# status checks in branch protection. Self-contained (no third-party action) to keep the supply chain small.
+
+on:
+  pull_request:
+  # The merge queue reports against `merge_group`, not against the PR, so a required check that does
+  # not run here leaves every queued entry waiting forever. The sign-off itself was already certified
+  # on the PR — this event carries the same commits — so the job runs and reports green rather than
+  # re-deriving a range that has no `pull_request` context to read.
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  dco:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Check Signed-off-by on every commit in the PR
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          fail=0
+          # Merge commits are exempt (they have no authored change to certify).
+          for sha in $(git rev-list --no-merges "$BASE..$HEAD"); do
+            author="$(git show -s --format='%an <%ae>' "$sha")"
+            if ! git show -s --format='%B' "$sha" | grep -qiE "^Signed-off-by: .+ <.+@.+>"; then
+              echo "::error::commit $sha by $author is missing a Signed-off-by line (use 'git commit -s')"
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            # The fix, in the failure itself. This check is the single most common thing standing
+            # between a first-time contributor and a merged PR here, and the message used to point at
+            # CONTRIBUTING.md, which does not mention signing off at all. The two remedies are
+            # different commands and the multi-commit one is the case people are usually in, so both
+            # are spelled out — a contributor who has just been blocked should not have to go and
+            # find this.
+            echo ""
+            echo "How to fix — sign off certifies you wrote the change and may submit it"
+            echo "under the project's license (https://developercertificate.org)."
+            echo ""
+            echo "  one commit:      git commit --amend --no-edit -s"
+            echo "  several:         git rebase --signoff origin/main"
+            echo ""
+            echo "  then:            git push --force-with-lease"
+            echo ""
+            echo "Signing rewrites the commits, so the push has to be forced. Nothing else changes."
+            echo "To stop this happening again, install the repo's hooks — a prepare-commit-msg"
+            echo "hook signs every commit for you:"
+            echo ""
+            echo "  pnpm hooks:install"
+            echo ""
+            echo "Note: 'git config format.signOff true' does NOT do this. It applies to"
+            echo "format-patch/send-email, not to git commit."
+            exit 1
+          fi
+          echo "All commits are signed off."

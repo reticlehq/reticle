@@ -1,0 +1,123 @@
+---
+title: Reticle vs Chrome DevTools MCP
+description: Chrome DevTools MCP is slightly cheaper per look. Reticle caught every bug it missed. Here is the trade, measured.
+icon: chrome
+---
+
+**Short answer:** Chrome DevTools MCP is a few percent cheaper per observation. It also caught 8 of 10 bugs where Reticle caught 10. If your tool is cheap because it looks at less, the savings are not savings.
+
+## The measurement
+
+Same app, same bugs, same moment:
+
+|                         | Reticle   | Chrome DevTools MCP |
+| ----------------------- | --------- | ------------------- |
+| Bugs caught (of 10)     | **10**    | 8                   |
+| Detection accuracy      | **1.00**  | 0.82                |
+| Avg tokens per look     | 815       | **758**             |
+| Verification efficiency | **12.27** | 10.55               |
+
+DevTools MCP genuinely wins the cost column. We are not going to bury that. 758 against 815 is a real 7% advantage per observation, and if you are making a very large number of trivial looks it adds up.
+
+But cost per look is only half a metric. Verification efficiency combines both. Regressions caught per 1,000 tokens spent, gated on catching **all** of them with zero false alarms on a known-good control. On that measure Reticle leads 12.27 to 10.55.
+
+<Card title="Why efficiency is gated on the catch rate" icon="chart-column" href="/benchmarks">
+  A tool can look cheap by not looking. The floor exists to stop that counting as a win.
+</Card>
+
+On a real production dashboard, one observation:
+
+|                     | Snapshot | Network | Total     |
+| ------------------- | -------- | ------- | --------- |
+| Reticle             | 678      | 345     | **1,023** |
+| Chrome DevTools MCP | 1,105    | 252     | 1,357     |
+
+Note the flip. DevTools is cheaper on a small page and more expensive on a large one. Its snapshot is 1,105 tokens against Reticle's 678. The cost advantage does not survive contact with a real app.
+
+## What DevTools MCP does better
+
+- **Cheaper on simple pages**, as above.
+- **It is Chrome's own tooling**, which means the performance and tracing surface is deep and authoritative in a way third-party instrumentation is not.
+- **Nothing to install in your app.** No SDK, no plugin, no build-time step. If instrumenting is off the table, this matters a lot.
+- **Real pixels.** Actual rendered frames, with everything that implies.
+
+## The two bugs
+
+DevTools MCP is DOM-and-network only. It can describe what a page looks like and what it requested; it cannot ask the application what it believes.
+
+That is why the misses cluster where they do. The scenarios that separate the tools are the ones where the page is fine and the program is not. A mutation that never reached the store, a success handler that fired for the wrong reason. There is nothing in the DOM or the network log that distinguishes those from working code.
+
+Reticle can require the app's own signal:
+
+```json
+{ "ref": "e5", "action": "click", "until": { "kind": "signal", "name": "deploy:created" } }
+```
+
+That predicate cannot be satisfied by a `200`, by a rendered row, or by a hopeful agent. Either the app declared success or it did not.
+
+## The other difference: where to fix it
+
+DevTools MCP can tell you a request failed. Reticle tells you a request failed **and** that the button which sent it lives at `src/components/Login.tsx:81`.
+
+For a human, that is a convenience. For an agent, it is most of the value. Finding the bug is half the job, and the other half is knowing which file to open.
+
+## They compose
+
+Neither tool forbids the other. A reasonable setup:
+
+- **DevTools MCP** for performance traces, deep Chrome internals, and real screenshots.
+- **Reticle** for the verify loop: did the change work, and where do I fix it.
+
+## Choosing
+
+<CardGroup cols={2}>
+  <Card title="Pick Chrome DevTools MCP" icon="gauge">
+    You cannot instrument the app, you are chasing a performance or rendering problem, or you need
+    Chrome's own tracing.
+  </Card>
+  <Card title="Pick Reticle" icon="crosshairs">
+    You own the app and the failures you care about are the non-visual ones, mock data, dead
+    handlers, double submits, silent validation.
+  </Card>
+</CardGroup>
+
+## FAQ
+
+<AccordionGroup>
+
+<Accordion title="Which two bugs did Chrome DevTools MCP miss?">
+  The ones where the page is fine and the program is not: a mutation that never reached the store,
+  and a success handler that fired for the wrong reason. DevTools MCP is DOM-and-network only, so it
+  can describe what the page looks like and what it requested, but it cannot ask the application
+  what it believes. There is nothing in the DOM or the network log that separates those cases from
+  working code.
+</Accordion>
+
+<Accordion title="If DevTools MCP is cheaper, why not just use it?">
+  Because it is cheaper partly by looking at less. Cost per look is half a metric; the other half is
+  whether the look catches the bug. Verification Efficiency combines them and gates on catching
+  every bug with zero false alarms, and on that measure Reticle leads 12.27 to 10.55. The 7%
+  per-look advantage also inverts on a real app: on the production dashboard measured here DevTools'
+  snapshot was 1,105 tokens against Reticle's 678.
+</Accordion>
+
+<Accordion title="Can I run both MCP servers at once?">
+  Yes. They are independent servers with distinct tool names. A reasonable split is DevTools MCP for
+  performance traces, deep Chrome internals and real screenshots, and Reticle for the verify loop
+  and the source pointer.
+</Accordion>
+
+<Accordion title="Do I have to instrument my app to use Reticle?">
+  You have to add the dev-only SDK, which is what `npx @reticlehq/server init` does. Beyond that,
+  look, act and observe work with zero component changes. Signals and registered stores are
+  optional, and they are what buys the assertions DevTools MCP structurally cannot make. If
+  instrumenting is off the table entirely, DevTools MCP is the correct choice.
+</Accordion>
+
+<Accordion title="Does Reticle give me performance traces?">
+  Not in the way Chrome's own tooling does, and it does not pretend to. It can tell you a React
+  render storm is happening (commit rate climbing with no DOM mutation), which DevTools MCP does not
+  surface. For flame charts and deep tracing, use Chrome's.
+</Accordion>
+
+</AccordionGroup>

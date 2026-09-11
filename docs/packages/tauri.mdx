@@ -1,0 +1,63 @@
+---
+title: 'reticle-tauri'
+description: The Rust crate that gives a Tauri app Reticle screenshots and headless mode.
+icon: rust
+---
+
+`reticle-tauri` is a Rust crate on crates.io, not an npm package. You need it only if your Tauri app should answer `reticle_screenshot`, or run headless in CI. Everything else about a Tauri app, including IPC observation, works without it.
+
+It is versioned **independently** of the ten npm packages. **MIT licensed, unlike the Apache 2.0 npm packages. Edition 2021.**
+
+## Why it exists, and why it is small
+
+Tauri IPC observation needs nothing on the Rust side. An `invoke('load_todos')` already reaches Reticle as `ipc://load_todos` through the SDK in the webview. You only need this crate for two things: screenshots, and headless mode.
+
+<Warning>
+  Do not expect this to match the npm version. Doing so would imply a release cadence the crate does
+  not have, and it would make every npm release a crates.io release for no reason.
+</Warning>
+
+## Install
+
+```toml
+[dependencies]
+reticle-tauri = "2.14"
+```
+
+Its own dependencies are `tauri = "2"` plus the per-platform capture backends: `objc2` and friends on macOS, `webview2-com` and `windows` on Windows, `webkit2gtk` and `cairo-rs` on Linux and the BSDs.
+
+## Wiring
+
+```rust
+tauri::Builder::default()
+    .invoke_handler(tauri::generate_handler![reticle_tauri::reticle_capture])
+    .on_page_load(reticle_tauri::on_page_load)
+```
+
+Nothing is needed on the JavaScript side. Tauri has no preload stage, so the SDK reaches `reticle_capture` through Tauri's own internals.
+
+## The public API
+
+| Item | Signature |
+| --- | --- |
+| `reticle_capture` | `#[tauri::command] pub async fn reticle_capture(window: tauri::WebviewWindow, full_page: Option<bool>) -> Result<String, String>` |
+| `on_page_load` | `pub fn on_page_load<R: Runtime>(webview: &Webview<R>, payload: &tauri::webview::PageLoadPayload<'_>)` |
+| `FULL_PAGE_UNSUPPORTED` | `pub const FULL_PAGE_UNSUPPORTED: &str = "full-page-unsupported"` |
+
+There are no public traits and no macros.
+
+### `reticle_capture`
+
+Runs on a blocking thread, writes a PNG into a per-process `0700` directory under the OS temp dir as `reticle-capture-<nanos>.png`, and returns the **path**, not the bytes. Full-page capture is supported on Linux only; elsewhere it returns `FULL_PAGE_UNSUPPORTED`, which is pinned to core's `VisualReason` value so the refusal is the same string everywhere.
+
+### `on_page_load`
+
+Hides the window on `PageLoadEvent::Finished` when the environment variable `RETICLE_HEADLESS=1` is set. That ordering matters: the window exists and renders, then it is hidden, so the capture path still works.
+
+## The silent failure to know about
+
+A Tauri app with the default CSP runs perfectly and never connects to Reticle, with nothing said anywhere. [`reticle doctor`](/cli/doctor) diagnoses this explicitly on a desktop project, because it is invisible otherwise.
+
+<Card title="Desktop setup in full" icon="display" href="/desktop">
+  The CSP entry, the headless flag, and how capture differs from a browser screenshot.
+</Card>

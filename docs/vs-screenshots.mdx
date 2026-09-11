@@ -1,0 +1,137 @@
+---
+title: 'Screenshots lie: why pixels cannot verify AI-generated code'
+sidebarTitle: vs screenshots
+description: The failures that AI coding agents actually produce are invisible in a rendered frame. Here is why a better vision model does not fix that.
+icon: image
+---
+
+**Short answer:** the information is not in the picture. Whether a request fired, what it returned, whether state changed, whether one click sent two requests. None of that is visible in a rendered frame, at any resolution, to any model.
+
+## The four failures a screenshot approves
+
+<CardGroup cols={2}>
+  <Card title="Mock data" icon="ghost">
+    POST returns `200`, the row appears, nothing persisted. Reload and it's gone. The screenshot
+    during the demo is perfect.
+  </Card>
+  <Card title="Dead handler" icon="plug-circle-xmark">
+    Button has an `onClick`, the `onClick` calls a function, the function was never wired to the
+    store. Looks connected all the way down.
+  </Card>
+  <Card title="Double submit" icon="clone">
+    One click, two POSTs, customer charged twice. Zero pixels differ.
+  </Card>
+  <Card title="Silent validation" icon="triangle-exclamation">
+    The form accepts `"abc"` as a quantity and sends it to your database. Renders beautifully.
+  </Card>
+</CardGroup>
+
+Every one of these renders as a correct-looking page. Ask a vision model whether the feature works and it will say yes, because the only evidence available says yes.
+
+## "Just use a better model"
+
+This is the intuition worth killing, because it sounds reasonable and costs teams months.
+
+Model quality is not the constraint. **You cannot see a network call.** You cannot photograph a state mutation. A screenshot of a page whose bug is non-visual contains no signal about that bug, so asking a stronger model to look harder produces a more confident version of the same wrong answer.
+
+Improving the model improves the reading of the evidence. It does not create evidence that was never captured.
+
+## What "reading the program" means instead
+
+Reticle runs inside the app and reads what actually happened:
+
+```json
+{
+  "verified": "yes",
+  "verdict": {
+    "evidence": { "method": "POST", "url": "/api/login", "status": 200, "durationMs": 67 }
+  },
+  "summary": {
+    "net": { "total": 1, "errors": 0 },
+    "consoleErrors": 0,
+    "stateDiffs": [{ "path": "auth", "from": null, "to": "{\"email\":\"admin@reticle.dev\"}" }],
+    "signals": ["auth:granted"]
+  }
+}
+```
+
+Read what that rules out. `net.total: 1` kills double-submit. `stateDiffs` kills mock data, the store genuinely changed. `signals` is the app declaring success in its own words. `consoleErrors: 0` kills "it worked but threw".
+
+No pixel in the world carries that.
+
+## A real one, caught on the first run
+
+On the first drive of a real production dashboard, before any instrumentation, Reticle's network observation flagged two endpoints returning `500`. A database migration that had not been applied.
+
+**The page rendered fine.** The sidebar loaded. Nothing looked broken. A screenshot agent would have called it done and moved on.
+
+That is the thesis in one incident: "looks done" and "is done" are different properties, and the difference is usually non-visual.
+
+## When a screenshot is the right tool
+
+Screenshots are not useless. They are the correct instrument for a specific class of bug, and this page would be dishonest without saying so:
+
+- A font that failed to load
+- A GPU or compositing glitch
+- Layout that breaks only at a particular viewport
+- Anything where the actual rendered frame _is_ the thing under test
+
+Those are real bugs and structural reads can miss them. Reticle has `reticle_screenshot` and `reticle_visual_diff` for exactly this, and if pixel regression is your primary concern, a dedicated visual tool will serve you better.
+
+The argument is not "screenshots are bad". It is that a screenshot cannot answer "did the code work", and that is the question an AI coding agent needs answered on every change.
+
+## The honest limits
+
+We have not proven that Reticle makes agents _fix_ more bugs. A controlled test did not show a fix-rate improvement; the benchmark was confounded and we are still working on measuring it properly.
+
+What is measured is detection: 10 of 10 injected regressions caught with zero false alarms, against 9 and 8 for the alternatives.
+
+## FAQ
+
+<AccordionGroup>
+
+<Accordion title="Would a better vision model fix this?">
+  No, and this is the single most expensive misconception on the page. Model quality improves the
+  _reading_ of evidence; it cannot create evidence that was never captured. A screenshot of a page
+  whose bug is non-visual contains no signal about that bug at any resolution, so a stronger model
+  produces a more confident version of the same wrong answer.
+</Accordion>
+
+<Accordion title="So screenshots are useless?">
+  No. They are the correct instrument for a specific class of bug: a font that failed to load, a GPU
+  or compositing glitch, layout that breaks only at one viewport, and anything where the rendered
+  frame _is_ the thing under test. Reticle ships `reticle_screenshot` and `reticle_visual_diff` for
+  exactly those. If pixel regression is your primary concern, a dedicated visual tool will serve you
+  better.
+</Accordion>
+
+<Accordion title="What does Reticle read instead of pixels?">
+  The program: the network log (did the request fire, how many times, what did it return), the
+  console, client-side routing, registered store state, and any signal the app itself emits. A
+  response carrying `net.total: 1` rules out a double submit; a non-empty `stateDiffs` rules out
+  mock data; `consoleErrors: 0` rules out "it worked but threw".
+</Accordion>
+
+<Accordion title="Does that mean Reticle catches every bug?">
+  No. It has not been shown to make agents _fix_ more bugs; a controlled fix-rate test did not show
+  an improvement and we consider that question open. What is measured is detection: 10 of 10
+  injected regressions caught with zero false alarms, against 9 and 8 for the alternatives. And a
+  purely visual regression still needs the opt-in visual diff.
+</Accordion>
+
+<Accordion title="Can I keep using screenshots alongside Reticle?">
+  Yes, and for a visual product you probably should. The argument here is not that screenshots are
+  bad, it is that a screenshot cannot answer "did the code work", which is the question an AI coding
+  agent needs answered on every change.
+</Accordion>
+
+</AccordionGroup>
+
+<CardGroup cols={2}>
+  <Card title="See a real verdict" icon="rocket" href="/quickstart">
+    Five minutes, and the output on that page was captured live.
+  </Card>
+  <Card title="The full benchmark" icon="chart-column" href="/benchmarks">
+    Method, raw numbers, and where Reticle comes second.
+  </Card>
+</CardGroup>

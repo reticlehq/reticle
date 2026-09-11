@@ -1,0 +1,22 @@
+{
+  "question": "For a company that ALREADY has Playwright scripts, what does Reticle replay cost?",
+  "flows": 4,
+  "playwright": {
+    "harness": "playwright-compiled-script",
+    "passed": 4,
+    "end_to_end_ms": 3809,
+    "llm_tokens": 0,
+    "report_bytes": 14
+  },
+  "reticle": {
+    "harness": "reticle_flow_verify",
+    "passed": 3,
+    "end_to_end_ms": 5251,
+    "startup_ms": 4269,
+    "login_ms": 874,
+    "verify_call_ms": 108,
+    "llm_tokens": 0,
+    "report_bytes": 530
+  },
+  "finding": "Both cost ZERO LLM tokens and both return a ~90-byte verdict. The token-efficiency argument does not apply to a compiled suite — it applies to an agent re-driving the browser. On wall-time the compiled script is faster end-to-end. The real difference is what the check can see (replay expectations cover signal/state/net-cardinality/console, which a DOM assertion cannot reach) and that the flow was recorded by driving rather than hand-written."
+}

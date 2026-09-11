@@ -1,0 +1,94 @@
+---
+title: '@reticlehq/vite-plugin'
+description: One line in vite.config.ts that stamps source locations on your JSX and auto-injects reticle.connect().
+icon: bolt
+---
+
+`@reticlehq/vite-plugin` is one line in `vite.config.ts` that does the two things everyone forgets: injecting `reticle.connect()` and enabling source mapping. Install it if your app builds with Vite. On Next.js use [`@reticlehq/next`](/packages/next) instead; on any other bundler, wire [`@reticlehq/browser`](/packages/browser) by hand.
+
+**Apache 2.0. Depends on `@babel/core`, `@reticlehq/babel-plugin` and `@reticlehq/core`. Optional peer dependency: `vite >= 4`.**
+
+## Install and use
+
+```bash
+npm i -D @reticlehq/vite-plugin @reticlehq/react
+```
+
+```ts
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { reticle } from '@reticlehq/vite-plugin';
+
+export default defineConfig({
+  plugins: [reticle(), react()],
+});
+```
+
+<Warning>
+  The import specifier is `@reticlehq/vite-plugin` and the export is `reticle`. An old README
+  documented `@reticlehq/core/vite`; that subpath has never existed in core's exports map, and `npx
+  @reticlehq/core init` is not a command either. The binary is `reticle`, from
+  [`@reticlehq/server`](/packages/server).
+</Warning>
+
+## Why it exists
+
+`apply: 'serve'` means it never reaches a production build. That is the guarantee that lets you leave it in the config permanently: there is no way to ship Reticle to your users by forgetting to remove a line.
+
+## What it injects
+
+A virtual module at `/@reticle-connect`, added to the HTML, whose contents are:
+
+```ts
+import { reticle, install } from '@reticlehq/react';
+install();
+reticle.connect({/* resolved args */});
+```
+
+Plus a dynamic import of your dev module if one exists. It looks for `src/reticle-dev.ts`, `.js`, `.tsx` or `.jsx`, in that order, and leaves the file alone if you have one: that file is yours to edit.
+
+## Options
+
+`reticle(options?: ReticleVitePluginOptions): ReticleVitePlugin`. Every option is optional.
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `port` | `number` | Discovered from the daemon registry for this project, falling back to `4400` |
+| `root` | `string` | Vite's `root`, else `process.cwd()` |
+| `sdkVersion` | `string` | Read from the installed `@reticlehq/react` |
+| `session` | `string` | Omitted, so the SDK generates one |
+| `projectId` | `string` | Derived from the package name plus the root path |
+| `token` | `string` | `readPairingToken()`, from `~/.reticle/pairing-token` |
+| `sourceMapping` | `boolean` | `true`. Set `false` to skip the Babel pass |
+| `inject` | `boolean` | `true`. Set `false` to call `connect()` yourself |
+| `desktop` | `boolean` | `false`. When `true` the plugin also applies to `vite build` and passes `allowInProduction: true`, which is what an Electron or Tauri renderer needs |
+| `captureNetworkBodies` | `boolean` | `false`. Also enabled by `VITE_RETICLE_CAPTURE_BODIES=1` |
+| `onWarn` | `(message: string) => void` | `console.warn` |
+
+## Other exports
+
+| Export | Type | What it is |
+| --- | --- | --- |
+| `RETICLE_VITE_PLUGIN_NAME` | `'reticle'` | The plugin name |
+| `RETICLE_TOKEN_GLOBAL` | `'__RETICLE_TOKEN__'` | The global the token is stamped onto |
+| `RETICLE_CONNECT_MODULE` | `'/@reticle-connect'` | The virtual module id |
+| `RENDER_PREHOOK_SOURCE` | `string` | The inline render prehook snippet |
+| `RETICLE_DEV_MODULE_CANDIDATES` | readonly tuple | The four dev-module paths it looks for |
+| `readPairingToken` | `() => string \| undefined` | Read the pairing token from disk |
+| `findDevModule` | `(root: string, exists: (p: string) => boolean) => string \| null` | Locate the dev module |
+| `connectModuleSource` | `(options: ReticleVitePluginOptions, devModule?: string \| null) => string` | Build the injected module source |
+| `cjsDepIncludes` | `(appRoot: string, canResolve?: (dep: string) => boolean) => string[]` | CommonJS deps to add to `optimizeDeps` |
+
+Types: `ReticleVitePluginOptions`, `ReticleVitePlugin`, `ViteDevServerLike`.
+
+## Desktop
+
+```ts
+reticle({ desktop: true });
+```
+
+A packaged Electron or Tauri renderer is a production build loaded from a custom protocol, so the default guards would refuse. This one flag drops `apply: 'serve'` and opts the connect call into production.
+
+<Card title="Desktop wiring in full" icon="display" href="/desktop">
+  Including the Tauri CSP whose failure is completely silent.
+</Card>

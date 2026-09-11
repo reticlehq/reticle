@@ -1,0 +1,120 @@
+---
+title: 'Action reference: lights, camera, click'
+sidebarTitle: Actions
+description: Every action reticle_act and reticle_act_and_wait can perform, with its arguments and the one that has a history.
+icon: hand-pointer
+---
+
+Every action Reticle can perform takes the same shape: a `ref` from [`reticle_snapshot`](/tools-snapshot) or [`reticle_query`](/tools-query), an `action` name, and an optional `args` object. The same seventeen actions are available on [`reticle_act`](/tools-act), which proves nothing, and on [`reticle_act_and_wait`](/tools-act-and-wait), which returns a verdict.
+
+```json
+{ "ref": "e104", "action": "fill", "args": { "value": "reticle" } }
+```
+
+| Action | Arguments | Notes |
+| --- | --- | --- |
+| `click` / `dblclick` | none | Dispatches a real click |
+| `hover` | none | `mouseover` + `mouseenter`, so JS hover state triggers |
+| `focus` / `blur` | none |  |
+| `fill` | `{ value }` | Sets value via a React-safe native setter, then `input` and `change` |
+| `type` | `{ text }` | **Appends** to the current value |
+| `clear` | none | Empties an input |
+| `select` | `{ value }` | For `<select>` |
+| `check` / `uncheck` | none | Checkbox and radio |
+| `submit` | none | Submits the element's `<form>` |
+| `press` | `{ text }` | The key **name**: `Escape`, `Tab`, `Enter` |
+| `scrollIntoView` | none |  |
+| `upload` | `{ content?, name?, type?, path? }` | Sets a file on `<input type="file">`. Inline bytes default to `"reticle test file"` / `"file.txt"` / `"text/plain"`. `path` reads a file from disk, scoped to the project root plus any opt-in directories listed in `.reticle.json` as `"uploadRoots": ["~/Downloads", "/Volumes/fixtures"]`. A refusal names every allowed root. |
+| `drag` | `{ toRef }` | Pointer-based drag (dnd-kit, react-beautiful-dnd) plus HTML5 DnD. `target` is an alias |
+| `webmcp` | `{ tool, params }` | Calls a `navigator.modelContext` tool, if the site exposes one |
+
+### Arguments that are not actions
+
+Three `args` keys apply across actions rather than belonging to one:
+
+| Key | What it does |
+| --- | --- |
+| `native` | Forces a trusted native click instead of the occlusion-honest synthetic path. For file pickers and clipboard access |
+| `holdMs` | Keeps the pointer **down** for that long between mousedown and mouseup. The only way to drive a hold-to-confirm control. `effect.heldMs` reports the hold actually achieved |
+| `confirmDangerous` | A permission gate for a control Reticle judged destructive. It is **not** a duration |
+
+<Warning>
+  `confirmDangerous` and `holdMs` are routinely confused because both show up around delete buttons.
+  `holdMs` is how long the button is held; `confirmDangerous` is permission to press it at all.
+  Passing the wrong one gets you either a refusal or a press that was never held.
+</Warning>
+
+### The refusal you will meet first
+
+Reticle blocks a control that looks destructive before acting on it:
+
+```json
+{
+  "error": "potentially destructive action blocked; retry with args.confirmDangerous=true",
+  "recovery": "Reticle blocked a potentially destructive control (delete, remove, revoke…) on purpose. If you mean it, retry the same action with args.confirmDangerous set to true. This is a deliberate refusal, not a defect: there is nothing to report."
+}
+```
+
+A stale ref is refused the same way, with `"ref 'e303' no longer resolves to an element"` and a recovery note telling you to re-query. Both refusals cost a turn and prevent a false green, which is the trade.
+
+## `fill` versus `type`
+
+`fill` replaces. `type` appends. Reaching for `type` when you meant `fill` is how a field ends up containing `hellohello`, and neither call will complain.
+
+## `press` takes `text`, not `key`
+
+Both are accepted today, and `text` wins when both are present. Use `text`. It is what the tool description documents.
+
+<Warning>
+This one has history worth knowing. The implementation used to read `args.key` and **default to
+`Enter`**, so the documented call, `{ action: "press", args: { text: "Escape" } }`, silently sent
+`Enter` and reported success.
+
+Three consequences, worst last: the requested key never arrived, so Escape-to-close and Tab-traversal went unverified while looking verified; nothing in the result said the argument had been ignored; and `Enter` is not a neutral substitute. On a focused field inside a form it **submits it**. A request to close a dialog could file the form behind it.
+
+Two field reports were exactly this, both diagnosed as "synthetic events don't reach the app". Wrong root cause: the event reached the app perfectly well and simply said `Enter`.
+
+</Warning>
+
+That bug is fixed, and the reason it is written down here is that it is the exact shape of failure Reticle exists to catch. An action that reports success while doing something else.
+
+## Batching
+
+Several actions in one round trip:
+
+```json
+{
+  "steps": [
+    { "ref": "e603", "action": "fill", "args": { "value": "admin@reticle.dev" } },
+    { "ref": "e604", "action": "fill", "args": { "value": "hunter2" } },
+    { "ref": "e605", "action": "click" }
+  ]
+}
+```
+
+<Warning>
+  [`reticle_act_sequence`](/tools-act-sequence) returns `ok: true` when the steps were
+  **dispatched**, not when they worked. Batch the setup, then prove the outcome with
+  [`reticle_act_and_wait`](/tools-act-and-wait) on the final step.
+</Warning>
+
+## Real versus synthetic input
+
+`inputMode` in the response says which you got. `synthetic` means events dispatched programmatically. Correct for the overwhelming majority of apps. `real` means native CDP input, available under `reticle drive`, and needed by a few drag-and-drop and pointer-gesture libraries.
+
+<Warning>
+  On a throttled tab, synthetic timers and pointer gestures can silently no-op. Pass
+  `refuseWhenThrottled: true` to fail loudly instead of acting into a tab the browser has paused.
+</Warning>
+
+## What every action reports
+
+`dispatched`, `targetMatched`, `visible`, `enabled`, `valueChanged`, `focusMoved`, `domMutatedWithin`, `defaultPrevented`, `occluded`, `occludedBy` and `scrolledIntoView`. Plus the element's `testid`, `component`, `role`, `name` and `source` file and line.
+
+Fields sitting at their uninformative default are **omitted**, so a clean action collapses to its consequence. A missing `visible` means `true`, not `false`. Read an absence as "nothing to report" rather than as a failure.
+
+`occluded` is the answer to a large share of "the button doesn't work" reports: the click landed on the modal overlay sitting on top of it.
+
+<Card title="Full field-by-field walkthrough" icon="hand-pointer" href="/tools-act">
+  What each effect field tells you, with a real response.
+</Card>

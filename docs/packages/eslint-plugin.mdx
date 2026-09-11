@@ -1,0 +1,86 @@
+---
+title: '@reticlehq/eslint-plugin'
+description: Two lint rules that keep Reticle's signal layer and its comment hygiene self-enforcing.
+icon: shield-check
+---
+
+`@reticlehq/eslint-plugin` is two ESLint rules that keep Reticle's signal layer self-enforcing. It is entirely optional: nothing in Reticle needs it, and you want it only once your app emits signals and you would like the compiler to notice when a new mutation forgets one.
+
+It exists because conventions rot. Someone adds a mutation, forgets the signal, and every verdict for that flow quietly drops a grade. Nothing breaks, the tests still pass, the evidence just gets weaker. A lint rule is the only way a convention survives contact with a deadline.
+
+**Apache 2.0. Depends on `@typescript-eslint/utils`. Peer dependency: `eslint >= 9`.**
+
+```bash
+npm i -D @reticlehq/eslint-plugin
+```
+
+## Exports
+
+| Export                    | What it is                                                         |
+| ------------------------- | ------------------------------------------------------------------ |
+| `default`                 | The plugin object: `{ meta: { name: 'reticle' }, rules, configs }` |
+| `rules`                   | `{ 'require-signal-on-mutation': ..., 'no-internal-tags': ... }`   |
+| `requireSignalOnMutation` | The rule, exported individually                                    |
+| `noInternalTags`          | The rule, exported individually                                    |
+
+## The rules
+
+### `reticle/require-signal-on-mutation`
+
+Warns when a store mutation happens without a mapped Reticle signal.
+
+**Message id:** `mutationWithoutSignal`. **Text:** `store mutation without a mapped Reticle signal`.
+
+**Options** (`options[0]`, no additional properties):
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `mutators` | `string[]` | `[]`. With the default the rule is a no-op, which is deliberate: name your own mutators. Matched by BARE NAME, so `set` also matches `map.set()` and `headers.set()`; prefer an unambiguous name |
+| `signalCallee` | `string \| string[]` | `['reticleSignal', 'signal']` |
+
+```js
+'reticle/require-signal-on-mutation': ['warn', {
+  mutators: ['setState', 'commit', 'dispatch'],
+  signalCallee: ['reticleSignal'],
+}]
+```
+
+The check is scoped per function: a mutation and its signal must live in the same function body.
+
+### `reticle/no-internal-tags`
+
+Errors on internal design-doc reference codes and internal version strings appearing in comments, file names, directory names or test descriptions. **Message id:** `internalTag`, with a `{ tag }` placeholder. No options.
+
+This one is mostly for contributors to Reticle itself, but the `recommended` config turns it on for everyone.
+
+## The recommended config
+
+One config, `recommended`:
+
+```js
+import reticle from '@reticlehq/eslint-plugin';
+
+export default [reticle.configs.recommended];
+```
+
+Which is exactly:
+
+```js
+{
+  plugins: { reticle: plugin },
+  rules: {
+    'reticle/require-signal-on-mutation': 'warn',
+    'reticle/no-internal-tags': 'error',
+  },
+}
+```
+
+<Warning>
+  `recommended` enables **both** rules, and `no-internal-tags` at `error`. An older README
+  documented only the first rule, so the second can arrive as a surprise. Enable the rules
+  individually if you want just the signal check.
+</Warning>
+
+<Card title="Why signals are the strongest evidence" icon="tower-broadcast" href="/instrumentation">
+  What a signal proves that a rendered pixel cannot.
+</Card>

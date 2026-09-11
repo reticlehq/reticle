@@ -1,0 +1,102 @@
+name: Publish reticle-tauri to crates.io
+
+# Publishes the `reticle-tauri` crate (packages/tauri) when a GitHub Release is published, or on
+# manual dispatch. Mirrors publish.yml: same triggers, same Production environment, same ref guard,
+# same "gate the artifact before shipping it" rule.
+#
+# A SEPARATE workflow rather than a job inside publish.yml, on purpose: npm and crates.io fail
+# independently, and when one registry hiccups you want to re-run only that half. A shared job would
+# force a re-publish attempt across both.
+#
+# CARGO_REGISTRY_TOKEN lives in the "Production" GitHub Environment, so the job declares
+# `environment: Production` below to bring that secret into scope.
+#
+# Re-running is safe. crates.io rejects a version that already exists, so the job checks first and
+# exits successfully when the version is already published — matching `pnpm -r publish`, which skips
+# versions already on npm so a partial or failed run can simply be re-triggered.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  publish-crate:
+    runs-on: ubuntu-latest
+    environment: Production # CARGO_REGISTRY_TOKEN lives in this GitHub Environment
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: packages/tauri
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # Never publish from an arbitrary branch state on a manual dispatch — releases run against
+      # their tag; a manual dispatch is only allowed from main. (A `release: published` event is
+      # already tag-scoped by GitHub, so this only gates workflow_dispatch.)
+      - name: Guard publish ref
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        working-directory: .
+        run: |
+          echo "refusing to publish from ${{ github.ref }} — dispatch only from main or publish via a Release"
+          exit 1
+
+      # rustup ships on the GitHub runner image; using it directly avoids pinning a third-party
+      # action to a SHA that would need re-verifying on every bump.
+      - name: Set up Rust
+        working-directory: .
+        run: |
+          rustup update stable --no-self-update
+          rustup default stable
+          rustup component add clippy rustfmt
+          rustc --version && cargo --version
+
+      # `cargo publish` runs a verification BUILD of the packaged crate, and on Linux that compiles
+      # the WebKitGTK capture path — which needs the same system libraries a Tauri app needs. Without
+      # these the publish fails at the verify step, so they are a build requirement, not a nicety.
+      - name: Install WebKitGTK build dependencies
+        working-directory: .
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libwebkit2gtk-4.1-dev libglib2.0-dev libcairo2-dev libsoup-3.0-dev
+
+      # Already-published is success, not failure: a re-triggered release must not fail here just
+      # because the crate half already went out.
+      - name: Skip if this version is already on crates.io
+        id: check
+        run: |
+          NAME=$(grep -m1 '^name' Cargo.toml | cut -d'"' -f2)
+          VERSION=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          echo "crate=$NAME $VERSION"
+          PUBLISHED=$(curl -sS -H 'User-Agent: reticle-ci' \
+            "https://crates.io/api/v1/crates/$NAME/$VERSION" | grep -c '"num"' || true)
+          if [ "$PUBLISHED" != "0" ]; then
+            echo "already-published=true" >> "$GITHUB_OUTPUT"
+            echo "$NAME $VERSION is already on crates.io — nothing to do"
+          else
+            echo "already-published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Gate the artifact: never publish code that fails the same checks CI enforces on every PR.
+      - name: Check formatting
+        if: steps.check.outputs.already-published == 'false'
+        run: cargo fmt --check
+
+      - name: Lint
+        if: steps.check.outputs.already-published == 'false'
+        run: cargo clippy --all-targets -- -D warnings
+
+      # The Linux capture path is what compiles natively here. The macOS and Windows paths are behind
+      # cfg gates and are covered by the `rust` / `rust-macos` jobs in ci.yml (a Windows
+      # `cargo check --target` and a native macOS clippy), not by this job.
+      - name: Build
+        if: steps.check.outputs.already-published == 'false'
+        run: cargo build --release
+
+      - name: Publish
+        if: steps.check.outputs.already-published == 'false'
+        run: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

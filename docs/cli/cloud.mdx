@@ -1,0 +1,153 @@
+---
+title: reticle cloud commands
+description: Sign in, link a repository, and read runs and regressions from Reticle Cloud.
+icon: cloud
+---
+
+Ten subcommands bind this repository to Reticle Cloud so runs and flows land on a dashboard. They dispatch before the local parser, so `reticle login` is one tool, not a second binary.
+
+```bash
+npx @reticlehq/server <login|logout|whoami|link|project|config|push|runs|regression|share>
+```
+
+These are thin clients over the `/v1` API. The moat is the server, not the verbs.
+
+## Where credentials live
+
+| Path | Contents | Secret |
+| --- | --- | --- |
+| `~/.reticle/session.json` | `{ url, token, orgName }` from `reticle login` | Yes |
+| `~/.reticle/credentials.json` | Project-scoped API keys from `reticle link`, keyed by `projectId` | Yes |
+| `<repo>/.reticle/cloud.json` | `{ projectId, projectName, url, sync, verify }`. The non-secret binding | No, commit it |
+
+Auth for any command is `RETICLE_CLOUD_KEY` from the environment (the agent path) if set, otherwise the login token. `RETICLE_CLOUD_URL` overrides the endpoint; the default is `http://localhost:8890`. When a command falls back to that default without `RETICLE_CLOUD_URL` (or a saved session URL), it prints a one-line notice on stderr; stdout stays pure JSON for agents.
+
+## The commands
+
+### `reticle login`
+
+```bash
+npx @reticlehq/server login                                    # browser device flow (the default)
+npx @reticlehq/server login --email you@acme.com               # headless: requests a code
+npx @reticlehq/server login --email you@acme.com --code 123456 # headless: exchanges it
+npx @reticlehq/server login --email you@acme.com --org "Acme"  # --org is consulted only for a brand new account
+```
+
+With no `--email`, it runs a browser device flow like `gh auth login`: fetch a device and user code, open the browser to approve, poll until confirmed. With `--email` it keeps the two-step code path for CI and servers, because it proves you own the inbox before handing out a session. A local cloud whose dev mailer cannot deliver echoes the code back and completes in one command.
+
+### `reticle logout`
+
+Empties `session.json`. Per-project keys in `credentials.json` stay. Prints `{ "loggedOut": true }`.
+
+### `reticle whoami`
+
+The one call to make when you do not know your state. Real capture:
+
+```json
+{
+  "loggedInAs": "acme",
+  "repo": {
+    "attached": false,
+    "projectId": null,
+    "url": null,
+    "sync": { "runs": true, "memory": true, "flows": true },
+    "verify": "local"
+  }
+}
+```
+
+An unattached repo also gets a next-step nudge on stderr, telling you to run `reticle link`:
+
+```
+→ this repo is not attached ... run `reticle link`
+```
+
+`whoami` exits `0` either way. Throughout this page, the punctuation joining the two halves of a message is shown as `...`.
+
+### `reticle link`
+
+```bash
+npx @reticlehq/server link [--project <name|id>]
+```
+
+Binds this repository to a cloud project. With a login token it **mints** a project-scoped key, so there is nothing to paste. With `RETICLE_CLOUD_KEY` already set, it resolves that key's project instead. `--project` accepts a slug id or a display name; omitted, it uses the `default` project. Writes `cloud.json` and the key.
+
+### `reticle project`
+
+```bash
+npx @reticlehq/server project ls
+npx @reticlehq/server project create "My App"
+npx @reticlehq/server project rename <projectId> "New name"
+npx @reticlehq/server project rm <projectId>
+```
+
+`rename` and `rm` work but are missing from the top-level `reticle help` block, which lists only `<ls|create <name>>`. The command's own usage error names all four. Missing or malformed arguments exit `2`:
+
+```
+reticle: usage: reticle project <ls|create <name>|rename <id> <name>|rm <id>>
+```
+
+### `reticle config`
+
+```bash
+npx @reticlehq/server config [--runs on|off] [--memory on|off] [--flows on|off] [--verify local|server]
+```
+
+Edits `.reticle/cloud.json` in place. Any value other than `on` or `off` (or `local` or `server` for `--verify`) exits `2`. Requires the repo to be linked; run in an unlinked repo it exits `2` before it looks at the flags at all:
+
+```
+reticle: no .reticle/cloud.json here ... run `reticle link` first
+```
+
+### `reticle push`
+
+Sends local run artifacts from `.reticle` to the linked project, honoring the sync policy. With `sync.runs` off it does nothing and says so. Prints `{ pushed, failed, total, project }`.
+
+### `reticle runs`
+
+The linked project's recent run artifacts. The key scopes the query server-side.
+
+### `reticle regression`
+
+The CI gate: which flows broke relative to before. **Exits `3`** when any flow regressed, which is the whole point of it being a separate command.
+
+### `reticle share`
+
+```bash
+npx @reticlehq/server share <runId>
+```
+
+Mints a public proof link for one run. A missing `runId` exits `2`:
+
+```
+reticle: usage: reticle share <runId>
+```
+
+## When the repo is not attached
+
+`push`, `runs` and `regression` all need a project to talk to. Without one they exit `1` with the same line on stderr, measured:
+
+```
+reticle: cloud not attached here ... run `reticle link` (or set RETICLE_CLOUD_URL/KEY)
+```
+
+## Exit codes
+
+| Code | Meaning                                                                             |
+| ---- | ----------------------------------------------------------------------------------- |
+| `0`  | Success                                                                             |
+| `1`  | The API call failed, or the repository is not attached where attachment is required |
+| `2`  | Usage error, or not signed in and no `RETICLE_CLOUD_KEY`                            |
+| `3`  | `regression` only: at least one flow broke                                          |
+
+Output is pretty-printed JSON on stdout. Errors and next-step nudges go to stderr, so an agent parsing stdout is unaffected.
+
+## Worked example
+
+```bash
+npx @reticlehq/server login
+npx @reticlehq/server project create "Checkout"
+npx @reticlehq/server link --project "Checkout"
+npx @reticlehq/server verify http://localhost:4173   # runs auto-push once linked
+npx @reticlehq/server regression                      # exit 3 fails the pipeline
+```

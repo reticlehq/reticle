@@ -1,0 +1,88 @@
+---
+title: reticle status
+description: Ask whether the Reticle daemon is up and which app sessions have connected to it.
+icon: heart-pulse
+---
+
+`reticle status` is the command that tells you whether the install actually finished. Not a tick in a checklist: a connected app.
+
+```bash
+npx @reticlehq/server status [--port N]
+```
+
+## Flags
+
+| Flag | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `--port N` | number | `4400` (or `RETICLE_PORT`, or the port in `.reticle.json`) | Which daemon to ask |
+
+## What it prints
+
+One JSON line on stdout. Real capture, daemon up and no app connected:
+
+```json
+{
+  "t": "2026-08-15T18:43:33.724Z",
+  "event": "reticle_status",
+  "port": 4499,
+  "running": true,
+  "pid": 78137,
+  "sessionCount": 0,
+  "sessions": [],
+  "why": "no browser session connected. Two things to weigh, and neither of them is proof. (1) Nothing is listening on the ports Reticle scans (3000, 3001, 4200, 4321, 5000, 5173, 5174, 8000, 8080, 8100, 9000, 1420, 3100, 4173, 5175, 7860, 8501), so the dev server may not be running ... (2) There is no `.reticle.json` in the directory this daemon is running in ..."
+}
+```
+
+With an app connected, `why` is absent and each session carries its own fields:
+
+```json
+{
+  "t": "2026-08-15T18:45:58.190Z",
+  "event": "reticle_status",
+  "port": 4400,
+  "running": true,
+  "pid": 72698,
+  "sessionCount": 1,
+  "sessions": [
+    {
+      "sessionId": "s223e0fad-e012-43f9-a23d-6d585470c90d",
+      "url": "http://localhost:4310/",
+      "throttled": false,
+      "stale": false,
+      "pendingMarks": 0
+    }
+  ]
+}
+```
+
+Both are one line of JSON in the terminal, pretty-printed here, with `why` trimmed at the ellipses.
+
+| Field | Meaning |
+| --- | --- |
+| `running` | Whether a usable daemon owns the port |
+| `presence` | Present when the pid file is dead: `daemon`, `foreign`, or `absent`. The port is asked, not just the pid file |
+| `pid` | The daemon process |
+| `sessionCount` / `sessions` | Connected app sessions, each with `sessionId`, `url`, `throttled`, `stale`, `pendingMarks` |
+| `why` | Present when zero sessions connected. Names the two likely causes and refuses to assert either |
+| `updateAvailable` | Present when a newer server version is on the registry |
+
+<Note>
+  `status` asks the **port**, not only the pid file. `running: false` used to be printed about a
+  port that was demonstrably occupied, which sent the reader off to start a daemon that could never
+  bind.
+</Note>
+
+## Exit codes
+
+Always `0`. This command answers a question; it does not judge the answer.
+
+## Worked example
+
+```bash
+npx @reticlehq/server init
+npx @reticlehq/server status    # a session in the list means the app is genuinely wired
+```
+
+<Card title="Nothing connected?" icon="triangle-exclamation" href="/troubleshooting">
+  The bridge port is not your dev server port, and that is the most common cause.
+</Card>

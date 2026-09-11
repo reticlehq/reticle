@@ -1,0 +1,37 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Deployment summary</title>
+<style>
+  body {
+    margin: 0;
+    font:
+      13px/1.5 ui-sans-serif,
+      system-ui,
+      sans-serif;
+    color: #c9d1d9;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+  b {
+    color: #e6edf3;
+  }
+</style>
+<span>Deployments tracked:</span>
+<b data-testid="iframe-count">–</b>
+<script>
+  // Same-origin on purpose: Reticle's snapshot walks a same-origin contentDocument, so this content is
+  // reachable, while a cross-origin frame would be a documented blind spot instead of a testable one.
+  const params = new URLSearchParams(location.search);
+  document.querySelector('[data-testid="iframe-count"]').textContent = params.get('count') ?? '0';
+
+  // The injector can ask this frame to throw. The error belongs to the FRAME's console, not the
+  // parent's — a tool that only reads the top-level console sees a completely clean page.
+  if (params.has('throw')) {
+    setTimeout(() => {
+      throw new Error('panel: failed to render deployment summary');
+    }, 300);
+  }
+</script>

@@ -1,0 +1,62 @@
+---
+title: reticle watch
+description: Watch the working tree and report which saved flows must re-verify on every save.
+icon: eye
+---
+
+`reticle watch` is the buddy loop. It watches the current directory and, on every save of a source file, reports which saved flows the change puts at risk. It runs in the environment, so it costs your agent nothing per turn.
+
+```bash
+npx @reticlehq/server watch [url]
+```
+
+Long-running. Stop it with `Ctrl+C`.
+
+## Arguments
+
+| Argument | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `url` | string, positional, optional | unset | Accepted by the parser and reserved for the increment that replays the affected flows against a live app. The current version detects and reports only |
+
+## What it watches
+
+The working directory, recursively, filtered to `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.vue` and `.svelte`. Changes are batched with a 200ms debounce.
+
+## What it prints
+
+Real capture, the first two lines of a run in this repository:
+
+```json
+{"t":"2026-08-15T18:44:08.930Z","event":"reticle_watch_started","cwd":"/Users/you/reticle"}
+{"t":"2026-08-15T18:44:09.104Z","event":"reticle_buddy","status":"✓ 0/47 flows nominal · 9 flaky quarantined"}
+```
+
+A save then produces a `reticle_watch_affected` line naming the changed files and the flows they put at risk, followed by a refreshed buddy line. Real capture, with both lists trimmed:
+
+```json
+{"t":"2026-08-15T18:44:09.317Z","event":"reticle_watch_affected","changed":["packages/init/src/mcp-clients.ts"],"affected":["WEB-flow","deploy-journey","verify-route"]}
+{"t":"2026-08-15T18:44:09.355Z","event":"reticle_buddy","status":"✗ 39 deviations: ELECTRON-1LINE-flow, ELECTRON-COLD-flow +37 more · 0 nominal · 9 flaky quarantined"}
+```
+
+| Event | When |
+| --- | --- |
+| `reticle_watch_started` | Once, at startup, with the directory being watched |
+| `reticle_buddy` | Once at startup and after every batch. One ambient line, designed to be parked in a status line |
+| `reticle_watch_affected` | After a batch, when at least one flow is affected. Carries `changed` and `affected` |
+| `reticle_watch_failed` | A flow load error. Never fatal |
+
+<Note>
+  The buddy line is deliberately best-effort and silent on failure. A status line that throws is
+  worse than no status line, and it must never interfere with the watch loop it rides on.
+</Note>
+
+## Exit codes
+
+Runs until interrupted.
+
+## Worked example
+
+```bash
+npx @reticlehq/server watch &
+# edit src/components/Login.tsx, and the affected flows are named on save
+```

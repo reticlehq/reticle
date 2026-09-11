@@ -1,0 +1,47 @@
+<!doctype html><meta charset="utf-8">
+<style>
+  @import url('');
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1200px; height:630px; }
+  body {
+    background:
+      radial-gradient(900px 500px at 82% 12%, rgba(255,157,134,.30), transparent 62%),
+      radial-gradient(700px 460px at 8% 96%, rgba(208,68,37,.22), transparent 60%),
+      #0b0d12;
+    color:#eef0f6;
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Inter,sans-serif;
+    padding:76px 84px; display:flex; flex-direction:column; justify-content:space-between;
+    position:relative; overflow:hidden;
+  }
+  .grid { position:absolute; inset:0;
+    background-image:linear-gradient(rgba(255,255,255,.028) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(255,255,255,.028) 1px,transparent 1px);
+    background-size:64px 64px; }
+  .wrap { position:relative; z-index:1; display:flex; flex-direction:column; height:100%; justify-content:space-between; }
+  .brand { display:flex; align-items:center; gap:18px; }
+  .brand svg { width:46px; height:46px; }
+  .brand span { font-size:30px; font-weight:640; letter-spacing:-.4px; }
+  h1 { font-size:82px; line-height:1.03; font-weight:700; letter-spacing:-2.6px; max-width:20ch; }
+  h1 .dim { color:#9398a8; }
+  .sub { margin-top:24px; font-size:29px; color:#aab0c2; line-height:1.42; max-width:34ch; font-weight:420; }
+  .foot { display:flex; align-items:center; gap:14px; }
+  .chip { font-size:20px; color:#c9cee0; border:1px solid rgba(255,255,255,.14);
+          background:rgba(255,255,255,.045); padding:11px 20px; border-radius:999px;
+          font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .accent { color:#ff9d86; }
+</style>
+<div class="grid"></div>
+<div class="wrap">
+  <div class="brand">
+    <svg viewBox="0 0 96 94" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M92.8175 92.1592C93.0734 93.3999 91.7737 94.3966 90.6276 93.8271C89.6247 93.3288 88.6218 92.8203 87.6292 92.3016C71.1431 83.7793 54.79 72.267 39.6138 57.958C39.0919 57.4902 38.57 56.9817 38.0583 56.4935C22.4523 41.5235 9.7833 25.1399 0.327586 8.52231C0.286653 8.45112 0.245719 8.37993 0.204785 8.30874C-0.439922 7.20023 0.511789 5.83747 1.79097 6.05103L24.0692 9.71218C43.0625 12.8343 60.6333 11.7462 75.5537 6.52902L93.9534 0.0914973C95.1507 -0.325467 96.3071 0.783048 95.9285 1.98309L90.0954 20.4922C85.3676 35.4826 84.8968 52.9748 88.6934 71.728L92.8278 92.1592H92.8175Z" fill="#ff9d86"/><path d="M58.7197 89.2298L6.15046 92.7994C5.23968 92.8604 4.48241 92.1282 4.51311 91.2231L6.5598 30.387C6.61097 28.9124 8.51439 28.3632 9.35353 29.5734C16.2304 39.428 24.98 52.3539 33.0133 61.2627C41.0465 70.1715 50.6046 78.7243 59.6202 86.5551C60.6538 87.4501 60.0807 89.1281 58.7197 89.2298Z" fill="#ff9d86"/></svg>
+    <span>Reticle</span>
+  </div>
+  <div>
+    <h1>Your agent says it works.<br><span class="dim">Reticle checks.</span></h1>
+    <p class="sub">Verification from <span class="accent">inside</span> your running app. A verdict with evidence, not a screenshot.</p>
+  </div>
+  <div class="foot">
+    <span class="chip">npx reticle init</span>
+    <span class="chip">docs.reticle.sh</span>
+  </div>
+</div>

@@ -1,0 +1,48 @@
+---
+title: reticle license
+description: Show the enterprise license status resolved from the environment, offline.
+icon: key
+---
+
+`reticle license` reports whether an enterprise license is active. It resolves entirely from the environment. Nothing leaves the machine.
+
+```bash
+npx @reticlehq/server license
+```
+
+No flags.
+
+## What it prints
+
+One `reticle_license` line. Real capture on a checkout with no issuer key configured:
+
+```json
+{
+  "t": "2026-08-15T18:42:26.758Z",
+  "event": "reticle_license",
+  "status": "eval",
+  "detail": "evaluation mode: enterprise features run free (no issuer key configured)"
+}
+```
+
+| `status`  | Meaning                                       |
+| --------- | --------------------------------------------- |
+| `active`  | A valid license is present                    |
+| `eval`    | Evaluation mode. Enterprise features run free |
+| `missing` | No license, and the build expects one         |
+
+`detail` is a sentence explaining the status.
+
+## Exit codes
+
+Always `0`.
+
+## Worked example
+
+```bash
+npx @reticlehq/server license | jq -r .status
+```
+
+<Card title="What enterprise covers" icon="building" href="/enterprise">
+  The licensed surface, and what stays Apache 2.0.
+</Card>

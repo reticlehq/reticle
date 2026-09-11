@@ -1,0 +1,14 @@
+/* Any .css file at the docs root is auto-loaded by Mintlify; docs.json has no field for it.
+   Tagline under the footer logo: the footer schema is {socials, links} and takes no text. */
+#footer a.select-none::after {
+  content: 'Your agent says it works. Reticle checks.';
+  display: block;
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: rgb(var(--gray-500));
+}
+
+.dark #footer a.select-none::after {
+  color: rgb(var(--gray-400));
+}

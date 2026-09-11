@@ -1,0 +1,68 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+
+  // Dead-code config for `npx knip`. NOT part of any gate — a reporting tool, run by hand.
+  //
+  // It exists because knip's defaults call ~95 live files unused here: everything in bench/ and
+  // apps/e2e/specs is an entry point invoked by a shell script or picked up by a sibling runner's
+  // runtime glob, never imported. A report that is 95% false positives gets ignored, which is the
+  // same as not having one.
+  //
+  // Add an entry here when you add a new shell-invoked runner. Do NOT silence a finding by listing
+  // a file as ignored unless it is genuinely unreachable — that is the failure mode this config is
+  // meant to prevent, not to enable.
+  //
+  // TWO known false positives are left standing rather than silenced. A visible, explained false
+  // positive beats an ignore rule that would also hide the file the day it really does go dead.
+  //
+  //  1. apps/vibe-builder-demo/src/builder-ui.ts. knip resolves <script src> out of index.html but
+  //     not out of the second page, builder.html, even when that page is named as an entry. The file
+  //     is genuinely reached — `vite build` emits dist/builder.html and its chunk.
+  //
+  //  2. apps/examples/astro/src/reticle-env.d.ts. An AMBIENT declaration: tsc picks it up from the
+  //     include patterns and nothing imports it, which is the shape knip cannot see. It declares
+  //     `__RETICLE_TOKEN__`, which astro.config.mjs `define`s and src/pages/index.astro reads — so
+  //     deleting it as "unused" breaks the app's types while every import in the repo still resolves.
+  "workspaces": {
+    ".": {
+      "entry": [
+        "scripts/*.mjs",
+        "bench/**/*.mjs",
+        "assets/benchmarks/render.mjs",
+        "eslint.config.mjs",
+        "vitest.integration.config.ts",
+      ],
+      "project": ["scripts/**", "bench/**", "assets/**"],
+    },
+    // run.mjs globs specs/ at runtime and run-*.sh invoke the harnesses — no static import reaches them.
+    "apps/e2e": {
+      "entry": ["run.mjs", "desktop-harness.mjs", "specs/*.mjs"],
+    },
+    // Multi-page app: knip does not evaluate the rollupOptions.input array, so name both pages.
+    "apps/vibe-builder-demo": {
+      "entry": ["index.html", "builder.html", "qa/*.mjs", "vite.config.ts"],
+    },
+    // Electron's main process names its preload by PATH STRING, so no import reaches preload.cjs.
+    "apps/electron-smoke": {
+      "entry": ["electron/main.cjs", "electron/preload.cjs", "src/main.tsx"],
+    },
+    "packages/*": {
+      "entry": ["src/index.ts", "scripts/*.mts"],
+      "project": ["src/**"],
+      "ignore": ["dist/**"],
+    },
+  },
+
+  // @reticlehq/react: probed at runtime from the USER's app, never imported here — see
+  //   packages/vite-plugin/src/installed.ts.
+  // electron: resolved on purpose through createRequire(apps/electron-smoke/package.json) so the
+  //   harnesses do not depend on hoisting. knip sees the bare require and not the base it is
+  //   rooted at. Declaring it in apps/e2e would install a SECOND ~200MB Electron.
+  "ignoreDependencies": ["@reticlehq/react", "electron"],
+
+  // A system binary, not something npm can supply.
+  "ignoreBinaries": ["pgrep"],
+
+  // Rust; outside every JS tool in this repo.
+  "ignoreWorkspaces": ["packages/tauri"],
+}

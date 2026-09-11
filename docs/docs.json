@@ -1,0 +1,369 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Reticle",
+  "description": "Reticle is the proof layer for AI agents: it verifies a running web app from the inside, without screenshots, and returns a verdict with evidence.",
+  "colors": {
+    "primary": "#ff9d86",
+    "light": "#ffbcac",
+    "dark": "#d04425"
+  },
+  "logo": {
+    "light": "/logo/wordmark-black.svg",
+    "dark": "/logo/wordmark-white.svg"
+  },
+  "favicon": {
+    "light": "/favicon/mark-black.svg",
+    "dark": "/favicon/mark-white.svg"
+  },
+  "appearance": {
+    "default": "system"
+  },
+  "styling": {
+    "eyebrows": "breadcrumbs",
+    "codeblocks": "dark"
+  },
+  "search": {
+    "prompt": "Search the Reticle docs"
+  },
+  "metadata": {
+    "timestamp": true
+  },
+  "navigation": {
+    "versions": [
+      {
+        "version": "2.14.0",
+        "default": true,
+        "tabs": [
+          {
+            "tab": "Guides",
+            "groups": [
+              {
+                "group": "Get started",
+                "pages": [
+                  "quickstart",
+                  "what-is-reticle",
+                  "why-reticle",
+                  "getting-started",
+                  "for-agents"
+                ]
+              },
+              {
+                "group": "Install",
+                "pages": ["install-agentic", "install-manual", "frameworks"]
+              },
+              {
+                "group": "Instrument",
+                "pages": ["instrumentation", "state-management"]
+              },
+              {
+                "group": "Verify and ship",
+                "pages": ["flows", "testing", "deploy-checks", "integration-patterns"]
+              },
+              {
+                "group": "Working with agents",
+                "pages": [
+                  "multi-agent-testing",
+                  "human-control",
+                  "platform-integration",
+                  "http-transport"
+                ]
+              },
+              {
+                "group": "When it goes wrong",
+                "pages": ["troubleshooting", "debugging"]
+              }
+            ]
+          },
+          {
+            "tab": "Reference",
+            "groups": [
+              {
+                "group": "Tools",
+                "pages": [
+                  "tools-overview",
+                  "tools-snapshot",
+                  "tools-query",
+                  "tools-inspect",
+                  "tools-navigate",
+                  "tools-act",
+                  "tools-act-and-wait",
+                  "tools-act-sequence",
+                  "tools-observe",
+                  "tools-network",
+                  "tools-console",
+                  "tools-state",
+                  "tools-wait-for",
+                  "tools-assert",
+                  "tools-sessions",
+                  "tools-tools-and-run",
+                  "tools-session-and-feedback"
+                ]
+              },
+              {
+                "group": "Beyond the loop",
+                "pages": ["capabilities"]
+              },
+              {
+                "group": "CLI commands",
+                "pages": [
+                  "cli",
+                  "cli/init",
+                  "cli/doctor",
+                  "cli/status",
+                  "cli/serve",
+                  "cli/stop",
+                  "cli/kill",
+                  "cli/restart",
+                  "cli/mcp",
+                  "cli/open",
+                  "cli/drive",
+                  "cli/verify",
+                  "cli/affected",
+                  "cli/gate",
+                  "cli/watch",
+                  "cli/capsules",
+                  "cli/hunt",
+                  "cli/update",
+                  "cli/rollback",
+                  "cli/license",
+                  "cli/version",
+                  "cli/telemetry",
+                  "cli/feedback",
+                  "cli/identify",
+                  "cli/help",
+                  "cli/cloud"
+                ]
+              },
+              {
+                "group": "Packages",
+                "pages": [
+                  "packages",
+                  "packages/core",
+                  "packages/browser",
+                  "packages/server",
+                  "packages/react",
+                  "packages/vite-plugin",
+                  "packages/babel-plugin",
+                  "packages/next",
+                  "packages/test",
+                  "packages/eslint-plugin",
+                  "packages/electron",
+                  "packages/tauri"
+                ]
+              },
+              {
+                "group": "Grammar",
+                "pages": ["predicates", "actions", "recipes"]
+              },
+              {
+                "group": "Long form",
+                "pages": ["agent-cheatsheet", "reticle-manual", "usage", "faq"]
+              }
+            ]
+          },
+          {
+            "tab": "Desktop",
+            "groups": [
+              {
+                "group": "Electron and Tauri",
+                "pages": ["desktop"]
+              }
+            ]
+          },
+          {
+            "tab": "Resources",
+            "groups": [
+              {
+                "group": "How it works",
+                "pages": ["architecture", "benchmarks", "token-efficiency"]
+              },
+              {
+                "group": "Compare",
+                "pages": ["vs-playwright-mcp", "vs-chrome-devtools-mcp", "vs-screenshots"]
+              },
+              {
+                "group": "Practice",
+                "pages": ["best-practices", "skill-file"]
+              },
+              {
+                "group": "Trust & licensing",
+                "pages": ["telemetry", "license-activation", "enterprise"]
+              }
+            ]
+          },
+          {
+            "tab": "Contributing",
+            "groups": [
+              {
+                "group": "Working on Reticle",
+                "pages": ["first-drive", "gates", "gate-plan", "fixtures", "local-registry"]
+              },
+              {
+                "group": "Internals",
+                "pages": ["system-map", "telemetry-contract", "telemetry-events"]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "global": {
+      "anchors": [
+        {
+          "anchor": "GitHub",
+          "href": "https://github.com/reticlehq/reticle",
+          "icon": "github"
+        },
+        {
+          "anchor": "Discord",
+          "href": "https://discord.gg/BwAbzv9ZRz",
+          "icon": "discord"
+        },
+        {
+          "anchor": "npm",
+          "href": "https://www.npmjs.com/org/reticlehq",
+          "icon": "npm"
+        },
+        {
+          "anchor": "Changelog",
+          "href": "https://github.com/reticlehq/reticle/blob/main/CHANGELOG.md",
+          "icon": "clock-rotate-left"
+        }
+      ]
+    }
+  },
+  "navbar": {
+    "links": [
+      {
+        "type": "github",
+        "href": "https://github.com/reticlehq/reticle"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Get started",
+      "href": "/quickstart"
+    }
+  },
+  "footer": {
+    "socials": {
+      "x": "https://x.com/reticle_hq",
+      "github": "https://github.com/reticlehq/reticle",
+      "linkedin": "https://www.linkedin.com/company/reticlehq",
+      "discord": "https://discord.gg/BwAbzv9ZRz"
+    },
+    "links": [
+      {
+        "header": "Docs",
+        "items": [
+          {
+            "label": "Quickstart",
+            "href": "/quickstart"
+          },
+          {
+            "label": "Usage guide",
+            "href": "/usage"
+          },
+          {
+            "label": "Agent cheat sheet",
+            "href": "/agent-cheatsheet"
+          },
+          {
+            "label": "For agents",
+            "href": "/for-agents"
+          }
+        ]
+      },
+      {
+        "header": "Project",
+        "items": [
+          {
+            "label": "Contributing",
+            "href": "https://github.com/reticlehq/reticle/blob/main/CONTRIBUTING.md"
+          },
+          {
+            "label": "Security",
+            "href": "https://github.com/reticlehq/reticle/blob/main/SECURITY.md"
+          },
+          {
+            "label": "License",
+            "href": "https://github.com/reticlehq/reticle/blob/main/LICENSE"
+          }
+        ]
+      },
+      {
+        "header": "Community",
+        "items": [
+          {
+            "label": "Discord",
+            "href": "https://discord.gg/BwAbzv9ZRz"
+          },
+          {
+            "label": "Star on GitHub",
+            "href": "https://github.com/reticlehq/reticle"
+          },
+          {
+            "label": "X",
+            "href": "https://x.com/reticle_hq"
+          },
+          {
+            "label": "LinkedIn",
+            "href": "https://www.linkedin.com/company/reticlehq"
+          }
+        ]
+      }
+    ]
+  },
+  "redirects": [
+    {
+      "source": "/README",
+      "destination": "/getting-started",
+      "permanent": true
+    },
+    {
+      "source": "/desktop-apps",
+      "destination": "/desktop",
+      "permanent": true
+    }
+  ],
+  "contextual": {
+    "options": ["copy", "view", "claude", "chatgpt", "cursor", "vscode", "mcp", "add-mcp"]
+  },
+  "markdown": {
+    "instructions": [
+      "Reticle is a dev-only, localhost-only verification layer for AI coding agents. It reads program truth (network, state, console, routing, animations, framework state) from inside a running web app and returns a deterministic verdict with evidence. It is not a screenshot tool and not a browser automation library.",
+      "Only `reticle_act_and_wait` and `reticle_assert` produce a verdict. Every other tool moves or reads the app and proves nothing. A drive that ends without one of those two has no result, however many tools it used.",
+      "A verdict of `verified: \"unknown\"` is not a pass. It means Reticle drove the app and could not tell what happened. Report it as unknown; never weaken a check to make it pass.",
+      "Package names are scoped `@reticlehq/*`. Run every CLI command as `npx @reticlehq/server <command>`, for example `npx @reticlehq/server init`. `reticle` is a bin name that `@reticlehq/server` installs once it is on your PATH, NOT a package on npm: `npx reticle` fetches an unrelated package published by somebody else, so never run that. The complete tool surface is on the `/usage` page; `/agent-cheatsheet` is the one-screen version."
+    ]
+  },
+  "seo": {
+    "metatags": {
+      "og:site_name": "Reticle Docs",
+      "og:type": "website",
+      "og:title": "Reticle Docs: verification for AI coding agents",
+      "og:description": "Reticle verifies a running web app from the inside and returns a verdict with evidence, not a screenshot. Install it, instrument it, and read the full tool reference.",
+      "og:url": "https://docs.reticle.sh",
+      "og:image": "https://docs.reticle.sh/images/og.png",
+      "og:image:alt": "Reticle: your agent says it works. Reticle checks.",
+      "twitter:card": "summary_large_image",
+      "twitter:site": "@reticle_hq",
+      "twitter:creator": "@reticle_hq",
+      "twitter:image": "https://docs.reticle.sh/images/og.png"
+    },
+    "organization": {
+      "name": "Reticle",
+      "url": "https://docs.reticle.sh",
+      "logo": "https://docs.reticle.sh/images/og.png",
+      "sameAs": ["https://github.com/reticlehq/reticle", "https://www.npmjs.com/org/reticlehq"]
+    }
+  },
+  "errors": {
+    "404": {
+      "redirect": false,
+      "title": "No such page",
+      "description": "That page moved or never existed. Start at [Getting started](/getting-started), or search above."
+    }
+  }
+}

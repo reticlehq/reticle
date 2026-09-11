@@ -1,0 +1,257 @@
+---
+title: 'Quickstart: proof in five minutes'
+sidebarTitle: Quickstart
+description: Install Reticle, connect your coding agent, and get a real verdict with evidence in about five minutes.
+icon: rocket
+---
+
+**Run `npx @reticlehq/server init` in your project, restart your dev server and your agent, then ask your agent to drive a flow.** That is the whole install. Reticle is a verification layer for AI coding agents: it embeds a dev-only SDK in your running web app so an agent can prove a change works instead of guessing.
+
+By the end of this page your agent will click a button in your app and prove what happened: the request that fired, the state that changed, and the file to open if it didn't.
+
+<Note>
+  Every response on this page is real output, captured against a running app while writing it.
+  Nothing here is illustrative.
+</Note>
+
+## Prerequisites
+
+- Node 20 or newer
+- A web app you can run locally, and its dev server
+- A coding agent that speaks MCP (Claude Code, Cursor, Codex, OpenCode, Windsurf, VS Code)
+
+## Step 1. Let your agent install it
+
+The fastest path is to hand the job to the agent that will use it. In your project directory:
+
+```bash
+npx @reticlehq/server init
+```
+
+This registers the MCP server, installs the SDK, wires it into your app's entry point, and writes the agent rule files. It is idempotent. Run it twice and the second run reports what was already done rather than doing it again.
+
+Prefer to install the skill and let the agent run setup itself? On Claude Code the plugin registers the MCP server and the skill in one step:
+
+```text
+/plugin marketplace add reticlehq/reticle
+/plugin install reticle@reticlehq
+```
+
+On Cursor, Codex, Copilot, Gemini and anything else the skills CLI supports:
+
+```bash
+npx skills add reticlehq/reticle
+```
+
+Then type `/reticle` and the agent runs the install from the skill.
+
+Useful flags, from `reticle init` itself:
+
+```
+reticle init  [--dry-run] [--port N] [--no-mcp] [--no-install] [--app <dir>]
+              --app picks WHICH app in a monorepo, when several are found
+              --no-mcp skips MORE than the server registration: also the agent rule files
+              (CLAUDE.md / AGENTS.md / .cursor) and the /reticle command, because all three
+              only make sense once the tools are reachable.
+```
+
+Start with `--dry-run` if you want to see the plan before anything is written.
+
+<Tip>
+  In a monorepo, `init` will find several apps and ask which one you mean. `--app packages/web`
+  skips the question.
+</Tip>
+
+Prefer to wire it yourself? See [Manual install](/install-manual). It is about ten lines, and worth reading once even if you let the agent do it, because it explains what the agent actually changed.
+
+## Step 2. Check the setup
+
+```bash
+npx @reticlehq/server doctor
+```
+
+`doctor` diagnoses the whole setup in one command: Chromium, the daemon, the port. If something is wrong this is the page you want before you start debugging your app instead.
+
+## Step 3. Start your app and open it
+
+Start your dev server as usual, then:
+
+```bash
+npx @reticlehq/server open
+```
+
+This reuses the tab you already have open, or opens one if you don't. The SDK connects to the local daemon over a WebSocket, and your agent can now see the app.
+
+<Warning>
+  If the browser console says `[Reticle] this page could not open a websocket to …`, your app and
+  the daemon disagree about the port. Set it explicitly:
+  `VITE_RETICLE_WS_URL=ws://localhost:4400/reticle` for Vite, or `reticle.connect({url})`. This is
+  the single most common setup problem, and the console message names the exact address it tried.
+</Warning>
+
+## Step 4. Look at the page
+
+Ask your agent to take a snapshot. This is what came back from a real app:
+
+```json
+{
+  "tree": "- textbox \"Email\" (ref=e3) [value=\"admin@reticle.dev\"]\n- textbox \"Password\" (ref=e4) [value=\"[REDACTED]\"]\n- button \"Sign in\" (ref=e5)",
+  "nodes": 3,
+  "truncated": false,
+  "status": { "route": "/", "title": "Reticle · Mission Control" },
+  "cost": { "bytes": 243, "tokens": 61 }
+}
+```
+
+Three things to notice.
+
+The password is already `[REDACTED]`. Reticle redacts credential-shaped values before they leave the page, so your agent's context never holds your test password, let alone your real one.
+
+The whole snapshot cost **61 tokens**. This is `mode: "interactive"`, which returns only the controls. A full accessibility-tree dump of a comparable page runs to thousands. Reticle is built to ask narrow questions, because the answer gets re-sent to the model on every turn.
+
+Each control has a `ref` like `e5`. That's the handle for the next step, and it stays valid until the element leaves the DOM, so you don't re-snapshot between actions.
+
+## Step 5. Act, and prove it
+
+Here is the whole idea of Reticle in one call. Your agent names the expected consequence **before** it acts:
+
+```json
+{
+  "ref": "e5",
+  "action": "click",
+  "until": { "kind": "net", "method": "POST" }
+}
+```
+
+Stating the expectation up front is the difference between a check and a rationalisation. An agent that clicks first and then decides what counts as success will always find something that counts.
+
+The real response, trimmed for length:
+
+```json
+{
+  "verified": "yes",
+  "verifiedReason": "proved",
+  "because": "assertion held at presence grade over a clean capture with no channel disagreeing",
+  "effect": {
+    "ok": true,
+    "testid": "login-submit",
+    "component": "Login",
+    "name": "Sign in",
+    "effect": { "domMutatedWithin": 7, "appeared": "Signing in…" },
+    "source": { "file": "src/components/Login.tsx", "line": 81, "column": 8 }
+  },
+  "verdict": {
+    "pass": true,
+    "evidence": {
+      "method": "POST",
+      "url": "http://localhost:8787/api/login",
+      "status": 200,
+      "durationMs": 67,
+      "requestBody": "{\"email\":\"admin@reticle.dev\",\"password\":\"[REDACTED]\"}",
+      "responseBody": "{\"token\":\"[REDACTED]\",\"user\":{\"email\":\"admin@reticle.dev\"}}"
+    }
+  },
+  "summary": {
+    "net": { "total": 1, "errors": 0 },
+    "consoleErrors": 0,
+    "stateDiffs": [{ "path": "auth", "from": null, "to": "{\"email\":\"admin@reticle.dev\"}" }],
+    "signals": ["auth:granted"]
+  },
+  "honesty": {
+    "grade": "presence",
+    "coverage": { "pct": 100, "partial": false },
+    "integrity": { "clean": true, "issues": [] }
+  }
+}
+```
+
+![A real act_and_wait verdict, annotated. The verdict, the source pointer, the request evidence, the request count, the state diff, and the app's own signal](/images/verdict-annotated.png)
+
+Read what that actually proves:
+
+| Field | What it tells you |
+| --- | --- |
+| `verified: "yes"` | The named consequence happened. Not "the page looks different", the specific thing. |
+| `source.file` / `line` | The button lives at `src/components/Login.tsx:81`. If this had failed, your agent knows which file to open. |
+| `verdict.evidence` | The exact request: one `POST /api/login`, `200`, 67ms. Not a summary of it. The request. |
+| `stateDiffs` | Application state moved from `null` to a real user. A mock that returns 200 without changing state is caught right here. |
+| `signals` | The app's own `auth:granted` fired. This is the strongest signal available, because the app declared success itself. |
+| `net.total: 1` | Exactly one request. Double-submit bugs show up as `2`. |
+| `integrity.clean` | Nothing interfered with the capture, so the verdict is trustworthy. |
+
+## What "verified" can say
+
+<CardGroup cols={3}>
+  <Card title="yes" icon="circle-check">
+    The consequence you named actually happened, and the evidence is attached.
+  </Card>
+  <Card title="no" icon="circle-xmark">
+    It did not happen. This is a finding, with the source pointer to go fix it.
+  </Card>
+  <Card title="unknown" icon="circle-question">
+    Reticle drove the app and could not tell. **This is not a pass.** Report it as unknown.
+  </Card>
+</CardGroup>
+
+That third state is the one that matters. Most tools have two outcomes and quietly file "I couldn't tell" under "fine". A verification layer that cannot admit uncertainty is just a very confident random number generator.
+
+## Frequently asked questions
+
+<AccordionGroup>
+  <Accordion title="How long does it actually take to install Reticle?">
+    One command and two restarts. `npx @reticlehq/server init` registers the MCP server, installs
+    the SDK, wires your build config and writes the agent rules. Then restart your dev server, so it
+    picks up the new build plugin, and restart your agent, so it re-reads its MCP server list. The
+    MCP registration is global, so every later project starts with the tools already there.
+  </Accordion>
+
+<Accordion title="Do I need to write tests or learn a query syntax?">
+  No. You talk to your agent in plain language and it calls the tools. There is no spec file, no
+  selector language and no test runner involved in the loop on this page. If you later want the same
+  flow to block a bad merge, you can save it and run it in CI, but that is a separate step.
+</Accordion>
+
+<Accordion title="Will any of this end up in my production build?">
+  No. The SDK is dev-only. The Vite plugin declares `apply: 'serve'`, so it is dropped from `vite
+  build` entirely, and `connect()` self-disables when the build reports `NODE_ENV=production`. The
+  recommended wiring also guards the call behind `import.meta.env.DEV`, so there are two independent
+  locks.
+</Accordion>
+
+<Accordion title="Does my code or my app's data leave my machine?">
+  No. The daemon runs on your machine and the SDK runs in your browser. No application code, DOM,
+  network traffic or console output leaves it. Anonymous product analytics are sent unless you opt
+  out with `npx @reticlehq/server telemetry disable`, and they never include your code or your app's
+  data.
+</Accordion>
+
+<Accordion title="What if my framework is not React or Next.js?">
+  The core is framework-neutral, so DOM, network, console, routing and source mapping work anywhere
+  JavaScript runs. What varies is how `connect()` gets into your app and whether you get component
+  identity on top. See [Frameworks](/frameworks) for the exact wiring per stack and an honest table
+  of what is gated in CI versus wired but unverified.
+</Accordion>
+
+  <Accordion title="Nothing connected. What is the first thing to check?">
+    Run `npx @reticlehq/server doctor`. If it shows the daemon running but `sessions` at zero, your
+    app is not reaching the bridge, and the usual cause is a port mismatch. The bridge port is not
+    your dev-server port. See [Troubleshooting](/troubleshooting).
+  </Accordion>
+</AccordionGroup>
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Instrument your app" icon="wrench" href="/instrumentation">
+    Emit signals like `auth:granted` so your verdicts get stronger than "the DOM changed".
+  </Card>
+  <Card title="Every tool" icon="list" href="/tools-overview">
+    The 18 tools your agent sees by default, and the 30 more it can reach on demand.
+  </Card>
+  <Card title="Run it in CI" icon="circle-check" href="/testing">
+    Turn this session into a suite that blocks a bad merge.
+  </Card>
+  <Card title="Why Reticle" icon="lightbulb" href="/why-reticle">
+    The false-green problem, and the measured case that this fixes it.
+  </Card>
+</CardGroup>

@@ -1,0 +1,238 @@
+---
+title: Instrument your app so it can testify
+sidebarTitle: Instrument
+description: Register stores, emit signals, add testids. The three things that decide whether your verdicts say "the DOM changed" or "the app succeeded".
+icon: wrench
+---
+
+**Three things raise a Reticle verdict from "something appeared" to "the app declared success": register your store, emit named signals, and add testids.** All three live in one dev-only file, `src/reticle-dev.ts`, which `npx @reticlehq/server init` creates for you.
+
+Reticle works with zero instrumentation. You get DOM, network, console and routing out of the box, and that is already more than a screenshot can tell you.
+
+But there is a ceiling, and this page is about raising it. Instrumentation is the difference between a verdict that says _something appeared_ and one that says _the application declared success_.
+
+## The grade ladder
+
+Every verdict carries an `honesty.grade`. How strong the evidence actually was.
+
+<CardGroup cols={3}>
+  <Card title="presence" icon="eye">
+    An element appeared, or text showed up. True, and weak: a mock renders exactly the same.
+  </Card>
+  <Card title="state" icon="database">
+    A registered store changed. Now you know the app accepted it, not just drew it.
+  </Card>
+  <Card title="signal" icon="tower-broadcast">
+    The app fired a named signal. The app itself declaring success. Nothing beats this.
+  </Card>
+</CardGroup>
+
+Here is the same login, verified two ways. First with a network predicate and no instrumentation leaned on:
+
+```json
+"honesty": { "grade": "presence", "coverage": { "pct": 100 }, "integrity": { "clean": true } }
+```
+
+Then with a signal predicate, against the same app:
+
+```json
+"honesty": { "grade": "signal", "coverage": { "pct": 100 }, "integrity": { "clean": true } }
+```
+
+Same click. Better evidence. The only difference is that somebody spent ten minutes emitting a signal.
+
+## Three things to add
+
+Everything lives in `src/reticle-dev.ts`, which `reticle init` creates for you and which is dev-only, it self-guards on `import.meta.env.DEV` and is a no-op in a production build.
+
+### 1. Register your store
+
+```ts
+import { registerStore, registerCapabilities, tanstackQueryStore } from '@reticlehq/browser';
+
+registerStore('app', useApp);
+registerStore('queries', tanstackQueryStore(queryClient));
+```
+
+<Warning>
+Pass the **store**, not `() => store.getState()`. The store form wires `subscribe`, so every mutation
+emits a state diff. The getter form is read-only and silently produces empty `stateDiffs`, which
+reads as "nothing changed" and actually means "I was never watching".
+</Warning>
+
+That single line is what turns this up in a verdict:
+
+```json
+"stateDiffs": [
+  { "path": "auth", "from": null, "to": "{\"email\":\"admin@reticle.dev\"}", "atMs": 833326 }
+]
+```
+
+A mock that returns `200` without touching state gets caught precisely there, and nowhere else.
+
+<Tip>
+  Register your server-state cache too. "The screen is plausible and the network is silent" is the
+  normal failure with query caches: a mutation forgets to invalidate, the UI keeps rendering a
+  number that was true a minute ago, and nothing fires for anyone to notice. The cache's freshness
+  metadata is the only witness.
+</Tip>
+
+### 2. Emit signals
+
+A signal is your app saying "this specific thing succeeded". Define the names in one place so they cannot drift:
+
+```ts
+import { reticle } from '@reticlehq/browser';
+
+export const Sig = {
+  AUTH_GRANTED: 'auth:granted',
+  AUTH_DENIED: 'auth:denied',
+  DEPLOY_CREATED: 'deploy:created',
+  MODAL_OPENED: 'modal:opened',
+  TOAST_SHOWN: 'toast:shown',
+} as const;
+
+export type SigName = (typeof Sig)[keyof typeof Sig];
+
+const isDev = import.meta.env.DEV;
+
+/** Emit a Reticle signal (dev only, no-op in production). */
+export function emit(name: SigName, data: Record<string, unknown> = {}): void {
+  if (isDev) reticle.signal(name, data);
+}
+```
+
+`Sig` is a value, so it cannot be used as a type directly. `SigName` is the union of its values, which is what makes `emit(Sig.AUTH_GRANTED)` check and `emit('auth:granded')` fail at compile time rather than at 2am.
+
+Then call `emit(Sig.AUTH_GRANTED, { email })` where the thing actually succeeds. Not where you _think_ it succeeds. In the success branch, after the state update, not in the click handler.
+
+**Emit the failures too.** `auth:denied` is as valuable as `auth:granted`, for a reason the next section demonstrates.
+
+### 3. Advertise the surface
+
+```ts
+registerCapabilities({
+  testids: TESTIDS,
+  signals: Object.values(Sig),
+  stores: ['app'],
+  flows: FLOWS,
+});
+```
+
+This is what [`reticle_capabilities`](/tools-tools-and-run) returns. The app telling an agent what it considers testable, before the agent has looked at a single element. It is the cheapest and most truthful first call on an unfamiliar codebase.
+
+## Why emitting failure signals pays off
+
+Here is a real failed login, from an app that emits both signals:
+
+```json
+{
+  "verified": "no",
+  "verdict": {
+    "pass": false,
+    "failureReason": "no signal matched {\"kind\":\"signal\",\"name\":\"auth:granted\"}",
+    "observed": "signal 'auth:granted' never fired; signals seen in this window: auth:denied",
+    "expected": "signal 'auth:granted' to fire"
+  },
+  "summary": {
+    "net": { "total": 1, "errors": 1, "headline": "POST http://localhost:8787/api/login 401" },
+    "stateDiffs": [],
+    "signals": ["auth:denied"]
+  },
+  "honesty": { "grade": "signal", "integrity": { "clean": true } },
+  "capsule": {
+    "firstDivergence": {
+      "expected": { "kind": "signal", "name": "auth:granted" },
+      "observed": "signal \"auth:granted\" never fired"
+    },
+    "blastRadius": ["signal auth:denied"]
+  }
+}
+```
+
+Read `observed` again:
+
+> signal 'auth:granted' never fired; **signals seen in this window: auth:denied**
+
+Without the failure signal, that line would have stopped at "never fired", and the agent would be guessing between a network problem, a broken handler and a wrong password.
+
+With it, the app has named its own outcome: the credentials were rejected. The 401 headline confirms it, `stateDiffs: []` proves nothing was written, and the whole diagnosis arrives in one response.
+
+<Note>
+  `capsule.firstDivergence` and `blastRadius` are saved to disk automatically on a failure, so the
+  evidence survives the agent's context window. Look for `capsuleSaved` in the response.
+</Note>
+
+## When Reticle refuses to call it a pass
+
+This is the one that surprises people, so here it is in full. A successful login, on a backgrounded tab:
+
+```json
+{
+  "verified": "unknown",
+  "verifiedReason": "unsettled",
+  "because": "the page never settled, so the reaction window may have closed before the app finished",
+  "verdict": {
+    "pass": true,
+    "evidence": { "name": "auth:granted", "data": { "email": "admin@reticle.dev" } }
+  },
+  "summary": {
+    "stateDiffs": [{ "path": "auth", "from": null, "to": "{\"email\":\"admin@reticle.dev\"}" }],
+    "signals": ["auth:granted"]
+  },
+  "honesty": { "grade": "signal", "integrity": { "clean": true } },
+  "feedback_invite": "Reticle could not tell what happened here. If you expected otherwise, reticle_feedback. An unknown verdict is our defect, not yours"
+}
+```
+
+The signal fired. State changed. `verdict.pass` is `true`. And `verified` is **`unknown`**, because the page never went quiet inside the observation window, so Reticle cannot promise it saw the whole story.
+
+That is the design working as intended. A tool that reports "pass" whenever it happens to catch a matching event, without knowing whether it saw everything, is how you get a confident wrong answer.
+
+<Warning>
+  The usual cause is a **throttled tab**. A backgrounded browser tab has its timers suppressed,
+  which suppresses the quiescence detection Reticle uses to decide the page has settled. Focus the
+  tab, or drive a dedicated context. The response tells you: look for `session.throttled` and the
+  accompanying `warning`.
+</Warning>
+
+Note the last field. When Reticle cannot tell what happened, it invites a bug report and calls the ambiguity its own defect rather than yours. If you hit an `unknown` you believe is wrong, that is worth [sending](/tools-session-and-feedback).
+
+## Testids, briefly
+
+```tsx
+<button data-testid="login-submit">Sign in</button>
+```
+
+Role and text queries survive refactors well. Testids survive redesigns, translations, and the day marketing rewrites every button label. Add them to the elements your important flows actually touch. Not to everything, which is a chore nobody finishes.
+
+## Keeping it honest
+
+Signals rot the way every convention rots: someone adds a mutation, forgets the signal, and every verdict for that flow quietly drops from `signal` to `presence`. Nothing goes red. The tests pass. The evidence just gets weaker, invisibly.
+
+```bash
+npm i -D @reticlehq/eslint-plugin
+```
+
+One rule. State changed, so a signal must fire, makes the signal layer self-enforcing. It is the only mechanism we have found that survives contact with a deadline.
+
+## Start with one flow
+
+You do not need to describe the whole app, and trying to is the slow path that gets abandoned halfway.
+
+1. Pick your most important flow. The one that would be embarrassing to break.
+2. Register the store it reads.
+3. Emit a signal where it succeeds, and one where it fails.
+4. Add testids to the elements it touches.
+5. Drive it, and check `honesty.grade` says `signal`.
+
+Then stop. Add more when a flow you actually replay needs it.
+
+<CardGroup cols={2}>
+  <Card title="Prove it" icon="circle-check" href="/tools-act-and-wait">
+    Use your new signals as predicates and watch the grade climb.
+  </Card>
+  <Card title="Lock it in" icon="vial" href="/testing">
+    Turn the instrumented flow into a spec that runs on every pull request.
+  </Card>
+</CardGroup>

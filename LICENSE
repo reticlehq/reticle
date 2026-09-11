@@ -1,0 +1,33 @@
+Reticle — License overview
+Copyright (c) 2026 Reticle Labs
+
+Reticle uses a per-package license model so the SDK is safe to embed in your own
+application while the server and enterprise features remain protected. The
+license that applies depends on the package. Each package contains its own
+LICENSE file, which is authoritative.
+
+1. Apache License, Version 2.0 — the wire contract + the embeddable SDK
+   Packages: @reticlehq/core, @reticlehq/browser, @reticlehq/react,
+   @reticlehq/babel-plugin, @reticlehq/next, @reticlehq/vite-plugin,
+   @reticlehq/eslint-plugin
+   @reticlehq/core is the bottom-of-graph wire contract (constants + zod schemas,
+   zod its only dependency); every embeddable SDK package above depends on it, so
+   it is Apache-2.0 too — that is what makes the SDK genuinely safe to embed. These
+   run inside / compile into your application. Use them anywhere, including in apps
+   you ship to your own customers. See the LICENSE and NOTICE files in each package.
+   (@reticlehq/protocol is a deprecated, unpublished Apache-2.0 alias of core.)
+
+2. Functional Source License, Version 1.1, Apache 2.0 future (FSL-1.1-ALv2)
+   Packages: @reticlehq/server, @reticlehq/init, @reticlehq/test
+   Free for any Permitted Purpose (internal use, development, evaluation,
+   non-commercial research/education, professional services). The one
+   restriction is a Competing Use — offering Reticle itself as a competing
+   product or service. Each version converts to Apache-2.0 two years after
+   its release. See the LICENSE file in each package.
+
+3. The Reticle Enterprise License — enterprise features
+   Path: packages/server/src/ee/ (source-available)
+   Free for development and evaluation; production use requires a valid Reticle
+   Enterprise subscription license key. See packages/server/src/ee/LICENSE.
+
+For OEM / embedding / commercial licensing questions: hey@reticle.sh

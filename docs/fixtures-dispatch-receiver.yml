@@ -1,0 +1,76 @@
+# Copy this into `reticle-fixtures` as `.github/workflows/verify-on-dispatch.yml`.
+#
+# It is kept HERE, in the repo that sends the dispatch, on purpose: the two halves have to agree on
+# an event name and a payload shape, and a contract whose two ends live in different repositories
+# drifts the first time somebody edits one of them. This file is the sending end's statement of what
+# the receiving end must look like.
+#
+# It has never run. Nothing in this repository can verify it — the dispatch needs a token that does
+# not exist yet, and the receiver needs to be committed to another repository. Treat every line as
+# unverified until somebody has watched one green run, and do not let its presence here be mistaken
+# for Tier 2 being live.
+name: Verify a Reticle commit against the fixtures
+
+on:
+  repository_dispatch:
+    types: [reticle-commit]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Reticle commit to verify
+        required: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    # Nine real apps, each installed and booted. This is why Tier 2 cannot block a merge.
+    timeout-minutes: 90
+    steps:
+      - name: Check out the fixtures (the pristine surface)
+        uses: actions/checkout@v4
+        with:
+          # `clean` is the branch that has NEVER been instrumented. Running init over an already
+          # wired app reports "already wired" for every step and proves nothing, which is exactly how
+          # an install regression ships unnoticed.
+          ref: clean
+
+      - name: Check out the Reticle commit under test
+        uses: actions/checkout@v4
+        with:
+          repository: reticlehq/reticle
+          ref: ${{ github.event.client_payload.sha || inputs.sha }}
+          path: reticle
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build the release candidate
+        working-directory: reticle
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - run: npx playwright install --with-deps chromium
+
+      - name: Materialise the fixture apps
+        run: node scripts/materialise.mjs
+
+      - name: Install into every fixture and open each one in a browser
+        # `--local` is the whole point: without it the gate can only confirm what already shipped,
+        # which is the wrong half of the question before a release.
+        run: node scripts/verify.mjs --local ./reticle
+        env:
+          # The fixtures gate's own idle shutdown once fired mid-install and scored three fixtures as
+          # install failures. A gate owns its daemon for the whole run — see the reticle repo's
+          # apps/e2e/harness-rules.md, rule 2.
+          RETICLE_IDLE_SHUTDOWN_MS: '0'
+
+      - name: Upload the run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fixtures-run
+          path: runs/
+          if-no-files-found: ignore
