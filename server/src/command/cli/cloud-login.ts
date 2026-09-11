@@ -16,8 +16,8 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';
 import { CLOUD_LINK_FILE } from '../../features/cloud/cloud-config.js';
 import { RETICLE_CONFIG_BASENAME } from './ports/resolve/cli-port.js';
-import { DevicePollSchema, DeviceStartSchema, openBrowser } from './device-flow.js';
-import { normalizeUrl, sessionPath, SESSIONS_DIR } from './cloud-session.js';
+import { DevicePollSchema, DeviceStartSchema, openBrowser } from './auth/device-flow.js';
+import { normalizeUrl, sessionPath, SESSIONS_DIR } from './auth/cloud-session.js';
 import {
   api,
   baseUrl,

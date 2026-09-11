@@ -233,6 +233,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   capsule: ['dir', 'fs'],
   cli: [
     'artifact',
+    'auth',
     'bridge',
     'browser',
     'capsule',
@@ -305,6 +306,12 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // "correcting" the spelling would give two directories one basename, which is how the reach
   // graph silently collapsed `cli/cloud` into `features/cloud` with every test still passing.
   artifact: ['dir', 'fs'],
+  // `reticle login` and what it leaves on the machine: the credential store, the signed-in
+  // session, and the browser device flow. Named `auth` and deliberately NOT `cloud`, though every
+  // file in it is about the cloud -- `features/cloud` already owns that basename, and the reach
+  // graph keys on basename, so a second `cloud` would merge the two into one node and every test
+  // would still pass. That has happened here once already.
+  auth: ['cloud'],
   journal: ['artifact', 'dir', 'fs', 'project', 'runs'],
   license: ['config'],
   mcp: [

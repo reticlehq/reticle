@@ -11,7 +11,7 @@
  */
 import { z } from 'zod';
 import { spawn } from 'node:child_process';
-import { NodePlatform } from '../../platform.js';
+import { NodePlatform } from '../../../platform.js';
 
 /** What `/v1/auth/device/start` answers: the codes, where to approve, and how fast to poll. */
 export const DeviceStartSchema = z.object({

@@ -19,7 +19,7 @@ import {
   resolveSessionFor,
   sessionPath,
   type Session,
-} from './cloud-session.js';
+} from './auth/cloud-session.js';
 
 /** Where `reticle login` dials when nothing says otherwise: the hosted service. */
 export const DEFAULT_URL = 'https://app.reticle.sh';
