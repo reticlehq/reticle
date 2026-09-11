@@ -16,6 +16,7 @@
 export * from './vocabulary/subject.js';
 export * from './vocabulary/channel.js';
 export * from './vocabulary/intent.js';
+export * from './vocabulary/predicate.js';
 export * from './vocabulary/realm-surface.js';
 export * from './vocabulary/evidence.js';
 export * from './vocabulary/verdict.js';

@@ -165,7 +165,17 @@ async function main() {
             assertions:
               entry?.claim === undefined
                 ? []
-                : [{ id: 'a1', predicate: {}, reads: entry.claim, channels: entry.reads }],
+                : [
+                    {
+                      id: 'a1',
+                      // A subject that has one gets a real predicate the specification can
+                      // evaluate; the rest still carry an empty one, which evaluates to
+                      // "nobody checked" rather than to a pass.
+                      predicate: entry?.predicate ?? {},
+                      reads: entry.claim,
+                      channels: entry.reads,
+                    },
+                  ],
           },
         };
       },

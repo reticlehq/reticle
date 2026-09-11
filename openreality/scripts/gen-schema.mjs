@@ -39,6 +39,7 @@ const SCHEMAS = Object.freeze({
   intent: ovp.IntentSchema,
   claim: ovp.ClaimSchema,
   assertion: ovp.AssertionSchema,
+  predicate: ovp.PredicateSchema,
   constraint: ovp.ConstraintSchema,
   capability: ovp.CapabilitySchema,
   action: ovp.ActionSchema,

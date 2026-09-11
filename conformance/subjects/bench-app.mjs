@@ -47,6 +47,17 @@ export const BENCH_APP_SUBJECT = Object.freeze({
     act: { capability: 'act', target: 'testid=login-submit', verb: 'click' },
     claim: 'exactly one sign-in request was made',
     reads: ['net'],
+    // A claim that names a COUNT, written in the specification's own predicate form rather than
+    // in prose. That is the whole point of this scenario: two writes landed where one was
+    // claimed, and the honest route to `no` is the claim failing -- not an anomaly detector
+    // happening to notice. Prose could not be evaluated, so this scenario used to come back
+    // `unknown` from a window that held both requests.
+    predicate: {
+      kind: 'count',
+      match: { channel: 'net', summary: 'net.request', valueContains: '/api/login' },
+      op: 'exactly',
+      value: 1,
+    },
   },
 
   /**

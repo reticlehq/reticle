@@ -1,4 +1,10 @@
-import { adjudicate, Declaration, type Claim, type Coverage } from '@reticlehq/openreality';
+import {
+  adjudicate,
+  assertionsHeld,
+  Declaration,
+  type Claim,
+  type Coverage,
+} from '@reticlehq/openreality';
 import { ProvenanceClass, type Evidence } from '@reticlehq/openreality';
 import type { WebRealm } from './web-realm.js';
 
@@ -146,10 +152,11 @@ export function conformanceClient(realm: WebRealm, now: () => number): Conforman
         // Asked for, at last. The binding passed an empty array for as long as the interface
         // had no way to return one, and three planted defects came back `yes` because of it.
         anomalies: realm.detect === undefined ? [] : await realm.detect(window, observations),
-        // The suite plants a behaviour and asks what the implementation says about it; whether
-        // the claim's own predicate held is the realm's answer, and this binding does not have
-        // one to give. Undefined is "nobody evaluated it", which is what that means.
-        assertionsHeld: undefined,
+        // The specification evaluates its own predicate forms, so this is a real answer now
+        // rather than a shrug. Still three-valued: a claim written in a language the
+        // specification does not speak comes back `undefined`, which means nobody evaluated it
+        // and must never be read as either pass or fail.
+        assertionsHeld: assertionsHeld(claim.assertions, observations),
       });
       return {
         verdict: decided.verdict,
