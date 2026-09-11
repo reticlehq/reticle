@@ -30,7 +30,34 @@ interface Manifest {
   readonly name?: string;
   readonly private?: boolean;
   readonly publishConfig?: { readonly access?: string };
+  readonly repository?: unknown;
+  readonly homepage?: unknown;
+  readonly bugs?: unknown;
+  readonly description?: unknown;
+  readonly engines?: unknown;
+  readonly license?: unknown;
 }
+
+/**
+ * What an npm page needs to be worth landing on.
+ *
+ * Every one of the eleven packages that existed before v3 carries all of these. Neither of the
+ * two the release adds did: no repository link, so the npm page has no source and provenance
+ * has nothing to point at; no `bugs`, so a reader with a problem has nowhere to go; no
+ * `keywords`, which for a specification package whose entire purpose is being found and
+ * implemented by other people is most of the job.
+ *
+ * The same shape as the access defect one commit earlier, and the same cause: a new package
+ * does not inherit the conventions of its neighbours, and nothing was comparing them.
+ */
+const PAGE_FIELDS = [
+  'repository',
+  'homepage',
+  'bugs',
+  'description',
+  'engines',
+  'license',
+] as const;
 
 function publishable(): { path: string; manifest: Manifest }[] {
   return execFileSync('git', ['ls-files', '*/package.json'], { cwd: REPO_ROOT, encoding: 'utf8' })
@@ -47,6 +74,22 @@ function publishable(): { path: string; manifest: Manifest }[] {
 describe('what a scoped package asks npm for', () => {
   it('finds the publishable packages, so a pass is not a pass over none', () => {
     expect(publishable().length).toBeGreaterThan(8);
+  });
+
+  it('every published package carries the fields an npm page needs', () => {
+    const thin = publishable()
+      .map(({ manifest }) => ({
+        name: manifest.name ?? '',
+        missing: PAGE_FIELDS.filter((field) => undefined === manifest[field]),
+      }))
+      .filter(({ missing }) => 0 < missing.length)
+      .map(({ name, missing }) => `${name} lacks ${missing.join(', ')}`)
+      .sort();
+    expect(
+      thin,
+      'these publish to npm with nothing on the page: no source link, nowhere to report a bug, ' +
+        'or no statement of what they are. Copy the shape from any neighbour.',
+    ).toEqual([]);
   });
 
   it('every scoped one declares public access', () => {

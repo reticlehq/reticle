@@ -2,6 +2,24 @@
   "name": "@reticlehq/engine",
   "version": "3.0.0",
   "description": "The rules that decide a verdict: read what happened in a running app and say whether the declared consequence held. No browser, no daemon, no command line - an implementation of the OpenReality specification you can use on its own.",
+  "keywords": [
+    "verification",
+    "verdict",
+    "evidence",
+    "ai-agents",
+    "testing",
+    "reticle"
+  ],
+  "homepage": "https://github.com/reticlehq/reticle#readme",
+  "bugs": "https://github.com/reticlehq/reticle/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reticlehq/reticle.git",
+    "directory": "engine"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
