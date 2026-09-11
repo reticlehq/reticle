@@ -80,7 +80,7 @@ import {
   openInBrowser,
   openCommand,
 } from './cli/launch/cli-launch.js';
-import { handleDrive } from './cli/drive-command.js';
+import { handleDrive } from './cli/drive/drive-command.js';
 import { handleVerify } from './cli/cli-verify.js';
 import { runKill } from './cli/cli-kill.js';
 import { summarizeHunt, type HuntAnomaly, type HuntRun } from '../features/hunt/hunt-report.js';

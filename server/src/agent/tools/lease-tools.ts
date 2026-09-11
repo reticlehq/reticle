@@ -450,7 +450,7 @@ export async function waitForLeasedSession(
  * Named on its own because `reticle drive <url>` runs it too.
  *
  * When a daemon already owns the bridge port, `drive` asks that daemon for a browser instead of
- * competing for the port (see cli/drive-attach.ts), and the browser it should get is exactly the one
+ * competing for the port (see cli/drive/drive-attach.ts), and the browser it should get is exactly the one
  * an agent gets: same pool, same isolation, same reporting. Sharing the ToolDef rather than the
  * handler keeps that literal — the drive route dispatches through `runTool`, so it is counted like
  * any other call instead of being a second, invisible dispatch path.

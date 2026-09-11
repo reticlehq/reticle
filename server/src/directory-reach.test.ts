@@ -305,6 +305,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   cloud: ['cli', 'fs', 'intent'],
   command: [
+    'drive',
     'cli',
     'daemon',
     'flows',
@@ -470,6 +471,12 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * what the flake ledger learned from the run.
    */
   suite: ['cloud', 'fs', 'stores', 'tools'],
+  /**
+   * `reticle drive`. It attaches to a daemon that is already running rather than binding the
+   * port itself, which is the whole reason the two files exist and why they reach the daemon,
+   * the launcher, the mcp surface and the port table.
+   */
+  drive: ['daemon', 'launch', 'mcp', 'ports'],
   tools: [
     'args',
     'timing',

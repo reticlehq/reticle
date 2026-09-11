@@ -41,7 +41,7 @@ export interface SharedServer {
    * session it registered.
    *
    * This is how `reticle drive` stops fighting the daemon for the bridge port. The daemon already
-   * owns the browser plane, so driving is a request to it — see cli/drive-attach.ts. Left
+   * owns the browser plane, so driving is a request to it — see cli/drive/drive-attach.ts. Left
    * unattached, the route 404s, which is exactly what a newer CLI needs to hear from an older daemon.
    */
   attachDrive(provider: (url: string) => Promise<unknown>): void;

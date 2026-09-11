@@ -812,7 +812,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   // `reticle drive <url>` when this daemon already owns the port: it asks HERE instead of trying to
   // bind a port we are holding, and gets the same pooled context an agent's reticle_lease returns —
   // through runTool, so it is counted and reported like any other call rather than being a second,
-  // invisible dispatch path. See cli/drive-attach.ts for why attaching beats refereeing the race.
+  // invisible dispatch path. See cli/drive/drive-attach.ts for why attaching beats refereeing the race.
   shared.attachDrive((url) => runTool(LEASE_ACQUIRE_TOOL, effectiveDeps, { url }));
 
   // Optional OEM/CI verify endpoint: a host platform POSTs to /verify and gets an ReticleVerificationRun,

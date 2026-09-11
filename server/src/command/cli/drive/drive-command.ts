@@ -7,13 +7,13 @@
  * drive-attach.ts, which is where the reasoning for attaching is written down.
  */
 
-import { start, type StartOptions } from '../../index.js';
-import { log } from '../../log.js';
-import { probePresence, describePresence } from '../daemon/port-presence.js';
-import { probeDaemon } from '../../agent/mcp/mcp-proxy.js';
-import { readPid } from '../daemon/daemon.js';
-import { fetchStatus } from './launch/cli-launch.js';
-import { captureLookup, findPortHolder } from './ports/port-holder.js';
+import { start, type StartOptions } from '../../../index.js';
+import { log } from '../../../log.js';
+import { probePresence, describePresence } from '../../daemon/port-presence.js';
+import { probeDaemon } from '../../../agent/mcp/mcp-proxy.js';
+import { readPid } from '../../daemon/daemon.js';
+import { fetchStatus } from '../launch/cli-launch.js';
+import { captureLookup, findPortHolder } from '../ports/port-holder.js';
 import {
   DriveMode,
   decideDriveMode,
@@ -38,7 +38,7 @@ export function handleDrive(parsed: { port: number; driveUrl: string; headless: 
  * a throttled tab nearly always coexists with the daemon holding the port. Refusing politely was
  * only half a fix: the way out it named (`reticle stop`, then retry) is a race the user loses,
  * because the MCP proxy respawns a daemon into the gap. So a healthy daemon is now ATTACHED to —
- * see cli/drive-attach.ts.
+ * see cli/drive/drive-attach.ts.
  */
 async function driveWithHonestConflict(parsed: {
   port: number;

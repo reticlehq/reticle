@@ -164,7 +164,7 @@ describe('attachAgentPresence — agent-independent MCP connection presence', ()
 
 /**
  * `reticle drive` asks the daemon that already owns the port for a driveable session instead of
- * competing with it for the bind — see cli/drive-attach.ts. This is the daemon's half of that.
+ * competing with it for the bind — see cli/drive/drive-attach.ts. This is the daemon's half of that.
  */
 describe('POST /drive', () => {
   function post(

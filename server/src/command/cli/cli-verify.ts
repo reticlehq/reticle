@@ -417,7 +417,7 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
  * `reticle drive` leads, because it is the only option that works in the state most people are in
  * when they reach this message: the client exposes no `reticle_*` tools (Codex, Cursor Cloud,
  * Antigravity, a session whose MCP link dropped), which is exactly when the CLI is reached for. It
- * ATTACHES to the running daemon rather than binding — see cli/drive-attach.ts — so there is nothing
+ * ATTACHES to the running daemon rather than binding — see cli/drive/drive-attach.ts — so there is nothing
  * to stop, nothing to race, and it hands back a sessionId the daemon owns. The advice that used to
  * lead, "ask the daemon through the tools", is the one thing that reader by construction cannot do.
  *
