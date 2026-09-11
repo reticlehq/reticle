@@ -95,3 +95,21 @@ jobs:
             echo "::error::@reticlehq/browser unpacked size $bytes exceeds the 700KB budget"
             exit 1
           fi
+
+          # The other package a size change is felt in, and it had no ceiling at all.
+          #
+          # Nobody installs @reticlehq/server as a dependency; an agent runs it with `npx`, which
+          # downloads it before the first tool call of a fresh machine. That download is on the
+          # path this project measures in minutes-to-first-verdict, so its size is a user-facing
+          # number even though no package.json mentions it.
+          #
+          # MEASURED 2026-09-11: 4,845,142 bytes, most of it the docs that `pack-docs.mjs` stages
+          # so the MCP surface can answer from them offline. Recorded at 5,200,000, which is
+          # about 350KB of room. Same rule as the SDK above: if the reason is not in the diff,
+          # do not move the number.
+          server_bytes=$(cd server && npm pack --dry-run --json 2>/dev/null | sed -n '/^\[/,$p' | node -e "process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d)[0].unpackedSize))")
+          echo "server unpacked: $server_bytes bytes"
+          if [ "$server_bytes" -gt 5200000 ]; then
+            echo "::error::@reticlehq/server unpacked size $server_bytes exceeds the 5200KB budget"
+            exit 1
+          fi

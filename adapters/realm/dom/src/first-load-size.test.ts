@@ -106,8 +106,19 @@ const MAX_FIRST_LOAD_BYTES = 232_500;
  * For scale, the largest single line item in the first load is neither: zod itself is 59,536 B,
  * and it has been there since long before the protocol existed.
  */
-/** What is left is the handful of small leaf files a page names on the way in. See log-kinds.ts. */
-const MAX_PANEL_BYTES_IN_FIRST_LOAD = 5_000;
+/**
+ * What is left is the handful of small leaf files a page names on the way in. See log-kinds.ts.
+ *
+ * Lowered 5,000 -> 2,000 on 2026-09-11. Measured 1,023, so the old ceiling carried nearly five
+ * times the actual figure in slack, and slack is what a creep hides in: this number exists to
+ * catch a single constant dragging the panel's stylesheet into the first load, and it would
+ * have let four times the current total arrive before saying anything. The sibling ceiling in
+ * `package-quality.yml` had the same shape and let the package grow 19% unremarked.
+ *
+ * 2,000 leaves about 1KB, which is room for another small leaf file and not room for a
+ * stylesheet.
+ */
+const MAX_PANEL_BYTES_IN_FIRST_LOAD = 2_000;
 
 interface Chunk {
   readonly bytes: number;
