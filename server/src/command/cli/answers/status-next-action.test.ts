@@ -31,6 +31,26 @@ describe('statusNextAction', () => {
     expect(next?.toLowerCase()).toContain('agent');
   });
 
+  it('does not tell an unidentified directory that ITS wiring is correct', () => {
+    // Found by running `status` in an empty /tmp directory on a machine that had used Reticle
+    // before. `previouslyConnected` is the WIDE fact — any app, this port — because the helper
+    // behind it falls back to that when there is no project id, and another branch wants the
+    // wide answer. This sentence was the narrow claim, so it attributed a stranger's connection
+    // to a directory holding no app, no config and no instrumentation, and called the wiring
+    // correct.
+    const next = statusNextAction({
+      running: false,
+      sessionCount: 0,
+      previouslyConnected: true,
+      initialized: false,
+    });
+    expect(next).toBeDefined();
+    expect(next).not.toContain('This project has connected before');
+    expect(next).not.toContain('the wiring is correct');
+    // The wide fact is still worth saying, in the words the evidence supports.
+    expect(next).toContain('connected on this port before');
+  });
+
   it('does not send a previously-connected project back to `init`', () => {
     // The install is known-good the moment an app has ever connected on this port, and `init` is the
     // one action that cannot help and can overwrite a config that works.

@@ -59,9 +59,25 @@ export function statusNextAction(facts: StatusFacts): string | undefined {
     // `running: false` reads as "Reticle is broken", and it usually means the opposite: the daemon is
     // started by an agent, on demand, and idles out when nobody is driving. A user who has not
     // attached an agent yet is exactly on track, and saying so is the whole job of this branch.
-    const wiring = facts.previouslyConnected
-      ? 'This project has connected before, so the wiring is correct.'
-      : '';
+    // `previouslyConnected` answers the WIDE question — has any app connected on this port —
+    // because `hasConnectedBefore` falls back to that when the directory has no project id, and
+    // the branch below genuinely wants the wide answer: plugin-based wiring can connect without
+    // ever writing `.reticle.json`.
+    //
+    // The sentence here is NARROW. "This project has connected before" attributes a connection to
+    // the directory the user is standing in, and with no project id there is nothing to attribute
+    // it to. Run `status` in an empty directory on a machine that has ever used Reticle and the
+    // old version said the wiring was correct, in a directory with no app, no config and no
+    // instrumentation — the confident-but-unevidenced reassurance this command exists to avoid,
+    // and the same shape as the port-mismatch claim removed from the lease hint.
+    //
+    // So the wide fact gets the wide sentence. Losing the reassurance is the point when the thing
+    // it reassures about cannot be checked.
+    const wiring = !facts.previouslyConnected
+      ? ''
+      : facts.initialized
+        ? 'This project has connected before, so the wiring is correct.'
+        : 'An app has connected on this port before, though nothing here identifies this directory as that project.';
     return (
       `no daemon is running on this port, which is normal — an agent starts it when it first calls a ` +
       `Reticle tool, and it exits again when idle. ${wiring} Ask your agent to verify something, then ` +
