@@ -4,79 +4,63 @@ import { join } from 'node:path';
 import { scanPackage } from '../../scripts/orphan-scan.mjs';
 
 /**
- * A module that nothing imports must be DECLARED unwired, not discovered by an auditor.
+ * A module that nothing imports must be declared unwired, not discovered later as dead code.
  *
- * Four modules sat in the tree with doc comments written in the present tense — describing behaviour
- * the product does not have. The worst claimed "the server snapshots registered store paths + storage
- * keys BEFORE dispatching an action and again after", which nothing does; anyone reading the source to
- * evaluate the product would conclude that fallback exists. Dead code is cheap; dead code that asserts
- * it is alive is a lie told to the next reader.
+ * The last package to get this, and deliberately the last: it is the largest, and a first run
+ * over fifty-nine directories is exactly the situation that produced seventeen false findings in
+ * `engine`. So it was measured first, then written.
  *
- * This test does not ban orphans — some are staged work with real tests, and deleting them would throw
- * away sound code. It bans UNDECLARED orphans: to add one you must name it here, which is exactly the
- * moment to ask whether it should be wired or removed.
+ * Eleven modules have no PRODUCTION importer, and every one of them is imported by tests. That
+ * splits two ways, and the split is the point of the list below:
  *
- * The scan lives in `scripts/orphan-scan.mjs` so every package asks the same question the same way,
- * and so entry points are derived from this package's `exports` map rather than a literal
- * `index.ts` (#548).
+ *   **Test infrastructure living in `src/`** — `temp-dir` (33 test importers), `fake-session`
+ *   (11), `memory-fs` (7), `workspace-packages` (4), `import-graph` (2). Real, used constantly,
+ *   and invisible to this scan because the scan deliberately ignores test importers: a module
+ *   kept alive only by tests is exactly what it is looking for. These are the false positives
+ *   that shape has, and naming them is cheaper than teaching the scanner about helper files.
+ *
+ *   **Product code whose only caller is its own test** — the other six. Each is finished,
+ *   tested, and unreachable from `index.ts` or any command. That is not the same as dead: one
+ *   says outright that it exists to prove a gate. But "written, proved by a test, and called by
+ *   nothing" is a state worth being able to see, and until now this package could not show it.
+ *
+ * The list is the finding. It is not a backlog this file is asking anybody to clear, and
+ * shortening it by deleting working code would be the wrong reading.
  */
 
 const PACKAGE_DIR = join(__dirname, '..');
 
 /** Modules with no production importer, each with the reason it is allowed to stay. */
 const DECLARED_UNWIRED: Record<string, string> = {
-  'agent/runs/to-artifact.ts':
-    'turns a run into a document somebody outside this repository could read. It has no caller ' +
-    'because nobody outside this repository has asked for one yet, and that is the whole bet: one ' +
-    'pure mapper costs a file if the format is never adopted, where shaping our internal artifact ' +
-    'around a hypothetical consumer would cost the artifact. It is wired the day a consumer exists.',
-  'workspace-packages.ts':
-    'answers "which packages does this repository publish, and where do they live" for the checks ' +
-    'that need to look at all of them. Like repo-root.ts it has no production caller, because the ' +
-    'product never inspects the repository it was built from. It exists because four separate ' +
-    'checks each found that list by reading one directory, and all four went half-blind the moment ' +
-    'packages stopped all living in it. It reads repo-root.ts, which answers the same kind of ' +
-    'question -- where the repository starts -- and exists for the same reason: paths worked out ' +
-    'by counting directories break silently the first time something moves.',
-  'events/adversary.ts':
-    'builds the smallest wire events the contract accepts, so the readers can be checked against a ' +
-    'client that offers nothing. It has no production caller by design — shipping a generator of ' +
-    'deliberately unhelpful input would be shipping a way to produce it. Its only importer is the ' +
-    'test beside it, which is where hostile input belongs.',
-  'command/dev/stale-issue-guard.ts':
-    'decision logic for scripts/check-stale-issues.mjs, which imports it from dist. That script is ' +
-    'MANUAL: it is reachable only as the `check:stale-issues` package script, and nothing under ' +
-    '.github/ runs it — an earlier version of this note claimed it "runs in CI", and a grep for ' +
-    'check-stale-issues across .github/ returns nothing. A repo-hygiene guard has no caller inside ' +
-    'the product by definition; the unit tests are here so the rule is testable without a network ' +
-    'or a repo. Unwired in the sense that matters: no automation depends on it today.',
+  // ── test infrastructure that happens to live in src/ ────────────────────────────────────────
+  'temp-dir.ts': 'test helper: makes and removes scratch directories. 33 test importers.',
   'connection/session/fake-session.ts':
-    'test-only Session factory. Returns a REAL Session with inert defaults so a new method on the ' +
-    'class arrives with a working default instead of undefined in seven stub files (#726); ' +
-    'imported by specs, which this scan deliberately does not count as production importers.',
+    'the typed Session double every connection test builds on. 11 test importers, and the ' +
+    'reason those tests cannot silently drift from the real interface.',
   'features/project/memory-fs.ts':
-    'test-only in-memory FileSystemPort. Extracted after a third spec hand-rolled its own copy; ' +
-    'imported by specs, which this scan deliberately does not count as production importers.',
-  'agent/capsule/minimize.ts':
-    'Pure prefix-trim for bug capsules, unit-tested. Ready to wire into capsule save; not yet called.',
-  'features/flows/flow-report.ts':
-    'Mermaid confidence report. No caller can produce it today — needs a CLI or tool surface first.',
-  'features/phenomena/phenomena.ts':
-    'Phenomenon classification over journal actions. Staged for the deviation reporter; not yet called.',
-  'import-graph.ts':
-    'Test-only walker over this package’s own imports, shared by the two boundary guards ' +
-    '(library-path-boundary and ee-boundary). Both need the TRANSITIVE reach from an entry point, ' +
-    'because the import that breaks a boundary is never in the entry file — it is four modules down. ' +
-    'It lived inside one of those tests until a second guard needed the same forty lines. Production ' +
-    'code has no reason to read its own source, so a production importer would be the surprise here.',
-  'temp-dir.ts':
-    'Test-only teardown helper: removing a temp directory tolerantly of Windows’ delayed handle ' +
-    'release. Production code never deletes a temp tree, so a production importer would be the ' +
-    'surprise here — it is imported by ~30 test files and belongs to src only because that is where ' +
-    'the tsconfig can see it.',
+    'an in-memory FileSystemPort, so a test can exercise project code without touching disk.',
+  'workspace-packages.ts': 'reads the workspace layout; used by the cross-package guards.',
+  'import-graph.ts': 'builds the import graph the boundary guards assert over.',
+
+  // ── product code with no production caller ──────────────────────────────────────────────────
   'features/ee/audit-log.ts':
-    'Enterprise audit hook, a self-admitted pass-through stub. Nothing calls it; the license gate that ' +
-    'would is real, but this consumer is not implemented.',
+    'deliberately unwired, and says so in its own header: an example enterprise feature whose ' +
+    'body is a stub, existing to prove the licence gate rather than to be called.',
+  'agent/capsule/minimize.ts':
+    'a first cut at bug-capsule minimization (prefix-trim). Written and tested; nothing calls ' +
+    'it yet, because the capsule pipeline it belongs to is not assembled.',
+  'agent/runs/to-artifact.ts':
+    'converts a drive into the run artifact shape. Three tests cover it and no production path ' +
+    'reaches it; `build-verification-run.ts` is what the daemon actually calls.',
+  'features/flows/flow-report.ts':
+    'renders the human confidence report for a replayed flow. Complete and unreferenced: no ' +
+    'tool or command currently offers it.',
+  'features/phenomena/phenomena.ts':
+    'named, evidence-backed anomalies over the journal. Its own header describes matchers that ' +
+    'land when a later signal exists, so it is staged ahead of its caller.',
+  'command/dev/stale-issue-guard.ts':
+    'a maintenance guard that nothing invokes -- not a package script, not a workflow, only its ' +
+    'own test. Worth knowing: a guard whose sole caller is its test guards nothing.',
 };
 
 describe('no undeclared orphan modules', () => {
@@ -87,6 +71,8 @@ describe('no undeclared orphan modules', () => {
   });
 
   it('every declared entry is still an orphan — a wired one must be removed from the list', () => {
+    // The half that keeps the list honest as the code moves. Wiring one of these up without
+    // removing its line would leave a reason that is no longer true sitting in the file.
     expect(stale).toEqual([]);
   });
 });
