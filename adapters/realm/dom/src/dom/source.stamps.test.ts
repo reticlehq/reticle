@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { documentHasSourceStamps, sourceFromDom } from './source.js';
+import { documentHasSourceStamps, sourceFromDom } from './addressing/source.js';
 
 /**
  * Telling "this element has no stamp" apart from "nothing on this page has one".

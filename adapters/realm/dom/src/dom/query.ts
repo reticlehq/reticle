@@ -25,7 +25,7 @@ import { isIgnored, isReticleOverlay } from './dom-ignore.js';
 import { isSensitiveKey } from '../security/serialization.js';
 import { declaredTestids } from '../registry/capabilities.js';
 import { identifyComponent } from '../registry/stores/adapters.js';
-import { refs } from './refs.js';
+import { refs } from './addressing/refs.js';
 
 const TESTID_ATTR = 'data-testid';
 const SOURCE_ATTR = DATA_RETICLE_SOURCE_ATTR;

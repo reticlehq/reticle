@@ -48,9 +48,9 @@ const PACKAGES: Readonly<Record<string, Recorded>> = {
     note: 'the scaffolder. detect, patch and plan each know about the others.',
   },
   'adapters/realm/dom': {
-    directories: 20,
+    directories: 21,
     mutual: 1,
-    note: 'the SDK. Twenty directories and one mutual pair, which is the best ratio here.',
+    note: 'the SDK. Twenty-one directories and one mutual pair (dom <-> registry), which is the best ratio here.',
   },
   'spec-runner': {
     directories: 0,

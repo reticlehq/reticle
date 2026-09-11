@@ -1,5 +1,5 @@
 import { describe as suite, it, expect, beforeEach } from 'vitest';
-import { describe } from './a11y.js';
+import { describe } from '../a11y.js';
 import { parseSourceAttr, sourceFromDom, formatSource } from './source.js';
 
 beforeEach(() => {

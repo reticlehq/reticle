@@ -19,7 +19,7 @@ describe('settle is bounded — never hangs on a throttled rAF', () => {
     vi.stubGlobal('requestAnimationFrame', (_cb: FrameRequestCallback): number => 1);
     // Re-import so native-timers captures the stubbed rAF at module load.
     const { executeAction } = await import('./actions.js');
-    const { refs } = await import('../dom/refs.js');
+    const { refs } = await import('../dom/addressing/refs.js');
 
     document.body.innerHTML = '<button>Save</button>';
     const el = document.querySelector('button');
@@ -41,7 +41,7 @@ describe('settle is bounded — never hangs on a throttled rAF', () => {
   it('still rejects on a stale ref even when rAF never fires', async () => {
     vi.stubGlobal('requestAnimationFrame', (): number => 1);
     const { executeAction } = await import('./actions.js');
-    const { refs } = await import('../dom/refs.js');
+    const { refs } = await import('../dom/addressing/refs.js');
     document.body.innerHTML = '<button>gone</button>';
     const el = document.querySelector('button');
     if (null === el) throw new Error('no button');
@@ -53,7 +53,7 @@ describe('settle is bounded — never hangs on a throttled rAF', () => {
   it('surfaces per-step settled:false in executeSequence when rAF never fires', async () => {
     vi.stubGlobal('requestAnimationFrame', (_cb: FrameRequestCallback): number => 1);
     const { executeSequence } = await import('./actions.js');
-    const { refs } = await import('../dom/refs.js');
+    const { refs } = await import('../dom/addressing/refs.js');
 
     document.body.innerHTML = '<button id="a">A</button><button id="b">B</button>';
     const a = document.querySelector('#a');

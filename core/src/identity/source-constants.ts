@@ -10,7 +10,7 @@
  * The attribute the build plugin stamps on JSX host elements as `file:line:column`, so the browser SDK
  * and the React adapter can map a DOM node back to its source file (the source-pointer feature, needed
  * on React 19 which dropped _debugSource). Read here by both packages — it was duplicated as a local
- * const in dom/source.ts AND dom/query.ts and inlined as a literal in the React adapter. The stamper
+ * const in dom/addressing/source.ts AND dom/query.ts and inlined as a literal in the React adapter. The stamper
  * (@reticlehq/babel-plugin, separate build tooling) stamps this same literal and MUST match it.
  */
 export const DATA_RETICLE_SOURCE_ATTR = 'data-reticle-source';

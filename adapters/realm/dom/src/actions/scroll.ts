@@ -1,4 +1,4 @@
-import { refs } from '../dom/refs.js';
+import { refs } from '../dom/addressing/refs.js';
 
 /** Outcome of one container scroll — enough for the server to drive a find loop. */
 interface ScrollResult {

@@ -7,7 +7,7 @@ import {
   isSessionState,
   type PresenterTone,
 } from '@reticlehq/core';
-import { refs } from '../dom/refs.js';
+import { refs } from '../dom/addressing/refs.js';
 import { unreachableStripText } from '../transport/unreachable-message.js';
 import { actionVerb } from './chrome/presenter-verbs.js';
 import { nativeSetTimeout, nativeClearTimeout, nativeNow } from '../timers/native/native-timers.js';

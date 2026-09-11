@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { EventType } from '@reticlehq/core';
 import { installDom } from '../observers/dom.js';
 import { executeAction, executeSequence } from './actions.js';
-import { refs } from '../dom/refs.js';
+import { refs } from '../dom/addressing/refs.js';
 
 interface Collected {
   type: EventType;

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createCommandRegistry } from './commands.js';
 import { executeAction } from '../actions/actions.js';
-import { refs } from '../dom/refs.js';
+import { refs } from '../dom/addressing/refs.js';
 import { registerAdapter } from '../registry/stores/adapters.js';
 
 const reg = createCommandRegistry();

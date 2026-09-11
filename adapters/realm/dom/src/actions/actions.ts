@@ -7,7 +7,7 @@ import {
   SettleReason,
 } from '@reticlehq/core';
 import { asSyntheticInput } from './synthetic/synthetic-input.js';
-import { echoRef, refs } from '../dom/refs.js';
+import { echoRef, refs } from '../dom/addressing/refs.js';
 import {
   dangerousActionContext,
   requiresDangerousConfirmation,

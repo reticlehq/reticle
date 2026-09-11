@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { ActionType } from '@reticlehq/core';
 import { executeAction } from './actions.js';
-import { refs } from '../dom/refs.js';
+import { refs } from '../dom/addressing/refs.js';
 
 /**
  * `check` / `uncheck` must drive the checkbox the way a user does, not assign its property.

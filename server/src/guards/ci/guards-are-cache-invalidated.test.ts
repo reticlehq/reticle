@@ -7,7 +7,7 @@
  * those other trees left the key untouched and the guards replayed a pass recorded against
  * different files.
  *
- * Reproduced before this was written: edit `packages/browser/src/dom/refs.ts`, run `pnpm test:unit`,
+ * Reproduced before this was written: edit `packages/browser/src/dom/addressing/refs.ts`, run `pnpm test:unit`,
  * and `@reticlehq/server:test:unit` reports `cache hit, replaying logs`. The guard did not run.
  *
  * That is a false green in the gate itself, which is worse than the defects these guards catch: the

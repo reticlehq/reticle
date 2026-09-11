@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { ActionType } from '@reticlehq/core';
 import { Annotator } from './annotator.js';
 import { executeAction } from '../actions/actions.js';
-import { refs } from '../dom/refs.js';
+import { refs } from '../dom/addressing/refs.js';
 
 /**
  * Annotate mode cancels page clicks to place a mark. That is right for a person and wrong for the

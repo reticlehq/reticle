@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { ActionType, ActionWarning } from '@reticlehq/core';
 import { executeAction } from './actions.js';
-import { refs } from '../dom/refs.js';
+import { refs } from '../dom/addressing/refs.js';
 
 /**
  * `press` must send the key it was ASKED for, and never a different one.

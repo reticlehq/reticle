@@ -5,7 +5,7 @@ import { buildSnapshot } from './snapshot.js';
 import { ATTR_VALUE_MAX, matchQuery, runQuery } from './query.js';
 import { registerCapabilities } from '../registry/capabilities.js';
 import { executeAction } from '../actions/actions.js';
-import { refs } from './refs.js';
+import { refs } from './addressing/refs.js';
 
 function render(html: string): void {
   document.body.innerHTML = html;

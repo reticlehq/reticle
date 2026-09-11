@@ -1,6 +1,6 @@
 import { EventType, TruncationChannel } from '@reticlehq/core';
 import { getAccessibleName, getRole, isVisible } from '../dom/a11y.js';
-import { refs } from '../dom/refs.js';
+import { refs } from '../dom/addressing/refs.js';
 
 /**
  * A STABLE identity for the region a mutation happened in. Ambient learning cannot key on the element

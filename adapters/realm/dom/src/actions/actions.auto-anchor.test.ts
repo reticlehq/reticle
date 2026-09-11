@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { executeAction } from './actions.js';
-import { refs } from '../dom/refs.js';
+import { refs } from '../dom/addressing/refs.js';
 import { registerAdapter, type ComponentInfo } from '../registry/stores/adapters.js';
 
 /**

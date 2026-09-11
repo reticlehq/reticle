@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ActionWarning } from '@reticlehq/core';
 import { executeAction } from './actions.js';
-import { refs } from '../dom/refs.js';
+import { refs } from '../dom/addressing/refs.js';
 
 function refOf(selector: string): string {
   const el = document.querySelector(selector);

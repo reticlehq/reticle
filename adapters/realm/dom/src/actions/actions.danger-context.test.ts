@@ -18,7 +18,7 @@
  */
 import { describe, expect, it, beforeEach } from 'vitest';
 import { executeAction } from './actions.js';
-import { refs } from '../dom/refs.js';
+import { refs } from '../dom/addressing/refs.js';
 
 const refTo = (selector: string): string => {
   const el = document.querySelector(selector);

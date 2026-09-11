@@ -6,7 +6,7 @@ import {
   type MatchResult,
 } from '@reticlehq/core';
 import { createCommandRegistry, resolveNavigationUrl } from './commands.js';
-import { refs } from '../dom/refs.js';
+import { refs } from '../dom/addressing/refs.js';
 import { registerStore, unregisterStore } from '../registry/stores.js';
 import { registerAdapter } from '../registry/stores/adapters.js';
 import { registerCapabilities } from '../registry/capabilities.js';

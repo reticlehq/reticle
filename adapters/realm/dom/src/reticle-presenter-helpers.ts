@@ -1,5 +1,5 @@
 import { ReticleCommand, PresenterMode, QueryBy } from '@reticlehq/core';
-import { refs } from './dom/refs.js';
+import { refs } from './dom/addressing/refs.js';
 import { describe } from './dom/a11y.js';
 
 /** Coerce an unknown arg to a string, falling back to `fallback` (default empty) when it isn't one. */

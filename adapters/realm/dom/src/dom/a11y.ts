@@ -1,9 +1,9 @@
 import { ElementState, REDACTED_VALUE, type ElementDescriptor } from '@reticlehq/core';
 import { isButton, isHtmlElement, isImage, isInput, isSelect, isTextArea } from './realm.js';
-import { refs } from './refs.js';
+import { refs } from './addressing/refs.js';
 import { inspectChart } from './chart.js';
 import { isSensitiveKey } from '../security/serialization.js';
-import { formatSource, sourceFromDom } from './source.js';
+import { formatSource, sourceFromDom } from './addressing/source.js';
 
 /**
  * Roles whose accessible name comes from their text content (ARIA's `nameFrom: author content`).

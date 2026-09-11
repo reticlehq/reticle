@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { NO_EDITS_OBSERVED } from '@reticlehq/core';
 import { EditEpoch } from './edit-epoch.js';
-import { RefRegistry } from './dom/refs.js';
+import { RefRegistry } from './dom/addressing/refs.js';
 
 /**
  * A stale ref after a hot update must SAY the code changed underneath it.

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { refs } from '../dom/refs.js';
+import { refs } from '../dom/addressing/refs.js';
 import { scrollContainer } from './scroll.js';
 
 /** Make a real div behave like a scrollable container (jsdom has no layout, so we define metrics). */

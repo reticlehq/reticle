@@ -4,7 +4,7 @@ import { createCommandRegistry } from '../commands/commands.js';
 import { executeAction } from './actions.js';
 import { installScroll } from '../observers/scroll.js';
 import { installOverlay } from '../presenter/overlay.js';
-import { refs } from '../dom/refs.js';
+import { refs } from '../dom/addressing/refs.js';
 
 describe('drag', () => {
   it('fires a pointer/mouse drag from source to target (async, yields frames)', async () => {

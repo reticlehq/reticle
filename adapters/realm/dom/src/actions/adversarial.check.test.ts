@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ActionType } from '@reticlehq/core';
 import { executeAction } from './actions.js';
-import { refs } from '../dom/refs.js';
+import { refs } from '../dom/addressing/refs.js';
 
 /**
  * The two claims the check/uncheck path rests on, pinned because both were once believed backwards.

@@ -21,7 +21,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { RefRegistry, REF_BLOCK } from './refs.js';
+import { RefRegistry, REF_BLOCK } from './addressing/refs.js';
 
 beforeEach(() => {
   document.body.innerHTML = '';

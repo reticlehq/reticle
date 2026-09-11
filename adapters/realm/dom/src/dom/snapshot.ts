@@ -2,7 +2,7 @@ import { ElementState, SnapshotMode } from '@reticlehq/core';
 import { capturedRootOf } from './shadow-registry.js';
 import { isFrame } from './realm.js';
 import { getAccessibleName, getRole, getStates, getValue, isVisible } from './a11y.js';
-import { refs } from './refs.js';
+import { refs } from './addressing/refs.js';
 import { isIgnored, isReticleOverlay } from './dom-ignore.js';
 
 const INTERACTIVE = new Set([

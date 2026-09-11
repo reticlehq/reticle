@@ -1,5 +1,5 @@
 import { NO_EDITS_OBSERVED } from '@reticlehq/core';
-import { echoRef, refs, type RefRegistry } from './dom/refs.js';
+import { echoRef, refs, type RefRegistry } from './dom/addressing/refs.js';
 
 /**
  * What the page can tell us about its own source being edited underneath it.

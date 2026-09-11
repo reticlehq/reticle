@@ -14,7 +14,7 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { ActionType } from '@reticlehq/core';
 import { executeAction } from './actions.js';
-import { refs } from '../dom/refs.js';
+import { refs } from '../dom/addressing/refs.js';
 
 let el: HTMLButtonElement;
 let seen: KeyboardEvent[];

@@ -21,9 +21,9 @@ import {
   type ActionStep,
 } from '../actions/actions.js';
 import { describe } from '../dom/a11y.js';
-import { documentHasSourceStamps, sourceFor, formatSource } from '../dom/source.js';
+import { documentHasSourceStamps, sourceFor, formatSource } from '../dom/addressing/source.js';
 import { themeReport } from '../dom/theme.js';
-import { refs } from '../dom/refs.js';
+import { refs } from '../dom/addressing/refs.js';
 import { editEpoch } from '../edit-epoch.js';
 import { isButton, isInput } from '../dom/realm.js';
 import { hitTestOccluder } from '../dom/occlusion.js';

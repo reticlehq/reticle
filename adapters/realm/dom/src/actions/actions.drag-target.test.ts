@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { ActionType } from '@reticlehq/core';
 import { executeAction } from './actions.js';
-import { refs } from '../dom/refs.js';
+import { refs } from '../dom/addressing/refs.js';
 
 /**
  * A drag whose target could not be resolved is a FAILED call, not a free drag.
