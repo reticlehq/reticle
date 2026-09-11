@@ -109,6 +109,22 @@ export const BENCH_APP_SUBJECT = Object.freeze({
     reads: ['visual'],
   },
 
+  /**
+   * The healthy run again, with the claim written down AFTERWARDS.
+   *
+   * Same app, same action, same evidence as `healthy-app-real-claim`, and the only difference
+   * is `declaredAt`. That is the point: if an implementation ignores the field, this scenario
+   * and the healthy one are identical inputs and it will answer `yes` to both -- which is
+   * exactly the failure pre-registration exists to prevent.
+   */
+  'claim-written-after-the-action': {
+    bug: undefined,
+    act: { capability: 'act', target: 'testid=login-submit', verb: 'click' },
+    claim: 'the sign-in completed',
+    reads: ['net'],
+    declaredAt: 'after-action',
+  },
+
   /** A clean, quiet window in which nobody claimed anything. */
   'nothing-declared': {
     bug: undefined,

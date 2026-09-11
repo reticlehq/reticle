@@ -119,6 +119,20 @@ export const SCENARIOS = [
     why: 'The observer left. Blaming the app for that is the most common way a check becomes a liar.',
   },
   {
+    id: 'claim-written-after-the-action',
+    profile: Profile.EFFECT,
+    plant:
+      'A real claim about a real consequence, written down after the action instead of before.',
+    mustProduce: { verdict: Verdict.UNKNOWN, ground: 'declared-after-action' },
+    why:
+      "Pre-registration is this specification's signature idea and the one thing no other test " +
+      'format records: afterwards, anything that happened can be described as what you meant, so ' +
+      'a claim made late can be MET and can never be PROVED. The application is healthy and the ' +
+      'evidence is real -- only the order is wrong, which is what makes this the scenario an ' +
+      'implementation passes by accident if it ignores the field. Until it existed, both runners ' +
+      'hardcoded `before-action` and clause 8 had never once fired.',
+  },
+  {
     id: 'nothing-declared',
     profile: Profile.EFFECT,
     plant: 'A clean, quiet window in which nobody claimed anything would happen.',

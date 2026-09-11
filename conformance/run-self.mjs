@@ -161,7 +161,10 @@ async function main() {
           claim: {
             id: String(args?.scenario),
             statement: entry?.claim ?? 'nothing was declared',
-            declaredAt: 'before-action',
+            // From the subject, not hardcoded. Both runners pinned this to `before-action`,
+            // so clause 8 could never fire and an implementation that ignored the field
+            // entirely would have scored exactly the same.
+            declaredAt: entry?.declaredAt ?? 'before-action',
             assertions:
               entry?.claim === undefined
                 ? []

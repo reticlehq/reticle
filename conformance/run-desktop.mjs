@@ -98,6 +98,18 @@ const SUBJECT = Object.freeze({
     reads: ['visual'],
   },
 
+  /**
+   * The healthy run with the claim written down afterwards. Same action, same evidence; only
+   * the order differs, which is what makes it the scenario an implementation passes by accident
+   * if it ignores `declaredAt`.
+   */
+  'claim-written-after-the-action': {
+    act: { target: 'add', verb: 'click' },
+    claim: 'the todo was added',
+    reads: ['net'],
+    declaredAt: 'after-action',
+  },
+
   'nothing-declared': { act: undefined, claim: undefined, reads: [] },
 });
 
@@ -225,7 +237,10 @@ async function main() {
           claim: {
             id: String(args?.scenario),
             statement: entry.claim ?? 'nothing was declared',
-            declaredAt: 'before-action',
+            // From the subject, not hardcoded. Both runners pinned this to `before-action`,
+            // so clause 8 could never fire and an implementation that ignored the field
+            // entirely would have scored exactly the same.
+            declaredAt: entry?.declaredAt ?? 'before-action',
             assertions:
               entry.claim === undefined
                 ? []

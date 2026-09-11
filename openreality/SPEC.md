@@ -281,6 +281,8 @@ The clauses are checked in this order, and the order _is_ the specification. It 
 9. Nothing independent and consequence-grade supports it → `unknown`.
 10. Otherwise → `yes` at consequence grade.
 
+Clause 8 is the one an implementation passes by accident. An implementation that ignores `declaredAt` entirely answers a late claim exactly as it answers a pre-registered one, and nothing about its output looks wrong. The conformance suite therefore drives the two as a PAIR: the same application, the same action, the same evidence, differing only in when the claim was written down. If both come back `yes`, the field is being ignored.
+
 Each clause has a **ground**: a code naming which one decided, returned alongside the prose. In clause order: `nothing-declared`, `channel-not-observed`, `contradicted`, `assertion-failed`, `window-not-closed`, `coverage-impeached`, `suspicion-unresolved`, `declared-after-action`, `no-independent-consequence`, `proved`.
 
 The ground exists because a verdict alone is too coarse and its sentence is too fine. `no` is returned by both clause 3 and clause 4, so "disproved because independent channels contradicted" is not expressible in the verdict; and comparing the sentence would score every implementation against this one's vocabulary. The prose stays for a person to read. **A conformance scenario names a ground, never a wording.**
