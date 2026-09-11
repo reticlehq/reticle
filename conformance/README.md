@@ -69,6 +69,8 @@ A conformance suite whose author passes everything is a suite shaped around its 
 
 The scenarios, the profiles, the scoring rules and the **driver** are all here, and every one of them is checked by tests that need nothing running.
 
+The reference implementation's own binding is `server/src/connection/realm/conformance-client.ts` — three methods over a live session, and a worked example if you would rather read one than a paragraph. Note what it does _not_ do: it never asks Reticle's verdict kernel anything. Every answer comes from the specification's `adjudicate`, because scoring an implementation against its own rules makes every implementation conformant by construction.
+
 What is still yours to supply is the **binding**: `driveAll` takes a client with three methods — `hello()`, `command(name, args)` and `verify(claim)` — and how those reach your implementation is your business, because we have never seen your platform. Wire them to a socket, a pipe, or a function call.
 
 ```js
