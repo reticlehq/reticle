@@ -134,10 +134,17 @@ async function liveRealm(server) {
 
 async function main() {
   const env = { ...process.env, RETICLE_PORT: String(PORT) };
-  const server = await start({ port: PORT, mcp: false });
-  const { vite, app } = await boot(env);
+  // Started inside the try for the same reason as the web runner: `boot` spawns vite and an
+  // Electron tree AFTER the bridge has bound a port, so anything it throws used to leak the
+  // bridge and whichever half of `boot` had already succeeded. The web side left an `apps/api`
+  // holding 8787 for forty minutes that way, and the next battery refused to run.
+  let server;
+  let vite;
+  let app;
   const report = { earned: undefined, failed: [], couldNotBePlanted: [], notes: {} };
   try {
+    server = await start({ port: PORT, mcp: false });
+    ({ vite, app } = await boot(env));
     const live = await liveRealm(server);
     if (live === undefined) throw new Error('the desktop app never dialled the bridge');
     // Printed, because it is the whole point of running this on Electron: if the subject does not
@@ -211,15 +218,15 @@ async function main() {
       }),
     );
   } finally {
-    await server.stop?.();
+    await server?.stop?.();
     // The whole process GROUP. Electron is a tree -- launcher, main, renderer, GPU helper -- and
     // killing the launcher leaves the window up to pollute the next run.
     try {
-      process.kill(-app.pid, 'SIGKILL');
+      if (undefined !== app) process.kill(-app.pid, 'SIGKILL');
     } catch {
       /* already gone */
     }
-    vite.kill();
+    vite?.kill();
   }
   const agreement = print(report);
   // ── EXIT ────────────────────────────────────────────────────────────────────────────────────

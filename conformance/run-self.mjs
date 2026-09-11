@@ -51,12 +51,22 @@ const API = 'http://localhost:8787';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** The app under test. Its own dev server, so the run needs nothing already running. */
+/**
+ * The bench app, in its own process GROUP so the whole thing can be killed.
+ *
+ * `pnpm exec vite` is a wrapper around a child, and killing the wrapper leaves vite holding
+ * 4318 for the next run to trip over. The desktop runner already says this about Electron --
+ * "killing the launcher leaves the window up to pollute the next run" -- and the shape here is
+ * the same tree one level shallower. Measured after a clean conformance run: 8787 released,
+ * 4318 still listening, owned by a vite whose wrapper had been asked to stop.
+ */
 function bootApp() {
   return spawn(
     'pnpm',
     ['--filter', '@reticlehq/bench-app', 'exec', 'vite', '--port', '4318', '--strictPort'],
     {
       stdio: 'ignore',
+      detached: true,
       env: { ...process.env, RETICLE_PORT: String(PORT) },
     },
   );
@@ -94,14 +104,26 @@ async function waitFor(url, what) {
 }
 
 async function main() {
-  const app = bootApp();
-  const api = bootApi();
-  const server = await start({ port: PORT, mcp: false });
-  const browser = await chromium.launch();
-  const page = await browser.newPage();
-
+  // Declared out here and started INSIDE the try, so the finally can reach whatever got as far
+  // as existing.
+  //
+  // They used to start above the try: app, api, bridge, browser, in that order. Anything that
+  // threw after the first one leaked every process before it, and `start()` binding a busy port
+  // is the one that actually does. Observed twice: a conformance run died on `EADDRINUSE 4400`
+  // and left `apps/api` holding 8787 with its parent gone, which the e2e battery then refused to
+  // run against -- correctly, since a battery pointed at somebody else's app is a measurement of
+  // nothing. Forty minutes later the orphan was still there.
+  let app;
+  let api;
+  let server;
+  let browser;
   const report = { earned: undefined, failed: [], couldNotBePlanted: [], notes: {} };
   try {
+    app = bootApp();
+    api = bootApi();
+    server = await start({ port: PORT, mcp: false });
+    browser = await chromium.launch();
+    const page = await browser.newPage();
     // Open the app BEFORE the driver asks anything. `driveAll` checks the handshake first, and
     // a blank page has no session, so the declaration comes back empty and the run is refused
     // before a scenario is driven. The refusal was correct -- scoring an implementation that
@@ -229,10 +251,17 @@ async function main() {
       }),
     );
   } finally {
-    await browser.close();
-    await server.stop?.();
-    app.kill();
-    api.kill();
+    await browser?.close();
+    await server?.stop?.();
+    if (undefined !== app?.pid) {
+      // The group, not the wrapper. See bootApp.
+      try {
+        process.kill(-app.pid, 'SIGKILL');
+      } catch {
+        /* already gone */
+      }
+    }
+    api?.kill();
   }
 
   print(report);
