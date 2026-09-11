@@ -8,6 +8,7 @@ import {
   type SuiteFlowResult,
   type FlowStep,
   type SuiteVerdict,
+  unreachedRoutes,
 } from '@reticlehq/core';
 import { classifyFlowAssertions, FlowAssertionGrade } from './flow-classify.js';
 import { SUCCESS_STEP_TOOL } from './flow-success.js';
@@ -172,8 +173,13 @@ export function unverifiableReason(flow: FlowFile | undefined): string | undefin
   );
 }
 
+/**
+ * @param knownRoutes every route the project has been seen to have — each flow's `startPath`,
+ * including the flows this run held back. Omit it when nothing is known; see `unreached`.
+ */
 export function buildSuiteVerdict(
   runs: ReadonlyArray<{ replay: FlowReplayResult; flow?: FlowFile }>,
+  knownRoutes: readonly string[] = [],
 ): SuiteVerdict {
   const failures: SuiteFlowResult[] = [];
   const unverifiable: { flow: string; reason: string }[] = [];
@@ -224,6 +230,15 @@ export function buildSuiteVerdict(
     coverage === undefined || coverage.declared === coverage.steps
       ? ''
       : ` — only ${String(coverage.declared)} of ${String(coverage.steps)} steps declared a consequence; the rest were driven, not verified`;
+  const visited = runs
+    .map((run) => run.flow?.startPath)
+    .filter((path): path is string => path !== undefined);
+  const unreached = unreachedRoutes(knownRoutes, visited);
+  /* Same reason as the coverage line: a gap stated only in a field is a gap nobody reads. */
+  const neverOpened =
+    0 === unreached.length
+      ? ''
+      : ` — ${String(unreached.length)} known route(s) never opened: ${unreached.join(', ')}`;
   const summary =
     0 === total
       ? 'no flows to verify — nothing was checked. Record one with reticle_record { action: "start" }, then reticle_flow_save.'
@@ -237,10 +252,11 @@ export function buildSuiteVerdict(
     total,
     passed,
     failed,
-    summary: summary + silentSteps,
+    summary: summary + silentSteps + neverOpened,
     failures,
     ...(unverifiable.length > 0 ? { unverifiable } : {}),
     ...(coverage === undefined ? {} : { coverage }),
+    ...(0 === unreached.length ? {} : { unreached }),
   };
 }
 

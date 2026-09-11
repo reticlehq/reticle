@@ -494,6 +494,12 @@ export const FLOW_TOOLS: ToolDef[] = [
         .describe(
           'Steps driven, and how many declared a consequence. 47 of 63 is not "75% verified" — it is verified for 47 and silent about 16.',
         ),
+      unreached: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Known routes this run never opened — every route the project's flows start on, minus the ones replayed. Coverage above counts what was driven; this counts what was not looked at.",
+        ),
       quarantined: z
         .array(z.string())
         .optional()
@@ -589,7 +595,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         }));
         const flaky = await recordSuiteFlakes(deps.fs, deps.reticleRoot, parallelRuns);
         await persistAndSyncVerificationRun(deps, timed, projectId);
-        const verdict = buildSuiteVerdict(parallelRuns);
+        const verdict = buildSuiteVerdict(parallelRuns, selected.knownRoutes);
         return {
           ...verdict,
           ...(flaky.length > 0 ? { flaky: [...flaky] } : {}),
@@ -619,7 +625,7 @@ export const FLOW_TOOLS: ToolDef[] = [
       const flaky = await recordSuiteFlakes(deps.fs, deps.reticleRoot, runs);
       // Emit the consolidated run artifact (Runs tab) + best-effort cloud push. Never blocks the verdict.
       await persistAndSyncVerificationRun(deps, timed, projectId);
-      const verdict = buildSuiteVerdict(runs);
+      const verdict = buildSuiteVerdict(runs, selected.knownRoutes);
       // A flow that has both passed and failed on UNCHANGED code is a different thing from a
       // regression, and an agent that cannot tell them apart either chases a ghost or ignores a real
       // break. Present only when the ledger has seen enough runs to say so.

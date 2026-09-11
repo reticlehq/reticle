@@ -23,6 +23,7 @@
 // ── STABLE public surface: the wire/domain contract ──────────────────────────────────────────────
 export * from './artifacts/flow-order.js'; // orderFlows — prerequisites first, cycles reported
 export * from './artifacts/flow-select.js'; // selectFlows — which flows a run replays, and what it held back
+export * from './artifacts/flow-unreached.js'; // unreachedRoutes — known routes this run never visited
 export * from './wire/constants/constants.js'; // EventType, ActionType, wire constants, TRANSPORT_LIMITS, …
 export * from './identity/source-constants.js'; // DATA_RETICLE_SOURCE_ATTR, RETICLE_ROOT_GLOBAL
 export * from './wire/event-classification.js'; // CHURN_TYPES — shared eviction priority for buffer/queue

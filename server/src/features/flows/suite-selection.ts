@@ -37,6 +37,14 @@ export async function resolveSuiteSelection(
   cycles?: string[];
   /** A flow whose prerequisite is not in this run, so it did not run either. */
   unsatisfied?: { flow: string; needs: string }[];
+  /**
+   * Every route the PROJECT'S flows start on, including the ones this selection held back.
+   *
+   * The candidates are already loaded here, so the whole app's known surface costs nothing extra to
+   * report — and it is the only place that has it. By the time the suite has a verdict it knows only
+   * about the flows it ran, which is exactly the set that cannot reveal what was skipped.
+   */
+  knownRoutes: string[];
 }> {
   const store = flowsForSession(deps, projectId).flows;
   const names = await store.list(projectId);
@@ -92,5 +100,12 @@ export async function resolveSuiteSelection(
     unmatched: chosen.unmatched.filter((entry) => !wantedNames.includes(entry)),
     ...(0 === ordered.cycles.length ? {} : { cycles: ordered.cycles }),
     ...(0 === ordered.unsatisfied.length ? {} : { unsatisfied: ordered.unsatisfied }),
+    knownRoutes: [
+      ...new Set(
+        loaded
+          .map((flow) => flow.startPath)
+          .filter((path): path is string => path !== undefined && '' !== path),
+      ),
+    ],
   };
 }

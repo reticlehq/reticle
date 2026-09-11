@@ -435,6 +435,18 @@ export interface SuiteVerdict {
    * zero would read as "nothing was declared" rather than "nothing was counted".
    */
   coverage?: { steps: number; declared: number };
+  /**
+   * Known routes this run never opened.
+   *
+   * `coverage` above counts what the suite DROVE. Neither it nor anything else here notices a route
+   * no flow goes near — so a selection replaying two of eleven flows reports "all 2 flows pass",
+   * which is true and says nothing about the nine routes that were not looked at.
+   *
+   * Known means seen before, not enumerated from the app: every flow the project holds contributes
+   * the route it starts on. Omitted when the caller knows of no routes, because "0 unreached" from
+   * an empty ledger reads as a clean sweep rather than as an unanswered question.
+   */
+  unreached?: string[];
 }
 
 /** The reticle_flow_replay envelope. */
