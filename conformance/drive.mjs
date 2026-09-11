@@ -130,5 +130,8 @@ export async function driveAll(client, registered, options = {}) {
     outcomes[scenario.id] = result.outcome;
     if (result.note !== undefined) notes[scenario.id] = result.note;
   }
-  return { ...report(registered, outcomes), notes };
+  // `outcomes` rides along so a second surface can be compared against this one. The report's
+  // buckets say how many and which, never WHAT each scenario answered, and agreement between
+  // two surfaces is a statement about the answers.
+  return { ...report(registered, outcomes), notes, outcomes };
 }

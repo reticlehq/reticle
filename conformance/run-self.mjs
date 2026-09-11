@@ -37,6 +37,9 @@
 
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { start, WebRealm, conformanceClient } from '@reticlehq/server';
 import { driveAll } from './drive.mjs';
 import { BENCH_APP_CHANNELS, BENCH_APP_SUBJECT, plantUrl } from './subjects/bench-app.mjs';
@@ -244,6 +247,15 @@ async function main() {
   // this file and it still holds. `failed` is different: it means a scenario we CAN plant was
   // driven and the implementation gave the wrong answer. That is always a defect, and it is
   // clearable today, because the number is zero.
+  // Hand this surface's answers to whatever runs next, so the desktop pass can check that the
+  // two agree rather than only that each is internally fine. Written unconditionally and to a
+  // temp path: it is a handoff between two processes in one `gate:conformance`, not an
+  // artifact anybody keeps.
+  writeFileSync(
+    join(tmpdir(), 'reticle-conformance-web.json'),
+    JSON.stringify({ at: Date.now(), outcomes: report.outcomes ?? {} }),
+  );
+
   const failed = report.failed.length;
   if (process.argv.includes('--gate') && failed > 0) {
     console.error(

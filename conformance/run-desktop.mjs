@@ -28,8 +28,10 @@
 
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
+const { join } = path;
 import { ReticleCommand } from '@reticlehq/core';
 import { start, WebRealm, conformanceClient } from '@reticlehq/server';
 import { driveAll } from './drive.mjs';
@@ -219,7 +221,7 @@ async function main() {
     }
     vite.kill();
   }
-  print(report);
+  const agreement = print(report);
   // ── EXIT ────────────────────────────────────────────────────────────────────────────────────
   //
   // Zero by default: this measures, and a measurement that fails a build teaches people to stop
@@ -237,6 +239,17 @@ async function main() {
       `\nconformance: ${String(failed)} plantable scenario(s) answered wrongly: ` +
         `${report.failed.join(', ')}\n` +
         'ABSENT scenarios are not counted here -- only ones that were driven and got it wrong.\n',
+    );
+    process.exit(1);
+  }
+  // A disagreement between two surfaces is always a defect, and a clearable one: it is zero
+  // today, measured rather than claimed. Gated alongside `failed` because the whole argument
+  // for desktop being the same realm with a different camera is that the answers match.
+  if (process.argv.includes('--gate') && agreement.disagreed.length > 0) {
+    console.error(
+      `\nconformance: ${String(agreement.disagreed.length)} scenario(s) answered differently on ` +
+        `a browser tab and a desktop shell: ${agreement.disagreed.join(', ')}\n` +
+        'Same specification, same adjudicator, two surfaces. They must reach the same verdict.\n',
     );
     process.exit(1);
   }
@@ -260,11 +273,51 @@ function print(report) {
   }
   const unanswered = report.couldNotBePlanted.length + (report.outOfProfile?.length ?? 0);
   const driven = SCENARIOS.length - unanswered;
+  const agreement = comparedWithWeb(report);
   console.log(
     `\n  ${String(driven)} scenarios, and the number is honest rather than disappointing: the rest\n` +
-      '  need a defect planted and this app carries no bug injector. What these prove is that a\n' +
-      '  real desktop shell reaches the same verdicts as a browser tab, which was once a comment.\n',
+      '  need a defect planted and this app carries no bug injector.\n',
   );
+  console.log(`  ${agreement.line}\n`);
+  return agreement;
+}
+
+/**
+ * Do the two surfaces answer the same, where both could plant the same scenario?
+ *
+ * This footer used to assert it. It said a real desktop shell "reaches the same verdicts as a
+ * browser tab, which was once a comment" -- and compared nothing, so it was still a comment,
+ * one paragraph further along. The claim is the whole point of treating desktop as the same
+ * realm with a different camera rather than as a second realm, so it is worth a measurement.
+ *
+ * The web pass writes its answers to a temp file and runs first in `gate:conformance`. When
+ * that file is absent this says so and gates nothing: running the desktop pass alone is a
+ * normal thing to do, and inventing an agreement from one surface would be worse than not
+ * checking.
+ */
+function comparedWithWeb(report) {
+  const handoff = join(tmpdir(), 'reticle-conformance-web.json');
+  if (!existsSync(handoff)) {
+    return {
+      line: 'cross-surface agreement: not checked, the web pass did not run',
+      disagreed: [],
+    };
+  }
+  const web = JSON.parse(readFileSync(handoff, 'utf8')).outcomes ?? {};
+  const mine = report.outcomes ?? {};
+  const shared = Object.keys(mine).filter(
+    (id) =>
+      web[id] !== undefined &&
+      mine[id] !== undefined &&
+      'absent' !== web[id] &&
+      'absent' !== mine[id],
+  );
+  const disagreed = shared.filter((id) => web[id] !== mine[id]);
+  const line =
+    disagreed.length > 0
+      ? `cross-surface agreement: ${String(disagreed.length)} of ${String(shared.length)} DISAGREE — ${disagreed.join(', ')}`
+      : `cross-surface agreement: ${String(shared.length)} of ${String(shared.length)} scenarios answer identically on a browser tab and a desktop shell`;
+  return { line, disagreed };
 }
 
 void main();
