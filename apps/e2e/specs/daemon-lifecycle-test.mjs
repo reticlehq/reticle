@@ -3,7 +3,7 @@
 // Three separate bugs shipped behind this gap in a single night:
 //
 //   1. the idle watcher could never fire while an agent was attached, so a daemon spawned in a
-//      directory with no app sat for a median of 28 minutes doing nothing (0.04% duty cycle);
+//      directory with no app sat idle for as long as the editor stayed open, doing nothing;
 //   2. the MCP proxy never respawned a dead daemon — it retried a dead port until the retry budget
 //      ran out and then exited, taking the agent's whole Reticle surface with it, silently;
 //   3. fixing both at once produced a SHUTDOWN/RESPAWN LOOP: the daemon exited as useless, the proxy

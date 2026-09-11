@@ -2,16 +2,15 @@
  * Whether this daemon has ever been useful to anyone.
  *
  * Reticle is usually registered as a GLOBAL MCP server, so every agent session in every directory
- * spawns it — including the three quarters of directories that are not web apps at all. Measured
- * over a day: `stack` was null for 92 of 121 profiled projects, 50 were not even git repositories,
- * and 74% of daemon sessions never called a single tool. Median daemon lifetime 28 minutes; total
- * uptime across those sessions 10,816 minutes against 4.6 minutes of actual work — a duty cycle of
- * **0.04%**.
+ * spawns it — including the many directories that are not web apps at all. Most profiled projects
+ * had no detectable stack, a large share were not even git repositories, and most daemon sessions
+ * never called a single tool. Their total uptime was orders of magnitude larger than the work they
+ * did.
  *
  * The existing idle-shutdown could never fire on any of it, because its predicate is
  * `!agentConnected && …` and an attached agent keeps `agentConnected` true for the whole editor
- * session. So a daemon sat for half an hour, in a directory with no app, doing nothing, holding
- * memory and a port.
+ * session. So a daemon sat there, in a directory with no app, doing nothing, holding memory and a
+ * port, for as long as the editor stayed open.
  *
  * The rule here is deliberately the most conservative one that still catches that population:
  * a daemon is USELESS only if it has never served a tool call AND no browser has ever connected to
@@ -73,8 +72,8 @@ interface IdlePool {
  * Two ways to be idle. The original — nobody attached, nothing connected. And the one that was
  * missing: an agent IS attached but this daemon has never served a tool call and no browser has ever
  * connected to it. `agentConnected` stays true for an entire editor session, so without the second
- * clause the shutdown watcher could never fire on the 74% of daemons that spawn in a directory with
- * no app and sit there for half an hour.
+ * clause the shutdown watcher could never fire on the many daemons that spawn in a directory with
+ * no app and sit there for the length of an editor session.
  */
 export function buildIdlePredicate(
   agentConnected: () => boolean,

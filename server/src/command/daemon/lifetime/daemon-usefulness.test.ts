@@ -1,10 +1,11 @@
 /**
- * The 0.04% duty cycle, and why the existing idle-shutdown could never touch it.
+ * Daemons that lived for hours and worked for minutes, and why the existing idle-shutdown could
+ * never touch them.
  *
  * `isIdle` is `!agentConnected && sessions === 0 && pool === 0`, and an attached agent keeps
  * `agentConnected` true for a whole editor session — so a daemon spawned in a directory with no web
- * app sat there for a median of 28 minutes doing nothing, and the shutdown watcher never got a look
- * in. Measured across 98 sessions: 10,816 minutes of uptime, 4.6 minutes of work.
+ * app sat there doing nothing for as long as the editor stayed open, and the shutdown watcher never
+ * got a look in. Across a run of sessions the uptime was orders of magnitude larger than the work.
  *
  * These pin the conservatism. Every clause is a LIFETIME fact, because a window-based rule would
  * fire during a thinking pause and kill a daemon somebody was about to use.

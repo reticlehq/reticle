@@ -10,8 +10,8 @@
  * dependency installs, and the apps that booted afterwards hit ERR_CONNECTION_REFUSED and were scored
  * as INSTALL failures — one of them (cra-redux-saga) has no install defect at all.
  *
- * The rule that causes it was deliberate and must not be reverted: daemons used to sit idle a median
- * of 28 minutes at a 0.04% duty cycle, because "an agent is attached" alone kept them alive for a
+ * The rule that causes it was deliberate and must not be reverted: daemons used to sit idle for
+ * long stretches doing almost nothing, because "an agent is attached" alone kept them alive for a
  * whole editor session. So an attached-but-unused daemon does still have to go away.
  *
  * The distinction is TIME, not state. Mid-install, an attached daemon is state-identical to one

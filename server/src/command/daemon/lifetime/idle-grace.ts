@@ -1,13 +1,13 @@
 /**
  * How long an idle daemon is given before it shuts itself down.
  *
- * It used to be one number for every case, and at 5 minutes that number killed live runs: 187
- * `reticle_daemon_idle_shutdown` lines on one user's machine, with their editor's Reticle
+ * It used to be one number for every case, and at 5 minutes that number killed live runs: a
+ * daemon shutting down repeatedly under somebody working normally, their editor's Reticle
  * disconnecting each time; and in the fixtures gate it fired during long dependency installs, so apps
  * that booted afterwards hit ERR_CONNECTION_REFUSED and were scored as install failures when nothing
  * was wrong with their install.
  *
- * Reverting is not an option. Daemons used to sit idle a median of 28 minutes at a 0.04% duty cycle
+ * Reverting is not an option. Daemons used to sit idle for long stretches doing almost nothing,
  * because "an agent is attached" alone kept one alive for a whole editor session, and the widened
  * rule is what fixed that.
  *

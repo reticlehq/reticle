@@ -6,7 +6,7 @@
  * any MCP client has started one, so the bind died with a raw `node:net` EADDRINUSE stack — in the
  * exact situation the product tells people to run `drive` in, since `reticle_sessions` recommends it
  * for a throttled tab and a throttled tab nearly always coexists with the daemon that makes the bind
- * impossible. Two independent field reports hit it; the second lost half an hour to the workaround,
+ * impossible. Independent field reports hit it; one lost a long stretch to the workaround,
  * because `reticle stop` frees the port and the MCP proxy respawns a daemon into the gap before
  * `drive` can bind, so the "escape hatch" is a race the user cannot win.
  *
