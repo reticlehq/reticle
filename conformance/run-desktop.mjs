@@ -30,6 +30,7 @@ import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { ReticleCommand } from '@reticlehq/core';
 import { start, WebRealm, conformanceClient } from '@reticlehq/server';
 import { driveAll } from './drive.mjs';
 import { Profile } from './scenarios/index.mjs';
@@ -53,6 +54,33 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * a different shell, not to test a factoring.
  */
 const SUBJECT = Object.freeze({
+  /**
+   * The screen moves on over an operation that failed.
+   *
+   * `todos:archive` always rejects and the renderer updates optimistically and swallows it --
+   * a defect the smoke app has carried since it was written, for the web battery's benefit.
+   * Nothing was added to the fixture to reach this scenario, which matters: inventing a bug to
+   * raise a conformance score is building the fixture around the number it produces.
+   */
+  'effect-failed-surface-advanced': {
+    act: { target: 'archive-1', verb: 'click' },
+    claim: 'the todo was archived',
+    reads: ['net'],
+  },
+
+  /**
+   * An action whose effect nothing can observe.
+   *
+   * `todos:seen` is `ipcRenderer.send` with no reply, so the renderer cannot learn whether it
+   * ran. This scenario is ABSENT on the web subject and reachable here, which is the first case
+   * of the desktop shell covering something the browser fixture cannot.
+   */
+  'fire-and-forget': {
+    act: { target: 'mark-seen', verb: 'click' },
+    claim: 'the todo was marked seen',
+    reads: ['net'],
+  },
+
   'healthy-app-real-claim': {
     // Crosses the contextBridge and comes back with a row the renderer did not author.
     act: { target: 'add', verb: 'click' },
@@ -155,11 +183,21 @@ async function main() {
       command: async (_name, args) => {
         const entry = SUBJECT[String(args?.scenario)];
         if (entry === undefined) return { planted: false, reason: 'no subject for this scenario' };
+        // Reload BEFORE each scenario, because evidence bleeds otherwise and the suite stops
+        // being a measurement. The web runner gets this free: it plants by navigating, so every
+        // scenario starts on a fresh document. This one drives a single long-lived window, and
+        // without a reset two consecutive runs disagreed -- `fire-and-forget` came back
+        // `unknown` then `yes`, and the archive scenario was ABSENT then `no`. A suite whose
+        // answer depends on the order its scenarios happen to run in is not measuring the
+        // implementation.
+        await live.session.command(ReticleCommand.NAVIGATE, { reload: true });
+        await sleep(1200);
         current = live.client;
         if (entry.act !== undefined) {
           const handles = await live.client.locate({ by: 'testid', value: entry.act.target });
           const ref = handles[0]?.ref;
           if (ref === undefined) {
+            console.log(`   · ${String(args?.scenario)}: nothing matched ${entry.act.target}`);
             return { planted: false, reason: `nothing matched ${entry.act.target}` };
           }
           const receipt = await live.client.command('act', { ref, action: entry.act.verb });

@@ -5,7 +5,7 @@ import {
   type Claim,
   type Coverage,
 } from '@reticlehq/openreality';
-import { ProvenanceClass, type Evidence } from '@reticlehq/openreality';
+import { Grade, ProvenanceClass, type Evidence } from '@reticlehq/openreality';
 import type { WebRealm } from './web-realm.js';
 
 /**
@@ -64,6 +64,26 @@ const WINDOW_BUDGET_MS = 8_000;
  * Built here rather than by the realm, because a realm that produced evidence would be grading
  * the weight of its own observations — the separation the specification exists to keep.
  */
+/**
+ * An observation that records a send and can never record its outcome.
+ *
+ * A one-way dispatch is the clearest case and the one that produced a false green: the caller
+ * gets no reply by construction, so no later event can tell anybody whether the effect happened.
+ * `presence` is exactly what that is worth -- something was there -- and the whole point of the
+ * grade is that presence may not buy a `yes`.
+ *
+ * Deliberately narrow. A request still IN FLIGHT is not included: it may settle inside the window
+ * and its settled event carries the outcome, so downgrading it would discard evidence the
+ * verifier is about to be given. That case is already handled, and handled in the right place --
+ * as a `still-in-flight` blind spot in coverage, which says "I stopped watching" rather than
+ * "this proves nothing".
+ */
+function provesOnlyDispatch(observation: { readonly value?: unknown }): boolean {
+  const value = observation.value;
+  if ('object' !== typeof value || null === value) return false;
+  return true === (value as { oneWay?: unknown }).oneWay;
+}
+
 function asEvidence(
   realm: WebRealm,
   observations: Awaited<ReturnType<WebRealm['observe']>>,
@@ -84,7 +104,16 @@ function asEvidence(
         at,
       },
       independence: channel.independence,
-      grade: channel.grade,
+      // The channel's grade is a CEILING, not every observation's grade. Taking it unconditionally
+      // is how `fire-and-forget` came back `yes`: a one-way `ipcRenderer.send` travels on `net`,
+      // `net` is declared consequence-grade, and so "something was dispatched and can never
+      // report an outcome" was counted as proof that the outcome happened.
+      //
+      // Reticle already knew better -- the desktop battery asserts that a one-way call is
+      // "reported as one-way with NO status", precisely because dispatched is not succeeded --
+      // and that knowledge stopped at the observer. This is the adapter's job: the specification
+      // supplies the two grades, and which one an observation deserves is a realm's judgement.
+      grade: provesOnlyDispatch(observation) ? Grade.PRESENCE : channel.grade,
     });
   }
   return out;
