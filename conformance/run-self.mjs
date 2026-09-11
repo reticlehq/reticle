@@ -13,6 +13,23 @@
 // implementation failed. Making it a gate before the subject is finished would turn a known gap
 // into a red board nobody can clear.
 //
+// ── WHY IT CURRENTLY EARNS NOTHING, WITH THE EVIDENCE ───────────────────────────────────────────
+// Measured, not guessed. Every scenario answers *"nothing independent of the action supports
+// this at consequence grade"*, while the session's buffer holds two hundred network events. So
+// the evidence exists and the claim never reaches it, and the reason is upstream of the verdict:
+// **every plant is REFUSED**. `testid=login-submit` is how a person names a control; `act` takes
+// a REF, which a query mints. The refusal is correct and was invisible -- the driver reported
+// four driven scenarios because this runner reported a plant where the realm had reported a
+// refusal.
+//
+// Fixing it needs something the interface does not currently offer. `Realm.perform` returns a
+// RECEIPT and never data, which is right for an action and wrong for a query -- a query is a
+// read. Reads are supposed to go through `describe`, and `describe` hardcodes a snapshot. So a
+// driver cannot resolve a ref through the SPI at all. That is a gap in the interface, found by
+// trying to use it, and it is recorded rather than patched around here: routing a read through
+// `perform` would make the receipt carry data, which is exactly the shape the separation exists
+// to prevent.
+//
 // ── WHAT IT DELIBERATELY DOES NOT DO ────────────────────────────────────────────────────────────
 // Ask Reticle's own verdict kernel anything. Every answer comes from the specification's
 // `adjudicate`, through the binding, because scoring an implementation against its own rules
@@ -112,7 +129,11 @@ async function main() {
       },
       verify: async (claim) => {
         if (current === undefined) return { verdict: 'unknown', reason: 'nothing was driven' };
-        return current.verify(claim);
+        const out = await current.verify(claim);
+        // Printed per scenario. A score that says only "failed" cannot be diagnosed, and four
+        // things could produce a failure here of which only one is the implementation.
+        console.log(`   · ${claim.id}: ${out.verdict}${out.reason ? ' — ' + out.reason : ''}`);
+        return out;
       },
     };
 
