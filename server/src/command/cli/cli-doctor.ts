@@ -152,7 +152,15 @@ export async function handleDoctor(port: number): Promise<void> {
       split !== undefined
         ? `✗ ${split}`
         : attachAction === undefined
-          ? "✓ an MCP client has listed and called Reticle's tools on this port"
+          ? // A RECORD, not a live check, and the row now says so. The attach memory is durable
+            // and per-port: once a client has attached, enumerated and called, this stays green
+            // forever. A registration pointing at a path that no longer exists produces a client
+            // that cannot start at all, and this row reported the link healthy throughout —
+            // measured, on this machine, for the two days after `packages/` was dissolved and
+            // nothing updated ~/.claude.json. `doctor` is what a stuck human runs, so a row that
+            // answers "did this ever work" while looking like "does this work" is the wrong
+            // shape here even though every word of it is true.
+            '✓ an MCP client attached here and called tools before (a record, not a live check)'
           : `✗ ${attachAction}`,
     ),
   );
