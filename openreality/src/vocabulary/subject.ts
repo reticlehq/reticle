@@ -45,7 +45,30 @@ export const Surface = {
 } as const;
 export type Surface = (typeof Surface)[keyof typeof Surface];
 
-export const SurfaceSchema = z.union([z.nativeEnum(Surface), z.string().min(1)]);
+/**
+ * A named surface, or a namespaced extension.
+ *
+ * The `x-` rule is the one `ChannelIdSchema` already applies, and the two disagreed until now:
+ * a channel this specification does not name had to say so in its name, and a surface could be
+ * any string at all. The asymmetry has a cost with a date on it. Somebody verifying a voice
+ * agent writes `surface: 'voice'` today because nothing fits and a bare string is allowed; if
+ * this document later names `voice`, every artifact already written silently means something
+ * else, with no validator rejecting it and no version distinguishing it. `x-voice` cannot
+ * collide, and says on its face that it is somebody's word rather than this document's.
+ *
+ * Narrowing rather than widening, and this is the only cheap moment to do it: the protocol is
+ * unpublished, so nothing in the world is written the old way.
+ *
+ * The answer to a new domain is an `x-` surface, NOT a new entry here. Adding `voice`, `robot`,
+ * `lab` and `agent` is how a generic contract becomes a list of the domains its author happened
+ * to think of -- the same argument this specification makes about predicate forms.
+ */
+export const SurfaceSchema = z.union([
+  z.nativeEnum(Surface),
+  z
+    .string()
+    .regex(/^x-[a-z0-9-]+$/, 'a surface this specification does not name must start with x-'),
+]);
 
 /**
  * The identity of the thing being verified.
