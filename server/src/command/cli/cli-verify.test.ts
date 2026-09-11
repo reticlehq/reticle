@@ -73,6 +73,9 @@ function harness(conn: Partial<VerifyConnection>): { ports: VerifyPorts; rec: Re
       rec.closed += 1;
       return Promise.resolve();
     },
+    // Absent unless the case under test supplies one — which is exactly how the live connection
+    // behaves on a machine with no model configured.
+    ...(conn.explore === undefined ? {} : { explore: conn.explore }),
   };
   const ports: VerifyPorts = {
     connect: () => Promise.resolve(connection),
@@ -84,6 +87,7 @@ function harness(conn: Partial<VerifyConnection>): { ports: VerifyPorts; rec: Re
 }
 
 const ARGS = { url: 'http://localhost:3000', timeoutMs: 1000 };
+const EXPLORING = { ...ARGS, explore: true };
 
 describe('urlParts', () => {
   it('flags localhost / 127.0.0.1 / ::1 as loopback', () => {
@@ -205,5 +209,98 @@ describe('verify against a port a daemon already owns', () => {
     expect(message.toLowerCase(), 'says who has it').toMatch(/daemon|already/);
     expect(message, 'gives a way out').toMatch(/reticle stop|RETICLE_PORT|verify_change/);
     expect(message, 'never a bare node error').not.toMatch(/EADDRINUSE|node:net/);
+  });
+});
+
+describe('exploring an app that has no saved flows', () => {
+  /** A project with nothing saved, that gains whatever the drive records. */
+  function emptyThenSaved(saved: readonly string[]): Partial<VerifyConnection> {
+    let flows: readonly string[] = [];
+    return {
+      listFlows: () => Promise.resolve([...flows]),
+      explore: () => {
+        flows = saved;
+        return Promise.resolve({ savedFlows: saved, steps: 7 });
+      },
+    };
+  }
+
+  it('drives the app, then verifies what it recorded', async () => {
+    const { ports, rec } = harness(emptyThenSaved(['checkout']));
+
+    await runVerify(EXPLORING, ports);
+
+    expect(rec.verifyCalls).toBe(1);
+    expect(rec.exit).toEqual([0]);
+    expect(rec.out.join('\n')).toContain('checkout');
+  });
+
+  it('never drives unasked, because a drive spends money and really clicks things', async () => {
+    let drives = 0;
+    const { ports, rec } = harness({
+      listFlows: () => Promise.resolve([]),
+      explore: () => {
+        drives += 1;
+        return Promise.resolve({ savedFlows: ['x'], steps: 1 });
+      },
+    });
+
+    await runVerify(ARGS, ports);
+
+    expect(drives).toBe(0);
+    expect(rec.exit).toEqual([1]);
+  });
+
+  it('does not drive a project that already has flows — replay is the cheap path', async () => {
+    let drives = 0;
+    const { ports, rec } = harness({
+      listFlows: () => Promise.resolve(['checkout']),
+      explore: () => {
+        drives += 1;
+        return Promise.resolve({ savedFlows: [], steps: 1 });
+      },
+    });
+
+    await runVerify(EXPLORING, ports);
+
+    expect(drives).toBe(0);
+    expect(rec.exit).toEqual([0]);
+  });
+
+  it('refuses a pass when the drive recorded nothing, however much it cost', async () => {
+    const { ports, rec } = harness({
+      listFlows: () => Promise.resolve([]),
+      explore: () => Promise.resolve({ savedFlows: [], steps: 40 }),
+    });
+
+    await runVerify(EXPLORING, ports);
+
+    expect(rec.verifyCalls).toBe(0);
+    expect(rec.exit).toEqual([1]);
+    expect(rec.fail.join('\n')).toContain('Nothing was proved');
+  });
+
+  it('says how to make exploring available when no model is configured', async () => {
+    const { ports, rec } = harness({ listFlows: () => Promise.resolve([]) });
+
+    await runVerify(EXPLORING, ports);
+
+    expect(rec.exit).toEqual([1]);
+    expect(rec.fail.join('\n')).toContain('ANTHROPIC_API_KEY');
+  });
+
+  it('drives as the persona it was given', async () => {
+    let focus: string | undefined;
+    const { ports } = harness({
+      listFlows: () => Promise.resolve([]),
+      explore: (who) => {
+        focus = who;
+        return Promise.resolve({ savedFlows: [], steps: 1 });
+      },
+    });
+
+    await runVerify({ ...ARGS, persona: 'a returning customer with a full basket' }, ports);
+
+    expect(focus).toBe('a returning customer with a full basket');
   });
 });

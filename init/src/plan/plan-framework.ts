@@ -5,7 +5,7 @@
  */
 
 import { bridgeWsUrl } from '@reticlehq/core';
-import { patchViteConfig, VitePatchKind } from '../patch/vite-config.js';
+import { patchViteConfig, VitePatchKind, VITE_IMPORT } from '../patch/vite-config.js';
 import { patchNextConfig, patchRootLayout, patchPagesApp } from '../patch/next-patch.js';
 import {
   ASTRO_ENV_DTS_PATH,
@@ -293,7 +293,9 @@ function viteConfigSteps(input: PlanInput, detail: string, inject = true): Step[
       target: cfg.path,
       status: StepStatus.APPLY,
       detail,
-      write: { path: cfg.path, content: patch.code },
+      // Both halves, because either alone is a config that does not wire: the import without the
+      // call leaves `plugins` untouched, and the call without the import does not build.
+      write: { path: cfg.path, content: patch.code, expect: [VITE_IMPORT, 'reticle('] },
       dependsOnInstall: true,
     },
   ];

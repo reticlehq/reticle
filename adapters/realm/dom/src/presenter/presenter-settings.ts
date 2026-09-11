@@ -250,7 +250,7 @@ export function settingsPanelHtml(): string {
   const motionHelp = 'Reduce HUD animations for accessibility';
   const glowHelp =
     'Glow the page edges in the status colour while a session is live. Off keeps the HUD signals and leaves your app alone.';
-  return `<div ${SETTINGS_PANEL_ATTR} class="reticle-settings ${HUD_SURFACE_CLASS}" role="dialog" aria-label="Reticle settings" aria-hidden="true">
+  return `<div ${SETTINGS_PANEL_ATTR} class="reticle-settings ${HUD_SURFACE_CLASS}" role="region" aria-label="Reticle settings" aria-hidden="true">
     <div class="reticle-settings-inner">
       <div class="reticle-settings-head">
         <span class="reticle-settings-title">Settings</span>

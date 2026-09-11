@@ -50,7 +50,33 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * measured, so an ordinary change does not fail on rounding; raising either one needs a reason
  * written here, the way the tool-surface budget does.
  */
-const MAX_FIRST_LOAD_BYTES = 231_000;
+const MAX_FIRST_LOAD_BYTES = 232_500;
+/**
+ * Raised again, 231,000 to 232,500, when the previous release merged into this branch. Measured
+ * 231,715,
+ * attributed from the same metafile rather than guessed at:
+ *
+ *   adapters/realm/dom   126,941 -> 127,400   +459   the previous release's SDK work
+ *   core                  31,745 ->  32,508   +763   see below
+ *   @reticlehq/openreality 8,352 ->   8,658   +306   the `measure` predicate's schema
+ *   zod                   59,536 unchanged
+ *
+ * **328 B of core's growth is a server-only helper on every page load.** `global-press` answers
+ * whether a key press is a document key, and it is used by `act-preflight` and `act-target` and
+ * by nothing in the browser. It reaches a page because it is exported from core's ROOT barrel,
+ * which is the same shape as `verification-run` two entries below: the browser pays for a thing
+ * only the daemon reads.
+ *
+ * Not fixed here, and the reason is narrow. Removing the export breaks the server's import,
+ * because core publishes `.`, `./telemetry` and `./artifacts` and nothing else, so the server
+ * has no other way to reach it. Giving it one is a change to a published package's exports, and
+ * a merge of fifty-eight commits is the wrong place to make a public-surface decision.
+ *
+ * Both costs now point at the same fix: a `core` subpath for the things a page never reads.
+ * `verification-run` is 3,635 B, the protocol behind it 8,352 B, and this is 328 B. Together
+ * that is about 12.3 KB of every page load, spent on a run artifact, a specification and a
+ * keyboard helper, none of which a browser uses.
+ */
 /**
  * Raised from 230,000 on 2026-09-11, with the reason the comment above asks for.
  *

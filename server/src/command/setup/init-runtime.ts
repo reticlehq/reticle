@@ -74,6 +74,21 @@ const licenseIo = {
  * both keep the old ending. Everyone else gets the rest, because writing files was never the same
  * thing as an install working.
  */
+function printRelaunch(parsed: InitRuntimeArgs, io: RuntimePrintIo, cwd: string): void {
+  if (true !== parsed.relaunch) return;
+  io.print(
+    relaunchDecision({
+      ...(undefined === process.env['CLAUDE_CODE_SESSION_ID']
+        ? {}
+        : { claudeSessionId: process.env['CLAUDE_CODE_SESSION_ID'] }),
+      ...(undefined === codexSessionFor(cwd) ? {} : { codexSessionId: codexSessionFor(cwd) }),
+      transcriptExists: claudeTranscriptExists,
+      cwd,
+    }).message,
+  );
+  io.print('');
+}
+
 export async function continueAfterInit(
   parsed: InitRuntimeArgs,
   result: InitResult,
@@ -88,6 +103,16 @@ export async function continueAfterInit(
     const written = writeLicenseKey(cwd, parsed.licenseKey, licenseIo);
     io.print(written.message);
   }
+
+  // Decided and printed before the `--files-only` return, not after it. The restart question is
+  // asked by whoever just installed, and `--files-only` is the mode an agent uses when the app is
+  // ALREADY running — so the one route that most needs the answer was the one route that could not
+  // reach it, and `--relaunch --files-only` accepted the flag and silently did nothing with it.
+  //
+  // Never performed: opening a terminal is not something a one-shot command should do behind a
+  // flag, and the half worth having is the refusal — `--resume` on an id with no transcript opens
+  // an EMPTY conversation that looks exactly like it worked. See relaunch.ts.
+  printRelaunch(parsed, io, cwd);
 
   if (true === parsed.filesOnly || parsed.dryRun) {
     // Registration and pre-approval still run here, and this is the ONLY route an existing user
@@ -117,24 +142,6 @@ export async function continueAfterInit(
   // The run still ends non-zero: the phase returns `ok: false` when no session appears, and a
   // session appearing means the manual step WAS done and the app really did connect — which is a
   // green worth reporting, not one to suppress.
-
-  // What a restart should do, decided and printed. Never performed: opening a terminal is not
-  // something a one-shot command should do behind a flag, and the half worth having is the refusal —
-  // `--resume` on an id with no transcript opens an EMPTY conversation that looks exactly like it
-  // worked. See relaunch.ts.
-  if (true === parsed.relaunch) {
-    io.print(
-      relaunchDecision({
-        ...(undefined === process.env['CLAUDE_CODE_SESSION_ID']
-          ? {}
-          : { claudeSessionId: process.env['CLAUDE_CODE_SESSION_ID'] }),
-        ...(undefined === codexSessionFor(cwd) ? {} : { codexSessionId: codexSessionFor(cwd) }),
-        transcriptExists: claudeTranscriptExists,
-        cwd,
-      }).message,
-    );
-    io.print('');
-  }
 
   // Before the connect wait, never after: a bridge held by a stranger makes a session impossible,
   // so going ahead spends the entire budget and then reports what reads as an instrumentation

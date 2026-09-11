@@ -5,6 +5,21 @@
  * imports are unchanged.
  */
 import { parseFeedbackArgs, type ParsedFeedback } from './cli-parse-feedback.js';
+import { parseVerifySuffix } from './cli-parse-verify.js';
+import {
+  HEADED_FLAG,
+  PORT_FLAG,
+  VERIFY_COMMAND,
+  missingOperand,
+  missingValue,
+  notANumber,
+  unknownArgument,
+  type ParseError,
+} from './cli-parse-grammar.js';
+
+// Re-exported because the daemon's own argv builder reaches for these through this module, which is
+// where the grammar has always lived as far as every caller is concerned.
+export { HEADED_FLAG, PORT_FLAG };
 import { FORCE_FLAG } from './cli-kill.js';
 
 // Re-exported so every existing importer of these flags is unaffected by the file split.
@@ -36,6 +51,11 @@ export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticl
                 Repeatable, and a value may contain spaces and equals signs
                 --files-only writes the files and stops, which is what init did before it
                 learned to boot the app and prove the install works
+                --relaunch prints the exact command that restarts THIS conversation with
+                the tools loaded, so the restart is not a chore handed to a human. It
+                refuses when the session id has no transcript behind it, because
+                --resume on an empty id opens a blank conversation that looks like
+                success. Works with --files-only
                 --license writes the key to .env and keeps .env out of git
                 --json puts the result on stdout, so an agent reads one object
                 --no-drive / --no-open / --no-agents / --url / --timeout / --drive-model
@@ -51,6 +71,7 @@ export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticl
   reticle doctor [--port N]                            (one command to diagnose setup: Chromium, daemon, port)
   reticle open  [url] [--port N]                        (show the app: reuse the connected tab, else open one)
   reticle verify <url> [--port N] [--headed] [--timeout N] [--storage-state <file>] [--session-id <id>]  (one-shot: drive the URL, verify saved flows, exit 0=pass)
+                       [--explore] [--persona <who>]   (no saved flows? let Reticle drive the app itself and record them)
                 [--expect '<json predicate>']            (one verdict, no saved flows needed — asks
                 the daemon that is already running, so nothing is bound and nothing is stopped. This
                 is the path when your client never loaded the reticle_* tools. exit 0 ONLY on
@@ -92,7 +113,6 @@ const RESTART_COMMAND = 'restart';
 const STATUS_COMMAND = 'status';
 const OPEN_COMMAND = 'open';
 const DRIVE_COMMAND = 'drive';
-const VERIFY_COMMAND = 'verify';
 const AFFECTED_COMMAND = 'affected';
 const HUNT_COMMAND = 'hunt';
 const CAPSULES_COMMAND = 'capsules';
@@ -178,14 +198,12 @@ export function knownCommand(arg: string | undefined): string {
   return KNOWN_COMMANDS.has(arg) ? arg : UNKNOWN_COMMAND;
 }
 
-export const HEADED_FLAG = '--headed';
 /**
  * Force a hidden browser. The default is now HEADED: a run nobody can see is a run nobody trusts,
  * and every "did it actually do anything?" question cost a round-trip. CI passes this (or just sets
  * CI, which flips the default) because there is no display there to be headed on.
  */
 const HEADLESS_FLAG = '--headless';
-export const PORT_FLAG = '--port';
 export const DRIVE_FLAG = '--drive';
 const QUIET_FLAG = '--quiet';
 const DRY_RUN_FLAG = '--dry-run';
@@ -247,8 +265,6 @@ const NO_INSTALL_FLAG = '--no-install';
 export const HTTP_FLAG = '--http';
 export const HTTP_PORT_FLAG = '--http-port';
 export const HTTP_TOKEN_FLAG = '--http-token';
-const TIMEOUT_FLAG = '--timeout';
-const STORAGE_STATE_FLAG = '--storage-state';
 /**
  * A predicate for a flow-free, one-shot verdict against the daemon that is already running.
  *
@@ -257,8 +273,6 @@ const STORAGE_STATE_FLAG = '--storage-state';
  * working install — the other verdict paths need saved flows a first-install project does not have,
  * and stopping the daemon cuts the agent's own MCP link.
  */
-const EXPECT_FLAG = '--expect';
-const SESSION_ID_FLAG = '--session-id';
 
 export type CliResult =
   | {
@@ -322,6 +336,8 @@ export type CliResult =
       storageState?: string;
       sessionId?: string;
       expect?: unknown;
+      explore?: boolean;
+      persona?: string;
     }
   | { kind: 'affected'; files: string[]; since?: string }
   | { kind: 'hunt'; dir: string }
@@ -371,24 +387,6 @@ type ServeFlags =
  * The help text is still shown — cli.ts renders it as readable text underneath. It is just not the
  * message any more.
  */
-type ParseError = { kind: 'error'; message: string };
-
-const unknownArgument = (arg: string): ParseError => ({
-  kind: 'error',
-  message: `unknown argument '${arg}'`,
-});
-const missingValue = (flag: string): ParseError => ({
-  kind: 'error',
-  message: `${flag} needs a value`,
-});
-const notANumber = (flag: string, value: string): ParseError => ({
-  kind: 'error',
-  message: `${flag} expects a number, got '${value}'`,
-});
-const missingOperand = (command: string, what: string): ParseError => ({
-  kind: 'error',
-  message: `${command} needs ${what}`,
-});
 const requiresHttp = (flag: string): ParseError => ({
   kind: 'error',
   message: `${flag} requires ${HTTP_FLAG} — it configures the verify endpoint ${HTTP_FLAG} starts`,
@@ -495,98 +493,6 @@ function parseDriveSuffix(args: string[], port: number, defaultHeadless: boolean
   }
   if (driveUrl === undefined) return missingOperand(DRIVE_COMMAND, 'a url');
   return { kind: 'ok', port, driveUrl, headless };
-}
-
-type VerifySuffix =
-  | {
-      kind: 'ok';
-      url: string;
-      headless: boolean;
-      port: number;
-      timeoutMs?: number;
-      storageState?: string;
-      sessionId?: string;
-      expect?: unknown;
-    }
-  | { kind: 'error'; message: string };
-
-/**
- * Parse `verify <url> [--port N] [--headed] [--timeout N] [--storage-state <file>]
- * [--session-id <id>]`. The first non-flag token is the preview URL. `defaultPort` is already
- * env + `.reticle.json` + 4400.
- */
-function parseVerifySuffix(args: string[], defaultPort: number): VerifySuffix {
-  let headless = true;
-  let url: string | undefined;
-  let timeoutMs: number | undefined;
-  let storageState: string | undefined;
-  let sessionId: string | undefined;
-  let expect: unknown;
-  let port = defaultPort;
-  let i = 0;
-  while (i < args.length) {
-    const arg = args[i];
-    if (arg === undefined) break;
-    if (arg === HEADED_FLAG) {
-      headless = false;
-    } else if (arg === PORT_FLAG) {
-      i++;
-      const n = args[i];
-      if (n === undefined) return missingValue(PORT_FLAG);
-      const parsed = parseInt(n, 10);
-      if (isNaN(parsed)) return notANumber(PORT_FLAG, n);
-      port = parsed;
-    } else if (arg === TIMEOUT_FLAG) {
-      i++;
-      const n = args[i];
-      if (n === undefined) return missingValue(TIMEOUT_FLAG);
-      const parsed = parseInt(n, 10);
-      if (isNaN(parsed)) return notANumber(TIMEOUT_FLAG, n);
-      timeoutMs = parsed;
-    } else if (arg === STORAGE_STATE_FLAG) {
-      i++;
-      const v = args[i];
-      if (v === undefined) return missingValue(STORAGE_STATE_FLAG);
-      storageState = v;
-    } else if (arg === SESSION_ID_FLAG) {
-      i++;
-      const v = args[i];
-      if (v === undefined) return missingValue(SESSION_ID_FLAG);
-      sessionId = v;
-    } else if (arg === EXPECT_FLAG) {
-      i++;
-      const v = args[i];
-      if (v === undefined) return missingValue(EXPECT_FLAG);
-      try {
-        expect = JSON.parse(v);
-      } catch {
-        // Named as a JSON problem rather than an unknown argument: the value IS the predicate, and
-        // "unknown argument" would send the reader looking at the flag instead of at their quoting.
-        return {
-          kind: 'error',
-          message: `${EXPECT_FLAG} needs a JSON predicate; could not parse: ${v}`,
-        };
-      }
-    } else if (arg.startsWith('--')) {
-      return unknownArgument(arg);
-    } else if (url === undefined) {
-      url = arg;
-    } else {
-      return unknownArgument(arg);
-    }
-    i++;
-  }
-  if (url === undefined) return missingOperand(VERIFY_COMMAND, 'a url');
-  return {
-    kind: 'ok',
-    url,
-    headless,
-    port,
-    ...(expect !== undefined ? { expect } : {}),
-    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
-    ...(storageState !== undefined ? { storageState } : {}),
-    ...(sessionId !== undefined ? { sessionId } : {}),
-  };
 }
 
 type InitFlags =
@@ -930,6 +836,8 @@ export function parseCliArgs(
         ...(r.storageState !== undefined ? { storageState: r.storageState } : {}),
         ...(r.sessionId !== undefined ? { sessionId: r.sessionId } : {}),
         ...(r.expect !== undefined ? { expect: r.expect } : {}),
+        ...(true === r.explore ? { explore: true } : {}),
+        ...(r.persona !== undefined ? { persona: r.persona } : {}),
       };
     }
     case CAPSULES_COMMAND:

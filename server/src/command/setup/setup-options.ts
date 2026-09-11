@@ -18,8 +18,9 @@
  *               backend named in the README, the variable that skips an auth wall: all readable by
  *               an agent, none inferable by a script. Without this a real app sits on a login
  *               screen and there is no flow to drive at all.
- *   --dev-cmd   the command, when the project's own scripts do not say it plainly.
- *   --url       the app is already running here, so do not start anything.
+ *   --url       the app is already running here, so do not start anything. This is also the answer
+ *               when the project's own scripts do not name a dev command: start it yourself and say
+ *               where. There is no flag that overrides the dev command; --url replaces the need.
  *
  * Everything else on this type is an operator's dial, not an agent's judgement.
  */

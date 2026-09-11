@@ -212,6 +212,24 @@ const ONLY = process.argv.includes('--only')
 const REGISTRY_PORT = Number(process.env.INSTALL_GATE_REGISTRY_PORT ?? '4873');
 const REGISTRY = `http://localhost:${String(REGISTRY_PORT)}`;
 
+/**
+ * The registry the gate publishes into — INSTALLED, not fetched at gate time.
+ *
+ * This used to be `npx --yes verdaccio@latest`, which is a network fetch on every one of twenty
+ * matrix cells, and on Windows it is the least reliable line in the gate. Observed on one run: the
+ * self-test's fetch sat silent for the full 240s wait and was killed, and the real run eleven
+ * seconds later got `'verdaccio' is not recognized as an internal or external command` — the killed
+ * fetch had left npx's cache half-written, so the failure MOVED from the cell that caused it to the
+ * next one. The nuxt cell's `ERR_MODULE_NOT_FOUND` on an unrelated diff was the same thing. Every
+ * one of those reads as "the install gate failed", which is the one sentence this gate exists to
+ * mean something by.
+ *
+ * As a devDependency of `@reticlehq/e2e` it arrives with the `pnpm install --frozen-lockfile` CI
+ * already runs, at a version the lockfile pins. Spawned through `node` and its bin script rather
+ * than the `.bin` shim, so Windows needs no `.cmd` and no `shell: true`.
+ */
+const VERDACCIO_BIN = join(ROOT, 'apps/e2e/node_modules/verdaccio/bin/verdaccio');
+
 async function startLocalRegistry() {
   await freePortSafely(REGISTRY_PORT);
   // The paths scripts/verdaccio.yaml actually uses. Resetting BOTH matters: leave the htpasswd file
@@ -235,12 +253,10 @@ async function startLocalRegistry() {
       .replace('/tmp/reticle-verdaccio-storage', storage.split('\\').join('/'))
       .replace('/tmp/reticle-verdaccio-htpasswd', htpasswd.split('\\').join('/')),
   );
-  const verdaccio = pm('npx', ['--yes', 'verdaccio@latest', '--config', config]);
-  const proc = spawn(verdaccio.cmd, verdaccio.args, {
+  const proc = spawn(process.execPath, [VERDACCIO_BIN, '--config', config], {
     cwd: ROOT,
     detached: !WIN,
     stdio: ['ignore', 'pipe', 'pipe'],
-    ...verdaccio.shellOpts,
   });
   const log = [];
   proc.stdout.on('data', (d) => log.push(String(d)));
@@ -284,7 +300,7 @@ async function startLocalRegistry() {
     const tail = log.join('').trim();
     throw new Error(
       `verdaccio did not start on ${REGISTRY} — ${cause}. ` +
-        `command: ${verdaccio.cmd} ${verdaccio.args.join(' ')}. ` +
+        `command: ${process.execPath} ${VERDACCIO_BIN} --config ${config}. ` +
         `output: ${0 === tail.length ? '(nothing on stdout or stderr)' : tail.slice(-400)}`,
     );
   }

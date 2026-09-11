@@ -668,6 +668,17 @@ export const UNVERIFIED_TANSTACK_START_NOTE =
   'Reticle has no TanStack Start app and no CI gate for one, so this wiring is untested — it may work, but nothing proves it and nothing will tell us if it breaks. Supported and gated today: Vite + React, Next.js, Remix and Astro. If the client effect does not register a session, please open an issue.';
 
 /**
+ * Printed when init detects react-three-fiber. Reticle's model is DOM + store + network; a WebGL
+ * canvas is none of those. Without this line, init succeeds, sessions connect, and surrounding UI
+ * verdicts pass while the canvas — often the product — stays a blank rectangle (#880).
+ */
+export const WEBGL_CANVAS_LIMIT_NOTE =
+  'A WebGL / react-three-fiber subtree is not observable as a scene: reticle_query and ' +
+  'reticle_snapshot see a single <canvas>, and Reticle cannot pick faces or drive the camera ' +
+  'inside it. DOM, registered store state, and network around the canvas still work — verify ' +
+  'consequences there (import counts, mesh stats, solver results), not geometry under the pointer.';
+
+/**
  * Dev-only client hook that connects Reticle in a SvelteKit app. SvelteKit renders through app.html and
  * never triggers Vite's index.html injection (verified), so the standard plugin can't auto-connect —
  * a client hook is the reliable path. SvelteKit runs src/hooks.client.ts on the client at startup.

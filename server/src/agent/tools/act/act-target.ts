@@ -7,11 +7,19 @@
  * dispatch out of the file that opens the window would have weakened a real invariant to satisfy a
  * line count. This resolves a TARGET and dispatches only QUERY, so that guard is untouched.
  */
-import { ReticleCommand } from '@reticlehq/core';
+import { ReticleCommand, isGlobalPressCall } from '@reticlehq/core';
 import type { Session } from '../../../connection/session/session.js';
 import { normalizeQueryArgs } from '../read/query-shape.js';
 import { resolveTargetRef, type TargetResolution } from './resolve-target.js';
 import { asRecord, asString } from '@reticlehq/core';
+
+/**
+ * A press of Escape, Tab, or a modifier shortcut is a document key. Requiring a locator for it
+ * forced a snapshot just to name an element the keystroke is not about.
+ */
+const MISSING_ACT_TARGET =
+  'pass `ref` (from reticle_query/reticle_snapshot) or `target` (e.g. { testid } or { role, name }). ' +
+  'A press of Escape, Tab, or a modifier shortcut is a document key and needs neither.';
 
 /**
  * Resolve an action's element: an explicit `ref`, or a `target` query resolved in the SAME call.
@@ -23,6 +31,10 @@ import { asRecord, asString } from '@reticlehq/core';
  *
  * `ref` wins when both are given, because it is the more specific instruction and silently
  * preferring the query would act on something the caller did not name.
+ *
+ * A document-key press (Escape, Tab, a modifier shortcut) is the one action that is not aimed at
+ * an element. It resolves to `{ kind: 'global' }` rather than refusing, so dismissing a dialog
+ * does not cost a snapshot.
  */
 export async function resolveActTarget(
   session: Session,
@@ -32,11 +44,8 @@ export async function resolveActTarget(
   if (ref !== undefined && ref.length > 0) return { kind: 'ref', ref };
   const target = args['target'];
   if (target === undefined) {
-    return {
-      kind: 'error',
-      message:
-        'pass `ref` (from reticle_query/reticle_snapshot) or `target` (e.g. { testid } or { role, name }).',
-    };
+    if (isGlobalPressCall(args)) return { kind: 'global', ref: '' };
+    return { kind: 'error', message: MISSING_ACT_TARGET };
   }
   const q = normalizeQueryArgs(asRecord(target));
   const out = await session.command(ReticleCommand.QUERY, {

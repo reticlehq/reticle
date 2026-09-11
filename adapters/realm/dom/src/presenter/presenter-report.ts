@@ -34,7 +34,7 @@ const COPIED_FLASH_MS = 1600;
 
 export function reportPanelHtml(): string {
   const close = hiIconHtml(PresenterIcon.REMOVE, PRESENTER_ICON_SIZE.MIN);
-  return `<div ${REPORT_PANEL_ATTR} class="reticle-report ${HUD_SURFACE_CLASS}" role="dialog" aria-label="Reticle impact" aria-hidden="true">
+  return `<div ${REPORT_PANEL_ATTR} class="reticle-report ${HUD_SURFACE_CLASS}" role="region" aria-label="Reticle impact" aria-hidden="true">
     <div class="reticle-report-inner">
       <div class="reticle-report-head">
         <span class="reticle-report-title">${REPORT_TEXT.TITLE}</span>

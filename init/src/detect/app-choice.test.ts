@@ -11,7 +11,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { chooseWorkspaceApp } from './app-choice.js';
+import { chooseWorkspaceApp, withoutTrailingSlashes } from './app-choice.js';
 
 const APPS = ['web', 'admin', 'packages/editor'];
 
@@ -45,5 +45,27 @@ describe('choosing which app to wire', () => {
 
   it('is undecided when no app was named — the caller keeps its existing behaviour', () => {
     expect(chooseWorkspaceApp(undefined, APPS)).toEqual({ ok: true, app: undefined });
+  });
+});
+
+/**
+ * The trim replaced a `/\/+$/` regex that CodeQL flagged as polynomial ReDoS. Behaviour must be
+ * identical, including the cases a loop is easy to get wrong: a path that is nothing but slashes,
+ * and one with no trailing slash at all.
+ */
+describe('trimming the slashes tab-completion adds', () => {
+  it('matches what the regex did, including the edges', () => {
+    expect(withoutTrailingSlashes('apps/web/')).toBe('apps/web');
+    expect(withoutTrailingSlashes('apps/web///')).toBe('apps/web');
+    expect(withoutTrailingSlashes('apps/web')).toBe('apps/web');
+    expect(withoutTrailingSlashes('')).toBe('');
+    expect(withoutTrailingSlashes('/')).toBe('');
+    expect(withoutTrailingSlashes('///')).toBe('');
+    // An interior run is not a trailing one and must survive.
+    expect(withoutTrailingSlashes('a//b/')).toBe('a//b');
+  });
+
+  it('is linear, so a long run of slashes cannot stall it', () => {
+    expect(withoutTrailingSlashes(`${'/'.repeat(200_000)}x`)).toBe(`${'/'.repeat(200_000)}x`);
   });
 });

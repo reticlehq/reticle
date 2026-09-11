@@ -13,5 +13,8 @@
     "@reticlehq/server": "workspace:*",
     "@reticlehq/test": "workspace:*",
     "playwright": "^1.62.1"
+  },
+  "devDependencies": {
+    "verdaccio": "6.10.3"
   }
 }

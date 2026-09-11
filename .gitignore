@@ -1,5 +1,7 @@
 # Research never ships — plan/ is always ignored
-plan/
+# Anchored: an unanchored `plan/` also matched init/src/plan/, so a new file there was
+# silently untracked. Same bug as `build/` vs adapters/build/, fixed the same way.
+/plan/
 
 # Cloud control plane — the paid app (moat + tenant/billing) lives OUTSIDE this repo, at the
 # sibling ReticleHQ/app/, with its own git per service. This entry is a belt-and-suspenders guard

@@ -24,6 +24,7 @@
 export * from './wire/constants.js'; // EventType, ActionType, wire constants, TRANSPORT_LIMITS, …
 export * from './identity/source-constants.js'; // DATA_RETICLE_SOURCE_ATTR, RETICLE_ROOT_GLOBAL
 export * from './wire/event-classification.js'; // CHURN_TYPES — shared eviction priority for buffer/queue
+export * from './wire/global-press.js'; // which press is a document key (Escape / Tab / a shortcut)
 export * from './verdict/verified-constants.js'; // Verified — the one field an agent gates on
 export * from './verdict/verify-progress.js'; // VerifyPhase — what a run is doing while it is still doing it
 export * from './wire/session-constants.js';

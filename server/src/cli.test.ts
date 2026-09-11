@@ -249,6 +249,34 @@ describe('parseCliArgs', () => {
     });
   });
 
+  it('verify <url> --explore asks Reticle to drive the app itself', () => {
+    expect(parseCliArgs(['verify', URL, '--explore'], PORT)).toEqual({
+      kind: 'verify',
+      url: URL,
+      headless: true,
+      port: PORT,
+      explore: true,
+    });
+  });
+
+  it('verify <url> --persona implies the drive, because naming one is asking for it', () => {
+    expect(parseCliArgs(['verify', URL, '--persona', 'a first-time buyer'], PORT)).toEqual({
+      kind: 'verify',
+      url: URL,
+      headless: true,
+      port: PORT,
+      explore: true,
+      persona: 'a first-time buyer',
+    });
+  });
+
+  it('verify --persona with no value says so rather than driving as nobody', () => {
+    expect(parseCliArgs(['verify', URL, '--persona'], PORT)).toEqual({
+      kind: 'error',
+      message: '--persona needs a value',
+    });
+  });
+
   it('verify with no url says it needs a url', () => {
     expect(parseCliArgs(['verify'], PORT)).toEqual({
       kind: 'error',

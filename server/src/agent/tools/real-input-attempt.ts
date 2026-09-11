@@ -12,11 +12,12 @@
  * bridge, so the browser side sees a normal `{ content, name, type }` call and `assertUploadArgs`
  * keeps its invariant (no fabricated bytes, no silently-dropped keys).
  *
- * Trust boundary: scoped to the project root (one level above `deps.reticleRoot`), resolved
- * through `realpath` so symlinks cannot escape it. Sensitive files (.env*, .git/, *.pem, id_*,
- * .npmrc) are denied with a message that says why. The cap is derived from the bridge's own
- * MAX_MESSAGE_BYTES with the base64 4/3 inflation factor applied, so the encoded payload always
- * fits in one WebSocket frame.
+ * Trust boundary: scoped to the project root (one level above `deps.reticleRoot`) plus any
+ * opt-in `uploadRoots` declared in `.reticle.json`, resolved through `realpath` so symlinks
+ * cannot escape an allowed root. Sensitive files (.env*, .git/, *.pem, id_*, .npmrc) are denied
+ * with a message that says why. The cap is derived from the bridge's own MAX_MESSAGE_BYTES with
+ * the base64 4/3 inflation factor applied, so the encoded payload always fits in one WebSocket
+ * frame.
  */
 import { ActionType, InputModeReason, ReticleCommand, TRANSPORT_LIMITS } from '@reticlehq/core';
 import type { Session } from '../../connection/session/session.js';
@@ -27,7 +28,9 @@ import { NATIVE_INPUT_ARG } from '@reticlehq/core';
 import { asRecord, asString } from '@reticlehq/core';
 import { type ToolDeps, commandOrThrow } from './tool-kit.js';
 import { asBox } from './act/act-helpers.js';
-import { isAbsolute, join, relative, extname, basename } from 'node:path';
+import { isAbsolute, join, relative, extname, basename, resolve } from 'node:path';
+import { homedir } from 'node:os';
+import { RETICLE_CONFIG_BASENAME } from '../../command/cli/ports/resolve/cli-port.js';
 
 /**
  * Minimal extension → MIME-type table for the file types agents most commonly upload.
@@ -101,12 +104,61 @@ function isDeniedPath(resolvedPath: string): boolean {
 const UPLOAD_MAX_BYTES = Math.floor((TRANSPORT_LIMITS.MAX_MESSAGE_BYTES / (4 / 3)) * 0.75);
 
 /**
+ * Expand a leading `~` against the caller's home directory. Absolute and relative paths pass
+ * through unchanged. `home` is injected so unit tests do not depend on the machine's real home.
+ */
+export function expandUserPath(rawPath: string, home: string): string {
+  if ('~' === rawPath) return home;
+  if (rawPath.startsWith('~/') || rawPath.startsWith('~\\')) return join(home, rawPath.slice(2));
+  return rawPath;
+}
+
+/** True when `real` is inside `root` after both have been realpath'd / resolved. */
+function isInsideRoot(real: string, root: string): boolean {
+  const rel = relative(root, real);
+  return !rel.startsWith('..') && !isAbsolute(rel);
+}
+
+/**
+ * Opt-in extra upload directories from `.reticle.json` (`uploadRoots`). Absent, empty, or unreadable
+ * config means project-root only — the previous default, kept on purpose.
+ */
+async function readUploadRoots(
+  projectRoot: string,
+  fs: ToolDeps['fs'],
+  home: string,
+): Promise<readonly string[]> {
+  const configPath = join(projectRoot, RETICLE_CONFIG_BASENAME);
+  let raw: string;
+  try {
+    raw = await fs.readFile(configPath);
+  } catch {
+    return [];
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if ('object' !== typeof parsed || null === parsed || Array.isArray(parsed)) return [];
+  const listed = (parsed as Record<string, unknown>)['uploadRoots'];
+  if (!Array.isArray(listed)) return [];
+  const roots: string[] = [];
+  for (const entry of listed) {
+    if ('string' !== typeof entry || 0 === entry.trim().length) continue;
+    roots.push(resolve(expandUserPath(entry.trim(), home)));
+  }
+  return roots;
+}
+
+/**
  * Resolve and validate a caller-supplied upload path.
  *
- * 1. Resolve to absolute (join against project root for relative paths).
+ * 1. Expand a leading `~`, then resolve to absolute (join against project root for relative paths).
  * 2. Call `realpath` to follow symlinks — `relative()` is lexical and a symlink inside the tree
  *    can point outside it; realpath is the only reliable check.
- * 3. Confirm the real path is within the project root.
+ * 3. Confirm the real path is within the project root or an opt-in `uploadRoots` entry.
  * 4. Confirm the path does not match the sensitive-file deny-list.
  *
  * Returns the resolved real path on success. Throws with a user-readable message on any violation.
@@ -115,8 +167,11 @@ async function resolveUploadPath(
   rawPath: string,
   projectRoot: string,
   fs: ToolDeps['fs'],
+  uploadRoots: readonly string[],
+  home: string,
 ): Promise<string> {
-  const abs = isAbsolute(rawPath) ? rawPath : join(projectRoot, rawPath);
+  const expanded = expandUserPath(rawPath, home);
+  const abs = isAbsolute(expanded) ? expanded : join(projectRoot, expanded);
 
   // realpath resolves symlinks; it also rejects ENOENT, so we get a clear missing-file error.
   const real = await fs.realpath(abs).catch(() => {
@@ -125,12 +180,13 @@ async function resolveUploadPath(
     );
   });
 
-  const rel = relative(projectRoot, real);
-  if (rel.startsWith('..') || isAbsolute(rel)) {
+  const allowed = [projectRoot, ...uploadRoots];
+  if (!allowed.some((root) => isInsideRoot(real, root))) {
+    const listed = allowed.map((r) => `'${r}'`).join(', ');
     throw new Error(
-      `upload path '${rawPath}' resolves to '${real}', which is outside the project root ` +
-        `'${projectRoot}' — only files within the project directory may be uploaded. ` +
-        'Use a path relative to the project root, or an absolute path inside it.',
+      `upload path '${rawPath}' resolves to '${real}', which is outside every allowed upload root ` +
+        `(${listed}). Paths must sit under the project directory or an entry in ` +
+        `\`.reticle.json\`'s \`uploadRoots\` (e.g. ["~/Downloads"]).`,
     );
   }
 
@@ -157,16 +213,19 @@ export async function rewriteUploadArgs(
   deps: Pick<ToolDeps, 'fs' | 'reticleRoot'>,
   action: string,
   innerArgs: Record<string, unknown>,
+  /** Injected for tests; production uses the process home directory. */
+  home: string = homedir(),
 ): Promise<Record<string, unknown>> {
   if (action !== ActionType.UPLOAD) return innerArgs;
   const rawPath = asString(innerArgs['path']);
   if (rawPath === undefined) return innerArgs; // no path → browser handles as inline upload
 
   // Project root is one level above .reticle/
-  const projectRoot = join(deps.reticleRoot, '..');
+  const projectRoot = resolve(join(deps.reticleRoot, '..'));
+  const uploadRoots = await readUploadRoots(projectRoot, deps.fs, home);
 
   // Blocker 4 fix: stat FIRST, before allocating read buffer, so a huge file fails fast.
-  const realPath = await resolveUploadPath(rawPath, projectRoot, deps.fs);
+  const realPath = await resolveUploadPath(rawPath, projectRoot, deps.fs, uploadRoots, home);
   const fileStat = await deps.fs.stat(realPath).catch(() => {
     throw new Error(
       `upload path '${rawPath}' could not be read: file not found or not accessible.`,

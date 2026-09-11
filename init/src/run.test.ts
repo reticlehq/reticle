@@ -80,7 +80,10 @@ function memoryIo(
     written,
     lines,
     execCalls,
-    readFile: (p) => present[key(p)] ?? written[key(p)] ?? null,
+    // A write SHADOWS the seeded file. The real IO has no other option — it reads the bytes on
+    // disk — and with the order reversed a step that patches an existing file could never read its
+    // own patch back, which is the one thing #882 asked init to start doing.
+    readFile: (p) => written[key(p)] ?? present[key(p)] ?? null,
     writeFile: (p, c) => {
       written[key(p)] = c;
     },
@@ -1234,5 +1237,38 @@ describe('the install retry ladder', () => {
     const io = memoryIo(CRA_APP, { execOk: true });
     runInit({ ...OPTS, install: true }, io);
     expect(installArgs(io).length).toBe(1);
+  });
+});
+
+/**
+ * init verifying its OWN writes landed (#882).
+ *
+ * Reported from a project where `.reticle.json`, the connect module and `node_modules` were all
+ * correct, `vite.config.ts` had never received `reticle()`, and nothing said so — the SDK was
+ * absent from the bundle and the checklist pointed at the wrong cause.
+ */
+describe('init verifies its own wiring landed', () => {
+  it('reports the vite step as failed when the patch did not reach the file', () => {
+    const base = memoryIo(VITE_FILES);
+    // The write lands, but strips what the step exists to add — the shape a silently no-op'ing
+    // patcher produces, which existence alone cannot tell from a success.
+    const io = {
+      ...base,
+      writeFile: (path: string, content: string): void => {
+        base.writeFile(
+          path,
+          path.endsWith('vite.config.ts') ? content.replace(/reticle/g, 'nope') : content,
+        );
+      },
+    };
+    runInit(OPTS, io);
+    expect(base.lines.join('\n')).toContain('[⚠] Vite plugin → vite.config.ts');
+  });
+
+  it('passes when the patch really is in the file (negative control)', () => {
+    const io = memoryIo(VITE_FILES);
+    runInit(OPTS, io);
+    expect(io.written['vite.config.ts']).toContain('reticle(');
+    expect(io.lines.join('\n')).toContain('[✓] Vite plugin → vite.config.ts');
   });
 });

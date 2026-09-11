@@ -141,6 +141,13 @@ export interface Detection {
    * unstated fixture is. `detect` always sets it.
    */
   customReconciler?: boolean | undefined;
+  /**
+   * Whether this project depends on react-three-fiber (or the legacy package name). A WebGL /
+   * R3F subtree is a blank `<canvas>` to Reticle: DOM, state and network around it still work;
+   * picking and observing inside the scene do not. Optional for the same reason as
+   * `customReconciler` — absent means an ordinary DOM app.
+   */
+  webGlSubtree?: boolean | undefined;
   packageManager: PackageManager;
 }
 
@@ -181,6 +188,9 @@ const CUSTOM_RECONCILER_DEPS = [
   'ink',
   'react-native',
 ];
+
+/** Packages whose presence means the product's main surface is a WebGL canvas, not the DOM. */
+const WEBGL_SUBTREE_DEPS = ['@react-three/fiber', 'react-three-fiber'] as const;
 
 function hasAnyConfig(files: ReadonlySet<string>, candidates: readonly string[]): boolean {
   return candidates.some((c) => files.has(c));
@@ -371,6 +381,7 @@ export function detect(input: DetectInput): Detection {
     customReconciler: CUSTOM_RECONCILER_DEPS.some(
       (name) => depVersion(input.pkg, name) !== undefined,
     ),
+    webGlSubtree: WEBGL_SUBTREE_DEPS.some((name) => depVersion(input.pkg, name) !== undefined),
     packageManager: detectPackageManager(input.lockfiles, input.nodeModulesMarkers ?? new Set()),
   };
 }

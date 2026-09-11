@@ -18,12 +18,6 @@ interface FaultDef {
 
 const FAULTS: FaultDef[] = [
   { kind: '404', testid: 'fault-404', label: '404 Not Found', desc: 'GET /api/broken/404' },
-  {
-    kind: 'timeout',
-    testid: 'fault-timeout',
-    label: 'Timeout',
-    desc: 'GET /api/broken/timeout (hangs)',
-  },
   { kind: '500', testid: 'fault-500', label: '500 Server Error', desc: 'GET /api/broken/500' },
   { kind: 'cors', testid: 'fault-cors', label: 'CORS blocked', desc: 'missing allow-origin' },
   {

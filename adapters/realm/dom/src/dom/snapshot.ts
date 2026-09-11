@@ -414,14 +414,10 @@ function walk(parent: Element, depth: number, ctx: WalkCtx, inLive = false): voi
 }
 
 /**
- * The APP's open dialogs. Reticle's own panels are excluded, always.
- *
- * The HUD's chat and report panels carry `role="dialog"` because that is the correct role for what
- * they are — but they are OUR surface, not the application's. Once the presenter became visible to
- * the tool surface (so that Reticle can be used to check its own HUD), every snapshot of every page
- * started reporting the HUD's own panel in `visibleDialogs`, telling the agent a modal was up when
- * the app had none. An agent that believes a dialog is open dismisses it before doing anything else,
- * which is a wasted action at best and a dismissed REAL dialog at worst.
+ * The APP's open dialogs. Reticle's own panels use `role="region"` (not `dialog`) so they are not
+ * mistaken for the application's modal layer by snapshot hints, query orientation, or a library's
+ * outside-click walk — see #783. Anything that still carries `role="dialog"` inside our overlay is
+ * excluded here via `isReticleOverlay`.
  */
 function collectDialogs(root: ParentNode): string[] {
   const nodes = root.querySelectorAll('[role="dialog"], dialog[open], [aria-modal="true"]');

@@ -123,6 +123,34 @@ export const FlowExpectSchema = z
       .strict()
       .optional(),
     /**
+     * Rendered text as an end-condition, using the shapes the assert surface already accepts.
+     *
+     * The gap this closes: an app with no testids, no `reticle.signal`, no registrable store and no
+     * network call on the interaction under test -- a discount price computed and rendered, a
+     * formatted total, a derived label -- could not produce an asserted flow AT ALL. Everything the
+     * vocabulary offered needed a channel that app does not have, so the only honest outcome was
+     * `assertion-free`, which is a permanent green (#811).
+     *
+     * Derived-DOM rendering is a large share of what actually breaks in a UI, and it was the share
+     * that could not be pinned.
+     *
+     * Classified PRESENCE, not consequence, and that is not a technicality: text is read from the
+     * DOM, so a locator healed to the wrong element can still satisfy it. It earns `presence-only`,
+     * which is a real grade above `assertion-free` and honestly below `signal`/`net`/`state`.
+     */
+    text: z
+      .object({
+        contains: z.string().min(1),
+        /** Narrow the search to a container, exactly as the `text` predicate's `scope` does. */
+        scope: z.string().optional(),
+        /** Assert the text is GONE — the regression check for a cleared error or a dismissed toast. */
+        absent: z.boolean().optional(),
+        /** Require the match to be visible, not merely present in the DOM. */
+        visible: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
+    /**
      * Assert a registered store's value — the source of truth no DOM/network read can reach. Compiles
      * to the predicate engine's `state` predicate. Additive/optional — a flow without it still parses
      * and the on-disk version stays FLOW_FILE_VERSION 1. `equals` accepts a literal, omitted = presence,

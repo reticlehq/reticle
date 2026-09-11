@@ -44,6 +44,7 @@ Everything here is published to [docs.reticle.sh](https://docs.reticle.sh) by `d
 | [tools-session-and-feedback.mdx](tools-session-and-feedback.mdx) | `reticle_session` / `reticle_feedback`, the human boundary |
 | [packages.mdx](packages.mdx) | every library at a glance: what it does, why it exists, when you need it |
 | [packages/](packages/) | one page per published package, with its real exported API and dependencies |
+| [autodrive.md](autodrive.md) | letting Reticle drive the app itself, and keeping the flows it records |
 | [best-practices.mdx](best-practices.mdx) | the habits that make a verdict worth trusting |
 | [skill-file.mdx](skill-file.mdx) | the paste-one-URL skill that teaches an agent Reticle |
 | [agent-cheatsheet.md](agent-cheatsheet.md) | the condensed version an agent keeps in context |

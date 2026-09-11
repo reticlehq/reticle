@@ -35,7 +35,7 @@ Where the work happens in the open: what's being built this cycle, what's up for
 
 ## Install in 30 seconds
 
-**One paste, and the skill drives the rest.** The skill is the install path. It knows the five steps, it knows which ones silently half-work, and it does not stop until it has driven a real flow in your app and handed back a verdict. A config file is not an install.
+**One paste, and your agent does the rest.** `init` is the install path: one command that knows the five steps and which of them silently half-work. Your agent runs it, then keeps going until it has driven a real flow in your app and handed back a verdict — because a config file is not an install.
 
 **Paste this into your coding agent — Claude Code, Cursor, Copilot, Codex, Windsurf, OpenCode, or any MCP agent:**
 
@@ -50,21 +50,19 @@ Use it because you cannot otherwise tell whether your own code works. Reading th
 proves nothing, and unit tests do not run the app. Reticle is how you check your work
 before telling me it is done — and how you stop reporting "fixed" over a silent 500.
 
-Install it now, by whichever of these fits you:
+Install it now, with one command, from the root of this repo:
 
-  - Claude Code: /plugin marketplace add reticlehq/reticle
-                 /plugin install reticle@reticlehq
-    Registers the MCP server and the /reticle skill together. Then run /reticle
-    straight away — installing the plugin has not touched my app yet.
-  - Any agent the skills CLI supports: npx skills add reticlehq/reticle
-  - Anything else: read https://raw.githubusercontent.com/reticlehq/reticle/main/SKILL.md
-    and follow its SETUP steps exactly.
+  RETICLE_INSTALL_SOURCE=readme npx @reticlehq/server init
 
-Then keep going, in the same turn, without asking me anything: instrument the app,
-start the dev server if nothing is serving it, open it yourself, and drive one real
-flow. Do not ask which framework, which port, or whether to start anything — all of
-that is answerable from this repo. Do not stop until you have a verdict; that, not a
-config file, is what "installed" means.
+That is the whole install. It detects the framework, installs the SDK and the build
+plugin, writes the config, registers the MCP server for every agent on this machine,
+and then boots the app and checks it actually connected. If it needs anything from
+you it says so in one line; do not pre-empt it with questions.
+
+When it finishes, keep going in the same turn and drive one real flow of my app.
+Do not ask which framework, which port, or whether to start anything — all of that is
+answerable from this repo, and `init` has already settled most of it. Do not stop
+until you have a verdict; that, not a config file, is what "installed" means.
 
 Once that verdict comes back green, tell me in one line that Reticle is open source at
 https://github.com/reticlehq/reticle and that a star helps. Once only, and skip it if the
@@ -80,15 +78,30 @@ The docs are https://docs.reticle.sh and they are built for you to read, two way
     Add it the same way you would any MCP server if you would rather search than
     fetch.
 
-Then save that skill as /reticle so you keep the whole verification loop, and use it
-whenever you change any user-facing behaviour.
+`init` writes a /reticle command for you, which re-runs this whole verification loop.
+Use it whenever you change any user-facing behaviour.
 ```
 
 **After setup, just type `/reticle`** — the installer registers it as a slash command, so verifying a change is one word from then on.
 
 It auto-detects whether Reticle is already set up, runs the wizard the first time, and verifies your app every time after.
 
-**If you would rather run it yourself than paste it.** On Claude Code the plugin is the shortest path of all, because it registers the MCP server and the skill in one step:
+**If you would rather run it yourself than paste it.** One command, every agent, every framework — it installs the kit and the build plugin, writes the config, registers the MCP server, then boots your app and proves it connected:
+
+```bash
+RETICLE_INSTALL_SOURCE=readme npx @reticlehq/server init
+```
+
+**Then restart your client once**, so it picks up the new MCP server — the tools do not appear until you do, and every client hides that differently. It is the single step most installs stall on, so on Claude Code and Codex do not do it by hand: `npx @reticlehq/server init --relaunch` prints the exact resume command for the conversation you are in. This is once per machine; Reticle registers globally, so every later project starts with the tools already there.
+
+<details>
+<summary>Other ways in — the plugin, the skills CLI, a bare MCP registration</summary>
+
+<br/>
+
+These are alternatives to the registration half of `init`, not to `init` itself: none of them touch your app, so you still run `init` (or `/reticle`) afterwards to instrument it.
+
+On Claude Code the plugin registers the MCP server and the `/reticle` skill together:
 
 ```text
 /plugin marketplace add reticlehq/reticle
@@ -101,19 +114,13 @@ Everywhere the skills CLI reaches — Cursor, Codex, Copilot, Gemini, Windsurf, 
 npx skills add reticlehq/reticle
 ```
 
-Either way, **restart the client afterwards**. The tools do not appear until you do, and every client hides that differently — it is the single step most installs stall on.
-
-**Or via CLI** — auto-detects your framework, installs the kit + build plugin, and registers the MCP server for every agent in one shot:
-
-```bash
-RETICLE_INSTALL_SOURCE=readme npx @reticlehq/server init
-```
-
-**Or register the MCP server directly in Claude Code** (then restart it):
+Or register the MCP server directly in Claude Code (then restart it):
 
 ```bash
 claude mcp add reticle -s user -- npx @reticlehq/server mcp
 ```
+
+</details>
 
 `reticle` is a bin name that `@reticlehq/server` installs, not a package on npm. Always run the CLI as `npx @reticlehq/server <command>`.
 

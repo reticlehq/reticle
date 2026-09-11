@@ -12,11 +12,9 @@ import {
   type Detection,
 } from '../detect/detect.js';
 import type { FoundStore } from '../detect/capabilities.js';
-import { CONTAINERISED_TITLE, containerisedDevServerNote } from '../diagnose/containerised-dev-server.js';
 import { installFailureHint } from '../diagnose/install-hint.js';
 import { installRetries } from '../diagnose/install-retries.js';
-import { claudeAddCommand, mcpManual, mcpWindowsNote } from '../register/mcp.js';
-import { NodePlatform } from '../detect/platform.js';
+import { claudeAddCommand, mcpManual } from '../register/mcp.js';
 import {
   mergeClientConfig,
   ClientMergeStatus,
@@ -44,8 +42,9 @@ import {
 import { cspStep, frameworkSteps } from './plan-framework.js';
 import { FRAMEWORK_ADAPTERS, RETICLE_BROWSER_SDK, RETICLE_REACT_KIT } from './framework-adapter.js';
 import { join } from 'node:path';
-import { reticleConfigContent, unverifiedUiLibraryNote } from '../patch/snippets.js';
+import { reticleConfigContent } from '../patch/snippets.js';
 import { configWithInstallSource } from '../project/install-source-config.js';
+import { containerisedStep, uiLibraryStep, webGlCanvasStep, windowsMcpNoteStep } from './notices.js';
 import { existingConfigProblem, projectIdOf, RETICLE_CONFIG_FILE } from '../detect/existing-config.js';
 
 // Re-exported: it moved to the module that reads it, and every existing importer says `plan.js`.
@@ -125,8 +124,16 @@ export interface Step {
   target: string;
   status: StepStatus;
   detail: string;
-  /** Present only when status is APPLY and a file must be written. */
-  write?: { path: string; content: string };
+  /**
+   * Present only when status is APPLY and a file must be written.
+   *
+   * `expect` is what must be READABLE BACK from the file afterwards, for a step whose write is a
+   * PATCH of somebody else's file rather than a file we own outright. Existence is enough to
+   * confirm a file we generated whole; it confirms nothing about a config we edited in place, and
+   * that gap is what #882 cost: `vite.config.ts` never received `reticle()`, the tick printed
+   * anyway, and the SDK was absent from the bundle with nothing pointing at the config.
+   */
+  write?: { path: string; content: string; expect?: readonly string[] };
   /** Present only when status is APPLY and a subprocess must run (the dependency install). */
   exec?: { command: string; args: string[]; fallback: string };
   /**
@@ -170,22 +177,6 @@ export interface Plan {
   steps: Step[];
 }
 
-/**
- * The two things a containerised dev server does differently, said before they go wrong.
- *
- * Null for every project with no container marker near it, which is almost all of them — so this
- * adds nothing to the ordinary plan and does not move the install baseline.
- */
-function containerisedStep(input: PlanInput): Step | null {
-  const marker = input.containerMarker;
-  if (marker === undefined || 0 === marker.length) return null;
-  return {
-    title: CONTAINERISED_TITLE,
-    target: marker,
-    status: StepStatus.NOTICE,
-    detail: containerisedDevServerNote(marker),
-  };
-}
 
 export interface PlanInput {
   detection: Detection;
@@ -487,18 +478,7 @@ function mcpSteps(input: PlanInput): Step[] {
   return steps;
 }
 
-const WINDOWS_MCP_TITLE = 'Windows MCP spawn';
 
-/** Windows only. The reported install never reached mcpManual because `claude mcp add` succeeded. */
-function windowsMcpNoteStep(input: PlanInput): Step | null {
-  if (input.platform !== NodePlatform.WINDOWS) return null;
-  return {
-    title: WINDOWS_MCP_TITLE,
-    target: MCP_TARGET,
-    status: StepStatus.NOTICE,
-    detail: mcpWindowsNote(),
-  };
-}
 
 const SLASH_COMMAND_TITLE = 'The /reticle command';
 
@@ -953,27 +933,6 @@ function reticleConfigSteps(input: PlanInput): Step[] {
   return [reticleConfigStep(input, content), ...agentRootConfigStep(input, content)];
 }
 
-/**
- * A step that says out loud when the app isn't React. SvelteKit already carries its own unverified
- * note, so it isn't doubled up here.
- */
-function uiLibraryStep(input: PlanInput): Step[] {
-  const lib = input.detection.uiLibrary;
-  // A framework whose own recipe already says it is unverified must not be argued with by a second,
-  // more generic notice. Asked of the registry rather than of a remembered `SVELTEKIT || NUXT` pair:
-  // the pair was the answer, not the question, and a third framework joining it was a silent edit.
-  if (lib === UiLibrary.REACT) return [];
-  if (FRAMEWORK_ADAPTERS[input.detection.framework].carriesOwnUnverifiedNote) return [];
-  if (lib === UiLibrary.UNKNOWN) return [];
-  return [
-    {
-      title: `${lib} is UNVERIFIED`,
-      target: 'package.json',
-      status: StepStatus.NOTICE,
-      detail: unverifiedUiLibraryNote(lib),
-    },
-  ];
-}
 
 export function buildPlan(input: PlanInput): Plan {
   const steps: Step[] = [
@@ -982,6 +941,7 @@ export function buildPlan(input: PlanInput): Plan {
     ...agentRuleSteps(input),
     ...slashCommandSteps(input),
     ...uiLibraryStep(input),
+    ...webGlCanvasStep(input),
     installStep(input),
     ...reticleConfigSteps(input),
   ];

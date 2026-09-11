@@ -91,7 +91,11 @@ describe('a crash with no Reticle frames still reports where it was', () => {
     proc.fire('unhandledRejection', refusedLoopback(4400));
 
     const call = emit.mock.calls.find(([kind]) => kind === TelemetryEventKind.RUNTIME_CRASHED);
-    const serialized = JSON.stringify(crashOf(call?.[1]));
+    const crash = crashOf(call?.[1]);
+    // Machine metrics (load1x100, heap, etc.) are unrelated to the connect target and can
+    // coincidentally equal the bridge port — scanning the whole payload false-fails on macOS CI.
+    const { machine: _machine, ...crashFields } = crash;
+    const serialized = JSON.stringify(crashFields);
     expect(serialized).not.toContain('127.0.0.1');
     // The message is skeletonised, so the port survives nowhere — not in a field, not in prose.
     expect(serialized).not.toContain('4400');

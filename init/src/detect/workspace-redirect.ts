@@ -14,7 +14,7 @@
 import { join } from 'node:path';
 import { detect, Framework } from './detect.js';
 import { findWorkspaceApps, PACKAGE_JSON } from './workspace-apps.js';
-import { chooseWorkspaceApp } from './app-choice.js';
+import { chooseWorkspaceApp, withoutTrailingSlashes } from './app-choice.js';
 import type { InitIo, InitOptions, InitResult } from '../run.js';
 
 /** Re-enter `init`, scoped to one directory of the workspace. */
@@ -57,7 +57,7 @@ export function redirectToWorkspaceApp(
   // directories, and somebody who names a path knows their own layout better than the scan does.
   const named = options.app === undefined || '' === options.app ? undefined : options.app;
   if (named !== undefined) {
-    const wanted = named.replace(/\/+$/, '');
+    const wanted = withoutTrailingSlashes(named);
     if (io.exists(`${wanted}/${PACKAGE_JSON}`))
       return enterApp(options, io, wanted, 'Wiring', runInit);
     io.print(`--app ${named} does not name a directory with a package.json in it.`);

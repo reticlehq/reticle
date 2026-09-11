@@ -12,13 +12,27 @@
 
 type AppChoice = { ok: true; app: string | undefined } | { ok: false; message: string };
 
+/**
+ * Trim the trailing slashes tab-completion adds, without a regex.
+ *
+ * `/\/+$/` is quadratic on a long run of slashes: the engine retries the match from every start
+ * position. Nobody is attacking their own `--app` flag, so the risk here is theoretical — but the
+ * loop is the same two lines, is linear, and keeps a real ReDoS finding out of the scanner's
+ * results, where a theoretical one costs the attention that a genuine one needs.
+ */
+export function withoutTrailingSlashes(path: string): string {
+  let end = path.length;
+  while (0 < end && '/' === path[end - 1]) end -= 1;
+  return path.slice(0, end);
+}
+
 export function chooseWorkspaceApp(
   requested: string | undefined,
   apps: readonly string[],
 ): AppChoice {
   if (requested === undefined || '' === requested) return { ok: true, app: undefined };
   // Tab-completion adds a trailing slash; the discovered names never carry one.
-  const wanted = requested.replace(/\/+$/, '');
+  const wanted = withoutTrailingSlashes(requested);
   if (apps.includes(wanted)) return { ok: true, app: wanted };
   return {
     ok: false,

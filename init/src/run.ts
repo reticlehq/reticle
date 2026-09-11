@@ -733,7 +733,14 @@ function applyEffects(
         } catch {
           return false; // a throw is the loud version of the same failure
         }
-        return io.exists(write.path);
+        if (!io.exists(write.path)) return false;
+        // A PATCH is only applied if what it was supposed to add is there to read back. A generated
+        // file we own is proved by existing; a config we edited is not, and a patcher that quietly
+        // no-ops returns the source unchanged, which writes and exists exactly like a success.
+        const expect = write.expect;
+        if (undefined === expect) return true;
+        const after = io.readFile(write.path) ?? '';
+        return expect.every((needle) => after.includes(needle));
       });
       if (!wrote) {
         failed.add(s.target);

@@ -118,8 +118,11 @@ export function restartHint(
   return (
     `${dev}\n` +
     `${demo}\n` +
-    'Then restart your agent so it picks up the new MCP server — restart Claude Code, reload the ' +
-    'window in Cursor, or hit Start in `.vscode/mcp.json` in VS Code.\n' +
+    'Then restart your agent so it picks up the new MCP server. On Claude Code and Codex, do NOT ' +
+    'ask a human to do it: `npx @reticlehq/server init --relaunch` prints the exact resume command ' +
+    'for THIS conversation — run that command and the restart continues the work on the other ' +
+    'side. Everywhere else it is a human step — reload the window in Cursor, or hit Start in ' +
+    '`.vscode/mcp.json` in VS Code — so name the one that applies and ask for that alone.\n' +
     'The tools only appear after that: your agent read its server list before Reticle existed, ' +
     'and no slash command re-reads it (`/mcp` manages servers already loaded, so it cannot pick ' +
     'up a new one). This is once per machine — Reticle is registered globally, so every later ' +

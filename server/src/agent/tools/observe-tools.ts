@@ -363,7 +363,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         // is the most common thing an agent wants to assert. A field report reached us from an agent
         // that guessed `urlContains` on route (net's spelling) and got unrecognized_keys.
         'Predicate to evaluate. Kinds: { signal, name|dataMatches|count } ' +
-          '{ net, urlContains|method|status|count|bodyContains } ' +
+          '{ net, urlContains|method|status|count|bodyContains|requestBodyContains|requestBodyMatches } ' +
           '{ state, path|equals } { route, pathname (exact) | contains (path+query+hash) } ' +
           '{ element, testid|role|text } { text } { console, level|contains|absent } { animation, name } ' +
           '{ settled } — combine with { allOf | anyOf | not }. Prefer a signal/net/state consequence ' +

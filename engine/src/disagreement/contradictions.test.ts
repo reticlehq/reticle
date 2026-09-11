@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ContradictionKind, EventType, type ReticleEvent } from '@reticlehq/core';
+import { ContradictionKind, EventType, isAbsenceDerived, type ReticleEvent } from '@reticlehq/core';
 import { findContradictions } from './contradictions.js';
 
 let seq = 0;
@@ -418,6 +418,55 @@ describe('the route moved and nothing was rendered for it', () => {
       hash: '#/invoices',
     });
     expect(kinds([hashRoute])).toContain(ContradictionKind.ROUTE_RENDERED_NOTHING);
+  });
+
+  /**
+   * #897: `verified: "unknown"` for a destination that crashed. The route committed, nothing
+   * rendered, AND the console carried the React error that explains why — positive evidence, not
+   * mere absence, so this must NOT be graded the same absence-derived way as a silently blank route.
+   */
+  describe('…and the console says why: a crashed destination, not merely a blank one', () => {
+    const consoleError = (message: string): ReticleEvent =>
+      ev(EventType.CONSOLE_ERROR, { message });
+
+    it('reports ROUTE_RENDERED_NOTHING_CRASHED instead of the plain kind when a console error is in the window', () => {
+      const found = findContradictions([
+        routeChange(),
+        consoleError('Error: Rendered fewer hooks than expected.'),
+      ]);
+      expect(found.map((c) => c.kind)).toEqual([ContradictionKind.ROUTE_RENDERED_NOTHING_CRASHED]);
+      expect(found.map((c) => c.kind)).not.toContain(ContradictionKind.ROUTE_RENDERED_NOTHING);
+    });
+
+    it('names the actual error text in the finding, not just that one exists', () => {
+      const found = findContradictions([
+        routeChange(),
+        consoleError('Error: Rendered fewer hooks than expected.'),
+      ]);
+      const detail = found[0]?.detail ?? '';
+      expect(detail).toContain('Rendered fewer hooks than expected');
+    });
+
+    it('is NOT absence-derived — a definitive NO must be available, unlike the plain kind', () => {
+      expect(isAbsenceDerived(ContradictionKind.ROUTE_RENDERED_NOTHING_CRASHED)).toBe(false);
+      expect(isAbsenceDerived(ContradictionKind.ROUTE_RENDERED_NOTHING)).toBe(true);
+    });
+
+    it('the plain kind still fires alone when there is no console error', () => {
+      const found = findContradictions([routeChange(), attrOnly()]);
+      expect(found.map((c) => c.kind)).toEqual([ContradictionKind.ROUTE_RENDERED_NOTHING]);
+    });
+
+    it('stays silent (like the plain kind) when the destination actually rendered', () => {
+      const found = findContradictions([
+        routeChange(),
+        ev(EventType.DOM_ADDED, { role: 'table' }),
+        consoleError('Error: unrelated'),
+      ]);
+      expect(found.map((c) => c.kind)).not.toContain(
+        ContradictionKind.ROUTE_RENDERED_NOTHING_CRASHED,
+      );
+    });
   });
 });
 

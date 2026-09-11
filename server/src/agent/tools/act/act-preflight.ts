@@ -10,6 +10,7 @@
  * produce: it sends somebody to fix code that is not broken. "Nothing was acted on" is a far better
  * outcome than "unknown".
  */
+import { isGlobalPressCall } from '@reticlehq/core';
 import { SessionReplacedError } from '../../../connection/session/pending-commands.js';
 import { assertNativeInputSupported } from './act-danger.js';
 import { unevaluablePredicateReason } from '@reticlehq/engine/question/predicate-precheck.js';
@@ -22,8 +23,9 @@ import { unevaluablePredicateReason } from '@reticlehq/engine/question/predicate
  * a stale-ref diagnosis for a missing locator — and the caller went looking for a re-render.
  *
  * `target` is the same locator `reticle_act` / `reticle_act_and_wait` take; the handler resolves it
- * with `resolveActTarget` before dispatch. This check only asks that every step names one of the
- * two, and it runs before the first step, so a typo in step three cannot leave one and two applied.
+ * with `resolveActTarget` before dispatch. This check asks that every step names one of the two,
+ * except a document-key press (Escape, Tab, a modifier shortcut), which is not aimed at an element.
+ * It runs before the first step, so a typo in step three cannot leave one and two applied.
  */
 /**
  * Keys an agent reaches for when it means "and prove this happened".
@@ -59,10 +61,12 @@ export function assertSequenceSteps(steps: readonly unknown[]): void {
     }
     if ('string' === typeof step['ref'] && step['ref'].length > 0) return;
     if (step['target'] !== undefined) return;
+    if (isGlobalPressCall(step)) return;
     throw new Error(
       `step ${String(i)} has no \`ref\` or \`target\`. ` +
         'Sequence steps take `ref` (from reticle_query/reticle_snapshot) or `target` ' +
         '(e.g. { testid } or { label }), the same locator reticle_act accepts. ' +
+        'A press of Escape, Tab, or a modifier shortcut is a document key and needs neither. ' +
         'Nothing was acted on — the whole sequence is refused so a bad step cannot leave the earlier ones half-applied.',
     );
   });

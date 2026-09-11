@@ -13,6 +13,11 @@
 import { join, basename } from 'node:path';
 import { runAdhocVerdict } from './adhoc-verdict.js';
 import {
+  exploreApp,
+  harnessAvailable,
+  MSG_NO_HARNESS_KEY,
+} from '../../agent/tools/harness-explore.js';
+import {
   readOrCreatePairingTokenSync,
   defaultPairingTokenDir,
 } from '../../connection/bridge/pairing-token.js';
@@ -70,7 +75,13 @@ const MSG_NO_SESSION =
 const MSG_NO_FLOWS =
   'No saved flows to verify (.reticle/flows is empty), so refusing to report a pass for verifying nothing.\n' +
   '  Flows are recorded interactively by an agent (reticle_record{action:"start"} → act → reticle_flow_save via the\n' +
-  '  MCP tools), then committed to .reticle/flows/. In CI, check those files in and re-run `reticle verify`.';
+  '  MCP tools), then committed to .reticle/flows/. In CI, check those files in and re-run `reticle verify`.\n' +
+  '  Or let Reticle record them for you: `reticle verify <url> --explore` drives the app itself and saves what it\n' +
+  '  drove, so every run after the first one replays with no model in the loop.';
+
+/** What a drive that produced nothing is allowed to be reported as. Never a pass — see runVerify. */
+const MSG_EXPLORED_NOTHING =
+  'The drive saved no flows, so there is still nothing to verify. Nothing was proved.';
 const MSG_VERIFY_PREFIX = 'verify failed: ';
 
 /** The live capabilities runVerify needs — faked in tests so the logic runs without a browser. */
@@ -78,6 +89,13 @@ export interface VerifyConnection {
   /** Resolve true once a browser session has connected, or false at timeout. */
   sessionReady(timeoutMs: number): Promise<boolean>;
   listFlows(): Promise<string[]>;
+  /**
+   * Drive the app with a model and save what it drove. Present only when a model is configured.
+   *
+   * Optional on the interface on purpose: the harness is unavailable on a machine with no key, and
+   * every other path through this command has to keep working exactly as it did.
+   */
+  explore?: (focus?: string) => Promise<{ savedFlows: readonly string[]; steps: number }>;
   /**
    * `onProgress` is narration for a run in flight — see `verify-progress.ts` in core. Optional at
    * every layer: a connection that ignores it behaves exactly as it did before.
@@ -96,6 +114,10 @@ export interface VerifyPorts {
 interface VerifyArgs {
   url: string;
   timeoutMs: number;
+  /** Drive the app with a model first, saving flows, when there is nothing saved yet. */
+  explore?: boolean;
+  /** Who to be, or what to accomplish, while exploring. Implies `explore`. */
+  persona?: string;
 }
 
 function errMessage(error: unknown): string {
@@ -123,7 +145,20 @@ export async function runVerify(args: VerifyArgs, ports: VerifyPorts): Promise<v
       ports.exit(EXIT_FAIL);
       return;
     }
-    const names = await conn.listFlows();
+    let names = await conn.listFlows();
+    /*
+     * Drive the app ourselves, but only when asked and only when there is nothing to replay.
+     *
+     * Never automatic. A drive spends somebody's model budget and really clicks things in their app,
+     * and neither is a decision this command gets to make on their behalf. And never INSTEAD of
+     * replaying: saved flows are the cheap, deterministic path, so a project that already has them
+     * pays nothing here.
+     */
+    if (0 === names.length && (true === args.explore || args.persona !== undefined)) {
+      const explored = await explore(conn, args, ports);
+      if (!explored) return;
+      names = await conn.listFlows();
+    }
     if (0 === names.length) {
       ports.fail(MSG_NO_FLOWS);
       ports.exit(EXIT_FAIL);
@@ -178,6 +213,37 @@ export async function runVerify(args: VerifyArgs, ports: VerifyPorts): Promise<v
   } finally {
     await conn.close().catch(() => undefined);
   }
+}
+
+/**
+ * Drive the app with a model, and say plainly what came of it.
+ *
+ * Returns false when the run should stop. A drive that saved nothing is NOT a pass: the honest
+ * refusal below it is the whole reason this command exists, and reaching it through an expensive
+ * drive rather than an empty directory changes nothing about what was proved.
+ */
+async function explore(
+  conn: VerifyConnection,
+  args: VerifyArgs,
+  ports: VerifyPorts,
+): Promise<boolean> {
+  if (conn.explore === undefined) {
+    ports.fail(MSG_NO_HARNESS_KEY);
+    ports.exit(EXIT_FAIL);
+    return false;
+  }
+  ports.out('No saved flows yet — driving the app to record some.');
+  const drive = await conn.explore(args.persona);
+  if (0 === drive.savedFlows.length) {
+    ports.fail(MSG_EXPLORED_NOTHING);
+    ports.exit(EXIT_FAIL);
+    return false;
+  }
+  ports.out(
+    `Recorded ${String(drive.savedFlows.length)} flow(s) in ${String(drive.steps)} step(s): ` +
+      `${drive.savedFlows.join(', ')} — every future run replays these with no model in the loop.`,
+  );
+  return true;
 }
 
 /**
@@ -295,6 +361,19 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
   return {
     sessionReady: (timeoutMs) => waitForSession(deps.sessions, timeoutMs, opts.now),
     listFlows: () => deps.flows.list(),
+    // Absent, not throwing, when no model is configured: the CLI reads its absence as "unavailable"
+    // and prints the one sentence that makes it available.
+    ...(harnessAvailable(process.env)
+      ? {
+          explore: async (focus?: string) => {
+            const result = await exploreApp(deps, process.env, {
+              ...(focus === undefined ? {} : { focus }),
+              ...(opts.sessionId === undefined ? {} : { sessionId: opts.sessionId }),
+            });
+            return { savedFlows: result.savedFlows, steps: result.drive.steps };
+          },
+        }
+      : {}),
     verify: async (onProgress) => {
       const run = await runner.verify({
         project: { name: opts.projectName, framework: RunFramework.OTHER, previewUrl: opts.url },
@@ -375,6 +454,10 @@ export function handleVerify(parsed: {
   timeoutMs?: number;
   storageState?: string;
   sessionId?: string;
+  /** Drive the app with a model and record flows, when there are none saved yet. */
+  explore?: boolean;
+  /** Who to be, or what to accomplish, while exploring. Implies `explore`. */
+  persona?: string;
   /** Bridge port — parseCliArgs already resolves --port / RETICLE_PORT / .reticle.json into this. */
   port: number;
 }): void {
@@ -431,7 +514,12 @@ export function handleVerify(parsed: {
       return;
     }
     await runVerify(
-      { url: parsed.url, timeoutMs: parsed.timeoutMs ?? DEFAULT_SESSION_TIMEOUT_MS },
+      {
+        url: parsed.url,
+        timeoutMs: parsed.timeoutMs ?? DEFAULT_SESSION_TIMEOUT_MS,
+        ...(true === parsed.explore ? { explore: true } : {}),
+        ...(parsed.persona === undefined ? {} : { persona: parsed.persona }),
+      },
       ports,
     );
   })();

@@ -165,6 +165,22 @@ export const ReticleEnv = {
    * shortening it. A budget nobody can reach in a test is a budget nobody tests.
    */
   RECONNECT_ATTEMPTS: 'RETICLE_RECONNECT_ATTEMPTS',
+  /** Quiet window before an abandoned MCP stdio proxy exits; `0` disables the watcher. */
+  MCP_PROXY_IDLE: 'RETICLE_MCP_PROXY_IDLE_MS',
+  /**
+   * API key for the harness — the model that drives the app when no coding agent is in the loop.
+   *
+   * The standard Anthropic name, on purpose: a machine that can already run a coding agent can
+   * already run the harness, with nothing to configure. Absent ⇒ the harness is simply unavailable
+   * and every other part of Reticle is unaffected.
+   */
+  HARNESS_KEY: 'ANTHROPIC_API_KEY',
+  /** Model the harness drives with. Defaults to a small one — see `DEFAULT_HARNESS_MODEL`. */
+  HARNESS_MODEL: 'RETICLE_HARNESS_MODEL',
+  /** Base URL for the harness's model API, for a proxy or a gateway. */
+  HARNESS_BASE_URL: 'RETICLE_HARNESS_BASE_URL',
+  /** Hard ceiling on harness model turns in one drive. Bounds cost, not value. */
+  HARNESS_MAX_STEPS: 'RETICLE_HARNESS_MAX_STEPS',
 } as const;
 
 /** Hard transport bounds shared by the browser and bridge. */
@@ -612,6 +628,12 @@ export const ActionWarning = {
    */
   CLICK_OCCLUDED:
     'target is visually occluded by another element; a real user could not click it (synthetic dispatch still delivered the event) — dismiss the overlay or scroll the target clear',
+  /**
+   * A document-key press (Escape, Tab, a modifier shortcut) was dispatched at the focused
+   * element or the document. No named target was given, so the effect must not claim one.
+   */
+  GLOBAL_PRESS:
+    'press landed on the focused element or document — no named target was given, so this effect does not claim one',
 } as const;
 export type ActionWarning = (typeof ActionWarning)[keyof typeof ActionWarning];
 

@@ -21,7 +21,7 @@ import {
   isInViewport,
   isVisible,
 } from './a11y.js';
-import { isIgnored } from './dom-ignore.js';
+import { isIgnored, isReticleOverlay } from './dom-ignore.js';
 import { isSensitiveKey } from '../security/serialization.js';
 import { declaredTestids } from '../registry/capabilities.js';
 import { identifyComponent } from '../registry/stores/adapters.js';
@@ -470,8 +470,19 @@ export function matchQuery(
     state === undefined ? elements : elements.filter((el) => inState(el, state, visMemo));
   const attrs = query.attrs;
   const described = filtered.slice(0, Math.max(0, Math.min(limit, MAX_DESCRIBED)));
+  // When more than one match is described, stamp `inViewport` onto those that sit in the window.
+  // Target resolution (#886) ranks ambiguity refusals by that fact; it is omitted from single-match
+  // and snapshot-wide describes because it would bloat every element on every look (#398).
+  const stampViewport = described.length > 1;
   const descriptors: ElementDescriptor[] = described.map((el) => {
-    const base = describe(el, visMemo);
+    let base = describe(el, visMemo);
+    if (
+      stampViewport &&
+      isInViewport(el, visMemo) &&
+      !base.states.includes(ElementState.IN_VIEWPORT)
+    ) {
+      base = { ...base, states: [...base.states, ElementState.IN_VIEWPORT] };
+    }
     if (attrs === undefined || 0 === attrs.length) return base;
     const projected = projectAttrs(el, attrs);
     return projected === undefined ? base : { ...base, attrs: projected };
@@ -531,6 +542,9 @@ function buildPresentRegions(query: ElementQuery): PresentRegion[] {
   for (const role of CONTAINER_ROLES) {
     const containers = queryByRoleAndName(container, role, undefined);
     for (const el of containers) {
+      // Reticle's HUD is not the app's modal layer — listing it here sent agents to dismiss a panel
+      // that was never the problem (#783).
+      if (isReticleOverlay(el)) continue;
       const name =
         el.getAttribute('aria-label') ??
         resolveLabelledBy(el) ?? // aria-labelledby is an element ID - resolve it to the referenced TEXT

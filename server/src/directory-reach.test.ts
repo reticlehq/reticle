@@ -385,7 +385,10 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // `mcp` dropped out when the proxy files left it: what setup actually wanted from that
   // directory was the proxy, and nothing else. The extraction made an existing dependency
   // legible rather than adding one -- see `would FREE` in scripts/safe-to-group.mjs.
-  setup: ['bridge', 'bringup', 'daemon', 'launch', 'proxy', 'telemetry', 'terminal'],
+  // `resolve` arrived with 2.14.0: `setup-command` reports the project id in its result, and
+  // `readProjectId` lives there. One way, and the same edge `mcp` and `tools` already had -- it
+  // is the only module that exports it, so the alternative was a second copy of the reader.
+  setup: ['bridge', 'bringup', 'daemon', 'launch', 'proxy', 'resolve', 'telemetry', 'terminal'],
   telemetry: [
     'cli',
     'daemon',
@@ -402,6 +405,13 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'facts',
     'act',
     'annotate-notes',
+    // The model-driven drive: the loop, the model binding and the timeout, and nothing else.
+    //
+    // Strictly one-way BY CONSTRUCTION, which is why the binding to the tool surface lives here in
+    // `tools` rather than beside the loop. `harness` imports nothing from this package at all — it
+    // is handed a toolset and a driver — so it is a sink, and `tools -> harness` can never become a
+    // mutual pair. Putting the two files that know about TOOLS inside it would have made one on the
+    // first commit.
     'artifact',
     'browser',
     'capsule',
@@ -413,6 +423,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'flows',
     'fs',
     'gaps',
+    'harness',
     'impact',
     'input',
     'intent',

@@ -9,6 +9,11 @@ import {
 } from '@reticlehq/core';
 import { describeObserved } from './observed-in-window.js';
 import { netEvidence } from './net-evidence.js';
+import {
+  checkRequestBody,
+  newRequestBodyState,
+  requestBodyVerdict,
+} from './predicate-request-body.js';
 export { evalConsole } from './predicate-console.js';
 import type { Predicate } from './predicate-schema.js';
 
@@ -165,7 +170,10 @@ function structurallyEqual(got: unknown, want: unknown): boolean {
 }
 
 /** Shallow JSON pattern match: each key in `pattern` must match (see matchValue). */
-function dataMatches(actual: Record<string, unknown>, pattern: Record<string, unknown>): boolean {
+export function dataMatches(
+  actual: Record<string, unknown>,
+  pattern: Record<string, unknown>,
+): boolean {
   for (const [key, want] of Object.entries(pattern)) {
     if (!matchValue(actual[key], want)) return false;
   }
@@ -233,7 +241,7 @@ function observedNetCalls(
 const MAX_BODY_IN_FAILURE = 200;
 
 /** Enough of a body to see what differed, without paying for a whole payload in the verdict. */
-function clipBody(body: string): string {
+export function clipBody(body: string): string {
   return body.length <= MAX_BODY_IN_FAILURE ? body : `${body.slice(0, MAX_BODY_IN_FAILURE)}…`;
 }
 
@@ -244,7 +252,9 @@ function clipBody(body: string): string {
  * applied too, so the caller was shown a predicate it had not written and told nothing matched it.
  * A printed filter that is narrower than the real one is worse than none: it is believed.
  */
-function describeNetFilter(p: Extract<Predicate, { kind: typeof PredicateKind.NET }>): string {
+export function describeNetFilter(
+  p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
+): string {
   const { kind: _kind, count: _count, since: _since, ...filter } = p;
   return JSON.stringify(filter);
 }
@@ -533,6 +543,7 @@ export function evalNet(
    * a truncated one cannot (#614).
    */
   let truncatedBody: string | undefined;
+  const requestState = newRequestBodyState();
   const matches = events.filter((e) => {
     if (e.type !== EventType.NET_REQUEST || e.t < since) return false;
     const d = e.data;
@@ -579,6 +590,7 @@ export function evalNet(
         return false;
       }
     }
+    if (!checkRequestBody(d, p, requestState)) return false;
     return true;
   });
   if (unobservableStatus && 0 === matches.length) {
@@ -602,6 +614,8 @@ export function evalNet(
       assertion: 'net.bodyContains',
     };
   }
+  const requestVerdict = requestBodyVerdict(requestState, p, matches.length);
+  if (requestVerdict !== undefined) return requestVerdict;
   // Ranked ABOVE the mismatch branch: when both a truncated and a full body missed the needle,
   // the honest verdict is the undecidable one. Deciding on the full body would report a failure
   // the truncated call may well contradict.

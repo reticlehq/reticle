@@ -678,13 +678,34 @@ function findWindowContradictions(
     (e) => e.type === EventType.NET_REQUEST || e.type === EventType.NET_PENDING,
   );
   if (routed && !hashAnchorOnly && !rendered && !fetched && true !== options.renderProved) {
-    found.push({
-      kind: ContradictionKind.ROUTE_RENDERED_NOTHING,
-      claim: 'the app navigated to a new route',
-      counter: 'nothing was rendered for it — no content added or removed, and no request made',
-      detail:
-        'the URL moved but the destination produced no content: a route with no view, a view that returned null, or data the page never asked for. A control that navigates always looks alive, so this is invisible to a dead-control check. Confirm by reading the page — a view revealed from DOM that already existed emits this same window',
-    });
+    // A console error in the SAME window turns "nothing rendered" from an absence into a positive
+    // claim: the destination did not merely fail to produce content, it crashed while trying to.
+    // Reported once as `unknown` when this held — a React hooks error and an empty destination were
+    // both in hand, and the honest, definitive answer was available and not given (#897).
+    const consoleErrors = events
+      .filter((e) => e.type === EventType.CONSOLE_ERROR)
+      .map((e) => asString(e.data['message']))
+      .filter((m): m is string => undefined !== m && m.length > 0);
+    if (consoleErrors.length > 0) {
+      found.push({
+        kind: ContradictionKind.ROUTE_RENDERED_NOTHING_CRASHED,
+        claim: 'the app navigated to a new route',
+        counter: `nothing was rendered for it, and the console shows why: ${consoleErrors[0] ?? ''}`,
+        detail:
+          `the URL moved but the destination produced no content, and the same window logged ` +
+          `${String(consoleErrors.length)} console error(s) — the first: "${consoleErrors[0] ?? ''}". ` +
+          'The destination crashed rather than merely rendering nothing; read the error for the ' +
+          'component and line at fault.',
+      });
+    } else {
+      found.push({
+        kind: ContradictionKind.ROUTE_RENDERED_NOTHING,
+        claim: 'the app navigated to a new route',
+        counter: 'nothing was rendered for it — no content added or removed, and no request made',
+        detail:
+          'the URL moved but the destination produced no content: a route with no view, a view that returned null, or data the page never asked for. A control that navigates always looks alive, so this is invisible to a dead-control check. Confirm by reading the page — a view revealed from DOM that already existed emits this same window',
+      });
+    }
   }
 
   // ── The app claimed success while its own request failed ────────────────────────────────────

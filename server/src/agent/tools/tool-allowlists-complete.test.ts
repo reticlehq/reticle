@@ -138,7 +138,17 @@ describe('tool allowlists are complete', () => {
    * no guard, because it occupies the space where a real one would go.
    */
   it('holds the tool count, so a new tool forces a review of the eleven allowlists', () => {
-    const PINNED_RAW_TOOL_COUNT = 62;
+    /*
+     * 63 since `reticle_verify { action: "explore" }` — the model-driven drive.
+     *
+     * Its membership was decided against `reticle_crawl`, the sibling it behaves exactly like: both
+     * are destructive actions on the whole app reached as an action on `reticle_verify`, and both
+     * belong to NONE of the eleven sets. The parent carries what matters — `VERIFY` is already in
+     * SESSION_BOUND_TOOLS (a drive with no live session is nothing) and in VERDICT_TOOLS, where
+     * `verificationOf` still requires a verdict shape this action does not return. It saves flows;
+     * the replay of those flows is what produces a verdict, and that is counted where it happens.
+     */
+    const PINNED_RAW_TOOL_COUNT = 63;
 
     expect(
       RAW_TOOLS.length,

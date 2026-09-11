@@ -45,6 +45,32 @@ function shellSafe(args: readonly string[]): string[] {
   return args.map(windowsShellArg);
 }
 
+/**
+ * Every program `init` is ever allowed to run.
+ *
+ * The set is closed and tiny — the four package managers, `npx`, and the Claude CLI — because those
+ * are the only things the plan can ask for. It is a named constant for the same reason every other
+ * wire string here is one, and it is CHECKED because of `shellOpt`: on Windows these spawn through
+ * a shell, and a shell turns the command name into something the shell parses rather than a file it
+ * executes. Arguments are quoted by `shellSafe`; the command name was the half nothing covered.
+ *
+ * A command outside this set is a programming error — the plan built something no branch of this
+ * package can produce — so it throws rather than returning `false`, which would read to the caller
+ * as "the command ran and failed" and hide the bug in a retry.
+ */
+export const RUNNABLE_COMMANDS: readonly string[] = ['pnpm', 'yarn', 'bun', 'npm', 'npx', 'claude'];
+
+/** The command, proven to be one of `RUNNABLE_COMMANDS` — never the caller's string. */
+function runnable(command: string): string {
+  const found = RUNNABLE_COMMANDS.find((allowed) => allowed === command);
+  if (undefined === found) {
+    throw new Error(
+      `init refused to run ${JSON.stringify(command)}: not one of ${RUNNABLE_COMMANDS.join(', ')}.`,
+    );
+  }
+  return found;
+}
+
 export function buildNodeIo(cwd: string, host: InitHost): InitIo {
   // Project-relative by default; absolute paths (e.g. ~/.cursor/mcp.json) pass through unchanged.
   const abs = (rel: string): string => (isAbsolute(rel) ? rel : join(cwd, rel));
@@ -102,7 +128,11 @@ export function buildNodeIo(cwd: string, host: InitHost): InitIo {
     },
     exec(command, args) {
       // Inherit stdio so the install's own progress is visible to the user.
-      const result = spawnSync(command, shellSafe(args), { cwd, stdio: 'inherit', ...shellOpt() });
+      const result = spawnSync(runnable(command), shellSafe(args), {
+        cwd,
+        stdio: 'inherit',
+        ...shellOpt(),
+      });
       return 0 === result.status;
     },
     /** One access check, rather than discovering it as an EACCES stack four phases later. */
@@ -116,7 +146,11 @@ export function buildNodeIo(cwd: string, host: InitHost): InitIo {
     },
     probe(command, args) {
       // Quiet yes/no check (CLI availability, existing registration). Never throws.
-      const result = spawnSync(command, shellSafe(args), { cwd, stdio: 'ignore', ...shellOpt() });
+      const result = spawnSync(runnable(command), shellSafe(args), {
+        cwd,
+        stdio: 'ignore',
+        ...shellOpt(),
+      });
       return 0 === result.status;
     },
     print(line) {

@@ -58,6 +58,7 @@ import { proxyLog } from './proxy/proxy-log.js';
 import { OutageReason, OutageStage, reportMcpOutage } from './faults/mcp-outage.js';
 import { postToSession } from './proxy/mcp-post-transport.js';
 import { reconnectDelayMs } from './proxy/proxy-backoff.js';
+import { PROXY_IDLE_EXIT_EVENT, ProxyIdleExit, resolveProxyIdleExitMs } from './proxy-idle-exit.js';
 export { reconnectDelayMs, RECONNECT_BASE_MS, RECONNECT_CAP_MS } from './proxy/proxy-backoff.js';
 
 export {
@@ -364,6 +365,8 @@ export function startMcpProxy(
    * failure mode for a daemon that crashed, was stopped, or shut itself down as idle.
    */
   ensureDaemon?: () => Promise<void>,
+  /** Observe the real shutdown boundary in transport tests without terminating their worker. */
+  exitProcess: (code: number) => void = (code) => process.exit(code),
 ): Promise<never> {
   return new Promise<never>((_resolve, reject) => {
     // A client just started us, which is the only honest evidence that Reticle is registered with
@@ -376,6 +379,7 @@ export function startMcpProxy(
     // a runtime throw, not a type error.
     const catalog = new ToolCatalogCache();
     let postUrl: string | null = null;
+    let stopped = false;
     /**
      * No daemon is listening and the proxy has stopped chasing one.
      *
@@ -443,12 +447,32 @@ export function startMcpProxy(
     };
     const replay = new HandshakeReplay();
     const pending = new PendingRequests();
+    const quit = (code: number): void => {
+      if (stopped) return;
+      stopped = true;
+      idleExit.stop();
+      // Await: fire-and-forget here is how daemon_stopped never arrived.
+      void flushProxySessionMetrics().finally(() => exitProcess(code));
+    };
+    const idleExit = new ProxyIdleExit({
+      graceMs: resolveProxyIdleExitMs(process.env[ReticleEnv.MCP_PROXY_IDLE]),
+      isBusy: () => pending.unanswered.length > 0 || stdinQueue.length > 0,
+      onExit: (idleMs) => {
+        proxyLog(PROXY_IDLE_EXIT_EVENT, {
+          port,
+          idleMs,
+          note: 'the client link was quiet for the configured idle window with no work in flight; exiting the abandoned proxy',
+        });
+        quit(0);
+      },
+    });
+    idleExit.start();
     /** The ONE way a line reaches the client — so nothing can be answered without clearing the debt. */
     const emit = (line: string): void => {
+      idleExit.noteTraffic();
       pending.observeInbound(line);
       process.stdout.write(`${line}\n`);
     };
-    let stopped = false;
     let attempts = 0;
     /** The daemon announced a planned shutdown; the next drop is that, not a fault. */
     let daemonRetiring = false;
@@ -797,6 +821,8 @@ export function startMcpProxy(
     let stdinDiscarding = false;
 
     process.stdin.on('data', (chunk: string) => {
+      if (stopped) return;
+      idleExit.noteTraffic();
       // Not `(buffer + chunk).split()` inline — that rescans everything held on every chunk, so one
       // large line cost O(n²) in its own size and pinned the event loop for tens of seconds, during
       // which every other tool call on this link hung with no response and no error. See drainLines.
@@ -878,11 +904,7 @@ export function startMcpProxy(
     // between the writes made it "work", which is the signature of a teardown race, not of a client
     // that asked for too much. Drain first, and let the exit status carry the truth if it fails.
     process.stdin.on('end', () => {
-      const quit = (code: number): void => {
-        stopped = true;
-        // Await: fire-and-forget here is how daemon_stopped never arrived.
-        void flushProxySessionMetrics().finally(() => process.exit(code));
-      };
+      if (stopped) return;
       if (0 === pending.unanswered.length) {
         quit(0);
         return;
