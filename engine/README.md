@@ -33,4 +33,4 @@ Two things, and both are optional:
 - somewhere to **write down** a rule that could not be run at all
 - a way to **keep a re-check attached** to the call that asked for it
 
-Leave them out and the rules still work — you lose a log line, never a verdict. You hand them in on the object you pass; the rules never go looking. See `events/engine-host.ts`.
+Leave them out and the rules still work — you lose a log line, never a verdict. You hand them in on the object you pass; the rules never go looking. See `window/engine-host.ts`.

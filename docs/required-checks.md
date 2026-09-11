@@ -13,7 +13,7 @@ That gap is the difference between a gate and a decoration. A decoration still c
 
 That trick only reaches so far. A job can only wait on jobs in **its own workflow file**, so the five workflows below cannot be folded into `gate`. Each has to be named in branch protection separately, or it blocks nothing.
 
-`packages/server/src/ci-aggregate-covers-jobs.test.ts` fails if a new workflow starts running on pull requests without being accounted for, and if a job in `ci.yml` is not watched by `gate`.
+`server/src/ci-aggregate-covers-jobs.test.ts` fails if a new workflow starts running on pull requests without being accounted for, and if a job in `ci.yml` is not watched by `gate`.
 
 ## The list to require
 

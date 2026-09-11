@@ -161,4 +161,4 @@ The `202` comes back here; the tool list appears in the first shell.
 
 The transport carries the tools. It does not replace the rest of the setup. The app still has to be instrumented and connected, and `reticle_sessions` is still what tells you whether a session is there to drive. A verdict reached over HTTP is a verdict reached the usual way: only `verified: "yes"` is a pass.
 
-The endpoints, the handshake, the three status codes and the `202`-then-SSE shape are pinned by `packages/server/src/mcp-http-transport.test.ts`, which drives them over raw HTTP with no client library, so the contract this page describes fails the build if it changes.
+The endpoints, the handshake, the three status codes and the `202`-then-SSE shape are pinned by `server/src/mcp-http-transport.test.ts`, which drives them over raw HTTP with no client library, so the contract this page describes fails the build if it changes.

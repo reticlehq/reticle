@@ -39,7 +39,7 @@ Two places, both found while preparing v3.
 
 Three things.
 
-Give it a version number, and add it to `packages/server/src/on-disk-versions.test.ts`. That test fails when any version changes, so the change cannot happen without somebody deciding what becomes of the files already out there.
+Give it a version number, and add it to `server/src/on-disk-versions.test.ts`. That test fails when any version changes, so the change cannot happen without somebody deciding what becomes of the files already out there.
 
 Tell the two failure cases apart when you read it. `ProjectReadError` shows the shape: `MALFORMED` for damage, `WRONG_VERSION` for a file from elsewhere. One message for both sends somebody hunting a typo in a healthy file.
 

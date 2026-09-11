@@ -68,6 +68,6 @@ Honest about where things stand: **build and realm adapters are not yet somethin
 
 A **build adapter** is a plugin for your build tool. It does two things: make sure `connect()` runs in the page, and stamp each element with the file it came from. `@reticlehq/vite-plugin` is the one to read. Adding another today means a change to Reticle's own installer, because the installer has to know which projects need which plugin.
 
-A **realm adapter** teaches Reticle about a kind of app that is not a browser tab: an Electron window, a Tauri window. It supplies the shell's own message traffic and a way to photograph the window. `@reticlehq/electron` is the one to read. What a realm _is_ now lives in one table (`packages/core/src/realm/registry.ts`), so the facts are in one place; what a realm _does_ is still code inside Reticle.
+A **realm adapter** teaches Reticle about a kind of app that is not a browser tab: an Electron window, a Tauri window. It supplies the shell's own message traffic and a way to photograph the window. `@reticlehq/electron` is the one to read. What a realm _is_ now lives in one table (`core/src/realm/registry.ts`), so the facts are in one place; what a realm _does_ is still code inside Reticle.
 
 If you want to write either, open an issue and say what you are building. The interfaces exist; what is missing is the door.

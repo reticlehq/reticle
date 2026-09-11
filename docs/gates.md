@@ -66,7 +66,7 @@ Find the row that matches what you changed. Run its commands. That is the whole 
 
 **CI routes too, so this table is not just about your time.** It used to be true that CI ran everything regardless, which made skipping a local gate cost you nothing but a slower red. That is no longer so: the expensive gates only run when a path they care about changed, on the same reasoning as the table above. Machine time spent proving that a documentation edit did not break an Electron app is machine time nobody reads the result of.
 
-Which means a gate skipped locally can also be skipped in CI, if what you changed did not match its paths. The routing is deliberately generous, and the paths are checked (`packages/server/src/ci-routing-paths.test.ts` fails if a path in the workflow matches no real file, so a rename cannot quietly switch a gate off). But if you are doing something the paths would not predict, run the gate rather than assuming.
+Which means a gate skipped locally can also be skipped in CI, if what you changed did not match its paths. The routing is deliberately generous, and the paths are checked (`server/src/ci-routing-paths.test.ts` fails if a path in the workflow matches no real file, so a rename cannot quietly switch a gate off). But if you are doing something the paths would not predict, run the gate rather than assuming.
 
 | CI gate | runs when |
 | --- | --- |
