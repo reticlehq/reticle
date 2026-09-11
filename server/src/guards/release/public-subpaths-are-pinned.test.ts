@@ -5,6 +5,17 @@ import { join } from 'node:path';
 import { REPO_ROOT } from '../../machine/repo-root.js';
 
 /**
+ * Why a guard that reads `git ls-files` can disagree with the editor in front of you.
+ *
+ * It cost a blocked commit and a wrong diagnosis: `verify` passed on an untracked new file,
+ * `git add` made it tracked, and the identical test then failed in the hook. I blamed turbo's
+ * cache, started widening its inputs, and measured three cases that all invalidated correctly
+ * before noticing the real cause. The message says it now so nobody repeats that.
+ */
+const STAGED_NOTE =
+  'A new file is invisible here until it is STAGED: this counts what git tracks, so `pnpm verify` before `git add` and the pre-commit hook after it are asking about two different trees. If you just created or deleted one, stage it and run this again.\n\n';
+
+/**
  * Every filename a published package exposes through a wildcard subpath.
  *
  * `@reticlehq/engine` exports `"./evidence/*.js"` and three siblings. A pattern subpath
@@ -145,7 +156,8 @@ describe('what a published package promises by filename', () => {
       expect(found.length).toBeGreaterThan(10);
       expect(
         found,
-        `${surface.package} publishes ${surface.patterns.join(', ')}, so each of these filenames ` +
+        STAGED_NOTE +
+          `${surface.package} publishes ${surface.patterns.join(', ')}, so each of these filenames ` +
           'is an import path somebody outside this repository may already have written. Adding ' +
           'one is a new public entry point; moving or removing one is a breaking change that ' +
           'nothing here will otherwise notice. Update this list and the changelog together.',

@@ -6,6 +6,17 @@ import { join } from 'node:path';
 import { REPO_ROOT } from '../../machine/repo-root.js';
 
 /**
+ * Why a guard that reads `git ls-files` can disagree with the editor in front of you.
+ *
+ * It cost a blocked commit and a wrong diagnosis: `verify` passed on an untracked new file,
+ * `git add` made it tracked, and the identical test then failed in the hook. I blamed turbo's
+ * cache, started widening its inputs, and measured three cases that all invalidated correctly
+ * before noticing the real cause. The message says it now so nobody repeats that.
+ */
+const STAGED_NOTE =
+  'A new file is invisible here until it is STAGED: this counts what git tracks, so `pnpm verify` before `git add` and the pre-commit hook after it are asking about two different trees. If you just created or deleted one, stage it and run this again.\n\n';
+
+/**
  * The coupling record, for the packages that have no record of their own.
  *
  * Five packages carry their own `directory-reach.test.ts`: server, core, engine, init and the
@@ -113,7 +124,8 @@ describe('what every other package knows about itself', () => {
       it(`has ${String(recorded.directories)} directories`, () => {
         expect(
           directories(join(REPO_ROOT, name)).length,
-          `${name}: ${recorded.note}\nAdding or removing a directory here means recording the ` +
+          STAGED_NOTE +
+            `${name}: ${recorded.note}\nAdding or removing a directory here means recording the ` +
             'new number in this file, in the commit that changed it.',
         ).toBe(recorded.directories);
       });
