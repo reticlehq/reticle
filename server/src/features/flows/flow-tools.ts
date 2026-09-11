@@ -488,6 +488,12 @@ export const FLOW_TOOLS: ToolDef[] = [
         .describe(
           'Flows that have both passed and failed on UNCHANGED code — intermittent, not regressions. Omitted when none are known.',
         ),
+      coverage: z
+        .object({ steps: z.number(), declared: z.number() })
+        .optional()
+        .describe(
+          'Steps driven, and how many declared a consequence. 47 of 63 is not "75% verified" — it is verified for 47 and silent about 16.',
+        ),
       quarantined: z
         .array(z.string())
         .optional()

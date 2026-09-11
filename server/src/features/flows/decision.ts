@@ -6,6 +6,7 @@ import {
   type FlowStepResult,
   type ReplayDecision,
   type SuiteFlowResult,
+  type FlowStep,
   type SuiteVerdict,
 } from '@reticlehq/core';
 import { classifyFlowAssertions, FlowAssertionGrade } from './flow-classify.js';
@@ -214,6 +215,15 @@ export function buildSuiteVerdict(
     0 === unverifiable.length
       ? ''
       : ` — ${String(unverifiable.length)} verified nothing (${unverifiable.map((u) => u.flow).join(', ')})`;
+  const coverage = suiteCoverage(runs);
+  /*
+   * Said in the summary, not only in a field. A number nobody reads is a number that does not exist,
+   * and the whole point of this one is that a green suite can still be mostly unproved.
+   */
+  const silentSteps =
+    coverage === undefined || coverage.declared === coverage.steps
+      ? ''
+      : ` — only ${String(coverage.declared)} of ${String(coverage.steps)} steps declared a consequence; the rest were driven, not verified`;
   const summary =
     0 === total
       ? 'no flows to verify — nothing was checked. Record one with reticle_record { action: "start" }, then reticle_flow_save.'
@@ -227,8 +237,43 @@ export function buildSuiteVerdict(
     total,
     passed,
     failed,
-    summary,
+    summary: summary + silentSteps,
     failures,
     ...(unverifiable.length > 0 ? { unverifiable } : {}),
+    ...(coverage === undefined ? {} : { coverage }),
   };
+}
+
+/**
+ * Steps driven, and steps that declared a consequence.
+ *
+ * Counted from the FLOW rather than from the results, because "did this step declare something" is a
+ * property of what was recorded, not of what happened when it ran — a step that declared and failed
+ * still declared.
+ *
+ * Sub-steps count. `classifyFlowAssertions` already walks act_sequence children for exactly this
+ * reason, and a sequence of five clicks is five steps to anybody reading the number.
+ *
+ * Undefined when no flow file was available: a replay whose file could not be loaded cannot be
+ * counted, and an invented zero reads as "nothing was declared" rather than "nothing was counted".
+ */
+function suiteCoverage(
+  runs: ReadonlyArray<{ flow?: FlowFile }>,
+): { steps: number; declared: number } | undefined {
+  const flows = runs.map((run) => run.flow).filter((flow): flow is FlowFile => flow !== undefined);
+  if (0 === flows.length) return undefined;
+  let steps = 0;
+  let declared = 0;
+  const walk = (list: readonly FlowStep[]): void => {
+    for (const step of list) {
+      if (step.steps !== undefined && step.steps.length > 0) {
+        walk(step.steps);
+        continue;
+      }
+      steps += 1;
+      if (step.expect !== undefined) declared += 1;
+    }
+  };
+  for (const flow of flows) walk(flow.steps);
+  return { steps, declared };
 }

@@ -421,6 +421,20 @@ export interface SuiteVerdict {
    * the ledger has not seen enough runs to say.
    */
   flaky?: string[];
+  /**
+   * How much of what the suite DROVE it actually proved.
+   *
+   * `unverifiable` above catches a flow that asserts nothing at all. It cannot catch the commoner
+   * shape: a flow of twelve steps where three declare a consequence and nine do not. That flow
+   * passes, counts in `passed`, and nine of its steps would have replayed green whether or not the
+   * feature worked.
+   *
+   * So the count travels. Sixty-three steps driven and forty-seven declared is not "75% verified" —
+   * it is verified for forty-seven and silent about sixteen, and only a number carrying both lets a
+   * reader tell those apart. Omitted when no flow file was available to count, because an invented
+   * zero would read as "nothing was declared" rather than "nothing was counted".
+   */
+  coverage?: { steps: number; declared: number };
 }
 
 /** The reticle_flow_replay envelope. */
