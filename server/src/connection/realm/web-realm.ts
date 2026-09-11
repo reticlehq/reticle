@@ -20,11 +20,11 @@ import {
   type Window as ProtocolWindow,
 } from '@reticlehq/openreality';
 import {
-  AppRuntime,
   CONTRADICTION_CHANNELS,
   ContradictionKind,
   EventType,
   ReticleCommand,
+  subjectOf,
   tierOfFinding,
 } from '@reticlehq/core';
 import { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';
@@ -64,22 +64,6 @@ import type { Session } from '../session/session.js';
  * of anything. A field a caller must remember to set correctly, which nothing checks, and which
  * every caller sets the same way, is not a parameter — it is a constant with a way to lie.
  */
-
-/** Which of the protocol's surfaces this session is running on. */
-export type RealmSurface = 'web' | 'desktop';
-
-/**
- * The protocol's surface for a shell the SDK reported.
- *
- * `undefined` is an SDK too old to say, and is read as `web`. That IS an assumption, and it is
- * the one this function cannot avoid: a surface is mandatory on a `SubjectRef`, and there is no
- * other tell in the handshake. It is wrong for exactly one population — a desktop app on an SDK
- * predating the runtime report — and the consequence is a subject identified as a page, which is
- * a weaker statement rather than a false one.
- */
-export function surfaceOf(runtime: AppRuntime | undefined): RealmSurface {
-  return AppRuntime.ELECTRON === runtime || AppRuntime.TAURI === runtime ? 'desktop' : 'web';
-}
 
 export interface WebRealmDeps {
   readonly session: Session;
@@ -250,19 +234,7 @@ export class WebRealm extends Realm {
    * strongest evidence available that the abstraction was not invented for this document.
    */
   identity(): SubjectRef {
-    const { session } = this.#deps;
-    const surface = surfaceOf(session.runtime);
-    const document = session.currentDocumentId;
-    const epoch = session.currentEditEpoch;
-    return {
-      surface,
-      // The document id when there is one. Falling back to the session id is a WEAKER identity --
-      // it survives a navigation that should have invalidated it -- so it is used only before the
-      // first document is known, never as a substitute for one.
-      instance: document ?? session.id,
-      ...(epoch === undefined ? {} : { epoch }),
-      locator: session.url,
-    };
+    return subjectOf(this.#deps.session);
   }
 
   /**

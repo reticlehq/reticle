@@ -935,12 +935,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
 // takes a live `Session`, and a `Session` exists only inside a running daemon. A runner that
 // cannot import it cannot score anything, which would have made the whole conformance chain
 // complete and unusable.
-export {
-  WebRealm,
-  surfaceOf,
-  type RealmSurface,
-  type WebRealmDeps,
-} from './connection/realm/web-realm.js';
+export { WebRealm, type WebRealmDeps } from './connection/realm/web-realm.js';
 export {
   conformanceClient,
   type ConformanceClient,

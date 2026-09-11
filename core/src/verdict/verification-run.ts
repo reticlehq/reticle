@@ -11,6 +11,7 @@
  */
 
 import { z } from 'zod';
+import { SubjectRefSchema } from '@reticlehq/openreality';
 import { PredicateKind } from './consequence.js';
 import { Verified } from './verified-constants.js';
 
@@ -440,6 +441,22 @@ export const ReticleVerificationRunSchema = z.object({
    * green. Absent when the run had no way to know.
    */
   editEpoch: z.number().optional(),
+
+  /**
+   * What was verified, in the protocol's own vocabulary.
+   *
+   * The artifact recorded the project, the agent, the trigger and the edit round, and never what
+   * KIND of thing was on the other end -- so a run against a Tauri desktop app and one against a
+   * web page were indistinguishable to every reader of this file. `surface` is the field that
+   * separates them, and `instance` is the one that says which document the evidence belongs to,
+   * which is the difference between evidence about this page and evidence that survived a
+   * navigation.
+   *
+   * `SubjectRef` is the specification's, imported rather than restated. Optional because a run
+   * assembled without a live session -- in CI, from flows alone -- genuinely does not know, and
+   * an invented subject is worse than an absent one.
+   */
+  subject: SubjectRefSchema.optional(),
 
   changedFiles: z.array(RunChangedFileSchema).default([]),
   flows: z.array(RunFlowResultSchema).default([]),

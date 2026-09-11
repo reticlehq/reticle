@@ -33,6 +33,7 @@
  * nobody asked for. This table holds facts you could write on an index card.
  */
 
+import { Surface, type SubjectRef } from '@reticlehq/openreality';
 import { AppRuntime } from '../telemetry-feedback.js';
 import { PlatformProfile } from '../wire/platform.js';
 
@@ -154,6 +155,54 @@ export function realmOf(runtime: string | undefined): RealmTraits {
     ? REALMS[runtime as AppRuntime]
     : REALMS[AppRuntime.WEB];
   return known;
+}
+
+/**
+ * The protocol's surface for a realm.
+ *
+ * Reads `isDesktopShell` rather than testing the runtime again, which is the whole reason this
+ * table exists: a third place branching on `electron || tauri` is a third place to forget a realm,
+ * and the answer it would forget into is the web one -- the answer most likely to look plausible
+ * and be wrong.
+ *
+ * An unknown or absent runtime answers `web`, like everything else here. For a surface that IS an
+ * assumption rather than a fact: a `SubjectRef` requires one and the handshake carries no other
+ * tell, so the error is a desktop app identified as a page, which understates the subject rather
+ * than misdescribing it.
+ */
+export function surfaceOf(runtime: string | undefined): Surface {
+  return realmOf(runtime).isDesktopShell ? Surface.DESKTOP : Surface.WEB;
+}
+
+/**
+ * What a subject's identity is read from.
+ *
+ * Structural rather than a `Session`, so the identity can be taken where a full session is not in
+ * hand -- the run artifact is assembled at teardown from a narrowed view of one. Naming it is the
+ * point: there is exactly ONE definition of what identifies a subject, and a second place
+ * computing `surface` and `instance` its own way is how two artifacts about the same session come
+ * to disagree about what was verified.
+ */
+export interface SubjectFacts {
+  readonly id: string;
+  readonly url: string;
+  readonly runtime?: string | undefined;
+  readonly currentDocumentId?: string | undefined;
+  readonly currentEditEpoch?: number | undefined;
+}
+
+/** The protocol's identity for a connected subject. */
+export function subjectOf(facts: SubjectFacts): SubjectRef {
+  const epoch = facts.currentEditEpoch;
+  return {
+    surface: surfaceOf(facts.runtime),
+    // The document id when there is one. Falling back to the session id is a WEAKER identity --
+    // it survives a navigation that should have invalidated it -- so it is used only before the
+    // first document is known, never as a substitute for one.
+    instance: facts.currentDocumentId ?? facts.id,
+    ...(epoch === undefined ? {} : { epoch }),
+    locator: facts.url,
+  };
 }
 
 /**

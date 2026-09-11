@@ -4,7 +4,12 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createNodeFileSystem } from '../project/fs/fs-port.js';
-import { Verified } from '@reticlehq/core';
+import {
+  AppRuntime,
+  ReticleVerificationRunSchema,
+  Verified,
+  type ReticleVerificationRun,
+} from '@reticlehq/core';
 import { AmbientStore } from './ambient-store.js';
 import { makeSessionEnd, type SessionEndTarget } from './session-end.js';
 import { DEFAULT_SESSION_RETENTION } from './retention.js';
@@ -198,6 +203,42 @@ describe('the run a drive leaves behind', () => {
     await end(driven([Verified.YES]));
     await end(driven([Verified.YES, Verified.NO]));
     expect((await runsWritten()).filter((f) => f.endsWith('.json'))).toHaveLength(1);
+  });
+
+  /** The run just written, parsed back off disk, which is the only place worth reading it. */
+  const runOnDisk = async (): Promise<ReticleVerificationRun> => {
+    const dir = reticleDirPaths(root).runs;
+    const file = (await fs.readdir(dir)).filter((f) => f.endsWith('.json'))[0] ?? '';
+    return ReticleVerificationRunSchema.parse(JSON.parse(await fs.readFile(join(dir, file))));
+  };
+
+  it("names the subject in the protocol's terms, including a desktop shell", async () => {
+    // The artifact recorded the project, the agent and the trigger, and never what KIND of thing
+    // was on the other end -- a run against a Tauri app and one against a web page read the same.
+    // Pinned on DISK rather than on the builder, because the schema is what a reader parses and
+    // an optional field that never gets written is indistinguishable from one nobody added.
+    const end = makeSessionEnd({ fs, reticleRoot: root, enabled: true, now: () => 1_700_000 });
+    await end({
+      ...driven([Verified.YES]),
+      url: 'tauri://localhost/checkout',
+      runtime: AppRuntime.TAURI,
+      currentDocumentId: 'doc_44',
+      currentEditEpoch: 9,
+    });
+    expect((await runOnDisk()).subject).toEqual({
+      surface: 'desktop',
+      instance: 'doc_44',
+      epoch: 9,
+      locator: 'tauri://localhost/checkout',
+    });
+  });
+
+  it('leaves the subject absent when the session could not say where it was', async () => {
+    // Absent rather than invented. A subject with no locator is a guess, and a reader cannot tell
+    // a guess from a fact once it is in the file.
+    const end = makeSessionEnd({ fs, reticleRoot: root, enabled: true, now: () => 1_700_000 });
+    await end(driven([Verified.YES]));
+    expect((await runOnDisk()).subject).toBeUndefined();
   });
 
   it('leaves teardown intact for a session that cannot answer — every existing double', async () => {

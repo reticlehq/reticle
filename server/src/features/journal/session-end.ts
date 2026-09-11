@@ -1,6 +1,6 @@
 import { AmbientStore } from './ambient-store.js';
 import type { AmbientCounts } from '@reticlehq/engine/window/ambient.js';
-import type { JournalAction } from '@reticlehq/core';
+import { subjectOf, type JournalAction } from '@reticlehq/core';
 import type { FileSystemPort } from '../project/fs/fs-port.js';
 import { pruneSessions } from './retention.js';
 import { buildVerificationRun } from '../../agent/runs/build-verification-run.js';
@@ -19,6 +19,18 @@ import { RunStore } from '../../agent/runs/run-store.js';
 /** The minimal Session surface teardown needs (Session satisfies it structurally). */
 export interface SessionEndTarget {
   readonly id: string;
+  /**
+   * Enough of the session to name the subject in the protocol's terms.
+   *
+   * Optional for the same reason `readJournalActions` is: an existing double keeps compiling and
+   * simply produces a run with no subject, which is the honest outcome rather than an invented
+   * one. See `subjectOf` -- there is one definition of what identifies a subject, and this reads
+   * it rather than assembling a second.
+   */
+  readonly url?: string | undefined;
+  readonly runtime?: string | undefined;
+  readonly currentDocumentId?: string | undefined;
+  readonly currentEditEpoch?: number | undefined;
   /** Write any batched journal events to disk. */
   flushJournal(): Promise<void>;
   /** The ambient-churn counts learned during this session. */
@@ -136,6 +148,24 @@ async function recordDriveRun(deps: SessionEndDeps, session: SessionEndTarget): 
     ...(session.projectId === undefined ? {} : { projectId: session.projectId }),
   });
   if (input === undefined) return;
+  // The protocol reaching the artifact a person actually reads. Only when the session could say
+  // where it was: a subject with no locator is not a weaker subject, it is a guess, and the
+  // schema makes the field optional so that absence can be told from invention.
+  const subject =
+    session.url === undefined
+      ? undefined
+      : subjectOf({
+          id: session.id,
+          url: session.url,
+          runtime: session.runtime,
+          currentDocumentId: session.currentDocumentId,
+          currentEditEpoch: session.currentEditEpoch,
+        });
   const store = new RunStore(deps.fs, session.artifactRoot ?? deps.reticleRoot);
-  await store.write(buildVerificationRun(input, deps.now ?? ((): number => Date.now())));
+  await store.write(
+    buildVerificationRun(
+      { ...input, ...(subject === undefined ? {} : { subject }) },
+      deps.now ?? ((): number => Date.now()),
+    ),
+  );
 }
