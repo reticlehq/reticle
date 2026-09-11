@@ -103,6 +103,36 @@ describe('the tool the guard tells people to ask first', () => {
     expect(said).toContain('cannot see them');
   });
 
+  it('answers about a package ROOT, not only a directory inside src', () => {
+    // `core/src` is a normal thing to ask about and it used to die on `scandir 'cor'`: the
+    // root was found with `indexOf('/src/')`, which needs BOTH slashes and so never matches a
+    // path that ENDS at src. Four of this repo's biggest flat directories are package roots,
+    // and a sweep over them read as "no groups here" rather than as a crash.
+    const root = mkdtempSync(join(tmpdir(), 'safe-root-'));
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(join(root, 'package.json'), '{"name":"fixture"}');
+      writeFileSync(join(root, 'src', 'alone.ts'), 'export const alone = 1;\n');
+      let said = '';
+      let code = 0;
+      try {
+        said = execFileSync(
+          'node',
+          [join(REPO, 'scripts', 'safe-to-group.mjs'), join(root, 'src'), 'alone'],
+          { encoding: 'utf8' },
+        );
+      } catch (thrown) {
+        const e = thrown as { stdout?: string; status?: number };
+        said = e.stdout ?? '';
+        code = e.status ?? -1;
+      }
+      expect(code, said).toBe(0);
+      expect(said).toContain('group of 1');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('refuses a group where no name resolved, instead of printing SAFE about nothing', () => {
     // An empty group reaches nothing, frees nothing and used to print SAFE. It told me three
     // groupings were safe when my shell had passed every name as ONE argument: zsh does not

@@ -37,7 +37,14 @@ function sources(root, out = []) {
 // The package root: walk up from the given directory to whatever holds `src`. Splitting on the
 // first two segments worked while every package was one level down and stopped the day one was
 // not, which is the same assumption that broke fifty path literals elsewhere in this repo.
-const ROOT = DIR.slice(0, DIR.indexOf('/src/') + 4);
+//
+// `/src/` with BOTH slashes only matches a directory INSIDE src. Asked about `core/src` itself
+// -- a package root, which is a normal thing to ask about and where four of this repo's biggest
+// flat directories live -- `indexOf` returned -1, the slice produced `cor`, and the tool died
+// on `scandir 'cor'`. It had been answering nothing for every package root all along, and a
+// sweep over them read as "no groups here" rather than as a crash.
+const INSIDE = DIR.indexOf('/src/');
+const ROOT = -1 !== INSIDE ? DIR.slice(0, INSIDE + 4) : DIR.replace(/\/src\/?$/, '/src');
 const files = new Set(sources(ROOT).map((p) => resolve(p)));
 const imports = new Map();
 for (const p of files) {
