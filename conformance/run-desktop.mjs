@@ -209,7 +209,7 @@ async function main() {
 
     Object.assign(
       report,
-      await driveAll(client, {
+      await driveAll(dishonestIfSelfTesting(client), {
         name: 'reticle-electron',
         version: process.env['npm_package_version'] ?? 'dev',
         platform: 'desktop',
@@ -241,6 +241,21 @@ async function main() {
   // driven and the implementation gave the wrong answer. That is always a defect, and it is
   // clearable today, because the number is zero.
   const failed = report.failed.length;
+  if (process.argv.includes('--self-test')) {
+    // Inverted: the control passes only when the gate would have FAILED.
+    if (0 === failed) {
+      console.error(
+        '\nSELF-TEST FAILED: a desktop subject answering "yes" to every claim was scored\n' +
+          'clean. This gate is not measuring whether the answers are right.\n',
+      );
+      process.exit(1);
+    }
+    console.log(
+      `\nself-test passed: caught on ${String(failed)} scenario(s), and the cross-surface ` +
+        `check reported ${String(agreement.disagreed.length)} disagreement(s) with the web run.\n`,
+    );
+    process.exit(0);
+  }
   if (process.argv.includes('--gate') && failed > 0) {
     console.error(
       `\nconformance: ${String(failed)} plantable scenario(s) answered wrongly: ` +
@@ -302,6 +317,31 @@ function print(report) {
  * normal thing to do, and inventing an agreement from one surface would be worse than not
  * checking.
  */
+/**
+ * The negative control, the desktop half. See the twin in run-self.mjs for the full reasoning.
+ *
+ * This gate has TWO ways to fail and this control only proves ONE of them, which is worth
+ * stating plainly because the first draft of this comment claimed otherwise.
+ *
+ * A subject answering `yes` to every claim gets scenarios wrong, so `failed` rises and the gate
+ * would go red. That half is proven. The other half is the cross-surface check, and it stays
+ * flat here at zero disagreements: `gate:conformance:self-test` makes BOTH surfaces tell the
+ * same lie, so they agree perfectly, and agreeing is exactly what that check looks for. Two
+ * subjects that are identically wrong are indistinguishable, to this check, from two that are
+ * identically right.
+ *
+ * That is a real limit on what a green here means, and not one worth closing by lying on only
+ * one surface: the interesting disagreement is between a browser tab and a desktop shell
+ * answering an honest question differently, which is what the scored run already measures.
+ */
+function dishonestIfSelfTesting(client) {
+  if (!process.argv.includes('--self-test')) return client;
+  return {
+    ...client,
+    verify: async () => ({ verdict: 'yes', ground: 'proved', reason: 'self-test: always yes' }),
+  };
+}
+
 function comparedWithWeb(report) {
   const handoff = join(tmpdir(), 'reticle-conformance-web.json');
   if (!existsSync(handoff)) {
