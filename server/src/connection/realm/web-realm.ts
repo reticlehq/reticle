@@ -161,8 +161,20 @@ function readUrl(data: unknown): string | undefined {
   return 'string' === typeof url ? url : undefined;
 }
 
-const CHANNEL_OF_PREFIX: Readonly<Record<string, ProtocolChannel>> = {
+export const CHANNEL_OF_PREFIX: Readonly<Record<string, ProtocolChannel>> = {
   net: ProtocolChannel.NET,
+  // Screen facts. Each is unambiguously "what is on the subject's surface", which is what the
+  // protocol's `ui` channel means, and each was being dropped as an unrecognised prefix -- so
+  // an animation, a dialog or a reveal was recorded by the SDK and never reached the
+  // adjudicator at all. The refusal to guess was right; the list of things that need no
+  // guessing was short.
+  anim: ProtocolChannel.UI,
+  dialog: ProtocolChannel.UI,
+  focus: ProtocolChannel.UI,
+  render: ProtocolChannel.UI,
+  reveal: ProtocolChannel.UI,
+  scroll: ProtocolChannel.UI,
+  visible: ProtocolChannel.UI,
   ipc: ProtocolChannel.NET,
   dom: ProtocolChannel.UI,
   state: ProtocolChannel.STATE,
@@ -172,6 +184,55 @@ const CHANNEL_OF_PREFIX: Readonly<Record<string, ProtocolChannel>> = {
   route: ProtocolChannel.ROUTE,
   storage: ProtocolChannel.STORAGE,
   perf: ProtocolChannel.TIME,
+};
+
+/**
+ * Prefixes that are deliberately NOT evidence, each with the reason.
+ *
+ * These describe the TOOL rather than the subject: Reticle's own transport overflowing, its SDK
+ * failing, a person pressing pause in the HUD, a flow being recorded. Reporting any of them as
+ * evidence about the application would be the observer contaminating the observation, which is
+ * the confusion this whole protocol exists to prevent.
+ *
+ * Named rather than left to fall through, because "unrecognised" and "deliberately excluded"
+ * were producing identical behaviour and only one of them is a decision. `every-event-is-placed
+ * .test.ts` fails if a new prefix belongs to neither list.
+ */
+export const NOT_EVIDENCE: Readonly<Record<string, string>> = {
+  context: "Reticle's own context tool opening, not something the application did",
+  flow: 'a flow being recorded by the tool',
+  human: 'a person driving the HUD: pause, resume, a mark. The operator, not the subject',
+  page: "the SDK's own health report about the page it is inside",
+  sdk: 'the SDK itself failing, which is a fact about the observer',
+  transport: "the tool's own buffer overflowing",
+  'blind-spot':
+    'a region the SDK cannot observe: a cross-origin iframe, a closed shadow root. Reported as ' +
+    'coverage rather than evidence -- `coverage()` emits it from `session.blindSpots()` as the ' +
+    "protocol's `boundary-uncrossable`, which is where a gap in observation belongs",
+  truncated:
+    'a per-channel cap dropping part of a batch. This IS reported, as coverage rather than as ' +
+    "evidence: `coverage()` already emits it as the protocol's `buffer-truncated` blind spot, " +
+    'which is the plane the specification puts it in',
+};
+
+/**
+ * Application behaviour the protocol has no channel for.
+ *
+ * `download` is the app producing a FILE -- a Blob handed to `URL.createObjectURL` and saved.
+ * It is unambiguously the subject acting, and it is the one artifact class nothing outside the
+ * browser can inspect, because it never crosses the network: there is no request to intercept.
+ *
+ * The protocol's nine channels cannot say it. It is not `net` (its own definition is that no
+ * network is involved), not `storage` (that is cookies and web storage), not `ui`. Mapping it to
+ * the nearest one would be exactly the error `observe()` refuses elsewhere -- an observation
+ * attributed to a source that did not produce it.
+ *
+ * So it is named here rather than mapped or silently dropped, and it is a **gap in the
+ * specification** rather than in this adapter: a tenth channel, for a consequence the subject
+ * emitted that left no trace on any of the nine.
+ */
+export const NO_PROTOCOL_CHANNEL: Readonly<Record<string, string>> = {
+  download: 'a file the application produced; the protocol has no channel for an emitted artifact',
 };
 
 /**
