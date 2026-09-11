@@ -212,7 +212,26 @@ async function main() {
   }
 
   print(report);
-  // Exit 0 whichever way it lands. This measures; it does not gate. See the note at the top.
+  // ── EXIT ────────────────────────────────────────────────────────────────────────────────────
+  //
+  // Zero by default: this measures, and a measurement that fails a build teaches people to stop
+  // taking it. `--gate` is the narrow promise it CAN keep.
+  //
+  // What is gated is REGRESSION, never the score. `earned` is `none` and will stay `none` until
+  // the fixture grows, because five scenarios have no plant and ABSENT is never a pass -- gating
+  // on that would be a red board nobody can clear, which is the objection recorded at the top of
+  // this file and it still holds. `failed` is different: it means a scenario we CAN plant was
+  // driven and the implementation gave the wrong answer. That is always a defect, and it is
+  // clearable today, because the number is zero.
+  const failed = report.failed.length;
+  if (process.argv.includes('--gate') && failed > 0) {
+    console.error(
+      `\nconformance: ${String(failed)} plantable scenario(s) answered wrongly: ` +
+        `${report.failed.join(', ')}\n` +
+        'ABSENT scenarios are not counted here -- only ones that were driven and got it wrong.\n',
+    );
+    process.exit(1);
+  }
   process.exit(0);
 }
 

@@ -36,6 +36,7 @@
     "test:e2e:desktop": "bash apps/e2e/run-desktop.sh",
     "conformance": "node conformance/run-self.mjs",
     "conformance:desktop": "node conformance/run-desktop.mjs",
+    "gate:conformance": "node conformance/run-self.mjs --gate && node conformance/run-desktop.mjs --gate",
     "gate:install": "node apps/e2e/install-gate.mjs",
     "gate:install:self-test": "node apps/e2e/install-gate.mjs --self-test",
     "gate:multi": "node apps/e2e/multi/multi-agent-sim.mjs",

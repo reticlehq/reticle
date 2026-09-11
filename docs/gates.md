@@ -53,6 +53,7 @@ Find the row that matches what you changed. Run its commands. That is the whole 
 | The tool surface, the wire contract (`packages/core`), or an observer | ↑ **and** `pnpm test:e2e` | +~8 min |
 | `reticle init`, `@reticlehq/vite-plugin`, `@reticlehq/next`, `@reticlehq/babel-plugin`, anything a user runs before their first session | ↑ **and** `pnpm gate:install` | +~15 min |
 | `@reticlehq/electron`, `packages/tauri`, the IPC observer, desktop capture | ↑ **and** `pnpm test:e2e:desktop` | +~3 min |
+| `@reticlehq/openreality`, the adjudicator, `WebRealm`, or anything a verdict is derived from | ↑ **and** `pnpm gate:conformance` | +~3 min |
 | Telemetry, feedback, or anything that emits an event | ↑ **and** read [`telemetry-contract.md`](./telemetry-contract.md) first. `pnpm test:e2e` covers it (`telemetry-events-test`) | n/a |
 | `packages/tauri` (Rust) | ↑ **and** `cd packages/tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings` | +~2 min |
 | Docs, README, comments only | `pnpm format:check` | seconds |
@@ -91,6 +92,7 @@ Each gate exists because the ones above it are blind to something. That blindnes
 | **Integration** | `pnpm test:integration` | real headless Chromium: browser pool, crash isolation, framework adapters, `withReticle` | the MCP surface, the daemon | `e2e` |
 | **Web e2e battery** | `pnpm test:e2e` | **39** specs against 3 booted servers and a real browser (the tool surface, the daemon lifecycle, transport faults, telemetry, trace shape), plus the soak | desktop runtimes; the install | `e2e` |
 | **Desktop battery** | `pnpm test:e2e:desktop` | two real Electron main processes (plain Vite + electron-vite) and a **packaged** Tauri binary, driven headless | web-only paths | `desktop-e2e` |
+| **Conformance** | `pnpm gate:conformance` | drives the published specification's scenarios against this implementation on a real browser AND a real Electron shell, scoring every verdict through the spec's own `adjudicate` rather than Reticle's kernel | the nine scenarios no fixture can plant, which are reported ABSENT | not wired to CI yet; see below |
 | **Install gate** | `pnpm gate:install` | scaffolds **10** pristine apps across 2 OSes (20 cells), publishes this checkout to a local Verdaccio, lets `init` install itself, boots each app in a real browser, polls for a session that advertised capabilities | install _complexity_; see [`fixtures.md`](./fixtures.md) | `install-gate` |
 | **Matrix records** | `pnpm matrix:validate` | every submitted client-compat record is well-formed | whether the client actually works | `matrix-records` |
 | **Windows** | (CI only) | that the code runs at all on the majority platform | e2e; Windows is unit-only | `windows` |
@@ -174,3 +176,12 @@ Two rules learned the expensive way:
   A general guard was attempted and abandoned: a path in a string cannot be told apart from a fixture filename or an output path without guessing, and the noisy version of this check is worse than none: it would be switched off inside a week and take real coverage with it.
 
 - **Being a leaf among siblings is not enough.** A file can import no sibling and still close a cycle once its directory has a name -- `tool-kit.ts` imports no sibling and reaches `flows`, and `flows` reaches back. Invisible while both sat in one directory.
+
+## Why the conformance gate is not inside a battery
+
+`pnpm gate:conformance` runs on its own rather than as a spec in `pnpm test:e2e`, and the reason is worth stating so nobody "tidies" it in:
+
+- **The web battery boots the demo API with `REFLECT_MS=6000`.** The conformance runner boots its own on the same port. Folded into the battery it would find the battery's backend already answering, score every scenario against a deliberately-slowed API, and still print a number. A verdict suite silently measuring a different system is the exact failure it exists to catch.
+- **It gates REGRESSION, not the score.** `earned` is `none` and stays `none` until the fixture grows: nine of fourteen scenarios have no plant, and ABSENT is never a pass. `--gate` fails only when a scenario that _could_ be planted was driven and answered wrongly. That number is zero today, so the gate is clearable; gating on `earned` would be a red board nobody can clear.
+
+It is **not wired into CI yet.** That is a deliberate gap rather than an oversight: the step belongs beside the two battery jobs, and adding a job to `ci.yml` cannot be tested from a workstation. Run it by hand when you touch the protocol, the adjudicator, or anything a verdict is derived from.
