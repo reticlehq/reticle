@@ -35,6 +35,7 @@
   ],
   "scripts": {
     "build": "tsc -b",
+    "prepack": "tsc -b && node ../scripts/prepare-dist.mjs dist",
     "typecheck": "tsc -b",
     "lint": "eslint src",
     "test:unit": "node ../scripts/guard-tests.mjs unit",

@@ -21,6 +21,7 @@
   ],
   "scripts": {
     "build": "tsc -b && node scripts/gen-schema.mjs",
+    "prepack": "tsc -b && node scripts/gen-schema.mjs && node ../scripts/prepare-dist.mjs dist",
     "test:unit": "vitest run --passWithNoTests",
     "test:guards": "vitest run --passWithNoTests"
   },
