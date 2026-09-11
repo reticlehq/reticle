@@ -1,7 +1,7 @@
 import { Verified } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/server';
 import { describe, expect, it } from 'vitest';
-import { expectText } from './matchers.js';
+import { expectText } from './context/matchers.js';
 import { createTestContext } from './test-context.js';
 
 /**

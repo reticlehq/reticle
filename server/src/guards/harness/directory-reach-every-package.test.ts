@@ -63,9 +63,9 @@ const PACKAGES: Readonly<Record<string, Recorded>> = {
     note: 'the protocol. Three directories, nothing mutual, and until this entry existed it had no coupling record at all — which for the package the whole release is named after was the gap worth finding.',
   },
   'spec-runner': {
-    directories: 1,
+    directories: 2,
     mutual: 0,
-    note: 'was FLAT, and the recorded zero did its job: the first grouping here turned directories into 1, the guard went red, and this baseline was measured rather than inherited. outcome/ holds how a spec reports what happened.',
+    note: 'was FLAT, and the recorded zero did its job: the first grouping here turned directories into 1, the guard went red, and this baseline was measured rather than inherited. outcome/ holds how a spec reports what happened; context/ holds the four things test-context assembles into `t`.',
   },
 };
 

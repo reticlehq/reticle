@@ -1,7 +1,7 @@
 import { ReticleTool, type ToolInvoker } from '@reticlehq/server';
 import { QueryBy } from '@reticlehq/core';
-import { ReticleQueryEmptyError } from './outcome/skip.js';
-import { NO_ELEMENT_FOR_TESTID } from './outcome/constants.js';
+import { ReticleQueryEmptyError } from '../outcome/skip.js';
+import { NO_ELEMENT_FOR_TESTID } from '../outcome/constants.js';
 
 /** Shape of the reticle_query envelope the façade consumes (a narrowed view of QueryResult). */
 interface QueryEnvelope {

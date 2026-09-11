@@ -14,9 +14,9 @@ export {
 export type { AssertionDetail } from './outcome/skip.js';
 export { createTestContext } from './test-context.js';
 export type { TestContext, TestContextOptions, Predicate } from './test-context.js';
-export type { TestClock } from './clock.js';
-export { resolveTestid } from './resolve.js';
-export { expectInputModeReal, InputModeTracker, readInputMode } from './input-mode.js';
+export type { TestClock } from './context/clock.js';
+export { resolveTestid } from './context/resolve.js';
+export { expectInputModeReal, InputModeTracker, readInputMode } from './context/input-mode.js';
 export {
   TestStatus,
   STATUS_GLYPH,

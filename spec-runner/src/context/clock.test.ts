@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/server';
-import { createTestContext } from './test-context.js';
+import { createTestContext } from '../test-context.js';
 import type { ToolInvoker } from '@reticlehq/server';
 
 function fakeInvoker(handlers: Record<string, (args: Record<string, unknown>) => unknown>): {

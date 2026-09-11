@@ -1,10 +1,10 @@
 import { ReticleTool, type ToolInvoker } from '@reticlehq/server';
 import { ActionType, type ElementQuery, type ElementState } from '@reticlehq/core';
-import { resolveTestid } from './resolve.js';
-import { buildClock, type TestClock } from './clock.js';
-import { InputModeTracker, expectInputModeReal } from './input-mode.js';
-import { failFromVerdict, proved } from './matchers.js';
-import type { MatcherDeps, Verdict } from './matchers.js';
+import { resolveTestid } from './context/resolve.js';
+import { buildClock, type TestClock } from './context/clock.js';
+import { InputModeTracker, expectInputModeReal } from './context/input-mode.js';
+import { failFromVerdict, proved } from './context/matchers.js';
+import type { MatcherDeps, Verdict } from './context/matchers.js';
 import {
   expectAbsent,
   expectElement,
@@ -12,7 +12,7 @@ import {
   expectNoConsoleErrors,
   expectSignal,
   expectText,
-} from './matchers.js';
+} from './context/matchers.js';
 import { DEFAULT_ASSERT_TIMEOUT_MS } from './outcome/constants.js';
 
 /** A declarative predicate (the reticle_assert/until DSL). Kept structural to avoid a server type dep. */
