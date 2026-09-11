@@ -45,18 +45,36 @@ export const IntentStatus = {
 } as const;
 export type IntentStatus = (typeof IntentStatus)[keyof typeof IntentStatus];
 
-export const IntentSchema = z.object({
-  id: z.string().min(1),
-  /** Prose, and mandatory. The thing whose fidelity decays -- captured before it does. */
-  statement: z.string().min(1),
-  origin: z.nativeEnum(IntentOrigin),
-  status: z.nativeEnum(IntentStatus),
-  /** Claim ids this intent was bound to. Empty while `declared`. */
-  claims: z.array(z.string()).default([]),
-  /** Why it was abandoned, when it was. Required in spirit; a bare abandonment says nothing. */
-  abandonedBecause: z.string().optional(),
-  declaredAt: z.number().int().optional(),
-});
+export const IntentSchema = z
+  .object({
+    id: z.string().min(1),
+    /** Prose, and mandatory. The thing whose fidelity decays -- captured before it does. */
+    statement: z.string().min(1),
+    origin: z.nativeEnum(IntentOrigin),
+    status: z.nativeEnum(IntentStatus),
+    /** Claim ids this intent was bound to. Empty while `declared`. */
+    claims: z.array(z.string()).default([]),
+    /**
+     * Why it was abandoned. Required WHEN abandoned, and refused blank; omitted in every other
+     * state, because only giving up owes an explanation.
+     *
+     * This said "Required in spirit" and was enforced by nothing, so `{ status: 'abandoned' }`
+     * validated -- and SPEC.md is not written in spirit here, it says the reason MUST be
+     * recorded, on the grounds that "`abandoned` exists so that giving up is a decision somebody
+     * wrote down rather than a row that quietly stopped moving". A bare abandonment IS that row.
+     */
+    abandonedBecause: z.string().optional(),
+    declaredAt: z.number().int().optional(),
+  })
+  .refine(
+    (i) => i.status !== IntentStatus.ABANDONED || (i.abandonedBecause ?? '').trim().length > 0,
+    {
+      message:
+        'an abandoned intent must record why: the reason is what makes giving up a decision ' +
+        'somebody wrote down rather than a row that quietly stopped moving.',
+      path: ['abandonedBecause'],
+    },
+  );
 export type Intent = z.infer<typeof IntentSchema>;
 
 /**

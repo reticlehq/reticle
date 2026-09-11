@@ -3,6 +3,15 @@
 // The TypeScript is the AUTHORING form and the JSON Schema is the CONTRACT. That direction is
 // deliberate and is the one thing about this file worth defending: two hand-written definitions of
 // one contract is the drift problem, not the fix. Nobody writes JSON Schema here. It is generated,
+//
+// ONE THING THIS DROPS, and it is worth knowing before trusting the output: a `.refine()` does
+// not survive. `zod-to-json-schema` emits the object and discards the predicate, with no
+// warning, so a conditional MUST enforced in the authoring form is simply absent from the
+// contract -- `required` does not grow and no `if`/`then` appears. Two rules are in that state
+// today, both added in this release. They are enumerated in
+// `src/refinements-reach-the-contract.test.ts`, which fails when a third is added, so the
+// choice between "model it as a union the generator can express" and "accept the divergence"
+// gets made deliberately rather than by default.
 // every build, from the same zod that the reference implementation validates against, so a schema
 // that disagrees with the code is not a thing that can exist.
 //
