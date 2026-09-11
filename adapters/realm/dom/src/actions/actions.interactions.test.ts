@@ -3,7 +3,7 @@ import { EventType } from '@reticlehq/core';
 import { createCommandRegistry } from '../commands/commands.js';
 import { executeAction } from './actions.js';
 import { installScroll } from '../observers/scroll.js';
-import { installOverlay } from '../presenter/overlay.js';
+import { installOverlay } from '../presenter/chrome/overlay.js';
 import { refs } from '../dom/addressing/refs.js';
 
 describe('drag', () => {

@@ -1,5 +1,5 @@
 import { Z_OVERLAY } from './chrome/layers.js';
-import { LOG_CSS } from './presenter-log.js';
+import { LOG_CSS } from './chrome/presenter-log.js';
 import { CONTROLS_CSS } from './presenter-controls.js';
 import { SHELL_CSS } from './presenter-shell-styles.js';
 import { SETTINGS_CSS } from './presenter-settings-styles.js';

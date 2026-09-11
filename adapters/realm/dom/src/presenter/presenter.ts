@@ -22,7 +22,7 @@ import {
   type LogKind,
   type LogResult,
   type LogHandle,
-} from './presenter-log.js';
+} from './chrome/presenter-log.js';
 import { PRESENTER_CSS } from './presenter-styles.js';
 import { HudShell } from './presenter-shell.js';
 import { parseImpactSnapshot } from './chrome/presenter-report-copy.js';
@@ -76,8 +76,8 @@ import { Annotator, type AnnotatorChrome } from '../review/annotator.js';
 // Re-export the config surface so the public import path (`./presenter.js`) is unchanged.
 export { GlowPhase } from './presenter-config.js';
 export type { PresenterOptions } from './presenter-config.js';
-export { LOG_KIND, LOG_RESULT } from './presenter-log.js';
-export type { LogHandle } from './presenter-log.js';
+export { LOG_KIND, LOG_RESULT } from './chrome/presenter-log.js';
+export type { LogHandle } from './chrome/presenter-log.js';
 export type { ControlIntent, ControlHandler } from './presenter-controls.js';
 
 type RunLogEntry = { at: number; kind: LogKind; text: string; result?: LogResult };

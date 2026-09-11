@@ -1,4 +1,4 @@
-import { LOG_RESULT, type LogResult } from './presenter-log.js';
+import { LOG_RESULT, type LogResult } from './chrome/presenter-log.js';
 import { PresenterIcon, PRESENTER_ICON_SIZE, hiIcon } from './icons/presenter-icons.js';
 
 /**

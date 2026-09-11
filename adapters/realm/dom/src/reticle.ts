@@ -44,7 +44,7 @@ import {
   type CapabilitiesInput,
 } from './registry/capabilities.js';
 import { installAllObservers, runTeardowns } from './observers/install-all.js';
-import { installOverlay, type OverlayHandle } from './presenter/overlay.js';
+import { installOverlay, type OverlayHandle } from './presenter/chrome/overlay.js';
 // TYPES only. Naming the panel's class here would put the whole panel in the first thing a page
 // downloads, and the panel is wanted only once an agent connects. It is fetched below instead, at
 // the moment the page says it wants one. Types cost nothing: they are gone once the code is built.

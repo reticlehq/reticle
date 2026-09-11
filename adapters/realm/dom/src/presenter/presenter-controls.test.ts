@@ -3,7 +3,7 @@ import { HumanControlKind, PresenterTone, SessionState } from '@reticlehq/core';
 import { Presenter, type ControlIntent } from './presenter.js';
 import { CONTROLS_CSS } from './presenter-controls.js';
 import { buildSnapshot } from '../dom/snapshot.js';
-import { LOG_KIND } from './presenter-log.js';
+import { LOG_KIND } from './chrome/presenter-log.js';
 import { isIgnored } from '../dom/dom-ignore.js';
 import { Annotator } from '../review/annotator.js';
 

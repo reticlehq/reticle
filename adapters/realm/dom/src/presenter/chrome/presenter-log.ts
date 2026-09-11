@@ -1,12 +1,12 @@
 import { PresenterMode } from '@reticlehq/core';
-import { LOG_KIND, LOG_RESULT, type LogKind, type LogResult } from './chrome/log-kinds.js';
-import { nativeSetTimeout } from '../timers/native/native-timers.js';
+import { LOG_KIND, LOG_RESULT, type LogKind, type LogResult } from './log-kinds.js';
+import { nativeSetTimeout } from '../../timers/native/native-timers.js';
 import {
   PresenterIcon,
   PRESENTER_ICON_SIZE,
   hiIcon,
   type PresenterIconName,
-} from './icons/presenter-icons.js';
+} from '../icons/presenter-icons.js';
 
 // Activity-log UI for the presenter HUD: a persistent, timestamped, scrollable transcript of
 // every read/act/narration. All strings here are presenter-only UI (chips, glyphs, attrs) - they

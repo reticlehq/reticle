@@ -2,7 +2,7 @@
  * Floating HUD shell styles - FAB, morphing toolbar, and agent chat panel.
  * Split from presenter-styles.ts so the controller stays under the size cap.
  */
-import { LOG_TIME_ATTR } from './presenter-log.js';
+import { LOG_TIME_ATTR } from './chrome/presenter-log.js';
 import { Z_HUD_TOOLTIP } from './presenter-config.js';
 import {
   CHAT_ATTR,
