@@ -4,6 +4,7 @@ import type { Observation } from './evidence.js';
 import {
   assertionsHeld,
   CountOp,
+  MeasureOp,
   evaluate,
   MatchSchema,
   PredicateKind,
@@ -122,5 +123,82 @@ describe('a claim may not rest on valueContains alone', () => {
         match: { channel: ChannelId.NET, valueContains: '/api/x' },
       }).success,
     ).toBe(false);
+  });
+});
+
+/**
+ * A measured quantity, which is what every domain outside a browser actually claims about.
+ *
+ * The three existing forms answer "how many" and "was it there". Nothing answered "what was the
+ * reading, and was it close enough": `count` takes a non-negative integer and counts MATCHES,
+ * not values. So "the temperature held at 37 ± 0.5", "the arm reached 30.2° ± 0.5", "the frame
+ * budget stayed under 16.7 ms", "the light drew at least 8 W" and "p99 latency was at most
+ * 250 ms" were all inexpressible — biotechnology, physical AI, games, smart home and backends,
+ * which between them is most of what this specification claims to serve.
+ *
+ * Deliberately one form rather than five domain-specific ones. A number means the same thing in
+ * every domain; a `temperature` predicate would not, and the moment the vocabulary grows a
+ * domain-shaped entry it stops being generic.
+ *
+ * `tolerance` is on every operator and defaults to zero, so there is no conditional requirement
+ * to enforce — which matters here, because a `.refine()` would not survive the trip to JSON
+ * Schema and this specification's rules must reach the implementer who never installs it.
+ */
+describe('a measured quantity, compared with a tolerance', () => {
+  const reading = (n: unknown): Observation => ({
+    id: 'o1',
+    window: 'w1',
+    channel: ChannelId.NET,
+    at: 1,
+    summary: 'sensor.temperature',
+    value: n,
+  });
+  const measure = (op: MeasureOp, value: number, tolerance = 0): unknown => ({
+    kind: PredicateKind.MEASURE,
+    match: { channel: ChannelId.NET, summary: 'sensor.temperature' },
+    op,
+    value,
+    tolerance,
+  });
+
+  it('accepts a reading inside the band and refuses one outside it', () => {
+    expect(evaluate(measure(MeasureOp.EQUALS, 37, 0.5), [reading(37.3)])).toBe(true);
+    expect(evaluate(measure(MeasureOp.EQUALS, 37, 0.5), [reading(37.6)])).toBe(false);
+  });
+
+  it('treats a zero tolerance as exact, which is the default', () => {
+    expect(evaluate(measure(MeasureOp.EQUALS, 16), [reading(16)])).toBe(true);
+    expect(evaluate(measure(MeasureOp.EQUALS, 16), [reading(16.0001)])).toBe(false);
+  });
+
+  it('widens at-least and at-most in the reading’s favour by the tolerance', () => {
+    expect(evaluate(measure(MeasureOp.AT_LEAST, 8, 0.2), [reading(7.9)])).toBe(true);
+    expect(evaluate(measure(MeasureOp.AT_LEAST, 8, 0.2), [reading(7.7)])).toBe(false);
+    expect(evaluate(measure(MeasureOp.AT_MOST, 16.7, 0.3), [reading(16.9)])).toBe(true);
+    expect(evaluate(measure(MeasureOp.AT_MOST, 16.7, 0.3), [reading(17.1)])).toBe(false);
+  });
+
+  it('says NOBODY CHECKED when the matched observation carries no number', () => {
+    // Not false. A realm that reports its temperature as the string "37C" has not been
+    // evaluated, and reading that as a failed claim would invent a defect out of a formatting
+    // choice. Same three-valued discipline as an unparseable predicate.
+    expect(evaluate(measure(MeasureOp.EQUALS, 37, 0.5), [reading('37C')])).toBeUndefined();
+    expect(evaluate(measure(MeasureOp.EQUALS, 37, 0.5), [reading(Number.NaN)])).toBeUndefined();
+  });
+
+  it('says NOBODY CHECKED when nothing matched at all', () => {
+    // Distinct from `absent`, which asserts emptiness on purpose. A measurement over no reading
+    // is not a reading of zero.
+    expect(evaluate(measure(MeasureOp.EQUALS, 37, 0.5), [])).toBeUndefined();
+  });
+
+  it('is satisfied by any one matching reading, the way present is', () => {
+    expect(
+      evaluate(measure(MeasureOp.EQUALS, 37, 0.5), [reading(40), reading(37.1), reading(12)]),
+    ).toBe(true);
+  });
+
+  it('refuses a negative tolerance, which would narrow rather than widen', () => {
+    expect(evaluate(measure(MeasureOp.EQUALS, 37, -1), [reading(37)])).toBeUndefined();
   });
 });

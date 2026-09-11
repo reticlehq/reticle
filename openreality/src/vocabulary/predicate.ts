@@ -92,8 +92,30 @@ export const PredicateKind = {
    * coverage rather than in a confident `yes`.
    */
   ABSENT: 'absent',
+  /** A measured quantity, compared with a tolerance. Every domain outside a browser has these. */
+  MEASURE: 'measure',
 } as const;
 export type PredicateKind = (typeof PredicateKind)[keyof typeof PredicateKind];
+
+/**
+ * How a measured quantity is compared with the number a claim named.
+ *
+ * Three operators and a tolerance on all of them, rather than a separate `within`. A tolerance
+ * of zero is exactness, so one shape covers "exactly 16", "37 plus or minus 0.5" and "at least
+ * 8, and I will accept 7.9" without a conditional requirement anywhere -- which matters more
+ * here than it looks, because a conditional requirement would have to be a `.refine()`, and a
+ * refinement does not survive the trip to JSON Schema. A rule this specification cannot publish
+ * is a rule the implementer who never installs the package does not get.
+ */
+export const MeasureOp = {
+  /** Inside the band: the reading differs from the named value by at most the tolerance. */
+  EQUALS: 'equals',
+  /** At or above the named value, with the tolerance allowed BELOW it. */
+  AT_LEAST: 'at-least',
+  /** At or below the named value, with the tolerance allowed ABOVE it. */
+  AT_MOST: 'at-most',
+} as const;
+export type MeasureOp = (typeof MeasureOp)[keyof typeof MeasureOp];
 
 export const PredicateSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -104,6 +126,18 @@ export const PredicateSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal(PredicateKind.PRESENT), match: MatchSchema }),
   z.object({ kind: z.literal(PredicateKind.ABSENT), match: MatchSchema }),
+  z.object({
+    kind: z.literal(PredicateKind.MEASURE),
+    match: MatchSchema,
+    op: z.nativeEnum(MeasureOp),
+    /** The number the claim named. Any real number: a temperature, an angle, a millisecond. */
+    value: z.number().finite(),
+    /**
+     * How far off the reading may be and still satisfy the claim. Never negative -- a negative
+     * tolerance would NARROW the band, which is a different predicate written by accident.
+     */
+    tolerance: z.number().nonnegative().finite().default(0),
+  }),
 ]);
 export type Predicate = z.infer<typeof PredicateSchema>;
 
@@ -133,6 +167,40 @@ export function render(value: unknown): string {
 }
 
 /**
+ * A measurement over the observations a predicate selected.
+ *
+ * Three-valued like everything else here, and the middle value is the point. A reading that is
+ * not a number has NOT been evaluated: a realm reporting its temperature as `"37C"` has made a
+ * formatting choice, and reading that as a failed claim would invent a defect out of it. Same
+ * for a selection that matched nothing -- a measurement over no reading is not a reading of
+ * zero, which is the difference between this and `absent`.
+ *
+ * Satisfied by ANY one matching reading, the way `present` is. A claim that every reading in a
+ * window stayed inside a band is a different predicate, and inventing it here without a caller
+ * would be one more thing defined and reached by nobody.
+ *
+ * The unit is deliberately not a field. It is carried by `match.summary`, which is exact, so
+ * `sensor.temperature.celsius` and `sensor.temperature.kelvin` are different selections rather
+ * than one selection with a unit nobody compares. A unit the engine could not check would be a
+ * field that exists to be ignored.
+ */
+function measured(
+  p: { readonly op: MeasureOp; readonly value: number; readonly tolerance: number },
+  found: readonly Observation[],
+): boolean | undefined {
+  const readings = found
+    .map((o) => o.value)
+    .filter((v): v is number => 'number' === typeof v && Number.isFinite(v));
+  if (0 === readings.length) return undefined;
+  const holds = (x: number): boolean => {
+    if (MeasureOp.AT_LEAST === p.op) return x >= p.value - p.tolerance;
+    if (MeasureOp.AT_MOST === p.op) return x <= p.value + p.tolerance;
+    return Math.abs(x - p.value) <= p.tolerance;
+  };
+  return readings.some(holds);
+}
+
+/**
  * Evaluate a predicate over a window's observations.
  *
  * `undefined` is a real answer and the most important one: it means NOBODY EVALUATED THIS, which
@@ -157,6 +225,8 @@ export function evaluate(
       if (CountOp.EXACTLY === p.op) return found.length === p.value;
       if (CountOp.AT_LEAST === p.op) return found.length >= p.value;
       return found.length <= p.value;
+    case PredicateKind.MEASURE:
+      return measured(p, found);
   }
 }
 
