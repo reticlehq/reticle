@@ -44,6 +44,7 @@ import { Profile } from './scenarios/index.mjs';
 
 const PORT = 4400;
 const APP = 'http://localhost:4318';
+const API = 'http://localhost:8787';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** The app under test. Its own dev server, so the run needs nothing already running. */
@@ -58,23 +59,40 @@ function bootApp() {
   );
 }
 
+/**
+ * The backend the app posts to. Booting only the app was enough to make the page RENDER and
+ * nowhere near enough to make it WORK: with nothing on 8787 every `POST /api/login` answered
+ * `Failed to fetch`, in the planted runs and in the healthy control alike. A plant that makes a
+ * request fail cannot be distinguished from a request that already fails, so three scenarios
+ * scored `yes` off an app whose sign-in had never once succeeded -- including the negative
+ * control, whose whole job is to be the one run where the app really works.
+ */
+function bootApi() {
+  return spawn('node', ['server.mjs'], {
+    cwd: new URL('../apps/api/', import.meta.url),
+    stdio: 'ignore',
+    env: { ...process.env },
+  });
+}
+
 /** Wait for the dev server to answer. Vite takes a moment, and a refused connection reads as a
  * broken runner rather than as one that started too early. */
-async function waitForApp() {
+async function waitFor(url, what) {
   for (let i = 0; i < 120; i++) {
     try {
-      const res = await fetch(APP);
+      const res = await fetch(url);
       if (res.ok) return;
     } catch {
       // not up yet
     }
     await sleep(500);
   }
-  throw new Error(`the bench app never answered on ${APP}`);
+  throw new Error(`${what} never answered on ${url}`);
 }
 
 async function main() {
   const app = bootApp();
+  const api = bootApi();
   const server = await start({ port: PORT, mcp: false });
   const browser = await chromium.launch();
   const page = await browser.newPage();
@@ -86,7 +104,8 @@ async function main() {
     // before a scenario is driven. The refusal was correct -- scoring an implementation that
     // declared nothing would have credited it for evidence it never had -- but the cause was
     // this runner, not the implementation.
-    await waitForApp();
+    await waitFor(`${API}/api/health`, 'the demo backend');
+    await waitFor(APP, 'the bench app');
     await page.goto(APP, { waitUntil: 'domcontentloaded' });
     await liveRealm(server, page);
     // A client that plants by NAVIGATING, which is how this subject is put into a state. The
@@ -179,6 +198,7 @@ async function main() {
     await browser.close();
     await server.stop?.();
     app.kill();
+    api.kill();
   }
 
   print(report);

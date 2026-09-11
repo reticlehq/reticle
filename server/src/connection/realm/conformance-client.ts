@@ -32,7 +32,7 @@ export interface ConformanceClient {
   command(name: string, args?: Record<string, unknown>): Promise<Record<string, unknown>>;
   /** How a person names a control, turned into a handle `command` will accept as `ref`. */
   locate(query: unknown): Promise<readonly { ref: string; describes: string }[]>;
-  verify(claim: Claim): Promise<{ verdict: string; reason?: string }>;
+  verify(claim: Claim): Promise<{ verdict: string; ground: string; reason?: string }>;
 }
 
 /**
@@ -153,6 +153,7 @@ export function conformanceClient(realm: WebRealm, now: () => number): Conforman
       });
       return {
         verdict: decided.verdict,
+        ground: decided.ground,
         ...(decided.reasons[0] === undefined ? {} : { reason: decided.reasons[0] }),
       };
     },

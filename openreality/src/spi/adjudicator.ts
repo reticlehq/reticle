@@ -28,10 +28,48 @@ import { type Anomaly, AnomalyTier, Verdict } from '../vocabulary/verdict.js';
  * disagrees with this function, this function is what the specification means.
  */
 
+/**
+ * The clause that decided, as a code rather than as a sentence.
+ *
+ * The prose in `reasons` is for a person and is an implementation's own; this is the same fact in
+ * a form another program can compare. Both are needed, and the distinction was found by the
+ * conformance suite rather than reasoned about: a scenario that requires "disproved BECAUSE two
+ * channels contradicted" cannot be scored against `verdict` alone -- `no` is also what a merely
+ * failed assertion returns -- and scoring it against the sentence would pin every implementation
+ * to this one's vocabulary, which is the thing a specification must never do.
+ *
+ * One code per clause of `adjudicate`, in the order the clauses run.
+ */
+export const Ground = {
+  /** Clause 1: nothing was declared, over a window that closed cleanly. */
+  NOTHING_DECLARED: 'nothing-declared',
+  /** Clause 2: the claim reads a channel this implementation does not observe. */
+  CHANNEL_NOT_OBSERVED: 'channel-not-observed',
+  /** Clause 3: independent channels contradict each other. */
+  CONTRADICTED: 'contradicted',
+  /** Clause 4: the declared consequence did not hold. */
+  ASSERTION_FAILED: 'assertion-failed',
+  /** Clauses 1 and 5: the window did not close the way it said it would. */
+  WINDOW_NOT_CLOSED: 'window-not-closed',
+  /** Clause 6: something the claim needed was not visible. */
+  COVERAGE_IMPEACHED: 'coverage-impeached',
+  /** Clause 7: an absence inside a window whose end we chose. Never a fault. */
+  SUSPICION_UNRESOLVED: 'suspicion-unresolved',
+  /** Clause 8: the claim was written down after the action. */
+  DECLARED_AFTER_ACTION: 'declared-after-action',
+  /** Clause 9: nothing independent and consequence-grade paid for it. */
+  NO_INDEPENDENT_CONSEQUENCE: 'no-independent-consequence',
+  /** The bottom of the ladder: every rung cleared. */
+  PROVED: 'proved',
+} as const;
+export type Ground = (typeof Ground)[keyof typeof Ground];
+
 export interface Adjudication {
   readonly verdict: Verdict;
   /** What bought a `yes`. Absent when nothing did. */
   readonly grade?: Grade;
+  /** The deciding clause, as a code another implementation can be scored against. */
+  readonly ground: Ground;
   /** The deciding clause, named. A verdict whose reason is unnamed cannot be argued with. */
   readonly reasons: readonly string[];
 }
@@ -68,10 +106,12 @@ export function adjudicate(input: AdjudicationInput): Adjudication {
     return closedCleanly(window)
       ? {
           verdict: Verdict.NO_FAULT,
+          ground: Ground.NOTHING_DECLARED,
           reasons: ['the window closed cleanly and nothing was declared to prove'],
         }
       : {
           verdict: Verdict.UNKNOWN,
+          ground: Ground.WINDOW_NOT_CLOSED,
           reasons: ['nothing was declared, and the window did not close cleanly either'],
         };
   }
@@ -83,6 +123,7 @@ export function adjudicate(input: AdjudicationInput): Adjudication {
   if (missing.length > 0) {
     return {
       verdict: Verdict.UNKNOWN,
+      ground: Ground.CHANNEL_NOT_OBSERVED,
       reasons: [`the claim reads ${missing.join(', ')}, which this implementation cannot observe`],
     };
   }
@@ -96,19 +137,25 @@ export function adjudicate(input: AdjudicationInput): Adjudication {
   if (convicting.length > 0) {
     return {
       verdict: Verdict.NO,
+      ground: Ground.CONTRADICTED,
       reasons: convicting.map((a) => `${a.claim} — but ${a.counter}`),
     };
   }
 
   // 4. The assertions themselves failed.
   if (assertionsHeld === false) {
-    return { verdict: Verdict.NO, reasons: ['the declared consequence did not hold'] };
+    return {
+      verdict: Verdict.NO,
+      ground: Ground.ASSERTION_FAILED,
+      reasons: ['the declared consequence did not hold'],
+    };
   }
 
   // 5. The window never closed properly, so nothing here is a statement about a finished effect.
   if (!closedCleanly(window)) {
     return {
       verdict: Verdict.UNKNOWN,
+      ground: Ground.WINDOW_NOT_CLOSED,
       reasons: [`the window closed by ${String(window.closedBy)} rather than ${window.closes}`],
     };
   }
@@ -118,7 +165,7 @@ export function adjudicate(input: AdjudicationInput): Adjudication {
   //    punished and an implementation learns to declare less.
   if (isImpeached(coverage)) {
     const spots = coverage.blindSpots.filter((s) => s.impeaching).map((s) => s.detail);
-    return { verdict: Verdict.UNKNOWN, reasons: spots };
+    return { verdict: Verdict.UNKNOWN, ground: Ground.COVERAGE_IMPEACHED, reasons: spots };
   }
 
   // 7. An absence-derived anomaly. Never a fault; always a reason to look again.
@@ -126,6 +173,7 @@ export function adjudicate(input: AdjudicationInput): Adjudication {
   if (suspicions.length > 0) {
     return {
       verdict: Verdict.UNKNOWN,
+      ground: Ground.SUSPICION_UNRESOLVED,
       reasons: suspicions.map((a) => `${a.claim} — and ${a.counter}`),
     };
   }
@@ -135,6 +183,7 @@ export function adjudicate(input: AdjudicationInput): Adjudication {
   if (claim.declaredAt !== Declaration.BEFORE_ACTION) {
     return {
       verdict: Verdict.UNKNOWN,
+      ground: Ground.DECLARED_AFTER_ACTION,
       reasons: ['the claim was declared after the action, so it can be met but not proved'],
     };
   }
@@ -146,6 +195,7 @@ export function adjudicate(input: AdjudicationInput): Adjudication {
   if (proving.length === 0) {
     return {
       verdict: Verdict.UNKNOWN,
+      ground: Ground.NO_INDEPENDENT_CONSEQUENCE,
       reasons: [
         'nothing independent of the action supports this at consequence grade; ' +
           'the subject agreeing with itself is not evidence that it acted',
@@ -156,6 +206,7 @@ export function adjudicate(input: AdjudicationInput): Adjudication {
   return {
     verdict: Verdict.YES,
     grade: Grade.CONSEQUENCE,
+    ground: Ground.PROVED,
     reasons: ['proved by independent evidence over a cleanly closed window'],
   };
 }

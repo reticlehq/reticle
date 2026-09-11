@@ -39,14 +39,14 @@ export const SCENARIOS = [
     id: 'effect-failed-surface-advanced',
     profile: Profile.EFFECT,
     plant: 'A request fails, and the app moves on to a success state anyway.',
-    mustProduce: { verdict: Verdict.NO, reason: 'contradicted' },
+    mustProduce: { verdict: Verdict.NO, ground: 'contradicted' },
     why: 'The swallowed rejection. The screen says it worked and the wire says it did not.',
   },
   {
     id: 'write-echoes-different-value',
     profile: Profile.IN_REALM,
     plant: 'A write is accepted, and what comes back differs from what was sent.',
-    mustProduce: { verdict: Verdict.NO, reason: 'contradicted' },
+    mustProduce: { verdict: Verdict.NO, ground: 'contradicted' },
     why: 'A field silently dropped on the way in. The call succeeded and the data is wrong.',
   },
   {

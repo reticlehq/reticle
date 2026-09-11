@@ -42,12 +42,16 @@ describe('an answer is scored against what the scenario required', () => {
     expect(answersScenario(scenario(), { verdict: Verdict.YES })).toBe(false);
   });
 
-  it('compares the reason only when the scenario named one', () => {
-    // Pinning an implementation's own wording would score it on vocabulary rather than behaviour.
-    const withReason = scenario({ mustProduce: { verdict: Verdict.NO, reason: 'contradicted' } });
-    expect(answersScenario(withReason, { verdict: Verdict.NO, reason: 'contradicted' })).toBe(true);
-    expect(answersScenario(withReason, { verdict: Verdict.NO, reason: 'other' })).toBe(false);
-    expect(answersScenario(scenario(), { verdict: Verdict.NO, reason: 'anything' })).toBe(true);
+  it('compares the ground only when the scenario named one', () => {
+    // The deciding CLAUSE, as a code. Pinning an implementation's own wording would score it on
+    // vocabulary rather than behaviour, and `no` alone is too coarse: a scenario about a
+    // contradiction would also be satisfied by a merely failed assertion.
+    const withGround = scenario({ mustProduce: { verdict: Verdict.NO, ground: 'contradicted' } });
+    expect(answersScenario(withGround, { verdict: Verdict.NO, ground: 'contradicted' })).toBe(true);
+    expect(answersScenario(withGround, { verdict: Verdict.NO, ground: 'assertion-failed' })).toBe(
+      false,
+    );
+    expect(answersScenario(scenario(), { verdict: Verdict.NO, ground: 'anything' })).toBe(true);
   });
 
   it('honours notVerdict, which most scenarios use', () => {

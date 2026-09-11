@@ -44,9 +44,11 @@ export function answersScenario(scenario, answer) {
   if (scenario.neverProduce !== undefined && answer.verdict === scenario.neverProduce) return false;
   if (want.notVerdict !== undefined) return answer.verdict !== want.notVerdict;
   if (want.verdict !== undefined && answer.verdict !== want.verdict) return false;
-  // The reason is compared only when the scenario names one. Most do not, because pinning an
-  // implementation's own wording would score it on vocabulary rather than on behaviour.
-  if (want.reason !== undefined && answer.reason !== want.reason) return false;
+  // The GROUND is compared when the scenario names one -- the deciding clause as a code, never
+  // the sentence beside it. `no` alone is not enough for a scenario about a contradiction, since
+  // a merely failed assertion returns `no` too; and comparing the prose would score an
+  // implementation on this one's vocabulary.
+  if (want.ground !== undefined && answer.ground !== want.ground) return false;
   return true;
 }
 
