@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { ChannelId } from './channel.js';
 import type { Observation } from './evidence.js';
-import { assertionsHeld, CountOp, evaluate, PredicateKind } from './predicate.js';
+import {
+  assertionsHeld,
+  CountOp,
+  evaluate,
+  MatchSchema,
+  PredicateKind,
+  PredicateSchema,
+} from './predicate.js';
 
 const at = (n: number, value: unknown, summary = 'net.request'): Observation => ({
   id: `o${String(n)}`,
@@ -32,7 +39,7 @@ describe('evaluating the predicate forms the specification names itself', () => 
     const elsewhere = [{ ...login(1), channel: ChannelId.UI }];
     const p = {
       kind: PredicateKind.PRESENT,
-      match: { channel: ChannelId.NET, valueContains: '/api/login' },
+      match: { channel: ChannelId.NET, summary: 'net.request', valueContains: '/api/login' },
     };
     // The channel is the whole basis of the independence rule. A predicate that quietly matched
     // an observation from another channel would let the subject's own reporting answer a claim
@@ -59,7 +66,7 @@ describe('evaluating the predicate forms the specification names itself', () => 
 describe('whether a claim held, three-valued', () => {
   const counted = {
     kind: PredicateKind.COUNT,
-    match: { channel: ChannelId.NET, valueContains: '/api/login' },
+    match: { channel: ChannelId.NET, summary: 'net.request', valueContains: '/api/login' },
     op: CountOp.EXACTLY,
     value: 1,
   };
@@ -75,5 +82,45 @@ describe('whether a claim held, three-valued', () => {
     const some = [{ predicate: counted }, { predicate: { kind: 'x-unknowable' } }];
     expect(assertionsHeld(some, [login(1)])).toBe(true);
     expect(assertionsHeld(some, [login(1), login(2)])).toBe(false);
+  });
+});
+
+describe('a claim may not rest on valueContains alone', () => {
+  /**
+   * SPEC.md says this in the imperative and nothing enforced it, in a schema I wrote in the
+   * same release as the sentence. The rule is real: rendering is an implementation's own, so an
+   * unanchored substring can match in one conformant implementation and not in another, and a
+   * claim hinging on it is not portable -- which is the one thing a published predicate form
+   * exists to be.
+   */
+  it('refuses a match with valueContains and no summary', () => {
+    expect(MatchSchema.safeParse({ channel: ChannelId.NET, valueContains: '/api/x' }).success).toBe(
+      false,
+    );
+  });
+
+  it('accepts it when anchored by an exact summary', () => {
+    expect(
+      MatchSchema.safeParse({
+        channel: ChannelId.NET,
+        summary: 'net.request',
+        valueContains: '/api/x',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('still accepts a match on the channel alone, which rests on nothing weak', () => {
+    expect(MatchSchema.safeParse({ channel: ChannelId.NET }).success).toBe(true);
+  });
+
+  it('refuses it through the predicate too, not only the bare match', () => {
+    // The schema a caller actually hands over is the predicate; a refinement that only held on
+    // the inner shape would be satisfied by nobody's real input.
+    expect(
+      PredicateSchema.safeParse({
+        kind: PredicateKind.PRESENT,
+        match: { channel: ChannelId.NET, valueContains: '/api/x' },
+      }).success,
+    ).toBe(false);
   });
 });

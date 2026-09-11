@@ -50,7 +50,26 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * measured, so an ordinary change does not fail on rounding; raising either one needs a reason
  * written here, the way the tool-surface budget does.
  */
-const MAX_FIRST_LOAD_BYTES = 230_000;
+const MAX_FIRST_LOAD_BYTES = 231_000;
+/**
+ * Raised from 230,000 on 2026-09-11, with the reason the comment above asks for.
+ *
+ * Measured 230,149 B. The growth is the protocol reaching this bundle through `@reticlehq/core`:
+ * `core/index.js` re-exports `realm/registry`, `verdict/verification-run` and `wire/channel`,
+ * and this release gave the first two an import of `@reticlehq/openreality` -- the run artifact
+ * now carries a `SubjectRef`, and the realm registry derives a `Surface`. Both are real
+ * features. Their zod schemas are constructed at module scope, so esbuild keeps them.
+ *
+ * 149 B over, which is 0.06%, and the ceiling had almost no headroom left. Raised by 1,000 B
+ * rather than to the measurement, so an ordinary change does not fail on rounding.
+ *
+ * **The structural fix is not this.** A page has no use for the run artifact's schema or the
+ * protocol's subject vocabulary, and `core` already has the pattern for keeping them away from
+ * it: `./telemetry` and `./artifacts` are subpath entry points precisely so the barrel does not
+ * drag everything in. Moving `verification-run` behind one would take this back below 230,000
+ * and stop the next protocol addition arriving on every page load. That is a public-surface
+ * change to `@reticlehq/core` and wants deciding rather than doing under a size guard.
+ */
 /** What is left is the handful of small leaf files a page names on the way in. See log-kinds.ts. */
 const MAX_PANEL_BYTES_IN_FIRST_LOAD = 5_000;
 

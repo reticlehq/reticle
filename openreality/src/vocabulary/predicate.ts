@@ -29,26 +29,34 @@ import type { Observation } from './evidence.js';
  */
 
 /** How a predicate selects the observations it is about. */
-export const MatchSchema = z.object({
-  /** The channel the observations must have come from. */
-  channel: ChannelIdSchema,
-  /**
-   * The observation's `summary`, exactly.
-   *
-   * Exact rather than a pattern on purpose: a summary is a short realm-defined label, and a
-   * regular expression over it would be a predicate language arriving through the back door.
-   */
-  summary: z.string().min(1).optional(),
-  /**
-   * A substring of the observation's rendered value.
-   *
-   * The weakest thing here, and it says so. Rendering is an implementation's own, so two
-   * conformant implementations may disagree about whether this matches. Use it to name an
-   * endpoint or an identifier -- something that survives any reasonable rendering -- and never as
-   * the whole of a claim.
-   */
-  valueContains: z.string().min(1).optional(),
-});
+export const MatchSchema = z
+  .object({
+    /** The channel the observations must have come from. */
+    channel: ChannelIdSchema,
+    /**
+     * The observation's `summary`, exactly.
+     *
+     * Exact rather than a pattern on purpose: a summary is a short realm-defined label, and a
+     * regular expression over it would be a predicate language arriving through the back door.
+     */
+    summary: z.string().min(1).optional(),
+    /**
+     * A substring of the observation's rendered value.
+     *
+     * The weakest thing here, and it says so. Rendering is an implementation's own, so two
+     * conformant implementations may disagree about whether this matches. Use it to name an
+     * endpoint or an identifier -- something that survives any reasonable rendering -- and never as
+     * the whole of a claim.
+     */
+    valueContains: z.string().min(1).optional(),
+  })
+  .refine((m) => m.valueContains === undefined || m.summary !== undefined, {
+    message:
+      'a match may not rest on valueContains alone: pair it with an exact `summary`. Rendering ' +
+      "is an implementation's own, so an unanchored substring can match in one conformant " +
+      'implementation and not in another, and a claim that hinges on it is not portable.',
+    path: ['valueContains'],
+  });
 export type Match = z.infer<typeof MatchSchema>;
 
 /** Comparisons a count may be held to. */
