@@ -4,6 +4,8 @@ import { ReticleTool } from './tool-names.js';
 import { withSizeCost } from '../session/output-budget.js';
 import { applySnapshotDelta, SnapshotCache } from './snapshot-delta.js';
 import { asRecord, asString, asNumber } from './tools-helpers.js';
+import { crashedRootNote } from './crashed-root-note.js';
+import type { ReticleEvent } from '@reticlehq/core';
 import { countSchema } from './numeric-bounds.js';
 import { normalizeQueryArgs } from './query-shape.js';
 import { paginateQueryResult } from './query-paginate.js';
@@ -293,21 +295,25 @@ export const RAW_TOOLS: ToolDef[] = [
         mode,
       }).then((raw) =>
         withSizeCost(
-          noteHiddenPage(
-            noteEmptyLeanTree(
-              applySnapshotDelta(
-                raw,
-                {
-                  sessionId: resolved.id,
-                  scope: asString(args['scope']) ?? '',
-                  mode,
-                  diff: true === args['diff'],
-                },
-                SNAPSHOT_CACHE,
+          noteCrashedRoot(
+            noteHiddenPage(
+              noteEmptyLeanTree(
+                applySnapshotDelta(
+                  raw,
+                  {
+                    sessionId: resolved.id,
+                    scope: asString(args['scope']) ?? '',
+                    mode,
+                    diff: true === args['diff'],
+                  },
+                  SNAPSHOT_CACHE,
+                ),
+                mode,
               ),
               mode,
             ),
             mode,
+            resolved.eventsSince(0),
           ),
         ),
       );
@@ -762,6 +768,30 @@ function noteEmptyLeanTree(result: unknown, mode: string): unknown {
  * cannot know why, and a note that guessed would be the same kind of overconfident answer as the
  * empty tree it replaces.
  */
+/**
+ * The third cause of an empty tree, and the only one that means something is wrong RIGHT NOW.
+ *
+ * `noteHiddenPage` explains an empty tree by what the walk skipped. When it skipped nothing, the
+ * tree is empty because the page is, and "the view has not rendered yet" is the reading an agent
+ * reaches for -- correctly, almost always. A crashed root produces the identical shape and needs the
+ * opposite response: waiting will not fix it. See crashed-root-note.ts.
+ *
+ * Takes the session's events rather than the snapshot payload because the tell is not in the tree:
+ * it is the uncaught errors sitting beside it, which the server already holds.
+ */
+function noteCrashedRoot(result: unknown, mode: string, events: readonly ReticleEvent[]): unknown {
+  if (SnapshotMode.STATUS === mode) return result;
+  const row = asRecord(result);
+  if (0 !== asNumber(row['nodes'])) return result;
+  // A note already there is the more specific one, and two explanations for one empty tree is worse
+  // than the better of them alone -- the same rule noteHiddenPage follows.
+  if (row['note'] !== undefined) return result;
+  // Hiddenness explains this tree; that is noteHiddenPage's answer, not this one's.
+  if ((asNumber(row['hiddenSkipped']) ?? 0) > 0) return result;
+  const note = crashedRootNote(events);
+  return note === undefined ? result : { ...row, note };
+}
+
 function noteHiddenPage(result: unknown, mode: string): unknown {
   if (SnapshotMode.STATUS === mode) return result;
   const row = asRecord(result);
