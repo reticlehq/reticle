@@ -54,21 +54,31 @@ const MAX_FIRST_LOAD_BYTES = 231_000;
 /**
  * Raised from 230,000 on 2026-09-11, with the reason the comment above asks for.
  *
- * Measured 230,149 B. The growth is the protocol reaching this bundle through `@reticlehq/core`:
- * `core/index.js` re-exports `realm/registry`, `verdict/verification-run` and `wire/channel`,
- * and this release gave the first two an import of `@reticlehq/openreality` -- the run artifact
- * now carries a `SubjectRef`, and the realm registry derives a `Surface`. Both are real
- * features. Their zod schemas are constructed at module scope, so esbuild keeps them.
+ * Measured 230,149 B -- 149 B over, and the ceiling had almost no headroom left. Raised by
+ * 1,000 B rather than to the measurement, so an ordinary change does not fail on rounding.
  *
- * 149 B over, which is 0.06%, and the ceiling had almost no headroom left. Raised by 1,000 B
- * rather than to the measurement, so an ordinary change does not fail on rounding.
+ * The cause, attributed from the same metafile rather than guessed at: `core/index.js`
+ * re-exports `verdict/verification-run`, and this release gave it an import of
+ * `@reticlehq/openreality`, because a run artifact now carries a `SubjectRef`. That one import
+ * is of the protocol's barrel, and the barrel re-exports the whole vocabulary -- every one of
+ * which builds a zod schema at module scope, so none of it can be shaken out. Ten protocol
+ * files, 8,352 B minified, arrive on every page load to give one schema to one field.
  *
- * **The structural fix is not this.** A page has no use for the run artifact's schema or the
- * protocol's subject vocabulary, and `core` already has the pattern for keeping them away from
- * it: `./telemetry` and `./artifacts` are subpath entry points precisely so the barrel does not
- * drag everything in. Moving `verification-run` behind one would take this back below 230,000
- * and stop the next protocol addition arriving on every page load. That is a public-surface
- * change to `@reticlehq/core` and wants deciding rather than doing under a size guard.
+ * What does NOT arrive is worth writing down, because the first draft of this comment claimed
+ * it did: `realm/registry` is not in the first load at all, and neither is the adjudicator nor
+ * the reference realm. Those are functions and classes with no module-scope side effects, so
+ * esbuild drops them. Only the schemas survive. A protocol addition costs a page load exactly
+ * when it is a schema, and nothing when it is a rule.
+ *
+ * **The structural fix is not this.** `core` already has the pattern: `./telemetry` and
+ * `./artifacts` are subpath entry points precisely so the barrel does not drag everything in.
+ * Moving `verification-run` behind one would take back its own 3,635 B and the protocol's
+ * 8,352 B with it -- about 12 KB, well below 230,000 -- and stop the next schema arriving on
+ * every page load. That is a public-surface change to `@reticlehq/core` and wants deciding
+ * rather than doing under a size guard.
+ *
+ * For scale, the largest single line item in the first load is neither: zod itself is 59,536 B,
+ * and it has been there since long before the protocol existed.
  */
 /** What is left is the handful of small leaf files a page names on the way in. See log-kinds.ts. */
 const MAX_PANEL_BYTES_IN_FIRST_LOAD = 5_000;
