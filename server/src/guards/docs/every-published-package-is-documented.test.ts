@@ -20,6 +20,15 @@ import { REPO_ROOT } from '../../machine/repo-root.js';
  *
  * Publishability is read from the manifests, so adding a package is enough to be asked for; and
  * the crate is checked too, because `reticle-tauri` is installable and is not an npm package.
+ *
+ * README is deliberately NOT checked the same way, and the reason is worth keeping. Its
+ * "What's inside" table had the identical hole and both new packages were added to it by hand.
+ * But the table groups the three build plugins into one row and writes them `-next`,
+ * `-babel-plugin`, `-eslint-plugin` with the prefix elided, and `@reticlehq/init` is never
+ * named at all because nobody installs it. A guard insisting on the full name of every package
+ * would force that table apart to satisfy a check rather than to help a reader, which is the
+ * thing a guard is supposed to prevent, not cause. Discoverability is covered by the page
+ * whose job it is.
  */
 
 const PAGE = 'docs/packages.mdx';
