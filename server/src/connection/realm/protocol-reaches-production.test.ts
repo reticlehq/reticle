@@ -62,14 +62,38 @@ describe('how much of the protocol the shipping product uses', () => {
     ).toEqual([]);
   });
 
-  it('leaves the run artifact subject unwritten, rather than half-written', () => {
-    // Half-written would be worse than empty: a SubjectRef with an invented `instance` is a
-    // subject that cannot be distinguished from a real one, and the schema's own comment says
-    // an invented subject is worse than an absent one.
-    const writers = tracked('server/src', 'core/src').filter((f) =>
-      /subject:\s*subjectOf\(|subject:\s*this\.identity\(\)/.test(code(f)),
-    );
-    expect(writers).toEqual(['server/src/connection/realm/web-realm.ts']);
+  it('writes the run artifact subject from exactly the two places that can know it', () => {
+    // This assertion used to read "leaves the run artifact subject unwritten", and it was green
+    // while being false. It matched the SOURCE TEXT `subject: subjectOf(`, and `session-end.ts`
+    // assigns to a local and spreads `{ subject }` instead — so the one file that actually puts a
+    // SubjectRef into a persisted run was invisible to the check written to watch for exactly
+    // that. A pattern that matches one spelling of a thing is not a check for the thing.
+    //
+    // Detected by IMPORT now, which is what distinguishes it: there are two functions called
+    // `subjectOf` in this repository. The protocol's (`@reticlehq/core`, returns a `SubjectRef`)
+    // and the journal's (`runs/artifact/run-context.js`, returns a string key for folding actions).
+    // A bare grep for the name catches `feature-capture.ts`, which is the journal one and has
+    // nothing to do with the protocol.
+    //
+    // Two writers is the intended state, and they are different answers to "can this know where it
+    // was": the realm knows because it IS the connection; session-end knows only when the session
+    // recorded a url, and writes nothing when it did not, because the schema makes the field
+    // optional precisely so absence can be told from invention.
+    const writers = tracked('server/src', 'core/src')
+      .filter((f) => f !== 'core/src/realm/registry.ts')
+      .filter((f) =>
+        /import\s*\{[^}]*\bsubjectOf\b[^}]*\}\s*from\s*'@reticlehq\/core'/s.test(code(f)),
+      )
+      .sort();
+    expect(
+      writers,
+      'the set of places that can stamp a run with a protocol SubjectRef changed. Each one is a ' +
+        'claim about knowing what was verified, and an invented subject is worse than an absent ' +
+        'one — so adding a writer is a decision to record here.',
+    ).toEqual([
+      'server/src/connection/realm/web-realm.ts',
+      'server/src/features/journal/session-end.ts',
+    ]);
   });
 
   it('exports the artifact from exactly one place, the run export tool', () => {
