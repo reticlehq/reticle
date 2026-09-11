@@ -13,6 +13,7 @@
 
 import { isDangerousActionText } from '@reticlehq/core';
 import { getAccessibleName } from '../dom/a11y.js';
+import { isTextArea } from '../dom/realm.js';
 
 /**
  * Input types whose `value` IS the visible label rather than data the user put there.
@@ -73,6 +74,12 @@ const SUBMIT_CONTROL_SELECTOR =
   'button[type="submit"], input[type="submit"], button:not([type]):not([type=""])';
 
 export function submitControlFor(el: HTMLElement): HTMLElement | null {
+  // Except in a textarea, where Enter inserts a NEWLINE and submits nothing. Judging it by the
+  // form's submit button blocks the one keystroke on the page that does the least: the field is
+  // exempted from its own text above, and then the button beside it supplies the danger anyway.
+  // That is the reported false positive in its second shape -- Enter in a notes box refused, next
+  // to a submit button whose click would be judged the same way and allowed.
+  if (isTextArea(el)) return null;
   const found = el.closest('form')?.querySelector(SUBMIT_CONTROL_SELECTOR);
   return found instanceof HTMLElement ? found : null;
 }
