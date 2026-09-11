@@ -5,7 +5,7 @@ import {
   type Claim,
   type Coverage,
 } from '@reticlehq/openreality';
-import { Grade, ProvenanceClass, type Evidence } from '@reticlehq/openreality';
+import { CloseCondition, Grade, ProvenanceClass, type Evidence } from '@reticlehq/openreality';
 import type { WebRealm } from './web-realm.js';
 
 /**
@@ -82,6 +82,27 @@ function provesOnlyDispatch(observation: { readonly value?: unknown }): boolean 
   const value = observation.value;
   if ('object' !== typeof value || null === value) return false;
   return true === (value as { oneWay?: unknown }).oneWay;
+}
+
+/**
+ * How this window actually closed, rather than how it hoped to.
+ *
+ * The binding used to report `closedBy: window.closes` -- the condition the window was OPENED
+ * with -- so `closedCleanly` was true by construction and clause 5 could never fire. A field
+ * always set to the happy value is the same defect as `impeaching`, which made clause 6
+ * unreachable: defined, deferred to somebody, and decided by nobody.
+ *
+ * The honest answer available here is the budget. If the window was still open when its budget
+ * ran out, the verifier stopped watching, and that is `budget-exhausted` whatever the window was
+ * waiting for. Quiescence itself is the realm's to measure; this is the part the binding knows.
+ */
+function closedBy(
+  window: { readonly openedAt: number; readonly budgetMs: number; readonly closes: CloseCondition },
+  closedAt: number,
+): CloseCondition {
+  return closedAt - window.openedAt >= window.budgetMs
+    ? CloseCondition.BUDGET_EXHAUSTED
+    : window.closes;
 }
 
 function asEvidence(
@@ -168,7 +189,13 @@ export function conformanceClient(realm: WebRealm, now: () => number): Conforman
 
     async command(name, args = {}) {
       // Opened before the action, not after it. See the note above.
-      open = realm.openWindow(WINDOW_BUDGET_MS);
+      //
+      // The budget is the subject's to shorten. One scenario needs a window that runs out before
+      // the application settles -- the verifier giving up, which must never be read as the
+      // application failing -- and there is no way to produce that without asking for less time
+      // than the work takes.
+      const budget = 'number' === typeof args['budgetMs'] ? args['budgetMs'] : WINDOW_BUDGET_MS;
+      open = realm.openWindow(budget);
       const receipt = await realm.perform({
         id: `conformance-${String(now())}`,
         actor: 'conformance',
@@ -190,11 +217,12 @@ export function conformanceClient(realm: WebRealm, now: () => number): Conforman
       // observe nothing and be told so.
       const window = open ?? realm.openWindow(WINDOW_BUDGET_MS);
       open = undefined;
+      const closedAt = now();
       const observations = await realm.observe(window);
       const coverage: Coverage = await realm.coverage(window);
       const decided = adjudicate({
         claim: { ...claim, declaredAt: claim.declaredAt ?? Declaration.BEFORE_ACTION },
-        window: { ...window, closedAt: now(), closedBy: window.closes },
+        window: { ...window, closedAt: closedAt, closedBy: closedBy(window, closedAt) },
         channels: realm.channels(),
         evidence: asEvidence(realm, observations, now()),
         coverage,

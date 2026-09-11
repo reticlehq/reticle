@@ -144,6 +144,8 @@ async function main() {
           const receipt = await realm.client.command(entry.act.capability, {
             ref,
             action: entry.act.verb,
+            // Only one scenario sets this: a window deliberately shorter than the work.
+            ...(entry.budgetMs === undefined ? {} : { budgetMs: entry.budgetMs }),
           });
           if (receipt['planted'] !== true) {
             // Printed: an action refused after a handle resolved is the next thing to diagnose,

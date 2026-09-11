@@ -133,6 +133,20 @@ export const SCENARIOS = [
       'hardcoded `before-action` and clause 8 had never once fired.',
   },
   {
+    id: 'verifier-ran-out-of-budget',
+    profile: Profile.EFFECT,
+    plant: 'The window runs out before the application settles.',
+    mustProduce: { verdict: Verdict.UNKNOWN, ground: 'window-not-closed' },
+    neverProduce: Verdict.NO,
+    why:
+      'The verifier gave up, and the application may be perfectly fine. This is the one place ' +
+      "where the tool's own impatience could be reported as somebody else's defect, so `no` is " +
+      'forbidden outright rather than merely discouraged: a slow backend must never be convicted ' +
+      'by a short window. It is also the clause an implementation skips by reporting the close ' +
+      'condition it OPENED with instead of the one it closed on, which makes every window look ' +
+      'clean.',
+  },
+  {
     id: 'nothing-declared',
     profile: Profile.EFFECT,
     plant: 'A clean, quiet window in which nobody claimed anything would happen.',

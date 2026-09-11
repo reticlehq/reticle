@@ -125,6 +125,22 @@ export const BENCH_APP_SUBJECT = Object.freeze({
     declaredAt: 'after-action',
   },
 
+  /**
+   * A window too short for the work, against an operation that will not finish.
+   *
+   * `hung-login` starts a request that never settles, and `budgetMs` is set below the time the
+   * driver waits before verifying, so the window is already out of budget when the verdict is
+   * taken. The application is not at fault in any way here -- nothing about it is broken except
+   * that it is slower than the verifier's patience.
+   */
+  'verifier-ran-out-of-budget': {
+    bug: 'hung-login',
+    act: { capability: 'act', target: 'testid=login-submit', verb: 'click' },
+    claim: 'the sign-in completed',
+    reads: ['net'],
+    budgetMs: 200,
+  },
+
   /** A clean, quiet window in which nobody claimed anything. */
   'nothing-declared': {
     bug: undefined,
