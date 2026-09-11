@@ -70,6 +70,10 @@ function fakeSession(options: Options): Session {
     getState: () => SessionState.ACTIVE,
     drainInbox: () => [],
     inboxSize: () => 0,
+    // A step that declares an `expect` waits on a predicate, and a predicate subscribes. Without
+    // this the wait throws and every declared step reads as a STALL, which is a different answer
+    // to the one being tested.
+    onEvent: () => () => undefined,
   };
   return stub as Session;
 }
@@ -232,5 +236,54 @@ describe('act_sequence per-step progress', () => {
 
     expect(timedOutStep?.dispatched).toBeNull();
     expect(timedOutStep?.timedOut).toBe(true);
+  });
+});
+
+/**
+ * `completed` has to mean the same thing whichever way the sequence stopped.
+ *
+ * It was `stalledAt ?? inputSteps.length` — written when a stall (a thrown or timed-out step) was
+ * the only way to stop early. A halt on an unmet `expect` came later, and `completed` never learned
+ * about it, so a sequence that stopped at step 2 of 3 answered `completed: 3` while `tail` carried
+ * the step it had not run. Two contradictory accounts of one drive, in the response an agent gates
+ * on, and the optimistic one is the round number.
+ *
+ * Measured on a live daemon: a three-step plan whose step 2 declared a signal that never fires came
+ * back `stopped_at: 1`, one step in `tail`, two step results — and `completed: 3`.
+ *
+ * The halted step itself counts as completed: it WAS dispatched, and only its declared consequence
+ * failed afterwards. A stalled step did not run at all, which is why that index stays exclusive.
+ */
+describe('what completed counts when a declared consequence does not hold', () => {
+  const plan = [
+    { ref: 'e1', action: 'fill', args: { value: 'a@b.com' } },
+    {
+      ref: 'e2',
+      action: 'fill',
+      args: { value: 'hunter2' },
+      expect: { kind: 'signal', name: 'never:fires' },
+    },
+    { ref: 'e3', action: 'click' },
+  ];
+
+  it('counts the steps that actually ran, not the whole plan', async () => {
+    const session = fakeSession({});
+    const result = (await tool(ReticleTool.ACT_SEQUENCE).handler(fakeDeps(session), {
+      steps: plan,
+      timeout_ms: 0,
+    })) as SequenceResult & { stopped_at?: number; tail?: unknown[] };
+    // Vacuity: if it did not halt, `completed: 3` would be correct and this proves nothing.
+    expect(result.stopped_at).toBe(1);
+    expect(result.tail).toHaveLength(1);
+    expect(result.completed).toBe(2);
+  });
+
+  it('agrees with the tail, so the two halves cannot tell different stories', async () => {
+    const session = fakeSession({});
+    const result = (await tool(ReticleTool.ACT_SEQUENCE).handler(fakeDeps(session), {
+      steps: plan,
+      timeout_ms: 0,
+    })) as SequenceResult & { tail?: unknown[] };
+    expect(result.completed + (result.tail ?? []).length).toBe(plan.length);
   });
 });

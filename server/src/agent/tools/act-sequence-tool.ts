@@ -232,7 +232,19 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
         }
       }
 
-      const completed = stalledAt ?? inputSteps.length;
+      /*
+       * Steps that actually ran — which is not the same as the length of the plan.
+       *
+       * This was `stalledAt ?? inputSteps.length`, from when a stall was the only way to stop early.
+       * Halting on an unmet `expect` came later and this never learned about it, so a sequence that
+       * stopped at step 2 of 3 answered `completed: 3` while `tail` carried the step it had not run:
+       * two accounts of one drive in the response an agent gates on, and the optimistic one was the
+       * round number. Measured on a live daemon.
+       *
+       * The halted step counts: it WAS dispatched, and only the consequence it declared failed
+       * afterwards. A stalled step never ran, which is why that index stays exclusive.
+       */
+      const completed = stoppedAt !== undefined ? stoppedAt + 1 : (stalledAt ?? inputSteps.length);
       if (completed > 0) {
         session.lastAct.markActed(since, undefined, undefined);
       }

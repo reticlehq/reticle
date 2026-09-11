@@ -137,16 +137,16 @@ describe('what a step reports', () => {
  * the predicate. The endpoint cannot exist, so the assertion could never hold; nothing evaluated it.
  * An agent reads `completed` plus `settled: true` and records a consequence that was never checked.
  *
- * act_sequence cannot grade a consequence — only act_and_wait and reticle_assert produce a verdict —
- * so the honest answer is to refuse and name the tool that can, the same way an unsupported native
- * click is refused rather than faked.
+ * The honest answer is to refuse and name the key that IS read, the same way an unsupported native
+ * click is refused rather than faked. `expect` was on this list until the tool learned to grade one
+ * per step — see the block below, and the live drive that found the door still locked.
  */
 describe('a sub-step cannot silently carry an assertion it will never grade', () => {
-  for (const key of ['until', 'expect', 'assert', 'waitFor']) {
+  for (const key of ['until', 'assert', 'waitFor']) {
     it(`refuses a step carrying \`${key}\``, () => {
       expect(() =>
         assertSequenceSteps([{ ref: 'e1', action: 'click', [key]: { kind: 'settled' } }]),
-      ).toThrow(/act_and_wait|reticle_assert/);
+      ).toThrow(/does not read[\s\S]*`expect`/);
     });
   }
 
@@ -164,6 +164,97 @@ describe('a sub-step cannot silently carry an assertion it will never grade', ()
       assertSequenceSteps([
         { ref: 'e1', action: 'fill', args: { value: 'a' } },
         { target: { testid: 't' }, action: 'click' },
+      ]),
+    ).not.toThrow();
+  });
+});
+
+/**
+ * The preflight was written when a sub-step genuinely could not be graded, and stayed that way after
+ * it could.
+ *
+ * `reticle_act_sequence` now takes `expect` per step, parses it, grades it, and returns
+ * `stopped_at` — and its own schema tells the agent so: *"`expect` … is what makes a step PROVE
+ * something"*. The preflight runs first and refused every step carrying one, so an agent following
+ * the tool's own documentation got a hard refusal and the whole graded path was unreachable.
+ *
+ * No unit test could see it: they call `gradeSequence` and the handler internals directly. It took a
+ * live drive of a three-step plan to hit the door that was still locked.
+ *
+ * The other three keys stay refused. `until`, `assert` and `waitFor` are still keys this tool does
+ * not read, and silently dropping one manufactures the false green the refusal exists to stop — but
+ * the answer is now "you want `expect`", not "go and use another tool".
+ */
+describe('the consequence an agent declares on a sub-step', () => {
+  const expectStep = {
+    ref: 'e1',
+    action: 'click',
+    expect: { kind: 'signal', name: 'todo:added' },
+  };
+
+  it('accepts `expect`, which this tool grades', () => {
+    expect(() => assertSequenceSteps([expectStep])).not.toThrow();
+  });
+
+  it('accepts it beside steps that declare nothing', () => {
+    expect(() =>
+      assertSequenceSteps([{ ref: 'e0', action: 'fill', args: { value: 'a' } }, expectStep]),
+    ).not.toThrow();
+  });
+
+  for (const key of ['until', 'assert', 'waitFor']) {
+    it(`still refuses \`${key}\`, which is read by nothing and would be dropped`, () => {
+      expect(() =>
+        assertSequenceSteps([{ ref: 'e1', action: 'click', [key]: { kind: 'signal', name: 'x' } }]),
+      ).toThrow(/expect/);
+    });
+  }
+});
+
+/**
+ * An `expect` the tool cannot parse must be REFUSED, never counted as nothing declared.
+ *
+ * The handler used `PredicateSchema.safeParse` and, on failure, pushed `{ declared: false }`. So an
+ * agent that wrote `expect: { signal: "order:placed" }` — a plausible spelling, and wrong, the
+ * shape is `{ kind: "signal", name: ... }` — got back *"all 3 steps declared nothing, so the app was
+ * driven but not verified"*. It had declared. Nobody told it the declaration was thrown away, and
+ * the sentence it did get invites it to add the very thing it just wrote.
+ *
+ * That is the same false green the unreadable-key refusal above exists to prevent, arriving through
+ * a key the tool DOES read. Measured on a live daemon, which is also the only place it shows: the
+ * handler tests construct predicates that parse.
+ *
+ * Refused in the preflight, before the first dispatch, for the reason every other refusal here is:
+ * half a journey is worse than none.
+ */
+describe('an expect this tool cannot parse', () => {
+  it('refuses a plausible but wrong predicate spelling', () => {
+    expect(() =>
+      assertSequenceSteps([{ ref: 'e1', action: 'click', expect: { signal: 'order:placed' } }]),
+    ).toThrow(/step 0[\s\S]*expect/);
+  });
+
+  it('names what a predicate looks like, so the fix does not need another round trip', () => {
+    expect(() =>
+      assertSequenceSteps([{ ref: 'e1', action: 'click', expect: { signal: 'order:placed' } }]),
+    ).toThrow(/kind/);
+  });
+
+  it('refuses rather than dropping it, so nothing is acted on', () => {
+    expect(() =>
+      assertSequenceSteps([
+        { ref: 'e1', action: 'fill', args: { value: 'a' } },
+        { ref: 'e2', action: 'click', expect: 'the receipt appears' },
+      ]),
+    ).toThrow(/Nothing was acted on/);
+  });
+
+  it('still accepts every predicate the grader understands', () => {
+    expect(() =>
+      assertSequenceSteps([
+        { ref: 'e1', action: 'click', expect: { kind: 'signal', name: 'order:placed' } },
+        { ref: 'e2', action: 'click', expect: { kind: 'element', by: 'testid', value: 'receipt' } },
+        { ref: 'e3', action: 'click', expect: { kind: 'settled' } },
       ]),
     ).not.toThrow();
   });
