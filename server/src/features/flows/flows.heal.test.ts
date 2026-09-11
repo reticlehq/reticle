@@ -117,12 +117,30 @@ function renamedSessionWithSignal(
   );
 }
 
-/** A session where `old` resolves to 0 elements with `present`, and any other testid resolves to 1. */
+/**
+ * The consequence every fixture flow carries unless it says otherwise.
+ *
+ * Heal REFUSES a flow with no consequence — there would be nothing to check the rebind against. So
+ * the default fixture has one, and the sessions below emit it: a test about confidence scoring or
+ * about byte-stability should not be silently testing the refusal instead.
+ */
+const HEALABLE_SIGNAL = 'flow:complete';
+
+/**
+ * A session where `old` resolves to 0 elements with `present`, and any other testid resolves to 1.
+ *
+ * It also emits the default success signal, so a healed flow's consequence holds. A session that
+ * cannot satisfy any consequence would make every apply path report CONSEQUENCE_BROKEN, which is a
+ * different answer to the one most of these tests are asking about.
+ */
 function renamedSession(old: string, presentTestids: string[]): FakeSession {
-  return new FakeSession((testid) =>
-    testid === old
-      ? { elements: [], hint: present(presentTestids) }
-      : { elements: [el(`e-${testid}`, testid)] },
+  return new FakeSession(
+    (testid) =>
+      testid === old
+        ? { elements: [], hint: present(presentTestids) }
+        : { elements: [el(`e-${testid}`, testid)] },
+    true,
+    [signalEvent(HEALABLE_SIGNAL)],
   );
 }
 
@@ -135,8 +153,25 @@ function clickStep(testid: string): FlowFile['steps'][number] {
   };
 }
 
-function flowFile(name: string, steps: FlowFile['steps']): FlowFile {
-  return { version: FLOW_FILE_VERSION, name, createdAt: FROZEN, steps };
+/**
+ * A fixture flow that is HEALABLE by default — it declares a consequence.
+ *
+ * Pass `{ success: undefined }` for the flows that exist to prove the refusal; pass a different
+ * `success` to aim the oracle somewhere the session will not satisfy.
+ */
+function flowFile(
+  name: string,
+  steps: FlowFile['steps'],
+  overrides: Partial<Pick<FlowFile, 'success'>> = {},
+): FlowFile {
+  return {
+    version: FLOW_FILE_VERSION,
+    name,
+    createdAt: FROZEN,
+    steps,
+    success: { signal: HEALABLE_SIGNAL },
+    ...overrides,
+  };
 }
 
 function fakeDeps(store: FlowStore, session: FakeSession): ToolDeps {
@@ -254,14 +289,47 @@ describe('FlowStore.heal + reticle_flow_heal', () => {
     expect(after).toEqual(before); // file untouched — never ship a green-but-dead flow
   }, 10_000);
 
-  it('heals a flow with no declared success but says the rebind is unverified', async () => {
-    await store.saveFlow(flowFile('chat', [clickStep('old-id')]));
+  /*
+   * This used to heal and warn. The warning was the wrong instrument.
+   *
+   * A heal re-points a drifted anchor at its nearest match, and the only thing that stops that from
+   * becoming a lie is a CONSEQUENCE: a locator healed to the wrong element cannot fake a signal, a
+   * request or a store value. A flow with none has nothing to check the rebind against, so healing
+   * it produces a flow that passes forever and proves nothing — WORSE than the drift it replaced,
+   * because the drift was at least visible.
+   *
+   * Writing it and saying "the rebind is unverified" put the one sentence that matters in a field
+   * an agent reads after it has already banked a green. Self-healing that manufactures a false green
+   * is the most expensive irony this product could ship, so the answer is a refusal.
+   *
+   * The proposal still travels: the drift is real and a human may well want to fix it by hand.
+   */
+  it('REFUSES to heal a flow with no consequence, and says what would make it healable', async () => {
+    await store.saveFlow(flowFile('chat', [clickStep('old-id')], { success: undefined }));
+    const session = renamedSession('old-id', ['new-id']);
+    const before = await readFile(flowPath(root, asFlowName('chat')), 'utf8');
+
+    const res = await heal(store, session, { flowName: 'chat', apply: true });
+    expect(res.status).toBe(HealStatus.UNFALSIFIABLE);
+    expect(res.applied).toBe(false);
+    expect(res.proposals).toHaveLength(1);
+    expect(res.message).toMatch(/expect|success/);
+    expect(await readFile(flowPath(root, asFlowName('chat')), 'utf8')).toEqual(before);
+  });
+
+  it('REFUSES a flow whose only assertion is that an element is present', async () => {
+    // The sharpest case: "the element is there" is exactly what a wrong rebind makes true, so it
+    // cannot be the thing that validates a rebind.
+    await store.saveFlow(
+      flowFile('chat', [{ ...clickStep('old-id'), expect: { element: { testid: 'new-id' } } }], {
+        success: undefined,
+      }),
+    );
     const session = renamedSession('old-id', ['new-id']);
 
     const res = await heal(store, session, { flowName: 'chat', apply: true });
-    expect(res.status).toBe(HealStatus.HEALED);
-    expect(res.applied).toBe(true);
-    expect(res.message.toLowerCase()).toContain('no success consequence');
+    expect(res.status).toBe(HealStatus.UNFALSIFIABLE);
+    expect(res.applied).toBe(false);
   });
 
   it('heal apply:false returns the proposal but does NOT modify the file', async () => {
@@ -363,15 +431,35 @@ describe('FlowStore.heal + reticle_flow_heal', () => {
   });
 
   it('apply rewrites only confident steps, leaves low-confidence steps', async () => {
-    await store.saveFlow(flowFile('multi', [clickStep('old-id'), clickStep('save')]));
+    /*
+     * Asserted per STEP rather than through the flow's `success`, deliberately.
+     *
+     * Heal verifies a flow-level success by re-replaying from the first drifted step, and this flow
+     * still has a drifted step 1 by design — so a flow-level oracle would report CONSEQUENCE_BROKEN
+     * and this test would be answering about consequences instead of about confidence. A step
+     * `expect` makes it healable without changing what is being measured.
+     */
+    await store.saveFlow(
+      flowFile(
+        'multi',
+        [{ ...clickStep('old-id'), expect: { signal: HEALABLE_SIGNAL } }, clickStep('save')],
+        { success: undefined },
+      ),
+    );
     // step0 'old-id' renamed to confident 'new-id'; step1 'save' has only a far 'delete-everything'.
-    const session = new FakeSession((testid) => {
-      if ('old-id' === testid)
-        return { elements: [], hint: present(['new-id', 'delete-everything']) };
-      if ('save' === testid)
-        return { elements: [], hint: present(['new-id', 'delete-everything']) };
-      return { elements: [el(`e-${testid}`, testid)] };
-    });
+    const session = new FakeSession(
+      (testid) => {
+        if ('old-id' === testid)
+          return { elements: [], hint: present(['new-id', 'delete-everything']) };
+        if ('save' === testid)
+          return { elements: [], hint: present(['new-id', 'delete-everything']) };
+        return { elements: [el(`e-${testid}`, testid)] };
+      },
+      true,
+      // The flow declares a consequence, so the page has to be able to satisfy it — otherwise this
+      // test about CONFIDENCE would be answering about a broken consequence instead.
+      [signalEvent(HEALABLE_SIGNAL)],
+    );
 
     const res = await heal(store, session, { flowName: 'multi', apply: true });
     expect(res.status).toBe(HealStatus.HEALED);

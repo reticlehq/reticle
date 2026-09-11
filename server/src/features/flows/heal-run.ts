@@ -18,6 +18,7 @@ import { asString } from '@reticlehq/core';
 import { waitForPredicate } from '@reticlehq/engine/question/predicate/predicate.js';
 import { replayFlow } from './flow-replay.js';
 import { applyHealChanges, collectProposals } from './heal.js';
+import { healPrecondition } from './heal-precondition.js';
 import { assertSuccess, dynamicTestids, successLabel } from './flow-success.js';
 import { flowErrorMessage, sessionProjectId } from './flow-replay-run.js';
 import type { ToolDeps } from '../../agent/tools/tools.js';
@@ -30,7 +31,7 @@ const HEAL_MESSAGES = {
   DRIFT_DRY: 'confident rebind(s) proposed — re-run with apply:true to write them to disk',
   UNHEALABLE: `drift found, but no nearest match cleared the confidence floor (HEAL_CONFIDENCE_MIN=${HEAL_CONFIDENCE_MIN}); file left untouched; add a data-testid or fix the flow by hand`,
   HEALED_UNVERIFIED:
-    'rewrote drifted testid anchors — but this flow declares no success consequence, so the rebind resolves a locator without proving the intent still holds. Add a success-state assertion (reticle_annotate) so future heals can be verified.',
+    "rewrote drifted testid anchors. This flow declares its consequences per STEP rather than as a flow `success`, so the rebind was not re-verified end to end — the steps will assert on the next replay, but nothing proved the healed flow still reaches its outcome. Set the flow's `success` (reticle_annotate) to have future heals re-verified before they are written.",
   CONSEQUENCE_BROKEN:
     'rebind resolves the drifted locator to a surviving element, but the healed flow no longer satisfies its success consequence — refusing to write (a heal that loses the intent would ship a green-but-dead test). Fix by hand and verify',
 } as const;
@@ -112,6 +113,33 @@ export async function healFlow(
       proposals,
       changed: [],
       message: HEAL_MESSAGES.DRIFT_DRY,
+    };
+  }
+
+  /*
+   * A flow with no consequence may not be healed at all.
+   *
+   * The rebind is checked by the CONSEQUENCE: a locator healed to the wrong element cannot fake a
+   * signal, a request or a store value. A flow that asserts nothing has nothing to check it against,
+   * so healing it yields a flow that passes forever and proves nothing — worse than the drift it
+   * replaced, because the drift was at least visible. Presence-only is refused for the sharpest
+   * version of the same reason: "the element is there" is exactly what a wrong rebind makes true.
+   *
+   * This used to heal and say "the rebind is unverified" in the message, which put the one sentence
+   * that mattered where an agent reads it after banking a green.
+   *
+   * Refused at the WRITE, not before the replay: the drift is real, and a human may well want to
+   * fix it by hand, so the proposal still travels. Same split as CONSEQUENCE_BROKEN.
+   */
+  const unfalsifiable = healPrecondition(loaded.value);
+  if (unfalsifiable !== undefined) {
+    return {
+      name,
+      status: unfalsifiable.status,
+      applied: false,
+      proposals,
+      changed: [],
+      message: unfalsifiable.message,
     };
   }
 
