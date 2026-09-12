@@ -556,6 +556,47 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
     return Promise.resolve(stripVolatile(page.url()) === stripVolatile(sessionUrl));
   }
 
+  /**
+   * The context's cookies and per-origin storage, or undefined when no page is live.
+   *
+   * Present here and not only on the CDP provider because THIS is the provider `reticle drive`
+   * builds, and `fixturePortFor` refuses outright when either half is missing — so without these a
+   * driven session had no fixture port at all, and every suite seeded nothing while reading as if it
+   * seeded everything. Same two methods, same contract, one page instead of a page lookup.
+   */
+  async storageState(_sessionUrl: string): Promise<unknown> {
+    const page = this.#livePage();
+    if (page === undefined) return undefined;
+    return page.context().storageState();
+  }
+
+  /**
+   * Put a captured state back: cookies through the context, per-origin storage through the page.
+   * Only the context owns a cookie jar and only a document owns its localStorage.
+   */
+  async applyStorageState(_sessionUrl: string, state: unknown): Promise<boolean> {
+    const page = this.#livePage();
+    if (page === undefined) return false;
+    const saved = state as {
+      cookies?: Parameters<ReturnType<Page['context']>['addCookies']>[0];
+      origins?: { origin: string; localStorage?: { name: string; value: string }[] }[];
+    };
+    if (saved.cookies !== undefined) await page.context().addCookies(saved.cookies);
+    for (const origin of saved.origins ?? []) {
+      // A page sitting on a different origin cannot be given another origin's storage, and silently
+      // succeeding there is the quiet half-restore this whole path exists to avoid.
+      if (!page.url().startsWith(origin.origin)) continue;
+      await page.evaluate((entries: { name: string; value: string }[]) => {
+        const store = (
+          globalThis as { localStorage?: { setItem(key: string, value: string): void } }
+        ).localStorage;
+        if (store === undefined) return;
+        for (const entry of entries) store.setItem(entry.name, entry.value);
+      }, origin.localStorage ?? []);
+    }
+    return true;
+  }
+
   perform(
     _sessionUrl: string,
     action: ActionType,

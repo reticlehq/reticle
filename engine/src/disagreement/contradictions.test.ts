@@ -816,3 +816,118 @@ describe('the app announced a consequence and nothing else moved', () => {
     );
   });
 });
+
+/**
+ * The store moved and the screen did not.
+ *
+ * `response-ignored` covers *a write succeeded and nothing moved*; `action-had-no-effect` covers
+ * *the click did nothing at all*. Neither covers the commonest React defect there is: state commits,
+ * and the component that should have re-rendered did not — a memo with a stale comparator, a key
+ * that never changed, a selector reading the wrong slice. The app is internally consistent and the
+ * user sees the old value.
+ *
+ * ABSENCE-DERIVED, and that is the whole design. A store holds plenty that was never meant to paint:
+ * an analytics flag, a timer, a cached token. "Nothing rendered" is therefore not proof of a fault,
+ * which is why this downgrades a green to UNKNOWN rather than asserting NO — the same scoping
+ * `signal-without-consequence` already earned, for the same reason.
+ *
+ * So the rule is deliberately narrow: only when the window is attributed to an ACTION, only when
+ * state moved, only when NOTHING in the DOM moved, and only when no request is in flight that the
+ * render could still be waiting on.
+ */
+describe('the store moved and the screen did not', () => {
+  it('fires when state commits with no DOM movement at all', () => {
+    const found = causedKinds([stateChanged()]);
+    expect(found).toContain(ContradictionKind.STATE_VS_RENDER);
+  });
+
+  it('is absence-derived, so it downgrades a green rather than inventing a fault', () => {
+    expect(isAbsenceDerived(ContradictionKind.STATE_VS_RENDER)).toBe(true);
+  });
+
+  it('does NOT fire when the DOM moved too — that is an app doing its job', () => {
+    expect(causedKinds([stateChanged(), domChanged()])).not.toContain(
+      ContradictionKind.STATE_VS_RENDER,
+    );
+  });
+
+  it('does NOT fire when the window carries any network — another rule owns that fact', () => {
+    // Proved by two PRE-EXISTING tests that broke when this rule was first written without the
+    // guard: both describe a window with a failed call in it, and both are already answered by the
+    // rule that owns failed calls. One fact, one finding.
+    expect(causedKinds([stateChanged(), okCall()])).not.toContain(
+      ContradictionKind.STATE_VS_RENDER,
+    );
+    expect(causedKinds([stateChanged(), failedCall()])).not.toContain(
+      ContradictionKind.STATE_VS_RENDER,
+    );
+  });
+
+  it('does NOT fire when nothing moved at all — that is action-had-no-effect, not this', () => {
+    expect(causedKinds([])).not.toContain(ContradictionKind.STATE_VS_RENDER);
+  });
+
+  it('does NOT fire on an UNATTRIBUTED window — a read is not a claim about a click', () => {
+    // `reticle_assert` observes; there is no action whose consequence should have rendered. Without
+    // this the rule would accuse every quiet read that happened to see a store tick.
+    expect(findContradictions([stateChanged()]).map((c) => c.kind)).not.toContain(
+      ContradictionKind.STATE_VS_RENDER,
+    );
+  });
+});
+
+/**
+ * The verdict was taken while the screen was still moving.
+ *
+ * `trace.summary.animations` counts animations and says nothing about whether any FINISHED. An
+ * action that starts a transition and is judged mid-flight produces a verdict about a screen that
+ * was still changing — the visual sibling of `request-never-settled`, and read the same way: not
+ * "the app is broken", but "this evidence was taken early".
+ *
+ * Narrowed to animations THIS ACTION started. A spinner that was already turning before the click
+ * is not the action's transition, and accusing every app with a loading indicator is how a detector
+ * earns itself a mute.
+ */
+describe('an animation started and never finished in this window', () => {
+  const animStart = (name: string, t: number): ReticleEvent => ({
+    t,
+    seq: t,
+    type: EventType.ANIM_START,
+    sessionId: 's',
+    data: { name },
+  });
+  const animEnd = (name: string, t: number): ReticleEvent => ({
+    t,
+    seq: t,
+    type: EventType.ANIM_END,
+    sessionId: 's',
+    data: { name },
+  });
+
+  it('fires when the action starts a transition that never ends', () => {
+    const found = findContradictions([animStart('slide-in', 5)], { actionSince: 1 });
+    expect(found.map((c) => c.kind)).toContain(ContradictionKind.TRANSITION_UNFINISHED);
+  });
+
+  it('names the animation, so a reader can judge whether it matters', () => {
+    const found = findContradictions([animStart('slide-in', 5)], { actionSince: 1 });
+    const hit = found.find((c) => c.kind === ContradictionKind.TRANSITION_UNFINISHED);
+    expect(`${hit?.detail ?? ''}${hit?.counter ?? ''}`).toContain('slide-in');
+  });
+
+  it('does NOT fire when the transition completed', () => {
+    const found = findContradictions([animStart('slide-in', 5), animEnd('slide-in', 9)], {
+      actionSince: 1,
+    });
+    expect(found.map((c) => c.kind)).not.toContain(ContradictionKind.TRANSITION_UNFINISHED);
+  });
+
+  it('ignores an animation that was ALREADY running — a spinner is not this action’s transition', () => {
+    const found = findContradictions([animStart('spinner', 0)], { actionSince: 5 });
+    expect(found.map((c) => c.kind)).not.toContain(ContradictionKind.TRANSITION_UNFINISHED);
+  });
+
+  it('is absence-derived — the screen still moving is not proof of a fault', () => {
+    expect(isAbsenceDerived(ContradictionKind.TRANSITION_UNFINISHED)).toBe(true);
+  });
+});

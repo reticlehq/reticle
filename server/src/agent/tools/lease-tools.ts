@@ -11,7 +11,11 @@
  */
 
 import type { RealInputProvider } from '../../connection/input/real-input.js';
-import { fixturePortFor, seedFromStorageState } from '../../connection/input/storage-fixture.js';
+import {
+  fixturePortFor,
+  seedFromStorageState,
+  type StorageFixturePort,
+} from '../../connection/input/storage-fixture.js';
 import {
   mutationPortFor,
   type NetworkMutationPort,
@@ -830,6 +834,26 @@ export async function suiteFixtureSeed(
     const port = await fixturePortFor(realInput, appUrl);
     if (port === undefined) return undefined;
     return seedFromStorageState(await port.capture(), appUrl);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Save/restore for this session's page, or nothing.
+ *
+ * The same job as `suiteFixtureSeed` next door, stopping one step earlier: that one captures and
+ * converts, this hands back the PORT so a caller can re-apply what it captured later. It lives here
+ * for the reason written above — a feature reaching into the input layer directly is a feature
+ * depending on a driver, and the boundary guard asks about it. It asked.
+ */
+export async function suiteFixturePort(
+  realInput: RealInputProvider | undefined,
+  appUrl: string | undefined,
+): Promise<StorageFixturePort | undefined> {
+  if (realInput === undefined || appUrl === undefined) return undefined;
+  try {
+    return await fixturePortFor(realInput, appUrl);
   } catch {
     return undefined;
   }

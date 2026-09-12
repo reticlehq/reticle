@@ -328,6 +328,34 @@ export async function arriveAtStartPath(
   } catch {
     return undefined; // no usable base URL — nowhere to navigate from
   }
+  return navigateAndAwait(sessions, session, destination, target, timeoutMs, clock);
+}
+
+/**
+ * Send a tab somewhere and wait for the session that comes back.
+ *
+ * A navigation is a full page load: the session that issued it DIES and a successor connects with a
+ * new id. Every caller therefore has to wait for that successor rather than reuse the handle it
+ * already holds, and getting this wrong does not error — it leaves the caller talking to a session
+ * that will never answer again.
+ *
+ * Extracted so there is ONE of these rather than one per caller. `arriveAtStartPath` decides WHETHER
+ * to move and this decides how, which is also why the deliberate short-circuits live up there and
+ * not in here: a caller that has already decided it must move should not have to argue with them.
+ */
+export async function navigateAndAwait(
+  sessions: SessionManager,
+  session: {
+    id: string;
+    /** Optional because a session's URL is, and `carryReticleIdentity` already handles its absence. */
+    url?: string;
+    command(name: string, args?: Record<string, unknown>): Promise<CommandResult>;
+  },
+  destination: string,
+  expectedPath: string,
+  timeoutMs: number = START_PATH_ARRIVAL_TIMEOUT_MS,
+  clock: ArrivalClock = REAL_ARRIVAL_CLOCK,
+): Promise<Session | undefined> {
   // A leased tab is addressed by URL params, so navigating without them would strand the lease.
   const url = carryReticleIdentity(session.url, destination);
   try {
@@ -338,7 +366,7 @@ export async function arriveAtStartPath(
   }
   const deadline = clock.now() + timeoutMs;
   for (;;) {
-    const arrived = arrivedSuccessor(sessions, session.id, target);
+    const arrived = arrivedSuccessor(sessions, session.id, expectedPath);
     if (arrived !== undefined) return arrived;
     if (clock.now() >= deadline) return undefined;
     await clock.sleep(START_PATH_POLL_MS);

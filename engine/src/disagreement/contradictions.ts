@@ -2,20 +2,26 @@ import {
   type Contradiction,
   ContradictionKind,
   EventType,
-  MUTATING_METHODS,
-  isDevToolingUrl,
   isSameDocument,
-  isThirdPartyUrl,
   isSameEditEpoch,
-  urlForMatch,
   type ReticleEvent,
 } from '@reticlehq/core';
 import { describeSuperseded } from '../question/predicate/observed-in-window.js';
+import {
+  describe,
+  isMutating,
+  isSameDocumentHashAnchor,
+  isSteadyCadence,
+  netCall,
+  recoveredByRetry,
+  splitForeignTraffic,
+  type NetCall,
+} from './contradiction-evidence.js';
 import { findStaleResponses } from './stale-response.js';
 import { findBodyFailures } from './body-failures.js';
 import { findEchoMismatches } from './echo-mismatch.js';
 import { findUnitMismatches } from './unit-mismatch.js';
-import { asNumber, asString } from '@reticlehq/core';
+import { asString } from '@reticlehq/core';
 import { matchesDeclaredFailure, type DeclaredNetFailure } from '../question/declared.js';
 import type { NoteFn } from '../window/engine-host.js';
 import { runRegisteredFolds } from './contradiction-folds.js';
@@ -50,70 +56,6 @@ export type { Contradiction };
 
 export type OwnContradiction = Contradiction & { kind: ContradictionKind };
 
-interface NetCall {
-  method: string;
-  url: string;
-  /** Grader haystack — the raw request when redaction rewrote `url`. */
-  matchUrl: string;
-  status: number | undefined;
-  /**
-   * `undefined` means NO VERDICT — not failure.
-   *
-   * A one-way IPC `send` hands the message to the main process and returns; the renderer never learns
-   * whether it was handled. The observer deliberately omits both `ok` and `status` rather than
-   * manufacture a success nobody reported. Collapsing that to `false` here manufactured a FAILURE
-   * nobody reported instead, which is the same sin pointing the other way: every fire-and-forget send
-   * raised `ui-advanced-request-failed` against a UI that had done nothing wrong.
-   */
-  ok: boolean | undefined;
-}
-
-function netCall(e: ReticleEvent): NetCall {
-  const status = asNumber(e.data['status']);
-  return {
-    method: (asString(e.data['method']) ?? '').toUpperCase(),
-    url: asString(e.data['url']) ?? '',
-    matchUrl: urlForMatch(e.data),
-    status,
-    // `ok` is authoritative when present (IPC sets it explicitly); status is the HTTP fallback.
-    // Neither present = no verdict was ever reported, which stays undefined all the way through.
-    ok:
-      e.data['ok'] === undefined && status === undefined
-        ? undefined
-        : true === e.data['ok'] || (e.data['ok'] === undefined && (status ?? 0) < 400),
-  };
-}
-
-/**
- * The failed calls that a LATER successful call to the same endpoint replaced.
- *
- * Identity, not index: each `netCall` is a fresh object held by `settled`, and `settled` is built
- * from events in sequence order, so "later" is simply "further along the array". Compared on
- * `matchUrl` so a cache-buster or a changing query token cannot make a retry look like a different
- * call — the same normalisation every other url comparison here uses.
- */
-function recoveredByRetry(settled: readonly NetCall[]): ReadonlySet<NetCall> {
-  const out = new Set<NetCall>();
-  for (let i = 0; i < settled.length; i += 1) {
-    const call = settled[i];
-    if (call === undefined || false !== call.ok) continue;
-    for (let j = i + 1; j < settled.length; j += 1) {
-      const later = settled[j];
-      if (later === undefined) continue;
-      if (true === later.ok && later.method === call.method && later.matchUrl === call.matchUrl) {
-        out.add(call);
-        break;
-      }
-    }
-  }
-  return out;
-}
-
-/**
- * Did the user-visible application state move forward? DOM, store and route only — deliberately NOT
- * network, animation or signal. The question every rule below asks is "did the app act as if it
- * succeeded", and a request firing is not the app acting as if anything.
- */
 function uiAdvanced(events: readonly ReticleEvent[]): boolean {
   return events.some(
     (e) =>
@@ -124,10 +66,6 @@ function uiAdvanced(events: readonly ReticleEvent[]): boolean {
       e.type === EventType.STATE_CHANGE ||
       e.type === EventType.ROUTE_CHANGE,
   );
-}
-
-function isMutating(call: NetCall): boolean {
-  return MUTATING_METHODS.includes(call.method);
 }
 
 /**
@@ -197,17 +135,6 @@ function failureAcknowledged(events: readonly ReticleEvent[]): boolean {
   });
 }
 
-function describe(call: NetCall): string {
-  return `${call.method} ${call.url}${call.status === undefined ? '' : ` → ${String(call.status)}`}`;
-}
-
-/**
- * Actions that are SUPPOSED to make something happen, so producing nothing is a finding.
- *
- * Deliberately narrow. `hover`, `focus` and `scrollIntoView` can legitimately move nothing, and
- * `fill`/`type` change an input's value without necessarily mutating the DOM tree — flagging those
- * would manufacture noise, which is the failure mode opposite to a false green and just as bad.
- */
 const MUST_DO_SOMETHING = new Set(['click', 'dblclick', 'submit']);
 
 /**
@@ -367,130 +294,6 @@ export interface ContradictionOptions {
 }
 
 /** Net-shaped events — the only ones that carry a URL a dev-tooling channel could occupy. */
-const NET_TYPES: ReadonlySet<EventType> = new Set([
-  EventType.NET_PENDING,
-  EventType.NET_REQUEST,
-  EventType.NET_STREAM,
-]);
-
-/**
- * Hash-router paths put the route in the fragment (`#/settings`, `#!/home`). An in-page skip link
- * does not (`#main-content`, `#`, empty). The blank-destination rule must still see the former.
- */
-function isInPageFragment(hash: string): boolean {
-  if ('' === hash || '#' === hash) return true;
-  const body = hash.startsWith('#') ? hash.slice(1) : hash;
-  return !body.startsWith('/') && !body.startsWith('!');
-}
-
-function hrefAsUrl(value: string | undefined): URL | undefined {
-  if (value === undefined || '' === value) return undefined;
-  try {
-    return new URL(value);
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Same origin + pathname + search, different in-page fragment — a skip link, not a new view.
- *
- * Returns false when `from`/`to` are missing, so older events without hrefs keep the existing rule.
- */
-function isSameDocumentHashAnchor(event: ReticleEvent): boolean {
-  if (event.type !== EventType.ROUTE_CHANGE) return false;
-  const from = hrefAsUrl(asString(event.data['from']));
-  const to = hrefAsUrl(asString(event.data['to']));
-  if (from === undefined || to === undefined) return false;
-  if (from.origin !== to.origin || from.pathname !== to.pathname || from.search !== to.search) {
-    return false;
-  }
-  if (from.hash === to.hash) return false;
-  return isInPageFragment(to.hash);
-}
-
-/**
- * Split the window into the app's traffic and the dev toolchain's own (see `DevToolingChannel`).
- *
- * NOTHING below may judge the toolchain. Reported from a real drive: a correct Next.js navigation
- * graded `verified: "no"` because the dev overlay was resolving a source map for an unrelated React
- * key warning, and that in-flight `POST /__nextjs_original-stack-frames` read as "the UI advanced
- * over a request that never settled". Every app that logs one dev warning got a false negative on
- * every action. The overlay's own 404s and duplicate fetches are the same story on other checks,
- * which is why the split happens ONCE here rather than in the one check that reported it.
- */
-function splitForeignTraffic(
-  events: readonly ReticleEvent[],
-  appOrigin: string | undefined,
-): {
-  app: readonly ReticleEvent[];
-  ignored: string[];
-} {
-  const ignored: string[] = [];
-  const app = events.filter((e) => {
-    if (!NET_TYPES.has(e.type)) return true;
-    const url = asString(e.data['url']);
-    // Somebody else's code, twice over: the toolchain's own channel, and any site that is not the
-    // app under test. Neither can answer the question every rule below asks.
-    if (!isDevToolingUrl(url) && !isThirdPartyUrl(url, appOrigin)) return true;
-    if (url !== undefined && !ignored.includes(url)) ignored.push(url);
-    return false;
-  });
-  return { app, ignored };
-}
-
-/**
- * Cross-channel contradictions in this window, with the edit-epoch caveat attached when it applies.
- *
- * Cross-epoch evidence is LABELLED rather than excluded, which is the opposite of what the document
- * scoping does, and the difference is the point. A navigation is total — it throws away the page,
- * the refs, the in-flight requests and the state — so nothing recorded before it is still about the
- * world, and dropping it is the only honest option. A hot update is not: most modules, most of the
- * DOM, the whole network log and every console line survive one, so most of what was observed a
- * second before an edit is still true a second after. Excluding it would empty windows that hold
- * real findings, and an emptied window reads as "nothing happened" — which is the more expensive of
- * the two wrong answers and the one this whole family of checks exists to prevent.
- *
- * So the findings stand and the caveat is said out loud, and only when it is unambiguous: EVERY
- * observation in the window predates the edit. One post-edit observation and the agent is already
- * looking at the code it wrote, so the label would be noise.
- */
-/**
- * Below this, repeated writes are a BURST, whatever their spacing.
- *
- * A double submit is two clicks, or one click and a re-render: milliseconds apart. Nothing a human
- * or a StrictMode remount does lands on a quarter-second grid, so this is the floor under which
- * regularity means nothing.
- */
-const POLL_MIN_INTERVAL_MS = 250;
-
-/**
- * How far a gap may sit from the median and still count as the same cadence.
- *
- * Loose on purpose: a real poll drifts under load, and a `setInterval` competing with a busy main
- * thread is not metronomic. Tight enough that a burst followed by a late retry — the shape a double
- * submit plus a user's second attempt makes — is not read as a rhythm.
- */
-const POLL_JITTER_RATIO = 0.4;
-
-/**
- * Is this the same write on a steady interval, rather than the same write twice?
- *
- * THREE samples minimum, and that is the load-bearing part: two writes give one gap, and a single
- * gap cannot distinguish a cadence from a coincidence. Two writes stay a duplicate however far
- * apart they are, which is the classic double submit and every case this rule was written for.
- */
-function isSteadyCadence(times: readonly number[]): boolean {
-  if (times.length < 3) return false;
-  const ordered = [...times].sort((a, b) => a - b);
-  const gaps: number[] = [];
-  for (let i = 1; i < ordered.length; i += 1) gaps.push((ordered[i] ?? 0) - (ordered[i - 1] ?? 0));
-  const sorted = [...gaps].sort((a, b) => a - b);
-  const median = sorted[Math.floor(sorted.length / 2)] ?? 0;
-  if (median < POLL_MIN_INTERVAL_MS) return false;
-  return gaps.every((gap) => Math.abs(gap - median) <= median * POLL_JITTER_RATIO);
-}
-
 export function findContradictions(
   allEvents: readonly ReticleEvent[],
   options: ContradictionOptions = {},
@@ -811,6 +614,73 @@ function findWindowContradictions(
             },
       );
     }
+  }
+
+  // ── A transition this action started, still running when we judged ─────────────────────────
+  //
+  // The visual `request-never-settled`. Only animations that began AT OR AFTER the attribution floor
+  // count: one already running when the click landed belongs to the page, not to the click, and
+  // accusing every spinner is how a detector gets muted.
+  if (options.actionSince !== undefined) {
+    const floorT = options.actionSince;
+    const ended = new Set(
+      events
+        .filter((e) => e.type === EventType.ANIM_END)
+        .map((e) => asString(e.data['name']))
+        .filter((n): n is string => n !== undefined),
+    );
+    const unfinished = events
+      .filter((e) => e.type === EventType.ANIM_START && e.t >= floorT)
+      .map((e) => asString(e.data['name']))
+      .filter((n): n is string => n !== undefined && !ended.has(n));
+    if (unfinished.length > 0) {
+      found.push({
+        kind: ContradictionKind.TRANSITION_UNFINISHED,
+        claim: 'the action completed and the verdict was taken',
+        counter: `${String(unfinished.length)} animation(s) this action started had not finished`,
+        detail: `${unfinished.join(', ')} — the screen was still changing, so anything read from it here is EARLY rather than wrong; widen the wait or assert the consequence the transition ends in`,
+      });
+    }
+  }
+
+  // ── The store committed and the screen never moved ─────────────────────────────────────────
+  //
+  // Scoped as tightly as the one below, and for the same reason: it fires on an ABSENCE, which is
+  // the easiest way to build a false positive. Only for a window attributed to an ACTION, only when
+  // state actually moved, only when NO DOM node moved with it, and only when nothing is still in
+  // flight that the render could legitimately be waiting on.
+  //
+  // Route movement counts as the screen moving: a navigation IS a render, and a store change that
+  // drives one has been corroborated.
+  //
+  // And only when the window carries NO NETWORK AT ALL. A request means the app reached for
+  // something, and whether it failed, was ignored or never settled already belongs to three other
+  // rules — firing here as well would report one fact twice, which is exactly the scoping the
+  // signal rule below had to earn. Two existing tests proved it: both describe a window with a
+  // failed call in it, and both were already answered by the rule that owns that fact.
+  if (
+    options.actionSince !== undefined &&
+    events.some((e) => e.type === EventType.STATE_CHANGE) &&
+    !events.some((e) => e.type === EventType.NET_REQUEST || e.type === EventType.NET_PENDING) &&
+    !events.some(
+      (e) =>
+        e.type === EventType.DOM_ADDED ||
+        e.type === EventType.DOM_REMOVED ||
+        e.type === EventType.DOM_ATTR ||
+        e.type === EventType.DOM_TEXT ||
+        e.type === EventType.ROUTE_CHANGE,
+    )
+  ) {
+    found.push({
+      kind: ContradictionKind.STATE_VS_RENDER,
+      claim: 'the store committed a change',
+      counter:
+        'nothing rendered in the same window — no DOM node added, removed or changed, and no ' +
+        'route movement, with no request still in flight the render could be waiting on',
+      detail:
+        'a component that does not re-render on a committed change shows the OLD value while the ' +
+        'app is internally consistent, which is why nothing else reports it',
+    });
   }
 
   // ── The app announced a consequence and nothing else moved ─────────────────────────────────

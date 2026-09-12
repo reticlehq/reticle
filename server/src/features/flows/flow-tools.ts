@@ -80,6 +80,23 @@ export function leasableAppUrl(deps: ToolDeps, sessionId: string | undefined): s
   }
 }
 
+/**
+ * The live session's own URL — what the fixture port must be looked up by.
+ *
+ * NOT `leasableAppUrl`. That returns an ORIGIN, and the input provider finds a page by comparing
+ * full URLs, so an origin matched no page: `suiteFixtureSeed` answered `undefined` on every run and
+ * every leased flow booted cold while the code read as if it were seeded. Silent, because every
+ * refusal on that path is deliberately silent — a fixture is an optimisation, and a suite must not
+ * die when one is unavailable.
+ */
+function sessionUrlOf(deps: ToolDeps, sessionId: string | undefined): string | undefined {
+  try {
+    return deps.sessions.resolve(sessionId).url;
+  } catch {
+    return undefined;
+  }
+}
+
 /** A flow whose leased context never came up is a suite ERROR, never a silent pass. */
 export function leaseFailureReplay(name: string, error: string | undefined): FlowReplayResult {
   return {
@@ -584,7 +601,14 @@ export const FLOW_TOOLS: ToolDef[] = [
          * `undefined` whenever it cannot be had, and the suite then runs exactly as it did before:
          * every flow from cold, which is correct and merely slower.
          */
-        const seed = await suiteFixtureSeed(deps.realInput, appUrl);
+        // The LIVE PAGE URL, not `appUrl`. `leasableAppUrl` returns an origin, and the provider
+        // finds a page by comparing full URLs — so an origin matched no page, the lookup answered
+        // "nothing driven here", and this returned `undefined` on every run. Silent, and it made the
+        // seeding below a no-op: every leased flow booted cold while the code read as if it did not.
+        const seed = await suiteFixtureSeed(
+          deps.realInput,
+          sessionUrlOf(deps, sessionId) ?? appUrl,
+        );
         const outcomes = await mapWithConcurrency(requested, concurrency, async (flowName) => {
           const start = deps.now();
           const lease = await acquireLeasedSession(pool, deps.sessions, appUrl, projectId, seed);
@@ -629,6 +653,13 @@ export const FLOW_TOOLS: ToolDef[] = [
       const runs: { replay: FlowReplayResult; flow?: FlowFile }[] = [];
       const timed: TimedReplay[] = [];
       // Sequential default: every flow replays against the same live session, so they must not overlap.
+      //
+      // They also START wherever the previous flow left the app, which makes a verdict depend on RUN
+      // ORDER — measured, and the cause of a contradiction that moved between flows run by run. A
+      // reset between flows was BUILT AND REVERTED: see the ledger's 9.2. Playwright's
+      // `storageState` carries cookies and localStorage and NOT sessionStorage, so a forced reload
+      // restores part of an app's auth and drops the rest, and the suite went from noisy to FAILING
+      // (1 of 2 flows). Restoring two thirds of a session is worse than restoring none.
       for (const flowName of requested) {
         const start = deps.now();
         const replay = await replayNamedFlow(deps, { flowName, sessionId });

@@ -51,6 +51,9 @@ const PINNED: readonly PublicSurface[] = [
     patterns: ['./question/*.js', './disagreement/*.js', './window/*.js', './evidence/*.js'],
     files: [
       'disagreement/body-failures.ts',
+      // Split out of contradictions.ts at the line cap. Public by the `./disagreement/*.js` pattern
+      // whether or not anyone wants it to be, which is what this list exists to make deliberate.
+      'disagreement/contradiction-evidence.ts',
       'disagreement/contradiction-folds.ts',
       'disagreement/contradictions.ts',
       'disagreement/echo-mismatch.ts',
