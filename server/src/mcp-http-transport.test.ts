@@ -3,7 +3,7 @@ import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { MCP_MESSAGE_PATH, MCP_SSE_PATH } from '@reticlehq/core';
-import { createSharedServer, type SharedServer } from './http-server.js';
+import { createSharedServer, type SharedServer } from './surface/http-server.js';
 
 /**
  * The daemon's HTTP/SSE MCP transport, pinned as public surface (#690).

@@ -1,8 +1,8 @@
 import { FLOW_MUTATE_TOOL } from './flow-mutate-tools.js';
-import { seedSchema } from '../../agent/tools/args/numeric-bounds.js';
+import { seedSchema } from '../../surface/tools/args/numeric-bounds.js';
 import { z } from 'zod';
 import { emptyFlowRefusal } from './empty-flow.js';
-import { aliasParam } from '../../agent/tools/args/alias-args.js';
+import { aliasParam } from '../../surface/tools/args/alias-args.js';
 import {
   FlowErrorCode,
   RecordedSaveError,
@@ -13,7 +13,7 @@ import type { FlowFile } from '@reticlehq/core';
 import { recordSuiteFlakes } from './suite/suite-flakes.js';
 import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString, mutationTargetsFor, perturbationFor } from '@reticlehq/core';
-import { workerCountSchema } from '../../agent/tools/args/numeric-bounds.js';
+import { workerCountSchema } from '../../surface/tools/args/numeric-bounds.js';
 import { log } from '../../log.js';
 import { cloudFetch, syncFlowToCloud, SyncOutcome } from '../cloud/cloud-sync.js';
 import { mapWithConcurrency, resolveConcurrency } from './suite/parallel-suite.js';
@@ -21,7 +21,7 @@ import {
   acquireLeasedSession,
   sessionPerturbationPort,
   suiteFixtureSeed,
-} from '../../agent/tools/lease-tools.js';
+} from '../../surface/tools/lease-tools.js';
 import { homedir } from 'node:os';
 import { resolveProjectCloud } from '../cloud/cloud-config.js';
 import { buildSuiteVerdict } from './decision.js';
@@ -30,7 +30,7 @@ import { recordingBacktrackWarning } from './recording/recording-backtrack.js';
 import { isValidFlowName, flowPath } from '../project/dir/reticle-dir.js';
 import type { SuiteVerdict } from '@reticlehq/core';
 import { type FlowAnnotations } from './flows.js';
-import type { ToolDef, ToolDeps } from '../../agent/tools/tools.js';
+import type { ToolDef, ToolDeps } from '../../surface/tools/tools.js';
 import { flowsForSession } from './flow-store-for-session.js';
 import { resolveSuiteSelection } from './suite-selection.js';
 import {

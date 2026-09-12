@@ -39,7 +39,7 @@ describe('one vocabulary for one storage area', () => {
   });
 
   it('the storage tool takes its accepted areas from core, not from a second list', () => {
-    const source = read('server/src/agent/tools/read-tools.ts');
+    const source = read('server/src/surface/tools/read-tools.ts');
     expect(
       source.includes("'local', 'session', 'cookies'"),
       'read-tools.ts re-declares the storage areas as a literal list. A second copy of an enum is a ' +

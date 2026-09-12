@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PNG } from 'pngjs';
 import { VisualReason } from '@reticlehq/core';
-import { TOOLS, type ToolDeps } from '../../agent/tools/tools.js';
+import { TOOLS, type ToolDeps } from '../../surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore } from '../flows/recording/tape/recordings.js';

@@ -23,7 +23,7 @@ import {
 } from '@reticlehq/core';
 import { IntentStore } from '../intent/intent-store.js';
 import { FlowAssertionGrade } from './flow-classify.js';
-import { TOOLS, type ToolDeps } from '../../agent/tools/tools.js';
+import { TOOLS, type ToolDeps } from '../../surface/tools/tools.js';
 import { buildSuiteVerdict } from './decision.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../project/baselines.js';

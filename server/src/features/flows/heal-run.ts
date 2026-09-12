@@ -21,7 +21,7 @@ import { applyHealChanges, collectProposals } from './heal.js';
 import { healPrecondition } from './heal-precondition.js';
 import { assertSuccess, dynamicTestids, successLabel } from './flow-success.js';
 import { flowErrorMessage, sessionProjectId } from './flow-replay-run.js';
-import type { ToolDeps } from '../../agent/tools/tools.js';
+import type { ToolDeps } from '../../surface/tools/tools.js';
 import { flowsForSession } from './flow-store-for-session.js';
 
 const HEAL_MESSAGES = {

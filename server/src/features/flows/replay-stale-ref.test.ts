@@ -27,7 +27,7 @@ import {
   type CommandResult,
   type FlowStep,
 } from '@reticlehq/core';
-import { runStepWithStaleRetry } from '../../agent/tools/act/act-sequence-retry.js';
+import { runStepWithStaleRetry } from '../../surface/tools/act/act-sequence-retry.js';
 import { runRoleStep } from './flow-step-runners.js';
 import type { FlowReplaySession } from './flow-replay.js';
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { INTENT_TOOLS } from './intent-tools.js';
 import { createMemoryFs } from '../project/memory-fs.js';
-import type { ToolDeps } from '../../agent/tools/tools.js';
+import type { ToolDeps } from '../../surface/tools/tools.js';
 
 /**
  * One logical ledger, however many files it is kept in.

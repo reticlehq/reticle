@@ -17,9 +17,9 @@ import {
   LicenseActivation,
 } from '@reticlehq/core';
 import { generateKeyPairSync } from 'node:crypto';
-import { TOOLS } from '../agent/tools/tools.js';
+import { TOOLS } from '../surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import { VERDICT_TOOLS } from '../agent/tools/feedback-tools.js';
+import { VERDICT_TOOLS } from '../surface/tools/feedback-tools.js';
 import { bugsInResult, type BugCandidate } from './bug-found.js';
 import { describeParam } from './argument-shape.js';
 import { licenseFacts } from './license-activation.js';

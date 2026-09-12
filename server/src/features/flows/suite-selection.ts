@@ -13,7 +13,7 @@
  */
 import { FLOW_FILE_VERSION, orderFlows, selectFlows, type FlowFile } from '@reticlehq/core';
 import { flowsForSession } from './flow-store-for-session.js';
-import type { ToolDeps } from '../../agent/tools/tools.js';
+import type { ToolDeps } from '../../surface/tools/tools.js';
 
 /**
  * Resolve what a suite run should replay, and what it is holding back.

@@ -158,7 +158,7 @@ A directory with a long flat listing is a symptom, not a defect. What says wheth
 So a grouping is an improvement only if that number stays flat. Check before you move:
 
 ```
-node scripts/safe-to-group.mjs server/src/agent/tools query-shape snapshot-delta
+node scripts/safe-to-group.mjs server/src/surface/tools query-shape snapshot-delta
 ```
 
 It answers SAFE or UNSAFE by the same rule the test uses: a group is unsafe exactly when some directory it reaches out to also reaches back into it. It is a prediction; the test decides.

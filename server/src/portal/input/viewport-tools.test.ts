@@ -4,7 +4,7 @@ import { VIEWPORT_TOOLS } from './viewport-tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import type { RealInputProvider } from './real-input.js';
 import type { SessionManager } from '../session/session.js';
-import type { ToolDeps } from '../../agent/tools/tools.js';
+import type { ToolDeps } from '../../surface/tools/tools.js';
 
 function tool() {
   const t = VIEWPORT_TOOLS.find((x) => x.name === ReticleTool.VIEWPORT);

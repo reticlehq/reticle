@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Bridge } from './bridge.js';
-import type { ToolDeps } from '../../agent/tools/tools.js';
+import type { ToolDeps } from '../../surface/tools/tools.js';
 import { FakeBrowser, callTool, makeDeps, waitUntil } from './bridge.test-harness.js';
 
 /**

@@ -30,7 +30,7 @@ Measured against the bench dashboard (`apps/bench-app`) **with a 1,000-item list
 
 After the first snapshot, pass `reticle_snapshot({ diff: true })` to get back **only what changed** since your last look of the same scope/mode (`mode:delta` with added/removed lines, or `mode:unchanged`). A route change auto-resets to a full snapshot, so you never read a misleading cross-page diff.
 
-Measured on a representative 150-row dashboard (the shipped regression benchmark `server/src/agent/tools/snapshot-cost.test.ts`, char/4 proxy):
+Measured on a representative 150-row dashboard (the shipped regression benchmark `server/src/surface/tools/snapshot-cost.test.ts`, char/4 proxy):
 
 | Payload                            |    Tokens |
 | ---------------------------------- | --------: |

@@ -7,7 +7,7 @@ import { EventType, type JournalAction, type ReticleEvent } from '@reticlehq/cor
 import { Bridge } from '../../portal/bridge/bridge.js';
 import { ReticleTool } from '@reticlehq/core';
 import { createNodeFileSystem } from '../project/fs/fs-port.js';
-import type { ToolDeps } from '../../agent/tools/tools.js';
+import type { ToolDeps } from '../../surface/tools/tools.js';
 import {
   FakeBrowser,
   callTool,

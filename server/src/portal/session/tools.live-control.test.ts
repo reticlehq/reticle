@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { LastAct } from './last-act.js';
 import { SessionState, Verified } from '@reticlehq/core';
 import type { CommandResult } from '@reticlehq/core';
-import { TOOLS, type ToolDeps } from '../../agent/tools/tools.js';
+import { TOOLS, type ToolDeps } from '../../surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../../features/project/baselines.js';
 import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';

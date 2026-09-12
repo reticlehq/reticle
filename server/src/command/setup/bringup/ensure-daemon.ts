@@ -15,7 +15,7 @@
 import { log } from '../../../log.js';
 import { spawnDaemon } from '../../daemon/daemon.js';
 import { probePresence, presenceIsUsable } from '../../daemon/binding/port-presence.js';
-import { waitForDaemon, probeDaemon } from '../../../agent/mcp/mcp-proxy.js';
+import { waitForDaemon, probeDaemon } from '../../../surface/mcp/mcp-proxy.js';
 import { daemonSpawnArgs } from '../../cli/daemon-start-options.js';
 import { fetchStatus } from '../../cli/launch/cli-launch.js';
 

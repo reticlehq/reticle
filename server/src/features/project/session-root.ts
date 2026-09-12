@@ -1,4 +1,4 @@
-import type { ToolDeps } from '../../agent/tools/tool-kit.js';
+import type { ToolDeps } from '../../surface/tools/tool-kit.js';
 
 /**
  * The `.reticle` directory a tool call's artifacts belong in.

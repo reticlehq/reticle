@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { ReplayStatus } from '@reticlehq/core';
 import { leasableAppUrl, leaseFailureReplay } from './flow-tools.js';
-import type { ToolDeps } from '../../agent/tools/tools.js';
+import type { ToolDeps } from '../../surface/tools/tools.js';
 import type { Session, SessionManager } from '../../portal/session/session.js';
-import { TOOLS } from '../../agent/tools/tools.js';
+import { TOOLS } from '../../surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 
 /**

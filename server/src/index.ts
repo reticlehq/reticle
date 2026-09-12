@@ -35,7 +35,7 @@ import { originOf } from './portal/session/session-manager.js';
 import { setBrowserMode, BrowserMode } from './telemetry/browser-mode.js';
 import type { NetworkDetail } from './portal/input/network-detail.js';
 import { replayNamedFlow } from './features/flows/flow-tools.js';
-import { createSharedServer } from './http-server.js';
+import { createSharedServer } from './surface/http-server.js';
 import { openLoopbackAlias } from './command/daemon/binding/loopback-alias.js';
 import { reportAppInstrumented } from './telemetry/app-instrumented.js';
 import { resolveBridgeSecurityWithAutoToken } from './portal/bridge/bridge-security.js';
@@ -56,9 +56,9 @@ import { ReticleRunner } from './judgement/runs/reticle-runner.js';
 import { createRunnerPort } from './judgement/runs/runner-port.js';
 import { RunStore } from './judgement/runs/artifact/run-store.js';
 import { startVerifyServer } from './judgement/runs/verify-server.js';
-import { createMcpServer } from './agent/mcp/mcp.js';
-import { LEASE_ACQUIRE_TOOL } from './agent/tools/lease-tools.js';
-import { runTool } from './agent/tools/invoke-tool.js';
+import { createMcpServer } from './surface/mcp/mcp.js';
+import { LEASE_ACQUIRE_TOOL } from './surface/tools/lease-tools.js';
+import { runTool } from './surface/tools/invoke-tool.js';
 import {
   SessionReaper,
   endAllSessions,
@@ -66,7 +66,7 @@ import {
 } from './portal/session/session-reaper.js';
 import { wireSessionScope } from './portal/session/no-session-watch.js';
 import { buildIdlePredicate } from './command/daemon/lifetime/daemon-usefulness.js';
-import { resolveToolSurface } from './agent/tools/tool-surface.js';
+import { resolveToolSurface } from './surface/tools/tool-surface.js';
 import { statusPayload } from './status-payload.js';
 import { CdpRealInputProvider, LaunchedRealInputProvider } from './portal/input/real-input.js';
 import { cpus } from 'node:os';
@@ -114,11 +114,11 @@ export { Session, SessionManager } from './portal/session/session.js';
 export type { SessionInfo, SessionHealth } from './portal/session/session.js';
 export { buildSessionRecommendation } from './portal/session/presence/session-recommendation.js';
 export type { RecommendationInputs } from './portal/session/presence/session-recommendation.js';
-export { TOOLS } from './agent/tools/tools.js';
-export type { ToolDeps, ToolDef } from './agent/tools/tools.js';
-export { createToolInvoker, UNKNOWN_TOOL_ERROR } from './agent/tools/tool-invoker.js';
-export { runTool, SESSION_BOUND_TOOLS, SESSION_EXEMPT_TOOLS } from './agent/tools/invoke-tool.js';
-export type { ToolInvoker } from './agent/tools/tool-invoker.js';
+export { TOOLS } from './surface/tools/tools.js';
+export type { ToolDeps, ToolDef } from './surface/tools/tools.js';
+export { createToolInvoker, UNKNOWN_TOOL_ERROR } from './surface/tools/tool-invoker.js';
+export { runTool, SESSION_BOUND_TOOLS, SESSION_EXEMPT_TOOLS } from './surface/tools/invoke-tool.js';
+export type { ToolInvoker } from './surface/tools/tool-invoker.js';
 export { BaselineStore, normalizeLines, diffLines } from './features/project/baselines.js';
 export { RecordingStore } from './features/flows/recording/tape/recordings.js';
 export type { RecordedStep, CompiledProgram } from './features/flows/recording/tape/recordings.js';
@@ -158,7 +158,7 @@ export { findContradictions } from '@reticlehq/engine/disagreement/contradiction
  * Without this the composition seam is unreachable from outside the package: a consumer can build the
  * list and has nothing to hand it to.
  */
-export { createMcpServer } from './agent/mcp/mcp.js';
+export { createMcpServer } from './surface/mcp/mcp.js';
 export type {
   Contradiction,
   ContradictionOptions,
@@ -172,7 +172,7 @@ export { MCP_SSE_PATH, MCP_MESSAGE_PATH } from '@reticlehq/core';
 export { BrowserPool, DEFAULT_LEASE_TTL_MS } from './portal/pool/browser-pool.js';
 export type { Lease, Launcher, PooledBrowser } from './portal/pool/browser-pool.js';
 export { playwrightLauncher, resolveMaxContexts } from './portal/pool/playwright-launcher.js';
-export { appendReticleParams } from './agent/tools/lease-tools.js';
+export { appendReticleParams } from './surface/tools/lease-tools.js';
 export {
   writePid,
   removePid,
@@ -209,8 +209,8 @@ export {
   TOOL_PROFILE_ENV,
   filterTools,
   resolveToolSurface,
-} from './agent/tools/tool-surface.js';
-export type { ToolSurface } from './agent/tools/tool-surface.js';
+} from './surface/tools/tool-surface.js';
+export type { ToolSurface } from './surface/tools/tool-surface.js';
 export { AnnotationStore } from './features/flows/stores/annotation-store.js';
 export { replayFlow, nearestTestid } from './features/flows/flow-replay.js';
 export type { FlowReplaySession, WaitForSignal } from './features/flows/flow-replay.js';

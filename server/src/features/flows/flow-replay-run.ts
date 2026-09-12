@@ -18,8 +18,8 @@ import {
 import { haltedFrom } from './recording/replay-halt.js';
 import { asRecord, asString } from '@reticlehq/core';
 import { routeOfEvent, routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route.js';
-import type { ArrivalClock } from '../../agent/tools/act/navigation/navigate-arrival.js';
-import { carryReticleIdentity } from '../../agent/tools/lease-tools.js';
+import type { ArrivalClock } from '../../surface/tools/act/navigation/navigate-arrival.js';
+import { carryReticleIdentity } from '../../surface/tools/lease-tools.js';
 import type { SessionManager } from '../../portal/session/session-manager.js';
 import type { Session } from '../../portal/session/session.js';
 import { replayFlow } from './flow-replay.js';
@@ -44,7 +44,7 @@ import { cloudFetch, syncRunRecordToCloud, SyncOutcome } from '../cloud/cloud-sy
 import { resolveProjectCloud } from '../cloud/cloud-config.js';
 import { consultSubjectFor, selectConsulted, type ConsultedMemory } from './flow-memory-consult.js';
 import { log } from '../../log.js';
-import type { ToolDeps } from '../../agent/tools/tools.js';
+import type { ToolDeps } from '../../surface/tools/tools.js';
 import { flowsForSession } from './flow-store-for-session.js';
 import { FlowParseNote } from './flow-expect-grammar.js';
 

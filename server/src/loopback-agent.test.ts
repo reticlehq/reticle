@@ -20,8 +20,8 @@ import {
   isRetryableConnectError,
   LOOPBACK_AGENT_OPTIONS,
   LOOPBACK_IDLE_MS,
-} from './loopback-agent.js';
-import { createSharedServer } from './http-server.js';
+} from './surface/loopback-agent.js';
+import { createSharedServer } from './surface/http-server.js';
 
 const BODY = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call' });
 

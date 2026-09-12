@@ -54,7 +54,7 @@ describe('verify busy-port docs match the three-option message', () => {
  */
 describe('unadvertised-help header stays in lockstep with the surface-size gate', () => {
   const header = (): string => {
-    const text = read('server/src/agent/tools/unadvertised-help.ts');
+    const text = read('server/src/surface/tools/unadvertised-help.ts');
     const cut = text.indexOf('import');
     return -1 === cut ? text : text.slice(0, cut);
   };

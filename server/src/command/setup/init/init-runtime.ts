@@ -16,7 +16,7 @@ import { bridgeOccupied } from '../bringup/bridge-port.js';
 import { relaunchDecision } from '../bringup/relaunch.js';
 import { claudeTranscriptExists, codexSessionFor } from '../terminal/transcripts.js';
 import { probePresence } from '../../daemon/binding/port-presence.js';
-import { probeDaemon } from '../../../agent/mcp/proxy/proxy-daemon-probe.js';
+import { probeDaemon } from '../../../surface/mcp/proxy/proxy-daemon-probe.js';
 import { fetchStatus } from '../../cli/launch/cli-launch.js';
 import {
   collectEnv,

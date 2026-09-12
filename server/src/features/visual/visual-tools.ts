@@ -7,8 +7,8 @@ import {
   VisualReason,
 } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
-import { sessionIdShape } from '../../agent/tools/tool-kit.js';
-import { ratioSchema } from '../../agent/tools/args/numeric-bounds.js';
+import { sessionIdShape } from '../../surface/tools/tool-kit.js';
+import { ratioSchema } from '../../surface/tools/args/numeric-bounds.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { diffPng, type VisualRect } from './visual-diff.js';
 import { VisualStore } from './visual-store.js';
@@ -21,7 +21,7 @@ import type {
   RealInputProvider,
   ScreenshotOpts,
 } from '../../portal/input/real-input.js';
-import type { ToolDef, ToolDeps } from '../../agent/tools/tools.js';
+import type { ToolDef, ToolDeps } from '../../surface/tools/tools.js';
 
 const rectShape = z.object({
   x: z.number(),

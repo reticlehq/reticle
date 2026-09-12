@@ -12,7 +12,7 @@ import {
 import { Session, type SessionManager } from './session.js';
 import { LIVE_CONTROL_TOOLS } from './live-control-tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import type { ToolDeps } from '../../agent/tools/tools.js';
+import type { ToolDeps } from '../../surface/tools/tools.js';
 
 const HELLO: HelloMessage = {
   kind: MessageKind.HELLO,

@@ -3,10 +3,10 @@ import { IntentStore } from './intent-store.js';
 import { IntentShardStore } from './intent-shard-store.js';
 import { IntentStatus } from './intent-shard.js';
 import { ReticleTool } from '@reticlehq/core';
-import { sessionIdShape } from '../../agent/tools/tool-kit.js';
+import { sessionIdShape } from '../../surface/tools/tool-kit.js';
 import { sessionRoot } from '../project/session-root.js';
 import { asString } from '@reticlehq/core';
-import type { ToolDef, ToolDeps } from '../../agent/tools/tool-kit.js';
+import type { ToolDef, ToolDeps } from '../../surface/tools/tool-kit.js';
 
 /**
  * Declare what a change was SUPPOSED to make true, while somebody still knows.

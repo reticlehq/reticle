@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { LastAct } from '../session/last-act.js';
 import { ActionWarning, InputMode, InputModeReason, SessionState } from '@reticlehq/core';
 import type { CommandResult } from '@reticlehq/core';
-import { TOOLS, type ToolDeps } from '../../agent/tools/tools.js';
+import { TOOLS, type ToolDeps } from '../../surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../../features/project/baselines.js';
 import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';
@@ -13,7 +13,7 @@ import { AnnotationStore } from '../../features/flows/stores/annotation-store.js
 import { boxCenter, type ElementBox, type RealInputProvider } from './real-input.js';
 import type { Session, SessionManager } from '../session/session.js';
 import type { BrowserPool } from '../pool/browser-pool.js';
-import { HOVER_NEEDS_POINTER_MSG } from '../../agent/tools/real-input-attempt.js';
+import { HOVER_NEEDS_POINTER_MSG } from '../../surface/tools/real-input-attempt.js';
 
 const SESSION_URL = 'http://localhost:5173/app';
 const SOURCE_BOX: ElementBox = { x: 0, y: 0, width: 200, height: 100 };

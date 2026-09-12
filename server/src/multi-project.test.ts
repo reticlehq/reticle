@@ -20,7 +20,7 @@ import { join } from 'node:path';
 import { Bridge } from './portal/bridge/bridge.js';
 import { FakeBrowser, callTool, makeDeps, waitUntil } from './portal/bridge/bridge.test-harness.js';
 import { ReticleTool } from '@reticlehq/core';
-import type { ToolDeps } from './agent/tools/tools.js';
+import type { ToolDeps } from './surface/tools/tools.js';
 import { EventType, RETICLE_DEFAULT_PORT } from '@reticlehq/core';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

@@ -4,7 +4,7 @@ import { Verified } from '@reticlehq/core';
 import { VERIFY_CHANGE_TOOLS } from './verify-change-tools.js';
 import { FLOW_TOOLS } from './flow-tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import type { ToolDeps } from '../../agent/tools/tools.js';
+import type { ToolDeps } from '../../surface/tools/tools.js';
 
 const tool = VERIFY_CHANGE_TOOLS[0];
 if (tool === undefined) throw new Error('reticle_verify_change is not defined');

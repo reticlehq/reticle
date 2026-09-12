@@ -8,7 +8,7 @@ import { REPO_ROOT } from '../../machine/repo-root.js';
  * A path named in a package script must exist.
  *
  * `lint:docs` sat in the release checklist naming six test files under `src/tools/`. The tools
- * moved to `src/agent/tools/` in a directory regrouping, nobody updated the script, and it
+ * moved to `src/surface/tools/` in a directory regrouping, nobody updated the script, and it
  * **could not run at all** from that day. It failed with vitest's "no test files" path, which
  * prints `undefined` and an exit code and looks like a tooling fault rather than a stale string.
  *
@@ -17,7 +17,7 @@ import { REPO_ROOT } from '../../machine/repo-root.js';
  * moment they least want a surprise. It stayed broken for a day only because a release happened
  * not to be cut in that window.
  *
- * This is the same shape as the e2e spec that imported `agent/mcp/mcp-outage.js` by path and
+ * This is the same shape as the e2e spec that imported `surface/mcp/mcp-outage.js` by path and
  * broke when that file moved: a string that names a file, unchecked by any compiler. That one
  * had a guard. This one did not.
  */

@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { ReticleCommand } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
-import { idleMsSchema } from '../../agent/tools/args/numeric-bounds.js';
-import type { ToolDef, ToolDeps } from '../../agent/tools/tools.js';
+import { idleMsSchema } from '../../surface/tools/args/numeric-bounds.js';
+import type { ToolDef, ToolDeps } from '../../surface/tools/tools.js';
 
 /**
  * Session lifecycle controls. The presenter session begins on the agent's first action and ends

@@ -140,8 +140,8 @@ describe('a path this repository reads is a path that exists', () => {
   it('would notice a path that stopped resolving', () => {
     // The negative control, run against a constructed site rather than by editing a real one:
     // an anchored read of a file that is not there must not resolve.
-    expect(existsSync(join(REPO_ROOT, 'server/src/agent/tools/assert-verdict.ts'))).toBe(false);
-    expect(existsSync(join(REPO_ROOT, 'server/src/agent/tools/assert/assert-verdict.ts'))).toBe(
+    expect(existsSync(join(REPO_ROOT, 'server/src/surface/tools/assert-verdict.ts'))).toBe(false);
+    expect(existsSync(join(REPO_ROOT, 'server/src/surface/tools/assert/assert-verdict.ts'))).toBe(
       true,
     );
   });

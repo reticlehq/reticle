@@ -6,7 +6,7 @@
  * there is no reachable preview URL for the server to hit.
  */
 import type { SuiteVerdict, SuiteFlowResult } from '@reticlehq/core';
-import type { ToolDeps } from '../../../agent/tools/tools.js';
+import type { ToolDeps } from '../../../surface/tools/tools.js';
 import { VerifyMode, type ProjectCloud } from '../../cloud/cloud-config.js';
 import {
   CLOUD_VERIFY_TIMEOUT_MS,

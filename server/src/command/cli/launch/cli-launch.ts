@@ -6,7 +6,7 @@ import { daemonFix, describeSkew } from '../../version/version-skew.js';
 import { CONTRACT_FINGERPRINT } from '@reticlehq/core';
 import { SERVER_VERSION } from '../../version/identity/server-version.js';
 import { log } from '../../../log.js';
-import { loopbackAgent } from '../../../loopback-agent.js';
+import { loopbackAgent } from '../../../surface/loopback-agent.js';
 
 /**
  * CLI launch + status helpers — the daemon-introspection (`reticle status`) and the one-command

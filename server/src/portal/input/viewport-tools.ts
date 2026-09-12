@@ -1,15 +1,15 @@
 import { z } from 'zod';
 import { CDP_NO_PROVIDER_REASON, CDP_NO_PROVIDER_RECOMMENDATION } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
-import { sessionIdShape } from '../../agent/tools/tool-kit.js';
+import { sessionIdShape } from '../../surface/tools/tool-kit.js';
 import {
   MAX_VIEWPORT_PX,
   MIN_VIEWPORT_PX,
   viewportPxSchema,
-} from '../../agent/tools/args/numeric-bounds.js';
+} from '../../surface/tools/args/numeric-bounds.js';
 import { asString } from '@reticlehq/core';
 import type { RealInputProvider } from './real-input.js';
-import type { ToolDef, ToolDeps } from '../../agent/tools/tools.js';
+import type { ToolDef, ToolDeps } from '../../surface/tools/tools.js';
 
 /** Bounds so a viewport request stays sane (and a typo can't ask for a 1px or 100k-px window). */
 const MIN_DIM = MIN_VIEWPORT_PX;

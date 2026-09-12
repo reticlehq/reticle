@@ -39,7 +39,7 @@ const DIRECT_INVOCATION = /\.handler\(/;
  * are now *known*, and that the next one cannot arrive unnoticed.
  */
 const DECLARED_BYPASSES: Readonly<Record<string, string>> = {
-  'agent/tools/merge-tools.ts':
+  'surface/tools/merge-tools.ts':
     'A family tool (reticle_flow, reticle_session, …) dispatches to the member its `action` names. ' +
     'The OUTER call went through runTool, so nothing is uncounted — but it is counted as the FAMILY, ' +
     'so `toolCounts` cannot say which member ran. Known gap: the same family folding that means ' +
@@ -75,7 +75,7 @@ describe('every dispatch path is either the chokepoint or declared', () => {
     .filter((file) => DIRECT_INVOCATION.test(readFileSync(file, 'utf8')))
     .map((file) => relative(SRC, file).split('\\').join('/'))
     // invoke-tool.ts IS the chokepoint. It is supposed to call the handler; that is its whole job.
-    .filter((rel) => rel !== 'agent/tools/invoke-tool.ts');
+    .filter((rel) => rel !== 'surface/tools/invoke-tool.ts');
 
   it('no undeclared path reaches past runTool', () => {
     const undeclared = bypasses.filter((rel) => DECLARED_BYPASSES[rel] === undefined);
@@ -111,7 +111,7 @@ describe('every dispatch path is either the chokepoint or declared', () => {
   it('the chokepoint is where the contract says it is', () => {
     // If runTool moves or is renamed, the scan above starts passing for the wrong reason — it would
     // find no bypasses because it no longer knows what the chokepoint is.
-    const chokepoint = readFileSync(join(SRC, 'agent', 'tools', 'invoke-tool.ts'), 'utf8');
+    const chokepoint = readFileSync(join(SRC, 'surface', 'tools', 'invoke-tool.ts'), 'utf8');
     expect(chokepoint).toContain('export async function runTool');
     expect(chokepoint).toMatch(DIRECT_INVOCATION);
   });

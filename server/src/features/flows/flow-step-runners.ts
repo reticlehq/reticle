@@ -18,8 +18,8 @@ import {
 } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { replayActionArgs } from './replay.js';
-import { isStaleRefError } from '../../agent/tools/act/act-sequence-retry.js';
-import { waitForReaction } from '../../agent/tools/act/react-grace.js';
+import { isStaleRefError } from '../../surface/tools/act/act-sequence-retry.js';
+import { waitForReaction } from '../../surface/tools/act/react-grace.js';
 import { anchorFieldName } from './flows.js';
 import type { FlowReplaySession, Sleep } from './flow-replay.js';
 import {

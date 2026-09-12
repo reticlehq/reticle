@@ -12,7 +12,7 @@
  * agent learns to skip, and it would cost those tokens on every call for the rest of the session.
  */
 
-import { EnvelopeKey } from '../../agent/tools/tool-kit.js';
+import { EnvelopeKey } from '../../surface/tools/tool-kit.js';
 import type { SkewPair } from './version-skew.js';
 
 interface VersionSkewNudge {

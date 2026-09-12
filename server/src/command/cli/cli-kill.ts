@@ -20,7 +20,7 @@
 
 import { PortPresence, probePresence } from '../daemon/binding/port-presence.js';
 import { isAlive, readPid, removePid } from '../daemon/daemon.js';
-import { probeDaemon } from '../../agent/mcp/mcp-proxy.js';
+import { probeDaemon } from '../../surface/mcp/mcp-proxy.js';
 import { log } from '../../log.js';
 import { fetchStatus } from './launch/cli-launch.js';
 import { captureLookup, findPortHolder, type PortHolder } from './ports/port-holder.js';

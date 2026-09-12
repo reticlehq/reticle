@@ -3,9 +3,9 @@ import { type JournalAction, type ReticleEvent } from '@reticlehq/core';
 import { runContextFor } from './artifact/run-context.js';
 import { openSessionIntents } from '../../features/intent/open-intents.js';
 import { ReticleTool } from '@reticlehq/core';
-import { sessionIdShape } from '../../agent/tools/tool-kit.js';
+import { sessionIdShape } from '../../surface/tools/tool-kit.js';
 import { asString } from '@reticlehq/core';
-import type { ToolDef, ToolDeps } from '../../agent/tools/tool-kit.js';
+import type { ToolDef, ToolDeps } from '../../surface/tools/tool-kit.js';
 
 /**
  * What this run has established, asked for by the one party that knows when it is needed.

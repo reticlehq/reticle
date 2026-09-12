@@ -22,7 +22,7 @@ import {
   probeDaemon,
   proxyLog,
   setProxyLogPort,
-} from '../../agent/mcp/mcp-proxy.js';
+} from '../../surface/mcp/mcp-proxy.js';
 import { installProxyResilience } from '../daemon/daemon-resilience.js';
 import { readProjectId } from './ports/resolve/cli-port.js';
 import { resolveMcpPort, daemonProjectAt } from '../daemon/daemon-resolve.js';

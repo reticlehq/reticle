@@ -1,7 +1,7 @@
 import { IntentStore } from './intent-store.js';
 import { sessionRoot } from '../project/session-root.js';
 import type { Intent } from '@reticlehq/core/artifacts';
-import type { ToolDeps } from '../../agent/tools/tool-kit.js';
+import type { ToolDeps } from '../../surface/tools/tool-kit.js';
 
 /**
  * What this project still owes — the ledger's undischarged intents, for a tool that has `deps` and a

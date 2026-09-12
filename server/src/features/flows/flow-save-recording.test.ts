@@ -13,7 +13,7 @@ import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ActionType, QueryBy } from '@reticlehq/core';
-import { TOOLS, type ToolDeps } from '../../agent/tools/tools.js';
+import { TOOLS, type ToolDeps } from '../../surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore, type CompiledProgram } from './recording/tape/recordings.js';

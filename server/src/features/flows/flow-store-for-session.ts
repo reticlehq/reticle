@@ -24,7 +24,7 @@
  * returned unchanged.
  */
 import { FlowStore } from './flows.js';
-import type { ToolDeps } from '../../agent/tools/tool-kit.js';
+import type { ToolDeps } from '../../surface/tools/tool-kit.js';
 
 export function flowsForSession(
   deps: ToolDeps,

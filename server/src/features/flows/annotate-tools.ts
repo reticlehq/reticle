@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { aliasParam } from '../../agent/tools/args/alias-args.js';
+import { aliasParam } from '../../surface/tools/args/alias-args.js';
 import { AnnotationErrorCode, AnnotationSchema, type AnnotateResult } from '@reticlehq/core';
-import { RECOVERY } from '../../agent/tools/error-recovery.js';
+import { RECOVERY } from '../../surface/tools/error-recovery.js';
 
 /**
  * An unknown kind is almost always a free-text annotation, which this tool deliberately refuses to
@@ -15,7 +15,7 @@ const UNKNOWN_KIND_RECOVERY =
 import { ReticleTool } from '@reticlehq/core';
 import { asString } from '@reticlehq/core';
 import { compileAnnotation } from './annotate-notes/annotate.js';
-import type { ToolDef, ToolDeps } from '../../agent/tools/tools.js';
+import type { ToolDef, ToolDeps } from '../../surface/tools/tools.js';
 
 import { resolveAnnotateTarget } from './annotate-notes/annotate-target.js';
 

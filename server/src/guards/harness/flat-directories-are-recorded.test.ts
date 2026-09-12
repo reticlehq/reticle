@@ -18,7 +18,7 @@ const STAGED_NOTE =
  * How many source files sit loose in one directory, recorded so it cannot creep.
  *
  * A directory with forty files in it is not a design; it is what happens when nobody was
- * counting. This sweep took `agent/tools` from 160 to 32, `features/flows` from 35 to 24 and
+ * counting. This sweep took `surface/tools` from 160 to 32, `features/flows` from 35 to 24 and
  * `command/daemon` from 15 to 7, one verified extraction at a time — and every one of those
  * numbers can drift straight back, one file per commit, with no gate anywhere noticing.
  *
@@ -69,12 +69,12 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // implementer reads together into two places.
   'openreality/src/vocabulary': 12,
   'server/src/judgement/runs': 11,
-  'server/src/agent/tools': 32,
+  'server/src/surface/tools': 32,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it
   // hit the line cap, and splitting them again would scatter one cohesive unit across two homes.
-  'server/src/agent/tools/act': 11,
+  'server/src/surface/tools/act': 11,
   'server/src/command/cli': 18, // + tutorial.ts: one sequence, two audiences, ending at a verdict
   'server/src/command/setup': 15,
   'server/src/portal/session': 20,

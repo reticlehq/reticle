@@ -10,7 +10,7 @@
 import { start, type StartOptions } from '../../../index.js';
 import { log } from '../../../log.js';
 import { probePresence, describePresence } from '../../daemon/binding/port-presence.js';
-import { probeDaemon } from '../../../agent/mcp/mcp-proxy.js';
+import { probeDaemon } from '../../../surface/mcp/mcp-proxy.js';
 import { readPid } from '../../daemon/daemon.js';
 import { fetchStatus } from '../launch/cli-launch.js';
 import { captureLookup, findPortHolder } from '../ports/port-holder.js';

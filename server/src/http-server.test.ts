@@ -3,7 +3,7 @@ import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { DRIVE_PATH, MCP_SHUTDOWN_EVENT, MCP_SSE_PATH, STATUS_PATH } from '@reticlehq/core';
-import { createSharedServer, type SharedServer } from './http-server.js';
+import { createSharedServer, type SharedServer } from './surface/http-server.js';
 
 let shared: SharedServer | undefined;
 

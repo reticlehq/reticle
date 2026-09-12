@@ -38,7 +38,7 @@ import { asString } from '@reticlehq/core';
 import { flowPath } from '../project/dir/reticle-dir.js';
 import type { FileSystemPort } from '../project/fs/fs-port.js';
 import type { Session, SessionManager } from '../../portal/session/session.js';
-import type { ToolDeps } from '../../agent/tools/tools.js';
+import type { ToolDeps } from '../../surface/tools/tools.js';
 
 const FROZEN = 1234;
 const clock = { now: (): number => FROZEN };

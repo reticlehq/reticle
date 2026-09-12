@@ -23,7 +23,7 @@ import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore } from './recording/tape/recordings.js';
 import type { Session, SessionManager } from '../../portal/session/session.js';
-import type { ToolDeps } from '../../agent/tools/tools.js';
+import type { ToolDeps } from '../../surface/tools/tools.js';
 
 const FROZEN = 1234;
 const clock = { now: (): number => FROZEN };

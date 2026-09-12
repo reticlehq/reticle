@@ -14,11 +14,11 @@
 import { mutationTargetsFor, ReticleTool, asString, type FlowFile } from '@reticlehq/core';
 import { MutationOutcome } from '@reticlehq/openreality';
 import { z } from 'zod';
-import { sessionMutationPort } from '../../agent/tools/lease-tools.js';
+import { sessionMutationPort } from '../../surface/tools/lease-tools.js';
 import { mutationTest } from './mutation-run.js';
 import { replayNamedFlow, sessionProjectId } from './flow-replay-run.js';
 import { flowsForSession } from './flow-store-for-session.js';
-import type { ToolDef, ToolDeps } from '../../agent/tools/tools.js';
+import type { ToolDef, ToolDeps } from '../../surface/tools/tools.js';
 import { ReplayStatus } from '@reticlehq/core';
 
 const NOTHING_DECLARED =

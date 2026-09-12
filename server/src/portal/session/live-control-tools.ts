@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { noteEmptyRead } from '../../agent/tools/gaps/observed-nothing.js';
+import { noteEmptyRead } from '../../surface/tools/gaps/observed-nothing.js';
 import {
   AGENT_ASK_NOTICE,
   AGENT_WAITING_NOTICE,
@@ -8,9 +8,9 @@ import {
   YIELD_WITHOUT_SESSION_NOTE,
 } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
-import { sessionIdShape } from '../../agent/tools/tool-kit.js';
+import { sessionIdShape } from '../../surface/tools/tool-kit.js';
 import { asString } from '@reticlehq/core';
-import type { ToolDef } from '../../agent/tools/tools.js';
+import type { ToolDef } from '../../surface/tools/tools.js';
 
 /**
  * Is this a turn ending with nothing attached, rather than a call about a specific tab?

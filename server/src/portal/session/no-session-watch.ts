@@ -33,7 +33,7 @@ import {
 } from '../../command/daemon/daemon-resolve.js';
 import { stallUptime } from './stall-clock.js';
 import type { SessionManager } from './session-manager.js';
-import { probeDaemon } from '../../agent/mcp/mcp-proxy.js';
+import { probeDaemon } from '../../surface/mcp/mcp-proxy.js';
 import { findOccupiedSiblings } from '../../command/cli/ports/sibling-ports.js';
 import { WS_CLOSE_REASON } from '../bridge/bridge.js';
 

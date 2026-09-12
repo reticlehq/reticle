@@ -6,7 +6,7 @@ import { ReticleTool } from '@reticlehq/core';
 import type { MockRule } from './network-mock.js';
 import type { RealInputProvider } from './real-input.js';
 import type { SessionManager } from '../session/session.js';
-import type { ToolDeps } from '../../agent/tools/tools.js';
+import type { ToolDeps } from '../../surface/tools/tools.js';
 
 function tool() {
   const t = NETWORK_MOCK_TOOLS.find((x) => x.name === ReticleTool.NETWORK_MOCK);

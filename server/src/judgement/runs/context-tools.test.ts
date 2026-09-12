@@ -13,7 +13,7 @@ import { IntentStore } from '../../features/intent/intent-store.js';
 import { CONTEXT_TOOLS } from './context-tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import type { FileSystemPort } from '../../features/project/fs/fs-port.js';
-import type { ToolDeps } from '../../agent/tools/tool-kit.js';
+import type { ToolDeps } from '../../surface/tools/tool-kit.js';
 
 const ROOT = '/repo/.reticle';
 

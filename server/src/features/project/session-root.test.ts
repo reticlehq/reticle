@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ArtifactRootReason } from './artifact-root.js';
 import { sessionRoot } from './session-root.js';
-import type { ToolDeps } from '../../agent/tools/tool-kit.js';
+import type { ToolDeps } from '../../surface/tools/tool-kit.js';
 import type { Session, SessionManager } from '../../portal/session/session.js';
 
 const DAEMON_ROOT = '/daemon-cwd/.reticle';

@@ -74,7 +74,7 @@ describe('every ACT dispatch path opens an attribution window', () => {
     );
     expect(dispatchers).toEqual(
       expect.arrayContaining([
-        'agent/tools/act-tools.ts',
+        'surface/tools/act-tools.ts',
         'features/crawl/crawl.ts',
         'features/flows/flow-replay.ts',
         'features/flows/replay.ts',

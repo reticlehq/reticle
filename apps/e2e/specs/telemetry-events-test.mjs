@@ -72,13 +72,13 @@ const { installDaemonResilience } = await import(`${DIST}/command/daemon/daemon-
 const { submitFeedback } = await import(`${DIST}/telemetry/feedback.js`);
 const { submitIdentity } = await import(`${DIST}/telemetry/identify.js`);
 const { reportCliRun } = await import(`${DIST}/telemetry/cli-telemetry.js`);
-const { runTool } = await import(`${DIST}/agent/tools/invoke-tool.js`);
-const { TOOLS } = await import(`${DIST}/agent/tools/tools.js`);
-const { buildErrorPayload } = await import(`${DIST}/agent/tools/error-recovery.js`);
+const { runTool } = await import(`${DIST}/surface/tools/invoke-tool.js`);
+const { TOOLS } = await import(`${DIST}/surface/tools/tools.js`);
+const { buildErrorPayload } = await import(`${DIST}/surface/tools/error-recovery.js`);
 const { reportVersionChange } = await import(`${DIST}/command/update/updater.js`);
 const { reportMcpConnected, markDaemonStart } = await import(`${DIST}/telemetry/mcp-connection.js`);
 const { reportInitOutcome, InitFailure } = await import(`${DIST}/telemetry/init-telemetry.js`);
-const { reportMcpOutage, resetOutageReporting, OutageStage } = await import(`${DIST}/agent/mcp/faults/mcp-outage.js`);
+const { reportMcpOutage, resetOutageReporting, OutageStage } = await import(`${DIST}/surface/mcp/faults/mcp-outage.js`);
 const { decideVerified } = await import(`${ENGINE_DIST}/evidence/verified.js`);
 // Derived from core, never re-listed here — a copied vocabulary is correct on the day it is written
 // and silently wrong at the next addition, which has already cost this repo twice.

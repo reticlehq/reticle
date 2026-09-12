@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReplayStatus, type FlowReplayResult } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
-import type { ToolDeps } from '../../agent/tools/tools.js';
+import type { ToolDeps } from '../../surface/tools/tools.js';
 
 const persistSpy = vi.fn().mockResolvedValue('run-id-001');
 

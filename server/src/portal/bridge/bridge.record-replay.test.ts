@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { EventType, ReticleCommand } from '@reticlehq/core';
 import { Bridge } from './bridge.js';
-import { TOOLS, type ToolDeps } from '../../agent/tools/tools.js';
+import { TOOLS, type ToolDeps } from '../../surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { FakeBrowser, callTool, makeDeps, waitUntil } from './bridge.test-harness.js';
 

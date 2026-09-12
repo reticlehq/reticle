@@ -179,7 +179,14 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * `mcp -> cli`, `setup -> cli` and `terminal -> cli` are gone. None of them wanted the
    * command-line surface; each wanted to start a process. Mutual pairs 29 -> 27.
    */
-  launch: ['machine', 'identity', 'version'],
+  // `surface` is new here because `http-server.ts` and `loopback-agent.ts` stopped being loose
+  // files at `src` root and gained a home. The graph skips root files, so every edge those two
+  // already had materialised at once — this is that, not a dependency anybody added. The plan that
+  // ordered these moves named the mechanism in advance, and the number that matters did not move:
+  // the mutual-pair count is unchanged, so nothing here started needing something that needs it back.
+  launch: ['machine', 'identity', 'version', 'surface'],
+  /** The mouth and ears: the tool surface and the MCP server, plus the HTTP door they answer on. */
+  surface: ['bridge', 'telemetry', 'version'],
   /**
    * Where `.reticle/` is for a given project, and the id derived from it.
    *
@@ -683,7 +690,7 @@ const MUTUAL_PAIRS_TODAY = 22;
  * one that is missing, because it goes on reporting a number.
  *
  * Keyed on the basename rather than fixed by using full paths deliberately. Full paths would make
- * the reach list unreadable -- `agent/tools -> portal/session` twice a line -- and unique
+ * the reach list unreadable -- `surface/tools -> portal/session` twice a line -- and unique
  * short names are worth having for their own sake. This is the price of that, made loud.
  */
 describe('directory names in this package are unique', () => {

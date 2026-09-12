@@ -16,7 +16,7 @@ import {
   exploreApp,
   harnessAvailable,
   MSG_NO_HARNESS_KEY,
-} from '../../agent/tools/harness-explore.js';
+} from '../../surface/tools/harness-explore.js';
 import { resolveSuiteSelection } from '../../features/flows/suite-selection.js';
 import {
   readOrCreatePairingTokenSync,
@@ -39,7 +39,7 @@ import {
 } from '@reticlehq/core';
 import { start, type RunningServer } from '../../index.js';
 import { probePresence, PortPresence } from '../daemon/binding/port-presence.js';
-import { probeDaemon } from '../../agent/mcp/mcp-proxy.js';
+import { probeDaemon } from '../../surface/mcp/mcp-proxy.js';
 import { fetchStatus } from './launch/cli-launch.js';
 import {
   cloudFetch,
@@ -60,7 +60,7 @@ import { ProjectStore } from '../../features/project/project-store.js';
 import { AnnotationStore } from '../../features/flows/stores/annotation-store.js';
 import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';
 import type { SessionManager } from '../../portal/session/session-manager.js';
-import type { ToolDeps } from '../../agent/tools/tools.js';
+import type { ToolDeps } from '../../surface/tools/tools.js';
 
 const EXIT_PASS = 0;
 const EXIT_FAIL = 1;

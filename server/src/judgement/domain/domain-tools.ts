@@ -3,12 +3,12 @@ import { sessionRoot } from '../../features/project/session-root.js';
 import { asNumber, asString } from '@reticlehq/core';
 import type { FlowFile } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
-import { countSchema } from '../../agent/tools/args/numeric-bounds.js';
+import { countSchema } from '../../surface/tools/args/numeric-bounds.js';
 import { readContract } from '../../features/project/dir/reticle-dir.js';
 import { buildDomainModel } from './domain-model.js';
 import { proposeInstrumentation } from '../../judgement/oracles/self-instrument.js';
 import { instrumentationGapsForFlows } from '../../judgement/oracles/flow-instrument-gaps.js';
-import type { ToolDef, ToolDeps } from '../../agent/tools/tools.js';
+import type { ToolDef, ToolDeps } from '../../surface/tools/tools.js';
 
 /**
  * reticle_domain — the "learn the app before testing it" tool. Synthesizes every saved flow + the

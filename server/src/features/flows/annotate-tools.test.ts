@@ -11,7 +11,7 @@ import {
   QueryBy,
   type AnnotateResult,
 } from '@reticlehq/core';
-import { TOOLS, type ToolDeps } from '../../agent/tools/tools.js';
+import { TOOLS, type ToolDeps } from '../../surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore, type RecordedStep } from './recording/tape/recordings.js';

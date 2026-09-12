@@ -66,7 +66,7 @@ interface Source {
 function sources(): Source[] {
   return [
     {
-      label: 'the MCP instructions (server/src/agent/mcp/server-instructions.ts)',
+      label: 'the MCP instructions (server/src/surface/mcp/server-instructions.ts)',
       text: instructionProse(),
     },
     { label: 'SKILL.md', text: readFileSync(SKILL, 'utf8') },

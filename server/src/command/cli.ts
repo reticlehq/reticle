@@ -10,7 +10,7 @@ import {
   hasAnyAppConnectedBefore,
   hasProjectConnectedBefore,
 } from '../portal/session/recall/prior/connection-memory.js';
-import { attachStatusFields } from '../agent/mcp/attach-memory.js';
+import { attachStatusFields } from '../surface/mcp/attach-memory.js';
 import { splitBrainFields, withNextAction } from './cli/status-fields.js';
 import { reticleStateHome } from './daemon/daemon.js';
 import { handleMcp } from './cli/mcp-command.js';
@@ -58,7 +58,7 @@ import {
   presenceIsUsable,
   describePresence,
 } from './daemon/binding/port-presence.js';
-import { waitForDaemon, probeDaemon } from '../agent/mcp/mcp-proxy.js';
+import { waitForDaemon, probeDaemon } from '../surface/mcp/mcp-proxy.js';
 import {
   installDaemonResilience,
   recordExitReason,

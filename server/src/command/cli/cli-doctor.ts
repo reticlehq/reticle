@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { ReticleEnv } from '@reticlehq/core';
 import { readPid, reticleStateHome } from '../daemon/daemon.js';
 import { PortPresence, probePresence } from '../daemon/binding/port-presence.js';
-import { probeDaemon } from '../../agent/mcp/mcp-proxy.js';
+import { probeDaemon } from '../../surface/mcp/mcp-proxy.js';
 import { fetchStatus } from './launch/cli-launch.js';
 import { daemonLine, type DaemonIdentity } from './doctor/doctor-daemon-line.js';
 import { projectWiringLine } from './doctor/doctor-project-line.js';
@@ -21,7 +21,7 @@ import {
   readProjectPort,
 } from './ports/resolve/cli-port.js';
 import { DoctorRow, doctorRow } from './doctor/doctor-rows.js';
-import { attachState, describeAttachState } from '../../agent/mcp/attach-memory.js';
+import { attachState, describeAttachState } from '../../surface/mcp/attach-memory.js';
 import { findOccupiedSiblings, siblingListenerNote } from './ports/sibling-ports.js';
 import {
   daemonsServingProjectElsewhere,

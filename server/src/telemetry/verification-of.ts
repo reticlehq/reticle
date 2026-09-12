@@ -13,7 +13,7 @@
  * be readable and testable on its own rather than inferred from a ternary inside a dispatcher.
  */
 import { type BrowserBrand, CaptureLoss, type Verification, VerifiedReason } from '@reticlehq/core';
-import { VERDICT_TOOLS } from '../agent/tools/feedback-tools.js';
+import { VERDICT_TOOLS } from '../surface/tools/feedback-tools.js';
 import { getBrowserMode } from './browser-mode.js';
 
 /**

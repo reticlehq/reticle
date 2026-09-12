@@ -11,7 +11,7 @@ import {
   SessionState,
 } from '@reticlehq/core';
 import { MCP_SSE_PATH } from '@reticlehq/core';
-import { createSharedServer, type SharedServer } from './http-server.js';
+import { createSharedServer, type SharedServer } from './surface/http-server.js';
 import { Bridge } from './portal/bridge/bridge.js';
 import { endAllSessions } from './portal/session/session-reaper.js';
 

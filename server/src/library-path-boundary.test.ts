@@ -94,12 +94,12 @@ describe('library path boundary', () => {
   it('relative specifiers resolve the way the runtime resolves them', () => {
     // Across groups, which is what most cross-directory imports are now: two levels up, then the
     // group, then the directory.
-    expect(resolveImport('agent/mcp/mcp.ts', '../../command/setup/confirm.js')).toBe(
+    expect(resolveImport('surface/mcp/mcp.ts', '../../command/setup/confirm.js')).toBe(
       'command/setup/confirm.ts',
     );
     // Within a group, unchanged: one level up and along.
-    expect(resolveImport('agent/mcp/mcp.ts', '../tools/tools.js')).toBe('agent/tools/tools.ts');
-    expect(resolveImport('index.ts', './agent/tools/tools.js')).toBe('agent/tools/tools.ts');
+    expect(resolveImport('surface/mcp/mcp.ts', '../tools/tools.js')).toBe('surface/tools/tools.ts');
+    expect(resolveImport('index.ts', './surface/tools/tools.js')).toBe('surface/tools/tools.ts');
     expect(resolveImport('index.ts', '@reticlehq/core')).toBeUndefined();
   });
 });

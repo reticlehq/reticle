@@ -62,8 +62,8 @@ const RUN_TOOL = 'reticle_run';
 // Reading it from the built server keeps the check meaningful: the assertion below is still that a
 // REAL MCP connection advertises the surface, and it is now impossible for it to disagree with the
 // surface for the boring reason.
-const { TOOL_SURFACE } = await import(pathToFileURL(path.join(ROOT, 'server/dist/agent/tools/tool-surface.js')).href);
-const { advertisedTools } = await import(pathToFileURL(path.join(ROOT, 'server/dist/agent/mcp/mcp.js')).href);
+const { TOOL_SURFACE } = await import(pathToFileURL(path.join(ROOT, 'server/dist/surface/tools/tool-surface.js')).href);
+const { advertisedTools } = await import(pathToFileURL(path.join(ROOT, 'server/dist/surface/mcp/mcp.js')).href);
 const EXTENDED_SURFACE_SIZE = advertisedTools(TOOL_SURFACE.ALL).length;
 
 const client = new McpStdioClient(

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { IntentStore } from './intent-store.js';
 import { sessionRoot } from '../project/session-root.js';
-import type { ToolDeps } from '../../agent/tools/tool-kit.js';
+import type { ToolDeps } from '../../surface/tools/tool-kit.js';
 
 /**
  * Intent declared INLINE, on the tool that is already drawing the verdict.

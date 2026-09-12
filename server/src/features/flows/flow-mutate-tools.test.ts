@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/core';
 import { FLOW_MUTATE_TOOL } from './flow-mutate-tools.js';
-import type { ToolDeps } from '../../agent/tools/tools.js';
+import type { ToolDeps } from '../../surface/tools/tools.js';
 
 /**
  * Asking a flow the only question that grades IT rather than the app.
