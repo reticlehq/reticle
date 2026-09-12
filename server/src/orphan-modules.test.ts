@@ -39,20 +39,6 @@ const DECLARED_UNWIRED: Record<string, string> = {
     'reason those tests cannot silently drift from the real interface.',
   'features/project/memory-fs.ts':
     'an in-memory FileSystemPort, so a test can exercise project code without touching disk.',
-  /*
-   * Built and deliberately not wired: nothing constructs a fixture port yet, so no suite reuses
-   * anything and every flow still runs from cold — which is correct, and merely slower.
-   *
-   * It is not wired because the remaining question is not code. A fixture must be applied BEFORE the
-   * page loads for auth to hold, and a suite's flows currently arrive at an already-connected
-   * session, so the place this belongs is a lease/boot path that does not exist yet. Wiring it into
-   * the current one would restore a cookie jar into a page that had already decided it was signed
-   * out — a fixture that appears to work and silently does nothing, which is worse than the honest
-   * absence, because a suite would start trusting it.
-   */
-  'connection/input/storage-fixture.ts':
-    'the driven-browser fixture port: proven, and waiting on a boot path that can apply it before ' +
-    'the page loads.',
   'workspace-packages.ts': 'reads the workspace layout; used by the cross-package guards.',
   'import-graph.ts': 'builds the import graph the boundary guards assert over.',
 

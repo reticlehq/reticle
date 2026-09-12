@@ -10,6 +10,8 @@
  * Attach-only: the pool drives a browser against an already-running dev server — it never starts one.
  */
 
+import type { RealInputProvider } from '../../connection/input/real-input.js';
+import { fixturePortFor, seedFromStorageState } from '../../connection/input/storage-fixture.js';
 import { z } from 'zod';
 import { leaseNotConnectedHint, type LeaseEvidence } from './lease-hint.js';
 import { probeSdkMarker } from './gaps/sdk-marker-probe.js';
@@ -799,3 +801,32 @@ function tellWatchers(deps: ToolDeps, projectId: string | undefined, text: strin
 }
 
 export const LEASE_TOOLS: ToolDef[] = [LEASE_ACQUIRE_TOOL, LEASE_RELEASE_TOOL];
+
+/**
+ * The state a suite should boot its flows from: whatever the agent is already sitting in.
+ *
+ * This is the join the fixture work was building toward. A suite's flows each start from cold, so
+ * fifty of them prove the login works fifty times — and the flow that LOGS OUT leaves every flow
+ * after it signed out, which no navigation repairs, because the problem is not where the subject is
+ * but what it holds. A seed is applied to an isolated context BEFORE the first navigation, which is
+ * exactly and only when a fixture can work.
+ *
+ * Best-effort, deliberately. A fixture is an OPTIMISATION over running from cold, and running from
+ * cold is correct: a suite that refused to start because a cookie jar could not be read would have
+ * traded a slow answer for no answer. Every "no" here — no provider, no storage support, nothing
+ * driven, a browser that threw, nothing worth seeding — produces the same honest `undefined`, and
+ * the suite runs exactly as it did before any of this existed.
+ */
+export async function suiteFixtureSeed(
+  realInput: RealInputProvider | undefined,
+  appUrl: string,
+): Promise<SeedStorage | undefined> {
+  if (realInput === undefined) return undefined;
+  try {
+    const port = await fixturePortFor(realInput, appUrl);
+    if (port === undefined) return undefined;
+    return seedFromStorageState(await port.capture(), appUrl);
+  } catch {
+    return undefined;
+  }
+}

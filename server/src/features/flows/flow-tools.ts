@@ -15,7 +15,7 @@ import { workerCountSchema } from '../../agent/tools/args/numeric-bounds.js';
 import { log } from '../../log.js';
 import { cloudFetch, syncFlowToCloud, SyncOutcome } from '../cloud/cloud-sync.js';
 import { mapWithConcurrency, resolveConcurrency } from './suite/parallel-suite.js';
-import { acquireLeasedSession } from '../../agent/tools/lease-tools.js';
+import { acquireLeasedSession, suiteFixtureSeed } from '../../agent/tools/lease-tools.js';
 import { homedir } from 'node:os';
 import { resolveProjectCloud } from '../cloud/cloud-config.js';
 import { buildSuiteVerdict } from './decision.js';
@@ -570,9 +570,22 @@ export const FLOW_TOOLS: ToolDef[] = [
         requested.length > 0
       ) {
         const concurrency = resolveConcurrency(requested.length, pool.capacity(), parallelArg);
+        /*
+         * Captured ONCE, before any flow runs, from the page the agent is already driving.
+         *
+         * Each leased flow then boots already holding it, which is what closes the gap this suite
+         * had: a flow that logs out used to leave every flow after it signed out, and no navigation
+         * repairs that — the problem is not where the subject is, it is what it holds. Seeded before
+         * the first navigation, because restoring into a page that has already decided it is signed
+         * out is a fixture that appears to work and does nothing.
+         *
+         * `undefined` whenever it cannot be had, and the suite then runs exactly as it did before:
+         * every flow from cold, which is correct and merely slower.
+         */
+        const seed = await suiteFixtureSeed(deps.realInput, appUrl);
         const outcomes = await mapWithConcurrency(requested, concurrency, async (flowName) => {
           const start = deps.now();
-          const lease = await acquireLeasedSession(pool, deps.sessions, appUrl, projectId);
+          const lease = await acquireLeasedSession(pool, deps.sessions, appUrl, projectId, seed);
           try {
             const replay = await replayNamedFlow(deps, { flowName, sessionId: lease.sessionId });
             return { replay, durationMs: deps.now() - start };
