@@ -67,7 +67,10 @@ describe('selectPath declares its loss beside the value', () => {
     ],
     // 121, not 120: `length` is a selectable segment on an array, so it counts as available.
     ['an array', Array.from({ length: 120 }, (_, i) => i), 121],
-    ['a Map', new Map(Array.from({ length: 120 }, (_, i) => [`k${String(i)}`, i])), 120],
+    // 121, not 120: `size` is a selectable segment on a Map, so it counts as available.
+    ['a Map', new Map(Array.from({ length: 120 }, (_, i) => [`k${String(i)}`, i])), 121],
+    // 121, not 120: `size` is a selectable segment on a Set, so it counts as available.
+    ['a Set', new Set(Array.from({ length: 120 }, (_, i) => String(i))), 121],
   ])('reports the true size for %s', (_label, value, total) => {
     expect(selectPath(value, 'definitely-not-here').totalKeys).toBe(total);
   });

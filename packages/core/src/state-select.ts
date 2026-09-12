@@ -25,7 +25,6 @@ export interface PathSelection {
   totalKeys?: number;
 }
 
-const MAX_DEPTH = 3;
 /** Cap on how many near-miss keys travel in a failed selection — a 10k-key store must not return a
  *  10k-entry array in the error payload (that was the token blowup the near-miss exists to avoid). */
 const MAX_AVAILABLE_KEYS = 50;
@@ -58,20 +57,36 @@ function keysOf(value: unknown): { keys: string[]; total: number } {
   if (value instanceof Map) {
     const keys: string[] = [];
     let total = 0;
+    let hasExplicitSize = false;
     for (const k of value.keys()) {
       total += 1;
-      if ('string' === typeof k && keys.length < MAX_AVAILABLE_KEYS - 1) keys.push(k);
+      if ('string' === typeof k && keys.length < MAX_AVAILABLE_KEYS - 1) {
+        if (SIZE_SEGMENT === k) hasExplicitSize = true;
+        keys.push(k);
+      }
     }
-    return { keys: [...keys, SIZE_SEGMENT], total: total + 1 };
+    if (!hasExplicitSize) {
+      keys.push(SIZE_SEGMENT);
+      total += 1;
+    }
+    return { keys, total };
   }
   if (value instanceof Set) {
     const keys: string[] = [];
     let total = 0;
+    let hasExplicitSize = false;
     for (const item of value) {
       total += 1;
-      if ('string' === typeof item && keys.length < MAX_AVAILABLE_KEYS - 1) keys.push(item);
+      if ('string' === typeof item && keys.length < MAX_AVAILABLE_KEYS - 1) {
+        if (SIZE_SEGMENT === item) hasExplicitSize = true;
+        keys.push(item);
+      }
     }
-    return { keys: [...keys, SIZE_SEGMENT], total: total + 1 };
+    if (!hasExplicitSize) {
+      keys.push(SIZE_SEGMENT);
+      total += 1;
+    }
+    return { keys, total };
   }
   if ('object' === typeof value && null !== value) {
     const all = Object.keys(value);
@@ -184,8 +199,9 @@ export function capDepth(value: unknown, maxDepth: number): unknown {
     // `out['__proto__'] = …` on a normal object writes the prototype slot instead of a key, losing
     // that key from the projection. A prototype-less target makes every key an ordinary assignment.
     const out: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
-    for (const key of keys)
-      out[key] = capDepth((value as Record<string, unknown>)[key], maxDepth - 1);
+    for (const k of keys) {
+      out[k] = capDepth((value as Record<string, unknown>)[k], maxDepth - 1);
+    }
     return out;
   }
   return value;
