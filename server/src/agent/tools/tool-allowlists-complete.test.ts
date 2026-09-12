@@ -141,6 +141,25 @@ describe('tool allowlists are complete', () => {
     /*
      * 63 since `reticle_verify { action: "explore" }` — the model-driven drive.
      *
+     * 64 since `reticle_verify { action: "mutate" }` — the one that grades the FLOW rather than the
+     * app. Membership decided deliberately, as this guard asks:
+     *
+     *   CDP_TOOLS            YES — it breaks a request through the same Playwright route
+     *                        `reticle_network_mock` uses, so version skew must refuse it the same way.
+     *   ACTION_TOOLS         no  — it drives, and it also RESOLVES itself with its own grade, exactly
+     *                        as `reticle_flow_replay` does. That set exists to catch an action left
+     *                        hanging with no verdict after it, which cannot happen here.
+     *   VERDICT_TOOLS        no  — and this is the one worth arguing. It produces no verdict ABOUT
+     *                        THE APP: it grades a flow. Counting a mutation outcome toward
+     *                        `verification_completed` would inflate the headline metric with
+     *                        judgements about our own suite.
+     *   CAPTURED_TOOLS       no  — the honesty block describes the capture a verdict rests on, and
+     *                        there is no verdict here to qualify.
+     *   SESSION_BOUND/EXEMPT neither — it is a MEMBER of the merged `reticle_verify` facade, and the
+     *                        facade is what `runTool` sees. Its siblings (`flows`, `crawl`) are in
+     *                        neither set for the same reason.
+     *   REF_MINTING_TOOLS    no  — it hands back a grade, never a ref.
+     *
      * Its membership was decided against `reticle_crawl`, the sibling it behaves exactly like: both
      * are destructive actions on the whole app reached as an action on `reticle_verify`, and both
      * belong to NONE of the eleven sets. The parent carries what matters — `VERIFY` is already in
@@ -148,7 +167,7 @@ describe('tool allowlists are complete', () => {
      * `verificationOf` still requires a verdict shape this action does not return. It saves flows;
      * the replay of those flows is what produces a verdict, and that is counted where it happens.
      */
-    const PINNED_RAW_TOOL_COUNT = 63;
+    const PINNED_RAW_TOOL_COUNT = 64;
 
     expect(
       RAW_TOOLS.length,

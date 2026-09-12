@@ -68,6 +68,9 @@ const CDP_TOOLS: ReadonlySet<string> = new Set([
   ReticleTool.VISUAL_DIFF,
   ReticleTool.NETWORK_MOCK,
   ReticleTool.VIEWPORT,
+  // Breaks a request through the same Playwright route `reticle_network_mock` uses, so it fails the
+  // same way under version skew and must be refused with the same sentence.
+  ReticleTool.FLOW_MUTATE,
 ]);
 
 /**

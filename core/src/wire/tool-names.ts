@@ -54,6 +54,8 @@ export const ReticleTool = {
   FLOW_SAVE_RECORDED: 'reticle_flow_save_recorded',
   /** propose (+ opt-in apply) a nearest-match rebind for a drifted flow. */
   FLOW_HEAL: 'reticle_flow_heal',
+  /** Does this flow notice when the thing it depends on breaks? See flow-mutate-tools.ts. */
+  FLOW_MUTATE: 'reticle_flow_mutate',
   /** structured annotation → compiles into the recording's expect/dynamic/success. */
   ANNOTATE: 'reticle_annotate',
   AFFECTED: 'reticle_affected',

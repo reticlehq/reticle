@@ -39,32 +39,6 @@ const DECLARED_UNWIRED: Record<string, string> = {
     'reason those tests cannot silently drift from the real interface.',
   'features/project/memory-fs.ts':
     'an in-memory FileSystemPort, so a test can exercise project code without touching disk.',
-  /*
-   * Built and not yet driven. The port breaks a driven page's request and clears it again, and
-   * `WebRealm.mutate` passes through to it — but nothing yet RUNS the loop that gives the grade its
-   * meaning: replay a flow, break the thing it watches, replay it again, and demote it if it stayed
-   * green.
-   *
-   * Deliberately not wired to anything that would run it by accident. A mutation is a real break on
-   * a real page, and the loop has to reverse every one of them even when a replay throws in the
-   * middle — a half-run that leaves a page permanently answering 500 hands the next flow a subject
-   * that is not the subject, and every verdict after it would be about the wrong app.
-   */
-  'connection/input/network-mutation.ts':
-    'the deliberate-break port: proven, and waiting on a caller — see mutation-run.ts.',
-  /*
-   * The loop is built and nothing invokes it, because invoking it is a TOOL and a tool is its own
-   * change: a name on the surface, the eleven allowlists, a schema, and the battery.
-   *
-   * What it needs from a caller is specific, and is the reason this is not a two-line wiring: a
-   * DRIVEN session (an attached tab cannot be perturbed), the flow to replay, and a target worth
-   * breaking — the endpoint the flow's own steps depend on. Guessing that target is the part that
-   * would quietly make the number meaningless: break something the flow never touches and every
-   * flow "survives", which reads as a suite full of bad tests and is a bug in the mutation set.
-   */
-  'features/flows/mutation-run.ts':
-    'replay/break/replay/grade, with the reversal guaranteed: proven, and waiting on the tool that ' +
-    'chooses what to break.',
   'workspace-packages.ts': 'reads the workspace layout; used by the cross-package guards.',
   'import-graph.ts': 'builds the import graph the boundary guards assert over.',
 

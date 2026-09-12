@@ -1,3 +1,4 @@
+import { FLOW_MUTATE_TOOL } from './flow-mutate-tools.js';
 import { z } from 'zod';
 import { emptyFlowRefusal } from './empty-flow.js';
 import { aliasParam } from '../../agent/tools/args/alias-args.js';
@@ -110,6 +111,7 @@ const INTENT_GAP_FIELD = z
   );
 
 export const FLOW_TOOLS: ToolDef[] = [
+  FLOW_MUTATE_TOOL,
   {
     name: ReticleTool.FLOW_SAVE,
     description:

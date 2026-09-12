@@ -105,8 +105,26 @@ const bytesOf = (json: string): number => Buffer.byteLength(json, 'utf8');
  * labels are a UNION (ask for two, get either), and a quarantined flow never runs however it is
  * labelled. Everything else about selection lives in the tool description, which is sent once.
  */
-const DEFAULT_SURFACE_BYTE_BUDGET = 24_100;
-// Raised once, deliberately, from 23_000 — with the measurement that bought it.
+const DEFAULT_SURFACE_BYTE_BUDGET = 24_500;
+// Raised TWICE, each time deliberately, each time with the measurement that bought it.
+//
+// SECOND RAISE, 24_100 -> 24_500. `reticle_verify { action: "mutate" }` costs 185 B on the wire
+// (24,050 -> 24,235, ~46 tokens/turn), and the 24_100 ratchet had 50 B of headroom.
+//
+// Where those bytes go is the part worth recording, because the intuitive answer is wrong. NONE of
+// it is prose: the DEFAULT surface is terse, so a merged tool's description is truncated to its
+// first sentence and the whole paragraph describing `mutate` reaches the wire as zero bytes (it is
+// read through `reticle_tools`). The 185 B is the two INPUT PARAMETERS the action adds to the
+// facade — `flowName` and its `flow` alias, which `surface-consistency` requires as a pair — and
+// their JSON-Schema scaffolding, which no rewording can remove.
+//
+// What it buys: the only mechanism that grades our own suite. 5% of this repo's 137 recorded steps
+// declare a consequence, so 95% of them would replay green whether or not the feature works, and
+// asking agents to declare more has measurably not worked. A flow that does not go red when the
+// endpoint it declared it depends on fails is a click sequence, and until this action existed
+// nothing could say which flows those are.
+//
+// FIRST RAISE, 23_000 -> 24_100 — with the measurement that bought it.
 //
 // `reticle_verify` was promoted into the default surface and costs 898 B on the wire (22,680 ->
 // 23,578, ~225 tokens/turn). What it buys, measured on the Layer B agent loop: on a CLEAN app the

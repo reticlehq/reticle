@@ -12,6 +12,10 @@
 
 import type { RealInputProvider } from '../../connection/input/real-input.js';
 import { fixturePortFor, seedFromStorageState } from '../../connection/input/storage-fixture.js';
+import {
+  mutationPortFor,
+  type NetworkMutationPort,
+} from '../../connection/input/network-mutation.js';
 import { z } from 'zod';
 import { leaseNotConnectedHint, type LeaseEvidence } from './lease-hint.js';
 import { probeSdkMarker } from './gaps/sdk-marker-probe.js';
@@ -827,6 +831,27 @@ export async function suiteFixtureSeed(
     if (port === undefined) return undefined;
     return seedFromStorageState(await port.capture(), appUrl);
   } catch {
+    return undefined;
+  }
+}
+
+/**
+ * A way to break this session's page, or nothing.
+ *
+ * Sits beside `suiteFixtureSeed` because it is the same shape of job: turning a provider capability
+ * into something a feature can use, on the one side of the graph that is allowed to know about both.
+ * A flow tool reaching into the input layer directly would be a feature depending on a driver, which
+ * is the reach the boundary guard exists to ask about.
+ */
+export async function sessionMutationPort(
+  realInput: RealInputProvider | undefined,
+  appUrl: string | undefined,
+): Promise<NetworkMutationPort | undefined> {
+  if (realInput === undefined || appUrl === undefined) return undefined;
+  try {
+    return await mutationPortFor(realInput, appUrl);
+  } catch {
+    // A provider that cannot answer is the same answer as a provider that cannot break anything.
     return undefined;
   }
 }
