@@ -10,7 +10,7 @@ import { API_BASE } from '../lib/api.js';
  * It exists to make two acceptances testable, both of which a calm fixture cannot exercise:
  * - ambient learning: `settled` must still fire here (the churn region is learned as ambient),
  * so act_and_wait does not time out on a healthy real-time page.
- * - B12c priority eviction: the single failed request must survive the flood instead of being
+ * - priority eviction: the single failed request must survive the flood instead of being
  * pushed out of the ring buffer by thousands of low-signal churn events.
  */
 

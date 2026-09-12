@@ -28,7 +28,7 @@ import { generateKeyPairSync, createPrivateKey, randomUUID, createHash } from 'n
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { signLicenseKey } from '../packages/server/dist/license/license.js';
+import { signLicenseKey } from '../server/dist/features/license/license.js';
 
 const [cmd, ...rest] = process.argv.slice(2);
 

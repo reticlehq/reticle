@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1787866683679-e1312",
+  "createdAt": 1787866683679,
+  "origin": "failed-assert",
+  "expected": "declared consequence",
+  "observed": "no element matched {\"testid\":\"issue-list\"} — testids present here: nav-overview, nav-issues, nav-connect, nav-keys, nav-billing, nav-settings, shell-org, project-switcher, account-menu",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "e1312",
+        "source": {
+          "file": "src/features/overview/impact-board.tsx",
+          "line": 187,
+          "column": 8
+        }
+      },
+      "action": "click"
+    }
+  ]
+}

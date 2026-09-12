@@ -1,6 +1,6 @@
 {
   "name": "reticle-monorepo",
-  "version": "2.14.0",
+  "version": "3.0.0",
   "private": true,
   "description": "Reticle — the proof layer for AI agents. Observe and verify a running web app over MCP, no screenshots.",
   "packageManager": "pnpm@10.33.2",
@@ -14,13 +14,14 @@
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "check:lossy": "node scripts/check-lossy-transforms.mjs",
     "changelog:assemble": "node scripts/assemble-changelog.mjs",
-    "lint:docs": "pnpm --filter @reticlehq/server exec vitest run src/tools/docs-commands-run.test.ts src/tools/docs-code-blocks.test.ts src/tools/docs-index-coverage.test.ts src/tools/guidance-commands-run.test.ts src/tools/e2e-surface-drift.test.ts src/tools/published-skill-artifacts.test.ts",
+    "lint:docs": "pnpm --filter @reticlehq/server exec vitest run src/guards/docs/docs-commands-run.test.ts src/guards/docs/docs-code-blocks.test.ts src/surface/tools/docs-index-coverage.test.ts src/guards/docs/guidance-commands-run.test.ts src/surface/tools/e2e-surface-drift.test.ts src/guards/release/published-skill-artifacts.test.ts",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test:unit test:guards",
     "test:unit": "turbo run test:unit test:guards && pnpm test:bench",
     "test:bench": "vitest run bench/harness",
     "test:coverage": "turbo run test:coverage",
     "test:e2e": "bash apps/e2e/run-ci.sh",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:unit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "bench": "node bench/harness/bench-all.mjs",
@@ -33,6 +34,9 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "docs:api": "typedoc",
     "test:e2e:desktop": "bash apps/e2e/run-desktop.sh",
+    "conformance": "node conformance/run-self.mjs",
+    "conformance:desktop": "node conformance/run-desktop.mjs",
+    "gate:conformance": "node conformance/run-self.mjs --gate && node conformance/run-desktop.mjs --gate",
     "gate:install": "node apps/e2e/install-gate.mjs",
     "gate:install:self-test": "node apps/e2e/install-gate.mjs --self-test",
     "gate:multi": "node apps/e2e/multi/multi-agent-sim.mjs",
@@ -46,7 +50,8 @@
     "knip": "npx --yes knip --no-progress",
     "hooks:install": "ln -sf ../../pre-commit.sh .git/hooks/pre-commit && ln -sf ../../prepare-commit-msg.sh .git/hooks/prepare-commit-msg && echo \"pre-commit + sign-off hooks installed\"",
     "check:stale-issues": "node scripts/check-stale-issues.mjs",
-    "check:stale-issues:self-test": "node scripts/check-stale-issues.mjs --self-test"
+    "check:stale-issues:self-test": "node scripts/check-stale-issues.mjs --self-test",
+    "gate:conformance:self-test": "node conformance/run-self.mjs --self-test && node conformance/run-desktop.mjs --self-test"
   },
   "pnpm": {
     "overrides": {

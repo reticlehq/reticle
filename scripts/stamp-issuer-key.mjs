@@ -24,14 +24,14 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createPublicKey } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
-// Resolved from this file, not the cwd: the stamp runs from packages/server (prepack) as well as from
+// Resolved from this file, not the cwd: the stamp runs from server (prepack) as well as from
 // the repo root, and a cwd-relative path would silently miss in one of them.
 const TARGET = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  '../packages/server/dist/license/license.js',
+  '../server/dist/features/license/license.js',
 );
 /** Must match the declaration in license.ts verbatim. A rename here fails loudly rather than no-oping. */
 const EMPTY_DECLARATION = "const BAKED_ISSUER_PUBLIC_KEY_PEM = '';";
@@ -83,7 +83,11 @@ writeFileSync(TARGET, stamped);
 // Prove the stamp took, against the real module rather than the string we just wrote. With a key baked
 // and no customer key present, activation must read `missing` (enforcement ON). If it still reads
 // `eval`, the gate is off and this release must not ship.
-const { describeLicense } = await import(TARGET);
+// `pathToFileURL`, not the bare path: ESM `import()` takes a URL, and an absolute Windows path
+// (`D:\a\…\license.js`) is not one — the drive letter reads as a protocol and the loader throws
+// before the check can run. The release gate then fails as "the stamp could not be verified" on a
+// stamp that worked. Same conversion trap as `new URL(import.meta.url).pathname`.
+const { describeLicense } = await import(pathToFileURL(TARGET).href);
 const report = describeLicense(Date.now(), {});
 if (report.status !== 'missing') {
   process.stderr.write(

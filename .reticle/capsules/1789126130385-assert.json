@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1789126130385-assert",
+  "createdAt": 1789126130385,
+  "origin": "failed-assert",
+  "expected": "signal never-fires-so-A-waits-the-whole-window",
+  "observed": "signal \"never-fires-so-A-waits-the-whole-window\" never fired",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "nav-overview",
+        "source": {
+          "file": "src/components/Sidebar.tsx",
+          "line": 45,
+          "column": 8
+        }
+      },
+      "action": "click"
+    }
+  ]
+}

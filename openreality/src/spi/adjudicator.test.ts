@@ -1,0 +1,318 @@
+import { describe, expect, it } from 'vitest';
+import { adjudicate, couldEverProve, Ground, type AdjudicationInput } from './adjudicator.js';
+import { CHANNEL_DEFAULTS, ChannelId, Grade, Independence } from '../vocabulary/channel.js';
+import { Declaration } from '../vocabulary/intent.js';
+import { CloseCondition } from '../vocabulary/realm-surface.js';
+import { AnomalyTier, Verdict } from '../vocabulary/verdict.js';
+import { ProvenanceClass } from '../vocabulary/evidence.js';
+
+/**
+ * The rules, exercised as rules.
+ *
+ * `adjudicate` is normative — where an implementation disagrees with it, it is what the
+ * specification means — so it is the one function in this package that must be pinned clause by
+ * clause. Every test below names the clause it defends and the wrong answer it prevents.
+ */
+
+const SUBJECT = { surface: 'web', instance: 'i1', epoch: 3 } as const;
+
+function channel(id: ChannelId) {
+  return { id, ...CHANNEL_DEFAULTS[id] };
+}
+
+function evidence(
+  id: string,
+  channelId: ChannelId,
+  cls: ProvenanceClass = ProvenanceClass.OBSERVED,
+) {
+  return {
+    observation: {
+      id,
+      window: 'w1',
+      channel: channelId,
+      at: 10,
+      value: {},
+      summary: `${channelId} saw something`,
+    },
+    provenance: { class: cls, source: 'test', method: 'direct', subject: SUBJECT, at: 10 },
+    independence: CHANNEL_DEFAULTS[channelId].independence,
+    grade: CHANNEL_DEFAULTS[channelId].grade,
+  };
+}
+
+function input(over: Partial<AdjudicationInput> = {}): AdjudicationInput {
+  return {
+    claim: {
+      id: 'c1',
+      statement: 'the order was placed',
+      declaredAt: Declaration.BEFORE_ACTION,
+      assertions: [
+        { id: 'a1', predicate: {}, reads: 'POST /orders returned 200', channels: [ChannelId.NET] },
+      ],
+    },
+    window: {
+      id: 'w1',
+      openedAt: 0,
+      closedAt: 50,
+      budgetMs: 8000,
+      closes: CloseCondition.QUIESCENCE,
+      closedBy: CloseCondition.QUIESCENCE,
+      subject: SUBJECT,
+    },
+    channels: [channel(ChannelId.NET), channel(ChannelId.UI), channel(ChannelId.STATE)],
+    evidence: [evidence('e1', ChannelId.NET)],
+    coverage: { window: 'w1', observed: [ChannelId.NET, ChannelId.UI], blindSpots: [] },
+    anomalies: [],
+    assertionsHeld: true,
+    ...over,
+  };
+}
+
+describe('a yes has to be paid for', () => {
+  it('is proved when independent consequence evidence closes a clean window', () => {
+    const out = adjudicate(input());
+    expect(out.verdict).toBe(Verdict.YES);
+    expect(out.grade).toBe(Grade.CONSEQUENCE);
+  });
+
+  it('refuses to prove on channels the action itself produced', () => {
+    // The clause the whole protocol exists for. The screen and the store agreeing is the subject
+    // agreeing with itself; an application wrong about what it did is wrong on both, together.
+    const out = adjudicate(
+      input({
+        claim: {
+          id: 'c1',
+          statement: 'the badge updated',
+          declaredAt: Declaration.BEFORE_ACTION,
+          assertions: [
+            { id: 'a1', predicate: {}, reads: 'badge reads 1', channels: [ChannelId.UI] },
+          ],
+        },
+        evidence: [evidence('e1', ChannelId.UI), evidence('e2', ChannelId.STATE)],
+      }),
+    );
+    expect(out.verdict).toBe(Verdict.UNKNOWN);
+    expect(out.reasons.join(' ')).toMatch(/not evidence that it acted/);
+  });
+
+  it('refuses to prove on a learned belief, however confident', () => {
+    // The memory fence, at the point it matters. Repetition is not authority.
+    const out = adjudicate({
+      ...input(),
+      evidence: [evidence('e1', ChannelId.NET, ProvenanceClass.LEARNED)],
+    });
+    expect(out.verdict).toBe(Verdict.UNKNOWN);
+  });
+
+  it('refuses to prove a claim written down after the action', () => {
+    const out = adjudicate({
+      ...input(),
+      claim: { ...input().claim, declaredAt: Declaration.AFTER_ACTION },
+    });
+    expect(out.verdict).toBe(Verdict.UNKNOWN);
+    expect(out.reasons.join(' ')).toMatch(/after the action/);
+  });
+
+  it('refuses to prove over a window that ran out of budget', () => {
+    const out = adjudicate({
+      ...input(),
+      window: { ...input().window, closedBy: CloseCondition.BUDGET_EXHAUSTED },
+    });
+    expect(out.verdict).toBe(Verdict.UNKNOWN);
+  });
+});
+
+describe('could not see is decided before it did not happen', () => {
+  it('answers unknown when the claim reads a channel nobody declared', () => {
+    // Checked before any evidence is weighed: "nothing was watching" and "it did not happen"
+    // produce identical empty evidence and mean opposite things.
+    const out = adjudicate(input({ channels: [channel(ChannelId.UI)] }));
+    expect(out.verdict).toBe(Verdict.UNKNOWN);
+    expect(out.reasons.join(' ')).toMatch(/cannot observe/);
+  });
+
+  it('answers unknown when an impeaching blind spot falls on what the claim needed', () => {
+    const out = adjudicate(
+      input({
+        coverage: {
+          window: 'w1',
+          observed: [ChannelId.NET],
+          blindSpots: [
+            {
+              kind: 'buffer-truncated',
+              channel: ChannelId.NET,
+              detail: 'the request log was capped',
+              impeaching: true,
+            },
+          ],
+        },
+      }),
+    );
+    expect(out.verdict).toBe(Verdict.UNKNOWN);
+  });
+
+  it('is unmoved by a blind spot the claim never needed', () => {
+    // Without this an honest implementation is punished for declaring blind spots, and learns to
+    // declare fewer — which is the opposite of what the field is for.
+    const out = adjudicate(
+      input({
+        coverage: {
+          window: 'w1',
+          observed: [ChannelId.NET],
+          blindSpots: [
+            {
+              kind: 'channel-unobserved',
+              channel: ChannelId.STORAGE,
+              detail: 'storage is not watched here',
+              impeaching: false,
+            },
+          ],
+        },
+      }),
+    );
+    expect(out.verdict).toBe(Verdict.YES);
+  });
+});
+
+describe('an anomaly convicts only on independent channels', () => {
+  const anomaly = (between: [ChannelId, ChannelId], tier: AnomalyTier = AnomalyTier.OBSERVED) => ({
+    kind: 'advanced-over-failure' as const,
+    tier,
+    claim: 'the screen moved forward',
+    counter: 'a write in the same window failed',
+    between,
+    evidence: [],
+  });
+
+  it('forces no when the screen disagrees with the network', () => {
+    const out = adjudicate(input({ anomalies: [anomaly([ChannelId.UI, ChannelId.NET])] }));
+    expect(out.verdict).toBe(Verdict.NO);
+  });
+
+  it('does NOT force no when the screen disagrees with the store', () => {
+    // Both are produced by the same code path. Real, worth saying, and not proof of a failure.
+    // This is the aviation rule: two-of-three voting is valid over independent sensors only.
+    const out = adjudicate(input({ anomalies: [anomaly([ChannelId.UI, ChannelId.STATE])] }));
+    expect(out.verdict).toBe(Verdict.YES);
+  });
+
+  it('downgrades rather than convicts on an absence-derived anomaly', () => {
+    const out = adjudicate(
+      input({
+        anomalies: [anomaly([ChannelId.TIME, ChannelId.NET], AnomalyTier.ABSENCE_DERIVED)],
+        channels: [channel(ChannelId.NET), channel(ChannelId.TIME), channel(ChannelId.UI)],
+      }),
+    );
+    expect(out.verdict).toBe(Verdict.UNKNOWN);
+  });
+});
+
+describe('nothing declared is its own answer', () => {
+  it('is no-fault over a cleanly closed window', () => {
+    const out = adjudicate(input({ claim: { ...input().claim, assertions: [] } }));
+    expect(out.verdict).toBe(Verdict.NO_FAULT);
+  });
+
+  it('is unknown, not no-fault, when the window never closed cleanly', () => {
+    // no-fault requires a clean close, or it becomes the green-forever button that an
+    // always-available "nothing was wrong" always becomes.
+    const out = adjudicate(
+      input({
+        claim: { ...input().claim, assertions: [] },
+        window: { ...input().window, closedBy: CloseCondition.BUDGET_EXHAUSTED },
+      }),
+    );
+    expect(out.verdict).toBe(Verdict.UNKNOWN);
+  });
+});
+
+describe('an implementation can know at startup whether it could ever prove anything', () => {
+  it('says no for a presence-only implementation', () => {
+    expect(couldEverProve([channel(ChannelId.UI), channel(ChannelId.VISUAL)])).toBe(false);
+  });
+
+  it('says yes once an independent consequence channel is declared', () => {
+    expect(couldEverProve([channel(ChannelId.UI), channel(ChannelId.NET)])).toBe(true);
+  });
+
+  it('does not count an actuation-derived consequence channel as enough on its own', () => {
+    // `state` is consequence-grade and derived from the action. Grade alone is not the test.
+    expect(CHANNEL_DEFAULTS[ChannelId.STATE].grade).toBe(Grade.CONSEQUENCE);
+    expect(CHANNEL_DEFAULTS[ChannelId.STATE].independence).toBe(Independence.ACTUATION_DERIVED);
+    expect(couldEverProve([channel(ChannelId.STATE)])).toBe(false);
+  });
+});
+
+describe('a consequence that was already true', () => {
+  /**
+   * The clause the specification was missing, found by its own conformance suite.
+   *
+   * Before it existed, `adjudicate` answered `yes` here: the evidence is real, independent and
+   * consequence grade, the window closed cleanly, the claim was pre-registered and the assertion
+   * held. Nothing was wrong except that it had been true all along, and no input could say so --
+   * while `consequence-already-true` had been demanding `unknown` since the scenario list was
+   * written. The normative function could not pass the normative suite.
+   */
+  it('is unknown, not proved, when the implementation checked and it was', () => {
+    expect(adjudicate(input({ consequenceHeldBefore: true })).verdict).toBe(Verdict.UNKNOWN);
+    expect(adjudicate(input({ consequenceHeldBefore: true })).ground).toBe(Ground.ALREADY_TRUE);
+  });
+
+  it('is proved when the implementation checked and it was not', () => {
+    expect(adjudicate(input({ consequenceHeldBefore: false })).verdict).toBe(Verdict.YES);
+  });
+
+  it('is proved when nobody checked, because absent is not false', () => {
+    // The distinction this input exists to keep: an implementation that cannot read the
+    // before-state gets the verdict it would have got anyway, and is not punished for honesty.
+    expect(adjudicate(input()).verdict).toBe(Verdict.YES);
+    expect(adjudicate(input({ consequenceHeldBefore: undefined })).verdict).toBe(Verdict.YES);
+  });
+
+  it('does not outrank a real fault', () => {
+    // Last of the eleven on purpose: every earlier clause is a stronger reason to withhold a
+    // proof, and an already-true consequence must not mask an assertion that failed.
+    expect(adjudicate(input({ consequenceHeldBefore: true, assertionsHeld: false })).ground).toBe(
+      Ground.ASSERTION_FAILED,
+    );
+  });
+});
+
+/**
+ * With nothing observed, never `yes`. The one property that must not be vacuous.
+ *
+ * Every other empty case in this repository has been found reading as a pass: an orphan scan
+ * over zero files looked like a clean package, a grouping check over an empty group printed
+ * SAFE, a cross-surface comparison over an empty overlap said the surfaces agreed. A check
+ * that reads nothing reports exactly like a check that passed.
+ *
+ * This is where that failure would matter most. `adjudicate` deciding `yes` from an empty
+ * evidence list is a false green at the root of the system, and every verdict downstream
+ * inherits it.
+ *
+ * It does not, and clause 9 is why: nothing independent of the action supports the claim, so
+ * the answer is `unknown` with a ground that says so. Holding a caller's `assertionsHeld: true`
+ * does not change it, which is the case worth pinning, because that is the shape of a realm
+ * that evaluated its own predicate correctly and observed nothing at all.
+ *
+ * Measured before it was written down. Untested until now, which is why it is here.
+ */
+describe('an empty window proves nothing, however confident the caller is', () => {
+  it('refuses yes with no evidence, even when the caller says the assertions held', () => {
+    const decided = adjudicate(input({ evidence: [], assertionsHeld: true }));
+    expect(decided.verdict).toBe(Verdict.UNKNOWN);
+    expect(decided.ground).toBe(Ground.NO_INDEPENDENT_CONSEQUENCE);
+  });
+
+  it('refuses yes with no evidence when nobody evaluated the assertions either', () => {
+    expect(adjudicate(input({ evidence: [], assertionsHeld: undefined })).verdict).toBe(
+      Verdict.UNKNOWN,
+    );
+  });
+
+  it('still says yes when evidence IS there, so the rule above is not refusing everything', () => {
+    // The control. A clause that answered `unknown` to every input would satisfy both cases
+    // above and destroy the verdict, which is worse than the bug they guard against.
+    expect(adjudicate(input()).verdict).toBe(Verdict.YES);
+  });
+});

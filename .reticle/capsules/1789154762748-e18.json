@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1789154762748-e18",
+  "createdAt": 1789154762748,
+  "origin": "failed-assert",
+  "expected": "declared consequence",
+  "observed": "no element matched {\"text\":\"Quarterly Revenue Forecast Approved\"}",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "nav-deployments",
+        "source": {
+          "file": "src/components/Sidebar.tsx",
+          "line": 45,
+          "column": 8
+        }
+      },
+      "action": "click"
+    }
+  ]
+}

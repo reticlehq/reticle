@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "name": "drift-demo",
+  "createdAt": 1786152783607,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "nav-deployments",
+        "source": {
+          "file": "src/components/Sidebar.tsx",
+          "line": 41,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "click"
+    }
+  ]
+}

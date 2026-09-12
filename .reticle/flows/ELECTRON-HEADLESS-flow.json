@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "name": "ELECTRON-HEADLESS-flow",
+  "createdAt": 1785589789141,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "go-home"
+      },
+      "args": {},
+      "action": "click"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "go-settings"
+      },
+      "args": {},
+      "action": "click"
+    }
+  ]
+}

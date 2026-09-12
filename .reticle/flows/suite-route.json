@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "name": "suite-route",
+  "createdAt": 1789219500500,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "nav-compose",
+        "source": {
+          "file": "src/components/Sidebar.tsx",
+          "line": 45,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "click"
+    }
+  ],
+  "startPath": "/",
+  "success": {
+    "element": {
+      "testid": "compose-generate"
+    }
+  }
+}

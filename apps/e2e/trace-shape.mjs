@@ -12,7 +12,7 @@
 // Self-check: `node apps/e2e/trace-shape.mjs --self-check`
 // Against a real log: `node apps/e2e/trace-shape.mjs ~/.reticle/daemon-4400.log`
 
-/** The `event` value every trace line carries — see packages/server/src/trace.ts. */
+/** The `event` value every trace line carries — see server/src/trace.ts. */
 const TRACE_EVENT = 'trace';
 /** The root span `runTool` opens for every tool call, on both dispatch paths. */
 const TOOL_HANDLER_SPAN = 'tool.handler';

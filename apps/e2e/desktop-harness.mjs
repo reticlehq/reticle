@@ -235,19 +235,38 @@ export function spawnElectronVite(env) {
   const appDir = path.join(ROOT, 'apps', 'electron-vue-pinia');
   return spawn('pnpm', ['dev'], {
     cwd: appDir,
-    env: { ...env, RETICLE_HEADLESS: '1' },
+    env: {
+      ...env,
+      RETICLE_HEADLESS: '1',
+      // Which Electron electron-vite launches, decided here instead of by module resolution.
+      //
+      // It resolves `electron` from ITS OWN location, not the app's. `@electron-toolkit/preload`
+      // and `@electron-toolkit/utils` both declare `electron` as an EXACT peer on an older major
+      // than this app depends on, so pnpm materialises a second copy for them -- and that copy is
+      // a metadata-only directory whose binary was never downloaded. electron-vite finds it, sees
+      // no `path.txt`, and reports `Error: Electron uninstall`, which reads as "you forgot to
+      // install Electron" about a repository that has it installed twice.
+      //
+      // `ELECTRON_EXEC_PATH` is the first thing its resolver checks, so naming the app's own
+      // binary settles it: the app runs the major it declares, and the peer copy is irrelevant
+      // whether or not anybody ever downloads it.
+      ELECTRON_EXEC_PATH: resolveElectronBinary('electron-vue-pinia'),
+    },
   });
 }
 
 /**
- * Electron's own launcher path. `require('electron')` exports it as a string, so this is what the
- * `electron` CLI would exec — resolved directly so the spec does not depend on a bin shim.
+ * Electron's own launcher path, as the named app resolves it.
+ *
+ * `require('electron')` exports it as a string, so this is what the `electron` CLI would exec —
+ * resolved directly so the spec does not depend on a bin shim. Resolved from the APP's manifest,
+ * because this repository has two Electron majors installed and only the app can say which is its.
  */
-function resolveElectronBinary() {
-  const require = createRequire(path.join(ROOT, 'apps', 'electron-smoke', 'package.json'));
+function resolveElectronBinary(app = 'electron-smoke') {
+  const require = createRequire(path.join(ROOT, 'apps', app, 'package.json'));
   const bin = require('electron');
   if (typeof bin !== 'string' || !existsSync(bin)) {
-    throw new Error('electron is not installed — run `pnpm install` in apps/electron-smoke');
+    throw new Error(`electron is not installed — run \`pnpm install\` in apps/${app}`);
   }
   return bin;
 }

@@ -1,0 +1,45 @@
+[package]
+name = "reticle-tauri"
+version = "3.0.0"
+edition = "2021"
+description = "Reticle screenshots and headless mode for a Tauri app"
+license = "MIT"
+# crates.io shows these on the crate page; `repository` is also what links the published crate back
+# to the source a reader can verify it against.
+repository = "https://github.com/reticlehq/reticle"
+homepage = "https://reticle.dev"
+documentation = "https://docs.rs/reticle-tauri"
+readme = "README.md"
+keywords = ["tauri", "testing", "screenshot", "verification", "agent"]
+categories = ["development-tools::testing", "gui"]
+# Ship only what a consumer compiles. Excludes the local build output, which would otherwise be
+# packed into the .crate and rejected for size.
+exclude = ["target/", "Cargo.lock"]
+
+[dependencies]
+tauri = "2"
+
+[target."cfg(target_os = \"macos\")".dependencies]
+block2 = "0.6"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSImage", "NSBitmapImageRep", "NSGraphics"] }
+objc2-foundation = { version = "0.3", features = [
+  "NSError",
+  "NSData",
+  "NSDictionary",
+  "NSString",
+] }
+objc2-web-kit = { version = "0.3", features = ["WKWebView", "WKSnapshotConfiguration"] }
+
+[target."cfg(windows)".dependencies]
+webview2-com = "0.38"
+windows = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_System_Com",
+  "Win32_UI_Shell",
+] }
+
+[target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))'.dependencies]
+webkit2gtk = { version = "2", features = ["v2_40"] }
+# The version webkit2gtk itself resolves, so `snapshot` hands back the same `Surface` type.
+cairo-rs = { version = "0.18", features = ["png"] }

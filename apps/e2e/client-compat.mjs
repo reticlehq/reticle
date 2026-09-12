@@ -30,11 +30,11 @@ import {
   mergeClientConfig,
   ClientMergeStatus,
   clientSnippet,
-} from '../../packages/server/dist/init/mcp-clients.js';
+} from '../../init/dist/register/mcp-clients.js';
 import { freePortSafely } from './gate-harness.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const CLI = join(ROOT, 'packages/server/dist/cli.js');
+const CLI = join(ROOT, 'server/dist/command/cli.js');
 const PORT = Number(process.env.CLIENT_COMPAT_PORT ?? '4795');
 const ONLY = process.argv.includes('--only')
   ? process.argv[process.argv.indexOf('--only') + 1]

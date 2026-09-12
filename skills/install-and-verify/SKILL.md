@@ -3,7 +3,7 @@ name: install-and-verify
 description: Verify that a web app change actually works by driving the running app from the inside (DOM, network, routing, console, framework state) instead of screenshots or guessing. Use after any user-facing change, when a fix is claimed but unproven, when a test passes but the UI is broken, or when you need a real verdict rather than "looks right". Also use to install and wire up Reticle in a project that does not have it yet.
 license: Apache-2.0
 metadata:
-  version: 2.14.0
+  version: 3.0.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -19,7 +19,7 @@ Everything not in this file is at `https://docs.reticle.sh`, and it is built to 
 ```bash
 curl https://docs.reticle.sh/llms.txt                  # every page title and URL, small enough to read whole
 curl https://docs.reticle.sh/cli/doctor.md             # one CLI command: flags, real output, exit codes
-curl https://docs.reticle.sh/tools-act-and-wait.md     # one tool: arguments and what a verdict means
+curl https://docs.reticle.sh/tools/act-and-wait.md     # one tool: arguments and what a verdict means
 curl https://docs.reticle.sh/troubleshooting.md        # the failures people actually hit
 ```
 

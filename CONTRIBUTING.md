@@ -39,7 +39,7 @@ Every item here cost somebody a debugging session. None is discoverable by readi
 - **Port 4400 is the bridge, and something is probably on it.** Every e2e spec binds it, so a spec run with your editor's MCP client open dies with `EADDRINUSE`. Never `kill -9` the holder: on 4400 that list includes the `reticle mcp` proxy, and killing it cuts your own agent's link **with no log**, because the process that writes the log is the one that dies. Use `freePortSafely` from [`apps/e2e/gate-harness.mjs`](apps/e2e/gate-harness.mjs), which spares the proxy by design.
 - **Telemetry fails silently.** Nothing throws, no test reddens, the data is just permanently gone — `daemon_stopped` was fired just before `process.exit(0)` for months and every POST died unseen. Read [`docs/telemetry-contract.md`](docs/telemetry-contract.md) first.
 - **The fixtures are in a second repo.** Every app in `apps/` is already instrumented, so none of them can tell you whether a fresh install still works — re-running `init` over one reports "already wired" for every step and proves nothing. That question lives in [`reticle-fixtures`](https://github.com/reticlehq/reticle-fixtures), which keeps a pristine `clean` branch of real third-party apps plus `main` and `reticle/<version>`. See [`docs/fixtures.md`](docs/fixtures.md).
-- **`packages/core` is the contract and may not gain dependencies** (zod only). Anything crossing browser ↔ bridge ↔ agent is a named constant plus a zod schema there. A wire string inlined in `browser` or `server` is the bug, not a shortcut.
+- **`core` is the contract and may not gain dependencies** (zod only). Anything crossing browser ↔ bridge ↔ agent is a named constant plus a zod schema there. A wire string inlined in `browser` or `server` is the bug, not a shortcut.
 - **A new tool field needs several allowlists.** Miss one and the call silently returns nothing — measured, twice. If you add a field and it "does not arrive", start by grepping for every place the existing fields are listed.
 - **`format:check` is not run by `pnpm lint`.** CI enforces it separately, so all four heavy gates can be green locally and CI still red on formatting alone.
 - **A local gate is only trustworthy in a quiet checkout.** If something else is editing the same worktree, turbo will read files mid-write and report failures that are not yours.
@@ -67,17 +67,17 @@ Five top-level directories, each with one job. If you can name which of these yo
 ### `packages/` — the shipped product
 
 ```
-packages/core          @reticlehq/core         — wire contract, constants, zod schemas (deps: zod)
-packages/browser       @reticlehq/browser      — instrumentation SDK embedded in the app (DOM-side)
-packages/server        @reticlehq/server       — bridge + MCP server, the `reticle` CLI (Node-side)
+core          @reticlehq/core         — wire contract, constants, zod schemas (deps: zod)
+adapters/realm/dom       @reticlehq/browser      — instrumentation SDK embedded in the app (DOM-side)
+server        @reticlehq/server       — bridge + MCP server, the `reticle` CLI (Node-side)
 packages/react         @reticlehq/react        — React adapter: DOM ref -> component -> source file
 packages/vite-plugin   @reticlehq/vite-plugin  — Vite integration: stamps source + auto-injects connect()
 packages/babel-plugin  @reticlehq/babel-plugin — stamps data-reticle-source (source mapping, React 19)
 packages/next          @reticlehq/next         — Next.js source mapping (keeps SWC) via withReticle (CJS)
 packages/electron      @reticlehq/electron     — Electron main-process adapter (IPC observer, capture)
 packages/tauri         reticle-tauri           — Tauri capture backend (RUST — outside every JS gate)
-packages/test          @reticlehq/test         — spec runner + matchers for CI (peer vitest)
-packages/eslint-plugin @reticlehq/eslint-plugin — dev-only lint rule: state changed ⇒ signal fired
+spec-runner          @reticlehq/test         — spec runner + matchers for CI (peer vitest)
+eslint-plugin @reticlehq/eslint-plugin — dev-only lint rule: state changed ⇒ signal fired
 ```
 
 The TypeScript library packages (`-core`, `-browser`, `-server`, `-react`) are **strict TypeScript** and are the focus of the build/lint/test gates. `@reticlehq/babel-plugin` / `@reticlehq/next` are plain CJS tooling, and `apps/*` are local fixtures — these are excluded from the JS gates. `packages/tauri` is Rust and is invisible to all of them; CI's `rust` / `rust-macos` jobs are the only thing that compiles it.
@@ -105,7 +105,7 @@ pnpm lint && pnpm typecheck && pnpm test:unit    # ~2 min — ALWAYS
 
 | If you also touched… | Also run | Cost |
 | --- | --- | --- |
-| the tool surface, the wire contract (`packages/core`), or an observer | `pnpm test:e2e` | ~8 min |
+| the tool surface, the wire contract (`core`), or an observer | `pnpm test:e2e` | ~8 min |
 | `reticle init`, `vite-plugin`, `next`, `babel-plugin` — anything before a user's first session | `pnpm gate:install` | ~15 min |
 | `packages/electron`, `packages/tauri`, the IPC observer, desktop capture | `pnpm test:e2e:desktop` | ~3 min |
 | telemetry, feedback, or anything that emits an event | read [`docs/telemetry-contract.md`](docs/telemetry-contract.md) **first**, then `pnpm test:e2e` | — |
@@ -211,4 +211,4 @@ For anything non-trivial, **open an issue first** so we can agree on the approac
 
 ## License of contributions
 
-Reticle uses a per-package license model (Apache-2.0 for the embeddable SDK packages, FSL-1.1-ALv2 for the server / CLI / umbrella, and the Reticle Enterprise License for `packages/server/src/ee/`). By contributing, you agree that your contribution is licensed under the license of the package(s) you're modifying. See the root [LICENSE](LICENSE) and each package's own `LICENSE` file.
+Reticle uses a per-package license model (Apache-2.0 for the embeddable SDK packages, FSL-1.1-ALv2 for the server / CLI / umbrella, and the Reticle Enterprise License for `server/src/features/ee/`). By contributing, you agree that your contribution is licensed under the license of the package(s) you're modifying. See the root [LICENSE](LICENSE) and each package's own `LICENSE` file.

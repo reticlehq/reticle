@@ -52,7 +52,7 @@ grep -iE "Local:" /tmp/bench-cost-delta.log | head -1 || echo "bench-app log: /t
 cat <<EOF
 
 NEXT (must be done by you — cannot be scripted):
-  1. Ensure .mcp.json mcpServers.reticle env RETICLE_PORT = $PORT  (and args use packages/server/dist/cli.js)
+  1. Ensure .mcp.json mcpServers.reticle env RETICLE_PORT = $PORT  (and args use server/dist/command/cli.js)
   2. Restart Claude Code so its reticle proxy spawns the LOCAL daemon on the now-free :$PORT
   3. Verify: reticle_tools has NO version_info/apply_update/rollback; reticle_sessions shows localhost:4313
   4. Run the WITH-Reticle cells and compare to the v2.1.0 baseline in COST-DELTA.md

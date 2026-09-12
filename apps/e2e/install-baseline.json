@@ -81,6 +81,7 @@
     "✓ Reticle config → .reticle.json",
     "✓ Connect snippet (React Router) → app/entry.client.tsx",
     "✓ Vite plugin → vite.config.ts",
-    "✓ Capabilities + store → src/reticle-dev.ts"
+    "✓ Capabilities + store → src/reticle-dev.ts",
+    "ℹ Containerised dev server → Dockerfile"
   ]
 }

@@ -3,7 +3,7 @@
  * Set one version across every file that carries it.
  *
  * RELEASING.md used to spend three steps on this: `pnpm version`, `pnpm -r exec npm version`, and a
- * hand-written `sed -i '' '3s/…/…/' packages/tauri/Cargo.toml`. That last one is addressed by LINE
+ * hand-written `sed -i '' '3s/…/…/' adapters/realm/tauri/Cargo.toml`. That last one is addressed by LINE
  * NUMBER — add a comment above `version` in Cargo.toml and it silently rewrites the wrong line, in
  * the one file whose drift has already shipped once (the crate sat at 0.1.0 for months, green every
  * time). The two pnpm commands also cover only `package.json`; everything else was a human
@@ -79,13 +79,13 @@ const RULES = [
   },
   {
     what: 'crate manifest',
-    files: () => ['packages/tauri/Cargo.toml'],
+    files: () => ['adapters/realm/tauri/Cargo.toml'],
     // Anchored on the key, not on line 3. This is the site RELEASING.md addressed positionally.
     edit: (text, from, to) => text.replace(`version = "${from}"`, `version = "${to}"`),
   },
   {
     what: 'crate lockfile (own entry only)',
-    files: () => ['packages/tauri/Cargo.lock'],
+    files: () => ['adapters/realm/tauri/Cargo.lock'],
     edit: (text, from, to) =>
       text.replace(
         `name = "reticle-tauri"\nversion = "${from}"`,
@@ -134,6 +134,15 @@ for (const rule of RULES) {
     }
     const next = rule.edit(text, current, nextVersion);
     if (next === text) {
+      // A rule that opts out of the containment check above is asking to SEE every file in its
+      // glob, not claiming every file needs changing. The crate-pin rule reads all of `docs/`
+      // and edits only the pages carrying `reticle-tauri = "X.Y"`, so a no-op is the expected
+      // answer for the rest -- and reporting it as "holds <version> but no rule matched"
+      // produced 74 warnings naming pages that contain no version string at all.
+      //
+      // A warning channel that is 74/74 false is worse than none: the person reading it at
+      // release time learns to scroll past, and the one true warning goes with them.
+      if (true === rule.matchesAnyVersion) continue;
       console.log(`  !!  ${file} — holds ${current} but no rule matched it (${rule.what})`);
       continue;
     }

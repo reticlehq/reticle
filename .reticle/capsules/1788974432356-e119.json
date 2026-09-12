@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1788974432356-e119",
+  "createdAt": 1788974432356,
+  "origin": "failed-assert",
+  "expected": "declared consequence",
+  "observed": "no 'button' named 'Generate'; saw: Overview, Deployments 40, Compose, Diagnostics, Hostile, Saved Items, Expiring Token, Awkward Controls, Search or jump to… ⌘K, Sign out",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "nav-compose",
+        "source": {
+          "file": "src/components/Sidebar.tsx",
+          "line": 45,
+          "column": 8
+        }
+      },
+      "action": "click"
+    }
+  ]
+}

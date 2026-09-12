@@ -21,7 +21,7 @@
  */
 
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync, chmodSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync, chmodSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,7 +35,14 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  * thing users actually run — a negative control aimed at a superseded entry point proves nothing,
  * however green it stays.
  */
-const CLI = join(HERE, '..', 'packages', 'server', 'dist', 'cli.js');
+// Checked, not assumed: this said `packages/server/dist/cli.js` for two days after the layout
+// moved, and every scenario that reaches `init` then failed as MODULE_NOT_FOUND — which the matrix
+// scored as a missing diagnosis. A harness that cannot find the thing it drives has to say so.
+const CLI = join(HERE, '..', 'server', 'dist', 'command', 'cli.js');
+if (!existsSync(CLI)) {
+  console.error(`no built CLI at ${CLI} — run pnpm build first`);
+  process.exit(2);
+}
 /** The shell entry point, whose OWN guards two scenarios below exist to judge. */
 const LAUNCHER_SH = join(HERE, 'reticle.sh');
 const args = process.argv.slice(2);
@@ -641,12 +648,27 @@ const SCENARIOS = [
 const selected = SCENARIOS.filter((s) => only === undefined || s.name === only);
 const rows = [];
 
+/**
+ * A scenario that reaches `init`'s dependency install needs the checkout's OWN version to exist on
+ * npm, because the install is pinned to it. On a release branch it does not exist yet, so the run
+ * dies at `No matching version found for @reticlehq/<pkg>@<next>` long before the condition under
+ * test — and the matrix scored that as a MISSING DIAGNOSIS. That is the same mistake as blaming the
+ * product for a harness's own broken path: a precondition the scenario cannot meet is not a
+ * regression in a diagnosis. It is reported, counted apart, and never silently passed.
+ */
+const UNPUBLISHED =
+  /No matching version found for @reticlehq\/|ERR_PNPM_NO_MATURE_MATCHING_VERSION/;
+
 for (const s of selected) {
   const dir = s.build();
   let side;
   try {
     if (s.setup !== undefined) side = await s.setup(dir);
     const { code, out } = await s.run(dir);
+    if (UNPUBLISHED.test(out) && !out.includes(s.expect)) {
+      rows.push({ name: s.name, ok: false, skipped: true, failures: [], out: '', why: s.why });
+      continue;
+    }
     const failures = [];
     if (code === 0) failures.push('exited 0 — a broken machine was reported as a working install');
     if (STACK.test(out) || CRASH.test(out))
@@ -669,6 +691,13 @@ for (const s of selected) {
 }
 
 for (const r of rows) {
+  if (r.skipped === true) {
+    process.stdout.write(
+      `  ~ ${r.name} — UNGRADED: this checkout's version is not on npm, and the\n`,
+    );
+    process.stdout.write(`      scenario needs a real pinned install to reach what it tests\n`);
+    continue;
+  }
   process.stdout.write(`${r.ok ? '  ✓' : '  ✗'} ${r.name}\n`);
   if (!r.ok) {
     process.stdout.write(`      why it matters: ${r.why}\n`);
@@ -676,6 +705,13 @@ for (const r of rows) {
     process.stdout.write(`      ${r.out.replace(/\n/g, '\n      ')}\n`);
   }
 }
-const bad = rows.filter((r) => !r.ok);
-process.stdout.write(`\n${rows.length - bad.length}/${rows.length} hostile environments handled\n`);
+const skipped = rows.filter((r) => r.skipped === true);
+const graded = rows.filter((r) => r.skipped !== true);
+const bad = graded.filter((r) => !r.ok);
+process.stdout.write(
+  `\n${graded.length - bad.length}/${graded.length} hostile environments handled`,
+);
+process.stdout.write(
+  skipped.length === 0 ? '\n' : ` (${skipped.length} ungraded — version not published)\n`,
+);
 process.exit(bad.length > 0 ? 1 : 0);

@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1787715692189-e3",
+  "createdAt": 1787715692189,
+  "origin": "failed-assert",
+  "expected": "signal auth:granted",
+  "observed": "signal \"auth:granted\" never fired",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "login-email",
+        "source": {
+          "file": "src/components/Login.tsx",
+          "line": 48,
+          "column": 8
+        }
+      },
+      "action": "fill"
+    }
+  ]
+}

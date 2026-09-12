@@ -54,7 +54,7 @@
   },
 
   // @reticlehq/react: probed at runtime from the USER's app, never imported here — see
-  //   packages/vite-plugin/src/installed.ts.
+  //   adapters/build/vite-plugin/src/installed.ts.
   // electron: resolved on purpose through createRequire(apps/electron-smoke/package.json) so the
   //   harnesses do not depend on hoisting. knip sees the bare require and not the base it is
   //   rooted at. Declaring it in apps/e2e would install a SECOND ~200MB Electron.

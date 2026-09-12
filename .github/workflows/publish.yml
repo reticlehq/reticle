@@ -1,8 +1,18 @@
 name: Publish to npm
 
-# Publishes the public @reticlehq/* packages (core, browser, react, server, init, vite-plugin,
-# next, babel-plugin, test, eslint-plugin) when a GitHub Release is published, or on manual
-# dispatch.
+# Publishes the public @reticlehq/* packages when a GitHub Release is published, or on manual
+# dispatch. THIRTEEN of them, and the list is worth naming because it is longer than people
+# assume: core, browser, react, server, init, vite-plugin, next, babel-plugin, test,
+# eslint-plugin, electron, engine, openreality.
+#
+# The last three were absent from this comment while being published by every run. `engine` and
+# `openreality` were carved out during v3 and nobody updated the line; `electron` predates that.
+# The true list is whatever `pnpm -r publish` selects -- every workspace package that is not
+# `private` -- and it was read off `pnpm -r publish --dry-run` rather than counted by hand.
+#
+# It matters because this comment is what a person checks before a release. Two of the three
+# unlisted packages shipped their compiled tests and source maps until v3, and a reader auditing
+# "what do we publish" from this line would not have looked at them.
 # `pnpm -r publish` walks the workspace in dependency order, skips `private` packages (the retired
 # private packages are never republished), and skips any version
 # already on npm — so a partial/failed run is safe to re-trigger.

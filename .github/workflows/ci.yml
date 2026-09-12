@@ -245,21 +245,21 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            packages/tauri/target
-          key: cargo-linux-${{ hashFiles('packages/tauri/Cargo.lock') }}
+            adapters/realm/tauri/target
+          key: cargo-linux-${{ hashFiles('adapters/realm/tauri/Cargo.lock') }}
           restore-keys: cargo-linux-
       - name: Format
-        working-directory: packages/tauri
+        working-directory: adapters/realm/tauri
         run: cargo fmt --check
       - name: Lint (Linux capture path, natively)
-        working-directory: packages/tauri
+        working-directory: adapters/realm/tauri
         run: cargo clippy --all-targets -- -D warnings
       # Cross-CHECK the Windows path. It does not link here, but it does type-check `capture/
       # windows.rs` against the real `webview2-com` / `windows` bindings — verified to actually
       # compile that module, not skip it. Without this, an API bump in either crate is discovered by
       # a Windows user rather than by CI.
       - name: Check the Windows capture path
-        working-directory: packages/tauri
+        working-directory: adapters/realm/tauri
         run: cargo check --target x86_64-pc-windows-msvc
 
   # macOS gets its own runner rather than a cross-check: `capture/macos.rs` talks to WKWebView
@@ -289,11 +289,11 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            packages/tauri/target
-          key: cargo-macos-${{ hashFiles('packages/tauri/Cargo.lock') }}
+            adapters/realm/tauri/target
+          key: cargo-macos-${{ hashFiles('adapters/realm/tauri/Cargo.lock') }}
           restore-keys: cargo-macos-
       - name: Lint (macOS capture path, natively)
-        working-directory: packages/tauri
+        working-directory: adapters/realm/tauri
         run: cargo clippy --all-targets -- -D warnings
 
   # Advisory scan for the Rust tree. Nothing watched it: the npm ecosystem in dependabot.yml cannot
@@ -341,7 +341,7 @@ jobs:
       # The published crate is scanned against the COMMITTED lockfile, which is the exact set of
       # versions a consumer of the crate builds.
       - name: Audit reticle-tauri
-        working-directory: packages/tauri
+        working-directory: adapters/realm/tauri
         run: cargo audit
       # The smoke app is not published, but the desktop battery compiles and RUNS it, so a
       # vulnerable dependency here still executes on a runner. Its lockfile is gitignored, so one is
@@ -414,8 +414,12 @@ jobs:
     timeout-minutes: 5
     outputs:
       install: ${{ steps.filter.outputs.install }}
+      # Whether the install gate's OWN machinery changed, which is the only thing that can alter
+      # whether it is still able to detect a broken install. See the self-test step for why.
+      gateself: ${{ steps.filter.outputs.gateself }}
       bench: ${{ steps.filter.outputs.bench }}
       desktop: ${{ steps.filter.outputs.desktop }}
+      conformance: ${{ steps.filter.outputs.conformance }}
       rust: ${{ steps.filter.outputs.rust }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -440,8 +444,10 @@ jobs:
           if ! git rev-parse --verify "$BASE" >/dev/null 2>&1; then
             echo "cannot resolve $BASE — running every tier"
             echo "install=true" >> "$GITHUB_OUTPUT"
+            echo "gateself=true" >> "$GITHUB_OUTPUT"
             echo "desktop=true" >> "$GITHUB_OUTPUT"
             echo "bench=true" >> "$GITHUB_OUTPUT"
+            echo "conformance=true" >> "$GITHUB_OUTPUT"
             echo "rust=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           CHANGED="$(git diff --name-only "$BASE"...HEAD || true)"
@@ -451,33 +457,54 @@ jobs:
           if [ -z "$CHANGED" ]; then
             echo "no diff against $BASE — running every tier"
             echo "install=true" >> "$GITHUB_OUTPUT"
+            echo "gateself=true" >> "$GITHUB_OUTPUT"
             echo "desktop=true" >> "$GITHUB_OUTPUT"
             echo "bench=true" >> "$GITHUB_OUTPUT"
+            echo "conformance=true" >> "$GITHUB_OUTPUT"
             echo "rust=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           echo "changed files:"; echo "$CHANGED" | sed 's/^/  /'
           # Anything a user runs BEFORE their first session, plus the gate itself and the dependency
           # graph it installs through. Deliberately broad — the cost of a false positive is CI time,
           # the cost of a false negative is the 0%-connect class shipping again.
-          # `server/src/setup/` and the top-level `setup/` script are named here as of 2.13.0. They
+          # `server/src/command/setup/` and the top-level `setup/` script are named here as of 2.13.0. They
           # are the whole of one-command onboarding — agent registration, pre-approval, the skill
           # file, the drive — and neither was on this list, so the release that made `init` an
           # install could edit every one of them without the install gate running once.
-          if echo "$CHANGED" | grep -qE '^(packages/(init|server/src/setup|vite-plugin|next|babel-plugin|browser|react|core)/|setup/|apps/e2e/(install-gate|gate-harness|install-baseline)|package\.json|pnpm-lock\.yaml|\.github/workflows/ci\.yml)'; then
+          if echo "$CHANGED" | grep -qE '^((init|core)/|server/src/command/setup/|adapters/|setup/|apps/e2e/(install-gate|gate-harness|install-baseline)|package\.json|pnpm-lock\.yaml|\.github/workflows/ci\.yml)'; then
             echo "install=true" >> "$GITHUB_OUTPUT"
           else
             echo "install=false" >> "$GITHUB_OUTPUT"
+          fi
+          # The gate's OWN machinery, which is a narrower question than "could the install break".
+          # The self-test proves the gate can still FAIL. That ability changes when the gate, its
+          # harness, or its recorded baseline changes -- not when somebody edits the browser SDK.
+          if echo "$CHANGED" | grep -qE '^(apps/e2e/(install-gate|gate-harness|install-baseline)|\.github/workflows/ci\.yml)'; then
+            echo "gateself=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "gateself=false" >> "$GITHUB_OUTPUT"
           fi
           # The desktop battery boots a real Electron main process and BUILDS a Tauri binary from
           # Rust — the slowest job in this file — and it ran on every PR including docs-only ones.
           # Both adapters, both smoke apps, and the three browser/server files that are desktop-only
           # by definition: the IPC observer, desktop capture, and the setup/doctor pair that shape
-          # and diagnose a desktop install. Anything broader (all of packages/browser, say) would
+          # and diagnose a desktop install. Anything broader (all of adapters/realm/dom, say) would
           # route most PRs here and give the routing back for nothing.
-          if echo "$CHANGED" | grep -qE '^(packages/(electron|tauri)/|apps/(electron|tauri)-smoke/|packages/browser/src/observers/ipc\.ts|packages/browser/src/dom/desktop-capture\.ts|packages/server/src/setup/desktop-shape\.ts|packages/init/src/desktop-doctor\.ts|\.github/workflows/ci\.yml)'; then
+          if echo "$CHANGED" | grep -qE '^(adapters/realm/electron/|adapters/realm/tauri/|apps/(electron|tauri)-smoke/|adapters/realm/dom/src/observers/ipc\.ts|adapters/realm/dom/src/dom/desktop-capture\.ts|server/src/command/setup/desktop-shape\.ts|init/src/diagnose/desktop-doctor\.ts|\.github/workflows/ci\.yml)'; then
             echo "desktop=true" >> "$GITHUB_OUTPUT"
           else
             echo "desktop=false" >> "$GITHUB_OUTPUT"
+          fi
+          # What can change a CONFORMANCE ANSWER, which is a different question from what can
+          # break the desktop battery. The specification and its adjudicator; the suite, its
+          # scenarios and its two subject maps; the realm and the client that binds Reticle to the
+          # SPI; the two functions in core that build a protocol subject; and the two fixture apps
+          # the scenarios are planted into. Narrower than `desktop` in some places and wider in
+          # others, so it gets its own filter rather than borrowing one.
+          if echo "$CHANGED" | grep -qE '^(openreality/|conformance/|server/src/portal/realm/|core/src/realm/|core/src/verdict/verification-run\.ts|apps/bench-app/|apps/electron-smoke/|\.github/workflows/ci\.yml)'; then
+            echo "conformance=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "conformance=false" >> "$GITHUB_OUTPUT"
           fi
           # What can move TOKEN COST, which is a different question from what can break the install.
           # A tool's description and input schema are charged to the agent on every turn, so an edit
@@ -485,16 +512,16 @@ jobs:
           # The observation payloads (snapshot, query, the verdict reasons) sit in browser and events.
           # bench-app is the fixture the numbers are measured against, so changing it moves the
           # baseline whether or not any product code changed.
-          if echo "$CHANGED" | grep -qE '^(packages/(browser|core)/src/|packages/server/src/(tools|events|session|honesty)/|apps/bench-app/|bench/|\.github/workflows/ci\.yml)'; then
+          if echo "$CHANGED" | grep -qE '^(core/src/|adapters/realm/dom/src/|server/src/(surface/tools|portal/session)/|engine/src/(question|disagreement|window|evidence)/|apps/bench-app/|bench/|\.github/workflows/ci\.yml)'; then
             echo "bench=true" >> "$GITHUB_OUTPUT"
           else
             echo "bench=false" >> "$GITHUB_OUTPUT"
           fi
           # Only `rust-macos` reads this. The Linux `rust` job stays unconditional: it is an ubuntu
           # runner at 1x, it cross-checks the Windows capture path, and it is the ONLY thing in CI
-          # that compiles packages/tauri at all — a skip there is a real hole, a skip on the second
+          # that compiles adapters/realm/tauri at all — a skip there is a real hole, a skip on the second
           # macOS opinion of the same crate is not.
-          if echo "$CHANGED" | grep -qE '^(packages/tauri/|apps/tauri-smoke/src-tauri/|\.github/workflows/ci\.yml)'; then
+          if echo "$CHANGED" | grep -qE '^(adapters/realm/tauri/|apps/tauri-smoke/src-tauri/|\.github/workflows/ci\.yml)'; then
             echo "rust=true" >> "$GITHUB_OUTPUT"
           else
             echo "rust=false" >> "$GITHUB_OUTPUT"
@@ -615,7 +642,20 @@ jobs:
       # requires the gate to go red; if it passes, the gate proves nothing and the run below would be
       # a green that means nothing. check-boundaries and check-lossy-transforms already self-test in
       # CI for the same reason.
+      # Run the negative control when it can actually have broken, not on every PR.
+      #
+      # It costs 17.1 min on Windows and 8.3 on Ubuntu against 10.7 and 3.8 for the real gate, so it
+      # is 63% of this job -- and this job sets the whole pipeline's wall clock: `gate` finished two
+      # seconds after it, with everything else idle for twelve minutes.
+      #
+      # What it proves is that the gate can still FAIL, and that only changes when the gate itself
+      # changes. So: whenever the gate's own machinery is touched, and on every path that actually
+      # LANDS code (push to main, and the merge queue). A PR that broke detection without touching
+      # the gate is caught before it merges rather than at PR time -- later, but not never, and the
+      # real run below still covers every scaffold on every PR.
       - name: Install-gate self-test (a guard that has never failed is not a guard)
+        if: >-
+          needs.changes.outputs.gateself == 'true' || github.event_name == 'push' || github.event_name == 'merge_group'
         run: pnpm gate:install:self-test --only ${{ matrix.scaffold }}
       - name: Install gate (scaffold, init, boot, open, assert a session)
         run: pnpm gate:install --only ${{ matrix.scaffold }}
@@ -803,6 +843,57 @@ jobs:
         env:
           ELECTRON_DISABLE_SANDBOX: '1'
 
+  # The specification's own scenarios, driven against this implementation on a real browser AND a
+  # real Electron shell, with every verdict decided by the spec's `adjudicate` rather than by
+  # Reticle's kernel. CLAUDE.md and docs/gates.md have both listed this as required since it was
+  # written; neither made it run. A gate documented in two places and wired into none is the same
+  # defect this release kept finding in the protocol itself — defined, deferred to somebody,
+  # reached by nobody — so it is wired here rather than described again.
+  #
+  # It gates REGRESSION, never the score. `earned` stays `none` until the fixtures grow, and
+  # `--gate` fails only when a scenario that COULD be planted was driven and answered wrongly.
+  #
+  # Deliberately NOT folded into `e2e`: that job boots the demo API with REFLECT_MS=6000, and a
+  # conformance run beside it would score every scenario against a deliberately-slowed backend
+  # while still printing a number. The two also both want port 8787.
+  #
+  # Cheap despite the desktop half, because `run-desktop.mjs` needs Electron and a display and
+  # NOT Rust — it drives apps/electron-smoke, not the packaged Tauri binary that makes
+  # `desktop-e2e` the slowest job in this file.
+  conformance:
+    runs-on: ubuntu-latest
+    needs: [verify, changes]
+    if: needs.changes.outputs.conformance == 'true'
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+      # xvfb and libgbm are what let a never-shown Electron window be CREATED at all.
+      - name: Install headless display libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb libgbm1 libnss3 libasound2t64
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
+      - run: pnpm build
+      # FIRST, as the install gate's self-test is. It makes the subject answer "yes" to every
+      # claim and requires the gate to go RED. If this step ever passes, the scored run below
+      # is measuring something other than whether the answers are right, and its green is worth
+      # nothing.
+      - name: Negative control — a subject that says yes to everything must fail
+        run: xvfb-run -a pnpm gate:conformance:self-test
+        env:
+          ELECTRON_DISABLE_SANDBOX: '1'
+
+      - name: Score this implementation against the published specification
+        run: xvfb-run -a pnpm gate:conformance
+        env:
+          ELECTRON_DISABLE_SANDBOX: '1'
+
   # Token cost is the one property of this product nothing in CI measured, which is how a released
   # version once shipped a measurable token regression with every other gate green.
   #
@@ -867,7 +958,7 @@ jobs:
     # Every job that can fail a PR is listed HERE. A job missing from this list runs, reports, and is
     # structurally incapable of stopping a merge — which is what `windows`, `rust`, `rust-macos` and
     # `desktop-e2e` all were until they were added. `rust` in particular is the only thing in CI that
-    # compiles packages/tauri at all: it sits outside every JS gate, so an absent entry here meant a
+    # compiles adapters/realm/tauri at all: it sits outside every JS gate, so an absent entry here meant a
     # red Rust build merged clean. Adding a job to the workflow is half the work; this line is the
     # other half.
     #
@@ -890,6 +981,7 @@ jobs:
         rust-audit,
         rust-macos,
         desktop-e2e,
+        conformance,
         bench,
         multi-agent,
       ]

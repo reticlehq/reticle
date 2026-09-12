@@ -17,6 +17,7 @@ Everything here is published to [docs.reticle.sh](https://docs.reticle.sh) by `d
 | [why-reticle.mdx](why-reticle.mdx) | the false-green problem, the measured case, and where we lose |
 | [install-agentic.mdx](install-agentic.mdx) | what `npx @reticlehq/server init` writes, and how to read its marks |
 | [install-manual.mdx](install-manual.mdx) | wiring the MCP server and SDK by hand, per agent and framework |
+| [skill-setup.md](skill-setup.md) | the setup half of SKILL.md: what to pass `init`, reading its report, and what to do when it cannot finish |
 | [getting-started.md](getting-started.md) | install it, connect an agent, verify something |
 | [usage.md](usage.md) | the long-form narrative; most of it now has a focused page, and it says so at the top |
 | [predicates.mdx](predicates.mdx) | the predicate grammar, and which kinds actually prove something |
@@ -24,25 +25,26 @@ Everything here is published to [docs.reticle.sh](https://docs.reticle.sh) by `d
 | [recipes.mdx](recipes.mdx) | worked examples for real situations, with the response each returned |
 | [actions.mdx](actions.mdx) | every action and its arguments, including `press` and its history |
 | [faq.mdx](faq.mdx) | production, frameworks, comparisons, and the honest limits |
-| [tools-overview.mdx](tools-overview.mdx) | the 18 advertised tools, the 30 in the cold tail, and why |
-| [tools-snapshot.mdx](tools-snapshot.mdx) | `reticle_snapshot`: three modes, from full tree to a 25-token route check |
-| [tools-query.mdx](tools-query.mdx) | `reticle_query` finds elements by their reported roles, names and labels |
-| [tools-inspect.mdx](tools-inspect.mdx) | `reticle_inspect`: one element, down to source and design tokens |
-| [tools-navigate.mdx](tools-navigate.mdx) | `reticle_navigate`, and why `ok` does not mean the page arrived |
-| [tools-act.mdx](tools-act.mdx) | `reticle_act` acts, proves nothing, and says so |
-| [tools-act-and-wait.mdx](tools-act-and-wait.mdx) | `reticle_act_and_wait`, the tool that produces a verdict |
-| [tools-act-sequence.mdx](tools-act-sequence.mdx) | `reticle_act_sequence`: batch a form into one round trip |
-| [tools-observe.mdx](tools-observe.mdx) | `reticle_observe`, the whole timeline when you don't know what broke |
-| [tools-network.mdx](tools-network.mdx) | `reticle_network`: the request log, redaction, and buffer honesty |
-| [tools-console.mdx](tools-console.mdx) | `reticle_console`, and an empty result that proves it looked |
-| [tools-state.mdx](tools-state.mdx) | `reticle_state`: what the app believes, not what it drew |
-| [tools-wait-for.mdx](tools-wait-for.mdx) | `reticle_wait_for`, for consequences you did not cause |
-| [tools-assert.mdx](tools-assert.mdx) | `reticle_assert`: verdicts, and a real failure explained |
-| [tools-sessions.mdx](tools-sessions.mdx) | `reticle_sessions`: the health fields that decide if driving works |
-| [tools-tools-and-run.mdx](tools-tools-and-run.mdx) | `reticle_tools` / `reticle_run`, reaching the other 30 |
-| [tools-session-and-feedback.mdx](tools-session-and-feedback.mdx) | `reticle_session` / `reticle_feedback`, the human boundary |
+| [tools/overview.mdx](tools/overview.mdx) | the 18 advertised tools, the 30 in the cold tail, and why |
+| [tools/snapshot.mdx](tools/snapshot.mdx) | `reticle_snapshot`: three modes, from full tree to a 25-token route check |
+| [tools/query.mdx](tools/query.mdx) | `reticle_query` finds elements by their reported roles, names and labels |
+| [tools/inspect.mdx](tools/inspect.mdx) | `reticle_inspect`: one element, down to source and design tokens |
+| [tools/navigate.mdx](tools/navigate.mdx) | `reticle_navigate`, and why `ok` does not mean the page arrived |
+| [tools/act.mdx](tools/act.mdx) | `reticle_act` acts, proves nothing, and says so |
+| [tools/act-and-wait.mdx](tools/act-and-wait.mdx) | `reticle_act_and_wait`, the tool that produces a verdict |
+| [tools/act-sequence.mdx](tools/act-sequence.mdx) | `reticle_act_sequence`: batch a form into one round trip |
+| [tools/observe.mdx](tools/observe.mdx) | `reticle_observe`, the whole timeline when you don't know what broke |
+| [tools/network.mdx](tools/network.mdx) | `reticle_network`: the request log, redaction, and buffer honesty |
+| [tools/console.mdx](tools/console.mdx) | `reticle_console`, and an empty result that proves it looked |
+| [tools/state.mdx](tools/state.mdx) | `reticle_state`: what the app believes, not what it drew |
+| [tools/wait-for.mdx](tools/wait-for.mdx) | `reticle_wait_for`, for consequences you did not cause |
+| [tools/assert.mdx](tools/assert.mdx) | `reticle_assert`: verdicts, and a real failure explained |
+| [tools/sessions.mdx](tools/sessions.mdx) | `reticle_sessions`: the health fields that decide if driving works |
+| [tools/tools-and-run.mdx](tools/tools-and-run.mdx) | `reticle_tools` / `reticle_run`, reaching the other 30 |
+| [tools/session-and-feedback.mdx](tools/session-and-feedback.mdx) | `reticle_session` / `reticle_feedback`, the human boundary |
 | [packages.mdx](packages.mdx) | every library at a glance: what it does, why it exists, when you need it |
 | [packages/](packages/) | one page per published package, with its real exported API and dependencies |
+| [autodrive.md](autodrive.md) | letting Reticle drive the app itself, and keeping the flows it records |
 | [best-practices.mdx](best-practices.mdx) | the habits that make a verdict worth trusting |
 | [skill-file.mdx](skill-file.mdx) | the paste-one-URL skill that teaches an agent Reticle |
 | [agent-cheatsheet.md](agent-cheatsheet.md) | the condensed version an agent keeps in context |
@@ -82,6 +84,9 @@ Everything here is published to [docs.reticle.sh](https://docs.reticle.sh) by `d
 | --- | --- |
 | [gates.md](gates.md) | **I changed some files. Which gate do I run?** |
 | [gate-plan.md](gate-plan.md) | why the gates are shaped this way, and what is still unbuilt |
+| [required-checks.md](required-checks.md) | which checks actually block a merge, and which only look like they do |
+| [adapters.md](adapters.md) | what an adapter is, the three kinds, and how to write one |
+| [state-files.md](state-files.md) | what to do when a file on disk came from a different version of Reticle |
 | [system-map.md](system-map.md) | how a tool call reaches the app, and which failures are silent |
 | [telemetry-contract.md](telemetry-contract.md) | required reading before touching anything that emits |
 | [telemetry-events.mdx](telemetry-events.mdx) | every event kind and its payload, and the question each one exists to answer |

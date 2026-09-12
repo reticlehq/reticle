@@ -1,0 +1,1639 @@
+{
+  "version": 1,
+  "intents": {
+    "inline:submit-login-form-with-bad-credentials-and-wait-29ee207e": {
+      "id": "inline:submit-login-form-with-bad-credentials-and-wait-29ee207e",
+      "statement": "submit login form with bad credentials and wait for response",
+      "state": "declared",
+      "declaredAt": 1787609026995
+    },
+    "inline:submit-login-with-wrong-credentials-and-verify-e-56d47fac": {
+      "id": "inline:submit-login-with-wrong-credentials-and-verify-e-56d47fac",
+      "statement": "Submit login with wrong credentials and verify error message appears",
+      "state": "bound",
+      "declaredAt": 1787609044308,
+      "binding": {
+        "kind": "text",
+        "contains": "Invalid email or password"
+      }
+    },
+    "inline:a-signed-out-operator-submits-valid-credentials-f968247e": {
+      "id": "inline:a-signed-out-operator-submits-valid-credentials-f968247e",
+      "statement": "a signed-out operator submits valid credentials and lands authenticated on the dashboard",
+      "state": "proved",
+      "declaredAt": 1787622108294,
+      "binding": {
+        "kind": "state",
+        "store": "app",
+        "path": "auth.email",
+        "equals": "admin@reticle.dev"
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1787622108327",
+        "grade": "state",
+        "at": 1787622108327
+      }
+    },
+    "inline:an-operator-signs-in-and-reaches-the-dashboard-f22156e0": {
+      "id": "inline:an-operator-signs-in-and-reaches-the-dashboard-f22156e0",
+      "statement": "an operator signs in and reaches the dashboard",
+      "state": "proved",
+      "declaredAt": 1787622196086,
+      "binding": {
+        "kind": "signal",
+        "name": "auth:granted"
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787622196138",
+        "grade": "signal",
+        "at": 1787622196138
+      }
+    },
+    "inline:an-operator-opens-the-new-deploy-dialog-from-the-41121394": {
+      "id": "inline:an-operator-opens-the-new-deploy-dialog-from-the-41121394",
+      "statement": "an operator opens the new-deploy dialog from the deployments page",
+      "state": "bound",
+      "declaredAt": 1787622219052,
+      "binding": {
+        "kind": "element",
+        "query": {
+          "role": "dialog"
+        },
+        "state": "visible"
+      }
+    },
+    "inline:clicking-new-deploy-opens-the-new-deployment-dia-6565b4db": {
+      "id": "inline:clicking-new-deploy-opens-the-new-deployment-dia-6565b4db",
+      "statement": "clicking New deploy opens the new-deployment dialog",
+      "state": "proved",
+      "declaredAt": 1787622281109,
+      "binding": {
+        "kind": "signal",
+        "name": "modal:opened"
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787622281121",
+        "grade": "signal",
+        "at": 1787622281121
+      }
+    },
+    "inline:creating-an-account-with-email-password-signs-th-253205d1": {
+      "id": "inline:creating-an-account-with-email-password-signs-th-253205d1",
+      "statement": "Creating an account with email+password signs the user in and lands them on the dashboard",
+      "state": "bound",
+      "declaredAt": 1787684732763,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "net",
+            "method": "POST",
+            "urlContains": "/v1/auth/signup",
+            "status": 201
+          },
+          {
+            "kind": "route",
+            "pathname": "/"
+          }
+        ]
+      }
+    },
+    "inline:a-signed-in-session-survives-a-reload-3bd60a17": {
+      "id": "inline:a-signed-in-session-survives-a-reload-3bd60a17",
+      "statement": "a signed-in session survives a reload",
+      "state": "bound",
+      "declaredAt": 1787735865658,
+      "binding": {
+        "kind": "element",
+        "query": {
+          "testid": "nav-overview"
+        },
+        "state": "visible"
+      }
+    },
+    "inline:the-impact-board-renders-cleanly-cd8b0ece": {
+      "id": "inline:the-impact-board-renders-cleanly-cd8b0ece",
+      "statement": "the impact board renders cleanly",
+      "state": "proved",
+      "declaredAt": 1787743601596,
+      "binding": {
+        "kind": "console",
+        "level": "error",
+        "absent": true
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1787743601601",
+        "grade": "presence",
+        "at": 1787743601601
+      }
+    },
+    "inline:a-filtered-queue-is-a-shareable-link-67bc26f8": {
+      "id": "inline:a-filtered-queue-is-a-shareable-link-67bc26f8",
+      "statement": "a filtered queue is a shareable link",
+      "state": "proved",
+      "declaredAt": 1787743601843,
+      "binding": {
+        "kind": "route",
+        "contains": "category=severe"
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1787743601844",
+        "grade": "presence",
+        "at": 1787743601844
+      }
+    },
+    "inline:a-link-somebody-sends-opens-on-what-the-sender-s-385885c2": {
+      "id": "inline:a-link-somebody-sends-opens-on-what-the-sender-s-385885c2",
+      "statement": "a link somebody sends opens on what the sender saw",
+      "state": "proved",
+      "declaredAt": 1787743602372,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "route",
+            "contains": "category=severe"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "testid": "issue-list"
+            },
+            "state": "visible"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "testid": "filter-severe"
+            },
+            "state": "visible"
+          }
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1787743602374",
+        "grade": "presence",
+        "at": 1787743602374
+      }
+    },
+    "inline:a-near-miss-name-does-not-unlock-an-irreversible-48029015": {
+      "id": "inline:a-near-miss-name-does-not-unlock-an-irreversible-48029015",
+      "statement": "a near-miss name does not unlock an irreversible delete",
+      "state": "proved",
+      "declaredAt": 1787743604073,
+      "binding": {
+        "kind": "element",
+        "query": {
+          "testid": "confirm-delete"
+        },
+        "state": "disabled"
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1787743604075",
+        "grade": "presence",
+        "at": 1787743604075
+      }
+    },
+    "inline:the-hero-still-renders-its-headline-and-proof-nu-f2d2ef50": {
+      "id": "inline:the-hero-still-renders-its-headline-and-proof-nu-f2d2ef50",
+      "statement": "the hero still renders its headline and proof numbers after moving to the type scale and the mono voice",
+      "state": "proved",
+      "declaredAt": 1787862816033,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "verify"
+          },
+          {
+            "kind": "text",
+            "contains": "86 / 88"
+          },
+          {
+            "kind": "console",
+            "absent": true
+          }
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1787862816054",
+        "grade": "presence",
+        "at": 1787862816054
+      }
+    },
+    "inline:sign-in-to-the-seeded-design-workspace-so-i-can-d41b9b21": {
+      "id": "inline:sign-in-to-the-seeded-design-workspace-so-i-can-d41b9b21",
+      "statement": "sign in to the seeded design workspace so I can audit the real dashboard states",
+      "state": "proved",
+      "declaredAt": 1787864081933,
+      "binding": {
+        "kind": "not",
+        "predicate": {
+          "kind": "route",
+          "pathname": "/login"
+        }
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787864083137",
+        "grade": "presence",
+        "at": 1787864083137
+      }
+    },
+    "inline:the-headline-failure-count-must-now-reconcile-it-caef3dbe": {
+      "id": "inline:the-headline-failure-count-must-now-reconcile-it-caef3dbe",
+      "statement": "the headline failure count must now reconcile itself against the queue on the same screen, instead of leaving the reader to click Issues and find nothing",
+      "state": "proved",
+      "declaredAt": 1787864296578,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "element",
+            "query": {
+              "testid": "impact-hero-reconcile"
+            }
+          },
+          {
+            "kind": "text",
+            "contains": "None are open in the queue"
+          },
+          {
+            "kind": "text",
+            "contains": "Setup"
+          }
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1787864296593",
+        "grade": "presence",
+        "at": 1787864296593
+      }
+    },
+    "inline:sign-in-so-i-can-audit-the-remaining-screens-as-f424f6b4": {
+      "id": "inline:sign-in-so-i-can-audit-the-remaining-screens-as-f424f6b4",
+      "statement": "sign in so I can audit the remaining screens as a real user",
+      "state": "proved",
+      "declaredAt": 1787864508465,
+      "binding": {
+        "kind": "not",
+        "predicate": {
+          "kind": "route",
+          "pathname": "/login"
+        }
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787864509588",
+        "grade": "presence",
+        "at": 1787864509588
+      }
+    },
+    "inline:the-security-list-must-surface-real-access-event-c77f55ba": {
+      "id": "inline:the-security-list-must-surface-real-access-event-c77f55ba",
+      "statement": "the security list must surface real access events rather than letting routine token refreshes fill every row",
+      "state": "proved",
+      "declaredAt": 1787864713113,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "Signed in",
+            "scope": "[data-testid=activity-list]"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "testid": "activity-list"
+            }
+          }
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1787864713122",
+        "grade": "presence",
+        "at": 1787864713122
+      }
+    },
+    "inline:sign-in-on-the-tab-the-human-is-watching-so-the-c61fa8d5": {
+      "id": "inline:sign-in-on-the-tab-the-human-is-watching-so-the-c61fa8d5",
+      "statement": "sign in on the tab the human is watching, so the rest of this drive is visible to them",
+      "state": "proved",
+      "declaredAt": 1787864858540,
+      "binding": {
+        "kind": "not",
+        "predicate": {
+          "kind": "route",
+          "pathname": "/login"
+        }
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787864860648",
+        "grade": "presence",
+        "at": 1787864860648
+      }
+    },
+    "inline:an-issue-queue-that-has-never-held-anything-shou-75eda0cc": {
+      "id": "inline:an-issue-queue-that-has-never-held-anything-shou-75eda0cc",
+      "statement": "an issue queue that has never held anything should not show six category filters reading zero above its empty state",
+      "state": "proved",
+      "declaredAt": 1787864875727,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "No open issues"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "testid": "filter-severe"
+            },
+            "absent": true
+          },
+          {
+            "kind": "element",
+            "query": {
+              "testid": "issue-search"
+            },
+            "absent": true
+          }
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1787864875773",
+        "grade": "presence",
+        "at": 1787864875773
+      }
+    },
+    "inline:open-the-account-menu-to-sign-out-so-i-can-see-t-22e946f8": {
+      "id": "inline:open-the-account-menu-to-sign-out-so-i-can-see-t-22e946f8",
+      "statement": "open the account menu to sign out, so I can see the true first-run screen",
+      "state": "proved",
+      "declaredAt": 1787866151182,
+      "binding": {
+        "kind": "text",
+        "contains": "Sign out"
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787866153043",
+        "grade": "presence",
+        "at": 1787866153043
+      }
+    },
+    "inline:sign-out-so-the-next-sign-in-lands-on-a-genuinel-bb36abdd": {
+      "id": "inline:sign-out-so-the-next-sign-in-lands-on-a-genuinel-bb36abdd",
+      "statement": "sign out so the next sign-in lands on a genuinely first-run workspace",
+      "state": "proved",
+      "declaredAt": 1787866169688,
+      "binding": {
+        "kind": "route",
+        "pathname": "/login"
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787866171296",
+        "grade": "presence",
+        "at": 1787866171296
+      }
+    },
+    "inline:a-brand-new-workspace-must-land-on-one-live-setu-c8ef3d98": {
+      "id": "inline:a-brand-new-workspace-must-land-on-one-live-setu-c8ef3d98",
+      "statement": "a brand-new workspace must land on one live setup step with a pasteable command, not an empty results board",
+      "state": "proved",
+      "declaredAt": 1787866200587,
+      "binding": {
+        "kind": "element",
+        "query": {
+          "testid": "getting-started"
+        }
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787866203284",
+        "grade": "presence",
+        "at": 1787866203284
+      }
+    },
+    "inline:a-brand-new-workspace-must-actually-see-the-one-e6842ee7": {
+      "id": "inline:a-brand-new-workspace-must-actually-see-the-one-e6842ee7",
+      "statement": "a brand-new workspace must actually SEE the one command it needs to run — the bug was that an auto-created default project marked this step done before anyone had run anything",
+      "state": "proved",
+      "declaredAt": 1787866264013,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "element",
+            "query": {
+              "testid": "getting-started"
+            }
+          },
+          {
+            "kind": "text",
+            "contains": "npx @reticlehq/server login"
+          },
+          {
+            "kind": "text",
+            "contains": "Workspace created"
+          }
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1787866264063",
+        "grade": "presence",
+        "at": 1787866264063
+      }
+    },
+    "inline:the-setup-screen-must-replace-itself-with-the-re-7278ab5f": {
+      "id": "inline:the-setup-screen-must-replace-itself-with-the-re-7278ab5f",
+      "statement": "the setup screen must replace itself with the real board once a push lands, with no refresh and no click — the person who pasted the command is watching this tab",
+      "state": "proved",
+      "declaredAt": 1787866286103,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "element",
+            "query": {
+              "testid": "getting-started"
+            },
+            "absent": true
+          },
+          {
+            "kind": "element",
+            "query": {
+              "testid": "impact-board"
+            }
+          }
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1787866293527",
+        "grade": "presence",
+        "at": 1787866293527
+      }
+    },
+    "inline:a-workspace-that-has-reported-must-show-the-real-0bbb2ead": {
+      "id": "inline:a-workspace-that-has-reported-must-show-the-real-0bbb2ead",
+      "statement": "a workspace that has reported must show the real board and no setup screen, with the hero reconciling itself and the nav grouped",
+      "state": "proved",
+      "declaredAt": 1787866536198,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "element",
+            "query": {
+              "testid": "impact-board"
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "testid": "getting-started"
+            },
+            "absent": true
+          },
+          {
+            "kind": "element",
+            "query": {
+              "testid": "impact-hero-reconcile"
+            }
+          },
+          {
+            "kind": "text",
+            "contains": "Setup"
+          }
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1787866536232",
+        "grade": "presence",
+        "at": 1787866536232
+      }
+    },
+    "inline:with-real-issues-in-the-queue-the-headline-numbe-c752e838": {
+      "id": "inline:with-real-issues-in-the-queue-the-headline-numbe-c752e838",
+      "statement": "with real issues in the queue, the headline number must become a link to them rather than a dead end — the branch never exercised live until now",
+      "state": "proved",
+      "declaredAt": 1787866662622,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "element",
+            "query": {
+              "testid": "impact-hero-reconcile"
+            }
+          },
+          {
+            "kind": "text",
+            "contains": "open in the queue"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "role": "link",
+              "name": "2 open in the queue →"
+            }
+          }
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1787866662642",
+        "grade": "presence",
+        "at": 1787866662642
+      }
+    },
+    "inline:the-whole-point-of-the-reconcile-link-is-that-it-156e42ce": {
+      "id": "inline:the-whole-point-of-the-reconcile-link-is-that-it-156e42ce",
+      "statement": "the whole point of the reconcile link is that it ends the dead end — clicking the headline number must land on the actual issues, filters and all",
+      "state": "bound",
+      "declaredAt": 1787866671153,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "route",
+            "pathname": "/issues"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "testid": "issue-list"
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "testid": "filter-severe"
+            }
+          }
+        ]
+      }
+    },
+    "inline:scoped-to-a-project-with-no-issues-the-hero-must-c66e458e": {
+      "id": "inline:scoped-to-a-project-with-no-issues-the-hero-must-c66e458e",
+      "statement": "scoped to a project with no issues, the hero must say none are open rather than advertise another project's count",
+      "state": "proved",
+      "declaredAt": 1787866851642,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "element",
+            "query": {
+              "testid": "impact-hero-reconcile"
+            }
+          },
+          {
+            "kind": "text",
+            "contains": "None are open in the queue"
+          }
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1787866851673",
+        "grade": "presence",
+        "at": 1787866851673
+      }
+    },
+    "inline:switch-scope-to-the-project-that-actually-has-is-5caa5735": {
+      "id": "inline:switch-scope-to-the-project-that-actually-has-is-5caa5735",
+      "statement": "switch scope to the project that actually has issues",
+      "state": "proved",
+      "declaredAt": 1787866859460,
+      "binding": {
+        "kind": "text",
+        "contains": "nina-app"
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787866859987",
+        "grade": "presence",
+        "at": 1787866859987
+      }
+    },
+    "inline:scoping-to-nina-app-should-make-the-hero-report-e8d3624d": {
+      "id": "inline:scoping-to-nina-app-should-make-the-hero-report-e8d3624d",
+      "statement": "scoping to nina-app should make the hero report that project's real open issues",
+      "state": "bound",
+      "declaredAt": 1787866868072,
+      "binding": {
+        "kind": "text",
+        "contains": "open in the queue"
+      }
+    },
+    "inline:the-headline-number-must-deliver-the-reader-to-t-40b3cefc": {
+      "id": "inline:the-headline-number-must-deliver-the-reader-to-t-40b3cefc",
+      "statement": "the headline number must deliver the reader to the actual issues it counted — this exact click failed before the scoping fix",
+      "state": "proved",
+      "declaredAt": 1787866878571,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "route",
+            "pathname": "/issues"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "testid": "issue-list"
+            }
+          }
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787866879904",
+        "grade": "presence",
+        "at": 1787866879904
+      }
+    },
+    "inline:the-workspace-name-in-the-header-must-now-be-a-r-b3000e58": {
+      "id": "inline:the-workspace-name-in-the-header-must-now-be-a-r-b3000e58",
+      "statement": "the workspace name in the header must now be a real switcher listing all three workspaces, not inert text",
+      "state": "proved",
+      "declaredAt": 1787890539717,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "Nina Side Project"
+          },
+          {
+            "kind": "text",
+            "contains": "Nina Consulting"
+          },
+          {
+            "kind": "text",
+            "contains": "New workspace"
+          }
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787890540290",
+        "grade": "presence",
+        "at": 1787890540290
+      }
+    },
+    "inline:switching-workspace-from-the-header-must-actuall-6fe452d6": {
+      "id": "inline:switching-workspace-from-the-header-must-actuall-6fe452d6",
+      "statement": "switching workspace from the header must actually re-scope the session — the token names an org, so this has to reissue and reload",
+      "state": "bound",
+      "declaredAt": 1787890548031,
+      "binding": {
+        "kind": "text",
+        "contains": "Nina Side Project"
+      }
+    },
+    "inline:after-switching-the-header-must-name-the-new-wor-b39a059b": {
+      "id": "inline:after-switching-the-header-must-name-the-new-wor-b39a059b",
+      "statement": "after switching, the header must name the NEW workspace and the board must show that workspace's state — a fresh one has never reported, so it gets the setup screen",
+      "state": "bound",
+      "declaredAt": 1787890560474,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "Nina Side Project"
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "testid": "getting-started"
+            }
+          }
+        ]
+      }
+    },
+    "inline:reopen-the-switcher-to-move-to-a-different-works-1fc9486c": {
+      "id": "inline:reopen-the-switcher-to-move-to-a-different-works-1fc9486c",
+      "statement": "reopen the switcher to move to a different workspace and confirm the header keeps up this time",
+      "state": "proved",
+      "declaredAt": 1787890627371,
+      "binding": {
+        "kind": "text",
+        "contains": "Nina Consulting"
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787890628046",
+        "grade": "presence",
+        "at": 1787890628046
+      }
+    },
+    "inline:after-switching-the-header-must-name-the-workspa-ca9e39e3": {
+      "id": "inline:after-switching-the-header-must-name-the-workspa-ca9e39e3",
+      "statement": "after switching, the header must name the workspace you moved to — this exact assertion failed before the ORG_NAME fix",
+      "state": "bound",
+      "declaredAt": 1787890635864,
+      "binding": {
+        "kind": "element",
+        "query": {
+          "role": "button",
+          "name": "Nina Consulting"
+        }
+      }
+    },
+    "inline:the-header-names-the-workspace-actually-in-scope-8e254cdd": {
+      "id": "inline:the-header-names-the-workspace-actually-in-scope-8e254cdd",
+      "statement": "the header names the workspace actually in scope after a switch, and the project scope reset with it",
+      "state": "proved",
+      "declaredAt": 1787890652370,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "Nina Consulting"
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "All projects"
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "testid": "getting-started"
+            }
+          }
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1787890652414",
+        "grade": "presence",
+        "at": 1787890652414
+      }
+    },
+    "inline:reopen-the-workspace-switcher-to-return-to-the-w-20fba73e": {
+      "id": "inline:reopen-the-workspace-switcher-to-return-to-the-w-20fba73e",
+      "statement": "reopen the workspace switcher to return to the workspace that has projects",
+      "state": "bound",
+      "declaredAt": 1787890850273,
+      "binding": {
+        "kind": "text",
+        "contains": "Nina Co"
+      }
+    },
+    "inline:return-to-nina-co-so-the-project-scope-can-be-ex-43d857e4": {
+      "id": "inline:return-to-nina-co-so-the-project-scope-can-be-ex-43d857e4",
+      "statement": "return to Nina Co so the project scope can be exercised against real projects",
+      "state": "bound",
+      "declaredAt": 1787890857732,
+      "binding": {
+        "kind": "element",
+        "query": {
+          "role": "button",
+          "name": "Nina Co"
+        }
+      }
+    },
+    "inline:a-link-carrying-project-must-set-the-scope-on-ar-5384e46d": {
+      "id": "inline:a-link-carrying-project-must-set-the-scope-on-ar-5384e46d",
+      "statement": "a link carrying ?project= must set the scope on arrival — the switcher shows that project and the queue shows its issues, without the recipient having selected anything",
+      "state": "proved",
+      "declaredAt": 1787890876503,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "nina-app"
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "testid": "issue-list"
+            }
+          },
+          {
+            "kind": "text",
+            "contains": "checkout"
+          }
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1787890876549",
+        "grade": "presence",
+        "at": 1787890876549
+      }
+    },
+    "inline:changing-scope-must-be-reflected-in-the-url-so-t-c1580887": {
+      "id": "inline:changing-scope-must-be-reflected-in-the-url-so-t-c1580887",
+      "statement": "changing scope must be reflected in the URL, so the view stays linkable after the change",
+      "state": "proved",
+      "declaredAt": 1787890884816,
+      "binding": {
+        "kind": "text",
+        "contains": "All projects"
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787890885352",
+        "grade": "presence",
+        "at": 1787890885352
+      }
+    },
+    "inline:selecting-all-projects-must-remove-the-scope-par-2716724b": {
+      "id": "inline:selecting-all-projects-must-remove-the-scope-par-2716724b",
+      "statement": "selecting All projects must remove the scope parameter from the URL rather than leaving a stale one behind",
+      "state": "proved",
+      "declaredAt": 1787890901515,
+      "binding": {
+        "kind": "not",
+        "predicate": {
+          "kind": "route",
+          "contains": "project=nina-app"
+        }
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787890902963",
+        "grade": "presence",
+        "at": 1787890902963
+      }
+    },
+    "inline:a-navigation-that-remounts-the-shell-must-fire-t-fa70b09a": {
+      "id": "inline:a-navigation-that-remounts-the-shell-must-fire-t-fa70b09a",
+      "statement": "a navigation that remounts the shell must fire the session probe at most once, not twice",
+      "state": "bound",
+      "declaredAt": 1787891044121,
+      "binding": {
+        "kind": "net",
+        "urlContains": "/v1/auth/refresh",
+        "count": 1
+      }
+    },
+    "inline:the-saved-flow-triage-filter-link-clicks-filter-615eaa3c": {
+      "id": "inline:the-saved-flow-triage-filter-link-clicks-filter-615eaa3c",
+      "statement": "the saved flow triage-filter-link clicks filter-severe as its only step — confirm my progressive-disclosure change removes that anchor on an empty queue, which turns an intermittent flow into a deterministic failure",
+      "state": "proved",
+      "declaredAt": 1787892181438,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "text",
+            "contains": "No open issues"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "testid": "filter-severe"
+            },
+            "absent": true
+          }
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1787892181477",
+        "grade": "presence",
+        "at": 1787892181477
+      }
+    },
+    "inline:switch-the-watched-tab-to-the-account-that-recei-c8d97295": {
+      "id": "inline:switch-the-watched-tab-to-the-account-that-recei-c8d97295",
+      "statement": "switch the watched tab to the account that received the verification run, so the loop can be seen end to end",
+      "state": "proved",
+      "declaredAt": 1787893447653,
+      "binding": {
+        "kind": "element",
+        "query": {
+          "testid": "sign-out"
+        }
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787893450147",
+        "grade": "presence",
+        "at": 1787893450147
+      }
+    },
+    "inline:sign-out-so-i-can-sign-in-as-the-account-that-re-7f53cb72": {
+      "id": "inline:sign-out-so-i-can-sign-in-as-the-account-that-re-7f53cb72",
+      "statement": "sign out so I can sign in as the account that received the run",
+      "state": "proved",
+      "declaredAt": 1787893457307,
+      "binding": {
+        "kind": "route",
+        "pathname": "/login"
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787893458302",
+        "grade": "presence",
+        "at": 1787893458302
+      }
+    },
+    "inline:the-dashboard-must-show-the-verification-run-tha-4ab935f8": {
+      "id": "inline:the-dashboard-must-show-the-verification-run-tha-4ab935f8",
+      "statement": "the dashboard must show the verification run that Reticle just produced against this very app — the whole loop, visible",
+      "state": "bound",
+      "declaredAt": 1787893489060,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "not",
+            "predicate": {
+              "kind": "route",
+              "pathname": "/login"
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "testid": "tile-defects"
+            }
+          }
+        ]
+      }
+    },
+    "inline:the-dashboard-shows-the-verification-run-reticle-2954d848": {
+      "id": "inline:the-dashboard-shows-the-verification-run-reticle-2954d848",
+      "statement": "the dashboard shows the verification run Reticle just produced by driving this very app — the full loop, visible on screen",
+      "state": "proved",
+      "declaredAt": 1787893525655,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "element",
+            "query": {
+              "testid": "tile-defects"
+            }
+          },
+          {
+            "kind": "element",
+            "query": {
+              "testid": "section-runs"
+            }
+          }
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1787893525698",
+        "grade": "presence",
+        "at": 1787893525698
+      }
+    },
+    "inline:sign-in-to-mission-control-737ba5d2": {
+      "id": "inline:sign-in-to-mission-control-737ba5d2",
+      "statement": "Sign in to Mission Control",
+      "state": "bound",
+      "declaredAt": 1787979351362,
+      "binding": {
+        "kind": "not",
+        "predicate": {
+          "kind": "element",
+          "query": {
+            "role": "button",
+            "name": "Sign in"
+          }
+        }
+      }
+    },
+    "inline:sign-in-to-mission-control-this-time-against-a-l-3a475e54": {
+      "id": "inline:sign-in-to-mission-control-this-time-against-a-l-3a475e54",
+      "statement": "Sign in to Mission Control, this time against a live API",
+      "state": "proved",
+      "declaredAt": 1787979385774,
+      "binding": {
+        "kind": "net",
+        "method": "POST",
+        "urlContains": "/api/login",
+        "status": 200
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787979386310",
+        "grade": "net",
+        "at": 1787979386310
+      }
+    },
+    "inline:open-the-deployments-view-546603a0": {
+      "id": "inline:open-the-deployments-view-546603a0",
+      "statement": "Open the Deployments view",
+      "state": "bound",
+      "declaredAt": 1787979403770,
+      "binding": {
+        "kind": "text",
+        "contains": "Deployments"
+      }
+    },
+    "inline:open-compose-and-prove-the-route-actually-commit-c8843f58": {
+      "id": "inline:open-compose-and-prove-the-route-actually-commit-c8843f58",
+      "statement": "Open Compose and prove the route actually committed",
+      "state": "proved",
+      "declaredAt": 1787979422686,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "route",
+            "pathname": "/compose"
+          },
+          {
+            "kind": "signal",
+            "name": "nav:changed"
+          }
+        ]
+      },
+      "surface": {
+        "route": "/compose"
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787979423209",
+        "grade": "signal",
+        "at": 1787979423209
+      }
+    },
+    "inline:open-the-hostile-view-e31c0d23": {
+      "id": "inline:open-the-hostile-view-e31c0d23",
+      "statement": "Open the Hostile view",
+      "state": "proved",
+      "declaredAt": 1787979477798,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "route",
+            "pathname": "/hostile"
+          },
+          {
+            "kind": "signal",
+            "name": "nav:changed"
+          }
+        ]
+      },
+      "surface": {
+        "route": "/hostile"
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787979478294",
+        "grade": "signal",
+        "at": 1787979478294
+      }
+    },
+    "inline:prove-the-failing-request-is-attributable-to-thi-f4bae810": {
+      "id": "inline:prove-the-failing-request-is-attributable-to-thi-f4bae810",
+      "statement": "Prove the failing request is attributable to this click, not to ambient churn",
+      "state": "proved",
+      "declaredAt": 1787979502127,
+      "binding": {
+        "kind": "net",
+        "urlContains": "/api",
+        "ok": false
+      },
+      "surface": {
+        "route": "/hostile"
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787979502705",
+        "grade": "net",
+        "at": 1787979502705
+      }
+    },
+    "inline:claim-the-broken-endpoint-returns-200-it-does-no-da5542f0": {
+      "id": "inline:claim-the-broken-endpoint-returns-200-it-does-no-da5542f0",
+      "statement": "Claim the broken endpoint returns 200 — it does not",
+      "state": "bound",
+      "declaredAt": 1787979513969,
+      "binding": {
+        "kind": "net",
+        "urlContains": "/api/broken",
+        "status": 200
+      }
+    },
+    "inline:open-compose-be2ba56d": {
+      "id": "inline:open-compose-be2ba56d",
+      "statement": "Open Compose",
+      "state": "proved",
+      "declaredAt": 1787979580937,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "route",
+            "pathname": "/compose"
+          },
+          {
+            "kind": "signal",
+            "name": "nav:changed"
+          }
+        ]
+      },
+      "surface": {
+        "route": "/compose"
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787979581501",
+        "grade": "signal",
+        "at": 1787979581501
+      }
+    },
+    "inline:set-the-release-note-title-86166c1f": {
+      "id": "inline:set-the-release-note-title-86166c1f",
+      "statement": "Set the release note title",
+      "state": "bound",
+      "declaredAt": 1787979615749,
+      "binding": {
+        "kind": "element",
+        "query": {
+          "value": "v2.13.0 - stability and honest verdicts"
+        }
+      }
+    },
+    "inline:set-the-prompt-and-prove-it-reached-the-app-s-ow-cf1ea343": {
+      "id": "inline:set-the-prompt-and-prove-it-reached-the-app-s-ow-cf1ea343",
+      "statement": "Set the prompt and prove it reached the app's own store",
+      "state": "proved",
+      "declaredAt": 1787979635718,
+      "binding": {
+        "kind": "state",
+        "path": "compose.prompt",
+        "equals": "wedged tab fix, contradiction scoping, keep-alive retry"
+      },
+      "surface": {
+        "route": "/compose"
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787979636230",
+        "grade": "state",
+        "at": 1787979636230
+      }
+    },
+    "inline:prove-the-generated-note-came-back-from-the-serv-a1bb4560": {
+      "id": "inline:prove-the-generated-note-came-back-from-the-serv-a1bb4560",
+      "statement": "Prove the generated note came back from the server carrying my input",
+      "state": "proved",
+      "declaredAt": 1787979654647,
+      "binding": {
+        "kind": "net",
+        "method": "POST",
+        "urlContains": "/api",
+        "status": 200,
+        "bodyContains": "wedged tab fix"
+      },
+      "surface": {
+        "route": "/compose"
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1787979656710",
+        "grade": "net",
+        "at": 1787979656710
+      }
+    },
+    "inline:fetch-stats-over-electron-ipc-and-prove-the-main-1c45e6ea": {
+      "id": "inline:fetch-stats-over-electron-ipc-and-prove-the-main-1c45e6ea",
+      "statement": "Fetch stats over Electron IPC and prove the main-process round trip is observed",
+      "state": "bound",
+      "declaredAt": 1788288670606,
+      "binding": {
+        "kind": "signal",
+        "name": "stats:loaded"
+      }
+    },
+    "inline:type-a-todo-title-so-the-add-button-has-somethin-8f07d5fd": {
+      "id": "inline:type-a-todo-title-so-the-add-button-has-somethin-8f07d5fd",
+      "statement": "Type a todo title so the Add button has something real to commit over IPC",
+      "state": "bound",
+      "declaredAt": 1788288694213,
+      "binding": {
+        "kind": "element",
+        "query": {
+          "testid": "new-todo"
+        }
+      }
+    },
+    "inline:add-a-todo-over-electron-ipc-and-prove-the-app-s-4b40c18c": {
+      "id": "inline:add-a-todo-over-electron-ipc-and-prove-the-app-s-4b40c18c",
+      "statement": "Add a todo over Electron IPC and prove the app signals its own success",
+      "state": "proved",
+      "declaredAt": 1788288707160,
+      "binding": {
+        "kind": "signal",
+        "name": "todo:added"
+      },
+      "surface": {
+        "files": [
+          "src/App.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1788288707773",
+        "grade": "signal",
+        "at": 1788288707773
+      }
+    },
+    "inline:type-a-todo-title-in-the-tauri-wkwebview-before-3ee6b51f": {
+      "id": "inline:type-a-todo-title-in-the-tauri-wkwebview-before-3ee6b51f",
+      "statement": "Type a todo title in the Tauri WKWebView before committing it through a Rust command",
+      "state": "declared",
+      "declaredAt": 1788288783928
+    },
+    "inline:add-a-todo-in-the-tauri-app-and-prove-the-app-si-6d311691": {
+      "id": "inline:add-a-todo-in-the-tauri-app-and-prove-the-app-si-6d311691",
+      "statement": "Add a todo in the Tauri app and prove the app signals its own success in WKWebView",
+      "state": "proved",
+      "declaredAt": 1788288792788,
+      "binding": {
+        "kind": "signal",
+        "name": "todo:added"
+      },
+      "surface": {
+        "files": [
+          "src/App.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1788288793298",
+        "grade": "signal",
+        "at": 1788288793298
+      }
+    },
+    "inline:archive-a-todo-through-the-rust-archive-todo-com-7ec78ed7": {
+      "id": "inline:archive-a-todo-through-the-rust-archive-todo-com-7ec78ed7",
+      "statement": "Archive a todo through the Rust archive_todo command and prove the store recorded it",
+      "state": "bound",
+      "declaredAt": 1788288810499,
+      "binding": {
+        "kind": "state",
+        "store": "app",
+        "path": "status",
+        "equals": "archived"
+      }
+    },
+    "inline:same-archive-path-on-electron-prove-the-ipc-fail-d6398614": {
+      "id": "inline:same-archive-path-on-electron-prove-the-ipc-fail-d6398614",
+      "statement": "Same archive path on Electron: prove the IPC failure contradicts the UI there too",
+      "state": "bound",
+      "declaredAt": 1788288830098,
+      "binding": {
+        "kind": "state",
+        "store": "app",
+        "path": "status",
+        "equals": "archived"
+      }
+    },
+    "inline:user-logs-in-successfully-and-is-redirected-to-t-7d978eeb": {
+      "id": "inline:user-logs-in-successfully-and-is-redirected-to-t-7d978eeb",
+      "statement": "User logs in successfully and is redirected to the dashboard",
+      "state": "bound",
+      "declaredAt": 1788973530322,
+      "binding": {
+        "kind": "route",
+        "pathname": "/dashboard"
+      }
+    },
+    "inline:user-navigates-to-the-diagnostics-page-bad29080": {
+      "id": "inline:user-navigates-to-the-diagnostics-page-bad29080",
+      "statement": "User navigates to the Diagnostics page",
+      "state": "proved",
+      "declaredAt": 1788973538689,
+      "binding": {
+        "kind": "route",
+        "pathname": "/diagnostics"
+      },
+      "surface": {
+        "route": "/diagnostics",
+        "files": [
+          "src/components/Sidebar.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1788973538763",
+        "grade": "presence",
+        "at": 1788973538763
+      }
+    },
+    "inline:click-the-500-server-error-fault-button-and-capt-9814f707": {
+      "id": "inline:click-the-500-server-error-fault-button-and-capt-9814f707",
+      "statement": "Click the 500 Server Error fault button and capture any network requests",
+      "state": "declared",
+      "declaredAt": 1788973543332
+    },
+    "inline:sign-in-as-admin-reticle-dev-7fc4ff51": {
+      "id": "inline:sign-in-as-admin-reticle-dev-7fc4ff51",
+      "statement": "Sign in as admin@reticle.dev",
+      "state": "bound",
+      "declaredAt": 1788974006060,
+      "binding": {
+        "kind": "route",
+        "pathname": "*"
+      }
+    },
+    "inline:navigate-to-deployments-page-c4047c88": {
+      "id": "inline:navigate-to-deployments-page-c4047c88",
+      "statement": "Navigate to Deployments page",
+      "state": "proved",
+      "declaredAt": 1788974022517,
+      "binding": {
+        "kind": "route",
+        "pathname": "/deployments"
+      },
+      "surface": {
+        "route": "/deployments",
+        "files": [
+          "src/components/Sidebar.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1788974022542",
+        "grade": "presence",
+        "at": 1788974022542
+      }
+    },
+    "inline:click-new-deploy-button-to-open-the-new-deployme-c13dc439": {
+      "id": "inline:click-new-deploy-button-to-open-the-new-deployme-c13dc439",
+      "statement": "Click New deploy button to open the new-deployment modal",
+      "state": "bound",
+      "declaredAt": 1788974027182,
+      "binding": {
+        "kind": "element",
+        "query": {
+          "role": "dialog"
+        }
+      }
+    },
+    "compose-renders": {
+      "id": "compose-renders",
+      "statement": "clicking the Compose nav item navigates to the Compose view, which renders a prompt box and a Generate button",
+      "state": "declared",
+      "declaredAt": 1788974533493
+    },
+    "inline:form-should-display-an-error-message-indicating-9ff6f754": {
+      "id": "inline:form-should-display-an-error-message-indicating-9ff6f754",
+      "statement": "Form should display an error message indicating invalid credentials",
+      "state": "proved",
+      "declaredAt": 1788974671383,
+      "binding": {
+        "kind": "text",
+        "contains": "Invalid"
+      },
+      "surface": {
+        "files": [
+          "src/components/Login.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1788974671442",
+        "grade": "presence",
+        "at": 1788974671442
+      }
+    },
+    "inline:form-should-reject-bad-credentials-and-display-e-001f8d19": {
+      "id": "inline:form-should-reject-bad-credentials-and-display-e-001f8d19",
+      "statement": "Form should reject bad credentials and display error message",
+      "state": "bound",
+      "declaredAt": 1788974724455,
+      "binding": {
+        "kind": "text",
+        "contains": "Invalid email or password"
+      }
+    },
+    "inline:user-successfully-logs-in-and-is-navigated-to-th-bdb48c84": {
+      "id": "inline:user-successfully-logs-in-and-is-navigated-to-th-bdb48c84",
+      "statement": "User successfully logs in and is navigated to the Overview page",
+      "state": "bound",
+      "declaredAt": 1788975761579,
+      "binding": {
+        "kind": "route",
+        "pathname": "/overview"
+      }
+    },
+    "checkout-total-1789126155131": {
+      "id": "checkout-total-1789126155131",
+      "statement": "applying a discount code reduces the order total shown at checkout",
+      "state": "proved",
+      "declaredAt": 1789126161361,
+      "binding": {
+        "kind": "element",
+        "query": {
+          "testid": "fault-500"
+        }
+      },
+      "surface": {
+        "route": "/diagnostics",
+        "files": [
+          "src/components/Sidebar.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789126161412",
+        "grade": "presence",
+        "at": 1789126161412
+      }
+    },
+    "inline:signing-in-with-valid-credentials-authenticates-ff8a3023": {
+      "id": "inline:signing-in-with-valid-credentials-authenticates-ff8a3023",
+      "statement": "Signing in with valid credentials authenticates against the API and advances past the login form",
+      "state": "proved",
+      "declaredAt": 1789154741674,
+      "binding": {
+        "kind": "allOf",
+        "predicates": [
+          {
+            "kind": "net",
+            "method": "POST",
+            "urlContains": "/api/"
+          },
+          {
+            "kind": "element",
+            "query": {
+              "role": "button",
+              "name": "Sign in"
+            },
+            "absent": true
+          }
+        ]
+      },
+      "surface": {
+        "files": [
+          "src/components/Login.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789154741765",
+        "grade": "net",
+        "at": 1789154741765
+      }
+    },
+    "inline:negative-control-this-consequence-is-deliberatel-123e7b21": {
+      "id": "inline:negative-control-this-consequence-is-deliberatel-123e7b21",
+      "statement": "NEGATIVE CONTROL: this consequence is deliberately false and must not be reported as proved",
+      "state": "bound",
+      "declaredAt": 1789154754714,
+      "binding": {
+        "kind": "text",
+        "contains": "Quarterly Revenue Forecast Approved"
+      }
+    },
+    "inline:opening-compose-shows-the-compose-form-so-a-depl-dc2abfd4": {
+      "id": "inline:opening-compose-shows-the-compose-form-so-a-depl-dc2abfd4",
+      "statement": "Opening Compose shows the compose form so a deployment can be created",
+      "state": "proved",
+      "declaredAt": 1789154772698,
+      "binding": {
+        "kind": "state",
+        "path": "view",
+        "equals": "compose"
+      },
+      "surface": {
+        "route": "/compose",
+        "files": [
+          "src/components/Sidebar.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789154772718",
+        "grade": "state",
+        "at": 1789154772718
+      }
+    },
+    "inline:generating-a-release-note-replaces-the-empty-out-05e6067c": {
+      "id": "inline:generating-a-release-note-replaces-the-empty-out-05e6067c",
+      "statement": "Generating a release note replaces the empty-output placeholder with real generated content",
+      "state": "proved",
+      "declaredAt": 1789154793985,
+      "binding": {
+        "kind": "text",
+        "contains": "Your generated note appears here.",
+        "absent": true
+      },
+      "surface": {
+        "route": "/compose",
+        "files": [
+          "src/components/Sidebar.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_assert:1789154794005",
+        "grade": "presence",
+        "at": 1789154794005
+      }
+    },
+    "inline:generate-actually-calls-the-backend-and-renders-132b0e35": {
+      "id": "inline:generate-actually-calls-the-backend-and-renders-132b0e35",
+      "statement": "Generate actually calls the backend and renders what the server returned, not an echo of the input",
+      "state": "proved",
+      "declaredAt": 1789154802299,
+      "binding": {
+        "kind": "net",
+        "method": "POST",
+        "urlContains": "/api/",
+        "count": 1
+      },
+      "surface": {
+        "route": "/compose",
+        "files": [
+          "src/views/Compose.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789154804141",
+        "grade": "net",
+        "at": 1789154804141
+      }
+    },
+    "inline:fetching-stats-in-the-desktop-app-crosses-ipc-to-6bcd1d6d": {
+      "id": "inline:fetching-stats-in-the-desktop-app-crosses-ipc-to-6bcd1d6d",
+      "statement": "Fetching stats in the desktop app crosses IPC to the main process and Reticle observes that crossing",
+      "state": "proved",
+      "declaredAt": 1789154964432,
+      "binding": {
+        "kind": "net"
+      },
+      "surface": {
+        "files": [
+          "src/App.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789154964925",
+        "grade": "presence",
+        "at": 1789154964925
+      }
+    },
+    "inline:a-one-way-ipcrenderer-send-with-no-reply-channel-16df1331": {
+      "id": "inline:a-one-way-ipcrenderer-send-with-no-reply-channel-16df1331",
+      "statement": "A one-way ipcRenderer.send with no reply channel is still visible to Reticle as backend activity",
+      "state": "proved",
+      "declaredAt": 1789154991587,
+      "binding": {
+        "kind": "net"
+      },
+      "surface": {
+        "files": [
+          "src/App.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789154992054",
+        "grade": "presence",
+        "at": 1789154992054
+      }
+    },
+    "inline:archiving-a-todo-actually-archives-it-in-the-bac-b3af7e0d": {
+      "id": "inline:archiving-a-todo-actually-archives-it-in-the-bac-b3af7e0d",
+      "statement": "Archiving a todo actually archives it in the backend",
+      "state": "bound",
+      "declaredAt": 1789155015035,
+      "binding": {
+        "kind": "text",
+        "contains": "archived"
+      }
+    },
+    "inline:signing-in-with-the-seeded-credentials-replaces-d0b07f4d": {
+      "id": "inline:signing-in-with-the-seeded-credentials-replaces-d0b07f4d",
+      "statement": "signing in with the seeded credentials replaces the sign-in form with the authenticated mission-control view",
+      "state": "proved",
+      "declaredAt": 1789218374303,
+      "binding": {
+        "kind": "element",
+        "query": {
+          "testid": "sign-out"
+        }
+      },
+      "surface": {
+        "files": [
+          "src/components/Login.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789218374357",
+        "grade": "presence",
+        "at": 1789218374357
+      }
+    },
+    "inline:composing-a-script-fires-exactly-one-request-to-bbd5b844": {
+      "id": "inline:composing-a-script-fires-exactly-one-request-to-bbd5b844",
+      "statement": "composing a script fires exactly one request to the generate endpoint — a double-submit is a real bug in this flow",
+      "state": "proved",
+      "declaredAt": 1789218456402,
+      "binding": {
+        "kind": "route",
+        "contains": "compose"
+      },
+      "surface": {
+        "route": "/compose",
+        "files": [
+          "src/components/Sidebar.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789218456428",
+        "grade": "presence",
+        "at": 1789218456428
+      }
+    }
+  }
+}

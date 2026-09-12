@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "name": "qa2-flow",
+  "createdAt": 1786108235439,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "nav-overview",
+        "source": {
+          "file": "src/components/Sidebar.tsx",
+          "line": 41,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "hover"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "nav-deployments",
+        "source": {
+          "file": "src/components/Sidebar.tsx",
+          "line": 41,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "hover"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "nav-compose",
+        "source": {
+          "file": "src/components/Sidebar.tsx",
+          "line": 41,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "hover"
+    }
+  ]
+}

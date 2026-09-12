@@ -9,18 +9,21 @@ Reticle is the **proof layer for AI agents** — it verifies a running web app f
 ## Monorepo layout
 
 ```
-packages/core          @reticlehq/core         — bottom-of-graph foundation: wire contract, constants, zod schemas (deps: zod)
-packages/browser       @reticlehq/browser      — instrumentation SDK embedded in the app (DOM-side)
-packages/server        @reticlehq/server       — bridge + MCP server, the `reticle` CLI (Node-side)
-packages/init          @reticlehq/init         — project scaffolder: `reticle init`'s codemod, no runtime (Node-side)
-packages/react         @reticlehq/react        — React adapter: DOM ref -> component -> source file
-packages/vite-plugin   @reticlehq/vite-plugin  — Vite integration: stamps source + auto-injects connect()
-packages/babel-plugin  @reticlehq/babel-plugin — stamps data-reticle-source (source mapping, React 19)
-packages/next          @reticlehq/next         — Next.js source mapping (keeps SWC) via withReticle (CJS)
-packages/electron      @reticlehq/electron     — Electron main-process adapter (IPC observer, capture)
-packages/tauri         reticle-tauri           — Tauri capture backend (RUST — outside every JS gate)
-packages/test          @reticlehq/test         — spec runner + matchers for CI (peer vitest)
-packages/eslint-plugin @reticlehq/eslint-plugin — dev-only lint rule: state changed ⇒ signal fired
+core          @reticlehq/core         — bottom-of-graph foundation: wire contract, constants, zod schemas (deps: zod)
+openreality   @reticlehq/openreality  — the Open Verification Protocol: vocabulary, rules, `Realm`, `adjudicate()` (deps: zod)
+engine        @reticlehq/engine       — the rules that decide a verdict, with no browser, daemon or CLI attached
+conformance   —                       — drives the protocol's own scenarios against an implementation (PRIVATE, not published)
+adapters/realm/dom       @reticlehq/browser      — instrumentation SDK embedded in the app (DOM-side)
+server        @reticlehq/server       — bridge + MCP server, the `reticle` CLI (Node-side)
+init          @reticlehq/init         — project scaffolder: `reticle init`'s codemod, no runtime (Node-side)
+adapters/framework/react  @reticlehq/react        — React adapter: DOM ref -> component -> source file
+adapters/build/vite       @reticlehq/vite-plugin  — Vite integration: stamps source + auto-injects connect()
+adapters/build/babel-plugin  @reticlehq/babel-plugin — stamps data-reticle-source (source mapping, React 19)
+adapters/build/next       @reticlehq/next         — Next.js source mapping (keeps SWC) via withReticle (CJS)
+adapters/realm/electron   @reticlehq/electron     — Electron main-process adapter (IPC observer, capture)
+adapters/realm/tauri      reticle-tauri           — Tauri capture backend (RUST — outside every JS gate)
+spec-runner          @reticlehq/test         — spec runner + matchers for CI (peer vitest)
+adapters/lint/eslint  @reticlehq/eslint-plugin — dev-only lint rule: state changed ⇒ signal fired
 apps/bench-app         @reticlehq/bench-app    — integration proof (Vite + React) AND the primary benchmark target
 apps/api               @reticlehq/api          — support infra: backend the web e2e battery drives against
 apps/next-smoke        @reticlehq/next-smoke   — integration proof: Next.js 15 App Router, RSC, SWC source mapping
@@ -58,8 +61,9 @@ This is **one git repo** at the root (pnpm + turbo monorepo). The TS library pac
 7. **Inject the clock.** Never call `Date.now()`/`Math.random()` inside pure logic — pass them in.
 8. **Scope every data access to the authenticated principal.**
 9. **Design tokens are the only place design values live.**
-10. **Telemetry is part of the feature, not a follow-up.** Adding a tool? Put it in `TOOLS` and, if it produces a verdict, in `VERDICT_TOOLS` (`packages/server/src/tools/feedback-tools.ts`). Adding a finding kind? Add it to core's enum and never re-list it locally. Adding a dispatch path that bypasses `runTool`? It is invisible until you give it a reporter. Telemetry fails SILENTLY — nothing throws, no test reddens, the data is just permanently gone — so the rules are enforced by `telemetry-contract.test.ts` and written down in [`docs/telemetry-contract.md`](docs/telemetry-contract.md). Read that before touching anything that emits.
+10. **Telemetry is part of the feature, not a follow-up.** Adding a tool? Put it in `TOOLS` and, if it produces a verdict, in `VERDICT_TOOLS` (`server/src/surface/tools/feedback-tools.ts`). Adding a finding kind? Add it to core's enum and never re-list it locally. Adding a dispatch path that bypasses `runTool`? It is invisible until you give it a reporter. Telemetry fails SILENTLY — nothing throws, no test reddens, the data is just permanently gone — so the rules are enforced by `telemetry-contract.test.ts` and written down in [`docs/telemetry-contract.md`](docs/telemetry-contract.md). Read that before touching anything that emits.
 11. **No internal tracking tags.** Comments, file names, directory names, and test descriptions must never contain design-doc reference codes (letter + digit patterns like `N5`, `G4`, `M8`, `P2`, `F1`, `R1`) or internal version strings (like `0.3.7`).
+12. **No field numbers in anything we ship.** Telemetry tells us things about the people using Reticle, and those numbers do not belong in the changelog, in a pull request, in a code comment, in the docs or in a commit message. They live in the gitignored `plan/`. A shipped comment gave the median tool-call count of one session type and the share of all bugs it found: true, useful to us, and nobody's business in a source file somebody installed. This is not guarded and cannot usefully be: a regular expression cannot tell a measurement of OUR benchmark from a measurement of SOMEBODY'S usage, and the numbers from the bench, the test suite and the install gate are welcome and load-bearing. Ask where the number came from. If the answer is "from users", it stays in `plan/`.
 
 ## Naming conventions
 
@@ -77,13 +81,17 @@ This is **one git repo** at the root (pnpm + turbo monorepo). The TS library pac
 
 > The routing below is also a table in [`docs/gates.md`](docs/gates.md) — that file is the one a human contributor reads, and it carries the "what is each gate blind to" column. If you change a gate's cost or scope, change it in both; they are the same rule stated twice on purpose, because one of the two audiences never opens the other file.
 
-**Before coding:** scan for existing code to reuse → identify the constants you'll need and add them first → write the failing test. **After coding:** refactor with tests green → check the file is still cohesive (and under the 1000-line backstop) → run `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:unit` **before committing, not chained after it** → confirm no `any`, no free strings, no `console.log`.
+**Before coding:** scan for existing code to reuse → identify the constants you'll need and add them first → write the failing test. **After coding:** refactor with tests green → check the file is still cohesive (and under the 1000-line backstop) → run **`pnpm verify`** (which is `format:check && lint && typecheck && test:unit`) **before committing, not chained after it** → confirm no `any`, no free strings, no `console.log`.
+
+**Run it as `pnpm verify`, not as four separate lines.** The `&&` is what makes a failure stop the run: pasted as separate commands, or chained with newlines, only the LAST one decides the exit code, so a red `lint` in the middle reports success. That is not hypothetical — it happened while writing this line, and the "all green" it produced was a lint error in code written seconds earlier.
 
 `format:check` is first because it is the one CI enforces that **`pnpm lint` does not run**. This checklist omitted it until 2.6.0, which is exactly how a release branch with all four heavy gates green locally still turned CI's `verify` red on six prettier warnings — and `verify` is a dependency of `e2e`, `desktop-e2e` and `install-gate`, so one unformatted file skips every expensive gate behind it. `pnpm format` writes the fixes.
 
 **Touching the tool surface, the wire contract, or an observer?** Also run `pnpm test:e2e` (boots api + bench-app + next-smoke — **~8 min**, measured 2026-08-11 at 32/32 specs on an M-series mac; it was documented as "~20 min" for months and then as "~70s", and both numbers stopped anybody from planning around the real one). The unit gate cannot see cross-package drift: a tool rename once left four e2e specs dead across a whole framework and nothing caught it, because the battery is not part of `test:unit`. `e2e-surface-drift.test.ts` now catches the name-lookup half of that in the fast gate; the rest still needs the battery.
 
 **Touching telemetry, feedback, or anything that emits an event?** Read [`docs/telemetry-contract.md`](docs/telemetry-contract.md) first — short, and the difference between a metric that works and one that is silently absent for six months. `pnpm test:e2e` runs `telemetry-events-test`, which fires all ten event kinds against a real capture endpoint and asserts each one lands. It exists because telemetry fails SILENTLY: `daemon_stopped` was emitted fire-and-forget just before `process.exit(0)`, so the POST died every time and nothing threw, nothing failed, and no unit test could see it. Half the spec is leak checks — a telemetry mistake is silent, shipped, and about somebody else's data.
+
+**Touching `@reticlehq/openreality`, the adjudicator, `WebRealm`, or anything a verdict is derived from?** Also run **`pnpm gate:conformance`** (~3 min). It drives the published specification's own scenarios against this implementation on a real browser AND a real Electron shell, and every verdict is decided by the spec's `adjudicate` rather than by Reticle's kernel — scoring an implementation against its own rules makes every implementation conformant by construction. It gates REGRESSION, never the score: `earned` stays `none` until the fixture grows, and `--gate` fails only when a scenario that COULD be planted was driven and answered wrongly. It is deliberately not a spec inside `pnpm test:e2e`, because the battery boots the demo API with `REFLECT_MS=6000` and a conformance run folded into it would score every scenario against a deliberately-slowed backend while still printing a number. See [`docs/gates.md`](docs/gates.md).
 
 **Touching desktop — `@reticlehq/electron`, `packages/tauri`, the IPC observer, or desktop capture?** Also run `pnpm test:e2e:desktop`. It starts two real Electron main processes (plain Vite + electron-vite) and a **packaged** Tauri binary and drives them headless (~3 min, most of it the Rust build). The web battery boots three HTTP servers and no desktop runtime, so it is blind to all of this — which is how v2.3.0 shipped Electron and Tauri support with no automated coverage at all, and why a `no-visual-provider` lie on concurrent captures lived in code that no gate touched. `packages/tauri` is Rust and outside every JS gate; CI's `rust` / `rust-macos` jobs are the only thing that compiles it.
 

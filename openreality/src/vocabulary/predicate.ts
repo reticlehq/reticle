@@ -1,0 +1,250 @@
+import { z } from 'zod';
+import { ChannelIdSchema } from './channel.js';
+import type { Observation } from './evidence.js';
+
+/**
+ * The few predicate shapes this specification evaluates itself.
+ *
+ * ── WHY THIS EXISTS, GIVEN THAT `Assertion.predicate` IS DELIBERATELY OPAQUE ────────────────────
+ * It still is. A general predicate language is a realm's business and the part of a specification
+ * that ages worst, and nothing here narrows what an implementation may accept.
+ *
+ * What the opaque field could not do was let two implementations be COMPARED. The adjudicator's
+ * clause 4 -- "the declared consequence did not hold" -- is unreachable unless somebody evaluates
+ * the claim, and nobody can evaluate a predicate written in a language they do not speak. So
+ * every conformance scenario described its condition in prose, every binding passed
+ * `assertionsHeld: undefined`, and a claim that named a count could not be contradicted by two
+ * writes. The same shape of defect as `impeaching`: a field defined, deferred to somebody, and
+ * evaluated by nobody.
+ *
+ * These forms are therefore chosen to be the smallest set that makes the clause reachable, not a
+ * language:
+ *
+ *   - they read only what an `Observation` carries in EVERY realm -- its channel, its summary,
+ *     and its rendered value -- so a service, a robot and a browser answer them the same way;
+ *   - they are about COUNTING and PRESENCE, which is what a claim about a consequence mostly is
+ *     ("exactly one charge", "a receipt came back", "nothing was written");
+ *   - anything richer stays opaque and evaluates to `undefined`, which means *nobody evaluated
+ *     this*, and is honest rather than absent.
+ */
+
+/** How a predicate selects the observations it is about, minus the part the rule constrains. */
+const MatchBaseSchema = z.object({
+  /** The channel the observations must have come from. */
+  channel: ChannelIdSchema,
+});
+
+/**
+ * The rule: a match may not rest on `valueContains` alone.
+ *
+ * Rendering is an implementation's own, so an unanchored substring can match in one conformant
+ * implementation and not in another, and a claim that hinges on it is **not portable** -- which
+ * is the one property a published predicate form exists to have.
+ *
+ * A union rather than a `.refine()`, and the difference is not stylistic. `zod-to-json-schema`
+ * drops a refinement's predicate silently, and `gen-schema.mjs` says in its own header that the
+ * JSON Schema is the CONTRACT. Enforcing a portability rule only for people who install this
+ * TypeScript package, and not for the other-language implementer the whole contract exists to
+ * serve, is most of the way to not enforcing it. This shape emits `anyOf` with
+ * `required: ['summary', 'valueContains']` on the first branch, so `schema/match.json` alone
+ * now rejects what this package rejects.
+ */
+const MatchTargetSchema = z.union([
+  z.object({
+    /**
+     * The observation's `summary`, exactly.
+     *
+     * Exact rather than a pattern on purpose: a summary is a short realm-defined label, and a
+     * regular expression over it would be a predicate language arriving through the back door.
+     */
+    summary: z.string().min(1),
+    /** A substring of the observation's rendered value. Only ever alongside a `summary`. */
+    valueContains: z.string().min(1),
+  }),
+  z.object({
+    summary: z.string().min(1).optional(),
+    valueContains: z.undefined().optional(),
+  }),
+]);
+
+export const MatchSchema = MatchBaseSchema.and(MatchTargetSchema);
+export type Match = z.infer<typeof MatchSchema>;
+
+/** Comparisons a count may be held to. */
+export const CountOp = {
+  EXACTLY: 'exactly',
+  AT_LEAST: 'at-least',
+  AT_MOST: 'at-most',
+} as const;
+export type CountOp = (typeof CountOp)[keyof typeof CountOp];
+
+export const PredicateKind = {
+  /** How many matching observations the window holds. */
+  COUNT: 'count',
+  /** At least one matching observation. `count at-least 1`, named because claims say it often. */
+  PRESENT: 'present',
+  /**
+   * No matching observation.
+   *
+   * Weaker than it looks and the specification will not let it be forgotten: this is an ABSENCE
+   * inside a window whose end the verifier chose. It can be true because nothing happened or
+   * because nothing had happened YET, and an implementation is expected to reflect that in
+   * coverage rather than in a confident `yes`.
+   */
+  ABSENT: 'absent',
+  /** A measured quantity, compared with a tolerance. Every domain outside a browser has these. */
+  MEASURE: 'measure',
+} as const;
+export type PredicateKind = (typeof PredicateKind)[keyof typeof PredicateKind];
+
+/**
+ * How a measured quantity is compared with the number a claim named.
+ *
+ * Three operators and a tolerance on all of them, rather than a separate `within`. A tolerance
+ * of zero is exactness, so one shape covers "exactly 16", "37 plus or minus 0.5" and "at least
+ * 8, and I will accept 7.9" without a conditional requirement anywhere -- which matters more
+ * here than it looks, because a conditional requirement would have to be a `.refine()`, and a
+ * refinement does not survive the trip to JSON Schema. A rule this specification cannot publish
+ * is a rule the implementer who never installs the package does not get.
+ */
+export const MeasureOp = {
+  /** Inside the band: the reading differs from the named value by at most the tolerance. */
+  EQUALS: 'equals',
+  /** At or above the named value, with the tolerance allowed BELOW it. */
+  AT_LEAST: 'at-least',
+  /** At or below the named value, with the tolerance allowed ABOVE it. */
+  AT_MOST: 'at-most',
+} as const;
+export type MeasureOp = (typeof MeasureOp)[keyof typeof MeasureOp];
+
+export const PredicateSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal(PredicateKind.COUNT),
+    match: MatchSchema,
+    op: z.nativeEnum(CountOp),
+    value: z.number().int().nonnegative(),
+  }),
+  z.object({ kind: z.literal(PredicateKind.PRESENT), match: MatchSchema }),
+  z.object({ kind: z.literal(PredicateKind.ABSENT), match: MatchSchema }),
+  z.object({
+    kind: z.literal(PredicateKind.MEASURE),
+    match: MatchSchema,
+    op: z.nativeEnum(MeasureOp),
+    /** The number the claim named. Any real number: a temperature, an angle, a millisecond. */
+    value: z.number().finite(),
+    /**
+     * How far off the reading may be and still satisfy the claim. Never negative -- a negative
+     * tolerance would NARROW the band, which is a different predicate written by accident.
+     */
+    tolerance: z.number().nonnegative().finite().default(0),
+  }),
+]);
+export type Predicate = z.infer<typeof PredicateSchema>;
+
+/** Does this observation fall inside the predicate's selection? */
+export function matches(match: Match, observation: Observation, rendered: string): boolean {
+  if (observation.channel !== match.channel) return false;
+  if (match.summary !== undefined && observation.summary !== match.summary) return false;
+  if (match.valueContains !== undefined && !rendered.includes(match.valueContains)) return false;
+  return true;
+}
+
+/**
+ * How an observation's value is rendered for `valueContains`.
+ *
+ * Named and exported rather than inlined so that an implementation matching this specification's
+ * behaviour has something exact to match, and so a disagreement about a substring has a single
+ * place to be resolved.
+ */
+export function render(value: unknown): string {
+  if ('string' === typeof value) return value;
+  try {
+    return JSON.stringify(value) ?? '';
+  } catch {
+    // A value that will not serialise -- a cycle, a live handle. Unmatched rather than guessed at.
+    return '';
+  }
+}
+
+/**
+ * A measurement over the observations a predicate selected.
+ *
+ * Three-valued like everything else here, and the middle value is the point. A reading that is
+ * not a number has NOT been evaluated: a realm reporting its temperature as `"37C"` has made a
+ * formatting choice, and reading that as a failed claim would invent a defect out of it. Same
+ * for a selection that matched nothing -- a measurement over no reading is not a reading of
+ * zero, which is the difference between this and `absent`.
+ *
+ * Satisfied by ANY one matching reading, the way `present` is. A claim that every reading in a
+ * window stayed inside a band is a different predicate, and inventing it here without a caller
+ * would be one more thing defined and reached by nobody.
+ *
+ * The unit is deliberately not a field. It is carried by `match.summary`, which is exact, so
+ * `sensor.temperature.celsius` and `sensor.temperature.kelvin` are different selections rather
+ * than one selection with a unit nobody compares. A unit the engine could not check would be a
+ * field that exists to be ignored.
+ */
+function measured(
+  p: { readonly op: MeasureOp; readonly value: number; readonly tolerance: number },
+  found: readonly Observation[],
+): boolean | undefined {
+  const readings = found
+    .map((o) => o.value)
+    .filter((v): v is number => 'number' === typeof v && Number.isFinite(v));
+  if (0 === readings.length) return undefined;
+  const holds = (x: number): boolean => {
+    if (MeasureOp.AT_LEAST === p.op) return x >= p.value - p.tolerance;
+    if (MeasureOp.AT_MOST === p.op) return x <= p.value + p.tolerance;
+    return Math.abs(x - p.value) <= p.tolerance;
+  };
+  return readings.some(holds);
+}
+
+/**
+ * Evaluate a predicate over a window's observations.
+ *
+ * `undefined` is a real answer and the most important one: it means NOBODY EVALUATED THIS, which
+ * the adjudicator must not read as either pass or fail. It is returned for any predicate this
+ * specification does not name -- an implementation's own language is not wrong, it is merely not
+ * something this function can speak.
+ */
+export function evaluate(
+  predicate: unknown,
+  observations: readonly Observation[],
+): boolean | undefined {
+  const parsed = PredicateSchema.safeParse(predicate);
+  if (!parsed.success) return undefined;
+  const p = parsed.data;
+  const found = observations.filter((o) => matches(p.match, o, render(o.value)));
+  switch (p.kind) {
+    case PredicateKind.PRESENT:
+      return found.length > 0;
+    case PredicateKind.ABSENT:
+      return 0 === found.length;
+    case PredicateKind.COUNT:
+      if (CountOp.EXACTLY === p.op) return found.length === p.value;
+      if (CountOp.AT_LEAST === p.op) return found.length >= p.value;
+      return found.length <= p.value;
+    case PredicateKind.MEASURE:
+      return measured(p, found);
+  }
+}
+
+/**
+ * Did a claim's assertions hold?
+ *
+ * Three-valued, and it must stay that way. `undefined` when NO assertion could be evaluated --
+ * "nobody checked" -- and a single evaluable assertion is enough to answer, because an
+ * implementation that can check one of three conditions has still learned something about the
+ * claim. A false among them is decisive: a claim whose parts are conjunctive fails on any one.
+ */
+export function assertionsHeld(
+  assertions: readonly { readonly predicate?: unknown }[],
+  observations: readonly Observation[],
+): boolean | undefined {
+  const answers = assertions
+    .map((a) => evaluate(a.predicate, observations))
+    .filter((v): v is boolean => undefined !== v);
+  if (0 === answers.length) return undefined;
+  return answers.every((v) => v);
+}

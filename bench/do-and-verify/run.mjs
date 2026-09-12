@@ -112,7 +112,7 @@ const SERVERS = {
   },
   reticle: {
     command: 'node',
-    args: ['packages/server/dist/cli.js', 'mcp', '--port', RETICLE_PORT, '--drive', URL],
+    args: ['server/dist/command/cli.js', 'mcp', '--port', RETICLE_PORT, '--drive', URL],
     env: { RETICLE_PORT },
   },
   /**
@@ -130,7 +130,7 @@ const SERVERS = {
    */
   reticle_lean: {
     command: 'node',
-    args: ['packages/server/dist/cli.js', 'mcp', '--port', LEAN_PORT, '--drive', URL],
+    args: ['server/dist/command/cli.js', 'mcp', '--port', LEAN_PORT, '--drive', URL],
     env: { RETICLE_PORT: LEAN_PORT },
     // The profile has to be on the DAEMON, and putting it on the proxy silently does nothing.
     //
@@ -141,7 +141,7 @@ const SERVERS = {
     // following the changelog's own instruction on the wrong process gets the same silence.
     preStart: {
       command: 'node',
-      args: ['packages/server/dist/cli.js', '_daemon', '--port', LEAN_PORT],
+      args: ['server/dist/command/cli.js', '_daemon', '--port', LEAN_PORT],
       env: { RETICLE_TOOL_PROFILE: 'lean', RETICLE_PORT: LEAN_PORT },
     },
   },
@@ -377,8 +377,10 @@ export async function runCell(bugId, arm, opts = {}) {
         try {
           execFileSync(
             'node',
-            ['packages/server/dist/cli.js', 'stop', '--port', LEAN_PORT, '--quiet'],
-            { stdio: 'ignore' },
+            ['server/dist/command/cli.js', 'stop', '--port', LEAN_PORT, '--quiet'],
+            {
+              stdio: 'ignore',
+            },
           );
         } catch {
           /* nothing to stop */
@@ -495,8 +497,10 @@ export async function runCell(bugId, arm, opts = {}) {
       try {
         execFileSync(
           'node',
-          ['packages/server/dist/cli.js', 'stop', '--port', RETICLE_PORT, '--quiet'],
-          { stdio: 'ignore' },
+          ['server/dist/command/cli.js', 'stop', '--port', RETICLE_PORT, '--quiet'],
+          {
+            stdio: 'ignore',
+          },
         );
       } catch {
         /* already down */

@@ -69,6 +69,34 @@ The guards, which apply wherever this instruction appears:
 
 The corollary matters as much: if a dev server IS already running and nothing connects, the cause is the SDK not loading in the page. An agent that answers this state by asking you to start a server you are already running has ended the conversation with nothing fixed. Work the checklist above instead.
 
+### The dev server runs in a container
+
+Everything below the CLI assumes the daemon and the dev server share a filesystem. Three things break when they do not (Docker, a devcontainer, WSL, or a dev server on another machine), and all three look identical from the page: the SDK loads, the socket opens, and no session appears.
+
+**1. The pairing token.** The daemon writes `~/.reticle/pairing-token` on the host. The build plugin reads it from `$HOME` _inside_ the container, finds nothing, mints its own, and inlines that into every page, which the bridge then refuses. The console says `bridge refused the connection: authentication failed`, and `reticle status` names this case in full.
+
+Mount the host's token read-only and point the plugin at it:
+
+```yaml
+frontend:
+  environment:
+    RETICLE_PAIRING_TOKEN_DIR: /reticle-state
+  volumes:
+    - ~/.reticle/pairing-token:/reticle-state/pairing-token:ro
+```
+
+Run the daemon at least once first, or Docker creates a _directory_ at that host path. The token is read when the dev server resolves its config and inlined then, so restart the dev server afterwards.
+
+**2. The projectId.** The plugin reads it from `.reticle.json`, the file `reticle init` writes. If that file is not visible inside the container (it is not in the build context, or the source is not mounted), the plugin falls back to deriving one from the absolute project root. That is `/app` inside and your host path outside, so the two disagree. Make sure `.reticle.json` is mounted with the source, or pass the id explicitly: `reticle({ projectId: 'your-id-from-.reticle.json' })`.
+
+**3. The dependencies.** A container that installs its own `node_modules` into an anonymous volume will not see the two packages `init` added by restarting. Rebuild the image and renew the volume:
+
+```bash
+docker compose build frontend && docker compose up -d --renew-anon-volumes frontend
+```
+
+`reticle init` prints all three as a notice when it finds a `Dockerfile` or a compose file near the app, so on a fresh install you should meet this page having already been told.
+
 ### The port mismatch
 
 Your app dials a port; the daemon listens on one. When they disagree, the app runs perfectly and silently never connects. The browser console says so:
@@ -267,6 +295,6 @@ Stale sessions pointing at dev servers you restarted an hour ago look completely
   </Accordion>
 </AccordionGroup>
 
-<Card title="Still stuck?" icon="comments" href="/tools-session-and-feedback">
+<Card title="Still stuck?" icon="comments" href="/tools/session-and-feedback">
   `reticle feedback --agent` works even when nothing is installed and the daemon will not start.
 </Card>

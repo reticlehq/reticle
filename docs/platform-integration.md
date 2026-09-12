@@ -89,7 +89,7 @@ Copyable patterns: `apps/bench-app/src/reticle-dev.ts`, `apps/next-smoke/app/ret
 | UI-vs-store desync (the total lies) | reads the store, contradicts the display |
 | Blast-radius (an action corrupts unrelated state) | `state { hold:true }` invariant |
 
-Live, clickable demo of each: `apps/vibe-builder-demo/` (set `BUG_MODE=…`). Proven in CI: `packages/server/src/runs/generated-app-bugs.test.ts`.
+Live, clickable demo of each: `apps/vibe-builder-demo/` (set `BUG_MODE=…`). Proven in CI: `server/src/judgement/runs/generated-app-bugs.test.ts`.
 
 ---
 
@@ -106,7 +106,7 @@ Reticle is a stdio MCP server. A host that wires it correctly does four things, 
 
 ### Hosts that cap the number of tools
 
-Some editors cap the total tool count across every MCP server, which is why Reticle advertises a small surface instead of everything it can do. Nothing is out of reach: `reticle_tools { names: [...] }` lists the tools and returns the full argument grammar for the ones you name, and `reticle_run { tool, args }` invokes any of them, advertised or not. A host that is short on tool slots pays for the advertised handful and still reaches the whole surface through that pair. See [`reticle_tools` and `reticle_run`](/tools-tools-and-run).
+Some editors cap the total tool count across every MCP server, which is why Reticle advertises a small surface instead of everything it can do. Nothing is out of reach: `reticle_tools { names: [...] }` lists the tools and returns the full argument grammar for the ones you name, and `reticle_run { tool, args }` invokes any of them, advertised or not. A host that is short on tool slots pays for the advertised handful and still reaches the whole surface through that pair. See [`reticle_tools` and `reticle_run`](/tools/tools-and-run).
 
 ---
 
@@ -141,7 +141,7 @@ The shape is identical (in-app SDK in the template → verify in the sandbox →
 
 `POST /verify` (and `reticle_run_export`) return a stable, versioned `ReticleVerificationRun` (defined in `@reticlehq/core`): `verdict` (pass/fail/partial, confidence, blockingRisks), `flows[]`, `checks[]`, `risks[]` (auth/payment/db/…), `repair.failurePackets[]` (what + where to fix), `evidence`. Render a legible report with `renderRunReport()` or `reticle_run_export { format: "report" }`. Profiles: `dev` (full) vs `prod-preview` (source + state redacted for downstream sharing).
 
-**Why trust it:** the verdict is mechanical, derived only from observed outcomes, so it can't report green for something it never ran (a severed backend reads as _fail_, never a confident pass). Proof: `packages/server/src/runs/false-green.test.ts`.
+**Why trust it:** the verdict is mechanical, derived only from observed outcomes, so it can't report green for something it never ran (a severed backend reads as _fail_, never a confident pass). Proof: `server/src/judgement/runs/false-green.test.ts`.
 
 ## Licensing for embedding
 

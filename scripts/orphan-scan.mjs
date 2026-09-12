@@ -67,16 +67,44 @@ function sourceCandidates(target) {
   return SOURCE_EXTENSIONS.map((extension) => `${withoutDist}${extension}`);
 }
 
-/** Entry points for a package: every source file its manifest publishes. */
-export function entryPoints(packageDir) {
+/**
+ * Entry points for a package: every source file its manifest publishes.
+ *
+ * `available` is the package's own source list, needed only because an `exports` subpath may be a
+ * PATTERN. `"./question/*.js": "./dist/question/*.js"` publishes every module in that directory,
+ * and without expanding it the candidate is the literal string `question/*.ts`, which matches no
+ * file on disk -- so every module the package deliberately publishes reads as unreachable.
+ *
+ * Not hypothetical, and it stayed hidden for a reason worth recording: `@reticlehq/engine` is the
+ * only package here that publishes by pattern, and it was the only sizeable package with no
+ * orphan guard. The first run of that guard reported seventeen orphans, all of them files
+ * `server` imports by name every day. A guard whose first result is seventeen findings is
+ * usually wrong about the question rather than right about the code.
+ */
+export function entryPoints(packageDir, available = []) {
   const manifestPath = join(packageDir, 'package.json');
   if (!existsSync(manifestPath)) return new Set();
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   const entries = new Set();
   for (const target of manifestTargets(manifest)) {
-    for (const candidate of sourceCandidates(target)) entries.add(candidate);
+    for (const candidate of sourceCandidates(target)) {
+      if (!candidate.includes('*')) {
+        entries.add(candidate);
+        continue;
+      }
+      // One `*` matches within a path segment, as Node resolves `exports` patterns: it may span
+      // `/`, so `./a/*.js` covers a nested file too. Anchored at both ends so a pattern cannot
+      // quietly excuse a file outside the directory it names.
+      const pattern = new RegExp(`^${candidate.split('*').map(escapeForRegExp).join('(.+)')}$`);
+      for (const file of available) if (pattern.test(file)) entries.add(file);
+    }
   }
   return entries;
+}
+
+/** Everything a regular expression treats specially, so a path is matched literally. */
+function escapeForRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /** Production source files under `srcDir`, repo-relative to it, POSIX-separated. */
@@ -122,11 +150,49 @@ function isImported(file, corpus) {
 export function scanPackage(packageDir, declaredUnwired = {}) {
   const srcDir = join(packageDir, 'src');
   const files = sourceFiles(srcDir);
+  // Scanning nothing produces no orphans, which is indistinguishable from a clean package. Ten
+  // test files call this and every one of them asserts only that the result is empty, so a
+  // `src` that exists but yields no source -- a renamed layout, a changed extension, a filter
+  // that stops matching -- would turn all ten green while checking nothing. A MISSING `src`
+  // already throws from readdirSync; this is the quieter half of the same failure, and it
+  // belongs here rather than in ten copies of an assertion somebody has to remember to write.
+  if (0 === files.length) {
+    throw new Error(
+      `orphan scan found no source files under ${srcDir}. An empty result here would read as ` +
+        'a clean package rather than as a scan that never happened.',
+    );
+  }
+  // A declaration names a file by PATH, and a path is a string: moving the file it names does
+  // not break the build, does not break this scan, and does not make the declaration red. It
+  // makes it describe nothing. `stale` below catches a declared module that got WIRED; it
+  // cannot catch one that got RENAMED, because a path matching no file is imported by nobody
+  // and so looks exactly like a well-behaved orphan.
+  //
+  // Twice in one afternoon a grouping moved a declared module -- `to-artifact.ts` into
+  // `runs/artifact/` and `ambient-file.ts` into `journal/on-disk/` -- and both declarations had
+  // to be repointed by hand, found by grepping the old path rather than by anything going red.
+  //
+  // Thrown rather than returned: the list is an INPUT, and an input naming a file that is not
+  // there is a mistake in the list, not a finding about the package. Throwing also reaches all
+  // ten callers without ten of them having to remember a new assertion.
+  const present = new Set(files);
+  const absent = Object.keys(declaredUnwired)
+    .filter((declared) => !present.has(declared))
+    .sort();
+  if (0 < absent.length) {
+    throw new Error(
+      `these modules are declared unwired in ${packageDir} but no such file exists:\n` +
+        absent.map((path) => `  ${path}`).join('\n') +
+        '\nA declaration names a path. If the file moved, repoint it; if it was deleted, delete ' +
+        'the entry. Left alone it describes nothing and this scan stays green.',
+    );
+  }
+
   const corpus = files.map((file) => ({
     path: file,
     text: readFileSync(join(srcDir, file), 'utf8'),
   }));
-  const entries = entryPoints(packageDir);
+  const entries = entryPoints(packageDir, files);
 
   const orphans = files.filter(
     (file) =>

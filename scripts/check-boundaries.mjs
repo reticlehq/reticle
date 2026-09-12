@@ -23,14 +23,14 @@
 // package inherits the iso policy and is refused the Node externals it legitimately needs.
 //
 // `@reticlehq/electron` had been sitting in that gap. A Rust crate with no package.json is still not
-// an error: `readManifests` never sees it, so `packages/tauri` needs no tag.
+// an error: `readManifests` never sees it, so `adapters/realm/tauri` needs no tag.
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const PACKAGES_DIR = join(HERE, '..', 'packages');
+const REPO_ROOT = join(HERE, '..');
 
 /**
  * Which runtime each package lives in. Untagged → 'iso' (isomorphic). Four sides, because a build
@@ -62,6 +62,23 @@ export const SIDE = Object.freeze({
   '@reticlehq/electron': 'node',
   // Isomorphic foundation — imported by every side, imports none of them.
   '@reticlehq/core': 'iso',
+  // The conformance suite. Isomorphic and dependency-free: it describes behaviours to plant and
+  // scores what came back, and does neither in a browser nor a daemon.
+  '@reticlehq/conformance': 'iso',
+  // The rules that decide a verdict. Isomorphic: they read what happened and answer a question about
+  // it, which needs neither a page nor a socket. That is the whole reason they can be lifted out of
+  // the daemon and used on their own.
+  '@reticlehq/engine': 'iso',
+  // The specification, and the BOTTOM of the graph -- `@reticlehq/core` depends on it, not the
+  // reverse. A protocol defined inside the product it describes is two definitions of one
+  // contract, and the two drift in the product's favour.
+  //
+  // It carries `zod` and nothing else. That is one dependency more than it had, and it buys the
+  // thing that makes the contract readable without this ecosystem at all: the JSON Schemas under
+  // `schema/` are GENERATED from those definitions at build time, so an implementation in another
+  // language validates against JSON and imports none of this. Hand-written JSON Schema beside
+  // hand-written types is the drift problem wearing a solution's clothes.
+  '@reticlehq/openreality': 'iso',
 });
 
 /** Node-runtime npm packages a browser/build/iso package must never depend on (a "needs a server" proxy). */
@@ -146,15 +163,56 @@ export function findViolations(manifests, side = SIDE) {
 }
 
 /**
- * Read every package.json manifest under the given packages directory.
+ * Where the packages are, taken from `pnpm-workspace.yaml`.
  *
- * A directory without one is not an error: `packages/tauri` is a Rust crate, which has a Cargo
+ * This used to be a list of directories written out by hand here, and twice a package moved somewhere
+ * the list did not mention. Both times the guard went on printing success about the packages it could
+ * still see, which is worse than no guard at all -- a green then reads as "these are fine" when what
+ * it means is "these were not looked at".
+ *
+ * The workspace file cannot go stale in the same way, because it is the list the package manager
+ * itself installs from. A package missing from it is not quietly unchecked; it is not installed, and
+ * everything that depends on it stops working loudly.
+ *
+ * The globs used here are simple by convention -- `name`, `dir/*`, `dir/*\/*` -- so they are expanded
+ * directly rather than by pulling in a glob library for four shapes.
+ */
+export function workspaceGlobs(yamlText) {
+  return [...yamlText.matchAll(/^\s*-\s*'([^']+)'/gm)].map((m) => m[1]);
+}
+
+/** Expand one glob to the directories it names, relative to the repo root. */
+function directoriesFor(glob, root) {
+  const [head, ...rest] = glob.split('/');
+  const here = join(root, head ?? '');
+  if (!existsSync(here)) return [];
+  if (rest.length === 0) return [here];
+  const children = readdirSync(here, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => join(here, e.name));
+  if (rest.length === 1) return children;
+  // Only one more level is ever used (`adapters/<kind>/<name>`), and it is expanded the same way.
+  return children.flatMap((child) =>
+    readdirSync(child, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => join(child, e.name)),
+  );
+}
+
+/**
+ * Read every package.json the workspace covers, skipping the local fixture apps.
+ *
+ * A directory without a manifest is not an error: `adapters/realm/tauri` is a Rust crate, which has a Cargo
  * manifest and no npm one. It has no JavaScript dependency edges, so there is nothing here to check.
  */
-function readManifests(packagesDir) {
-  return readdirSync(packagesDir, { withFileTypes: true })
-    .filter((e) => e.isDirectory())
-    .map((e) => join(packagesDir, e.name, 'package.json'))
+function readManifests(root = REPO_ROOT) {
+  const globs = workspaceGlobs(readFileSync(join(root, 'pnpm-workspace.yaml'), 'utf8'))
+    // Everything under `apps/` is a local fixture, never published, and deliberately allowed to
+    // depend on anything at all -- that is what makes it a fixture.
+    .filter((glob) => !glob.startsWith('apps'));
+  return globs
+    .flatMap((glob) => directoriesFor(glob, root))
+    .map((dir) => join(dir, 'package.json'))
     .filter((p) => existsSync(p))
     .map((p) => JSON.parse(readFileSync(p, 'utf8')));
 }
@@ -191,7 +249,7 @@ function main() {
     selfTest();
     return;
   }
-  const violations = findViolations(readManifests(PACKAGES_DIR));
+  const violations = findViolations(readManifests());
   if (violations.length > 0) {
     console.error('Dependency-boundary violations:\n');
     for (const v of violations) {
@@ -202,10 +260,7 @@ function main() {
     console.error(`\n${violations.length} violation(s). See scripts/check-boundaries.mjs.`);
     process.exit(1);
   }
-  console.log(
-    'Dependency boundaries OK (%d packages checked).',
-    readManifests(PACKAGES_DIR).length,
-  );
+  console.log('Dependency boundaries OK (%d packages checked).', readManifests().length);
 }
 
 // Only run when invoked directly, not when imported by a test.

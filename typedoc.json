@@ -3,12 +3,12 @@
   "name": "Reticle API Reference",
   "entryPointStrategy": "resolve",
   "entryPoints": [
-    "packages/core/src/index.ts",
-    "packages/browser/src/index.ts",
-    "packages/react/src/index.ts",
-    "packages/server/src/index.ts",
-    "packages/test/src/index.ts",
-    "packages/vite-plugin/src/index.ts"
+    "core/src/index.ts",
+    "adapters/realm/dom/src/index.ts",
+    "adapters/framework/react/src/index.ts",
+    "server/src/index.ts",
+    "spec-runner/src/index.ts",
+    "adapters/build/vite/src/index.ts"
   ],
   "exclude": ["**/*.test.ts", "**/*.integration.test.ts", "**/node_modules/**"],
   "out": "docs-api",

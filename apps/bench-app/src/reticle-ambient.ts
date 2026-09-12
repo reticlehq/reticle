@@ -9,7 +9,7 @@
  *
  * That question was unmeasured. The observation suite had ten scenarios where the correct answer is
  * "something is wrong" and one where it is "nothing is wrong", so a detector that fired on absolutely
- * everything still scored 0.909, and the defect four separate field reports actually described — a
+ * everything still scored 0.909, and the defect several separate field reports actually described — a
  * `contradicted` verdict citing traffic the assertion never mentioned — could not lower any number
  * here. These are the negative cases that give the accuracy figure a denominator.
  *

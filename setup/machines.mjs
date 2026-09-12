@@ -39,7 +39,14 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  * the same reason, and this file is its companion — it breaks WHOLE MACHINES rather than one fault
  * at a time, so it has to be aimed at the same target or the pair disagree about what is under test.
  */
-const CLI = join(HERE, '..', 'packages', 'server', 'dist', 'cli.js');
+// Checked, not assumed: this said `packages/server/dist/cli.js` for two days after the layout
+// moved, and every scenario that reaches `init` then failed as MODULE_NOT_FOUND — which the matrix
+// scored as a missing diagnosis. A harness that cannot find the thing it drives has to say so.
+const CLI = join(HERE, '..', 'server', 'dist', 'command', 'cli.js');
+if (!existsSync(CLI)) {
+  console.error(`no built CLI at ${CLI} — run pnpm build first`);
+  process.exit(2);
+}
 /**
  * The shell entry point, for the profiles that judge ITS guards rather than the install.
  *

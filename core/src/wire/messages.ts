@@ -1,0 +1,280 @@
+import { z } from 'zod';
+import {
+  EventAttribution,
+  EventType,
+  RETICLE_MIN_PROTOCOL_VERSION,
+  RETICLE_PROTOCOL_VERSION,
+  MessageKind,
+  TRANSPORT_LIMITS,
+} from './constants/constants.js';
+import { HumanControlKind, MarkAnchorStrategy } from './constants/session-constants.js';
+import { MAX_WIRE_REDACT_KEYS, MAX_WIRE_REDACT_KEY_LENGTH } from './redaction.js';
+import { DOCUMENT_ID_LENGTH } from '../identity/document-identity.js';
+import { NO_EDITS_OBSERVED } from '../identity/edit-epoch.js';
+import { PlatformProfile } from './platform.js';
+import { ChannelId } from './channel.js';
+
+const sessionIdSchema = z.string().min(1).max(TRANSPORT_LIMITS.MAX_SESSION_ID_LENGTH);
+const refSchema = z.string().max(TRANSPORT_LIMITS.MAX_REF_LENGTH);
+const documentIdSchema = z.string().min(1).max(DOCUMENT_ID_LENGTH);
+
+/**
+ * Live-control: the narrowed payload of a HUMAN_CONTROL event. The server safeParses
+ * `event.data` against this at the inbound boundary (unknown → narrowed; never `any`).
+ */
+export const HumanControlDataSchema = z.object({
+  kind: z.nativeEnum(HumanControlKind),
+  text: z.string().optional(),
+});
+export type HumanControlData = z.infer<typeof HumanControlDataSchema>;
+
+/**
+ * Human review: the narrowed payload of a HUMAN_MARK event. A human flagged a mistake pinned to an
+ * element on the running page; the server safeParses `event.data` against this at the inbound
+ * boundary (unknown → narrowed; never `any`) and stores it for the agent to drain.
+ *
+ * `anchor` is the re-resolvable element address (auto-anchor's string, e.g.
+ * `component:Submit@src/Checkout.tsx:42`); `strategy` is its durability tier; `source` is the
+ * stamped file:line when the framework provided one — the single most useful field for the agent,
+ * because it points straight at the code to fix.
+ */
+export const HumanMarkDataSchema = z.object({
+  note: z.string().min(1).max(TRANSPORT_LIMITS.MAX_MARK_NOTE_LENGTH),
+  anchor: z.string().max(TRANSPORT_LIMITS.MAX_REF_LENGTH),
+  strategy: z.nativeEnum(MarkAnchorStrategy),
+  /** Human-legible element label (role + accessible name / text), to show the agent what was flagged. */
+  label: z.string().max(TRANSPORT_LIMITS.MAX_MARK_LABEL_LENGTH).optional(),
+  /** Source file:line stamped by the framework's compiler/plugin, when available. */
+  source: z
+    .object({
+      file: z.string().max(TRANSPORT_LIMITS.MAX_URL_LENGTH),
+      line: z.number().int().min(0),
+    })
+    .optional(),
+  /** Route/URL the mark was made on, so the agent can reproduce the context. */
+  route: z.string().max(TRANSPORT_LIMITS.MAX_URL_LENGTH).optional(),
+});
+export type HumanMarkData = z.infer<typeof HumanMarkDataSchema>;
+
+/**
+ * A normalized observation pushed from the browser into the ring buffer.
+ * `t` is a monotonic millisecond timestamp relative to session start (clock injected,
+ * never `Date.now` inside pure logic — see plan engineering standards).
+ */
+export const ReticleEventSchema = z.object({
+  t: z.number(),
+  type: z.nativeEnum(EventType),
+  sessionId: sessionIdSchema,
+  /** Stable element reference this event concerns, when applicable (e.g. "e7"). */
+  ref: refSchema.optional(),
+  /**
+   * Monotonic per-session sequence number stamped by the SDK. Gives events a total order independent
+   * of `t` (which can tie at millisecond resolution). Optional for back-compat with pre-2.2 SDKs.
+   */
+  seq: z.number().int().min(0).optional(),
+  /**
+   * The action this event is attributed to, when one was active at observation time. Set together with
+   * `attribution` (the tier of that link). Optional: ambient events observed outside any action window
+   * carry neither.
+   */
+  actionId: refSchema.optional(),
+  /** How `actionId` was derived. Present iff `actionId` is. */
+  attribution: z.nativeEnum(EventAttribution).optional(),
+  /**
+   * The document this was observed under. Minted once per real document; a full navigation replaces
+   * both. Lets evidence from a superseded document be excluded rather than counted against an action
+   * taken now. Optional for back-compat with SDKs that predate it, which is why absence is read as
+   * "current" rather than "foreign" — see `isSameDocument`.
+   */
+  documentId: documentIdSchema.optional(),
+  /**
+   * The round of source edits this was observed under — a counter the SDK advances once per applied
+   * hot update. A hot update replaces modules and re-renders INSIDE the same document, so
+   * `documentId` cannot see it; this is the edit-shaped half of the same question.
+   *
+   * Optional, and absent while nothing has hot-updated, which is why absence is read as "current"
+   * rather than "foreign" — see `isSameEditEpoch`. Most pages have no channel that could report an
+   * update at all, so a stamp of `NO_EDITS_OBSERVED` would be wire spent on the word "unknown".
+   */
+  editEpoch: z.number().int().min(NO_EDITS_OBSERVED).optional(),
+  /** Event-type-specific payload. Kept open here; refined per observer at the edges. */
+  data: z.record(z.unknown()).default({}),
+});
+export type ReticleEvent = z.infer<typeof ReticleEventSchema>;
+
+/** Browser announces itself to the bridge on connect. */
+export const HelloMessageSchema = z.object({
+  kind: z.literal(MessageKind.HELLO),
+  /**
+   * The wire protocol this peer speaks.
+   *
+   * A RANGE, not a fixed number. An exact match is right while both halves ship together and wrong
+   * as soon as anything else implements this: a peer one version behind is not incompatible, it is
+   * behind. The bridge accepts anything from the oldest version it still talks to up to its own.
+   *
+   * Out of range is still a hard door, with the diagnostics that already name which side is stale.
+   */
+  protocolVersion: z.number().int().min(RETICLE_MIN_PROTOCOL_VERSION).max(RETICLE_PROTOCOL_VERSION),
+  sessionId: sessionIdSchema,
+  url: z.string().max(TRANSPORT_LIMITS.MAX_URL_LENGTH),
+  title: z.string().max(TRANSPORT_LIMITS.MAX_TITLE_LENGTH),
+  /**
+   * Stable project identity stamped by the build plugin (e.g. "acme-web-9f3c1d"). Survives port
+   * changes, so session resolution can scope to the right app even when its dev server boots on a
+   * different port than usual. Optional for back-compat with v1.0 SDKs that don't send it; absent
+   * ⇒ resolution falls back to origin + recency.
+   */
+  projectId: sessionIdSchema.optional(),
+  adapters: z
+    .array(z.string().max(TRANSPORT_LIMITS.MAX_ADAPTER_NAME_LENGTH))
+    .max(TRANSPORT_LIMITS.MAX_ADAPTERS),
+  /** Optional browser/bridge pairing token. Required when the bridge configures one. */
+  token: z.string().max(TRANSPORT_LIMITS.MAX_TOKEN_LENGTH).optional(),
+  /**
+   * What kind of surface this is: a browser document, a web page in somebody else's window, a
+   * native view tree, or no rendering surface at all. See platform.ts.
+   *
+   * ABSENT MEANS `web`, never "unknown". Everything that connected before this field existed was a
+   * browser document, so absence is not a gap -- it is the answer those connections would have
+   * given. This is the same convention five other fields on this message already use.
+   *
+   * It is deliberately not the shell name. Electron and Tauri are two shells and one surface, and
+   * verification wants the surface: the question being asked is what can be demanded of you, not
+   * which product you are.
+   */
+  platform: z.nativeEnum(PlatformProfile).optional(),
+  /**
+   * The channels this build can actually observe. See channel.ts.
+   *
+   * ABSENT MEANS "everything", not "nothing" -- an SDK built before this field existed watched
+   * whatever it watched, and reading its silence as "observes nothing" would refuse every claim it
+   * makes. Same convention as every other optional field on this message.
+   *
+   * A closed list rather than free strings, because the rule that refuses a claim reading an
+   * undeclared channel has to switch on these. Commands below are free strings for the opposite
+   * reason: nothing switches on them, and command names are already opaque on this wire.
+   */
+  channels: z.array(z.nativeEnum(ChannelId)).max(TRANSPORT_LIMITS.MAX_ADAPTERS).optional(),
+  /**
+   * The commands this build can serve.
+   *
+   * Absent means "assume the usual set". Present and missing a name means asking for it is a
+   * mistake somebody can be told about before they spend an action on it, rather than after.
+   */
+  commands: z
+    .array(z.string().max(TRANSPORT_LIMITS.MAX_TOKEN_LENGTH))
+    .max(TRANSPORT_LIMITS.MAX_ADAPTERS)
+    .optional(),
+  /**
+   * The wire names this peer actually speaks, so compatibility can be judged name by name.
+   *
+   * The fingerprint beside it is a hash over the whole vocabulary: it can say "same" or "different"
+   * and nothing else. An implementation that speaks part of the contract -- which is the right thing
+   * for anything that is not a browser to do -- can never produce a matching hash, and was therefore
+   * reported as skewed on every call forever.
+   *
+   * Absent means "compare the fingerprint", which is what every build in the field does today.
+   */
+  contractParts: z
+    .object({
+      commands: z.array(z.string()).max(TRANSPORT_LIMITS.MAX_ADAPTERS),
+      events: z.array(z.string()).max(TRANSPORT_LIMITS.MAX_ADAPTERS),
+      actions: z.array(z.string()).max(TRANSPORT_LIMITS.MAX_ADAPTERS),
+    })
+    .optional(),
+  /** Whether the app has advertised a capability registry (reticle.describe). */
+  hasCapabilities: z.boolean().optional(),
+  /**
+   * Whether this page records request/response bodies (`connect({ captureNetworkBodies: true })`).
+   *
+   * Announced so an assertion that can only be answered from a body is refused BEFORE the action is
+   * spent, rather than after. Reported from the field: an `act_and_wait` matched the right call and
+   * came back `verified: "no"` with "a matching call with no recorded body" — knowable in advance,
+   * and on a drive that mutates state the action is not always repeatable.
+   *
+   * ABSENT means unknown, never false. An SDK predating this field says nothing, and treating
+   * silence as "off" would refuse a clause every one of those sessions can satisfy.
+   */
+  captureBodies: z.boolean().optional(),
+  /**
+   * Whether the build plugin's `data-reticle-source` stamp is switched OFF for this project.
+   *
+   * Announced for the same reason `captureBodies` is, and read by the same kind of rule: a verdict
+   * that cannot name a file and line needs to know WHY before it prescribes a fix. Without it, an
+   * app that disabled the stamp deliberately — which react-three-fiber apps must, and which `reticle
+   * init` now does for them automatically — was told on every red verdict to install a build plugin
+   * it already had.
+   *
+   * ABSENT means unknown, never false. An older SDK says nothing, and reading silence as "off"
+   * would suppress the honest gap for every app that simply has no source mapping at all.
+   */
+  sourceMapping: z.boolean().optional(),
+  /**
+   * The version of the SDK in the page, so a version-skewed pair can SAY so.
+   *
+   * `protocolVersion` only catches an incompatible wire format. A 2.2.1 SDK against a 2.4.0 daemon
+   * agrees on the protocol, connects fine, and then disagrees about tool behaviour — which surfaced
+   * as a bare `-32000` with nothing on either side naming a version. Supplied by the build plugin
+   * (which can read the installed package's version Node-side); absent means "unknown", never
+   * "matching", so a hand-wired connect is not falsely reported as in sync.
+   */
+  sdkVersion: z.string().max(TRANSPORT_LIMITS.MAX_ADAPTER_NAME_LENGTH).optional(),
+  /**
+   * The wire contract this SDK build speaks (see contract-fingerprint.ts) — DERIVED from core's
+   * vocabulary, so it moves only when a name on the wire genuinely changes.
+   *
+   * `sdkVersion` above answers "which release is this"; this answers the question that actually
+   * decides whether the pair works, and it answers it for the two cases a version cannot: a patch
+   * bump that changed nothing (equal here → stay quiet) and two different BUILDS of one version
+   * number, which is what a stale daemon or a cached npx install is (unequal here → say so).
+   */
+  contract: z.string().max(TRANSPORT_LIMITS.MAX_ADAPTER_NAME_LENGTH).optional(),
+  /**
+   * Extra key names this app declared sensitive via `connect({ redact: { keys } })`.
+   *
+   * Sent so the DRIVEN path redacts them too: a request body captured by the daemon from the network
+   * stack never passes through the SDK, so an app-declared credential would otherwise reach the
+   * journal in cleartext on exactly the path the user cannot see. Literal names only — a pattern
+   * compiled from the wire would be a ReDoS surface, and the exemption list is never sent because it
+   * is the only part of the config that could REMOVE redaction. See `wireRedactionKeys`.
+   */
+  redactKeys: z
+    .array(z.string().min(1).max(MAX_WIRE_REDACT_KEY_LENGTH))
+    .max(MAX_WIRE_REDACT_KEYS)
+    .optional(),
+});
+export type HelloMessage = z.infer<typeof HelloMessageSchema>;
+
+/** Agent -> browser request, routed by the bridge with a correlation id. */
+export const CommandMessageSchema = z.object({
+  kind: z.literal(MessageKind.COMMAND),
+  id: z.string().min(1).max(TRANSPORT_LIMITS.MAX_COMMAND_ID_LENGTH),
+  sessionId: sessionIdSchema.optional(),
+  name: z.string().min(1).max(TRANSPORT_LIMITS.MAX_COMMAND_NAME_LENGTH),
+  args: z.record(z.unknown()).default({}),
+});
+export type CommandMessage = z.infer<typeof CommandMessageSchema>;
+
+/** Browser -> agent reply to a command. */
+export const CommandResultSchema = z.object({
+  kind: z.literal(MessageKind.COMMAND_RESULT),
+  id: z.string().min(1).max(TRANSPORT_LIMITS.MAX_COMMAND_ID_LENGTH),
+  ok: z.boolean(),
+  result: z.unknown().optional(),
+  error: z.string().max(TRANSPORT_LIMITS.MAX_ERROR_LENGTH).optional(),
+});
+export type CommandResult = z.infer<typeof CommandResultSchema>;
+
+/** Browser -> bridge streamed observation. */
+export const EventMessageSchema = z.object({
+  kind: z.literal(MessageKind.EVENT),
+  event: ReticleEventSchema,
+});
+export type EventMessage = z.infer<typeof EventMessageSchema>;
+
+export const ReticleMessageSchema = z.discriminatedUnion('kind', [
+  HelloMessageSchema,
+  CommandMessageSchema,
+  CommandResultSchema,
+  EventMessageSchema,
+]);
