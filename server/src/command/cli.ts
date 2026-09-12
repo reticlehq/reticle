@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { renderTutorial } from './cli/tutorial.js';
 import { pathToFileURL } from 'node:url';
 import { openFailureNote } from './cli/answers/open-note.js';
 import { realpathSync } from 'node:fs';
@@ -901,6 +902,9 @@ export function main(): void {
       break;
     case 'doctor':
       void handleDoctor(parsed.port);
+      break;
+    case 'tutorial':
+      process.stdout.write(`${renderTutorial(parsed.audience)}\n`);
       break;
     case 'open':
       handleOpen(parsed.port, parsed.url);

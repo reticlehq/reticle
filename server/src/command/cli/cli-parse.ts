@@ -4,6 +4,7 @@
  * file-size cap and keep the parser pure + unit-testable. Re-exported from cli.ts so existing
  * imports are unchanged.
  */
+import { TutorialAudience } from './tutorial.js';
 import { parseFeedbackArgs, type ParsedFeedback } from './cli-parse-feedback.js';
 import { parseVerifySuffix } from './cli-parse-verify.js';
 import {
@@ -190,6 +191,7 @@ const KNOWN_COMMANDS: ReadonlySet<string> = new Set([
   'regression',
   'share',
   'doctor',
+  'tutorial',
   'help',
 ]);
 
@@ -317,6 +319,7 @@ export type CliResult =
   | { kind: 'version' }
   | { kind: 'help' }
   | { kind: 'doctor'; port: number }
+  | { kind: 'tutorial'; audience: TutorialAudience }
   | { kind: 'open'; port: number; url?: string }
   | {
       kind: '_daemon';
@@ -766,6 +769,12 @@ export function parseCliArgs(
     case STATUS_COMMAND: {
       const port = parsePortFlag(rest, defaultPort);
       return { kind: 'status', port };
+    }
+    case 'tutorial': {
+      // `--agent` is the opt-in, because a person typing this is the common case and should not have
+      // to ask for prose. An agent knows to pass the flag; a human would not know to avoid it.
+      const audience = argv.includes('--agent') ? TutorialAudience.AGENT : TutorialAudience.HUMAN;
+      return { kind: 'tutorial', audience };
     }
     case 'doctor': {
       const port = parsePortFlag(rest, defaultPort);

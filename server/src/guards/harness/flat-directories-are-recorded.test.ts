@@ -75,7 +75,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it
   // hit the line cap, and splitting them again would scatter one cohesive unit across two homes.
   'server/src/agent/tools/act': 11,
-  'server/src/command/cli': 17,
+  'server/src/command/cli': 18, // + tutorial.ts: one sequence, two audiences, ending at a verdict
   'server/src/command/setup': 15,
   'server/src/connection/session': 20,
   'server/src/features/flows': 27,

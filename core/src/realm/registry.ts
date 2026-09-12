@@ -33,7 +33,13 @@
  * nobody asked for. This table holds facts you could write on an index card.
  */
 
-import { Surface, type SubjectRef } from '@reticlehq/openreality';
+import {
+  ResumeStrategy,
+  resumeStrategy,
+  type DeterminismProfile,
+  Surface,
+  type SubjectRef,
+} from '@reticlehq/openreality';
 import { AppRuntime } from '../telemetry-feedback.js';
 import { PlatformProfile } from '../wire/platform.js';
 
@@ -258,4 +264,88 @@ const PROFILE_OF_RUNTIME: Record<AppRuntime, PlatformProfile> = {
 export function profileOfRuntime(runtime: string | undefined): PlatformProfile | undefined {
   if (runtime === undefined) return undefined;
   return PROFILE_OF_RUNTIME[runtime as AppRuntime];
+}
+
+/**
+ * How each kind of surface may be DRIVEN.
+ *
+ * "Resume is nearly free, just re-run the prefix at 27 ms a step" is true of a browser and FALSE
+ * AND DANGEROUS on hardware, where re-driving a prefix moves a physical
+ * arm, costs real time, and may not be idempotent. The protocol already decides this from a declared
+ * profile via `resumeStrategy`; what was missing was anywhere for server code to GET a profile,
+ * because a `Realm` object is constructed only by the conformance client and the code that resumes a
+ * replay has no realm to ask.
+ *
+ * A determinism profile is a property of the KIND of subject, not of one realm instance, so it lives
+ * here beside the other facts about kinds. That is what makes the rule enforceable on the path that
+ * actually resumes, today, rather than after some future wiring.
+ *
+ * Every surface the vocabulary names is declared. A missing entry would fall through to the web
+ * answer, and the web answer is the permissive one — which is the wrong direction to be wrong in
+ * when the question is "may I silently re-send this payment".
+ */
+export const DETERMINISM_BY_SURFACE: Record<Surface, DeterminismProfile> = {
+  [Surface.WEB]: {
+    reset: 'cheap',
+    replayPrefix: 'free',
+    time: 'injectable',
+    observation: 'exact',
+    actions: 'reversible',
+  },
+  /** A browser in a shell: the page behaves the same, the shell adds windows and menus. */
+  [Surface.DESKTOP]: {
+    reset: 'cheap',
+    replayPrefix: 'free',
+    time: 'injectable',
+    observation: 'exact',
+    actions: 'reversible',
+  },
+  /** A cold start is the reset, and it is not cheap. */
+  [Surface.MOBILE]: {
+    reset: 'costly',
+    replayPrefix: 'costly',
+    time: 'wall',
+    observation: 'exact',
+    actions: 'reversible',
+  },
+  /** A POST is not idempotent. Re-driving a prefix to reach step N re-sends everything before it. */
+  [Surface.SERVICE]: {
+    reset: 'costly',
+    replayPrefix: 'unsafe',
+    time: 'wall',
+    observation: 'exact',
+    actions: 'irreversible',
+  },
+  /** Frame-stepped and seedable, which makes a game the MOST deterministic subject here. */
+  [Surface.GAME]: {
+    reset: 'cheap',
+    replayPrefix: 'free',
+    time: 'stepped',
+    observation: 'exact',
+    actions: 'reversible',
+  },
+  /** A sensor reads a region, not a value, and an actuator cannot be un-moved. */
+  [Surface.DEVICE]: {
+    reset: 'costly',
+    replayPrefix: 'unsafe',
+    time: 'wall',
+    observation: 'sampled',
+    actions: 'irreversible',
+  },
+};
+
+/** The declared profile for a surface. */
+export function determinismFor(surface: Surface): DeterminismProfile {
+  return DETERMINISM_BY_SURFACE[surface];
+}
+
+/**
+ * May a resume re-drive the steps before the one asked for?
+ *
+ * The one question the resume path has to ask before it silently repeats somebody's actions. Derived
+ * through the protocol's own `resumeStrategy` rather than by reading `replayPrefix` here, so this
+ * cannot drift from the rule the specification publishes.
+ */
+export function mayResumeByReplayingPrefix(surface: Surface): boolean {
+  return ResumeStrategy.REFUSE !== resumeStrategy(determinismFor(surface));
 }

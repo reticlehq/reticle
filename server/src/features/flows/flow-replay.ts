@@ -1,3 +1,5 @@
+import { mayResumeByReplayingPrefix } from '@reticlehq/core';
+import { Surface } from '@reticlehq/openreality';
 import { span } from '../../trace.js';
 import { routeOfEvent } from '@reticlehq/engine/question/predicate/predicate-route.js';
 import { stepEffect } from '@reticlehq/engine/evidence/step-effect.js';
@@ -549,6 +551,31 @@ async function runSignalStep(
 /** Where a replay starts reporting. Steps before it are re-driven, silently, as setup. */
 export interface ReplayFromOptions {
   from?: number;
+  /**
+   * Which kind of subject this is. Decides whether re-driving the prefix is allowed at all.
+   *
+   * Defaults to `web`, which is the permissive answer — correct for the only surface that resumes
+   * today, and the reason a caller on a committing surface must say so rather than rely on silence.
+   */
+  surface?: Surface;
+}
+
+/**
+ * Where to start REPORTING — and whether re-driving the steps before it is allowed at all.
+ *
+ * "Resume is nearly free, just re-run the prefix" is true of a browser and false on a subject that
+ * COMMITS. Re-driving a prefix on a service re-sends every request before step N; on a device it
+ * moves an arm again. Neither is a convenience, and a protocol that did it silently would be
+ * defective rather than helpful.
+ *
+ * So the surface's declared profile decides, through the specification's own `resumeStrategy` rather
+ * than a local reading of `replayPrefix`. A refusal resumes from 0 — the whole journey is reported,
+ * nothing is skipped and nothing is silently repeated beyond what a plain replay already does.
+ */
+function resumableFrom(options: ReplayFromOptions): number {
+  const asked = Math.max(0, options.from ?? 0);
+  if (0 === asked) return 0;
+  return mayResumeByReplayingPrefix(options.surface ?? Surface.WEB) ? asked : 0;
 }
 
 export async function replayFlow(
@@ -570,7 +597,7 @@ export async function replayFlow(
    * about -- which is what makes "fix the break, resume, find the next one" a loop rather than a
    * full re-read each time.
    */
-  const from = Math.max(0, options.from ?? 0);
+  const from = resumableFrom(options);
   // testids whose region is LLM-dynamic — their expect-presence is NOT asserted.
   const dynamic = new Set<string>(
     (flow.dynamic ?? [])
