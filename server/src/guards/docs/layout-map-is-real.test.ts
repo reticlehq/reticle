@@ -53,14 +53,37 @@ function isTracked(path: string): boolean {
     cwd: REPO_ROOT,
     encoding: 'utf8',
   }).trim();
-  if ('' !== listed) return true;
-  // Nothing tracked. Ignored on purpose is fine; anything else is a path that is simply not there.
-  try {
-    execFileSync('git', ['check-ignore', '-q', '--', path], { cwd: REPO_ROOT });
-    return true;
-  } catch {
-    return false;
+  return '' !== listed;
+}
+
+/**
+ * Is this path ignored on purpose?
+ *
+ * Split out of `isTracked`, because folding the two together hid a CI-only failure for as long as
+ * this guard has existed. `plan/` is gitignored: it is on every developer's disk and in NOBODY's
+ * clone. The check was `!existsSync(path) || !isTracked(path)`, and the `existsSync` half fires
+ * first in a fresh checkout — so the ignore exemption could never be reached there, and the guard
+ * passed locally and failed in CI every single run.
+ *
+ * A path git ignores is DELIBERATELY absent from a clone, so "does it exist" is not a question worth
+ * asking about it on any machine.
+ *
+ * Asked BOTH ways, and the trailing slash is the whole reason this was invisible. The rule is
+ * `/plan/` — a directory-only pattern — and `git check-ignore plan` matches it on a developer's disk
+ * ONLY because the directory is there for git to see. In a fresh clone the path does not exist, git
+ * cannot tell it would be a directory, and the match fails. The guard was therefore structurally
+ * incapable of passing in CI while passing on every machine that could have noticed.
+ */
+function isIgnored(path: string): boolean {
+  for (const candidate of [path, `${path}/`]) {
+    try {
+      execFileSync('git', ['check-ignore', '-q', '--', candidate], { cwd: REPO_ROOT });
+      return true;
+    } catch {
+      // Not matched this spelling; try the other before concluding anything.
+    }
   }
+  return false;
 }
 
 describe('the map at the top of CLAUDE.md', () => {
@@ -81,7 +104,9 @@ describe('the map at the top of CLAUDE.md', () => {
     // next deliberately-untracked entry needs no edit here, while a directory that is simply GONE
     // is not ignored and still fails.
     const absent = mappedPaths().filter(
-      (path) => !existsSync(join(REPO_ROOT, path)) || !isTracked(path),
+      // Exempt FIRST. Asking whether an ignored path exists answers a question about this machine
+      // rather than about the map, and the answer differs between a developer's disk and a clone.
+      (path) => !isIgnored(path) && (!existsSync(join(REPO_ROOT, path)) || !isTracked(path)),
     );
     expect(
       absent,

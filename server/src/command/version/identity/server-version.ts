@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, parse } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 interface PackageJson {
   version: string;
@@ -19,7 +20,18 @@ interface PackageJson {
  * is true from `src/`, from `dist/`, and from wherever either ends up next.
  */
 function ownManifest(): PackageJson {
-  let dir = dirname(new URL(import.meta.url).pathname);
+  /*
+   * `fileURLToPath`, NOT `new URL(...).pathname`.
+   *
+   * On Windows the pathname of `file:///D:/a/reticle/...` is `/D:/a/reticle/...` — a leading slash
+   * in front of the drive letter, which is not a path that exists. Every `existsSync` below then
+   * answers false, the walk runs all the way to the root, and this throws "cannot find the server
+   * package.json" on a machine where the file is sitting right there.
+   *
+   * It broke the Windows build and nothing else, because that is the only place a POSIX-shaped
+   * assumption about a file URL gets a different answer.
+   */
+  let dir = dirname(fileURLToPath(import.meta.url));
   const { root } = parse(dir);
   for (;;) {
     const candidate = join(dir, 'package.json');
