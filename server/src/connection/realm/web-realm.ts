@@ -17,6 +17,8 @@ import {
   type Observation,
   Realm,
   RefusalReason,
+  fixtureIsUsable,
+  type FixtureRef,
   type SubjectRef,
   type Window as ProtocolWindow,
 } from '@reticlehq/openreality';
@@ -67,8 +69,25 @@ import type { Session } from '../session/session.js';
  * every caller sets the same way, is not a parameter — it is a constant with a way to lie.
  */
 
+/**
+ * A way to save and restore whatever the subject is holding — a cookie jar, localStorage, a session.
+ *
+ * Optional, because on the web the capability belongs to the CONNECTION rather than to the realm. An
+ * attached session — the user's own browser with the SDK in it, which is the common case — cannot
+ * write a cookie jar from inside the page; httpOnly is the entire point of httpOnly. A DRIVEN page
+ * has a browser context behind it and can.
+ *
+ * The payload is opaque here on purpose: the protocol never reads it, and only whatever wrote it can.
+ */
+export interface FixturePort {
+  capture(): Promise<unknown>;
+  apply(payload: unknown): Promise<void>;
+}
+
 export interface WebRealmDeps {
   readonly session: Session;
+  /** Present only when this connection can actually restore state. See `FixturePort`. */
+  readonly fixtures?: FixturePort;
   /**
    * The SESSION's clock, in elapsed milliseconds since it connected — `session.elapsed()`.
    *
@@ -333,9 +352,53 @@ export class WebRealm extends Realm {
    */
   #settleThrottled = false;
 
+  /**
+   * Saved state, and putting it back — assigned in the constructor rather than declared as methods.
+   *
+   * That is the difference between offering a capability and having one. A realm must not OFFER a
+   * fixture it cannot honour: claiming one you cannot restore produces flows that pass because the
+   * PREVIOUS flow happened to leave the right state behind, which is a suite that only works in the
+   * order it was written — worse than running every flow from cold, which is merely slower.
+   *
+   * A declared method is always present, so a realm with no port would answer "yes I do fixtures"
+   * and then throw. `applyFixture === undefined` is how an optional member says *not offered*, and
+   * these are therefore fields that exist only when something can back them.
+   */
+  override readonly captureFixture?: () => Promise<FixtureRef>;
+  override readonly applyFixture?: (ref: FixtureRef) => Promise<void>;
+
   constructor(deps: WebRealmDeps) {
     super();
     this.#deps = deps;
+    const port = deps.fixtures;
+    if (port !== undefined) {
+      this.captureFixture = async (): Promise<FixtureRef> => ({
+        id: `web-${String(deps.now())}`,
+        // Stamped with the subject it came from, epoch included. State that cannot say where it was
+        // taken is state nothing can check before putting it back.
+        subject: this.identity(),
+        capturedAt: deps.now(),
+        payload: await port.capture(),
+      });
+      this.applyFixture = async (ref: FixtureRef): Promise<void> => {
+        /*
+         * Refused when the subject has moved on, and this is the reason the epoch travels at all.
+         * Restoring a session the current build would never have issued makes every flow after it
+         * green against a state that cannot happen — a false green with a long tail, because it
+         * survives until somebody notices the fixture is older than the code.
+         */
+        if (!fixtureIsUsable(ref, this.identity())) {
+          throw new Error(
+            `refusing to apply fixture "${ref.id}": it was captured from a different subject ` +
+              `(${ref.subject.instance}@${String(ref.subject.epoch)}), and this one is ` +
+              `${this.identity().instance}@${String(this.identity().epoch)}. State from a build ` +
+              'that has since been rewritten is not a shortcut — it is a green flow standing on a ' +
+              'session the current code would never have issued. Capture a fresh one.',
+          );
+        }
+        await port.apply(ref.payload);
+      };
+    }
   }
 
   /**
