@@ -51,7 +51,20 @@ const DECLARED_UNWIRED: Record<string, string> = {
    * that is not the subject, and every verdict after it would be about the wrong app.
    */
   'connection/input/network-mutation.ts':
-    'the deliberate-break port: proven, and waiting on a driver that can guarantee the reversal.',
+    'the deliberate-break port: proven, and waiting on a caller — see mutation-run.ts.',
+  /*
+   * The loop is built and nothing invokes it, because invoking it is a TOOL and a tool is its own
+   * change: a name on the surface, the eleven allowlists, a schema, and the battery.
+   *
+   * What it needs from a caller is specific, and is the reason this is not a two-line wiring: a
+   * DRIVEN session (an attached tab cannot be perturbed), the flow to replay, and a target worth
+   * breaking — the endpoint the flow's own steps depend on. Guessing that target is the part that
+   * would quietly make the number meaningless: break something the flow never touches and every
+   * flow "survives", which reads as a suite full of bad tests and is a bug in the mutation set.
+   */
+  'features/flows/mutation-run.ts':
+    'replay/break/replay/grade, with the reversal guaranteed: proven, and waiting on the tool that ' +
+    'chooses what to break.',
   'workspace-packages.ts': 'reads the workspace layout; used by the cross-package guards.',
   'import-graph.ts': 'builds the import graph the boundary guards assert over.',
 
