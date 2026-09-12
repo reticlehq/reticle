@@ -453,6 +453,14 @@ export const RAW_TOOLS: ToolDef[] = [
             .optional()
             .describe('Structural clusters on the page — what IS here, to diagnose the miss.'),
           presentTestids: z.array(z.string()).optional(),
+          // Declared for the same reason presentRegions had to be: undeclared here, it is stripped
+          // from structuredContent without a word — and this field exists precisely to say a word.
+          presentTestidsTotal: z
+            .number()
+            .optional()
+            .describe(
+              'Present only when presentTestids was cut at its cap: how many there were. The list is document order, so a region low on the page is what got dropped — absence from the list proves nothing.',
+            ),
           knownEmptyState: z.boolean(),
           splitText: z
             .object({

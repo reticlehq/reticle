@@ -171,3 +171,52 @@ describe('text predicate: scope narrows the search', () => {
     expect(different.pass, 'self must still enforce the requested text').toBe(false);
   });
 });
+
+describe('a miss whose present-testid list was cut says so', () => {
+  /** A page with more testids than the hint carries: the browser reports the total it cut to. */
+  class CutListSession extends ScopedSession {
+    constructor(private readonly total: number | undefined) {
+      super([]);
+    }
+    override command(name: string, args: Record<string, unknown> = {}): Promise<CommandResult> {
+      if (name !== ReticleCommand.MATCH) return super.command(name, args);
+      const result: MatchResult = {
+        matched: false,
+        count: 0,
+        elements: [],
+        hint: {
+          route: '/orders/42',
+          presentTestids: Array.from({ length: 12 }, (_, i) => `header-${String(i)}`),
+          presentRegions: [],
+          knownEmptyState: false,
+          ...(this.total === undefined ? {} : { presentTestidsTotal: this.total }),
+        },
+      };
+      return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result });
+    }
+  }
+
+  it('carries the total in the evidence and says absence from the list proves nothing', async () => {
+    // The reporter's case: `evidence.presentTestids` omitted the detail-panel testids that
+    // reticle_query had just proved present, and the omission read as proof of absence. The list was
+    // the first twelve in document order and nothing said so.
+    const result = await evaluatePredicate(new CutListSession(41), {
+      kind: 'element',
+      query: { testid: 'detail-panel' },
+    });
+    expect(result.pass).toBe(false);
+    expect(result.evidence).toMatchObject({ presentTestidsTotal: 41 });
+    expect(result.failureReason).toMatch(/12 of 41/);
+    expect(result.failureReason).toMatch(/proves nothing/i);
+  });
+
+  it('adds no caveat when the list was whole', async () => {
+    const result = await evaluatePredicate(new CutListSession(undefined), {
+      kind: 'element',
+      query: { testid: 'detail-panel' },
+    });
+    expect(result.pass).toBe(false);
+    expect(result.failureReason).not.toMatch(/proves nothing/i);
+    expect(result.evidence).not.toHaveProperty('presentTestidsTotal');
+  });
+});

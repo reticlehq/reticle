@@ -256,6 +256,27 @@ describe('query empty hint', () => {
     expect(r.hint?.presentTestids).toHaveLength(12);
   });
 
+  it('says how many testids the cap cut, so a list that stops is not read as the whole page', () => {
+    // The cut is in document order, and a detail panel sits after the header, nav and list. On a
+    // page with a dozen testids before it, the panel's are exactly the ones dropped — and a list
+    // handed back with no marker reads as "here is what is present", with the panel absent from it.
+    // That is what a field reporter read as proof the panel never rendered. A trim is never silent.
+    render(
+      Array.from({ length: 20 }, (_, i) => `<div data-testid="t${i}"></div>`).join('') +
+        '<div data-testid="t0"></div>', // the duplicate must not count twice
+    );
+    const r = runQuery({ role: 'button', name: 'nope' });
+    expect(r.hint?.presentTestids).toHaveLength(12);
+    expect(r.hint?.presentTestidsTotal).toBe(20);
+  });
+
+  it('omits the total when nothing was cut — present only when it carries information', () => {
+    render('<div data-testid="a"></div><div data-testid="b"></div>');
+    const r = runQuery({ role: 'button', name: 'nope' });
+    expect(r.hint?.presentTestids).toHaveLength(2);
+    expect(r.hint?.presentTestidsTotal).toBeUndefined();
+  });
+
   /**
    * The field report this came from: a label rendered with `v-html` spans several child nodes, so
    * `by: text` — which reads an element's OWN text nodes — matched nothing while the string was

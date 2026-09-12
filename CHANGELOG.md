@@ -4,6 +4,10 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Fixed
+
+- **`@reticlehq/core` + `@reticlehq/browser` + `@reticlehq/server` — a miss whose present-testid list was cut says so, instead of handing back a partial list as the whole page.** On a zero-match query the browser reports the testids that _are_ in scope, capped at twelve in document order, and the cap was silent: no marker on the wire, and `reticle_assert` put the list straight into `evidence` as if it were everything. A detail panel sits after the header, nav and list, so on any page with a dozen testids before it the panel's are exactly the ones dropped — and a list with the panel missing from it was read in the field as proof the panel never rendered, the false-negative shape produced by a trim nobody was told about. The browser now reports `presentTestidsTotal` when the cap cut something (present only then, the same convention as the result's own `total`/`truncated` pair), it is declared in the tool output schema so it is not stripped the way `presentRegions` once was, and the assert failure says _"the present-testid list shows the first 12 of 41 in document order — absence from it proves nothing"_. `presentTestids` stays deprecated; this makes its last cycle stop lying. Part of [#793](https://github.com/reticlehq/reticle/issues/793).
+
 ## [2.14.0] — 2026-09-10
 
 ### Added

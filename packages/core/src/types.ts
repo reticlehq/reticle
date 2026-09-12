@@ -151,6 +151,14 @@ export interface QueryEmptyHint {
   presentRegions: PresentRegion[];
   /** @deprecated Use presentRegions. Kept for one major cycle; removed next major. */
   presentTestids: string[];
+  /**
+   * Present only when `presentTestids` was cut at its cap: how many distinct testids there were
+   * before the cut. The list is collected in DOCUMENT ORDER, so what the cap drops is whatever sits
+   * lowest on the page — a detail panel after the header, nav and list — and a list handed back
+   * with no marker reads as "here is what is present", with the panel absent from it. That was read
+   * in the field as proof the panel never rendered. A trim is never silent.
+   */
+  presentTestidsTotal?: number;
   /** True if a capability-registered testid is present in the scope. */
   knownEmptyState: boolean;
   /**

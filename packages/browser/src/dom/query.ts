@@ -653,13 +653,16 @@ function buildEmptyHint(query: ElementQuery): QueryEmptyHint {
   const container = resolveContainer(query.scope).container ?? document.body;
   const all = container.querySelectorAll(`[${TESTID_ATTR}]`);
   const present: string[] = [];
+  // Counted past the cap rather than stopping at it. The list is capped so the hint stays a hint;
+  // the COUNT is what stops a capped list being read as the whole page. `all` is already in hand,
+  // so the walk costs nothing the query had not already paid for.
+  const seen = new Set<string>();
   for (const el of Array.from(all)) {
     if (isIgnored(el)) continue; // the "what IS here" hint must not advertise Reticle's own UI either
     const id = el.getAttribute(TESTID_ATTR);
-    if (id !== null && id.length > 0 && !present.includes(id)) {
-      present.push(id);
-      if (present.length >= MAX_PRESENT_TESTIDS) break;
-    }
+    if (null === id || 0 === id.length || seen.has(id)) continue;
+    seen.add(id);
+    if (present.length < MAX_PRESENT_TESTIDS) present.push(id);
   }
   // DECLARED, not observed: see declaredTestids. Every present testid is also an observed one, so
   // the merged list would make this flag true for any page that has a testid at all.
@@ -669,6 +672,9 @@ function buildEmptyHint(query: ElementQuery): QueryEmptyHint {
   const hint: QueryEmptyHint = {
     route,
     presentTestids: present,
+    // Present only when the cap cut something: the same convention as the query result's own
+    // `total`/`truncated` pair, and for the same reason — a field on every result carries nothing.
+    ...(seen.size > present.length ? { presentTestidsTotal: seen.size } : {}),
     presentRegions: buildPresentRegions(query),
     knownEmptyState,
   };

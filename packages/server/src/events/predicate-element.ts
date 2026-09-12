@@ -27,6 +27,18 @@ import type { PredicateSession } from './predicate.js';
 import { describeTestidMiss } from './testid-near-miss.js';
 import { describeSplitTextMiss } from './split-text-miss.js';
 
+/**
+ * The caveat for a present-testid list that was cut at its cap, or nothing when it was whole.
+ *
+ * Phrased as what the list IS — "the first N of M in document order" — rather than as an apology,
+ * because the agent's next move depends on knowing the shape: a region absent from a capped list is
+ * unexamined, not absent. Empty when nothing was cut, so an ordinary miss keeps the message it had.
+ */
+function describePresentTestidsCut(shown: number, total: number | undefined): string {
+  if (total === undefined || total <= shown) return '';
+  return ` (the present-testid list shows the first ${String(shown)} of ${String(total)} in document order — absence from it proves nothing)`;
+}
+
 export async function matchOnce(
   session: PredicateSession,
   query: ElementQuery,
@@ -241,12 +253,24 @@ export async function evalElement(
   const splitText = describeSplitTextMiss(match.hint?.splitText, query.text);
   const clause = splitText ?? (alsoHere === undefined || '' === alsoHere ? undefined : alsoHere);
   const suffix = clause === undefined ? '' : ` — ${clause}`;
+  // The evidence list is capped in document order, so a region low on the page is exactly what it
+  // drops. Handed back with no marker it reads as the whole page, and the field report this came
+  // from read a missing detail panel as proof the panel never rendered. Say the cut happened (#793).
+  const total = match.hint?.presentTestidsTotal;
+  const cut = describePresentTestidsCut(present.length, total);
   return {
     pass: false,
-    failureReason: `no element matched ${subject}${state === undefined ? '' : ` in state '${state}'`}${suffix}`,
+    failureReason: `no element matched ${subject}${state === undefined ? '' : ` in state '${state}'`}${suffix}${cut}`,
     observed: `no matching element on the page${suffix}`,
     expected: `an element matching ${subject}${state === undefined ? '' : ` in state '${state}'`}`,
     assertion: 'element.present',
-    ...(present.length > 0 ? { evidence: { presentTestids: present } } : {}),
+    ...(present.length > 0
+      ? {
+          evidence: {
+            presentTestids: present,
+            ...(total === undefined ? {} : { presentTestidsTotal: total }),
+          },
+        }
+      : {}),
   };
 }
