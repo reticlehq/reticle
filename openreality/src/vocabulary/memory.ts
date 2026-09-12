@@ -34,9 +34,32 @@ import { Verdict } from './verdict.js';
  * comparison that matters is against a model, not against a compiled test suite somebody already
  * has -- against that, replay saves nothing and should not be sold as if it did.
  */
+/**
+ * The version of the OVP Flow Document GRAMMAR — not of any one document's contents.
+ *
+ * A document says which grammar it was written against so a reader can tell "this predates the
+ * field you are looking for" from "this omitted it". Published as a constant because the schema
+ * ships as JSON for implementations that never load this package's code, and a number they have to
+ * infer from prose is a number they will get wrong.
+ */
+export const OVP_FLOW_GRAMMAR_VERSION = 1;
+
 export const FlowSchema = z.object({
   name: z.string().min(1),
+  /** Which grammar this document was written against — see `OVP_FLOW_GRAMMAR_VERSION`. */
   version: z.number().int().positive(),
+  /**
+   * Where the subject must be before step 1, interpreted and validated BY THE REALM.
+   *
+   * This was a web route, which quietly assumed every subject has URLs. A level in a game, a home
+   * position on a rig, a signed-in container on a phone and a seeded schema on a service are all the
+   * same idea and none of them is a path. So the document carries an opaque value and the protocol
+   * does not look inside it — a protocol that parsed this would be a protocol with an opinion about
+   * what a subject is, which is the opinion it exists not to have.
+   *
+   * Absent means "start from wherever the subject already is", which is a real and common answer.
+   */
+  startState: z.unknown().optional(),
   /** The claim this route was recorded as establishing. */
   claim: z.string().min(1),
   steps: z.array(ActionSchema),

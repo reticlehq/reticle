@@ -27,6 +27,8 @@ export * from './vocabulary/memory.js';
 export * from './vocabulary/run.js';
 export * from './spi/realm.js';
 export * from './spi/witness.js'; // Witness — a vantage point that can look and cannot touch
+export * from './language/typecheck.js'; // refuse a document BEFORE an action is spent
+export * from './language/phases.js'; // parse -> resolve -> typecheck -> emit, and portability
 export * from './spi/adjudicator.js';
 export * from './registry.js';
 

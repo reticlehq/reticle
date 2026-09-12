@@ -50,7 +50,22 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * measured, so an ordinary change does not fail on rounding; raising either one needs a reason
  * written here, the way the tool-surface budget does.
  */
-const MAX_FIRST_LOAD_BYTES = 232_700;
+const MAX_FIRST_LOAD_BYTES = 232_800;
+/*
+ * Raised a second time, 232_700 -> 232_800, for a different reason than the first.
+ *
+ * `Flow.knownBugs` landed on the flow schema, and the in-page RECORDER compiles FlowFile-shaped
+ * objects, so the schema is genuinely reachable from the browser rather than dead weight: 31 B.
+ *
+ * What it buys: a flow can carry the bugs it is known to expose, so a suite red for a filed reason
+ * is not re-investigated and does not get quarantined — which would stop it watching the rest of the
+ * journey it covers. The note names the assertions it was written against and reports itself STALE
+ * when they change, because an old excuse attached to a new break reads as "known issue" and nobody
+ * looks again.
+ *
+ * Checked before raising: `shouldRetry` and `staleKnownBugs` are NOT referenced by the SDK, so this
+ * is the schema and not suite logic leaking into every page load.
+ */
 /*
  * Raised once, 232_500 -> 232_700, with the measurement that bought it.
  *

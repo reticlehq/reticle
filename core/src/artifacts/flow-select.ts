@@ -1,5 +1,5 @@
 /**
- * Which flows a run replays, and which it refused to.
+ * Which flows a run replays, which it refused to — and which it runs AGAIN.
  *
  * Two jobs that must stay distinguishable in the answer. SELECTION is what the caller asked for.
  * EXCLUSION is what the suite declined to run despite being asked. A run that silently returns fewer
@@ -54,4 +54,43 @@ export function selectFlows(flows: readonly FlowFile[], selection: FlowSelection
   ];
 
   return { run, quarantined, unmatched };
+}
+
+/** How many times a flow may be re-attempted, and on what evidence. */
+export interface RetryPolicy {
+  attempts: number;
+  /** `flake-classified` asks the ledger first; `any` does not, and the caller owns the cost. */
+  on: 'any' | 'flake-classified';
+}
+
+/** What the flake ledger knows about one flow: replays on UNCHANGED code, and how many failed. */
+export interface FlakeHistory {
+  runs: number;
+  fails: number;
+}
+
+/**
+ * Should this flow be re-attempted?
+ *
+ * Held back until there was a ledger to ask, because without one "retry on failure" is
+ * retry-everything with extra steps: a genuinely broken flow is run three times to fail three times,
+ * and the suite pays triple to learn what it already knew after the first attempt.
+ *
+ * The ledger answers the one question that makes retry honest — has this flow been seen to BOTH pass
+ * and fail on unchanged code? A flow that has only ever failed is not flaky, it is broken, and
+ * re-running it is how a suite turns a real regression into a slow one. A flow with no history has
+ * not been classified at all, and guessing is the same mistake with less evidence.
+ *
+ * Silence is never an opt-in: no policy means no retry.
+ */
+export function shouldRetry(
+  policy: RetryPolicy | undefined,
+  history: FlakeHistory | undefined,
+  attemptsSoFar: number,
+): boolean {
+  if (policy === undefined || attemptsSoFar + 1 >= policy.attempts) return false;
+  if ('any' === policy.on) return true;
+  if (history === undefined || 0 === history.runs) return false;
+  // Both outcomes seen on unchanged code. Neither "never failed" nor "never passed" is flaky.
+  return history.fails > 0 && history.fails < history.runs;
 }

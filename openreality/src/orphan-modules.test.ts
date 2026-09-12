@@ -20,7 +20,15 @@ import { scanPackage } from '../../scripts/orphan-scan.mjs';
 const PACKAGE_DIR = join(__dirname, '..');
 
 /** Modules with no production importer, each with the reason it is allowed to stay. */
-const DECLARED_UNWIRED: Record<string, string> = {};
+const DECLARED_UNWIRED: Record<string, string> = {
+  'language/criteria.ts':
+    'user-defined criteria, compiled to the same programs everything else compiles to. Unwired ' +
+    'ON PURPOSE and the absence is the claim: a criteria set is a PROGRAM, so it needs no runner ' +
+    'of its own — `criteriaToProgram` hands it to `typecheckProgram` and the existing pipeline ' +
+    'takes it from there. A dedicated execution path here would be the plugin API this file exists ' +
+    'to argue against, and the one thing that would make an SEO verdict incomparable with every ' +
+    'other verdict. Exercised end to end by its own tests against the real typechecker.',
+};
 
 describe('no undeclared orphan modules', () => {
   const { orphans, stale } = scanPackage(PACKAGE_DIR, DECLARED_UNWIRED);

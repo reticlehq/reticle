@@ -71,3 +71,5 @@ A **build adapter** is a plugin for your build tool. It does two things: make su
 A **realm adapter** teaches Reticle about a kind of app that is not a browser tab: an Electron window, a Tauri window. It supplies the shell's own message traffic and a way to photograph the window. `@reticlehq/electron` is the one to read. What a realm _is_ now lives in one table (`core/src/realm/registry.ts`), so the facts are in one place; what a realm _does_ is still code inside Reticle.
 
 If you want to write either, open an issue and say what you are building. The interfaces exist; what is missing is the door.
+
+A template for each of the four kinds, including the two that are contributable today, is in [`adapters/CONTRIBUTING.md`](../adapters/CONTRIBUTING.md). It carries the rules each adapter kind must hold to, and why each rule exists.

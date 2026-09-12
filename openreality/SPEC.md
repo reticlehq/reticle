@@ -552,6 +552,37 @@ Stated plainly, because a specification hiding its gaps is worse than a short on
 
 ---
 
+## 11a. The document is a language, and the engine compiles it
+
+A recording is a document in a language. The engine is its compiler. The realm is the target machine — a consumer and a messenger, never an interpreter. A realm that interprets semantics is a realm that can disagree with another realm about what a flow MEANS, and then a flow is not portable and two verdicts are not comparable.
+
+Compilation has four phases, and the order is the content:
+
+| Phase | Does |
+| --- | --- |
+| `parse` | JSON → AST, schema-validated. A malformed document never reaches a realm. |
+| `resolve` | Anchors → handles, via `locate()`. Drift is found here, before anything is dispatched. |
+| `typecheck` | Every action ∈ `capabilities()`, every read ∈ `channels()`. |
+| `emit` | Capability calls against resolved handles. No semantics left to interpret. |
+
+### 11a.1 TYPECHECK
+
+`perform()` (§5) already refuses an undeclared capability — at runtime, one action at a time, after the action has been dispatched and the subject has moved. TYPECHECK asks the same question of the whole document, before anything is spent. It is the rule of §6 applied to a program rather than a claim: _a claim reading a channel that is not here is `unknown` immediately, rather than after the action has been spent._
+
+A typecheck failure is one of two kinds — `undeclared-capability` (the realm cannot DO this) or `unobserved-channel` (the realm cannot SEE this) — and each names the 0-based step, so a fix has an address. An implementation MUST report every problem rather than stopping at the first: the caller is often an agent paying a turn per round trip.
+
+An implementation MUST NOT emit a program that failed TYPECHECK. A caller holding a half-valid program will eventually run it, and a journey that half-happens on a realm that could not complete it leaves the subject somewhere nobody planned and no verdict can describe.
+
+An EMPTY program typechecks. It asserts nothing, which is a coverage question and a real one, but it is not a type error.
+
+### 11a.2 Portability
+
+The same source document runs on any realm whose instruction set covers it, so portability is a CHECK rather than a claim: typecheck the document against that realm's declaration.
+
+When it does not run, an implementation MUST name what is missing rather than returning a bare no. "Not portable" ends a conversation; "this realm does not declare `click`" starts the one worth having — either the realm grows the capability, or the journey is genuinely surface-specific and somebody now knows why.
+
+---
+
 ## 12. A reference transport (non-normative)
 
 Nothing in this specification requires a particular transport, and an implementation that carries these nouns over HTTP, a file on disk or a function call is fully conformant. What follows is the wire the reference implementation uses, published because "transport-neutral" too often means "no two implementations can talk".

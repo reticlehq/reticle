@@ -69,9 +69,9 @@ const PACKAGES: Readonly<Record<string, Recorded>> = {
     note: 'FLAT. Two rules and their shared constants.',
   },
   openreality: {
-    directories: 3,
+    directories: 4,
     mutual: 0,
-    note: 'the protocol. Three directories, nothing mutual, and until this entry existed it had no coupling record at all — which for the package the whole release is named after was the gap worth finding.',
+    note: 'the protocol. FOUR directories since `language/` landed — the compiler phases and the typecheck that refuses a document before an action is spent. Still nothing mutual, which is the number that matters: `language` reads the vocabulary and the vocabulary has never heard of it, so the grammar can change without the nouns moving. Until this entry existed the package had no coupling record at all, which for the one the release is named after was the gap worth finding.',
   },
   'spec-runner': {
     directories: 2,

@@ -649,6 +649,29 @@ export const FlowFileSchema = z.object({
    * silent skip wearing a label: it removes the failure from the verdict AND the reason to ever fix
    * it. `until` is the optional half — a date somebody has to look at it again.
    */
+  /**
+   * Bugs this flow is KNOWN to expose, so a red for a filed reason is not re-investigated.
+   *
+   * Without it, a suite red for a known cause is indistinguishable from one that just broke: either
+   * somebody re-opens an investigation into a bug already filed, or the flow gets quarantined and
+   * stops watching the rest of the journey it covers.
+   *
+   * `assertions` is what keeps the note honest. A known-bug note is a claim about code, and code
+   * moves; a note recorded against assertions that have since changed explains away a NEW failure
+   * with an OLD excuse, which is a false green in a different costume. `staleKnownBugs` reports any
+   * note whose assertions no longer all exist, rather than trusting it.
+   */
+  knownBugs: z
+    .array(
+      z.object({
+        /** Required: an unattributable excuse is worse than none. An issue key, a URL, anything traceable. */
+        id: z.string().min(1),
+        summary: z.string().min(1),
+        /** Which of this flow's assertions the note was written against. */
+        assertions: z.array(z.string()),
+      }),
+    )
+    .optional(),
   quarantine: z
     .object({
       reason: z.string().min(1),
@@ -751,4 +774,28 @@ export interface FlowChip {
   name: string;
   /** The testid the flow's first step anchors to, when it has one — the panel hides chips that cannot start on the current page. */
   start?: string;
+}
+
+/** One recorded known bug, as stored on a flow. */
+export type KnownBug = NonNullable<FlowFile['knownBugs']>[number];
+
+/**
+ * Known-bug notes that can no longer be believed.
+ *
+ * A note survives only while EVERY assertion it named is still present. Anything else — an
+ * assertion renamed, removed, or a note that named none at all — is reported rather than trusted,
+ * because the failure mode is silent and expensive: an old excuse attached to a new break reads as
+ * "known issue" and nobody looks again.
+ *
+ * A note naming no assertions is always stale. It cannot be checked against anything, so it cannot
+ * be relied on to explain anything.
+ */
+export function staleKnownBugs(
+  notes: readonly KnownBug[] | undefined,
+  currentAssertions: readonly string[],
+): KnownBug[] {
+  const present = new Set(currentAssertions);
+  return (notes ?? []).filter(
+    (note) => 0 === note.assertions.length || !note.assertions.every((a) => present.has(a)),
+  );
 }
