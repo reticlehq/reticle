@@ -37,6 +37,9 @@ const MAX_AVAILABLE_KEYS = 50;
  */
 const LENGTH_SEGMENT = 'length';
 
+/** The size property selectable on standard collections (Set and Map). */
+const SIZE_SEGMENT = 'size';
+
 /** True where `LENGTH_SEGMENT` is a real, meaningful count — arrays and strings, nothing else. */
 function hasIntrinsicLength(value: unknown): value is unknown[] | string {
   return Array.isArray(value) || 'string' === typeof value;
@@ -54,13 +57,38 @@ function keysOf(value: unknown): { keys: string[]; total: number } {
   if (value instanceof Map) {
     const keys: string[] = [];
     let total = 0;
+    let hasExplicitSize = false;
     for (const k of value.keys()) {
       total += 1;
-      if ('string' === typeof k && keys.length < MAX_AVAILABLE_KEYS) keys.push(k);
+      if ('string' === typeof k && keys.length < MAX_AVAILABLE_KEYS - 1) {
+        if (SIZE_SEGMENT === k) hasExplicitSize = true;
+        keys.push(k);
+      }
+    }
+    if (!hasExplicitSize) {
+      keys.push(SIZE_SEGMENT);
+      total += 1;
     }
     return { keys, total };
   }
-  if ('object' === typeof value && value !== null) {
+  if (value instanceof Set) {
+    const keys: string[] = [];
+    let total = 0;
+    let hasExplicitSize = false;
+    for (const item of value) {
+      total += 1;
+      if ('string' === typeof item && keys.length < MAX_AVAILABLE_KEYS - 1) {
+        if (SIZE_SEGMENT === item) hasExplicitSize = true;
+        keys.push(item);
+      }
+    }
+    if (!hasExplicitSize) {
+      keys.push(SIZE_SEGMENT);
+      total += 1;
+    }
+    return { keys, total };
+  }
+  if ('object' === typeof value && null !== value) {
     const all = Object.keys(value);
     return { keys: all.slice(0, MAX_AVAILABLE_KEYS), total: all.length };
   }
@@ -80,7 +108,7 @@ function miss(value: unknown): PathSelection {
 
 /**
  * Walk `path` (e.g. "captionCache.v3.0.text") into `root`. Empty path returns root unchanged.
- * Segments are own keys, canonical array indices, Map keys, or `length` on an array/string.
+ * Segments are own keys, canonical array indices, Map keys, or `length`/`size` on supported types.
  */
 export function selectPath(root: unknown, path: string): PathSelection {
   const segments = path.split('.').filter((s) => s.length > 0);
@@ -111,13 +139,28 @@ export function selectPath(root: unknown, path: string): PathSelection {
         current = current.get(segment);
         continue;
       }
+      if (SIZE_SEGMENT === segment) {
+        current = current.size;
+        continue;
+      }
+      return miss(current);
+    }
+    if (current instanceof Set) {
+      if (SIZE_SEGMENT === segment) {
+        current = current.size;
+        continue;
+      }
+      if (current.has(segment)) {
+        current = true;
+        continue;
+      }
       return miss(current);
     }
     // `Object.hasOwn`, not `in`: `in` walks the prototype, so a path segment of `constructor`,
     // `__proto__`, or `toString` reported found:true and returned a function from Object.prototype —
     // a state assertion on a typo'd path silently passed against a builtin instead of failing with
     // availableKeys. Only an OWN key is a real state path.
-    if ('object' === typeof current && current !== null && Object.hasOwn(current, segment)) {
+    if ('object' === typeof current && null !== current && Object.hasOwn(current, segment)) {
       current = (current as Record<string, unknown>)[segment];
       continue;
     }
@@ -127,9 +170,10 @@ export function selectPath(root: unknown, path: string): PathSelection {
 }
 
 /**
- * Prune `value` to `maxDepth` levels: objects/arrays deeper than the budget collapse to a compact
- * placeholder string recording their size, so a huge store can be skimmed shape-first. A negative
- * budget means "no cap".
+ * Prune deeply-nested values to a budget.
+ *
+ * Negative maxDepth means NO cap (return value unchanged).
+ * At budget 0, complex values collapse to size markers so the agent can see something was there.
  */
 export function capDepth(value: unknown, maxDepth: number): unknown {
   if (maxDepth < 0) return value;
@@ -148,15 +192,16 @@ export function capDepth(value: unknown, maxDepth: number): unknown {
     if (0 === maxDepth) return `[Array(${String(value.length)})]`;
     return value.map((v) => capDepth(v, maxDepth - 1));
   }
-  if ('object' === typeof value && value !== null) {
+  if ('object' === typeof value && null !== value) {
     const keys = Object.keys(value);
     if (0 === maxDepth) return `{…${String(keys.length)} keys}`;
     // Null-proto target: a wire object can carry an own `__proto__` key (via JSON.parse), and
     // `out['__proto__'] = …` on a normal object writes the prototype slot instead of a key, losing
     // that key from the projection. A prototype-less target makes every key an ordinary assignment.
     const out: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
-    for (const key of keys)
-      out[key] = capDepth((value as Record<string, unknown>)[key], maxDepth - 1);
+    for (const k of keys) {
+      out[k] = capDepth((value as Record<string, unknown>)[k], maxDepth - 1);
+    }
     return out;
   }
   return value;
