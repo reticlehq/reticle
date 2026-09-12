@@ -13,7 +13,7 @@
 
 import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
-import { reticleDepsOf } from '../../features/project/reticle-deps.js';
+import { reticleDepsOf } from '../../memory/project/reticle-deps.js';
 
 /** What a project contributes to the remedy, when we were able to read one. */
 interface SdkFixContext {

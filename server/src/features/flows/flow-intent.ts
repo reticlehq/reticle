@@ -4,7 +4,7 @@ import {
   type FlowFile,
   type InstrumentationGap,
 } from '@reticlehq/core';
-import { IntentStore } from '../intent/intent-store.js';
+import { IntentStore } from '../../memory/intent/intent-store.js';
 import { classifyFlowAssertions } from './flow-classify.js';
 
 /**

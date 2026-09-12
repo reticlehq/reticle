@@ -16,7 +16,7 @@ import type { DivergenceCapsule } from '../../judgement/capsule/capsule.js';
 import { ReticleTool } from '@reticlehq/core';
 import { asRecord, asString } from '@reticlehq/core';
 import type { ToolDeps } from './tool-kit.js';
-import { sessionRoot } from '../../features/project/session-root.js';
+import { sessionRoot } from '../../memory/project/session-root.js';
 
 interface CapsuleSaveInputs {
   deps: ToolDeps;

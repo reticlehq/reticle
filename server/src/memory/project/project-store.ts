@@ -9,7 +9,7 @@ import {
   type RunRecord,
 } from '@reticlehq/core';
 import type { FileSystemPort } from './fs/fs-port.js';
-import type { Clock } from '../flows/flows.js';
+import type { Clock } from '../../features/flows/flows.js';
 import { reticleDirPaths } from './dir/reticle-dir.js';
 import { withFileLock } from './file-lock.js';
 

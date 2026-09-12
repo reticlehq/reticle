@@ -3,10 +3,10 @@ import type { CommandResult } from '@reticlehq/core';
 import { FROM_DISK_ARG } from '@reticlehq/core';
 import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import { BaselineStore } from '../../features/project/baselines.js';
+import { BaselineStore } from '../../memory/project/baselines.js';
 import { RecordingStore } from '../../features/flows/recording/tape/recordings.js';
 import { FlowStore } from '../../features/flows/flows.js';
-import { ProjectStore } from '../../features/project/project-store.js';
+import { ProjectStore } from '../../memory/project/project-store.js';
 import { AnnotationStore } from '../../features/flows/stores/annotation-store.js';
 import type { Session, SessionManager } from '../../portal/session/session.js';
 import {
@@ -14,8 +14,8 @@ import {
   readContract,
   writeContract,
   type ReadContractResult,
-} from '../../features/project/dir/reticle-dir.js';
-import type { FileSystemPort } from '../../features/project/fs/fs-port.js';
+} from '../../memory/project/dir/reticle-dir.js';
+import type { FileSystemPort } from '../../memory/project/fs/fs-port.js';
 
 const ROOT = '/virtual/.reticle';
 const FROZEN = 1_700_000_000_000;

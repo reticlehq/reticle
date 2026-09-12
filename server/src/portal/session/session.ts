@@ -2,7 +2,7 @@ import type { WebSocket } from 'ws';
 import type { ChannelId, ImpactSnapshot } from '@reticlehq/core';
 import type { HandshakeFacts } from './facts/handshake-facts.js';
 import { refusedResult } from './page-commands/undeclared-command.js';
-import { recordImpact } from '../../features/impact/impact-recorder.js';
+import { recordImpact } from '../../memory/impact/impact-recorder.js';
 import { LastAct } from './last-act.js';
 import { GapLedger } from '@reticlehq/engine/evidence/gap-ledger.js';
 import { CaptureLedger } from '../../surface/tools/feature-capture.js';
@@ -40,12 +40,12 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import { RingBuffer } from '@reticlehq/engine/window/ring-buffer.js';
-import type { JournalReader, JournalRecorder } from '../../features/journal/journal-recorder.js';
+import type { JournalReader, JournalRecorder } from '../../memory/journal/journal-recorder.js';
 import {
   filterEvents,
   mergeEventsBySeq,
   type EventQueryOptions,
-} from '../../features/journal/journal-query.js';
+} from '../../memory/journal/journal-query.js';
 import { type AmbientCounts } from '@reticlehq/engine/window/ambient.js';
 import { ObservedState } from './facts/observed-state.js';
 import { recordBrowserLatency, recordSdkFailure } from '../../telemetry/session-metrics.js';

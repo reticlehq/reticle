@@ -21,10 +21,15 @@ import { ReticleTool } from '@reticlehq/core';
 import { asRecord, asString } from '@reticlehq/core';
 import { applyHealChanges } from './heal.js';
 import { flowIntentGap, linkFlowIntent } from './flow-intent.js';
-import { IntentStore } from '../intent/intent-store.js';
+import { IntentStore } from '../../memory/intent/intent-store.js';
 import type { CompiledProgram, RecordedStep } from './recording/tape/recordings.js';
-import type { FileSystemPort } from '../project/fs/fs-port.js';
-import { flowDir, flowPath, reticleDirPaths, isValidFlowName } from '../project/dir/reticle-dir.js';
+import type { FileSystemPort } from '../../memory/project/fs/fs-port.js';
+import {
+  flowDir,
+  flowPath,
+  reticleDirPaths,
+  isValidFlowName,
+} from '../../memory/project/dir/reticle-dir.js';
 import { describeFlowZodFailure, parseFlowFileText } from './flow-expect-grammar.js';
 
 /**

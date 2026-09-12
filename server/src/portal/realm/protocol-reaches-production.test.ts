@@ -93,7 +93,7 @@ describe('how much of the protocol the shipping product uses', () => {
     ).toEqual([
       // Sorted, and the order moved when `connection/` became `portal/` — `features` now sorts
       // first. The SET is what this guards; the order is just how the listing arrives.
-      'server/src/features/journal/session-end.ts',
+      'server/src/memory/journal/session-end.ts',
       'server/src/portal/realm/web-realm.ts',
     ]);
   });

@@ -7,12 +7,12 @@ import { PNG } from 'pngjs';
 import { VisualReason } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from '../../surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import { BaselineStore } from '../project/baselines.js';
+import { BaselineStore } from '../../memory/project/baselines.js';
 import { RecordingStore } from '../flows/recording/tape/recordings.js';
 import { FlowStore } from '../flows/flows.js';
-import { ProjectStore } from '../project/project-store.js';
+import { ProjectStore } from '../../memory/project/project-store.js';
 import { AnnotationStore } from '../flows/stores/annotation-store.js';
-import { createNodeFileSystem, type FileSystemPort } from '../project/fs/fs-port.js';
+import { createNodeFileSystem, type FileSystemPort } from '../../memory/project/fs/fs-port.js';
 import type { RealInputProvider } from '../../portal/input/real-input.js';
 import type { Session, SessionManager } from '../../portal/session/session.js';
 

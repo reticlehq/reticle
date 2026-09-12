@@ -26,7 +26,7 @@ vi.mock('./suite/server-verify.js', () => ({
   runServerVerify: () => Promise.resolve(null),
 }));
 
-vi.mock('../cloud/cloud-config.js', () => ({
+vi.mock('../../memory/cloud/cloud-config.js', () => ({
   resolveProjectCloud: () =>
     Promise.resolve({ config: null, policy: { memory: false, runs: false } }),
 }));

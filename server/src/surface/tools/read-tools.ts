@@ -20,7 +20,7 @@ import {
   routesFromRecording,
 } from '../../features/flows/recording/recording-backtrack.js';
 import { replayProgram } from '../../features/flows/replay.js';
-import { diffLines } from '../../features/project/baselines.js';
+import { diffLines } from '../../memory/project/baselines.js';
 import { selectPath, capDepth, projectComponentState } from '../../portal/session/state-select.js';
 import { costHint } from '../../portal/session/output-budget.js';
 import { buildReactionReport, summarizeReaction } from '@reticlehq/engine/question/reaction.js';

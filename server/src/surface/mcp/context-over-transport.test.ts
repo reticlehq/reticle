@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
 import { createMcpServer } from './mcp.js';
 import { TOOL_SURFACE } from '../tools/tool-surface.js';
 import { ReticleTool } from '@reticlehq/core';
-import { createMemoryFs } from '../../features/project/memory-fs.js';
+import { createMemoryFs } from '../../memory/project/memory-fs.js';
 import type { ToolDeps } from '../tools/tools.js';
 
 /** No session connected, which is the state the honest-empty answer is about. */

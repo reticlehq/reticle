@@ -15,7 +15,7 @@
  * doing so cannot mislead somebody else.
  */
 import { join } from 'node:path';
-import { credentialSlot } from '../../../features/cloud/cloud-config.js';
+import { credentialSlot } from '../../../memory/cloud/cloud-config.js';
 
 /** Trailing slashes are not identity: `https://x/` and `https://x` are one cloud. */
 const normalizeUrl = (url: string): string => url.replace(/\/+$/, '');

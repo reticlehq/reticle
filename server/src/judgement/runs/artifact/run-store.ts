@@ -15,12 +15,8 @@ import {
   type ReticleVerificationRun,
   type RunId,
 } from '@reticlehq/core';
-import type { FileSystemPort } from '../../../features/project/fs/fs-port.js';
-import {
-  reticleDirPaths,
-  isValidRunId,
-  runPath,
-} from '../../../features/project/dir/reticle-dir.js';
+import type { FileSystemPort } from '../../../memory/project/fs/fs-port.js';
+import { reticleDirPaths, isValidRunId, runPath } from '../../../memory/project/dir/reticle-dir.js';
 
 const JSON_INDENT = 2;
 const JSON_EXT = '.json';

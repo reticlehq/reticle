@@ -7,11 +7,11 @@ import {
   type ElementQuery,
 } from '@reticlehq/core';
 import type { Bridge } from './bridge.js';
-import { BaselineStore } from '../../features/project/baselines.js';
-import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';
+import { BaselineStore } from '../../memory/project/baselines.js';
+import { createNodeFileSystem } from '../../memory/project/fs/fs-port.js';
 import { RecordingStore } from '../../features/flows/recording/tape/recordings.js';
 import { FlowStore } from '../../features/flows/flows.js';
-import { ProjectStore } from '../../features/project/project-store.js';
+import { ProjectStore } from '../../memory/project/project-store.js';
 import { AnnotationStore } from '../../features/flows/stores/annotation-store.js';
 import { TOOLS, type ToolDeps } from '../../surface/tools/tools.js';
 

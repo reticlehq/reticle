@@ -159,8 +159,14 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    *
    * Moving it out removed `command -> session` and `mcp -> session`. Neither wanted a live
    * session; both wanted the memory of one.
+   *
+   * `features/memory` merged in here when the memory category landed: two directories with one
+   * basename are ONE node to this graph, so their reaches were already being counted together —
+   * putting the files in the directory that already had the name is what makes the ledger honest
+   * rather than what changes it. These are the union, and nothing started or stopped needing
+   * anything.
    */
-  recall: [],
+  recall: ['args', 'cloud', 'fs', 'project', 'tools'],
   /**
    * The filesystem, as a port.
    *
@@ -394,7 +400,6 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'tools',
     'version',
   ],
-  memory: ['args', 'cloud', 'fs', 'project', 'tools'],
   pool: ['browser', 'input', 'telemetry'],
   // `runs` dropped out: what project wanted from it was the artifact, which is what broke the
   // project <-> runs mutual pair and took the count from 24 to 23.
@@ -592,7 +597,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'impact',
     'input',
     'intent',
-    'memory',
+    'recall',
     'oracles',
     'pool',
     'prior',

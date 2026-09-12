@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { ReplayStatus, type FlowReplayResult } from '@reticlehq/core';
 import { persistAndSyncVerificationRun, type TimedReplay } from './verification-sync.js';
 import { RunStore } from './artifact/run-store.js';
-import { createNodeFileSystem, type FileSystemPort } from '../../features/project/fs/fs-port.js';
+import { createNodeFileSystem, type FileSystemPort } from '../../memory/project/fs/fs-port.js';
 import type { RunId } from '@reticlehq/core';
 import type { ToolDeps } from '../../surface/tools/tools.js';
 

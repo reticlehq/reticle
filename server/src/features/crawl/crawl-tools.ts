@@ -4,7 +4,7 @@ import { asNumber, asString } from '@reticlehq/core';
 import { stepCountSchema, timeoutMsSchema } from '../../surface/tools/args/numeric-bounds.js';
 import { crawl, type CrawlOptions } from './crawl.js';
 import type { ToolDef, ToolDeps } from '../../surface/tools/tools.js';
-import { routeFromUrl, routesFromEvents } from '../project/learned-routes.js';
+import { routeFromUrl, routesFromEvents } from '../../memory/project/learned-routes.js';
 
 const nodeSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 

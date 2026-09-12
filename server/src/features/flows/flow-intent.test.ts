@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FLOW_FILE_VERSION, IntentState, type FlowFile } from '@reticlehq/core';
-import { createMemoryFs } from '../project/memory-fs.js';
-import { IntentStore } from '../intent/intent-store.js';
+import { createMemoryFs } from '../../memory/project/memory-fs.js';
+import { IntentStore } from '../../memory/intent/intent-store.js';
 import { FlowStore, type FlowAnnotations } from './flows.js';
 import { flowIntentGap } from './flow-intent.js';
 import { InstrumentationGapKind } from '@reticlehq/core/artifacts';

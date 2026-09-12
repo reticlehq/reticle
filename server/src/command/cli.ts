@@ -9,7 +9,7 @@ import { readDevServers } from './daemon/dev-servers.js';
 import {
   hasAnyAppConnectedBefore,
   hasProjectConnectedBefore,
-} from '../portal/session/recall/prior/connection-memory.js';
+} from '../memory/recall/prior/connection-memory.js';
 import { attachStatusFields } from '../surface/mcp/attach-memory.js';
 import { splitBrainFields, withNextAction } from './cli/status-fields.js';
 import { reticleStateHome } from './daemon/daemon.js';
@@ -32,7 +32,7 @@ import {
 import { loadDotEnv } from '../telemetry/dev-repo.js';
 import { licenseKeyFromEnvFiles } from '../features/license/license-env.js';
 import { LICENSE_KEY_ENV } from '../features/license/license.js';
-import { createNodeFileSystem } from '../features/project/fs/fs-port.js';
+import { createNodeFileSystem } from '../memory/project/fs/fs-port.js';
 import { affectedSavedFlows } from '../features/flows/change/flow-sources.js';
 
 import { availableUpdate } from './update/update-nudge.js';

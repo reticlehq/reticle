@@ -24,7 +24,7 @@
  */
 
 import type { JournalVerdictEffect } from '@reticlehq/core/artifacts';
-import { isValidRunId } from '../../features/project/dir/reticle-dir.js';
+import { isValidRunId } from '../../memory/project/dir/reticle-dir.js';
 import { defaultRunId } from './runner-port.js';
 import {
   JournalVerdictEffectSchema,

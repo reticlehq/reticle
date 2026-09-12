@@ -16,7 +16,7 @@ import { ActionType, AnchorKind, FLOW_FILE_VERSION, type FlowFile } from '@retic
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { resolveFlowUploads } from './flow-upload-resolve.js';
-import type { FileSystemPort } from '../../project/fs/fs-port.js';
+import type { FileSystemPort } from '../../../memory/project/fs/fs-port.js';
 
 const CWD = resolve(join(tmpdir(), 'reticle-flow-upload-test'));
 const RETICLE_ROOT = join(CWD, '.reticle');

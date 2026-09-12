@@ -15,7 +15,7 @@ import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString, mutationTargetsFor, perturbationFor } from '@reticlehq/core';
 import { workerCountSchema } from '../../surface/tools/args/numeric-bounds.js';
 import { log } from '../../log.js';
-import { cloudFetch, syncFlowToCloud, SyncOutcome } from '../cloud/cloud-sync.js';
+import { cloudFetch, syncFlowToCloud, SyncOutcome } from '../../memory/cloud/cloud-sync.js';
 import { mapWithConcurrency, resolveConcurrency } from './suite/parallel-suite.js';
 import {
   acquireLeasedSession,
@@ -23,11 +23,11 @@ import {
   suiteFixtureSeed,
 } from '../../surface/tools/lease-tools.js';
 import { homedir } from 'node:os';
-import { resolveProjectCloud } from '../cloud/cloud-config.js';
+import { resolveProjectCloud } from '../../memory/cloud/cloud-config.js';
 import { buildSuiteVerdict } from './decision.js';
 import { classifyFlowAssertions } from './flow-classify.js';
 import { recordingBacktrackWarning } from './recording/recording-backtrack.js';
-import { isValidFlowName, flowPath } from '../project/dir/reticle-dir.js';
+import { isValidFlowName, flowPath } from '../../memory/project/dir/reticle-dir.js';
 import type { SuiteVerdict } from '@reticlehq/core';
 import { type FlowAnnotations } from './flows.js';
 import type { ToolDef, ToolDeps } from '../../surface/tools/tools.js';

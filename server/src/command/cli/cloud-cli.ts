@@ -11,8 +11,8 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { z } from 'zod';
-import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';
-import { CLOUD_LINK_FILE, resolveProjectCloud } from '../../features/cloud/cloud-config.js';
+import { createNodeFileSystem } from '../../memory/project/fs/fs-port.js';
+import { CLOUD_LINK_FILE, resolveProjectCloud } from '../../memory/cloud/cloud-config.js';
 import { applyCredential, findCredential } from './auth/cloud-keystore.js';
 import { defaultProjectFor } from './project-name.js';
 import { RETICLE_CONFIG_BASENAME } from './ports/resolve/cli-port.js';
@@ -33,13 +33,13 @@ import {
   readSessionFor,
   RETICLE_DIR,
 } from './cloud-kit.js';
-import { describeSync, runSyncCycle } from '../../features/cloud/sync-cycle.js';
+import { describeSync, runSyncCycle } from '../../memory/cloud/sync-cycle.js';
 import {
   diskSink,
   diskSource,
   readCloudIssues,
   readCloudState,
-} from '../../features/cloud/sync-disk.js';
+} from '../../memory/cloud/sync-disk.js';
 
 /**
  * Where `reticle login` dials when nothing says otherwise: the hosted service.

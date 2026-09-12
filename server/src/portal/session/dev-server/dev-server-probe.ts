@@ -12,7 +12,7 @@
 
 import { request } from 'node:http';
 import { DEV_SERVER_PORTS } from '../../../command/cli/ports/resolve/cli-port.js';
-import { looksLikeDevServer } from '../recall/looks-like-dev-server.js';
+import { looksLikeDevServer } from '../../../memory/recall/looks-like-dev-server.js';
 
 /**
  * Give up fast, but do not call giving up an absence.

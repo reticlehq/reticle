@@ -12,7 +12,7 @@ import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { cloudFetch } from '../../features/cloud/cloud-sync.js';
+import { cloudFetch } from '../../memory/cloud/cloud-sync.js';
 import {
   normalizeUrl,
   readSessionFrom,

@@ -1,10 +1,10 @@
-import type { FileSystemPort } from '../project/fs/fs-port.js';
+import type { FileSystemPort } from '../../memory/project/fs/fs-port.js';
 import {
   isValidFlowName,
   visualDiffPath,
   visualDir,
   visualPath,
-} from '../project/dir/reticle-dir.js';
+} from '../../memory/project/dir/reticle-dir.js';
 
 /**
  * On-disk PNG baselines + diffs under .reticle/visual/. Binary sibling of FlowStore — same

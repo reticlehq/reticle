@@ -11,11 +11,11 @@ import { PAIRING_TOKEN_DIR_ENV } from './portal/bridge/pairing-token.js';
 process.env[PAIRING_TOKEN_DIR_ENV] = join(tmpdir(), 'reticle-drive-token-test');
 import { TOOLS, type ToolDeps } from './surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import { BaselineStore } from './features/project/baselines.js';
-import { createNodeFileSystem } from './features/project/fs/fs-port.js';
+import { BaselineStore } from './memory/project/baselines.js';
+import { createNodeFileSystem } from './memory/project/fs/fs-port.js';
 import { RecordingStore } from './features/flows/recording/tape/recordings.js';
 import { FlowStore } from './features/flows/flows.js';
-import { ProjectStore } from './features/project/project-store.js';
+import { ProjectStore } from './memory/project/project-store.js';
 import { AnnotationStore } from './features/flows/stores/annotation-store.js';
 import {
   DriveError,

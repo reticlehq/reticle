@@ -34,7 +34,7 @@ import {
   impactSnapshot,
   initImpact,
   recordImpact,
-} from '../../features/impact/impact-recorder.js';
+} from '../../memory/impact/impact-recorder.js';
 import { type FrictionKind, frictionOf, inviteFor } from './feedback-invite.js';
 import type { ToolDef, ToolDeps } from './tools.js';
 

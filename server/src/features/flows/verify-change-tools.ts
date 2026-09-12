@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { sessionRoot, sessionProjectId } from '../project/session-root.js';
+import { sessionRoot, sessionProjectId } from '../../memory/project/session-root.js';
 import { verdictForSuite } from '../../judgement/outcome/verify-change-verdict.js';
 import { attributedFailures } from '../../judgement/outcome/attributed-failure.js';
 import { Verified } from '@reticlehq/core';

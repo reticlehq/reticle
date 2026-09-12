@@ -1,8 +1,8 @@
 import { join } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { resolveProjectCloud } from './features/cloud/cloud-config.js';
-import { startSyncDaemon } from './features/cloud/sync-daemon.js';
+import { resolveProjectCloud } from './memory/cloud/cloud-config.js';
+import { startSyncDaemon } from './memory/cloud/sync-daemon.js';
 import {
   PROJECT_REGISTRY_FILE,
   emptyProjectRegistry,
@@ -17,7 +17,7 @@ import {
   projectCandidatesFrom,
   resolveArtifactRoot,
   type ArtifactRoot,
-} from './features/project/artifact-root.js';
+} from './memory/project/artifact-root.js';
 import type { Server } from 'node:http';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -42,15 +42,15 @@ import { resolveBridgeSecurityWithAutoToken } from './portal/bridge/bridge-secur
 import { Bridge } from './portal/bridge/bridge.js';
 import { sdkFixForDirectory } from './command/version/sdk-fix.js';
 import { SERVER_VERSION } from './command/version/identity/server-version.js';
-import { BaselineStore } from './features/project/baselines.js';
+import { BaselineStore } from './memory/project/baselines.js';
 import { RecordingStore } from './features/flows/recording/tape/recordings.js';
-import { initImpact } from './features/impact/impact-recorder.js';
+import { initImpact } from './memory/impact/impact-recorder.js';
 import { FlowStore } from './features/flows/flows.js';
 import { buildFlowChips } from './features/flows/flow-scope.js';
-import { ProjectStore } from './features/project/project-store.js';
-import { attachRouteLearning } from './features/project/learned-routes.js';
+import { ProjectStore } from './memory/project/project-store.js';
+import { attachRouteLearning } from './memory/project/learned-routes.js';
 import { AnnotationStore } from './features/flows/stores/annotation-store.js';
-import { createNodeFileSystem, type FileSystemPort } from './features/project/fs/fs-port.js';
+import { createNodeFileSystem, type FileSystemPort } from './memory/project/fs/fs-port.js';
 import { cleanupCaptureDirectories } from './features/visual/capture-cleanup.js';
 import { ReticleRunner } from './judgement/runs/reticle-runner.js';
 import { createRunnerPort } from './judgement/runs/runner-port.js';
@@ -78,18 +78,18 @@ import {
 import { playwrightLauncher, resolveMaxContexts } from './portal/pool/playwright-launcher.js';
 import { LeaseReaper } from './portal/pool/lease-reaper.js';
 import { readJournalEnabled, readProjectId } from './command/cli/ports/resolve/cli-port.js';
-import { hasProjectConnectedBefore } from './portal/session/recall/prior/connection-memory.js';
+import { hasProjectConnectedBefore } from './memory/recall/prior/connection-memory.js';
 import { reticleStateHome } from './command/daemon/daemon.js';
 import { probeChromium } from './command/cli/doctor/browser/chromium-hint.js';
-import { makeJournalAttach } from './features/journal/attach-journal.js';
-import { makeSessionEnd } from './features/journal/session-end.js';
-import { AmbientStore } from './features/journal/ambient-store.js';
-import { ensureWorkspaceGitignore } from './features/journal/on-disk/workspace-gitignore.js';
+import { makeJournalAttach } from './memory/journal/attach-journal.js';
+import { makeSessionEnd } from './memory/journal/session-end.js';
+import { AmbientStore } from './memory/journal/ambient-store.js';
+import { ensureWorkspaceGitignore } from './memory/journal/on-disk/workspace-gitignore.js';
 import {
   pruneFeedback,
   pruneSessions,
   pruneVisualDiffs,
-} from './features/journal/on-disk/retention.js';
+} from './memory/journal/on-disk/retention.js';
 import type {
   OwnedRealInputProvider,
   RealInputProvider,
@@ -119,7 +119,7 @@ export type { ToolDeps, ToolDef } from './surface/tools/tools.js';
 export { createToolInvoker, UNKNOWN_TOOL_ERROR } from './surface/tools/tool-invoker.js';
 export { runTool, SESSION_BOUND_TOOLS, SESSION_EXEMPT_TOOLS } from './surface/tools/invoke-tool.js';
 export type { ToolInvoker } from './surface/tools/tool-invoker.js';
-export { BaselineStore, normalizeLines, diffLines } from './features/project/baselines.js';
+export { BaselineStore, normalizeLines, diffLines } from './memory/project/baselines.js';
 export { RecordingStore } from './features/flows/recording/tape/recordings.js';
 export type { RecordedStep, CompiledProgram } from './features/flows/recording/tape/recordings.js';
 export { FlowStore, recordedStepToFlowStep } from './features/flows/flows.js';
@@ -138,8 +138,8 @@ export type {
   DomainFlowSummary,
   DomainGaps,
 } from './judgement/domain/domain-model.js';
-export { ProjectStore } from './features/project/project-store.js';
-export type { ReadProjectResult } from './features/project/project-store.js';
+export { ProjectStore } from './memory/project/project-store.js';
+export type { ReadProjectResult } from './memory/project/project-store.js';
 export { VisualStore } from './features/visual/visual-store.js';
 export { diffPng } from './features/visual/visual-diff.js';
 export type { VisualDiffResult, VisualRect, DiffOptions } from './features/visual/visual-diff.js';
@@ -221,10 +221,10 @@ export {
   reticleDirPaths,
   flowPath,
   baselinePath,
-} from './features/project/dir/reticle-dir.js';
-export type { ReticleDirPaths, ReadContractResult } from './features/project/dir/reticle-dir.js';
-export { createNodeFileSystem } from './features/project/fs/fs-port.js';
-export type { FileSystemPort } from './features/project/fs/fs-port.js';
+} from './memory/project/dir/reticle-dir.js';
+export type { ReticleDirPaths, ReadContractResult } from './memory/project/dir/reticle-dir.js';
+export { createNodeFileSystem } from './memory/project/fs/fs-port.js';
+export type { FileSystemPort } from './memory/project/fs/fs-port.js';
 // Replay/Verify API — the programmatic surface an OEM/CI pipeline drives (see docs/platform-integration.md).
 export { ReticleRunner } from './judgement/runs/reticle-runner.js';
 export type { RunnerPort, VerifyOptions } from './judgement/runs/reticle-runner.js';

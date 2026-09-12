@@ -14,7 +14,7 @@ import { join } from 'node:path';
 import { ReticleDir, RunFlowStatus } from '@reticlehq/core';
 import { FlowStore } from '../../features/flows/flows.js';
 import { RunStore } from '../../judgement/runs/artifact/run-store.js';
-import { createNodeFileSystem, type FileSystemPort } from '../../features/project/fs/fs-port.js';
+import { createNodeFileSystem, type FileSystemPort } from '../../memory/project/fs/fs-port.js';
 import { affectedSavedFlows, type NamedFlow } from '../../features/flows/change/flow-sources.js';
 import { gateDecision } from '../../features/flows/change/gate.js';
 import { FlakeStore } from '../../features/flows/stores/flake-store.js';

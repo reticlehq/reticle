@@ -27,16 +27,16 @@ import {
 import { FLOW_TOOLS } from './flow-tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { FlowStore } from './flows.js';
-import { ProjectStore } from '../project/project-store.js';
+import { ProjectStore } from '../../memory/project/project-store.js';
 import { replayFlow } from './flow-replay.js';
 import { waitForPredicate } from '@reticlehq/engine/question/predicate/predicate.js';
 import { AnnotationStore } from './stores/annotation-store.js';
-import { createNodeFileSystem } from '../project/fs/fs-port.js';
-import { BaselineStore } from '../project/baselines.js';
+import { createNodeFileSystem } from '../../memory/project/fs/fs-port.js';
+import { BaselineStore } from '../../memory/project/baselines.js';
 import { RecordingStore } from './recording/tape/recordings.js';
 import { asString } from '@reticlehq/core';
-import { flowPath } from '../project/dir/reticle-dir.js';
-import type { FileSystemPort } from '../project/fs/fs-port.js';
+import { flowPath } from '../../memory/project/dir/reticle-dir.js';
+import type { FileSystemPort } from '../../memory/project/fs/fs-port.js';
 import type { Session, SessionManager } from '../../portal/session/session.js';
 import type { ToolDeps } from '../../surface/tools/tools.js';
 

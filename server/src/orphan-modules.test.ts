@@ -37,7 +37,7 @@ const DECLARED_UNWIRED: Record<string, string> = {
   'portal/session/fake-session.ts':
     'the typed Session double every connection test builds on. 11 test importers, and the ' +
     'reason those tests cannot silently drift from the real interface.',
-  'features/project/memory-fs.ts':
+  'memory/project/memory-fs.ts':
     'an in-memory FileSystemPort, so a test can exercise project code without touching disk.',
   'portal/realm/http-witness.ts':
     'the reference Witness. openreality ships the abstraction and requires it be proved TWICE — a ' +

@@ -50,9 +50,9 @@ const PINNED_VERSIONS: Record<string, string> = {
   'server/src/judgement/capsule/capsule-store.ts': 'CAPSULE_VERSION',
   'server/src/features/flows/stores/assertion-tiers-store.ts': '1',
   'server/src/features/flows/recording/flake.ts': '1',
-  'server/src/features/intent/intent-shard.ts': 'INTENT_SHARD_VERSION,INTENT_SHARD_VERSION',
-  'server/src/features/journal/on-disk/ambient-file.ts': '1',
-  'server/src/features/journal/envelope-store.ts': 'ENVELOPE_FILE_VERSION',
+  'server/src/memory/intent/intent-shard.ts': 'INTENT_SHARD_VERSION,INTENT_SHARD_VERSION',
+  'server/src/memory/journal/on-disk/ambient-file.ts': '1',
+  'server/src/memory/journal/envelope-store.ts': 'ENVELOPE_FILE_VERSION',
 };
 
 /** Every `version: z.literal(X)` in tracked source, as file -> comma-joined X values in file order. */

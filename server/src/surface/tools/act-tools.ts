@@ -34,12 +34,12 @@ import { crashedRuleNotes } from '@reticlehq/engine/disagreement/contradiction-f
 import { gapsForAction } from '@reticlehq/engine/evidence/instrumentation-gaps.js';
 import { noteSessionGaps } from '@reticlehq/engine/evidence/gap-ledger.js';
 import { isChangeUndeclared } from '@reticlehq/engine/evidence/undeclared-change.js';
-import { intentDebt, openSessionIntents } from '../../features/intent/open-intents.js';
+import { intentDebt, openSessionIntents } from '../../memory/intent/open-intents.js';
 import {
   dischargeInlineIntent,
   inlineVerdictId,
   linkInlineIntent,
-} from '../../features/intent/inline-intent.js';
+} from '../../memory/intent/inline-intent.js';
 import { declaresState } from '@reticlehq/engine/question/predicate/predicate-asks.js';
 import { isStateUnwatched } from '@reticlehq/engine/evidence/blind-spots.js';
 import {

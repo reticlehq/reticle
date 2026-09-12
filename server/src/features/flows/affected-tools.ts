@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from '../../surface/tools/tools.js';
 import { loadNamedFlows, resolveChangedFiles } from '../../command/cli/cli-flow-commands.js';
-import { sessionRoot, sessionProjectId } from '../project/session-root.js';
+import { sessionRoot, sessionProjectId } from '../../memory/project/session-root.js';
 import { affectedSavedFlows } from './change/flow-sources.js';
 
 /**

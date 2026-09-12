@@ -13,7 +13,7 @@
 import { probeDevServers, probeDevServerStates } from './dev-server/dev-server-probe.js';
 import type { NoSessionReason } from '@reticlehq/core/telemetry';
 import { homedir } from 'node:os';
-import { registeredElsewhere } from './recall/registered-projects.js';
+import { registeredElsewhere } from '../../memory/recall/registered-projects.js';
 import { explainNoSession } from './no-session-diagnosis.js';
 import type { NoSessionFacts } from './no-session-diagnosis.js';
 import { detectDevCommand } from './dev-server/dev-command.js';
@@ -25,7 +25,10 @@ import {
   readProjectPort,
 } from '../../command/cli/ports/resolve/cli-port.js';
 import { discoverProjectConfigs } from '../../command/cli/config/config-discovery.js';
-import { hasProjectConnectedBefore, rememberConnected } from './recall/prior/connection-memory.js';
+import {
+  hasProjectConnectedBefore,
+  rememberConnected,
+} from '../../memory/recall/prior/connection-memory.js';
 import { isAlive, reticleStateHome } from '../../command/daemon/daemon.js';
 import {
   daemonsServingProjectElsewhere,

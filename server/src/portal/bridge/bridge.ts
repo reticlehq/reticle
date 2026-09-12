@@ -1,6 +1,6 @@
 import * as http from 'node:http';
 import { authFailureReason } from './auth-failure-reason.js';
-import { impactSnapshot, recordImpact } from '../../features/impact/impact-recorder.js';
+import { impactSnapshot, recordImpact } from '../../memory/impact/impact-recorder.js';
 import type { AddressInfo } from 'node:net';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import {

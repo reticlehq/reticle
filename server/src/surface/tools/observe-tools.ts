@@ -64,12 +64,12 @@ import {
 import { assertVerdict } from './assert/assert-verdict.js';
 import { assertionSource } from './assert/assert-source.js';
 import { isChangeUndeclared } from '@reticlehq/engine/evidence/undeclared-change.js';
-import { openSessionIntents } from '../../features/intent/open-intents.js';
+import { openSessionIntents } from '../../memory/intent/open-intents.js';
 import {
   dischargeInlineIntent,
   inlineVerdictId,
   linkInlineIntent,
-} from '../../features/intent/inline-intent.js';
+} from '../../memory/intent/inline-intent.js';
 import { bodiesNotCaptured } from '@reticlehq/engine/evidence/uncaptured-bodies.js';
 import { bodyClauseRefusal } from '@reticlehq/engine/evidence/body-capture-remedy.js';
 import { withControl } from '../../portal/session/control-envelope.js';

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { coverageRegressed, observabilityOf } from '@reticlehq/engine/evidence/observability.js';
 import { foldFeatureCapture } from '../tools/feature-capture.js';
 import { foldToolHitRate } from '../tools/tool-hit-rate.js';
-import { allSessionIntents } from '../../features/intent/open-intents.js';
+import { allSessionIntents } from '../../memory/intent/open-intents.js';
 import { ReticleCommand, SnapshotMode } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from './tools.js';

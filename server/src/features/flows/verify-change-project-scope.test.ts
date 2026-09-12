@@ -27,7 +27,7 @@ import { loadNamedFlows, resolveChangedFiles } from '../../command/cli/cli-flow-
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createNodeFileSystem } from '../project/fs/fs-port.js';
+import { createNodeFileSystem } from '../../memory/project/fs/fs-port.js';
 import { FlowStore } from './flows.js';
 import type { CompiledProgram } from './recording/tape/recordings.js';
 

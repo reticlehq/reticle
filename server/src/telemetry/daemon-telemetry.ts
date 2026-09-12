@@ -10,7 +10,7 @@ import { TelemetryEventKind, type SessionSummary } from '@reticlehq/core/telemet
 import { getTelemetry } from './telemetry.js';
 import { getSessionMetrics } from './session-metrics.js';
 import { profileProject, type InstallFacts } from './project-profile.js';
-import { hasProjectConnectedBefore } from '../portal/session/recall/prior/connection-memory.js';
+import { hasProjectConnectedBefore } from '../memory/recall/prior/connection-memory.js';
 import { readProjectId } from '../command/cli/ports/resolve/cli-port.js';
 import { reticleStateHome } from '../command/daemon/daemon.js';
 import { startUpdateCheck, updateNudgeState } from '../command/update/update-nudge.js';
