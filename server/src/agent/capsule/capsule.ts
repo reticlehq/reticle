@@ -17,8 +17,18 @@ export interface DivergenceCapsule {
   blastRadius: string[];
 }
 
-/** Observed signal/state changes the flow never declared — the side effects. */
-function blastRadius(
+/**
+ * Observed signals, store changes and REQUESTS the flow never declared — the side effects.
+ *
+ * Network was missing here for a long time, and it is the channel that carries the damage. An action
+ * satisfying every consequence it declared and also firing a request nobody asked for came back with
+ * an empty radius — which is the exact shape this idea exists for: a click that works AND posts
+ * somewhere else. A signal and a store change stay inside the page; a request leaves the machine.
+ *
+ * Declared requests are matched by `urlContains`, the same rule the divergence walk uses, so a flow
+ * that asked for `/api/order` is not told about `/api/order`.
+ */
+export function blastRadius(
   expected: readonly ExpectedLink[],
   observed: readonly ReticleEvent[],
 ): string[] {
@@ -38,11 +48,25 @@ function blastRadius(
       )
       .map((l) => l.name),
   );
+  const declaredUrls = expected
+    .filter(
+      (l): l is Extract<ExpectedLink, { kind: typeof ConsequenceKind.NET }> =>
+        ConsequenceKind.NET === l.kind,
+    )
+    .map((l) => l.urlContains);
   const radius: string[] = [];
   const add = (value: string): void => {
     if (!radius.includes(value)) radius.push(value);
   };
   for (const event of observed) {
+    if (event.type === EventType.NET_REQUEST) {
+      const url = event.data['url'];
+      if ('string' !== typeof url) continue;
+      if (declaredUrls.some((fragment) => url.includes(fragment))) continue;
+      const method = event.data['method'];
+      add(`net ${'string' === typeof method ? method : 'request'} ${url}`);
+      continue;
+    }
     const name = event.data['name'];
     if (typeof name !== 'string') continue;
     if (event.type === EventType.SIGNAL && !declaredSignals.has(name)) add(`signal ${name}`);

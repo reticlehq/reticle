@@ -60,7 +60,7 @@ import {
 } from '@reticlehq/engine/evidence/already-true.js';
 import { describeWaitTarget, namedNetIsInFlight } from '@reticlehq/engine/evidence/unsettled.js';
 import { saveFailedAssertCapsule } from './act-capsule.js';
-import { buildDivergenceCapsule } from '../capsule/capsule.js';
+import { blastRadius, buildDivergenceCapsule } from '../capsule/capsule.js';
 import { predicateToExpectedLinks } from '@reticlehq/engine/question/predicate/predicate-to-links.js';
 import { buildHonestyBlock } from '@reticlehq/engine/evidence/honesty.js';
 import {
@@ -413,6 +413,12 @@ export const ACT_TOOLS: ToolDef[] = [
         .describe(
           'Present only on a FAILED verdict: the divergence capsule { summary, firstDivergence (declared vs observed), blastRadius (undeclared side effects) } — the fault, located, no re-exploration needed.',
         ),
+      blastRadius: z
+        .array(z.string())
+        .optional()
+        .describe(
+          'Truth that changed OUTSIDE what this action declared — an undeclared signal, store change or REQUEST fired in the same window. Present on a PASS, where it is news: the declared consequence held and the action also did this. Omitted when nothing outside the declaration moved.',
+        ),
       capsuleSaved: z
         .string()
         .optional()
@@ -646,6 +652,20 @@ export const ACT_TOOLS: ToolDef[] = [
         const capsule = verdict.pass
           ? undefined
           : buildDivergenceCapsule(links, windowEvents, bufferLost);
+        /*
+         * The blast radius travels on a GREEN too, which is the only verdict where it is news.
+         *
+         * On a red the capsule already carries it and the fault is the headline. On a green nothing
+         * carried it at all — and "the consequence I declared held, AND this action also posted
+         * somewhere I never mentioned" is exactly the finding a passing verdict buries. A click that
+         * works and also fires a DELETE is a green that did extra damage.
+         *
+         * One pass over a window already in hand, and only attached when it is non-empty: a field
+         * that is always present teaches a reader to skim it, and the whole value here is that its
+         * presence is the signal. The full capsule stays red-only — the divergence walk and the
+         * causal summary are the expensive halves and answer a question a green does not have.
+         */
+        const greenRadius = verdict.pass ? blastRadius(links, windowEvents) : [];
         // Grade from what the verdict PROVED, not what it declared. A green anyOf holds on one branch, so
         // grading off `links` (every branch) would let a presence-only OR report grade `signal` — a false
         // green in the gate itself. `provenExpectedLinks` narrows a green to the branch that actually held;
@@ -910,6 +930,7 @@ export const ACT_TOOLS: ToolDef[] = [
           ...(contradictions.length > 0 ? { contradictions } : {}),
           honesty: honestyForVerdict(String(decision.verified), honesty),
           ...(capsule === undefined ? {} : { capsule }),
+          ...(0 === greenRadius.length ? {} : { blastRadius: greenRadius }),
           since,
           ...(session.id === actedSessionId ? {} : { sessionId: session.id }),
           ...healthEnvelope(session),
