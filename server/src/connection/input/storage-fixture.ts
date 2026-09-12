@@ -12,6 +12,7 @@
  * is "no" far more often than "yes" — which is correct, and merely slower: every flow runs from cold.
  */
 
+import type { SeedStorage } from '@reticlehq/core';
 import type { RealInputProvider } from './real-input.js';
 
 /**
@@ -68,5 +69,49 @@ export async function fixturePortFor(
         );
       }
     },
+  };
+}
+
+/** What a browser context hands back. Per-origin, which is the half that has to be filtered. */
+interface SavedContextState {
+  cookies?: SeedStorage['cookies'];
+  origins?: { origin: string; localStorage?: { name: string; value: string }[] }[];
+}
+
+/**
+ * Turn state a browser saved into something a lease can be BOOTED with.
+ *
+ * `SeedStorage` is applied to an isolated context before the first navigation, which is exactly and
+ * only when a fixture can work: restoring a cookie jar into a page that has already decided it is
+ * signed out is a fixture that appears to work and does nothing.
+ *
+ * The two shapes do not line up, and the mismatch is the reason this function exists rather than a
+ * spread:
+ *
+ *   - a context state is per-ORIGIN and a lease is booted at one URL, so another origin's
+ *     localStorage is dropped. Seeding it would write keys belonging to a site this run never
+ *     visits, under the name of a fixture somebody trusts.
+ *   - a context state carries no sessionStorage at all, so `session` is left ABSENT rather than set
+ *     to an empty object. A suite relying on a flag it was never given should find nothing, not
+ *     something that looks restored and is empty.
+ *
+ * Returns nothing when there is nothing to seed — an empty fixture is not a fixture, and a lease
+ * asked to boot with one would pay the isolation cost for no state.
+ */
+export function seedFromStorageState(state: unknown, pageUrl: string): SeedStorage | undefined {
+  if ('object' !== typeof state || null === state) return undefined;
+  const saved = state as SavedContextState;
+  const local: Record<string, string> = {};
+  for (const origin of saved.origins ?? []) {
+    if (!pageUrl.startsWith(origin.origin)) continue;
+    for (const entry of origin.localStorage ?? []) local[entry.name] = entry.value;
+  }
+  const cookies = saved.cookies ?? [];
+  const hasCookies = Array.isArray(cookies) ? cookies.length > 0 : Object.keys(cookies).length > 0;
+  const hasLocal = Object.keys(local).length > 0;
+  if (!hasCookies && !hasLocal) return undefined;
+  return {
+    ...(hasCookies ? { cookies } : {}),
+    ...(hasLocal ? { local } : {}),
   };
 }
