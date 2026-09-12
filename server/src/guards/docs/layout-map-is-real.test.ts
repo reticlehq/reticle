@@ -48,13 +48,28 @@ function mappedPaths(): string[] {
  * Two different absences look identical to `existsSync`: a directory that MOVED (a real defect in
  * the map) and one that is gitignored on purpose. Only the first should fail.
  */
-function isTracked(path: string): boolean {
-  const listed = execFileSync('git', ['ls-files', '--', path], {
+/**
+ * Which mapped paths git is tracking anything under — ONE `git ls-files`, not one per path.
+ *
+ * Same reason as `ignoredPaths` below: a spawn per entry made this guard cost process creation
+ * rather than matching, and it timed out at vitest's 5 s default whenever the machine was busy.
+ * Windows spawns are dearer still, and it timed out there on a runner doing nothing else — so the
+ * per-path version was not slow-under-load, it was simply too slow.
+ *
+ * `git ls-files` answers with forward slashes on every platform, which is also the spelling the map
+ * uses, so the prefix test needs no separator normalisation.
+ */
+const trackedPrefixes = (): ReadonlySet<string> => {
+  const listed = execFileSync('git', ['ls-files'], {
     cwd: REPO_ROOT,
     encoding: 'utf8',
-  }).trim();
-  return '' !== listed;
-}
+    maxBuffer: 32 * 1024 * 1024,
+  }).split('\n');
+  const mapped = mappedPaths();
+  return new Set(
+    mapped.filter((path) => listed.some((file) => file === path || file.startsWith(`${path}/`))),
+  );
+};
 
 /**
  * Is this path ignored on purpose?
@@ -119,10 +134,11 @@ describe('the map at the top of CLAUDE.md', () => {
     // next deliberately-untracked entry needs no edit here, while a directory that is simply GONE
     // is not ignored and still fails.
     const ignored = ignoredPaths();
+    const tracked = trackedPrefixes();
     const absent = mappedPaths().filter(
       // Exempt FIRST. Asking whether an ignored path exists answers a question about this machine
       // rather than about the map, and the answer differs between a developer's disk and a clone.
-      (path) => !ignored.has(path) && (!existsSync(join(REPO_ROOT, path)) || !isTracked(path)),
+      (path) => !ignored.has(path) && (!existsSync(join(REPO_ROOT, path)) || !tracked.has(path)),
     );
     expect(
       absent,

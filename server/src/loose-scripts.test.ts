@@ -47,6 +47,18 @@ const DECLARED_UNREACHABLE: Record<string, string> = {};
 /** Files that hold no readable text worth searching. */
 const NOT_TEXT = /\.(png|jpe?g|svg|ico|woff2?|lock|pdf|zip)$/;
 
+/**
+ * A repo-relative path spelled the way the rest of this repository spells one.
+ *
+ * `git ls-files` always answers with forward slashes, on every platform, and every path literal in
+ * this file is written that way too. `path.join` does not: on Windows it yields backslashes, so a
+ * path built here never equals the same path read from git. That is not a near-miss — it is a total
+ * miss on every entry, which turns a guard into one that passes over nothing.
+ */
+function posixPath(path: string): string {
+  return path.replaceAll('\\', '/');
+}
+
 function trackedFiles(): string[] {
   return execFileSync('git', ['ls-files'], { cwd: REPO_ROOT, encoding: 'utf8' })
     .split('\n')
@@ -60,7 +72,11 @@ function looseScripts(): string[] {
       const path = join(directory, name);
       if (!statSync(join(REPO_ROOT, path)).isFile()) continue;
       if (!RUNNABLE.test(name)) continue;
-      found.push(path);
+      // Repo-relative paths are compared against `git ls-files` output and against POSIX literals
+      // spelled in this file, and `join` yields `scripts\check-boundaries.mjs` on Windows. Every
+      // comparison then misses and the scan reads as "no loose scripts", which is a guard that
+      // cannot fail for the reason it exists. See posixPath.
+      found.push(posixPath(path));
     }
   }
   return [...found, ...ROOT_LEVEL_SCRIPTS].sort();

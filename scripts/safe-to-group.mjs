@@ -18,7 +18,14 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname, basename, resolve, relative } from 'node:path';
 
-const [, , DIR, ...NAMES] = process.argv;
+const [, , RAW_DIR, ...NAMES] = process.argv;
+// Forward slashes, always. Everything below reasons about the path as TEXT — `indexOf('/src/')`
+// decides the package root, and a `/`-spelled export prefix decides whether a file is published —
+// so a Windows argument like `C:\repo\src\alpha` matches neither, and the tool silently
+// answers about the wrong tree: the root collapses to the asked directory, so nothing outside it
+// is ever read, and a group that IS mutual comes back SAFE. Node accepts forward slashes on
+// Windows for every fs call below, so normalising once at the door costs nothing.
+const DIR = RAW_DIR === undefined ? undefined : RAW_DIR.replaceAll('\\', '/');
 if (DIR === undefined || NAMES.length === 0) {
   console.error('usage: node scripts/safe-to-group.mjs <dir> <name> [name...]');
   process.exit(2);
@@ -169,7 +176,7 @@ function publicSpecifiers() {
     if (!key.includes('*')) continue;
     const [prefix, suffix] = key.replace(/^\.\//, '').split('*');
     for (const p of group) {
-      const spec = relative(ROOT, p).replace(/\.ts$/, '.js');
+      const spec = relative(ROOT, p).replaceAll('\\', '/').replace(/\.ts$/, '.js');
       if (spec.startsWith(prefix) && spec.endsWith(suffix)) {
         found.push(`${pkg.name}/${spec}`);
       }

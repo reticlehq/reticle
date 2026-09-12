@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 // The same derivation the other repo-wide checks use, so they cannot disagree about what exists.
 import { workspaceGlobs } from '../../../../scripts/check-boundaries.mjs';
 import { REPO_ROOT } from '../../machine/repo-root.js';
@@ -69,7 +69,11 @@ function shippedPackages(): string[] {
     const levels = rest.length;
     const walk = (dir: string, depth: number): void => {
       if (depth === levels) {
-        if (existsSync(join(dir, 'package.json'))) names.push(dir.split('/').pop() ?? '');
+        // `basename`, not `split('/')`: on Windows `join` builds `…\\adapters\\build\\vite`, which
+        // contains no forward slash at all, so the split returned the WHOLE PATH as the package
+        // name and every entry missed the coverage map — reported as fourteen packages shipped
+        // without coverage, which is the opposite of what was true.
+        if (existsSync(join(dir, 'package.json'))) names.push(basename(dir));
         return;
       }
       for (const entry of readdirSync(dir, { withFileTypes: true })) {

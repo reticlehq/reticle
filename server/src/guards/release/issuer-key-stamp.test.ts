@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { generateKeyPairSync } from 'node:crypto';
-import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { REPO_ROOT } from '../../machine/repo-root.js';
 
@@ -72,7 +72,9 @@ describe('the issuer key can actually be stamped into the built server', () => {
     } finally {
       // Put the unstamped build back, so a later `pnpm pack` cannot ship a throwaway key.
       writeFileSync(TARGET, readFileSync(backup, 'utf8'));
-      execFileSync('rm', ['-f', backup]);
+      // `rmSync`, not `execFileSync('rm')`: there is no `rm` on a Windows runner, so the cleanup
+      // threw INSIDE a finally block and replaced whatever the test was reporting.
+      rmSync(backup, { force: true });
     }
   });
 

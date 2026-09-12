@@ -35,10 +35,15 @@ interface Manifest {
  */
 function publishable(): { dir: string; manifest: Manifest }[] {
   const listed = JSON.parse(
+    // `shell: true` on Windows, where pnpm is `pnpm.CMD` and a bare `execFileSync('pnpm', …)`
+    // cannot execute it: the call dies with `spawnSync pnpm ENOENT`, which reads as "this guard
+    // crashed" rather than "this runner spells the binary differently". Same trap as every other
+    // package-manager call this repo makes from Node.
     execFileSync('pnpm', ['-r', 'list', '--depth', '-1', '--json'], {
       cwd: REPO_ROOT,
       encoding: 'utf8',
       maxBuffer: 32 * 1024 * 1024,
+      shell: 'win32' === process.platform,
     }),
   ) as { name?: string; path?: string; private?: boolean }[];
   return listed

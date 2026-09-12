@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { workspaceGlobs } from '../../scripts/check-boundaries.mjs';
 import { REPO_ROOT } from './machine/repo-root.js';
 
@@ -48,5 +48,9 @@ function collect(dir: string, levels: number, into: string[]): void {
 
 /** The same list, as the last part of each path: `core`, `server`, `dom`, and so on. */
 export function publishedPackageNames(): string[] {
-  return publishedPackageDirs().map((dir) => dir.split('/').pop() ?? '');
+  // `basename`, not `split('/')`: these directories are built with `join`, so on Windows they hold
+  // backslashes and contain no forward slash at all — the split then returns the WHOLE ABSOLUTE
+  // PATH as the package name. Every caller comparing a name against a real one silently stops
+  // matching, which is the same defect that reported fourteen packages as uncovered.
+  return publishedPackageDirs().map((dir) => basename(dir));
 }

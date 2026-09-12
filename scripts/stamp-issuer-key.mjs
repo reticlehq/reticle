@@ -24,7 +24,7 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createPublicKey } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 // Resolved from this file, not the cwd: the stamp runs from server (prepack) as well as from
@@ -83,7 +83,11 @@ writeFileSync(TARGET, stamped);
 // Prove the stamp took, against the real module rather than the string we just wrote. With a key baked
 // and no customer key present, activation must read `missing` (enforcement ON). If it still reads
 // `eval`, the gate is off and this release must not ship.
-const { describeLicense } = await import(TARGET);
+// `pathToFileURL`, not the bare path: ESM `import()` takes a URL, and an absolute Windows path
+// (`D:\a\…\license.js`) is not one — the drive letter reads as a protocol and the loader throws
+// before the check can run. The release gate then fails as "the stamp could not be verified" on a
+// stamp that worked. Same conversion trap as `new URL(import.meta.url).pathname`.
+const { describeLicense } = await import(pathToFileURL(TARGET).href);
 const report = describeLicense(Date.now(), {});
 if (report.status !== 'missing') {
   process.stderr.write(
