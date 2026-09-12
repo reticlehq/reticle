@@ -118,7 +118,53 @@ describe('selectPath — Map support', () => {
     ]);
     const r = selectPath({ m }, 'm.missing');
     expect(r.found).toBe(false);
-    expect(r.availableKeys).toEqual(['str']);
+    expect(r.availableKeys).toEqual(['str', 'size']);
+  });
+});
+
+describe('selectPath — Set support and .size on collections', () => {
+  it('resolves .size on a Set', () => {
+    const state = { tags: new Set(['urgent', 'frontend']) };
+    expect(selectPath(state, 'tags.size')).toEqual({ found: true, value: 2 });
+  });
+
+  it('resolves membership on a Set for existing elements', () => {
+    const state = { tags: new Set(['urgent', 'frontend']) };
+    expect(selectPath(state, 'tags.urgent')).toEqual({ found: true, value: true });
+    expect(selectPath(state, 'tags.backend')).toEqual({
+      found: false,
+      value: null,
+      availableKeys: ['urgent', 'frontend', 'size'],
+    });
+  });
+
+  it('resolves .size on a Map', () => {
+    const state = { byId: new Map([['a', 1], ['b', 2]]) };
+    expect(selectPath(state, 'byId.size')).toEqual({ found: true, value: 2 });
+  });
+
+  it('prioritizes an explicit Map key named "size" over intrinsic size', () => {
+    const state = { custom: new Map([['size', 'custom-value']]) };
+    expect(selectPath(state, 'custom.size')).toEqual({ found: true, value: 'custom-value' });
+  });
+
+  it('offers size and keys in availableKeys when a Map path misses', () => {
+    const state = { byId: new Map([['x', 1]]) };
+    const r = selectPath(state, 'byId.missing');
+    expect(r.found).toBe(false);
+    expect(r.availableKeys).toContain('x');
+    expect(r.availableKeys).toContain('size');
+  });
+
+  it('allows no intrinsic beyond length and size — constructor/__proto__ stay unreachable', () => {
+    const state = {
+      tags: new Set(['a']),
+      map: new Map([['a', 1]]),
+    };
+    for (const seg of ['constructor', '__proto__', 'toString', 'add', 'delete', 'clear', 'has']) {
+      expect(selectPath(state, `tags.${seg}`).found, `tags.${seg} must not be found`).toBe(false);
+      expect(selectPath(state, `map.${seg}`).found, `map.${seg} must not be found`).toBe(false);
+    }
   });
 });
 
