@@ -564,7 +564,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     // Sampled BEFORE acquiring: afterwards this lease is itself a session, and the point is to name
     // a tab that already existed. A human's open tab is the one they can watch, so if one is here
     // the agent should be told at the moment it is choosing — not after it has gone dark on them.
-    const alreadyOpen = liveTabFor(deps, projectId);
+    const alreadyOpen = liveTabFor(deps, projectId, url);
     const origin = originOf(url);
     const priorLock = origin !== undefined ? originAcquireLocks.get(origin) : undefined;
     let releaseLock: (() => void) | undefined;
@@ -765,17 +765,34 @@ const PREFER_EXISTING_NOTE =
   'a non-leased tab for this app was already connected — that is the one a human can see, and this lease is not. Unless you need an isolated context (a second identity, a clean profile, parallel flows), release this lease and drive that sessionId instead.';
 
 /**
- * The first live non-leased session for this project, if any.
+ * The first live non-leased session that is THIS app, if any.
  *
- * Reuses the watcher selector rather than re-deriving "which sessions belong to a human": one rule
- * for one question, so the tab we announce to and the tab we recommend can never disagree.
+ * The watcher selector decides who to NARRATE to, and it is deliberately permissive: an unknown
+ * project still gets told, because a dark HUD is worse than a note that did not concern you. That
+ * is the right trade for a broadcast and the wrong one here, where a single `[0]` is handed back as
+ * "drive this instead". With `projectId` undefined — and it is an OPTIONAL argument that an
+ * acquiring agent has no reason to pass — every non-leased session qualified and the answer was
+ * whichever the map yielded first. Measured against a real daemon: leasing `localhost:4312`
+ * recommended a Phanpy tab on `:5173`, so an agent that complied would have driven a different
+ * application and reported a verdict about it.
+ *
+ * So this narrows by the one thing a lease always knows: the ORIGIN it is being taken against.
+ * `projectId` still narrows further when given. Nothing is recommended when nothing matches, which
+ * is the honest answer — a lease is simply correct then.
  */
-function liveTabFor(deps: ToolDeps, projectId: string | undefined): string | undefined {
+function liveTabFor(
+  deps: ToolDeps,
+  projectId: string | undefined,
+  url: string,
+): string | undefined {
   const pool = deps.pool;
   if (pool === undefined) return undefined;
+  const wanted = originOf(url);
+  if (wanted === undefined) return undefined;
   try {
     const candidates = deps.sessions
       .all()
+      .filter((session) => session.url !== undefined && originOf(session.url) === wanted)
       .map((session) => ({ id: session.id, projectId: session.projectId }));
     return watchersToNotify(candidates, pool.leasedSessionIds(), projectId)[0];
   } catch {

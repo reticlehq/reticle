@@ -36,8 +36,6 @@ const declared = {
   stateUnwatched: false,
   domMutated: true,
   signalsFired: 1,
-  routeChanged: false,
-  routeSignalFired: false,
   proved: true,
   hasCapabilities: true,
 } as const;

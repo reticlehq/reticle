@@ -862,8 +862,6 @@ export const ACT_TOOLS: ToolDef[] = [
           ),
           domMutated: (session.lastAct.effect().mutatedWithin ?? 0) > 0,
           signalsFired: actionSummary.signals.length,
-          routeChanged: actionSummary.route !== undefined,
-          routeSignalFired: actionSummary.signals.some((name) => name.startsWith('route')),
         });
         // The verdict IS the proof attempt, so a green one discharges the intent it was drawn for.
         // Only a green: a red proved nothing, and `dischargeIntent` refuses an unbound intent anyway,

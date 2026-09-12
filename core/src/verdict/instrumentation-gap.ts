@@ -44,7 +44,6 @@ export const InstrumentationGapKind = {
    */
   NO_SIGNAL_ON_MUTATION: 'no-signal-on-mutation',
   /** The route changed and no route signal fired, so route consequences cannot be asserted. */
-  NO_ROUTE_SIGNAL: 'no-route-signal',
   /** A control was driven that the declared capability contract does not mention. */
   UNDECLARED_CONTROL: 'undeclared-control',
   /**
@@ -149,8 +148,6 @@ const GAP_FIX: Readonly<Record<InstrumentationGapKind, string>> = {
     'register the store with reticle.registerStore(name, getState) so state can be read directly instead of inferred from the DOM',
   [InstrumentationGapKind.NO_SIGNAL_ON_MUTATION]:
     'fire reticle.signal(name, data) where this state is committed — commitAndSignal binds the two so they cannot drift',
-  [InstrumentationGapKind.NO_ROUTE_SIGNAL]:
-    'let the Reticle router adapter observe navigation, or fire reticle.signal on route commit',
   [InstrumentationGapKind.UNDECLARED_CONTROL]:
     'add this control to reticle.describe() so the capability contract matches what the app actually exposes',
   [InstrumentationGapKind.MISSING_TESTID]:

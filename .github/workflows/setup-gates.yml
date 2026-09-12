@@ -115,7 +115,9 @@ jobs:
       # exist. Without this the whole matrix failed with `Cannot find module dist/cli.js` and
       # reported it as a missing diagnosis, which is a different bug entirely.
       - run: corepack enable && pnpm install --frozen-lockfile
-      - run: pnpm --filter @reticlehq/core --filter @reticlehq/server build
+      # `turbo run build --filter=...` rather than a hand-listed pair: server's dependency set grew
+      # (openreality, engine) and a hand-listed pair does not notice. Turbo reads the graph.
+      - run: pnpm exec turbo run build --filter=@reticlehq/server...
       # Scenarios that reach `init` need the registry; the rest are hermetic. A failure here is a
       # regression in a diagnosis, which is the thing this script is judged on.
       - run: node setup/break-matrix.mjs

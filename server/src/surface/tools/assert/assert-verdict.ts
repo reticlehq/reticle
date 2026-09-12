@@ -218,8 +218,6 @@ export async function assertVerdict(
     ...(false === session.sourceMapping ? { sourceMappingDisabled: true } : {}),
     domMutated: false,
     signalsFired: 0,
-    routeChanged: false,
-    routeSignalFired: false,
   });
   noteSessionGaps(session, gaps);
   // The one file:line this verdict is entitled to: its own evidence, or — for a failure with no DOM

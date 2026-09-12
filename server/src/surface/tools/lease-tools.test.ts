@@ -618,6 +618,9 @@ describe('prioritising a tab that is already open', () => {
     const watcher = {
       id: 's-human',
       projectId: 'acme',
+      // Same origin as the lease below: steering is scoped to the app being leased, so a fake
+      // without a url is a tab belonging to no app and is correctly not recommended.
+      url: 'http://localhost:3000/',
       pushNarration: (t: string) => narrations.push(t),
     };
     const { pool } = fakePool();
@@ -649,6 +652,57 @@ describe('prioritising a tab that is already open', () => {
     })) as Record<string, unknown>;
 
     expect('preferExisting' in out).toBe(false);
+  });
+
+  it('does NOT name a tab from a different app when no projectId was passed', async () => {
+    // `projectId` is an OPTIONAL argument, and an agent acquiring a lease has no reason to pass it —
+    // every other test here does, which is why this was green while the tool was naming the wrong
+    // app. Without it the watcher filter admits EVERY non-leased session and `[0]` is whatever the
+    // map yields first. Measured against a real daemon: leasing http://localhost:4312/ answered
+    // `preferExisting` with a Phanpy tab on :5173, a different app and a different project — and the
+    // note tells the agent to release the lease and drive THAT instead. An agent that complies
+    // verifies the wrong application and reports a verdict about it.
+    const other = {
+      id: 's-other-app',
+      projectId: 'phanpy',
+      url: 'http://localhost:5173/',
+      pushNarration: () => undefined,
+    };
+    const { pool } = fakePool();
+    const deps = {
+      sessions: { all: () => [other], get: () => other },
+      pool,
+    } as unknown as ToolDeps;
+
+    const out = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: 'http://localhost:4312/',
+    })) as Record<string, unknown>;
+
+    expect('preferExisting' in out).toBe(false);
+  });
+
+  it('names a tab on the SAME origin even when no projectId was passed', async () => {
+    // The origin is what the lease actually knows. Steering must still work without the argument,
+    // or the fix above would simply delete the feature for every caller that omits it.
+    const same = {
+      id: 's-same-app',
+      projectId: 'bench',
+      url: 'http://localhost:4312/checkout',
+      pushNarration: () => undefined,
+    };
+    const { pool } = fakePool();
+    const deps = {
+      sessions: { all: () => [same], get: () => same },
+      pool,
+    } as unknown as ToolDeps;
+
+    const out = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: 'http://localhost:4312/',
+    })) as Record<string, unknown>;
+
+    expect((out['preferExisting'] as { sessionId: string } | undefined)?.sessionId).toBe(
+      's-same-app',
+    );
   });
 
   it('never REFUSES the lease — isolation is a legitimate need', async () => {

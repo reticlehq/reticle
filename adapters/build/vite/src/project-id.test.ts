@@ -112,8 +112,11 @@ describe('resolveProjectId reads the id init recorded', () => {
 });
 
 describe('readConfiguredProjectId', () => {
+  // The keys are POSIX paths and `join` produces `\` separators on Windows, so a fake tree matched
+  // by raw string equality finds NOTHING there and every lookup reads as "no config" — three green
+  // tests on macOS/Linux and three red ones on Windows, about separators rather than about walking.
   const tree = (files: Record<string, string>) => (path: string) => {
-    const found = files[path];
+    const found = files[path.replaceAll('\\', '/')];
     if (found === undefined) throw new Error(`ENOENT: ${path}`);
     return found;
   };

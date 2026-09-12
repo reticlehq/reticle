@@ -9,8 +9,6 @@ const clean: ActionInstrumentationFacts = {
   stateUnwatched: false,
   domMutated: false,
   signalsFired: 1,
-  routeChanged: false,
-  routeSignalFired: false,
 };
 
 const kinds = (facts: Partial<ActionInstrumentationFacts>): string[] =>
@@ -99,14 +97,17 @@ describe('gapsForAction', () => {
       expect(kinds({ domMutated: false, signalsFired: 0, pass: false })).toEqual([]);
     });
 
-    it('reports a route change nothing signalled', () => {
-      expect(kinds({ routeChanged: true, routeSignalFired: false, pass: false })).toEqual([
-        InstrumentationGapKind.NO_ROUTE_SIGNAL,
-      ]);
-    });
-
-    it('says nothing when the route change WAS signalled', () => {
-      expect(kinds({ routeChanged: true, routeSignalFired: true, pass: false })).toEqual([]);
+    it('says nothing about a route change — the SDK observes navigation itself', () => {
+      // There used to be a NO_ROUTE_SIGNAL gap here and it could never be right. It fired only when
+      // a route change had been OBSERVED, and the only thing that observes one is the SDK's own
+      // history patch, which is installed in every instrumented app — so its claim ("route
+      // consequences cannot be asserted on this app") was false in every case it fired. Driven
+      // against the bench app: a verdict asserting `{kind:"route"}` PASSED, `decidedBy` was
+      // "route-change", and the same response carried the gap saying nothing had signalled it.
+      // Its intended case — navigation Reticle cannot see at all — leaves this flag false, so it
+      // could not catch that either. The trigger was also a prefix match on an app-chosen signal
+      // NAME: an app firing `nav:changed` was told to wire a router adapter it already had.
+      expect(kinds({ pass: false })).toEqual([]);
     });
   });
 
@@ -124,12 +125,9 @@ describe('gapsForAction', () => {
         source: undefined,
         domMutated: true,
         signalsFired: 0,
-        routeChanged: true,
-        routeSignalFired: false,
       }).sort(),
     ).toEqual(
       [
-        InstrumentationGapKind.NO_ROUTE_SIGNAL,
         InstrumentationGapKind.NO_SIGNAL_ON_MUTATION,
         InstrumentationGapKind.NO_SOURCE_MAPPING,
       ].sort(),
@@ -180,10 +178,6 @@ describe('gapsForAction', () => {
       const [store] = gapsForAction({ ...clean, stateAsked: true, stateUnwatched: true });
       expect(store?.kind).toBe(InstrumentationGapKind.NO_STORE_REGISTERED);
       expect(store?.source).toBeUndefined();
-
-      const [route] = gapsForAction({ ...clean, pass: false, routeChanged: true });
-      expect(route?.kind).toBe(InstrumentationGapKind.NO_ROUTE_SIGNAL);
-      expect(route?.source).toBeUndefined();
     });
   });
 });

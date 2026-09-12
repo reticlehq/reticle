@@ -59,7 +59,7 @@ describe('instrumentation gaps', () => {
   });
 
   it('omits source and ref rather than carrying empty ones', () => {
-    const gap = instrumentationGap(InstrumentationGapKind.NO_ROUTE_SIGNAL, 'm', 'c');
+    const gap = instrumentationGap(InstrumentationGapKind.NO_STORE_REGISTERED, 'm', 'c');
     expect('source' in gap).toBe(false);
     expect('ref' in gap).toBe(false);
   });

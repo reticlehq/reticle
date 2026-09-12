@@ -63,9 +63,7 @@ export interface ActionInstrumentationFacts {
   /** How many app signals fired in the window. */
   signalsFired: number;
   /** Did the route change in this action's window? */
-  routeChanged: boolean;
   /** Did anything signal that route change? */
-  routeSignalFired: boolean;
   /**
    * Did a code change land since the last verdict with nothing declaring what it was for?
    *
@@ -185,18 +183,6 @@ export function gapsForAction(facts: ActionInstrumentationFacts): Instrumentatio
           ...(facts.ref === undefined ? {} : { ref: facts.ref }),
           ...(facts.source === undefined ? {} : { source: facts.source }),
         },
-      ),
-    );
-  }
-
-  // Also unlocated, for the same reason: the remedy is a router adapter wired app-wide, not a line
-  // at the control that happened to trigger this navigation.
-  if (facts.routeChanged && !facts.routeSignalFired) {
-    gaps.push(
-      instrumentationGap(
-        InstrumentationGapKind.NO_ROUTE_SIGNAL,
-        'the route changed and nothing signalled it',
-        'route consequences cannot be asserted on this app, so a navigation can only be checked by what rendered afterwards',
       ),
     );
   }

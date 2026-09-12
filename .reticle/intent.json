@@ -1224,7 +1224,9 @@
         "name": "todo:added"
       },
       "surface": {
-        "files": ["src/App.tsx"]
+        "files": [
+          "src/App.tsx"
+        ]
       },
       "provenBy": {
         "verdictId": "reticle_act_and_wait:1788288707773",
@@ -1248,7 +1250,9 @@
         "name": "todo:added"
       },
       "surface": {
-        "files": ["src/App.tsx"]
+        "files": [
+          "src/App.tsx"
+        ]
       },
       "provenBy": {
         "verdictId": "reticle_act_and_wait:1788288793298",
@@ -1301,7 +1305,9 @@
       },
       "surface": {
         "route": "/diagnostics",
-        "files": ["src/components/Sidebar.tsx"]
+        "files": [
+          "src/components/Sidebar.tsx"
+        ]
       },
       "provenBy": {
         "verdictId": "reticle_act_and_wait:1788973538763",
@@ -1336,7 +1342,9 @@
       },
       "surface": {
         "route": "/deployments",
-        "files": ["src/components/Sidebar.tsx"]
+        "files": [
+          "src/components/Sidebar.tsx"
+        ]
       },
       "provenBy": {
         "verdictId": "reticle_act_and_wait:1788974022542",
@@ -1372,7 +1380,9 @@
         "contains": "Invalid"
       },
       "surface": {
-        "files": ["src/components/Login.tsx"]
+        "files": [
+          "src/components/Login.tsx"
+        ]
       },
       "provenBy": {
         "verdictId": "reticle_act_and_wait:1788974671442",
@@ -1413,7 +1423,9 @@
       },
       "surface": {
         "route": "/diagnostics",
-        "files": ["src/components/Sidebar.tsx"]
+        "files": [
+          "src/components/Sidebar.tsx"
+        ]
       },
       "provenBy": {
         "verdictId": "reticle_act_and_wait:1789126161412",
@@ -1445,7 +1457,9 @@
         ]
       },
       "surface": {
-        "files": ["src/components/Login.tsx"]
+        "files": [
+          "src/components/Login.tsx"
+        ]
       },
       "provenBy": {
         "verdictId": "reticle_act_and_wait:1789154741765",
@@ -1475,7 +1489,9 @@
       },
       "surface": {
         "route": "/compose",
-        "files": ["src/components/Sidebar.tsx"]
+        "files": [
+          "src/components/Sidebar.tsx"
+        ]
       },
       "provenBy": {
         "verdictId": "reticle_act_and_wait:1789154772718",
@@ -1495,7 +1511,9 @@
       },
       "surface": {
         "route": "/compose",
-        "files": ["src/components/Sidebar.tsx"]
+        "files": [
+          "src/components/Sidebar.tsx"
+        ]
       },
       "provenBy": {
         "verdictId": "reticle_assert:1789154794005",
@@ -1516,7 +1534,9 @@
       },
       "surface": {
         "route": "/compose",
-        "files": ["src/views/Compose.tsx"]
+        "files": [
+          "src/views/Compose.tsx"
+        ]
       },
       "provenBy": {
         "verdictId": "reticle_act_and_wait:1789154804141",
@@ -1533,7 +1553,9 @@
         "kind": "net"
       },
       "surface": {
-        "files": ["src/App.tsx"]
+        "files": [
+          "src/App.tsx"
+        ]
       },
       "provenBy": {
         "verdictId": "reticle_act_and_wait:1789154964925",
@@ -1550,7 +1572,9 @@
         "kind": "net"
       },
       "surface": {
-        "files": ["src/App.tsx"]
+        "files": [
+          "src/App.tsx"
+        ]
       },
       "provenBy": {
         "verdictId": "reticle_act_and_wait:1789154992054",
@@ -1566,6 +1590,49 @@
       "binding": {
         "kind": "text",
         "contains": "archived"
+      }
+    },
+    "inline:signing-in-with-the-seeded-credentials-replaces-d0b07f4d": {
+      "id": "inline:signing-in-with-the-seeded-credentials-replaces-d0b07f4d",
+      "statement": "signing in with the seeded credentials replaces the sign-in form with the authenticated mission-control view",
+      "state": "proved",
+      "declaredAt": 1789218374303,
+      "binding": {
+        "kind": "element",
+        "query": {
+          "testid": "sign-out"
+        }
+      },
+      "surface": {
+        "files": [
+          "src/components/Login.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789218374357",
+        "grade": "presence",
+        "at": 1789218374357
+      }
+    },
+    "inline:composing-a-script-fires-exactly-one-request-to-bbd5b844": {
+      "id": "inline:composing-a-script-fires-exactly-one-request-to-bbd5b844",
+      "statement": "composing a script fires exactly one request to the generate endpoint — a double-submit is a real bug in this flow",
+      "state": "proved",
+      "declaredAt": 1789218456402,
+      "binding": {
+        "kind": "route",
+        "contains": "compose"
+      },
+      "surface": {
+        "route": "/compose",
+        "files": [
+          "src/components/Sidebar.tsx"
+        ]
+      },
+      "provenBy": {
+        "verdictId": "reticle_act_and_wait:1789218456428",
+        "grade": "presence",
+        "at": 1789218456428
       }
     }
   }
