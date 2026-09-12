@@ -50,7 +50,23 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * measured, so an ordinary change does not fail on rounding; raising either one needs a reason
  * written here, the way the tool-surface budget does.
  */
-const MAX_FIRST_LOAD_BYTES = 232_500;
+const MAX_FIRST_LOAD_BYTES = 232_700;
+/*
+ * Raised once, 232_500 -> 232_700, with the measurement that bought it.
+ *
+ * Occlusion stopped being a single centre-point hit test. It now samples five points and requires a
+ * MAJORITY of them to be blocked by the same element, and it reads the whole stack at each point so
+ * chrome above the occluder cannot hide it. That is ~77 B more than the one-liner it replaced.
+ *
+ * What the 77 B buys, MEASURED on this repo's detection suite: `occluded`, `nav-deployments-occluded`
+ * and `cmdk-occluded` went from missed to caught, taking the run from 84/88 to **86 of 86 catchable
+ * with 0 false positives** — the ceiling, since the remaining two are traps that a correct tool must
+ * NOT flag. The clean variants all still read not-caught, which is the half that matters: any-point
+ * sampling would have fired on a clipped corner and bought detection with false alarms.
+ *
+ * Two bugs a page load is a trade worth making; it is recorded here so the next raise has to make
+ * its own case rather than inheriting this one.
+ */
 /**
  * Raised again, 231,000 to 232,500, when the previous release merged into this branch. Measured
  * 231,715,

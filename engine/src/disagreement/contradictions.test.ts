@@ -876,6 +876,64 @@ describe('the store moved and the screen did not', () => {
   });
 });
 
+/*
+ * `transition-unfinished` was BUILT AND REVERTED. ARCHITECTURE.md lists it as a gap — nothing says
+ * an animation never finished — and the implementation was correct about what it observed. It was
+ * still wrong to ship.
+ *
+ * MEASURED on the e2e battery: it took `auth-retry-not-a-defect` from a pass to
+ * `verified=unknown / evidence_incomplete`, and made `telemetry-stitch` report THREE bugs where one
+ * real failure existed, two of them this detector. Real apps animate on nearly every action — a
+ * ripple, a fade, a height transition — and those routinely outlive the verdict window. Scoping it
+ * to "animations this action started" was not remotely narrow enough, because the action is exactly
+ * what starts them.
+ *
+ * An unfinished animation is only interesting when it is the animation the CLAIM depended on, and
+ * nothing here can tell which one that is. A detector that downgrades honest greens to `unknown`
+ * costs more than the bugs it would find, in the one metric this product sells on. Re-attempt it
+ * only with a relevance signal — not with a tighter time bound.
+ */
+describe('the store moved and the screen did not', () => {
+  it('fires when state commits with no DOM movement at all', () => {
+    const found = causedKinds([stateChanged()]);
+    expect(found).toContain(ContradictionKind.STATE_VS_RENDER);
+  });
+
+  it('is absence-derived, so it downgrades a green rather than inventing a fault', () => {
+    expect(isAbsenceDerived(ContradictionKind.STATE_VS_RENDER)).toBe(true);
+  });
+
+  it('does NOT fire when the DOM moved too — that is an app doing its job', () => {
+    expect(causedKinds([stateChanged(), domChanged()])).not.toContain(
+      ContradictionKind.STATE_VS_RENDER,
+    );
+  });
+
+  it('does NOT fire when the window carries any network — another rule owns that fact', () => {
+    // Proved by two PRE-EXISTING tests that broke when this rule was first written without the
+    // guard: both describe a window with a failed call in it, and both are already answered by the
+    // rule that owns failed calls. One fact, one finding.
+    expect(causedKinds([stateChanged(), okCall()])).not.toContain(
+      ContradictionKind.STATE_VS_RENDER,
+    );
+    expect(causedKinds([stateChanged(), failedCall()])).not.toContain(
+      ContradictionKind.STATE_VS_RENDER,
+    );
+  });
+
+  it('does NOT fire when nothing moved at all — that is action-had-no-effect, not this', () => {
+    expect(causedKinds([])).not.toContain(ContradictionKind.STATE_VS_RENDER);
+  });
+
+  it('does NOT fire on an UNATTRIBUTED window — a read is not a claim about a click', () => {
+    // `reticle_assert` observes; there is no action whose consequence should have rendered. Without
+    // this the rule would accuse every quiet read that happened to see a store tick.
+    expect(findContradictions([stateChanged()]).map((c) => c.kind)).not.toContain(
+      ContradictionKind.STATE_VS_RENDER,
+    );
+  });
+});
+
 /**
  * The verdict was taken while the screen was still moving.
  *
@@ -888,46 +946,3 @@ describe('the store moved and the screen did not', () => {
  * is not the action's transition, and accusing every app with a loading indicator is how a detector
  * earns itself a mute.
  */
-describe('an animation started and never finished in this window', () => {
-  const animStart = (name: string, t: number): ReticleEvent => ({
-    t,
-    seq: t,
-    type: EventType.ANIM_START,
-    sessionId: 's',
-    data: { name },
-  });
-  const animEnd = (name: string, t: number): ReticleEvent => ({
-    t,
-    seq: t,
-    type: EventType.ANIM_END,
-    sessionId: 's',
-    data: { name },
-  });
-
-  it('fires when the action starts a transition that never ends', () => {
-    const found = findContradictions([animStart('slide-in', 5)], { actionSince: 1 });
-    expect(found.map((c) => c.kind)).toContain(ContradictionKind.TRANSITION_UNFINISHED);
-  });
-
-  it('names the animation, so a reader can judge whether it matters', () => {
-    const found = findContradictions([animStart('slide-in', 5)], { actionSince: 1 });
-    const hit = found.find((c) => c.kind === ContradictionKind.TRANSITION_UNFINISHED);
-    expect(`${hit?.detail ?? ''}${hit?.counter ?? ''}`).toContain('slide-in');
-  });
-
-  it('does NOT fire when the transition completed', () => {
-    const found = findContradictions([animStart('slide-in', 5), animEnd('slide-in', 9)], {
-      actionSince: 1,
-    });
-    expect(found.map((c) => c.kind)).not.toContain(ContradictionKind.TRANSITION_UNFINISHED);
-  });
-
-  it('ignores an animation that was ALREADY running — a spinner is not this action’s transition', () => {
-    const found = findContradictions([animStart('spinner', 0)], { actionSince: 5 });
-    expect(found.map((c) => c.kind)).not.toContain(ContradictionKind.TRANSITION_UNFINISHED);
-  });
-
-  it('is absence-derived — the screen still moving is not proof of a fault', () => {
-    expect(isAbsenceDerived(ContradictionKind.TRANSITION_UNFINISHED)).toBe(true);
-  });
-});

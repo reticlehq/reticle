@@ -15,8 +15,20 @@ import { MutationKind, type Reversal } from '@reticlehq/openreality';
 import type { MockRule } from './network-mock.js';
 import type { RealInputProvider } from './real-input.js';
 
-/** The status a broken endpoint answers with. Named because it is a decision, not a constant of nature. */
-const BROKEN_STATUS = 500;
+/**
+ * How a broken endpoint breaks: the request ABORTS. It leaves and never arrives.
+ *
+ * This used to fulfill with a fabricated 500 — a response the server never sent. Grading a flow
+ * against an invented payload grades it against Reticle's fiction, and the grade is a real
+ * accusation ("this is a click sequence, not a test") to make on made-up input. A verdict built on
+ * something nobody observed is the exact failure this product exists to catch.
+ *
+ * An abort is a real failure mode — server down, network partition, DNS gone — and nothing is
+ * claimed on the server's behalf. It is also the STRICTLY harder break to survive silently: an app
+ * can quietly read a 500 body as empty data and carry on looking fine, but no code path mistakes a
+ * request that never completed for a successful one. A flow that stays green through it is
+ * unambiguously not checking what it declared it depends on.
+ */
 
 /**
  * What this hands back. Declared here rather than imported from the realm that consumes it: the
@@ -65,7 +77,7 @@ export async function mutationPortFor(
             '"/api/orders"). Failing every request would not test a flow, it would unplug the app.',
         );
       }
-      await setMocks([{ urlContains: mutation.target, status: BROKEN_STATUS }]);
+      await setMocks([{ urlContains: mutation.target, abort: true }]);
       return { mutation: `${MutationKind.REQUEST_FAILS}:${mutation.target}` };
     },
     /** Clearing the rules is the undo. A break nobody reverses is damage the next run inherits. */

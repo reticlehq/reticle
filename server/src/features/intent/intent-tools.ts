@@ -140,7 +140,21 @@ export const INTENT_TOOLS: ToolDef[] = [
         return { bound: await store.bind(id, args['binding']) };
       }
       if (LIST === action) {
-        return { intents: await store.open() };
+        /*
+         * Both files, one answer.
+         *
+         * `declare` writes the flat `.reticle/intent.json`; `record` writes the sharded
+         * `.reticle/intent/`. Listing only the flat one meant a recorded intent could not be found
+         * again by the agent that had just written it — and the lesson an agent draws from that is
+         * "the intent does not exist", not "there are two stores".
+         *
+         * Merged HERE rather than inside either store: this tool is the one seam that knows both
+         * exist, and neither store should have to learn the other's layout to stay honest.
+         */
+        const flat = await store.open();
+        const seen = new Set(flat.map((intent) => intent.id));
+        const fromShards = (await shards.all()).filter((record) => !seen.has(record.id));
+        return { intents: [...flat, ...fromShards] };
       }
       const raw = args['intents'];
       const entries = Array.isArray(raw)

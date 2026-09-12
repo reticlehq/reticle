@@ -616,33 +616,6 @@ function findWindowContradictions(
     }
   }
 
-  // ── A transition this action started, still running when we judged ─────────────────────────
-  //
-  // The visual `request-never-settled`. Only animations that began AT OR AFTER the attribution floor
-  // count: one already running when the click landed belongs to the page, not to the click, and
-  // accusing every spinner is how a detector gets muted.
-  if (options.actionSince !== undefined) {
-    const floorT = options.actionSince;
-    const ended = new Set(
-      events
-        .filter((e) => e.type === EventType.ANIM_END)
-        .map((e) => asString(e.data['name']))
-        .filter((n): n is string => n !== undefined),
-    );
-    const unfinished = events
-      .filter((e) => e.type === EventType.ANIM_START && e.t >= floorT)
-      .map((e) => asString(e.data['name']))
-      .filter((n): n is string => n !== undefined && !ended.has(n));
-    if (unfinished.length > 0) {
-      found.push({
-        kind: ContradictionKind.TRANSITION_UNFINISHED,
-        claim: 'the action completed and the verdict was taken',
-        counter: `${String(unfinished.length)} animation(s) this action started had not finished`,
-        detail: `${unfinished.join(', ')} — the screen was still changing, so anything read from it here is EARLY rather than wrong; widen the wait or assert the consequence the transition ends in`,
-      });
-    }
-  }
-
   // ── The store committed and the screen never moved ─────────────────────────────────────────
   //
   // Scoped as tightly as the one below, and for the same reason: it fires on an ABSENCE, which is

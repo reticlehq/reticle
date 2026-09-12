@@ -20,6 +20,7 @@ import {
   mutationPortFor,
   type NetworkMutationPort,
 } from '../../connection/input/network-mutation.js';
+import type { Perturbation } from '@reticlehq/core';
 import { z } from 'zod';
 import { leaseNotConnectedHint, type LeaseEvidence } from './lease-hint.js';
 import { probeSdkMarker } from './gaps/sdk-marker-probe.js';
@@ -837,6 +838,37 @@ export async function suiteFixtureSeed(
   } catch {
     return undefined;
   }
+}
+
+/**
+ * A way to make this session's page SLOW on purpose, or nothing.
+ *
+ * The third of these seams, for the same reason as the other two: a feature reaching into the input
+ * layer directly is a feature depending on a driver, and the boundary guard asks about it.
+ *
+ * Installs delays and NOTHING else. A rule that carried a status or a body would substitute a
+ * response the server never sent, and an app raced against invented data produces invented races —
+ * a fabricated defect handed to somebody at 3am, which is worse than finding nothing.
+ */
+export async function sessionPerturbationPort(
+  realInput: RealInputProvider | undefined,
+  appUrl: string | undefined,
+): Promise<
+  { slow(rules: readonly Perturbation[]): Promise<void>; clear(): Promise<void> } | undefined
+> {
+  if (realInput === undefined || appUrl === undefined) return undefined;
+  const setMocks = realInput.setMocks?.bind(realInput);
+  if (setMocks === undefined) return undefined;
+  if (!(await realInput.isAvailableFor(appUrl))) return undefined;
+  return {
+    slow: async (rules) => {
+      await setMocks(appUrl, [...rules]);
+    },
+    /** Clearing is the undo. A page left slowed is damage the next run inherits. */
+    clear: async () => {
+      await setMocks(appUrl, []);
+    },
+  };
 }
 
 /**

@@ -128,6 +128,19 @@ export class IntentShardStore {
    * Sharded wins on a collision. An id present in both has been migrated and possibly edited since,
    * and letting the flat copy overwrite that would silently revert the edit.
    */
+  /**
+   * Every record this ledger holds, from BOTH files, deduped by id.
+   *
+   * Public because the ledger is one logical thing kept in two places, and the tool that offers
+   * `list` has to be able to see all of it. It was private while `record` wrote to shards and `list`
+   * read the flat file, which meant an intent written through one action was invisible to the other
+   * — and an agent told its own recorded intent does not exist concludes the intent does not exist,
+   * not that there are two stores.
+   */
+  async all(): Promise<IntentRecord[]> {
+    return this.#all();
+  }
+
   async #all(): Promise<IntentRecord[]> {
     const shards = await Promise.all((await this.#subjectsOnDisk()).map((s) => this.#readShard(s)));
     const merged = new Map<string, IntentRecord>();

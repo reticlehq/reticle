@@ -109,6 +109,15 @@ export const ratioSchema = z.number().finite().min(0).max(1);
 /** HTTP status on a mock or a filter. */
 export const httpStatusSchema = z.number().finite().int().min(100).max(599);
 
+/**
+ * A perturbation seed. Bounded to 32 bits because that is what the generator consumes.
+ *
+ * The bound is not paranoia about size — it is what makes a seed a PROMISE. A value outside this
+ * range is silently coerced by the generator, so two different seeds would produce one run and a
+ * repro recorded against either would be a lie about which.
+ */
+export const seedSchema = z.number().finite().int().min(0).max(0xffff_ffff);
+
 /** Viewport CSS px. `.int()` alone still accepted 5 and 999999, then the handler silently clamped. */
 export const viewportPxSchema = z.number().finite().int().min(MIN_VIEWPORT_PX).max(MAX_VIEWPORT_PX);
 

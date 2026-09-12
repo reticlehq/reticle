@@ -161,3 +161,54 @@ describe('installNetworkMocks — Playwright wiring', () => {
     expect(fake.state.handler).toBeUndefined();
   });
 });
+
+/**
+ * A delay with nothing to substitute must delay the REAL response, not invent an empty one.
+ *
+ * `delayMs` alone used to produce a `fulfill` — status 200, `application/json`, body `''`. That is
+ * right for a fabricated failure and wrong for a slow endpoint: the app is handed an empty payload
+ * it never asked for, so anything observed afterwards describes Reticle's fake rather than the app's
+ * behaviour under load.
+ *
+ * It matters most for the thing this enables — seeded perturbation. A race "found" by pushing empty
+ * bodies at an app is not a race, it is an artifact, and shipping that as a finding would put a
+ * fabricated defect in front of somebody at 3am.
+ *
+ * So: a rule that says only WHEN says nothing about WHAT. The request goes to the real server and
+ * the real answer comes back, later.
+ */
+describe('a delay with no substitute response delays the real one', () => {
+  it('continues to the network rather than fulfilling an empty body', () => {
+    const out = matchMock([{ urlContains: '/api/save', delayMs: 300 }], {
+      url: 'https://app.test/api/save',
+      method: 'POST',
+    });
+    expect(out.kind).toBe('continue');
+    expect(out.delayMs).toBe(300);
+  });
+
+  it('still fulfills when the rule actually says WHAT to return', () => {
+    const out = matchMock([{ urlContains: '/api/save', delayMs: 300, status: 500 }], {
+      url: 'https://app.test/api/save',
+      method: 'POST',
+    });
+    expect(out.kind).toBe('fulfill');
+    expect(out.status).toBe(500);
+  });
+
+  it('a body alone still fulfills — saying WHAT is what makes it a substitution', () => {
+    const out = matchMock([{ urlContains: '/api/save', body: '{"ok":true}' }], {
+      url: 'https://app.test/api/save',
+      method: 'POST',
+    });
+    expect(out.kind).toBe('fulfill');
+  });
+
+  it('abort still wins over everything — a failure is not a delay', () => {
+    const out = matchMock([{ urlContains: '/api/save', delayMs: 300, abort: true }], {
+      url: 'https://app.test/api/save',
+      method: 'POST',
+    });
+    expect(out.kind).toBe('abort');
+  });
+});

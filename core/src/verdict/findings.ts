@@ -77,18 +77,6 @@ export const ContradictionKind = {
    */
   STATE_VS_RENDER: 'state-vs-render',
   /**
-   * The verdict was taken while the screen was still moving.
-   *
-   * `trace.summary.animations` counts animations and says nothing about whether any FINISHED, so an
-   * action that starts a transition and is judged mid-flight produced a verdict about a screen that
-   * was still changing — and nothing said so. This is the visual sibling of `request-never-settled`
-   * and is read the same way: not "the app is broken", but "this evidence was taken early".
-   *
-   * Narrowed to animations the ACTION started. One already running when the click landed is not
-   * that click's transition, and a detector that accuses every app with a spinner earns a mute.
-   */
-  TRANSITION_UNFINISHED: 'transition-unfinished',
-  /**
    * A write succeeded on the server and nothing moved in THIS document — because the page opened
    * another browsing context (an OAuth popup is the archetype) and the consequence lives there,
    * where an in-page SDK cannot follow. Reported instead of response-ignored, which would read as
@@ -294,8 +282,6 @@ export const ABSENCE_DERIVED_CONTRADICTIONS: ReadonlySet<ContradictionKind> = ne
   // The store moved and nothing painted. Non-visual state is a legitimate reason for that, so the
   // absence of a render is never by itself proof the app is wrong.
   ContradictionKind.STATE_VS_RENDER,
-  // The screen was still moving when we looked. That makes the evidence EARLY, never wrong.
-  ContradictionKind.TRANSITION_UNFINISHED,
   // The consequence is not missing, it is somewhere this document's SDK cannot look — a claim about
   // the reach of the observation, never a positive fault in the app.
   ContradictionKind.CONSEQUENCE_ELSEWHERE,
@@ -416,8 +402,6 @@ export const CONTRADICTION_CHANNELS: Record<ContradictionKind, readonly [Channel
   [ContradictionKind.SIGNAL_WITHOUT_CONSEQUENCE]: [ChannelId.SIGNAL, ChannelId.NET],
   // The two channels that disagree are the store and the screen it should have driven.
   [ContradictionKind.STATE_VS_RENDER]: [ChannelId.STATE, ChannelId.UI],
-  // Both sides are the screen: what the action set in motion, against what had settled by the close.
-  [ContradictionKind.TRANSITION_UNFINISHED]: [ChannelId.UI, ChannelId.UI],
   [ContradictionKind.CONSEQUENCE_ELSEWHERE]: [ChannelId.NET, ChannelId.UI],
   [ContradictionKind.DUPLICATE_REQUEST]: [ChannelId.NET, ChannelId.NET],
   [ContradictionKind.DUPLICATE_REQUEST_UNRELATED]: [ChannelId.NET, ChannelId.NET],

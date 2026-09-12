@@ -1,4 +1,5 @@
 import { FLOW_MUTATE_TOOL } from './flow-mutate-tools.js';
+import { seedSchema } from '../../agent/tools/args/numeric-bounds.js';
 import { z } from 'zod';
 import { emptyFlowRefusal } from './empty-flow.js';
 import { aliasParam } from '../../agent/tools/args/alias-args.js';
@@ -11,12 +12,16 @@ import {
 import type { FlowFile } from '@reticlehq/core';
 import { recordSuiteFlakes } from './suite/suite-flakes.js';
 import { ReticleTool } from '@reticlehq/core';
-import { asNumber, asString } from '@reticlehq/core';
+import { asNumber, asString, mutationTargetsFor, perturbationFor } from '@reticlehq/core';
 import { workerCountSchema } from '../../agent/tools/args/numeric-bounds.js';
 import { log } from '../../log.js';
 import { cloudFetch, syncFlowToCloud, SyncOutcome } from '../cloud/cloud-sync.js';
 import { mapWithConcurrency, resolveConcurrency } from './suite/parallel-suite.js';
-import { acquireLeasedSession, suiteFixtureSeed } from '../../agent/tools/lease-tools.js';
+import {
+  acquireLeasedSession,
+  sessionPerturbationPort,
+  suiteFixtureSeed,
+} from '../../agent/tools/lease-tools.js';
 import { homedir } from 'node:os';
 import { resolveProjectCloud } from '../cloud/cloud-config.js';
 import { buildSuiteVerdict } from './decision.js';
@@ -413,6 +418,11 @@ export const FLOW_TOOLS: ToolDef[] = [
         .boolean()
         .optional()
         .describe('Set true to allow destructive controls during this replay only.'),
+      seed: seedSchema
+        .optional()
+        .describe(
+          'Replay under SEEDED PERTURBATION: the endpoints this flow declared it depends on are each delayed by a different amount, so responses can arrive out of their recorded order. The same seed reproduces the same run exactly — a race nobody can re-run is a rumour. Only the TIMING changes; the real server answers and the real body comes back. Races, double-submits and stale-response bugs are invisible on a fast machine and appear here.',
+        ),
       sessionId: z
         .string()
         .optional()
@@ -421,6 +431,10 @@ export const FLOW_TOOLS: ToolDef[] = [
         ),
     },
     outputSchema: {
+      perturbed: z
+        .array(z.unknown())
+        .optional()
+        .describe('Present when `seed` was given: which endpoints were delayed, and by how long.'),
       // The flow's name — always present in FlowReplayResult (the description promises `{ name, … }`),
       // but omitted here, so a validating profile stripped it and a replay result arrived anonymous.
       name: z.string(),
@@ -463,7 +477,42 @@ export const FLOW_TOOLS: ToolDef[] = [
     },
     // The decision envelope is attached by replayNamedFlow only on drift/fail (clean pass stays
     // token-flat). Single-flow replay and whole-suite verify share that one implementation.
-    handler: (deps: ToolDeps, args): Promise<FlowReplayResult> => replayNamedFlow(deps, args),
+    handler: async (deps: ToolDeps, args): Promise<FlowReplayResult> => {
+      const seed = asNumber(args['seed']);
+      if (seed === undefined) return replayNamedFlow(deps, args);
+      /*
+       * Seeded chaos, and always put the page back.
+       *
+       * The targets are the endpoints the FLOW declared it depends on, so the perturbation lands on
+       * traffic the flow claims to care about rather than on something it never mentioned. No
+       * declared endpoints means nothing to slow, and the replay runs clean rather than pretending
+       * a seed did something.
+       *
+       * `finally` is not tidiness: a page left slowed is damage the NEXT run inherits, and it would
+       * inherit it as a mystery — the same rule the mutation loop had to earn.
+       */
+      const sessionId = asString(args['sessionId']);
+      const loaded = await flowsForSession(deps, sessionProjectId(deps, sessionId))
+        .flows.load(
+          asString(args['flowName']) ?? asString(args['flow']) ?? '',
+          sessionProjectId(deps, sessionId),
+        )
+        .catch(() => null);
+      const targets = loaded !== null && loaded.ok ? mutationTargetsFor(loaded.value) : [];
+      const rules = perturbationFor(seed, targets);
+      const port =
+        0 === rules.length
+          ? undefined
+          : await sessionPerturbationPort(deps.realInput, leasableAppUrl(deps, sessionId));
+      if (port === undefined) return replayNamedFlow(deps, args);
+      try {
+        await port.slow(rules);
+        const replay = await replayNamedFlow(deps, args);
+        return { ...replay, perturbed: rules } as FlowReplayResult;
+      } finally {
+        await port.clear().catch(() => undefined);
+      }
+    },
   },
   {
     name: ReticleTool.FLOW_VERIFY,

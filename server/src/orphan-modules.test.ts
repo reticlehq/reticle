@@ -39,6 +39,13 @@ const DECLARED_UNWIRED: Record<string, string> = {
     'reason those tests cannot silently drift from the real interface.',
   'features/project/memory-fs.ts':
     'an in-memory FileSystemPort, so a test can exercise project code without touching disk.',
+  'connection/realm/http-witness.ts':
+    'the reference Witness. openreality ships the abstraction and requires it be proved TWICE — a ' +
+    'protocol with one implementation is a description of that implementation. This is the second ' +
+    'proof, and it is deliberately not wired to a tool yet: a witness must be named per run (which ' +
+    'endpoint watches which subject) and there is no user asking for that. Exercised by its own ' +
+    'tests against the real `witnessDisagreement`, so it cannot drift from the contract it exists ' +
+    'to prove.',
   'workspace-packages.ts': 'reads the workspace layout; used by the cross-package guards.',
   'import-graph.ts': 'builds the import graph the boundary guards assert over.',
 

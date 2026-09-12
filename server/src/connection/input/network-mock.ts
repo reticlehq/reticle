@@ -52,6 +52,26 @@ export function matchMock(rules: MockRule[], req: { url: string; method: string 
     if (rule.method !== undefined && rule.method.toUpperCase() !== req.method.toUpperCase())
       continue;
     if (true === rule.abort) return { kind: 'abort' };
+    /*
+     * A rule that says only WHEN says nothing about WHAT.
+     *
+     * `delayMs` on its own used to fulfill — status 200, `application/json`, body `''` — so asking
+     * for a slow endpoint handed the app an EMPTY payload it never requested, and everything
+     * observed afterwards described Reticle's substitute rather than the app under load. Now the
+     * request goes to the real server and the real answer comes back, later.
+     *
+     * This is what makes seeded perturbation honest. A race "found" by pushing empty bodies at an
+     * app is an artifact, not a race, and shipping one as a finding puts a fabricated defect in
+     * front of somebody at 3am.
+     */
+    if (
+      rule.status === undefined &&
+      rule.body === undefined &&
+      rule.contentType === undefined &&
+      rule.delayMs !== undefined
+    ) {
+      return { kind: 'continue', delayMs: rule.delayMs };
+    }
     const outcome: MockOutcome = {
       kind: 'fulfill',
       status: rule.status ?? DEFAULT_STATUS,
@@ -71,6 +91,9 @@ export async function applyOutcome(
   sleep: (ms: number) => Promise<void>,
 ): Promise<void> {
   if ('continue' === outcome.kind) {
+    // Sleep FIRST, then let it through: the delay is the whole perturbation, and the response that
+    // comes back is the server's own.
+    if (outcome.delayMs !== undefined && outcome.delayMs > 0) await sleep(outcome.delayMs);
     await route.continue();
     return;
   }
