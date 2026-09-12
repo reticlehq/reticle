@@ -1,4 +1,4 @@
-import { healthEnvelope } from '../../connection/session/session-health.js';
+import { healthEnvelope } from '../../portal/session/session-health.js';
 import { verifyNextBaton, SUPPRESS_VERIFY_NEXT_ENV } from './verify-next-baton.js';
 import {
   type BrowserBrand,
@@ -24,8 +24,8 @@ import { EnvelopeKey } from './tool-kit.js';
 import { ReticleTool } from '@reticlehq/core';
 import { takeFeedbackPrompt } from './feedback-tools.js';
 import { takeFeedbackUndelivered } from '../../telemetry/feedback-delivery.js';
-import type { Session } from '../../connection/session/session.js';
-import { noteRefsMinted, wrongTabRefusal } from '../../connection/session/facts/ref-provenance.js';
+import type { Session } from '../../portal/session/session.js';
+import { noteRefsMinted, wrongTabRefusal } from '../../portal/session/facts/ref-provenance.js';
 import { CAPTURED_TOOLS, noteCapturedCall, noteToolDispatched } from '../tools/feature-capture.js';
 import { span } from '../../trace.js';
 import {

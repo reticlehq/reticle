@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "generatedAt": 1789201623615,
+  "capabilities": {
+    "testids": [
+      "activity-feed",
+      "area-chart",
+      "brand",
+      "cmdk-open",
+      "compose-generate",
+      "compose-prompt",
+      "compose-result",
+      "compose-source",
+      "compose-title",
+      "console-count",
+      "deploy-cancel",
+      "deploy-env-select",
+      "deploy-list",
+      "deploy-modal",
+      "deploy-name",
+      "deploy-submit",
+      "deploy-table",
+      "drawer",
+      "drawer-close",
+      "env-filter",
+      "env-menu",
+      "fault-404",
+      "fault-500",
+      "fault-buggy",
+      "fault-cors",
+      "fault-wrong-data",
+      "fault-wrong-format",
+      "filter-search",
+      "kpi-deploys",
+      "kpi-p95",
+      "kpi-services",
+      "kpi-success",
+      "login-email",
+      "login-error",
+      "login-password",
+      "login-submit",
+      "nav-compose",
+      "nav-deployments",
+      "nav-diagnostics",
+      "nav-overview",
+      "new-deploy",
+      "open-detail-action",
+      "palette",
+      "palette-input",
+      "request-log",
+      "row-menu",
+      "row-menu-trigger",
+      "saved-item-error",
+      "saved-item-input",
+      "saved-item-list",
+      "saved-item-submit",
+      "saved-items-heading",
+      "session-pill",
+      "ship-action"
+    ],
+    "signals": [
+      "auth:denied",
+      "auth:granted",
+      "compose:generated",
+      "compose:title-committed",
+      "deploy:created",
+      "deploy:reordered",
+      "deploy:selected",
+      "deploy:shipped",
+      "drawer:opened",
+      "fault:injected",
+      "filter:changed",
+      "item:saved",
+      "modal:closed",
+      "modal:opened",
+      "nav:changed",
+      "palette:opened",
+      "toast:shown"
+    ],
+    "stores": [
+      "app",
+      "queries"
+    ],
+    "flows": [
+      {
+        "name": "find-old-deploy",
+        "steps": [
+          "nav-deployments",
+          "scroll-to row-3600"
+        ]
+      },
+      {
+        "name": "generate-a-script",
+        "steps": [
+          "nav-compose",
+          "compose-prompt",
+          "compose-generate"
+        ]
+      },
+      {
+        "name": "ship-a-deploy",
+        "steps": [
+          "nav-deployments",
+          "new-deploy",
+          "deploy-name",
+          "deploy-submit"
+        ]
+      }
+    ]
+  }
+}

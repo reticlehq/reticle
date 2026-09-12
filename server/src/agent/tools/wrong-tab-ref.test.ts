@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { SessionState } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { runTool } from './invoke-tool.js';
-import { forgetRefProvenance } from '../../connection/session/facts/ref-provenance.js';
+import { forgetRefProvenance } from '../../portal/session/facts/ref-provenance.js';
 import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';
 import { BaselineStore } from '../../features/project/baselines.js';
 import { RecordingStore } from '../../features/flows/recording/tape/recordings.js';
@@ -19,7 +19,7 @@ import { FlowStore } from '../../features/flows/flows.js';
 import { ProjectStore } from '../../features/project/project-store.js';
 import { AnnotationStore } from '../../features/flows/stores/annotation-store.js';
 import type { ToolDef, ToolDeps } from './tools.js';
-import type { Session, SessionManager } from '../../connection/session/session.js';
+import type { Session, SessionManager } from '../../portal/session/session.js';
 
 const ROOT = '/tmp/reticle-wrong-tab-test/.reticle';
 const now = (): number => 0;

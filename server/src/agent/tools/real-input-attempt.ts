@@ -20,9 +20,9 @@
  * frame.
  */
 import { ActionType, InputModeReason, ReticleCommand, TRANSPORT_LIMITS } from '@reticlehq/core';
-import type { Session } from '../../connection/session/session.js';
-import type { ElementBox, RealInputArgs } from '../../connection/input/real-input.js';
-import { boxCenter, isPointerAction } from '../../connection/input/real-input.js';
+import type { Session } from '../../portal/session/session.js';
+import type { ElementBox, RealInputArgs } from '../../portal/input/real-input.js';
+import { boxCenter, isPointerAction } from '../../portal/input/real-input.js';
 import { assertDragNotDestructive, assertNotDestructive } from './act/act-danger.js';
 import { NATIVE_INPUT_ARG } from '@reticlehq/core';
 import { asRecord, asString } from '@reticlehq/core';

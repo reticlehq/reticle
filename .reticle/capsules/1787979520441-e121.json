@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1787979520441-e121",
+  "createdAt": 1787979520441,
+  "origin": "failed-assert",
+  "expected": "net",
+  "observed": "/api/broken responded 500 (expected 200)",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "hostile-fail-request",
+        "source": {
+          "file": "src/views/Hostile.tsx",
+          "line": 57,
+          "column": 6
+        }
+      },
+      "action": "click"
+    }
+  ]
+}

@@ -10,7 +10,7 @@ import { reloadResult } from './act/navigation/reload-result.js';
 import {
   waitForReconnect,
   RELOAD_RECONNECT_TIMEOUT_MS,
-} from '../../connection/session/session-reconnect.js';
+} from '../../portal/session/session-reconnect.js';
 import { ReticleCommand } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';

@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { EventType, Verified, VerifiedReason, type ReticleEvent } from '@reticlehq/core';
 import { TOOLS, type ToolDef, type ToolDeps } from '../tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import type { SessionManager } from '../../../connection/session/session.js';
-import { createFakeSession } from '../../../connection/session/fake-session.js';
+import type { SessionManager } from '../../../portal/session/session.js';
+import { createFakeSession } from '../../../portal/session/fake-session.js';
 
 /**
  * `reticle_assert` must SURFACE a contradiction, not merely be able to find one.

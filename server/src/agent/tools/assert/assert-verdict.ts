@@ -5,7 +5,7 @@ import { declaresState } from '@reticlehq/engine/question/predicate/predicate-as
 import { isStateUnwatched } from '@reticlehq/engine/evidence/blind-spots.js';
 import type { InstrumentationGap, JournalVerdictEffect } from '@reticlehq/core/artifacts';
 import type { Predicate } from '@reticlehq/engine/question/predicate/predicate.js';
-import type { Session } from '../../../connection/session/session.js';
+import type { Session } from '../../../portal/session/session.js';
 import {
   findContradictions,
   type Contradiction,

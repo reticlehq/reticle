@@ -3,10 +3,10 @@
  */
 import { describe, expect, it } from 'vitest';
 import { dispatchAct } from './act-preflight.js';
-import { SessionReplacedError } from '../../../connection/session/page-commands/pending-commands.js';
-import { CommandTimeoutError } from '../../../connection/session/page-commands/pending-commands.js';
+import { SessionReplacedError } from '../../../portal/session/page-commands/pending-commands.js';
+import { CommandTimeoutError } from '../../../portal/session/page-commands/pending-commands.js';
 import { followLostObservation } from './act-observation.js';
-import type { Session } from '../../../connection/session/session.js';
+import type { Session } from '../../../portal/session/session.js';
 
 describe('dispatchAct', () => {
   it('returns the result when nothing displaced the transport', async () => {

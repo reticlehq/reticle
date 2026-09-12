@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { SessionState } from '@reticlehq/core';
-import { LastAct } from '../../connection/session/last-act.js';
+import { LastAct } from '../../portal/session/last-act.js';
 import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import type { Session, SessionManager } from '../../connection/session/session.js';
+import type { Session, SessionManager } from '../../portal/session/session.js';
 
 /**
  * "No console errors" is the single most common claim an agent makes, and a quiet page and a dead

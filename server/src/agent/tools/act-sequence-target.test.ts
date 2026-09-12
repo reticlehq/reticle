@@ -6,7 +6,7 @@
  * problem rather than an unsupported locator — and the caller went looking for a re-render.
  */
 import { describe, expect, it } from 'vitest';
-import { LastAct } from '../../connection/session/last-act.js';
+import { LastAct } from '../../portal/session/last-act.js';
 import { SessionState } from '@reticlehq/core';
 import type { CommandResult, ReticleEvent } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from './tools.js';
@@ -18,7 +18,7 @@ import { RecordingStore } from '../../features/flows/recording/tape/recordings.j
 import { FlowStore } from '../../features/flows/flows.js';
 import { ProjectStore } from '../../features/project/project-store.js';
 import { AnnotationStore } from '../../features/flows/stores/annotation-store.js';
-import type { Session, SessionManager } from '../../connection/session/session.js';
+import type { Session, SessionManager } from '../../portal/session/session.js';
 
 interface ActCall {
   name: string;

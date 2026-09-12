@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1787776608237-e5",
+  "createdAt": 1787776608237,
+  "origin": "failed-assert",
+  "expected": "declared consequence",
+  "observed": "current route (no route change in the window) '/?__reticle_session=lease-a4c9f084-68a5-4dda-9683-54b29f8e1704' does not contain '/app'",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "login-submit",
+        "source": {
+          "file": "src/components/Login.tsx",
+          "line": 81,
+          "column": 8
+        }
+      },
+      "action": "click"
+    }
+  ]
+}

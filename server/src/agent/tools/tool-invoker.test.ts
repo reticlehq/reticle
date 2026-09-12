@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createToolInvoker, UNKNOWN_TOOL_ERROR } from './tool-invoker.js';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from './tools.js';
-import type { SessionManager } from '../../connection/session/session.js';
+import type { SessionManager } from '../../portal/session/session.js';
 
 /** Minimal ToolDeps stub: only `sessions.list` is exercised by reticle_sessions. */
 function fakeDeps(): ToolDeps {

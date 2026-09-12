@@ -6,8 +6,8 @@
  */
 import { z } from 'zod';
 import { ReticleCommand, SnapshotMode } from '@reticlehq/core';
-import type { SessionManager } from '../../connection/session/session.js';
-import type { RealInputProvider } from '../../connection/input/real-input.js';
+import type { SessionManager } from '../../portal/session/session.js';
+import type { RealInputProvider } from '../../portal/input/real-input.js';
 import type { BaselineStore } from '../../features/project/baselines.js';
 import { normalizeLines } from '../../features/project/baselines.js';
 import type { RecordingStore } from '../../features/flows/recording/tape/recordings.js';
@@ -16,7 +16,7 @@ import type { ArtifactRoot } from '../../features/project/artifact-root.js';
 import type { FlowStore } from '../../features/flows/flows.js';
 import type { ProjectStore } from '../../features/project/project-store.js';
 import type { AnnotationStore } from '../../features/flows/stores/annotation-store.js';
-import type { BrowserPool } from '../../connection/pool/browser-pool.js';
+import type { BrowserPool } from '../../portal/pool/browser-pool.js';
 import type { ChromiumProbe } from '../../command/cli/doctor/browser/chromium-hint.js';
 
 export interface ToolDeps<Ext = unknown> {

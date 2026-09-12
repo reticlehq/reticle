@@ -1,4 +1,4 @@
-import { SELF_RECOVERING_MARKER } from '../../../connection/session/no-session-diagnosis.js';
+import { SELF_RECOVERING_MARKER } from '../../../portal/session/no-session-diagnosis.js';
 import { DoctorRow, doctorRow } from './doctor-rows.js';
 
 /**

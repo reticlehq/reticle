@@ -7,7 +7,7 @@ import { FlowStore } from '../../features/flows/flows.js';
 import { ProjectStore } from '../../features/project/project-store.js';
 import { AnnotationStore } from '../../features/flows/stores/annotation-store.js';
 import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';
-import type { SessionManager } from '../../connection/session/session.js';
+import type { SessionManager } from '../../portal/session/session.js';
 
 /**
  * A consumer embedding this engine may carry its own dependencies on the deps bag.

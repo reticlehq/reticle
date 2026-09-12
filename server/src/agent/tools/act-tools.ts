@@ -3,11 +3,11 @@
  * that file under the line cap and assembled back into the tool list there via ...ACT_TOOLS; the
  * native-input attempt itself lives in real-input-attempt.ts for the same reason.
  */
-import type { Session } from '../../connection/session/session.js';
+import type { Session } from '../../portal/session/session.js';
 import { z } from 'zod';
 import { aliasParam } from './args/alias-args.js';
-import { resolveSessionWithin } from '../../connection/session/timing/resolve-within.js';
-import { WALL_CLOCK } from '../../connection/session/timing/wall-clock.js';
+import { resolveSessionWithin } from '../../portal/session/timing/resolve-within.js';
+import { WALL_CLOCK } from '../../portal/session/timing/wall-clock.js';
 import { ACT_SEQUENCE_TOOL } from './act-sequence-tool.js';
 import { timeoutMsSchema } from './args/numeric-bounds.js';
 import { captureAct } from '../../features/flows/replay.js';
@@ -79,13 +79,13 @@ import {
   provenExpectedLinks,
   PredicateSchema,
 } from '@reticlehq/engine/question/predicate/predicate.js';
-import { healthEnvelope, refuseIfThrottled } from '../../connection/session/session-health.js';
+import { healthEnvelope, refuseIfThrottled } from '../../portal/session/session-health.js';
 import {
   pausedShortCircuit,
   pausedOutputShape,
   withControl,
   PAUSED_NO_VERDICT,
-} from '../../connection/session/control-envelope.js';
+} from '../../portal/session/control-envelope.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { sourceOf } from './tools-helpers.js';
 import { dispatchAct, preflightAct } from './act/act-preflight.js';

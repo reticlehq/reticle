@@ -8,7 +8,7 @@ import { RecordingStore } from '../../features/flows/recording/tape/recordings.j
 import { FlowStore } from '../../features/flows/flows.js';
 import { ProjectStore } from '../../features/project/project-store.js';
 import { AnnotationStore } from '../../features/flows/stores/annotation-store.js';
-import type { Session, SessionManager } from '../../connection/session/session.js';
+import type { Session, SessionManager } from '../../portal/session/session.js';
 import {
   reticleDirPaths,
   readContract,

@@ -12,7 +12,7 @@ import { AnnotationStore } from './stores/annotation-store.js';
 import { ArtifactRootReason } from '../project/artifact-root.js';
 import { createMemoryFs } from '../project/memory-fs.js';
 import type { FileSystemPort } from '../project/fs/fs-port.js';
-import type { Session, SessionManager } from '../../connection/session/session.js';
+import type { Session, SessionManager } from '../../portal/session/session.js';
 
 /**
  * Where a saved flow LANDS, as opposed to what it contains.

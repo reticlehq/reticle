@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { Bridge } from '../../connection/bridge/bridge.js';
+import { Bridge } from '../../portal/bridge/bridge.js';
 import type { ToolDeps } from './tools.js';
 import {
   FakeBrowser,
   callTool,
   makeDeps,
   waitUntil,
-} from '../../connection/bridge/bridge.test-harness.js';
+} from '../../portal/bridge/bridge.test-harness.js';
 import { SnapshotDeltaMode } from './read/snapshot-delta.js';
 
 describe('reticle_snapshot diff round trip — fields survive the tool boundary', () => {

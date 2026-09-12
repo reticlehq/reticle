@@ -10,7 +10,7 @@
  */
 
 import { RefusalReason, TRANSPORT_LIMITS } from '@reticlehq/core';
-import { SELF_RECOVERING_MARKER } from '../../connection/session/no-session-diagnosis.js';
+import { SELF_RECOVERING_MARKER } from '../../portal/session/no-session-diagnosis.js';
 import {
   chromiumInstallCommand,
   bundledPlaywrightVersion,

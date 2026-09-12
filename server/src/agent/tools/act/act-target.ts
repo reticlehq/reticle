@@ -8,7 +8,7 @@
  * line count. This resolves a TARGET and dispatches only QUERY, so that guard is untouched.
  */
 import { ReticleCommand, isGlobalPressCall } from '@reticlehq/core';
-import type { Session } from '../../../connection/session/session.js';
+import type { Session } from '../../../portal/session/session.js';
 import { normalizeQueryArgs } from '../read/query-shape.js';
 import { resolveTargetRef, type TargetResolution } from './resolve-target.js';
 import { asRecord, asString } from '@reticlehq/core';

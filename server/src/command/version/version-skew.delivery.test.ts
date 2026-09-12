@@ -10,10 +10,10 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { WebSocket } from 'ws';
 import { RETICLE_WS_PATH, LOOPBACK_HOST, MessageKind } from '@reticlehq/core';
-import { Bridge } from '../../connection/bridge/bridge.js';
+import { Bridge } from '../../portal/bridge/bridge.js';
 import { TOOLS, type ToolDeps } from '../../agent/tools/tools.js';
 import { runTool } from '../../agent/tools/invoke-tool.js';
-import { makeDeps } from '../../connection/bridge/bridge.test-harness.js';
+import { makeDeps } from '../../portal/bridge/bridge.test-harness.js';
 import { resetVersionSkew } from './version-nudge.js';
 
 let bridge: Bridge;

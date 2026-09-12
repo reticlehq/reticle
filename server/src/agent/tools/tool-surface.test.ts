@@ -12,8 +12,8 @@ import {
   resolveToolSurface,
 } from './tool-surface.js';
 import { ReticleTool } from '@reticlehq/core';
-import { PAUSE_HINT } from '../../connection/session/control-envelope.js';
-import { buildSessionLease } from '../../connection/session/presence/session-lease.js';
+import { PAUSE_HINT } from '../../portal/session/control-envelope.js';
+import { buildSessionLease } from '../../portal/session/presence/session-lease.js';
 
 describe('tool profiles', () => {
   const original = process.env[TOOL_PROFILE_ENV];

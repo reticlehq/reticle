@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sizeCost, estimateTokens } from '../../connection/session/output-budget.js';
+import { sizeCost, estimateTokens } from '../../portal/session/output-budget.js';
 import { applySnapshotDelta, SnapshotCache } from './read/snapshot-delta.js';
 
 /**

@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1788288675073-e14",
+  "createdAt": 1788288675073,
+  "origin": "failed-assert",
+  "expected": "signal stats:loaded",
+  "observed": "signal \"stats:loaded\" never fired",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "fetch-stats",
+        "source": {
+          "file": "src/App.tsx",
+          "line": 181,
+          "column": 8
+        }
+      },
+      "action": "click"
+    }
+  ]
+}

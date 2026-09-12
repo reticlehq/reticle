@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { CommandResult } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import type { Session, SessionManager } from '../../connection/session/session.js';
+import type { Session, SessionManager } from '../../portal/session/session.js';
 
 /**
  * The QUERY handler forwards an explicit ALLOWLIST of arguments to the browser, so a newly added

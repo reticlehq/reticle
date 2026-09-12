@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1788288698690-e6",
+  "createdAt": 1788288698690,
+  "origin": "failed-assert",
+  "expected": "declared consequence",
+  "observed": "no element matched {\"testid\":\"new-todo\"} — testids present here: status, route, draft, bulk-done, add, todo-list, archive-1, archive-2, break, go-settings, go-home, fetch-stats",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "draft",
+        "source": {
+          "file": "src/App.tsx",
+          "line": 125,
+          "column": 8
+        }
+      },
+      "action": "fill"
+    }
+  ]
+}

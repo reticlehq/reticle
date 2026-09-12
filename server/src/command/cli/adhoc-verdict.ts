@@ -1,7 +1,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { LOOPBACK_HOST, MCP_SSE_PATH } from '@reticlehq/core';
-import { TOKEN_QUERY_PARAM } from '../../connection/bridge/token-auth.js';
+import { TOKEN_QUERY_PARAM } from '../../portal/bridge/token-auth.js';
 import { ReticleTool } from '@reticlehq/core';
 
 /**

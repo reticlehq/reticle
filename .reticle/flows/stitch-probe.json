@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "name": "stitch-probe",
+  "createdAt": 1786333152376,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "nav-deployments",
+        "source": {
+          "file": "src/components/Sidebar.tsx",
+          "line": 41,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "signal": "nav:changed"
+      }
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BlindSpotKind, SessionState, Verified } from '@reticlehq/core';
 import type { CommandResult, ReticleEvent } from '@reticlehq/core';
-import { LastAct } from '../../connection/session/last-act.js';
+import { LastAct } from '../../portal/session/last-act.js';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../../features/project/baselines.js';
@@ -12,7 +12,7 @@ import { ProjectStore } from '../../features/project/project-store.js';
 import { AnnotationStore } from '../../features/flows/stores/annotation-store.js';
 import type { CausalSummary } from '../capsule/causal-summary.js';
 import type { HonestyBlock } from '@reticlehq/engine/evidence/honesty.js';
-import type { Session, SessionManager } from '../../connection/session/session.js';
+import type { Session, SessionManager } from '../../portal/session/session.js';
 
 /**
  * An act over an app with NO subscribed store returns `stateDiffs: []` — which reads as "the app

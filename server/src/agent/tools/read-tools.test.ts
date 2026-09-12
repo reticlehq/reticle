@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CommandResult } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import type { Session, SessionManager } from '../../connection/session/session.js';
+import type { Session, SessionManager } from '../../portal/session/session.js';
 
 /**
  * An unscoped state read must not hand back the entire store tree — and must not change shape to

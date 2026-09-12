@@ -31,15 +31,15 @@ import {
   EventType,
 } from '@reticlehq/core';
 import type { FlowReplayResult } from '@reticlehq/core';
-import { originOf } from './connection/session/session-manager.js';
+import { originOf } from './portal/session/session-manager.js';
 import { setBrowserMode, BrowserMode } from './telemetry/browser-mode.js';
-import type { NetworkDetail } from './connection/input/network-detail.js';
+import type { NetworkDetail } from './portal/input/network-detail.js';
 import { replayNamedFlow } from './features/flows/flow-tools.js';
 import { createSharedServer } from './http-server.js';
 import { openLoopbackAlias } from './command/daemon/binding/loopback-alias.js';
 import { reportAppInstrumented } from './telemetry/app-instrumented.js';
-import { resolveBridgeSecurityWithAutoToken } from './connection/bridge/bridge-security.js';
-import { Bridge } from './connection/bridge/bridge.js';
+import { resolveBridgeSecurityWithAutoToken } from './portal/bridge/bridge-security.js';
+import { Bridge } from './portal/bridge/bridge.js';
 import { sdkFixForDirectory } from './command/version/sdk-fix.js';
 import { SERVER_VERSION } from './command/version/identity/server-version.js';
 import { BaselineStore } from './features/project/baselines.js';
@@ -63,22 +63,22 @@ import {
   SessionReaper,
   endAllSessions,
   MCP_DISCONNECT_SUMMARY,
-} from './connection/session/session-reaper.js';
-import { wireSessionScope } from './connection/session/no-session-watch.js';
+} from './portal/session/session-reaper.js';
+import { wireSessionScope } from './portal/session/no-session-watch.js';
 import { buildIdlePredicate } from './command/daemon/lifetime/daemon-usefulness.js';
 import { resolveToolSurface } from './agent/tools/tool-surface.js';
 import { statusPayload } from './status-payload.js';
-import { CdpRealInputProvider, LaunchedRealInputProvider } from './connection/input/real-input.js';
+import { CdpRealInputProvider, LaunchedRealInputProvider } from './portal/input/real-input.js';
 import { cpus } from 'node:os';
-import { BrowserPool } from './connection/pool/browser-pool.js';
+import { BrowserPool } from './portal/pool/browser-pool.js';
 import {
   AGENT_ALREADY_DRIVING_ELSEWHERE,
   shouldGreetWithLeaseNotice,
-} from './connection/session/lease-visibility.js';
-import { playwrightLauncher, resolveMaxContexts } from './connection/pool/playwright-launcher.js';
-import { LeaseReaper } from './connection/pool/lease-reaper.js';
+} from './portal/session/lease-visibility.js';
+import { playwrightLauncher, resolveMaxContexts } from './portal/pool/playwright-launcher.js';
+import { LeaseReaper } from './portal/pool/lease-reaper.js';
 import { readJournalEnabled, readProjectId } from './command/cli/ports/resolve/cli-port.js';
-import { hasProjectConnectedBefore } from './connection/session/recall/prior/connection-memory.js';
+import { hasProjectConnectedBefore } from './portal/session/recall/prior/connection-memory.js';
 import { reticleStateHome } from './command/daemon/daemon.js';
 import { probeChromium } from './command/cli/doctor/browser/chromium-hint.js';
 import { makeJournalAttach } from './features/journal/attach-journal.js';
@@ -94,7 +94,7 @@ import type {
   OwnedRealInputProvider,
   RealInputProvider,
   InjectConnectOptions,
-} from './connection/input/real-input.js';
+} from './portal/input/real-input.js';
 import { log } from './log.js';
 
 /** A human-facing one-liner for a panel replay verdict — ✓ passed / ⚠ drifted / ✗ errored. */
@@ -109,11 +109,11 @@ function replayVerdictLine(result: FlowReplayResult): string {
 // not have to know that the vocabulary moved.
 export { ReticleTool } from '@reticlehq/core';
 export { RingBuffer } from '@reticlehq/engine/window/ring-buffer.js';
-export { Bridge } from './connection/bridge/bridge.js';
-export { Session, SessionManager } from './connection/session/session.js';
-export type { SessionInfo, SessionHealth } from './connection/session/session.js';
-export { buildSessionRecommendation } from './connection/session/presence/session-recommendation.js';
-export type { RecommendationInputs } from './connection/session/presence/session-recommendation.js';
+export { Bridge } from './portal/bridge/bridge.js';
+export { Session, SessionManager } from './portal/session/session.js';
+export type { SessionInfo, SessionHealth } from './portal/session/session.js';
+export { buildSessionRecommendation } from './portal/session/presence/session-recommendation.js';
+export type { RecommendationInputs } from './portal/session/presence/session-recommendation.js';
 export { TOOLS } from './agent/tools/tools.js';
 export type { ToolDeps, ToolDef } from './agent/tools/tools.js';
 export { createToolInvoker, UNKNOWN_TOOL_ERROR } from './agent/tools/tool-invoker.js';
@@ -165,9 +165,9 @@ export {
 } from '@reticlehq/engine/disagreement/contradiction-folds.js';
 export type { ContradictionFold } from '@reticlehq/engine/disagreement/contradiction-folds.js';
 export { MCP_SSE_PATH, MCP_MESSAGE_PATH } from '@reticlehq/core';
-export { BrowserPool, DEFAULT_LEASE_TTL_MS } from './connection/pool/browser-pool.js';
-export type { Lease, Launcher, PooledBrowser } from './connection/pool/browser-pool.js';
-export { playwrightLauncher, resolveMaxContexts } from './connection/pool/playwright-launcher.js';
+export { BrowserPool, DEFAULT_LEASE_TTL_MS } from './portal/pool/browser-pool.js';
+export type { Lease, Launcher, PooledBrowser } from './portal/pool/browser-pool.js';
+export { playwrightLauncher, resolveMaxContexts } from './portal/pool/playwright-launcher.js';
 export { appendReticleParams } from './agent/tools/lease-tools.js';
 export {
   writePid,
@@ -193,12 +193,12 @@ export type {
   CrawlOptions,
   CrawlSession,
 } from './features/crawl/crawl.js';
-export { scrollToFind } from './connection/input/scroll-find.js';
+export { scrollToFind } from './portal/input/scroll-find.js';
 export type {
   ScrollFindResult,
   ScrollFindQuery,
   ScrollFindSession,
-} from './connection/input/scroll-find.js';
+} from './portal/input/scroll-find.js';
 export {
   CORE_TOOL_NAMES,
   TOOL_SURFACE,
@@ -259,7 +259,7 @@ export {
   performGesture,
   boxCenter,
   isPointerAction,
-} from './connection/input/real-input.js';
+} from './portal/input/real-input.js';
 export type {
   RealInputProvider,
   OwnedRealInputProvider,
@@ -267,7 +267,7 @@ export type {
   LaunchedProviderOptions,
   ElementBox,
   RealInputArgs,
-} from './connection/input/real-input.js';
+} from './portal/input/real-input.js';
 
 export interface StartOptions {
   port?: number;
@@ -336,7 +336,7 @@ export interface RunningServer {
   close: () => Promise<void>;
 }
 
-export { resolveBridgeSecurity } from './connection/bridge/bridge-security.js';
+export { resolveBridgeSecurity } from './portal/bridge/bridge-security.js';
 
 /**
  * Build the shared browser pool (one headless Chromium, N capped isolated leased contexts). Lazy —
@@ -946,8 +946,5 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
 // takes a live `Session`, and a `Session` exists only inside a running daemon. A runner that
 // cannot import it cannot score anything, which would have made the whole conformance chain
 // complete and unusable.
-export { WebRealm, type WebRealmDeps } from './connection/realm/web-realm.js';
-export {
-  conformanceClient,
-  type ConformanceClient,
-} from './connection/realm/conformance-client.js';
+export { WebRealm, type WebRealmDeps } from './portal/realm/web-realm.js';
+export { conformanceClient, type ConformanceClient } from './portal/realm/conformance-client.js';

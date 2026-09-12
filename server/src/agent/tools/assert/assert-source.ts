@@ -1,6 +1,6 @@
 import { declaresDom } from '@reticlehq/engine/question/predicate/predicate-asks.js';
 import type { Predicate } from '@reticlehq/engine/question/predicate/predicate-schema.js';
-import type { Session } from '../../../connection/session/session.js';
+import type { Session } from '../../../portal/session/session.js';
 
 /**
  * Where an assertion's OWN evidence is written, as `file:line`.

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { capabilityAbsences } from './capability-absences.js';
 import { TOOLS, type ToolDef, type ToolDeps } from '../tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import type { Session, SessionManager } from '../../../connection/session/session.js';
+import type { Session, SessionManager } from '../../../portal/session/session.js';
 
 describe('what a session cannot do is reported, but only when it said so', () => {
   it('a healthy session declares nothing missing', () => {

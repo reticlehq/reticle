@@ -22,7 +22,7 @@ import {
   isLoopbackPeer,
   requestToken,
   tokensMatch,
-} from './connection/bridge/token-auth.js';
+} from './portal/bridge/token-auth.js';
 import { LOOPBACK_IDLE_MS } from './loopback-agent.js';
 
 export interface SharedServer {

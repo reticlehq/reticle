@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1789130984514-assert",
+  "createdAt": 1789130984514,
+  "origin": "failed-assert",
+  "expected": "state view",
+  "observed": "state \"view\" never changed",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "login-submit",
+        "source": {
+          "file": "src/components/Login.tsx",
+          "line": 81,
+          "column": 8
+        }
+      },
+      "action": "click"
+    }
+  ]
+}

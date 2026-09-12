@@ -162,7 +162,7 @@ export const READ_PATH = Object.freeze({
       'the wire body is the one field that REPLACES the in-page one rather than filling a gap, so both caveats ride with it: requestBodyTruncated follows the body that won, and requestBodyDivergedFromPage states that the two disagreed',
     ],
   },
-  'server/src/connection/input/network-detail.ts': {
+  'server/src/portal/input/network-detail.ts': {
     NetworkDetail: [Declaration.NONE, 'the payload type'],
     ResponseLike: [Declaration.NONE, 'type: the Playwright surface the attachment reads'],
     PageLike: [Declaration.NONE, 'type: the Playwright surface the attachment reads'],
@@ -205,7 +205,7 @@ export const CONFORMANCE_TESTS = Object.freeze([
   'adapters/realm/dom/src/security/serialization.test.ts',
   'adapters/realm/dom/src/transport/transport.overflow-marker.test.ts',
   'engine/src/window/ring-buffer.test.ts',
-  'server/src/connection/input/network-detail.lossy-conformance.test.ts',
+  'server/src/portal/input/network-detail.lossy-conformance.test.ts',
 ]);
 
 const IDENTIFIER = '[A-Za-z_$][\\w$]*';

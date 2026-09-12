@@ -19,7 +19,7 @@ import { FlowStore } from '../../features/flows/flows.js';
 import { ProjectStore } from '../../features/project/project-store.js';
 import { AnnotationStore } from '../../features/flows/stores/annotation-store.js';
 import type { ToolDef, ToolDeps } from './tools.js';
-import type { Session, SessionManager } from '../../connection/session/session.js';
+import type { Session, SessionManager } from '../../portal/session/session.js';
 
 const ROOT = '/tmp/reticle-captured-calls-test/.reticle';
 const SESSION_ID = 'sA';

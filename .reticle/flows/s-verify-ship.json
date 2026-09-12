@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "name": "s-verify-ship",
+  "createdAt": 1789195310611,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "login-email",
+        "source": {
+          "file": "src/components/Login.tsx",
+          "line": 48,
+          "column": 8
+        }
+      },
+      "args": {
+        "value": "admin@reticle.dev"
+      },
+      "action": "fill"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "login-password",
+        "source": {
+          "file": "src/components/Login.tsx",
+          "line": 59,
+          "column": 8
+        }
+      },
+      "args": {
+        "value": "<redacted: supply at replay>"
+      },
+      "action": "fill"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "login-submit",
+        "source": {
+          "file": "src/components/Login.tsx",
+          "line": 81,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "click"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "nav-deployments",
+        "source": {
+          "file": "src/components/Sidebar.tsx",
+          "line": 45,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "click"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "row-menu-trigger-4000",
+        "source": {
+          "file": "src/components/DeployTable.tsx",
+          "line": 104,
+          "column": 14
+        }
+      },
+      "args": {},
+      "action": "click"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "ship-4000",
+        "source": {
+          "file": "src/components/DeployTable.tsx",
+          "line": 125,
+          "column": 18
+        }
+      },
+      "args": {},
+      "action": "click"
+    }
+  ],
+  "startPath": "/",
+  "success": {
+    "state": {
+      "path": "deployments.0.status",
+      "store": "app",
+      "equals": "live"
+    }
+  }
+}

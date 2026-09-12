@@ -6,10 +6,10 @@ import {
   registerContradictionFold,
 } from '@reticlehq/engine/disagreement/contradiction-folds.js';
 import { SessionState, Verified, type ReticleEvent } from '@reticlehq/core';
-import { LastAct } from './connection/session/last-act.js';
+import { LastAct } from './portal/session/last-act.js';
 import { TOOLS, type ToolDef, type ToolDeps } from './agent/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import type { Session, SessionManager } from './connection/session/session.js';
+import type { Session, SessionManager } from './portal/session/session.js';
 
 /** A healthy session with nothing wrong with it, so any UNKNOWN below comes from the crashed rule. */
 function deps(): ToolDeps {

@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { LastAct } from './connection/session/last-act.js';
+import { LastAct } from './portal/session/last-act.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DriveErrorCode, InputMode, SessionState } from '@reticlehq/core';
 import type { CommandResult } from '@reticlehq/core';
 import { start, type RunningServer } from './index.js';
-import { PAIRING_TOKEN_DIR_ENV } from './connection/bridge/pairing-token.js';
+import { PAIRING_TOKEN_DIR_ENV } from './portal/bridge/pairing-token.js';
 
 // start auto-provisions a pairing token; keep it out of the real ~/.reticle during tests.
 process.env[PAIRING_TOKEN_DIR_ENV] = join(tmpdir(), 'reticle-drive-token-test');
@@ -23,8 +23,8 @@ import {
   type ElementBox,
   type OwnedRealInputProvider,
   type RealInputProvider,
-} from './connection/input/real-input.js';
-import type { Session, SessionManager } from './connection/session/session.js';
+} from './portal/input/real-input.js';
+import type { Session, SessionManager } from './portal/session/session.js';
 
 const DRIVE_URL = 'http://localhost:3000/app';
 const SOURCE_BOX: ElementBox = { x: 0, y: 0, width: 200, height: 100 };

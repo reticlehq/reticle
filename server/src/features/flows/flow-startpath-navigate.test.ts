@@ -16,8 +16,8 @@ import {
   type FlowFile,
 } from '@reticlehq/core';
 import { arriveAtStartPath } from './flow-replay-run.js';
-import type { SessionManager } from '../../connection/session/session-manager.js';
-import type { Session } from '../../connection/session/session.js';
+import type { SessionManager } from '../../portal/session/session-manager.js';
+import type { Session } from '../../portal/session/session.js';
 
 const flow = (startPath?: string): FlowFile => ({
   version: FLOW_FILE_VERSION,

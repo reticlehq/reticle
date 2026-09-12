@@ -3,7 +3,7 @@ import { TRANSPORT_LIMITS } from '@reticlehq/core';
 import { FEEDBACK_ASK, RECOVERY, buildErrorPayload, recoveryFor } from './error-recovery.js';
 import { TOOLS } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import { diagnoseNoSession } from '../../connection/session/no-session-diagnosis.js';
+import { diagnoseNoSession } from '../../portal/session/no-session-diagnosis.js';
 
 describe('recoveryFor — every known error carries an actionable next move', () => {
   it('maps the no-session footgun to a concrete recovery', () => {

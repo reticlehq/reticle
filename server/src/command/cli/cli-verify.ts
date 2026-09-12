@@ -21,7 +21,7 @@ import { resolveSuiteSelection } from '../../features/flows/suite-selection.js';
 import {
   readOrCreatePairingTokenSync,
   defaultPairingTokenDir,
-} from '../../connection/bridge/pairing-token.js';
+} from '../../portal/bridge/pairing-token.js';
 import { randomUUID } from 'node:crypto';
 import {
   RETICLE_DEFAULT_PORT,
@@ -59,7 +59,7 @@ import { FlowStore } from '../../features/flows/flows.js';
 import { ProjectStore } from '../../features/project/project-store.js';
 import { AnnotationStore } from '../../features/flows/stores/annotation-store.js';
 import { createNodeFileSystem } from '../../features/project/fs/fs-port.js';
-import type { SessionManager } from '../../connection/session/session-manager.js';
+import type { SessionManager } from '../../portal/session/session-manager.js';
 import type { ToolDeps } from '../../agent/tools/tools.js';
 
 const EXIT_PASS = 0;

@@ -5,7 +5,7 @@ import { ReticleTool } from '@reticlehq/core';
 import { cursorSchema } from './args/numeric-bounds.js';
 import { reconcile, type Mismatch } from '@reticlehq/engine/disagreement/reconcile.js';
 import { salvageJson } from '@reticlehq/engine/window/json-salvage.js';
-import { withControl } from '../../connection/session/control-envelope.js';
+import { withControl } from '../../portal/session/control-envelope.js';
 import { asNumber, asString } from '@reticlehq/core';
 import { type ToolDef, sessionIdShape, commandOrThrow } from './tool-kit.js';
 import { readCompleteTree } from './read/complete-snapshot.js';

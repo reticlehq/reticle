@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1787715679208-e5",
+  "createdAt": 1787715679209,
+  "origin": "failed-assert",
+  "expected": "declared consequence",
+  "observed": "current route (no route change in the window) is '/', expected '/billing/invoices/overdue'",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "login-submit",
+        "source": {
+          "file": "src/components/Login.tsx",
+          "line": 81,
+          "column": 8
+        }
+      },
+      "action": "click"
+    }
+  ]
+}

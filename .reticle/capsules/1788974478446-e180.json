@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1788974478446-e180",
+  "createdAt": 1788974478446,
+  "origin": "failed-assert",
+  "expected": "state app.newDeployOpen",
+  "observed": "state \"app.newDeployOpen\" never changed",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "deploy-cancel",
+        "source": {
+          "file": "src/components/NewDeployModal.tsx",
+          "line": 39,
+          "column": 10
+        }
+      },
+      "action": "click"
+    }
+  ]
+}

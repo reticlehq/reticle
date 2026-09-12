@@ -4,7 +4,7 @@ import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EventType, type JournalAction, type ReticleEvent } from '@reticlehq/core';
-import { Bridge } from '../../connection/bridge/bridge.js';
+import { Bridge } from '../../portal/bridge/bridge.js';
 import { ReticleTool } from '@reticlehq/core';
 import { createNodeFileSystem } from '../project/fs/fs-port.js';
 import type { ToolDeps } from '../../agent/tools/tools.js';
@@ -13,7 +13,7 @@ import {
   callTool,
   makeDeps,
   waitUntil,
-} from '../../connection/bridge/bridge.test-harness.js';
+} from '../../portal/bridge/bridge.test-harness.js';
 import { makeJournalAttach } from './attach-journal.js';
 
 /**

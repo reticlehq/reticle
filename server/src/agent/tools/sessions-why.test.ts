@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest';
 import { NoSessionAction } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { TOOLS } from './tools.js';
-import type { NoSessionNextAction } from '../../connection/session/no-session-next-action.js';
+import type { NoSessionNextAction } from '../../portal/session/no-session-next-action.js';
 import type { ToolDeps } from './tool-kit.js';
 
 const sessionsTool = TOOLS.find((tool) => ReticleTool.SESSIONS === tool.name);

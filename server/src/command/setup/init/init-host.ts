@@ -14,7 +14,7 @@ import { reportInitOutcome } from '../../../telemetry/init-telemetry.js';
 import {
   defaultPairingTokenDir,
   readOrCreatePairingTokenSync,
-} from '../../../connection/bridge/pairing-token.js';
+} from '../../../portal/bridge/pairing-token.js';
 import { declaredInstallSource } from '../../../telemetry/install-source.js';
 
 export function serverInitHost(): InitHost {

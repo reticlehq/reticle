@@ -34,12 +34,12 @@ const PACKAGE_DIR = join(__dirname, '..');
 const DECLARED_UNWIRED: Record<string, string> = {
   // ── test infrastructure that happens to live in src/ ────────────────────────────────────────
   'machine/temp-dir.ts': 'test helper: makes and removes scratch directories. 33 test importers.',
-  'connection/session/fake-session.ts':
+  'portal/session/fake-session.ts':
     'the typed Session double every connection test builds on. 11 test importers, and the ' +
     'reason those tests cannot silently drift from the real interface.',
   'features/project/memory-fs.ts':
     'an in-memory FileSystemPort, so a test can exercise project code without touching disk.',
-  'connection/realm/http-witness.ts':
+  'portal/realm/http-witness.ts':
     'the reference Witness. openreality ships the abstraction and requires it be proved TWICE — a ' +
     'protocol with one implementation is a description of that implementation. This is the second ' +
     'proof, and it is deliberately not wired to a tool yet: a witness must be named per run (which ' +

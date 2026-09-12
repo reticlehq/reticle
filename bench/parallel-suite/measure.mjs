@@ -9,7 +9,7 @@
 // its own bridge so the leased tabs register with US, not with whatever external daemon is around).
 
 import { join } from 'node:path';
-import { Bridge } from '../../server/dist/connection/bridge/bridge.js';
+import { Bridge } from '../../server/dist/portal/bridge/bridge.js';
 import { FLOW_TOOLS } from '../../server/dist/features/flows/flow-tools.js';
 import { FlowStore } from '../../server/dist/features/flows/flows.js';
 import { ProjectStore } from '../../server/dist/features/project/project-store.js';
@@ -17,11 +17,11 @@ import { BaselineStore } from '../../server/dist/features/project/baselines.js';
 import { RecordingStore } from '../../server/dist/features/flows/recording/tape/recordings.js';
 import { AnnotationStore } from '../../server/dist/features/flows/stores/annotation-store.js';
 import { createNodeFileSystem } from '../../server/dist/features/project/fs/fs-port.js';
-import { BrowserPool } from '../../server/dist/connection/pool/browser-pool.js';
+import { BrowserPool } from '../../server/dist/portal/pool/browser-pool.js';
 import {
   playwrightLauncher,
   resolveMaxContexts,
-} from '../../server/dist/connection/pool/playwright-launcher.js';
+} from '../../server/dist/portal/pool/playwright-launcher.js';
 import { cpus } from 'node:os';
 
 const APP_URL = process.argv[2] ?? 'http://localhost:4312';

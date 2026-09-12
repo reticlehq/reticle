@@ -13,8 +13,8 @@ import { FlowStore } from '../flows/flows.js';
 import { ProjectStore } from '../project/project-store.js';
 import { AnnotationStore } from '../flows/stores/annotation-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '../project/fs/fs-port.js';
-import type { RealInputProvider } from '../../connection/input/real-input.js';
-import type { Session, SessionManager } from '../../connection/session/session.js';
+import type { RealInputProvider } from '../../portal/input/real-input.js';
+import type { Session, SessionManager } from '../../portal/session/session.js';
 
 const now = (): number => 0;
 const SESSION_URL = 'http://localhost:3100/';

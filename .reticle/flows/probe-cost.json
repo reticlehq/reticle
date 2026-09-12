@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "name": "probe-cost",
+  "createdAt": 1789185547204,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "login-email",
+        "source": {
+          "file": "src/components/Login.tsx",
+          "line": 48,
+          "column": 8
+        }
+      },
+      "args": {
+        "value": "admin@reticle.dev"
+      },
+      "action": "fill"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "login-password",
+        "source": {
+          "file": "src/components/Login.tsx",
+          "line": 59,
+          "column": 8
+        }
+      },
+      "args": {
+        "value": "<redacted: supply at replay>"
+      },
+      "action": "fill"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "login-submit",
+        "source": {
+          "file": "src/components/Login.tsx",
+          "line": 81,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "click"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "nav-diagnostics",
+        "source": {
+          "file": "src/components/Sidebar.tsx",
+          "line": 45,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "click"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "fault-500",
+        "source": {
+          "file": "src/views/Diagnostics.tsx",
+          "line": 79,
+          "column": 12
+        }
+      },
+      "args": {},
+      "action": "click"
+    }
+  ],
+  "startPath": "/"
+}

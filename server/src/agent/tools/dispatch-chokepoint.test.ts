@@ -49,7 +49,7 @@ const DECLARED_BYPASSES: Readonly<Record<string, string>> = {
     'outer call is recorded; the inner suite run is not counted as its own tool call. Deliberate — ' +
     'counting it would double-count one agent action — but it means flow_verify usage is ' +
     'understated by however often verify_change is the caller.',
-  'connection/bridge/bridge.test-harness.ts':
+  'portal/bridge/bridge.test-harness.ts':
     'A test harness, not a product path. It exists precisely to call handlers without the daemon ' +
     'around them.',
 };

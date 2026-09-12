@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { suiteFixtureSeed } from './lease-tools.js';
-import type { RealInputProvider } from '../../connection/input/real-input.js';
+import type { RealInputProvider } from '../../portal/input/real-input.js';
 
 /**
  * The join: capture the state the agent is already in, and boot every leased flow from it.

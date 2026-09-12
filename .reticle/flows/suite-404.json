@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "name": "suite-404",
+  "createdAt": 1789195413998,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "nav-diagnostics",
+        "source": {
+          "file": "src/components/Sidebar.tsx",
+          "line": 45,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "click"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "fault-404",
+        "source": {
+          "file": "src/views/Diagnostics.tsx",
+          "line": 79,
+          "column": 12
+        }
+      },
+      "args": {},
+      "action": "click"
+    }
+  ],
+  "startPath": "/",
+  "success": {
+    "signal": "fault:injected"
+  }
+}

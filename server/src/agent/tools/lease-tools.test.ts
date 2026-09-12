@@ -27,10 +27,10 @@ import {
   type Predicate,
   type PredicateSession,
 } from '@reticlehq/engine/question/predicate/predicate.js';
-import type { Session } from '../../connection/session/session.js';
+import type { Session } from '../../portal/session/session.js';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from './tool-kit.js';
-import type { BrowserPool, Lease } from '../../connection/pool/browser-pool.js';
+import type { BrowserPool, Lease } from '../../portal/pool/browser-pool.js';
 
 function tool(name: string): (deps: ToolDeps, args: Record<string, unknown>) => Promise<unknown> {
   const def = LEASE_TOOLS.find((t) => t.name === name);

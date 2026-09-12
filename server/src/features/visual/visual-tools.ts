@@ -20,7 +20,7 @@ import type {
   ElementBox,
   RealInputProvider,
   ScreenshotOpts,
-} from '../../connection/input/real-input.js';
+} from '../../portal/input/real-input.js';
 import type { ToolDef, ToolDeps } from '../../agent/tools/tools.js';
 
 const rectShape = z.object({

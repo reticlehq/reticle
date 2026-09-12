@@ -21,7 +21,7 @@ import { AnnotationStore } from './stores/annotation-store.js';
 import { FlowStore } from './flows.js';
 import { ProjectStore } from '../project/project-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '../project/fs/fs-port.js';
-import type { Session } from '../../connection/session/session.js';
+import type { Session } from '../../portal/session/session.js';
 
 const clock = { now: (): number => 1234 };
 let root: string;

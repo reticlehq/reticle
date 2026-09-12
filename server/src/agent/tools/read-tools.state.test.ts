@@ -3,7 +3,7 @@ import { ReticleCommand } from '@reticlehq/core';
 import { READ_TOOLS } from './read-tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from './tools.js';
-import type { Session, SessionManager } from '../../connection/session/session.js';
+import type { Session, SessionManager } from '../../portal/session/session.js';
 
 function stateDeps(result: unknown): ToolDeps {
   const session = {

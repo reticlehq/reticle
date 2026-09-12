@@ -7,7 +7,7 @@ import { probeDaemon } from '../../agent/mcp/mcp-proxy.js';
 import { fetchStatus } from './launch/cli-launch.js';
 import { daemonLine, type DaemonIdentity } from './doctor/doctor-daemon-line.js';
 import { projectWiringLine } from './doctor/doctor-project-line.js';
-import { hasProjectConnectedBefore } from '../../connection/session/recall/prior/connection-memory.js';
+import { hasProjectConnectedBefore } from '../../portal/session/recall/prior/connection-memory.js';
 import { sessionsLine, type SessionsLine } from './doctor/doctor-sessions-line.js';
 import { captureLookup, describeForeignHolder, findPortHolder } from './ports/port-holder.js';
 import { chromiumHint, probeChromium } from './doctor/browser/chromium-hint.js';

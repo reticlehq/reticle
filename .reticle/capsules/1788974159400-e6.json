@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1788974159400-e6",
+  "createdAt": 1788974159401,
+  "origin": "failed-assert",
+  "expected": "declared consequence",
+  "observed": "current route (no route change in the window) '/', expected '/overview'",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "login-submit",
+        "source": {
+          "file": "src/components/Login.tsx",
+          "line": 81,
+          "column": 8
+        }
+      },
+      "action": "click"
+    }
+  ]
+}

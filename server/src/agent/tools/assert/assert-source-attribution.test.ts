@@ -20,7 +20,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { type CommandResult, type ReticleEvent } from '@reticlehq/core';
-import { LastAct } from '../../../connection/session/last-act.js';
+import { LastAct } from '../../../portal/session/last-act.js';
 import { TOOLS, type ToolDef, type ToolDeps } from '../tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../../../features/project/baselines.js';
@@ -29,8 +29,8 @@ import { RecordingStore } from '../../../features/flows/recording/tape/recording
 import { FlowStore } from '../../../features/flows/flows.js';
 import { ProjectStore } from '../../../features/project/project-store.js';
 import { AnnotationStore } from '../../../features/flows/stores/annotation-store.js';
-import type { Session, SessionManager } from '../../../connection/session/session.js';
-import { createFakeSession } from '../../../connection/session/fake-session.js';
+import type { Session, SessionManager } from '../../../portal/session/session.js';
+import { createFakeSession } from '../../../portal/session/fake-session.js';
 
 const ACTED_SOURCE = 'app/page.tsx:22';
 const NAV_SOURCE = 'ui/global-nav.tsx:54';

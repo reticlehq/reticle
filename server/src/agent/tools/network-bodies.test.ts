@@ -3,7 +3,7 @@ import { EventType, type ReticleEvent } from '@reticlehq/core';
 import { OBSERVE_TOOLS } from './observe-tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from './tools.js';
-import type { Session, SessionManager } from '../../connection/session/session.js';
+import type { Session, SessionManager } from '../../portal/session/session.js';
 
 /**
  * #401: `reticle_network` returned full request/response bodies with no way to ask for the list

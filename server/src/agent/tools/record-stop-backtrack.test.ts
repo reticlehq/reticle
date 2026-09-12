@@ -10,7 +10,7 @@ import { EventType } from '@reticlehq/core';
 import { READ_TOOLS } from './read-tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from './tools.js';
-import type { Session, SessionManager } from '../../connection/session/session.js';
+import type { Session, SessionManager } from '../../portal/session/session.js';
 import { RecordingStore } from '../../features/flows/recording/tape/recordings.js';
 
 function recordStopTool() {

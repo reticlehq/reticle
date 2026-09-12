@@ -10,27 +10,24 @@
  * Attach-only: the pool drives a browser against an already-running dev server — it never starts one.
  */
 
-import type { RealInputProvider } from '../../connection/input/real-input.js';
+import type { RealInputProvider } from '../../portal/input/real-input.js';
 import {
   fixturePortFor,
   seedFromStorageState,
   type StorageFixturePort,
-} from '../../connection/input/storage-fixture.js';
-import {
-  mutationPortFor,
-  type NetworkMutationPort,
-} from '../../connection/input/network-mutation.js';
+} from '../../portal/input/storage-fixture.js';
+import { mutationPortFor, type NetworkMutationPort } from '../../portal/input/network-mutation.js';
 import type { Perturbation } from '@reticlehq/core';
 import { z } from 'zod';
 import { leaseNotConnectedHint, type LeaseEvidence } from './lease-hint.js';
 import { probeSdkMarker } from './gaps/sdk-marker-probe.js';
 import { readProjectFramework, readProjectId } from '../../command/cli/ports/resolve/cli-port.js';
-import { hasAnyAppConnectedBefore } from '../../connection/session/recall/prior/connection-memory.js';
+import { hasAnyAppConnectedBefore } from '../../portal/session/recall/prior/connection-memory.js';
 import {
   AGENT_DRIVING_ELSEWHERE,
   AGENT_DRIVING_HERE_AGAIN,
   watchersToNotify,
-} from '../../connection/session/lease-visibility.js';
+} from '../../portal/session/lease-visibility.js';
 import { reticleStateHome } from '../../command/daemon/daemon.js';
 import {
   LeaseNotReadyReason,

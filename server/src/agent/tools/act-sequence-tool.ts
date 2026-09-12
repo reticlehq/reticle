@@ -14,12 +14,12 @@ import { z } from 'zod';
 import { timeoutMsSchema } from './args/numeric-bounds.js';
 import { compileSequenceStep } from '../../features/flows/replay.js';
 import { ReticleTool } from '@reticlehq/core';
-import { healthEnvelope } from '../../connection/session/session-health.js';
+import { healthEnvelope } from '../../portal/session/session-health.js';
 import {
   pausedShortCircuit,
   pausedOutputShape,
   withControl,
-} from '../../connection/session/control-envelope.js';
+} from '../../portal/session/control-envelope.js';
 import { asRecord } from '@reticlehq/core';
 import { sessionIdFromArgs } from './tools-helpers.js';
 import { describeStepResult, runStepWithStaleRetry } from './act/act-sequence-retry.js';
@@ -37,7 +37,7 @@ import {
   type StepExpectation,
 } from './act/sequence-grade.js';
 import { stepEffect, type StepEffect } from '@reticlehq/engine/evidence/step-effect.js';
-import type { Session } from '../../connection/session/session.js';
+import type { Session } from '../../portal/session/session.js';
 // resolveActTarget moved out of act-tools into its own module on this branch; #706 was written
 // against the older layout where act-tools re-exported it.
 import { resolveActTarget } from './act/act-target.js';

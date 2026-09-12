@@ -8,7 +8,7 @@ import {
   type JournalAction,
   type ReticleEvent,
 } from '@reticlehq/core';
-import { Session } from '../../connection/session/session.js';
+import { Session } from '../../portal/session/session.js';
 import { JournalRecorder, type JournalSink } from './journal-recorder.js';
 
 function hello(): HelloMessage {

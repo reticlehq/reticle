@@ -12,8 +12,8 @@ import {
 } from '@reticlehq/core';
 import { MCP_SSE_PATH } from '@reticlehq/core';
 import { createSharedServer, type SharedServer } from './http-server.js';
-import { Bridge } from './connection/bridge/bridge.js';
-import { endAllSessions } from './connection/session/session-reaper.js';
+import { Bridge } from './portal/bridge/bridge.js';
+import { endAllSessions } from './portal/session/session-reaper.js';
 
 /**
  * End-to-end proof of the agent-independent presence chain through the REAL wiring:

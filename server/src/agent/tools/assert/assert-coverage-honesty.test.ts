@@ -17,8 +17,8 @@ import { RecordingStore } from '../../../features/flows/recording/tape/recording
 import { FlowStore } from '../../../features/flows/flows.js';
 import { ProjectStore } from '../../../features/project/project-store.js';
 import { AnnotationStore } from '../../../features/flows/stores/annotation-store.js';
-import type { SessionManager } from '../../../connection/session/session.js';
-import { createFakeSession } from '../../../connection/session/fake-session.js';
+import type { SessionManager } from '../../../portal/session/session.js';
+import { createFakeSession } from '../../../portal/session/fake-session.js';
 
 /**
  * A green verdict must never imply more coverage than the SDK actually had.

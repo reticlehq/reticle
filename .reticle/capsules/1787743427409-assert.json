@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1787743427409-assert",
+  "createdAt": 1787743427409,
+  "origin": "failed-assert",
+  "expected": "net",
+  "observed": "no element matched {\"role\":\"alert\"} in state 'visible'",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "auth-submit",
+        "source": {
+          "file": "src/features/auth/login-view.tsx",
+          "line": 159,
+          "column": 10
+        }
+      },
+      "action": "click"
+    }
+  ]
+}

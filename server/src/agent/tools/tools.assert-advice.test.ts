@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { EventType, ReticleCommand, type CommandResult, type ReticleEvent } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import type { SessionManager } from '../../connection/session/session.js';
-import { createFakeSession } from '../../connection/session/fake-session.js';
+import type { SessionManager } from '../../portal/session/session.js';
+import { createFakeSession } from '../../portal/session/fake-session.js';
 
 /** A session whose MATCH answers `matched`, and whose buffer is a fixed event list. */
 function depsWith(opts: { matched?: boolean; events?: ReticleEvent[] }): ToolDeps {

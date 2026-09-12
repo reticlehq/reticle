@@ -4,7 +4,7 @@ import {
   type ImpactDefect,
   type ImpactSnapshot,
 } from '@reticlehq/core';
-import { estimateTokens } from '../../connection/session/output-budget.js';
+import { estimateTokens } from '../../portal/session/output-budget.js';
 import { ImpactStore, type ImpactFoldMeta } from './impact-store.js';
 
 /**

@@ -18,7 +18,7 @@
  * `timeout_ms` (resolve-within.ts); this is the same budget applied to the same wait.
  */
 
-import type { SessionManager } from '../../../../connection/session/session-manager.js';
+import type { SessionManager } from '../../../../portal/session/session-manager.js';
 import type { NavigateArrival } from './navigate-result.js';
 
 /**

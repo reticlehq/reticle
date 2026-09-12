@@ -17,13 +17,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Bridge } from './connection/bridge/bridge.js';
-import {
-  FakeBrowser,
-  callTool,
-  makeDeps,
-  waitUntil,
-} from './connection/bridge/bridge.test-harness.js';
+import { Bridge } from './portal/bridge/bridge.js';
+import { FakeBrowser, callTool, makeDeps, waitUntil } from './portal/bridge/bridge.test-harness.js';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from './agent/tools/tools.js';
 import { EventType, RETICLE_DEFAULT_PORT } from '@reticlehq/core';

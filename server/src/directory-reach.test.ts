@@ -9,7 +9,7 @@ import { REPO_ROOT } from './machine/repo-root.js';
  *
  * The directories are now gathered into four groups, by who the code is for:
  *
- *   connection/  the live link to a running app -- the socket, what we know about a tab, driving it
+ *   portal/  the live link to a running app -- the socket, what we know about a tab, driving it
  *   agent/       what an agent talks to -- the tool surface, the MCP door, what a drive produced
  *   command/     what a person runs -- the command line, the daemon's life, setup, updates
  *   features/    the things Reticle does with what it sees -- flows, journal, crawl, and the rest
@@ -652,7 +652,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
  *     event files are mutual with the package root; the three constants files are mutual with
  *     `artifacts`; `net`/`channel`/`platform` are mutual with `verdict`.
  *
- * One coherent SAFE category existed in the whole repository and it is `connection/session/facts`,
+ * One coherent SAFE category existed in the whole repository and it is `portal/session/facts`,
  * extracted the day this note was written. The leaf rule is spent, and now measured spent rather
  * than assumed so -- an earlier version of this claim was made three times from reading the
  * import graph, and the sweep that settles it takes thirty milliseconds per candidate.
@@ -683,7 +683,7 @@ const MUTUAL_PAIRS_TODAY = 22;
  * one that is missing, because it goes on reporting a number.
  *
  * Keyed on the basename rather than fixed by using full paths deliberately. Full paths would make
- * the reach list unreadable -- `agent/tools -> connection/session` twice a line -- and unique
+ * the reach list unreadable -- `agent/tools -> portal/session` twice a line -- and unique
  * short names are worth having for their own sake. This is the price of that, made loud.
  */
 describe('directory names in this package are unique', () => {

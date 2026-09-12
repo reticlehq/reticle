@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ActionType } from '@reticlehq/core';
-import type { Session } from '../../../connection/session/session.js';
+import type { Session } from '../../../portal/session/session.js';
 import { resolveActTarget } from './act-target.js';
 
 /**

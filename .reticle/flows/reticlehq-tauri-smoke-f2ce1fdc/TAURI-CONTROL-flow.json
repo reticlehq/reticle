@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "name": "TAURI-CONTROL-flow",
+  "projectId": "reticlehq-tauri-smoke-f2ce1fdc",
+  "createdAt": 1785608081433,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "go-home",
+        "source": {
+          "file": "src/App.tsx",
+          "line": 131,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "click"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "go-settings",
+        "source": {
+          "file": "src/App.tsx",
+          "line": 128,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "click"
+    }
+  ]
+}
