@@ -82,7 +82,7 @@ import {
 import { handleDrive } from './cli/drive/drive-command.js';
 import { handleVerify } from './cli/cli-verify.js';
 import { runKill } from './cli/cli-kill.js';
-import { summarizeHunt, type HuntAnomaly, type HuntRun } from '../features/hunt/hunt-report.js';
+import { summarizeHunt, type HuntAnomaly, type HuntRun } from '../judgement/hunt/hunt-report.js';
 import { runInit, buildNodeIo } from '@reticlehq/init';
 import { continueAfterInit } from './setup/init/init-runtime.js';
 import { handleDoctor } from './cli/cli-doctor.js';

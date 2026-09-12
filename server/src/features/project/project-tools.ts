@@ -10,11 +10,11 @@ import {
   resolveCloudConfig,
 } from '../cloud/cloud-sync.js';
 import type { ToolDef, ToolDeps } from '../../agent/tools/tools.js';
-import { RunStore } from '../../agent/runs/artifact/run-store.js';
+import { RunStore } from '../../judgement/runs/artifact/run-store.js';
 import {
   diffRuns as diffVerificationRuns,
   type RunDiff as VerificationRunDiff,
-} from '../../agent/runs/artifact/run-diff.js';
+} from '../../judgement/runs/artifact/run-diff.js';
 
 /** The diff between the two most-recent runs for a name — the "did it behave like last time?" answer. */
 interface RunDiff {

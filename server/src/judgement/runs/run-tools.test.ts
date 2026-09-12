@@ -12,7 +12,7 @@ import {
   RunTrigger,
 } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
-import type { ToolDeps } from '../tools/tools.js';
+import type { ToolDeps } from '../../agent/tools/tools.js';
 import type { SessionManager } from '../../portal/session/session.js';
 import { BaselineStore } from '../../features/project/baselines.js';
 import { RecordingStore } from '../../features/flows/recording/tape/recordings.js';

@@ -13,7 +13,7 @@ import {
 } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { advanceMsSchema, depthSchema } from './args/numeric-bounds.js';
-import { proposeConsequences } from '../oracles/propose-consequences.js';
+import { proposeConsequences } from '../../judgement/oracles/propose-consequences.js';
 import type { CompiledProgram } from '../../features/flows/recording/tape/recordings.js';
 import {
   recordingBacktrackWarning,

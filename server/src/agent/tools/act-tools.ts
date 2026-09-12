@@ -28,7 +28,7 @@ import { ReticleTool } from '@reticlehq/core';
 import { buildReactionReport, summarizeReaction } from '@reticlehq/engine/question/reaction.js';
 import { parsePredicate } from '@reticlehq/engine/question/predicate/predicate-parse.js';
 import { bodyClauseRefusal } from '@reticlehq/engine/evidence/body-capture-remedy.js';
-import { causalSummary } from '../capsule/causal-summary.js';
+import { causalSummary } from '../../judgement/capsule/causal-summary.js';
 import { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';
 import { crashedRuleNotes } from '@reticlehq/engine/disagreement/contradiction-folds.js';
 import { gapsForAction } from '@reticlehq/engine/evidence/instrumentation-gaps.js';
@@ -60,7 +60,7 @@ import {
 } from '@reticlehq/engine/evidence/already-true.js';
 import { describeWaitTarget, namedNetIsInFlight } from '@reticlehq/engine/evidence/unsettled.js';
 import { saveFailedAssertCapsule } from './act-capsule.js';
-import { blastRadius, buildDivergenceCapsule } from '../capsule/capsule.js';
+import { blastRadius, buildDivergenceCapsule } from '../../judgement/capsule/capsule.js';
 import { predicateToExpectedLinks } from '@reticlehq/engine/question/predicate/predicate-to-links.js';
 import { buildHonestyBlock } from '@reticlehq/engine/evidence/honesty.js';
 import {

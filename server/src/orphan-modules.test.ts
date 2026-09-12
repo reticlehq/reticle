@@ -53,13 +53,13 @@ const DECLARED_UNWIRED: Record<string, string> = {
   'features/ee/audit-log.ts':
     'deliberately unwired, and says so in its own header: an example enterprise feature whose ' +
     'body is a stub, existing to prove the licence gate rather than to be called.',
-  'agent/capsule/minimize.ts':
+  'judgement/capsule/minimize.ts':
     'a first cut at bug-capsule minimization (prefix-trim). Written and tested; nothing calls ' +
     'it yet, because the capsule pipeline it belongs to is not assembled.',
   'features/flows/flow-report.ts':
     'renders the human confidence report for a replayed flow. Complete and unreferenced: no ' +
     'tool or command currently offers it.',
-  'features/phenomena/phenomena.ts':
+  'judgement/phenomena/phenomena.ts':
     'named, evidence-backed anomalies over the journal. Its own header describes matchers that ' +
     'land when a later signal exists, so it is staged ahead of its caller.',
   'command/dev/stale-issue-guard.ts':

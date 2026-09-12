@@ -116,20 +116,20 @@ describe('how much of the protocol the shipping product uses', () => {
     // not because a second consumer is wrong, but because it should be a decision and not a drift.
     const callers = tracked('server/src', 'core/src', 'adapters').filter(
       (f) =>
-        f !== 'server/src/agent/runs/artifact/to-artifact.ts' && code(f).includes('toArtifact'),
+        f !== 'server/src/judgement/runs/artifact/to-artifact.ts' && code(f).includes('toArtifact'),
     );
     expect(
       callers,
       'the artifact exporter grew or lost a caller. One call site is the intended state — the ' +
         '`format:"openreality"` branch of reticle_run_export. If the export now surfaces somewhere ' +
         'else too, say so here and in the changelog.',
-    ).toEqual(['server/src/agent/runs/run-tools.ts']);
+    ).toEqual(['server/src/judgement/runs/run-tools.ts']);
   });
 
   it('exports an artifact whose subject is deliberately not the protocol shape', () => {
     // Pinned so that changing one without the other is loud. The exported shape is Reticle's,
     // the protocol's is SubjectRef, and today they are different on purpose.
-    const artifact = code('server/src/agent/runs/artifact/to-artifact.ts');
+    const artifact = code('server/src/judgement/runs/artifact/to-artifact.ts');
     expect(artifact).toContain('OPENREALITY_ARTIFACT_KIND');
     expect(artifact).not.toContain('SubjectRef');
   });

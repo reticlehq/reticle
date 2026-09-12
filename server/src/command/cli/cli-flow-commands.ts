@@ -13,15 +13,15 @@ import { changedFilesSince, type ChangedFiles } from '../../features/flows/chang
 import { join } from 'node:path';
 import { ReticleDir, RunFlowStatus } from '@reticlehq/core';
 import { FlowStore } from '../../features/flows/flows.js';
-import { RunStore } from '../../agent/runs/artifact/run-store.js';
+import { RunStore } from '../../judgement/runs/artifact/run-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '../../features/project/fs/fs-port.js';
 import { affectedSavedFlows, type NamedFlow } from '../../features/flows/change/flow-sources.js';
 import { gateDecision } from '../../features/flows/change/gate.js';
 import { FlakeStore } from '../../features/flows/stores/flake-store.js';
 import { formatBuddyStatus } from '../../features/flows/buddy-status.js';
-import { CapsuleStore } from '../../agent/capsule/capsule-store.js';
+import { CapsuleStore } from '../../judgement/capsule/capsule-store.js';
 import { AssertionTiersStore } from '../../features/flows/stores/assertion-tiers-store.js';
-import { detectDowngrades } from '../../features/flows/outcome/assertion-integrity.js';
+import { detectDowngrades } from '../../judgement/outcome/assertion-integrity.js';
 import { computeCoverage, flowCoverageReport } from '../../features/flows/suite/coverage.js';
 import { createWatchBatcher } from '../../features/flows/change/watch-batcher.js';
 import { watch } from 'node:fs';

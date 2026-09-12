@@ -42,7 +42,7 @@ import {
 import {
   persistAndSyncVerificationRun,
   type TimedReplay,
-} from '../../agent/runs/verification-sync.js';
+} from '../../judgement/runs/verification-sync.js';
 import { runServerVerify } from './suite/server-verify.js';
 import { healFlow } from './heal-run.js';
 

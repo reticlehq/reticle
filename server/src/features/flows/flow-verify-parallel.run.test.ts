@@ -5,7 +5,7 @@ import type { ToolDeps } from '../../agent/tools/tools.js';
 
 const persistSpy = vi.fn().mockResolvedValue('run-id-001');
 
-vi.mock('../../agent/runs/verification-sync.js', () => ({
+vi.mock('../../judgement/runs/verification-sync.js', () => ({
   persistAndSyncVerificationRun: (...args: unknown[]): Promise<string> =>
     persistSpy(...args) as Promise<string>,
 }));

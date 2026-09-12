@@ -5,7 +5,7 @@ import {
   type Intent,
   type JournalAction,
 } from '@reticlehq/core/artifacts';
-import { subjectOf } from '../runs/artifact/run-context.js';
+import { subjectOf } from '../../judgement/runs/artifact/run-context.js';
 import { ReticleTool } from '@reticlehq/core';
 
 /**

@@ -8,7 +8,7 @@
 import { randomUUID } from 'node:crypto';
 import { asRunId, type RunId } from '@reticlehq/core';
 import { replayNamedFlow } from '../../features/flows/flow-tools.js';
-import type { ToolDeps } from '../tools/tools.js';
+import type { ToolDeps } from '../../agent/tools/tools.js';
 import type { RunnerPort } from './reticle-runner.js';
 
 /** The default run-id generator — a branded uuid. Isolated so it can be swapped/tested independently. */

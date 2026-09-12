@@ -49,10 +49,10 @@ import {
   syncRunToCloud,
   SyncOutcome,
 } from '../../features/cloud/cloud-sync.js';
-import { ReticleRunner, type VerifyProgressListener } from '../../agent/runs/reticle-runner.js';
-import { createRunnerPort } from '../../agent/runs/runner-port.js';
-import { RunStore } from '../../agent/runs/artifact/run-store.js';
-import { renderRunReport } from '../../agent/runs/artifact/render-report.js';
+import { ReticleRunner, type VerifyProgressListener } from '../../judgement/runs/reticle-runner.js';
+import { createRunnerPort } from '../../judgement/runs/runner-port.js';
+import { RunStore } from '../../judgement/runs/artifact/run-store.js';
+import { renderRunReport } from '../../judgement/runs/artifact/render-report.js';
 import { BaselineStore } from '../../features/project/baselines.js';
 import { RecordingStore } from '../../features/flows/recording/tape/recordings.js';
 import { FlowStore } from '../../features/flows/flows.js';

@@ -68,7 +68,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // rather than grouped -- this directory IS the vocabulary, and splitting it would put nouns an
   // implementer reads together into two places.
   'openreality/src/vocabulary': 12,
-  'server/src/agent/runs': 11,
+  'server/src/judgement/runs': 11,
   'server/src/agent/tools': 32,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,

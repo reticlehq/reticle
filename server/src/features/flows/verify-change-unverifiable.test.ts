@@ -17,7 +17,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { Verified } from '@reticlehq/core';
-import { verdictForSuite } from './outcome/verify-change-verdict.js';
+import { verdictForSuite } from '../../judgement/outcome/verify-change-verdict.js';
 
 describe('the verdict a suite status earns', () => {
   it('a passing suite proves the change is fine', () => {

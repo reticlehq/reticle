@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { sessionRoot, sessionProjectId } from '../project/session-root.js';
-import { verdictForSuite } from './outcome/verify-change-verdict.js';
-import { attributedFailures } from './outcome/attributed-failure.js';
+import { verdictForSuite } from '../../judgement/outcome/verify-change-verdict.js';
+import { attributedFailures } from '../../judgement/outcome/attributed-failure.js';
 import { Verified } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from '../../agent/tools/tools.js';

@@ -8,7 +8,7 @@ import { persistAndSyncVerificationRun, type TimedReplay } from './verification-
 import { RunStore } from './artifact/run-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '../../features/project/fs/fs-port.js';
 import type { RunId } from '@reticlehq/core';
-import type { ToolDeps } from '../tools/tools.js';
+import type { ToolDeps } from '../../agent/tools/tools.js';
 
 const timed = (name: string, status: ReplayStatus): TimedReplay => ({
   replay: { name, status, steps: [] } satisfies FlowReplayResult,

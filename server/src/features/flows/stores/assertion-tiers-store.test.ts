@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createNodeFileSystem } from '../../project/fs/fs-port.js';
 import { ASSERTION_TIERS_VERSION, AssertionTiersStore } from './assertion-tiers-store.js';
-import { detectDowngrades } from '../outcome/assertion-integrity.js';
+import { detectDowngrades } from '../../../judgement/outcome/assertion-integrity.js';
 
 describe('AssertionTiersStore (anti-downgrade baseline)', () => {
   let root: string;

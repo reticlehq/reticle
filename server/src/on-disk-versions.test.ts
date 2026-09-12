@@ -47,7 +47,7 @@ const PINNED_VERSIONS: Record<string, string> = {
   // version it does not understand yet -- there is only version 1 -- and the day there are two,
   // this line going red is the reminder to decide what happens to the ones already written.
   'openreality/src/vocabulary/memory.ts': '.int().positive()',
-  'server/src/agent/capsule/capsule-store.ts': 'CAPSULE_VERSION',
+  'server/src/judgement/capsule/capsule-store.ts': 'CAPSULE_VERSION',
   'server/src/features/flows/stores/assertion-tiers-store.ts': '1',
   'server/src/features/flows/recording/flake.ts': '1',
   'server/src/features/intent/intent-shard.ts': 'INTENT_SHARD_VERSION,INTENT_SHARD_VERSION',

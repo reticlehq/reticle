@@ -52,10 +52,10 @@ import { attachRouteLearning } from './features/project/learned-routes.js';
 import { AnnotationStore } from './features/flows/stores/annotation-store.js';
 import { createNodeFileSystem, type FileSystemPort } from './features/project/fs/fs-port.js';
 import { cleanupCaptureDirectories } from './features/visual/capture-cleanup.js';
-import { ReticleRunner } from './agent/runs/reticle-runner.js';
-import { createRunnerPort } from './agent/runs/runner-port.js';
-import { RunStore } from './agent/runs/artifact/run-store.js';
-import { startVerifyServer } from './agent/runs/verify-server.js';
+import { ReticleRunner } from './judgement/runs/reticle-runner.js';
+import { createRunnerPort } from './judgement/runs/runner-port.js';
+import { RunStore } from './judgement/runs/artifact/run-store.js';
+import { startVerifyServer } from './judgement/runs/verify-server.js';
 import { createMcpServer } from './agent/mcp/mcp.js';
 import { LEASE_ACQUIRE_TOOL } from './agent/tools/lease-tools.js';
 import { runTool } from './agent/tools/invoke-tool.js';
@@ -132,8 +132,12 @@ export {
 } from './features/flows/flow-success.js';
 export { classifyFlowAssertions, FlowAssertionGrade } from './features/flows/flow-classify.js';
 export type { FlowAssertionClassification } from './features/flows/flow-classify.js';
-export { buildDomainModel } from './agent/domain/domain-model.js';
-export type { DomainModel, DomainFlowSummary, DomainGaps } from './agent/domain/domain-model.js';
+export { buildDomainModel } from './judgement/domain/domain-model.js';
+export type {
+  DomainModel,
+  DomainFlowSummary,
+  DomainGaps,
+} from './judgement/domain/domain-model.js';
 export { ProjectStore } from './features/project/project-store.js';
 export type { ReadProjectResult } from './features/project/project-store.js';
 export { VisualStore } from './features/visual/visual-store.js';
@@ -222,29 +226,29 @@ export type { ReticleDirPaths, ReadContractResult } from './features/project/dir
 export { createNodeFileSystem } from './features/project/fs/fs-port.js';
 export type { FileSystemPort } from './features/project/fs/fs-port.js';
 // Replay/Verify API — the programmatic surface an OEM/CI pipeline drives (see docs/platform-integration.md).
-export { ReticleRunner } from './agent/runs/reticle-runner.js';
-export type { RunnerPort, VerifyOptions } from './agent/runs/reticle-runner.js';
-export { createRunnerPort, defaultRunId } from './agent/runs/runner-port.js';
+export { ReticleRunner } from './judgement/runs/reticle-runner.js';
+export type { RunnerPort, VerifyOptions } from './judgement/runs/reticle-runner.js';
+export { createRunnerPort, defaultRunId } from './judgement/runs/runner-port.js';
 export {
   buildVerificationRun,
   computeVerdict,
-} from './agent/runs/artifact/build-verification-run.js';
-export type { VerificationRunInput } from './agent/runs/artifact/build-verification-run.js';
-export { RunStore } from './agent/runs/artifact/run-store.js';
-export type { ReadRunResult } from './agent/runs/artifact/run-store.js';
-export { classifyChangedFiles, buildRisks, risksForPath } from './agent/runs/risk-classify.js';
-export type { ChangedFileInput, RiskPolicy } from './agent/runs/risk-classify.js';
-export { buildRepairPacket, buildRepairPackets } from './agent/runs/repair-prompt.js';
-export { redactForProfile, REDACTED } from './agent/runs/artifact/profile-redact.js';
-export { renderRunReport } from './agent/runs/artifact/render-report.js';
-export { handleVerifyRequest, tokenOk, VERIFY_PATH } from './agent/runs/verify-http.js';
-export type { VerifyHttpRequest, VerifyHttpResponse } from './agent/runs/verify-http.js';
+} from './judgement/runs/artifact/build-verification-run.js';
+export type { VerificationRunInput } from './judgement/runs/artifact/build-verification-run.js';
+export { RunStore } from './judgement/runs/artifact/run-store.js';
+export type { ReadRunResult } from './judgement/runs/artifact/run-store.js';
+export { classifyChangedFiles, buildRisks, risksForPath } from './judgement/runs/risk-classify.js';
+export type { ChangedFileInput, RiskPolicy } from './judgement/runs/risk-classify.js';
+export { buildRepairPacket, buildRepairPackets } from './judgement/runs/repair-prompt.js';
+export { redactForProfile, REDACTED } from './judgement/runs/artifact/profile-redact.js';
+export { renderRunReport } from './judgement/runs/artifact/render-report.js';
+export { handleVerifyRequest, tokenOk, VERIFY_PATH } from './judgement/runs/verify-http.js';
+export type { VerifyHttpRequest, VerifyHttpResponse } from './judgement/runs/verify-http.js';
 export {
   createVerifyRequestListener,
   startVerifyServer,
   TOKEN_HEADER,
-} from './agent/runs/verify-server.js';
-export type { VerifyServerOptions } from './agent/runs/verify-server.js';
+} from './judgement/runs/verify-server.js';
+export type { VerifyServerOptions } from './judgement/runs/verify-server.js';
 export {
   evaluatePredicate,
   waitForPredicate,
