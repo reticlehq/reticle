@@ -44,7 +44,7 @@ const DECLARED_BYPASSES: Readonly<Record<string, string>> = {
     'The OUTER call went through runTool, so nothing is uncounted — but it is counted as the FAMILY, ' +
     'so `toolCounts` cannot say which member ran. Known gap: the same family folding that means ' +
     '"every tool is callable" is asserted over 48 surfaces and not 68 behaviours (docs/system-map.md).',
-  'features/flows/verify-change-tools.ts':
+  'language/flows/verify-change-tools.ts':
     'reticle_verify_change replays the affected flows by calling reticle_flow_verify directly. The ' +
     'outer call is recorded; the inner suite run is not counted as its own tool call. Deliberate — ' +
     'counting it would double-count one agent action — but it means flow_verify usage is ' +

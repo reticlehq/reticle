@@ -10,7 +10,7 @@ import { LastAct } from '../../portal/session/last-act.js';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { BaselineStore } from '../../memory/project/baselines.js';
 import { createNodeFileSystem } from '../../memory/project/fs/fs-port.js';
-import { RecordingStore } from '../../features/flows/recording/tape/recordings.js';
+import { RecordingStore } from '../../language/flows/recording/tape/recordings.js';
 import type { Session, SessionManager } from '../../portal/session/session.js';
 
 /**

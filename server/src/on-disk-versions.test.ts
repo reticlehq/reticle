@@ -48,8 +48,8 @@ const PINNED_VERSIONS: Record<string, string> = {
   // this line going red is the reminder to decide what happens to the ones already written.
   'openreality/src/vocabulary/memory.ts': '.int().positive()',
   'server/src/judgement/capsule/capsule-store.ts': 'CAPSULE_VERSION',
-  'server/src/features/flows/stores/assertion-tiers-store.ts': '1',
-  'server/src/features/flows/recording/flake.ts': '1',
+  'server/src/language/flows/stores/assertion-tiers-store.ts': '1',
+  'server/src/language/flows/recording/flake.ts': '1',
   'server/src/memory/intent/intent-shard.ts': 'INTENT_SHARD_VERSION,INTENT_SHARD_VERSION',
   'server/src/memory/journal/on-disk/ambient-file.ts': '1',
   'server/src/memory/journal/envelope-store.ts': 'ENVELOPE_FILE_VERSION',

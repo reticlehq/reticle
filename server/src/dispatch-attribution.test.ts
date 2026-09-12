@@ -76,8 +76,8 @@ describe('every ACT dispatch path opens an attribution window', () => {
       expect.arrayContaining([
         'surface/tools/act-tools.ts',
         'features/crawl/crawl.ts',
-        'features/flows/flow-replay.ts',
-        'features/flows/replay.ts',
+        'language/flows/flow-replay.ts',
+        'language/flows/replay.ts',
       ]),
     );
   });

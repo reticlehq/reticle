@@ -20,8 +20,8 @@ import {
   type FlowStep,
   type RunRecord,
 } from '@reticlehq/core';
-import { classifyFlowAssertions, FlowAssertionGrade } from '../../features/flows/flow-classify.js';
-import { successLabel } from '../../features/flows/flow-success.js';
+import { classifyFlowAssertions, FlowAssertionGrade } from '../../language/flows/flow-classify.js';
+import { successLabel } from '../../language/flows/flow-success.js';
 import { flowRisk, latestRun, rankByRisk, RiskLevel, type FlowRisk } from './flow-risk.js';
 
 export interface DomainFlowSummary {

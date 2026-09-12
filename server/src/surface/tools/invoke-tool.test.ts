@@ -7,10 +7,10 @@ import { getSessionMetrics, resetSessionMetrics } from '../../telemetry/session-
 import { buildDynamicTools } from './dynamic-tools.js';
 import { runTool, SESSION_BOUND_TOOLS, SESSION_EXEMPT_TOOLS } from './invoke-tool.js';
 import { BaselineStore } from '../../memory/project/baselines.js';
-import { RecordingStore } from '../../features/flows/recording/tape/recordings.js';
-import { FlowStore } from '../../features/flows/flows.js';
+import { RecordingStore } from '../../language/flows/recording/tape/recordings.js';
+import { FlowStore } from '../../language/flows/flows.js';
 import { ProjectStore } from '../../memory/project/project-store.js';
-import { AnnotationStore } from '../../features/flows/stores/annotation-store.js';
+import { AnnotationStore } from '../../language/flows/stores/annotation-store.js';
 import { createNodeFileSystem } from '../../memory/project/fs/fs-port.js';
 import type { Session, SessionManager } from '../../portal/session/session.js';
 

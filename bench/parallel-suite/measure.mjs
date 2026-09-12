@@ -10,12 +10,12 @@
 
 import { join } from 'node:path';
 import { Bridge } from '../../server/dist/portal/bridge/bridge.js';
-import { FLOW_TOOLS } from '../../server/dist/features/flows/flow-tools.js';
-import { FlowStore } from '../../server/dist/features/flows/flows.js';
+import { FLOW_TOOLS } from '../../server/dist/language/flows/flow-tools.js';
+import { FlowStore } from '../../server/dist/language/flows/flows.js';
 import { ProjectStore } from '../../server/dist/features/project/project-store.js';
 import { BaselineStore } from '../../server/dist/features/project/baselines.js';
-import { RecordingStore } from '../../server/dist/features/flows/recording/tape/recordings.js';
-import { AnnotationStore } from '../../server/dist/features/flows/stores/annotation-store.js';
+import { RecordingStore } from '../../server/dist/language/flows/recording/tape/recordings.js';
+import { AnnotationStore } from '../../server/dist/language/flows/stores/annotation-store.js';
 import { createNodeFileSystem } from '../../server/dist/features/project/fs/fs-port.js';
 import { BrowserPool } from '../../server/dist/portal/pool/browser-pool.js';
 import {

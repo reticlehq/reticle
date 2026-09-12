@@ -17,7 +17,7 @@ import {
   harnessAvailable,
   MSG_NO_HARNESS_KEY,
 } from '../../surface/tools/harness-explore.js';
-import { resolveSuiteSelection } from '../../features/flows/suite-selection.js';
+import { resolveSuiteSelection } from '../../language/flows/suite-selection.js';
 import {
   readOrCreatePairingTokenSync,
   defaultPairingTokenDir,
@@ -54,10 +54,10 @@ import { createRunnerPort } from '../../judgement/runs/runner-port.js';
 import { RunStore } from '../../judgement/runs/artifact/run-store.js';
 import { renderRunReport } from '../../judgement/runs/artifact/render-report.js';
 import { BaselineStore } from '../../memory/project/baselines.js';
-import { RecordingStore } from '../../features/flows/recording/tape/recordings.js';
-import { FlowStore } from '../../features/flows/flows.js';
+import { RecordingStore } from '../../language/flows/recording/tape/recordings.js';
+import { FlowStore } from '../../language/flows/flows.js';
 import { ProjectStore } from '../../memory/project/project-store.js';
-import { AnnotationStore } from '../../features/flows/stores/annotation-store.js';
+import { AnnotationStore } from '../../language/flows/stores/annotation-store.js';
 import { createNodeFileSystem } from '../../memory/project/fs/fs-port.js';
 import type { SessionManager } from '../../portal/session/session-manager.js';
 import type { ToolDeps } from '../../surface/tools/tools.js';

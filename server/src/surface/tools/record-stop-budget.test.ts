@@ -7,7 +7,7 @@ import type { Session, SessionManager } from '../../portal/session/session.js';
 import {
   RecordingStore,
   type CompiledProgram,
-} from '../../features/flows/recording/tape/recordings.js';
+} from '../../language/flows/recording/tape/recordings.js';
 
 function recordStopTool() {
   const t = READ_TOOLS.find((x) => x.name === ReticleTool.RECORD_STOP);

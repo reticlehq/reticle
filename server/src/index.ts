@@ -34,7 +34,7 @@ import type { FlowReplayResult } from '@reticlehq/core';
 import { originOf } from './portal/session/session-manager.js';
 import { setBrowserMode, BrowserMode } from './telemetry/browser-mode.js';
 import type { NetworkDetail } from './portal/input/network-detail.js';
-import { replayNamedFlow } from './features/flows/flow-tools.js';
+import { replayNamedFlow } from './language/flows/flow-tools.js';
 import { createSharedServer } from './surface/http-server.js';
 import { openLoopbackAlias } from './command/daemon/binding/loopback-alias.js';
 import { reportAppInstrumented } from './telemetry/app-instrumented.js';
@@ -43,13 +43,13 @@ import { Bridge } from './portal/bridge/bridge.js';
 import { sdkFixForDirectory } from './command/version/sdk-fix.js';
 import { SERVER_VERSION } from './command/version/identity/server-version.js';
 import { BaselineStore } from './memory/project/baselines.js';
-import { RecordingStore } from './features/flows/recording/tape/recordings.js';
+import { RecordingStore } from './language/flows/recording/tape/recordings.js';
 import { initImpact } from './memory/impact/impact-recorder.js';
-import { FlowStore } from './features/flows/flows.js';
-import { buildFlowChips } from './features/flows/flow-scope.js';
+import { FlowStore } from './language/flows/flows.js';
+import { buildFlowChips } from './language/flows/flow-scope.js';
 import { ProjectStore } from './memory/project/project-store.js';
 import { attachRouteLearning } from './memory/project/learned-routes.js';
-import { AnnotationStore } from './features/flows/stores/annotation-store.js';
+import { AnnotationStore } from './language/flows/stores/annotation-store.js';
 import { createNodeFileSystem, type FileSystemPort } from './memory/project/fs/fs-port.js';
 import { cleanupCaptureDirectories } from './features/visual/capture-cleanup.js';
 import { ReticleRunner } from './judgement/runs/reticle-runner.js';
@@ -120,18 +120,18 @@ export { createToolInvoker, UNKNOWN_TOOL_ERROR } from './surface/tools/tool-invo
 export { runTool, SESSION_BOUND_TOOLS, SESSION_EXEMPT_TOOLS } from './surface/tools/invoke-tool.js';
 export type { ToolInvoker } from './surface/tools/tool-invoker.js';
 export { BaselineStore, normalizeLines, diffLines } from './memory/project/baselines.js';
-export { RecordingStore } from './features/flows/recording/tape/recordings.js';
-export type { RecordedStep, CompiledProgram } from './features/flows/recording/tape/recordings.js';
-export { FlowStore, recordedStepToFlowStep } from './features/flows/flows.js';
-export type { FlowResult, Clock } from './features/flows/flows.js';
+export { RecordingStore } from './language/flows/recording/tape/recordings.js';
+export type { RecordedStep, CompiledProgram } from './language/flows/recording/tape/recordings.js';
+export { FlowStore, recordedStepToFlowStep } from './language/flows/flows.js';
+export type { FlowResult, Clock } from './language/flows/flows.js';
 export {
   assertSuccess,
   successToPredicate,
   dynamicTestids,
   successLabel,
-} from './features/flows/flow-success.js';
-export { classifyFlowAssertions, FlowAssertionGrade } from './features/flows/flow-classify.js';
-export type { FlowAssertionClassification } from './features/flows/flow-classify.js';
+} from './language/flows/flow-success.js';
+export { classifyFlowAssertions, FlowAssertionGrade } from './language/flows/flow-classify.js';
+export type { FlowAssertionClassification } from './language/flows/flow-classify.js';
 export { buildDomainModel } from './judgement/domain/domain-model.js';
 export type {
   DomainModel,
@@ -211,9 +211,9 @@ export {
   resolveToolSurface,
 } from './surface/tools/tool-surface.js';
 export type { ToolSurface } from './surface/tools/tool-surface.js';
-export { AnnotationStore } from './features/flows/stores/annotation-store.js';
-export { replayFlow, nearestTestid } from './features/flows/flow-replay.js';
-export type { FlowReplaySession, WaitForSignal } from './features/flows/flow-replay.js';
+export { AnnotationStore } from './language/flows/stores/annotation-store.js';
+export { replayFlow, nearestTestid } from './language/flows/flow-replay.js';
+export type { FlowReplaySession, WaitForSignal } from './language/flows/flow-replay.js';
 export {
   ensureReticleDir,
   writeContract,

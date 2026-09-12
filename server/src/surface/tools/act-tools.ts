@@ -10,7 +10,7 @@ import { resolveSessionWithin } from '../../portal/session/timing/resolve-within
 import { WALL_CLOCK } from '../../portal/session/timing/wall-clock.js';
 import { ACT_SEQUENCE_TOOL } from './act-sequence-tool.js';
 import { timeoutMsSchema } from './args/numeric-bounds.js';
-import { captureAct } from '../../features/flows/replay.js';
+import { captureAct } from '../../language/flows/replay.js';
 import {
   ActionType,
   ActionWarning,

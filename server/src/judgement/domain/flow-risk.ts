@@ -11,7 +11,7 @@
  */
 
 import { RunStatus, type RunRecord } from '@reticlehq/core';
-import { FlowAssertionGrade } from '../../features/flows/flow-classify.js';
+import { FlowAssertionGrade } from '../../language/flows/flow-classify.js';
 
 export const RiskLevel = {
   HIGH: 'high',

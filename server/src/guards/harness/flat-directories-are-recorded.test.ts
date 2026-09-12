@@ -78,7 +78,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   'server/src/command/cli': 18, // + tutorial.ts: one sequence, two audiences, ending at a verdict
   'server/src/command/setup': 15,
   'server/src/portal/session': 20,
-  'server/src/features/flows': 27,
+  'server/src/language/flows': 27,
   'server/src/memory/journal': 11,
   'server/src/telemetry': 32,
   'spec-runner/src': 11,

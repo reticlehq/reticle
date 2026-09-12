@@ -2,7 +2,7 @@
  * Read / record / replay tools — baselines + diff, recordings + replay, narrate, clock, state,
  * explore. Split out of tools.ts; assembled back via...READ_TOOLS.
  */
-import { resolveAnnotateTarget } from '../../features/flows/annotate-notes/annotate-target.js';
+import { resolveAnnotateTarget } from '../../language/flows/annotate-notes/annotate-target.js';
 import { z } from 'zod';
 import {
   EventType,
@@ -14,12 +14,12 @@ import {
 import { ReticleTool } from '@reticlehq/core';
 import { advanceMsSchema, depthSchema } from './args/numeric-bounds.js';
 import { proposeConsequences } from '../../judgement/oracles/propose-consequences.js';
-import type { CompiledProgram } from '../../features/flows/recording/tape/recordings.js';
+import type { CompiledProgram } from '../../language/flows/recording/tape/recordings.js';
 import {
   recordingBacktrackWarning,
   routesFromRecording,
-} from '../../features/flows/recording/recording-backtrack.js';
-import { replayProgram } from '../../features/flows/replay.js';
+} from '../../language/flows/recording/recording-backtrack.js';
+import { replayProgram } from '../../language/flows/replay.js';
 import { diffLines } from '../../memory/project/baselines.js';
 import { selectPath, capDepth, projectComponentState } from '../../portal/session/state-select.js';
 import { costHint } from '../../portal/session/output-budget.js';

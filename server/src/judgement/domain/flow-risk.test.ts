@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { RunKind, RunStatus, type RunRecord } from '@reticlehq/core';
-import { FlowAssertionGrade } from '../../features/flows/flow-classify.js';
+import { FlowAssertionGrade } from '../../language/flows/flow-classify.js';
 import { flowRisk, latestRun, rankByRisk, RiskLevel } from './flow-risk.js';
 
 function run(

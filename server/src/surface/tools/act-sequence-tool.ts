@@ -12,7 +12,7 @@
 
 import { z } from 'zod';
 import { timeoutMsSchema } from './args/numeric-bounds.js';
-import { compileSequenceStep } from '../../features/flows/replay.js';
+import { compileSequenceStep } from '../../language/flows/replay.js';
 import { ReticleTool } from '@reticlehq/core';
 import { healthEnvelope } from '../../portal/session/session-health.js';
 import {

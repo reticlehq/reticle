@@ -56,7 +56,7 @@ const DECLARED_UNWIRED: Record<string, string> = {
   'judgement/capsule/minimize.ts':
     'a first cut at bug-capsule minimization (prefix-trim). Written and tested; nothing calls ' +
     'it yet, because the capsule pipeline it belongs to is not assembled.',
-  'features/flows/flow-report.ts':
+  'language/flows/flow-report.ts':
     'renders the human confidence report for a replayed flow. Complete and unreferenced: no ' +
     'tool or command currently offers it.',
   'judgement/phenomena/phenomena.ts':

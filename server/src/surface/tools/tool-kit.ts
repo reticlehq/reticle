@@ -10,12 +10,12 @@ import type { SessionManager } from '../../portal/session/session.js';
 import type { RealInputProvider } from '../../portal/input/real-input.js';
 import type { BaselineStore } from '../../memory/project/baselines.js';
 import { normalizeLines } from '../../memory/project/baselines.js';
-import type { RecordingStore } from '../../features/flows/recording/tape/recordings.js';
+import type { RecordingStore } from '../../language/flows/recording/tape/recordings.js';
 import type { FileSystemPort } from '../../memory/project/fs/fs-port.js';
 import type { ArtifactRoot } from '../../memory/project/artifact-root.js';
-import type { FlowStore } from '../../features/flows/flows.js';
+import type { FlowStore } from '../../language/flows/flows.js';
 import type { ProjectStore } from '../../memory/project/project-store.js';
-import type { AnnotationStore } from '../../features/flows/stores/annotation-store.js';
+import type { AnnotationStore } from '../../language/flows/stores/annotation-store.js';
 import type { BrowserPool } from '../../portal/pool/browser-pool.js';
 import type { ChromiumProbe } from '../../command/cli/doctor/browser/chromium-hint.js';
 
