@@ -450,7 +450,34 @@ Evidence already carries its own `provenance.subject`, so which rows came from w
 
 It returns **nothing** when the witness could not look. A witness that was unreachable saw nothing for a reason that has nothing to do with the application, and reporting that as _"the write never happened"_ would be the protocol inventing a defect out of its own blind spot — the same rule that makes an empty `blindSpots` array a positive claim rather than a default.
 
-### 10.2 Fixtures — the state a suite starts from
+### 10.2 Mutation — testing the test
+
+Everyone tests the application. Nobody tests the test.
+
+A flow that would stay green if the feature broke is worse than no flow: it is a false green carrying a maintenance cost, and it is indistinguishable from a real one by reading it. The only way to tell is to break the thing it claims to watch and see whether it notices.
+
+```ts
+mutate?(mutation: { kind, target? }): Promise<Reversal>;   // optional, like locate and photograph
+```
+
+A realm perturbs what it has. The kinds named here — `handler-removed`, `locator-renamed`, `request-fails`, `effect-discarded` — are what the vocabulary ships with, and the list is open at the edge like every other: a game freezes a subsystem, a service fails a dependency. Hardware almost certainly declares none of them, and that is a correct answer rather than a missing feature — a rig you can break on demand is a rig you can break by accident.
+
+The `Reversal` is not optional politeness. A break nobody can undo is damage, and a run that lost track of what it left broken would hand the next one a subject that is not the subject.
+
+`gradeMutation({before, after, applied})` says what one run established about one flow:
+
+| before | after | outcome | what it means |
+| --- | --- | --- | --- |
+| `pass` | `fail` | `killed` | the flow would have caught this. The only outcome that proves anything |
+| `pass` | `pass` | `survived` | the flow stayed green through a broken subject — it is not testing what it appears to |
+| `fail` | anything | `inconclusive` | it was going to be red either way |
+| any | any, `applied: false` | `inconclusive` | the realm could not perturb the subject |
+
+The two inconclusive rows are the ones that keep the number honest. Counting an already-failing flow as `killed` is how a mutation score inflates itself into meaninglessness — the broken flows would carry the grade for the ones that assert nothing. And scoring an unapplied mutation as a survival would demote flows for a gap in the **mutation set** rather than in themselves.
+
+What this produces is the figure nobody in this space publishes: not _"how many bugs do we catch"_, which is a claim about the subject, but _"what fraction of our own suite would notice if the feature broke"_, which is a claim about ourselves.
+
+### 10.3 Fixtures — the state a suite starts from
 
 A suite of fifty flows that each start from cold spends most of its time proving the login works, fifty times. Worse, the flow that logs _out_ leaves every flow after it signed out, and no amount of navigating repairs that: the problem is not where the subject is, it is what it holds.
 
@@ -475,7 +502,7 @@ A realm offering neither is correct and merely slower — every flow runs from c
 
 A `FixtureRef` carries the subject it was captured from, epoch included, and `fixtureIsUsable(fixture, subject)` is what a caller checks first. State captured from a build that has since been rewritten is not a shortcut — it is a green flow standing on a session the current code would never have issued. When neither side claims an epoch the answer is yes: a realm that cannot tell when it was rewritten says so by omitting it, and treating that as "never reusable" would punish the honest omission and push implementers to invent a number.
 
-### 10.3 The determinism profile
+### 10.4 The determinism profile
 
 Every other question here is about what a realm can SEE. `determinism()` is about what it can be PUT THROUGH, and it exists because the rest of this specification had inherited a browser's answer to a question no browser has to ask.
 

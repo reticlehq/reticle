@@ -64,6 +64,9 @@ const PINNED: readonly SchemaSurface[] = [
       'handle.json',
       'implementation.json',
       'intent.json',
+      // New public entry point: how a realm undoes a deliberate break. Published because a run that
+      // lost track of what it left broken hands the next one a subject that is not the subject.
+      'reversal.json',
       'invalidation.json',
       'match.json',
       'observation.json',

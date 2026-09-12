@@ -49,6 +49,7 @@ const BASE = 'https://openreality.dev/schema/v1';
 export const SCHEMAS = Object.freeze({
   'subject-ref': ovp.SubjectRefSchema,
   'fixture-ref': ovp.FixtureRefSchema,
+  reversal: ovp.ReversalSchema,
   invalidation: ovp.InvalidationSchema,
   'channel-descriptor': ovp.ChannelDescriptorSchema,
   intent: ovp.IntentSchema,

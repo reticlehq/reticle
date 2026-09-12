@@ -10,6 +10,7 @@ import {
 import { type ChannelId } from '../vocabulary/channel.js';
 import { Witness } from './witness.js';
 import type { FixtureRef } from '../vocabulary/fixture.js';
+import type { Reversal } from '../vocabulary/mutation.js';
 import type { DeterminismProfile } from '../vocabulary/determinism.js';
 import { type Observation } from '../vocabulary/evidence.js';
 import type { Anomaly } from '../vocabulary/verdict.js';
@@ -172,6 +173,24 @@ export abstract class Realm extends Witness {
    */
   applyFixture?(ref: FixtureRef): Promise<void>;
   captureFixture?(): Promise<FixtureRef>;
+
+  /**
+   * Break the subject on purpose, and hand back how to undo it — optional.
+   *
+   * This is what lets a verifier grade ITSELF. A flow that would stay green if the feature broke is
+   * worse than no flow, and there is no way to tell one from a real flow by reading it: the only
+   * way is to break the thing it claims to watch and see whether it notices. A flow that does not go
+   * red is demoted — it is not a test, it is a click sequence.
+   *
+   * A realm perturbs what it has: a web page loses a handler or a locator, a service fails a
+   * request, a game freezes a subsystem. Hardware almost certainly declares nothing, and that is a
+   * correct answer rather than a missing feature — a rig you can break on demand is a rig you can
+   * break by accident.
+   *
+   * The `Reversal` is not optional politeness. A break nobody can undo is damage, and a run that
+   * lost track of what it left broken would hand the next one a subject that is not the subject.
+   */
+  mutate?(mutation: { kind: string; target?: string }): Promise<Reversal>;
 
   // ── The rules, implemented once, for everybody ──────────────────────────────────────────────
 
