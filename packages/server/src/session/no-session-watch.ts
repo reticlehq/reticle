@@ -10,6 +10,7 @@
  * daemon that outlives the agent by hours has no business scanning ports it does not need.
  */
 
+import { probeRouteStatus } from './route-status-probe.js';
 import { probeDevServers, probeDevServerStates } from './dev-server-probe.js';
 import type { NoSessionReason } from '@reticlehq/core/telemetry';
 import { homedir } from 'node:os';
@@ -91,6 +92,15 @@ interface NoSessionWatchOptions {
    */
   attach?: (url: string) => Promise<unknown>;
   /**
+   * What the route the last session was on answers right now, as an HTTP status, or undefined
+   * when there is no answer to report.
+   *
+   * Injected so tests can pin the observation without opening a socket. Production (no override)
+   * asks the route itself — see route-status-probe. The one fact that separates a route that 500s
+   * from a closed tab (#808, option 3).
+   */
+  routeStatus?: (url: string) => Promise<number | undefined>;
+  /**
    * Where the durable "an app has connected here before" bit lives. The daemon's state home unless
    * a test says otherwise.
    */
@@ -116,6 +126,15 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
    */
   let slowListeners: readonly number[] = [];
   let siblingListeners: readonly number[] = [];
+  /**
+   * What the last-known route answered, cached beside the port scan for the same reason the scan
+   * is cached: the hint is read synchronously, so every fact it carries has to be gathered before
+   * it is asked. Keyed by URL so a status is never attributed to a route other than the one it
+   * came from — a fresh departure on a different URL reads as "not asked yet", not as the old
+   * answer.
+   */
+  let lastKnownStatus: { url: string; status: number } | undefined;
+  const routeStatus = options.routeStatus ?? probeRouteStatus;
   let running = false;
   /** Ports auto-attach has already spent its one attempt on. Bounded: never a loop, never a retry. */
   const attempted = new Set<number>();
@@ -262,6 +281,13 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
             : options.probe === undefined
               ? await findOccupiedSiblings(options.port, probeDaemon)
               : [];
+        // Asked once per departed URL, on the same background cadence as the port scan, and never
+        // on the hint's own path. A url already answered is not asked again; a new departure is.
+        const known = options.sessions.lastKnown?.();
+        if (known !== undefined && lastKnownStatus?.url !== known.url) {
+          const status = await routeStatus(known.url);
+          if (status !== undefined) lastKnownStatus = { url: known.url, status };
+        }
         await autoAttach(ports);
       })
       .catch(() => {
@@ -352,7 +378,14 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
       // has none to name.
       ...(() => {
         const known = options.sessions.lastKnown?.();
-        return undefined === known ? {} : { lastKnownUrl: known.url };
+        if (undefined === known) return {};
+        // The status rides only when it was fetched for THIS url. A departure since the fetch
+        // means the cached answer is about a route nobody is asking about.
+        const status =
+          lastKnownStatus !== undefined && lastKnownStatus.url === known.url
+            ? { lastKnownStatus: lastKnownStatus.status }
+            : {};
+        return { lastKnownUrl: known.url, ...status };
       })(),
       // How long this daemon has been waiting with no app. The diagnosis uses it to surface
       // "install never finished" — the same condition telemetry already knows about.

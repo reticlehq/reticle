@@ -140,7 +140,17 @@ export interface NoSessionFacts {
    * or the ring has forgotten — inventing a URL is worse than the silence this exists to end.
    */
   lastKnownUrl?: string;
+  /**
+   * What a plain GET of `lastKnownUrl` answered, done out of band by the watch after the session
+   * went. The one fact that separates a server error from a closed tab and from an install
+   * problem (#808, option 3). Present only when the fetch got an HTTP status back — a failed or
+   * timed-out fetch is no fact, and this stays absent rather than guessing.
+   */
+  lastKnownStatus?: number;
 }
+
+/** The lowest HTTP status that means the server itself failed to answer the route. */
+const SERVER_ERROR_FLOOR = 500;
 
 /** The one framework whose most likely cause differs from every other framework's. */
 const NUXT = 'nuxt';
@@ -538,6 +548,27 @@ export function explainNoSession(facts: NoSessionFacts): {
           'headless context, not a human tab, and it takes its cookies with it (so an authenticated ' +
           'app needs signing in again). Re-acquire with reticle_lease {action:"acquire", url} and ' +
           `carry on.${alreadyListeningClause(listening)} ${RETRY}`,
+      );
+    }
+    // Ranked above TAB_GONE because it is not an absence: the route itself answered. A tab that a
+    // 5xx tore down and a tab a human closed produce the same empty list, and until the watch asked
+    // the route, they produced the same sentence. Present tense throughout — "answers ... right
+    // now" — because a 500 now does not prove the teardown was a 500 then, and saying so would
+    // turn an observation into a story.
+    if (
+      facts.lastKnownStatus !== undefined &&
+      facts.lastKnownStatus >= SERVER_ERROR_FLOOR &&
+      facts.lastKnownUrl !== undefined &&
+      '' !== facts.lastKnownUrl
+    ) {
+      return reason(
+        NoSessionReason.ROUTE_SERVER_ERROR,
+        'no browser session connected, but one WAS connected to this daemon earlier, so the wiring ' +
+          `is correct. The page was torn down while on ${facts.lastKnownUrl}, and that route answers ` +
+          `HTTP ${String(facts.lastKnownStatus)} right now — a server error in the app, not a closed ` +
+          'tab and not an install problem. A route that throws server-side tears the page down and ' +
+          'the SDK cannot reconnect to it. Fix the route, then reload the tab (or run ' +
+          `${OPEN_CMD_BARE}).${alreadyListeningClause(listening)} ${RETRY}`,
       );
     }
     return reason(

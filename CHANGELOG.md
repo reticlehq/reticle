@@ -4,6 +4,10 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Fixed
+
+- **`@reticlehq/core` + `@reticlehq/server` — a route that 500s is named as a server error, not as a closed tab.** A route that throws server-side tears the page down and the SDK never reconnects, so `reticle_sessions` was empty and the diagnosis said the tab was torn down while on that URL (#862) — which is true, and indistinguishable from somebody closing it. The daemon now asks the route itself: when a session has gone and its last URL is held, the no-session watch does one `GET` of that URL in the background, on the same cadence as its port scan, and the diagnosis reads the answer. A 5xx becomes `NoSessionReason.ROUTE_SERVER_ERROR`, ranked above `TAB_GONE` because it is not an absence: _the page was torn down while on /X, and that route answers HTTP 500 right now — a server error in the app, not a closed tab and not an install problem_. Present tense on purpose, since a 500 now does not prove the teardown was a 500 then. The probe fetches loopback `http:` only, `GET` only, never reads the body, and treats an error or a timeout as no fact — the diagnosis is then unchanged rather than wrong. A non-5xx status stays with the closed-tab wording. Part of [#808](https://github.com/reticlehq/reticle/issues/808); the overlay-read option stays open.
+
 ## [2.14.0] — 2026-09-10
 
 ### Added

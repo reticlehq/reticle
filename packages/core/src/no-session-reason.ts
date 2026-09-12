@@ -19,6 +19,13 @@ export const NoSessionReason = {
   LEASE_EXPIRED: 'lease_expired',
   /** Connected before; the tab was closed, navigated away, or hard-reloaded. */
   TAB_GONE: 'tab_gone',
+  /**
+   * Connected before, and the route the tab was on answers 5xx right now. A server error tears the
+   * page down and the SDK never reconnects, so it used to read as TAB_GONE — the URL was known, and
+   * nothing asked it what it answers. This is the answer, and it outranks TAB_GONE because it is not
+   * an absence. Present tense only: a 5xx now is what was observed, not a claim about then.
+   */
+  ROUTE_SERVER_ERROR: 'route_server_error',
   /** This project has connected before, but not to this daemon run. Usually a restart with no reopen. */
   APP_NOT_REOPENED: 'app_not_reopened',
   /** A `.reticle.json` exists OUTSIDE this daemon's directory: a scope problem, not an install one. */

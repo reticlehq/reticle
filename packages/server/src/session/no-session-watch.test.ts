@@ -145,3 +145,81 @@ describe('the no-session diagnosis and a config written after boot', () => {
     expect(message).not.toMatch(/the daemon this app wants/i);
   });
 });
+
+describe('the watch asks the route the tab died on what it answers now', () => {
+  /** A manager whose one departed session was on `url`. */
+  function stubWithLastKnown(url: string): ReturnType<typeof stubSessions> {
+    const stub = stubSessions();
+    const m = stub.manager as unknown as Record<string, unknown>;
+    m['everConnected'] = () => true;
+    m['lastKnown'] = () => ({ id: 's-gone', url });
+    return stub;
+  }
+
+  it('fetches the last-known URL in the background and the hint reads the status', async () => {
+    const dir = projectDir(JSON.stringify({ framework: 'next', projectId: 'app-1' }));
+    const { manager, hint } = stubWithLastKnown('http://localhost:3000/orders/explode');
+    const asked: string[] = [];
+    const stop = startNoSessionWatch({
+      sessions: manager,
+      port: 4400,
+      initialized: true,
+      directory: dir,
+      probe: () => Promise.resolve([3000]),
+      occupiedSiblings: () => Promise.resolve([]),
+      routeStatus: (url) => {
+        asked.push(url);
+        return Promise.resolve(500);
+      },
+    });
+    // One macrotask turn lets the whole background refresh chain settle — probe, siblings, route.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const message = hint();
+    stop();
+    expect(asked).toEqual(['http://localhost:3000/orders/explode']);
+    expect(message).toMatch(/HTTP 500/);
+    expect(message).toMatch(/server error/i);
+  });
+
+  it('a fetch that fails is no fact — the diagnosis is unchanged, not wrong', async () => {
+    const dir = projectDir(JSON.stringify({ framework: 'next', projectId: 'app-1' }));
+    const { manager, hint } = stubWithLastKnown('http://localhost:3000/orders/explode');
+    const stop = startNoSessionWatch({
+      sessions: manager,
+      port: 4400,
+      initialized: true,
+      directory: dir,
+      probe: () => Promise.resolve([3000]),
+      occupiedSiblings: () => Promise.resolve([]),
+      routeStatus: () => Promise.resolve(undefined),
+    });
+    // One macrotask turn lets the whole background refresh chain settle — probe, siblings, route.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const message = hint();
+    stop();
+    expect(message).toMatch(/torn down while on/i);
+    expect(message).not.toMatch(/server error|HTTP 5/i);
+  });
+
+  it('does not ask at all when nothing departed — no URL, no fetch', async () => {
+    const dir = projectDir(JSON.stringify({ framework: 'next', projectId: 'app-1' }));
+    const { manager } = stubSessions();
+    let asked = 0;
+    const stop = startNoSessionWatch({
+      sessions: manager,
+      port: 4400,
+      initialized: true,
+      directory: dir,
+      probe: () => Promise.resolve([3000]),
+      occupiedSiblings: () => Promise.resolve([]),
+      routeStatus: () => {
+        asked += 1;
+        return Promise.resolve(500);
+      },
+    });
+    // One macrotask turn lets the whole background refresh chain settle — probe, siblings, route.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    stop();
+    expect(asked).toBe(0);
+  });
+});
