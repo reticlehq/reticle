@@ -178,18 +178,27 @@ describe('replayFlow — anchor re-resolution + legible drift', () => {
     ]);
   });
 
-  it('records per-step durationMs from the injected clock (and omits it when the clock is fixed)', async () => {
+  it('carries per-step duration in the WINDOW, not as a separate durationMs', async () => {
+    // This used to assert `durationMs === 25`. That number was `window.until - window.since` computed
+    // one line earlier in the same function, under the same emission condition — so every step of
+    // every replay shipped the subtraction AND both of its operands. Dropping the derived one is a
+    // route cut: the duration is still here, exactly once, in the field that is also the drill address
+    // an agent hands to `reticle_observe`.
     const script = (testid: string): QueryScript => ({ elements: [el(`e-${testid}`, testid)] });
     // Readings: [replayFloor, cursorBefore, post-settle]. The first is consumed by the replay-start
     // floor (captured once, for signal-step scoping); the step's duration is the last two: 10→35 = 25ms.
     const timed = new FakeSession(script, [], PASS, {}, [0, 10, 35]);
     const steps = await replayFlow(timed, flow([testidStep('chat-send')]), waitForPredicate, FAST);
-    expect(steps[0]?.durationMs).toBe(25);
+    expect(steps[0]?.window).toEqual({ since: 10, until: 35 });
+    expect((steps[0]?.window?.until ?? 0) - (steps[0]?.window?.since ?? 0)).toBe(25);
+    expect('durationMs' in (steps[0] ?? {})).toBe(false);
 
-    // Fixed-clock fake (default): durationMs stays absent — additive, never a spurious 0.
+    // Fixed-clock fake (default): no clock movement, so there is no window to bound and nothing to
+    // derive — the step reads duration-free rather than carrying a spurious 0.
     const untimed = new FakeSession(script);
     const s2 = await replayFlow(untimed, flow([testidStep('chat-send')]), waitForPredicate, FAST);
-    expect(s2[0]?.durationMs).toBeUndefined();
+    expect(s2[0]?.window).toBeUndefined();
+    expect('durationMs' in (s2[0] ?? {})).toBe(false);
   });
 
   it('captures the page (route) each step ran on — the journey trail', async () => {

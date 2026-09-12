@@ -5,6 +5,7 @@ import {
   AnchorKind,
   DriftReason,
   EventType,
+  FlowStepTool,
   ReticleCommand,
   QueryBy,
   type CommandResult,
@@ -670,11 +671,10 @@ export async function replayFlow(
     const windowEvents = session.eventsSince(cursorBefore).filter((e) => e.t >= cursorBefore);
     const consequence = summarizeConsequence(windowEvents);
     if (consequence !== undefined) result.consequence = consequence;
-    // Per-step wall time from the session's injected clock (dispatch → here, post-settle). Only set when
-    // the clock actually advanced, so a fixed-clock fake reads durationMs-free (additive, non-breaking).
+    // Per-step wall time is NOT shipped: it is `window.until - window.since`, computed from two numbers
+    // the next line already puts in the same object, under the same emission condition. A step used to
+    // carry the subtraction AND both operands, on every step of every replay.
     const cursorAfter = session.elapsed();
-    const durationMs = cursorAfter - cursorBefore;
-    if (durationMs > 0) result.durationMs = durationMs;
     // ONE builder, shared with the live act path, so a driven step and a replayed one describe what
     // happened in identical words rather than in two vocabularies that agree by coincidence.
     Object.assign(result, stepEffect(windowEvents, { since: cursorBefore, until: cursorAfter }));
@@ -685,6 +685,9 @@ export async function replayFlow(
      * run did not start where the caller will read it as having started. Swallowing it would turn
      * "I could not get there" into "I got there and it was fine".
      */
+    // `tool` is dropped HERE rather than at the ten places that set it, so a new step runner cannot
+    // forget the rule and quietly re-introduce the cost. Spelled out only when it is NOT the default.
+    if (FlowStepTool.ACT === result.tool) delete result.tool;
     if (index >= from || !result.ok || result.drift !== undefined) results.push(result);
     if (result.drift !== undefined || !result.ok) break;
     index += 1;

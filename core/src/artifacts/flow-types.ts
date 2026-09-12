@@ -262,17 +262,39 @@ export interface ReactionSummary {
   signals: number;
 }
 
+/**
+ * The digest's counts: `total` always, every other counter only when it is NON-ZERO.
+ *
+ * This shape is sparse and the full `ReactionSummary` above is not, on purpose. The digest ships on
+ * every step of every replay and on every `act_and_wait`; the full report does not. Measured on a
+ * real four-step replay, 25 of 36 counters were zero — every step spelling out `"network":0,
+ * "domAdded":0,"routeChanges":0,…` whether or not anything moved.
+ *
+ * Omitting a zero is a ROUTE cut and never an evidence cut: an absent counter IS zero, so the reader
+ * answers the same question from the same facts. Read one as `summary.network ?? 0`.
+ *
+ * `total` is unconditional because "the window was empty" is itself evidence, and a summary with no
+ * keys could not be told apart from one that was never computed.
+ */
+export type ReactionSummaryDigest = { total: number } & Partial<Omit<ReactionSummary, 'total'>>;
+
 /** The lean reaction report: the window and the counts, without the per-event timeline. */
 export interface ReactionDigest {
   window_ms: number;
-  summary: ReactionSummary;
+  summary: ReactionSummaryDigest;
 }
 
 export interface FlowStepResult {
   /** 0-based index of this step in the flow. */
   step: number;
-  /** The tool the step runs — FlowStepTool.ACT | ACT_SEQUENCE (core). */
-  tool: string;
+  /**
+   * The tool the step runs — FlowStepTool.ACT | ACT_SEQUENCE | the synthetic success oracle.
+   *
+   * OMITTED when it is `ACT`, which 137/137 steps in this repo's corpus are. Read it as
+   * `tool ?? FlowStepTool.ACT`. Every reader only ever asks "is this the success oracle?", and a
+   * missing field is correctly falsy against that — so the coercion fails in the safe direction.
+   */
+  tool?: string;
   /** The testid/signal value the step is bound to (the re-resolved anchor). */
   anchor: string;
   /**

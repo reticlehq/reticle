@@ -2,6 +2,7 @@ import {
   EventType,
   type ReactionDigest,
   type ReactionSummary,
+  type ReactionSummaryDigest,
   type ReticleEvent,
 } from '@reticlehq/core';
 
@@ -71,5 +72,12 @@ export function buildReactionReport(events: ReticleEvent[], windowMs: number): R
  * the cost (hundreds of tokens of mutations); the digest is a handful.
  */
 export function summarizeReaction(report: ReactionReport): ReactionDigest {
-  return { window_ms: report.window_ms, summary: report.summary };
+  const { total, ...counters } = report.summary;
+  const summary: ReactionSummaryDigest = { total };
+  for (const [key, count] of Object.entries(counters)) {
+    // A zero counter is the DEFAULT, and spelling out a default on every step of every replay is
+    // paying per turn to say nothing. An absent counter reads as zero; read one as `?? 0`.
+    if (0 !== count) Object.assign(summary, { [key]: count });
+  }
+  return { window_ms: report.window_ms, summary };
 }

@@ -137,10 +137,61 @@ describe('a replayed step carries the structured digest of what the app did', ()
       FAST,
     );
 
+    //
+    // The digest is SPARSE: `total` always, every other counter only when it is non-zero. This used
+    // to assert `toHaveProperty('consoleErrors')` and `('network')` — i.e. that the zeros were spelled
+    // out — which is the byte the route cut removed. An absent counter reads as zero, so what has to
+    // hold is that the counts are a SURFACE (numbers keyed by channel), not that every key is sent.
+    const summary = results[0]?.digest?.summary;
     expect(results[0]?.digest).toBeDefined();
-    expect(results[0]?.digest?.summary.total).toBeTypeOf('number');
-    expect(results[0]?.digest?.summary).toHaveProperty('consoleErrors');
-    expect(results[0]?.digest?.summary).toHaveProperty('network');
-    expect(results[0]?.digest?.summary).toHaveProperty('signals');
+    expect(summary?.total).toBeTypeOf('number');
+    for (const [key, count] of Object.entries(summary ?? {})) {
+      expect(count, `${key} is a count`).toBeTypeOf('number');
+      // The whole point of the cut: nothing is sent just to say it did not happen.
+      if ('total' !== key) expect(count, `${key} is present, so it moved`).not.toBe(0);
+    }
+  });
+});
+
+/**
+ * Two facts, four numbers.
+ *
+ * `window {since, until}` is the drill address an agent passes straight to `reticle_observe`, and its
+ * "bounded on BOTH ends" invariant is argued in core beside the type. `durationMs` was `until - since`
+ * computed one line earlier, under the SAME emission condition — so every step shipped the subtraction
+ * as well as its operands, on every step of every replay, forever.
+ *
+ * Removing a value the reader can compute from two others in the same object is a ROUTE cut: the fact
+ * survives byte-for-byte. Removing `window.until` instead would save fewer bytes AND make the observe
+ * address require arithmetic, which is the wrong half to drop.
+ *
+ * The `tool` field is the same shape of waste for a different reason: 137/137 steps in this repo's
+ * corpus are `reticle_act`, and every reader only ever asks "is this the success oracle?". So it is
+ * omitted when it holds the default and spelled out when it does not — read it as `tool ?? ACT`.
+ */
+describe('a replayed step does not ship what the reader can already compute', () => {
+  it('omits durationMs — it is window.until minus window.since', async () => {
+    const results = await replayFlow(
+      new TickingSession(new Set(['one'])),
+      flow(['one']),
+      waitForPredicate,
+      FAST,
+    );
+
+    const step = results[0];
+    expect(step?.window, 'the window is the evidence and stays').toBeDefined();
+    expect(step?.window?.until).toBeGreaterThan(step?.window?.since ?? 0);
+    expect('durationMs' in (step ?? {}), 'durationMs is the subtraction, not a fact').toBe(false);
+  });
+
+  it('omits `tool` when it is the default, so a non-default still announces itself', async () => {
+    const results = await replayFlow(
+      new TickingSession(new Set(['one'])),
+      flow(['one']),
+      waitForPredicate,
+      FAST,
+    );
+
+    expect('tool' in (results[0] ?? {}), 'reticle_act is the default — unsaid').toBe(false);
   });
 });
