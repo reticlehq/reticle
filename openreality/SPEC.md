@@ -450,7 +450,32 @@ Evidence already carries its own `provenance.subject`, so which rows came from w
 
 It returns **nothing** when the witness could not look. A witness that was unreachable saw nothing for a reason that has nothing to do with the application, and reporting that as _"the write never happened"_ would be the protocol inventing a defect out of its own blind spot — the same rule that makes an empty `blindSpots` array a positive claim rather than a default.
 
-### 10.2 The determinism profile
+### 10.2 Fixtures — the state a suite starts from
+
+A suite of fifty flows that each start from cold spends most of its time proving the login works, fifty times. Worse, the flow that logs _out_ leaves every flow after it signed out, and no amount of navigating repairs that: the problem is not where the subject is, it is what it holds.
+
+What a fixture IS cannot live in this specification.
+
+| realm    | fixture                                                              |
+| -------- | -------------------------------------------------------------------- |
+| web      | a saved `storageState` — authenticate once, reuse across fifty flows |
+| mobile   | a signed-in container, or a seeded simulator snapshot                |
+| game     | a save file at the level under test                                  |
+| service  | seeded rows, a migrated schema                                       |
+| hardware | a homed, calibrated rig                                              |
+
+So the protocol declares **that** one exists and **when** it is applied; the realm declares **how**:
+
+```ts
+applyFixture?(ref: FixtureRef): Promise<void>;   // optional, like locate and photograph
+captureFixture?(): Promise<FixtureRef>;
+```
+
+A realm offering neither is correct and merely slower — every flow runs from cold. A realm that offers one it cannot honour is the failure this is shaped to prevent: a fixture you claim and cannot restore produces flows that pass because the _previous_ flow happened to leave the right state behind, which is a suite that only works in the order it was written. Same rule as `channels()`, and the same reason.
+
+A `FixtureRef` carries the subject it was captured from, epoch included, and `fixtureIsUsable(fixture, subject)` is what a caller checks first. State captured from a build that has since been rewritten is not a shortcut — it is a green flow standing on a session the current code would never have issued. When neither side claims an epoch the answer is yes: a realm that cannot tell when it was rewritten says so by omitting it, and treating that as "never reusable" would punish the honest omission and push implementers to invent a number.
+
+### 10.3 The determinism profile
 
 Every other question here is about what a realm can SEE. `determinism()` is about what it can be PUT THROUGH, and it exists because the rest of this specification had inherited a browser's answer to a question no browser has to ask.
 

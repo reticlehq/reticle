@@ -48,6 +48,7 @@ const BASE = 'https://openreality.dev/schema/v1';
 // contract contains" would be the drift this file exists to prevent, one level up.
 export const SCHEMAS = Object.freeze({
   'subject-ref': ovp.SubjectRefSchema,
+  'fixture-ref': ovp.FixtureRefSchema,
   invalidation: ovp.InvalidationSchema,
   'channel-descriptor': ovp.ChannelDescriptorSchema,
   intent: ovp.IntentSchema,

@@ -57,6 +57,9 @@ const PINNED: readonly SchemaSurface[] = [
       'constraint.json',
       'coverage.json',
       'evidence.json',
+      // New public entry point: the reference to state a suite starts from. An implementer in
+      // another language validates a saved fixture against this by name.
+      'fixture-ref.json',
       'flow.json',
       'handle.json',
       'implementation.json',

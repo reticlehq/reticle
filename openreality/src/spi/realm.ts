@@ -9,6 +9,7 @@ import {
 } from '../vocabulary/realm-surface.js';
 import { type ChannelId } from '../vocabulary/channel.js';
 import { Witness } from './witness.js';
+import type { FixtureRef } from '../vocabulary/fixture.js';
 import type { DeterminismProfile } from '../vocabulary/determinism.js';
 import { type Observation } from '../vocabulary/evidence.js';
 import type { Anomaly } from '../vocabulary/verdict.js';
@@ -148,6 +149,29 @@ export abstract class Realm extends Witness {
 
   /** Pixels, when this realm has them. Optional: a service has nothing to photograph. */
   photograph?(window: Window): Promise<Uint8Array>;
+
+  /**
+   * Put the subject into state somebody captured earlier, and capture it — both optional.
+   *
+   * A suite of fifty flows that each start from cold spends most of its time proving the login
+   * works, fifty times; and the flow that logs OUT leaves every flow after it signed out, which no
+   * amount of navigating repairs, because the problem is not where the subject is but what it holds.
+   *
+   * What a fixture IS cannot live in this protocol — a saved `storageState`, a seeded container, a
+   * save file, rows and a migration, a homed rig. The protocol says THAT one exists and when it is
+   * applied; you say how.
+   *
+   * Offering neither is a correct implementation that is merely slower: every flow runs from cold.
+   * Offering one you cannot honour is the failure this is shaped to prevent — a fixture you claim
+   * and cannot restore produces flows that pass because the PREVIOUS flow happened to leave the
+   * right state behind, which is a suite that only works in the order it was written. Same rule as
+   * `channels()`, and the same reason.
+   *
+   * Check `fixtureIsUsable` before applying one: state captured from a build that has since been
+   * rewritten is a green flow standing on a session the current code would never have issued.
+   */
+  applyFixture?(ref: FixtureRef): Promise<void>;
+  captureFixture?(): Promise<FixtureRef>;
 
   // ── The rules, implemented once, for everybody ──────────────────────────────────────────────
 
