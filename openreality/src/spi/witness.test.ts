@@ -39,8 +39,8 @@ class DatabaseWitness extends Witness {
   channels(): readonly ChannelDescriptor[] {
     return [
       {
-        ...CHANNEL_DEFAULTS,
         id: ChannelId.STATE,
+        ...CHANNEL_DEFAULTS[ChannelId.STATE],
         // The whole reason it is worth asking: it did not cause what it reports.
         independence: Independence.INDEPENDENT,
         grade: Grade.CONSEQUENCE,
@@ -126,7 +126,7 @@ describe('the verdict a witness disagreement produces', () => {
         assertions: [{ id: 'a1', text: CLAIM, channels: [ChannelId.UI] }],
       },
       channels: [
-        { ...CHANNEL_DEFAULTS, id: ChannelId.UI, grade: Grade.CONSEQUENCE },
+        { id: ChannelId.UI, ...CHANNEL_DEFAULTS[ChannelId.UI], grade: Grade.CONSEQUENCE },
         {
           ...CHANNEL_DEFAULTS,
           id: ChannelId.STATE,

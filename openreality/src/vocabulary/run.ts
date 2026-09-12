@@ -59,6 +59,31 @@ export const VerificationRunSchema = z.object({
   subject: SubjectRefSchema,
   /** What this implementation declared it could observe. The first assertion it makes. */
   channels: z.array(ChannelDescriptorSchema),
+  /**
+   * Vantage points OUTSIDE the subject that were consulted — see `Witness`.
+   *
+   * Every channel above is, in the end, the subject describing itself. When an application lies to
+   * itself, every channel inside it repeats the lie consistently; a witness is the thing that is not
+   * in there. Evidence already carries its own `provenance.subject`, so which rows came from where
+   * was technically derivable — and derivable is not declared. `channels` sits at the top of a run
+   * precisely because what a vantage point CLAIMS it can see is an assertion to be checked rather
+   * than inferred from what it happened to report, and a witness earns the same treatment for the
+   * sharper reason: one that calls itself independent while reading the app's own cache is the
+   * costliest lie available here, and a reader cannot doubt a declaration nobody wrote down.
+   *
+   * Defaults to none, so a run that consulted nothing outside the subject says so by saying nothing
+   * and no artifact written before this became unreadable.
+   */
+  witnesses: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        /** Its OWN subject. A witness whose subject is implied is one a reader cannot place. */
+        subject: SubjectRefSchema,
+        channels: z.array(ChannelDescriptorSchema),
+      }),
+    )
+    .default([]),
 
   intents: z.array(IntentSchema).default([]),
   claims: z.array(ClaimSchema).default([]),

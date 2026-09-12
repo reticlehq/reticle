@@ -107,6 +107,9 @@ const run = (
   verifier: { name: 'test', version: '0' },
   subject: subject(),
   channels: [],
+  // Nothing outside the subject was consulted. Said explicitly, because this fixture is written out
+  // in full on purpose — see the note above.
+  witnesses: [],
   intents: [],
   claims: [],
   constraints: [],

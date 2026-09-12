@@ -440,6 +440,14 @@ A `Witness` is a `Realm` minus the ability to act, and the omission is the point
 
 `witnessDisagreement(actor, witness)` turns the subject's claim and the witness's silence into an `observed` anomaly of kind `claim-uncorroborated`, between the two channels. §7.1 clause 3 then outranks a passing assertion with it, because one of the two is independent — so _"the UI says it saved and the database has no row"_ is a `no`, not a pass with a note.
 
+A run that consulted one records it, beside the channels the actor declared:
+
+```ts
+witnesses: [{ name: 'orders-db', subject: {...}, channels: [...] }]  // defaults to []
+```
+
+Evidence already carries its own `provenance.subject`, so which rows came from where was derivable — and derivable is not declared. `channels` sits at the top of a run precisely because what a vantage point _claims_ it can see is an assertion to be checked rather than inferred from what it happened to report, and a witness earns the same treatment for the sharper reason above: a reader cannot doubt a declaration nobody wrote down.
+
 It returns **nothing** when the witness could not look. A witness that was unreachable saw nothing for a reason that has nothing to do with the application, and reporting that as _"the write never happened"_ would be the protocol inventing a defect out of its own blind spot — the same rule that makes an empty `blindSpots` array a positive claim rather than a default.
 
 ### 10.2 The determinism profile
