@@ -139,7 +139,12 @@ describe('selectPath — Set support and .size on collections', () => {
   });
 
   it('resolves .size on a Map', () => {
-    const state = { byId: new Map([['a', 1], ['b', 2]]) };
+    const state = {
+      byId: new Map([
+        ['a', 1],
+        ['b', 2],
+      ]),
+    };
     expect(selectPath(state, 'byId.size')).toEqual({ found: true, value: 2 });
   });
 
@@ -161,7 +166,15 @@ describe('selectPath — Set support and .size on collections', () => {
       tags: new Set(['a']),
       map: new Map([['a', 1]]),
     };
-    for (const seg of ['constructor', '__proto__', 'toString', 'add', 'delete', 'clear', 'has']) {
+    for (const seg of [
+      'constructor',
+      '__proto__',
+      'toString',
+      'add',
+      'delete',
+      'clear',
+      'has',
+    ]) {
       expect(selectPath(state, `tags.${seg}`).found, `tags.${seg} must not be found`).toBe(false);
       expect(selectPath(state, `map.${seg}`).found, `map.${seg} must not be found`).toBe(false);
     }
