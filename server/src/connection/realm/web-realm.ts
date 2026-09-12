@@ -19,6 +19,7 @@ import {
   RefusalReason,
   fixtureIsUsable,
   type FixtureRef,
+  type Reversal,
   type SubjectRef,
   type Window as ProtocolWindow,
 } from '@reticlehq/openreality';
@@ -84,8 +85,21 @@ export interface FixturePort {
   apply(payload: unknown): Promise<void>;
 }
 
+/**
+ * A way to break the subject on purpose and put it back.
+ *
+ * Optional for the same reason the fixture port is: a driven page can be perturbed and an attached
+ * tab cannot. Declared as what the realm NEEDS rather than imported from whatever provides it.
+ */
+export interface MutationPort {
+  mutate(mutation: { kind: string; target?: string }): Promise<Reversal>;
+  revert(): Promise<void>;
+}
+
 export interface WebRealmDeps {
   readonly session: Session;
+  /** Present only when this connection can actually perturb the page. See `MutationPort`. */
+  readonly mutations?: MutationPort;
   /** Present only when this connection can actually restore state. See `FixturePort`. */
   readonly fixtures?: FixturePort;
   /**
@@ -364,12 +378,24 @@ export class WebRealm extends Realm {
    * and then throw. `applyFixture === undefined` is how an optional member says *not offered*, and
    * these are therefore fields that exist only when something can back them.
    */
+  /**
+   * Break the subject, when something can — and be ABSENT when nothing can.
+   *
+   * The same structural honesty the fixture methods carry: a declared method is always present, so
+   * a realm with no port would answer "yes I can be broken" and then throw. A mutation set that
+   * cannot be applied is not a small mutation set, it is a mutation score that demotes flows for
+   * surviving things that never happened to them.
+   */
+  override readonly mutate?: (mutation: { kind: string; target?: string }) => Promise<Reversal>;
+
   override readonly captureFixture?: () => Promise<FixtureRef>;
   override readonly applyFixture?: (ref: FixtureRef) => Promise<void>;
 
   constructor(deps: WebRealmDeps) {
     super();
     this.#deps = deps;
+    const breaker = deps.mutations;
+    if (breaker !== undefined) this.mutate = (mutation) => breaker.mutate(mutation);
     const port = deps.fixtures;
     if (port !== undefined) {
       this.captureFixture = async (): Promise<FixtureRef> => ({

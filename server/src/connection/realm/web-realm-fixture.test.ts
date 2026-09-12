@@ -86,3 +86,36 @@ describe('a web realm driving a page it can restore', () => {
     expect(p.applied).toEqual([{ token: 'abc' }]);
   });
 });
+
+/**
+ * Being breakable is a capability a realm either has or does not, and saying so is the point.
+ *
+ * The mutation grade demotes a flow that survives a break. A realm that claimed it could break
+ * things and quietly did not would demote flows for surviving a perturbation that never reached
+ * them — a mutation score lying in the direction that looks like rigour, which is the worst
+ * direction for a number whose whole purpose is to be sceptical of ourselves.
+ */
+describe('whether this realm can be broken on purpose', () => {
+  it('does not offer mutation when nothing can perturb the page', () => {
+    expect(new WebRealm({ session: createFakeSession(), now: () => 0 }).mutate).toBeUndefined();
+  });
+
+  it('offers it, and passes the mutation through, when something can', async () => {
+    const asked: { kind: string; target?: string }[] = [];
+    const realm = new WebRealm({
+      session: createFakeSession(),
+      now: () => 0,
+      mutations: {
+        mutate: (m) => {
+          asked.push(m);
+          return Promise.resolve({ mutation: 'request-fails:/api/orders' });
+        },
+        revert: () => Promise.resolve(),
+      },
+    });
+    const reversal = await realm.mutate?.({ kind: 'request-fails', target: '/api/orders' });
+    expect(asked).toEqual([{ kind: 'request-fails', target: '/api/orders' }]);
+    // The undo travels back, because a break nobody can reverse is damage.
+    expect(reversal?.mutation).toBe('request-fails:/api/orders');
+  });
+});
