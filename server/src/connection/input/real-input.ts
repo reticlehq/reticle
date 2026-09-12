@@ -67,6 +67,22 @@ export interface RealInputProvider {
    */
   screenshot?(sessionUrl: string, opts: ScreenshotOpts): Promise<Uint8Array | undefined>;
   /**
+   * Read and restore the browser CONTEXT's state — cookies and per-origin storage — so a suite can
+   * start from a known place instead of logging in fifty times.
+   *
+   * Optional, and on the web this is where the capability actually lives. A page cannot write an
+   * httpOnly cookie from inside itself, so the SDK can never do this however much is added to it;
+   * only something holding the context can. A provider with no owned browser omits both, and every
+   * flow then runs from cold, which is correct and merely slower.
+   *
+   * The state is opaque to everything but the browser that produced it. `applyStorageState` returns
+   * false when no driven page matched, which the caller must treat as a failure rather than a
+   * no-op — a suite that believes it is signed in and is not fails fifty times for a reason none of
+   * them names.
+   */
+  storageState?(sessionUrl: string): Promise<unknown>;
+  applyStorageState?(sessionUrl: string, state: unknown): Promise<boolean>;
+  /**
    * Install (or replace, or with [] clear) network-mock rules on the correlated page — stub a 500,
    * force offline, delay a response — for deterministic error/edge-state testing. Returns true when
    * a page matched and the rules were applied, false when no driven page matches this session.
@@ -326,6 +342,47 @@ export class CdpRealInputProvider implements RealInputProvider {
     const page = await this.#pageFor(sessionUrl);
     if (page === undefined) return undefined;
     return capturePage(page, opts);
+  }
+
+  /** The context's cookies and per-origin storage; undefined when no driven page matches. */
+  async storageState(sessionUrl: string): Promise<unknown> {
+    const page = await this.#pageFor(sessionUrl);
+    if (page === undefined) return undefined;
+    return page.context().storageState();
+  }
+
+  /**
+   * Put a captured context state back: cookies through the context, per-origin storage through the
+   * page, because only the context owns a cookie jar and only a document owns its localStorage.
+   *
+   * False when no driven page matches. The caller throws on that — see `fixturePortFor`.
+   */
+  async applyStorageState(sessionUrl: string, state: unknown): Promise<boolean> {
+    const page = await this.#pageFor(sessionUrl);
+    if (page === undefined) return false;
+    const saved = state as {
+      cookies?: Parameters<ReturnType<Page['context']>['addCookies']>[0];
+      origins?: { origin: string; localStorage?: { name: string; value: string }[] }[];
+    };
+    if (saved.cookies !== undefined) await page.context().addCookies(saved.cookies);
+    for (const origin of saved.origins ?? []) {
+      // Only the document for an origin can write that origin's localStorage, so this is applied in
+      // the page rather than through the context. A page sitting on a different origin cannot be
+      // given another origin's storage, and silently succeeding there would be the quiet half-restore
+      // this whole path exists to avoid.
+      if (!page.url().startsWith(origin.origin)) continue;
+      await page.evaluate((entries: { name: string; value: string }[]) => {
+        // Reached through `globalThis` rather than `window`: this body is serialised and runs in the
+        // PAGE, but it is typechecked here, and this package never pulls in the DOM lib — a server
+        // that can name `window` is one step from a server that uses it.
+        const store = (
+          globalThis as { localStorage?: { setItem(key: string, value: string): void } }
+        ).localStorage;
+        if (store === undefined) return;
+        for (const entry of entries) store.setItem(entry.name, entry.value);
+      }, origin.localStorage ?? []);
+    }
+    return true;
   }
 
   /** Apply network-mock rules to the correlated page; false when no driven page matches. */
