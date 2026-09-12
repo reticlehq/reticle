@@ -4,6 +4,10 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Fixed
+
+- **`@reticlehq/server` — `reticle_lineage` reads the attribution the SDK already stamped, instead of only a fresh timing window.** Every event observed under a driven action carries `actionId` + `attribution` at `window` tier — the same heuristic the tool was recomputing from `t`, already labelled and narrower. The tool ignored it, with two consequences that ran the wrong way for an honesty tool. Five seconds spans several driven acts, so a request fired by the _previous_ click was named as a candidate for a change caused by _this_ one, and the chain reported "ambiguous — timing alone cannot choose" while holding the stamp that had already chosen. And because its only middle link was an app-emitted signal, which most apps never emit, a change Reticle itself drove came back "its cause is not in evidence" — a factual claim, false whenever the change carried the id of the act Reticle dispatched. A candidate stamped with a _different_ act is now excluded (the stamp rules out; it never rules in, so an unstamped pre-dispatch request stays a candidate), and a stamped change with no signal behind it names the act at the tier the event carries, then looks for the request behind it under the same stamp. An ambient change, with no stamp, is traced exactly as before. Closes [#939](https://github.com/reticlehq/reticle/issues/939).
+
 ## [2.14.0] — 2026-09-10
 
 ### Added

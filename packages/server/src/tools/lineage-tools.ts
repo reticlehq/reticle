@@ -23,7 +23,7 @@ export const LINEAGE_TOOLS: ToolDef[] = [
     name: ReticleTool.LINEAGE,
     example: { path: 'user.profile.name' },
     description:
-      'Trace BACKWARDS from a runtime value: which state change set it, which signal preceded that, and which request preceded the signal. Read-only — it draws no verdict and changes nothing. The state change is OBSERVED; every link above it is an INFERENCE from timing and says so in its own text. Where several candidates could explain a link it names ALL of them rather than choosing, because timing alone cannot justify the choice — so a chain here is a place to look, never a proven cause. Use it after a `no` verdict or a contradiction, instead of correlating reticle_state, reticle_network and reticle_observe by hand.',
+      'Trace BACKWARDS from a runtime value: which state change set it, which driven action it was observed under, which signal preceded it, and which request preceded that. Read-only — it draws no verdict and changes nothing. The state change is OBSERVED; every link above it is an INFERENCE and says so in its own text — a driven action is the window-tier stamp the SDK put on the event, a signal or request is a timing look-back. A candidate stamped with a DIFFERENT action is excluded; an unstamped one is kept. Where several candidates could still explain a link it names ALL of them rather than choosing, because timing alone cannot justify the choice — so a chain here is a place to look, never a proven cause. Use it after a `no` verdict or a contradiction, instead of correlating reticle_state, reticle_network and reticle_observe by hand.',
     inputSchema: {
       path: z
         .string()

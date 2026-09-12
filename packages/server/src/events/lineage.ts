@@ -16,10 +16,18 @@
  *   one thing a correlation cannot justify;
  * - no candidate says the value was not seen to pass through one, and reaches for nothing.
  *
+ * One more source, read rather than recomputed: the SDK stamps `actionId` + `attribution` onto every
+ * event observed while a driven action is active (see `core/messages.ts`). That is a time-window
+ * heuristic too — `EventAttribution.WINDOW`'s own comment says so — but it is the same tier, already
+ * computed, already labelled, and narrower than a fresh look-back, so the join reads it two ways:
+ * a candidate stamped with a DIFFERENT act is not a candidate for this one (the stamp rules out; it
+ * never rules in), and a stamped change with no signal behind it names the act rather than calling
+ * its cause "not in evidence" when the evidence is on the event (#939).
+ *
  * Read-only. Produces no verdict, is not reachable from an assert path, and changes nothing.
  */
 
-import { EventType, type ReticleEvent } from '@reticlehq/core';
+import { EventAttribution, EventType, type ReticleEvent } from '@reticlehq/core';
 import { asString } from '../tools/tools-helpers.js';
 
 /** What the caller is asking about. `value` narrows a path that changed more than once. */
@@ -30,8 +38,8 @@ export interface LineageQuery {
 
 /** One line of the chain, with the confidence that produced it. */
 export interface LineageLink {
-  /** Which stream this came from. */
-  kind: 'state' | 'signal' | 'net';
+  /** Which stream this came from. `act` is the driven action the event was stamped with. */
+  kind: 'state' | 'act' | 'signal' | 'net';
   /** The rendered line, already carrying its own hedge. */
   text: string;
   /** True only when this is an event we hold. A join is never observed. */
@@ -68,9 +76,45 @@ function stateChangesFor(events: readonly ReticleEvent[], query: LineageQuery): 
   });
 }
 
-/** Events of one kind inside the causal window before `t`, oldest first. */
-function precursors(events: readonly ReticleEvent[], type: string, t: number): ReticleEvent[] {
-  return events.filter((e) => e.type === type && e.t < t && e.t >= t - CAUSE_WINDOW_MS);
+/**
+ * Events of one kind inside the causal window before `t`, oldest first.
+ *
+ * When the change being traced carries an `actionId`, a candidate stamped with a DIFFERENT one is
+ * dropped: the SDK observed it under another driven action, and five seconds spans several of
+ * those. An UNSTAMPED candidate stays. A request fired just before dispatch carries no stamp and its
+ * response can still land inside the act — the stamp proves an event belongs elsewhere, it cannot
+ * prove an unstamped one is unrelated. Rules out, never rules in.
+ */
+function precursors(
+  events: readonly ReticleEvent[],
+  type: string,
+  t: number,
+  actionId: string | undefined,
+): ReticleEvent[] {
+  return events.filter(
+    (e) =>
+      e.type === type &&
+      e.t < t &&
+      e.t >= t - CAUSE_WINDOW_MS &&
+      (actionId === undefined || e.actionId === undefined || e.actionId === actionId),
+  );
+}
+
+/**
+ * The link from a stamped change to the act that was active when it was observed.
+ *
+ * Rendered from the tier the event carries, not asserted: `attribution` is present iff `actionId`
+ * is, and today there is one tier. It is not an observation — the SDK stamped an id across a span
+ * of time — and the text says what that span is, so a reader who acts on the arrow has been told
+ * what the arrow is worth.
+ */
+function actLink(actionId: string, attribution: string | undefined): LineageLink {
+  const tier = attribution ?? EventAttribution.WINDOW;
+  return {
+    kind: 'act',
+    text: `← attributed to action ${actionId} — ${tier} tier: the SDK stamped this action's id on every event between its dispatch and settle. A time window, not dataflow.`,
+    observed: false,
+  };
 }
 
 /**
@@ -130,20 +174,37 @@ export function traceLineage(events: readonly ReticleEvent[], query: LineageQuer
     },
   ];
 
-  const signals = precursors(events, EventType.SIGNAL, latest.t);
+  const actionId = latest.actionId;
+  const signals = precursors(events, EventType.SIGNAL, latest.t, actionId);
   if (0 === signals.length) {
-    return {
-      found: true,
-      chain,
-      note: 'No signal fired in the window before this change, so the value was not seen to pass through one. Nothing further is claimed — the change is real, its cause is not in evidence.',
-    };
+    if (actionId === undefined) {
+      return {
+        found: true,
+        chain,
+        note: 'No signal fired in the window before this change, so the value was not seen to pass through one. Nothing further is claimed — the change is real, its cause is not in evidence.',
+      };
+    }
+    // The common case: `reticle.signal()` is a call the APP must make, and most apps never do. But
+    // this change was observed under a driven action, and that is on the event. Saying its cause is
+    // "not in evidence" would be a factual claim, and a false one.
+    chain.push(actLink(actionId, latest.attribution));
+    const driven = precursors(events, EventType.NET_REQUEST, latest.t, actionId);
+    if (0 === driven.length) {
+      return {
+        found: true,
+        chain,
+        note: 'No signal fired, and no request in the window carries this action or none at all, so the chain stops at the act rather than joining across a gap in the evidence.',
+      };
+    }
+    chain.push(inferredLink('net', driven.map(netLabel)));
+    return { found: true, chain };
   }
   chain.push(inferredLink('signal', signals.map(signalLabel)));
 
   // Anchored on the OLDEST candidate signal: a request that preceded any of them could have produced
   // it, and narrowing to the newest would quietly discard candidates for the link below.
   const anchor = signals[0]?.t ?? latest.t;
-  const calls = precursors(events, EventType.NET_REQUEST, anchor);
+  const calls = precursors(events, EventType.NET_REQUEST, anchor, actionId);
   if (0 === calls.length) {
     return {
       found: true,
