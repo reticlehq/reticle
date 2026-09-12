@@ -26,6 +26,28 @@ function saysSomething(text: string): boolean {
 }
 
 /**
+ * How much markup a fragment may contain and still be a MESSAGE rather than a rendered view.
+ *
+ * An added node's `textContent` flattens its whole subtree with no separators, so a container that
+ * just rendered arrives here as one long run-on string. Measured on a real drive, clicking a nav
+ * item reported `"Compose | generate a release note | DraftRelease note generatorTitle · commits on
+ * blurWhat shipped?GenerateOutputYour generated note appears here."` — 36 tokens on every
+ * navigation verdict, with the fragment boundaries lost ("DraftRelease", "blurWhat") so not even
+ * readable as a list.
+ *
+ * Three is deliberately generous: a message with emphasis, a link and an icon inside it still
+ * counts, and only something with the shape of a view is dropped. A view that IS dropped is not
+ * lost — `reticle_snapshot` describes it properly, and a semantic tree is what a reader wanted for
+ * a new screen anyway. Same trade as the bare-numeral rule above: the cheaper mistake.
+ */
+const MAX_MESSAGE_ELEMENTS = 3;
+
+/** True when this node looks like a view that rendered, not a line the app wrote. */
+function isRenderedView(node: Node): boolean {
+  return node instanceof Element && node.querySelectorAll('*').length > MAX_MESSAGE_ELEMENTS;
+}
+
+/**
  * Gathers the text an action put on the page, from mutation records the observer already receives.
  *
  * `domMutatedWithin` counts records and throws their content away, so a failed login reports
@@ -49,6 +71,7 @@ export class AppearedText {
       }
       for (const node of record.addedNodes) {
         if (this.#full()) return;
+        if (isRenderedView(node)) continue;
         const owner = TEXT_NODE === node.nodeType ? node.parentElement : elementOf(node);
         this.#add(node.textContent, owner);
       }

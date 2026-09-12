@@ -4,7 +4,7 @@
  * Route is the one predicate with TWO sources of truth — a navigation inside the window and where the
  * app is right now — and keeping that reconciliation in one place is what makes it readable.
  */
-import { EventType, PredicateKind, type ReticleEvent } from '@reticlehq/core';
+import { EventType, PredicateKind, RETICLE_URL_PARAM, type ReticleEvent } from '@reticlehq/core';
 import { str, type EvalResult, type Predicate } from './predicate-eval.js';
 
 /**
@@ -100,6 +100,41 @@ export function routeOfEvent(
   return data === undefined ? undefined : partsFromPayload(data);
 }
 
+/**
+ * Route evidence with Reticle's OWN identity params removed.
+ *
+ * A leased tab carries `__reticle_session` (and optionally `__reticle_project`) because the pool
+ * appended them so the app's SDK would adopt the lease — they are Reticle's bookkeeping, not the
+ * app's state. Reporting them back is paying tokens to tell ourselves something we wrote: measured
+ * on a real drive, `from`, `to` and `search` each echoed the same lease UUID, 58 of the evidence
+ * block's 96 tokens for one value stated three times.
+ *
+ * Only OUR params are dropped. The app's own query string is evidence — a redirect that loses one
+ * is exactly what a route assertion is for — so everything else survives, and a URL that will not
+ * parse is returned untouched rather than lost.
+ */
+function withoutIdentityParams(value: unknown): unknown {
+  if ('string' !== typeof value) return value;
+  const isSearch = value.startsWith('?');
+  if (isSearch) {
+    const params = new URLSearchParams(value);
+    for (const name of Object.values(RETICLE_URL_PARAM)) params.delete(name);
+    const rest = params.toString();
+    return 0 === rest.length ? '' : `?${rest}`;
+  }
+  if (!URL.canParse(value)) return value;
+  const parsed = new URL(value);
+  for (const name of Object.values(RETICLE_URL_PARAM)) parsed.searchParams.delete(name);
+  return parsed.toString();
+}
+
+/** The event payload as evidence: every URL-ish field scrubbed of our own params. */
+function routeEvidence(data: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(data).map(([key, value]) => [key, withoutIdentityParams(value)]),
+  );
+}
+
 /** Same shape from a session URL (the fallback when the tab hard-loaded and emitted no route event). */
 export function routeOfUrl(url: string): RouteParts | undefined {
   if (!URL.canParse(url)) return undefined;
@@ -127,7 +162,7 @@ function readCurrentRoute(url: string): RouteReading {
     routePath: parts?.routePath ?? routePathOf(pathname, hash),
     full: parts?.full ?? `${pathname}${search}${hash}`,
     decidedBy: RouteDecidedBy.CURRENT,
-    data: { pathname, search, hash, url, decidedBy: RouteDecidedBy.CURRENT },
+    data: routeEvidence({ pathname, search, hash, url, decidedBy: RouteDecidedBy.CURRENT }),
   };
 }
 
@@ -164,7 +199,7 @@ export function evalRoute(
           routePath: changed.routePath,
           full: changed.full,
           decidedBy: RouteDecidedBy.CHANGE,
-          data: { ...last.data, decidedBy: RouteDecidedBy.CHANGE },
+          data: routeEvidence({ ...last.data, decidedBy: RouteDecidedBy.CHANGE }),
         }
       : currentUrl === undefined || 0 === currentUrl.length
         ? undefined

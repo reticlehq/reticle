@@ -55,12 +55,32 @@ interface IntentDebt {
  * intent this very call proves — measured live: an inline intent was declared, asserted and proved
  * by one verdict, and the result still said "1 declared intent(s) are still unproved".
  */
+/**
+ * How old an open intent may be and still be THIS run's debt.
+ *
+ * The ledger is project-scoped and outlives every session, so without a horizon a verdict's honesty
+ * block reports the whole standing backlog. Measured on a real drive: 32 intents, oldest 18 days,
+ * 142 tokens on EVERY passing verdict — 24.9% of the response and the largest field in it, to say
+ * something the same sentence admitted was "probably not what this run is about".
+ *
+ * A day, matching the age threshold the gap already used to decide a backlog was stale. Anything
+ * older is not silently forgiven: it is exactly what `reticle_context` lists, which is where the
+ * gap's own `fix` sends the reader. The distinction is which QUESTION each answers — "did this run
+ * leave something unproved" is actionable on the result being read, "what does this project owe"
+ * is a separate ask — and collapsing them made the actionable one unreadable.
+ */
+const THIS_RUN_MS = 86_400_000;
+
 export function intentDebt(
   open: readonly Intent[],
   dischargedId: string | undefined,
   now: number,
 ): IntentDebt {
-  const stillOpen = open.filter((i) => dischargedId === undefined || i.id !== dischargedId);
+  const stillOpen = open
+    .filter((i) => dischargedId === undefined || i.id !== dischargedId)
+    // `<=` on the age, so a clock corrected backwards (declaredAt in the future) stays counted
+    // rather than being filtered out as ancient — the existing negative-age case.
+    .filter((i) => now - i.declaredAt <= THIS_RUN_MS);
   const oldest = stillOpen.reduce<number | undefined>(
     (min, i) => (min === undefined || i.declaredAt < min ? i.declaredAt : min),
     undefined,

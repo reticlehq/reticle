@@ -41,18 +41,43 @@ describe('the debt a verdict reports', () => {
     expect(intentDebt([intent('a', NOW)], 'a', NOW).oldestOpenIntentAgeMs).toBeUndefined();
   });
 
-  it('reports the age of the OLDEST, not the newest', () => {
+  it('does not count a backlog older than this run', () => {
+    // Measured on a real drive: every passing verdict carried "32 declared intent(s) are still
+    // unproved (the oldest for 18 days)" — 142 tokens, 24.9% of the whole response, and the single
+    // largest field in it. The text itself said "a backlog this old is probably not what this run
+    // is about", which is the gap conceding it is noise while printing it anyway. A guard that
+    // fires on every green is one people learn to skip, and then it cannot do its job on the day
+    // it is right. A verdict's honesty block reports what THIS run left unproved; the standing
+    // backlog belongs to reticle_context, which is where the gap's own `fix` already points.
+    const debt = intentDebt([intent('ancient', NOW - 18 * DAY)], undefined, NOW);
+    expect(debt.openIntentCount).toBe(0);
+  });
+
+  it('still counts a fresh one — the guard has to survive the cut', () => {
     const debt = intentDebt(
-      [intent('new', NOW - 1000), intent('old', NOW - 5 * DAY)],
+      [intent('just-now', NOW - 1000), intent('ancient', NOW - 18 * DAY)],
       undefined,
       NOW,
     );
-    expect(debt.oldestOpenIntentAgeMs).toBe(5 * DAY);
+    expect(debt.openIntentCount).toBe(1);
+  });
+
+  it('reports the age of the OLDEST fresh one, not the newest', () => {
+    const debt = intentDebt(
+      [intent('new', NOW - 1000), intent('older', NOW - 3 * 3600_000)],
+      undefined,
+      NOW,
+    );
+    expect(debt.oldestOpenIntentAgeMs).toBe(3 * 3600_000);
   });
 
   it('ignores the discharged one when finding the oldest', () => {
     // Otherwise proving the oldest intent leaves the report still quoting its age.
-    const debt = intentDebt([intent('old', NOW - 5 * DAY), intent('new', NOW - 1000)], 'old', NOW);
+    const debt = intentDebt(
+      [intent('older', NOW - 3 * 3600_000), intent('new', NOW - 1000)],
+      'older',
+      NOW,
+    );
     expect(debt.oldestOpenIntentAgeMs).toBe(1000);
   });
 

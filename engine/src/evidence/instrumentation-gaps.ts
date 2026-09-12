@@ -209,14 +209,6 @@ export function gapsForAction(facts: ActionInstrumentationFacts): Instrumentatio
    * one is not about the work in front of you. Naming the age separates them without weakening the
    * gap, and without pretending a stale backlog is this verdict's fault.
    */
-  const DAY_MS = 86_400_000;
-
-  function describeIntentAge(ageMs: number | undefined): string {
-    if (ageMs === undefined || ageMs < DAY_MS) return '';
-    const days = Math.floor(ageMs / DAY_MS);
-    return ` (the oldest for ${String(days)} day${1 === days ? '' : 's'} — a backlog this old is probably not what this run is about; retire them or prove them)`;
-  }
-
   // A green that does not settle what the run OWES.
   //
   // The mirror of `changeUndeclared` above, and the more expensive half: that fires when nothing was
@@ -236,7 +228,7 @@ export function gapsForAction(facts: ActionInstrumentationFacts): Instrumentatio
     gaps.push(
       instrumentationGap(
         InstrumentationGapKind.INTENT_UNDISCHARGED,
-        `this verdict passed, and ${String(owed)} declared intent(s) are still unproved${describeIntentAge(facts.oldestOpenIntentAgeMs)}`,
+        `this verdict passed, and ${String(owed)} intent(s) declared in this run are still unproved`,
         'a green settles what it asserted, not what the run set out to do — reporting done here rests on the change looking right rather than on anything having checked it',
       ),
     );

@@ -50,7 +50,25 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * measured, so an ordinary change does not fail on rounding; raising either one needs a reason
  * written here, the way the tool-surface budget does.
  */
-const MAX_FIRST_LOAD_BYTES = 232_800;
+const MAX_FIRST_LOAD_BYTES = 232_900;
+/*
+ * Raised a third time, 232_800 -> 232_900, for 36 B that PAY FOR THEMSELVES on the first navigation.
+ *
+ * `appeared` reports the text an action put on the page, and an added node's `textContent` flattens
+ * its whole subtree with no separators — so a navigation that swapped a view returned the new
+ * screen run together into one string. Measured on a real drive against bench-app, clicking a nav
+ * item: `"Compose | generate a release note | DraftRelease note generatorTitle · commits on
+ * blurWhat shipped?GenerateOutputYour generated note appears here."` — 146 B, 36 tokens, on every
+ * navigation verdict, with the fragment boundaries lost ("DraftRelease", "blurWhat") so it is not
+ * even readable as a list. A container with more than three descendant elements is now treated as
+ * a render rather than a message.
+ *
+ * The trade is 36 B ONCE per page load against ~36 tokens per navigation verdict, and the threshold
+ * is generous on purpose: a message with emphasis, a link and an icon inside it still reports. The
+ * two keep-cases were written before the cut and passed throughout, which is what says this bought
+ * route and not evidence — a dropped view is still described properly by `reticle_snapshot`, which
+ * is what a reader wanted for a new screen anyway.
+ */
 /*
  * Raised a second time, 232_700 -> 232_800, for a different reason than the first.
  *

@@ -74,17 +74,32 @@ function isTracked(path: string): boolean {
  * cannot tell it would be a directory, and the match fails. The guard was therefore structurally
  * incapable of passing in CI while passing on every machine that could have noticed.
  */
-function isIgnored(path: string): boolean {
-  for (const candidate of [path, `${path}/`]) {
-    try {
-      execFileSync('git', ['check-ignore', '-q', '--', candidate], { cwd: REPO_ROOT });
-      return true;
-    } catch {
-      // Not matched this spelling; try the other before concluding anything.
-    }
+/**
+ * Answered for EVERY path in one `git check-ignore --stdin`, not one spawn per spelling per path.
+ *
+ * The per-path version spawned up to two processes for each of twenty-odd entries, and process
+ * creation — not the matching — was all of the cost. It timed out at 8.1s against vitest's 5s
+ * default while a benchmark had the CPU, which is the load-only flake this repo already warns
+ * about: a failure that says nothing about the code and only ever appears where machines are busy,
+ * i.e. in CI. Raising the timeout would have hidden it; one spawn removes it.
+ *
+ * `--stdin` prints back the paths that ARE ignored and exits non-zero when none of them is, which
+ * is a normal answer here rather than an error.
+ */
+const ignoredPaths = (): ReadonlySet<string> => {
+  const candidates = mappedPaths().flatMap((path) => [path, `${path}/`]);
+  try {
+    const matched = execFileSync('git', ['check-ignore', '--stdin'], {
+      cwd: REPO_ROOT,
+      input: candidates.join('\n'),
+      encoding: 'utf8',
+    });
+    return new Set(matched.split('\n').map((line) => line.replace(/\/$/, '').trim()));
+  } catch {
+    // Non-zero means nothing matched — every mapped path is expected to exist.
+    return new Set();
   }
-  return false;
-}
+};
 
 describe('the map at the top of CLAUDE.md', () => {
   it('finds paths to check, so a pass is not a pass over nothing', () => {
@@ -103,10 +118,11 @@ describe('the map at the top of CLAUDE.md', () => {
     // a clone, so "does it exist" is not the question to ask about it — and deriving means the
     // next deliberately-untracked entry needs no edit here, while a directory that is simply GONE
     // is not ignored and still fails.
+    const ignored = ignoredPaths();
     const absent = mappedPaths().filter(
       // Exempt FIRST. Asking whether an ignored path exists answers a question about this machine
       // rather than about the map, and the answer differs between a developer's disk and a clone.
-      (path) => !isIgnored(path) && (!existsSync(join(REPO_ROOT, path)) || !isTracked(path)),
+      (path) => !ignored.has(path) && (!existsSync(join(REPO_ROOT, path)) || !isTracked(path)),
     );
     expect(
       absent,
