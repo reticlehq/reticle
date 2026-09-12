@@ -24,6 +24,7 @@ export * from './vocabulary/verdict.js';
 export * from './vocabulary/memory.js';
 export * from './vocabulary/run.js';
 export * from './spi/realm.js';
+export * from './spi/witness.js'; // Witness — a vantage point that can look and cannot touch
 export * from './spi/adjudicator.js';
 export * from './registry.js';
 

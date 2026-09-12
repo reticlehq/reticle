@@ -7,11 +7,11 @@ import {
   CloseCondition,
   RefusalReason,
 } from '../vocabulary/realm-surface.js';
-import { type ChannelDescriptor, type ChannelId } from '../vocabulary/channel.js';
+import { type ChannelId } from '../vocabulary/channel.js';
+import { Witness } from './witness.js';
 import type { DeterminismProfile } from '../vocabulary/determinism.js';
-import { type Coverage, type Observation } from '../vocabulary/evidence.js';
+import { type Observation } from '../vocabulary/evidence.js';
 import type { Anomaly } from '../vocabulary/verdict.js';
-import { type SubjectRef } from '../vocabulary/subject.js';
 
 /**
  * What you extend to make a new kind of environment verifiable.
@@ -55,23 +55,17 @@ import { type SubjectRef } from '../vocabulary/subject.js';
  * claim in your domain will be reported `unknown` forever and it will look like a limitation of
  * the protocol.
  */
-export abstract class Realm {
+export abstract class Realm extends Witness {
   // ── The questions only this realm can answer ────────────────────────────────────────────────
 
-  /** What is running, and what would invalidate evidence about it. See `SubjectRef`. */
-  abstract identity(): SubjectRef;
-
-  /**
-   * What this build can observe.
+  /*
+   * `identity`, `channels`, `openWindow`, `observe` and `coverage` are inherited from `Witness`.
    *
-   * Declared once, at connect time, and it is the first assertion this implementation makes. A
-   * claim reading a channel that is not here is `unknown` immediately, rather than after the
-   * action has been spent and the moment has passed.
-   *
-   * Declaring a channel you cannot actually observe is the one lie the conformance suite is built
-   * to catch, because it produces a verifier that is scored on evidence it never had.
+   * That is the honest direction of the relationship: OBSERVING is the base and ACTING is the
+   * addition. A realm is a witness that can also touch the subject — and a witness is not a realm
+   * with its action methods left unimplemented, which is the modelling that would let a vantage
+   * point quietly acquire the ability to cause what it reports.
    */
-  abstract channels(): readonly ChannelDescriptor[];
 
   /**
    * How this subject may be DRIVEN — the five properties that decide resume, reset and safety.
@@ -106,26 +100,6 @@ export abstract class Realm {
    * HAPPENED is decided elsewhere, from evidence on a channel other than the one that acted.
    */
   protected abstract dispatch(action: Action): Promise<ActionReceipt>;
-
-  /**
-   * Open a window and say what will close it.
-   *
-   * The close condition is yours. See the note above; this is the method that decides whether your
-   * domain is really supported or only appears to be.
-   */
-  abstract openWindow(budgetMs: number): Window;
-
-  /** Everything seen in that window, on the channels you declared. */
-  abstract observe(window: Window): Promise<readonly Observation[]>;
-
-  /**
-   * What you could not see while that window was open.
-   *
-   * Returning an empty `blindSpots` array is a positive claim that nothing was hidden. If you
-   * cannot enumerate them, say so by marking the channel unobserved rather than by returning
-   * nothing -- a silent `[]` is the most expensive value in this interface.
-   */
-  abstract coverage(window: Window): Promise<Coverage>;
 
   /**
    * Turn how a person names something into a handle an action will accept.

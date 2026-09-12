@@ -27,13 +27,26 @@ const REPO = execFileSync('git', ['rev-parse', '--show-toplevel'], {
   encoding: 'utf8',
 }).trim();
 
-/** The abstract members of `Realm`, read from the specification itself. */
+/**
+ * The abstract members of `Realm`, read from the specification itself.
+ *
+ * BOTH files, because `Realm extends Witness` and five of the required members — identity,
+ * channels, openWindow, observe, coverage — are declared on the base. Reading only `realm.ts`
+ * stopped watching those the moment they moved, which is the exact hole this guard exists to close:
+ * a member nothing checks can be stubbed or thrown from and the implementation still earns a
+ * profile. The vacuity assertion below is what caught it.
+ */
+const SPI_FILES = ['openreality/src/spi/realm.ts', 'openreality/src/spi/witness.ts'];
+
 function requiredMembers(): string[] {
-  const source = readFileSync(join(REPO, 'openreality/src/spi/realm.ts'), 'utf8');
-  return [...source.matchAll(/^\s*(?:protected\s+)?abstract\s+([a-zA-Z]+)\s*\(/gm)]
-    .map((m) => m[1] ?? '')
-    .filter((name) => '' !== name)
-    .sort();
+  const source = SPI_FILES.map((file) => readFileSync(join(REPO, file), 'utf8')).join('\n');
+  return [
+    ...new Set(
+      [...source.matchAll(/^\s*(?:protected\s+)?abstract\s+([a-zA-Z]+)\s*\(/gm)]
+        .map((m) => m[1] ?? '')
+        .filter((name) => '' !== name),
+    ),
+  ].sort();
 }
 
 /** The binding, with comments stripped: a call in prose is not a call. */

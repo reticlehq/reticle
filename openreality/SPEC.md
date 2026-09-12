@@ -407,6 +407,7 @@ class MyRealm extends Realm {
   identity(); // what this is, and what invalidates evidence about it
   channels(); // what you can see — and whether any of it is independent
   determinism(); // how you may be DRIVEN — resume, reset, clock, reads, reversibility
+  // identity/channels/openWindow/observe/coverage come from Witness — see §10.1
   capabilities(); // what an actor may ask for
   describe(); // what is here now, as structure
   dispatch(); // do one thing; report that you did it, never that it worked
@@ -419,7 +420,29 @@ class MyRealm extends Realm {
 
 `perform()` is sealed and refuses undeclared capabilities on your behalf. There is no method that returns a verdict, and that is not an oversight.
 
-### 10.1 The determinism profile
+### 10.1 A witness — a vantage point that cannot act
+
+Every channel a realm declares is, in the end, the subject describing itself. The DOM says the order was saved because the app wrote that on the screen; the network says so because the app made the call. When an application lies to itself — the optimistic update that was never committed, the write that returned `200` and rolled back — every channel inside it repeats the lie consistently, and no quantity of evidence from in there settles it.
+
+The database is not in there.
+
+```ts
+class OrdersDb extends Witness {
+  identity(); // what is being looked at
+  channels(); // usually independent — and still a declaration, checked like any other
+  openWindow(); // when "done" happens from HERE, which is rarely when it happens in the subject
+  observe(); // what was seen
+  coverage(); // what could NOT be seen
+}
+```
+
+A `Witness` is a `Realm` minus the ability to act, and the omission is the point: it cannot be the thing that caused what it reports. `Realm extends Witness`, which is the honest direction — observing is the base, acting is the addition. A witness modelled as a realm with its action methods left unimplemented is an interface inviting the coupling that makes the evidence worthless, and an implementer who _can_ act through that object eventually will.
+
+`witnessDisagreement(actor, witness)` turns the subject's claim and the witness's silence into an `observed` anomaly of kind `claim-uncorroborated`, between the two channels. §7.1 clause 3 then outranks a passing assertion with it, because one of the two is independent — so _"the UI says it saved and the database has no row"_ is a `no`, not a pass with a note.
+
+It returns **nothing** when the witness could not look. A witness that was unreachable saw nothing for a reason that has nothing to do with the application, and reporting that as _"the write never happened"_ would be the protocol inventing a defect out of its own blind spot — the same rule that makes an empty `blindSpots` array a positive claim rather than a default.
+
+### 10.2 The determinism profile
 
 Every other question here is about what a realm can SEE. `determinism()` is about what it can be PUT THROUGH, and it exists because the rest of this specification had inherited a browser's answer to a question no browser has to ask.
 
