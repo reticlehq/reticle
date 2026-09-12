@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   ABSENCE_DERIVED_CONTRADICTIONS,
+  ADVISORY_CONTRADICTIONS,
   ContradictionKind,
   CrawlAnomalyKind,
   FindingTier,
   isAbsenceDerived,
+  isAdvisory,
   tierOfFinding,
 } from './findings.js';
 
@@ -30,10 +32,27 @@ describe('tierOfFinding', () => {
     }
   });
 
-  it('agrees with isAbsenceDerived, because it is the same question asked twice', () => {
+  it('agrees with the predicates, because it is the same question asked twice', () => {
+    // Three tiers now, not two: ADVISORY was added for a finding that is true and simply not about
+    // the question asked, which neither existing tier could express without moving a verdict it has
+    // no business moving. The precedence matters — an advisory kind must never also be read as
+    // absence-derived, or it would downgrade through the other branch.
     for (const kind of Object.values(ContradictionKind)) {
-      const expected = isAbsenceDerived(kind) ? FindingTier.ABSENCE_DERIVED : FindingTier.OBSERVED;
+      const expected = isAdvisory(kind)
+        ? FindingTier.ADVISORY
+        : isAbsenceDerived(kind)
+          ? FindingTier.ABSENCE_DERIVED
+          : FindingTier.OBSERVED;
       expect(tierOfFinding(kind), kind).toBe(expected);
+    }
+  });
+
+  it('keeps the two decision-moving tiers disjoint from the advisory one', () => {
+    // The property the verdict rule rests on: it drops advisory findings first, then splits the
+    // rest. A kind in both sets would be dropped AND expected to downgrade, and which happened
+    // would depend on the order of two filters.
+    for (const kind of ADVISORY_CONTRADICTIONS) {
+      expect(isAbsenceDerived(kind), kind).toBe(false);
     }
   });
 

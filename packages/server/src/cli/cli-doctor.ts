@@ -13,8 +13,7 @@ import { captureLookup, describeForeignHolder, findPortHolder } from './port-hol
 import { chromiumHint, probeChromium } from './chromium-hint.js';
 import { SERVER_VERSION } from '../version/server-version.js';
 import { CONTRACT_FINGERPRINT } from '@reticlehq/core';
-import { diagnoseDesktop, isDesktopProject } from '../init/desktop-doctor.js';
-import { diagnoseWebCsp } from '../init/csp-doctor.js';
+import { diagnoseDesktop, isDesktopProject, diagnoseWebCsp } from '@reticlehq/init';
 import {
   RETICLE_CONFIG_BASENAME,
   diagnosePortMismatch,

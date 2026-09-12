@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
-import { emptyProjectRegistry, rememberProject } from '@reticlehq/core';
+import { emptyProjectRegistry, rememberProject } from '@reticlehq/core/artifacts';
 import { ArtifactRootReason, projectCandidatesFrom, resolveArtifactRoot } from './artifact-root.js';
 import type { ConfigDiscovery } from '../cli/config-discovery.js';
 

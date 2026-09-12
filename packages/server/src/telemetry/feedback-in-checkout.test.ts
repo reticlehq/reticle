@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { TelemetryEventKind } from '@reticlehq/core';
+import { TelemetryEventKind } from '@reticlehq/core/telemetry';
 import { createTelemetry } from './telemetry.js';
 
 /**

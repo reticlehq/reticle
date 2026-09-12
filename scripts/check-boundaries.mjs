@@ -14,7 +14,16 @@
 //   node scripts/check-boundaries.mjs --self-test # verify the checker itself catches a bad graph
 //
 // Wired into `pnpm lint` and CI so a regression fails the build. To add a new package, tag it in
-// `SIDE` below; an untagged package is treated as isomorphic and is checked accordingly.
+// `SIDE` below. An untagged package with a manifest is a VIOLATION, not a default.
+//
+// It used to be treated as isomorphic, and that default is the one hole a boundary guard cannot
+// afford. Isomorphic is the most permissive side there is: everyone may import it. So a Node package
+// nobody remembered to tag was silently declared safe for the browser side to depend on, which is
+// the exact edge this file exists to forbid. It also cut the other way, since an untagged Node
+// package inherits the iso policy and is refused the Node externals it legitimately needs.
+//
+// `@reticlehq/electron` had been sitting in that gap. A Rust crate with no package.json is still not
+// an error: `readManifests` never sees it, so `packages/tauri` needs no tag.
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -42,6 +51,15 @@ export const SIDE = Object.freeze({
   // Server runtime — runs in the `reticle` process, touches sockets/fs, never the DOM.
   '@reticlehq/server': 'node',
   '@reticlehq/test': 'node',
+  // The project scaffolder. Build-time by nature — it edits configs and shells out to a package
+  // manager — but tagged 'node' rather than 'build' because @reticlehq/server depends on it, and a
+  // node-side package may only reach the node side and the isomorphic foundation. It carries no
+  // WS/MCP/DOM dependency of its own, which is the substance the 'build' tag exists to protect.
+  '@reticlehq/init': 'node',
+  // The Electron adapter is Node on both halves: `main.cjs` requires `electron`'s ipcMain and
+  // `node:fs/promises`, and the preload shim runs in the preload context, which has Node integration
+  // and never touches `document` or `window`. It is not the browser side, and it is not isomorphic.
+  '@reticlehq/electron': 'node',
   // Isomorphic foundation — imported by every side, imports none of them.
   '@reticlehq/core': 'iso',
 });
@@ -85,6 +103,19 @@ export function findViolations(manifests, side = SIDE) {
   for (const pkg of manifests) {
     const from = pkg.name;
     if (EXEMPT.has(from)) continue;
+    // Untagged is not a side, it is an unanswered question. Reported before the edges are walked,
+    // because every judgement below depends on knowing which runtime this package is.
+    if (!Object.hasOwn(side, from)) {
+      violations.push({
+        from,
+        to: '',
+        reason:
+          'package is not tagged in SIDE — add it as browser, build, node or iso. Until it is, ' +
+          'the guard cannot say which edges it may have, and an untagged package would default to ' +
+          'the most permissive side (iso), which every other side is allowed to import',
+      });
+      continue;
+    }
     const fromSide = sideOf(from);
     const policy = POLICY[fromSide];
     const deps = { ...pkg.dependencies, ...pkg.peerDependencies };
@@ -134,6 +165,9 @@ function selfTest() {
     { name: '@reticlehq/browser', dependencies: { ws: '^8', '@reticlehq/server': 'workspace:*' } },
     { name: '@reticlehq/server', dependencies: { '@reticlehq/react': 'workspace:*' } },
     { name: '@reticlehq/core', dependencies: { '@reticlehq/browser': 'workspace:*' } },
+    // A package nobody tagged. Its deps are deliberately innocent: the violation is the missing
+    // answer, not an edge, and before this the guard read the silence as "isomorphic" and passed it.
+    { name: '@reticlehq/untagged', dependencies: { '@reticlehq/core': 'workspace:*' } },
   ];
   const v = findViolations(bad);
   const got = new Set(v.map((x) => `${x.from}->${x.to}`));
@@ -142,6 +176,7 @@ function selfTest() {
     '@reticlehq/browser->@reticlehq/server',
     '@reticlehq/server->@reticlehq/react',
     '@reticlehq/core->@reticlehq/browser',
+    '@reticlehq/untagged->',
   ];
   const missing = expected.filter((e) => !got.has(e));
   if (missing.length > 0) {
@@ -159,7 +194,11 @@ function main() {
   const violations = findViolations(readManifests(PACKAGES_DIR));
   if (violations.length > 0) {
     console.error('Dependency-boundary violations:\n');
-    for (const v of violations) console.error(`  ✗ ${v.from} → ${v.to}\n    ${v.reason}`);
+    for (const v of violations) {
+      // An untagged package has no edge to name, so printing "pkg → " would invent one.
+      const edge = v.to === '' ? v.from : `${v.from} → ${v.to}`;
+      console.error(`  ✗ ${edge}\n    ${v.reason}`);
+    }
     console.error(`\n${violations.length} violation(s). See scripts/check-boundaries.mjs.`);
     process.exit(1);
   }

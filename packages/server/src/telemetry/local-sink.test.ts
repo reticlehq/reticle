@@ -21,7 +21,7 @@ import { describe, expect, it } from 'vitest';
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { TelemetryEventKind } from '@reticlehq/core';
+import { TelemetryEventKind } from '@reticlehq/core/telemetry';
 import { createTelemetry } from './telemetry.js';
 
 const withDir = async (fn: (dir: string) => Promise<void>): Promise<void> => {

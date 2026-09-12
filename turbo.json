@@ -29,11 +29,15 @@
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/tauri/src/**"]
     },
-    "@reticlehq/server#test:unit": {
+    "test:guards": {
+      "dependsOn": ["^build"]
+    },
+    "@reticlehq/server#test:guards": {
       "dependsOn": ["^build"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/packages/*/src/**",
+        "$TURBO_ROOT$/packages/*/package.json",
         "$TURBO_ROOT$/apps/**",
         "$TURBO_ROOT$/bench/**",
         "$TURBO_ROOT$/scripts/**",
@@ -49,6 +53,25 @@
         "$TURBO_ROOT$/CHANGELOG.md",
         "$TURBO_ROOT$/CONTRIBUTING.md",
         "$TURBO_ROOT$/turbo.json"
+      ]
+    },
+    "@reticlehq/init#test:unit": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/SKILL.md",
+        "$TURBO_ROOT$/skills/**",
+        "$TURBO_ROOT$/docs/**",
+        "$TURBO_ROOT$/.claude-plugin/**",
+        "$TURBO_ROOT$/plugin/**"
+      ]
+    },
+    "@reticlehq/server#test:unit": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/*/src/**",
+        "$TURBO_ROOT$/scripts/guard-tests.mjs"
       ]
     }
   }

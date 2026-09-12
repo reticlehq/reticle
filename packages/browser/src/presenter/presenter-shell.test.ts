@@ -89,12 +89,14 @@ describe('presenter HUD shell', { timeout: HUD_MOUNT_TIMEOUT_MS }, () => {
     expect(getComputedStyle(deco as Element).visibility).toBe('visible');
     p.destroy();
   });
-  it('ships a workspace chip in the chat composer', () => {
+  it('ships a workspace chip in the panel footer', () => {
+    // Was "in the chat composer". The composer is gone; the workspace chip shared its stack and is
+    // the reason that footer still exists.
     document.body.innerHTML = '';
     const p = new Presenter({});
     p.mount();
     expect(document.querySelector('[data-reticle-workspace-btn]')).not.toBeNull();
-    expect(document.querySelector('.reticle-composer-stack')).not.toBeNull();
+    expect(document.querySelector('.reticle-foot-stack')).not.toBeNull();
     p.destroy();
   });
   it('does not ship a separate flag-a-bug control', () => {

@@ -78,4 +78,22 @@ describe('isInViewport (#398)', () => {
     const inView = matchQuery({ role: 'button', name: 'Go' }, ElementState.IN_VIEWPORT);
     expect(inView.count).toBe(1);
   });
+
+  it('stamps inViewport onto multi-match descriptors so ambiguity can be ranked (#886)', () => {
+    const onScreen = boxed(
+      { top: 100, left: 100, bottom: 140, right: 200, width: 100, height: 40 },
+      'button',
+    );
+    onScreen.textContent = 'Go';
+    const belowFold = boxed(
+      { top: 3000, left: 100, bottom: 3040, right: 200, width: 100, height: 40 },
+      'button',
+    );
+    belowFold.textContent = 'Go';
+
+    const all = matchQuery({ role: 'button', name: 'Go' });
+    expect(all.elements).toHaveLength(2);
+    const stamped = all.elements.filter((e) => e.states.includes(ElementState.IN_VIEWPORT));
+    expect(stamped).toHaveLength(1);
+  });
 });

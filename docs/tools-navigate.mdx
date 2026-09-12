@@ -17,13 +17,14 @@ Real response, with the throttled-tab `session` and `warning` fields trimmed off
   "ok": true,
   "url": "http://localhost:4310/deployments",
   "confirmed": false,
-  "note": "ok means the navigation was DISPATCHED, not that the page arrived. The SDK is torn down by the navigation itself, so nothing here can see the new document. Call reticle_sessions to confirm a session reconnected at the new URL before acting; if none appears, the page did not load or is not instrumented."
+  "waitedMs": 5000,
+  "note": "ok means the navigation was DISPATCHED, not that the page arrived. The SDK is torn down by the navigation itself, so nothing here can see the new document, and no session reconnected at the new URL within 5000ms. A slow app may still be on its way (an SPA reattaching under HMR can take 30-60s): navigate again with a larger timeout_ms, or call reticle_sessions to confirm a session reconnected before acting; if none appears, the page did not load or is not instrumented."
 }
 ```
 
 ## `confirmed: true` when the page comes back in time
 
-The daemon waits briefly for the SDK to re-announce itself. When it does, you are told so and can act immediately without a `reticle_sessions` round trip. This is a real reload response:
+The daemon waits up to `timeout_ms` (default 5000) for the SDK to re-announce itself. When it does, you are told so and can act immediately without a `reticle_sessions` round trip. This is a real reload response:
 
 ```json
 {
@@ -40,6 +41,12 @@ Read the second sentence, which is the one that costs people a turn. `confirmed:
 A full navigation destroys the document the SDK was living in. Reticle cannot report on the new page from inside the old one, because the old one no longer exists. So it tells you what it actually knows: the navigation was dispatched.
 
 Most tools would return `ok: true` and let you assume arrival. When the page then fails to load, or loads without instrumentation, you get a confusing cascade of "element not found" errors several calls later, with nothing pointing at the real cause.
+
+`waitedMs` says which of two things you are looking at. Reticle stopped waiting at the budget it had, or the page never came back. The first is fixed by asking for more: a single-page app reattaching under HMR has been measured at 30–60s, which no default should wait for on every call, but which the caller who knows the app can grant.
+
+```json
+{ "url": "/deployments", "timeout_ms": 45000 }
+```
 
 ## The pattern after navigating
 
@@ -64,11 +71,12 @@ with [`reticle_sessions`](/tools-sessions), and only then snapshot. If no sessio
 
 ## Arguments
 
-| Argument | What it does                          |
-| -------- | ------------------------------------- |
-| `url`    | Where to go. Relative paths work      |
+| Argument | What it does |
+| --- | --- |
+| `url` | Where to go. Relative paths work |
 | `reload` | Reload in place instead of navigating |
-| `hard`   | With `reload`, bypass the cache       |
+| `hard` | With `reload`, bypass the cache |
+| `timeout_ms` | How long to wait for the page to come back before `confirmed: false`. Default 5000; 0 looks once |
 
 ## Client-side routing is different
 

@@ -6,7 +6,7 @@
  * (nothing here may ever be able to fail a daemon start), and because `cli.ts` is a dispatcher — the
  * more of this that lives there, the harder it is to see what a command actually does.
  */
-import { TelemetryEventKind, type SessionSummary } from '@reticlehq/core';
+import { TelemetryEventKind, type SessionSummary } from '@reticlehq/core/telemetry';
 import { getTelemetry } from './telemetry.js';
 import { getSessionMetrics } from './session-metrics.js';
 import { profileProject, type InstallFacts } from './project-profile.js';

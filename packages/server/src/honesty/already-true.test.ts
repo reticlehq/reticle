@@ -25,7 +25,7 @@ import { describe, expect, it } from 'vitest';
 import { Verified } from '@reticlehq/core';
 import { decideVerified } from './verified.js';
 import { buildHonestyBlock, HonestyGrade } from './honesty.js';
-import { readsDomState } from './already-true.js';
+import { readsDomState, alreadyTrueHiddenMatch } from './already-true.js';
 
 const clean = buildHonestyBlock({ grade: HonestyGrade.PRESENCE, attribution: 'window' });
 
@@ -103,20 +103,101 @@ describe('which predicates need the before-check at all', () => {
     expect(readsDomState({ kind: 'route' })).toBe(true);
   });
 
-  it('state reads a store, which the action is supposed to change — and it IS floored', () => {
-    expect(readsDomState({ kind: 'state', path: 'cart.total' })).toBe(false);
+  /**
+   * `state` was originally assumed to be floored like event-based kinds. It is not: STATE_READ
+   * queries live in-page store memory, where no event floor applies. An action asserting a state
+   * condition that already held before dispatch passes immediately without causing any change.
+   * Evaluating before dispatch catches this as already_true.
+   */
+  it('state reads live store memory via STATE_READ without an event floor, so it needs the before-check', () => {
+    expect(readsDomState({ kind: 'state', path: 'cart.total' })).toBe(true);
+    expect(readsDomState({ kind: 'state', store: 'cart', path: 'total' })).toBe(true);
+  });
+});
+
+/**
+ * #889: a text predicate matched hidden dialog content and returned already_true, proving nothing —
+ * and named neither which node it matched nor that the match was hidden. `text`/`element` predicates
+ * check DOM presence by default, not visibility, so a hidden pre-existing match reads identically to
+ * a genuinely-visible one unless something says otherwise.
+ */
+describe('alreadyTrueHiddenMatch — was the already_true match against something invisible', () => {
+  const hidden = { ref: 'e1', role: 'heading', name: 'Add money', visible: false };
+  const visible = { ref: 'e2', role: 'heading', name: 'Add money', visible: true };
+
+  it('true when every matched element is hidden', () => {
+    expect(alreadyTrueHiddenMatch({ kind: 'text', contains: 'Add money' }, [hidden])).toBe(true);
   });
 
-  it('a combinator inherits it from any branch that reads the DOM', () => {
+  it('false when at least one match is visible — a fair, ordinary read', () => {
+    expect(alreadyTrueHiddenMatch({ kind: 'text', contains: 'Add money' }, [hidden, visible])).toBe(
+      false,
+    );
+  });
+
+  it('false when the caller already asked for visible:true — they handled it themselves', () => {
+    expect(
+      alreadyTrueHiddenMatch({ kind: 'text', contains: 'Add money', visible: true }, [hidden]),
+    ).toBe(false);
+  });
+
+  it('false for an element predicate that already declared a state constraint', () => {
+    expect(
+      alreadyTrueHiddenMatch({ kind: 'element', query: { testid: 'x' }, state: 'visible' }, [
+        hidden,
+      ]),
+    ).toBe(false);
+  });
+
+  it('false for predicate kinds this does not apply to (route, state, net, …)', () => {
+    expect(alreadyTrueHiddenMatch({ kind: 'route', pathname: '/a' }, [hidden])).toBe(false);
+    expect(alreadyTrueHiddenMatch({ kind: 'state', path: 'cart.count' }, [hidden])).toBe(false);
+  });
+
+  it('false on empty or non-descriptor evidence — nothing to judge', () => {
+    expect(alreadyTrueHiddenMatch({ kind: 'text', contains: 'x' }, [])).toBe(false);
+    expect(alreadyTrueHiddenMatch({ kind: 'text', contains: 'x' }, undefined)).toBe(false);
+    expect(alreadyTrueHiddenMatch({ kind: 'text', contains: 'x' }, { absent: true })).toBe(false);
+  });
+});
+
+describe('decideVerified names a hidden already_true match', () => {
+  it('appends the hidden-match note to `because` when set', () => {
+    const d = decideVerified({
+      pass: true,
+      alreadyTrue: true,
+      alreadyTrueHiddenMatch: true,
+      settled: true,
+      honesty: clean,
+    });
+    expect(d.because).toContain('HIDDEN');
+    expect(d.because).toContain('visible: true');
+  });
+
+  it('says nothing extra when the match was visible (or unknown)', () => {
+    const d = decideVerified({ pass: true, alreadyTrue: true, settled: true, honesty: clean });
+    expect(d.because).not.toContain('HIDDEN');
+  });
+});
+
+describe('which predicates need the before-check at all (combinators)', () => {
+  it('a combinator inherits it from any branch that reads the DOM or live state', () => {
     expect(
       readsDomState({
         kind: 'allOf',
         predicates: [{ kind: 'settled' }, { kind: 'text', contains: 'Done' }],
       }),
     ).toBe(true);
+    expect(
+      readsDomState({
+        kind: 'allOf',
+        predicates: [{ kind: 'settled' }, { kind: 'state', path: 'cart.count' }],
+      }),
+    ).toBe(true);
     expect(readsDomState({ kind: 'not', predicate: { kind: 'text', contains: 'Error' } })).toBe(
       true,
     );
+    expect(readsDomState({ kind: 'not', predicate: { kind: 'state', path: 'error' } })).toBe(true);
     expect(readsDomState({ kind: 'anyOf', predicates: [{ kind: 'signal', name: 'a' }] })).toBe(
       false,
     );

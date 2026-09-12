@@ -81,10 +81,10 @@ import { handleDrive } from './cli/drive-command.js';
 import { handleVerify } from './cli/cli-verify.js';
 import { runKill } from './cli/cli-kill.js';
 import { summarizeHunt, type HuntAnomaly, type HuntRun } from './hunt/hunt-report.js';
-import { runInit } from './init/run.js';
+import { runInit, buildNodeIo } from '@reticlehq/init';
 import { continueAfterInit } from './setup/init-runtime.js';
 import { handleDoctor } from './cli/cli-doctor.js';
-import { buildNodeIo } from './init/node-io.js';
+import { serverInitHost } from './setup/init-host.js';
 import { describeLicense } from './license/license.js';
 import {
   isLikelyDevServerPort,
@@ -123,7 +123,7 @@ function handleInit(parsed: {
   driveModel?: string | undefined;
 }): void {
   const cwd = process.cwd();
-  const io = buildNodeIo(cwd);
+  const io = buildNodeIo(cwd, serverInitHost());
   const result = runInit(
     {
       cwd,
@@ -132,6 +132,9 @@ function handleInit(parsed: {
       dryRun: parsed.dryRun,
       install: parsed.install,
       ...(parsed.app === undefined ? {} : { app: parsed.app }),
+      // Handed to init, not only to the drive phase below: the preflight names `--url` as the way
+      // past a missing package manager, and could not honour that while never being told about it.
+      ...(parsed.url === undefined ? {} : { url: parsed.url }),
       captureBodies: true === parsed.captureBodies,
       // The outcome is reported by confirmInstall instead, once it knows whether an app connected —
       // `init` writing files was never the same thing as `init` working (#269).
@@ -491,8 +494,13 @@ async function handleAffected(files: string[], since: string | undefined): Promi
   try {
     const fs = createNodeFileSystem();
     const reticleRoot = join(process.cwd(), ReticleDir.ROOT);
-    const changed = await resolveChangedFiles(files, since);
-    const result = affectedSavedFlows(await loadNamedFlows(fs, reticleRoot), changed);
+    // The CLI gate still degrades to "no changes" rather than crash CI over a bad ref — the
+    // original reasoning, now opted into explicitly instead of handed a clean-looking empty list.
+    const changed = (await resolveChangedFiles(files, since, process.cwd())).files;
+    const result = affectedSavedFlows(
+      await loadNamedFlows(fs, reticleRoot, readProjectId(process.cwd())),
+      changed,
+    );
     log('reticle_affected', {
       changedFiles: changed,
       affected: result.affected,

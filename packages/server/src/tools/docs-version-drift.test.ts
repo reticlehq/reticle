@@ -18,7 +18,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SERVER_VERSION } from '../version/server-version.js';
@@ -26,11 +26,18 @@ import { SERVER_VERSION } from '../version/server-version.js';
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 const DOCS = join(REPO, 'docs');
 
-/** Files that state the current version, and are read by someone about to install. */
+/**
+ * Files that state the current version, and are read by someone about to install.
+ *
+ * Every path here must EXIST. The list used to name `skills/reticle/SKILL.md`, which has not existed
+ * for a long time, and the loop below swallowed the read error and moved on — so the guard listed a
+ * file it never opened and reported green for it. A registry whose entries are never checked is the
+ * failure this repo keeps rediscovering, and a version guard that reads as coverage while checking
+ * nothing is worse than no guard at all.
+ */
 const VERSION_BEARING = [
   join(REPO, 'SKILL.md'),
   join(REPO, 'README.md'),
-  join(REPO, 'skills', 'reticle', 'SKILL.md'),
   join(DOCS, 'packages.mdx'),
   join(DOCS, 'install-agentic.mdx'),
   join(DOCS, 'docs.json'),
@@ -60,29 +67,63 @@ const CURRENT_VERSION_CLAIMS: readonly RegExp[] = [
   /"version":\s*"(\d+\.\d+\.\d+)"/g,
 ];
 
+/** Read a file this guard claims to check. A missing one is a bug in the list, not a passing check. */
+const readVersionBearing = (file: string): string => {
+  if (!existsSync(file))
+    throw new Error(
+      `${file.replace(REPO, '.')} is listed as version-bearing but does not exist. Remove it from ` +
+        `VERSION_BEARING, or point it at the file that replaced it — an entry nobody can read is a ` +
+        `check that silently does not run.`,
+    );
+  return readFileSync(file, 'utf8');
+};
+
+/** Every current-version claim in the checked files, with the file that makes it. */
+const versionClaims = (): { file: string; claimed: string }[] => {
+  const out: { file: string; claimed: string }[] = [];
+  for (const file of [...VERSION_BEARING, ...packagePages()]) {
+    const text = readVersionBearing(file);
+    for (const pattern of CURRENT_VERSION_CLAIMS) {
+      for (const match of text.matchAll(pattern)) {
+        const claimed = match[1];
+        if (claimed !== undefined) out.push({ file, claimed });
+      }
+    }
+  }
+  return out;
+};
+
 describe('the docs do not advertise a version the packages do not have', () => {
   it('finds files to check', () => {
     expect(packagePages().length).toBeGreaterThan(5);
   });
 
+  it('every version-bearing file exists and is readable', () => {
+    for (const file of VERSION_BEARING) expect(() => readVersionBearing(file)).not.toThrow();
+  });
+
+  /**
+   * A version guard that matches nothing passes forever.
+   *
+   * When this was written, five of the six files it listed matched zero patterns and the sixth
+   * carried the only live assertion, so a rename of `docs.json`'s version field — or a rewrite of the
+   * install pages into a shape these patterns do not recognise — would have left a green test
+   * watching nothing. The guard has to be able to FIRE, so it asserts it found something to judge
+   * before judging it.
+   */
+  it('finds at least one current-version claim to check', () => {
+    expect(
+      versionClaims().length,
+      'no file matched any CURRENT_VERSION_CLAIMS pattern, so this guard is checking nothing. ' +
+        'Either the docs stopped stating a current version, or they state it in a new shape and ' +
+        'the pattern list needs it.',
+    ).toBeGreaterThan(0);
+  });
+
   it('every current-version claim matches the shipped version', () => {
-    const wrong: string[] = [];
-    for (const file of [...VERSION_BEARING, ...packagePages()]) {
-      let text: string;
-      try {
-        text = readFileSync(file, 'utf8');
-      } catch {
-        continue; // a file that does not exist cannot be stale
-      }
-      for (const pattern of CURRENT_VERSION_CLAIMS) {
-        for (const match of text.matchAll(pattern)) {
-          const claimed = match[1];
-          if (claimed !== undefined && claimed !== SERVER_VERSION) {
-            wrong.push(`${file.replace(REPO, '.')}: claims ${claimed}`);
-          }
-        }
-      }
-    }
+    const wrong = versionClaims()
+      .filter((c) => c.claimed !== SERVER_VERSION)
+      .map((c) => `${c.file.replace(REPO, '.')}: claims ${c.claimed}`);
 
     expect(
       [...new Set(wrong)],

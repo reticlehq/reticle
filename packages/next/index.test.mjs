@@ -76,6 +76,29 @@ describe('withReticle', () => {
     expect(rule.test.test('src/Foo.jsx')).toBe(true);
     expect(rule.test.test('src/util.ts')).toBe(false);
   });
+
+  /**
+   * A react-three-fiber app has no way to keep the rest of Reticle and drop the stamp otherwise,
+   * and the stamp crashes it: R3F reads the dashed attribute as a pierced property path, walks
+   * `data` -> `reticle` on a three.js instance that has no `data`, and throws from the commit
+   * phase, unmounting the whole tree. The user's other webpack config must survive the opt-out.
+   */
+  it('installs no loader when sourceMapping is off, and keeps the user webpack hook', () => {
+    process.env.NODE_ENV = 'development';
+    let sawUserHook = false;
+    const config = withReticle(
+      {
+        webpack(c) {
+          sawUserHook = true;
+          return c;
+        },
+      },
+      { sourceMapping: false },
+    );
+    const out = config.webpack({ module: { rules: [] } }, { dev: true });
+    expect(out.module.rules).toHaveLength(0);
+    expect(sawUserHook).toBe(true);
+  });
 });
 
 /**

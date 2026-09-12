@@ -100,9 +100,7 @@ export function mergeTools(spec: MergeSpec): ToolDef {
     description: spec.description,
     ...(spec.example === undefined ? {} : { example: spec.example }),
     inputSchema: {
-      action: z
-        .enum(actionNames as [string, ...string[]])
-        .describe(`Which operation to run: ${actionNames.join(' | ')}.`),
+      action: z.enum(actionNames as [string, ...string[]]).describe('Which operation to run.'),
       ...unionShape(spec.actions),
     },
     handler: (deps: ToolDeps, args: Record<string, unknown>) => {

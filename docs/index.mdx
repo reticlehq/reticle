@@ -44,9 +44,11 @@ Afterwards, use it whenever you change any user-facing behaviour.
 ```
 
 <Tip>
-  On Claude Code the plugin is shorter still: `/plugin marketplace add reticlehq/reticle` then
-  `/plugin install reticle@reticlehq`, which registers the MCP server and the skills in one step. On
-  most other agents, `npx skills add reticlehq/reticle`.
+  The plugin and the skills CLI are alternatives to the *registration* half only, not to `init`:
+  neither one touches your app, so you still run the command above afterwards to instrument it. On
+  Claude Code, `/plugin marketplace add reticlehq/reticle` then `/plugin install reticle@reticlehq`
+  registers the MCP server and the skills in one step; on most other agents, `npx skills add
+  reticlehq/reticle`.
 </Tip>
 
 <Card title="What that command actually changes" icon="wand-magic-sparkles" href="/install-agentic">

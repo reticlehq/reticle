@@ -9,7 +9,7 @@
  * The send is awaited. Fire-and-forget microseconds before `process.exit` is how `daemon_stopped`
  * never arrived: the POST was killed every time and nothing threw.
  */
-import { TelemetryEventKind } from '@reticlehq/core';
+import { TelemetryEventKind } from '@reticlehq/core/telemetry';
 import { getSessionMetrics, type SessionMetrics } from './session-metrics.js';
 import { getTelemetry, type Telemetry } from './telemetry.js';
 

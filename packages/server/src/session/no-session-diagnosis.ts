@@ -19,7 +19,7 @@
  * the hot resolve() path and this stays unit-testable.
  */
 
-import { NoSessionReason } from '@reticlehq/core';
+import { NoSessionReason } from '@reticlehq/core/telemetry';
 
 import { leaseCaveat, type LeaseBrowserState } from './lease-availability.js';
 import { DEV_SERVER_PORTS } from '../cli/cli-port.js';
@@ -131,6 +131,15 @@ export interface NoSessionFacts {
    * which is the common case and must not gain a paragraph.
    */
   siblingListeners?: readonly number[];
+  /**
+   * The URL of the session that most recently disappeared, when the tombstone still holds it.
+   *
+   * A route that 500s tears the page down and the SDK never reconnects. `everConnected` already
+   * knew a tab HAD been here; without this the diagnosis could not say WHERE, so a server error
+   * and a closed tab read as the same empty list (#808). Absent when nothing was ever connected,
+   * or the ring has forgotten — inventing a URL is worse than the silence this exists to end.
+   */
+  lastKnownUrl?: string;
 }
 
 /** The one framework whose most likely cause differs from every other framework's. */
@@ -193,13 +202,33 @@ const SELF_SERVE =
   'Reticle drives itself, and returns a sessionId you can use immediately (reach it with ' +
   'reticle_run {tool:"reticle_lease"} if it is not advertised directly; release it when you finish).';
 
+/** The hedge that is true for every vanished tab we did not watch leave. */
+const TAB_GONE_WHAT = 'The tab was closed, navigated away, or hard-reloaded.';
+
 /**
- * The ports the scan actually covers, rendered for the message.
+ * The last URL a connected session was on when it disappeared without a successor HELLO.
  *
- * Derived from DEV_SERVER_PORTS rather than re-typed: a message that lists ports the scan does not
- * check, or omits ones it does, is a new version of the same defect — a confident claim about
- * evidence that was never gathered.
+ * Shared with the observation-lost verdict so the two surfaces cannot drift into naming different
+ * routes for the same teardown (#808).
  */
+export function pageTornDownWhileOn(url: string): string {
+  return `the page was torn down while on ${url}`;
+}
+
+/**
+ * What happened to the tab, with the last URL named when we still hold it.
+ *
+ * Without the URL this is the sentence the field has always seen. With it, a route that tore the
+ * page down is no longer the same dead end as "the human closed the tab".
+ */
+function tabGoneWhat(url: string | undefined): string {
+  if (undefined === url || '' === url) return TAB_GONE_WHAT;
+  const torn = pageTornDownWhileOn(url);
+  const first = torn.charAt(0);
+  if ('' === first) return TAB_GONE_WHAT;
+  return `${first.toUpperCase()}${torn.slice(1)}. ${TAB_GONE_WHAT}`;
+}
+
 /**
  * The one cause that produces a PERFECTLY healthy everything and still never connects.
  *
@@ -264,6 +293,13 @@ const RESTARTED_LEAD =
   'reaching initialise on the page. Re-running the install is the wrong move here: it cannot help ' +
   'on a project that has demonstrably connected, and it can overwrite a working config.';
 
+/**
+ * The ports the scan actually covers, rendered for the message.
+ *
+ * Derived from DEV_SERVER_PORTS rather than re-typed: a message that lists ports the scan does not
+ * check, or omits ones it does, is a new version of the same defect — a confident claim about
+ * evidence that was never gathered.
+ */
 const SCANNED_PORTS = [...DEV_SERVER_PORTS].join(', ');
 
 /**
@@ -507,7 +543,7 @@ export function explainNoSession(facts: NoSessionFacts): {
     return reason(
       NoSessionReason.TAB_GONE,
       'no browser session connected, but one WAS connected to this daemon earlier, so the wiring ' +
-        'is correct. The tab was closed, navigated away, or hard-reloaded. Ask the human to reopen ' +
+        `is correct. ${tabGoneWhat(facts.lastKnownUrl)} Ask the human to reopen ` +
         `the app (or run ${OPEN_CMD_BARE}), or reload the tab.${alreadyListeningClause(listening)} ` +
         `${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`,
     );

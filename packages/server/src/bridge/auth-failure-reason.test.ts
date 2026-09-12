@@ -74,3 +74,39 @@ describe('why the bridge refused', () => {
     expect(Buffer.byteLength(reason, 'utf8')).toBeLessThanOrEqual(123);
   });
 });
+
+/**
+ * A daemon serving MANY projects is not one project's daemon.
+ *
+ * The "that daemon is not yours, stop it" inference is sound for a daemon that has served exactly
+ * one project. It is wrong for a daemon that has served several — that is the normal shape for a
+ * globally-registered daemon, which several editors start from the user's home directory and point
+ * at everything — and its advice is actively harmful there: `reticle stop` would take down the
+ * projects that ARE working, to fix a third whose actual problem is its token.
+ */
+describe('a multi-project daemon does not claim to belong to one project', () => {
+  it('stays plain when the daemon has served several projects', () => {
+    const reason = authFailureReason(new Set(['app-a', 'app-b']), 'app-c', 'a-token');
+    expect(
+      reason,
+      'stopping this daemon would break app-a and app-b to fix app-c, whose problem is its token',
+    ).not.toContain('different project');
+  });
+
+  it('still names a different project when exactly one has been served', () => {
+    expect(authFailureReason(new Set(['app-a']), 'app-c', 'a-token')).toContain(
+      'different project',
+    );
+  });
+
+  it('still stays plain for a project the multi-project daemon has already served', () => {
+    const reason = authFailureReason(new Set(['app-a', 'app-b']), 'app-a', 'a-token');
+    expect(reason).not.toContain('different project');
+  });
+
+  it('still names a missing token ahead of anything else, however many projects were served', () => {
+    expect(authFailureReason(new Set(['app-a', 'app-b']), 'app-c', '')).toContain(
+      'no pairing token',
+    );
+  });
+});

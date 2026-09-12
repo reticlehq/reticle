@@ -13,6 +13,7 @@
  */
 
 import { judgeWait, QUIET_MEANS_HUNG_MS, urlToWatch, WaitVerdict } from './dev-server-wait.js';
+import { waitProgressLine } from './wait-progress.js';
 
 /**
  * Windows gets longer to say something before silence counts as a wedge.
@@ -28,11 +29,20 @@ import { judgeWait, QUIET_MEANS_HUNG_MS, urlToWatch, WaitVerdict } from './dev-s
 const WINDOWS_QUIET_MEANS_HUNG_MS = 3 * 60_000;
 const WINDOWS_QUIET_MEANS_HUNG_MS_APPLIES = 'win32' === process.platform;
 import { pickSession, type CandidateSession } from './session-pick.js';
-import { readPage, describePage, type PageProbe } from './page-probe.js';
+import { readPage, describePage, PageFinding, type PageProbe } from './page-probe.js';
 import { remainingSteps, type Progress } from './remaining-steps.js';
 import { AppShape, isDesktop, policyFor } from './desktop-shape.js';
 
 /** Where a run got to, and why it stopped if it did. */
+/**
+ * How long to keep asking whether the SDK has reached the page before giving up on opening a window.
+ * Bounded by the connect budget, so a short budget is never overrun by the readiness check.
+ */
+const SDK_READY_WINDOW_MS = 15_000;
+
+/** The wait left when no browser was opened: only a tab that is ALREADY loaded can still appear. */
+const NO_BROWSER_GRACE_MS = 3_000;
+
 export const SetupPhase = {
   DEV_SERVER: 'dev-server',
   CONNECT: 'connect',
@@ -59,6 +69,11 @@ export interface SetupOutcome {
 export interface SetupEffects {
   /** Start the dev server. Resolves once started; the caller owns stopping it. */
   readonly startDevServer: (command: string, cwd: string) => Promise<void>;
+  /**
+   * A live server this project already announced, if any. Setup attaches to it rather than
+   * starting a second one on the next port.
+   */
+  readonly existingAppUrl?: () => Promise<string | undefined>;
   /** Everything the dev server has printed so far. */
   readonly devServerOutput: () => string;
   readonly devServerExited: () => boolean;
@@ -151,57 +166,85 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
 
   // ── the app has to be running ────────────────────────────────────────────────────────────────
   let url = input.suppliedUrl;
+  let attachedToExisting = false;
   if (undefined === url) {
-    if (undefined === input.devCommand) {
+    const announced = undefined === fx.existingAppUrl ? undefined : await fx.existingAppUrl();
+    if (undefined !== announced && 0 < announced.length) {
+      // The plugin already announced a live server for THIS project. Starting `dev` beside it is
+      // how Vite binds 5174, a second tab opens, and `reticle_sessions` lists three with no way
+      // to pick. The registry is scoped; an unscoped listen would attach to a sibling app.
+      url = announced;
+      attachedToExisting = true;
+      note(
+        `This project is already running at ${announced} — attaching instead of starting a second server.`,
+      );
+    } else if (undefined === input.devCommand) {
       note(
         // "stop here rather than invent one" is the SKILL.md rule, and the words are the contract —
         // inventing a dev command is how a setup script runs the wrong thing and reports success.
         'No dev command: the project names no dev, start or serve script, and there is no --url. ' +
-          'Stopping here rather than invent one — pass --dev-cmd or --url to say what serves this app.',
+          'Stopping here rather than invent one — start the app yourself and pass --url to say ' +
+          'where it is serving, or add a dev/start/serve script to package.json and re-run.',
       );
       return stop(input, SetupPhase.DEV_SERVER, {}, notes);
-    }
-    await fx.startDevServer(input.devCommand, input.appDir);
-    const startedAt = fx.now();
-    for (;;) {
-      const watching = urlToWatch(fx.devServerOutput(), fx.observedPorts());
-      const serving = undefined === watching ? false : (await fx.probePage(watching)).served;
-      const verdict = judgeWait({
-        output: fx.devServerOutput(),
-        launcherExited: fx.devServerExited(),
-        serving,
-        quietForMs: fx.devServerQuietForMs(),
-        elapsedMs: fx.now() - startedAt,
-        quietMeansHungMs: WINDOWS_QUIET_MEANS_HUNG_MS_APPLIES
-          ? WINDOWS_QUIET_MEANS_HUNG_MS
-          : QUIET_MEANS_HUNG_MS,
-      });
-      if (WaitVerdict.READY === verdict && undefined !== watching) {
-        url = watching;
-        break;
+    } else {
+      await fx.startDevServer(input.devCommand, input.appDir);
+      const startedAt = fx.now();
+      // This loop used to poll in complete silence. Reported as thirty minutes of nothing ending in a
+      // SIGKILL — and whatever made that wait long, a user who cannot tell "still starting" from
+      // "wedged" has been given no way to act. See wait-progress.ts.
+      let spokeAtMs: number | undefined;
+      for (;;) {
+        const watching = urlToWatch(fx.devServerOutput(), fx.observedPorts());
+        const waitedMs = fx.now() - startedAt;
+        const progress = waitProgressLine(waitedMs, watching, spokeAtMs);
+        if (progress !== undefined) {
+          note(progress);
+          spokeAtMs = waitedMs;
+        }
+        const probe =
+          undefined === watching
+            ? { served: false as const, sdkInPage: false as const }
+            : await fx.probePage(watching);
+        const serving = probe.served;
+        const verdict = judgeWait({
+          output: fx.devServerOutput(),
+          launcherExited: fx.devServerExited(),
+          serving,
+          quietForMs: fx.devServerQuietForMs(),
+          elapsedMs: fx.now() - startedAt,
+          quietMeansHungMs: WINDOWS_QUIET_MEANS_HUNG_MS_APPLIES
+            ? WINDOWS_QUIET_MEANS_HUNG_MS
+            : QUIET_MEANS_HUNG_MS,
+        });
+        if (WaitVerdict.READY === verdict && undefined !== watching) {
+          // Prefer the URL that answered when the announcement was the wrong family (#884).
+          url = probe.reachedUrl ?? watching;
+          break;
+        }
+        // A desktop shell serves its webview from inside the app, so there is no port to answer and
+        // nothing to be READY. Once it has announced a url, or bound one we can see, that is as far
+        // as this phase can get: the session it dials from its own window is the real signal.
+        if (isDesktop(input.shape) && undefined !== watching) {
+          url = watching;
+          break;
+        }
+        if (WaitVerdict.DEAD === verdict) {
+          note('The dev server exited without serving anything.');
+          return stop(input, SetupPhase.DEV_SERVER, {}, notes);
+        }
+        if (WaitVerdict.HUNG === verdict) {
+          // Says BOTH were checked. A server that prints nothing but IS listening is the CRA case and
+          // must not be failed, so a reader has to be able to tell "we looked at the log" from "we
+          // looked at the log AND the ports".
+          note(
+            'The dev server neither printed a URL nor bound a port, so setup has nothing to open. ' +
+              'Check its log, or pass --url with the address it serves.',
+          );
+          return stop(input, SetupPhase.DEV_SERVER, {}, notes);
+        }
+        await fx.sleep(input.pollMs);
       }
-      // A desktop shell serves its webview from inside the app, so there is no port to answer and
-      // nothing to be READY. Once it has announced a url, or bound one we can see, that is as far
-      // as this phase can get: the session it dials from its own window is the real signal.
-      if (isDesktop(input.shape) && undefined !== watching) {
-        url = watching;
-        break;
-      }
-      if (WaitVerdict.DEAD === verdict) {
-        note('The dev server exited without serving anything.');
-        return stop(input, SetupPhase.DEV_SERVER, {}, notes);
-      }
-      if (WaitVerdict.HUNG === verdict) {
-        // Says BOTH were checked. A server that prints nothing but IS listening is the CRA case and
-        // must not be failed, so a reader has to be able to tell "we looked at the log" from "we
-        // looked at the log AND the ports".
-        note(
-          'The dev server neither printed a URL nor bound a port, so setup has nothing to open. ' +
-            'Check its log, or pass --url with the address it serves.',
-        );
-        return stop(input, SetupPhase.DEV_SERVER, {}, notes);
-      }
-      await fx.sleep(input.pollMs);
     }
   }
 
@@ -209,22 +252,74 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
   const policy = policyFor(input.shape);
   // Through `note`, not `fx.note`: a caller reading the result should see it too.
   if (undefined !== policy.note) note(policy.note);
-  const before = new Set((await fx.listSessions()).map((s) => s.sessionId));
-  // Never for a desktop app: its own window is the client, and a browser tab would be a SECOND
-  // session that is not the app.
-  if (input.openBrowser && policy.openBrowser) await fx.openBrowser(url);
+  const listed = await fx.listSessions();
+  const requiredRuntime = isDesktop(input.shape) ? input.shape : undefined;
+  // A tab already on this URL is the answer. Opening another is how three sessions appear.
+  // `before` is empty so pickSession will take that tab rather than waiting for a new one.
+  const alreadyConnected = attachedToExisting
+    ? pickSession(listed, url, new Set(), requiredRuntime)
+    : null;
+  const before = new Set(listed.map((s) => s.sessionId));
+  // Do not put a window in front of somebody until the page behind it can actually do something.
+  //
+  // The probe that says whether the SDK is even IN the page used to run only in the failure branch
+  // below, AFTER the browser was already open. So a mis-wired app opened a real window onto a page
+  // that was never going to connect, and the person watching it saw a browser appear and then
+  // nothing happen for the whole connect budget — which reads as "Reticle is broken" rather than
+  // "the bundle predates the config edit". One fetch, before the window, turns that into a sentence.
+  //
+  // Only the browser is gated. The wait below still runs: something else may connect (an already
+  // open tab, a desktop window), and the probe is a statement about one fetch of the document, not
+  // proof that nothing can ever dial in.
+  const budgetMs = input.connectBudgetMs ?? Math.max(input.phaseTimeoutMs, policy.connectBudgetMs);
+  let openedBrowser = false;
+  if (null === alreadyConnected && input.openBrowser && policy.openBrowser) {
+    // SERVED is the precondition, not SDK_PRESENT: a url that answers nothing is the only state
+    // where a window is certainly useless. Whether the SDK is in the served HTML is a DIFFERENT
+    // question — Vite injects a marker, while Nuxt, React Router, Astro, SvelteKit and CRA deliver
+    // the connect in the JS BUNDLE, so their HTML never carries it. Gating on presence failed five
+    // of ten scaffolds in the install gate: no window, so no bundle, so no session, so exit 1 on a
+    // correct install. page-probe.ts says it is a diagnostic for a connect that already failed; the
+    // same signal as a precondition deadlocks every case it is wrong about.
+    //
+    // So presence decides only WHEN: open the moment it appears (the fast path for the frameworks
+    // that inline it), otherwise once the short readiness window is out.
+    const readyBy = fx.now() + Math.min(SDK_READY_WINDOW_MS, budgetMs);
+    let finding = readPage(await fx.probePage(url));
+    while (PageFinding.SDK_MISSING === finding && fx.now() < readyBy) {
+      await fx.sleep(input.pollMs);
+      finding = readPage(await fx.probePage(url));
+    }
+    if (PageFinding.NOT_SERVED === finding || PageFinding.TLS_REFUSED === finding) {
+      note(describePage(finding, url));
+      note(
+        'Not opening a browser: nothing answered that url, so the window could only show an error ' +
+          'page. Fix the line above and re-run — `init` is idempotent.',
+      );
+    } else {
+      // Said BEFORE the window appears, so somebody watching a page that stays inert has already
+      // been told which of the two it is.
+      if (PageFinding.SDK_MISSING === finding) note(describePage(finding, url));
+      await fx.openBrowser(url);
+      openedBrowser = true;
+    }
+  }
+  // Waiting the full budget for a session when nothing was opened to create one is dead time, and
+  // it used to be over two minutes of it: the browser is the session source on web, so declining to
+  // open it and then waiting as if we had is a promise to the reader that cannot be kept. Something
+  // else may still dial in — a tab the user already has open, a desktop window — and the existing
+  // diagnosis says such a session "will appear within a second of the page loading", so a short
+  // grace is the honest wait. A run that DID open a browser keeps the whole budget.
   const deadline =
-    fx.now() + (input.connectBudgetMs ?? Math.max(input.phaseTimeoutMs, policy.connectBudgetMs));
-  let session: CandidateSession | null = null;
-  for (;;) {
+    fx.now() +
+    (openedBrowser || !(input.openBrowser && policy.openBrowser)
+      ? budgetMs
+      : Math.min(NO_BROWSER_GRACE_MS, budgetMs));
+  let session: CandidateSession | null = alreadyConnected;
+  while (null === session) {
     // On a desktop app, only the desktop window counts. AppShape and the runtime a page reports use
     // the same three names, so the shape IS the requirement — see session-pick.
-    session = pickSession(
-      await fx.listSessions(),
-      url,
-      before,
-      isDesktop(input.shape) ? input.shape : undefined,
-    );
+    session = pickSession(await fx.listSessions(), url, before, requiredRuntime);
     if (null !== session) break;
     if (deadline <= fx.now()) break;
     await fx.sleep(input.pollMs);

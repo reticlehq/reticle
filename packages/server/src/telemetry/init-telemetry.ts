@@ -10,23 +10,13 @@
  * same treatment `cli_command_run` gets, for the same reason: an in-process fetch would keep the
  * event loop alive and tax the command by most of a second.
  */
-import { TelemetryEventKind, type InitOutcome } from '@reticlehq/core';
+import { TelemetryEventKind, type InitOutcome } from '@reticlehq/core/telemetry';
 import { getTelemetry } from './telemetry.js';
 import { resolveInstallSource } from './install-source.js';
 
-/** Classified init failures — our own vocabulary, never a raw error or a path. */
-export const InitFailure = {
-  /** Run outside a project root. The single most common first-run mistake. */
-  NO_PACKAGE_JSON: 'no_package_json',
-  /** The manifest exists and is not valid JSON — a trailing comma, usually. Never a stack trace. */
-  MALFORMED_PACKAGE_JSON: 'malformed_package_json',
-  /** The package manager failed: offline, a locked registry, a broken install. */
-  DEPENDENCY_INSTALL: 'dependency_install',
-  /** The `claude mcp add` step failed — the CLI is missing or refused. Reticle installs but is unreachable. */
-  MCP_REGISTRATION: 'mcp_registration',
-  OTHER: 'other',
-} as const;
-export type InitFailure = (typeof InitFailure)[keyof typeof InitFailure];
+// The failure vocabulary lives in `@reticlehq/init`, which is what classifies a failed run.
+// Re-exported so every consumer here is unchanged.
+export { InitFailure } from '@reticlehq/init';
 
 /** Report one init outcome. Best-effort; setup must never fail because a metric did. */
 export function reportInitOutcome(init: InitOutcome): void {

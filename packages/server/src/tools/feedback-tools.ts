@@ -17,7 +17,7 @@ import {
   FeedbackSource,
   FEEDBACK_RATING_MAX,
   FEEDBACK_RATING_MIN,
-} from '@reticlehq/core';
+} from '@reticlehq/core/telemetry';
 import { ReticleTool } from './tool-names.js';
 import { asNumber, asString } from './tools-helpers.js';
 import { submitFeedback, feedbackDisabled } from '../telemetry/feedback.js';

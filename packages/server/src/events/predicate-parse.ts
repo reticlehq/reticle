@@ -119,8 +119,43 @@ export function parsePredicate(input: unknown): z.infer<typeof PredicateSchema> 
   const issues = parsed.error.issues.slice(0, 3).map(describeIssue).join('; ');
   throw new Error(
     `that predicate did not parse (kind "${kind}"): ${issues}. Nothing ran — the predicate was ` +
-      `not evaluated, so no verdict was produced. ${accepted(kind, parsed.error.issues)} ` +
+      `not evaluated, so no verdict was produced. ${accepted(kind, parsed.error.issues)}` +
+      `${misplacedCallFields(input)} ` +
       `A valid ${kind} predicate looks like: ${exampleFor(kind)}`,
+  );
+}
+
+/**
+ * Arguments of the CALL that agents write inside the predicate instead.
+ *
+ * Reported from the field on `timeout_ms`, nested in `until` on an `act_and_wait` that had already
+ * timed out once at the default budget. The rejection said "unknown field", which reads as "there is
+ * no such thing" — so the obvious retry is to delete it and silently give up the longer budget that
+ * was the point of writing it. It is not an unknown field; it is a real argument one level too deep.
+ */
+const CALL_LEVEL_FIELDS: readonly string[] = [
+  'timeout_ms',
+  'sessionId',
+  'ref',
+  'action',
+  'args',
+  'target',
+  'intent',
+];
+
+/** The clause naming where a misplaced call argument goes, or '' when nothing was misplaced. */
+function misplacedCallFields(input: unknown): string {
+  if ('object' !== typeof input || null === input) return '';
+  const written = Object.keys(input);
+  const misplaced = CALL_LEVEL_FIELDS.filter((field) => written.includes(field));
+  if (0 === misplaced.length) return '';
+  const list = misplaced.join(', ');
+  // Named as a MOVE, not as a removal. Deleting the field is the reading of "unknown field" that
+  // costs the caller the thing it asked for.
+  return (
+    ` ${list} ${1 === misplaced.length ? 'is an argument' : 'are arguments'} of the CALL, not of ` +
+    `the predicate: ${1 === misplaced.length ? 'move it' : 'move them'} up beside \`until\` rather ` +
+    'than dropping it — nesting is why the predicate did not parse.'
   );
 }
 

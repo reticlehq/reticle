@@ -90,6 +90,13 @@ const ORDER = [
   'live-control-test',
   'real-world-tests',
   'response-ignored-test',
+  // A saved flow whose declared consequence outlives replay's default 4s wait. Sits beside
+  // response-ignored because it drives the same bench-app fixture, with its slow-endpoint knob.
+  'slow-endpoint-replay-test',
+  // A 401 the app recovered from must not read as two defects. Same bench-app, its own fixture view.
+  'auth-retry-not-a-defect-test',
+  // A file input, an unnamed icon button and a canvas — three properties `apps/` had no fixture for.
+  'awkward-controls-test',
   'multi-agent-lease-test',
   'atlas-hard-fixture-test',
   // Drives a real session and then checks that the EVENTS describe it — a different question from
@@ -113,9 +120,9 @@ const ORDER = [
   'release-smoke-test',
 ];
 // The desktop battery — `pnpm e2e:desktop`. Each of these starts its OWN runtime (an Electron main
-// process, a packaged Tauri binary) and waits for it to dial the bridge, so they need no server from
-// run-ci.sh and would only fail inside it for want of a display.
-const DESKTOP = ['electron-desktop-test', 'tauri-desktop-test'];
+// process, including the electron-vite path, or a packaged Tauri binary) and waits for it to dial
+// the bridge, so they need no server from run-ci.sh and would only fail inside it for want of a display.
+const DESKTOP = ['electron-desktop-test', 'electron-vite-desktop-test', 'tauri-desktop-test'];
 // Specs intentionally excluded from BOTH batteries (add here WITH a reason, never by omission).
 const present = new Set(
   readdirSync(specsDir)

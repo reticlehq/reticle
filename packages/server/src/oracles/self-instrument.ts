@@ -8,7 +8,7 @@
  * Kinds come from `@reticlehq/core`. A second enum here is how `reticle_domain` used to say
  * `missing-signal` while honesty said `no-signal-on-mutation` for the same absence.
  */
-import { InstrumentationGapKind } from '@reticlehq/core';
+import { InstrumentationGapKind } from '@reticlehq/core/artifacts';
 
 /** The three core kinds a located proposal can close. Other kinds are verdict-side, not insert-side. */
 type LocatableGapKind =

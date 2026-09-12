@@ -1,4 +1,4 @@
-import { dedupeGaps, type InstrumentationGap } from '@reticlehq/core';
+import { dedupeGaps, type InstrumentationGap } from '@reticlehq/core/artifacts';
 
 /**
  * What this session still cannot see, accumulated across its verdicts.

@@ -20,6 +20,7 @@ import {
 import type { EvalResult, Predicate } from '../events/predicate.js';
 import { asRecord, asString } from '../tools/tools-helpers.js';
 import { replayActionArgs, ambiguousTestidNote, queryRefs } from './replay.js';
+import { anchorFieldName } from './flow-secret-field.js';
 import {
   degradedStepResult,
   isDegradedAnchor,
@@ -404,9 +405,11 @@ async function runTestidStep(
     act = await session.command(ReticleCommand.ACT, {
       ref,
       action: step.action ?? '',
-      // `value` is the anchor's own name — the field this step types into — so a redacted fill can
-      // be supplied from RETICLE_SECRET_<FIELD> without the flow carrying the secret.
-      args: replayActionArgs(step.args, confirmDangerous, value),
+      // The field this step types into — from the anchor, so a redacted fill can be supplied from
+      // RETICLE_SECRET_<FIELD> without the flow carrying the secret. The testid runner used to pass
+      // the testid string here and the other two runners passed nothing, so a role-anchored login
+      // typed the literal placeholder.
+      args: replayActionArgs(step.args, confirmDangerous, anchorFieldName(step.anchor)),
     });
   } finally {
     session.finishAction?.();
@@ -559,6 +562,12 @@ export async function replayFlow(
   // Floor for signal steps: signals that fire during THIS replay, never a prior flow/run in the same
   // session. Captured once, before any step, so a back-to-back suite verify cannot cross-satisfy.
   const replayFloor = session.elapsed();
+  // How long a step waits for its consequence: the step's own declaration, else the flow's, else the
+  // caller's default. Resolved per step rather than once, because one slow step in an otherwise fast
+  // journey is the common shape — a file import, a model-backed endpoint — and making the whole flow
+  // wait for the slowest step would trade a false red for a slow suite. See FlowStep.timeoutMs.
+  const waitFor = (step: FlowStep): number =>
+    step.timeoutMs ?? flow.signalTimeoutMs ?? signalTimeoutMs;
   let index = 0;
   for (const step of flow.steps) {
     const label = anchorLabel(step.anchor);
@@ -588,7 +597,7 @@ export async function replayFlow(
             index,
             label,
             waitForSignal,
-            signalTimeoutMs,
+            waitFor(step),
             replayFloor,
           );
         }
@@ -612,7 +621,7 @@ export async function replayFlow(
         stepExpect,
         dynamic,
         waitForSignal,
-        signalTimeoutMs,
+        waitFor(step),
         cursorBefore,
       );
       if (expectDrift !== undefined) {

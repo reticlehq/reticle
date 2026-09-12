@@ -147,6 +147,46 @@ const EchoDiscriminator = {
  * A response carrying this many times more scalar keys than the request, overlapping on fewer than
  * `MIN_SHARED_KEYS`, is a snapshot that happened to reuse a name — not an echo of the write.
  */
+/**
+ * The two halves of an ADDRESSED write: a key that NAMES the field to set, and a generic container
+ * holding the value to set it to — `{"slot":"_dim","value":"3D"}`, `{"field":"locale","value":"fr"}`.
+ *
+ * A container key cannot be compared across documents by name. `value` in the request means "the
+ * value of the field named by `slot`"; `value` in the response means "the value of whichever field
+ * this node belongs to", and a document holding many addressed fields holds many `value` nodes. The
+ * flat by-key comparison below therefore measures the request's value against an unrelated sibling
+ * field's value, which is not evidence about the target field at all.
+ *
+ * Measured in the field, and it produced a FALSE RED on a passing assertion: the request asked
+ * `{"slot":"_dim","value":"3D"}`; the server applied it (`brief.dim: "3D"`, and the interview
+ * advanced from `{kind:"question"}` to `{kind:"geometry", payload:{dim:"3D"}}`); and this kind
+ * reported "asked 3d, got cfd", where `cfd` is `brief.slots._family.value` — a different slot,
+ * set earlier in the same interview. The next call on the same endpoint DID mirror into
+ * `slots.<slot>.value` and passed clean, so the kind misfires exactly when a server persists an
+ * addressed field somewhere other than a mirror named after it. That is a normal API shape.
+ *
+ * Cost of getting this wrong: a manufactured red is worse than a missed one here. Reticle's whole
+ * proposition is that an agent must not talk itself past a red; a heuristic that invents them
+ * teaches, inside a single session, that a `contradicted` verdict may be noise worth arguing with.
+ *
+ * The addressing key itself is still compared. If the server echoes a DIFFERENT `slot` than the one
+ * requested, that is a genuine dropped write and this file should say so.
+ */
+const ADDRESSING_KEYS: ReadonlySet<string> = new Set(['slot', 'field', 'key', 'path', 'property']);
+const CONTAINER_KEYS: ReadonlySet<string> = new Set(['value', 'val', 'newvalue']);
+
+/** True when the request says "set the field named X" rather than carrying the fields themselves. */
+function isAddressedWrite(asked: Map<string, Set<string>>): boolean {
+  let addressed = false;
+  let container = false;
+  for (const key of asked.keys()) {
+    const lower = key.toLowerCase();
+    if (ADDRESSING_KEYS.has(lower)) addressed = true;
+    if (CONTAINER_KEYS.has(lower)) container = true;
+  }
+  return addressed && container;
+}
+
 const SNAPSHOT_KEY_RATIO = 3;
 const MIN_SHARED_KEYS = 2;
 
@@ -230,8 +270,12 @@ export function findEchoMismatches(
     const echoed = scalarsByKey(response);
     const asked = scalarsByKey(request, new Map(), 0, true);
     if (!responseRestatesRequest(asked, echoed)) continue;
+    // See ADDRESSING_KEYS: on an addressed write the container key names nothing on its own, so
+    // comparing it by name across the two documents compares two different fields.
+    const addressed = isAddressedWrite(asked);
     const dropped: string[] = [];
     for (const [key, wanted] of asked) {
+      if (addressed && CONTAINER_KEYS.has(key.toLowerCase())) continue;
       // More than one requested value for a key (a before/after pair, a list of items) makes "what
       // was asked for" ambiguous, and a guess here is exactly how this kind would earn a reputation
       // for crying wolf.

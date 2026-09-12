@@ -3,6 +3,7 @@ import { HumanControlKind, PresenterTone, SessionState } from '@reticlehq/core';
 import { Presenter, type ControlIntent } from './presenter.js';
 import { CONTROLS_CSS } from './presenter-controls.js';
 import { buildSnapshot } from '../dom/snapshot.js';
+import { LOG_KIND } from './presenter-log.js';
 import { isIgnored } from '../dom/dom-ignore.js';
 import { Annotator } from '../review/annotator.js';
 
@@ -48,10 +49,6 @@ const sendBtn = (): HTMLButtonElement | null => q<HTMLButtonElement>('[data-reti
 const input = (): HTMLInputElement | null => q<HTMLInputElement>('[data-reticle-input]');
 const stateAttr = (): string | null =>
   q('[data-reticle-overlay][data-reticle-state]')?.getAttribute('data-reticle-state') ?? null;
-const logTexts = (): (string | null)[] =>
-  Array.from(document.querySelectorAll('[data-reticle-log] .reticle-log-text')).map(
-    (e) => e.textContent,
-  );
 
 describe('presenter-controls / live-control panel', () => {
   it('1 pause click emits {kind:pause} and enters paused', () => {
@@ -102,53 +99,6 @@ describe('presenter-controls / live-control panel', () => {
     expect(pauseBtn()?.getAttribute('aria-label')).toBe('Pause');
   });
 
-  it('5 send with text emits message, appends human row, clears input', () => {
-    const { onControl } = mount();
-    const i = input();
-    if (null === i) throw new Error('no input');
-    i.value = 'try the dark theme';
-    i.dispatchEvent(new Event('input', { bubbles: true }));
-    click(sendBtn());
-    expect(onControl).toHaveBeenCalledWith({
-      kind: HumanControlKind.MESSAGE,
-      text: 'try the dark theme',
-    });
-    expect(logTexts().some((t) => 'try the dark theme' === t)).toBe(true);
-    expect(q('[data-kind="human"]')).not.toBeNull();
-    expect(i.value).toBe('');
-  });
-
-  it('6 Enter key in input sends', () => {
-    const { onControl } = mount();
-    const i = input();
-    if (null === i) throw new Error('no input');
-    i.value = 'press enter';
-    i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-    expect(onControl).toHaveBeenCalledWith({
-      kind: HumanControlKind.MESSAGE,
-      text: 'press enter',
-    });
-    expect(i.value).toBe('');
-  });
-
-  it('7 send with empty input emits nothing', () => {
-    const { onControl } = mount();
-    const before = logTexts().length;
-    click(sendBtn());
-    expect(onControl).not.toHaveBeenCalled();
-    expect(logTexts().length).toBe(before);
-  });
-
-  it('8 send with whitespace-only emits nothing and appends no human row', () => {
-    const { onControl } = mount();
-    const i = input();
-    if (null === i) throw new Error('no input');
-    i.value = '   ';
-    click(sendBtn());
-    expect(onControl).not.toHaveBeenCalled();
-    expect(q('[data-kind="human"]')).toBeNull();
-  });
-
   it('9 end click emits {kind:end}, enters ended, shows banner', () => {
     const { onControl } = mount();
     click(endBtn());
@@ -159,15 +109,15 @@ describe('presenter-controls / live-control panel', () => {
   });
 
   it('10 ended disables all controls', () => {
+    // The composer is gone, so there is no input or send button left to disable. Pause and end are
+    // the controls an ended session still renders, and they are the ones that must go inert.
     mount();
     click(endBtn());
     expect(pauseBtn()?.disabled).toBe(true);
     expect(endBtn()?.disabled).toBe(true);
-    expect(sendBtn()?.disabled).toBe(true);
-    expect(input()?.disabled).toBe(true);
   });
 
-  it('11 clicking pause/end/send after ended emits nothing more', () => {
+  it('11 clicking pause/end after ended emits nothing more', () => {
     const { onControl } = mount();
     click(endBtn());
     const count = onControl.mock.calls.length;
@@ -316,8 +266,6 @@ describe('presenter-controls / live-control panel', () => {
     for (const sel of [
       '[data-reticle-pause]',
       '[data-reticle-end]',
-      '[data-reticle-input]',
-      '[data-reticle-send]',
       '[data-reticle-badge]',
       '[data-reticle-banner]',
     ]) {
@@ -326,7 +274,6 @@ describe('presenter-controls / live-control panel', () => {
       expect(isIgnored(el as Element)).toBe(true);
     }
     const snap = buildSnapshot({ mode: 'full' });
-    expect(snap.tree).not.toContain('Tell the agent something');
     expect(snap.tree).not.toContain('PAUSED');
     expect(snap.tree).not.toContain('Session ended');
     expect(snap.tree).not.toContain('reticle-brand-mini');
@@ -367,28 +314,14 @@ describe('presenter-controls / live-control panel', () => {
     ann.destroy();
   });
 
-  it('17 human log text never leaks to snapshot', () => {
-    mount();
-    const i = input();
-    if (null === i) throw new Error('no input');
-    i.value = 'secret guidance text';
-    click(sendBtn());
+  it('17 the human log well never leaks to snapshot', () => {
+    // Was driven by typing into the composer. The composer is gone; what this actually guards is
+    // that HUD log content stays out of the page's snapshot, so it drives the log directly.
+    const { presenter } = mount();
+    presenter.log(LOG_KIND.HUMAN, 'a sentence only the HUD should hold');
     const snap = buildSnapshot({ mode: 'full' });
-    expect(snap.tree).not.toContain('secret guidance text');
+    expect(snap.tree).not.toContain('a sentence only the HUD should hold');
   });
-});
-
-/**
- * Teardown has to remove what mount added.
- *
- * All eight of this panel's listeners are anonymous closures over `this`, so there was no reference
- * to hand `removeEventListener` and teardown removed none of them.
- *
- * Asserting the MECHANISM rather than a side effect: a test that tears down, clicks, and checks
- * nothing happened passes either way once the HUD has left the DOM, so it measures the removal
- * rather than the fix. Recording each registration and checking its signal is what goes red.
- */
-describe('control panel teardown', () => {
   it('registers its listeners with a signal, and aborts it on teardown', () => {
     document.body.innerHTML = '';
     const add = vi.spyOn(EventTarget.prototype, 'addEventListener');

@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it, beforeEach, vi } from 'vitest';
-import { TelemetryEventKind } from '@reticlehq/core';
+import { TelemetryEventKind } from '@reticlehq/core/telemetry';
 import {
   reportAppInstrumented,
   markInstrumentationClock,

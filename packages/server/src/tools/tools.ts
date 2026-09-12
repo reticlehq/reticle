@@ -18,6 +18,9 @@ import { paginateQueryResult } from './query-paginate.js';
  */
 const QUERY_BY_VALUES = Object.values(QueryBy);
 const QUERY_BY_LIST = QUERY_BY_VALUES.join(' | ');
+
+/** Every `by`/`value` shorthand says the same thing; the parameter name carries the rest. */
+const QUERY_ALIAS = 'Predicate spelling of by/value.';
 const queryByEnum = z.enum(QUERY_BY_VALUES as [string, ...string[]]);
 import { CONTRACT_TOOLS } from './contract-tools.js';
 import { DOMAIN_TOOLS } from '../domain/domain-tools.js';
@@ -43,6 +46,7 @@ import { type ToolDef, sessionIdShape, commandOrThrow } from './tool-kit.js';
 import { applyMerges, type MergePlan } from './merge-tools.js';
 import { ACT_TOOLS } from './act-tools.js';
 import { OBSERVE_TOOLS } from './observe-tools.js';
+import { LINEAGE_TOOLS } from './lineage-tools.js';
 import { RECONCILE_TOOLS } from './reconcile-tools.js';
 import { READ_TOOLS } from './read-tools.js';
 import { LEASE_TOOLS } from './lease-tools.js';
@@ -139,6 +143,15 @@ export const RAW_TOOLS: ToolDef[] = [
         .describe(
           "Present ONLY when `sessions` is empty: the same answer as `why`, executable. `command` is the LITERAL command to run, sourced from this project's own package.json scripts and lockfile — it is absent, never guessed, when the project declares no dev script. `action` is one of daemon_split | start_dev_server | run_init | open_app | reopen_app. `daemon_split` outranks the rest and means the app IS running and instrumented, on a DIFFERENT daemon than the one you are attached to — do not start or re-init anything, read `reason`.",
         ),
+      lastKnown: z
+        .object({
+          sessionId: z.string(),
+          url: z.string(),
+        })
+        .optional()
+        .describe(
+          'Present ONLY when `sessions` is empty AND a tab was connected to this daemon earlier: the last sessionId and URL that tab was on when it disappeared. A route that 500s tears the page down and the SDK never reconnects — this is the last thing we knew, not a route-500 verdict. An empty list with no lastKnown is a tab that never arrived.',
+        ),
     },
     handler: async (deps) => {
       const provider = deps.realInput;
@@ -159,10 +172,14 @@ export const RAW_TOOLS: ToolDef[] = [
         // The executable half. `why` is for the human reading the transcript; this is the one the
         // agent acts on, so it never has to parse a paragraph to find a command inside it.
         const next = deps.sessions.noSessionNextAction();
+        // The last tab, when one was here. Optional-call: test stubs of SessionManager predate it.
+        const known = deps.sessions.lastKnown?.();
+        const lastKnown = undefined === known ? undefined : { sessionId: known.id, url: known.url };
         return {
           sessions,
           ...(why === undefined ? {} : { why }),
           ...(next === undefined ? {} : { next_action: next }),
+          ...(undefined === lastKnown ? {} : { lastKnown }),
         };
       }
       return { sessions };
@@ -250,13 +267,19 @@ export const RAW_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe(
-          'Present when a diff was computed over a capped tree — "unchanged" is then partial.',
+          'Why this result is not what it looks like. Four causes, all of which otherwise read as "the page is empty": a diff computed over a capped tree ("unchanged" is then partial); an interactive-mode tree emptied by leanness; a page whose elements all computed hidden; and an UNMOUNTED app, where the DOM under the scope holds almost nothing — that last one will not improve by waiting, so read reticle_console for an uncaught error instead.',
         ),
       scopeMissing: z
         .boolean()
         .optional()
         .describe(
           'True when a scope was given but resolved to nothing — the tree is EMPTY on purpose, not because the page is empty. Do not read an absent element as absent from the page; re-check the scope.',
+        ),
+      growthWarning: z
+        .string()
+        .optional()
+        .describe(
+          'Present when this same scope was smaller moments ago — content likely arrived after your last look, and a presence/absence conclusion drawn from that earlier snapshot may have been taken mid-load. Re-check rather than trusting the earlier read.',
         ),
     },
     // async so a synchronous resolve() failure (no session connected) surfaces as a REJECTED promise —
@@ -274,17 +297,20 @@ export const RAW_TOOLS: ToolDef[] = [
         mode,
       }).then((raw) =>
         withSizeCost(
-          noteHiddenPage(
-            noteEmptyLeanTree(
-              applySnapshotDelta(
-                raw,
-                {
-                  sessionId: resolved.id,
-                  scope: asString(args['scope']) ?? '',
-                  mode,
-                  diff: true === args['diff'],
-                },
-                SNAPSHOT_CACHE,
+          noteUnmountedRoot(
+            noteHiddenPage(
+              noteEmptyLeanTree(
+                applySnapshotDelta(
+                  raw,
+                  {
+                    sessionId: resolved.id,
+                    scope: asString(args['scope']) ?? '',
+                    mode,
+                    diff: true === args['diff'],
+                  },
+                  SNAPSHOT_CACHE,
+                ),
+                mode,
               ),
               mode,
             ),
@@ -297,13 +323,13 @@ export const RAW_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.QUERY,
     example: { by: 'testid', value: 'todo-list' },
-    description: `Find elements by Testing-Library semantics, INCLUDING open shadow roots — \`count_only:true\` gives just the count (~30x smaller); \`limit\` caps descriptors. Pass \`by\` (${QUERY_BY_LIST}) and \`value\` (the query string). Returns matching refs + descriptors + visibility. Pass \`attrs:["href"]\` to project attributes (link/image URLs) onto each match. Pass \`limit\` to cap descriptors (broad role queries can be large) or \`count_only:true\` for just the match count — both cut tokens. On zero matches, also returns hint:{ route, presentRegions[], knownEmptyState } so you can distinguish an empty state from a missing element WITHOUT taking a snapshot. ASKING SEVERAL QUESTIONS ABOUT THE PAGE? One reticle_snapshot answers them all at once — a run of queries costs a round trip each and returns what the snapshot already held.`,
+    description: `Find elements by Testing-Library semantics, INCLUDING open shadow roots — \`count_only:true\` gives just the count (~30x smaller); \`limit\` caps descriptors. Pass \`by\` (${QUERY_BY_LIST}) and \`value\` (the query string). Returns matching refs + descriptors + visibility. Pass \`attrs:["href"]\` to project attributes (link/image URLs) onto each match. Pass \`limit\` to cap descriptors (broad role queries can be large) or \`count_only:true\` for just the match count — both cut tokens. On zero matches, also returns hint:{ route, presentRegions[], knownEmptyState, nameNearMiss[] } so you can distinguish an empty state from a missing element WITHOUT taking a snapshot — nameNearMiss carries the labels that role really has when an exact role+name query just missed. ASKING SEVERAL QUESTIONS ABOUT THE PAGE? One reticle_snapshot answers them all at once — a run of queries costs a round trip each and returns what the snapshot already held.`,
     inputSchema: {
       // Constrained to the enum, NOT z.string(). A free string let `by:'css'` through to the
       // browser's `default: return []`, so an unsupported strategy answered "0 matches" — which
       // reads as "the element is not on the page". Measured on a live page: by:'css' value:'body'
       // returned count 0. A false negative is the one answer this product must never invent.
-      by: queryByEnum.optional().describe(`Query strategy: ${QUERY_BY_LIST}`),
+      by: queryByEnum.optional().describe('Query strategy.'),
       value: z
         .string()
         .optional()
@@ -345,12 +371,15 @@ export const RAW_TOOLS: ToolDef[] = [
         ),
       // The predicate's spelling, accepted as an alias for by/value so the shape an agent learns from
       // act_and_wait/assert also works here. See query-shape.ts.
-      testid: z.string().optional().describe('Alias for by="testid" value=… (predicate spelling).'),
-      text: z.string().optional().describe('Alias for by="text" value=… (predicate spelling).'),
-      role: z.string().optional().describe('Alias for by="role" value=… (predicate spelling).'),
-      label: z.string().optional().describe('Alias for by="label" value=… (predicate spelling).'),
-      placeholder: z.string().optional().describe('Alias for by="placeholder" value=… .'),
-      alt: z.string().optional().describe('Alias for by="alt" value=… (predicate spelling).'),
+      // Six copies of one sentence, re-sent every turn. The parameter NAME already says which
+      // strategy it selects, and they sit in a block together, so each only has to say it is the
+      // predicate spelling of by/value.
+      testid: z.string().optional().describe(QUERY_ALIAS),
+      text: z.string().optional().describe(QUERY_ALIAS),
+      role: z.string().optional().describe(QUERY_ALIAS),
+      label: z.string().optional().describe(QUERY_ALIAS),
+      placeholder: z.string().optional().describe(QUERY_ALIAS),
+      alt: z.string().optional().describe(QUERY_ALIAS),
       ...sessionIdShape,
     },
     outputSchema: {
@@ -435,6 +464,14 @@ export const RAW_TOOLS: ToolDef[] = [
             .optional()
             .describe(
               "Present when a TEXT search missed but the string IS on the page, split across this container's children. Retry as { scope: <ref>, self: true } — no text query can match a string no single element owns.",
+            ),
+          // Declared here for the same reason presentRegions had to be: the browser emits it, and an
+          // undeclared field is stripped from structuredContent without a word.
+          nameNearMiss: z
+            .array(z.string())
+            .optional()
+            .describe(
+              'Present when a ROLE+NAME search missed and that role DOES carry a nearly-matching name — role+name is exact, so "Mesh" does not find "2 Mesh". Retry with one of these spellings; no snapshot needed.',
             ),
         })
         .optional()
@@ -609,6 +646,7 @@ export const RAW_TOOLS: ToolDef[] = [
   ...BROWSER_TOOLS,
   ...ACT_TOOLS,
   ...OBSERVE_TOOLS,
+  ...LINEAGE_TOOLS,
   ...READ_TOOLS,
   ...LEASE_TOOLS,
   // reticle_feedback — the agent reports that RETICLE failed (not that the app did). See feedback-tools.ts.
@@ -743,6 +781,50 @@ function noteEmptyLeanTree(result: unknown, mode: string): unknown {
  * cannot know why, and a note that guessed would be the same kind of overconfident answer as the
  * empty tree it replaces.
  */
+/**
+ * How much DOM there is under the mount container, when the tree is empty and nothing was skipped.
+ *
+ * A handful of elements is a container with nothing in it. React's own root div counts as one, and a
+ * wrapper or two is ordinary, so this is deliberately not `=== 0`.
+ */
+const UNMOUNTED_ROOT_MAX_ELEMENTS = 3;
+
+/**
+ * The third cause of an empty tree, and the one the walk cannot see: the app is not mounted.
+ *
+ * Reported from the field with the react-three-fiber crash. The source-mapping stamp threw inside
+ * R3F's commit phase, React unmounted the entire tree, and the page went white — and the snapshot
+ * answered `{ tree: "", nodes: 0 }`, which is also what a page that has not rendered yet answers.
+ * The reporter spent a diagnosis pass separating the two, and said that detecting a dead root would
+ * have pointed straight at the cause.
+ *
+ * The other two notes here explain an empty tree by what the WALK passed over. This one cannot: a
+ * walk that visited nothing has nothing to have skipped. It reads the DOM count instead, which is
+ * why the browser now reports it, and it fires only when the skip counts are silent — a page whose
+ * elements were all hidden has plenty of DOM and belongs to `noteHiddenPage`.
+ *
+ * Like both of its neighbours it names a fact and hands over the next read, and does not diagnose:
+ * "not mounted" is certain from the count, WHY is not, and the console is where the answer is.
+ */
+function noteUnmountedRoot(result: unknown, mode: string): unknown {
+  if (SnapshotMode.STATUS === mode) return result;
+  const row = asRecord(result);
+  if (0 !== asNumber(row['nodes'])) return result;
+  if (row['note'] !== undefined) return result;
+  const elements = asNumber(row['domElements']);
+  if (elements === undefined || elements > UNMOUNTED_ROOT_MAX_ELEMENTS) return result;
+  return {
+    ...row,
+    note:
+      `the tree is empty because there is almost nothing in the DOM: ${String(elements)} ` +
+      `element(s) under this scope. That is a mount container with nothing rendered into it, not a ` +
+      `page whose contents were skipped — so the app is UNMOUNTED rather than slow, and waiting ` +
+      `will not change it. An app that was rendering and then stopped has usually thrown: read ` +
+      `reticle_console for an uncaught error, and check anything that runs inside a framework ` +
+      `commit phase. If the app has genuinely not started yet, load it and snapshot again.`,
+  };
+}
+
 function noteHiddenPage(result: unknown, mode: string): unknown {
   if (SnapshotMode.STATUS === mode) return result;
   const row = asRecord(result);

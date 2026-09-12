@@ -1,5 +1,5 @@
 import { EventType, TRANSPORT_LIMITS } from '@reticlehq/core';
-import type { Emit, Teardown } from './types.js';
+import { observeSafely, type Emit, type Teardown } from './types.js';
 import { safeStringify } from '../security/serialization.js';
 import { requireCapturedMethod } from '../util/captured-method.js';
 
@@ -55,37 +55,72 @@ export function installConsole(emit: Emit): Teardown {
     originals.set(method, original);
     const callOriginal = original.bind(console);
     const wrapper = (...args: unknown[]): void => {
-      // Only console.error carries a stack — the diagnosis case; log/warn stay lean.
-      const stack = 'error' === method ? firstErrorStack(args) : undefined;
-      emit(METHOD_EVENT[method], {
-        message: stringifyArgs(args),
-        ...(stack === undefined ? {} : { stack }),
-      });
+      // The message reaches the console FIRST, outside the guard — storage.ts's ordering, and for the
+      // same reason. `stringifyArgs` walks arbitrary app objects, so one hostile getter or revoked
+      // proxy used to throw out of the app's own `console.log` before it had logged anything.
       callOriginal(...args);
+      observeSafely(() => {
+        // Only console.error carries a stack — the diagnosis case; log/warn stay lean.
+        const stack = 'error' === method ? firstErrorStack(args) : undefined;
+        emit(METHOD_EVENT[method], {
+          message: stringifyArgs(args),
+          ...(stack === undefined ? {} : { stack }),
+        });
+      });
     };
     patched.set(method, wrapper);
     console[method] = wrapper;
   }
 
-  const onError = (event: ErrorEvent): void => {
-    const stack = capStack(event.error instanceof Error ? event.error.stack : undefined);
-    emit(EventType.ERROR_UNCAUGHT, {
-      message: event.message,
-      source: event.filename,
-      line: event.lineno,
-      ...(stack === undefined ? {} : { stack }),
+  const onError = (event: Event): void => {
+    // A SUBRESOURCE that failed to load — `<img>`, `<script>`, `<link>`, media. The browser writes
+    // these to the console and none of them passes through a console method, so patching console
+    // cannot see them. They dispatch on the ELEMENT and do not bubble, which is why this listener
+    // is registered in the CAPTURE phase: a bubble-phase listener on `window` never runs for one,
+    // and `console absent` came back green on pages visibly full of red.
+    //
+    // Told apart from a real script error by the event's own type, not by guessing: a script that
+    // loaded and then threw dispatches an `ErrorEvent` carrying `message`/`error`, while a resource
+    // failure dispatches a plain `Event` whose target is the element. No double-report either way.
+    if (!(event instanceof ErrorEvent)) {
+      const target = event.target;
+      if (!(target instanceof Element) || target === (document as unknown as Element)) return;
+      const tag = target.tagName.toLowerCase();
+      const url = target.getAttribute('src') ?? target.getAttribute('href') ?? '';
+      observeSafely(() => {
+        emit(EventType.ERROR_UNCAUGHT, {
+          message: `<${tag}> failed to load${0 === url.length ? '' : `: ${url}`}`,
+          kind: 'resource',
+          ...(0 === url.length ? {} : { source: url }),
+        });
+      });
+      return;
+    }
+    observeSafely(() => {
+      const stack = capStack(event.error instanceof Error ? event.error.stack : undefined);
+      emit(EventType.ERROR_UNCAUGHT, {
+        message: event.message,
+        source: event.filename,
+        line: event.lineno,
+        ...(stack === undefined ? {} : { stack }),
+      });
     });
   };
   const onRejection = (event: PromiseRejectionEvent): void => {
-    const reason: unknown = event.reason;
-    const stack = capStack(reason instanceof Error ? reason.stack : undefined);
-    emit(EventType.ERROR_UNCAUGHT, {
-      message: reason instanceof Error ? reason.message : String(reason),
-      kind: 'unhandledrejection',
-      ...(stack === undefined ? {} : { stack }),
+    observeSafely(() => {
+      const reason: unknown = event.reason;
+      const stack = capStack(reason instanceof Error ? reason.stack : undefined);
+      emit(EventType.ERROR_UNCAUGHT, {
+        message: reason instanceof Error ? reason.message : String(reason),
+        kind: 'unhandledrejection',
+        ...(stack === undefined ? {} : { stack }),
+      });
     });
   };
-  window.addEventListener('error', onError);
+  // Capture phase: element `error` events do not bubble, so this is the only registration that
+  // sees a failed subresource. Uncaught script errors reach a capturing window listener too, so one
+  // registration covers both.
+  window.addEventListener('error', onError, true);
   window.addEventListener('unhandledrejection', onRejection);
 
   return () => {
@@ -94,7 +129,7 @@ export function installConsole(emit: Emit): Teardown {
       // that wrapped console AFTER connect() must keep its instrumentation on teardown.
       if (console[method] === patched.get(method)) console[method] = original as typeof console.log;
     }
-    window.removeEventListener('error', onError);
+    window.removeEventListener('error', onError, true);
     window.removeEventListener('unhandledrejection', onRejection);
   };
 }

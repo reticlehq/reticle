@@ -363,7 +363,8 @@ describe('enterprise activation rides every event, and carries no identity', () 
     // Rule 4. A copied vocabulary is a correctness hazard the moment it is a column somebody reads,
     // and this one is read to decide whether a customer is about to churn.
     const source = readFileSync(new URL('./license-activation.ts', import.meta.url), 'utf8');
-    expect(source).toContain("from '@reticlehq/core'");
+    // Either core entry point counts — the analytics wire also lives at `@reticlehq/core/telemetry`.
+    expect(source).toMatch(/from '@reticlehq\/core(?:\/[a-z-]+)?'/);
     for (const status of Object.values(LicenseActivation)) {
       expect(
         source.includes(`'${status}'`),

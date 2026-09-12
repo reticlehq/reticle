@@ -74,15 +74,14 @@ chk('the default surface is the lean one, not the full list', names.size < 40, `
 
 // The premise of the skill's instructions. If these ever became advertised, the skill should stop
 // teaching the envelope — and this is the check that would say so instead of leaving it stale.
-for (const tool of [
-  'reticle_verify',
-  'reticle_flow_replay',
-  'reticle_record',
-  'reticle_flow_save',
-]) {
+// `reticle_verify` was promoted INTO the default surface, so it is deliberately absent from this
+// list: the skill now teaches the direct call for it. The other three are still cold-tail, and the
+// envelope is still the only way to reach them.
+for (const tool of ['reticle_flow_replay', 'reticle_record', 'reticle_flow_save']) {
   chk(`  ${tool} is NOT advertised, so the skill must teach reticle_run`, !names.has(tool));
 }
 chk('reticle_run IS advertised, since everything above depends on it', names.has('reticle_run'));
+chk('reticle_verify IS advertised, so the skill teaches it directly', names.has('reticle_verify'));
 
 // A real driven session first, or every answer below is "no browser session connected" — which the
 // envelope check would still pass (the arguments were accepted) while proving nothing about what the

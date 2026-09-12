@@ -24,8 +24,10 @@ import {
 } from '@reticlehq/core';
 import { Session, SessionManager } from '../session/session.js';
 import { tokensMatch } from './token-auth.js';
+import { pairingTokenSource } from './pairing-token.js';
 import { log } from '../log.js';
 import { getSessionMetrics } from '../telemetry/session-metrics.js';
+import { sessionReplacedReason } from '../session/session-replaced.js';
 import { describeSkew, sdkFix, SkewPair } from '../version/version-skew.js';
 import { noteVersionSkew } from '../version/version-nudge.js';
 import { protocolSkewReason } from './protocol-skew.js';
@@ -149,6 +151,8 @@ interface BridgeOptions {
   port: number;
   host?: string;
   token?: string;
+  /** Which source supplied `token`. Set by resolveBridgeSecurity; logged on a refusal, never sent. */
+  tokenSource?: ReturnType<typeof pairingTokenSource>;
   allowedOrigins?: string[];
   maxMessagesPerSecond?: number;
   maxSessions?: number;
@@ -227,6 +231,8 @@ export class Bridge {
   readonly #wss: WebSocketServer;
   readonly #clock: () => number;
   readonly #token: string | undefined;
+  /** Which source supplied #token — logged on a refusal so a mismatch names its own cause. */
+  readonly #tokenSource: ReturnType<typeof pairingTokenSource>;
   /**
    * Projects this daemon has ACCEPTED a session from. Evidence, not derivation: it is what lets a
    * leaked daemon say "I belong to another project" instead of "authentication failed". See
@@ -279,6 +285,15 @@ export class Bridge {
     this.#clock = options.clock ?? (() => Date.now());
     this.#token =
       options.token !== undefined && options.token.length > 0 ? options.token : undefined;
+    // Supplied by resolveBridgeSecurity, which is the only place that can tell an auto-provisioned
+    // token from one a caller passed — both arrive here as options.token. Defaulted rather than
+    // required so a directly-constructed Bridge (tests, embedders) still logs something true.
+    this.#tokenSource =
+      options.tokenSource ??
+      pairingTokenSource({
+        explicit: options.token !== undefined && 0 < options.token.length,
+        env: process.env,
+      });
     // An entry that fails to normalize — typically a scheme-less `myapp.test` — used to be
     // filtered out with no trace: the allow-list LOOKED configured, every dial from that origin
     // was refused at the gate, and the refusal read as a scheme mismatch in the page rather than
@@ -508,10 +523,16 @@ export class Bridge {
             // token is not wrong, it is somebody else's — and "authentication failed" sends the user to
             // check the one thing that is fine. See auth-failure-reason.
             const reason = authFailureReason(this.#servedProjects, parsed.projectId, parsed.token);
+            // The token SOURCE, never the token. A refusal here has no other witness: the value is
+            // machine-level on both sides, so the daemon's cwd cannot explain a mismatch (#685) and
+            // the only thing that can is the environment the two processes were started in — which
+            // differs exactly when an IDE spawns the MCP server globally instead of from the shell
+            // that launched the dev server.
             log('authentication_failed', {
               served: [...this.#servedProjects],
               ...(parsed.projectId === undefined ? {} : { helloProject: parsed.projectId }),
               presented: parsed.token !== undefined && 0 < parsed.token.length,
+              tokenSource: this.#tokenSource,
             });
             this.sessions.noteClosure(WS_CLOSE_REASON.AUTH_FAILED, this.#clock());
             socket.close(WS_CLOSE.AUTH_FAILED[0], reason);
@@ -569,10 +590,7 @@ export class Bridge {
             // the old handle can finish against the live connection instead of returning an error whose
             // only answer is to go and rediscover an id that has not changed. See Session.succeededBy.
             replaced.succeededBy(session);
-            replaced.disconnect(
-              `session replaced by a newer connection claiming the same id (${session.id}) from ${session.url}`,
-              true,
-            );
+            replaced.disconnect(sessionReplacedReason(session.id, session.url), true);
           }
           // The daemon is the single judge of skew, and HELLO is where the page announces itself.
           // Reported on the session (reticle_sessions) AND queued for the next tool result, because an
@@ -586,6 +604,9 @@ export class Bridge {
             },
             { version: SERVER_VERSION, contract: CONTRACT_FINGERPRINT },
           );
+          // Kept so a remedy can check whether it applies to THIS page — see body-capture-remedy.
+          session.sdkVersion = parsed.sdkVersion;
+          session.captureBodies = parsed.captureBodies;
           if (skew !== undefined) {
             log('version_skew', {
               sessionId: session.id,

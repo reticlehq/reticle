@@ -14,7 +14,7 @@
  * No hostname, no username, no disk paths, no process list.
  */
 import { cpus, freemem, loadavg, totalmem } from 'node:os';
-import type { MachineSnapshot } from '@reticlehq/core';
+import type { MachineSnapshot } from '@reticlehq/core/telemetry';
 
 const MB = 1024 * 1024;
 

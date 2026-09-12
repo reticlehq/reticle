@@ -5,7 +5,7 @@ import { LastAct } from './last-act.js';
 import { GapLedger } from '../honesty/gap-ledger.js';
 import { CaptureLedger } from '../honesty/feature-capture.js';
 import { commandTimeoutMessage, type PageRuntime } from './command-timeout.js';
-import { readHealthEvent, type SessionHealth } from './session-health.js';
+import { readHealthEvent, pendingNavigationMs, type SessionHealth } from './session-health.js';
 import { MIRRORED_COMMANDS, mirroredNarration } from './session-mirror.js';
 
 export type { SessionHealth };
@@ -130,6 +130,15 @@ export class Session {
   hasCapabilities: boolean;
   /** Set when the page's SDK version differs from the daemon's (see version-skew.ts). */
   versionSkew?: string;
+  /** SDK version from HELLO; kept so a remedy can check it applies — see body-capture-remedy.ts. */
+  sdkVersion?: string | undefined;
+  /** Whether the page records network bodies; undefined on an SDK too old to say. See HELLO. */
+  captureBodies?: boolean | undefined;
+  /**
+   * Whether this build stamps `data-reticle-source`, when the build plugin said. See HELLO.
+   * `false` separates "the project turned it off" from "nothing provides one"; undefined is unknown.
+   */
+  sourceMapping?: boolean | undefined;
   /**
    * Extra key names this app declared sensitive via `connect({ redact: { keys } })`. Held so the
    * DRIVEN path can redact them too — a request body the daemon captures from the network stack
@@ -173,28 +182,16 @@ export class Session {
   #journalReader: JournalReader | undefined;
   /** What this session has learned by watching its own stream: ambient churn + blind-spot levels. */
   readonly #observed = new ObservedState();
+  /** Set when a required application precondition (e.g. seedStorage) was not established. */
+  #preconditionFailure?: string;
   /**
    * Which document is on screen right now — the one the most recent stamped event was observed under.
-   *
-   * DERIVED, never announced. The SDK mints a document id once per real document and stamps it on
-   * every event, so the stream already carries the answer; asking the page for it separately would be
-   * a second source of truth that can disagree with the evidence it is supposed to scope. A full
-   * navigation or a reload builds a new document, mints a new id, and the first event carrying it
-   * moves this forward — which is exactly the moment the previous document's evidence stops being
-   * about the world. An SPA route change keeps the same document and so keeps the same id, which is
-   * correct rather than a limitation: same JavaScript context, same in-flight requests, same evidence.
-   *
-   * An UNSTAMPED event never clears this. An SDK older than the field stamps nothing, and letting one
-   * such event blank the current document would make every later comparison vacuous.
+   * DERIVED, never announced: the SDK stamps it on events. An unstamped event never clears this.
    */
   #documentId: string | undefined;
   /**
-   * The edit epoch of the most recent stamped event. DERIVED for the same reason `#documentId` is:
-   * the stream already carries it, and asking the page separately would be a second source of truth.
-   *
-   * A hot update advances it INSIDE the same document, which is the case `#documentId` structurally
-   * cannot see — no navigation, same page, replaced code. An unstamped event never clears it: most
-   * pages have no hot-update channel at all, so absence is "unknown", never "back to no edits".
+   * The edit epoch of the most recent stamped event. DERIVED for the same reason `#documentId` is.
+   * A hot update advances it inside the same document. An unstamped event never clears it.
    */
   #editEpoch: number | undefined;
 
@@ -205,6 +202,7 @@ export class Session {
     this.title = hello.title;
     this.adapters = hello.adapters;
     this.hasCapabilities = hello.hasCapabilities ?? false;
+    this.sourceMapping = hello.sourceMapping;
     this.redactKeys = hello.redactKeys ?? [];
     this.#socket = socket;
     this.#clock = clock;
@@ -273,10 +271,17 @@ export class Session {
 
   /** The attachable health block — single source of truth for the tools. */
   health(): SessionHealth {
+    // From event t=0, not a cursor: a wedge that began before the current action is exactly the
+    // case a per-window reading cannot see, and is the one both reporters hit.
+    const stuck = pendingNavigationMs(this.eventsSince(0), this.elapsed());
     const base: SessionHealth = {
       lastSeenMs: this.lastSeenMs(),
       throttled: this.throttled(),
       focused: this.#focused,
+      ...(stuck === undefined ? {} : { pendingNavigationMs: stuck }),
+      // Carried onto every act/assert result, not just reticle_sessions: skew drops actions
+      // SILENTLY, and the fields it contradicts are on the act verdict.
+      ...(this.versionSkew === undefined ? {} : { versionSkew: this.versionSkew }),
     };
     // attach the escape-hatch hint only when un-scriptable (keeps field absent otherwise).
     const recommendation = buildSessionRecommendation({
@@ -331,6 +336,14 @@ export class Session {
   /** The edit epoch the most recent stamped event was observed under. See `#editEpoch`. */
   get currentEditEpoch(): number | undefined {
     return this.#editEpoch;
+  }
+
+  /** Seed/auth precondition failure reason, if any. */
+  setPreconditionFailure(reason: string): void {
+    this.#preconditionFailure = reason;
+  }
+  preconditionFailure(): string | undefined {
+    return this.#preconditionFailure;
   }
 
   /** Re-stamp an incoming event with server-relative time, buffer it, and fan out. */
@@ -981,9 +994,5 @@ export class Session {
   }
 }
 
-/**
- * Re-exported from session-manager.ts so the public import path (`./session.js`) is unchanged for
- * the many call sites that resolve a target session. The class lives in its own file to keep both
- * units under the file-size cap.
- */
+/** Re-exported so the public import path (`./session.js`) is unchanged. */
 export { SessionManager } from './session-manager.js';

@@ -38,5 +38,49 @@
     "✓ Reticle config → .reticle.json",
     "✓ Vite plugin → vite.config.js",
     "✓ Capabilities + store → src/reticle-dev.ts"
+  ],
+  "astro": [
+    "– MCP server (global) → global (claude user scope)",
+    "✓ Install dependencies → package.json",
+    "✓ Reticle config → .reticle.json",
+    "✓ Astro config (token + build target) → astro.config.mjs",
+    "✓ Connect snippet (Astro) → src/pages/index.astro",
+    "✓ Astro env types (Vite defines) → src/env.d.ts"
+  ],
+  "sveltekit": [
+    "– MCP server (global) → global (claude user scope)",
+    "✓ Install dependencies → package.json",
+    "✓ Reticle config → .reticle.json",
+    "ℹ SvelteKit is UNVERIFIED → src/hooks.client.ts",
+    "✓ Reticle client hook → src/hooks.client.ts",
+    "✓ Vite plugin → vite.config.ts",
+    "✓ Capabilities + store → src/reticle-dev.ts",
+    "ℹ AGENT: finish the capabilities file → src/reticle-dev.ts"
+  ],
+  "cra": [
+    "– MCP server (global) → global (claude user scope)",
+    "✓ Install dependencies → package.json",
+    "✓ Reticle config → .reticle.json",
+    "✓ Reticle connect module → src/reticle-dev.js",
+    "✓ Pairing token → .env.development.local",
+    "ℹ Pairing token is per-machine → .env.development.local",
+    "✓ Connect snippet (CRA) → src/index.js"
+  ],
+  "nuxt": [
+    "– MCP server (global) → global (claude user scope)",
+    "ℹ vue is UNVERIFIED → package.json",
+    "✓ Install dependencies → package.json",
+    "✓ Reticle config → .reticle.json",
+    "✓ Connect snippet (Nuxt) → app/plugins/reticle.client.ts",
+    "✓ Nuxt config (token + watcher) → nuxt.config.ts",
+    "ℹ Restart the Nuxt dev server → app/plugins/reticle.client.ts"
+  ],
+  "react-router": [
+    "– MCP server (global) → global (claude user scope)",
+    "✓ Install dependencies → package.json",
+    "✓ Reticle config → .reticle.json",
+    "✓ Connect snippet (React Router) → app/entry.client.tsx",
+    "✓ Vite plugin → vite.config.ts",
+    "✓ Capabilities + store → src/reticle-dev.ts"
   ]
 }

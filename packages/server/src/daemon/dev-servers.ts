@@ -23,7 +23,7 @@ import {
   devServerRegistryPort,
   liveDevServers,
   type DevServerEntry,
-} from '@reticlehq/core';
+} from '@reticlehq/core/artifacts';
 
 /** process.kill(pid, 0) throws iff the process is gone — the same probe the daemon registry uses. */
 function isAliveNow(pid: number): boolean {

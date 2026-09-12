@@ -8,7 +8,7 @@ import {
   emptyProjectRegistry,
   parseProjectRegistry,
   projectCandidates,
-} from '@reticlehq/core';
+} from '@reticlehq/core/artifacts';
 import { discoverProjectConfigs, type ConfigDiscovery } from './cli/config-discovery.js';
 import {
   projectCandidatesFrom,

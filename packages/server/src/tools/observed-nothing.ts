@@ -16,6 +16,15 @@ interface EmptyReadContext {
   windowMs?: number;
   /** What was being counted, in the agent's words: "console lines", "network calls". */
   noun: string;
+  /**
+   * What this channel could NOT have seen, when it has a structural blind spot.
+   *
+   * "The observation ran and found none" is only the whole truth for a channel that was watching
+   * the entire window. The console is not one: it does not exist until the SDK patches it, so a
+   * clean read cannot speak for what the page logged before that. Saying so here is the difference
+   * between a result and a confident false green — omitted for every channel that has no such gap.
+   */
+  caveat?: string;
 }
 
 /**
@@ -38,6 +47,8 @@ export function noteEmptyRead(
     ...result,
     // The distinction the field sweep could not make: this is a RESULT, not a failure to look.
     observed: true,
-    note: `no ${context.noun}${window}; the observation ran and found none, which is a result, not a missing reading`,
+    note:
+      `no ${context.noun}${window}; the observation ran and found none, which is a result, not a missing reading` +
+      (context.caveat === undefined ? '' : ` — ${context.caveat}`),
   };
 }

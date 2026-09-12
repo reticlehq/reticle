@@ -153,6 +153,8 @@ export const ReticleEnv = {
    * shortening it. A budget nobody can reach in a test is a budget nobody tests.
    */
   RECONNECT_ATTEMPTS: 'RETICLE_RECONNECT_ATTEMPTS',
+  /** Quiet window before an abandoned MCP stdio proxy exits; `0` disables the watcher. */
+  MCP_PROXY_IDLE: 'RETICLE_MCP_PROXY_IDLE_MS',
 } as const;
 
 /** Hard transport bounds shared by the browser and bridge. */
@@ -409,6 +411,16 @@ export const EventType = {
    * `data: { href }` — the URL the page asked to open, when it named one.
    */
   CONTEXT_OPENED: 'context.opened',
+  /**
+   * The app opened a native `alert`/`confirm`/`prompt` while Reticle was driving it.
+   *
+   * Recorded because Reticle ANSWERS these rather than letting them block — a native dialog halts
+   * the main thread, and the SDK's own message pump is on that thread, so one `confirm` behind a
+   * driven click made the tab permanently unresponsive with no recovery from inside the session.
+   * Answering silently would trade a wedge for an invisible one, so the question the app asked, and
+   * the answer given, ride out as an event.
+   */
+  DIALOG_OPENED: 'dialog.opened',
   /** aggregated React commits over a throttle window (dev builds) — `data: { commits }`. Commit storms /
    * wasted re-renders show up here without a per-render flood. */
   RENDER_COMMIT: 'render.commit',
@@ -587,6 +599,12 @@ export const ActionWarning = {
    */
   CLICK_OCCLUDED:
     'target is visually occluded by another element; a real user could not click it (synthetic dispatch still delivered the event) — dismiss the overlay or scroll the target clear',
+  /**
+   * A document-key press (Escape, Tab, a modifier shortcut) was dispatched at the focused
+   * element or the document. No named target was given, so the effect must not claim one.
+   */
+  GLOBAL_PRESS:
+    'press landed on the focused element or document — no named target was given, so this effect does not claim one',
 } as const;
 export type ActionWarning = (typeof ActionWarning)[keyof typeof ActionWarning];
 
@@ -781,3 +799,20 @@ export const MessageKind = {
   EVENT: 'event',
 } as const;
 export type MessageKind = (typeof MessageKind)[keyof typeof MessageKind];
+
+/**
+ * WHY a lease came back `ready: false` — the two situations that were one word.
+ *
+ * `ready: false` meant exactly one thing on the mint path: the SDK never dialled in, so the app
+ * probably does not embed `@reticlehq/core`. A REUSED lease can fail readiness a second way, and it
+ * is the opposite problem: an SDK did dial in, and has since stopped answering. The next action
+ * differs — check the install versus recover the tab — so the two get names rather than sharing a
+ * bare `false`.
+ */
+export const LeaseNotReadyReason = {
+  /** No SDK dialled in within the wait. The install is the thing to look at. */
+  SDK_NEVER_DIALLED: 'sdk_never_dialled',
+  /** One dialled in and stopped answering: the tab is attached but wedged. */
+  SDK_STOPPED_ANSWERING: 'sdk_stopped_answering',
+} as const;
+export type LeaseNotReadyReason = (typeof LeaseNotReadyReason)[keyof typeof LeaseNotReadyReason];

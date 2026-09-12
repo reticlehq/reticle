@@ -12,10 +12,14 @@
 //
 // Playwright/DevTools MCP have no replay: catching the same regression means an agent re-drives the
 // whole flow with the LLM every run (~30k tok, Layer B) — and may or may not notice the break.
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { ReticleAdapter } from './adapters.mjs';
 import { measure } from './tokenizer.mjs';
+import { recordingReachedAnchor } from './recording-reached-anchor.mjs';
 
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const URL = process.env.BENCH_URL ?? 'http://localhost:4312/';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const LLM_REDRIVE = { playwright_mcp: 30249, chrome_devtools_mcp: 32296 };
@@ -78,6 +82,15 @@ async function detectFor(flow) {
     await a.c.callTool('reticle_record', { action: 'stop', recordingName: flow.name });
     const saved = await a.c.callTool('reticle_flow_save', { flowName: flow.name });
     const stepCount = JSON.parse(saved.text || '{}').stepCount ?? null;
+    // A cell whose recording never reached the anchor cannot measure anything. Fail loudly.
+    // A cell whose recording never reached the anchor cannot measure anything — see
+    // recording-reached-anchor.mjs. Fail loudly rather than scoring a silent 0.
+    const reached = recordingReachedAnchor(
+      flow.name,
+      flow.breakId,
+      JSON.parse(readFileSync(join(REPO_ROOT, '.reticle', 'flows', `${flow.name}.json`), 'utf8')),
+    );
+    if (!reached.ok) throw new Error(reached.reason);
 
     // 2. baseline replay on the healthy app
     await a.refresh();

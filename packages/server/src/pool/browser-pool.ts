@@ -11,7 +11,8 @@
  */
 
 /** The minimal page surface the pool drives. Real Playwright `Page` satisfies this. */
-import { unreachableUrlIn } from '@reticlehq/core';
+import { unreachableUrlIn, type SeedStorage } from '@reticlehq/core';
+import { seedStorageInto } from './storage-seed.js';
 
 export interface PooledPage {
   goto(url: string, opts?: { timeoutMs?: number }): Promise<unknown>;
@@ -37,11 +38,59 @@ export interface PooledPage {
    * reports dispatched/settled while the styles never ran.
    */
   hover?(x: number, y: number): Promise<void>;
+  /** Add an init script to run after document creation but before any page scripts run. */
+  addInitScript?<Arg>(
+    script: ((arg: Arg) => void) | string,
+    arg?: Arg,
+  ): Promise<InitScriptHandle | void>;
   /**
    * Install (or clear) network mocks on this page. OPTIONAL: a fake that does not implement it
    * makes `reticle_network_mock` refuse rather than claiming it stubbed a request it cannot intercept.
    */
   installMocks?(rules: readonly PooledMockRule[]): Promise<void>;
+  /**
+   * Resize this page's viewport. OPTIONAL, like `installMocks`: a fake that does not implement it
+   * makes `reticle_viewport` refuse rather than claim a resize the page never took.
+   *
+   * A lease IS a real browser page, so the resize was always possible — the tool simply had no route
+   * to it and consulted only the driven-provider path. On an SDK-only install there is no such
+   * provider, so mobile-only UI (a `lg:hidden` hamburger, a drawer that only mounts under a
+   * breakpoint) could not be driven at all without installing Playwright separately.
+   */
+  setViewport?(size: { width: number; height: number }): Promise<void>;
+  /**
+   * Fires when the page opens a native `window.confirm`/`alert`/`prompt`. OPTIONAL, like `onConsole`:
+   * a fake that does not implement it means the pool cannot see or arbitrate the dialog, and the
+   * page is left to whatever the underlying engine does with no listener attached.
+   *
+   * The pool always dismisses on this handler (see `acquire`) — a page blocked on a native dialog
+   * previously wedged the whole session (every subsequent tool call timed out and no recovery
+   * existed short of restarting the daemon), because nothing in the stack ever answered it.
+   */
+  onDialog?(handler: (dialog: PooledDialog) => void): void;
+}
+
+/** A native dialog the page opened, handed to the pool so it can be dismissed instead of left blocking. */
+export interface PooledDialog {
+  /** The dialog's message text — kept for diagnostics (`BrowserPool#lastDialogMessage`). */
+  readonly message: string;
+  dismiss(): Promise<void>;
+}
+
+export interface InitScriptHandle {
+  dispose(): Promise<void>;
+}
+
+export interface PooledCookie {
+  name: string;
+  value: string;
+  url?: string;
+  domain?: string;
+  path?: string;
+  expires?: number;
+  httpOnly?: boolean;
+  secure?: boolean;
+  sameSite?: 'Strict' | 'Lax' | 'None';
 }
 
 /**
@@ -62,6 +111,7 @@ export interface PooledMockRule {
 export interface PooledContext {
   newPage(): Promise<PooledPage>;
   close(): Promise<void>;
+  addCookies?(cookies: PooledCookie[]): Promise<void>;
 }
 
 /** The launched browser. Real Playwright `Browser` satisfies this. */
@@ -80,6 +130,7 @@ export type Launcher = () => Promise<PooledBrowser>;
 export interface Lease {
   readonly sessionId: string;
   readonly url: string;
+  readonly navStatus?: number;
   release(): Promise<void>;
 }
 
@@ -122,6 +173,13 @@ interface ActiveLease {
    * after the first says the same thing.
    */
   dialFailureUrl?: string;
+  /**
+   * The message of the most recent native dialog dismissed on this lease, if any.
+   *
+   * One string, overwritten — not a buffer, same reasoning as `dialFailureUrl`: this is diagnostic
+   * context for "why did the page look frozen for a moment", not a log an agent needs to replay.
+   */
+  lastDialogMessage?: string;
 }
 
 /**
@@ -256,7 +314,26 @@ export class BrowserPool {
     this.#aliases.set(registeredId, leaseId);
   }
 
-  /** The lease this id refers to: itself, or whatever it is an alias for. */
+  /**
+   * The lease this id refers to: itself, or whatever it is an alias for.
+   *
+   * EVERY AGENT-FACING LOOKUP MUST GO THROUGH THIS. A leased page runs the SDK, which dials and
+   * registers under its OWN session id, so the id `reticle_sessions` shows an agent is routinely the
+   * alias rather than the lease key. Four capabilities used the raw map instead — screenshots,
+   * hover, network mocks and the dial-failure diagnostic — and every one of them refused for a
+   * lease that was alive and working, addressed by the only id the agent had been given.
+   *
+   * `reticle_network_mock` is where that surfaced: it reported `no-cdp-provider` in every
+   * configuration a reporter could reach, including after `reticle drive`, and the recommendation it
+   * printed ("start with `reticle drive <url>`") could not fix it because the provider was never the
+   * problem. Their conclusion was that error-path verification was impossible without shipping
+   * failure-injection code inside the application — which is exactly what an external mock exists to
+   * avoid.
+   *
+   * `acquire` and `#release` are the two exceptions and must stay raw: the first is registering the
+   * lease key itself before any alias can exist, and the second must delete that key rather than
+   * whatever it points at.
+   */
   #leaseIdOf(sessionId: string): string {
     return this.#active.has(sessionId) ? sessionId : (this.#aliases.get(sessionId) ?? sessionId);
   }
@@ -285,7 +362,7 @@ export class BrowserPool {
     sessionId: string,
     opts: { fullPage?: boolean } = {},
   ): Promise<Uint8Array | undefined> {
-    const lease = this.#active.get(sessionId);
+    const lease = this.#active.get(this.#leaseIdOf(sessionId));
     if (lease === undefined || lease.page.screenshot === undefined) return undefined;
     this.touch(sessionId);
     try {
@@ -305,7 +382,7 @@ export class BrowserPool {
    * Touches the lease like any other tool call, so hovering keeps it alive.
    */
   async hoverLease(sessionId: string, x: number, y: number): Promise<boolean> {
-    const lease = this.#active.get(sessionId);
+    const lease = this.#active.get(this.#leaseIdOf(sessionId));
     if (lease === undefined || lease.page.hover === undefined) return false;
     this.touch(sessionId);
     try {
@@ -323,8 +400,30 @@ export class BrowserPool {
    *
    * Touches the lease like any other tool call, so mocking keeps it alive.
    */
+  /**
+   * Resize a leased page's viewport, or report that this page cannot be resized.
+   *
+   * Alias-resolved like every other agent-facing capability — see `#leaseIdOf`.
+   *
+   * Touches the lease like any other tool call, so resizing keeps it alive.
+   */
+  async setViewportLease(
+    sessionId: string,
+    size: { width: number; height: number },
+  ): Promise<boolean> {
+    const lease = this.#active.get(this.#leaseIdOf(sessionId));
+    if (lease === undefined || lease.page.setViewport === undefined) return false;
+    this.touch(sessionId);
+    try {
+      await lease.page.setViewport(size);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async setMocksLease(sessionId: string, rules: readonly PooledMockRule[]): Promise<boolean> {
-    const lease = this.#active.get(sessionId);
+    const lease = this.#active.get(this.#leaseIdOf(sessionId));
     if (lease === undefined || lease.page.installMocks === undefined) return false;
     this.touch(sessionId);
     try {
@@ -383,7 +482,7 @@ export class BrowserPool {
    */
   async acquire(
     url: string,
-    opts: { signal?: AbortSignal; sessionId?: string } = {},
+    opts: { signal?: AbortSignal; sessionId?: string; seedStorage?: SeedStorage } = {},
   ): Promise<Lease> {
     if (this.#closed) throw new Error('browser pool is shut down');
     // #waitForSlot claims the slot synchronously (bumps #occupied) before returning, so the cap holds
@@ -392,6 +491,7 @@ export class BrowserPool {
     const sessionId = opts.sessionId ?? this.#genId();
     let context: PooledContext | undefined;
     let pending: string | undefined;
+    let pendingDialogMessage: string | undefined;
     try {
       const browser = await this.#ensureBrowser();
       context = await browser.newContext();
@@ -411,22 +511,62 @@ export class BrowserPool {
         if (active !== undefined) active.dialFailureUrl = dialled;
         else pending = dialled; // logged during goto, before the lease is registered below
       });
-      await page.goto(url, { timeoutMs: this.#navTimeout });
+      // Same "listen before goto" reasoning as onConsole above: a dialog opened during the initial
+      // navigation (an app that confirms something in an onload handler) must still be dismissed, not
+      // just ones opened after the lease is registered.
+      page.onDialog?.((dialog) => {
+        const active = this.#active.get(sessionId);
+        if (active !== undefined) active.lastDialogMessage = dialog.message;
+        else pendingDialogMessage = dialog.message;
+        void dialog.dismiss();
+      });
+      let seedHandle: InitScriptHandle | undefined;
+      let checkSeedError: (() => void) | undefined;
+      if (opts.seedStorage !== undefined) {
+        const seedResult = await seedStorageInto(context, page, url, opts.seedStorage);
+        seedHandle = seedResult?.handle;
+        checkSeedError = seedResult?.checkError;
+      }
+      let navRes: unknown;
+      try {
+        navRes = await page.goto(url, { timeoutMs: this.#navTimeout });
+        checkSeedError?.();
+      } finally {
+        if (seedHandle !== undefined) {
+          await seedHandle.dispose().catch(() => undefined);
+        }
+      }
       // The browser can crash WHILE goto is resolving; #onCrash then clears #active and zeroes
       // #occupied. Registering the lease now would resurrect a dead entry against a crashed browser with
       // the slot count out of sync (drifting below #active.size, eventually exceeding the cap). If we're
       // no longer the live browser, bail — the catch below closes the context and returns the slot.
       if (this.#browser !== browser) throw new Error('browser crashed during navigation');
+      let navStatus: number | undefined;
+      if (null !== navRes && 'object' === typeof navRes && 'status' in navRes) {
+        const s: unknown = (navRes as { status?: unknown }).status;
+        if ('function' === typeof s) {
+          try {
+            const code: unknown = s.call(navRes);
+            if ('number' === typeof code) navStatus = code;
+          } catch {
+            // ignore
+          }
+        } else if ('number' === typeof s) {
+          navStatus = s;
+        }
+      }
       this.#active.set(sessionId, {
         context,
         page,
         url,
         touchedAt: this.#now(),
         ...(pending === undefined ? {} : { dialFailureUrl: pending }),
+        ...(pendingDialogMessage === undefined ? {} : { lastDialogMessage: pendingDialogMessage }),
       });
       return {
         sessionId,
         url,
+        ...(navStatus !== undefined ? { navStatus } : {}),
         release: () => this.#release(sessionId),
       };
     } catch (err) {
@@ -444,7 +584,15 @@ export class BrowserPool {
    * Undefined means the page said nothing — never that it dialled the right place.
    */
   dialFailureUrl(sessionId: string): string | undefined {
-    return this.#active.get(sessionId)?.dialFailureUrl;
+    return this.#active.get(this.#leaseIdOf(sessionId))?.dialFailureUrl;
+  }
+
+  /**
+   * The message of the most recent native dialog (`confirm`/`alert`/`prompt`) auto-dismissed on this
+   * lease, if any. Diagnostic only — the dialog itself is already gone by the time this is readable.
+   */
+  lastDialogMessage(sessionId: string): string | undefined {
+    return this.#active.get(this.#leaseIdOf(sessionId))?.lastDialogMessage;
   }
 
   /** Close every context and the browser. Pending waiters are rejected (the pool is terminal now). */

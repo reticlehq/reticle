@@ -24,7 +24,19 @@ The date is not the commitment; the shipped-and-green build is. A quiet month me
 
 ## Changelog entries
 
-Any user-facing change adds its entry to the `[Unreleased]` section of [CHANGELOG.md](CHANGELOG.md) **in the same PR** — that's what makes cutting a release a 10-minute job instead of an archaeology session. Write it for someone who hits the bug, not for someone reading the diff: what was wrong, what it cost them, what it does now.
+Any user-facing change adds its entry **in the same PR** — that's what makes cutting a release a 10-minute job instead of an archaeology session. Write it for someone who hits the bug, not for someone reading the diff: what was wrong, what it cost them, what it does now.
+
+The entry goes in a **new file under [`.changes/`](.changes/README.md)**, not into `CHANGELOG.md`:
+
+```md
+<!-- .changes/856-navigate-timeout.md -->
+
+### Fixed
+
+- **`@reticlehq/server` — `reticle_navigate` gave up at 5s and called it a failed navigation.** …
+```
+
+Same policy, different mechanism. `CHANGELOG.md` was the largest merge-conflict source in the repo — 23 of 42 open PRs edited it and 11 of those were conflicting, every one of them two branches appending to `[Unreleased]` in the same place. Two PRs adding two files never conflict. The files are assembled into `CHANGELOG.md` at release time by `pnpm changelog:assemble`; the format and the rest of the rules are in [`.changes/README.md`](.changes/README.md).
 
 ## Cutting a release
 
@@ -38,12 +50,13 @@ pnpm lint:docs                                  #    every documented command st
 claude plugin validate ./plugin                 #    the published Claude Code plugin still resolves
 npx skills add reticlehq/reticle -l             #    the published skills are all still discoverable
 
-pnpm version 2.3.0 --no-git-tag-version         # 3. bump root…
-pnpm -r exec npm version 2.3.0 --no-git-tag-version   #    …and every workspace package, in lockstep
-sed -i '' '3s/^version = .*/version = "2.3.0"/' packages/tauri/Cargo.toml  # …and the ELEVENTH artifact
+node scripts/set-version.mjs 2.3.0              # 3. every artifact that carries the number, in lockstep
+pnpm install --lockfile-only                   #    …then reconcile the lockfile
 ```
 
-**The Rust crate is the eleventh artifact and it is easy to forget**, which is not hypothetical: it sat at `0.1.0` from the day it was written until 2.11.0. `publish-crate.yml` publishes only when the version is ABSENT from crates.io, so every release found `0.1.0` already there, printed "nothing to do" and exited green — a silent no-op reporting success for months, while a desktop capture-path security fix sat undelivered and the docs told users to pin the build that had it. `crate-version-lockstep.test.ts` now fails the fast unit gate if this line is forgotten, so the `sed` above is belt to its braces rather than the only thing standing between a release and nothing.
+**The Rust crate is the twelfth artifact and it is easy to forget**, which is not hypothetical: it sat at `0.1.0` from the day it was written until 2.11.0. `publish-crate.yml` publishes only when the version is ABSENT from crates.io, so every release found `0.1.0` already there, printed "nothing to do" and exited green — a silent no-op reporting success for months, while a desktop capture-path security fix sat undelivered and the docs told users to pin the build that had it. `crate-version-lockstep.test.ts` now fails the fast unit gate if the crate is forgotten, and `set-version.mjs` writes it along with the other 44 sites — so the guard is belt to the script's braces rather than the only thing standing between a release and nothing.
+
+`set-version.mjs` replaced three manual steps, one of which addressed `Cargo.toml` **by line number** (`sed '3s/…'`): adding a comment above `version` would have silently rewritten the wrong line, in the one file whose drift has already shipped. Every rule in the script is anchored on the key instead, it refuses to write a file that does not already hold the current version, and `--dry-run` prints the list first. The four version guards are unchanged and are now the script's negative control: run it, run the gate, and a missed site is named by a test rather than found by a user.
 
 ### What the gates already prove about the docs, and what they do not
 
@@ -65,12 +78,12 @@ Two limits worth knowing before trusting a green run.
 
 **None of it checks the deployed site.** The guards read this repository. `docs.reticle.sh` is a separate Mintlify deployment, and it has served pages several commits behind before, so a page being correct here is not evidence that it is correct in front of a user. Check the live page after a release, not only the source.
 
-4. Move `[Unreleased]` in `CHANGELOG.md` under a `## [2.3.0] — YYYY-MM-DD` heading; leave a fresh empty `[Unreleased]`.
+4. `pnpm changelog:assemble` — splices every `.changes/*.md` entry into `[Unreleased]` and deletes the consumed files (`--dry-run` prints the result and touches nothing). Then move `[Unreleased]` under a `## [2.3.0] — YYYY-MM-DD` heading; leave a fresh empty `[Unreleased]`.
 
    **First, check what landed behind it:**
 
    ```bash
-   git log --oneline "$(git log -1 --format=%H -- CHANGELOG.md)"..HEAD
+   git log --oneline "$(git log -1 --format=%H -- CHANGELOG.md .changes)"..HEAD
    ```
 
    A release section is written once and then commits keep arriving, so the entry you are about to publish describes the release as it was on the day somebody opened the section. That has now happened twice in one release: the first time thirty-three commits had landed behind it including both headline fixes, the second time eighteen more. Both were found by running exactly the command above, and nothing else would have found either.

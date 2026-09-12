@@ -7,7 +7,7 @@
  */
 
 import type { Browser } from 'playwright';
-import { BrowserLaunchKind } from '@reticlehq/core';
+import { BrowserLaunchKind } from '@reticlehq/core/telemetry';
 import { chromiumLaunchOptions } from '../chromium-launch-options.js';
 import { getSessionMetrics } from '../telemetry/session-metrics.js';
 import { classifyConnectFailure } from '../telemetry/connect-failure.js';
@@ -64,10 +64,27 @@ function wrapBrowser(browser: Browser): PooledBrowser {
               await page.mouse.move(x, y);
             },
             installMocks: (rules) => installNetworkMocks(page, [...rules]),
+            setViewport: (size) => page.setViewportSize(size),
             onCrash: (handler) => page.on('crash', handler),
             onConsole: (handler) => page.on('console', (msg) => handler(msg.text())),
+            onDialog: (handler) =>
+              page.on('dialog', (dialog) =>
+                handler({ message: dialog.message(), dismiss: () => dialog.dismiss() }),
+              ),
+            addInitScript: async (script, arg) => {
+              const handle = (await page.addInitScript(script as never, arg)) as
+                { dispose?: () => Promise<void> } | undefined;
+              const dispose = handle?.dispose;
+              if ('function' !== typeof dispose) {
+                throw new Error(
+                  'Storage seeding failed: Playwright page.addInitScript did not return a disposable handle',
+                );
+              }
+              return { dispose: () => dispose() };
+            },
           };
         },
+        addCookies: (cookies) => context.addCookies(cookies),
         close: () => context.close(),
       };
     },

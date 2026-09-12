@@ -222,6 +222,26 @@ export const CORE_TOOL_NAMES: ReadonlySet<string> = new Set([
   // deleting the instruction from the lease and the pause hint — deletes the handback protocol,
   // because there is nowhere else those two calls are ever named.
   ReticleTool.SESSION,
+  // VERIFY is the only advertised tool that can CONCLUDE, and its absence was measurably the most
+  // expensive thing on this surface.
+  //
+  // Measured on the Layer B agent loop (bench/raw/agent-loop-results.json, Haiku 4.5, 25-turn cap):
+  // on the no-regression control — a CLEAN app, where the right answer is "nothing is wrong" —
+  // Playwright MCP concluded in 7 turns and Reticle burned all 25 and never answered, at 333k tokens
+  // against Playwright's 54k. That one cell was a quarter of Reticle's total cost across five
+  // scenarios. Removing it, Reticle is at parity on the other four and wins two outright.
+  //
+  // The cause is compositional rather than behavioural: every other tool in this set answers "here
+  // is more to look at". None of them can say "there is nothing more". On a healthy app — which is
+  // most runs — that is a loop with no exit, and 25 was just where the cap fell.
+  //
+  // `reticle_verify` is the exit. { action: "crawl" } drives every reachable control itself and
+  // reports the whole fault set in ONE call, and { action: "flows" } replays the saved flows with no
+  // model in the loop at all — the path Layer C measures at 271 tokens, deterministic, 0% flake.
+  // Both were built and neither was reachable: the same "a tool an agent must already know about is
+  // a tool that never gets called" argument that put INSPECT and FEEDBACK here, applied to the one
+  // tool that ends the loop.
+  ReticleTool.VERIFY,
 ]);
 
 /**
@@ -277,8 +297,6 @@ export const EXTENDED_TOOL_NAMES: ReadonlySet<string> = new Set([
   ReticleTool.CLOCK,
   ReticleTool.NETWORK_MOCK,
   ReticleTool.STORAGE,
-  // Merged change/flows/affected/coverage/crawl — one name where three of these used to sit.
-  ReticleTool.VERIFY,
 ]);
 
 /**

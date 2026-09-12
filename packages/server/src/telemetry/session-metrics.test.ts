@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BrowserLaunchKind, ConnectFailure } from '@reticlehq/core';
+import { BrowserLaunchKind, ConnectFailure } from '@reticlehq/core/telemetry';
 import { SessionMetrics } from './session-metrics.js';
 import {
   errorSkeleton,

@@ -1,8 +1,13 @@
 /**
  * Rule: no-internal-tags.
  *
- * Bans design-doc reference codes and internal version strings from comments, so a reader of the source
- * never meets a token that only means something in a document they cannot see.
+ * Bans design-doc reference codes and internal version strings from comments, TEST DESCRIPTIONS and
+ * the FILE AND DIRECTORY NAMES of the module itself, so a reader of the source never meets a token
+ * that only means something in a document they cannot see.
+ *
+ * Those four surfaces are the ones the project rule names, and the rule enforced two of them. A path
+ * is the first thing a reader meets, before any comment, so `n5-ring-buffer.ts` is the shape this
+ * exists to prevent stated in the loudest available place.
  *
  * This rule exists because the prose version of it did not hold. An audit of the codebase found the
  * machine-checked rules at ~100% compliance and every prose-only rule violated — 59 tracking codes
@@ -18,6 +23,7 @@
  * `H2`, `Welford M2` when part of a sentence) is matched only when it stands alone as a tag.
  */
 
+import { relative, sep } from 'node:path';
 import { AST_NODE_TYPES, ESLintUtils } from '@typescript-eslint/utils';
 import { DOCS_URL_ROOT } from './constants.js';
 
@@ -25,6 +31,8 @@ const createRule = ESLintUtils.RuleCreator((name) => `${DOCS_URL_ROOT}#${name}`)
 
 const INTERNAL_TAG_MESSAGE =
   "Internal reference '{{tag}}' does not belong in source. It means nothing to a reader without the design doc — describe the behaviour instead.";
+const PATH_TAG_MESSAGE =
+  "Internal reference '{{tag}}' does not belong in a file or directory name. It means nothing to a reader without the design doc — name the module after what it does.";
 
 /** `(W11)`, `B37`, `W10.3`, `N5:` — a short capital-prefixed code used as a label. */
 const TRACKING_CODE = /(?<![A-Za-z0-9])[A-Z]{1,2}\d{1,2}(?:\.\d{1,2})?(?![A-Za-z0-9])/g;
@@ -47,6 +55,16 @@ const EXTERNAL_SPECS =
  * banned string legal.
  */
 const VERSION_STRING = /(?<![A-Za-z0-9])v\d+\.\d+\.\d+(?![A-Za-z0-9])/g;
+/**
+ * The same two shapes over a PATH, case-insensitively.
+ *
+ * File names here are kebab-case, so a code that would read `N5` in a sentence reads `n5` in a path
+ * and the upper-case patterns above cannot see it. The boundaries do the work that case was doing:
+ * `e2e`, `utf8`, `http2` and `base64` all fail them, because each needs a non-alphanumeric on both
+ * sides of a letters-then-digits token.
+ */
+const PATH_TRACKING_CODE = /(?<![A-Za-z0-9])[A-Za-z]{1,2}\d{1,2}(?:\.\d{1,2})?(?![A-Za-z0-9])/g;
+const PATH_VERSION_STRING = /(?<![A-Za-z0-9])v\d+\.\d+\.\d+(?![A-Za-z0-9])/gi;
 /** Third-party names whose versions are legitimate prose. Reticle is deliberately NOT here. */
 const THIRD_PARTY =
   /\b(React|Vite|Node|TypeScript|Playwright|Chrome|Chromium|Firefox|Safari|Zod|Vitest|ESLint|pnpm|MCP)\b[^v]{0,12}$/i;
@@ -93,7 +111,7 @@ export const noInternalTags = createRule({
     type: 'problem',
     docs: { description: 'Ban design-doc codes and internal version strings from comments.' },
     schema: [],
-    messages: { internalTag: INTERNAL_TAG_MESSAGE },
+    messages: { internalTag: INTERNAL_TAG_MESSAGE, pathTag: PATH_TAG_MESSAGE },
   },
   defaultOptions: [],
   create(context) {
@@ -118,12 +136,54 @@ export const noInternalTags = createRule({
       return found;
     };
 
+    /**
+     * Banned tokens in this module's own path, relative to the project root.
+     *
+     * Relative, never absolute: an absolute path runs through directories nobody chose as part of
+     * this codebase (a CI runner's workspace, a developer's home) and flagging those would report a
+     * violation the author cannot fix.
+     */
+    const pathTags = (): Set<string> => {
+      const found = new Set<string>();
+      const filename = context.filename;
+      // `<input>` and `<text>` are what a linter reports for source with no file, e.g. a RuleTester
+      // case or a piped snippet. There is no path to judge.
+      if (filename.startsWith('<')) return found;
+      const rel = relative(context.cwd, filename);
+      // Outside the project root entirely: `relative` climbs out with `..`, and the segments above
+      // the root are not this codebase's to answer for.
+      if (rel.startsWith('..')) return found;
+      const path = rel.split(sep).join('/');
+      // Version FIRST, and its spans claimed, because the tracking-code shape is a prefix of it:
+      // `replay-v2.2.0.ts` matches `v2.2.0` as a version and `v2.2` as a code, and reporting both
+      // would name the same offence twice under two different explanations.
+      const claimed: { start: number; end: number }[] = [];
+      for (const pattern of [PATH_VERSION_STRING, PATH_TRACKING_CODE]) {
+        pattern.lastIndex = 0;
+        for (const match of path.matchAll(pattern)) {
+          const start = match.index ?? 0;
+          const end = start + match[0].length;
+          if (claimed.some((c) => start < c.end && end > c.start)) continue;
+          const tag = match[0].trim();
+          claimed.push({ start, end });
+          if (ALLOWED.has(tag.replace(/[^A-Za-z0-9]/g, '').toUpperCase())) continue;
+          found.add(tag);
+        }
+      }
+      return found;
+    };
+
     return {
-      Program(): void {
+      Program(node): void {
         for (const comment of context.sourceCode.getAllComments()) {
           for (const tag of tagsIn(comment.value)) {
             context.report({ node: comment, messageId: 'internalTag', data: { tag } });
           }
+        }
+        // Reported on the Program node: the offence is the module's name, which has no node of its
+        // own, and the first line is where a reader will look for it.
+        for (const tag of pathTags()) {
+          context.report({ node, messageId: 'pathTag', data: { tag } });
         }
       },
 

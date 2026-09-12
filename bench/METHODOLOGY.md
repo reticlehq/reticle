@@ -48,6 +48,9 @@ The headline metric people want — _tokens per verification cycle_ — only exi
   "tool": "",
   "layer": "A|B",
   "token_input": 0,
+  "token_input_uncached": 0,
+  "token_cache_creation": 0,
+  "token_cache_read": 0,
   "token_output": 0,
   "total_tokens": 0,
   "tokens_o200k": 0,
@@ -64,6 +67,8 @@ The headline metric people want — _tokens per verification cycle_ — only exi
 ```
 
 `token_input/output/total` are populated only in Layer B. In Layer A they are `null` (NOT MEASURED) and `tokens_o200k`/`chars`/`bytes` carry the observation cost.
+
+**Prompt caching (Layer B).** Every arm sends its tool block and system prompt with a `cache_control: {"type":"ephemeral"}` breakpoint — identical placement for all three servers, in one shared code path, because all three re-send their own schemas on every turn. `token_input` and `total_tokens` keep their original meaning of token **volume** (`input_tokens + cache_creation + cache_read`), so cached and pre-caching rows are the same measurement; `token_input_uncached`/`token_cache_creation`/`token_cache_read` carry the split that **cost** is computed from (writes 1.25x, reads 0.1x, the remainder 1x). A multi-turn cell with `token_cache_read: 0` means caching did not engage — treat that run as unmeasured for cost, not as an expensive result.
 
 ## Developer-effort dimension (estimated, labeled as such)
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FEEDBACK_TEXT_MAX, StackUnknownReason } from '@reticlehq/core';
+import { FEEDBACK_TEXT_MAX, StackUnknownReason } from '@reticlehq/core/telemetry';
 import {
   FEEDBACK_ENV,
   REDACTED,
@@ -133,6 +133,7 @@ describe('feedback context detection', () => {
     [{ astro: '~4.0.0' }, 'astro', 4],
     [{ 'solid-js': '1.8.0' }, 'solid', 1],
     [{ '@sveltejs/kit': '2.0.0' }, 'sveltekit', 2],
+    [{ '@tanstack/react-start': '1.121.0', react: '19.0.0' }, 'tanstack-start', 1],
   ])('detects %o with its major version', (deps, stack, stackMajor) => {
     expect(detectStack('/p', () => pkg(deps))).toEqual({ stack, stackMajor, stackSource: 'cwd' });
   });

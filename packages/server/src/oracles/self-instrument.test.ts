@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { InstrumentationGapKind } from '@reticlehq/core';
+import { InstrumentationGapKind } from '@reticlehq/core/artifacts';
 import { proposeInstrumentation } from './self-instrument.js';
 
 describe('proposeInstrumentation', () => {

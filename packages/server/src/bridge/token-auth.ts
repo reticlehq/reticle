@@ -4,7 +4,13 @@ import { isLoopbackHostname } from '@reticlehq/core';
 
 /** `Authorization: Bearer <token>` prefix and the query-param fallback for clients that can't set headers. */
 const BEARER_PREFIX = 'Bearer ';
-const TOKEN_QUERY_PARAM = 'token';
+/**
+ * The query parameter a client may present its pairing token in.
+ *
+ * Exported because the CLI now presents the same token when it attaches to a running daemon over the
+ * MCP HTTP transport, and a second spelling of this string is a second way for auth to fail.
+ */
+export const TOKEN_QUERY_PARAM = 'token';
 /** Node reports IPv4 loopback over a dual-stack socket as this mapped form; strip it before classifying. */
 const IPV4_MAPPED_PREFIX = /^::ffff:/i;
 

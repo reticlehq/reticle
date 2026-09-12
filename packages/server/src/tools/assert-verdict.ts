@@ -3,7 +3,7 @@ import { gapsForAction } from '../honesty/instrumentation-gaps.js';
 import { noteSessionGaps } from '../honesty/gap-ledger.js';
 import { declaresState } from '../events/predicate-asks.js';
 import { isStateUnwatched } from '../honesty/blind-spots.js';
-import type { InstrumentationGap, JournalVerdictEffect } from '@reticlehq/core';
+import type { InstrumentationGap, JournalVerdictEffect } from '@reticlehq/core/artifacts';
 import type { Predicate } from '../events/predicate.js';
 import type { Session } from '../session/session.js';
 import { findContradictions, type Contradiction } from '../events/contradictions.js';
@@ -115,6 +115,7 @@ export async function assertVerdict(
     currentEditEpoch: session.currentEditEpoch,
     appOrigin: session.url,
     expectedFailures: declared.netFailures,
+    namedNetUrls: declared.netUrls,
     renderProved: pass && declared.rendersContent,
     ...(actCursor !== undefined && actCursor >= since ? { actionSince: actCursor } : {}),
   });
@@ -129,15 +130,20 @@ export async function assertVerdict(
   const outcomePending = hasAcceptedWrite(windowEvents);
   const outcomeUnread = unreadWriteLabels(windowEvents);
   const stillInFlight = inFlightRequestLabels(windowEvents);
+  const effectiveInconclusive =
+    inconclusive ?? (!pass ? session.preconditionFailure?.() : undefined);
   const decision = decideVerified({
     pass,
+    // So the unread-body remedy can check it applies to THIS page. Threaded rather than
+    // looked up inside decideVerified, which is pure and has no session.
+    ...(session.sdkVersion === undefined ? {} : { sdkVersion: session.sdkVersion }),
     // Same rule as the act path: the caller named a consequence, so a settlement-only finding must
     // not override it. A fix that lived on one half of the verdict surface would leave the other
     // half broken, and this is the tool agents call most.
     declaredConsequence: predicate.kind !== PredicateKind.SETTLED,
     ...(declaresBodyIndependentChannel(predicate) ? { independentOfBody: true } : {}),
-    ...(inconclusive === undefined ? {} : { inconclusive }),
-    ...(true === observationLost ? { observationLost: true } : {}),
+    ...(effectiveInconclusive === undefined ? {} : { inconclusive: effectiveInconclusive }),
+    ...(true === observationLost ? { observationLost: true, lastUrl: session.url } : {}),
     ...(absenceBlindSpot === undefined ? {} : { absenceBlindSpot }),
     ...(namedNetIsInFlight(predicate, stillInFlight) ? { namedRequestInFlight: true } : {}),
     honesty: buildHonestyBlock({
@@ -190,6 +196,9 @@ export async function assertVerdict(
     stateUnwatched: isStateUnwatched(spots),
     // What the app DECLARED, so an under-instrumented one is told without having to be asked.
     hasCapabilities: session.hasCapabilities,
+    // Whether the build TURNED the source stamp off, so a red with no file:line prescribes the
+    // right fix. `false` from the page is the only value that means anything; absent is unknown.
+    ...(false === session.sourceMapping ? { sourceMappingDisabled: true } : {}),
     domMutated: false,
     signalsFired: 0,
     routeChanged: false,

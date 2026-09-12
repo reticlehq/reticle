@@ -41,6 +41,26 @@ export interface ReticleConnectOptions {
    */
   captureNetworkBodies?: boolean;
   /**
+   * Whether this build stamps `data-reticle-source`. Supplied by the build plugin, which is the only
+   * thing that knows: the page cannot tell "no plugin" from "plugin with the stamp turned off", and
+   * a verdict that cannot name a line prescribes opposite fixes for the two. Absent means unknown.
+   */
+  sourceMapping?: boolean;
+  /**
+   * Retain the response body of a FAILED request (HTTP >= 400) even with `captureNetworkBodies`
+   * off. **Default true.** Set `false` for a workspace that wants nothing retained at all.
+   *
+   * The two flags answer different questions. `captureNetworkBodies` is a volume-and-privacy
+   * decision about every 200 the app makes. This is about the handful of bytes that say why
+   * something broke: a confirmed `POST /auth/v1/signup -> 500, responseSize: 74` says signup is
+   * broken, and the 74 bytes say the mail provider refuses this domain -- only the second is
+   * actionable (#800).
+   *
+   * Bounded and narrow by design: failures only, a 4 KB cap, and the same redaction every other
+   * captured body goes through, applied before retention.
+   */
+  captureErrorBodies?: boolean;
+  /**
    * Make Reticle's OWN presenter visible to snapshots and queries. CONTRIBUTORS ONLY.
    *
    * The presenter is hidden from every tool by design, for a good reason: an agent that can drive

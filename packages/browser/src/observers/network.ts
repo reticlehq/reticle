@@ -6,8 +6,14 @@ import {
   StreamDirection,
 } from '@reticlehq/core';
 import { captureMethod } from '../patching/capture-method.js';
-import type { Emit, Teardown } from './types.js';
-import { isCapturableType, projectBody, withBodyDeadline } from './network-body.js';
+import { observeSafely, observeValue, type Emit, type Teardown } from './types.js';
+import {
+  isCapturableType,
+  projectBody,
+  projectErrorBody,
+  shouldCaptureErrorBody,
+  withBodyDeadline,
+} from './network-body.js';
 import { redactUrl, netUrlFields } from './network-redact.js';
 import { watchStreamedBody } from './network-stream.js';
 import { requireCapturedMethod } from '../util/captured-method.js';
@@ -33,6 +39,8 @@ type NetResponseReinterpreter = (
 interface NetworkOptions {
   /** Capture request/response bodies (text-like content only, redacted, per-body capped). */
   captureBodies?: boolean;
+  /** Retain the response body of a FAILED request even with `captureBodies` off. Default true (#800). */
+  captureErrorBodies?: boolean;
   /** Optional hook that reinterprets a completed request — see NetResponseReinterpreter. */
   reinterpret?: NetResponseReinterpreter;
   /**
@@ -167,16 +175,44 @@ function methodOf(input: RequestInfo | URL, init: RequestInit | undefined): stri
 const NON_APP_FRAME =
   /@reticlehq|reticle\.ts|network\.ts|transport\.ts|<anonymous>|new Promise|node:internal/i;
 
-/** Pure: the first real app-code frame in a stack string, capped. Exported for unit testing. */
+/**
+ * A frame inside somebody's dependencies, ours included.
+ *
+ * `NON_APP_FRAME` matches on FILE NAME, which works only while our code is served under a path that
+ * still says `@reticlehq`. A bundler is free to rename it: Vite's dependency optimiser emits shared
+ * chunks as `/node_modules/.vite/deps/chunk-ABC123.js`, where nothing identifies the package. Our own
+ * patched `fetch` then reads as ordinary app code and gets reported as the CALLER.
+ *
+ * That is what a field reporter hit, and the cost was not a cosmetic mislabel. They were looking at
+ * an RSC request stuck `pending` for 170 seconds and trying to decide whether the app's navigation
+ * genuinely hung or Reticle's own tracking had lost it — and the evidence said Reticle initiated the
+ * request. Their words: "I could not disambiguate from the available tools." An instrument that names
+ * itself as the cause of the thing it is measuring destroys the reading.
+ */
+const DEPENDENCY_FRAME = /node_modules|\/\.vite\/deps\//i;
+
+/**
+ * Pure: the first real app-code frame in a stack string, capped. Exported for unit testing.
+ *
+ * Two passes, because "not the app" and "not useful" are different. The first pass skips
+ * dependencies entirely and finds the APP's own call site, which is what an agent wants: the line in
+ * their code that started this request. The second pass accepts a dependency frame, because a fetch
+ * that genuinely originates in `axios` or a query client has no app frame to find and naming the
+ * library still tells the reader where to look.
+ *
+ * A frame this file recognises as OURS is never returned by either pass. Where the only frames are
+ * ours the answer is `undefined`, and the field is omitted — saying nothing is strictly better than
+ * pointing at the observer, because a reader can go and look, whereas a false attribution stops them.
+ */
 export function firstAppFrame(stack: string | undefined): string | undefined {
   if (stack === undefined) return undefined;
-  for (const line of stack.split('\n').slice(1)) {
-    if (NON_APP_FRAME.test(line)) continue;
-    const trimmed = line.trim();
-    if (0 === trimmed.length) continue;
-    return trimmed.slice(0, 300);
-  }
-  return undefined;
+  const frames = stack
+    .split('\n')
+    .slice(1)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !NON_APP_FRAME.test(line));
+  const app = frames.find((line) => !DEPENDENCY_FRAME.test(line));
+  return (app ?? frames[0])?.slice(0, 300);
 }
 
 function initiatorFrame(): string | undefined {
@@ -260,6 +296,10 @@ const OURS = new WeakSet<typeof window.fetch>();
 
 export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown {
   const captureBodies = true === opts.captureBodies;
+  // Default TRUE, unlike `captureBodies`. The two answer different questions: the general flag is a
+  // volume-and-privacy decision about every 200 the app makes, and this one is about the handful of
+  // bytes that say why something broke. See `shouldCaptureErrorBody`.
+  const captureErrorBodies = false !== opts.captureErrorBodies;
   const reinterpret = opts.reinterpret;
   // Keep the true original for teardown identity, plus a window-bound copy to invoke
   // (fetch throws "Illegal invocation" if called with the wrong `this`).
@@ -299,44 +339,58 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
     const method = methodOf(input, init);
     const urlFields = netUrlFields(rawUrl);
     const url = urlFields.url;
-    const initiatorStack = initiatorFrame();
+    const initiatorStack = observeValue(() => initiatorFrame());
     const initiatorFields = initiatorStack === undefined ? {} : { initiatorStack };
-    emit(EventType.NET_PENDING, {
-      id,
-      method,
-      ...urlFields,
-      initiator: 'fetch',
-      ...initiatorFields,
+    // Guarded: redaction runs over a URL the app supplied, and this is the LAST thing between the
+    // caller and their request. A throw here used to mean the fetch was never made at all.
+    observeSafely(() => {
+      emit(EventType.NET_PENDING, {
+        id,
+        method,
+        ...urlFields,
+        initiator: 'fetch',
+        ...initiatorFields,
+      });
     });
     try {
       const res = await callFetch(input, init);
       // The app's fetch resolves HERE — at headers — like a native fetch. durationMs is measured to
       // headers-received, so it stays honest whether or not we read the body.
       const headersAt = performance.now();
-      const contentType = res.headers.get('content-type');
+      const contentType = observeValue(() => res.headers.get('content-type')) ?? null;
       // The request is done; the BODY may not be. Watch it so settle cannot pass mid-stream.
-      watchStreamedBody(emit, res, id, url, contentType, res.headers.get('content-length'));
+      observeSafely(() => {
+        watchStreamedBody(emit, res, id, url, contentType, res.headers.get('content-length'));
+      });
       reportedNetUrls.add(rawUrl);
       const emitRequest = (responseBodyFields: Record<string, unknown>): void => {
-        emit(EventType.NET_REQUEST, {
-          id,
-          method,
-          ...urlFields,
-          status: res.status,
-          ok: statusIsOk(res.status),
-          durationMs: Math.round(headersAt - start),
-          initiator: 'fetch',
-          ...initiatorFields,
-          ...resourceTiming(rawUrl),
-          ...netResponseMeta(res.statusText, contentType, res.headers.get('content-length')),
-          ...projectRequestBody(init?.body, captureBodies),
-          ...responseBodyFields,
-          // Applied LAST so a reinterpreted verdict wins over the transport's own fields — a Tauri
-          // command that returned Err still travelled down a fetch that answered HTTP 200.
-          ...(reinterpret?.(url, (name) => res.headers.get(name)) ?? {}),
+        // The app's response has already arrived. Nothing this builds — body projection, redaction,
+        // a reinterpreting header read — may turn a resolved fetch into a rejected one.
+        observeSafely(() => {
+          emit(EventType.NET_REQUEST, {
+            id,
+            method,
+            ...urlFields,
+            status: res.status,
+            ok: statusIsOk(res.status),
+            durationMs: Math.round(headersAt - start),
+            initiator: 'fetch',
+            ...initiatorFields,
+            ...resourceTiming(rawUrl),
+            ...netResponseMeta(res.statusText, contentType, res.headers.get('content-length')),
+            ...projectRequestBody(init?.body, captureBodies),
+            ...responseBodyFields,
+            // Applied LAST so a reinterpreted verdict wins over the transport's own fields — a Tauri
+            // command that returned Err still travelled down a fetch that answered HTTP 200.
+            ...(reinterpret?.(url, (name) => res.headers.get(name)) ?? {}),
+          });
         });
       };
-      if (captureBodies && isCapturableType(contentType)) {
+      // A failure's body is read on the default path too, so the deferral documented below now
+      // applies to non-2xx responses even with body capture off. That is the intended trade: an
+      // ordering caveat on requests that already failed, in exchange for the cause of the failure.
+      const wantErrorBody = shouldCaptureErrorBody(res.status, captureErrorBodies);
+      if ((captureBodies || wantErrorBody) && isCapturableType(contentType)) {
         // ONLY the body read can make the app wait (a chunked response with no content-length can be
         // arbitrarily long). Clone synchronously so the app's stream is untouched, then read + emit from
         // a DETACHED promise — the app already has res, so our bounded read is invisible to it. Without
@@ -363,10 +417,18 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
             try {
               const text = await withBodyDeadline(clone.text());
               if (text !== undefined) {
-                const { body, truncated } = projectBody(text, contentType);
-                responseBodyFields = truncated
-                  ? { responseBody: body, responseBodyTruncated: true }
-                  : { responseBody: body };
+                // Under the error-only path the tighter cap applies; when the app asked for body
+                // capture, a failure is projected exactly like any other response.
+                const { body, truncated } = captureBodies
+                  ? projectBody(text, contentType)
+                  : projectErrorBody(text, contentType);
+                responseBodyFields = {
+                  responseBody: body,
+                  ...(truncated ? { responseBodyTruncated: true } : {}),
+                  // Says WHY a body is here when the app never asked for bodies, so a reader does
+                  // not conclude that capture is on and trust an absent body on a 200.
+                  ...(captureBodies ? {} : { responseBodyReason: 'error-status' }),
+                };
               }
             } catch {
               /* body not readable — skip, keep the envelope */
@@ -383,16 +445,20 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
       }
       return res;
     } catch (error) {
-      emit(EventType.NET_REQUEST, {
-        id,
-        method,
-        url,
-        status: 0,
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-        durationMs: Math.round(performance.now() - start),
-        initiator: 'fetch',
-        ...initiatorFields,
+      // The app's own error must reach the app, not ours: an unguarded emit here replaced the real
+      // network failure with an SDK exception the developer could make no sense of.
+      observeSafely(() => {
+        emit(EventType.NET_REQUEST, {
+          id,
+          method,
+          url,
+          status: 0,
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+          durationMs: Math.round(performance.now() - start),
+          initiator: 'fetch',
+          ...initiatorFields,
+        });
       });
       throw error;
     }
@@ -414,12 +480,14 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
     url: string | URL,
     ...rest: unknown[]
   ): void {
-    meta.set(this, {
-      id: nextId(),
-      method: method.toUpperCase(),
-      url: redactUrl(String(url)),
-      rawUrl: String(url),
-      start: 0,
+    observeSafely(() => {
+      meta.set(this, {
+        id: nextId(),
+        method: method.toUpperCase(),
+        url: redactUrl(String(url)),
+        rawUrl: String(url),
+        start: 0,
+      });
     });
     callOpen.call(this, method, url, ...rest);
   };
@@ -433,61 +501,78 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
     this: XMLHttpRequest,
     body?: Document | XMLHttpRequestBodyInit | null,
   ): void {
-    const m = meta.get(this);
-    if (m !== undefined) {
-      m.start = performance.now();
-      m.reqBody = body ?? null;
-      m.initiatorStack = initiatorFrame(); // the app's xhr.send call site
-      const initiatorFields =
-        m.initiatorStack === undefined ? {} : { initiatorStack: m.initiatorStack };
-      emit(EventType.NET_PENDING, {
-        id: m.id,
-        method: m.method,
-        ...netUrlFields(m.rawUrl),
-        initiator: 'xhr',
-        ...initiatorFields,
-      });
-      if (!listenerAttached.has(this)) {
-        listenerAttached.add(this);
-        this.addEventListener('loadend', () => {
-          const cur = meta.get(this);
-          if (cur === undefined) return;
-          reportedNetUrls.add(cur.rawUrl);
-          const xhrContentType = this.getResponseHeader('content-type');
-          let responseBodyFields: Record<string, unknown> = {};
-          // responseText throws unless responseType is '' or 'text' — guard before reading.
-          const textReadable = '' === this.responseType || 'text' === this.responseType;
-          if (captureBodies && textReadable && isCapturableType(xhrContentType)) {
-            try {
-              const { body: rb, truncated } = projectBody(this.responseText, xhrContentType);
-              responseBodyFields = truncated
-                ? { responseBody: rb, responseBodyTruncated: true }
-                : { responseBody: rb };
-            } catch {
-              /* unreadable body — skip */
-            }
-          }
-          emit(EventType.NET_REQUEST, {
-            id: cur.id,
-            method: cur.method,
-            ...netUrlFields(cur.rawUrl),
-            status: this.status,
-            ok: statusIsOk(this.status),
-            durationMs: Math.round(performance.now() - cur.start),
-            initiator: 'xhr',
-            ...(cur.initiatorStack === undefined ? {} : { initiatorStack: cur.initiatorStack }),
-            ...resourceTiming(cur.rawUrl),
-            ...netResponseMeta(
-              this.statusText,
-              xhrContentType,
-              this.getResponseHeader('content-length'),
-            ),
-            ...projectRequestBody(cur.reqBody, captureBodies),
-            ...responseBodyFields,
-          });
+    // Guarded WHOLE, and it has to run before the send rather than after: the `loadend` listener
+    // must be attached before a synchronous XHR blocks in `send`, and `start` must be read before the
+    // request leaves. So the minimum is captured here — inside the guard — and the app's send is
+    // reached whatever happens in it.
+    observeSafely(() => {
+      const m = meta.get(this);
+      if (m !== undefined) {
+        m.start = performance.now();
+        m.reqBody = body ?? null;
+        m.initiatorStack = initiatorFrame(); // the app's xhr.send call site
+        const initiatorFields =
+          m.initiatorStack === undefined ? {} : { initiatorStack: m.initiatorStack };
+        emit(EventType.NET_PENDING, {
+          id: m.id,
+          method: m.method,
+          ...netUrlFields(m.rawUrl),
+          initiator: 'xhr',
+          ...initiatorFields,
         });
+        if (!listenerAttached.has(this)) {
+          listenerAttached.add(this);
+          this.addEventListener('loadend', () => {
+            observeSafely(() => {
+              const cur = meta.get(this);
+              if (cur === undefined) return;
+              reportedNetUrls.add(cur.rawUrl);
+              const xhrContentType = this.getResponseHeader('content-type');
+              let responseBodyFields: Record<string, unknown> = {};
+              // responseText throws unless responseType is '' or 'text' — guard before reading.
+              const textReadable = '' === this.responseType || 'text' === this.responseType;
+              const wantXhrErrorBody = shouldCaptureErrorBody(this.status, captureErrorBodies);
+              if (
+                (captureBodies || wantXhrErrorBody) &&
+                textReadable &&
+                isCapturableType(xhrContentType)
+              ) {
+                try {
+                  const { body: rb, truncated } = captureBodies
+                    ? projectBody(this.responseText, xhrContentType)
+                    : projectErrorBody(this.responseText, xhrContentType);
+                  responseBodyFields = {
+                    responseBody: rb,
+                    ...(truncated ? { responseBodyTruncated: true } : {}),
+                    ...(captureBodies ? {} : { responseBodyReason: 'error-status' }),
+                  };
+                } catch {
+                  /* unreadable body — skip */
+                }
+              }
+              emit(EventType.NET_REQUEST, {
+                id: cur.id,
+                method: cur.method,
+                ...netUrlFields(cur.rawUrl),
+                status: this.status,
+                ok: statusIsOk(this.status),
+                durationMs: Math.round(performance.now() - cur.start),
+                initiator: 'xhr',
+                ...(cur.initiatorStack === undefined ? {} : { initiatorStack: cur.initiatorStack }),
+                ...resourceTiming(cur.rawUrl),
+                ...netResponseMeta(
+                  this.statusText,
+                  xhrContentType,
+                  this.getResponseHeader('content-length'),
+                ),
+                ...projectRequestBody(cur.reqBody, captureBodies),
+                ...responseBodyFields,
+              });
+            });
+          });
+        }
       }
-    }
+    });
     origSend.call(this, body ?? null);
   };
   const patchedSend = captureMethod(proto, 'send');
@@ -502,18 +587,23 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
     window.EventSource = class extends origEventSource {
       constructor(u: string | URL, init?: EventSourceInit) {
         super(u, init);
-        const urlFields = netUrlFields(String(u));
-        emit(EventType.NET_STREAM, {
-          transport: StreamTransport.SSE,
-          direction: StreamDirection.OPEN,
-          ...urlFields,
-        });
-        this.addEventListener('message', (ev: MessageEvent) => {
+        // `new EventSource(...)` is the app's constructor call — observation may not make it throw.
+        observeSafely(() => {
+          const urlFields = netUrlFields(String(u));
           emit(EventType.NET_STREAM, {
             transport: StreamTransport.SSE,
-            direction: StreamDirection.IN,
+            direction: StreamDirection.OPEN,
             ...urlFields,
-            ...frameFields(ev.data, captureBodies),
+          });
+          this.addEventListener('message', (ev: MessageEvent) => {
+            observeSafely(() => {
+              emit(EventType.NET_STREAM, {
+                transport: StreamTransport.SSE,
+                direction: StreamDirection.IN,
+                ...urlFields,
+                ...frameFields(ev.data, captureBodies),
+              });
+            });
           });
         });
       }
@@ -528,18 +618,23 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
         super(u, protocols);
         this.#isBridge = isBridgeSocket(String(u));
         if (this.#isBridge) return;
-        const urlFields = netUrlFields(String(u));
-        emit(EventType.NET_STREAM, {
-          transport: StreamTransport.WS,
-          direction: StreamDirection.OPEN,
-          ...urlFields,
-        });
-        this.addEventListener('message', (ev: MessageEvent) => {
+        // `new WebSocket(...)` is the app's constructor call — observation may not make it throw.
+        observeSafely(() => {
+          const urlFields = netUrlFields(String(u));
           emit(EventType.NET_STREAM, {
             transport: StreamTransport.WS,
-            direction: StreamDirection.IN,
+            direction: StreamDirection.OPEN,
             ...urlFields,
-            ...frameFields(ev.data, captureBodies),
+          });
+          this.addEventListener('message', (ev: MessageEvent) => {
+            observeSafely(() => {
+              emit(EventType.NET_STREAM, {
+                transport: StreamTransport.WS,
+                direction: StreamDirection.IN,
+                ...urlFields,
+                ...frameFields(ev.data, captureBodies),
+              });
+            });
           });
         });
       }
@@ -552,13 +647,18 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
           super.send(data);
           return;
         }
-        emit(EventType.NET_STREAM, {
-          transport: StreamTransport.WS,
-          direction: StreamDirection.OUT,
-          ...netUrlFields(this.url),
-          ...frameFields(data, captureBodies),
-        });
+        // The app's frame goes FIRST and outside the guard — storage.ts's ordering. Building the
+        // OUT payload (redacting the frame, projecting a Blob/ArrayBuffer) used to run before the
+        // send, so one throw meant the customer's message was never transmitted at all.
         super.send(data);
+        observeSafely(() => {
+          emit(EventType.NET_STREAM, {
+            transport: StreamTransport.WS,
+            direction: StreamDirection.OUT,
+            ...netUrlFields(this.url),
+            ...frameFields(data, captureBodies),
+          });
+        });
       }
     };
     patchedWebSocket = window.WebSocket;
@@ -578,22 +678,24 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
   if (navProto !== null && origBeacon !== undefined) {
     patchedBeacon = function (this: Navigator, url: string | URL, data?: BodyInit | null): boolean {
       const id = nextId();
-      const urlFields = netUrlFields(String(url));
-      const initiatorStack = initiatorFrame();
+      const urlFields = observeValue(() => netUrlFields(String(url)));
+      const initiatorStack = observeValue(() => initiatorFrame());
       const sent = origBeacon.call(this, url, data);
       // sendBeacon returns whether the payload was QUEUED, not an HTTP result — the response never
       // surfaces to JS. Fabricating status 200 lied to an agent asserting on status. Report status 0
       // (no HTTP response observed) and carry the real signal in `queued`.
-      emit(EventType.NET_REQUEST, {
-        id,
-        method: 'POST',
-        ...urlFields,
-        status: 0,
-        ok: sent,
-        queued: sent,
-        durationMs: 0,
-        initiator: 'beacon',
-        ...(initiatorStack === undefined ? {} : { initiatorStack }),
+      observeSafely(() => {
+        emit(EventType.NET_REQUEST, {
+          id,
+          method: 'POST',
+          ...urlFields,
+          status: 0,
+          ok: sent,
+          queued: sent,
+          durationMs: 0,
+          initiator: 'beacon',
+          ...(initiatorStack === undefined ? {} : { initiatorStack }),
+        });
       });
       return sent;
     };

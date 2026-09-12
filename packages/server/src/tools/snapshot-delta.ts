@@ -180,6 +180,44 @@ function focusedLine(tree: string): { id: string; text: string } | undefined {
   return { id: REF_MARKER.exec(focused)?.[0]?.trim() ?? deltaKey(focused), text };
 }
 
+/**
+ * How recent a smaller prior snapshot has to be for its growth to be worth flagging (#787) — long
+ * enough to catch the "route committed, then hydrated" window the bug report describes (hundreds of
+ * ms up to a couple of seconds), short enough that an unrelated LATER snapshot of a page that simply
+ * grew through normal use (an infinite-scroll load, a live feed) doesn't get blamed on load timing.
+ */
+const GROWTH_NOTE_WINDOW_MS = 5000;
+
+/** Non-empty lines only — a blank line in the tree text is formatting, not a node. */
+function nodeCount(tree: string): number {
+  return tree.split('\n').filter((line) => '' !== line.trim()).length;
+}
+
+/**
+ * Pure: was the prior snapshot of this scope both RECENT and SMALLER than this one? If so, the
+ * earlier reading was very likely taken mid-load — content arrived in the gap between the two calls
+ * — and any presence-grade conclusion drawn from that earlier snapshot ("this route renders
+ * nothing") is suspect. Silent otherwise: a stale prior or a page that shrank (or stayed the same
+ * size) is not this trap.
+ */
+export function snapshotGrowthNote(
+  prior: { tree: string; atMs: number } | undefined,
+  nextTree: string,
+  nowMs: number,
+  windowMs: number = GROWTH_NOTE_WINDOW_MS,
+): string | undefined {
+  if (prior === undefined) return undefined;
+  const elapsedMs = nowMs - prior.atMs;
+  if (elapsedMs < 0 || elapsedMs > windowMs) return undefined;
+  const priorCount = nodeCount(prior.tree);
+  const nextCount = nodeCount(nextTree);
+  if (nextCount <= priorCount) return undefined;
+  return (
+    `this scope had ${String(priorCount)} nodes ${String(elapsedMs)}ms ago and has ${String(nextCount)} now — ` +
+    'content likely arrived after your last look; a presence conclusion drawn from that earlier snapshot may have been taken mid-load'
+  );
+}
+
 export const SnapshotDeltaMode = {
   FULL: 'full',
   DELTA: 'delta',
@@ -243,11 +281,13 @@ const DEFAULT_MAX_ENTRIES = 50;
 
 /** Per-(session,scope,mode) last-snapshot cache. Route-aware: a route change invalidates the entry. */
 export class SnapshotCache {
-  readonly #map = new Map<string, { route: string; tree: string }>();
+  readonly #map = new Map<string, { route: string; tree: string; atMs: number }>();
   readonly #max: number;
+  readonly #now: () => number;
 
-  constructor(max: number = DEFAULT_MAX_ENTRIES) {
+  constructor(max: number = DEFAULT_MAX_ENTRIES, now: () => number = Date.now) {
     this.#max = max;
+    this.#now = now;
   }
 
   /** True when an entry exists for this key (regardless of route match). */
@@ -255,15 +295,30 @@ export class SnapshotCache {
     return this.#map.has(key);
   }
 
+  /** The clock this cache was constructed with — callers compare against it so `remember`'s
+   * timestamp and a caller's "now" can never drift onto two different clocks. */
+  now(): number {
+    return this.#now();
+  }
+
   /** Last tree for this key IF the route still matches; undefined when absent or route changed. */
   recall(key: string, route: string): string | undefined {
+    return this.priorEntry(key, route)?.tree;
+  }
+
+  /**
+   * The last remembered tree for this key AND when it was remembered, IF the route still matches.
+   * Same route-gating as `recall` — a route change makes the prior entry meaningless for comparison,
+   * not just for diffing.
+   */
+  priorEntry(key: string, route: string): { tree: string; atMs: number } | undefined {
     const entry = this.#map.get(key);
     if (entry === undefined || entry.route !== route) return undefined;
     // LRU touch: re-insert so a HOT key isn't evicted while colder, more-recently-added keys survive
     // (Map preserves insertion order; delete+set moves it to the most-recently-used end).
     this.#map.delete(key);
     this.#map.set(key, entry);
-    return entry.tree;
+    return { tree: entry.tree, atMs: entry.atMs };
   }
 
   remember(key: string, route: string, tree: string): void {
@@ -273,7 +328,7 @@ export class SnapshotCache {
       const oldest = this.#map.keys().next().value;
       if (oldest !== undefined) this.#map.delete(oldest);
     }
-    this.#map.set(key, { route, tree });
+    this.#map.set(key, { route, tree, atMs: this.#now() });
   }
 }
 
@@ -322,19 +377,25 @@ export function applySnapshotDelta(
       : {};
   const route = 'string' === typeof status['route'] ? status['route'] : '';
   const key = snapshotCacheKey(opts.sessionId, opts.scope, opts.mode);
+  // Read the growth signal BEFORE remember() overwrites the entry it compares against — needed on
+  // both branches below (#787), not only the diff:true path, since the reporter's own repro used a
+  // plain snapshot the second time.
+  const priorEntry = cache.priorEntry(key, route);
+  const growthNote = snapshotGrowthNote(priorEntry, tree, cache.now());
+  const growth = growthNote === undefined ? {} : { growthWarning: growthNote };
 
   if (!opts.diff) {
     cache.remember(key, route, tree);
-    return raw;
+    return { ...(r as object), ...growth };
   }
 
-  const prev = cache.recall(key, route);
+  const prev = priorEntry?.tree;
   const hadEntry = cache.has(key);
   cache.remember(key, route, tree);
   const decision = snapshotDelta(prev, tree);
   if (decision.mode === SnapshotDeltaMode.FULL) {
     const reason = hadEntry ? 'route changed' : 'first snapshot for this route';
-    return { ...(r as object), mode: SnapshotDeltaMode.FULL, reason };
+    return { ...(r as object), mode: SnapshotDeltaMode.FULL, reason, ...growth };
   }
   // The walk stops at a node cap and returns a DOCUMENT-ORDER PREFIX, so two capped snapshots of a
   // large page are identical whenever the change happened past the cap — and "unchanged" is then a
@@ -346,7 +407,13 @@ export function applySnapshotDelta(
   // field is simply absent forever.
   const moved = decision.focusChanged === undefined ? {} : { focusChanged: decision.focusChanged };
   if (decision.mode === SnapshotDeltaMode.UNCHANGED) {
-    return { mode: SnapshotDeltaMode.UNCHANGED, status: r['status'], ...moved, ...capped };
+    return {
+      mode: SnapshotDeltaMode.UNCHANGED,
+      status: r['status'],
+      ...moved,
+      ...capped,
+      ...growth,
+    };
   }
   const { changed, ...structuralDelta } = decision.delta;
   const changedField = changed.length > 0 ? { changed, changedCount: changed.length } : {};
@@ -357,5 +424,6 @@ export function applySnapshotDelta(
     status: r['status'],
     ...moved,
     ...capped,
+    ...growth,
   };
 }

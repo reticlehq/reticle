@@ -5,7 +5,7 @@
  * is the one command whose arguments are free text, so it is the only place in the grammar where
  * "everything that is not a flag" is a rule with edge cases rather than a one-liner.
  */
-import { FeedbackKind } from '@reticlehq/core';
+import { FeedbackKind } from '@reticlehq/core/telemetry';
 
 /** `reticle feedback --rating 4 "the words"` — the human half of the channel. */
 export const RATING_FLAG = '--rating';

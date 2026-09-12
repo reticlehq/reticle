@@ -16,7 +16,7 @@
  * `project_profiled` already carries it on the same daemon run, so the two join on sessionId.
  */
 
-import { TelemetryEventKind } from '@reticlehq/core';
+import { TelemetryEventKind } from '@reticlehq/core/telemetry';
 import { getTelemetry } from './telemetry.js';
 
 let reported = false;

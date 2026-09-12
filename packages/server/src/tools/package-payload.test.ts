@@ -21,6 +21,7 @@
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -30,7 +31,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
@@ -119,5 +120,67 @@ describe('the published package does not carry the docs site assets', () => {
         `directory prepack prunes, or reference them from the docs site instead of committing them ` +
         `where the tarball picks them up.`,
     ).toEqual([]);
+  });
+});
+
+/**
+ * `docs/` lives at the repo root and lands at `packages/server/docs` in the tarball, so the copy
+ * changes its depth. Every `../CONTRIBUTING.md`, `../apps/README.md`, `../bench/README.md` and
+ * `../apps/e2e/harness-rules.md` in the shipped copy then resolves inside `packages/server/`, where
+ * none of them exist — and the asset prune above takes `docs/matrix/` with it, killing three more.
+ * Nineteen dead links in the copy every user downloads and every agent reads out of `node_modules`,
+ * and nothing could see them: the source docs are correct where they are written, so no docs guard
+ * fires, and the breakage exists only in an artifact no test built.
+ *
+ * So this one BUILDS it. `pack-docs.mjs` now repoints anything with no file behind it at
+ * `github.com/reticlehq/reticle/blob/main/...`; existence in the staged tree is the test, not
+ * counting `..`, because a link into a pruned directory escapes nothing and is just as dead.
+ */
+describe('the docs inside the published package still resolve', () => {
+  /** Inline links with a local target: not a URL, not an anchor, not a site-absolute path. */
+  const LINK = /\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+
+  const markdown = (dir: string, prefix = ''): string[] => {
+    const out: string[] = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const rel = `${prefix}${entry.name}`;
+      if (entry.isDirectory()) out.push(...markdown(join(dir, entry.name), `${rel}/`));
+      else if (/\.mdx?$/.test(entry.name)) out.push(rel);
+    }
+    return out;
+  };
+
+  it('no relative link in the staged copy points outside it', () => {
+    const dest = mkdtempSync(join(tmpdir(), 'reticle-packdocs-links-'));
+    try {
+      execFileSync(process.execPath, [join(REPO, 'scripts/pack-docs.mjs'), REPO, dest], {
+        stdio: 'ignore',
+      });
+
+      const dead: string[] = [];
+      for (const rel of markdown(dest)) {
+        const file = join(dest, rel);
+        for (const [, target] of readFileSync(file, 'utf8').matchAll(LINK)) {
+          if (undefined === target || /^(?:[a-z][a-z0-9+.-]*:|#|\/)/i.test(target)) continue;
+          const path = target.split('#')[0];
+          if (undefined === path || '' === path) continue;
+          const landed = resolve(dirname(file), path);
+          const here =
+            existsSync(landed) || existsSync(`${landed}.md`) || existsSync(`${landed}.mdx`);
+          if (!here) dead.push(`${rel} -> ${target}`);
+        }
+      }
+
+      expect(
+        dead,
+        `These links resolve to nothing inside the published package. docs/ changes depth when it ` +
+          `is copied into packages/server/, so a link that is correct in the repo is dead in the ` +
+          `tarball — and the pruned asset directories kill the rest. pack-docs.mjs is supposed to ` +
+          `repoint them at ${'https://github.com/reticlehq/reticle/blob/main/'}; fix it there, not ` +
+          `in the source docs, which are correct where they are written.`,
+      ).toEqual([]);
+    } finally {
+      rmSync(dest, { recursive: true, force: true });
+    }
   });
 });

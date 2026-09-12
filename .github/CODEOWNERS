@@ -1,0 +1,44 @@
+# Who reviews what.
+#
+# There is one maintainer: `git shortlog -sn` puts @divshekhar at ~2000 of the ~2200 commits, and
+# every other name is a contributor rather than a reviewer. This file does not change who that is —
+# it changes whether GitHub knows. Without it a PR opens with NO requested reviewer, so 24 of the
+# 42 open PRs were green, mergeable, and waiting on a review nobody had been asked for.
+#
+# Last matching pattern wins, so the catch-all is FIRST and the per-area lines below it are the
+# ones GitHub actually reports. They are spelled out per package and per app on purpose: the day a
+# second maintainer takes one area, the change is one owner on one line, not a new file.
+
+*                          @divshekhar
+
+# Packages — the shipped product.
+/packages/core/            @divshekhar
+/packages/browser/         @divshekhar
+/packages/server/          @divshekhar
+/packages/react/           @divshekhar
+/packages/vite-plugin/     @divshekhar
+/packages/babel-plugin/    @divshekhar
+/packages/next/            @divshekhar
+/packages/electron/        @divshekhar
+/packages/tauri/           @divshekhar
+/packages/test/            @divshekhar
+/packages/eslint-plugin/   @divshekhar
+
+# Apps — fixtures, smoke apps and the harnesses that drive them.
+/apps/api/                 @divshekhar
+/apps/atlas/               @divshekhar
+/apps/bench-app/           @divshekhar
+/apps/e2e/                 @divshekhar
+/apps/electron-smoke/      @divshekhar
+/apps/electron-vue-pinia/  @divshekhar
+/apps/examples/            @divshekhar
+/apps/large-dom-bench/     @divshekhar
+/apps/next-smoke/          @divshekhar
+/apps/tauri-smoke/         @divshekhar
+/apps/vibe-builder-demo/   @divshekhar
+
+# Everything a change here can break without a test noticing.
+/.github/                  @divshekhar
+/bench/                    @divshekhar
+/docs/                     @divshekhar
+/scripts/                  @divshekhar

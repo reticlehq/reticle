@@ -1,6 +1,6 @@
 import { NO_SESSION_CONNECTED_ERROR } from '@reticlehq/core';
 import { notePendingNoSessionReason } from '../telemetry/tool-refused.js';
-import type { NoSessionReason } from '@reticlehq/core';
+import type { NoSessionReason } from '@reticlehq/core/telemetry';
 import {
   declareDrivenRedactionKeys,
   forgetDrivenRedactionKeys,
@@ -348,8 +348,20 @@ export class SessionManager {
    * vanished rather than about the daemon's lifetime history (#611).
    */
   lastDeparted(): string | undefined {
-    let last: string | undefined;
-    for (const id of this.#tombstones.keys()) last = id;
+    return this.lastKnown()?.id;
+  }
+
+  /**
+   * The session that most recently disappeared — id, last URL, project — or undefined.
+   *
+   * `lastDeparted` is the id alone, which is what lease-expiry attribution needs. This is the
+   * rest: a route that 500s tears the page down and the SDK never reconnects, and without the
+   * URL `reticle_sessions` is an empty list with no history (#808). Tombstones, not live rows:
+   * a connected tab is in `list()`, not here.
+   */
+  lastKnown(): SessionIdentity | undefined {
+    let last: SessionIdentity | undefined;
+    for (const record of this.#tombstones.values()) last = record;
     return last;
   }
 
@@ -369,9 +381,13 @@ export class SessionManager {
   #unknownSessionError(sessionId: string): string {
     const live = [...this.#sessions.values()];
     if (0 === live.length) {
+      const known = this.lastKnown();
+      const where = undefined === known ? '' : ` Last seen on ${known.url}.`;
       return (
         `no connected session with id '${sessionId}', and no sessions are connected at all — so ` +
-        'there is no other id to retry with. The app is not dialling this daemon; call ' +
+        'there is no other id to retry with.' +
+        where +
+        ' The app is not dialling this daemon; call ' +
         'reticle_sessions for the diagnosis rather than retrying this call.'
       );
     }

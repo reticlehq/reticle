@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NoSessionReason } from '@reticlehq/core';
+import { NoSessionReason } from '@reticlehq/core/telemetry';
 import { diagnoseNoSession, explainNoSession } from './no-session-diagnosis.js';
 import type { NoSessionFacts } from './no-session-diagnosis.js';
 

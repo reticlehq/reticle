@@ -32,7 +32,7 @@
   "navigation": {
     "versions": [
       {
-        "version": "2.13.1",
+        "version": "2.14.0",
         "default": true,
         "tabs": [
           {
@@ -197,7 +197,7 @@
             "groups": [
               {
                 "group": "Working on Reticle",
-                "pages": ["gates", "gate-plan", "fixtures", "local-registry"]
+                "pages": ["first-drive", "gates", "gate-plan", "fixtures", "local-registry"]
               },
               {
                 "group": "Internals",

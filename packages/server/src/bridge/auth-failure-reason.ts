@@ -32,7 +32,20 @@ export function authFailureReason(
   helloProject: string | undefined,
   helloToken?: string,
 ): string {
-  if (helloProject !== undefined && 0 < servedProjects.size && !servedProjects.has(helloProject)) {
+  // ONE served project, not merely some. A daemon that has accepted sessions from SEVERAL projects
+  // is demonstrably not owned by any one of them, so "that daemon is not yours, stop it" is the
+  // wrong story — and its advice is actively harmful there, because stopping it breaks the projects
+  // that are working. This is the normal shape for a globally-registered daemon, which several
+  // editors start from the user's home directory and point at everything.
+  //
+  // With one served project the inference holds and is worth making: the daemon belongs to that
+  // project and this HELLO is somebody else's. With several, the token is the suspect, and the plain
+  // reason says so without prescribing a recovery that costs other people their sessions.
+  if (
+    helloProject !== undefined &&
+    1 === servedProjects.size &&
+    !servedProjects.has(helloProject)
+  ) {
     const reason = `this daemon serves a different project — run \`reticle stop\` and retry`;
     return Buffer.byteLength(reason, 'utf8') <= MAX_REASON_BYTES ? reason : PLAIN;
   }

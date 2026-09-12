@@ -4,7 +4,7 @@
  * stream is fine). The counts therefore ride the existing session summary, omitted when zero.
  */
 import { describe, expect, it } from 'vitest';
-import { TelemetryEventKind } from '@reticlehq/core';
+import { TelemetryEventKind } from '@reticlehq/core/telemetry';
 import { SessionMetrics } from './session-metrics.js';
 import { createTelemetry } from './telemetry.js';
 import { flushProxySessionMetrics } from './proxy-telemetry.js';

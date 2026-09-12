@@ -38,13 +38,9 @@ There are exactly three places you may stop, and none is a question about a pref
 2. **Your host asks the human to approve a command.** That prompt belongs to the host. Never bypass or suppress it, and take a refusal as the answer. `init` writing a pre-approval rule for the `reticle` server is not that: it is a scoped, announced config change the human asked for by running the command, and it covers only Reticle's own tools.
 3. **Only if no agent CLI exists on the machine at all**, the client restart that loads the MCP tools (step 2). If `claude`, `codex`, `cursor-agent` or `gemini` is installed, you do NOT stop. Step 2 shows you how to drive from a child process instead, and that path is measured to be the difference between a verdict and a dead end.
 
+**On Claude Code and Codex, do not ask the human to restart at all.** `npx @reticlehq/server init --relaunch` prints the exact resume command for this conversation; run that command yourself rather than handing the person a chore. It refuses when the id has no transcript behind it, because `--resume` on an empty id opens a blank session that looks exactly like success. Everywhere else the restart genuinely is theirs: name the one step for their client and ask for that alone.
+
 If you do have to stop, the restart ends your turn. This file was fetched into the context that just ended, so nothing carries it across unless you make it. **Before you trigger the restart, write the remaining steps into `RETICLE-SETUP.md` at the repo root**, one line each, with the step you stopped at marked. That file is what you re-read afterwards. Delete it once step 5 has produced a verdict.
-
-Better still, install the on-disk copy first. It survives the restart on its own, and it is the same content:
-
-```bash
-npx skills add reticlehq/reticle --skill install-and-verify -y
-```
 
 **After the restart, resume at the step you were on.** Do not start over, and do not skip forward.
 
@@ -89,11 +85,7 @@ Read **VERIFY** below when the question is "does this still work?" rather than "
 
 # SETUP
 
-**One command. It does all of it, and it ends with a verdict.**
-
-```bash
-RETICLE_INSTALL_SOURCE=skill_file npx @reticlehq/server@latest init --flow "<the journey worth proving>"
-```
+**One command, the one at the top of this file. It does all of it, and it ends with a verdict.**
 
 `@latest` is deliberate: `npx` caches, and a stale cached CLI is the most common silent setup failure. Never pin a version here.
 
@@ -142,7 +134,7 @@ curl https://docs.reticle.sh/install-manual.md      # register the MCP, wire the
 curl https://docs.reticle.sh/troubleshooting.md     # nothing connected, click did nothing, verdict unknown
 ```
 
-**Vite + React**, **Next.js**, **Remix** and **Astro** are the frameworks with an app and a CI gate behind them, so their wiring is proven rather than assumed. The SDK is framework-agnostic and usually connects elsewhere, but say that honestly rather than reporting a proven install.
+**Vite + React**, **Next.js**, **Remix** and **Astro** are the frameworks with an app and a CI gate behind them, so their wiring is proven rather than assumed. **TanStack Start** is detected and given a client-only recipe, but nothing in CI proves it. The SDK is framework-agnostic and usually connects elsewhere, but say that honestly rather than reporting a proven install.
 
 Do not reconstruct it from memory. Three things decide whether it works, and all three get skipped:
 
@@ -198,18 +190,18 @@ Work down this list and stop at the first row that fits. Do not hand-drive a flo
 
 | The question | The call | Calls |
 | --- | --- | --- |
-| "Did my edit break anything?" | `reticle_run({ tool: "reticle_verify", args: { action: "change", files: ["src/App.tsx"] } })` | 1 |
+| "Did my edit break anything?" | `reticle_verify({ action: "change", files: ["src/App.tsx"] })` | 1 |
 | "Does this known journey still work?" | `reticle_run({ tool: "reticle_flow_replay", args: { flowName: "login" } })` | 1 |
 | "Does this new behaviour work?" | `reticle_act_sequence` for the setup, then ONE `reticle_act_and_wait` | 2 |
 | No MCP available at all | `npx @reticlehq/server verify <url>` in the shell | 1, no MCP |
 
-`reticle_verify` and `reticle_flow_replay` are **not on the advertised tool list**: they are reached through `reticle_run` exactly as written above. That is the supported call shape, not a workaround, and it is why you have to be told they exist at all.
+`reticle_verify` IS on the advertised tool list, so call it directly. `reticle_flow_replay` is not: it is reached through `reticle_run` exactly as written above. That is the supported call shape, not a workaround, and it is why you have to be told it exists at all.
 
 `reticle_verify {action:"change"}` answers `unknown` when no saved flow covers the files you changed. That is the honest answer and not a failure. Nothing ran, so nothing was proved. It is also the signal to record one. Never read it as a pass.
 
 ## Two more you have to be told about
 
-Same story as `reticle_verify`: extended surface, so they are not in the tool list you were handed, and reached through `reticle_run`.
+Extended surface, so they are not in the tool list you were handed, and reached through `reticle_run`.
 
 **Context compacted, a turn starting, or a sub-agent taking over?** Ask what this run already established, instead of re-snapshotting to rediscover what you already knew:
 
@@ -263,11 +255,9 @@ reticle_act_and_wait({ sessionId, ref, action: "click", until: { kind: "allOf", 
 
 Prefer `reticle_act_and_wait({ ref, action, until })`. It names the expected consequence **before** the action, which is the difference between a check and a rationalisation.
 
-A verdict of `verified: "unknown"` is not a pass. It means Reticle drove the app and could not tell what happened. Report it as unknown. `verified: "no-fault"` is not a pass either. It means the page settled and no channel reported a problem, but nothing was declared to prove, so assert a consequence the action CHANGES. **Never weaken a check to make it pass.**
-
 Then report what you drove, what it produced, and the `file:line` for anything broken.
 
-The surface is deliberately small: `default` 18, `all` 30. Editors budget tools across every MCP server you have connected (Cursor allows 40 in total), so the count is capped rather than allowed to grow. `reticle_tools` loads the argument grammar for the rest on demand, and `reticle_run` invokes any of them by name. Nothing is unreachable; the cold tail just costs one discovery hop.
+The surface is deliberately small: `default` 19, `all` 30. Editors budget tools across every MCP server you have connected (Cursor allows 40 in total), so the count is capped rather than allowed to grow. `reticle_tools` loads the argument grammar for the rest on demand, and `reticle_run` invokes any of them by name. Nothing is unreachable; the cold tail just costs one discovery hop.
 
 - Batching, regression suites, reading a verdict: `https://docs.reticle.sh/agent-cheatsheet.md`
 - Every predicate and action: `https://docs.reticle.sh/predicates.md`, `https://docs.reticle.sh/actions.md`

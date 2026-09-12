@@ -110,6 +110,21 @@ export interface SnapshotResult {
    */
   hiddenSkipped?: number;
   /**
+   * How many elements exist under the scope at all, present ONLY when the walk produced no nodes.
+   *
+   * The third cause of an empty tree, and the one no count of the WALK can reach: a walk that
+   * visited nothing has nothing to report. Filed from the field after the source-mapping stamp
+   * crashed a react-three-fiber app — React unmounted everything, the page went white, and
+   * `{ tree: "", nodes: 0 }` was indistinguishable from a page that had not rendered yet. A
+   * diagnosis pass went on establishing which.
+   *
+   * Counted off the DOM instead, which settles it outright: a handful of elements is a mount
+   * container with nothing in it, and dozens is a page whose elements were all skipped (see
+   * `hiddenSkipped`). Deliberately a number rather than a verdict, for the reason `hiddenSkipped`
+   * gives — the walk knows this for certain and cannot know why the app unmounted.
+   */
+  domElements?: number;
+  /**
    * Refs of the subtree roots the walk never entered, present ONLY when `truncated`. This is the
    * cut's own frontier: re-snapshot each with `{ scope: ref, includeRoot: true }` and the union is
    * the whole tree. Without it `truncated` says only THAT the read stopped, never WHERE, so nobody
@@ -184,6 +199,8 @@ function formatLine(
   role: string,
   name: string,
   layout: string,
+  /** The element's OWN text, when it has no accessible name to carry it. */
+  ownText = '',
 ): string {
   const indent = '  '.repeat(depth);
   const value = getValue(el);
@@ -195,7 +212,11 @@ function formatLine(
   const refPart = INTERACTIVE.has(role) || label.length > 0 ? ` (ref=${refs.refFor(el)})` : '';
   const valuePart = value !== undefined && value.length > 0 ? ` [value="${value}"]` : '';
   const layoutPart = layout.length > 0 ? ` [${layout}]` : '';
-  return `${indent}- ${role}${namePart}${refPart}${valuePart}${layoutPart}${stateSuffix(el)}`;
+  // `[text="…"]` rather than a second quoted string: the bare quoted form already means the
+  // ACCESSIBLE NAME, and two of them on one line would be unreadable. This is the element's own
+  // text and never a descendant's, so a reader can tell whose it is — which is the whole complaint.
+  const textPart = ownText.length > 0 ? ` [text="${ownText}"]` : '';
+  return `${indent}- ${role}${namePart}${refPart}${valuePart}${textPart}${layoutPart}${stateSuffix(el)}`;
 }
 
 /** A generic container's own text content, with no ref (kept lean — text isn't actionable). */
@@ -299,9 +320,20 @@ function visit(child: Element, depth: number, ctx: WalkCtx, inLive: boolean): vo
   // message sits in a child element would otherwise be included as a contentless `- generic`.
   const announce = inLive || announces(child, role);
   const lean = ctx.mode === SnapshotMode.INTERACTIVE && !announce;
-  // A generic, unnamed container's own text content — only consulted outside INTERACTIVE mode,
-  // so the actionable-only view stays lean while FULL/meaningful views see content regressions.
-  const text = !lean && 'generic' === role && 0 === name.length ? directText(child) : '';
+  // An unnamed element's OWN text content — only consulted outside INTERACTIVE mode, so the
+  // actionable-only view stays lean while FULL/meaningful views see content regressions.
+  //
+  // NOT restricted to `generic` any more, and that restriction was a content-losing bug. An element
+  // carrying both a real role and its own text had that text DROPPED while a generic child's text
+  // survived and printed one level in, so `<p>$29<span> / mo for 1</span></p>` came back as
+  // `- paragraph` / `- text "/ mo for 1"` — which reads exactly like an interpolation that rendered
+  // nothing. A reporter twice filed a copy defect from this against screens that were correct; the
+  // second was a sentence whose two halves (`connects this project ` and ` .`) both vanished, leaving
+  // only the `<b>` between them and making the spacing look broken.
+  //
+  // Skipped when the element HAS an accessible name: for a button the name IS its text, and printing
+  // both would double every control on the page.
+  const text = !lean && 0 === name.length ? directText(child) : '';
   // Layout signature for grid/flex containers — makes CLS/layout regressions visible.
   const layout = lean ? '' : layoutSignature(style);
   // Actionable WITHOUT an interactive role, which is most of the real web.
@@ -352,9 +384,12 @@ function visit(child: Element, depth: number, ctx: WalkCtx, inLive: boolean): vo
   if (include) {
     ctx.nodes += 1;
     ctx.lines.push(
-      text.length > 0 && 0 === name.length && 0 === layout.length
+      // A bare `- text` line only for a GENERIC container, where there is no role worth keeping.
+      // Any other role keeps its line and carries the text as a field, because "- text" would throw
+      // away what kind of element it was, which is half of what a snapshot is for.
+      'generic' === role && text.length > 0 && 0 === layout.length
         ? formatTextLine(depth, text)
-        : formatLine(child, depth, role, name, layout),
+        : formatLine(child, depth, role, name, layout, text),
     );
     walk(child, depth + 1, ctx, announce);
   } else {
@@ -379,14 +414,10 @@ function walk(parent: Element, depth: number, ctx: WalkCtx, inLive = false): voi
 }
 
 /**
- * The APP's open dialogs. Reticle's own panels are excluded, always.
- *
- * The HUD's chat and report panels carry `role="dialog"` because that is the correct role for what
- * they are — but they are OUR surface, not the application's. Once the presenter became visible to
- * the tool surface (so that Reticle can be used to check its own HUD), every snapshot of every page
- * started reporting `visibleDialogs: ["Reticle agent chat"]`, telling the agent a modal was up when
- * the app had none. An agent that believes a dialog is open dismisses it before doing anything else,
- * which is a wasted action at best and a dismissed REAL dialog at worst.
+ * The APP's open dialogs. Reticle's own panels use `role="region"` (not `dialog`) so they are not
+ * mistaken for the application's modal layer by snapshot hints, query orientation, or a library's
+ * outside-click walk — see #783. Anything that still carries `role="dialog"` inside our overlay is
+ * excluded here via `isReticleOverlay`.
  */
 function collectDialogs(root: ParentNode): string[] {
   const nodes = root.querySelectorAll('[role="dialog"], dialog[open], [aria-modal="true"]');
@@ -509,6 +540,9 @@ export function buildSnapshot(options: SnapshotOptions = {}): SnapshotResult {
     status,
     nodes: ctx.nodes,
     truncated: ctx.truncated,
+    // Only when the tree is empty: on any other result it is a number nobody reads, paid for on
+    // every snapshot. `querySelectorAll` on an empty container is the cheapest possible count.
+    ...(0 === ctx.nodes ? { domElements: root.querySelectorAll('*').length } : {}),
     ...(ctx.leanSkipped > 0 ? { leanSkipped: ctx.leanSkipped } : {}),
     ...(ctx.hiddenSkipped > 0 ? { hiddenSkipped: ctx.hiddenSkipped } : {}),
     ...(ctx.unread.length > 0 ? { unread: ctx.unread } : {}),

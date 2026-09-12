@@ -27,6 +27,7 @@ import { leanActResult, mutatedWithin } from './act-view.js';
 import { ReticleTool } from './tool-names.js';
 import { buildReactionReport, summarizeReaction } from '../events/reaction.js';
 import { parsePredicate } from '../events/predicate-parse.js';
+import { bodyClauseRefusal } from '../honesty/body-capture-remedy.js';
 import { causalSummary } from '../capsule/causal-summary.js';
 import { findContradictions } from '../events/contradictions.js';
 import { gapsForAction } from '../honesty/instrumentation-gaps.js';
@@ -49,7 +50,10 @@ import { waitForReaction } from './react-grace.js';
 import { decideVerified } from '../honesty/verified.js';
 import { honestyForVerdict } from '../honesty/honesty.js';
 import { declaredExpectations, declaresBodyIndependentChannel } from '../events/declared.js';
-import { readsDomState } from '../honesty/already-true.js';
+import {
+  readsDomState,
+  alreadyTrueHiddenMatch as alreadyTrueHiddenMatchOf,
+} from '../honesty/already-true.js';
 import { describeWaitTarget, namedNetIsInFlight } from '../honesty/unsettled.js';
 import { saveFailedAssertCapsule } from './act-capsule.js';
 import { buildDivergenceCapsule } from '../capsule/capsule.js';
@@ -149,7 +153,6 @@ export async function actCommand(
  * one layer earlier, before any session is resolved or any work is done.
  */
 const ACTION_TYPE_VALUES = Object.values(ActionType);
-const ACTION_TYPE_LIST = ACTION_TYPE_VALUES.join(' | ');
 const actionTypeEnum = z.enum(ACTION_TYPE_VALUES as [string, ...string[]]);
 
 export const ACT_TOOLS: ToolDef[] = [
@@ -163,7 +166,7 @@ export const ACT_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe(
-          `Element ref (e.g. 'e42') from reticle_snapshot/reticle_query — stable until the element leaves the DOM, so no re-snapshot between actions. Give this OR \`target\`.`,
+          `Element ref (e.g. 'e42') from reticle_snapshot/reticle_query — stable until the element leaves the DOM, so no re-snapshot between actions. Give this OR \`target\`. A press of Escape, Tab, or a modifier shortcut (Cmd+K) is a document key and needs neither.`,
         ),
       target: z
         .record(z.unknown())
@@ -171,7 +174,7 @@ export const ACT_TOOLS: ToolDef[] = [
         .describe(
           'Find the element and act on it in ONE call, instead of a reticle_query round trip first: { testid } | { text } | { role, name } | { label }. Refuses if it matches more than one, rather than guessing.',
         ),
-      action: actionTypeEnum.describe(`Action to perform: ${ACTION_TYPE_LIST}`),
+      action: actionTypeEnum.describe('Action to perform.'),
       args: z
         .record(z.unknown())
         .optional()
@@ -318,7 +321,7 @@ export const ACT_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe(
-          `Element ref (e.g. 'e42') from reticle_snapshot/reticle_query — stable until the element leaves the DOM, so no re-snapshot between actions. Give this OR \`target\`.`,
+          `Element ref (e.g. 'e42') from reticle_snapshot/reticle_query — stable until the element leaves the DOM, so no re-snapshot between actions. Give this OR \`target\`. A press of Escape, Tab, or a modifier shortcut (Cmd+K) is a document key and needs neither.`,
         ),
       target: z
         .record(z.unknown())
@@ -326,7 +329,7 @@ export const ACT_TOOLS: ToolDef[] = [
         .describe(
           'Find the element and act on it in ONE call, instead of a reticle_query round trip first: { testid } | { text } | { role, name } | { label }. Refuses if it matches more than one, rather than guessing.',
         ),
-      action: actionTypeEnum.describe(`Action to perform: ${ACTION_TYPE_LIST}`),
+      action: actionTypeEnum.describe('Action to perform.'),
       args: z
         .record(z.unknown())
         .optional()
@@ -480,6 +483,10 @@ export const ACT_TOOLS: ToolDef[] = [
         withUntil['until'] !== undefined
           ? parsePredicate(withUntil['until'])
           : ({ kind: PredicateKind.SETTLED } as const);
+      // BEFORE the action. A body clause this session cannot answer would fail whatever the app
+      // did, and on a drive that mutates state the action is not always repeatable. See #801(C).
+      const bodyRefusal = bodyClauseRefusal(until, session);
+      if (bodyRefusal !== undefined) throw new Error(bodyRefusal);
       const timeout = asNumber(args['timeout_ms']) ?? DEFAULT_ASSERT_TIMEOUT_MS;
       // An intent declared here lands in the ledger BEFORE the verdict is drawn, which is what makes
       // the undeclared-change gap silent on THIS verdict rather than the next one: it reads the
@@ -514,9 +521,17 @@ export const ACT_TOOLS: ToolDef[] = [
       // state — event-based ones are floored at this act's cursor and cannot be satisfied by the
       // past, so they need no pre-check and pay nothing. One extra query, on the path where a green
       // is otherwise unfalsifiable. See honesty/already-true.
-      const alreadyTrue =
+      const alreadyTruePrecheck =
         until !== undefined && readsDomState(until)
-          ? (await evaluatePredicate(session, until, since, false)).pass
+          ? await evaluatePredicate(session, until, since, false)
+          : undefined;
+      const alreadyTrue = alreadyTruePrecheck?.pass ?? false;
+      // #889: the pre-check evidence is already in hand — cheap to also ask whether that match was
+      // against something hidden, so the already_true message can name it instead of leaving the
+      // agent to re-derive "was this actually showing?" from nothing.
+      const alreadyTrueHiddenMatch =
+        alreadyTrue && until !== undefined
+          ? alreadyTrueHiddenMatchOf(until, alreadyTruePrecheck?.evidence)
           : false;
       try {
         // actCommand is the single interception point for upload+path rewrite.
@@ -619,7 +634,12 @@ export const ACT_TOOLS: ToolDef[] = [
         // On RED only, attach the Tier-2 divergence capsule (first-divergence + blast radius). Red-only,
         // so the common green path — what the loop optimizes — is unchanged; on red, diagnosis is the point.
         const links = predicateToExpectedLinks(until);
-        const capsule = verdict.pass ? undefined : buildDivergenceCapsule(links, windowEvents);
+        // Read before the capsule, which needs it: a window the buffer trimmed cannot state an
+        // absolute about what did NOT happen. See CausalSummary.truncated.
+        const bufferLost = session.lostSince(since);
+        const capsule = verdict.pass
+          ? undefined
+          : buildDivergenceCapsule(links, windowEvents, bufferLost);
         // Grade from what the verdict PROVED, not what it declared. A green anyOf holds on one branch, so
         // grading off `links` (every branch) would let a presence-only OR report grade `signal` — a false
         // green in the gate itself. `provenExpectedLinks` narrows a green to the branch that actually held;
@@ -648,7 +668,6 @@ export const ACT_TOOLS: ToolDef[] = [
         const impeachingNotes = [impeaching.note, gapNote].filter(
           (n): n is string => n !== undefined,
         );
-        const bufferLost = session.lostSince(since);
         // Which loss, as an enum, beside the prose that describes it. Classified here because this is
         // the only place that knows the three apart: our buffer, our transport, and the page's own
         // boundaries. See `CaptureLoss`.
@@ -731,6 +750,9 @@ export const ACT_TOOLS: ToolDef[] = [
         const stillInFlight = inFlightRequestLabels(windowEvents);
         const decision = decideVerified({
           pass: verdict.pass,
+          // So the unread-body remedy can check it applies to THIS page. Threaded rather than
+          // looked up inside decideVerified, which is pure and has no session.
+          ...(session.sdkVersion === undefined ? {} : { sdkVersion: session.sdkVersion }),
           // The caller NAMED the consequence rather than defaulting to "wait for idle". A
           // declaration made before the action is what this tool sells, and idle-settlement was
           // overriding it — see `declaredConsequence`. An explicit `{ kind: "settled" }` is not a
@@ -740,12 +762,15 @@ export const ACT_TOOLS: ToolDef[] = [
           // Omit when false: a net-only `until` must still hit `outcome_unread`.
           ...(declaresBodyIndependentChannel(until) ? { independentOfBody: true } : {}),
           ...(alreadyTrue ? { alreadyTrue } : {}),
+          ...(alreadyTrueHiddenMatch ? { alreadyTrueHiddenMatch } : {}),
           // An assertion nobody could evaluate must not be reported as one the app failed.
           ...(verdict.inconclusive === undefined ? {} : { inconclusive: verdict.inconclusive }),
           // Nor must one nobody could OBSERVE. This is the act path, so it is the one that produced
           // the measured false red: a reload mid-wait, graded assertion_failed at the clicked
           // component's own file and line.
-          ...(true === verdict.observationLost ? { observationLost: true } : {}),
+          ...(true === verdict.observationLost
+            ? { observationLost: true, lastUrl: session.url }
+            : {}),
           ...(absenceBlindSpot === undefined ? {} : { absenceBlindSpot }),
           honesty,
           contradictions,
@@ -767,7 +792,10 @@ export const ACT_TOOLS: ToolDef[] = [
         });
         // Computed once: the verdict block reports it, and the instrumentation gaps are a second
         // reading of the same evidence rather than a new observation.
-        const actionSummary = causalSummary(windowEvents, { stateUnwatched });
+        const actionSummary = causalSummary(windowEvents, {
+          stateUnwatched,
+          truncated: bufferLost,
+        });
         // Asked of every verdict drawn after an observed edit, not once per edit — see
         // isChangeUndeclared for why repeating it is disclosure rather than nagging.
         // Read ONCE and used twice: `changeUndeclared` asks whether the ledger is empty, and the
@@ -787,6 +815,9 @@ export const ACT_TOOLS: ToolDef[] = [
           stateUnwatched,
           // What the app DECLARED, so an under-instrumented one is told without having to be asked.
           hasCapabilities: session.hasCapabilities,
+          // Whether the build TURNED the source stamp off, so a red with no file:line prescribes the
+          // right fix. `false` from the page is the only value that means anything; absent is unknown.
+          ...(false === session.sourceMapping ? { sourceMappingDisabled: true } : {}),
           // What the run still owes. A green that leaves this above zero is not the same as done.
           // MINUS the one this verdict is about to discharge.
           //

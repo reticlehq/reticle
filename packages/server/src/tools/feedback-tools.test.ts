@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { FeedbackKind, FEEDBACK_RATING_MAX, FEEDBACK_RATING_MIN } from '@reticlehq/core';
+import { FeedbackKind, FEEDBACK_RATING_MAX, FEEDBACK_RATING_MIN } from '@reticlehq/core/telemetry';
 import * as feedbackModule from '../telemetry/feedback.js';
 import * as telemetryModule from '../telemetry/telemetry.js';
 import { TOOLS } from './tools.js';

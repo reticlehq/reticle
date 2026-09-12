@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
+import http from 'node:http';
+import net from 'node:net';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,6 +16,34 @@ import {
 
 const isWindows = 'win32' === process.platform;
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** Who is LISTENING on this port right now, as a pid list — empty when nobody is. */
+const holdersOf = (port: number): string =>
+  spawnSync('sh', ['-c', `lsof -ti:${port} -sTCP:LISTEN || true`], {
+    encoding: 'utf8',
+  }).stdout.trim();
+
+/**
+ * Wait until the port is held (or released), rather than sleeping a guess.
+ *
+ * These tests spawn a real shell, which spawns a real node, which then binds. A fixed 1,200ms for
+ * all three was fine on a developer's machine and not on a loaded runner: when it was not enough
+ * the fixture had simply not come up yet, and the assertion failed as `expected '' not to be ''` —
+ * a handover reported as broken because the machine was busy. That is the shape CLAUDE.md rules out
+ * under *Timing assertions are a bug*, and it has now cost three unrelated PRs a red CI.
+ *
+ * Polling is strictly better here: it returns as soon as the state is real, so the fast path is
+ * faster than the sleep it replaces, and the ceiling only matters when something is genuinely wrong.
+ */
+async function waitForPort(port: number, want: 'held' | 'free'): Promise<string> {
+  const deadline = Date.now() + 10_000;
+  for (;;) {
+    const held = holdersOf(port);
+    if (('held' === want) === ('' !== held)) return held;
+    if (Date.now() >= deadline) return held;
+    await sleep(50);
+  }
+}
 
 describe('the dev server this process owns', () => {
   // The promise: stopped on every ending except success. An interrupted run used to leave one
@@ -30,15 +60,9 @@ describe('the dev server this process owns', () => {
         process.cwd(),
         {},
       );
-      await sleep(1_200);
-      const held = (): string =>
-        spawnSync('sh', ['-c', `lsof -ti:${port} -sTCP:LISTEN || true`], {
-          encoding: 'utf8',
-        }).stdout.trim();
-      expect(held(), 'the fixture server never came up').not.toBe('');
+      expect(await waitForPort(port, 'held'), 'the fixture server never came up').not.toBe('');
       server.stop();
-      await sleep(700);
-      expect(held(), 'stopping left the port held by an orphan').toBe('');
+      expect(await waitForPort(port, 'free'), 'stopping left the port held by an orphan').toBe('');
     },
     15_000,
   );
@@ -53,15 +77,20 @@ describe('the dev server this process owns', () => {
         process.cwd(),
         {},
       );
-      await sleep(1_200);
+      expect(await waitForPort(port, 'held'), 'the fixture server never came up').not.toBe('');
       server.handOver();
       server.stop();
+      // A real pause, not a poll: this asserts the server is STILL there, so it has to be given a
+      // chance to die first. Polling for "still held" would pass on its first tick and prove nothing.
       await sleep(400);
-      const held = spawnSync('sh', ['-c', `lsof -ti:${port} -sTCP:LISTEN || true`], {
-        encoding: 'utf8',
-      }).stdout.trim();
-      expect(held, 'a handed-over server must survive').not.toBe('');
-      for (const pid of held.split('\n')) process.kill(Number(pid), 'SIGKILL');
+      const survivors = holdersOf(port);
+      // Killed BEFORE the assertion, so a failure cannot leak the listener this test deliberately
+      // kept alive: an assertion that throws would skip the cleanup underneath it, and the next run
+      // would find 59232 held and fail for a reason belonging to this one.
+      for (const pid of survivors.split('\n').filter(Boolean)) {
+        process.kill(Number(pid), 'SIGKILL');
+      }
+      expect(survivors, 'a handed-over server must survive').not.toBe('');
     },
     15_000,
   );
@@ -83,6 +112,38 @@ describe('the dev server this process owns', () => {
 describe('probing the page', () => {
   it('reports nothing answering as not served', async () => {
     expect(await probePage('http://127.0.0.1:59233/')).toMatchObject({ served: false });
+  });
+
+  it('finds an IPv6-only listener when the announcement was IPv4 (#884)', async ({ skip }) => {
+    const canBind = await new Promise<boolean>((resolve) => {
+      const probe = net.createServer();
+      probe.once('error', () => resolve(false));
+      probe.listen(0, '::1', () => probe.close(() => resolve(true)));
+    });
+    if (!canBind) {
+      skip();
+      return;
+    }
+    const server = http.createServer((_req, res) => {
+      res.end('<html>@reticlehq/browser</html>');
+    });
+    const port = await new Promise<number>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '::1', () => {
+        const addr = server.address();
+        if (null === addr || 'string' === typeof addr) reject(new Error('no port'));
+        else resolve(addr.port);
+      });
+    });
+    try {
+      const announced = `http://127.0.0.1:${String(port)}/`;
+      const probe = await probePage(announced);
+      expect(probe.served).toBe(true);
+      expect(probe.sdkInPage).toBe(true);
+      expect(probe.reachedUrl).toMatch(/localhost|\[::1\]/);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });
 

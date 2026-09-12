@@ -99,6 +99,31 @@ function netCall(e: ReticleEvent): NetCall {
 }
 
 /**
+ * The failed calls that a LATER successful call to the same endpoint replaced.
+ *
+ * Identity, not index: each `netCall` is a fresh object held by `settled`, and `settled` is built
+ * from events in sequence order, so "later" is simply "further along the array". Compared on
+ * `matchUrl` so a cache-buster or a changing query token cannot make a retry look like a different
+ * call — the same normalisation every other url comparison here uses.
+ */
+function recoveredByRetry(settled: readonly NetCall[]): ReadonlySet<NetCall> {
+  const out = new Set<NetCall>();
+  for (let i = 0; i < settled.length; i += 1) {
+    const call = settled[i];
+    if (call === undefined || false !== call.ok) continue;
+    for (let j = i + 1; j < settled.length; j += 1) {
+      const later = settled[j];
+      if (later === undefined) continue;
+      if (true === later.ok && later.method === call.method && later.matchUrl === call.matchUrl) {
+        out.add(call);
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * Did the user-visible application state move forward? DOM, store and route only — deliberately NOT
  * network, animation or signal. The question every rule below asks is "did the app act as if it
  * succeeded", and a request firing is not the app acting as if anything.
@@ -336,6 +361,16 @@ export interface ContradictionOptions {
    * one: a caller that cannot say which page is under test gets the behaviour it had before this.
    */
   appOrigin?: string | undefined;
+  /**
+   * The traffic the assertion actually named — `urlContains` from each net clause, `''` for a clause
+   * that named the whole channel.
+   *
+   * Used only by `duplicate-request`, to tell "the write you asked about fired twice" from "some
+   * other endpoint is busy". Undefined disables the split and every duplicate is reported as it was
+   * before, which is what a caller with no predicate (a bare `observe`) should get: with nothing
+   * declared, nothing is unrelated.
+   */
+  namedNetUrls?: readonly string[] | undefined;
 }
 
 /** Net-shaped events — the only ones that carry a URL a dev-tooling channel could occupy. */
@@ -565,7 +600,20 @@ function findWindowContradictions(
       },
     ];
   }
-  const failed = settled.filter((c) => false === c.ok);
+  // A failure the app RECOVERED from is not evidence against anything.
+  //
+  // Reported from the field on an app whose api-client documents the pattern every token-refreshing
+  // app has: a 401 re-hydrates the session and retries once. One extraction produced a 401 and then
+  // a 200 to the same endpoint, with exactly one extraction in state, and Reticle called it two
+  // separate contradictions. Both were false, both cost calls to disprove, and a rule that
+  // manufactures reds costs more trust than a missed bug does.
+  //
+  // Structural, not a timing heuristic: what makes it a retry is that a LATER call to the same
+  // method and url SUCCEEDED. The write landed, so the UI was entitled to move and a success signal
+  // was entitled to fire. Filtered at the definition rather than at the two reading sites, because
+  // both rules make the same claim about the same evidence and a fix in one is a fix in half.
+  const recovered = recoveredByRetry(settled);
+  const failed = settled.filter((c) => false === c.ok && !recovered.has(c));
   // The failures NOBODY declared — see ContradictionOptions.expectedFailures. Only the heuristic
   // "the UI moved while a request failed" rule reads this; the sharp rules still read `failed`.
   const unexpected = failed.filter(
@@ -622,13 +670,34 @@ function findWindowContradictions(
     (e) => e.type === EventType.NET_REQUEST || e.type === EventType.NET_PENDING,
   );
   if (routed && !hashAnchorOnly && !rendered && !fetched && true !== options.renderProved) {
-    found.push({
-      kind: ContradictionKind.ROUTE_RENDERED_NOTHING,
-      claim: 'the app navigated to a new route',
-      counter: 'nothing was rendered for it — no content added or removed, and no request made',
-      detail:
-        'the URL moved but the destination produced no content: a route with no view, a view that returned null, or data the page never asked for. A control that navigates always looks alive, so this is invisible to a dead-control check. Confirm by reading the page — a view revealed from DOM that already existed emits this same window',
-    });
+    // A console error in the SAME window turns "nothing rendered" from an absence into a positive
+    // claim: the destination did not merely fail to produce content, it crashed while trying to.
+    // Reported once as `unknown` when this held — a React hooks error and an empty destination were
+    // both in hand, and the honest, definitive answer was available and not given (#897).
+    const consoleErrors = events
+      .filter((e) => e.type === EventType.CONSOLE_ERROR)
+      .map((e) => asString(e.data['message']))
+      .filter((m): m is string => undefined !== m && m.length > 0);
+    if (consoleErrors.length > 0) {
+      found.push({
+        kind: ContradictionKind.ROUTE_RENDERED_NOTHING_CRASHED,
+        claim: 'the app navigated to a new route',
+        counter: `nothing was rendered for it, and the console shows why: ${consoleErrors[0] ?? ''}`,
+        detail:
+          `the URL moved but the destination produced no content, and the same window logged ` +
+          `${String(consoleErrors.length)} console error(s) — the first: "${consoleErrors[0] ?? ''}". ` +
+          'The destination crashed rather than merely rendering nothing; read the error for the ' +
+          'component and line at fault.',
+      });
+    } else {
+      found.push({
+        kind: ContradictionKind.ROUTE_RENDERED_NOTHING,
+        claim: 'the app navigated to a new route',
+        counter: 'nothing was rendered for it — no content added or removed, and no request made',
+        detail:
+          'the URL moved but the destination produced no content: a route with no view, a view that returned null, or data the page never asked for. A control that navigates always looks alive, so this is invisible to a dead-control check. Confirm by reading the page — a view revealed from DOM that already existed emits this same window',
+      });
+    }
   }
 
   // ── The app claimed success while its own request failed ────────────────────────────────────
@@ -816,7 +885,7 @@ function findWindowContradictions(
     const navigatedAt = events.find(
       (e) => EventType.ROUTE_CHANGE === e.type && e.t >= actionSince,
     )?.t;
-    const writeTimes = new Map<string, { label: string; times: number[] }>();
+    const writeTimes = new Map<string, { label: string; times: number[]; landed: number }>();
     for (const event of events) {
       if (event.type !== EventType.NET_REQUEST || event.t < actionSince) continue;
       if (navigatedAt !== undefined && event.t >= navigatedAt) continue;
@@ -825,20 +894,49 @@ function findWindowContradictions(
       const label = `${call.method} ${call.url}`;
       const body = asString(event.data['requestBody']);
       const key = body === undefined || 0 === body.length ? label : `${label} ${body}`;
-      const entry = writeTimes.get(key) ?? { label, times: [] };
+      const entry = writeTimes.get(key) ?? { label, times: [], landed: 0 };
       entry.times.push(event.t);
+      // Counted separately from the occurrences, because the claim is about what APPLIED.
+      if (false !== call.ok) entry.landed += 1;
       writeTimes.set(key, entry);
     }
-    for (const [, { label, times }] of writeTimes) {
+    /**
+     * Did the assertion name this endpoint?
+     *
+     * `undefined` means the caller declared nothing (a bare `observe`), and with nothing declared
+     * nothing is unrelated — every duplicate keeps the behaviour it had. An empty-string entry is a
+     * net clause with no `urlContains`, which named the whole channel and therefore matches
+     * everything.
+     */
+    const named = options.namedNetUrls;
+    const wasNamed = (label: string): boolean =>
+      named === undefined || named.some((u) => label.includes(u));
+    for (const [, { label, times, landed }] of writeTimes) {
       if (times.length < 2) continue;
+      // A DOUBLE SUBMIT is a write that landed twice. Two attempts of which one failed is a RETRY,
+      // and the field case is the commonest retry there is: a 401 that refreshed a token and went
+      // again, one row created, reported here as `duplicate-request ×2`. Two attempts that both
+      // failed are not a double submit either — nothing applied even once, so the claim "one user
+      // action was performed" is not contradicted by them. A call with no verdict at all still
+      // counts, because absence of a status is not evidence the write was rejected.
+      if (landed < 2) continue;
       // A steady cadence is a POLL, and a poll is not a double submit. An app that polls could not
       // produce a verdict at all: a camera scan loop POSTing until it acquires a lock had every
       // assertion that had already seen its consequence come back `unknown` behind writes that
       // were the app working correctly (#673).
       if (isSteadyCadence(times)) continue;
+      // A burst the assertion never mentioned is still worth telling the caller about -- a retry
+      // loop or a bursty beacon is a real finding -- but it is not evidence about the consequence
+      // they declared, so it is reported and decides nothing. The named case keeps its downgrade:
+      // "the write you asked about fired twice" is exactly what this rule is for.
+      const related = wasNamed(label);
       found.push({
-        kind: ContradictionKind.DUPLICATE_REQUEST,
-        claim: 'one user action was performed',
+        kind: related
+          ? ContradictionKind.DUPLICATE_REQUEST
+          : ContradictionKind.DUPLICATE_REQUEST_UNRELATED,
+        claim: related
+          ? 'one user action was performed'
+          : 'the assertion did not name this endpoint',
         counter: `the same write fired ${String(times.length)} times`,
         detail: `${label} ×${String(times.length)}`,
       });

@@ -3,18 +3,29 @@ import {
   ActionWarning,
   DANGEROUS_ACTION_CONFIRM_ARG,
   ElementState,
-  isDangerousActionText,
   NATIVE_INPUT_ARG,
   SettleReason,
 } from '@reticlehq/core';
 import { asSyntheticInput } from './synthetic-input.js';
 import { echoRef, refs } from '../dom/refs.js';
+import {
+  dangerousActionContext,
+  requiresDangerousConfirmation,
+  submitControlFor,
+} from './danger-context.js';
 import { assertEditable, assertNotRichText, setNativeValue } from './value-input.js';
 import { getAccessibleName, getRole, isVisible, getStates } from '../dom/a11y.js';
 import { elementHasHoverHandlers, identifyComponent } from '../registry/adapters.js';
 import { isForm, isHtmlElement, isInput, isSelect, isTextArea } from '../dom/realm.js';
 import { nativeSetTimeout, settle } from '../timers/native-timers.js';
 import { AppearedText } from './appeared-text.js';
+import {
+  focusedOrDocument,
+  isReflessDocumentPress,
+  pressCode,
+  pressKey,
+  pressModifiers,
+} from './actions-press.js';
 
 /**
  * Best-effort evidence of whether/why an action landed, so the agent can separate
@@ -256,125 +267,6 @@ function alreadyAtCheckedState(el: HTMLElement, action: string): boolean {
  * The form's `action` stays — that is a URL this element submits to, i.e. a property of what this
  * click DOES, not of what happens to be on screen beside it.
  */
-function dangerousActionContext(el: HTMLElement): string {
-  const form = el.closest('form');
-  return [
-    getAccessibleName(el),
-    el.textContent ?? '',
-    el.getAttribute('value') ?? '',
-    el.getAttribute('title') ?? '',
-    el.getAttribute('aria-label') ?? '',
-    el.getAttribute('href') ?? '',
-    form?.getAttribute('action') ?? '',
-  ].join(' ');
-}
-
-function requiresDangerousConfirmation(text: string, role?: string): boolean {
-  return isDangerousActionText(text, role);
-}
-
-/**
- * Which key a `press` is asking for.
- *
- * `text` FIRST, because that is what the tool description documents ("{ text } for type/press") and
- * therefore what agents send. The implementation read only `args['key']` and defaulted to `'Enter'`,
- * so the documented call — `press` with `{ text: 'Escape' }` — silently dispatched **Enter** and
- * reported success. Two field reports blamed "synthetic events not reaching the app"; the events
- * arrived perfectly and said the wrong thing.
- *
- * Enter is the worst possible substitute to pick by accident: on a focused field inside a form it
- * SUBMITS it, so a request to dismiss a dialog could file the form behind it. `key` still works —
- * it is what anyone reading the source would have sent — and the default only applies when neither
- * was named.
- */
-function pressKey(args: Record<string, unknown>): string {
-  const text = args['text'];
-  if ('string' === typeof text && text.length > 0) return text;
-  return asString(args['key'], 'Enter');
-}
-
-/**
- * Modifier flags for a `press`, from `args.modifiers`: an array of Meta / Control / Shift / Alt
- * (case-insensitive, with the usual aliases). Without them a Cmd+K / Ctrl+Shift shortcut receives a
- * keydown with every modifier false, so the app's own `event.metaKey` check never matches and
- * nothing observable happens -- a false negative Reticle reports as no error. (#393)
- */
-function pressModifiers(args: Record<string, unknown>): {
-  metaKey: boolean;
-  ctrlKey: boolean;
-  shiftKey: boolean;
-  altKey: boolean;
-} {
-  const raw = args['modifiers'];
-  const names = Array.isArray(raw) ? raw.map((m) => asString(m).toLowerCase()) : [];
-  const has = (...aliases: string[]): boolean => aliases.some((a) => names.includes(a));
-  return {
-    metaKey: has('meta', 'cmd', 'command', 'super', 'win'),
-    ctrlKey: has('control', 'ctrl'),
-    shiftKey: has('shift'),
-    altKey: has('alt', 'option', 'opt'),
-  };
-}
-
-/**
- * The PHYSICAL key identity — `event.code` — derived from the logical key.
- *
- * A real browser always sends both, and a meaningful class of library reads only `code`, because it
- * is the layout-independent one: dnd-kit's KeyboardSensor matches its activation and arrow keys on
- * it, and so does react-aria. We sent `key` alone, so those handlers simply never matched — the
- * event fired, the listener ran, the guard failed, and the action reported dispatched over an app
- * that did nothing. Reported from the field as a keyboard drag that could be neither started nor
- * steered.
- *
- * An explicit `code` always wins: a caller driving a non-US layout knows something this derivation
- * cannot. And an unrecognised multi-character key yields `''` rather than a guess — a wrong `code`
- * is worse than none, because a handler will act on it.
- */
-function pressCode(args: Record<string, unknown>, key: string): string {
-  const explicit = args['code'];
-  if ('string' === typeof explicit && explicit.length > 0) return explicit;
-  if (' ' === key) return 'Space';
-  if (1 === key.length) {
-    if (/[a-z]/i.test(key)) return `Key${key.toUpperCase()}`;
-    if (/[0-9]/.test(key)) return `Digit${key}`;
-    return '';
-  }
-  // Named keys — 'Enter', 'Escape', 'Tab', 'ArrowDown' — already ARE their own code.
-  return /^[A-Z][A-Za-z0-9]*$/.test(key) && KNOWN_NAMED_KEYS.has(key) ? key : '';
-}
-
-/**
- * Named keys whose `code` equals their `key`. An allow-list rather than a shape test: `Zzz` looks
- * exactly like `Tab` to a regex, and inventing `code: "Zzz"` would be a confident fabrication.
- */
-const KNOWN_NAMED_KEYS: ReadonlySet<string> = new Set([
-  'Enter',
-  'Escape',
-  'Tab',
-  'Backspace',
-  'Delete',
-  'Home',
-  'End',
-  'PageUp',
-  'PageDown',
-  'ArrowUp',
-  'ArrowDown',
-  'ArrowLeft',
-  'ArrowRight',
-  'Insert',
-  'F1',
-  'F2',
-  'F3',
-  'F4',
-  'F5',
-  'F6',
-  'F7',
-  'F8',
-  'F9',
-  'F10',
-  'F11',
-  'F12',
-]);
 
 /**
  * The drop target a `drag` names, under either spelling.
@@ -463,7 +355,14 @@ function assertActionAllowed(el: HTMLElement, action: string, args: Record<strin
   // Same resolver as the dispatch below, so the destructive-action guard cannot classify a drag
   // by a target the dispatch will not use.
   const dragTarget = action === ActionType.DRAG ? refs.resolve(dragTargetRef(args)) : null;
-  const sourceDangerous = requiresDangerousConfirmation(dangerousActionContext(el), getRole(el));
+  // Enter is judged by what it submits as well as by the field itself. Any OTHER key submits
+  // nothing, so the form is none of its business.
+  const submitter =
+    action === ActionType.PRESS && 'Enter' === pressKey(args) ? submitControlFor(el) : null;
+  const sourceDangerous =
+    requiresDangerousConfirmation(dangerousActionContext(el), getRole(el)) ||
+    (submitter !== null &&
+      requiresDangerousConfirmation(dangerousActionContext(submitter), getRole(submitter)));
   const targetDangerous =
     isHtmlElement(dragTarget) &&
     requiresDangerousConfirmation(dangerousActionContext(dragTarget), getRole(dragTarget));
@@ -826,10 +725,16 @@ export async function executeAction(
   action: string,
   args: Record<string, unknown> = {},
 ): Promise<ActionResult> {
-  const el = requireElement(ref);
-  assertActionAllowed(el, action, args);
+  const named = 0 < ref.length;
+  const el = isReflessDocumentPress(ref, action, args) ? focusedOrDocument() : requireElement(ref);
+  // A document-key press is not aimed at the element we dispatch on. The destructive-action
+  // guard classifies the ELEMENT, and inventing a target from body/focus would be the lie this
+  // path exists to avoid.
+  if (named) assertActionAllowed(el, action, args);
   // Capture the anchor while the element is still mounted — the action may unmount it (navigation).
-  const anchor = anchorOf(el);
+  // A refless press reports no anchor: minting a testid/component of whatever is focused would
+  // invent a target the caller did not name.
+  const anchor = named ? anchorOf(el) : {};
   const visible = isVisible(el);
   const enabled = enabledOf(el);
   const prevFocus = activeRef(el);
@@ -877,7 +782,7 @@ export async function executeAction(
   const nextFocus = activeRef(el);
   const effect: ActionEffect = {
     dispatched: true,
-    targetMatched: el.isConnected,
+    targetMatched: named && el.isConnected,
     visible,
     enabled,
     defaultPrevented,
@@ -899,11 +804,14 @@ export async function executeAction(
   };
   // Honesty caveats: a visually-occluded click is reported even though synthetic dispatch landed;
   // else synthetic hover may not fire framework enter/leave handlers (no native hit-test).
-  const warning = geometry.occluded
-    ? ActionWarning.CLICK_OCCLUDED
-    : action === ActionType.HOVER && elementHasHoverHandlers(el)
-      ? ActionWarning.HOVER_NATIVE_ENTER_LEAVE
-      : undefined;
+  // A document-key press did not resolve a named target — say so rather than describing body.
+  const warning = !named
+    ? ActionWarning.GLOBAL_PRESS
+    : geometry.occluded
+      ? ActionWarning.CLICK_OCCLUDED
+      : action === ActionType.HOVER && elementHasHoverHandlers(el)
+        ? ActionWarning.HOVER_NATIVE_ENTER_LEAVE
+        : undefined;
   return result(ref, action, effect, settled, settleReason, anchor, warning);
 }
 

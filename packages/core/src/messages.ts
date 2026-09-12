@@ -121,6 +121,31 @@ export const HelloMessageSchema = z.object({
   /** Whether the app has advertised a capability registry (reticle.describe). */
   hasCapabilities: z.boolean().optional(),
   /**
+   * Whether this page records request/response bodies (`connect({ captureNetworkBodies: true })`).
+   *
+   * Announced so an assertion that can only be answered from a body is refused BEFORE the action is
+   * spent, rather than after. Reported from the field: an `act_and_wait` matched the right call and
+   * came back `verified: "no"` with "a matching call with no recorded body" — knowable in advance,
+   * and on a drive that mutates state the action is not always repeatable.
+   *
+   * ABSENT means unknown, never false. An SDK predating this field says nothing, and treating
+   * silence as "off" would refuse a clause every one of those sessions can satisfy.
+   */
+  captureBodies: z.boolean().optional(),
+  /**
+   * Whether the build plugin's `data-reticle-source` stamp is switched OFF for this project.
+   *
+   * Announced for the same reason `captureBodies` is, and read by the same kind of rule: a verdict
+   * that cannot name a file and line needs to know WHY before it prescribes a fix. Without it, an
+   * app that disabled the stamp deliberately — which react-three-fiber apps must, and which `reticle
+   * init` now does for them automatically — was told on every red verdict to install a build plugin
+   * it already had.
+   *
+   * ABSENT means unknown, never false. An older SDK says nothing, and reading silence as "off"
+   * would suppress the honest gap for every app that simply has no source mapping at all.
+   */
+  sourceMapping: z.boolean().optional(),
+  /**
    * The version of the SDK in the page, so a version-skewed pair can SAY so.
    *
    * `protocolVersion` only catches an incompatible wire format. A 2.2.1 SDK against a 2.4.0 daemon

@@ -48,6 +48,18 @@ export const ContradictionKind = {
   /** The same write fired more than once in one action — double-submit / retry storm. */
   DUPLICATE_REQUEST: 'duplicate-request',
   /**
+   * The same write fired repeatedly on an endpoint the assertion never named.
+   *
+   * A poll that bursts, a batched analytics beacon, a retry loop the caller was not asking about.
+   * The finding is real and worth reporting; what it is NOT is evidence about the consequence the
+   * caller declared. An app that polls could not produce a verdict at all -- every assertion that
+   * had already seen its consequence came back `unknown` behind writes it never mentioned (#673).
+   *
+   * ADVISORY, so it rides out in `contradictions` and decides nothing. `DUPLICATE_REQUEST` proper
+   * -- a burst on an endpoint the assertion DID name -- keeps its downgrade.
+   */
+  DUPLICATE_REQUEST_UNRELATED: 'duplicate-request-unrelated',
+  /**
    * Two reads of the same endpoint were in flight together and settled OUT OF ORDER, so the one the
    * user asked for first is the one that landed last — and the screen is showing it.
    *
@@ -132,6 +144,26 @@ export const ContradictionKind = {
    * working does not), so it is reported with that ceiling stated rather than tuned into silence.
    */
   ROUTE_RENDERED_NOTHING: 'route-rendered-nothing',
+  /**
+   * The route changed, nothing was rendered for it, AND the window holds a console error — the same
+   * shape as `ROUTE_RENDERED_NOTHING`, but with positive evidence of WHY the destination is blank,
+   * not merely its absence.
+   *
+   * `ROUTE_RENDERED_NOTHING` is deliberately absence-derived: a route that renders nothing might be a
+   * false positive (a view revealed from DOM that already existed — the 1-in-11 case measured on its
+   * own doc comment), so it downgrades to UNKNOWN rather than assert a fault nobody proved. That
+   * caution is wrong for THIS case. A console error in the same window is not an absence of
+   * evidence, it is a specific, positive claim — the destination crashed, and the app's own error
+   * boundary or console said so. Reported `unknown` anyway once, when a route-rendered-nothing
+   * window also carried a React hooks error: the console errors and the empty destination were both
+   * in hand, and the honest answer was available and not given.
+   *
+   * NOT in `ABSENCE_DERIVED_CONTRADICTIONS` — this is exactly the "evidence AGAINST the action"
+   * category that set exists to distinguish itself from, and it is graded `NO` for the same reason
+   * `ui-advanced-request-failed` is: a definitive verdict is available and inconclusive is a weaker,
+   * wrong answer to give when it is.
+   */
+  ROUTE_RENDERED_NOTHING_CRASHED: 'route-rendered-nothing-crashed',
   /**
    * Everything this window held belongs to a document that has SINCE been replaced.
    *
@@ -229,6 +261,33 @@ export function isAbsenceDerived(kind: string): boolean {
 }
 
 /**
+ * Findings that are REPORTED and decide nothing.
+ *
+ * The two existing tiers both move a verdict: OBSERVED answers `no`, ABSENCE_DERIVED downgrades to
+ * `unknown`. Neither fits a fact that is true, worth telling the caller, and simply not about the
+ * question the caller asked.
+ *
+ * That gap had a cost. An app that polls on an interval could not produce a verdict at all: a camera
+ * scan loop POSTing until it acquired a lock had every assertion -- ones that had already seen the
+ * person recognised, the heading, the 200s -- come back `unknown`, because writes the assertion
+ * never mentioned counted against it. The caller then reports `pass: true` with correct evidence and
+ * has to explain in prose that Reticle's own verdict is wrong, which erodes the reason to have a
+ * verdict (#673).
+ *
+ * The bar for adding a kind here is high, and it is not "this rule is noisy". It is that the finding
+ * cannot, even in principle, be evidence about the declared consequence -- because it concerns
+ * traffic the assertion did not name.
+ */
+export const ADVISORY_CONTRADICTIONS: ReadonlySet<ContradictionKind> = new Set([
+  ContradictionKind.DUPLICATE_REQUEST_UNRELATED,
+]);
+
+/** True when this kind is reported alongside a verdict without changing it. */
+export function isAdvisory(kind: string): boolean {
+  return ADVISORY_CONTRADICTIONS.has(kind as ContradictionKind);
+}
+
+/**
  * How much authority a finding carries — the distinction above, said out loud on the finding itself.
  *
  * The rule already turns on this: an OBSERVED contradiction outranks a passing assertion and answers
@@ -248,6 +307,14 @@ export const FindingTier = {
    * become true a moment later. It is a statement about our timing at least as much as about the app.
    */
   ABSENCE_DERIVED: 'absence-derived',
+  /**
+   * True, reported, and not about the question asked. Traffic the assertion never named.
+   *
+   * Distinct from ABSENCE_DERIVED, which IS about the declared consequence and says our timing was
+   * inconclusive about it. This one is about something else entirely, so downgrading on it answers a
+   * question nobody put.
+   */
+  ADVISORY: 'advisory',
 } as const;
 export type FindingTier = (typeof FindingTier)[keyof typeof FindingTier];
 
@@ -265,6 +332,7 @@ export type FindingTier = (typeof FindingTier)[keyof typeof FindingTier];
  * end Reticle chose, so downgrading it would invent a caveat on its author's behalf.
  */
 export function tierOfFinding(kind: string): FindingTier {
+  if (isAdvisory(kind)) return FindingTier.ADVISORY;
   return isAbsenceDerived(kind) ? FindingTier.ABSENCE_DERIVED : FindingTier.OBSERVED;
 }
 

@@ -206,8 +206,13 @@ function loopBody(text: string, headOpen: number): string | null {
  * `session-end` is the one worth naming: it creates `DEFAULT_SESSION_RETENTION + 5` directories and
  * writes a file into each, which is more per-iteration IO than the 40-record loop that actually
  * broke Windows CI and prompted this issue.
+ *
+ * 13th: `setup/node-effects.test.ts`. It now polls `lsof` for a port to be bound instead of sleeping
+ * a fixed 1,200ms and hoping — which is the same defect this rule exists for, one layer down, and
+ * had failed three unrelated PRs as `expected '' not to be ''`. The poll is the IO loop; both tests
+ * in that file already declare `15_000`, so it satisfies the rule and only this count moved.
  */
-const EXPECTED_IO_LOOP_FILES = 12;
+const EXPECTED_IO_LOOP_FILES = 13;
 
 function testFiles(dir: string): string[] {
   const out: string[] = [];

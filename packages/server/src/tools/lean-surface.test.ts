@@ -51,6 +51,10 @@ const PINNED_DEFAULT = [
   ReticleTool.INSPECT,
   ReticleTool.FEEDBACK,
   ReticleTool.SESSION,
+  // VERIFY joined the default surface: it is the only advertised tool that can CONCLUDE.
+  // Measured on the Layer B control (a CLEAN app): with no exit on the surface the agent burned
+  // all 25 turns and never answered. See tool-surface.ts for the full evidence.
+  ReticleTool.VERIFY,
 ];
 
 /**
