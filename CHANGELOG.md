@@ -4,6 +4,10 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Changed
+
+- **`@reticlehq/browser` — `Annotator` tears down its document/window listeners via `AbortController`.** The `click`, `mousemove`, and `keydown` listeners on `document` and the `scroll`/`resize` listeners on `window` now share a single `AbortController` instead of five separately-tracked handler fields, in line with `health.ts`, `animation.ts`, `focus.ts`, and `scroll.ts`. The `MutationObserver` and the seven listeners on nodes the annotator creates and destroys are unchanged. Consistency only — the prior teardown correctly removed all five listeners. Added a teardown test asserting none of them fire after `destroy()`. Part of [#453](https://github.com/reticlehq/reticle/issues/453).
+
 ## [2.14.0] — 2026-09-10
 
 ### Added
