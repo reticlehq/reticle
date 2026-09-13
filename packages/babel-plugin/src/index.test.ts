@@ -104,3 +104,32 @@ describe('non-DOM reconcilers', () => {
     expect(transform('const x = <svg:rect />;')).not.toContain(SOURCE_ATTR);
   });
 });
+
+describe('@reticle-ignore skips the whole file', () => {
+  const IGNORED = ['// @reticle-ignore', 'const x = <button>Hi</button>;'].join('\n');
+
+  it('stamps nothing when the first non-empty line carries the marker', () => {
+    expect(transform(IGNORED)).not.toContain(DATA_RETICLE_SOURCE_ATTR);
+  });
+
+  it('keeps the marker in the output, so a reader of the built file still sees why', () => {
+    expect(transform(IGNORED)).toContain('@reticle-ignore');
+  });
+
+  it('is per file: the next file through the same plugin instance is stamped', () => {
+    // The flag has to be scoped to the file being transformed, not to the plugin. A plugin-level
+    // flag set by one ignored file would switch stamping off for the rest of the build.
+    transform(IGNORED, 'src/Generated.tsx');
+    const next = transform('const y = <button>Yo</button>;', 'src/Real.tsx');
+    expect(next).toContain(DATA_RETICLE_SOURCE_ATTR);
+  });
+
+  it('does nothing when the marker is not on the first non-empty line', () => {
+    const out = transform(
+      ["import React from 'react';", '// @reticle-ignore', 'const x = <button>Hi</button>;'].join(
+        '\n',
+      ),
+    );
+    expect(out).toContain(DATA_RETICLE_SOURCE_ATTR);
+  });
+});

@@ -23,4 +23,6 @@ export default defineConfig({
 module.exports = { plugins: [require('@reticlehq/babel-plugin').default] };
 ```
 
-After this, `reticle_inspect` returns `component.source = { file, line, column }`. Only host elements (`<div>`, `<button>`, …) are stamped; components are left untouched. Apache-2.0.
+After this, `reticle_inspect` returns `component.source = { file, line, column }`. Only host elements (`<div>`, `<button>`, …) are stamped; components are left untouched.
+
+**Opting one file out:** a file whose first non-empty line is `// @reticle-ignore` (or `/* @reticle-ignore */`) is not stamped at all. Whole file, first line — the reasons to opt out are file-shaped, and a marker that works from anywhere is a marker nobody can find. Apache-2.0.

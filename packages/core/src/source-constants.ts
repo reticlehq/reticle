@@ -33,3 +33,15 @@ export const RETICLE_ROOT_GLOBAL = '__RETICLE_ROOT__';
  * package's version. See `sdkVersion` on the HELLO message.
  */
 export const RETICLE_SDK_VERSION_GLOBAL = '__RETICLE_SDK_VERSION__';
+
+/**
+ * The per-file opt-out for source stamping: a file whose FIRST non-empty line is a comment carrying
+ * this marker — the `//` line form, the block-comment form, or `<!-- @reticle-ignore -->` for a
+ * Svelte component — is not stamped at all.
+ *
+ * Whole file, first line, on purpose. The reasons to opt out are file-shaped ("this component is
+ * generated", "stamping this one breaks a snapshot test"), and a marker that worked from line 40
+ * would be a marker nobody can find. The string lives here so the Babel plugin, the Vite plugin and
+ * the docs cannot drift on it; the stampers own the line check (#853).
+ */
+export const RETICLE_IGNORE_MARKER = '@reticle-ignore';

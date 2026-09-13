@@ -3,8 +3,6 @@ import { missingTokenWarning } from './missing-token.js';
 import { ensurePairingToken } from './ensure-token.js';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { transformSync } from '@babel/core';
-import reticleSource from '@reticlehq/babel-plugin';
 import {
   RETICLE_DEFAULT_PORT,
   RETICLE_RENDER_PREHOOK,
@@ -17,7 +15,14 @@ import {
 import { resolveProjectId } from './project-id.js';
 import { discoverDaemonPort } from './discover-port.js';
 import { announceDevServer } from './announce.js';
-import { SVELTE_FILE, stampSvelte } from './svelte-source.js';
+import { stampSvelte } from './svelte-source.js';
+import {
+  ignoredFileNotice,
+  optsOutOfStamping,
+  shouldStamp,
+  shouldStampSvelte,
+  stamp,
+} from './stamping.js';
 import {
   resolvableChain,
   sdkPackageVersion,
@@ -41,12 +46,6 @@ const RETICLE_SENSOR = '@reticlehq/browser';
  * file it lives in.
  */
 export const RETICLE_TOKEN_GLOBAL = '__RETICLE_TOKEN__';
-
-/** Files we stamp with source info — JSX/TSX only. */
-const JSX_FILE = /\.[jt]sx$/;
-/** Rollup virtual-module ids start with a NUL byte; never transform those. */
-const VIRTUAL_PREFIX = '\0';
-const NODE_MODULES = 'node_modules';
 
 /**
  * The connect code is served as a real module (not an inline <script>) so that Vite's import
@@ -394,41 +393,6 @@ function isHtmlEntry(id: string, specifier: string | undefined, root: string | u
   return candidate.endsWith(target.startsWith('/') ? target : `/${target}`);
 }
 
-/** A module id we may stamp at all: not virtual, not a dependency. Extension decides which stamper. */
-function stampableId(id: string): string | null {
-  if (id.startsWith(VIRTUAL_PREFIX)) return null;
-  if (id.includes(NODE_MODULES)) return null;
-  // Strip any query suffix (?worker, ?raw,...) before matching the extension.
-  return id.split('?')[0] ?? id;
-}
-
-function shouldStamp(id: string): boolean {
-  const clean = stampableId(id);
-  return clean !== null && JSX_FILE.test(clean);
-}
-
-/** A `.svelte` single-file component, which needs the Svelte stamper rather than Babel. */
-function shouldStampSvelte(id: string): boolean {
-  const clean = stampableId(id);
-  return clean !== null && SVELTE_FILE.test(clean);
-}
-
-function stamp(code: string, id: string): { code: string; map: string | null } | null {
-  const out = transformSync(code, {
-    filename: id,
-    plugins: [reticleSource],
-    parserOpts: { plugins: ['jsx', 'typescript'] },
-    sourceMaps: true,
-    configFile: false,
-    babelrc: false,
-  });
-  if (out?.code === undefined || null === out.code) return null;
-  return {
-    code: out.code,
-    map: out.map === undefined || null === out.map ? null : JSON.stringify(out.map),
-  };
-}
-
 /**
  * Read the daemon's auto-provisioned pairing token (~/.reticle/pairing-token, or the
  * RETICLE_PAIRING_TOKEN_DIR override) so the served app can present it. Node-side only — a browser
@@ -657,6 +621,8 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
   const warn = options.onWarn ?? ((message: string) => globalThis.console.warn(message));
   /** Whether connect() actually reached a module — asserted at buildEnd, never assumed. */
   let injected = false;
+  /** Files already announced as opted out of stamping: one line each, for the life of the server. */
+  const announcedIgnored = new Set<string>();
   /**
    * Resolve port + token at the moment of injection, not at plugin construction. By the time a
    * module is served or built the daemon is up and has written its pairing token; resolving early
@@ -832,6 +798,16 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
         return stamped ?? { code: withConnect, map: null };
       }
       if (!sourceMapping) return null;
+      // Decided HERE, ahead of both stampers, so the Svelte path honours the marker too and so the
+      // opt-out is announced once regardless of which stamper would have run. The Babel plugin reads
+      // the same marker on its own for the callers that reach it without Vite (#853).
+      if (optsOutOfStamping(code, id)) {
+        if (!announcedIgnored.has(id)) {
+          announcedIgnored.add(id);
+          warn(ignoredFileNotice(id));
+        }
+        return null;
+      }
       // `.svelte` runs on the RAW component source, which is only still markup because this plugin
       // declares `enforce: 'pre'` and therefore transforms before @sveltejs/vite-plugin-svelte. No
       // map: the insertions are within a line and never move one, and a wrong map is worse than none.
