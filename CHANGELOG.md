@@ -4,6 +4,10 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Changed
+
+- **`@reticlehq/browser` — `installDownload()` tears down its document `click` listener via `AbortController`.** Brings the download observer's document-level listener in line with the rest of the observer suite (`health.ts`, `animation.ts`, `focus.ts`, `scroll.ts`), which already use a shared `AbortController` + `{ signal }` instead of a manual `removeEventListener` call. The `URL.createObjectURL`/`HTMLAnchorElement.prototype.click` monkey-patch restoration is unchanged. Consistency only — the prior teardown correctly removed the listener. Part of [#453](https://github.com/reticlehq/reticle/issues/453).
+
 ## [2.14.0] — 2026-09-10
 
 ### Added
