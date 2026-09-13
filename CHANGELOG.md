@@ -4,6 +4,10 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Changed
+
+- **`@reticlehq/browser` — `observeSameOriginFrames()` tears down its `load` listener via `AbortController`.** Brings the frame observer in line with the rest of the observer suite (`health.ts`, `animation.ts`, `focus.ts`, `scroll.ts`), which already register document/window listeners with `{ signal }` instead of a manual `removeEventListener` pair. Consistency only — the prior teardown correctly removed the listener. Part of [#453](https://github.com/reticlehq/reticle/issues/453).
+
 ## [2.14.0] — 2026-09-10
 
 ### Added
