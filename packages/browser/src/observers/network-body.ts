@@ -95,11 +95,50 @@ export function isCapturableType(contentType: string | null): boolean {
 }
 
 /**
- * Per-body character cap. Bodies ride the same ring buffer as the DOM/route/console timeline, so an
- * uncapped body could evict the whole behavioral history; the small cap keeps a few large responses
- * from starving the timeline (the separate-budget concern in the scalability audit).
+ * Per-body character cap, by default. Bodies ride the same ring buffer as the DOM/route/console
+ * timeline, so an uncapped body could evict the whole behavioral history; the small cap keeps a few
+ * large responses from starving the timeline (the separate-budget concern in the scalability audit).
  */
-const MAX_BODY_CHARS = 8192;
+const DEFAULT_BODY_CHARS = 8192;
+
+/**
+ * Ceiling on the configured cap.
+ *
+ * The default is right for reading a body in a transcript, and wrong for the one assertion class it
+ * makes impossible: a NEGATIVE `bodyContains` has to be checked over the WHOLE payload, so on any
+ * list endpoint larger than the cap it is permanently undecidable -- and that is the class that
+ * proves safety invariants ("this dangerous field is absent from every row"). Raising the cap is
+ * the cheap way to make those provable, so the cap is raisable (#799).
+ *
+ * The ceiling exists because the ring buffer is shared. 256 KB of one response is already a large
+ * share of the behavioural history an agent reads; past that, retaining the body is the wrong tool
+ * and a streaming absence match is the right one.
+ */
+const MAX_CONFIGURABLE_BODY_CHARS = 262144;
+
+/** Floor, so a typo'd `0` does not silently disable body capture that was explicitly asked for. */
+const MIN_CONFIGURABLE_BODY_CHARS = 256;
+
+let bodyMaxChars = DEFAULT_BODY_CHARS;
+
+/**
+ * Set the per-body character cap, clamped to a supported range.
+ *
+ * Called once from `connect()`. Out-of-range values are clamped rather than rejected: a body cap is
+ * a budget, not a contract, and failing an app's `connect()` over one is the wrong trade.
+ */
+export function setNetworkBodyMaxChars(chars: number): void {
+  if (!Number.isFinite(chars)) return;
+  bodyMaxChars = Math.min(
+    MAX_CONFIGURABLE_BODY_CHARS,
+    Math.max(MIN_CONFIGURABLE_BODY_CHARS, Math.floor(chars)),
+  );
+}
+
+/** The cap currently in force. Exported for tests and for the capabilities report. */
+export function networkBodyMaxChars(): number {
+  return bodyMaxChars;
+}
 
 /**
  * Hard bound on how much of a body is ever PARSED or SCANNED, independent of how much is reported.
@@ -111,7 +150,21 @@ const MAX_BODY_CHARS = 8192;
  * stays bounded AND redaction keeps enough context to catch a secret straddling the reported edge.
  * Scanning far past the output cap is wasted work in any case — only 8 KB is ever reported.
  */
-const MAX_BODY_SCAN_CHARS = MAX_BODY_CHARS * 2;
+const REDACT_SCAN_CEILING = DEFAULT_BODY_CHARS * 2;
+
+/**
+ * How much of a body is parsed or scanned, given the cap in force.
+ *
+ * Twice the reported cap so redaction still sees a secret straddling the reported edge -- but for
+ * the `redactText` path only, never past {@link REDACT_SCAN_CEILING}. That path is where the
+ * measured quadratic cost lives, and raising the cap must not reintroduce a main-thread freeze the
+ * bound was set to prevent. A JSON body takes `JSON.parse` + `safeStringify` instead, neither of
+ * which backtracks, so it can be scanned to the full configured width.
+ */
+function scanWidth(redacting: boolean): number {
+  const generous = bodyMaxChars * 2;
+  return redacting ? Math.min(generous, REDACT_SCAN_CEILING) : generous;
+}
 
 /**
  * An `Authorization: Bearer …` / `Basic …` credential. The token side requires credential shape — 16+
@@ -208,10 +261,12 @@ export function projectBody(
   //
   // The slice is generous (a multiple of the output cap) so redaction still sees enough context to
   // recognise a secret that straddles the boundary, while the work stays bounded regardless of body size.
-  const oversized = rawText.length > MAX_BODY_SCAN_CHARS;
-  const text = oversized ? rawText.slice(0, MAX_BODY_SCAN_CHARS) : rawText;
+  const isJson = contentType !== null && /json|graphql/i.test(contentType);
+  const scanChars = scanWidth(!isJson);
+  const oversized = rawText.length > scanChars;
+  const text = oversized ? rawText.slice(0, scanChars) : rawText;
   let out: string;
-  if (contentType !== null && /json|graphql/i.test(contentType)) {
+  if (isJson) {
     try {
       // safeStringify already sanitizes internally — the extra sanitizeForTransport here re-walked
       // every captured JSON body a second time (~21% of the per-response cost) for an identical result.
@@ -227,6 +282,6 @@ export function projectBody(
   out = scrubKnownSecrets(out);
   // Truncated if the projection overflows the cap OR the input itself was clipped above — a body the
   // SDK never fully read must not be reported as complete.
-  const truncated = oversized || out.length > MAX_BODY_CHARS;
-  return { body: out.length > MAX_BODY_CHARS ? out.slice(0, MAX_BODY_CHARS) : out, truncated };
+  const truncated = oversized || out.length > bodyMaxChars;
+  return { body: out.length > bodyMaxChars ? out.slice(0, bodyMaxChars) : out, truncated };
 }
