@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1787893505436-assert",
+  "createdAt": 1787893505436,
+  "origin": "failed-assert",
+  "expected": "declared consequence",
+  "observed": "this tab is throttled and has not rendered; a miss here is not evidence the UI is absent. acquire a scriptable context with reticle_run { tool: \"reticle_lease\", action: \"acquire\", url } (the human can run `reticle drive <url>` if they have a shell)",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "auth-submit",
+        "source": {
+          "file": "src/features/auth/login-view.tsx",
+          "line": 184,
+          "column": 10
+        }
+      },
+      "action": "click"
+    }
+  ]
+}

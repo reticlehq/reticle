@@ -92,12 +92,12 @@ process.on('unhandledRejection', () => undefined);
 process.chdir(ROOT);
 
 // A daemon of our own, on a port nothing else in the battery uses.
-execSync(`node packages/server/dist/cli.js stop --port ${String(PORT)} --quiet || true`, {
+execSync(`node server/dist/command/cli.js stop --port ${String(PORT)} --quiet || true`, {
   stdio: 'ignore',
   shell: '/bin/sh',
 });
 const daemon = execSync(
-  `node packages/server/dist/cli.js serve --port ${String(PORT)} >/dev/null 2>&1 & echo started`,
+  `node server/dist/command/cli.js serve --port ${String(PORT)} >/dev/null 2>&1 & echo started`,
   { shell: '/bin/sh' },
 ).toString();
 void daemon;
@@ -248,7 +248,7 @@ try {
       /* already gone */
     }
   }
-  execSync(`node packages/server/dist/cli.js stop --port ${String(PORT)} --quiet || true`, {
+  execSync(`node server/dist/command/cli.js stop --port ${String(PORT)} --quiet || true`, {
     stdio: 'ignore',
     shell: '/bin/sh',
   });

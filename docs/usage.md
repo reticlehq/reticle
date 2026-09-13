@@ -12,7 +12,7 @@ If you haven't set up Reticle yet, start with [Getting Started](getting-started.
 >
 > | Looking for                                | Go to                                   |
 > | ------------------------------------------ | --------------------------------------- |
-> | One tool, with a real request and response | [Tools reference](/tools-overview)      |
+> | One tool, with a real request and response | [Tools reference](/tools/overview)      |
 > | The predicate grammar                      | [Predicates](/predicates)               |
 > | Every action and its arguments             | [Actions](/actions)                     |
 > | Worked examples for real situations        | [Recipes](/recipes)                     |
@@ -315,10 +315,10 @@ Each pending mark carries the human note, the element label, the source **`file:
 On a page Reticle drives (`reticle drive`) or a leased Playwright tab (`reticle_lease acquire`), make a request return a 500, force it offline, or delay it, so testing error/edge states is one declared rule, no backend changes:
 
 ```
-reticle_network_mock({ mocks: [{ urlContains: "/api/pay", method: "POST", status: 500 }] })
+reticle_run({ tool: "reticle_network_mock", args: { mocks: [{ urlContains: "/api/pay", method: "POST", status: 500 }] } })
 → { applied: true, count: 1 }      // now the checkout POST returns 500; verify the failure UI
-reticle_network_mock({ mocks: [{ urlContains: "/api/feed", abort: true }] })   // simulate offline
-reticle_network_mock({ clear: true }) // turn mocking off
+reticle_run({ tool: "reticle_network_mock", args: { mocks: [{ urlContains: "/api/feed", abort: true }] } })   // simulate offline
+reticle_run({ tool: "reticle_network_mock", args: { clear: true } }) // turn mocking off
 ```
 
 First matching rule wins (`urlContains` + optional case-insensitive `method`). Needs a driven or leased browser; without one it returns a `recommendation` pointing at `reticle drive`.
@@ -328,7 +328,7 @@ First matching rule wins (`urlContains` + optional case-insensitive `method`). N
 Pin the driven page to a fixed viewport so a screenshot baseline is reproducible across machines:
 
 ```
-reticle_viewport({ width: 1280, height: 800 })   // set once, before reticle_screenshot / reticle_visual_diff
+reticle_run({ tool: "reticle_viewport", args: { width: 1280, height: 800 } })   // set once, before reticle_screenshot / reticle_visual_diff
 → { applied: true, width: 1280, height: 800 }
 ```
 
@@ -622,11 +622,11 @@ reticle_baseline {action:"diff"}({ baseline: "checkout-ok" })
 The semantic `reticle_baseline {action:"diff"}` above never flakes. For an actual **pixel** diff (`reticle_screenshot` + `reticle_visual_diff`, driven mode), three knobs make it CI-stable instead of flaky:
 
 ```jsonc
-reticle_viewport({ width: 1280, height: 800 }) // 1. same size on every machine
-reticle_clock({ freeze: true })                // 2. no animation/time jitter
-reticle_screenshot({ name: "checkout-ok" })    //    capture the baseline
+reticle_run({ tool: "reticle_viewport", args: { width: 1280, height: 800 } }) // 1. same size on every machine
+reticle_run({ tool: "reticle_clock", args: { freeze: true } })                // 2. no animation/time jitter
+reticle_run({ tool: "reticle_screenshot", args: { name: "checkout-ok" } })    //    capture the baseline
 // …later, after a change, at the same viewport + frozen clock:
-reticle_visual_diff({ baseline: "checkout-ok", masks: [{ x: 0, y: 0, width: 200, height: 24 }] })
+reticle_run({ tool: "reticle_visual_diff", args: { baseline: "checkout-ok", masks: [{ x: 0, y: 0, width: 200, height: 24 }] } })
 // → { matched: false, changedPixels, ratio, region, diffPath }   // 3. masks ignore volatile regions
 ```
 
@@ -654,7 +654,7 @@ reticle_record {action:"stop"}({ recordingName: "checkout" })
 `reticle_record {action:"stop"}` returns a compiled, replayable `program`: the agent's `reticle_act` / `reticle_act_sequence` invocations captured during the span, with each ref normalized to its element's `data-testid` where resolvable. Re-run it later:
 
 ```jsonc
-reticle_replay({ recordingName: "checkout" })
+reticle_run({ tool: "reticle_replay", args: { recordingName: "checkout" } })
 // re-resolves each step by testid and re-runs the actions in order
 // → { recordingName, ok, steps: [{ tool, ok, error?, note? }] }   // stops at the first failure
 ```
@@ -668,7 +668,7 @@ reticle_replay({ recordingName: "checkout" })
 Have the agent crawl and stress a screen without a script:
 
 ```jsonc
-reticle_explore({ scope: "main" })
+reticle_run({ tool: "reticle_explore", args: { scope: "main" } })
 // → { interactive: [ { ref, desc }, … ], consoleErrors, hint }
 ```
 
@@ -834,11 +834,11 @@ It renders on the HUD. (The agent's private reasoning isn't visible to Reticle; 
 Fast-forward toasts, debounces, auto-dismiss, and commit-on-blur without waiting:
 
 ```jsonc
-reticle_clock({ freeze: true })          // freeze app timers (Date.now/setTimeout/setInterval)
+reticle_run({ tool: "reticle_clock", args: { freeze: true } })          // freeze app timers (Date.now/setTimeout/setInterval)
 reticle_act({ ref: e9, action: "click" })
-reticle_clock({ advanceMs: 5000 })       // jump 5s: the auto-dismiss fires now, deterministically
+reticle_run({ tool: "reticle_clock", args: { advanceMs: 5000 } })       // jump 5s: the auto-dismiss fires now, deterministically
 reticle_assert({ predicate: { kind: "element", query: { role: "alert" }, absent: true } })
-reticle_clock({ reset: true })           // restore real timers
+reticle_run({ tool: "reticle_clock", args: { reset: true } })           // restore real timers
 ```
 
 It does **not** freeze `requestAnimationFrame`/microtasks (React's scheduler keeps running), and Reticle's own internal timers are insulated, so freezing never stalls the tools.
@@ -1022,7 +1022,7 @@ registerCapabilities({ testids: [...], signals: [...], stores: [...], flows: [..
 ```
 
 ```jsonc
-reticle_capabilities()   // → { testids, signals, stores, flows }
+reticle_run({ tool: "reticle_capabilities", args: {} })   // → { testids, signals, stores, flows }
 ```
 
 ### `reticle_replay`: recordings become re-runnable programs

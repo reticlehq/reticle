@@ -35,17 +35,34 @@ const chk = (label, ok, detail = '') => {
 // DELIBERATELY no RETICLE_ADVERTISE_ALL_TOOLS: the point is the surface a user actually gets.
 const client = new McpStdioClient(
   'node',
-  ['packages/server/dist/cli.js', 'mcp', '--port', PORT, '--drive', APP],
+  ['server/dist/command/cli.js', 'mcp', '--port', PORT, '--drive', APP],
   { RETICLE_PORT: PORT, RETICLE_TELEMETRY: '0' },
 );
 
 /** Call through the skill's own envelope and hand back whatever came out, refusals included. */
 let SID;
+/**
+ * The budget is generous ON PURPOSE, and it is not tuned to this machine.
+ *
+ * `reticle_verify { action: "change" }` replays EVERY saved flow whose covered sources it cannot
+ * determine — over-running beats silently skipping, which is the right trade and is documented in
+ * `attributed-failure.ts`. So this call's cost grows with the number of saved flows in whatever
+ * repository it runs against, without bound. Measured here at 43.8s over 39 flows; CI has a slower
+ * runner and more flows by the time this spec runs, so 60s was a statement about the machine, and
+ * it failed only in CI — which is exactly what a timing assertion does.
+ *
+ * What this spec asserts is that the SKILL's one-call paths resolve and answer. It has never been
+ * about how long they take, and a cap that turns a working path into a red is measuring the wrong
+ * thing. If the cost itself is the worry, that belongs in the benchmark, where it is compared
+ * against a baseline rather than against a stopwatch.
+ */
+const CALL_BUDGET_MS = 240_000;
+
 async function viaRun(tool, args) {
   const result = await client.request(
     'tools/call',
     { name: 'reticle_run', arguments: { tool, args, ...(SID === undefined ? {} : { sessionId: SID }) } },
-    60_000,
+    CALL_BUDGET_MS,
   );
   const text = (result?.content ?? [])
     .filter((c) => c.type === 'text')

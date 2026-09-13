@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "name": "deploy-journey",
+  "createdAt": 0,
+  "startPath": "/",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "login-submit",
+        "source": {
+          "file": "apps/bench-app/src/store/store.ts",
+          "line": 96
+        }
+      },
+      "action": "click",
+      "args": {},
+      "expect": {
+        "signal": "auth:granted"
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "nav-deployments",
+        "source": {
+          "file": "apps/bench-app/src/store/store.ts",
+          "line": 86
+        }
+      },
+      "action": "click",
+      "args": {},
+      "expect": {
+        "signal": "nav:changed"
+      }
+    }
+  ],
+  "success": {
+    "signal": "nav:changed"
+  }
+}

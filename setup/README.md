@@ -6,7 +6,7 @@
 npx @reticlehq/server@latest init --flow "<the journey worth proving>"
 ```
 
-That is the first line of `SKILL.md`, it is what `break-matrix.mjs` measures, and it is the only install path that ships: `setup/` is absent from every published package (`packages/server` ships `dist`, `README.md`, `LICENSE-ENTERPRISE`, `SKILL.md`, `docs`), the root package is `private: true`, and nothing anywhere fetches these files over the network. They exist only in a checkout.
+That is the first line of `SKILL.md`, it is what `break-matrix.mjs` measures, and it is the only install path that ships: `setup/` is absent from every published package (`server` ships `dist`, `README.md`, `LICENSE-ENTERPRISE`, `SKILL.md`, `docs`), the root package is `private: true`, and nothing anywhere fetches these files over the network. They exist only in a checkout.
 
 What lives here is the PROTOTYPE the CLI's runtime phase was ported from, plus the negative control that keeps `init` honest:
 

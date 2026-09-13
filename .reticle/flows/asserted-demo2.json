@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "name": "asserted-demo2",
+  "createdAt": 1786153152845,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "login-submit",
+        "source": {
+          "file": "src/components/Login.tsx",
+          "line": 80,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "element": {
+          "testid": "nav-overview"
+        }
+      }
+    }
+  ]
+}

@@ -162,14 +162,19 @@ export class McpStdioClient {
 /**
  * The reticle CLI entrypoint, resolved once.
  *
- * This lived as a hand-written path literal in three call sites, all of which still said
- * `packages/core/dist/cli.js` after the CLI moved to `packages/server`. Nothing referenced a missing
- * file until spawn time, where it surfaced only as `mcp process exited code=1` — so the head-to-head
- * suite was simply unrunnable, with no error that named the cause. Resolved and existence-checked here
- * so a future move fails loudly, in one place.
+ * "In one place" was the intention and has never been true. The path is a hand-written literal in
+ * fifty-odd call sites across `bench/` and `apps/e2e/`, and it has now been wrong three times: it
+ * said `core/dist/cli.js` after the CLI moved to `server`, `packages/server/dist/cli.js` after
+ * `packages/` was dissolved, and `server/dist/cli.js` after the CLI moved into `command/`.
+ *
+ * The third one hid the longest, and the reason is worth writing down: a build does not delete what
+ * it no longer emits, so the file left behind by the PREVIOUS layout stayed on disk and every one
+ * of those literals went on resolving. Everything passed locally and nothing but a clean checkout
+ * could have shown it. Only this call site throws by name; the fifty that copied it fail at spawn
+ * time as `mcp process exited code=1`, which names nothing.
  */
 export const RETICLE_CLI = (() => {
-  const p = path.join(REPO_ROOT, 'packages', 'server', 'dist', 'cli.js');
+  const p = path.join(REPO_ROOT, 'server', 'dist', 'command', 'cli.js');
   if (!existsSync(p))
     throw new Error(
       `reticle CLI not found at ${p} — run \`pnpm build\` first (or fix RETICLE_CLI if the CLI moved).`,

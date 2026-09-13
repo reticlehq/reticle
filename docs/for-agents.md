@@ -67,5 +67,6 @@ You rarely need more than one.
 | Look up a specific tool, flag, or workflow | [Complete usage guide](/usage) |
 | Understand what Reticle is doing under the hood | [Architecture](/architecture) |
 | Wire it into a desktop app | [Desktop apps](/desktop) |
-| Make the checks repeatable in CI | [Specs for CI](/testing) |
+| Write my own checks in code, no agent involved | [Write verification in code](/testing) |
+| Make the checks repeatable in CI | [Write verification in code](/testing) |
 | Work on Reticle itself | [Gates](/gates), then [System map](/system-map) |

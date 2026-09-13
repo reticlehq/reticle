@@ -3,7 +3,7 @@ name: audit-my-app
 description: Sweep a whole running web app for what is broken, without writing a script or knowing the codebase. Clicks every reachable control and reports dead buttons, console errors, failed requests, and places where the API and the screen disagree. Use on an unfamiliar codebase, before a release, after a big merge or dependency bump, when the user asks for a smoke test or a health check, or when someone says "just check everything still works".
 license: Apache-2.0
 metadata:
-  version: 2.14.0
+  version: 3.0.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -15,7 +15,7 @@ You do not need to understand the codebase to check it. **Reticle** drives every
 ## 1. Ask the app what it can do
 
 ```
-reticle_capabilities({ sessionId })
+reticle_run({ tool: "reticle_capabilities", args: { sessionId } })
 ```
 
 About 1 KB, and it is the app describing its own testable surface: every registered testid, every domain signal, the stores, and the saved flows with their steps. That beats snapshotting the DOM and inferring intent from element names, and it is the cheapest orientation available.

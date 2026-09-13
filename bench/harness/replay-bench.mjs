@@ -81,6 +81,32 @@ const meanReplay = measured.length
   : null;
 const summary = {
   layer: 'C (regression replay — deterministic, no LLM)',
+  /*
+   * The rise above the previous baseline was CHOSEN, and this is where that is said out loud.
+   *
+   * A replayed step now carries evidence instead of a pass/fail bit: a bounded `window`
+   * {since, until} (the address an agent hands straight to `reticle_observe`), a structured digest
+   * of what each step's window contained, per-step contradictions, and cross-step ones. Before it, a
+   * replay of an app with a console error reported `ok: true` — the path designed to run forever was
+   * the one that captured nothing.
+   *
+   * The route fat that came with it was measured field by field and cut: zero-valued digest counters
+   * (an absent counter IS zero), the per-step `tool` when it holds the default (137/137 corpus steps
+   * do), and `durationMs` (it was `window.until - window.since`, shipped alongside both operands).
+   * That took 604 -> 431 with detection unchanged at 3/3, 2/2, 1/1.
+   *
+   * What is left is evidence, not restatement, so it is declared rather than trimmed further. The
+   * next rise has to declare itself the same way.
+   */
+  cost: {
+    token_budget: {
+      extra_tokens: 180,
+      reason:
+        'per-step window + digest + contradictions (the deterministic effect record). Route fat ' +
+        'was cut first: 604 -> 431 via sparse digest counters, default-valued `tool`, and the ' +
+        'derived `durationMs`. Detection held at 3/3, 2/2, 1/1 across every cut.',
+    },
+  },
   per_run: {
     reticle_replay_mean_tokens: meanReplay,
     playwright_mcp_redrive_tokens: LLM_REDRIVE.playwright_mcp,

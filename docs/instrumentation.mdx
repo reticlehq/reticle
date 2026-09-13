@@ -119,7 +119,7 @@ registerCapabilities({
 });
 ```
 
-This is what [`reticle_capabilities`](/tools-tools-and-run) returns. The app telling an agent what it considers testable, before the agent has looked at a single element. It is the cheapest and most truthful first call on an unfamiliar codebase.
+This is what [`reticle_capabilities`](/tools/tools-and-run) returns. The app telling an agent what it considers testable, before the agent has looked at a single element. It is the cheapest and most truthful first call on an unfamiliar codebase.
 
 ## Why emitting failure signals pays off
 
@@ -196,7 +196,7 @@ That is the design working as intended. A tool that reports "pass" whenever it h
   accompanying `warning`.
 </Warning>
 
-Note the last field. When Reticle cannot tell what happened, it invites a bug report and calls the ambiguity its own defect rather than yours. If you hit an `unknown` you believe is wrong, that is worth [sending](/tools-session-and-feedback).
+Note the last field. When Reticle cannot tell what happened, it invites a bug report and calls the ambiguity its own defect rather than yours. If you hit an `unknown` you believe is wrong, that is worth [sending](/tools/session-and-feedback).
 
 ## Testids, briefly
 
@@ -229,7 +229,7 @@ You do not need to describe the whole app, and trying to is the slow path that g
 Then stop. Add more when a flow you actually replay needs it.
 
 <CardGroup cols={2}>
-  <Card title="Prove it" icon="circle-check" href="/tools-act-and-wait">
+  <Card title="Prove it" icon="circle-check" href="/tools/act-and-wait">
     Use your new signals as predicates and watch the grade climb.
   </Card>
   <Card title="Lock it in" icon="vial" href="/testing">

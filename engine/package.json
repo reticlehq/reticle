@@ -1,0 +1,72 @@
+{
+  "name": "@reticlehq/engine",
+  "version": "3.0.0",
+  "description": "The rules that decide a verdict: read what happened in a running app and say whether the declared consequence held. No browser, no daemon, no command line - an implementation of the OpenReality specification you can use on its own.",
+  "keywords": [
+    "verification",
+    "verdict",
+    "evidence",
+    "ai-agents",
+    "testing",
+    "reticle"
+  ],
+  "homepage": "https://github.com/reticlehq/reticle#readme",
+  "bugs": "https://github.com/reticlehq/reticle/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reticlehq/reticle.git",
+    "directory": "engine"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./question/*.js": {
+      "types": "./dist/question/*.d.ts",
+      "default": "./dist/question/*.js"
+    },
+    "./disagreement/*.js": {
+      "types": "./dist/disagreement/*.d.ts",
+      "default": "./dist/disagreement/*.js"
+    },
+    "./window/*.js": {
+      "types": "./dist/window/*.d.ts",
+      "default": "./dist/window/*.js"
+    },
+    "./evidence/*.js": {
+      "types": "./dist/evidence/*.d.ts",
+      "default": "./dist/evidence/*.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "prepack": "tsc -b && node ../scripts/prepare-dist.mjs dist",
+    "typecheck": "tsc -b",
+    "lint": "eslint src",
+    "test:unit": "node ../scripts/guard-tests.mjs unit",
+    "test:guards": "node ../scripts/guard-tests.mjs guards"
+  },
+  "dependencies": {
+    "@reticlehq/core": "workspace:*",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@reticlehq/openreality": "workspace:*"
+  }
+}

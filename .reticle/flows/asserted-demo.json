@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "name": "asserted-demo",
+  "createdAt": 1786152972536,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "login-submit",
+        "source": {
+          "file": "src/components/Login.tsx",
+          "line": 80,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "net": {
+          "method": "POST",
+          "urlContains": "/api/login"
+        }
+      }
+    }
+  ]
+}

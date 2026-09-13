@@ -7,7 +7,7 @@ icon: filter
 
 A predicate declares what should be true, as `{ kind, ...fields }`. Reticle has twelve kinds: `signal`, `state`, `net`, `route`, `element`, `text`, `console`, `animation`, `settled`, and the combinators `allOf`, `anyOf` and `not`. Which one you pick decides whether a green means anything.
 
-It is the argument to `until` on [`reticle_act_and_wait`](/tools-act-and-wait), and to `predicate` on [`reticle_assert`](/tools-assert) and [`reticle_wait_for`](/tools-wait-for).
+It is the argument to `until` on [`reticle_act_and_wait`](/tools/act-and-wait), and to `predicate` on [`reticle_assert`](/tools/assert) and [`reticle_wait_for`](/tools/wait-for).
 
 Every predicate is `{ kind, ...fields }`.
 
@@ -189,7 +189,7 @@ This is the predicate that catches a UI-versus-store desync. A deploy that only 
 { "kind": "settled", "quietMs": 500 }
 ```
 
-Network and DOM idle. This is the deterministic replacement for a fixed sleep, not a proof of anything: combine it with a real consequence rather than asserting it alone. Omitting `until` on [`reticle_act_and_wait`](/tools-act-and-wait) waits for exactly this.
+Network and DOM idle. This is the deterministic replacement for a fixed sleep, not a proof of anything: combine it with a real consequence rather than asserting it alone. Omitting `until` on [`reticle_act_and_wait`](/tools/act-and-wait) waits for exactly this.
 
 ## Combinators
 
@@ -253,6 +253,6 @@ On a failure each child reports separately too, so you can see which one broke:
 
 The `since` cursor comes from a prior `reticle_act` response. Use it whenever you are asserting something an action was supposed to cause. Without it, an assertion can pass on an event from two clicks ago.
 
-<Card title="Where predicates get used" icon="circle-check" href="/tools-act-and-wait">
+<Card title="Where predicates get used" icon="circle-check" href="/tools/act-and-wait">
   Naming the consequence before the action is the whole point.
 </Card>

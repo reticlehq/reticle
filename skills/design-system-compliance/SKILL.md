@@ -3,7 +3,7 @@ name: design-system-compliance
 description: Check that the UI you actually rendered uses the design system, by reading computed styles in the running app against the project's design tokens. Catches hardcoded hex colors, off-palette backgrounds, invisible or unusable controls, and animations that never ran. Use after building or restyling a component, when a design review is wanted, when a UI looks slightly off but nobody can say why, or when a design system exists and nothing checks whether the code follows it.
 license: Apache-2.0
 metadata:
-  version: 2.14.0
+  version: 3.0.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -47,7 +47,7 @@ A design review that only compares colors passes a button nobody can press.
 ## Animations
 
 ```
-reticle_animations({ sessionId })
+reticle_run({ tool: "reticle_animations", args: { sessionId } })
 ```
 
 Returns running and recently completed animations with their targets and timing. Two things worth checking after any motion work: an animation you added that **never appears here** did not run, and one whose duration does not match the token is off-spec. Both look identical in a screenshot.

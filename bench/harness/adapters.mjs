@@ -229,6 +229,21 @@ function reticleRefForTestid(queryText, _testid) {
  */
 const BENCH_APP_RETICLE_PORT = Number(RETICLE_PORT);
 
+/**
+ * Which build of Reticle to measure. Defaults to this checkout.
+ *
+ * Overridable because the path was hardcoded, and a hardcoded path means the harness can only ever
+ * measure the tree it sits in — so a question as basic as "did this release get cheaper than the
+ * last one" could not be answered with ONE measuring stick. Running each release's own harness
+ * instead confounds the product with the instrument: the harness files themselves change between
+ * releases, so a token delta measured that way cannot be attributed to either.
+ *
+ * Point it at another checkout's CLI (`BENCH_RETICLE_CLI=/path/to/server/dist/.../cli.js`) to drive
+ * an older build with today's harness. Flow files are readable across releases while
+ * FLOW_FILE_VERSION agrees, and each pass records its own flows anyway.
+ */
+const RETICLE_CLI = process.env.BENCH_RETICLE_CLI ?? 'server/dist/command/cli.js';
+
 export class ReticleAdapter {
   constructor(url, port = BENCH_APP_RETICLE_PORT) {
     this.url = url;
@@ -238,7 +253,7 @@ export class ReticleAdapter {
   async start() {
     this.c = new McpStdioClient(
       'node',
-      ['packages/server/dist/cli.js', 'mcp', '--port', this.port, '--drive', this.url],
+      [RETICLE_CLI, 'mcp', '--port', this.port, '--drive', this.url],
       // The default `hybrid` profile advertises only the core verify tools directly and reaches the
       // rest through 2 meta-tools. This deterministic client calls tools BY NAME (record_start,
       // flow_save, flow_replay…), so it needs them advertised directly — opt into the full profile.
@@ -486,11 +501,9 @@ export class ReticleAdapter {
     // Explicit daemon teardown — reticle mcp leaves a persistent daemon + driven browser otherwise.
     try {
       const { execFileSync } = await import('node:child_process');
-      execFileSync(
-        'node',
-        ['packages/server/dist/cli.js', 'stop', '--port', this.port, '--quiet'],
-        { stdio: 'ignore' },
-      );
+      execFileSync('node', [RETICLE_CLI, 'stop', '--port', this.port, '--quiet'], {
+        stdio: 'ignore',
+      });
     } catch {
       /* noop */
     }

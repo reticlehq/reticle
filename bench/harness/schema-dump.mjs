@@ -30,7 +30,7 @@ const SERVERS = {
   },
   reticle: {
     command: 'node',
-    args: ['packages/server/dist/cli.js', 'mcp', '--port', '4400'],
+    args: ['server/dist/command/cli.js', 'mcp', '--port', '4400'],
     env: { RETICLE_PORT: '4400' },
   },
 };

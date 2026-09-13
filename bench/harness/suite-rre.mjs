@@ -133,10 +133,28 @@ for (const k of [2, names.length]) {
   // run in which every flow failed to replay (status=fail, passed=0) because the tool names it called
   // had been consolidated away — the cost of a failed verify is still a number, and a number still
   // divides. Efficiency is only meaningful when the thing was actually verified.
-  if (v.status !== 'pass' || v.passed !== k) {
+  //
+  // The guard reads the VERDICT'S ARRAYS, not its `status`. `status` collapses two different facts
+  // into one word: a suite that proved nothing, and a suite that proved everything it declared while
+  // a channel disagreed about something else. `SuiteVerdict` distinguishes them — `unverifiable[]`
+  // names flows that cannot fail, `contradictions[]` names channel disagreements — and reading only
+  // `status` made an app-level FINDING look like a failure to verify, which is how a green 2/2 suite
+  // turned this pass red. A contradiction is not permission to skip the measurement; it is a result,
+  // so it is PRINTED, never swallowed.
+  const cannotFail = v.verdict?.unverifiable ?? [];
+  const disagreements = v.verdict?.contradictions ?? [];
+  if (v.passed !== k || (v.verdict?.failed ?? 0) > 0 || cannotFail.length > 0) {
     throw new Error(
-      `suite verify did not pass at K=${k} (status=${v.status}, passed=${v.passed}/${k}). ` +
+      `suite verify did not pass at K=${k} (status=${v.status}, passed=${v.passed}/${k}, ` +
+        `cannot-fail=${cannotFail.length}). ` +
         'Refusing to report a regression-efficiency ratio for a suite that did not verify.',
+    );
+  }
+  if (disagreements.length > 0) {
+    console.log(
+      `contradictions at K=${k} (the suite verified; these are findings about the APP, and the ` +
+        `efficiency ratio below still measures a real verify): ` +
+        JSON.stringify(disagreements.map((c) => ({ flow: c.flow, step: c.step, kind: c.kind }))),
     );
   }
   const competitor = k * LLM_REDRIVE_PER_FLOW;

@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "name": "fg-probe3",
+  "createdAt": 1786161482546,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "nav-overview",
+        "source": {
+          "file": "src/components/Sidebar.tsx",
+          "line": 41,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "signal": "signal-that-never-fires"
+      }
+    }
+  ]
+}

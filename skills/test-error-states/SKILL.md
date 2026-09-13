@@ -3,7 +3,7 @@ name: test-error-states
 description: Force the states a happy-path run never reaches (a failing API, an empty list, a slow request, a timeout, an expired session, a toast that auto-dismisses) and check the UI actually handles them. Use when error handling was written but never run, when a loading or empty state needs verifying, when a bug only happens on a slow connection, or when a timer, poll, debounce or retry needs testing without sleeping.
 license: Apache-2.0
 metadata:
-  version: 2.14.0
+  version: 3.0.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -53,9 +53,9 @@ Worth forcing, in rough order of how often they are broken: `500`, a `4xx` with 
 ## Skip time instead of sleeping
 
 ```
-reticle_clock({ sessionId, freeze: true })
-reticle_clock({ sessionId, advanceMs: 5000 })
-reticle_clock({ sessionId, reset: true })
+reticle_run({ tool: "reticle_clock", args: { sessionId, freeze: true } })
+reticle_run({ tool: "reticle_clock", args: { sessionId, advanceMs: 5000 } })
+reticle_run({ tool: "reticle_clock", args: { sessionId, reset: true } })
 ```
 
 Toasts that auto-dismiss, debounced search, polling, session timeouts, retry backoff. All of these are normally verified by sleeping, which is slow and flaky in equal measure. A timing assertion is a statement about the machine, so it passes on your laptop and fails in CI.

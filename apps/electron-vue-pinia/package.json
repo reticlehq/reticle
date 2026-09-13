@@ -1,6 +1,6 @@
 {
   "name": "apps-electron-vue-pinia",
-  "version": "2.13.1",
+  "version": "3.0.0",
   "private": true,
   "description": "An Electron application with Vue and TypeScript",
   "main": "./out/main/index.js",

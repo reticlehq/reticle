@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "name": "demo/signin",
+  "createdAt": 1789282663032,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "login-submit",
+        "source": {
+          "file": "src/components/Login.tsx",
+          "line": 81,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "signal": "auth:granted"
+      }
+    }
+  ],
+  "startPath": "/",
+  "intent": "a signed-out user signing in makes the app announce auth:granted",
+  "intentId": "flow:demo/signin"
+}

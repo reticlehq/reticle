@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1787738869523-assert",
+  "createdAt": 1787738869524,
+  "origin": "failed-assert",
+  "expected": "net",
+  "observed": "no request to /v1/issues",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "nav-issues",
+        "source": {
+          "file": "src/app/app-shell.tsx",
+          "line": 77,
+          "column": 10
+        }
+      },
+      "action": "click"
+    }
+  ]
+}

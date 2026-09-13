@@ -419,7 +419,7 @@ The SDK runs inside your app and observes the DOM, network, console, routing, st
 
 **Full documentation: [docs.reticle.sh](https://docs.reticle.sh)**. A page per tool, a page per CLI command, a page per package, and every command on them captured from a real run.
 
-→ [Quickstart](https://docs.reticle.sh/quickstart) · [Every tool](https://docs.reticle.sh/tools-overview) · [Every command](https://docs.reticle.sh/cli) · [Troubleshooting](https://docs.reticle.sh/troubleshooting) · [Desktop apps](https://docs.reticle.sh/desktop)
+→ [Quickstart](https://docs.reticle.sh/quickstart) · [Every tool](https://docs.reticle.sh/tools/overview) · [Every command](https://docs.reticle.sh/cli) · [Troubleshooting](https://docs.reticle.sh/troubleshooting) · [Desktop apps](https://docs.reticle.sh/desktop)
 
 **Reading this as an agent?** Append `.md` to any page URL for the source with no site chrome, and start from [`/llms.txt`](https://docs.reticle.sh/llms.txt) to pick the one page you need. Details: [Docs for agents](https://docs.reticle.sh/for-agents).
 
@@ -462,9 +462,11 @@ A pnpm + turbo monorepo — each audience installs only what it needs (apps embe
 | `@reticlehq/vite-plugin` · `-next` · `-babel-plugin` | dev-only source mapping + `connect()` injection (Vite / Next.js / React 19) |
 | `@reticlehq/electron` | the Electron adapter: makes main-process IPC observable and the window screenshottable, from the two places the renderer cannot reach |
 | `@reticlehq/server` | the bridge + MCP server + the `reticle` CLI |
-| `@reticlehq/test` · `-eslint-plugin` | declarative CI specs · the "state change must fire a signal" lint rule |
+| `@reticlehq/openreality` | the Open Verification Protocol: the vocabulary, the rules, and the interface an implementation answers. Depends only on `zod`, so implementing the contract does not mean installing the product |
+| `@reticlehq/engine` | the rules that decide a verdict, with no browser, daemon or CLI attached |
+| `@reticlehq/test` · `-eslint-plugin` | write your own checks in code, no agent needed (and run them in CI) · the "state change must fire a signal" lint rule |
 
-**Tauri apps get a Rust crate too.** [`reticle-tauri`](https://crates.io/crates/reticle-tauri) on crates.io adds screenshots and headless runs to a Tauri app. IPC observation needs nothing on the Rust side, so the crate is optional: an `invoke('load_todos')` already reaches Reticle as `ipc://load_todos`. It is versioned **independently** of the npm packages, so its version number is its own.
+**Tauri apps get a Rust crate too.** [`reticle-tauri`](https://crates.io/crates/reticle-tauri) on crates.io adds screenshots and headless runs to a Tauri app. IPC observation needs nothing on the Rust side, so the crate is optional: an `invoke('load_todos')` already reaches Reticle as `ipc://load_todos`. It ships the same version as the npm packages, and a release guard fails if it does not: the crate sat at `0.1.0` for months of releases because the publish job treats an already-published version as nothing to do, and reported success every time.
 
 ## Status & safety
 
@@ -476,7 +478,7 @@ A per-package model, so it's safe to embed in your app and fair to build a busin
 
 - **Embedded in your app → Apache-2.0.** `core`, `browser`, `react`, `next`, `vite-plugin`, `babel-plugin`, `eslint-plugin` compile into your application. Use them anywhere, including apps you ship to customers. No copyleft; explicit patent grant.
 - **Server / CLI / MCP → FSL-1.1-ALv2.** `server` and `test` are free for any use except offering Reticle itself as a competing hosted service; each release converts to Apache-2.0 after two years.
-- **Enterprise features → Reticle Enterprise License.** Source-available under `packages/server/src/ee/`; free to evaluate, a key is required in production.
+- **Enterprise features → Reticle Enterprise License.** Source-available under `server/src/features/ee/`; free to evaluate, a key is required in production.
 
 New here? See [CONTRIBUTING.md](CONTRIBUTING.md), [GOVERNANCE.md](GOVERNANCE.md), [RELEASING.md](RELEASING.md), and the [ROADMAP](ROADMAP.md). Contributions are certified under the [DCO](https://developercertificate.org) — just `git commit -s`. OEM / commercial licensing: **[hey@reticle.sh](mailto:hey@reticle.sh)**
 

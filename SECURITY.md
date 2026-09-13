@@ -15,7 +15,7 @@ We aim to acknowledge reports within **2 business days** and to keep you updated
 
 ## Scope
 
-Reticle is **dev/preview-only** and **localhost-only** by design, and sends **no telemetry** — see [`docs/enterprise.md`](docs/enterprise.md) for the full data-handling posture. The most valuable reports concern anything that breaks those properties, for example:
+Reticle is **dev/preview-only** and **localhost-only** by design, and sends **nothing from the app under test** — no DOM, no request or response bodies, no source. It does send anonymous usage counters (which commands ran, which tools an agent called, whether a verdict was produced), and `npx @reticlehq/server telemetry disable` turns them off permanently. [`docs/telemetry.md`](docs/telemetry.md) is the complete list; [`docs/enterprise.md`](docs/enterprise.md) covers the rest of the data-handling posture. The most valuable reports concern anything that breaks those properties, for example:
 
 - the browser SDK reaching a production bundle,
 - the server binding beyond `127.0.0.1` or bypassing the verify-endpoint token,

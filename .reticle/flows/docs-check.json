@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "name": "docs-check",
+  "createdAt": 1786820081227,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "login-submit",
+        "source": {
+          "file": "src/components/Login.tsx",
+          "line": 81,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "click"
+    }
+  ]
+}

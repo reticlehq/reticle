@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1788974031200-e136",
+  "createdAt": 1788974031201,
+  "origin": "failed-assert",
+  "expected": "declared consequence",
+  "observed": "no element matched {\"role\":\"dialog\"}",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "new-deploy",
+        "source": {
+          "file": "src/views/Deployments.tsx",
+          "line": 104,
+          "column": 10
+        }
+      },
+      "action": "click"
+    }
+  ]
+}

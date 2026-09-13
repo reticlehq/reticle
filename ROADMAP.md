@@ -24,7 +24,7 @@ Reticle's edge is seeing the **program**, not the pixels — app state, signals,
 
 ## Enterprise (source-available)
 
-SSO/SAML, SCIM, RBAC, audit logs, and verify-before-merge policy gates live under `packages/server/ee/`, source-available and free for development/evaluation, unlocked in production by a license key. The core verification engine stays free forever.
+SSO/SAML, SCIM, RBAC, audit logs, and verify-before-merge policy gates live under `server/ee/`, source-available and free for development/evaluation, unlocked in production by a license key. The core verification engine stays free forever.
 
 ## Beyond the browser: mobile and native
 

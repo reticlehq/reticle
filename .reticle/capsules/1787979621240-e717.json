@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1787979621240-e717",
+  "createdAt": 1787979621241,
+  "origin": "failed-assert",
+  "expected": "declared consequence",
+  "observed": "no element matched {\"value\":\"v2.13.0 - stability and honest verdicts\"}",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "compose-title",
+        "source": {
+          "file": "src/views/Compose.tsx",
+          "line": 33,
+          "column": 8
+        }
+      },
+      "action": "fill"
+    }
+  ]
+}

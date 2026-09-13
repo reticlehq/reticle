@@ -7,8 +7,12 @@ name: CodeQL
 on:
   push:
     branches: [main]
+  # Every pull request, whatever it targets. This used to say `branches: [main]`, which came from the
+  # template and meant a pull request into a release or feature branch was never scanned at all. Work
+  # here lands on long-lived branches for weeks before those branches go to main, so that covered the
+  # last merge of a release and none of the ones that built it. The push trigger above did eventually
+  # scan the code, after it was already in.
   pull_request:
-    branches: [main]
   schedule:
     - cron: '27 4 * * 1' # Mondays, off the hour to avoid the load spike
 

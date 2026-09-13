@@ -245,7 +245,7 @@ package that re-exports the others) ·
 - **Skill file (paste this URL to your agent):** https://raw.githubusercontent.com/reticlehq/reticle/main/SKILL.md
 - **Docs site (start here):** https://docs.reticle.sh — a page per tool, per CLI command, per
   package, with every command captured from a real run.
-  - Quickstart: https://docs.reticle.sh/quickstart · Every tool: https://docs.reticle.sh/tools-overview
+  - Quickstart: https://docs.reticle.sh/quickstart · Every tool: https://docs.reticle.sh/tools/overview
     · Every command: https://docs.reticle.sh/cli · Troubleshooting: https://docs.reticle.sh/troubleshooting
     · Desktop apps: https://docs.reticle.sh/desktop
 - **Reading as an agent — fetch:** https://docs.reticle.sh/llms.txt lists every page, and appending

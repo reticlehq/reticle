@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "name": "TAURI-flow",
+  "createdAt": 1785589367509,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "go-home",
+        "source": {
+          "file": "src/App.tsx",
+          "line": 131,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "click"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "go-settings",
+        "source": {
+          "file": "src/App.tsx",
+          "line": 128,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "click"
+    }
+  ]
+}

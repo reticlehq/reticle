@@ -127,7 +127,7 @@ async function settled(promise) {
 console.log('\n=== MCP STRESS: brute force against the transport ===');
 process.on('unhandledRejection', () => undefined);
 
-const client = new McpStdioClient('node', ['packages/server/dist/cli.js', 'mcp', '--port', PORT], {
+const client = new McpStdioClient('node', ['server/dist/command/cli.js', 'mcp', '--port', PORT], {
   RETICLE_PORT: PORT,
   RETICLE_TELEMETRY: '0',
   // Reach the retry budget in seconds rather than minutes — the same override the survival spec uses.
@@ -276,7 +276,7 @@ killDaemon();
 
   const resetClient = new McpStdioClient(
     'node',
-    ['packages/server/dist/cli.js', 'mcp', '--port', RESET_PORT],
+    ['server/dist/command/cli.js', 'mcp', '--port', RESET_PORT],
     { RETICLE_PORT: RESET_PORT, RETICLE_TELEMETRY: '0', RETICLE_RECONNECT_ATTEMPTS: '3' },
   );
   await resetClient.start();
@@ -310,7 +310,7 @@ killDaemon();
 
   const flapClient = new McpStdioClient(
     'node',
-    ['packages/server/dist/cli.js', 'mcp', '--port', FLAP_PORT],
+    ['server/dist/command/cli.js', 'mcp', '--port', FLAP_PORT],
     { RETICLE_PORT: FLAP_PORT, RETICLE_TELEMETRY: '0', RETICLE_RECONNECT_ATTEMPTS: '3' },
   );
   await flapClient.start().catch(() => undefined);

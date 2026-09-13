@@ -16,6 +16,15 @@ const refOf=async(by,v)=>{for(let i=0;i<30;i++){const r=(await T('reticle_query'
 console.log('\n=== self-healing rebind (real browser) ===');
 await T('reticle_record',{action:'start',recordingName:'ht'});
 await T('reticle_act',{ref:await refOf('testid','add-task'),action:'click'});
+// A CONSEQUENCE, because heal refuses a flow that has none: a rebind is only safe if something
+// could catch one that pointed at the wrong element, and "the element is there" is exactly what a
+// wrong rebind makes true. The page registers its state with useReticleStore, so the item count is
+// a source of truth no DOM read can reach.
+const annotated=await T('reticle_annotate',{flow:'ht',kind:'success-state',statePath:'items',store:'page'});
+// Asserted, not assumed. The first version of this line passed the annotation nested and under the
+// wrong key; it was refused, the spec ignored the refusal, and the flow went on being consequence-free
+// while looking annotated. A setup step whose failure is invisible is a setup step that will fail.
+chk('the flow is given an observable consequence to heal against', annotated.ok!==false, JSON.stringify(annotated).slice(0,120));
 await T('reticle_record',{action:'stop',recordingName:'ht'});
 await T('reticle_flow_save',{flowName:'ht'});
 const file=path.join(reticleRoot,'flows','ht.json');
@@ -28,5 +37,20 @@ const applied=await T('reticle_flow_heal',{flowName:'ht',apply:true});
 chk('heal(apply:true) rewrites the anchor back to add-task', nfs.readFileSync(file,'utf8').includes('add-task') && applied.applied===true, JSON.stringify(applied).slice(0,110));
 const rep=await T('reticle_flow_replay',{flowName:'ht'});
 chk('replay is green again after self-heal', rep.status==='ok'||rep.ok!==false&&!rep.drift, JSON.stringify(rep).slice(0,90));
+
+// The rule the gate exists for, driven rather than asserted in a unit: a flow with NO consequence
+// has nothing to check a rebind against, so healing it would produce a flow that passes forever and
+// proves nothing — worse than the drift it replaced, which was at least visible.
+await T('reticle_record',{action:'start',recordingName:'bare'});
+await T('reticle_act',{ref:await refOf('testid','add-task'),action:'click'});
+await T('reticle_record',{action:'stop',recordingName:'bare'});
+await T('reticle_flow_save',{flowName:'bare'});
+const bareFile=path.join(reticleRoot,'flows','bare.json');
+nfs.writeFileSync(bareFile, nfs.readFileSync(bareFile,'utf8').replaceAll('add-task','add-tassk'));
+const bareBytes=nfs.readFileSync(bareFile,'utf8');
+const refused=await T('reticle_flow_heal',{flowName:'bare',apply:true});
+chk('REFUSES to heal a flow with no consequence, and leaves the file alone',
+  refused.status==='unfalsifiable' && refused.applied===false && refused.proposals.length===1
+  && nfs.readFileSync(bareFile,'utf8')===bareBytes, JSON.stringify(refused).slice(0,120));
 console.log(`\n${fail===0?'✅ SELF-HEAL VERIFIED':'❌ FAILED'} (${pass} passed, ${fail} failed)`);
 await b.close(); await server.close(); nfs.rmSync(path.dirname(reticleRoot),{recursive:true,force:true}); process.exit(fail===0?0:1);

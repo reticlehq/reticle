@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "name": "ELECTRON-1LINE-flow",
+  "projectId": "reticlehq-electron-smoke-95c606c9",
+  "createdAt": 1785592844690,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "go-home",
+        "source": {
+          "file": "src/App.tsx",
+          "line": 146,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "click"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "go-settings",
+        "source": {
+          "file": "src/App.tsx",
+          "line": 143,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "click"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 name: Publish reticle-tauri to crates.io
 
-# Publishes the `reticle-tauri` crate (packages/tauri) when a GitHub Release is published, or on
+# Publishes the `reticle-tauri` crate (adapters/realm/tauri) when a GitHub Release is published, or on
 # manual dispatch. Mirrors publish.yml: same triggers, same Production environment, same ref guard,
 # same "gate the artifact before shipping it" rule.
 #
@@ -28,7 +28,7 @@ jobs:
       contents: read
     defaults:
       run:
-        working-directory: packages/tauri
+        working-directory: adapters/realm/tauri
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 

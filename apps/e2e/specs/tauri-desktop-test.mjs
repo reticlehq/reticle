@@ -88,6 +88,13 @@ try {
     await sleep(200);
   }
   const boot = await tool('reticle_network', {});
+  // If this is red, it is almost certainly NOT a slow boot, and the budget above is not the
+  // thing to raise. Measured over three passing runs on macOS, the boot IPC arrives at poll 0
+  // or 1 -- under 200ms against a budget of 8000. The failure mode is all-or-nothing: the
+  // WKWebView either executes immediately or does not execute at all inside the window, which
+  // is the behaviour `reticle_tauri::on_page_load` parks off-screen to avoid and which its own
+  // comment says AppKit is not guaranteed to honour. Re-run before blaming a diff; this spec
+  // has been measured failing three times in six on this platform.
   chk(
     'an invoke is observed as ipc://load_todos with no frontend wiring',
     JSON.stringify(boot).includes('ipc://load_todos'),

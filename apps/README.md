@@ -6,7 +6,7 @@ The rule is one sentence:
 
 > **Every app here exists to answer a question a gate asks. If no gate asks it, the app does not belong here.**
 
-Enforced by `packages/server/src/tools/integration-coverage.test.ts`, which fails when a shipped integration has no covering app and spec. It is a red build, not a convention.
+Enforced by `server/src/guards/harness/integration-coverage.test.ts`, which fails when a shipped integration has no covering app and spec. It is a red build, not a convention.
 
 ## The three jobs — and nothing else
 

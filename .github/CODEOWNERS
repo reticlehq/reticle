@@ -12,17 +12,14 @@
 *                          @divshekhar
 
 # Packages — the shipped product.
-/packages/core/            @divshekhar
-/packages/browser/         @divshekhar
-/packages/server/          @divshekhar
-/packages/react/           @divshekhar
-/packages/vite-plugin/     @divshekhar
-/packages/babel-plugin/    @divshekhar
-/packages/next/            @divshekhar
-/packages/electron/        @divshekhar
-/packages/tauri/           @divshekhar
-/packages/test/            @divshekhar
-/packages/eslint-plugin/   @divshekhar
+/core/                     @divshekhar
+/openreality/              @divshekhar
+/engine/                   @divshekhar
+/server/                   @divshekhar
+/init/                     @divshekhar
+/spec-runner/              @divshekhar
+/conformance/              @divshekhar
+/adapters/                 @divshekhar
 
 # Apps — fixtures, smoke apps and the harnesses that drive them.
 /apps/api/                 @divshekhar

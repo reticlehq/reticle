@@ -8,7 +8,7 @@ Measures the dimension the fix-loop bench is blind to: **is a green verdict as h
 node bench/honesty/run-honesty.mjs   # deterministic, no agent/API cost; exit 1 on a false green or over-flag
 ```
 
-Requires the server built (`pnpm --filter @reticlehq/server build`) — the runner imports the REAL honesty functions from `packages/server/dist`, so it scores the shipped composition, not a mock.
+Requires the server built (`pnpm --filter @reticlehq/server build`) — the runner imports the REAL honesty functions from `server/dist`, so it scores the shipped composition, not a mock.
 
 ## Pieces
 

@@ -6,15 +6,23 @@ application while the server and enterprise features remain protected. The
 license that applies depends on the package. Each package contains its own
 LICENSE file, which is authoritative.
 
-1. Apache License, Version 2.0 — the wire contract + the embeddable SDK
-   Packages: @reticlehq/core, @reticlehq/browser, @reticlehq/react,
+1. Apache License, Version 2.0 — the protocol, the wire contract, the embeddable SDK
+   Packages: @reticlehq/openreality, @reticlehq/core, @reticlehq/engine,
+   @reticlehq/browser, @reticlehq/react, @reticlehq/electron,
    @reticlehq/babel-plugin, @reticlehq/next, @reticlehq/vite-plugin,
    @reticlehq/eslint-plugin
-   @reticlehq/core is the bottom-of-graph wire contract (constants + zod schemas,
-   zod its only dependency); every embeddable SDK package above depends on it, so
-   it is Apache-2.0 too — that is what makes the SDK genuinely safe to embed. These
-   run inside / compile into your application. Use them anywhere, including in apps
-   you ship to your own customers. See the LICENSE and NOTICE files in each package.
+   @reticlehq/openreality is the Open Verification Protocol — the vocabulary and
+   rules a verdict is derived from — and is Apache-2.0 so anyone can implement it,
+   including implementations that compete with ours. @reticlehq/core is the
+   bottom-of-graph wire contract (constants + zod schemas; it depends on
+   @reticlehq/openreality and zod, and on nothing else). @reticlehq/engine holds
+   the rules that decide a verdict, with no browser, daemon or CLI attached; it was
+   carved out of the FSL-licensed server tree and is released under Apache-2.0
+   deliberately, so that the part which DECIDES can be audited and reimplemented by
+   anybody. Every embeddable SDK package above depends on core, so it is Apache-2.0
+   too — that is what makes the SDK genuinely safe to embed. These run inside /
+   compile into your application. Use them anywhere, including in apps you ship to
+   your own customers. See the LICENSE and NOTICE files in each package.
    (@reticlehq/protocol is a deprecated, unpublished Apache-2.0 alias of core.)
 
 2. Functional Source License, Version 1.1, Apache 2.0 future (FSL-1.1-ALv2)
@@ -26,8 +34,8 @@ LICENSE file, which is authoritative.
    its release. See the LICENSE file in each package.
 
 3. The Reticle Enterprise License — enterprise features
-   Path: packages/server/src/ee/ (source-available)
+   Path: server/src/features/ee/ (source-available)
    Free for development and evaluation; production use requires a valid Reticle
-   Enterprise subscription license key. See packages/server/src/ee/LICENSE.
+   Enterprise subscription license key. See server/src/features/ee/LICENSE.
 
 For OEM / embedding / commercial licensing questions: hey@reticle.sh

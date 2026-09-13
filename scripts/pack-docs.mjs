@@ -9,9 +9,9 @@
  * The excluded directories are IMAGES, and they are excluded on size: the published tarball is what
  * every user downloads, and a logo is not something anybody reads out of node_modules.
  *
- * The copy also REWRITES links. `docs/` sits at the repo root here and at `packages/server/docs` in
+ * The copy also REWRITES links. `docs/` sits at the repo root here and at `server/docs` in
  * the tarball, so every `../CONTRIBUTING.md`, `../apps/README.md` and `../bench/README.md` in the
- * shipped copy resolves inside `packages/server/`, where none of those exist — and the pruned asset
+ * shipped copy resolves inside `server/`, where none of those exist — and the pruned asset
  * directories take `docs/matrix/README.md` with them. Nineteen links, all of them silently dead in
  * the copy every user downloads and agents read out of `node_modules`. Anything that does not exist
  * in the staged output becomes an absolute GitHub URL, computed from where the file lived in the

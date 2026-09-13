@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1789123596914-assert",
+  "createdAt": 1789123596914,
+  "origin": "failed-assert",
+  "expected": "signal signal-that-never-fires",
+  "observed": "signal \"signal-that-never-fires\" never fired",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "nav-diagnostics",
+        "source": {
+          "file": "src/components/Sidebar.tsx",
+          "line": 45,
+          "column": 8
+        }
+      },
+      "action": "click"
+    }
+  ]
+}

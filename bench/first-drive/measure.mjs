@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { McpStdioClient } from '../harness/mcp-client.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const CLI = path.join(REPO, 'packages/server/dist/cli.js');
+const CLI = path.join(REPO, 'server/dist/command/cli.js');
 const PORT = process.env.BENCH_FIRST_DRIVE_PORT ?? '4468';
 
 /** Chars-per-token proxy. Matches the ratio the rest of bench/ uses; it is an estimate, not a count. */

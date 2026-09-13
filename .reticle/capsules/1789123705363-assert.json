@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1789123705363-assert",
+  "createdAt": 1789123705363,
+  "origin": "failed-assert",
+  "expected": "declared consequence",
+  "observed": "not settled: last activity (dom.added) 0ms ago, need 500ms quiet",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "nav-diagnostics",
+        "source": {
+          "file": "src/components/Sidebar.tsx",
+          "line": 45,
+          "column": 8
+        }
+      },
+      "action": "click"
+    }
+  ]
+}

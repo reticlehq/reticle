@@ -41,7 +41,7 @@ updates:
   # manifest, and CodeQL does not scan Rust at all. Its Cargo.lock is committed, so Dependabot
   # resolves against the exact versions a consumer builds.
   - package-ecosystem: cargo
-    directory: /packages/tauri
+    directory: /adapters/realm/tauri
     schedule:
       interval: weekly
       day: monday

@@ -50,6 +50,12 @@ const ESCAPES = [
   /'\.\.'\s*,\s*'\.\.'\s*,\s*'\.\.'/,
   /["'`]\.\.\/\.\.\/\.\./,
   /process\.cwd\(\)\s*,\s*'\.\.'/,
+  // Asking git where the repository starts, which is what those walks were doing by hand. Added the
+  // moment they stopped being written as `..` segments: every test that had been correctly put in
+  // the guard half became invisible to this in one commit, and would have quietly moved to the
+  // cheap half and replayed stale passes -- the exact failure this split exists to prevent.
+  /from '[^']*repo-root\.js'/,
+  /rev-parse'?\s*,\s*'--show-toplevel'/,
 ];
 
 function testFiles(dir, out = []) {
@@ -91,6 +97,15 @@ function vitestCli(packageDir) {
 
 function run(packageDir, mode) {
   const guards = guardTests(packageDir);
+  // A package with no repo-scanning tests has nothing to run in this half, and saying so is the
+  // whole answer. Handing vitest an empty list of files does NOT mean "no files" -- it means "no
+  // filter", so it would run the entire suite a second time. That is invisible from the outside:
+  // the task passes, it just costs another full run of everything for nothing. Found when the rules
+  // became their own package and became the first package here with no repo-scanning test at all.
+  if ('guards' === mode && 0 === guards.length) {
+    console.log('no tests here read outside this package, so there is nothing in the guard half');
+    process.exit(0);
+  }
   const args =
     'guards' === mode
       ? ['run', '--passWithNoTests', ...guards]

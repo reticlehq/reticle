@@ -1,6 +1,10 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalDependencies": ["packages/browser/src/**/*.ts", "tsconfig.base.json", "eslint.config.mjs"],
+  "globalDependencies": [
+    "adapters/realm/dom/src/**/*.ts",
+    "tsconfig.base.json",
+    "eslint.config.mjs"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -20,24 +24,39 @@
       "dependsOn": ["^build"]
     },
     "test:unit": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/**"]
     },
     "test:coverage": {
       "dependsOn": ["^build"]
     },
     "@reticlehq/core#test:unit": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/tauri/src/**"]
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/adapters/realm/tauri/src/**"]
     },
     "test:guards": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/**"]
     },
     "@reticlehq/server#test:guards": {
       "dependsOn": ["^build"],
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/packages/*/src/**",
-        "$TURBO_ROOT$/packages/*/package.json",
+        "$TURBO_ROOT$/adapters/**",
+        "$TURBO_ROOT$/pnpm-workspace.yaml",
+        "$TURBO_ROOT$/core/src/**",
+        "$TURBO_ROOT$/core/package.json",
+        "$TURBO_ROOT$/init/src/**",
+        "$TURBO_ROOT$/init/package.json",
+        "$TURBO_ROOT$/adapters/lint/eslint/src/**",
+        "$TURBO_ROOT$/adapters/lint/eslint/package.json",
+        "$TURBO_ROOT$/spec-runner/src/**",
+        "$TURBO_ROOT$/spec-runner/package.json",
+        "$TURBO_ROOT$/engine/src/**",
+        "$TURBO_ROOT$/engine/package.json",
+        "$TURBO_ROOT$/openreality/src/**",
+        "$TURBO_ROOT$/openreality/package.json",
+        "$TURBO_ROOT$/conformance/**",
         "$TURBO_ROOT$/apps/**",
         "$TURBO_ROOT$/bench/**",
         "$TURBO_ROOT$/scripts/**",
@@ -70,7 +89,7 @@
       "dependsOn": ["^build"],
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/packages/*/src/**",
+        "$TURBO_ROOT$/core/src/**",
         "$TURBO_ROOT$/scripts/guard-tests.mjs"
       ]
     }

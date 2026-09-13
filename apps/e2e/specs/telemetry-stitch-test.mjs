@@ -70,7 +70,7 @@ console.log('\n=== TELEMETRY STITCH: a real session, and the events that describ
 //      rather than the 45 flows this repo has committed.
 const PROJECT = mkdtempSync(path.join(tmpdir(), 'reticle-stitch-'));
 process.chdir(PROJECT);
-const CLI = path.join(ROOT, 'packages', 'server', 'dist', 'cli.js');
+const CLI = path.join(ROOT, 'server', 'dist', 'command', 'cli.js');
 
 // Stop whatever daemon a previous spec left on this port FIRST. Telemetry configuration belongs to
 // the process that starts the daemon, so attaching to an inherited one (which the battery's earlier

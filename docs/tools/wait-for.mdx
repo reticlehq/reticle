@@ -1,0 +1,85 @@
+---
+title: reticle_wait_for
+description: Block until a predicate holds. Or return immediately if it is already true in the recent buffer.
+icon: hourglass
+---
+
+`reticle_wait_for` blocks until a predicate holds, or returns straight away if it is already satisfied in the recent event buffer. Reach for it when you are waiting on something you did not cause. It reads and waits; it does not produce a verdict, so finish with [`reticle_assert`](/tools/assert).
+
+It takes the same predicate grammar as [`reticle_act_and_wait`](/tools/act-and-wait), without the action. Use it when the thing you are waiting for was triggered by something other than your own click. A timer, a websocket push, a background refresh.
+
+## Example
+
+```json
+{
+  "predicate": { "kind": "text", "contains": "Invalid email or password" },
+  "timeout_ms": 3000
+}
+```
+
+Real response:
+
+```json
+{
+  "pass": true,
+  "evidence": [
+    {
+      "ref": "e606",
+      "role": "alert",
+      "name": "Invalid email or password",
+      "visible": true,
+      "source": "src/components/Login.tsx:72",
+      "states": ["present", "visible", "enabled"]
+    }
+  ]
+}
+```
+
+The evidence is the element itself, with the file and line that rendered it.
+
+<Note>
+  A `text` predicate matches **presence** by default, so an element that is in the DOM but hidden
+  satisfies it and comes back with `visible: false` and `states: ["present", "hidden", "enabled"]`.
+  If you need it on screen, say so: `{ "kind": "text", "contains": "…", "visible": true }`.
+</Note>
+
+The field is `contains`. `value` and `text` are accepted as aliases and rewritten to it, but `contains` is what the published schema declares.
+
+## It checks the buffer first
+
+`wait_for` does not always wait. If the predicate is already satisfied in the recent event buffer, it returns immediately. This means you can act, then wait, without racing. The event that happened while you were composing the second call is not lost.
+
+## Arguments
+
+| Argument                 | What it does                                                      |
+| ------------------------ | ----------------------------------------------------------------- |
+| `predicate` (or `until`) | `{ kind, ...fields }`, see the [predicate reference](/predicates) |
+| `timeout_ms`             | Maximum wait. Default 4000                                        |
+| `since`                  | Cursor from a prior act, to widen or narrow the window explicitly |
+
+By default the wait only counts events since your last act, so a signal that fired before the action cannot satisfy it. A miss returns a near-miss diagnosis rather than a bare `false`:
+
+```json
+{
+  "pass": false,
+  "failureReason": "no element matched {\"text\":\"Deployments\"}",
+  "observed": "no matching element on the page",
+  "expected": "an element matching {\"text\":\"Deployments\"}",
+  "assertion": "element.present",
+  "evidence": { "presentTestids": ["login-email", "login-password", "login-submit"] }
+}
+```
+
+`presentTestids` there is the answer to the real question. The text was missing because the app had logged out, not because the render was slow.
+
+## Prefer `act_and_wait` when you caused it
+
+If your own action is supposed to trigger the thing, put the predicate in the action:
+
+```json
+{ "ref": "e605", "action": "click", "until": { "kind": "signal", "name": "auth:granted" } }
+```
+
+One call instead of two, no gap for an event to slip through, and, the part that actually matters, the expectation is recorded _before_ the action rather than chosen after it.
+
+Save `wait_for` for consequences you did not cause.

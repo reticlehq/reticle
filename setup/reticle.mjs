@@ -715,12 +715,33 @@ if (devCmd === null && opts.url === undefined) {
 }
 result.app = { ...result.app, dir: appDir, devCmd };
 
+/**
+ * Read a file, or treat a missing one as empty.
+ *
+ * `existsSync(f) ? readFileSync(f) : ''` asks whether the file was there a moment ago; the read
+ * that follows asks whether it is there NOW, and between the two an editor saving, a `git checkout`
+ * or another tool can make them different answers — the installer then crashes on somebody's first
+ * run. Doing the read and handling its failure asks one question once. (CodeQL: js/file-system-race.)
+ */
+const readOrEmpty = (file) => {
+  try {
+    return readFileSync(file, 'utf8');
+  } catch {
+    return '';
+  }
+};
+
 // A license key is a credential: into .env, never into git, never echoed back.
 if (opts.license !== undefined) {
   const env = join(cwd, '.env');
-  appendFileSync(env, `${existsSync(env) ? '\n' : ''}RETICLE_LICENSE_KEY=${opts.license}\n`);
+  // The separator comes from what the file ENDS WITH rather than from whether it exists: an `.env`
+  // that already ends in a newline was getting a blank line, and one somebody left without a
+  // trailing newline is the case a separator is actually for.
+  const current = readOrEmpty(env);
+  const separator = current.length > 0 && !current.endsWith('\n') ? '\n' : '';
+  appendFileSync(env, `${separator}RETICLE_LICENSE_KEY=${opts.license}\n`);
   const ignore = join(cwd, '.gitignore');
-  const ignored = existsSync(ignore) ? readFileSync(ignore, 'utf8') : '';
+  const ignored = readOrEmpty(ignore);
   if (!ignored.split('\n').some((l) => l.trim() === '.env')) appendFileSync(ignore, '\n.env\n');
   say('license key written to .env (and .env is gitignored)');
 }

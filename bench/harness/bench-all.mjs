@@ -197,7 +197,7 @@ function cleanupDaemon() {
   try {
     execFileSync(
       'node',
-      ['packages/server/dist/cli.js', 'stop', '--port', RETICLE_PORT, '--quiet'],
+      ['server/dist/command/cli.js', 'stop', '--port', RETICLE_PORT, '--quiet'],
       {
         stdio: 'ignore',
       },

@@ -1,0 +1,16 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    // This SDK is embedded in users' apps, so every byte here is bundled into somebody else's
+    // bundle. The comments in this repo are long and explanatory on purpose, and that is right for
+    // the source and wrong for the artefact: they were 320KB of the shipped .js and 114KB of the
+    // .d.ts, about 43% of the package, none of it useful to a consumer. Stripping them is the
+    // "take the waste out first" step the size budget in ci.yml demands before the number moves.
+    "removeComments": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+  },
+  "include": ["src/**/*"],
+  "references": [{ "path": "../../../core" }]
+}

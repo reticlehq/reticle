@@ -24,21 +24,74 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createPublicKey } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
-// Resolved from this file, not the cwd: the stamp runs from packages/server (prepack) as well as from
+// Resolved from this file, not the cwd: the stamp runs from server (prepack) as well as from
 // the repo root, and a cwd-relative path would silently miss in one of them.
 const TARGET = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  '../packages/server/dist/license/license.js',
+  '../server/dist/features/license/license.js',
 );
 /** Must match the declaration in license.ts verbatim. A rename here fails loudly rather than no-oping. */
 const EMPTY_DECLARATION = "const BAKED_ISSUER_PUBLIC_KEY_PEM = '';";
 
+/**
+ * Is this run putting a tarball on a REAL registry, as opposed to a build, a dry run, or a test?
+ *
+ * npm and pnpm both set `npm_command` for the invoked command, `npm_config_dry_run` for `--dry-run`,
+ * and `npm_config_registry` for `--registry`. A plain `pnpm build` sets none of them.
+ *
+ * The registry check is the one that is easy to leave out, and leaving it out broke `gate:install`
+ * on every one of its twenty matrix cells: that gate publishes this whole checkout to a Verdaccio on
+ * localhost so `init` resolves dependencies the way a user would, which is a real `pnpm -r publish`
+ * and is not a release. The danger being guarded against is an unstamped artifact reaching people —
+ * so the question is not "is this a publish" but "is this a publish somebody can install from".
+ * A scratch registry on loopback is neither.
+ */
+function isLoopbackRegistry(url) {
+  if (url === undefined || url.length === 0) return false;
+  try {
+    const { hostname } = new URL(url);
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+  } catch {
+    return false;
+  }
+}
+
+const isRealPublish =
+  process.env.npm_command === 'publish' &&
+  process.env.npm_config_dry_run !== 'true' &&
+  !isLoopbackRegistry(process.env.npm_config_registry);
+
 const pem = process.env.RETICLE_ISSUER_PUBLIC_KEY;
 if (pem === undefined || pem.length === 0) {
-  process.stdout.write('stamp-issuer-key: RETICLE_ISSUER_PUBLIC_KEY unset, leaving eval mode\n');
+  /*
+   * A PUBLISH with no key is refused; every other run is fine and says so.
+   *
+   * Eval mode is correct for a contributor's build and for CI, and that is what keeps this script
+   * from simply requiring the variable. It is not correct for a tarball going to the registry: the
+   * artifact looks normal, every gate is green, and enterprise keys activate nothing for anyone who
+   * installs it. The release workflow sets the variable; a laptop `pnpm -r publish` does not, and
+   * nothing anywhere said so — RELEASING.md names `pnpm -r publish --dry-run` as an authority and
+   * never mentions the key.
+   *
+   * `RETICLE_ALLOW_EVAL_PUBLISH=1` is the deliberate override, for a release that is meant to ship
+   * without enterprise enforcement. It has to be typed, which is the whole point.
+   */
+  if (isRealPublish && process.env.RETICLE_ALLOW_EVAL_PUBLISH !== '1') {
+    process.stderr.write(
+      'stamp-issuer-key: refusing to publish without RETICLE_ISSUER_PUBLIC_KEY.\n' +
+        '  The tarball would ship in eval mode: enterprise licence keys would activate nothing,\n' +
+        '  and nothing at runtime or in any gate would report it. Publish through the release\n' +
+        '  workflow, which supplies the key, or set RETICLE_ALLOW_EVAL_PUBLISH=1 to mean it.\n',
+    );
+    process.exit(1);
+  }
+  // stderr, not stdout: `npm pack --json` parses stdout, and a line of prose here makes the output
+  // unparseable for any release tooling that reads it. The same defect was found and fixed in
+  // openreality's prepack earlier in this release; this is the second copy of it.
+  process.stderr.write('stamp-issuer-key: RETICLE_ISSUER_PUBLIC_KEY unset, leaving eval mode\n');
   process.exit(0);
 }
 
@@ -83,7 +136,11 @@ writeFileSync(TARGET, stamped);
 // Prove the stamp took, against the real module rather than the string we just wrote. With a key baked
 // and no customer key present, activation must read `missing` (enforcement ON). If it still reads
 // `eval`, the gate is off and this release must not ship.
-const { describeLicense } = await import(TARGET);
+// `pathToFileURL`, not the bare path: ESM `import()` takes a URL, and an absolute Windows path
+// (`D:\a\…\license.js`) is not one — the drive letter reads as a protocol and the loader throws
+// before the check can run. The release gate then fails as "the stamp could not be verified" on a
+// stamp that worked. Same conversion trap as `new URL(import.meta.url).pathname`.
+const { describeLicense } = await import(pathToFileURL(TARGET).href);
 const report = describeLicense(Date.now(), {});
 if (report.status !== 'missing') {
   process.stderr.write(

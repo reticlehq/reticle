@@ -21,7 +21,7 @@ import { tmpdir, homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const CLI = path.join(ROOT, 'packages', 'server', 'dist', 'cli.js');
+const CLI = path.join(ROOT, 'server', 'dist', 'command', 'cli.js');
 const OUTBOX = path.join(homedir(), '.reticle', 'feedback-outbox.jsonl');
 
 let pass = 0;

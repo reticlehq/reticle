@@ -39,7 +39,7 @@ Every item here cost somebody a debugging session. None is discoverable by readi
 - **Port 4400 is the bridge, and something is probably on it.** Every e2e spec binds it, so a spec run with your editor's MCP client open dies with `EADDRINUSE`. Never `kill -9` the holder: on 4400 that list includes the `reticle mcp` proxy, and killing it cuts your own agent's link **with no log**, because the process that writes the log is the one that dies. Use `freePortSafely` from [`apps/e2e/gate-harness.mjs`](apps/e2e/gate-harness.mjs), which spares the proxy by design.
 - **Telemetry fails silently.** Nothing throws, no test reddens, the data is just permanently gone — `daemon_stopped` was fired just before `process.exit(0)` for months and every POST died unseen. Read [`docs/telemetry-contract.md`](docs/telemetry-contract.md) first.
 - **The fixtures are in a second repo.** Every app in `apps/` is already instrumented, so none of them can tell you whether a fresh install still works — re-running `init` over one reports "already wired" for every step and proves nothing. That question lives in [`reticle-fixtures`](https://github.com/reticlehq/reticle-fixtures), which keeps a pristine `clean` branch of real third-party apps plus `main` and `reticle/<version>`. See [`docs/fixtures.md`](docs/fixtures.md).
-- **`packages/core` is the contract and may not gain dependencies** (zod only). Anything crossing browser ↔ bridge ↔ agent is a named constant plus a zod schema there. A wire string inlined in `browser` or `server` is the bug, not a shortcut.
+- **`core` is the contract and may not gain dependencies** (zod only). Anything crossing browser ↔ bridge ↔ agent is a named constant plus a zod schema there. A wire string inlined in `browser` or `server` is the bug, not a shortcut.
 - **A new tool field needs several allowlists.** Miss one and the call silently returns nothing — measured, twice. If you add a field and it "does not arrive", start by grepping for every place the existing fields are listed.
 - **`format:check` is not run by `pnpm lint`.** CI enforces it separately, so all four heavy gates can be green locally and CI still red on formatting alone.
 - **A local gate is only trustworthy in a quiet checkout.** If something else is editing the same worktree, turbo will read files mid-write and report failures that are not yours.
@@ -54,33 +54,39 @@ Every item here cost somebody a debugging session. None is discoverable by readi
 
 ## Repository layout
 
-Five top-level directories, each with one job. If you can name which of these your change belongs to, you can find everything else.
+The packages sit at the top level — there is no `packages/` directory; it was dissolved in v3 so a package's path names what it IS rather than the fact that it is a package. If you can name which area your change belongs to, you can find everything else.
 
 | Directory | Job | Read first |
 | --- | --- | --- |
-| `packages/` | the shipped product — everything published to npm and crates.io | this section |
+| top level | the shipped product — everything published to npm and crates.io | this section |
+| `adapters/` | the shipped product's edges: one directory per realm, framework, build tool and linter | this section |
 | `apps/` | fixtures the gates drive, plus the test runner itself | [`apps/README.md`](apps/README.md) |
 | `bench/` | measurement and research. **Not a gate** — nothing here blocks a PR | [`bench/README.md`](bench/README.md) |
 | `docs/` | user docs (published to reticle.sh) **and** contributor docs | [`docs/README.md`](docs/README.md) |
 | `scripts/` | repo tooling: the boundary/lossy guards, the local registry | — |
 
-### `packages/` — the shipped product
+### The shipped product
 
 ```
-packages/core          @reticlehq/core         — wire contract, constants, zod schemas (deps: zod)
-packages/browser       @reticlehq/browser      — instrumentation SDK embedded in the app (DOM-side)
-packages/server        @reticlehq/server       — bridge + MCP server, the `reticle` CLI (Node-side)
-packages/react         @reticlehq/react        — React adapter: DOM ref -> component -> source file
-packages/vite-plugin   @reticlehq/vite-plugin  — Vite integration: stamps source + auto-injects connect()
-packages/babel-plugin  @reticlehq/babel-plugin — stamps data-reticle-source (source mapping, React 19)
-packages/next          @reticlehq/next         — Next.js source mapping (keeps SWC) via withReticle (CJS)
-packages/electron      @reticlehq/electron     — Electron main-process adapter (IPC observer, capture)
-packages/tauri         reticle-tauri           — Tauri capture backend (RUST — outside every JS gate)
-packages/test          @reticlehq/test         — spec runner + matchers for CI (peer vitest)
-packages/eslint-plugin @reticlehq/eslint-plugin — dev-only lint rule: state changed ⇒ signal fired
+core          @reticlehq/core         — wire contract, constants, zod schemas (deps: openreality, zod)
+openreality   @reticlehq/openreality  — the Open Verification Protocol: vocabulary, rules, `Realm`, `adjudicate()`
+engine        @reticlehq/engine       — the rules that decide a verdict, with no browser, daemon or CLI attached
+server        @reticlehq/server       — bridge + MCP server, the `reticle` CLI (Node-side)
+init          @reticlehq/init         — project scaffolder: `reticle init`'s codemod, no runtime (Node-side)
+spec-runner   @reticlehq/test         — spec runner + matchers for CI (peer vitest)
+conformance   —                       — drives the protocol's own scenarios against an implementation (PRIVATE)
+
+adapters/realm/dom           @reticlehq/browser      — instrumentation SDK embedded in the app (DOM-side)
+adapters/realm/electron      @reticlehq/electron     — Electron main-process adapter (IPC observer, capture)
+adapters/realm/tauri         reticle-tauri           — Tauri capture backend (RUST — outside every JS gate)
+adapters/framework/react     @reticlehq/react        — React adapter: DOM ref -> component -> source file
+adapters/build/vite          @reticlehq/vite-plugin  — Vite integration: stamps source + auto-injects connect()
+adapters/build/babel-plugin  @reticlehq/babel-plugin — stamps data-reticle-source (source mapping, React 19)
+adapters/build/next          @reticlehq/next         — Next.js source mapping (keeps SWC) via withReticle (CJS)
+adapters/lint/eslint         @reticlehq/eslint-plugin — dev-only lint rule: state changed ⇒ signal fired
 ```
 
-The TypeScript library packages (`-core`, `-browser`, `-server`, `-react`) are **strict TypeScript** and are the focus of the build/lint/test gates. `@reticlehq/babel-plugin` / `@reticlehq/next` are plain CJS tooling, and `apps/*` are local fixtures — these are excluded from the JS gates. `packages/tauri` is Rust and is invisible to all of them; CI's `rust` / `rust-macos` jobs are the only thing that compiles it.
+The TypeScript library packages are **strict TypeScript** and are the focus of the build/lint/test gates. `@reticlehq/babel-plugin` / `@reticlehq/next` are plain CJS tooling, and `apps/*` are local fixtures — these are excluded from the JS gates. `adapters/realm/tauri` is Rust and is invisible to all of them; CI's `rust` / `rust-macos` jobs are the only thing that compiles it.
 
 ### Root files worth knowing
 
@@ -105,9 +111,9 @@ pnpm lint && pnpm typecheck && pnpm test:unit    # ~2 min — ALWAYS
 
 | If you also touched… | Also run | Cost |
 | --- | --- | --- |
-| the tool surface, the wire contract (`packages/core`), or an observer | `pnpm test:e2e` | ~8 min |
+| the tool surface, the wire contract (`core`), or an observer | `pnpm test:e2e` | ~8 min |
 | `reticle init`, `vite-plugin`, `next`, `babel-plugin` — anything before a user's first session | `pnpm gate:install` | ~15 min |
-| `packages/electron`, `packages/tauri`, the IPC observer, desktop capture | `pnpm test:e2e:desktop` | ~3 min |
+| `adapters/realm/electron`, `adapters/realm/tauri`, the IPC observer, desktop capture | `pnpm test:e2e:desktop` | ~3 min |
 | telemetry, feedback, or anything that emits an event | read [`docs/telemetry-contract.md`](docs/telemetry-contract.md) **first**, then `pnpm test:e2e` | — |
 
 **This routing is the whole rule, and [`docs/gates.md`](docs/gates.md) is the full map** — every gate, what it proves, what it is blind to, and which CI job runs it. CI runs everything regardless, so skipping a tier costs you a slower red, never a missed one.
@@ -211,4 +217,4 @@ For anything non-trivial, **open an issue first** so we can agree on the approac
 
 ## License of contributions
 
-Reticle uses a per-package license model (Apache-2.0 for the embeddable SDK packages, FSL-1.1-ALv2 for the server / CLI / umbrella, and the Reticle Enterprise License for `packages/server/src/ee/`). By contributing, you agree that your contribution is licensed under the license of the package(s) you're modifying. See the root [LICENSE](LICENSE) and each package's own `LICENSE` file.
+Reticle uses a per-package license model (Apache-2.0 for the embeddable SDK packages, FSL-1.1-ALv2 for the server / CLI / umbrella, and the Reticle Enterprise License for `server/src/features/ee/`). By contributing, you agree that your contribution is licensed under the license of the package(s) you're modifying. See the root [LICENSE](LICENSE) and each package's own `LICENSE` file.

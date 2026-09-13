@@ -24,7 +24,7 @@ import { McpStdioClient } from '../../../bench/harness/mcp-client.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const PORT = process.env.SKEW_PORT ?? '4409';
-const CLI = path.join(ROOT, 'packages', 'server', 'dist', 'cli.js');
+const CLI = path.join(ROOT, 'server', 'dist', 'command', 'cli.js');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let pass = 0;

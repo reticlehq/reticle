@@ -21,7 +21,7 @@ pnpm install
 pnpm build       # required: the specs and the CLI run from dist/, not src/
 ```
 
-`pnpm build` is not optional. Several things below load `packages/server/dist`, and a stale or absent `dist` produces errors that read as code faults rather than as a missing build.
+`pnpm build` is not optional. Several things below load `server/dist`, and a stale or absent `dist` produces errors that read as code faults rather than as a missing build.
 
 ## 1. Boot something to look at
 
@@ -57,7 +57,7 @@ node -e "require('playwright').chromium.launch({headless:true})
 Then ask for a verdict:
 
 ```bash
-node packages/server/dist/cli.js verify "" --port 4400 \
+node server/dist/command/cli.js verify "" --port 4400 \
   --expect '{"kind":"text","contains":"Reticle"}'
 ```
 
@@ -72,7 +72,7 @@ That is the whole product in one line: a claim, checked against a running page, 
 Try making it fail, because a tool that only ever says yes is not telling you anything:
 
 ```bash
-node packages/server/dist/cli.js verify "" --port 4400 \
+node server/dist/command/cli.js verify "" --port 4400 \
   --expect '{"kind":"text","contains":"definitely not on this page"}'
 ```
 

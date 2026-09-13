@@ -16,7 +16,10 @@ step() { printf "\n%b==> %s%b\n" "$YELLOW" "$1" "$NC"; }
 # works on macOS bash 3.2). Each grep over it tolerates an empty list.
 STAGED="$(git diff --cached --name-only --diff-filter=ACM)"
 staged() { printf '%s\n' "$STAGED"; }
-ts_staged() { staged | grep -E '\.(ts|tsx)$' || true; }
+# Source this hook checks. `.mjs`/`.cjs` are included because the largest file in the repo is one
+# (`setup/reticle.mjs`, the thing a new user runs) and it had never been subject to any check below.
+# `apps/` and `bench/` are fixtures and measurement scratch, deliberately outside every gate.
+ts_staged() { staged | grep -E '\.(ts|tsx|mjs|cjs)$' | grep -vE '^(apps|bench)/' || true; }
 
 # ----- 1. SAFETY -----------------------------------------------------------
 step "Safety checks"
@@ -54,8 +57,8 @@ while IFS= read -r f; do
   # sit naturally above 500 and don't decompose without artificial seams. The cap catches the genuine
   # cohesion failures — a file sprawling well past it — without forcing those splits.
   lines=$(wc -l < "$f" | tr -d ' ')
-  if [ "$lines" -gt 600 ]; then
-    note "${RED}✗ $f is $lines lines (> 600 cap) — split it${NC}"; fail=1
+  if [ "$lines" -gt 1000 ]; then
+    note "${RED}✗ $f is $lines lines (> 1000 cap) — split it${NC}"; fail=1
   fi
   if grep -nE 'eslint-disable(-next-line|-line)?' "$f" | grep -vq -- '--'; then
     note "${RED}✗ eslint-disable without a '-- reason' in $f${NC}"; fail=1

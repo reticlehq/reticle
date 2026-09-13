@@ -1,0 +1,104 @@
+---
+title: reticle_state
+description: Read live framework state directly from the running app. What it believes, not just what it rendered, without the app broadcasting anything.
+icon: database
+---
+
+`reticle_state` reads live framework state straight out of the running app, without the app broadcasting anything. Reach for it when the DOM looks right and you want to know whether the application actually accepted the change, which is where false greens live.
+
+The DOM tells you what the app _drew_. `reticle_state` tells you what it _believes_. The gap between those two is where false greens live: a row appears in the table, the store never changed, and a reload makes the row vanish.
+
+## Example
+
+```json
+{ "depth": 2 }
+```
+
+Real response:
+
+```json
+{
+  "found": true,
+  "value": {
+    "stores": {
+      "__reticle_renders": "{…1 keys}",
+      "app": "{…30 keys}",
+      "queries": "{…0 keys}"
+    },
+    "storeNames": ["__reticle_renders", "app", "queries"]
+  },
+  "storeNames": ["__reticle_renders", "app", "queries"]
+}
+```
+
+`depth: 2` collapsed the contents to size markers: `{…30 keys}` rather than thirty keys of JSON. On a large store this is the difference between a cheap look and a very expensive one.
+
+## Arguments
+
+| Argument | What it does                                                 |
+| -------- | ------------------------------------------------------------ |
+| `store`  | A registered store name, e.g. `app`                          |
+| `path`   | Dot-path into a store, e.g. `cart.items.0.qty`               |
+| `depth`  | Collapse anything deeper than N levels to a size marker      |
+| `ref`    | Best-effort read of the nearest React component's hook state |
+
+Drill in once you know what you want:
+
+```json
+{ "store": "app", "path": "auth" }
+```
+
+```json
+{
+  "store": "app",
+  "path": "auth",
+  "found": true,
+  "value": { "email": "admin@reticle.dev" },
+  "storeNames": ["__reticle_renders", "app", "queries"]
+}
+```
+
+A wrong `path` comes back `{ "found": false, "availableKeys": [...] }` rather than an empty value, so a typo is diagnosable instead of looking like an empty store.
+
+<Warning>
+  `reticle_state` asks the page and waits. On a backgrounded tab the page may never answer, and you
+  get `"command 'state_read' timed out after 8000ms"` with a recovery note pointing at
+  [`reticle_sessions`](/tools/sessions). That is a fact about the tab, not a Reticle failure. Bring
+  it to the front, or drive your own browser.
+</Warning>
+
+## You have to register stores first
+
+`reticle_state` reads what your app registered in `src/reticle-dev.ts`. With nothing registered, `storeNames` comes back empty and this tool has nothing to say.
+
+```ts
+registerCapabilities({
+  stores: [{ name: 'app', store: appStore }],
+});
+```
+
+<Warning>
+Pass the **store**, not `() => store.getState()`. The store form wires `subscribe` too, so every
+mutation emits a state diff. The getter form is read-only and silently produces empty diffs, which
+looks like "nothing changed" and is really "I was never watching".
+</Warning>
+
+That distinction is the single most common instrumentation mistake, and its failure mode is a verdict that passes when it should not.
+
+## Why this is the strongest evidence you have
+
+A `POST` returning `200` proves the server was reachable. A row in the DOM proves React rendered something. Neither proves your application accepted the change.
+
+State does. When [`reticle_act_and_wait`](/quickstart) reports
+
+```json
+"stateDiffs": [
+  { "path": "auth", "from": null, "to": "{\"email\":\"admin@reticle.dev\"}", "atMs": 44403 }
+]
+```
+
+that is the app itself saying the login took. A mock that returns `200` without touching state gets caught right there, and nowhere else.
+
+<Card title="Instrument your app" icon="wrench" href="/instrumentation">
+  Registering one store for your most important flow is the highest-value line you can write.
+</Card>

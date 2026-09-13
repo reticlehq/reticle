@@ -1,0 +1,55 @@
+{
+  "name": "@reticlehq/openreality",
+  "version": "3.0.0",
+  "description": "The Open Verification Protocol: the vocabulary, the rules and the interface an implementation answers, so that \"it works\" can be checked from outside the thing claiming it.",
+  "keywords": [
+    "verification",
+    "protocol",
+    "specification",
+    "conformance",
+    "ai-agents",
+    "reticle"
+  ],
+  "homepage": "https://github.com/reticlehq/reticle#readme",
+  "bugs": "https://github.com/reticlehq/reticle/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reticlehq/reticle.git",
+    "directory": "openreality"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./schema/*.json": "./dist/schema/*.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "SPEC.md",
+    "GOVERNANCE.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -b && node scripts/gen-schema.mjs",
+    "prepack": "tsc -b && node scripts/gen-schema.mjs && node ../scripts/prepare-dist.mjs dist",
+    "test:unit": "vitest run --passWithNoTests",
+    "test:guards": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "zod-to-json-schema": "^3.23.5"
+  }
+}
