@@ -93,11 +93,7 @@ export class Annotator {
   #clearBtn: HTMLElement | undefined;
   #countEl: HTMLElement | undefined;
   #accent: string | undefined;
-  #onClick: ((ev: MouseEvent) => void) | undefined;
-  #onKeydown: ((ev: KeyboardEvent) => void) | undefined;
-  #onMove: ((ev: MouseEvent) => void) | undefined;
-  #onScroll: (() => void) | undefined;
-  #onResize: (() => void) | undefined;
+  #ac: AbortController | undefined;
   #mo: MutationObserver | undefined;
 
   constructor(deps: AnnotatorDeps) {
@@ -132,16 +128,23 @@ export class Annotator {
     this.#hiLabel = root.querySelector<HTMLElement>(sel('hilabel')) ?? undefined;
     this.#selBox = root.querySelector<HTMLElement>(sel('sel')) ?? undefined;
 
-    this.#onClick = (ev: MouseEvent): void => this.#handleClick(ev);
-    document.addEventListener('click', this.#onClick, { capture: true });
-    this.#onMove = (ev: MouseEvent): void => this.#scheduleMove(ev);
-    document.addEventListener('mousemove', this.#onMove, { passive: true, capture: true });
-    this.#onKeydown = (ev: KeyboardEvent): void => this.#handleKey(ev);
-    document.addEventListener('keydown', this.#onKeydown);
-    this.#onScroll = (): void => this.#reposition();
-    this.#onResize = (): void => this.#reposition();
-    window.addEventListener('scroll', this.#onScroll, true);
-    window.addEventListener('resize', this.#onResize);
+    const ac = new AbortController();
+    this.#ac = ac;
+    document.addEventListener('click', (ev) => this.#handleClick(ev), {
+      capture: true,
+      signal: ac.signal,
+    });
+    document.addEventListener('mousemove', (ev) => this.#scheduleMove(ev), {
+      passive: true,
+      capture: true,
+      signal: ac.signal,
+    });
+    document.addEventListener('keydown', (ev) => this.#handleKey(ev), { signal: ac.signal });
+    window.addEventListener('scroll', () => this.#reposition(), {
+      capture: true,
+      signal: ac.signal,
+    });
+    window.addEventListener('resize', () => this.#reposition(), { signal: ac.signal });
     this.#mo = new MutationObserver(() => this.syncAnchors());
     this.#mo.observe(document.documentElement, { childList: true, subtree: true });
     if (undefined !== this.#accent) this.setAccent(this.#accent);
@@ -174,26 +177,8 @@ export class Annotator {
   }
 
   destroy(): void {
-    if (this.#onClick !== undefined) {
-      document.removeEventListener('click', this.#onClick, { capture: true });
-      this.#onClick = undefined;
-    }
-    if (this.#onKeydown !== undefined) {
-      document.removeEventListener('keydown', this.#onKeydown);
-      this.#onKeydown = undefined;
-    }
-    if (this.#onMove !== undefined) {
-      document.removeEventListener('mousemove', this.#onMove, { capture: true });
-      this.#onMove = undefined;
-    }
-    if (this.#onScroll !== undefined) {
-      window.removeEventListener('scroll', this.#onScroll, true);
-      this.#onScroll = undefined;
-    }
-    if (this.#onResize !== undefined) {
-      window.removeEventListener('resize', this.#onResize);
-      this.#onResize = undefined;
-    }
+    this.#ac?.abort();
+    this.#ac = undefined;
     this.#mo?.disconnect();
     this.#mo = undefined;
     if (this.#hiTimer !== undefined) nativeClearTimeout(this.#hiTimer);
