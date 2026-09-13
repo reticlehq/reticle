@@ -4,6 +4,10 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Changed
+
+- **`@reticlehq/browser` — `mountWorkspaceSelector()` tears down its document-level listeners via `AbortController`.** The workspace selector's `pointerdown`/`keydown` listeners on `document` — the two that would outlive the presenter if teardown forgot them — now share an `AbortController` and register with `{ signal }`, in line with `health.ts`, `animation.ts`, `focus.ts`, and `scroll.ts`. The three listeners on nodes this module owns (`btn`, `menu`, `copyBtn`) are unchanged, since they are removed along with the node when the presenter unmounts. Consistency only — the prior teardown correctly removed the document listeners. Part of [#453](https://github.com/reticlehq/reticle/issues/453).
+
 ## [2.14.0] — 2026-09-10
 
 ### Added
