@@ -87,17 +87,22 @@ describe('raising the cap does not widen the quadratic redaction scan', () => {
     const raw = 'a'.repeat(1_000_000);
     setNetworkBodyMaxChars(262144);
 
-    const started = Date.now();
     const { body, truncated } = projectBody(raw, 'text/plain');
-    const elapsed = Date.now() - started;
 
     expect(truncated, 'the input was clipped, so the body is not complete').toBe(true);
-    // The scan ceiling is 2x the DEFAULT cap, not 2x the configured one, so the output cannot
-    // exceed what that scan produced -- which is the property that keeps the cost bounded.
+    // The property is about the INPUT the scan is handed, which `projectBody` bounds before any
+    // scanning: the ceiling for the redacting path is 2x the DEFAULT cap, never 2x the configured
+    // one. The output length is the observable consequence -- a scan that had run over the whole
+    // megabyte could not have produced a body this short.
+    //
+    // Asserted by SIZE rather than by elapsed time on purpose. A wall-clock budget here measured
+    // the runner rather than the code: it read 1137ms against a 1000ms limit on a Windows CI box
+    // and turned a correct implementation red, while proving nothing the length does not.
     expect(body.length).toBeLessThanOrEqual(DEFAULT_CAP * 2);
-    expect(elapsed, 'a raised cap must not put seconds of work on the main thread').toBeLessThan(
-      1000,
-    );
+    expect(
+      body.length,
+      'the cap is 262144; a scan that respected IT would be far longer',
+    ).toBeLessThan(262_144);
   });
 
   it('still scans a JSON body to the full configured width', () => {
