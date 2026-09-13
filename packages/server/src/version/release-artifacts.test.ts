@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
  * that existed. The
  * npm job walks the workspace and publishes everything not marked `private`, so a fixture app that
  * arrived without the flag was offered to the registry under a name we do not own — a 403 AFTER all
- * ten real packages had already published, which is the worst place to fail: the release is out, the
+ * eleven real packages had already published, which is the worst place to fail: the release is out, the
  * workflow is red, and the two facts disagree.
  *
  * `cargo publish` refuses a dirty working tree, and bumping `Cargo.toml` without regenerating

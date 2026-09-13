@@ -20,6 +20,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { fileURLToPath } from 'node:url';
+import { waitUntil } from '../wait-until.mjs';
 const DIST = join(fileURLToPath(new URL('../../../packages/server/dist', import.meta.url)));
 const PORT = 9960;
 
@@ -204,7 +205,7 @@ await runTool(actTool, deps, { ref: 'e7', action: 'type', args: 'hunter2-passwor
 await settle();
 // The envelope the product's MAIN verification tool returns: no top-level `pass`, the verdict
 // nested under `verdict`, the summary at `verified`. act_and_wait was absent from
-// VERIFICATION_TOOLS AND unreadable by bugsInResult, so every verdict it produced — and every
+// VERDICT_TOOLS AND unreadable by bugsInResult, so every verdict it produced — and every
 // failure — was invisible to both metrics. Measured: act_and_wait 14 calls/day, assert 0.
 const actAndWaitFail = {
   name: 'reticle_act_and_wait',
@@ -668,7 +669,10 @@ await daemon.shutdown('idle');
 }
 
 // ── 10. Project profile (deliberately deferred 5s off the daemon boot path) ───
-await new Promise((r) => setTimeout(r, 6000));
+// The 5s deferral is the PRODUCT's, and it is real. What was invented was the 6000: a one-second
+// margin over it, unconditional, on every run. Wait for the event instead — same 5s floor on an idle
+// machine, and a loaded runner that needs seven gets seven instead of a red.
+await waitUntil(() => find('project_profiled').length > 0);
 // ── ────────────────────────────────────────────────────
 {
   const p = find('project_profiled')[0]?.properties;

@@ -3,7 +3,7 @@ import {
   dedupeGaps,
   instrumentationGap,
   type InstrumentationGap,
-} from '@reticlehq/core';
+} from '@reticlehq/core/artifacts';
 
 /**
  * The gaps ONE action revealed, derived from facts the act path already holds.
@@ -83,6 +83,13 @@ export interface ActionInstrumentationFacts {
    */
   openIntentCount?: number;
   /**
+   * The page announced that this build has the `data-reticle-source` stamp switched OFF.
+   *
+   * Only `true` means anything: absent is "nobody said", which is every SDK predating the field and
+   * every hand-wired connect. See the HELLO field of the same name.
+   */
+  sourceMappingDisabled?: boolean;
+  /**
    * How long the OLDEST open intent has been owed, in ms.
    *
    * A count alone cannot tell "you declared this a minute ago and have not proved it yet" from
@@ -98,11 +105,21 @@ export function gapsForAction(facts: ActionInstrumentationFacts): Instrumentatio
 
   // A red verdict names the control and cannot name the line that renders it. That is the round trip
   // the agent is about to spend, and the one a build plugin removes permanently.
+  //
+  // ...unless the project TURNED THE STAMP OFF, which is a different situation with the opposite
+  // remedy. Reported from the field: a react-three-fiber app disabled `sourceMapping` because the
+  // stamp crashed it to a white screen, and every red verdict afterwards told the reader to install
+  // a build plugin that was already there. Only a definite `false` counts — an SDK that says nothing
+  // is unknown, and reading silence as an opt-out would mute the honest gap for every app that
+  // simply has no source mapping at all.
   if (!facts.pass && facts.source === undefined) {
+    const off = true === facts.sourceMappingDisabled;
     gaps.push(
       instrumentationGap(
-        InstrumentationGapKind.NO_SOURCE_MAPPING,
-        'the control that was driven carries no source mapping',
+        off ? InstrumentationGapKind.SOURCE_MAPPING_OFF : InstrumentationGapKind.NO_SOURCE_MAPPING,
+        off
+          ? 'source mapping is turned off for this build, so no element carries data-reticle-source'
+          : 'the control that was driven carries no source mapping',
         'this verdict can name the control but not the file and line that render it, so finding the code is a separate search',
         { ...(facts.ref === undefined ? {} : { ref: facts.ref }) },
       ),

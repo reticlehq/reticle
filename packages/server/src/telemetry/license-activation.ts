@@ -25,7 +25,7 @@
  * resolves to a company only against the issuance ledger held locally, so the analytics backend never
  * holds a customer list.
  */
-import { LicenseActivation } from '@reticlehq/core';
+import { LicenseActivation } from '@reticlehq/core/telemetry';
 import { describeLicense, LICENSE_KEY_ENV } from '../license/license.js';
 
 /** The activation facts that ride the wire. All absent on a build with no issuer key baked. */

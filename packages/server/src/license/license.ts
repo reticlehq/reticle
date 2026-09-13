@@ -13,7 +13,7 @@
 
 import { createPublicKey, sign as edSign, verify as edVerify, type KeyObject } from 'node:crypto';
 import { z } from 'zod';
-import { LicenseActivation } from '@reticlehq/core';
+import { LicenseActivation } from '@reticlehq/core/telemetry';
 
 /** Outcome of verifying a license key. */
 export const LicenseStatus = {

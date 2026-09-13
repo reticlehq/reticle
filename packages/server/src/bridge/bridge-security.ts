@@ -4,6 +4,7 @@ import {
   defaultPairingTokenDir,
   nodePairingTokenDeps,
   readOrCreatePairingToken,
+  pairingTokenSource,
 } from './pairing-token.js';
 import { log } from '../log.js';
 
@@ -12,6 +13,13 @@ interface BridgeSecurity {
   host?: string;
   token?: string;
   allowedOrigins?: string[];
+  /**
+   * Which source supplied `token`, decided HERE because this is the only place that knows.
+   * By the time the Bridge sees it, an auto-provisioned token and one passed by a caller are the
+   * same field — so computing it downstream would report `explicit` for every daemon and describe
+   * nothing. See pairingTokenSource for why a refusal needs this at all.
+   */
+  tokenSource?: ReturnType<typeof pairingTokenSource>;
 }
 
 /**
@@ -20,6 +28,10 @@ interface BridgeSecurity {
  * every entrypoint — a past divergence let daemon mode silently run with auth disabled.
  */
 export function resolveBridgeSecurity(options: StartOptions): BridgeSecurity {
+  const tokenSource = pairingTokenSource({
+    explicit: options.token !== undefined && 0 < options.token.length,
+    env: process.env,
+  });
   const envToken = process.env[ReticleEnv.TOKEN];
   const envOrigins = process.env[ReticleEnv.ALLOWED_ORIGINS];
   const host = options.host ?? process.env[ReticleEnv.HOST];
@@ -35,6 +47,7 @@ export function resolveBridgeSecurity(options: StartOptions): BridgeSecurity {
     ...(host === undefined ? {} : { host }),
     ...(token === undefined ? {} : { token }),
     ...(allowedOrigins === undefined ? {} : { allowedOrigins }),
+    tokenSource,
   };
 }
 

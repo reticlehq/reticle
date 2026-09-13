@@ -11,7 +11,7 @@
  * this list needs another entry — which is a signal in itself, and the reason it is never merged
  * into one of the known causes.
  */
-import { ConnectFailure } from '@reticlehq/core';
+import { ConnectFailure } from '@reticlehq/core/telemetry';
 
 /** Ordered most-specific first; the first match wins. Patterns track messages we have actually seen. */
 const RULES: readonly { readonly match: RegExp; readonly cause: ConnectFailure }[] = [

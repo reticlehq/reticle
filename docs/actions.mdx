@@ -24,7 +24,7 @@ Every action Reticle can perform takes the same shape: a `ref` from [`reticle_sn
 | `submit` | none | Submits the element's `<form>` |
 | `press` | `{ text }` | The key **name**: `Escape`, `Tab`, `Enter` |
 | `scrollIntoView` | none |  |
-| `upload` | `{ content?, name?, type? }` | Sets a file on `<input type="file">`. All three default, to `"reticle test file"`, `"file.txt"` and `"text/plain"` |
+| `upload` | `{ content?, name?, type?, path? }` | Sets a file on `<input type="file">`. Inline bytes default to `"reticle test file"` / `"file.txt"` / `"text/plain"`. `path` reads a file from disk, scoped to the project root plus any opt-in directories listed in `.reticle.json` as `"uploadRoots": ["~/Downloads", "/Volumes/fixtures"]`. A refusal names every allowed root. |
 | `drag` | `{ toRef }` | Pointer-based drag (dnd-kit, react-beautiful-dnd) plus HTML5 DnD. `target` is an alias |
 | `webmcp` | `{ tool, params }` | Calls a `navigator.modelContext` tool, if the site exposes one |
 

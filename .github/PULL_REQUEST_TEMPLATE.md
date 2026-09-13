@@ -28,5 +28,5 @@ Closes #
 - [ ] No `any`, no free strings (wire strings live in `@reticlehq/core`), no non-null `!`
 - [ ] No `console.log` or internal tracking codes left in the diff
 - [ ] Each changed file is under the 1000-line cap
-- [ ] Docs and `CHANGELOG.md` updated if this is user-facing (entry under `[Unreleased]`)
+- [ ] Docs updated, and a user-facing change adds a **new file** under `.changes/` (never edit `CHANGELOG.md` — that file is assembled at release time, and editing it is what makes PRs conflict; format in `.changes/README.md`)
 - [ ] Security-affecting? Auth/redaction/trust-boundary changes keep the localhost-only, no-app-data-leaves-the-machine, no-arbitrary-JS posture (usage telemetry stays anonymous + opt-out per `docs/telemetry.md`) and are covered by a test

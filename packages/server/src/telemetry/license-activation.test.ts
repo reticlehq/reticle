@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { generateKeyPairSync } from 'node:crypto';
-import { LicenseActivation } from '@reticlehq/core';
+import { LicenseActivation } from '@reticlehq/core/telemetry';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { TelemetryEventKind } from '@reticlehq/core';
+import { TelemetryEventKind } from '@reticlehq/core/telemetry';
 import { licenseFacts } from './license-activation.js';
 import { createTelemetry, POSTHOG_GROUP_ORGANIZATION } from './telemetry.js';
 import { LICENSE_KEY_ENV, LICENSE_PUBLIC_KEY_ENV, signLicenseKey } from '../license/license.js';

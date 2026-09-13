@@ -19,6 +19,7 @@ import { chromium } from 'playwright';
 import { start, TOOLS, BaselineStore, RecordingStore } from '@reticlehq/server';
 import { waitForSession } from '../wait-for-session.mjs';
 import { freePortSafely } from '../gate-harness.mjs';
+import { waitUntil } from '../wait-until.mjs';
 
 /** Atlas serves from here; the session is identified by it, since atlas self-assigns its id. */
 const ATLAS_PORT = 4320;
@@ -108,10 +109,13 @@ await waitForSession(() => server.bridge.sessions.list(), isAtlas, { what: `an a
 console.log('\n=== ATLAS: the hard fixture, driven ===');
 chk('atlas SDK connected', sessionId() !== undefined);
 
-// Give the virtualized table and the SSE stream time to be real.
-await sleep(2500);
-
-const snap = await T('reticle_snapshot', {});
+// Give the virtualized table and the SSE stream time to be real — by waiting until they ARE, rather
+// than by guessing that 2500ms is enough on every machine that will ever run this.
+const snap =
+  (await waitUntil(async () => {
+    const s = await T('reticle_snapshot', {});
+    return 0 < (s.nodes ?? 0) ? s : undefined;
+  })) ?? (await T('reticle_snapshot', {}));
 chk('a snapshot of a 10k-row app comes back at all', typeof snap.tree === 'string' && snap.nodes > 0, `nodes=${snap.nodes}`);
 
 // ── Virtualization honesty ────────────────────────────────────────────────────────────────────
@@ -156,6 +160,75 @@ if (inertRef !== undefined) {
   );
 } else {
   chk('found an inert element to test attribution against', false, 'no heading resolved');
+}
+
+// ── A storage write storm must not turn a verdict into a confident zero ───────────────────────
+// The field shape this reproduces: an app rewriting one localStorage key thousands of times a
+// minute with byte-identical content. Those no-op writes filled the server ring buffer
+// (`held: 2000, dropped: 70482`), and the verdict taken in that window reported `net.total: 0`,
+// `stateDiffs: []` and `state "cad" never changed` — while a POST that had returned 200 inside that
+// same window carried the entire root cause in its body. The agent read the zero and nearly
+// reported "clicking Accept fires no network request", which sends a developer to the click handler
+// instead of to the payload the server rejected.
+//
+// Two fixes came out of that and BOTH shipped against unit tests only, because nothing in this repo
+// behaved like this. This is the end-to-end half:
+//
+//   1. a write whose value is unchanged emits nothing, so it costs no buffer slot;
+//   2. a window the buffer DID trim reports a floor, never a bare total.
+//
+// The assertion is deliberately about the CAVEAT, not about the counts. A green here must not mean
+// "the buffer survived" — an app can always out-write any buffer. It means: whatever the counts say,
+// they are not presented as facts about the app when they are facts about what survived.
+const storm = await T('reticle_query', { by: 'testid', value: 'write-storm' });
+const stormRef = storm.elements?.[0]?.ref;
+if (stormRef === undefined) {
+  chk('the write-storm control is present in the fixture', false, 'no write-storm testid');
+} else {
+  await T('reticle_act', { ref: stormRef, action: 'click' });
+  await sleep(3000); // long enough for an unguarded buffer to be starved several times over
+
+  // Count the storage events the storm actually PRODUCED, which is the thing the fix changes.
+  //
+  // An earlier version of this check asserted that the capture stayed clean, and it passed with the
+  // guard reverted — the assert window is short and the transport rate-cap already sheds low-value
+  // events, so cleanliness is not sensitive to the defect. A guard that is green either way is
+  // decoration, and this repo has paid for that before. This measures the difference directly:
+  // ~12,000 byte-identical writes land in this window (200 every 50ms for 3s), and the fix is that
+  // a write which changes nothing emits nothing.
+  const observed = await T('reticle_observe', { window_ms: 3000, max_events: 500 });
+  const storageEvents = (observed.events ?? []).filter((e) =>
+    String(e.type ?? '').toLowerCase().includes('storage'),
+  ).length;
+
+  const verdict = await T('reticle_assert', { predicate: { kind: 'text', contains: 'Shipments' } });
+  const truncated =
+    verdict.honesty?.integrity?.clean === false ||
+    JSON.stringify(verdict.honesty ?? {}).includes('buffer_loss');
+
+  chk(
+    'a verdict taken during a write storm still returns',
+    verdict.verified !== undefined,
+    `verified=${verdict.verified} truncated=${String(truncated)}`,
+  );
+  // Measured RED by reverting the observer guard and re-running: the same storm then produces
+  // hundreds of STORAGE_CHANGE events here.
+  // AT MOST ONE, not zero, and the difference is the point. The first write genuinely changes the
+  // key — from absent to its value — and must be reported; every rewrite after it changes nothing
+  // and must not be. Asserting zero would demand that Reticle drop a real change, which is the
+  // opposite defect and a worse one.
+  //
+  // Measured on this fixture: 1 with the guard, 496 without it. A decisive gap either way, and the
+  // bound is deliberately loose because the exact number depends on where the storm starts relative
+  // to the window — what must not happen is hundreds.
+  chk(
+    'a storm of byte-identical writes reports the first one and none of the rewrites',
+    storageEvents <= 1,
+    `storage events in a 3s window of ~12,000 no-op writes = ${String(storageEvents)} (reverting the observer guard gives ~496)`,
+  );
+
+  // Stop it, so the storm cannot outlive this spec and poison a later one sharing the bridge.
+  await T('reticle_act', { ref: stormRef, action: 'click' });
 }
 
 await b.close();

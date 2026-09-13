@@ -4,11 +4,13 @@
 
 ## Headline
 
+> **A false-green figure always carries its denominator.** A raw count falls when usage falls, so "1" read a year from now says nothing about whether Reticle got better or the corpus got smaller. The denominator here is one verification per bug in the registry. Pinned by `false-green-oracle-independence.test.ts`, alongside the rule that the ground truth may not import the machinery it grades.
+
 | Metric                                    |     Reticle |  Playwright |
 | ----------------------------------------- | ----------: | ----------: |
 | Bugs caught                               | **85 / 88** |     59 / 88 |
 | Of what it _structurally can_ catch       | **85 / 86** |     57 / 60 |
-| **False greens** (broken but reported OK) |       **1** |      **29** |
+| **False greens** (broken but reported OK) |  **1 / 88** | **29 / 88** |
 | False positives (clean build flagged)     |           0 |           0 |
 | Output bytes / bug                        |     9,261 B | **5,849 B** |
 

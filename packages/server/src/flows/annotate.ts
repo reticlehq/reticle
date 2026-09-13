@@ -19,7 +19,8 @@ import {
  * assert-signal → step.expect.signal (+ signalData) on the LAST step (needs ≥1 step)
  * assert-visible → step.expect.element.testid on the LAST step (needs ≥1 step)
  * mark-dynamic → flow.dynamic[] += testid flow-level, allowed with 0 steps
- * success-state → flow.success = { signal | element } flow-level (signal XOR testid; both → signal)
+ * success-state → flow.success = { signal | state | net | console | element | text } flow-level,
+ *                 resolved in that precedence order (a consequence beats a presence check)
  *
  * FIRST CUT: only the four structured kinds above. Free natural-language annotation → predicate
  * compilation is explicitly FUTURE — an NL string never reaches here (AnnotationSchema
@@ -74,6 +75,16 @@ export function compileAnnotation(a: Annotation, stepCount: number): AnnotateOut
       }
       if (a.testid !== undefined) {
         return flowSuccess(a, { element: { testid: a.testid } });
+      }
+      // Last, and above only MISSING_FIELD. An element is a locator and text is content; where a
+      // caller offered both, the locator is the more stable anchor. But text beats nothing at all,
+      // which is what an app whose only observable is a rendered value used to get (#811).
+      if (a.text !== undefined) {
+        const text: NonNullable<FlowExpect['text']> = { contains: a.text.contains };
+        if (a.text.scope !== undefined) text.scope = a.text.scope;
+        if (a.text.absent !== undefined) text.absent = a.text.absent;
+        if (a.text.visible !== undefined) text.visible = a.text.visible;
+        return flowSuccess(a, { text });
       }
       return { result: { ok: false, code: AnnotationErrorCode.MISSING_FIELD } };
     }
@@ -169,6 +180,12 @@ export function describeCompiled(a: Annotation): string {
         return `${COMPILED_PREDICATE_PREFIX} succeed when ${
           true === a.console.absent ? `no console.${level}` : `console.${level}`
         }`;
+      }
+      if (a.testid === undefined && a.text !== undefined) {
+        const where = a.text.scope === undefined ? '' : ` in ${a.text.scope}`;
+        return `${COMPILED_PREDICATE_PREFIX} succeed when ${
+          true === a.text.absent ? 'text is gone:' : 'text shows:'
+        } ${JSON.stringify(a.text.contains)}${where}`;
       }
       return `${COMPILED_PREDICATE_PREFIX} succeed when ${a.testid ?? ''} visible`;
     case AnnotationKind.INTENT:

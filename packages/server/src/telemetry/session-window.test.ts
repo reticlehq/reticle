@@ -24,7 +24,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { TelemetryEventKind } from '@reticlehq/core';
+import { TelemetryEventKind } from '@reticlehq/core/telemetry';
 import { SessionMetrics } from './session-metrics.js';
 import { FIRST_FLUSH_MS, SESSION_FLUSH_MS } from './daemon-telemetry.js';
 

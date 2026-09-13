@@ -22,6 +22,8 @@ import { installNetwork } from './network.js';
 import { installIpc, ipcNetOverrides, isReticleOwnIpc } from './ipc.js';
 import { installPerf } from './perf.js';
 import { installRoute } from './route.js';
+import { installNavigation } from './navigation.js';
+import { installDeparture } from './departure.js';
 import { installConsole } from './console.js';
 import { installDialogs } from './dialogs.js';
 import { installAnimation } from './animation.js';
@@ -42,6 +44,24 @@ function guard(emit: Emit, site: SdkSite, install: () => Teardown): Teardown {
   } catch (error) {
     reportSdkFailure(emit, site, error);
     return () => {}; // nothing was installed, so there is nothing to tear down
+  }
+}
+
+/**
+ * Undo every install, guarded — the mirror of `guard()`, and for the same reason.
+ *
+ * This loop ran bare in `disconnect()`. One throwing disposer took every LATER one with it, so a
+ * page the SDK had been told to leave kept `fetch`, XHR, `Storage.prototype.*`, `console` and the
+ * native dialogs patched for the rest of its life, silently. A teardown that cannot finish is
+ * strictly worse than one that never ran: the app keeps the wrapper and loses the observer.
+ */
+export function runTeardowns(emit: Emit, teardowns: readonly Teardown[]): void {
+  for (const teardown of teardowns) {
+    try {
+      teardown();
+    } catch (error) {
+      reportSdkFailure(emit, SdkSite.TEARDOWN, error);
+    }
   }
 }
 
@@ -67,6 +87,13 @@ export function installAllObservers(emit: Emit, options: InstallOptions): Teardo
     ),
     guard(emit, SdkSite.ANIMATION_OBSERVER, () => installPerf(emit)),
     guard(emit, SdkSite.ROUTER_OBSERVER, () => installRoute(emit)),
+    // The request that fetched THIS document, which no in-page patch could have seen: it was made
+    // by the browser before this document, and therefore this SDK, existed. See installNavigation.
+    guard(emit, SdkSite.NETWORK_OBSERVER, () => installNavigation(emit)),
+    // Where the browser is about to GO, recorded before it goes — an OAuth handoff and a native
+    // download both leave no other trace, because the SDK dies with the document. See
+    // installDeparture.
+    guard(emit, SdkSite.NETWORK_OBSERVER, () => installDeparture(emit)),
     guard(emit, SdkSite.CONSOLE_OBSERVER, () => installConsole(emit)),
     // A native dialog behind a driven click wedges the tab permanently — the main thread stops and
     // the SDK's own pump is on it, so nothing inside the session can recover. Answered, never

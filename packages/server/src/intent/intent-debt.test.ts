@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { intentDebt } from './open-intents.js';
-import type { Intent } from '@reticlehq/core';
+import type { Intent } from '@reticlehq/core/artifacts';
 
 const NOW = Date.parse('2026-08-26T12:00:00Z');
 const DAY = 86_400_000;

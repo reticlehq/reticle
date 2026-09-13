@@ -108,7 +108,6 @@ function withoutConstantSessionId(event: unknown): unknown {
  * it (it reports which levels are present), but on a quiet page the answer is identical to a genuine
  * all-clear. Refusing the value outright is the only reading with no ambiguity.
  */
-const CONSOLE_LEVEL_LIST = CONSOLE_LEVELS.join(' | ');
 const consoleLevelEnum = z.enum(CONSOLE_LEVELS as [string, ...string[]]);
 
 export const OBSERVE_TOOLS: ToolDef[] = [
@@ -359,7 +358,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         // is the most common thing an agent wants to assert. A field report reached us from an agent
         // that guessed `urlContains` on route (net's spelling) and got unrecognized_keys.
         'Predicate to evaluate. Kinds: { signal, name|dataMatches|count } ' +
-          '{ net, urlContains|method|status|count|bodyContains } ' +
+          '{ net, urlContains|method|status|count|bodyContains|requestBodyContains|requestBodyMatches } ' +
           '{ state, path|equals } { route, pathname (exact) | contains (path+query+hash) } ' +
           '{ element, testid|role|text } { text } { console, level|contains|absent } { animation, name } ' +
           '{ settled } — combine with { allOf | anyOf | not }. Prefer a signal/net/state consequence ' +
@@ -656,9 +655,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
     description:
       'Console/error log. Fast path for "were there any errors during this flow?". When a level filter matches nothing, returns a `hint` { totalInWindow, byLevel } so 0 errors is distinguishable from a silent page.',
     inputSchema: {
-      level: consoleLevelEnum
-        .optional()
-        .describe(`Log level filter: ${CONSOLE_LEVEL_LIST}. Omit to return all levels.`),
+      level: consoleLevelEnum.optional().describe('Log level filter. Omit to return all levels.'),
       since: cursorSchema
         .optional()
         .describe(

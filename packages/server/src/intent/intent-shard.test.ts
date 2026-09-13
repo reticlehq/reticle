@@ -2,7 +2,7 @@
  * The sharded model: what makes it cheap to read, and what it refuses to invent.
  */
 import { describe, expect, it } from 'vitest';
-import type { Intent } from '@reticlehq/core';
+import type { Intent } from '@reticlehq/core/artifacts';
 import {
   indexFrom,
   IntentStatus,

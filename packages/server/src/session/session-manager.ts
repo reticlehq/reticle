@@ -1,6 +1,6 @@
 import { NO_SESSION_CONNECTED_ERROR } from '@reticlehq/core';
 import { notePendingNoSessionReason } from '../telemetry/tool-refused.js';
-import type { NoSessionReason } from '@reticlehq/core';
+import type { NoSessionReason } from '@reticlehq/core/telemetry';
 import {
   declareDrivenRedactionKeys,
   forgetDrivenRedactionKeys,

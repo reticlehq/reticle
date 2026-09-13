@@ -7,7 +7,7 @@
  */
 
 import type { Browser } from 'playwright';
-import { BrowserLaunchKind } from '@reticlehq/core';
+import { BrowserLaunchKind } from '@reticlehq/core/telemetry';
 import { chromiumLaunchOptions } from '../chromium-launch-options.js';
 import { getSessionMetrics } from '../telemetry/session-metrics.js';
 import { classifyConnectFailure } from '../telemetry/connect-failure.js';
@@ -64,6 +64,7 @@ function wrapBrowser(browser: Browser): PooledBrowser {
               await page.mouse.move(x, y);
             },
             installMocks: (rules) => installNetworkMocks(page, [...rules]),
+            setViewport: (size) => page.setViewportSize(size),
             onCrash: (handler) => page.on('crash', handler),
             onConsole: (handler) => page.on('console', (msg) => handler(msg.text())),
             onDialog: (handler) =>

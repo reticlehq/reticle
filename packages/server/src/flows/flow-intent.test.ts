@@ -4,7 +4,7 @@ import { createMemoryFs } from '../project/memory-fs.js';
 import { IntentStore } from '../intent/intent-store.js';
 import { FlowStore, type FlowAnnotations } from './flows.js';
 import { flowIntentGap } from './flow-intent.js';
-import { InstrumentationGapKind } from '@reticlehq/core';
+import { InstrumentationGapKind } from '@reticlehq/core/artifacts';
 import { ReticleTool } from '../tools/tool-names.js';
 import { dischargeFlowIntent, flowIntentId, flowIntentStatement } from './flow-intent.js';
 import type { CompiledProgram } from './recordings.js';

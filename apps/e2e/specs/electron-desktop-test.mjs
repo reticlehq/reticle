@@ -23,6 +23,7 @@ import {
   spawnElectronSmoke,
   tempCaptures,
 } from '../desktop-harness.mjs';
+import { waitUntil } from '../wait-until.mjs';
 
 const { chk, state } = checker();
 const smokeDir = path.join(ROOT, 'apps/electron-smoke');
@@ -237,9 +238,14 @@ try {
     extraEnv: { RETICLE_SMOKE_NO_PRELOAD: '1' },
     urlIncludes: ':5174',
   });
-  await sleep(2500);
-
-  const net = await blind.tool('reticle_network', {});
+  // The un-instrumented renderer still loads its OWN subresources, and that is what the second check
+  // below asserts — so wait for one to be OBSERVED rather than for 2500ms to pass. The IPC half is an
+  // absence and cannot be polled for; this is the positive half, and it is the half the wait was for.
+  const net =
+    (await waitUntil(async () => {
+      const seen = await blind.tool('reticle_network', {});
+      return (seen.calls ?? []).some((c) => /:5174/.test(String(c.url ?? ''))) ? seen : undefined;
+    })) ?? (await blind.tool('reticle_network', {}));
   // Document-initiated subresource observation means the network view is no longer guaranteed
   // empty without the preload: the page's own <script>/<link>/<img> loads are seen at the
   // session layer. What must still be EMPTY here is the IPC half: no preload, no invoke patch,
@@ -255,6 +261,21 @@ try {
     calls.some((c) => /:5174/.test(String(c.url ?? ''))),
     JSON.stringify(calls.slice(0, 3)),
   );
+
+  // The app has to have LOADED before "a passing assert still passes" means anything, and this
+  // waits for that rather than assuming it. `reticle_assert` evaluates ONCE by default — documented,
+  // deliberate, and the right default for a verdict — so asserting here raced the 120ms IPC round
+  // trip that fills the status line and lost every time. It failed deterministically rather than
+  // flakily, which is why it read like a product defect: the preceding wait watches the NETWORK, and
+  // the page's own subresources are observed long before the todos come back over IPC.
+  //
+  // reticle_wait_for is the tool that spends a budget (4000ms), so it establishes the precondition;
+  // the assert below is then left exactly as it was, evaluating once, which is the behaviour under
+  // test. Waiting for the app is not the same as weakening the check.
+  const ready = await blind.tool('reticle_wait_for', {
+    predicate: { kind: 'text', contains: '2 todos' },
+  });
+  chk('the un-instrumented app finishes its own IPC load', ready.pass === true);
 
   const green = await blind.tool('reticle_assert', {
     predicate: { kind: 'text', contains: '2 todos' },

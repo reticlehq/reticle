@@ -19,7 +19,7 @@
  * the hot resolve() path and this stays unit-testable.
  */
 
-import { NoSessionReason } from '@reticlehq/core';
+import { NoSessionReason } from '@reticlehq/core/telemetry';
 
 import { leaseCaveat, type LeaseBrowserState } from './lease-availability.js';
 import { DEV_SERVER_PORTS } from '../cli/cli-port.js';

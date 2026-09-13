@@ -29,7 +29,7 @@ interface CrashCause {
   internalFrame?: string;
 }
 
-import { CrashPort } from '@reticlehq/core';
+import { CrashPort } from '@reticlehq/core/telemetry';
 import { reticleFrames } from './error-fingerprint.js';
 
 /** IPv4 loopback is the whole 127/8 block, not just 127.0.0.1. */

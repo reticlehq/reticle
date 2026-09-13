@@ -16,7 +16,7 @@
  * in effect: it was not versioned, it was stuck.
  *
  * So the crate moves in lockstep, and this is what makes lockstep a fact rather than an intention.
- * A release that bumps the ten npm packages and forgets the eleventh artifact now fails here, in the
+ * A release that bumps the eleven npm packages and forgets the twelfth artifact now fails here, in the
  * fast unit gate, instead of silently shipping nothing.
  */
 

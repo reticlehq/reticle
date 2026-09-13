@@ -14,7 +14,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ProjectIdSource } from '@reticlehq/core';
+import { ProjectIdSource } from '@reticlehq/core/telemetry';
 import { projectFingerprint } from './telemetry.js';
 
 let root = '';

@@ -76,6 +76,24 @@ describe('refusing a sequence that cannot act', () => {
       ]),
     ).not.toThrow();
   });
+
+  it('accepts a document-key press with neither ref nor target', () => {
+    expect(() =>
+      assertSequenceSteps([{ action: 'press', args: { text: 'Escape' } }]),
+    ).not.toThrow();
+    expect(() =>
+      assertSequenceSteps([
+        { ref: 'e1', action: 'click' },
+        { action: 'press', args: { text: 'k', modifiers: ['Meta'] } },
+      ]),
+    ).not.toThrow();
+  });
+
+  it('still refuses a default Enter press with no locator — that key submits a control', () => {
+    expect(() => assertSequenceSteps([{ action: 'press', args: { text: 'Enter' } }])).toThrow(
+      /no `ref` or `target`/,
+    );
+  });
 });
 
 describe('what a step reports', () => {

@@ -26,11 +26,11 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { McpStdioClient } from '../../../bench/harness/mcp-client.mjs';
 import { waitForSession } from '../wait-for-session.mjs';
+import { waitUntil } from '../wait-until.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const PORT = process.env.RETICLE_PORT ?? '4400';
 const APP = process.env.SWEEP_APP_URL ?? 'http://localhost:4310/';
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let pass = 0;
 let fail = 0;
@@ -257,7 +257,11 @@ chk(
 await record('reticle_clock', { freeze: true });
 await record('reticle_clock', { reset: true });
 await record('reticle_navigate', { reload: true });
-await sleep(2500);
+// A reload drops the page's SDK and it dials back. What the rest of the sweep needs is that it HAS —
+// so wait for the app to be answering queries again, rather than for 2500ms, which was a guess about
+// how long a Vite dev server takes to hand back a React tree on somebody's laptop. `callRaw`, not
+// `record`: the poll must not enter the call list the four properties below are asserted over.
+await waitUntil(async () => 0 < ((await callRaw('reticle_query', { by: 'role', value: 'button' })).parsed?.elements ?? []).length);
 await record('reticle_annotate', { kind: 'intent', text: 'sweep' });
 await record('reticle_record', { action: 'start', recordingName: 'sweep' });
 await record('reticle_record', { action: 'stop', recordingName: 'sweep' });

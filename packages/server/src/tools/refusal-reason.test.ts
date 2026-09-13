@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RefusalReason } from '@reticlehq/core';
+import { RefusalReason } from '@reticlehq/core/telemetry';
 import { SELF_RECOVERING_MARKER } from '../session/no-session-diagnosis.js';
 import { RECOVERY, recoveryFor, refusalReasonFor } from './error-recovery.js';
 

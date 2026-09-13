@@ -4,7 +4,7 @@ import {
   RUN_ESTABLISHED_CAP,
   type Intent,
   type JournalAction,
-} from '@reticlehq/core';
+} from '@reticlehq/core/artifacts';
 import { subjectOf } from '../runs/run-context.js';
 import { ReticleTool } from '../tools/tool-names.js';
 

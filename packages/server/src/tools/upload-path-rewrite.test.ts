@@ -44,7 +44,11 @@ function fakeFs(files: Record<string, Uint8Array>): FileSystemPort {
   for (const [k, v] of Object.entries(files)) normalised[resolve(k)] = v;
 
   return {
-    readFile: () => Promise.resolve(''),
+    readFile: (path) => {
+      const bytes = normalised[resolve(path)];
+      if (bytes === undefined) return Promise.reject(new Error(`ENOENT: ${path}`));
+      return Promise.resolve(new TextDecoder().decode(bytes));
+    },
     writeFile: () => Promise.resolve(),
     appendFile: () => Promise.resolve(),
     readFileBytes: (path) => {
@@ -190,7 +194,7 @@ describe('rewriteUploadArgs', () => {
       } as unknown as ToolDeps;
       await expect(
         rewriteUploadArgs(depsWithFile, ActionType.UPLOAD, { path: outsidePath }),
-      ).rejects.toThrow('outside the project root');
+      ).rejects.toThrow('outside every allowed upload root');
     });
 
     it('refuses a relative path that escapes via ../', async () => {
@@ -205,10 +209,10 @@ describe('rewriteUploadArgs', () => {
       } as unknown as ToolDeps;
       await expect(
         rewriteUploadArgs(depsWithRealpath, ActionType.UPLOAD, { path: escapePath }),
-      ).rejects.toThrow('outside the project root');
+      ).rejects.toThrow('outside every allowed upload root');
     });
 
-    it('names the project root in the error', async () => {
+    it('names the allowed roots in the error', async () => {
       const deps = fakeDeps({});
       const outsidePath = join(tmpdir(), 'other', 'secret.txt');
       const depsWithRealpath = {
@@ -219,6 +223,70 @@ describe('rewriteUploadArgs', () => {
         path: outsidePath,
       }).catch((e: unknown) => String(e));
       expect(err).toContain(CWD);
+      expect(err).toContain('uploadRoots');
+    });
+  });
+
+  /**
+   * Opt-in allowlist in `.reticle.json` (#878). CAD and similar apps ingest files that live outside
+   * the repo; without this, agents copy third-party binaries into the source tree so flows can
+   * replay. The project root stays the default; extra roots are declared and reviewable.
+   */
+  describe('uploadRoots allowlist from .reticle.json', () => {
+    const HOME = resolve(join(tmpdir(), 'reticle-upload-home'));
+    const DOWNLOADS = join(HOME, 'Downloads');
+    const STEP_FILE = join(DOWNLOADS, 'Pipe Junction.step');
+    const CONFIG = join(CWD, '.reticle.json');
+
+    function depsWithRoots(roots: string[], files: Record<string, Uint8Array>): ToolDeps {
+      return fakeDeps({
+        ...files,
+        [CONFIG]: new TextEncoder().encode(JSON.stringify({ uploadRoots: roots })),
+      });
+    }
+
+    it('allows a path under an absolute uploadRoots entry', async () => {
+      const deps = depsWithRoots([DOWNLOADS], { [STEP_FILE]: HELLO_BYTES });
+      const result = await rewriteUploadArgs(deps, ActionType.UPLOAD, { path: STEP_FILE }, HOME);
+      expect(result['content']).toBe(Buffer.from(HELLO_BYTES).toString('base64'));
+      expect(result['name']).toBe('Pipe Junction.step');
+    });
+
+    it('expands ~ in uploadRoots and in the upload path', async () => {
+      const deps = depsWithRoots(['~/Downloads'], { [STEP_FILE]: HELLO_BYTES });
+      const result = await rewriteUploadArgs(
+        deps,
+        ActionType.UPLOAD,
+        { path: '~/Downloads/Pipe Junction.step' },
+        HOME,
+      );
+      expect(result['content']).toBeDefined();
+    });
+
+    it('still refuses a path outside every allowed root, and names them', async () => {
+      const other = join(tmpdir(), 'nowhere', 'x.step');
+      const deps = depsWithRoots([DOWNLOADS], { [STEP_FILE]: HELLO_BYTES });
+      const depsOpen = {
+        ...deps,
+        fs: {
+          ...deps.fs,
+          realpath: (path: string) => Promise.resolve(resolve(path)),
+        },
+      } as unknown as ToolDeps;
+      const err = await rewriteUploadArgs(depsOpen, ActionType.UPLOAD, { path: other }, HOME).catch(
+        (e: unknown) => String(e),
+      );
+      expect(err).toContain('outside every allowed upload root');
+      expect(err).toContain(CWD);
+      expect(err).toContain(DOWNLOADS);
+    });
+
+    it('still denies sensitive files even under an allowlisted root', async () => {
+      const envFile = join(DOWNLOADS, '.env');
+      const deps = depsWithRoots([DOWNLOADS], { [envFile]: HELLO_BYTES });
+      await expect(
+        rewriteUploadArgs(deps, ActionType.UPLOAD, { path: envFile }, HOME),
+      ).rejects.toThrow('sensitive-file pattern');
     });
   });
 

@@ -17,7 +17,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { InstallSource, TelemetryEventKind } from '@reticlehq/core';
+import { InstallSource, TelemetryEventKind } from '@reticlehq/core/telemetry';
 import { createTelemetry, type TelemetryExtra } from './telemetry.js';
 
 const TEST_ENV = {

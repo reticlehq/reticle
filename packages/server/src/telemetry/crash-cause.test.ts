@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CrashPort } from '@reticlehq/core';
+import { CrashPort } from '@reticlehq/core/telemetry';
 import { crashCause, innermostInternalFrame } from './crash-cause.js';
 
 /** The real thing, captured from `net.connect(1, '127.0.0.1')` on Node 22. */

@@ -5,7 +5,7 @@ description: Every Reticle package. What it does, why it exists, when you actual
 icon: cubes
 ---
 
-Reticle is eleven packages, and most people install two. This page exists so you can tell which two, and so that the ones you skip stop looking mysterious.
+Reticle is twelve packages, and most people install two. This page exists so you can tell which two, and so that the ones you skip stop looking mysterious.
 
 <Note>
   Everything ships together at one version: whatever `npm view @reticlehq/core version` says, every
@@ -89,13 +89,25 @@ if (import.meta.env.DEV) reticle.connect();
 
 **Why it exists:** agents speak MCP; browsers speak WebSocket; somebody has to be fluent in both and own the `.reticle/` directory where flows, baselines and runs are stored.
 
-**Depends on:** `@modelcontextprotocol/sdk`, `@reticlehq/core`, `ws`, `zod`.
+**Depends on:** `@modelcontextprotocol/sdk`, `@reticlehq/core`, `@reticlehq/init`, `ws`, `zod`.
 
 **Do you install it?** Not into your project. Your agent launches it:
 
 ```bash
 npx @reticlehq/server mcp
 ```
+
+---
+
+## @reticlehq/init
+
+**The project scaffolder behind `reticle init`.** Detects the framework and package manager, writes `.reticle.json`, patches the build config, generates the connect snippet and the agent rules, and registers the MCP server with whichever clients are on the machine.
+
+**Why it exists:** nothing in it observes a running app. It is a build-time codemod that runs once. While it lived inside `@reticlehq/server`, a typo in a generated snippet forced a republish of the MCP server, and every MCP user downloaded a scaffolder they run once or never. It reaches back into the daemon for nothing: the version it stamps, the tracer, the outcome reporter and the bridge pairing token all arrive through one injected `InitHost`.
+
+**Depends on:** `@reticlehq/core`, and nothing else.
+
+**Do you install it?** No. `@reticlehq/server` depends on it at the same version, and the `reticle` CLI drives it.
 
 ---
 
@@ -207,7 +219,7 @@ A lint rule makes the signal layer self-enforcing, which is the only way a conve
 
 ```toml
 [dependencies]
-reticle-tauri = "2.13"
+reticle-tauri = "2.14"
 ```
 
 <Warning>

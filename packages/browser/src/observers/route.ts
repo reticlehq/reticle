@@ -1,5 +1,5 @@
 import { EventType } from '@reticlehq/core';
-import type { Emit, Teardown } from './types.js';
+import { observeSafely, type Emit, type Teardown } from './types.js';
 import { captureMethod } from '../patching/capture-method.js';
 
 function snapshotLocation(): { pathname: string; search: string; hash: string; href: string } {
@@ -25,16 +25,20 @@ export function installRoute(emit: Emit): Teardown {
   // (which made `to === from` trip and silently drop the back navigation).
   let lastHref = location.href;
 
+  // Guarded whole: this runs inside the app's own `history.pushState` (and inside a popstate
+  // listener), so a throw anywhere in reading location or emitting would crash a router's navigate.
   const fire = (from: string): void => {
-    const to = snapshotLocation();
-    if (to.href === from) return;
-    lastHref = to.href;
-    emit(EventType.ROUTE_CHANGE, {
-      from,
-      to: to.href,
-      pathname: to.pathname,
-      search: to.search,
-      hash: to.hash,
+    observeSafely(() => {
+      const to = snapshotLocation();
+      if (to.href === from) return;
+      lastHref = to.href;
+      emit(EventType.ROUTE_CHANGE, {
+        from,
+        to: to.href,
+        pathname: to.pathname,
+        search: to.search,
+        hash: to.hash,
+      });
     });
   };
 

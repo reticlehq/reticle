@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RefusalReason, TelemetryEventKind } from '@reticlehq/core';
+import { RefusalReason, TelemetryEventKind } from '@reticlehq/core/telemetry';
 import { noteToolServed, reportToolRefused, resetToolRefusals } from './tool-refused.js';
 import * as telemetry from './telemetry.js';
 

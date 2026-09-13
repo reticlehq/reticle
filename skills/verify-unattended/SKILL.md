@@ -3,7 +3,7 @@ name: verify-unattended
 description: 'Install, instrument and verify a web app end to end without pausing for a human. Use in an autonomous or goal-mode agent, in CI, or in any client that asks for approval on every command: it never says "restart your client" or "open a browser", because it takes a route that needs neither. Prefer the normal install-and-verify skill when a human is present and can answer.'
 license: Apache-2.0
 metadata:
-  version: 2.13.1
+  version: 2.14.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---

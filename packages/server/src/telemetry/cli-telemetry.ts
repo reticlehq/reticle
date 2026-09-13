@@ -4,7 +4,7 @@
  * Lives in its own module so `cli.ts` stays a dispatcher, and so the `_daemon` exclusion below sits
  * next to the explanation of why it exists rather than buried in a startup function.
  */
-import { TelemetryEventKind } from '@reticlehq/core';
+import { TelemetryEventKind } from '@reticlehq/core/telemetry';
 import { DAEMON_INNER_COMMAND, knownCommand } from '../cli/cli-parse.js';
 import { getTelemetry } from './telemetry.js';
 import { describeCliFlags } from './argument-shape.js';

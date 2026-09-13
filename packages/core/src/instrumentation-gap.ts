@@ -102,6 +102,21 @@ export const InstrumentationGapKind = {
    * on it. Absence stays honest.
    */
   NO_FLOW_INTENT: 'no-flow-intent',
+  /**
+   * Source mapping is off because the PROJECT turned it off, not because nothing provides it.
+   *
+   * A separate kind from `NO_SOURCE_MAPPING` because the remedy is the opposite one. Reported from
+   * the field by a react-three-fiber app: the `data-reticle-source` stamp crashed it to a white
+   * screen — R3F host elements are three.js objects, and a dashed prop is read there as a property
+   * path — so the option was disabled, correctly, and every red verdict afterwards told the reader
+   * to add a build plugin that was already installed and whose stamp was the thing that broke.
+   *
+   * A remedy that cannot be followed costs a round trip and teaches the reader to skip the gap
+   * block, which is where the honest gaps live too. Any app built on a non-DOM reconciler has to
+   * turn the stamp off to run at all, so this is a supported configuration rather than an unusual
+   * one, and the verdict has to speak to it.
+   */
+  SOURCE_MAPPING_OFF: 'source-mapping-off',
 } as const;
 export type InstrumentationGapKind =
   (typeof InstrumentationGapKind)[keyof typeof InstrumentationGapKind];
@@ -144,6 +159,8 @@ const GAP_FIX: Readonly<Record<InstrumentationGapKind, string>> = {
     'declare it with reticle_intent { action: "declare", intents: [{ id, statement }] } — the statement is prose, in your own words: which user does what, and what should become true',
   [InstrumentationGapKind.INTENT_UNDISCHARGED]:
     'draw a verdict whose `until` asserts the intent itself, then it discharges — or call reticle_run({ tool: "reticle_context" }) to see exactly what is still owed',
+  [InstrumentationGapKind.SOURCE_MAPPING_OFF]:
+    'nothing to install — this build has sourceMapping turned off, so no element carries data-reticle-source. Re-enable it in the Reticle plugin options unless this app renders through a non-DOM reconciler (react-three-fiber, react-pdf, ink), where the stamp is what would break it',
   [InstrumentationGapKind.NO_FLOW_INTENT]:
     'save it again with intent: "<which user does what, and what should become true>" — prose, in your own words — or set intentId to an intent already in the ledger',
 };

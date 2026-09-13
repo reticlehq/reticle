@@ -5,7 +5,7 @@ description: Which frameworks Reticle supports, which are wired but unverified, 
 icon: layer-group
 ---
 
-**React + Vite, Next.js, Remix and Astro are fully supported, each with an example app driven to a verdict in CI. SvelteKit, TanStack Start, Nuxt, Vue, Preact, Create React App and plain HTML are wired and documented but not gated, so treat them as plausible rather than proven.** The exact wiring for each is below.
+**React + Vite, Next.js, Remix and Astro are fully supported, each with an example app driven to a verdict in CI. Astro, SvelteKit, Nuxt, React Router framework mode, Create React App and Vue have their INSTALL gated: the install gate scaffolds each from scratch on every change and requires a real session, but no gate drives them to a verdict. TanStack Start, Preact and plain HTML are wired and documented but not gated at all, so treat them as plausible rather than proven.** The exact wiring for each is below.
 
 Reticle is a verification layer that embeds a dev-only SDK in your running web app so an AI coding agent can prove a change works. Its core is framework-neutral: DOM, network, console, routing, animations and source mapping work anywhere JavaScript runs.
 
@@ -27,10 +27,11 @@ Two columns say different things and it is worth keeping them apart. **CI gate**
 | **Next.js** | yes | yes | yes | yes | Supported |
 | **Remix** | yes | yes | yes | yes | Supported |
 | **Astro** | yes | yes | yes | yes | Supported |
-| **SvelteKit** | yes | no | no | unproven | Wired, unverified |
+| **SvelteKit** | yes | no | install only | unproven | Install gated, drive unverified |
 | **TanStack Start** | yes | no | no | unproven | Wired, unverified |
-| **Nuxt** | yes | no | no | unproven | Wired, unverified |
-| **Create React App** | yes | no | no | unproven | Wired, unverified |
+| **Nuxt** | yes | no | install only | unproven | Install gated, drive unverified |
+| **React Router (framework mode)** | yes | no | install only | yes | Install gated, drive unverified |
+| **Create React App** | yes | no | install only | unproven | Install gated, drive unverified |
 | **Plain HTML** | yes | no | no | no | Wired, unverified |
 | **Vue (non-Nuxt)** | as Vite | no | install only | no | Install gated, drive unverified |
 | **Preact** | as Vite | no | no | unproven | Sensor, React adapter via `preact/compat` |
@@ -123,10 +124,10 @@ useEffect(() => {
 
 ## Nuxt
 
-Nuxt owns its own Vite instance and renders its own HTML. There is no `vite.config` to patch and no `index.html` to inject into. The idiom is a dev-only client plugin.
+Nuxt owns its own Vite instance and renders its own HTML. There is no `vite.config` to patch and no `index.html` to inject into, so `reticle init` writes a dev-only client plugin and adds a `vite.define` block to `nuxt.config`. That block is the only place a Nuxt app can inline the pairing token, which the bridge requires even on localhost. What it writes is this, and the notes below are why each line is the way it is.
 
 ```ts
-// plugins/reticle.client.ts
+// app/plugins/reticle.client.ts (Nuxt 3: plugins/reticle.client.ts)
 export default defineNuxtPlugin(() => {
   if (!import.meta.dev) return;
   void import('@reticlehq/browser').then(({ reticle }) => {

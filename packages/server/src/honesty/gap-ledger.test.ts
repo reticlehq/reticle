@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { InstrumentationGapKind, instrumentationGap } from '@reticlehq/core';
+import { InstrumentationGapKind, instrumentationGap } from '@reticlehq/core/artifacts';
 import { GapLedger, noteSessionGaps } from './gap-ledger.js';
 
 const gap = (kind: InstrumentationGapKind, missing = 'm') =>

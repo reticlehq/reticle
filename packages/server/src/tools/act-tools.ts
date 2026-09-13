@@ -153,7 +153,6 @@ export async function actCommand(
  * one layer earlier, before any session is resolved or any work is done.
  */
 const ACTION_TYPE_VALUES = Object.values(ActionType);
-const ACTION_TYPE_LIST = ACTION_TYPE_VALUES.join(' | ');
 const actionTypeEnum = z.enum(ACTION_TYPE_VALUES as [string, ...string[]]);
 
 export const ACT_TOOLS: ToolDef[] = [
@@ -167,7 +166,7 @@ export const ACT_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe(
-          `Element ref (e.g. 'e42') from reticle_snapshot/reticle_query — stable until the element leaves the DOM, so no re-snapshot between actions. Give this OR \`target\`.`,
+          `Element ref (e.g. 'e42') from reticle_snapshot/reticle_query — stable until the element leaves the DOM, so no re-snapshot between actions. Give this OR \`target\`. A press of Escape, Tab, or a modifier shortcut (Cmd+K) is a document key and needs neither.`,
         ),
       target: z
         .record(z.unknown())
@@ -175,7 +174,7 @@ export const ACT_TOOLS: ToolDef[] = [
         .describe(
           'Find the element and act on it in ONE call, instead of a reticle_query round trip first: { testid } | { text } | { role, name } | { label }. Refuses if it matches more than one, rather than guessing.',
         ),
-      action: actionTypeEnum.describe(`Action to perform: ${ACTION_TYPE_LIST}`),
+      action: actionTypeEnum.describe('Action to perform.'),
       args: z
         .record(z.unknown())
         .optional()
@@ -322,7 +321,7 @@ export const ACT_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe(
-          `Element ref (e.g. 'e42') from reticle_snapshot/reticle_query — stable until the element leaves the DOM, so no re-snapshot between actions. Give this OR \`target\`.`,
+          `Element ref (e.g. 'e42') from reticle_snapshot/reticle_query — stable until the element leaves the DOM, so no re-snapshot between actions. Give this OR \`target\`. A press of Escape, Tab, or a modifier shortcut (Cmd+K) is a document key and needs neither.`,
         ),
       target: z
         .record(z.unknown())
@@ -330,7 +329,7 @@ export const ACT_TOOLS: ToolDef[] = [
         .describe(
           'Find the element and act on it in ONE call, instead of a reticle_query round trip first: { testid } | { text } | { role, name } | { label }. Refuses if it matches more than one, rather than guessing.',
         ),
-      action: actionTypeEnum.describe(`Action to perform: ${ACTION_TYPE_LIST}`),
+      action: actionTypeEnum.describe('Action to perform.'),
       args: z
         .record(z.unknown())
         .optional()
@@ -816,6 +815,9 @@ export const ACT_TOOLS: ToolDef[] = [
           stateUnwatched,
           // What the app DECLARED, so an under-instrumented one is told without having to be asked.
           hasCapabilities: session.hasCapabilities,
+          // Whether the build TURNED the source stamp off, so a red with no file:line prescribes the
+          // right fix. `false` from the page is the only value that means anything; absent is unknown.
+          ...(false === session.sourceMapping ? { sourceMappingDisabled: true } : {}),
           // What the run still owes. A green that leaves this above zero is not the same as done.
           // MINUS the one this verdict is about to discharge.
           //

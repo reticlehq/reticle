@@ -7,24 +7,31 @@ import { dirname, join, normalize, relative, sep } from 'node:path';
  *
  * `@reticlehq/server` has two doors: the root barrel (`index.ts`), which a consumer imports to LEASE
  * the engine — bridge, pool, tool surface, stores — and `cli.ts`, which is the `reticle` bin and owns
- * everything a human runs before their first session. `init/` belongs to the second door only.
+ * everything a human runs before their first session. The scaffolder belongs to the second door only,
+ * and it is now its own package, `@reticlehq/init`.
  *
- * A consumer that embeds the engine never invokes the CLI, so `init/` costs it nothing — provided the
- * boundary actually holds. It did not: `mcp/mcp.ts` and `mcp/proxy-handshake.ts` each reached into
- * `init/mcp.js` for the MCP server NAME, a wire identity that had no business living behind the
- * installer. One misplaced constant is all it takes for the whole install-time subtree to become
- * load-bearing on the library path, and the cost of that is not measured in bytes: it is that a
- * consumer who wants none of `init` now has an opinion about it, and the only way to express that
- * opinion is a fork.
+ * A consumer that embeds the engine never invokes the CLI, so the scaffolder costs it nothing —
+ * provided the boundary actually holds. It did not, when the scaffolder still lived in this tree:
+ * `mcp/mcp.ts` and `mcp/proxy-handshake.ts` each reached into `init/mcp.js` for the MCP server NAME,
+ * a wire identity that had no business living behind the installer. One misplaced constant is all it
+ * takes for the whole install-time subtree to become load-bearing on the library path, and the cost
+ * of that is not measured in bytes: it is that a consumer who wants none of it now has an opinion
+ * about it, and the only way to express that opinion is a fork.
  *
- * This walks the real import graph rather than trusting a grep, because the reach that matters is the
- * transitive one — nobody adds `import '../init/run.js'` to `index.ts`, they add it four modules down.
+ * Splitting the package did not make the guard unnecessary, it changed what the guard reads: the
+ * subtree is now a bare specifier rather than a directory prefix. This walks the real import graph
+ * rather than trusting a grep, because the reach that matters is the transitive one — nobody adds
+ * `import '@reticlehq/init'` to `index.ts`, they add it four modules down.
+ *
+ * Only crossings ON the library path are declared below. `telemetry/init-telemetry.ts` also
+ * re-exports from the scaffolder and is deliberately absent: the barrel does not reach it, and
+ * listing an unreachable module would be an exemption nobody could tell had gone stale.
  */
 
 const SRC = join(__dirname);
 
-/** Directories that belong to the CLI door and must stay unreachable from the library door. */
-const CLI_ONLY_DIRS = ['init/'];
+/** The package that belongs to the CLI door and must stay unreachable from the library door. */
+const CLI_ONLY_PACKAGE = '@reticlehq/init';
 
 /**
  * The crossings that exist today, each with the reason it is allowed to stay.
@@ -36,11 +43,24 @@ const CLI_ONLY_DIRS = ['init/'];
 const DECLARED_CROSSINGS: Record<string, string> = {
   'telemetry/feedback-context.ts':
     'Reads `parseMajor` and `findWorkspaceApps` to say which build tool and which app a report came ' +
-    'from. Both are general-purpose and squat in init/ for historical reasons, but `findWorkspaceApps` ' +
-    'carries `workspaceParents` and the workspace manifest constants with it, so lifting them out ' +
-    'means editing the install path — the one path in this repo with the worst track record for ' +
-    'silent breakage. Left in place deliberately: a consumer embedding the engine takes this module ' +
-    'verbatim and never calls the installer, so the crossing costs it nothing.',
+    'from. Both are general-purpose and squat in the scaffolder for historical reasons, but ' +
+    '`findWorkspaceApps` carries `workspaceParents` and the workspace manifest constants with it, so ' +
+    'lifting them out means editing the install path — the one path in this repo with the worst ' +
+    'track record for silent breakage. Left in place deliberately: a consumer embedding the engine ' +
+    'takes this module verbatim and never calls the installer, so the crossing costs it nothing.',
+  'platform.ts':
+    'Re-exports `NodePlatform`, four lines naming the two `process.platform` values this daemon ' +
+    'branches on. It is DEFINED in the scaffolder because `node-io.ts` needs it and that package may ' +
+    'not import this one; re-exported here so the five runtime readers are unchanged. A type-level ' +
+    'constant, not a code path — nothing of the installer runs.',
+  'cli/cli-port.ts':
+    'Re-exports the dev-server port heuristics. `existing-config.ts` diagnoses a `.reticle.json` ' +
+    'whose `port` is the app’s own dev-server port, so the set is defined there; the runtime ' +
+    'readers (the dev-server probe, the no-session diagnosis) read it through here. Data, not a code ' +
+    'path.',
+  'telemetry/install-source.ts':
+    'Re-exports `configWithInstallSource`. `init` is the only thing that writes `.reticle.json`, so ' +
+    'the writer lives with it; this module stays the one place to read about install attribution.',
 };
 
 /** Resolve a relative specifier (always written with a `.js` extension) to a repo-relative `.ts` path. */
@@ -52,7 +72,7 @@ function resolveImport(fromFile: string, specifier: string): string | undefined 
   return resolved.replace(/\.js$/, '.ts');
 }
 
-/** Every relative import in a module, in source order. */
+/** Every import specifier in a module, relative and bare alike, in source order. */
 function importsOf(file: string): string[] {
   let text: string;
   try {
@@ -62,7 +82,7 @@ function importsOf(file: string): string[] {
   }
   const specifiers: string[] = [];
   // `from '...'` covers static imports, type imports and re-exports; `import('...')` the dynamic ones.
-  for (const match of text.matchAll(/(?:from|import)\s*\(?\s*['"](\.[^'"]+)['"]/g)) {
+  for (const match of text.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)) {
     const specifier = match[1];
     if (specifier !== undefined) specifiers.push(specifier);
   }
@@ -87,46 +107,36 @@ function reachableFrom(entry: string): Map<string, string> {
   return seen;
 }
 
+/** Every module in `reached` that imports the scaffolder package directly. */
+function crossings(reached: Iterable<string>): string[] {
+  return [...reached].filter((file) => importsOf(file).includes(CLI_ONLY_PACKAGE)).sort();
+}
+
 describe('library path boundary', () => {
   it('the root barrel never reaches the install-time surface', () => {
-    const reached = reachableFrom('index.ts');
-    const violations = [...reached.entries()]
-      // Only the EDGE into the subtree is a violation. Once a declared crossing has pulled `init/run.ts`
-      // in, everything that module imports is reachable too, and reporting those would bury the one
-      // line that matters under the forty that follow from it.
-      .filter(([file, importer]) => {
-        if (!CLI_ONLY_DIRS.some((dir) => file.startsWith(dir))) return false;
-        if (CLI_ONLY_DIRS.some((dir) => importer.startsWith(dir))) return false;
-        return DECLARED_CROSSINGS[importer] === undefined;
-      })
-      .map(([file, importer]) => `${importer} -> ${file}`);
+    const violations = crossings(reachableFrom('index.ts').keys()).filter(
+      (file) => DECLARED_CROSSINGS[file] === undefined,
+    );
     expect(violations).toEqual([]);
   });
 
   it('every declared crossing is still a real one', () => {
     // A declaration that has stopped being true is a stale exemption, and a stale exemption is a hole
     // nobody knows is open. If the reach is gone, the entry belongs deleted, not kept "just in case".
-    const reached = reachableFrom('index.ts');
-    const importers = new Set(
-      [...reached.entries()]
-        .filter(([file]) => CLI_ONLY_DIRS.some((dir) => file.startsWith(dir)))
-        .map(([, importer]) => importer),
-    );
+    const reached = new Set(crossings(reachableFrom('index.ts').keys()));
     for (const declared of Object.keys(DECLARED_CROSSINGS)) {
-      expect(importers, `${declared} is declared but no longer crosses`).toContain(declared);
+      expect(reached, `${declared} is declared but no longer crosses`).toContain(declared);
     }
   });
 
   it('the CLI entry point still owns the install-time surface', () => {
-    // The counterpart, so the first assertion can never be satisfied by DELETING init/ — which is the
-    // one fix that would pass this file and break the free product.
-    const reached = reachableFrom('cli.ts');
-    const initModules = [...reached.keys()].filter((file) => file.startsWith('init/'));
-    expect(initModules.length).toBeGreaterThan(0);
+    // The counterpart, so the first assertion can never be satisfied by DELETING the install path —
+    // which is the one fix that would pass this file and break the free product.
+    expect(crossings(reachableFrom('cli.ts').keys()).length).toBeGreaterThan(0);
   });
 
   it('relative specifiers resolve the way the runtime resolves them', () => {
-    expect(resolveImport('mcp/mcp.ts', '../init/mcp.js')).toBe('init/mcp.ts');
+    expect(resolveImport('mcp/mcp.ts', '../setup/confirm.js')).toBe('setup/confirm.ts');
     expect(resolveImport('index.ts', './tools/tools.js')).toBe('tools/tools.ts');
     expect(resolveImport('index.ts', '@reticlehq/core')).toBeUndefined();
   });
@@ -137,9 +147,9 @@ describe('library path boundary', () => {
 describe('path normalisation', () => {
   it('compares POSIX-separated paths on every platform', () => {
     expect(
-      relative(SRC, join(SRC, 'init', 'mcp.ts'))
+      relative(SRC, join(SRC, 'setup', 'confirm.ts'))
         .split(sep)
         .join('/'),
-    ).toBe('init/mcp.ts');
+    ).toBe('setup/confirm.ts');
   });
 });

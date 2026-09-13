@@ -10,6 +10,19 @@ import { URL_RAW } from './net.js';
  * request bodies straight from the network stack — those are raw and unscrubbed, and duplicating a
  * security regex to redact them would be the worst possible place to have two copies drift.
  */
+// `pass[-_]?phrase` is the fourth spelling of the first three. There is no benign field called
+// `passphrase`: it is what an SSH key, a keystore, an encrypted backup and a wallet all call their
+// secret, so it is a gap rather than a judgement call.
+//
+// The one-time codes are the second family. They expire, which is what makes them easy to wave
+// away, but the window in which one is useful is the window in which a drive is running, and the
+// journal is written to disk and read back later. `(otp|totp|mfa|recovery|backup)[-_]?codes?`
+// carries the camelCase spellings too, since `[-_]?` is optional and the rule is case-insensitive.
+// Bare `otp`/`totp` are boundary-anchored: unanchored they would fire inside ordinary words, and
+// this file's own history is a list of false positives that had to be walked back.
+// `code` on its own is deliberately NOT here — `statusCode`, `postcode`, `couponCode` and
+// `countryCode` are ordinary app data an agent needs in order to reach a verdict.
+//
 // `token` must match auth CREDENTIALS, not compound design fields. Bare/separated `token(s)` and
 // auth-prefixed tokens (accessToken, auth_token, sessionToken, …) are redacted; `colorToken`,
 // `backgroundToken`, `tokenCount`, `designToken` are NOT — they were false-positives that redacted
@@ -20,7 +33,7 @@ import { URL_RAW } from './net.js';
 // unredacted), NOT any key that merely contains the substring — `scopecookie`, `cookieConsent`,
 // `cookiePolicy` are legitimate app values an agent may need to read, and stay visible.
 const SENSITIVE_KEY =
-  /password|passwd|passcode|secret|(?:(?:access|refresh|auth|bearer|api|id|session|csrf|client)[-_]?tokens?|(?:^|[-_])tokens?(?=$|[-_]))|session[-_]?id|(?:^|[-_])(?:sid|pwd|jwt)(?=$|[-_])|authorization|(?:^|[-_])(?:set[-_])?cookie(?=$|[-_])|api[-_]?key|access[-_]?key|private[-_]?key|client[-_]?secret|credit[-_]?card|card[-_]?number|cvv|cvc|ssn|(?:^|[-_])(?:signature|sig)$|(?:^|[-_])credential$|x-(?:amz|goog)-(?:signature|credential|security-token)$/i;
+  /password|passwd|passcode|pass[-_]?phrase|(?:otp|totp|mfa|recovery|backup)[-_]?codes?|(?:^|[-_])(?:otp|totp)(?=$|[-_])|secret|(?:(?:access|refresh|auth|bearer|api|id|session|csrf|client)[-_]?tokens?|(?:^|[-_])tokens?(?=$|[-_]))|session[-_]?id|(?:^|[-_])(?:sid|pwd|jwt)(?=$|[-_])|authorization|(?:^|[-_])(?:set[-_])?cookie(?=$|[-_])|api[-_]?key|access[-_]?key|private[-_]?key|client[-_]?secret|credit[-_]?card|card[-_]?number|cvv|cvc|ssn|(?:^|[-_])(?:signature|sig)$|(?:^|[-_])credential$|x-(?:amz|goog)-(?:signature|credential|security-token)$/i;
 
 /**
  * The built-in rule, always available and never configurable.

@@ -18,7 +18,7 @@ LICENSE file, which is authoritative.
    (@reticlehq/protocol is a deprecated, unpublished Apache-2.0 alias of core.)
 
 2. Functional Source License, Version 1.1, Apache 2.0 future (FSL-1.1-ALv2)
-   Packages: @reticlehq/server, @reticlehq/test
+   Packages: @reticlehq/server, @reticlehq/init, @reticlehq/test
    Free for any Permitted Purpose (internal use, development, evaluation,
    non-commercial research/education, professional services). The one
    restriction is a Competing Use — offering Reticle itself as a competing

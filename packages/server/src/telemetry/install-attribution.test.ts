@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { InstallSource } from '@reticlehq/core';
+import { InstallSource } from '@reticlehq/core/telemetry';
 import {
   configWithInstallSource,
   declaredInstallSource,
@@ -25,7 +25,7 @@ import {
   resolveInstallSource,
   INSTALL_SOURCE_ENV,
 } from './install-source.js';
-import { reticleConfigContent } from '../init/snippets.js';
+import { reticleConfigContent } from '@reticlehq/init';
 
 describe('the install source survives the install', () => {
   let dir: string;

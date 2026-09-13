@@ -42,7 +42,7 @@
  * invent them, and a store that rejected incomplete records would simply not be written to.
  */
 import { z } from 'zod';
-import { IntentSchema, type Intent } from '@reticlehq/core';
+import { IntentSchema, type Intent } from '@reticlehq/core/artifacts';
 import type { FileSystemPort } from '../project/fs-port.js';
 import { subjectFor, UNSORTED_SUBJECT } from './intent-subject.js';
 

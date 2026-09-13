@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { InstrumentationGapKind, instrumentationGap } from '@reticlehq/core';
+import { InstrumentationGapKind, instrumentationGap } from '@reticlehq/core/artifacts';
 import { coverageRegressed, observabilityOf } from './observability.js';
 
 const gapOn = (ref: string) =>

@@ -34,6 +34,33 @@ export function defaultPairingTokenDir(): string {
   return join(homedir(), ReticleDir.ROOT);
 }
 
+/**
+ * Which of the three sources supplied the token this process is using.
+ *
+ * The SOURCE, never the secret. #685 reports a globally-registered daemon refusing an app that
+ * `doctor` calls correctly wired, and blames the daemon's cwd — but cwd cannot reach this value:
+ * resolution is options.token, then RETICLE_TOKEN, then the file under ~/.reticle, and the Vite
+ * plugin reads that same file. What CAN diverge is the ENVIRONMENT, because an IDE spawning a global
+ * MCP server does not inherit the shell that started the dev server. Either variable then moves one
+ * side and not the other, and neither is visible in anything we print — so the refusal is a mystery
+ * with no witness, which is how this report has stayed open on a guessed cause.
+ *
+ * Pure, and takes its env, so the order can be pinned by tests rather than by reading two files.
+ */
+export function pairingTokenSource(input: {
+  explicit: boolean;
+  env: NodeJS.ProcessEnv;
+}): 'explicit' | 'env:RETICLE_TOKEN' | 'env:RETICLE_PAIRING_TOKEN_DIR' | 'default' {
+  // Same precedence the resolver applies, deliberately: a source that did not decide the value is a
+  // misdirection, and this exists to stop one.
+  if (input.explicit) return 'explicit';
+  const token = input.env[ReticleEnv.TOKEN];
+  if (token !== undefined && 0 < token.length) return `env:${ReticleEnv.TOKEN}`;
+  const dir = input.env[PAIRING_TOKEN_DIR_ENV];
+  if (dir !== undefined && 0 < dir.length) return `env:${PAIRING_TOKEN_DIR_ENV}`;
+  return 'default';
+}
+
 export function pairingTokenPath(dir: string): string {
   return join(dir, ReticleDir.PAIRING_TOKEN_FILE);
 }

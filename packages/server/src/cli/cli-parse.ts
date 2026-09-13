@@ -36,6 +36,11 @@ export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticl
                 Repeatable, and a value may contain spaces and equals signs
                 --files-only writes the files and stops, which is what init did before it
                 learned to boot the app and prove the install works
+                --relaunch prints the exact command that restarts THIS conversation with
+                the tools loaded, so the restart is not a chore handed to a human. It
+                refuses when the session id has no transcript behind it, because
+                --resume on an empty id opens a blank conversation that looks like
+                success. Works with --files-only
                 --license writes the key to .env and keeps .env out of git
                 --json puts the result on stdout, so an agent reads one object
                 --no-drive / --no-open / --no-agents / --url / --timeout / --drive-model
@@ -51,6 +56,10 @@ export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticl
   reticle doctor [--port N]                            (one command to diagnose setup: Chromium, daemon, port)
   reticle open  [url] [--port N]                        (show the app: reuse the connected tab, else open one)
   reticle verify <url> [--port N] [--headed] [--timeout N] [--storage-state <file>] [--session-id <id>]  (one-shot: drive the URL, verify saved flows, exit 0=pass)
+                [--expect '<json predicate>']            (one verdict, no saved flows needed — asks
+                the daemon that is already running, so nothing is bound and nothing is stopped. This
+                is the path when your client never loaded the reticle_* tools. exit 0 ONLY on
+                verified:"yes" — "unknown" is not a pass)
   reticle affected [--since <ref>] [file...]           (which saved flows must re-verify for the changed files)
   reticle gate [--since <ref>] [file...]               (exit non-zero unless passing artifacts cover the affected flows)
   reticle watch [url]                                  (on save, report which saved flows must re-verify)
@@ -245,6 +254,15 @@ export const HTTP_PORT_FLAG = '--http-port';
 export const HTTP_TOKEN_FLAG = '--http-token';
 const TIMEOUT_FLAG = '--timeout';
 const STORAGE_STATE_FLAG = '--storage-state';
+/**
+ * A predicate for a flow-free, one-shot verdict against the daemon that is already running.
+ *
+ * The dead end this removes: a client that never loaded the `reticle_*` tools had no path to a
+ * verdict at all. `verify` refused because the daemon owned the port — the normal state after a
+ * working install — the other verdict paths need saved flows a first-install project does not have,
+ * and stopping the daemon cuts the agent's own MCP link.
+ */
+const EXPECT_FLAG = '--expect';
 const SESSION_ID_FLAG = '--session-id';
 
 export type CliResult =
@@ -308,6 +326,7 @@ export type CliResult =
       timeoutMs?: number;
       storageState?: string;
       sessionId?: string;
+      expect?: unknown;
     }
   | { kind: 'affected'; files: string[]; since?: string }
   | { kind: 'hunt'; dir: string }
@@ -492,6 +511,7 @@ type VerifySuffix =
       timeoutMs?: number;
       storageState?: string;
       sessionId?: string;
+      expect?: unknown;
     }
   | { kind: 'error'; message: string };
 
@@ -506,6 +526,7 @@ function parseVerifySuffix(args: string[], defaultPort: number): VerifySuffix {
   let timeoutMs: number | undefined;
   let storageState: string | undefined;
   let sessionId: string | undefined;
+  let expect: unknown;
   let port = defaultPort;
   let i = 0;
   while (i < args.length) {
@@ -537,6 +558,20 @@ function parseVerifySuffix(args: string[], defaultPort: number): VerifySuffix {
       const v = args[i];
       if (v === undefined) return missingValue(SESSION_ID_FLAG);
       sessionId = v;
+    } else if (arg === EXPECT_FLAG) {
+      i++;
+      const v = args[i];
+      if (v === undefined) return missingValue(EXPECT_FLAG);
+      try {
+        expect = JSON.parse(v);
+      } catch {
+        // Named as a JSON problem rather than an unknown argument: the value IS the predicate, and
+        // "unknown argument" would send the reader looking at the flag instead of at their quoting.
+        return {
+          kind: 'error',
+          message: `${EXPECT_FLAG} needs a JSON predicate; could not parse: ${v}`,
+        };
+      }
     } else if (arg.startsWith('--')) {
       return unknownArgument(arg);
     } else if (url === undefined) {
@@ -552,6 +587,7 @@ function parseVerifySuffix(args: string[], defaultPort: number): VerifySuffix {
     url,
     headless,
     port,
+    ...(expect !== undefined ? { expect } : {}),
     ...(timeoutMs !== undefined ? { timeoutMs } : {}),
     ...(storageState !== undefined ? { storageState } : {}),
     ...(sessionId !== undefined ? { sessionId } : {}),
@@ -889,6 +925,7 @@ export function parseCliArgs(
         ...(r.timeoutMs !== undefined ? { timeoutMs: r.timeoutMs } : {}),
         ...(r.storageState !== undefined ? { storageState: r.storageState } : {}),
         ...(r.sessionId !== undefined ? { sessionId: r.sessionId } : {}),
+        ...(r.expect !== undefined ? { expect: r.expect } : {}),
       };
     }
     case CAPSULES_COMMAND:

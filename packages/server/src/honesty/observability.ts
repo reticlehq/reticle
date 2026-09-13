@@ -1,4 +1,4 @@
-import type { InstrumentationGap } from '@reticlehq/core';
+import type { InstrumentationGap } from '@reticlehq/core/artifacts';
 
 /**
  * Of the controls this session drove, how many could Reticle fully observe?

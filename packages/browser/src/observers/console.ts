@@ -1,5 +1,5 @@
 import { EventType, TRANSPORT_LIMITS } from '@reticlehq/core';
-import type { Emit, Teardown } from './types.js';
+import { observeSafely, type Emit, type Teardown } from './types.js';
 import { safeStringify } from '../security/serialization.js';
 import { requireCapturedMethod } from '../util/captured-method.js';
 
@@ -55,13 +55,18 @@ export function installConsole(emit: Emit): Teardown {
     originals.set(method, original);
     const callOriginal = original.bind(console);
     const wrapper = (...args: unknown[]): void => {
-      // Only console.error carries a stack — the diagnosis case; log/warn stay lean.
-      const stack = 'error' === method ? firstErrorStack(args) : undefined;
-      emit(METHOD_EVENT[method], {
-        message: stringifyArgs(args),
-        ...(stack === undefined ? {} : { stack }),
-      });
+      // The message reaches the console FIRST, outside the guard — storage.ts's ordering, and for the
+      // same reason. `stringifyArgs` walks arbitrary app objects, so one hostile getter or revoked
+      // proxy used to throw out of the app's own `console.log` before it had logged anything.
       callOriginal(...args);
+      observeSafely(() => {
+        // Only console.error carries a stack — the diagnosis case; log/warn stay lean.
+        const stack = 'error' === method ? firstErrorStack(args) : undefined;
+        emit(METHOD_EVENT[method], {
+          message: stringifyArgs(args),
+          ...(stack === undefined ? {} : { stack }),
+        });
+      });
     };
     patched.set(method, wrapper);
     console[method] = wrapper;
@@ -82,28 +87,34 @@ export function installConsole(emit: Emit): Teardown {
       if (!(target instanceof Element) || target === (document as unknown as Element)) return;
       const tag = target.tagName.toLowerCase();
       const url = target.getAttribute('src') ?? target.getAttribute('href') ?? '';
-      emit(EventType.ERROR_UNCAUGHT, {
-        message: `<${tag}> failed to load${0 === url.length ? '' : `: ${url}`}`,
-        kind: 'resource',
-        ...(0 === url.length ? {} : { source: url }),
+      observeSafely(() => {
+        emit(EventType.ERROR_UNCAUGHT, {
+          message: `<${tag}> failed to load${0 === url.length ? '' : `: ${url}`}`,
+          kind: 'resource',
+          ...(0 === url.length ? {} : { source: url }),
+        });
       });
       return;
     }
-    const stack = capStack(event.error instanceof Error ? event.error.stack : undefined);
-    emit(EventType.ERROR_UNCAUGHT, {
-      message: event.message,
-      source: event.filename,
-      line: event.lineno,
-      ...(stack === undefined ? {} : { stack }),
+    observeSafely(() => {
+      const stack = capStack(event.error instanceof Error ? event.error.stack : undefined);
+      emit(EventType.ERROR_UNCAUGHT, {
+        message: event.message,
+        source: event.filename,
+        line: event.lineno,
+        ...(stack === undefined ? {} : { stack }),
+      });
     });
   };
   const onRejection = (event: PromiseRejectionEvent): void => {
-    const reason: unknown = event.reason;
-    const stack = capStack(reason instanceof Error ? reason.stack : undefined);
-    emit(EventType.ERROR_UNCAUGHT, {
-      message: reason instanceof Error ? reason.message : String(reason),
-      kind: 'unhandledrejection',
-      ...(stack === undefined ? {} : { stack }),
+    observeSafely(() => {
+      const reason: unknown = event.reason;
+      const stack = capStack(reason instanceof Error ? reason.stack : undefined);
+      emit(EventType.ERROR_UNCAUGHT, {
+        message: reason instanceof Error ? reason.message : String(reason),
+        kind: 'unhandledrejection',
+        ...(stack === undefined ? {} : { stack }),
+      });
     });
   };
   // Capture phase: element `error` events do not bubble, so this is the only registration that

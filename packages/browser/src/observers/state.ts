@@ -6,7 +6,7 @@ import {
   type StoreSubscribe,
 } from '../registry/stores.js';
 import { isSensitiveKey, sanitizeForTransport } from '../security/serialization.js';
-import type { Emit, Teardown } from './types.js';
+import { observeSafely, type Emit, type Teardown } from './types.js';
 
 interface StateChange {
   path: string;
@@ -70,16 +70,21 @@ export function installStoreState(emit: Emit): Teardown {
     active.set(
       name,
       subscribe(() => {
-        const next = safeRead(getter);
-        for (const change of diffState(last, next)) {
-          emit(EventType.STATE_CHANGE, {
-            name,
-            path: change.path,
-            value: project(change.path, change.new),
-            old: project(change.path, change.old),
-          });
-        }
-        last = next;
+        // This callback runs INSIDE the app's own notify loop (zustand/Redux iterate their listeners
+        // synchronously), so a throw here — from diffing, redacting or emitting an exotic value —
+        // unwinds that loop and every listener registered after ours never runs.
+        observeSafely(() => {
+          const next = safeRead(getter);
+          for (const change of diffState(last, next)) {
+            emit(EventType.STATE_CHANGE, {
+              name,
+              path: change.path,
+              value: project(change.path, change.new),
+              old: project(change.path, change.old),
+            });
+          }
+          last = next;
+        });
       }),
     );
   };

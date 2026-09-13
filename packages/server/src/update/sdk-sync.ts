@@ -12,7 +12,7 @@
  * npm took 2.3.0 in the next project over.
  */
 
-import { installCommandParts, type PackageManager } from '../init/detect.js';
+import { installCommandParts, type PackageManager } from '@reticlehq/init';
 
 export { reticleDepsOf } from './reticle-deps.js';
 

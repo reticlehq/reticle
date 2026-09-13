@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { loadManifest, saveManifest } from './update-checker.js';
 import { RETICLE_NPM_PACKAGE, SERVER_VERSION } from '../version/server-version.js';
 import { log } from '../log.js';
-import { TelemetryEventKind } from '@reticlehq/core';
+import { TelemetryEventKind } from '@reticlehq/core/telemetry';
 import { getTelemetry } from '../telemetry/telemetry.js';
 import { wasNudged } from './nudge-credit.js';
 

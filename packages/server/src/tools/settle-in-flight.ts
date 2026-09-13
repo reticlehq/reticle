@@ -28,7 +28,7 @@
  *     limit instead of an early exit.
  */
 
-import { EventType, isDevToolingUrl } from '@reticlehq/core';
+import { EventType, NetInitiator, isDevToolingUrl } from '@reticlehq/core';
 
 /**
  * The dev toolchain talking about ITSELF is not the app finishing its work.
@@ -40,6 +40,15 @@ import { EventType, isDevToolingUrl } from '@reticlehq/core';
  */
 const isDevTooling = (data: Record<string, unknown>): boolean =>
   isDevToolingUrl('string' === typeof data['url'] ? data['url'] : undefined);
+
+/**
+ * A departure records where the browser was SENT, not a request whose result we will see — the
+ * response is delivered to a document this session does not live into. It can never be matched by a
+ * NET_REQUEST, so counting it as outstanding would mean no page containing an outbound link or a
+ * download button ever settles again. See `NetInitiator.NAVIGATION`.
+ */
+const isDeparture = (data: Record<string, unknown>): boolean =>
+  data['initiator'] === NetInitiator.NAVIGATION;
 
 /** Just the shape this needs — a real Session satisfies it, and a test can supply it. */
 export interface SettleSource {
@@ -76,7 +85,7 @@ export function inFlightRequestIds(
   }
   const open: string[] = [];
   for (const e of events) {
-    if (e.type !== EventType.NET_PENDING || isDevTooling(e.data)) continue;
+    if (e.type !== EventType.NET_PENDING || isDevTooling(e.data) || isDeparture(e.data)) continue;
     const id = idOf(e.data);
     if (id !== undefined && !settled.has(id) && !open.includes(id)) open.push(id);
   }

@@ -99,6 +99,10 @@ describe('every shipped integration is covered by an app AND a gate', () => {
       'server',
       'test',
       'eslint-plugin',
+      // The project scaffolder. It is what WIRES an integration, so every scaffold the install gate
+      // drives is a test of it — but a user never installs it to wire a framework, and it has no app
+      // of its own. `apps/e2e/install-gate.mjs` is its coverage.
+      'init',
     ]);
     const unmapped = shippedPackages().filter((p) => !known.has(p));
     expect(

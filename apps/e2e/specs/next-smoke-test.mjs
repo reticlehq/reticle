@@ -2,6 +2,7 @@
 import { chromium } from 'playwright';
 import { start, TOOLS, BaselineStore, RecordingStore } from '@reticlehq/server';
 import { waitForSession } from '../wait-for-session.mjs';
+import { waitUntil } from '../wait-until.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const deps = { sessions: null, baselines: new BaselineStore(), recordings: new RecordingStore() };
@@ -70,18 +71,40 @@ console.log('\nTASK D — a SERVER ACTION, the mutation shape with no fetch the 
 // unobserved — the desktop-IPC blind spot in a different costume. The fixture at app/actions has
 // asked this question since it was written and no gate ever answered it.
 await page.goto('http://localhost:3100/actions', { waitUntil: 'domcontentloaded' });
-await sleep(1500);
-const countBefore = (await T('reticle_query', { by: 'testid', value: 'note-count' })).elements?.[0]?.text;
+// A route change drops the page's SDK and it dials back; `domcontentloaded` says nothing about that.
+// Wait for the route's OWN content to be queryable — which is the thing the next line needs — rather
+// than for 1500ms, which is a statement about how fast `next dev` compiles a route on this machine.
+const countBefore = await waitUntil(
+  async () => (await T('reticle_query', { by: 'testid', value: 'note-count' })).elements?.[0]?.text,
+);
 await T('reticle_act', { ref: await refOf('testid', 'note-input'), action: 'fill', args: { value: 'from the battery' } });
 const acted = await T('reticle_act', { ref: await refOf('testid', 'save-note'), action: 'click' });
-await sleep(2000);
-const saCalls = (await T('reticle_network', { since: acted.since })).calls ?? [];
+// The server action's POST is exactly what the check below looks for, so wait for it to be OBSERVED.
+// 2000ms was the guess; a cold `next dev` route compiles slower than that and the check then reads
+// "a server action is silently missed" — a product accusation manufactured by a timer.
+const saCalls =
+  (await waitUntil(async () => {
+    const calls = (await T('reticle_network', { since: acted.since })).calls ?? [];
+    return calls.some((c) => c.method === 'POST' && String(c.url).includes('/actions'))
+      ? calls
+      : undefined;
+  })) ?? (await T('reticle_network', { since: acted.since })).calls ?? [];
 check(
   'a server action is OBSERVED as a network write, not silently missed',
   saCalls.some((c) => c.method === 'POST' && String(c.url).includes('/actions')),
   saCalls.map((c) => `${c.method} ${String(c.url).replace(/^https?:\/\/[^/]+/, '')} -> ${c.status}`).join(', ') || 'no calls seen',
 );
-const countAfter = (await T('reticle_query', { by: 'testid', value: 'note-count' })).elements?.[0]?.text;
+// Wait for the CONSEQUENCE, not for the observation. The check above waits for the POST to be
+// OBSERVED, which happens when the request STARTS — its status is still `pending` at that moment.
+// Reading the count right then races the server action's round trip and the revalidate that follows
+// it, and the race is won or lost on how loaded the machine is. It read `0 notes -> 0 notes` here
+// while the very same page served `1 notes` three seconds later, which is the same "product
+// accusation manufactured by a timer" the comment above already warns about, one level up.
+const countAfter =
+  (await waitUntil(async () => {
+    const now = (await T('reticle_query', { by: 'testid', value: 'note-count' })).elements?.[0]?.text;
+    return now !== countBefore ? now : undefined;
+  })) ?? (await T('reticle_query', { by: 'testid', value: 'note-count' })).elements?.[0]?.text;
 check('and the write really landed on the server', countBefore !== countAfter, `${String(countBefore)} -> ${String(countAfter)}`);
 
 console.log(`\n${fail === 0 ? '✅ NEXT.JS SMOKE TEST PASSED' : `❌ ${fail} FAILED`}  (${pass} passed, ${fail} failed)`);

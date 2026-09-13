@@ -361,8 +361,8 @@ One deliberate exception to the rules above: `RETICLE_TELEMETRY_FILE` keeps tele
 
 | You are adding | Do this | Enforced by |
 | --- | --- | --- |
-| **A tool** | Add it to `TOOLS`. Nothing else. If its name implies a verdict (`assert`/`verify`), also add it to `VERIFICATION_TOOLS` | `telemetry-contract.test.ts` |
-| **A verdict-producing tool** | Add it to `VERIFICATION_TOOLS`. Otherwise it emits no `verification_completed` and stops counting toward the product's headline metric | ✓ |
+| **A tool** | Add it to `TOOLS`. Nothing else. If its name implies a verdict (`assert`/`verify`), also add it to `VERDICT_TOOLS` | `telemetry-contract.test.ts` |
+| **A verdict-producing tool** | Add it to `VERDICT_TOOLS` (`packages/server/src/tools/feedback-tools.ts`). Otherwise it emits no `verification_completed` and stops counting toward the product's headline metric | ✓ |
 | **A contradiction / anomaly kind** | Add it to core's enum only. `bug-found.ts` derives from it | ✓ |
 | **A new finding shape** in a tool result | Teach `bugsInResult` the field. Add a case to the contract test | ✓ |
 | **A failure path** (connect, install, crash) | Classify it into an enum with an explicit `OTHER` bucket; a classifier that cannot say "I don't know" lies instead | ✓ |

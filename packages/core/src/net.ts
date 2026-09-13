@@ -13,6 +13,46 @@ export const NetInitiator = {
   XHR: 'xhr',
   BEACON: 'beacon',
   IPC: 'ipc',
+  /**
+   * The request that fetched the DOCUMENT itself, read once from `PerformanceNavigationTiming`.
+   *
+   * A server-rendered app answers a click with a full document load: the old document is torn down
+   * with the SDK inside it, and the SDK comes back up in a page whose defining request happened
+   * before it existed. No patched transport could have seen it, so the net channel had no record of
+   * it at all — a Django MPA click was verified on route and heading while the `net` clause naming
+   * the destination MISSED, and the verdict came back `unknown`.
+   *
+   * DISTINCT FROM the document-INITIATED subresource initiators (`link`, `css`, `img`, `script`,
+   * `manifest`, `other`) that the resource-timing observer stamps. Those prove that observer is
+   * alive on this page and gate a downgrade in `predicate-eval`; this one does not, because the
+   * navigation entry exists on every page with Navigation Timing including ones where
+   * `PerformanceObserver` never fired. Conflating them would turn an honest "cannot tell" into a
+   * false red over favicons and fonts.
+   */
+  DOCUMENT: 'document',
+  /**
+   * The browser is LEAVING for this URL, recorded at the moment of departure.
+   *
+   * Emitted as a NET_PENDING that can never be matched, because that is exactly what it is: a
+   * request the browser is about to make and whose outcome this SDK will never see, having died with
+   * the document. Absence of a completion is honest here rather than a defect, and `reconcileNet`
+   * already renders an unmatched pending as `{status: 'pending'}` — so a `urlContains` assertion
+   * matches it and a `status: 200` one correctly does not.
+   *
+   * It exists because leaving the instrumented origin returned `observation_lost` and nothing else.
+   * "Sign in with <provider>" is on a large share of real apps, and the checkable claim is narrow:
+   * does the app hand the browser to the expected provider, with the expected parameters? Nobody
+   * expects Reticle to verify the provider's own pages. That modest claim came back as `unknown`,
+   * and the reporter's fallback was to read the local endpoint's 302 by hand and report the whole
+   * flow unverified.
+   *
+   * The same event covers a native download — an `<a download href="/api/export.pdf">` produces no
+   * fetch and no new document, so an export was equally unprovable.
+   *
+   * MUST be excluded from the settle oracle: a pending that by construction never completes would
+   * otherwise mean no page containing an outbound link ever settles again.
+   */
+  NAVIGATION: 'navigation',
 } as const;
 export type NetInitiator = (typeof NetInitiator)[keyof typeof NetInitiator];
 

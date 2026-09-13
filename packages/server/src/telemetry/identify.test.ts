@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { UsageContextKind } from '@reticlehq/core';
+import { UsageContextKind } from '@reticlehq/core/telemetry';
 import {
   IDENTIFY_NOTICE,
   clearIdentity,

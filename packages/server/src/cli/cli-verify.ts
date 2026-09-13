@@ -11,6 +11,8 @@
  */
 
 import { join, basename } from 'node:path';
+import { runAdhocVerdict } from './adhoc-verdict.js';
+import { readOrCreatePairingTokenSync, defaultPairingTokenDir } from '../bridge/pairing-token.js';
 import { randomUUID } from 'node:crypto';
 import {
   RETICLE_DEFAULT_PORT,
@@ -364,6 +366,8 @@ export function portBusyMessage(port: number): string {
 
 export function handleVerify(parsed: {
   url: string;
+  /** A parsed predicate for a flow-free, one-shot verdict against the running daemon. */
+  expect?: unknown;
   headless: boolean;
   timeoutMs?: number;
   storageState?: string;
@@ -399,6 +403,26 @@ export function handleVerify(parsed: {
       (await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus })) ===
       PortPresence.DAEMON
     ) {
+      // A daemon owning the port is the NORMAL state after a working install, and it used to be the
+      // end of the road: `verify` refused, the other verdict paths need saved flows a first-install
+      // project does not have, and stopping the daemon cuts the agent's own MCP link. An agent could
+      // hold a live, correctly-wired app and have no way to reach a verdict at all.
+      //
+      // With `--expect` there is now a way, and it does not need the port: ask the daemon that
+      // already owns it. See runAdhocVerdict.
+      if (parsed.expect !== undefined) {
+        const verdict = await runAdhocVerdict({
+          port,
+          ...(parsed.url !== undefined && '' !== parsed.url ? { url: parsed.url } : {}),
+          predicate: parsed.expect,
+          ...((t: string | undefined) => (t === undefined || 0 === t.length ? {} : { token: t }))(
+            readOrCreatePairingTokenSync(defaultPairingTokenDir()),
+          ),
+        });
+        for (const line of verdict.lines) ports.out(line);
+        ports.exit(verdict.code);
+        return;
+      }
       ports.fail(portBusyMessage(port));
       ports.exit(1);
       return;

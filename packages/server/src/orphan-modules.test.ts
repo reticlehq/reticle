@@ -26,9 +26,12 @@ const PACKAGE_DIR = join(__dirname, '..');
 /** Modules with no production importer, each with the reason it is allowed to stay. */
 const DECLARED_UNWIRED: Record<string, string> = {
   'dev/stale-issue-guard.ts':
-    'decision logic for scripts/check-stale-issues.mjs, which runs in CI and imports it from dist. ' +
-    'A repo-hygiene guard has no caller inside the product by definition; the unit tests are here ' +
-    'so the rule is testable without a network or a repo.',
+    'decision logic for scripts/check-stale-issues.mjs, which imports it from dist. That script is ' +
+    'MANUAL: it is reachable only as the `check:stale-issues` package script, and nothing under ' +
+    '.github/ runs it — an earlier version of this note claimed it "runs in CI", and a grep for ' +
+    'check-stale-issues across .github/ returns nothing. A repo-hygiene guard has no caller inside ' +
+    'the product by definition; the unit tests are here so the rule is testable without a network ' +
+    'or a repo. Unwired in the sense that matters: no automation depends on it today.',
   'session/fake-session.ts':
     'test-only Session factory. Returns a REAL Session with inert defaults so a new method on the ' +
     'class arrives with a working default instead of undefined in seven stub files (#726); ' +

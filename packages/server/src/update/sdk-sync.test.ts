@@ -12,7 +12,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { PackageManager } from '../init/detect.js';
+import { PackageManager } from '@reticlehq/init';
 import { reticleDepsOf, sdkSyncCommand } from './sdk-sync.js';
 
 const TARGET = '2.5.0';

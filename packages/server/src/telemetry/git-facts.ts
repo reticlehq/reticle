@@ -22,7 +22,7 @@
  */
 import { readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { GitState, RepoForge } from '@reticlehq/core';
+import { GitState, RepoForge } from '@reticlehq/core/telemetry';
 
 /** How far up the tree to look for a `.git` before giving up. Deep monorepos are still well inside. */
 const MAX_PARENT_WALK = 20;

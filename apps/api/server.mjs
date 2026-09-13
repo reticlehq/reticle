@@ -37,6 +37,36 @@ app.post('/api/login', (req, res) => {
   return res.status(401).json({ error: 'invalid email or password' });
 });
 
+// --- Expiring access token: 401 → refresh → retry once ---------------------
+//
+// The dominant auth pattern on the web, and the one that made Reticle report two FALSE contradictions
+// on a passing assertion: `ui-advanced-request-failed` ("POST ... -> 401") and `duplicate-request`
+// ("the same write fired 2 times"). Both described a working refresh path. Nothing fired twice in
+// effect — the first attempt was rejected before doing any work — and the UI advancing was correct.
+//
+// `?expireFirst=1` makes the FIRST call with a given access token 401, exactly once. The client is
+// expected to refresh and retry, which then succeeds. That is the shape, reproduced honestly: a real
+// 401 on the wire followed by a real 200, from one user action.
+const expiredOnce = new Set();
+const REFRESHED_TOKEN = 'reticle-demo-token-refreshed';
+
+app.post('/api/auth/refresh', (_req, res) => {
+  // A refresh cookie would carry this in a real app; the fixture only needs the shape.
+  res.json({ token: REFRESHED_TOKEN });
+});
+
+app.post('/api/expiring-write', (req, res) => {
+  const auth = String(req.headers.authorization ?? '');
+  const key = String(req.query.key ?? 'default');
+  if (req.query.expireFirst === '1' && !expiredOnce.has(key) && !auth.endsWith('-refreshed')) {
+    expiredOnce.add(key);
+    // Rejected BEFORE doing any work — nothing is written, which is why the later retry is not a
+    // duplicate of anything.
+    return res.status(401).json({ error: 'token expired' });
+  }
+  return res.json({ ok: true, key, wrote: 1 });
+});
+
 // --- Items: list / eventually-consistent add ------------------------------
 app.get('/api/items', requireAuth, (req, res) => {
   const offset = Number(req.query.offset ?? 0);

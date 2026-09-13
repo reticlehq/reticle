@@ -13,7 +13,7 @@
  * outage) and the share where it never came back on its own (the budget being spent).
  */
 
-import { OutageReason, OutageStage, TelemetryEventKind } from '@reticlehq/core';
+import { OutageReason, OutageStage, TelemetryEventKind } from '@reticlehq/core/telemetry';
 import { getTelemetry } from '../telemetry/telemetry.js';
 
 /**

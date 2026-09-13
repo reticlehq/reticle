@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AutomationHint } from '@reticlehq/core';
+import { AutomationHint } from '@reticlehq/core/telemetry';
 import { resolveAutomationHint } from './automation-hint.js';
 
 const noFiles = (): boolean => false;

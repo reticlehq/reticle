@@ -10,17 +10,20 @@ import { describe, expect, it } from 'vitest';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
+/** core's root entry point, or one of its subpaths (`@reticlehq/core/artifacts`, …). */
+const FROM_CORE = /from '@reticlehq\/core(?:\/[a-z-]+)?'/;
+
 describe('oracles use the core gap vocabulary', () => {
   it('self-instrument.ts does not declare its own InstrumentationGapKind', () => {
     const src = readFileSync(join(HERE, 'self-instrument.ts'), 'utf8');
     expect(src).not.toMatch(/export const InstrumentationGapKind/);
-    expect(src).toMatch(/from '@reticlehq\/core'/);
+    expect(src).toMatch(FROM_CORE);
   });
 
   it('flow-instrument-gaps.ts does not import a local gap kind', () => {
     const src = readFileSync(join(HERE, 'flow-instrument-gaps.ts'), 'utf8');
     expect(src).not.toMatch(/InstrumentationGapKind.*from '\.\/self-instrument/);
-    expect(src).toMatch(/InstrumentationGapKind.*from '@reticlehq\/core'/);
+    expect(src).toMatch(new RegExp(`InstrumentationGapKind.*${FROM_CORE.source}`));
   });
 
   it('does not emit the retired oracle-local kind strings', () => {

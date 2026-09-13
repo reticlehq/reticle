@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "packages/core" },
+    { "path": "packages/init" },
     { "path": "packages/browser" },
     { "path": "packages/server" },
     { "path": "packages/test" },

@@ -1,3 +1,11 @@
+/**
+ * The `reticle.connect` argument literal the plugin bakes into the generated connect call.
+ *
+ * Split out of index.ts, which sits six lines under its 1000-line cap on main -- this option could
+ * not be added inline. Cohesive on its own terms: one function, whose whole job is deciding which
+ * of the plugin's options the PAGE needs to be told about.
+ */
+
 import { RETICLE_DEFAULT_PORT, bridgeWsUrl } from '@reticlehq/core';
 
 import type { ReticleVitePluginOptions } from './index.js';
@@ -28,20 +36,24 @@ export function connectArgs(options: ReticleVitePluginOptions): string {
   if (true === options.captureNetworkBodies || '1' === process.env['VITE_RETICLE_CAPTURE_BODIES']) {
     args['captureNetworkBodies'] = true;
   }
-  // Same shape, same reason -- except this one carries a value, so the env var is parsed rather than
-  // tested for '1'. A non-numeric env var is ignored rather than fatal: it must not take down an
-  // app's dev server, and the SDK clamps whatever does arrive.
+  // Only the OPT-OUT is announced, never the default. The daemon reads absence as "unknown", so
+  // sending `true` here would say nothing it does not already assume — while sending `false` is the
+  // one fact a red verdict needs to stop prescribing a plugin this project has deliberately muted.
+  if (false === options.sourceMapping) args['sourceMapping'] = false;
+  // The one option that defaults ON, so the env var and the config flag both DISABLE rather than
+  // enable. Emitted only when switched off; the default stays implicit in the SDK.
+  if (false === options.captureErrorBodies || '1' === process.env['VITE_RETICLE_NO_ERROR_BODIES']) {
+    args['captureErrorBodies'] = false;
+  }
+  // Same shape, same reason -- except this one carries a VALUE, so the env var is parsed rather
+  // than tested for '1'. A non-numeric env var is ignored rather than fatal: it must not take down
+  // an app's dev server, and the SDK clamps whatever does arrive.
   const envBodyChars = Number(process.env['VITE_RETICLE_BODY_MAX_CHARS']);
   const bodyChars =
     options.networkBodyMaxChars ??
     (Number.isFinite(envBodyChars) && envBodyChars > 0 ? envBodyChars : undefined);
   if (bodyChars !== undefined) {
     args['networkBodyMaxChars'] = bodyChars;
-  }
-  // The one option that defaults ON, so the env var and the config flag both DISABLE rather than
-  // enable. Emitted only when switched off; the default stays implicit in the SDK.
-  if (false === options.captureErrorBodies || '1' === process.env['VITE_RETICLE_NO_ERROR_BODIES']) {
-    args['captureErrorBodies'] = false;
   }
   // Same shape, same reason. Off unless asked for, in a config or for one session.
   if (true === options.exposePresenter || '1' === process.env['VITE_RETICLE_EXPOSE_PRESENTER']) {

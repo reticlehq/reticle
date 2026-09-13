@@ -24,7 +24,7 @@ import {
   daemonRegistryPort,
   pickDaemonPort,
   type DaemonRegistryEntry,
-} from '@reticlehq/core';
+} from '@reticlehq/core/artifacts';
 
 /**
  * Every well-formed registry entry in `home`.

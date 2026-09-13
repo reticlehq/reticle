@@ -46,6 +46,9 @@ export function SavedItems(): React.ReactElement {
   // Read the render-delay knob from the URL so the e2e harness can set it without touching code.
   const params = new URLSearchParams(window.location.search);
   const renderDelay = Number(params.get('renderDelay') ?? '0');
+  // A SLOW ENDPOINT, which is a different fixture from a slow render: the request itself takes this
+  // long. It is the shape a fixed replay wait cannot cope with — see saveItem.
+  const serverDelay = Number(params.get('serverDelay') ?? '0');
 
   const submit = async (): Promise<void> => {
     if (0 === label.trim().length) return;
@@ -54,7 +57,7 @@ export function SavedItems(): React.ReactElement {
     // before the POST settles, suppressing response-ignored in the broken variant.
     // Clear only after saveItem resolves (which for renderDelay=0 is after the state update,
     // and for renderDelay>0 is after the POST but before the delayed render).
-    await saveItem(current, renderDelay);
+    await saveItem(current, renderDelay, serverDelay);
     // For the broken variant the label clear still counts as a DOM change — but it happens
     // AFTER act_and_wait has already closed its window (the net predicate resolved first).
     setLabel('');

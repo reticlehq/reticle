@@ -24,7 +24,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { InstrumentationGapKind } from '@reticlehq/core';
+import { InstrumentationGapKind } from '@reticlehq/core/artifacts';
 import { gapsForAction } from './instrumentation-gaps.js';
 
 /** A healthy action against a fully-declared app: nothing to report. */

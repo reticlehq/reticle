@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { InstallSource } from '@reticlehq/core';
+import { InstallSource } from '@reticlehq/core/telemetry';
 import { INSTALL_SOURCE_ENV, resolveInstallSource } from './install-source.js';
 
 /**

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
+import http from 'node:http';
+import net from 'node:net';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -110,6 +112,38 @@ describe('the dev server this process owns', () => {
 describe('probing the page', () => {
   it('reports nothing answering as not served', async () => {
     expect(await probePage('http://127.0.0.1:59233/')).toMatchObject({ served: false });
+  });
+
+  it('finds an IPv6-only listener when the announcement was IPv4 (#884)', async ({ skip }) => {
+    const canBind = await new Promise<boolean>((resolve) => {
+      const probe = net.createServer();
+      probe.once('error', () => resolve(false));
+      probe.listen(0, '::1', () => probe.close(() => resolve(true)));
+    });
+    if (!canBind) {
+      skip();
+      return;
+    }
+    const server = http.createServer((_req, res) => {
+      res.end('<html>@reticlehq/browser</html>');
+    });
+    const port = await new Promise<number>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '::1', () => {
+        const addr = server.address();
+        if (null === addr || 'string' === typeof addr) reject(new Error('no port'));
+        else resolve(addr.port);
+      });
+    });
+    try {
+      const announced = `http://127.0.0.1:${String(port)}/`;
+      const probe = await probePage(announced);
+      expect(probe.served).toBe(true);
+      expect(probe.sdkInPage).toBe(true);
+      expect(probe.reachedUrl).toMatch(/localhost|\[::1\]/);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });
 

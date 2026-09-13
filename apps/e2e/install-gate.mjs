@@ -212,6 +212,24 @@ const ONLY = process.argv.includes('--only')
 const REGISTRY_PORT = Number(process.env.INSTALL_GATE_REGISTRY_PORT ?? '4873');
 const REGISTRY = `http://localhost:${String(REGISTRY_PORT)}`;
 
+/**
+ * The registry the gate publishes into — INSTALLED, not fetched at gate time.
+ *
+ * This used to be `npx --yes verdaccio@latest`, which is a network fetch on every one of twenty
+ * matrix cells, and on Windows it is the least reliable line in the gate. Observed on one run: the
+ * self-test's fetch sat silent for the full 240s wait and was killed, and the real run eleven
+ * seconds later got `'verdaccio' is not recognized as an internal or external command` — the killed
+ * fetch had left npx's cache half-written, so the failure MOVED from the cell that caused it to the
+ * next one. The nuxt cell's `ERR_MODULE_NOT_FOUND` on an unrelated diff was the same thing. Every
+ * one of those reads as "the install gate failed", which is the one sentence this gate exists to
+ * mean something by.
+ *
+ * As a devDependency of `@reticlehq/e2e` it arrives with the `pnpm install --frozen-lockfile` CI
+ * already runs, at a version the lockfile pins. Spawned through `node` and its bin script rather
+ * than the `.bin` shim, so Windows needs no `.cmd` and no `shell: true`.
+ */
+const VERDACCIO_BIN = join(ROOT, 'apps/e2e/node_modules/verdaccio/bin/verdaccio');
+
 async function startLocalRegistry() {
   await freePortSafely(REGISTRY_PORT);
   // The paths scripts/verdaccio.yaml actually uses. Resetting BOTH matters: leave the htpasswd file
@@ -235,12 +253,10 @@ async function startLocalRegistry() {
       .replace('/tmp/reticle-verdaccio-storage', storage.split('\\').join('/'))
       .replace('/tmp/reticle-verdaccio-htpasswd', htpasswd.split('\\').join('/')),
   );
-  const verdaccio = pm('npx', ['--yes', 'verdaccio@latest', '--config', config]);
-  const proc = spawn(verdaccio.cmd, verdaccio.args, {
+  const proc = spawn(process.execPath, [VERDACCIO_BIN, '--config', config], {
     cwd: ROOT,
     detached: !WIN,
     stdio: ['ignore', 'pipe', 'pipe'],
-    ...verdaccio.shellOpts,
   });
   const log = [];
   proc.stdout.on('data', (d) => log.push(String(d)));
@@ -284,7 +300,7 @@ async function startLocalRegistry() {
     const tail = log.join('').trim();
     throw new Error(
       `verdaccio did not start on ${REGISTRY} — ${cause}. ` +
-        `command: ${verdaccio.cmd} ${verdaccio.args.join(' ')}. ` +
+        `command: ${process.execPath} ${VERDACCIO_BIN} --config ${config}. ` +
         `output: ${0 === tail.length ? '(nothing on stdout or stderr)' : tail.slice(-400)}`,
     );
   }
@@ -350,6 +366,10 @@ const PNPM_LOCK_STUB = "lockfileVersion: '9.0'\n";
  * Optional fields, all defaulting to the single-app shape the first three use:
  *   - `appDir`   — where the create command puts the app (default `app/`)
  *   - `initFrom` — the directory `init` is invoked from (default: the app's)
+ *   - `create`   — the scaffold command. Omitted only where no usable one exists (see `cra`)
+ *   - `files`    — files written into the WORKDIR instead of, or on top of, a create command
+ *   - `devEnv`   — environment for the gate's own dev server, for a framework whose port is not a
+ *     flag (CRA reads `PORT`, and has no `--port`)
  *   - `seed`     — extra files written into the WORKDIR after scaffolding, before install
  *   - `hidePnpm` — make `pnpm` unusable for the `init` call only
  *   - `dropLocalLockfile` — delete the app's own lockfile after install, so package-manager
@@ -376,6 +396,93 @@ const PNPM_LOCK_STUB = "lockfileVersion: '9.0'\n";
 const INIT_DEV_PORTS = {
   vite: [5173, 5174, 5175],
   next: [3000, 3001, 3002],
+  astro: [4321, 4322, 4323],
+};
+
+/**
+ * NOT `INSTALL_PROBE_TESTID`, and the difference is load-bearing.
+ *
+ * `domTestids` (packages/browser/src/registry/auto-testids.ts) drops every observed testid whose
+ * name begins `reticle-`, because Reticle's own overlay stamps testids and they are not the host
+ * app's surface. The stamped probe id starts with exactly that, so a `reticle-install-probe` in the
+ * DOM is filtered out and `hasCapabilities` stays false — measured on astro, which failed this way
+ * with the markup already in place. It only counts on the Vite and Next paths because there it is
+ * DECLARED through `registerCapabilities`, and declared ids are not filtered.
+ *
+ * The stamped id cannot simply be renamed: `capabilities.test.ts` pins that exact string.
+ */
+const PROBE_MARKUP_TESTID = 'install-probe';
+
+/**
+ * Create React App, HAND-BUILT, because there is no scaffold command left to run.
+ *
+ * `create-react-app` is deprecated and its own CLI now refuses to scaffold; every other framework
+ * here gets its official generator and this one cannot. That is not a reason to leave CRA
+ * uncovered — the gate tests `reticle init`, not `create-react-app`, and init's CRA path keys off
+ * exactly one signal (`react-scripts` in the dependencies, detect.ts) plus the directory shape it
+ * writes into (`public/index.html`, `src/index.js`).
+ *
+ * JavaScript, not TypeScript, on purpose: `craDevModulePath(false)` is the branch that once emitted
+ * a `.ts` module into an app with no tsconfig, so the first compile after a green init failed.
+ *
+ * react-scripts 5 pinned: 4 runs webpack 4, whose parser predates the optional chaining our browser
+ * package ships, and init correctly REFUSES that combination — a legitimate ⚠ that would paint this
+ * scaffold red for a reason that is not a regression.
+ */
+const CRA_FILES = {
+  'app/package.json': `${JSON.stringify(
+    {
+      name: 'cra-fixture',
+      version: '0.1.0',
+      private: true,
+      dependencies: {
+        react: '^18.3.1',
+        'react-dom': '^18.3.1',
+        'react-scripts': '5.0.1',
+      },
+      scripts: { start: 'react-scripts start', build: 'react-scripts build' },
+      browserslist: { production: ['>0.2%'], development: ['last 1 chrome version'] },
+    },
+    null,
+    2,
+  )}\n`,
+  'app/public/index.html':
+    '<!doctype html>\n<html lang="en">\n  <head><meta charset="utf-8" /><title>CRA fixture</title></head>\n' +
+    '  <body><div id="root"></div></body>\n</html>\n',
+  'app/src/index.js':
+    "import React from 'react';\nimport { createRoot } from 'react-dom/client';\n" +
+    'createRoot(document.getElementById(\'root\')).render(\n' +
+    `  <h1 data-testid="${PROBE_MARKUP_TESTID}">CRA fixture</h1>,\n);\n`,
+};
+
+/**
+ * The probe testid IN THE RENDERED MARKUP, for a framework whose `init` writes no capabilities file.
+ *
+ * `stampInstallProbe` plants the same id in a source file, and on the Vite and Next paths that is
+ * enough: `init` SCANS the source and bakes the id into the `registerCapabilities` call it
+ * generates. Astro's plan has no such step, so that stamp is inert there and the app came up
+ * `hasCapabilities: false` — connected and unverifiable.
+ *
+ * A testid in the DOM is the other half of the same question, and the product answers it
+ * deliberately: `hasCapabilities()` (packages/browser/src/registry/capabilities.ts) counts LIVE
+ * testids as well as declared ones, precisely so an app with a testable surface is not reported as
+ * having none just because nobody typed the facts into a config file. So this is the realistic
+ * probe, not a weakened one — the assertion still requires a session that connects AND advertises
+ * something to drive. What it stops requiring is a capabilities FILE, which `init` does not write
+ * on these stacks (see the finding note above SCAFFOLDS).
+ */
+const PROBE_MARKUP = {
+  astro: {
+    'app/src/pages/index.astro':
+      '---\n---\n\n<html lang="en">\n  <head><meta charset="utf-8" /><title>Astro</title></head>\n' +
+      `  <body>\n    <h1 data-testid="${PROBE_MARKUP_TESTID}">Astro</h1>\n  </body>\n</html>\n`,
+  },
+  sveltekit: {
+    'app/src/routes/+page.svelte': `<h1 data-testid="${PROBE_MARKUP_TESTID}">SvelteKit</h1>\n`,
+  },
+  nuxt: {
+    'app/app/app.vue': `<template>\n  <h1 data-testid="${PROBE_MARKUP_TESTID}">Nuxt</h1>\n</template>\n`,
+  },
 };
 
 const SCAFFOLDS = [
@@ -493,6 +600,74 @@ const SCAFFOLDS = [
       ],
     ],
     dev: (port) => ['npm', ['run', 'dev', '--', '-p', String(port)]],
+  },
+  // ── the frameworks that own their own HTML ───────────────────────────────────────────────────
+  //
+  // Astro, SvelteKit, Nuxt and React Router render the document themselves, so the Vite plugin's
+  // `transformIndexHtml` hook never fires and a connect script injected there never reaches the
+  // page. That is not a hypothetical class: it is #678 (React Router framework mode reported every
+  // step green and produced zero sessions for 20+ minutes) and #741. `init` detects all four in
+  // their own right — they are four of the eight members of the `Framework` enum — and until this
+  // was written not one of them was scaffolded here, so the only paths this gate watched were the
+  // two where HTML injection works.
+  //
+  // Nuxt and React Router used to be absent, and the absence was the finding: on both, `init` ended
+  // with a `[⚠]` and said so itself — "This app will NOT connect until the ⚠ step above is done by
+  // hand". `nuxtSteps` and `reactRouterSteps` each emitted exactly one MANUAL step carrying the
+  // whole recipe, so "zero ⚠" could not hold for them and a cell that is red by design teaches a
+  // reader to ignore this gate. `init` now WRITES both files (the Nuxt client plugin plus its
+  // nuxt.config patch, and the React Router client entry), so they belong here.
+  {
+    id: 'nuxt',
+    // Nuxt owns its own Vite instance and renders its own HTML, so nothing of ours is in the page's
+    // path to inject the pairing token — it has to be inlined by nuxt.config, and the plugin that
+    // connects has to be one Nuxt itself auto-registers. Two writes that only a browser can prove.
+    what: 'Nuxt — framework-owned Vite and HTML, so the connect is a .client plugin + a config patch',
+    initDevPorts: INIT_DEV_PORTS.next,
+    create: [
+      'npx',
+      ['--yes', 'nuxi@latest', 'init', 'app', '--template', 'minimal', '--packageManager', 'npm', '--no-gitInit', '--no-install'],
+    ],
+    files: PROBE_MARKUP.nuxt,
+    dev: (port) => ['npm', ['run', 'dev', '--', '--port', String(port)]],
+  },
+  {
+    id: 'react-router',
+    // #678 in its own cell: framework mode renders HTML through its own request handler, the Vite
+    // plugin's transformIndexHtml never fires, and every step reported green over an app that
+    // produced zero sessions for 20+ minutes.
+    what: 'React Router framework mode — the client entry init writes, because HTML injection never fires',
+    initDevPorts: INIT_DEV_PORTS.vite,
+    create: ['npx', ['--yes', 'create-react-router@latest', 'app', '--no-install', '--no-git-init', '--yes']],
+    dev: (port) => ['npm', ['run', 'dev', '--', '--port', String(port), '--strictPort']],
+  },
+  {
+    id: 'astro',
+    what: 'Astro — framework-owned HTML, so the connect arrives through the Astro integration',
+    initDevPorts: INIT_DEV_PORTS.astro,
+    create: [
+      'npm',
+      ['create', 'astro@latest', 'app', '--', '--template', 'minimal', '--no-install', '--no-git', '--skip-houston', '-y'],
+    ],
+    files: PROBE_MARKUP.astro,
+    dev: (port) => ['npm', ['run', 'dev', '--', '--port', String(port)]],
+  },
+  {
+    id: 'sveltekit',
+    what: 'SvelteKit — Vite underneath, but SSR renders the document, and Svelte is not React',
+    initDevPorts: INIT_DEV_PORTS.vite,
+    create: ['npx', ['--yes', 'sv', 'create', 'app', '--template', 'minimal', '--types', 'ts', '--no-add-ons', '--no-install']],
+    files: PROBE_MARKUP.sveltekit,
+    dev: (port) => ['npm', ['run', 'dev', '--', '--port', String(port), '--strictPort']],
+  },
+  {
+    id: 'cra',
+    what: 'Create React App — hand-built fixture, JS not TS, react-scripts 5 (see CRA_FILES)',
+    initDevPorts: INIT_DEV_PORTS.next,
+    files: CRA_FILES,
+    // CRA has no `--port`. It reads `PORT`, which is why `devEnv` exists.
+    dev: () => ['npm', ['start']],
+    devEnv: (port) => ({ PORT: String(port) }),
   },
 ];
 
@@ -752,7 +927,13 @@ async function driveScaffold(scaffold, index) {
   try {
     // ── 1. a surface that has never seen Reticle ──────────────────────────────────────────────
     note('scaffolding…');
-    run(scaffold.create[0], scaffold.create[1], workdir);
+    if (scaffold.create !== undefined) run(scaffold.create[0], scaffold.create[1], workdir);
+    // Files that ARE the scaffold, for a framework with no generator left to run (see CRA_FILES).
+    // Before the probe stamp, which needs the app directory to exist.
+    for (const [rel, content] of Object.entries(scaffold.files ?? {})) {
+      mkdirSync(dirname(join(workdir, rel)), { recursive: true });
+      writeFileSync(join(workdir, rel), content);
+    }
     stampInstallProbe(app);
     // Seeded AFTER the create command, never before: `create-next-app` reads the surrounding
     // directory to pick a package manager, and a lockfile planted first would change what it builds.
@@ -761,9 +942,13 @@ async function driveScaffold(scaffold, index) {
     }
     const pkgPath = join(app, 'package.json');
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+    // `dev` OR `start`: CRA's own template names the script `start`, and `init` accepts either
+    // (DEV_SCRIPT_NAMES in packages/init/src/dev-script.ts). Requiring `dev` here would
+    // fail a CRA app for being shaped exactly like every CRA app.
     chk(
       'the scaffold is a real app',
-      typeof pkg.name === 'string' && pkg.scripts?.dev !== undefined,
+      typeof pkg.name === 'string' &&
+        ['dev', 'start'].some((s) => pkg.scripts?.[s] !== undefined),
     );
     chk(
       '  and it has never seen Reticle',
@@ -970,7 +1155,7 @@ async function driveScaffold(scaffold, index) {
       cwd: app,
       detached: !WIN,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, BROWSER: 'none' },
+      env: { ...process.env, BROWSER: 'none', ...(scaffold.devEnv?.(appPort) ?? {}) },
       ...devSpawn.shellOpts,
     });
     const devLog = [];
@@ -1037,16 +1222,26 @@ async function driveScaffold(scaffold, index) {
     // Connected is not verifiable. `hasCapabilities` is announced in HELLO at connect() and
     // re-announced when `registerCapabilities` runs after, so the first snapshot can be false even
     // on a file that registers a testid. Wait for a session, then keep polling for capabilities.
+    //
+    // And it must be THIS app's session. The daemon answers with every session it holds, and the
+    // check used to accept any of them — so a dev server left behind by an earlier scaffold, still
+    // dialling this bridge port, satisfied it. Measured: the `cra` scaffold passed on a session
+    // whose url was `http://localhost:5173/`, which is a SvelteKit server from the run before it.
+    // CRA does not serve 5173 and never did; the gate reported a working CRA install on evidence
+    // from a different framework. That is the exact failure this whole file exists to prevent, one
+    // level up. The browser above was pointed at `appPort`, so that is the only session that can
+    // answer for what was installed here.
+    const isOurs = (s) => String(s?.url ?? '').includes(`:${String(appPort)}`);
     const connectDeadline = Date.now() + CONNECT_TIMEOUT_MS;
     let sessions = [];
     while (Date.now() < connectDeadline) {
-      sessions = await sessionsOn(bridgePort);
+      sessions = (await sessionsOn(bridgePort)).filter(isOurs);
       if (sessions.length > 0) break;
       await sleep(500);
     }
     const capDeadline = Math.min(connectDeadline, Date.now() + CAPABILITIES_WAIT_MS);
     while (Date.now() < capDeadline && !sessions.some((s) => true === s.hasCapabilities)) {
-      sessions = await sessionsOn(bridgePort);
+      sessions = (await sessionsOn(bridgePort)).filter(isOurs);
       await sleep(500);
     }
 

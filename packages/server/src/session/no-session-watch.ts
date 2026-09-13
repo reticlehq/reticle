@@ -11,7 +11,9 @@
  */
 
 import { probeDevServers, probeDevServerStates } from './dev-server-probe.js';
-import type { NoSessionReason } from '@reticlehq/core';
+import type { NoSessionReason } from '@reticlehq/core/telemetry';
+import { homedir } from 'node:os';
+import { registeredElsewhere } from './registered-projects.js';
 import { explainNoSession } from './no-session-diagnosis.js';
 import type { NoSessionFacts } from './no-session-diagnosis.js';
 import { detectDevCommand } from './dev-command.js';
@@ -141,15 +143,32 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
     if (initialized) return { initialized };
     const discovery = discoverProjectConfigs(directory);
     const elsewhere = discovery.found.filter((config) => config.directory !== directory);
-    return 0 === elsewhere.length
-      ? { initialized, searchedDirectories: discovery.searched }
-      : {
-          initialized,
-          configsElsewhere: elsewhere.map((config) => ({
-            directory: config.directory,
-            ...(config.projectId === undefined ? {} : { projectId: config.projectId }),
-          })),
-        };
+    if (elsewhere.length > 0) {
+      return {
+        initialized,
+        configsElsewhere: elsewhere.map((config) => ({
+          directory: config.directory,
+          ...(config.projectId === undefined ? {} : { projectId: config.projectId }),
+        })),
+      };
+    }
+    // The walk found nothing — which is the honest answer from a daemon standing at `/` or `$HOME`,
+    // where several IDEs start a GLOBALLY registered MCP server. There is nothing above `/` and no
+    // repo root at either, so the walk cannot reach a project it has nonetheless paired with before.
+    // The registry can. See registeredElsewhere: "I am standing in the wrong place" and "you never
+    // installed this" are opposite diagnoses with opposite fixes, and without this we gave the
+    // second one — six times, on projects that were already correctly instrumented.
+    const registered = registeredElsewhere(homedir(), directory);
+    if (registered.length > 0) {
+      return {
+        initialized,
+        configsElsewhere: registered.map((project) => ({
+          directory: project.directory,
+          ...(project.projectId === undefined ? {} : { projectId: project.projectId }),
+        })),
+      };
+    }
+    return { initialized, searchedDirectories: discovery.searched };
   };
 
   // Read at boot: the daemon's own identity does not change under it, and this is the key the

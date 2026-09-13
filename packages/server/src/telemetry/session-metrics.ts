@@ -22,7 +22,7 @@ import {
   type ErrorShape,
   type SessionSummary,
   type ToolTiming,
-} from '@reticlehq/core';
+} from '@reticlehq/core/telemetry';
 import { errorSkeleton, fingerprintError } from './error-fingerprint.js';
 import { describeToolParams } from './argument-shape.js';
 import { machineSnapshot } from './machine-snapshot.js';

@@ -57,7 +57,7 @@ export function workspaceRowHtml(): string {
       <span class="reticle-workspace-name" ${WORKSPACE_NAME_ATTR}>${WORKSPACE_FALLBACK}</span>
       <span class="reticle-workspace-caret" aria-hidden="true">${caret}</span>
     </button>
-    <div class="reticle-workspace-menu" ${WORKSPACE_MENU_ATTR} role="dialog" aria-label="${WORKSPACE_LABEL}" aria-hidden="true" hidden>
+    <div class="reticle-workspace-menu" ${WORKSPACE_MENU_ATTR} role="region" aria-label="${WORKSPACE_LABEL}" aria-hidden="true" hidden>
       <div class="reticle-workspace-menu-head">
         <div class="reticle-workspace-menu-title">${WORKSPACE_LABEL}</div>
         <button type="button" class="reticle-workspace-copy" ${WORKSPACE_COPY_ATTR} title="${COPY_PATH_LABEL}" aria-label="${COPY_PATH_LABEL}">${copyIcon}</button>

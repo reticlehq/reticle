@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ProjectSize } from '@reticlehq/core';
+import { ProjectSize } from '@reticlehq/core/telemetry';
 import { profileProject, projectAgeWeeks, sizeBucket, isMonorepo } from './project-profile.js';
 import { forgeOf, gitFacts, normalizeGitOrigin } from './git-facts.js';
 import { knownCommand, UNKNOWN_COMMAND } from '../cli/cli-parse.js';

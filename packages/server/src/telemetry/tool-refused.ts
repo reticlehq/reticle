@@ -15,7 +15,7 @@ import {
   TelemetryActor,
   TelemetryEventKind,
   type NoSessionReason,
-} from '@reticlehq/core';
+} from '@reticlehq/core/telemetry';
 import { getTelemetry } from './telemetry.js';
 
 /**

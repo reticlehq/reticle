@@ -12,7 +12,7 @@ import {
   type HelloMessage,
   type ReticleEvent,
 } from '@reticlehq/core';
-import { AppRuntime } from '@reticlehq/core';
+import { AppRuntime } from '@reticlehq/core/telemetry';
 import { Session, SessionManager } from './session.js';
 
 const HELLO: HelloMessage = {

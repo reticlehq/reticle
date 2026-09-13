@@ -310,6 +310,32 @@ describe('query empty hint', () => {
     const listRegion = r.hint?.presentRegions.find((reg) => 'list' === reg.role);
     expect(listRegion?.name).toBe('Your Cart'); // resolved text, not "cart-heading"
   });
+
+  it('does not list the Reticle HUD as a dialog in zero-match hints (#783)', () => {
+    render(`
+      <main><button>Save</button></main>
+      <div data-reticle-overlay>
+        <div data-reticle-hud>
+          <div role="region" aria-label="Reticle session">panel</div>
+        </div>
+      </div>
+    `);
+    const r = runQuery({ testid: 'missing-control' });
+    const dialogs = r.hint?.presentRegions.filter((reg) => 'dialog' === reg.role) ?? [];
+    expect(dialogs.some((d) => (d.name ?? '').includes('Reticle'))).toBe(false);
+  });
+
+  it('skips Reticle overlay nodes in presentRegions even if they still carry role=dialog', () => {
+    render(`
+      <main><button>Save</button></main>
+      <div data-reticle-overlay>
+        <div role="dialog" aria-label="Reticle session">panel</div>
+      </div>
+    `);
+    const r = runQuery({ testid: 'missing-control' });
+    const dialogs = r.hint?.presentRegions.filter((reg) => 'dialog' === reg.role) ?? [];
+    expect(dialogs.some((d) => (d.name ?? '').includes('Reticle'))).toBe(false);
+  });
 });
 
 describe('actions', () => {

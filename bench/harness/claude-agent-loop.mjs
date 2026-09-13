@@ -94,11 +94,26 @@ const TASKS = {
   },
 };
 
+// The tools block and the system prompt are BYTE-IDENTICAL on every turn of a cell, which is the
+// textbook prompt-cache case: a cache write costs 1.25x once, a read 0.1x on every turn after. Without
+// it every turn re-paid the whole schema block at full rate, and for all three servers that block is
+// the majority of the bill — Reticle advertises the fewest tools and ships the heaviest schemas, so
+// the arm caching flatters most is ours. Which is exactly why it is applied to ALL THREE arms through
+// the same code path: this function has no idea which server it is serializing, and neither does the
+// request builder below.
+//
+// Placement per the Messages API: render order is tools -> system -> messages, and a breakpoint caches
+// everything BEFORE it. One on the last tool definition ends the tools segment; one on the last system
+// block ends the system segment. Two of the four allowed breakpoints, and nothing volatile sits before
+// either — the task text and the transcript live in `messages`, after both.
+const CACHE_CONTROL = { type: 'ephemeral' };
+
 function mcpToolsToAnthropic(tools) {
-  return tools.map((t) => ({
+  return tools.map((t, i) => ({
     name: t.name,
     description: (t.description ?? '').slice(0, 900),
     input_schema: t.inputSchema ?? { type: 'object', properties: {} },
+    ...(i === tools.length - 1 ? { cache_control: CACHE_CONTROL } : {}),
   }));
 }
 
@@ -110,7 +125,15 @@ async function callAnthropic(messages, tools, system) {
       'x-api-key': KEY,
       'anthropic-version': '2023-06-01',
     },
-    body: JSON.stringify({ model: MODEL, max_tokens: 1024, system, tools, messages }),
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: 1024,
+      // A content-block array so the cache breakpoint has somewhere to sit — a bare string cannot
+      // carry one.
+      system: [{ type: 'text', text: system, cache_control: CACHE_CONTROL }],
+      tools,
+      messages,
+    }),
   });
   if (!r.ok) throw new Error(`anthropic ${r.status}: ${(await r.text()).slice(0, 300)}`);
   return r.json();
@@ -122,6 +145,8 @@ async function runCell(scenarioId, toolKey) {
   const client = new McpStdioClient(cfg.command, cfg.args, cfg.env);
   const t0 = Date.now();
   let inTok = 0,
+    cacheWriteTok = 0,
+    cacheReadTok = 0,
     outTok = 0,
     turns = 0,
     verdictText = '';
@@ -165,7 +190,13 @@ async function runCell(scenarioId, toolKey) {
     const messages = [{ role: 'user', content: sc.task }];
     for (turns = 0; turns < MAX_TURNS; turns++) {
       const resp = await callAnthropic(messages, tools, system);
+      // `input_tokens` STOPS counting cached tokens once caching is on, so summing it alone would
+      // silently redefine every token column mid-benchmark and make this run look several times
+      // cheaper than the rows beside it for a reason that is not a product change. The three
+      // counters are kept apart here and recombined into the old meaning below.
       inTok += resp.usage?.input_tokens ?? 0;
+      cacheWriteTok += resp.usage?.cache_creation_input_tokens ?? 0;
+      cacheReadTok += resp.usage?.cache_read_input_tokens ?? 0;
       outTok += resp.usage?.output_tokens ?? 0;
       messages.push({ role: 'assistant', content: resp.content });
       const toolUses = resp.content.filter((c) => 'tool_use' === c.type);
@@ -213,9 +244,19 @@ async function runCell(scenarioId, toolKey) {
       scenario: scenarioId,
       tool: toolKey,
       layer: 'B',
-      token_input: inTok,
+      // TOKEN VOLUME, not billed tokens — the same quantity these two columns held before caching
+      // existed here, so a cached row and an uncached row remain the same measurement. Before
+      // caching, `input_tokens` WAS the whole input volume; now it is only the uncached remainder,
+      // so the three parts are added back together. The split rides beside it, because that is what
+      // COST is computed from (writes 1.25x, reads 0.1x, remainder 1x) — and if `token_cache_read`
+      // is 0 across a multi-turn cell, caching silently did not engage and the run is not measuring
+      // what it claims to.
+      token_input: inTok + cacheWriteTok + cacheReadTok,
+      token_input_uncached: inTok,
+      token_cache_creation: cacheWriteTok,
+      token_cache_read: cacheReadTok,
       token_output: outTok,
-      total_tokens: inTok + outTok,
+      total_tokens: inTok + cacheWriteTok + cacheReadTok + outTok,
       // Recorded so a run can never again be read as if the server had spoken when it had not.
       server_instructions_bytes: Buffer.byteLength(serverInstructions, 'utf8'),
       // Exact byte counts, not a token estimate.

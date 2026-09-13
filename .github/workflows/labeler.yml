@@ -1,0 +1,38 @@
+name: Labeler
+
+# `pull_request_target`, not `pull_request`, and the difference is the whole point: a PR from a FORK
+# gets a read-only GITHUB_TOKEN on `pull_request`, so labelling silently does nothing on exactly the
+# PRs that need triage most. `pull_request_target` runs the workflow definition from the BASE branch
+# with a writable token.
+#
+# That is the trigger with a known footgun — it must never execute code from the PR — so this
+# workflow does exactly one thing: it checks nothing out, runs no build, installs no dependency, and
+# calls one pinned action that reads the PR's file list through the API. The permissions below are
+# the minimum that allows: read the repo, write labels. Adding a checkout of `github.event.pull_request.head`
+# here would hand a fork write access to this repo; don't.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: '${{ github.workflow }}-${{ github.ref }}'
+  cancel-in-progress: true
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Pinned by SHA like every other action in this repo (OpenSSF Scorecard Pinned-Dependencies):
+      # a tag is a moving pointer, and `v7` moving under us is an unreviewed code change running
+      # with `pull-requests: write`.
+      - uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7
+        with:
+          configuration-path: .github/labeler.yml
+          # Labels are ADDITIVE. A maintainer who hand-labels a PR must not have it removed on the
+          # next push, which is what sync-labels does.
+          sync-labels: false

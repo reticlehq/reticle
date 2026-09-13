@@ -66,7 +66,6 @@ function unanchoredWarning(count: number): string {
 
 /** Severities the presenter HUD can render. */
 const HUD_LEVELS = ['info', 'warn', 'error'] as const;
-const HUD_LEVEL_LIST = HUD_LEVELS.join(' | ');
 const hudLevelEnum = z.enum(HUD_LEVELS);
 
 /**
@@ -318,9 +317,7 @@ export const READ_TOOLS: ToolDef[] = [
         ),
       // Derived, like every other advertised vocabulary here: a free string let a typo through to
       // a HUD that then rendered an unknown severity.
-      level: hudLevelEnum
-        .optional()
-        .describe(`Display severity: ${HUD_LEVEL_LIST}. Default: info.`),
+      level: hudLevelEnum.optional().describe('Display severity. Default: info.'),
       ...sessionIdShape,
     },
     outputSchema: { ok: z.boolean() },

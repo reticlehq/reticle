@@ -4,12 +4,25 @@
  * API-stability note: the exports below the divider are INTERNAL cross-package plumbing — they are
  * re-exported so the other @reticlehq/* packages can share one implementation, NOT as a stable surface
  * for outside consumers. They can change in a minor release. Depend on the STABLE section for anything
- * outside this monorepo. (A dedicated `@reticlehq/core/internal` entry point is a 3.0 consideration; for
- * now the boundary is documented here.)
+ * outside this monorepo.
+ *
+ * Two of those internal groups now have their own entry points, so a Node-side importer can name the
+ * half of core it depends on instead of pulling the whole surface:
+ *
+ *   - `@reticlehq/core/artifacts`  — on-disk + registry formats (see ./artifacts-entry.ts)
+ *   - `@reticlehq/core/telemetry`  — the analytics wire (see ./telemetry-entry.ts)
+ *
+ * This root entry point still exports everything it did before — the subpaths are additive, and
+ * removing a name from here would be a breaking change to a published package. The boundary that is
+ * actually ENFORCED is the one the browser SDK must not cross: `core-boundary.test.ts` in
+ * @reticlehq/browser fails if packages/browser/src imports any artifacts-group name from
+ * '@reticlehq/core'. That test, not this comment, is what keeps the DOM side off the Node-side
+ * plumbing.
  */
 
 // ── STABLE public surface: the wire/domain contract ──────────────────────────────────────────────
 export * from './constants.js'; // EventType, ActionType, wire constants, TRANSPORT_LIMITS, …
+export * from './global-press.js'; // which press is a document key (Escape / Tab / a shortcut)
 export * from './source-constants.js'; // DATA_RETICLE_SOURCE_ATTR, RETICLE_ROOT_GLOBAL
 export * from './event-classification.js'; // CHURN_TYPES — shared eviction priority for buffer/queue
 export * from './verified-constants.js'; // Verified — the one field an agent gates on
