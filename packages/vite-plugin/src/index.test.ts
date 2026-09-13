@@ -13,6 +13,7 @@ import {
   connectModuleSource,
   installedSdk,
 } from './index.js';
+import { ignoredFileNotice } from './stamping.js';
 
 // The attribute the babel plugin stamps (mirrors DATA_RETICLE_SOURCE_ATTR in core).
 const SOURCE_ATTR = 'data-reticle-source';
@@ -46,6 +47,33 @@ describe('reticle vite plugin', () => {
     expect(plugin.transform?.('const x = 1;', '/app/src/util.ts')).toBeNull();
     expect(plugin.transform?.('const x = <a/>;', '/app/node_modules/pkg/Foo.tsx')).toBeNull();
     expect(plugin.transform?.('const x = <a/>;', '\0virtual:foo.tsx')).toBeNull();
+  });
+
+  it('honours // @reticle-ignore on a JSX file, and says so once, by name', () => {
+    // Not silent: an opt-out nobody is told about is an opt-out somebody forgets, and the
+    // file:line it would have produced quietly stops resolving months later. One line, once per
+    // file, in the dev-server output where the person who added the comment will see it.
+    const warned: string[] = [];
+    const plugin = reticle({ onWarn: (m) => warned.push(m) });
+    const ignored = ['// @reticle-ignore', 'const x = <button>Hi</button>;'].join('\n');
+    expect(plugin.transform?.(ignored, '/app/src/Generated.tsx')).toBeNull();
+    expect(plugin.transform?.(ignored, '/app/src/Generated.tsx')).toBeNull();
+    expect(
+      plugin.transform?.('const y = <button>Yo</button>;', '/app/src/Real.tsx')?.code,
+    ).toContain(SOURCE_ATTR);
+    expect(warned).toHaveLength(1);
+    expect(warned[0]).toContain('Generated.tsx');
+    expect(warned[0]).toContain('@reticle-ignore');
+  });
+
+  it('honours <!-- @reticle-ignore --> on a .svelte file', () => {
+    const plugin = reticle();
+    expect(
+      plugin.transform?.(
+        ['<!-- @reticle-ignore -->', '<div>hi</div>'].join('\n'),
+        '/app/src/Gen.svelte',
+      ),
+    ).toBeNull();
   });
 
   it('disables stamping when sourceMapping is false', () => {
@@ -649,5 +677,14 @@ describe('the injected connect imports the SDK that is installed', () => {
     const source = connectModuleSource({ root: '/does-not-resolve' });
     // Nothing resolves under that root, so this is the React path — install() present.
     expect(source).toContain('install()');
+  });
+});
+
+describe('the opt-out report', () => {
+  it('names the file and the marker, once', () => {
+    const line = ignoredFileNotice('/app/src/Generated.tsx');
+    expect(line).toContain('Generated.tsx');
+    expect(line).toContain('@reticle-ignore');
+    expect(line.toLowerCase()).toContain('source');
   });
 });

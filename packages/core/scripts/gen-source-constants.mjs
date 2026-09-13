@@ -47,6 +47,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     DATA_RETICLE_SOURCE_ATTR: mod.DATA_RETICLE_SOURCE_ATTR,
     RETICLE_ROOT_GLOBAL: mod.RETICLE_ROOT_GLOBAL,
     RETICLE_SDK_VERSION_GLOBAL: mod.RETICLE_SDK_VERSION_GLOBAL,
+    RETICLE_IGNORE_MARKER: mod.RETICLE_IGNORE_MARKER,
   };
   const outCjs = join(dist, 'source-constants.cjs');
   const outDts = join(dist, 'source-constants.d.cts');

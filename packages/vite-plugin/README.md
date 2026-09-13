@@ -58,4 +58,19 @@ reticle({
 
 `desktop: true` makes the plugin apply to `vite build` as well and calls `connect()` with `allowInProduction`, because a packaged desktop renderer is a production build with no dev server. That means an instrumented production bundle, which a web app must never ship. Keep it behind your own dev-only build target.
 
+### Opting one file out of source stamping
+
+A file whose **first non-empty line** is a comment carrying `@reticle-ignore` is not stamped, and its elements will have no `file:line`:
+
+```tsx
+// @reticle-ignore
+export function Generated() { … }
+```
+
+`/* @reticle-ignore */` works the same way, and a `.svelte` component uses `<!-- @reticle-ignore -->` because it has no line for a `//` before its markup.
+
+Whole file, first line, on purpose. The reasons to opt out are file-shaped — a generated component, a snapshot test the stamp would break — and a marker that worked from line 40 would be a marker nobody can find. `include`/`exclude` globs still exist for whole directories; this is for the one file whose reason sits with the file.
+
+It is not silent. The plugin reports each opted-out file once, by name, in the dev-server output, so an opt-out is something a reader sees rather than something they discover months later from a pointer that never resolves.
+
 Apache-2.0.
