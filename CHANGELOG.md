@@ -4,6 +4,10 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Changed
+
+- **`@reticlehq/browser` — `Recorder` tears down its capture listeners via `AbortController`.** `#installCapture()`'s `click`/`input`/`change`/`submit` document listeners now share a single `AbortController` instead of an array of manually-tracked teardown closures, in line with `health.ts`, `animation.ts`, `focus.ts`, and `scroll.ts`. Consistency only — the prior teardown correctly removed all four listeners. Part of [#453](https://github.com/reticlehq/reticle/issues/453).
+
 ## [2.14.0] — 2026-09-10
 
 ### Added
