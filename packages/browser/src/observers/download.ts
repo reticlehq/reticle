@@ -50,6 +50,7 @@ export function installDownload(emit: Emit, opts: DownloadOptions = {}): Teardow
   // observability layer taking the host app down with it, which is the one failure mode it may never
   // have. No object URLs means no generated files to observe, so this simply stands down.
   if (typeof URL.createObjectURL !== 'function') return () => undefined;
+  const ac = new AbortController();
   const objectUrl = URL.createObjectURL.bind(URL);
   const known = new Map<string, PendingBlob>();
 
@@ -117,7 +118,7 @@ export function installDownload(emit: Emit, opts: DownloadOptions = {}): Teardow
       report(anchor.getAttribute('href') ?? '', anchor.getAttribute('download') ?? undefined);
     });
   };
-  document.addEventListener('click', onClick, true);
+  document.addEventListener('click', onClick, { capture: true, signal: ac.signal });
 
   // A programmatic `a.click()` on an anchor never inserted into the document dispatches no bubbling
   // event this listener can see, so the anchor path is patched too.
@@ -144,7 +145,7 @@ export function installDownload(emit: Emit, opts: DownloadOptions = {}): Teardow
     // A REAL restore, so teardown leaves the page exactly as it was found — but ONLY of the slots
     // that still hold OUR wrapper. Something that wrapped these AFTER connect() (a download shim, an
     // analytics SDK, a test harness) must keep its instrumentation; the rule route.ts states.
-    document.removeEventListener('click', onClick, true);
+    ac.abort();
     if (URL.createObjectURL === patchedCreate) URL.createObjectURL = originalCreate;
     if (HTMLAnchorElement.prototype.click === patchedClick) {
       HTMLAnchorElement.prototype.click = originalClick;
