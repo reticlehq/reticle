@@ -4,6 +4,10 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Changed
+
+- **`@reticlehq/browser` — `installConsole()` tears down its `error`/`unhandledrejection` listeners via `AbortController`.** Brings the console observer's window-level listeners in line with the rest of the observer suite (`health.ts`, `animation.ts`, `focus.ts`, `scroll.ts`), which already use a shared `AbortController` + `{ signal }` instead of manual `removeEventListener` calls. The `console[method]` monkey-patch restoration loop is unchanged. Consistency only — the prior teardown correctly removed both listeners. Part of [#453](https://github.com/reticlehq/reticle/issues/453).
+
 ## [2.14.0] — 2026-09-10
 
 ### Added

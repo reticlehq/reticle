@@ -43,6 +43,7 @@ function firstErrorStack(args: unknown[]): string | undefined {
 
 /** Patch console.{log,warn,error} and window error events. Reversible. */
 export function installConsole(emit: Emit): Teardown {
+  const ac = new AbortController();
   const methods: ConsoleMethod[] = ['log', 'warn', 'error', 'info', 'debug'];
   const originals = new Map<ConsoleMethod, (...args: unknown[]) => void>();
   const patched = new Map<ConsoleMethod, (...args: unknown[]) => void>();
@@ -120,8 +121,8 @@ export function installConsole(emit: Emit): Teardown {
   // Capture phase: element `error` events do not bubble, so this is the only registration that
   // sees a failed subresource. Uncaught script errors reach a capturing window listener too, so one
   // registration covers both.
-  window.addEventListener('error', onError, true);
-  window.addEventListener('unhandledrejection', onRejection);
+  window.addEventListener('error', onError, { capture: true, signal: ac.signal });
+  window.addEventListener('unhandledrejection', onRejection, { signal: ac.signal });
 
   return () => {
     for (const [method, original] of originals) {
@@ -129,7 +130,6 @@ export function installConsole(emit: Emit): Teardown {
       // that wrapped console AFTER connect() must keep its instrumentation on teardown.
       if (console[method] === patched.get(method)) console[method] = original as typeof console.log;
     }
-    window.removeEventListener('error', onError, true);
-    window.removeEventListener('unhandledrejection', onRejection);
+    ac.abort();
   };
 }
