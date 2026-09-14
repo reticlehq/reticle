@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, beforeAll } from 'vitest';
@@ -39,6 +39,7 @@ function required<T>(value: T | undefined, what: string): T {
 
 let resolveConfig: ResolveConfig | undefined;
 let createServer: CreateServer | undefined;
+let build: ((inline: Record<string, unknown>) => Promise<unknown>) | undefined;
 
 /**
  * Generous, explicit, and NOT a retuned guess.
@@ -65,9 +66,11 @@ beforeAll(async () => {
     const vite = (await import('vite')) as {
       resolveConfig: ResolveConfig;
       createServer: CreateServer;
+      build: (inline: Record<string, unknown>) => Promise<unknown>;
     };
     resolveConfig = vite.resolveConfig;
     createServer = vite.createServer;
+    build = vite.build;
   } catch (error) {
     // A declared dependency that will not import is a broken workspace, not a condition to skip on.
     // Swallowing it made these tests run zero assertions and report green.
@@ -106,18 +109,60 @@ describe('reticle() in the real Vite config resolution', () => {
     },
     SERVER_BOOT_BUDGET_MS,
   );
+});
+
+describe('disabled production build', () => {
+  const dirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of dirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 
   it(
-    'is filtered out of the build pipeline (never ships to production)',
+    'ships no browser SDK code when the app imports @reticlehq/browser',
     async () => {
-      const resolve = required(resolveConfig, 'vite.resolveConfig');
-      const resolved = await resolve(
-        { plugins: [reticle()], configFile: false, logLevel: 'silent' },
-        'build',
+      const runBuild = required(build, 'vite.build');
+      const root = mkdtempSync(join(tmpdir(), 'reticle-build-'));
+      const outDir = join(root, 'dist');
+      dirs.push(root);
+
+      mkdirSync(join(root, 'src'), { recursive: true });
+
+      writeFileSync(
+        join(root, 'index.html'),
+        '<script type="module" src="/src/main.js"></script>\n',
       );
-      expect(names(resolved.plugins)).not.toContain(RETICLE_VITE_PLUGIN_NAME);
+
+      writeFileSync(
+        join(root, 'src/main.js'),
+        "import { reticle } from '@reticlehq/browser';\nconsole.log(reticle);\n",
+      );
+
+      await runBuild({
+        root,
+        configFile: false,
+        logLevel: 'silent',
+        plugins: [reticle()],
+        build: { outDir },
+      });
+
+      // Read the generated JS and prove the real SDK did not reach the production artifact.
+      const assetsDir = join(outDir, 'assets');
+      const assets = readdirSync(assetsDir);
+      const jsAsset = assets.find((file) => file.endsWith('.js'));
+
+      if (jsAsset === undefined) {
+        throw new Error('Vite production build produced no JavaScript asset');
+      }
+
+      const bundle = readFileSync(join(assetsDir, jsAsset), 'utf8');
+
+      expect(bundle).not.toContain('__reticleInstance');
+      expect(bundle).not.toContain('Reticle');
     },
-    SERVER_BOOT_BUDGET_MS,
+    HOOK_TIMEOUT_MS,
   );
 });
 

@@ -65,17 +65,17 @@ describe('the published package can be loaded by a CommonJS Vite config', () => 
       expect(existsSync(cjsPath)).toBe(true);
     });
 
-    it('is requirable, and yields a serve-only plugin', () => {
+    it('is requirable, and yields a plugin whose apply never restricts', () => {
       // `createRequire` from this file, so the plugin's own dependencies resolve as they would for a
       // real consumer. A bare import would load the ESM build and prove nothing about this one.
       const required = createRequire(import.meta.url)(cjsPath) as {
-        reticle: (o: { port: number }) => { name: string; apply: string };
+        reticle: (o: { port: number }) => { name: string; apply: undefined };
       };
       const plugin = required.reticle({ port: 4400 });
       expect(plugin.name).toBe('reticle');
-      // The guarantee that keeps instrumentation out of a production bundle has to survive the
-      // second build, or the CJS path is a hole in it.
-      expect(plugin.apply).toBe('serve');
+      // Nothing gates `apply` any more (see disabled-browser-stub.ts) — that guarantee has to
+      // survive the CJS build too, or the CJS path is a hole in it.
+      expect(plugin.apply).toBe(undefined);
     });
 
     it('carries no live `import.meta`, which is empty under CJS', () => {
