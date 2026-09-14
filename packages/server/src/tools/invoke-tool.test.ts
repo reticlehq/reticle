@@ -6,6 +6,7 @@ import { EnvelopeKey } from './tool-kit.js';
 import { getSessionMetrics, resetSessionMetrics } from '../telemetry/session-metrics.js';
 import { buildDynamicTools } from './dynamic-tools.js';
 import { runTool, SESSION_BOUND_TOOLS, SESSION_EXEMPT_TOOLS } from './invoke-tool.js';
+import { withSessionEnvelope } from '../mcp/mcp.js';
 import { BaselineStore } from '../project/baselines.js';
 import { RecordingStore } from '../flows/recordings.js';
 import { FlowStore } from '../flows/flows.js';
@@ -408,5 +409,120 @@ describe('the feedback invitation is counted wherever friction actually happens'
     };
     await runTool(wrapper, fakeDeps(), {});
     expect(getSessionMetrics().summarize(true)).not.toHaveProperty('feedbackPrompted');
+  });
+});
+
+/**
+ * An act over a skewed SDK/daemon pair is not a verdict, and says so on EVERY act (#812).
+ *
+ * The existing `version_skew` envelope is a one-shot nudge: it rides out on whatever tool the agent
+ * happens to call next and then goes quiet. That cadence is right for "an update exists" and wrong
+ * for "do not trust the numbers you are reading". Measured in the field: eight attempts across
+ * three interaction strategies, each reporting `dispatched: true` / `settled: true` and sometimes
+ * `domMutatedWithin: 12-40ms`, while the React component never changed state. The nudge had been
+ * spent on an earlier call, so seven of those eight verdicts carried nothing.
+ */
+describe('runTool — a skewed act carries its own caveat', () => {
+  const SKEW = 'page SDK 2.13.1 vs daemon 2.14.0 — converge them before trusting a verdict';
+
+  function skewedSession(): Session {
+    return throttledSession({ versionSkew: SKEW });
+  }
+
+  it('marks an act taken over a skewed pair', async () => {
+    const r = (await runTool(
+      stubTool(ReticleTool.ACT, { dispatched: true, settled: true }),
+      fakeDeps(skewedSession()),
+      {},
+    )) as Record<string, { reason?: string; effect?: string }>;
+
+    const marker = r[EnvelopeKey.SKEW_SUSPECTED];
+    expect(
+      marker,
+      'a clean dispatched:true over a skewed link is the reported failure',
+    ).toBeDefined();
+    expect(marker?.reason).toBe(SKEW);
+    // The caveat has to say what is wrong with the NUMBERS, or it reads as background noise
+    // beside `dispatched: true` and loses to it.
+    expect(marker?.effect).toContain('dispatched');
+  });
+
+  it('marks EVERY act, not just the first', async () => {
+    // The whole defect. A one-shot caveat is spent before the agent has begun retrying.
+    const deps = fakeDeps(skewedSession());
+    const act = stubTool(ReticleTool.ACT, { dispatched: true, settled: true });
+
+    const attempts = [];
+    for (let i = 0; i < 8; i += 1) {
+      attempts.push(await runTool(act, deps, {}));
+    }
+
+    const marked = attempts.filter(
+      (r) => (r as Record<string, unknown>)[EnvelopeKey.SKEW_SUSPECTED] !== undefined,
+    );
+    expect(marked).toHaveLength(8);
+  });
+
+  it('marks act_and_wait and act_sequence too, not only act', async () => {
+    // All three drive the page, so all three produce a number an agent gates on.
+    const deps = fakeDeps(skewedSession());
+    for (const name of [ReticleTool.ACT_AND_WAIT, ReticleTool.ACT_SEQUENCE]) {
+      const r = (await runTool(stubTool(name, { dispatched: true }), deps, {})) as Record<
+        string,
+        unknown
+      >;
+      expect(r[EnvelopeKey.SKEW_SUSPECTED], `${name} is a drive and must carry it`).toBeDefined();
+    }
+  });
+
+  it('says nothing on a healthy pair', async () => {
+    const r = (await runTool(
+      stubTool(ReticleTool.ACT, { dispatched: true }),
+      fakeDeps(),
+      {},
+    )) as Record<string, unknown>;
+    expect(r[EnvelopeKey.SKEW_SUSPECTED]).toBeUndefined();
+  });
+
+  it('does not mark a read, which reports no effect to mistrust', async () => {
+    // Narrow on purpose. `reticle_query` returns what it found; there is no dispatched/settled on
+    // it to be misread, and a caveat on every read is the noise the one-shot nudge avoids.
+    const r = (await runTool(
+      stubTool(ReticleTool.QUERY, { count: 1 }),
+      fakeDeps(skewedSession()),
+      {},
+    )) as Record<string, unknown>;
+    expect(r[EnvelopeKey.SKEW_SUSPECTED]).toBeUndefined();
+  });
+
+  it('reaches the published schema of every acting tool, so a strict client cannot strip it', () => {
+    // `warning` was declared on reticle_act's schema and nowhere else, and every other
+    // session-bound tool silently dropped it on a validating profile. An undeclared honesty field
+    // is one that does not exist for the clients most likely to be gating on it.
+    //
+    // Asserted through `withSessionEnvelope`, which is what the MCP layer actually publishes --
+    // not the raw `outputSchema`. A tool declaring the key itself and a tool inheriting it from
+    // the shared envelope are the same thing to a client, and only this call knows which happened.
+    for (const name of [ReticleTool.ACT, ReticleTool.ACT_AND_WAIT, ReticleTool.ACT_SEQUENCE]) {
+      const tool = TOOLS.find((t) => t.name === name);
+      expect(tool?.outputSchema, `${name} has no outputSchema`).toBeDefined();
+      const published = withSessionEnvelope(name, tool?.outputSchema);
+      expect(
+        Object.keys(published ?? {}),
+        `${name} does not publish ${EnvelopeKey.SKEW_SUSPECTED}`,
+      ).toContain(EnvelopeKey.SKEW_SUSPECTED);
+    }
+  });
+
+  it('is published with a shape, not as an opaque envelope', () => {
+    // The describe() is the working part. Beside `dispatched: true`, an unknown-typed envelope is
+    // something an agent steps over -- which is precisely what happened for eight attempts.
+    const published = withSessionEnvelope(
+      ReticleTool.ACT,
+      TOOLS.find((t) => t.name === ReticleTool.ACT)?.outputSchema,
+    );
+    const field = published?.[EnvelopeKey.SKEW_SUSPECTED];
+    expect(field?.description, 'the caveat has to say what it means').toBeDefined();
+    expect(field?.description).toContain('Not a verdict');
   });
 });
