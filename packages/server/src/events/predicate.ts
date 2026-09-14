@@ -394,8 +394,39 @@ function annotateThrottledMiss(
     return { ...result, inconclusive: preconditionFailure };
   }
   if (true !== session.throttled?.()) return result;
+  if (decidedByAnAlreadyAnnotatedClause(predicate)) return result;
   if (failureRestsOnSeeing(predicate)) return result;
   return { ...result, inconclusive: THROTTLED_STARVED_NOTE };
+}
+
+/**
+ * Has this predicate's failure ALREADY been adjudicated, one level down?
+ *
+ * `allOf`/`anyOf` evaluate their clauses through `evaluatePredicate`, so every clause arrives here
+ * first and carries its own verdict on the starved-tab question. What reaches the composite is
+ * therefore pre-decided, and asking again re-decides it with strictly less information — the
+ * composite knows only that SOMETHING failed, not which clause or on what basis.
+ *
+ * The two composites reach a readable failure only one way each, and both are positive:
+ *
+ * - `allOf` returns the first clause that failed with no `inconclusive`. On a throttled tab a clause
+ *   that failed by NOT having seen something is stamped `THROTTLED_STARVED_NOTE` before the
+ *   composite looks at it, so it is never the one selected. A readable `allOf` failure is a clause
+ *   that failed by having SEEN something.
+ * - `anyOf` reports "no sub-predicate matched" only when no clause was unreadable — so every clause
+ *   failed readably, and by the same argument every one of them failed by having seen something.
+ *
+ * Without this, an `absent: true` clause that matched 13 elements was graded honestly as a clause
+ * and then re-graded `unknown` as an `allOf` of one — the same double-decision `annotateStarvedFailure`
+ * was fixed for in session-health.ts, at the next layer up (#897).
+ *
+ * `not` is deliberately absent. It is the one composite whose failure polarity is not settled by its
+ * child's verdict: `not` fails when the child PASSED, and a child that passes is never annotated, so
+ * there is nothing already decided to defer to. `failureRestsOnSeeing` keeps answering that one
+ * structurally, by flipping.
+ */
+function decidedByAnAlreadyAnnotatedClause(predicate: Predicate): boolean {
+  return PredicateKind.ALL_OF === predicate.kind || PredicateKind.ANY_OF === predicate.kind;
 }
 
 /**
@@ -411,12 +442,21 @@ function annotateThrottledMiss(
  * agent re-drives or walks away from — so the proof it was holding never reached anybody.
  *
  * `not` flips the polarity again, and nests, so this recurses rather than checking one level.
- * Composites (`allOf` / `anyOf`) deliberately fall through to `false`: a composite fails for a
- * reason this cannot name, and keeping the caveat is the conservative half of the trade — an
- * over-cautious `unknown` costs a re-drive, a missing one costs a wrong verdict.
+ *
+ * A composite reaches this function only through a `not` — `decidedByAnAlreadyAnnotatedClause`
+ * answers for a bare `allOf`/`anyOf` first, since its clauses were each annotated before it saw
+ * them. Under a `not` there is no such verdict to inherit: `not` fails when the composite PASSED,
+ * and a passing predicate is never annotated. So the question becomes whether the composite could
+ * have passed by NOT seeing something, and `some` is the conservative answer to it — `allOf` passes
+ * only if every clause did, `anyOf` on a clause this cannot identify, so one clause that passes by
+ * absence is enough to make the whole pass untrustworthy on a starved tab. An over-cautious
+ * `unknown` costs a re-drive, a missing one costs a wrong verdict.
  */
 function failureRestsOnSeeing(predicate: Predicate): boolean {
   if (PredicateKind.NOT === predicate.kind) return !failureRestsOnSeeing(predicate.predicate);
+  if (PredicateKind.ALL_OF === predicate.kind || PredicateKind.ANY_OF === predicate.kind) {
+    return predicate.predicates.some(failureRestsOnSeeing);
+  }
   if ('absent' in predicate && true === predicate.absent) return true;
   // `count: 0` is absence written as arithmetic, and fails the same way: by matching something.
   return 'count' in predicate && 0 === predicate.count;
