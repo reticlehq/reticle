@@ -286,3 +286,103 @@ export async function dragElement(
   }
   return dropPrevented;
 }
+
+/**
+ * A TOUCH tap, as a touch device actually delivers it.
+ *
+ * Not a click under another name, and the difference is not cosmetic. A handler bound to
+ * `touchstart`, or one that branches on `event.pointerType === 'touch'`, never runs for a mouse
+ * click — so mobile-web behaviour, swipe affordances and touch-only controls could not be driven at
+ * all, and an agent asked to check them had no honest answer.
+ *
+ * The sequence is the one a browser sends: pointerdown(touch) → touchstart → touchend → pointerup →
+ * click. The trailing click matters — a touch device synthesises one, and an app that only listens
+ * for `click` must still work under a tap, which is exactly the thing worth verifying.
+ *
+ * `holdMs` makes it a LONG PRESS: the gesture behind a context menu, a reorder handle, a
+ * press-and-hold reveal. Measured and returned like the mouse hold, for the same reason — a caller
+ * needs to tell "held 1200" from "held 1204" when the app's own threshold is 1200.
+ */
+export async function fireTapSequence(
+  el: HTMLElement,
+  hold: { ms: number; sleep: (ms: number) => Promise<void>; now: () => number } | undefined,
+): Promise<{ prevented: boolean; heldMs: number }> {
+  const touches = touchListFor(el);
+  firePointerTouch(el, 'pointerdown');
+  asSyntheticInput(() => el.dispatchEvent(makeTouchEvent('touchstart', touches)));
+  if (el.tabIndex >= 0 && 'function' === typeof el.focus) el.focus();
+  let heldMs = 0;
+  if (hold !== undefined && hold.ms > 0) {
+    const started = hold.now();
+    await hold.sleep(hold.ms);
+    heldMs = hold.now() - started;
+  }
+  asSyntheticInput(() => el.dispatchEvent(makeTouchEvent('touchend', [])));
+  firePointerTouch(el, 'pointerup');
+  const clicked = asSyntheticInput(() =>
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })),
+  );
+  return { prevented: !clicked, heldMs };
+}
+
+/** A pointer event that says it came from a FINGER — the discriminator a touch handler reads. */
+function firePointerTouch(el: Element, type: string): void {
+  asSyntheticInput(() => {
+    if ('function' === typeof PointerEvent) {
+      el.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          pointerType: 'touch',
+          isPrimary: true,
+          width: 23,
+          height: 23,
+        }),
+      );
+      return;
+    }
+    el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }));
+  });
+}
+
+/**
+ * One `Touch` at the element's centre, when the environment has the constructors.
+ *
+ * jsdom has `TouchEvent` but not always `Touch`, and a browser that lacks both still gets the
+ * pointer half above. Degrading to an empty list is correct rather than lazy: `touches` is
+ * documented as possibly empty (it IS empty on `touchend`), so a handler that reads it defensively
+ * behaves the same, and one that does not would have thrown on a real touchend too.
+ */
+function touchListFor(el: HTMLElement): Touch[] {
+  if ('function' !== typeof Touch || 'function' !== typeof el.getBoundingClientRect) return [];
+  const rect = el.getBoundingClientRect();
+  try {
+    return [
+      new Touch({
+        identifier: 0,
+        target: el,
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2,
+      }),
+    ];
+  } catch {
+    return [];
+  }
+}
+
+function makeTouchEvent(type: string, touches: Touch[]): Event {
+  if ('function' === typeof TouchEvent) {
+    try {
+      return new TouchEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        touches,
+        targetTouches: touches,
+        changedTouches: touches,
+      });
+    } catch {
+      // fall through to a plain Event: the TYPE is what a touchstart listener is bound to.
+    }
+  }
+  return new Event(type, { bubbles: true, cancelable: true });
+}

@@ -15,7 +15,7 @@
 import { describe, expect, it } from 'vitest';
 import { mergedNameRedirect } from './merged-name-redirect.js';
 import { ReticleTool } from '@reticlehq/core';
-import { TOOLS } from './tools.js';
+import { TOOLS, MERGED_TOOLS } from './tools.js';
 
 describe('an old member name points at where the capability went', () => {
   it.each([
@@ -47,7 +47,10 @@ describe('an old member name points at where the capability went', () => {
   });
 
   it('EVERY name that is no longer a tool has a redirect — none left as a dead end', () => {
-    const live = new Set(TOOLS.map((t) => t.name));
+    // Both tables. `reticle_look` is a live tool on the `merged` surface and appears in no other, so
+    // reading TOOLS alone reports it as a merged-away name with no redirect — a dead end that is the
+    // exact opposite of the truth. A redirect for it would point an agent AWAY from a tool it can call.
+    const live = new Set([...TOOLS, ...MERGED_TOOLS].map((t) => t.name));
     // The two meta-tools are built at MCP registration time, so they are callable without being in TOOLS.
     const meta = new Set<string>([ReticleTool.TOOLS, ReticleTool.RUN]);
     const dead = Object.values(ReticleTool).filter((n) => !live.has(n) && !meta.has(n));

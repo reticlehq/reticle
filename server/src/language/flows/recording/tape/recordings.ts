@@ -11,6 +11,16 @@ export interface RecordedStep {
   /** Optional post-condition annotation carried into the on-disk flow's expect. */
   expect?: FlowExpect;
   /**
+   * The route this step ran on. RECORDER-INTERNAL: it never reaches the on-disk flow.
+   *
+   * It exists so an ambient tape — which records a whole session rather than a journey somebody
+   * chose — can be cut into journeys at session end. Without it the tape is one flow that starts at
+   * the login screen and ends wherever the agent stopped, and replaying a suite of those fails on
+   * the second one: the app is already authenticated, so the login steps no longer apply. See
+   * drive-flow.ts, and the same hazard written down in bench/harness/suite-rre.mjs.
+   */
+  route?: string;
+  /**
    * The document this step runs, when the step is an INVOCATION rather than an action.
    *
    * Written by `stop` when a nested recording closes inside an outer one. `tool` and `args` are
@@ -87,6 +97,15 @@ export const INVOKE_TOOL: string = FlowStepTool.INVOKE;
  */
 export const AMBIENT_RECORDING = '__ambient__';
 
+/**
+ * How long a journey the ambient tape will hold.
+ *
+ * Generous, because the cost of one truncated tape is one flow that has to be re-driven, while the
+ * cost of no cap is a daemon that grows for as long as it is up. Nothing in the product wants a
+ * 400-step regression test: the longest saved flow in the corpus is a small fraction of this.
+ */
+const AMBIENT_STEP_CAP = 400;
+
 export class RecordingStore {
   readonly #active = new Map<string, ActiveRecording>();
   readonly #compiled = new Map<string, CompiledProgram>();
@@ -128,7 +147,7 @@ export class RecordingStore {
    * Opened lazily on the first step rather than in the constructor: a store that never records
    * anything should not carry an empty tape, and "did anything happen at all" stays answerable.
    */
-  capture(step: RecordedStep): void {
+  capture(step: RecordedStep, route?: string): void {
     if (!this.#active.has(AMBIENT_RECORDING)) {
       this.#active.set(AMBIENT_RECORDING, {
         cursor: 0,
@@ -136,7 +155,19 @@ export class RecordingStore {
         openedOver: new Map(),
       });
     }
-    for (const rec of this.#active.values()) rec.steps.push(step);
+    for (const [name, rec] of this.#active) {
+      // The ambient tape is opened by the system and closed by nobody, so it is the one recording
+      // with no human deciding when it has seen enough. Bounded here rather than left to grow for
+      // the length of a daemon's life. Appending STOPS at the cap instead of dropping the oldest: a
+      // flow replays from its FIRST step, so a tape missing its beginning is not a shorter journey,
+      // it is a different one that starts in a state nothing established. A recording somebody
+      // opened on purpose is not capped — they said when it starts and they say when it stops.
+      if (AMBIENT_RECORDING === name && rec.steps.length >= AMBIENT_STEP_CAP) continue;
+      // The route rides on the AMBIENT tape only: a recording somebody opened deliberately is
+      // already one journey by construction, and stamping a route on its steps would change what a
+      // deliberate recording contains.
+      rec.steps.push(AMBIENT_RECORDING === name && route !== undefined ? { ...step, route } : step);
+    }
   }
 
   /**

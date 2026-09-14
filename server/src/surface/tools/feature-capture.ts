@@ -51,6 +51,8 @@ export const CAPTURED_TOOLS: ReadonlySet<string> = new Set([
   ReticleTool.QUERY,
   ReticleTool.INSPECT,
   ReticleTool.STATE,
+  // All four of the above, merged, on the `merged` surface. A read is a read under either name.
+  ReticleTool.LOOK,
   ReticleTool.STORAGE,
   ReticleTool.NETWORK,
   ReticleTool.CONSOLE,

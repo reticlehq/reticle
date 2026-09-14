@@ -251,7 +251,15 @@ describe('presenter v2 activity log', () => {
     p.destroy();
   });
 
-  it('liveness: a quiet agent shows a live, growing "idle · {duration}" clock', async () => {
+  /**
+   * A quiet agent is PLANNING, and the strip must say so rather than "idle".
+   *
+   * The distinction is the whole point of this clock: quiet-and-alive and quiet-and-gone look
+   * identical on a frozen panel, which is the defect the heartbeat was added to fix. "idle" is a
+   * verdict on the agent that covers both, so it undoes in wording what the timer fixed in
+   * behaviour — see `#endIdle`, the one path allowed to say nothing more is coming.
+   */
+  it('liveness: a quiet agent shows a live, growing "planning next action · {duration}" clock', async () => {
     document.body.innerHTML = '';
     let clock = 0;
     const p = new Presenter({ now: () => clock, heartbeatMs: 8, idleNoticeMs: 20 });
@@ -263,7 +271,8 @@ describe('presenter v2 activity log', () => {
 
     clock = 5000; // 5s since the last action - well past idleNoticeMs
     await wait(24); // let a heartbeat tick (8ms) fire
-    expect(act()).toContain('idle');
+    expect(act()).toContain('planning next action');
+    expect(act(), 'a live agent is never called idle').not.toContain('idle');
     expect(act()).toContain('5s');
     expect(act()).toContain('since last action');
 
@@ -400,5 +409,30 @@ describe('presenter v2 activity log', () => {
     expect(rows[0]?.querySelector('.reticle-log-text')?.textContent).toBe('hello');
     expect(rows[0]?.querySelector('.reticle-chip-label')?.textContent ?? '').toBe('');
     p.destroy();
+  });
+});
+
+/**
+ * The two quiet states must read differently, because they mean different things to the human
+ * watching: one is "wait", the other is "nothing more is coming".
+ */
+describe('the panel never calls a live agent idle', () => {
+  it('says STOPPED, not idle, once the session has actually ended', async () => {
+    document.body.innerHTML = '';
+    let clock = 0;
+    const p = new Presenter({ now: () => clock, heartbeatMs: 8, idleNoticeMs: 20, idleEndMs: 100 });
+    p.mount();
+    p.sessionStart();
+    p.status('Clicking Deploy');
+    const act = (): string => document.querySelector('.reticle-act')?.textContent ?? '';
+
+    clock = 50; // quiet, but inside the end window — still alive
+    await wait(24);
+    expect(act()).toContain('planning next action');
+
+    clock = 5000; // past idleEndMs — the session auto-ends
+    await wait(24);
+    expect(act(), 'an ended session is stopped, and must not read as a pause').toBe('stopped');
+    expect(act()).not.toContain('planning');
   });
 });

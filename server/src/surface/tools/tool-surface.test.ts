@@ -154,9 +154,19 @@ describe('one surface, plus two switches', () => {
    * different cuts; `lean` pays for only one of them. It is an EXPERIMENT with the same exit as the
    * others: if it does not hold detection and false alarms against `default`, the entry comes out.
    */
-  it('offers exactly four internal surfaces, each a switch rather than a choice', () => {
+  it('offers exactly five internal surfaces, each a switch rather than a choice', () => {
     expect(new Set(Object.values(TOOL_SURFACE))).toEqual(
-      new Set([TOOL_SURFACE.DEFAULT, TOOL_SURFACE.ALL, TOOL_SURFACE.VERIFY, TOOL_SURFACE.LEAN]),
+      new Set([
+        TOOL_SURFACE.DEFAULT,
+        TOOL_SURFACE.ALL,
+        TOOL_SURFACE.VERIFY,
+        TOOL_SURFACE.LEAN,
+        // `merged` is admitted on the same terms and with the same exit as the two above: it is an
+        // EXPERIMENT, not an offer. It is the only trim that removes no evidence channel — it renames
+        // rather than subtracts — which is the one thing both earlier trims got wrong. If it does not
+        // hold false greens against `default` on the do-and-verify set, the entry comes out.
+        TOOL_SURFACE.MERGED,
+      ]),
     );
   });
 

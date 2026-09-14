@@ -25,7 +25,25 @@ interface MergeSpec {
   actions: Record<string, ToolDef>;
   /** A concrete call, carried through to the merged def (see ToolDef.example). */
   example?: Record<string, unknown>;
+  /**
+   * The action a bare call means. Omit where there is no obvious one.
+   *
+   * MEASURED, and it is the difference between a surface an agent uses and one it abandons. An
+   * agent's first two moves are zero-argument: "is anything connected?" then "what is on the page?".
+   * Merging turned both into `{action}` calls that refused a bare invocation, so the first move
+   * answered `unknown action 'undefined'`, the agent concluded the app was not wired, and it fixed
+   * all five benchmark bugs by reading source instead — 84 drive calls on the unmerged surface
+   * against 0, and one false green it reached in eight turns without ever opening the app.
+   *
+   * So a family whose common case is obvious names it, and a family whose name implies no single
+   * member does NOT — see `reticle_verify`, where one member really clicks and a wrong guess would
+   * drive the app instead of reading it.
+   */
+  defaultAction?: string;
 }
+
+/** The field the merged tool dispatches on. A member may not declare one of its own — see below. */
+const DISCRIMINATOR = 'action';
 
 /** The union of member input shapes, every field optional so one schema serves every action. */
 function unionShape(actions: Record<string, ToolDef>): z.ZodRawShape {
@@ -37,6 +55,31 @@ function unionShape(actions: Record<string, ToolDef>): z.ZodRawShape {
     }
   }
   return shape;
+}
+
+/**
+ * A member that declares `action` itself cannot be merged, and the failure was SILENT.
+ *
+ * The merged schema is `{ action: enum(...), ...unionShape(members) }` — the union spreads SECOND,
+ * so a member's own `action` field replaced the dispatch enum. The handler then read `args.action`
+ * expecting a member name, got `'click'`, and answered `unknown action 'click'` for every call. The
+ * tool would have advertised, validated and refused everything.
+ *
+ * Nothing shipped this: it was found while merging `reticle_act` (whose `action` is the DOM action:
+ * click/fill/press) into a family, which is exactly the shape that triggers it. It throws at module
+ * load like the unknown-member error above, because both are the same class of mistake — a plan that
+ * silently produces a surface nobody can call.
+ */
+function refuseDiscriminatorCollision(name: string, actions: Record<string, ToolDef>): void {
+  for (const [action, tool] of Object.entries(actions)) {
+    if (DISCRIMINATOR in tool.inputSchema) {
+      throw new Error(
+        `mergeTools(${name}): member '${tool.name}' (action '${action}') declares its own ` +
+          `'${DISCRIMINATOR}' parameter, which would overwrite the dispatch discriminator and make ` +
+          `every call to ${name} unroutable. Rename the member's parameter or leave it unmerged.`,
+      );
+    }
+  }
 }
 
 /** A merge declared by member NAME, resolved against the assembled tool list. */
@@ -51,6 +94,8 @@ export interface MergePlan {
    * example at all unless the plan states one.
    */
   example?: Record<string, unknown>;
+  /** What a bare call means. See MergeSpec.defaultAction for the measurement behind this. */
+  defaultAction?: string;
 }
 
 /**
@@ -86,26 +131,48 @@ export function applyMerges(
         description: plan.description,
         actions,
         ...(plan.example === undefined ? {} : { example: plan.example }),
+        ...(plan.defaultAction === undefined ? {} : { defaultAction: plan.defaultAction }),
       }),
     );
   }
   return [...tools.filter((t) => !consumed.has(t.name)), ...merged];
 }
 
+/**
+ * The dispatch parameter: required where a bare call means nothing, optional where it means the
+ * default. Optional is what lets `reticle_look {}` answer instead of refusing, which is the whole
+ * reason a merged surface is usable at all.
+ */
+function discriminatorSchema(
+  actionNames: readonly string[],
+  defaultAction: string | undefined,
+): z.ZodTypeAny {
+  const values = z.enum(actionNames as [string, ...string[]]);
+  if (defaultAction === undefined) return values.describe('Which operation to run.');
+  return values.describe(`Which operation to run. Omit for "${defaultAction}".`).optional();
+}
+
 export function mergeTools(spec: MergeSpec): ToolDef {
   const actionNames = Object.keys(spec.actions);
   if (0 === actionNames.length) throw new Error(`mergeTools(${spec.name}): no actions`);
+  refuseDiscriminatorCollision(spec.name, spec.actions);
+  if (spec.defaultAction !== undefined && !(spec.defaultAction in spec.actions)) {
+    throw new Error(
+      `mergeTools(${spec.name}): defaultAction '${spec.defaultAction}' is not one of its actions`,
+    );
+  }
   return {
     name: spec.name,
     description: spec.description,
     ...(spec.example === undefined ? {} : { example: spec.example }),
     inputSchema: {
-      action: z.enum(actionNames as [string, ...string[]]).describe('Which operation to run.'),
+      [DISCRIMINATOR]: discriminatorSchema(actionNames, spec.defaultAction),
       ...unionShape(spec.actions),
     },
     handler: (deps: ToolDeps, args: Record<string, unknown>) => {
-      const action = args['action'];
-      const chosen = 'string' === typeof action ? spec.actions[action] : undefined;
+      const named = args[DISCRIMINATOR];
+      const action = 'string' === typeof named ? named : spec.defaultAction;
+      const chosen = action === undefined ? undefined : spec.actions[action];
       if (chosen === undefined) {
         return Promise.resolve({
           error: `unknown action '${String(action)}' for ${spec.name}`,

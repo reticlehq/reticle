@@ -1,3 +1,4 @@
+import { driveFlowsFrom, type DriveProgram, type TapeStep } from './drive-flow.js';
 import { AmbientStore } from './ambient-store.js';
 import type { AmbientCounts } from '@reticlehq/engine/window/ambient.js';
 import { subjectOf, type JournalAction } from '@reticlehq/core';
@@ -59,6 +60,23 @@ interface SessionEndDeps {
    * than reached for inside the fold, which stays pure.
    */
   now?: () => number;
+  /**
+   * The tape store and the flow store, so a drive can be saved as a flow at teardown.
+   *
+   * Optional, like `now`, so every existing construction keeps working — and absent means the
+   * capture simply does not run rather than throwing at teardown, which is the rule every step in
+   * this handler follows.
+   */
+  /**
+   * Take this session's ambient tape, closing it. Bound by the CALLER, which is the half that
+   * already holds the recorder — teardown needs the data, not the recorder, and reaching two
+   * directories into `language/flows/recording/tape/` for a constant and two types was a dependency
+   * nobody needed. `directory-reach.test.ts` refused it, and its advice was right.
+   */
+  takeAmbientTape?: () => { steps: readonly TapeStep[]; startPath?: string } | undefined;
+  flows?: {
+    save: (program: DriveProgram, annotations?: undefined, projectId?: string) => Promise<unknown>;
+  };
 }
 
 /**
@@ -103,6 +121,20 @@ export function makeSessionEnd(deps: SessionEndDeps): (session: SessionEndTarget
     // Not nudged: the sync daemon re-reads `.reticle/runs/` from disk on every cycle, so this lands
     // within one interval and survives a daemon that exits first. Threading a wake-up through here
     // would buy under a minute of latency for a mutable handle held across two wiring sites.
+    // A DRIVE IS A REGRESSION TEST, and it used to need somebody to remember to say so.
+    //
+    // `record{start}` + `flow_save` is the agent-facing route and agents do not take it: the corpus
+    // measures 3 of 33 flows mutation-testable and 6 of 112 steps declaring a consequence, while the
+    // engine catches 84 of the 86 bugs it structurally can. The ceiling is how many flows EXIST that
+    // could go red, so a drive that is never saved is a regression test paid for and thrown away.
+    //
+    // Saved only when the tape declared a consequence — see drive-flow.ts for why the alternative is
+    // a false-green factory running once per session.
+    try {
+      await saveDrivenFlow(deps, session);
+    } catch {
+      // a flow is a by-product of the session; failing to write one never fails the teardown
+    }
     try {
       await recordDriveRun(deps, session);
     } catch {
@@ -168,4 +200,16 @@ async function recordDriveRun(deps: SessionEndDeps, session: SessionEndTarget): 
       deps.now ?? ((): number => Date.now()),
     ),
   );
+}
+
+/** Persist what this session drove as a replayable flow, when it declared anything provable. */
+async function saveDrivenFlow(deps: SessionEndDeps, session: SessionEndTarget): Promise<void> {
+  const takeTape = deps.takeAmbientTape;
+  const flows = deps.flows;
+  if (takeTape === undefined || flows === undefined) return;
+  // One flow per journey the session contained, not one flow per session — see drive-flow.ts.
+  const { programs } = driveFlowsFrom(session.id, takeTape());
+  for (const program of programs) {
+    await flows.save(program, undefined, session.projectId);
+  }
 }

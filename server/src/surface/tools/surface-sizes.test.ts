@@ -44,6 +44,11 @@ const EXPECTED_SIZE: Record<ToolSurface, number> = {
   // tripled false alarms, and only the observation cut caused the second half. Membership itself is
   // pinned in lean-surface.test.ts; this is only its count.
   [TOOL_SURFACE.LEAN]: 10,
+  // The same capabilities as `default`, under merged names: look (snapshot/query/inspect/state),
+  // observe (observe/network/console), assert (assert/wait_for), act absorbing act_sequence,
+  // sessions folded into session. NINE, and no meta-tools: this surface IS the product rather than
+  // a window onto it, so there is no cold tail for them to reach.
+  [TOOL_SURFACE.MERGED]: 9,
 };
 
 /**
@@ -103,7 +108,11 @@ describe('advertised surface sizes', () => {
     for (const profile of Object.values(TOOL_SURFACE)) {
       const names = advertisedTools(profile).map((t) => t.name);
       expect(names, profile).toContain('reticle_tools');
-      expect(names, profile).toContain('reticle_run');
+      // `reticle_run` is the DISPATCH hatch, and only a surface that hides something needs one.
+      // `merged` advertises every tool it has, so there is nothing to reach through it; the LOOKUP
+      // half of the pair, which every trimmed surface needs because its schemas are lean, is
+      // asserted for all of them above.
+      if (profile !== TOOL_SURFACE.MERGED) expect(names, profile).toContain('reticle_run');
     }
   });
 

@@ -44,6 +44,8 @@ import { SESSION_TOOLS } from '../../portal/session/session-tools.js';
 import { ANNOTATE_TOOLS } from '../../language/flows/annotate-tools.js';
 import { LIVE_CONTROL_TOOLS } from '../../portal/session/live-control-tools.js';
 import { type ToolDef, sessionIdShape, commandOrThrow } from './tool-kit.js';
+import { TOOL_SURFACE, type ToolSurface } from './tool-surface.js';
+import { mergeActWithSequence } from './act-merged.js';
 import { applyMerges, type MergePlan } from './merge-tools.js';
 import { ACT_TOOLS } from './act-tools.js';
 import { ACT_SEQUENCE_TOOL } from './act-sequence-tool.js';
@@ -854,3 +856,132 @@ function noteHiddenPage(result: unknown, mode: string): unknown {
 }
 
 export const TOOLS: ToolDef[] = applyMerges(RAW_TOOLS, MERGE_PLANS, RETIRED_FROM_SURFACE);
+
+/**
+ * The consolidation that is still UNDER MEASUREMENT, and is not what anybody gets by default.
+ *
+ * `MERGE_PLANS` above collapses cold sibling families. These four go further and merge inside the
+ * core hot-set, which the guardrail on `MERGE_PLANS` explicitly forbids — so they live on their own
+ * surface (`TOOL_SURFACE.MERGED`) rather than changing the one every user sees. The rule this
+ * follows is the one written on `TOOL_SURFACE.VERIFY`: that surface cut the bill 37% and TRIPLED
+ * false alarms, so a token number alone never promotes a surface.
+ *
+ * MEASURED, on the wire, against the default surface as it is actually advertised (terse
+ * descriptions, lean input shapes, no output schemas — measuring the raw ToolDefs instead reads 3x
+ * too high and is the mistake that started this):
+ *
+ *   default   17 tools   21,873 B   ~5,468 tok
+ *   merged    10 tools   17,885 B   ~4,471 tok   (-18.2%)
+ *
+ * NOT MEASURED: whether a model verifies as accurately against it. That is the number that decides
+ * whether this ever becomes the default, and it needs the fix-and-verify benchmark with a key.
+ *
+ * `reticle_act` and `reticle_act_and_wait` stay separate ON PURPOSE, and not only because `act`
+ * owns the `action` parameter (see `refuseDiscriminatorCollision`). They are the verdict boundary:
+ * `act_and_wait` names the expected consequence BEFORE the action and returns a verdict, `act`
+ * proves nothing. Merging them makes the proof an optional parameter instead of a different tool —
+ * a forgotten tool name is an error, a forgotten parameter is a silent non-verdict, and a silent
+ * non-verdict is the shape of the only false green this repository has ever measured.
+ */
+export const SURFACE_MERGE_PLANS: MergePlan[] = [
+  {
+    name: ReticleTool.LOOK,
+    description:
+      'Read the page, by action: "page" is the semantic snapshot of what is rendered, "find" resolves a locator (testid/role/text/component) to refs you can act on, "element" is the full detail of one ref, "state" reads the framework store. Reads only — nothing here changes the app.',
+    members: {
+      page: ReticleTool.SNAPSHOT,
+      find: ReticleTool.QUERY,
+      element: ReticleTool.INSPECT,
+      state: ReticleTool.STATE,
+    },
+    example: { action: 'find', by: 'testid', value: 'submit' },
+    // A bare `reticle_look` is "show me the page" — the move an agent makes before it knows enough
+    // to ask anything narrower, and the one the unmerged surface answered with `reticle_snapshot`.
+    defaultAction: 'page',
+  },
+  {
+    name: ReticleTool.OBSERVE,
+    description:
+      'What the app DID, by action: "events" is the reaction window since a cursor, "network" the requests it made, "console" what it logged. Evidence, not a verdict — the four evidence tools are what the `verify` surface dropped when it tripled its false-alarm rate.',
+    members: {
+      events: ReticleTool.OBSERVE,
+      network: ReticleTool.NETWORK,
+      console: ReticleTool.CONSOLE,
+    },
+    example: { action: 'events' },
+    // The reaction window is what "observe" means with no qualifier.
+    defaultAction: 'events',
+  },
+  {
+    name: ReticleTool.ASSERT,
+    description:
+      'Prove a consequence, by action: "now" evaluates a predicate against the window that already exists, "wait" waits for one to become true within a budget. Both return a verdict; only `verified:"yes"` is a pass.',
+    members: { now: ReticleTool.ASSERT, wait: ReticleTool.WAIT_FOR },
+    example: { action: 'now' },
+    // Evaluate against the window that already exists. `wait` spends a budget, so it is asked for.
+    defaultAction: 'now',
+  },
+];
+
+/**
+ * The `merged` surface's table. Built from the SAME raw tools and the same handlers — a merge can
+ * change the advertised shape and nothing else, which is what makes the two surfaces comparable.
+ */
+const MERGED_BASE: ToolDef[] = applyMerges(
+  RAW_TOOLS,
+  [
+    ...MERGE_PLANS.map((plan) =>
+      plan.name === ReticleTool.SESSION
+        ? {
+            ...plan,
+            // `list` and `feedback` join the session family HERE and not in MERGE_PLANS, so the
+            // harness toolset — which builds from TOOLS — keeps excluding `reticle_feedback` by
+            // name. A model driving in a loop reports its own confusion as a product defect.
+            members: {
+              ...plan.members,
+              list: ReticleTool.SESSIONS,
+              feedback: ReticleTool.FEEDBACK,
+            },
+            // A bare `reticle_session` is "what is connected?" — the FIRST call an agent makes, and
+            // the one `reticle_sessions` answered before it was folded in here. Only on this
+            // surface: on the default one `reticle_sessions` still exists and this tool is purely
+            // lifecycle, where no member is the obvious bare meaning.
+            defaultAction: 'list',
+          }
+        : plan,
+    ),
+    ...SURFACE_MERGE_PLANS,
+  ],
+  RETIRED_FROM_SURFACE,
+);
+
+/**
+ * The `merged` table: the plans above, plus the one merge the plan machinery cannot express.
+ *
+ * `act` absorbing `act_sequence` routes on shape, not on an `action` discriminator, because `act`
+ * already owns that parameter name. See act-merged.ts.
+ */
+export const MERGED_TOOLS: ToolDef[] = (() => {
+  const act = MERGED_BASE.find((tool) => tool.name === ReticleTool.ACT);
+  const sequence = MERGED_BASE.find((tool) => tool.name === ReticleTool.ACT_SEQUENCE);
+  if (act === undefined || sequence === undefined) {
+    throw new Error('merged surface: act and act_sequence must both exist to be merged');
+  }
+  return [
+    ...MERGED_BASE.filter(
+      (tool) => tool.name !== ReticleTool.ACT && tool.name !== ReticleTool.ACT_SEQUENCE,
+    ),
+    mergeActWithSequence(act, sequence),
+  ];
+})();
+
+/**
+ * Which table a surface serves.
+ *
+ * `merged` is the one surface whose tools are not the shipped ones — it advertises the same
+ * capabilities under merged names, so it needs the table those names exist in. Every other surface
+ * is a FILTER over `TOOLS` and shares it.
+ */
+export function tableForSurface(surface: ToolSurface): readonly ToolDef[] {
+  return surface === TOOL_SURFACE.MERGED ? MERGED_TOOLS : TOOLS;
+}

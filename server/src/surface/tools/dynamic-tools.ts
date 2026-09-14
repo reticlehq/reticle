@@ -78,8 +78,23 @@ function unknownKeys(args: Record<string, unknown>, shape: object): string[] {
  * Build the two dynamic meta-tools over the full tool table. `reticle_run` dispatches through the same
  * `runTool` chokepoint as a direct call, so session-health splicing and every other invariant hold.
  */
-export function buildDynamicTools(allTools: ToolDef[], profile?: ToolSurfaceOrigin): ToolDef[] {
-  const byName = new Map(allTools.map((t) => [t.name, t]));
+export function buildDynamicTools(
+  allTools: ToolDef[],
+  profile?: ToolSurfaceOrigin,
+  /**
+   * What this surface can actually INVOKE. Defaults to everything, which is true wherever
+   * `reticle_run` is advertised — it reaches any tool in the registry by name.
+   *
+   * Passed only by a surface that ships no dispatch hatch. Cataloguing a tool nothing can call is
+   * worse than hiding it: MEASURED on the nine-tool surface, this listed 66 names of which 57 were
+   * uninvokable, and the agent that found `reticle_lease` in it called it four times, failed four
+   * times, and then abandoned the product for the rest of the run.
+   */
+  callable?: ReadonlySet<string>,
+): ToolDef[] {
+  const reachable =
+    callable === undefined ? allTools : allTools.filter((tool) => callable.has(tool.name));
+  const byName = new Map(reachable.map((t) => [t.name, t]));
   // The profile is a DAEMON-startup decision, so an agent that exported RETICLE_TOOL_PROFILE into its
   // own environment sees no change and has, until now, no way to tell. Reported with the catalog.
   const profileBlock =
@@ -93,7 +108,10 @@ export function buildDynamicTools(allTools: ToolDef[], profile?: ToolSurfaceOrig
             // advertises the whole registry any more, so BOTH meta-tools are on every surface and
             // reticle_run is always the way to the tail. The old wording would now send an agent
             // away from the only tool that can reach half the registry.
-            note: `The surface is read once at daemon startup: set ${ADVERTISE_ALL_ENV}=1 and restart the daemon, or it has no effect. No surface advertises every tool: the advertised count is capped because editors budget tools across all connected MCP servers. Every tool listed here is callable through reticle_run { tool, args } whether or not it is advertised.`,
+            note:
+              callable === undefined
+                ? `The surface is read once at daemon startup: set ${ADVERTISE_ALL_ENV}=1 and restart the daemon, or it has no effect. No surface advertises every tool: the advertised count is capped because editors budget tools across all connected MCP servers. Every tool listed here is callable through reticle_run { tool, args } whether or not it is advertised.`
+                : 'This surface advertises everything it can call, so this list IS the product and every name in it is callable directly. There is no hidden tail and no dispatch hatch to reach one.',
           },
         };
 
@@ -128,7 +146,7 @@ export function buildDynamicTools(allTools: ToolDef[], profile?: ToolSurfaceOrig
         // The COUNT is stated, not just implied by the array length. An agent that can see 18 tools
         // has no way to know whether that is all of them; being told the registry holds more is what
         // turns "these are the tools" into "these are the tools I was shown".
-        const catalog = allTools.map((t) => ({
+        const catalog = reachable.map((t) => ({
           name: t.name,
           summary: firstSentence(t.description),
         }));
@@ -234,7 +252,7 @@ export function buildDynamicTools(allTools: ToolDef[], profile?: ToolSurfaceOrig
             ...(moved.action === undefined ? {} : { action: moved.action }),
           };
         }
-        return { error: `unknown tool '${name}'`, available: allTools.map((t) => t.name) };
+        return { error: `unknown tool '${name}'`, available: reachable.map((t) => t.name) };
       }
       // The outer aim, forwarded ONLY to a tool that declares a session — injecting it into one that
       // does not would trip the unknown-key check below and refuse a call the caller got right. An

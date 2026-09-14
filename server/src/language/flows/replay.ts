@@ -103,11 +103,21 @@ function sourceFromResult(res: Record<string, unknown>): Record<string, unknown>
  * saved a flow with zero steps.
  */
 export function captureAct(
-  recordings: { active: () => string[]; capture: (step: RecordedStep) => void },
+  recordings: { active: () => string[]; capture: (step: RecordedStep, route?: string) => void },
   args: Record<string, unknown>,
   res: unknown,
+  /** Where this step ran, so the ambient tape can be cut into journeys. See RecordedStep.route. */
+  route?: string,
 ): void {
-  if (0 === recordings.active().length) return;
+  // NO `active()` gate. `RecordingStore.capture` opens the AMBIENT tape on its first step, and that
+  // branch was unreachable from here: this returned early whenever nothing was open, and the only
+  // thing that opened anything was `reticle_record { action: "start" }`. So the comment on `capture`
+  // — "recording is a property of the system rather than a rule an agent has to remember" — was true
+  // about the intent and false about the code, and every drive nobody wrapped by hand was discarded.
+  //
+  // That is the whole supply of regression tests this product could have had for free: the corpus
+  // measures 3 of 33 flows mutation-testable and 6 of 112 steps declaring a consequence, and a drive
+  // that is never recorded cannot contribute to either.
   const step = compileActStep(args, res);
   // Keep the assertion the agent actually made. `act_and_wait { until }` IS the agent saying what
   // success means — 12 of 14 calls in a day carried one — and dropping it produced a flow graded
@@ -116,7 +126,7 @@ export function captureAct(
   // predicate-to-expect.ts.
   const expect = enforceableExpect(args['until'] ?? args['predicate']);
   if (expect !== undefined) step.expect = expect;
-  recordings.capture(step);
+  recordings.capture(step, route);
 }
 
 /**

@@ -79,7 +79,14 @@ const DECLARED_TOOLS = new Set<string>(Object.values(ReticleTool));
  * exists to draw: a FACADE MEMBER (`reticle_flow_list`) cannot be called by its own name in any
  * profile and must not be advertised as if it could; a profile-gated tool can.
  */
-const PROFILE_GATED = new Set<string>([ReticleTool.RUN, ReticleTool.TOOLS]);
+/**
+ * Real tools that a given surface may not advertise, so naming one is not naming a dead tool.
+ *
+ * `run`/`tools` are built at MCP registration rather than living in `TOOLS`. `look` is the merged
+ * read family: it exists only on the `merged` surface, so `surface-vocabulary.ts` has to be able to
+ * name it while resolving which spelling THIS surface uses.
+ */
+const PROFILE_GATED = new Set<string>([ReticleTool.RUN, ReticleTool.TOOLS, ReticleTool.LOOK]);
 
 /**
  * Names a spec may reference despite being absent from the advertised surface, each with the reason.
@@ -285,7 +292,12 @@ describe('user-facing guidance never names a tool an agent cannot call', () => {
       // flags ordinary code comments describing the module. Only a name inside a string on its own line
       // is guidance that ships.
       for (const line of text.split('\n')) {
-        if (line.trimStart().startsWith('*') || line.trimStart().startsWith('//')) continue;
+        // `/**` as well as `*` and `//`: a ONE-LINE doc comment starts with `/**`, which neither of
+        // the other two prefixes matches, so every single-line `/** … */` was being read as shipped
+        // guidance. Found when one legitimately described a tool by name.
+        const trimmed = line.trimStart();
+        if (trimmed.startsWith('*') || trimmed.startsWith('//') || trimmed.startsWith('/*'))
+          continue;
         for (const match of line.match(ANY_TOOL_MENTION) ?? []) {
           if (PROFILE_GATED.has(match)) continue;
           if (!DECLARED_TOOLS.has(match) || advertised.has(match) || KNOWN_REMOVED.has(match))

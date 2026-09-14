@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ReticleTool } from '@reticlehq/core';
-import { RAW_TOOLS, TOOLS } from './tools.js';
+import { RAW_TOOLS, TOOLS, MERGED_TOOLS } from './tools.js';
 
 const SERVER_SRC = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -101,8 +101,13 @@ describe('tool allowlists are complete', () => {
      * (`reticle_verify`, `reticle_session`, `reticle_flow`, `reticle_record`, `reticle_baseline`)
      * is synthesised by MERGE_PLANS and never appears in RAW_TOOLS, while its action MEMBERS do.
      * Both halves are real tools an allowlist may legitimately name.
+     *
+     * MERGED_TOOLS is the third: `reticle_look` is synthesised for the `merged` surface only, and
+     * the behavioural allowlists (session-bound, ref-minting, captured) MUST name it — that surface
+     * dispatches under it, and a missing entry there fails silently, which is the whole reason this
+     * guard exists.
      */
-    const live = new Set([...RAW_TOOLS, ...TOOLS].map((tool) => tool.name));
+    const live = new Set([...RAW_TOOLS, ...TOOLS, ...MERGED_TOOLS].map((tool) => tool.name));
     const enumValue = (member: string): string =>
       (ReticleTool as unknown as Record<string, string>)[member] ?? member;
 

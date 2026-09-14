@@ -73,6 +73,27 @@ export const TOOL_SURFACE = {
    */
   VERIFY: 'verify',
   /**
+   * EXPERIMENTAL, opt-in, UNDER MEASUREMENT — and deliberately on the same terms as LEAN below.
+   *
+   * The same ten capabilities as `default`, advertised as ten names instead of seventeen, by merging
+   * inside the core hot-set: look (snapshot/query/inspect/state), observe (observe/network/console),
+   * assert (assert/wait_for), and sessions folded into session. NOTHING is dropped — every tool
+   * `default` advertises is still reachable, which is the difference between this and `verify`.
+   *
+   * MEASURED on the wire, as actually advertised: 21,873 B -> 17,885 B, ~5,468 -> ~4,471 tokens,
+   * -18.2% per turn.
+   *
+   * NOT MEASURED: accuracy. `verify` is the reason that distinction is load-bearing — it cut 37% and
+   * tripled false alarms, and the tokens were not the part that mattered. This does not become the
+   * default on the strength of its token number, and the accuracy arm is the gate.
+   *
+   * The known risk, stated so the measurement knows what to look for: a merged tool's input schema is
+   * the UNION of its members' fields with every field optional, so the model sees `by`, `value`,
+   * `ref`, `mode` and `path` on one `reticle_look` with nothing saying which action takes which, and
+   * a wrong-field call validates instead of being refused.
+   */
+  MERGED: 'merged',
+  /**
    * EXPERIMENTAL, opt-in, and UNDER MEASUREMENT. Not a recommendation, and not on a path to becoming
    * the default until it has a number of its own.
    *
@@ -353,6 +374,37 @@ export const LEAN_TOOL_NAMES: ReadonlySet<string> = new Set([
   ReticleTool.STATE,
 ]);
 
+/**
+ * The `merged` surface: the default surface's capabilities under ten names.
+ *
+ * Derived from CORE_TOOL_NAMES rather than retyped — the members that got merged away, plus the
+ * names that replaced them. Writing it out by hand is how the two lists drift and a capability
+ * silently stops being advertised: `filterTools` matches by NAME, so a merged tool missing from here
+ * is dropped with no error at all. That happened while measuring this: `reticle_look` was absent, the
+ * four members it consumed were gone, and the surface reported a 32% saving that was really a
+ * capability loss.
+ */
+const MERGED_AWAY: ReadonlySet<string> = new Set([
+  // Absorbed by `reticle_act`, routed on the presence of `steps` rather than on an action name.
+  ReticleTool.ACT_SEQUENCE,
+  // Absorbed by `reticle_session`, which is already the tool for everything that talks OUT of the
+  // drive — yield, narrate, messages, review. Reporting that RETICLE failed is the same shape.
+  ReticleTool.FEEDBACK,
+  ReticleTool.SNAPSHOT,
+  ReticleTool.QUERY,
+  ReticleTool.INSPECT,
+  ReticleTool.STATE,
+  ReticleTool.NETWORK,
+  ReticleTool.CONSOLE,
+  ReticleTool.WAIT_FOR,
+  ReticleTool.SESSIONS,
+]);
+
+export const MERGED_TOOL_NAMES: ReadonlySet<string> = new Set([
+  ...[...CORE_TOOL_NAMES].filter((name) => !MERGED_AWAY.has(name)),
+  ReticleTool.LOOK,
+]);
+
 /** Is the truthy form of a boolean env var set? `1`, `true`, `yes` — anything else is off. */
 function envFlagOn(raw: string | undefined): boolean {
   if (raw === undefined) return false;
@@ -368,6 +420,7 @@ function envFlagOn(raw: string | undefined): boolean {
  */
 export function resolveToolSurface(explicit?: string): ToolSurface {
   if (explicit === TOOL_SURFACE.LEAN) return TOOL_SURFACE.LEAN;
+  if (explicit === TOOL_SURFACE.MERGED) return TOOL_SURFACE.MERGED;
   if (explicit === TOOL_SURFACE.VERIFY) return TOOL_SURFACE.VERIFY;
   if (explicit === TOOL_SURFACE.ALL) return TOOL_SURFACE.ALL;
   if (explicit === TOOL_SURFACE.DEFAULT) return TOOL_SURFACE.DEFAULT;
@@ -377,6 +430,9 @@ export function resolveToolSurface(explicit?: string): ToolSurface {
   // its own because the experiment is an A/B between two surfaces, and a boolean cannot name an arm.
   if (TOOL_SURFACE.LEAN === process.env[TOOL_PROFILE_ENV]?.trim().toLowerCase()) {
     return TOOL_SURFACE.LEAN;
+  }
+  if (TOOL_SURFACE.MERGED === process.env[TOOL_PROFILE_ENV]?.trim().toLowerCase()) {
+    return TOOL_SURFACE.MERGED;
   }
   if (envFlagOn(process.env[VERIFY_SURFACE_ENV])) return TOOL_SURFACE.VERIFY;
   if (envFlagOn(process.env[ADVERTISE_ALL_ENV])) return TOOL_SURFACE.ALL;
@@ -441,6 +497,9 @@ export function filterTools(tools: ToolDef[], surface: ToolSurface): ToolDef[] {
   // interesting thing about the `core` PROFILE, whose only distinction was a second name for this.
   if (surface === TOOL_SURFACE.VERIFY) return tools.filter((t) => VERIFY_TOOL_NAMES.has(t.name));
   if (surface === TOOL_SURFACE.LEAN) return tools.filter((t) => LEAN_TOOL_NAMES.has(t.name));
+  if (surface === TOOL_SURFACE.MERGED) {
+    return tools.filter((t) => MERGED_TOOL_NAMES.has(t.name));
+  }
   if (surface === TOOL_SURFACE.DEFAULT) return tools.filter((t) => CORE_TOOL_NAMES.has(t.name));
   // `all` is the extended surface, not the whole registry — the cap is a hard budget shared with
   // every other MCP server the user has connected. surface-sizes.test.ts enforces it.

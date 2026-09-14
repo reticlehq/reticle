@@ -1,4 +1,7 @@
+import { ReticleTool } from '@reticlehq/core';
 import { SHARED_PARAM_GUIDANCE } from './shared-params.js';
+import { CORE_TOOL_NAMES } from '../tools/tool-surface.js';
+import { surfaceVocabulary, listOf, type SurfaceVocabulary } from './surface-vocabulary.js';
 /**
  * What every connected agent is told, before it has asked anything.
  *
@@ -36,10 +39,17 @@ import { SHARED_PARAM_GUIDANCE } from './shared-params.js';
  * those turns were spent asking a browser a question that only source can answer.
  */
 
-/** The tools, and the rule that only two of them decide anything. Constant across both states. */
-const VERDICT_DISCIPLINE = `Reticle verifies a running web app from the inside: go (reticle_navigate), look (reticle_snapshot / reticle_query), act and prove in one hop (reticle_act_and_wait), observe (reticle_observe / reticle_state / reticle_network / reticle_console), assert (reticle_assert). Verify a user-facing change against the real app before you call it done, and never weaken a check to make it pass.
+/**
+ * The tools, and the rule that only two of them decide anything.
+ *
+ * Every tool named here is resolved from the LIVE surface — see surface-vocabulary.ts for the
+ * measured reason. A briefing that names a tool the agent was not given does not merely confuse it;
+ * it makes the agent stop using the product altogether.
+ */
+const verdictDiscipline = (v: SurfaceVocabulary): string =>
+  `Reticle verifies a running web app from the inside: go (${v.navigate}), look (${listOf(v.look, v.find)}), act and prove in one hop (${v.actAndWait}), observe (${listOf(v.observe, v.state, v.network, v.console)}), assert (${v.assert}). Verify a user-facing change against the real app before you call it done, and never weaken a check to make it pass.
 
-Only reticle_act_and_wait and reticle_assert produce a verdict. reticle_act and everything else move or read the app and prove nothing, so a drive that ends without one of those two has no result however many tools it used. Prefer reticle_act_and_wait({ ref, action, until }) — it names the expected consequence BEFORE the action, which is the difference between a check and a rationalisation. Only verified:"yes" is a pass — "unknown" means Reticle could not tell what happened, "no-fault" means nothing was declared to prove. Report either as not proved.
+Only ${v.actAndWait} and ${v.assert} produce a verdict. ${v.act.length > 0 ? `${v.act} and e` : 'E'}verything else moves or reads the app and proves nothing, so a drive that ends without one of those two has no result however many tools it used. Prefer ${v.actAndWait}({ ref, action, until }) — it names the expected consequence BEFORE the action, which is the difference between a check and a rationalisation. Only verified:"yes" is a pass — "unknown" means Reticle could not tell what happened, "no-fault" means nothing was declared to prove. Report either as not proved.
 
 A "yes" over a clean capture IS the answer — re-reading the page after one finds the same state. When every consequence you set out to check has one, stop.
 
@@ -54,9 +64,11 @@ DIAGNOSING a bug? Read the source first — Reticle proves what the app DOES, no
  * server restart, because a plugin added to a config the running server already read is the single
  * most common way this step half-succeeds.
  */
-const FIRST_MOVE = `FIRST: no app has ever connected to Reticle in this project, so nothing here can be verified yet. Having these tools is not the same as being set up — the tools reach a daemon, and the daemon has nothing to look at until the app itself is instrumented.
+const firstMoveFor = (
+  v: SurfaceVocabulary,
+): string => `FIRST: no app has ever connected to Reticle in this project, so nothing here can be verified yet. Having these tools is not the same as being set up — the tools reach a daemon, and the daemon has nothing to look at until the app itself is instrumented.
 
-Fix that before anything else: run \`npx @reticlehq/server init\` in the project, then RESTART the dev server (a plugin added to a config the running server already read is not in the bundle), then load the app in a browser. Confirm with reticle_sessions — a session listed there is the proof, and until one appears no other tool can tell you anything about this app.`;
+Fix that before anything else: run \`npx @reticlehq/server init\` in the project, then RESTART the dev server (a plugin added to a config the running server already read is not in the bundle), then load the app in a browser. Confirm with ${v.sessions} — a session listed there is the proof, and until one appears no other tool can tell you anything about this app.`;
 
 /**
  * When to reach for the tools that are advertised but never explained, and how to reach the two
@@ -77,12 +89,25 @@ Fix that before anything else: run \`npx @reticlehq/server init\` in the project
  * connected has nothing to observe, no run to carry forward and nothing to declare an intent
  * against. Its one instruction is the first move, and adding a second would compete with it.
  */
-const REACH_FOR = `reticle_observe is the evidence channel: everything the page did since a cursor, in one read. Take it BEFORE you call a build broken — measured, stripping the observation tools TRIPLED false alarms, because an agent that stops observing reaches for the verdict without the evidence. reticle_wait_for settles a page that is changing without you; reticle_inspect maps an element to its source file:line, which turns a finding into an edit; reticle_session {action:"yield"} hands the tab back to the human.
-
-Everything else is one hop: reticle_tools lists it, reticle_run calls it. Two to know early: reticle_run({ tool: "reticle_context", args: {} }) returns what this run already established, after a compaction or handover, and reticle_run({ tool: "reticle_intent", args: { action: "declare", ... } }) declares what a change was MEANT to do, so the verdict has something to check against other than itself.`;
+const reachFor = (v: SurfaceVocabulary): string => {
+  const lines = [
+    `${v.observe} is the evidence channel: everything the page did since a cursor, in one read. Take it BEFORE you call a build broken — measured, stripping the observation tools TRIPLED false alarms, because an agent that stops observing reaches for the verdict without the evidence. ${v.settle} settles a page that is changing without you; ${v.inspect} maps an element to its source file:line, which turns a finding into an edit${v.yield.length > 0 ? `; ${v.yield} hands the tab back to the human` : ''}.`,
+  ];
+  // Said ONLY when both halves are advertised. A catalogue with no way to invoke what it lists sent
+  // an agent at `reticle_lease` four times and then off the product entirely — see
+  // surface-vocabulary.ts. Where there is no cold tail, there is nothing to say about reaching it.
+  if (v.coldTail.length > 0) {
+    lines.push(
+      `${v.coldTail} Two to know early: ${ReticleTool.RUN}({ tool: "${ReticleTool.CONTEXT}", args: {} }) returns what this run already established, after a compaction or handover, and ${ReticleTool.RUN}({ tool: "${ReticleTool.INTENT}", args: { action: "declare", ... } }) declares what a change was MEANT to do, so the verdict has something to check against other than itself.`,
+    );
+  }
+  return lines.join('\n\n');
+};
 
 /** The feedback ask. Constant: an agent that cannot get set up is the report we most need. */
-const FEEDBACK_ASK = `Feedback is first-class here, not a courtesy. Reticle is built FOR agents, so your experience is the only signal that decides what gets built or fixed — and it disappears when your context does. Send it with \`reticle_feedback\` the moment you notice, then carry on with your task:
+const feedbackAsk = (
+  v: SurfaceVocabulary,
+): string => `Feedback is first-class here, not a courtesy. Reticle is built FOR agents, so your experience is the only signal that decides what gets built or fixed — and it disappears when your context does. Send it with \`${v.feedback}\` the moment you notice, then carry on with your task:
 - Reticle broke, lied, or could not see something you needed (\`bug\` / \`gap\` / \`ambiguity\`).
 - You wished it could do something, or something works but costs too many calls (\`feature_request\` / \`improvement\`).
 - The install, the wiring, or the setup itself gave you trouble — including anything you had to work around by hand.
@@ -90,6 +115,14 @@ const FEEDBACK_ASK = `Feedback is first-class here, not a courtesy. Reticle is b
 Nothing is too minor, and a report costs one call. If the tools are unreachable (setup unfinished, daemon down), file the same report from the shell instead: \`reticle feedback --agent --kind <one of those kinds> "what happened"\`. Report defects in RETICLE — a bug you find in the app under test is Reticle working, and belongs in your answer to the user.`;
 
 interface InstructionState {
+  /**
+   * The names this surface actually advertises. Every tool the prose mentions is resolved from it.
+   *
+   * Optional so the two proxy call sites, which brief before a daemon has answered, keep the shipped
+   * default — but a daemon that knows its surface MUST pass it, or it briefs an agent on a product
+   * it is not serving. That is not hypothetical: it cost a whole benchmark run.
+   */
+  advertised?: readonly string[];
   /**
    * Has an app ever connected to Reticle for this project, on this port?
    *
@@ -107,8 +140,17 @@ interface InstructionState {
  * this block rather than repeated across sixteen parameter descriptions. See shared-params.ts.
  */
 export function buildServerInstructions(state: InstructionState): string {
+  // Defaults to the surface this package ships, so the two proxy callers — which brief an agent
+  // before any daemon has answered — keep working unchanged.
+  // The two meta-tools are added by `buildDynamicTools`, not by the surface filter, so they are
+  // absent from CORE_TOOL_NAMES — and without them the cold-tail sentence goes silent on the very
+  // surface that has a cold tail. The default surface always carries both.
+  const v = surfaceVocabulary(
+    state.advertised ?? [...CORE_TOOL_NAMES, ReticleTool.TOOLS, ReticleTool.RUN],
+  );
+  const firstMove = firstMoveFor(v);
   const base = state.previouslyConnected
-    ? `${VERDICT_DISCIPLINE}\n\n${REACH_FOR}\n\n${FEEDBACK_ASK}`
-    : `${FIRST_MOVE}\n\n${VERDICT_DISCIPLINE}\n\n${FEEDBACK_ASK}`;
+    ? `${verdictDiscipline(v)}\n\n${reachFor(v)}\n\n${feedbackAsk(v)}`
+    : `${firstMove}\n\n${verdictDiscipline(v)}\n\n${feedbackAsk(v)}`;
   return `${base}\n\n${SHARED_PARAM_GUIDANCE}`;
 }

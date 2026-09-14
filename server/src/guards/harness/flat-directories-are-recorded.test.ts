@@ -93,7 +93,11 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // wanted that one function and imported a module that pulls the whole flow-replay stack, closing a
   // cycle. Same trade as `language/flows` below — a cycle is paid for in files.
   'server/src/judgement/runs': 12,
-  'server/src/surface/tools': 32,
+  // 33 since `act-merged.ts`: `reticle_act` absorbing `reticle_act_sequence`, routed on the shape of
+  // the call rather than on an `action` name because `act` already owns that parameter. It is its
+  // own file rather than a branch inside `merge-tools.ts` for exactly that reason — it is the one
+  // merge the plan machinery cannot express, and burying it there would hide why.
+  'server/src/surface/tools': 33,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it
@@ -108,7 +112,11 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // cannot also be one of them. Raised deliberately, and the grouping this directory still wants is
   // a `replay/` subdirectory for the nine files that cluster there, which is its own commit.
   'server/src/language/flows': 32,
-  'server/src/memory/journal': 11,
+  // 12 since `drive-flow.ts`: the rule that turns a session's ambient tape into a flow per journey,
+  // and the gate that refuses to save one asserting nothing. It sits beside `session-end.ts` because
+  // teardown is the only caller and the tape is data by then — the reach guard already refused the
+  // alternative, which was for this file to live near the recorder and pull teardown into it.
+  'server/src/memory/journal': 12,
   'server/src/telemetry': 32,
   'spec-runner/src': 11,
 };

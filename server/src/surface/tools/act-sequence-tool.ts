@@ -259,7 +259,9 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
       if (completed > 0) {
         session.lastAct.markActed(since, undefined, undefined);
       }
-      if (deps.recordings.active().length > 0 && stalledAt === undefined) {
+      // Same as captureAct: no `active()` gate, so a sequence driven with nothing open still lands
+      // in the ambient tape. A stalled plan is still excluded — those steps never ran.
+      if (stalledAt === undefined) {
         deps.recordings.capture(
           compileSequenceStep(args, { count: inputSteps.length, steps: stepResults }),
         );

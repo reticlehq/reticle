@@ -485,13 +485,21 @@ export class Presenter {
     }
     if (idleMs < this.#idleNoticeMs) return; // still active (or a brief think) - keep the action text
     const since = this.#lastActionText !== '' ? ACT_STRIP.SINCE_LAST : '';
-    this.#paintActStrip(`${ACT_STRIP.IDLE_PREFIX}${humanDuration(idleMs)}${since}`, true);
+    // Alive and between actions — NOT idle. The session is still running and the next action is
+    // being decided; `#endIdle` below is the only path that says nothing more is coming.
+    this.#paintActStrip(`${ACT_STRIP.PLANNING_PREFIX}${humanDuration(idleMs)}${since}`, true);
     if (this.#chatPillTime !== undefined) this.#chatPillTime.textContent = humanDuration(idleMs);
   }
   /** Auto-end after the idle window: stamp the end, drive the panel to ENDED, stop the heartbeat. */
   #endIdle(idleMs: number): void {
     this.#endMs = this.#now();
-    this.#panel.setState(SessionState.ENDED, `idle ${humanDuration(idleMs)}`);
+    // The one place the panel says nothing is coming. It says STOPPED rather than "idle", because
+    // by this point it is not a pause — the session has ended.
+    this.#panel.setState(
+      SessionState.ENDED,
+      `${ACT_STRIP.STOPPED_PREFIX}${humanDuration(idleMs)} quiet`,
+    );
+    this.#paintActStrip(ACT_STRIP.STOPPED, false);
     if (this.#heartbeatTimer !== undefined) {
       nativeClearTimeout(this.#heartbeatTimer);
       this.#heartbeatTimer = undefined;

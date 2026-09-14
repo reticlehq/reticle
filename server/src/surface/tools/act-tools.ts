@@ -14,6 +14,21 @@ import { resolveSessionWithin } from '../../portal/session/timing/resolve-within
 import { WALL_CLOCK } from '../../portal/session/timing/wall-clock.js';
 import { timeoutMsSchema } from './args/numeric-bounds.js';
 import { captureAct } from '../../language/flows/replay.js';
+
+/**
+ * The pathname of a session's live url, or undefined when it has none yet.
+ *
+ * Pathname rather than the whole url, because that is what `startPath` is compared against and what
+ * a hash-routed app makes meaningless in the document location — see routeOfEvent.
+ */
+function pathOf(url: string | undefined): string | undefined {
+  if (url === undefined) return undefined;
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return undefined;
+  }
+}
 import {
   ActionType,
   ActionWarning,
@@ -235,6 +250,13 @@ export const ACT_TOOLS: ToolDef[] = [
       const paused = pausedShortCircuit(session);
       if (paused !== undefined) return paused;
       refuseIfThrottled(session, args['refuseWhenThrottled']);
+      // Where this step RUNS, read before the action — not after.
+      //
+      // A navigating click moves the app, so `session.url` read afterwards is the DESTINATION. The
+      // ambient tape cuts journeys on this value, and stamping the destination put the sign-in click
+      // at the head of the page it navigated TO: 4 of 11 auto-captured flows began with
+      // `login-submit` on `/deployments`, which is the exact flow the segmentation exists to prevent.
+      const routeBefore = pathOf(session.url);
       // Resolve `target` to a ref BEFORE the action window opens, so the lookup is not attributed to
       // the act and cannot be mistaken for something the action caused.
       const targetRef = await resolveActTarget(session, args);
@@ -258,7 +280,7 @@ export const ACT_TOOLS: ToolDef[] = [
         // drive native pointer input when a provider is available; otherwise fall back.
         const real = await tryRealInput(deps, session, ref, action, args);
         if (real.result !== undefined) {
-          captureAct(deps.recordings, args, real.result);
+          captureAct(deps.recordings, args, real.result, routeBefore);
           settledOutcome = real.settled ?? undefined;
           // Native input reports no synthetic effect block, so nothing measured in-target: undefined
           // (the weaker empty-window test), never a fabricated zero.
@@ -282,7 +304,7 @@ export const ACT_TOOLS: ToolDef[] = [
           args: args['args'] ?? {},
         });
         if (!result.ok) throw new Error(result.error ?? 'act failed');
-        captureAct(deps.recordings, args, result.result);
+        captureAct(deps.recordings, args, result.result, routeBefore);
         // lift dispatch/settle status to the envelope (a settle timeout is NOT a failure).
         const r = asRecord(result.result);
         if ('boolean' === typeof r['settled']) settledOutcome = r['settled'];
@@ -542,6 +564,8 @@ export const ACT_TOOLS: ToolDef[] = [
           ? await evaluatePredicate(session, until, since, false)
           : undefined;
       const alreadyTrue = alreadyTruePrecheck?.pass ?? false;
+      // Same as the ACT handler: the route this step RAN on, before the action can move the app.
+      const routeBeforeWait = pathOf(session.url);
       // #889: the pre-check evidence is already in hand — cheap to also ask whether that match was
       // against something hidden, so the already_true message can name it instead of leaving the
       // agent to re-derive "was this actually showing?" from nothing.
@@ -567,7 +591,7 @@ export const ACT_TOOLS: ToolDef[] = [
         );
         if (actResult !== null) {
           if (!actResult.ok) throw new Error(actResult.error ?? 'act failed');
-          captureAct(deps.recordings, args, actResult.result);
+          captureAct(deps.recordings, args, actResult.result, routeBeforeWait);
           // Dispatched — now this act owns the cursor and the effect. Marking its OWN measurement
           // also stops the spread below from inheriting an earlier reticle_act's action and
           // mutation count.

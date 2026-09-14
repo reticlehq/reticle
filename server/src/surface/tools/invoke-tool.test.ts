@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { SessionState, UNSCRIPTABLE_TAB_RECOMMENDATION, TRANSPORT_LIMITS } from '@reticlehq/core';
-import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
+import { TOOLS, MERGED_TOOLS, type ToolDef, type ToolDeps } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { EnvelopeKey } from './tool-kit.js';
 import { getSessionMetrics, resetSessionMetrics } from '../../telemetry/session-metrics.js';
@@ -128,7 +128,10 @@ describe('runTool — universal session-health invariant', () => {
   });
 
   it('6: every name in the bound/exempt sets is a real tool (no dangling names)', () => {
-    const all = new Set(TOOLS.map((t) => t.name));
+    // Both tables: a tool that exists only on the `merged` surface (reticle_look) is no less real,
+    // and runTool dispatches it under that name. Checking TOOLS alone would force the allowlists to
+    // omit it, which is the silent half of this class of bug rather than a fix for it.
+    const all = new Set([...TOOLS, ...MERGED_TOOLS].map((t) => t.name));
     for (const n of [...SESSION_BOUND_TOOLS, ...SESSION_EXEMPT_TOOLS])
       expect(all.has(n)).toBe(true);
   });

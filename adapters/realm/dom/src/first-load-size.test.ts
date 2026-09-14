@@ -91,7 +91,16 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * any price: which element and which property. This is the trade the ceiling exists to make
  * visible, and it is the right way round.
  */
-const MAX_FIRST_LOAD_BYTES = 234_600;
+/**
+ * 237_600 since the input vocabulary was completed: `tap` (a real touch sequence, not a click under
+ * another name), bidirectional and horizontal `scroll`, a held key with its auto-repeat, multi-key
+ * combos released in reverse, and a `zoom` that refuses in-page.
+ *
+ * +2,893 B measured, and paid by every page load including the ones no agent ever connects to. It
+ * buys gestures that were previously undriveable rather than merely awkward: a `touchstart`
+ * handler never ran for a synthetic click, and a page could be scrolled forward but never back.
+ */
+const MAX_FIRST_LOAD_BYTES = 237_600;
 /*
  * Raised a fifth time, 233_300 -> 233_400, for a route to be assertable in a SAVED flow. 57 B.
  *

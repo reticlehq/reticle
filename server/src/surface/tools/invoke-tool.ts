@@ -84,6 +84,9 @@ const REF_MINTING_TOOLS: ReadonlySet<string> = new Set([
   ReticleTool.SNAPSHOT,
   ReticleTool.QUERY,
   ReticleTool.INSPECT,
+  // The same three merged, on the `merged` surface. Its `state` action mints nothing, and
+  // over-inclusion is the safe direction here: the worst case is a refusal naming two tabs.
+  ReticleTool.LOOK,
   ReticleTool.EXPLORE,
   // `crawl` mints refs for the controls it drives and `coverage` for the ones it reports untouched.
   // Both are actions on the merged verify tool now.
@@ -96,6 +99,9 @@ export const SESSION_BOUND_TOOLS: ReadonlySet<string> = new Set([
   ReticleTool.SNAPSHOT,
   ReticleTool.QUERY,
   ReticleTool.INSPECT,
+  // All four merged. Every member here is session-bound, so unlike `verify` there is no split to
+  // adjudicate — the merged tool inherits the only answer its members ever gave.
+  ReticleTool.LOOK,
   // Merged change/flows/affected/coverage/crawl. Its members were SPLIT across bound and exempt —
   // coverage/change/crawl bound, flow_verify exempt because it returns its own suite contract — and
   // a merged tool has to be one or the other. Bound is the right side: `crawl` drives the app

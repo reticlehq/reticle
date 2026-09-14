@@ -85,6 +85,8 @@ import { reticleStateHome } from './command/daemon/daemon.js';
 import { probeChromium } from './command/cli/doctor/browser/chromium-hint.js';
 import { makeJournalAttach } from './memory/journal/attach-journal.js';
 import { makeSessionEnd } from './memory/journal/session-end.js';
+import type { TapeStep } from './memory/journal/drive-flow.js';
+import { AMBIENT_RECORDING } from './language/flows/recording/tape/recordings.js';
 import { AmbientStore } from './memory/journal/ambient-store.js';
 import { ensureWorkspaceGitignore } from './memory/journal/on-disk/workspace-gitignore.js';
 import {
@@ -248,7 +250,13 @@ function makeNetworkDetailRouter(bridge: Bridge, driveUrl: string | undefined) {
  */
 function attachJournal(
   bridge: Bridge,
-  deps: { fs: FileSystemPort; reticleRoot: string; enabled: boolean },
+  deps: {
+    fs: FileSystemPort;
+    reticleRoot: string;
+    enabled: boolean;
+    takeAmbientTape?: () => { steps: readonly TapeStep[]; startPath?: string } | undefined;
+    flows?: FlowStore;
+  },
 ): void {
   const journalAttach = makeJournalAttach(deps);
   const ambientStore = new AmbientStore(deps.fs, deps.reticleRoot);
@@ -453,8 +461,15 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     const reticleRoot = options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT);
     const now = options.now ?? ((): number => Date.now());
     const journalEnabled = readJournalEnabled(process.cwd(), process.env[ReticleEnv.JOURNAL]);
-    attachJournal(bridge, { fs, reticleRoot, enabled: journalEnabled });
     const flows = new FlowStore(fs, reticleRoot, { now });
+    attachJournal(bridge, {
+      fs,
+      reticleRoot,
+      enabled: journalEnabled,
+      // Bound HERE, where the recorder is already in hand: teardown gets the tape, not the recorder.
+      takeAmbientTape: () => recordings.stop(AMBIENT_RECORDING),
+      flows,
+    });
     const project = new ProjectStore(fs, reticleRoot, { now });
     attachRouteLearning(bridge, project);
     const annotations = new AnnotationStore();
@@ -590,8 +605,17 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   const reticleRoot = options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT);
   const now = options.now ?? ((): number => Date.now());
   const journalEnabled = readJournalEnabled(process.cwd(), process.env[ReticleEnv.JOURNAL]);
-  attachJournal(bridge, { fs, reticleRoot, enabled: journalEnabled });
   const flows = new FlowStore(fs, reticleRoot, { now });
+  // Built here rather than inside `deps` below, so teardown can save what a drive recorded. Both
+  // paths pass the same pair — `daemon-parity.test.ts` is what keeps them from drifting apart.
+  const recordings = new RecordingStore();
+  attachJournal(bridge, {
+    fs,
+    reticleRoot,
+    enabled: journalEnabled,
+    takeAmbientTape: () => recordings.stop(AMBIENT_RECORDING),
+    flows,
+  });
   const project = new ProjectStore(fs, reticleRoot, { now });
   attachRouteLearning(bridge, project);
   const annotations = new AnnotationStore();
@@ -633,7 +657,10 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     sessions: bridge.sessions,
     pool,
     baselines: new BaselineStore(),
-    recordings: new RecordingStore(),
+    // The SAME store teardown reads, not a second one. A second store means the tools capture into
+    // one tape and the teardown saves from another, so every automatic flow would be empty while
+    // every check on the tape passed — the tape it checked just was not the one being driven.
+    recordings,
     annotations,
     flows,
     project,

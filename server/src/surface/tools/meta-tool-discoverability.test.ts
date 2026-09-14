@@ -41,7 +41,10 @@ describe('the meta-tools stay self-explanatory on every surface', () => {
       expect(text, 'must name the parameter that loads full detail').toContain('names');
     });
 
-    it(`${surface}: reticle_run says it invokes any tool by name`, () => {
+    // `merged` advertises every tool it has, so it ships no dispatch hatch to describe. Skipped
+    // rather than made conditional inside the test, so the surface that HAS one is still checked.
+    const runs = surface === TOOL_SURFACE.MERGED ? it.skip : it;
+    runs(`${surface}: reticle_run says it invokes any tool by name`, () => {
       const text = advertised(ReticleTool.RUN, surface).toLowerCase();
       expect(text).toContain('tool');
       expect(text, 'must convey invoking by name').toMatch(/invoke|call|run/);

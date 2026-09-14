@@ -680,7 +680,34 @@ export const ActionType = {
   PRESS: 'press',
   UPLOAD: 'upload',
   SCROLL_INTO_VIEW: 'scrollIntoView',
+  /**
+   * Scroll a container (or the document) by a delta, in either axis and EITHER DIRECTION.
+   *
+   * `scrollIntoView` puts a known element on screen; this is the gesture for looking around when you
+   * do not know what you are looking for yet — back up to what scrolled past, or move sideways on a
+   * wide table. Until now the only scroll available stepped DOWN, so a page could be walked in one
+   * direction and never back, and `inspect` reported `scrollLeft`/`scrollWidth` that nothing could act on.
+   */
+  SCROLL: 'scroll',
   DRAG: 'drag',
+  /**
+   * A TOUCH tap: pointerdown(touch) → touchstart → touchend → pointerup → click.
+   *
+   * Not a click with another name. A handler bound to `touchstart`, or one that branches on
+   * `event.pointerType`, never runs for a mouse click — so mobile-web behaviour, swipe/press
+   * affordances and touch-only controls were undriveable. `args.holdMs` makes it a LONG PRESS, the
+   * gesture behind context menus and reorder handles on touch.
+   */
+  TAP: 'tap',
+  /**
+   * Page zoom, as a fraction (1 = 100%).
+   *
+   * Real browser zoom is not scriptable from inside the page, so this needs a driven browser and
+   * REFUSES without one rather than faking it with CSS — see the note on `hover`, which refuses for
+   * the same reason. A layout that breaks at 200% is a real and common defect; a CSS transform that
+   * merely looks like zoom would report it caught while the layout viewport never changed.
+   */
+  ZOOM: 'zoom',
   WEBMCP: 'webmcp',
 } as const;
 export type ActionType = (typeof ActionType)[keyof typeof ActionType];

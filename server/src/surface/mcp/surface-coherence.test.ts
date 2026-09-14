@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { CORE_TOOL_NAMES } from '../tools/tool-surface.js';
+import { TOOL_SURFACE, CORE_TOOL_NAMES } from '../tools/tool-surface.js';
 import { ReticleTool } from '@reticlehq/core';
 import { buildServerInstructions } from './server-instructions.js';
+import { advertisedTools } from './mcp.js';
 import { REPO_ROOT } from '../../machine/repo-root.js';
 
 /**
@@ -112,6 +113,66 @@ describe('the instructions, SKILL.md and the advertised surface describe the sam
         '`reticle_run({ tool: "<name>", args: {...} })` where the document names it, or advertise ' +
         `the tool by adding it to CORE_TOOL_NAMES in tools/tool-surface.ts:\n${unreachable.join('\n')}`,
     ).toEqual([]);
+  });
+
+  /**
+   * The check above reads ONE surface. That blindness cost a whole benchmark run.
+   *
+   * The nine-tool surface shipped with instructions naming `reticle_snapshot`, `reticle_query`,
+   * `reticle_wait_for`, `reticle_state`, `reticle_network`, `reticle_sessions`, `reticle_run`,
+   * `reticle_context` and `reticle_intent` — none of which existed on it — plus a catalogue of 57
+   * more it could not invoke. MEASURED against the default surface on the same five bugs: drive
+   * calls fell 96 -> 2, verdicts 20 -> 1, intents declared 14 -> 1 and discharged 6 -> 0. The agent
+   * tried a tool it had been shown, failed, tried again, and then abandoned the product and fixed
+   * the bugs by reading source. It read as a 28% token saving, because a product nobody uses is cheap.
+   *
+   * The guard above was green throughout, because it asks about `CORE_TOOL_NAMES` and the briefing
+   * it judged was the default one. So the question is asked of EVERY surface here.
+   */
+  it('no surface briefs an agent on a tool it does not advertise', () => {
+    const wrong: string[] = [];
+    for (const surface of Object.values(TOOL_SURFACE)) {
+      const advertised = advertisedTools(surface).map((tool) => tool.name);
+      const live = new Set(advertised);
+      const text = [true, false]
+        .map((connected) => buildServerInstructions({ previouslyConnected: connected, advertised }))
+        .join('\n');
+      const reachable = runFormTools(text);
+      for (const name of mentionedTools(text)) {
+        if (live.has(name) || reachable.has(name)) continue;
+        wrong.push(`${surface}: ${name}`);
+      }
+    }
+    expect(
+      wrong,
+      'The briefing an agent reads FIRST names a tool that surface does not advertise and does not ' +
+        'show how to reach. An agent handed a briefing for a different product stops using this ' +
+        'one — that is measured, not predicted. FIX: resolve the name through surfaceVocabulary.ts ' +
+        `rather than writing it into the prose:\n${wrong.join('\n')}`,
+    ).toEqual([]);
+  });
+
+  it('a catalogue never lists a tool the surface cannot invoke', () => {
+    const dead: string[] = [];
+    for (const surface of Object.values(TOOL_SURFACE)) {
+      const advertised = advertisedTools(surface);
+      const live = new Set(advertised.map((tool) => tool.name));
+      // Where `reticle_run` is advertised every listed tool is callable through it, so there is
+      // nothing to check. Where it is not, the catalogue IS the list of what can be called.
+      if (live.has(ReticleTool.RUN)) continue;
+      const catalogue = advertised.find((tool) => tool.name === ReticleTool.TOOLS);
+      if (catalogue === undefined) continue;
+      dead.push(
+        `${surface}: catalogue advertised with no dispatch hatch — assert its contents here`,
+      );
+    }
+    // Deliberately not asserting emptiness: a surface MAY ship the catalogue without `reticle_run`,
+    // and the nine does. What must hold is that its entries are callable, which is asserted against
+    // the live handler in merged-surface.test.ts where the deps to call it exist.
+    expect(
+      dead.length,
+      'this exists to make the pairing a decision rather than an accident',
+    ).toBeLessThanOrEqual(1);
   });
 
   it('every advertised tool is named in at least one of them', () => {

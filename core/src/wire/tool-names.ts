@@ -24,6 +24,13 @@ import { FlowStepTool } from '../artifacts/flow-step-tool.js';
  *  browser recorder and the flow schema, so a rename can't desync the recorder from the replayer. */
 export const ReticleTool = {
   SESSIONS: 'reticle_sessions',
+  /**
+   * The merged read family — snapshot/query/inspect/state under one name, on the `merged` surface.
+   *
+   * A name of its own rather than reusing `reticle_snapshot`, because the merged tool answers four
+   * different questions and calling it "snapshot" would make three of them undiscoverable.
+   */
+  LOOK: 'reticle_look',
   SNAPSHOT: 'reticle_snapshot',
   QUERY: 'reticle_query',
   INSPECT: 'reticle_inspect',

@@ -3,7 +3,7 @@ import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { isPredicateParam } from '@reticlehq/engine/question/predicate/predicate-eval.js';
 import { isToonable, resultToToon, MCP_SERVER_NAME } from '@reticlehq/core';
-import { TOOLS, type ToolDeps } from '../tools/tools.js';
+import { tableForSurface, type ToolDeps } from '../tools/tools.js';
 import type { ToolDef } from '../tools/tools.js';
 import {
   filterTools,
@@ -255,7 +255,7 @@ export function advertisedTools(
    * A consumer embedding the engine passes its own composition — ours plus its own — so its tools
    * reach the wire without editing the shipped array.
    */
-  tools: readonly ToolDef[] = TOOLS,
+  tools: readonly ToolDef[] = tableForSurface(surface),
 ): ToolDef[] {
   // The catalog reports which surface is live and what chose it — the only way an agent can see that
   // a setting did not take (the daemon read the value it started with).
@@ -263,10 +263,28 @@ export function advertisedTools(
   // The profile trims OUR table only. A tool this package does not ship was appended deliberately by
   // whoever is embedding us, and our `CORE_TOOL_NAMES` was never going to contain its name — so
   // filtering it would drop every consumer tool and look exactly like the feature not working.
-  const shipped = new Set(TOOLS.map((tool) => tool.name));
+  const shipped = new Set(tableForSurface(surface).map((tool) => tool.name));
   const ours = tools.filter((tool) => shipped.has(tool.name));
   const theirs = tools.filter((tool) => !shipped.has(tool.name));
-  return [...filterTools([...ours], surface), ...theirs, ...buildDynamicTools([...tools], origin)];
+  // The `merged` surface keeps `reticle_tools` and drops `reticle_run`, which is not symmetry for
+  // its own sake. `reticle_run` exists to DISPATCH to a tool the surface does not advertise, and
+  // this surface advertises everything, so it has no job left. `reticle_tools` has a second job that
+  // survives: every input schema on a trimmed surface is LEAN, and `{ names: [...] }` is the only
+  // way to get a tool's full parameters — which matters more here than anywhere, because a merged
+  // tool's schema is the union of its members' fields with all of them optional. Recovery messages
+  // across this server also say "Call reticle_tools", and a surface without it turns our own advice
+  // into a dead end (see surface-sizes.test.ts — `full` used to be exactly that).
+  // A surface with no `reticle_run` can invoke only what it advertises, so the catalogue is told to
+  // list exactly that. Anything else is a menu of names the agent cannot order from.
+  const advertisedHere = filterTools([...ours], surface);
+  const callable =
+    surface === TOOL_SURFACE.MERGED
+      ? new Set([...advertisedHere, ...theirs].map((tool) => tool.name))
+      : undefined;
+  const meta = buildDynamicTools([...tools], origin, callable).filter(
+    (tool) => surface !== TOOL_SURFACE.MERGED || tool.name !== ReticleTool.RUN,
+  );
+  return [...advertisedHere, ...theirs, ...meta];
 }
 
 /**
@@ -306,7 +324,12 @@ export function advertisedConfig(
   const lean =
     profile === TOOL_SURFACE.DEFAULT ||
     profile === TOOL_SURFACE.VERIFY ||
-    profile === TOOL_SURFACE.LEAN;
+    profile === TOOL_SURFACE.LEAN ||
+    // `merged` is a trimmed surface too, and leaving it out cost 2.4x rather than saving 18%: it
+    // served full prose plus output schemas, so the merge measured as 13,941 tokens against the
+    // default's 5,867. Third time this exact omission has been made in this function, which is why
+    // the condition names surfaces rather than testing `!== FULL`.
+    profile === TOOL_SURFACE.MERGED;
   const terse = lean && !isMetaTool;
   // The first advertised tool carrying a predicate spells the grammar out; the rest point at it.
   const anchor = advertised.find((t) =>
@@ -512,7 +535,7 @@ export function createMcpServer(
    * slice: the profile filter, the `reticle_run` hatch, and the unadvertised-tool help — a consumer
    * tool missing from either of the last two is a tool the agent is actively told does not exist.
    */
-  tools: readonly ToolDef[] = TOOLS,
+  tools: readonly ToolDef[] = tableForSurface(profile),
 ): McpServer {
   const encoding = (process.env[ENCODING_ENV] ?? '').toLowerCase();
   // Which surface this daemon advertises. The 18-tool default and the 48-tool full surface are
@@ -520,7 +543,13 @@ export function createMcpServer(
   // session says which one it saw.
   getSessionMetrics().recordSurface(profile);
   const server = new McpServer(SERVER_INFO, {
-    instructions: buildServerInstructions({ previouslyConnected }),
+    instructions: buildServerInstructions({
+      previouslyConnected,
+      // The surface this server is about to serve. Without it the briefing describes the tools this
+      // package SHIPS rather than the ones this daemon advertises, and on any trimmed surface that
+      // is a briefing for a different product — measured cost: an agent that stopped driving.
+      advertised: advertisedTools(profile, tools).map((tool) => tool.name),
+    }),
   });
   /**
    * Record WHICH agent attached, at the handshake, for every session.

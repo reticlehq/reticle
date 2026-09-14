@@ -25,6 +25,9 @@ import {
   pressCode,
   pressKey,
   pressModifiers,
+  pressKeys,
+  holdKey,
+  pressCombo,
 } from './actions-press.js';
 
 /**
@@ -381,11 +384,13 @@ function assertActionAllowed(el: HTMLElement, action: string, args: Record<strin
 import {
   NO_GEOMETRY,
   fireClickSequence,
+  fireTapSequence,
   clickGeometry,
   firePointer,
   firePointerNonBubbling,
   dragElement,
 } from './actions-dom.js';
+import { scrollFrom } from './scroll.js';
 
 /** Derive `enabled` from the shared a11y state logic (disabled prop + aria-disabled). */
 function enabledOf(el: Element): boolean {
@@ -461,7 +466,29 @@ async function dispatchFor(
       0 === hold ? undefined : { ms: hold, sleep, now: () => Date.now() },
     );
   }
+  if (ActionType.TAP === action) {
+    // A finger, not a mouse. `holdMs` makes it a long press — the gesture behind a context menu or
+    // a reorder handle, which has no mouse equivalent worth pretending about.
+    const hold = clampHold(args['holdMs']);
+    return await fireTapSequence(
+      el,
+      0 === hold ? undefined : { ms: hold, sleep, now: () => Date.now() },
+    );
+  }
   return { prevented: await dispatchOther(el, action, args), heldMs: 0 };
+}
+
+/**
+ * Why an in-page zoom is refused. Exported so the server and the SDK say the identical sentence.
+ */
+export const ZOOM_NEEDS_REAL_BROWSER_MSG =
+  'cannot zoom from inside the page — CSS zoom changes how it LOOKS without changing the layout ' +
+  'viewport, visualViewport or media queries, so a layout that breaks at 200% would be reported as ' +
+  'checked and passing. Drive a real browser (reticle drive <url>, or reticle_lease) and zoom there.';
+
+/** A finite number from the wire, or undefined. Non-numbers are "not asked for", never zero. */
+function asFiniteNumber(raw: unknown): number | undefined {
+  return 'number' === typeof raw && Number.isFinite(raw) ? raw : undefined;
 }
 
 async function dispatchOther(
@@ -645,9 +672,14 @@ async function dispatchOther(
       return false; // requestSubmit returns void; the internal submit event is unobservable.
     }
     case ActionType.PRESS: {
+      const mods = pressModifiers(args);
+      const combo = pressKeys(args);
+      // SEVERAL keys held together, released in reverse — what a keyboard physically does.
+      // `modifiers` cannot express this: they are flags on ONE event, so "Control held while k and
+      // then j are struck" had no spelling at all.
+      if (combo.length > 0) return await pressCombo(el, combo, mods, clampHold(args['holdMs']));
       const key = pressKey(args);
       const code = pressCode(args, key);
-      const mods = pressModifiers(args);
       // Marked as ours like the click sequence: the annotator leaves annotate mode on Escape, so an
       // agent pressing Escape would otherwise switch off a mode the person turned on.
       const down = asSyntheticInput(() =>
@@ -655,6 +687,13 @@ async function dispatchOther(
           new KeyboardEvent('keydown', { key, code, bubbles: true, cancelable: true, ...mods }),
         ),
       );
+      // A HELD key, with the auto-repeat a browser sends while it is down.
+      //
+      // The mouse has had `holdMs` since hold-to-confirm; the keyboard did not, so a key that has to
+      // be held — a game control, hold-to-delete, a press-and-hold reveal — was undriveable while
+      // the identical gesture with a mouse button worked. The asymmetry was the bug.
+      const hold = clampHold(args['holdMs']);
+      if (hold > 0) await holdKey(el, key, code, mods, hold);
       asSyntheticInput(() =>
         el.dispatchEvent(new KeyboardEvent('keyup', { key, code, bubbles: true, ...mods })),
       );
@@ -663,6 +702,31 @@ async function dispatchOther(
     case ActionType.SCROLL_INTO_VIEW:
       el.scrollIntoView();
       return false;
+    case ActionType.ZOOM:
+      /*
+       * Page zoom cannot be done from inside the page, so this REFUSES rather than approximating it.
+       *
+       * `document.documentElement.style.zoom` and a CSS transform both look like zoom in a
+       * screenshot and are not it: the layout viewport does not change, `visualViewport` does not
+       * change, media queries do not re-evaluate, and `position: fixed` behaves differently. A
+       * layout that breaks at 200% browser zoom would therefore be reported as CHECKED and passing,
+       * which is worse than not supporting zoom at all.
+       *
+       * Same rule as `hover`, which refuses without a native pointer for the same reason: a
+       * synthetic mouseover reports success while CSS `:hover` never ran. The driven path
+       * (`reticle drive`, a lease, or a CDP attach) is where zoom is real, and `tryRealInput`
+       * routes there before this ever runs.
+       */
+      throw new Error(ZOOM_NEEDS_REAL_BROWSER_MSG);
+    case ActionType.SCROLL: {
+      // Either axis, either direction. `dy: -600` scrolls BACK up, `dx` moves a wide table sideways.
+      // Both were unreachable: the only scroll stepped down, so anything that scrolled past was gone.
+      const dy = asFiniteNumber(args['dy']);
+      const dx = asFiniteNumber(args['dx']);
+      const fraction = asFiniteNumber(args['fraction']);
+      scrollFrom(el, dy, fraction, dx);
+      return false;
+    }
     case ActionType.UPLOAD: {
       if (!isInput(el) || el.type !== 'file') {
         throw new Error('upload target must be a <input type="file">');

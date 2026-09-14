@@ -97,10 +97,27 @@ export const HEARTBEAT_MS = 1000;
  * (the killer gap: a frozen panel used to look identical whether the agent paused or stopped).
  */
 export const IDLE_NOTICE_MS = 4000;
-/** Act-strip copy (presenter-only UI). */
+/**
+ * Act-strip copy (presenter-only UI).
+ *
+ * "idle" is never said, because it is not what is happening and it reads as a verdict on the agent.
+ * A quiet strip means one of two DIFFERENT things and the panel has to tell them apart:
+ *
+ *   PLANNING  the agent is between actions — thinking, reading source, waiting on a model. The
+ *             session is alive and something will happen next.
+ *   STOPPED   nothing is coming. The session ended, by the idle window or on purpose.
+ *
+ * Collapsing those into one word is the failure this strip was built to fix: a frozen panel used to
+ * look identical whether the agent paused or died. Calling both of them "idle" brings that back in
+ * wording after the timer had solved it in behaviour.
+ */
 export const ACT_STRIP = {
   READY: 'Ready',
-  IDLE_PREFIX: 'idle · ',
+  /** Quiet, but alive. The duration that follows says how long the agent has been thinking. */
+  PLANNING_PREFIX: 'planning next action · ',
+  /** Quiet, and nothing is coming. */
+  STOPPED: 'stopped',
+  STOPPED_PREFIX: 'stopped · ',
   NOW: 'now',
   SINCE_LAST: ' since last action',
 } as const;

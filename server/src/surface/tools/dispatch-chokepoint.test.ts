@@ -44,6 +44,13 @@ const DECLARED_BYPASSES: Readonly<Record<string, string>> = {
     'The OUTER call went through runTool, so nothing is uncounted — but it is counted as the FAMILY, ' +
     'so `toolCounts` cannot say which member ran. Known gap: the same family folding that means ' +
     '"every tool is callable" is asserted over 48 surfaces and not 68 behaviours (docs/system-map.md).',
+  'surface/tools/act-merged.ts':
+    'reticle_act absorbing reticle_act_sequence, routed on the presence of `steps` rather than on ' +
+    'an `action` name — `act` already owns that parameter, and a dispatch enum of the same name ' +
+    'would silently overwrite it. Identical trade to merge-tools above: the OUTER call went ' +
+    'through runTool so nothing is uncounted, but a batched sequence is counted as reticle_act, so ' +
+    '`toolCounts` cannot separate "one action" from "twelve in one call". The two shapes are ' +
+    'distinguishable in the RESULT rather than the count.',
   'language/flows/verify-change-tools.ts':
     'reticle_verify_change replays the affected flows by calling reticle_flow_verify directly. The ' +
     'outer call is recorded; the inner suite run is not counted as its own tool call. Deliberate — ' +

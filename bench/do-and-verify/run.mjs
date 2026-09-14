@@ -51,8 +51,28 @@ const MODEL = process.env.BENCH_MODEL ?? 'claude-haiku-4-5-20251001';
 const URL = 'http://localhost:4312/';
 const MAX_TURNS = Number(process.env.DV_MAX_TURNS ?? 30);
 const ROOT = resolve(process.cwd());
-/** A port of its own, so the lean daemon can never be answered by a default one left running. */
-const LEAN_PORT = process.env.DV_LEAN_PORT ?? '4461';
+/**
+ * Every Reticle arm listens on the port the FIXTURE DIALS, and that is not a stylistic choice.
+ *
+ * These used to be 4461 and 4462 — "a port of its own, so the lean daemon can never be answered by a
+ * default one left running". The instinct is right and the consequence is fatal: apps/bench-app's
+ * SDK dials RETICLE_PORT (4460), so a daemon on any other port launches a browser, loads the app,
+ * and never receives a connection. Every tool then answers "no browser session connected", the agent
+ * concludes Reticle is not set up, and goes and reads source instead — which scores as a cheap,
+ * fast, tool-free run rather than as a broken arm.
+ *
+ * MEASURED: three consecutive A/B runs where the profile arm made ZERO drive calls and ZERO verdict
+ * calls against 84-96 and 10-24, and still "won" on turns and tokens.
+ *
+ * `bench/harness/ports.mjs` opens by describing this exact failure happening twice before, and ends
+ * "Do not write a port literal in a harness script." These were two port literals in a harness
+ * script, added under a comment explaining why they were a good idea.
+ *
+ * Arms are sequential and `OWNS_DAEMON` hands the port back between cells, so sharing it is safe —
+ * and a stale daemon answering is caught by the assertion in `runCell` rather than by a second port.
+ */
+const LEAN_PORT = RETICLE_PORT;
+const NINE_PORT = RETICLE_PORT;
 /** The agent may read and write here and nowhere else. */
 const APP_SRC = join(ROOT, 'apps/bench-app/src');
 
@@ -141,14 +161,78 @@ const SERVERS = {
     // following the changelog's own instruction on the wrong process gets the same silence.
     preStart: {
       command: 'node',
-      args: ['server/dist/command/cli.js', '_daemon', '--port', LEAN_PORT],
+      // `--drive` is NOT optional here, and leaving it off does not fail — it produces an arm with
+      // no browser, so no app ever connects and the daemon has no session. The default arm gets it
+      // for free: the proxy passes `--drive` through `daemonSpawnArgs` to the daemon IT spawns, and
+      // this daemon is started by hand instead. MEASURED cost of the omission: three consecutive
+      // A/B runs in which the profile arm made ZERO drive calls, because its first question —
+      // "is anything connected?" — correctly answered no, and the agent went and read source.
+      args: ['server/dist/command/cli.js', '_daemon', '--port', LEAN_PORT, '--drive', URL],
       env: { RETICLE_TOOL_PROFILE: 'lean', RETICLE_PORT: LEAN_PORT },
     },
   },
+  /**
+   * The NINE-tool surface: the same capabilities as the default arm, advertised under nine names.
+   *
+   * The question this arm answers is the one `lean` and `verify` both failed. Those two SUBTRACTED —
+   * `verify` dropped the observation tools, tripled false alarms, and the five new ones were every
+   * defect whose evidence lived in `state`/`network`/`observe`. This one only RENAMES: snapshot,
+   * query, inspect and state become actions on `reticle_look`; observe, network and console become
+   * actions on `reticle_observe`; assert and wait_for become actions on `reticle_assert`. Every
+   * evidence channel the earlier cuts removed is still one action away.
+   *
+   * So a false-green regression here would have a DIFFERENT cause than the earlier two, and that is
+   * worth knowing: the merged input schema is the union of its members' fields with all of them
+   * optional, so a call naming the wrong field for its action validates instead of being refused.
+   * That, not missing evidence, is the failure mode to look for in this arm's transcripts.
+   *
+   * MEASURED on the wire before running this: 19 tools / 23,466 B / ~5,867 tok -> 9 tools /
+   * 17,338 B / ~4,335 tok, a 26.1% cut to the surface re-sent every turn.
+   */
+  reticle_nine: {
+    command: 'node',
+    args: ['server/dist/command/cli.js', 'mcp', '--port', NINE_PORT, '--drive', URL],
+    env: { RETICLE_PORT: NINE_PORT },
+    // On the DAEMON, not the proxy — see the note on the lean arm, which cost a whole run that
+    // benchmarked the default surface twice under two names.
+    preStart: {
+      command: 'node',
+      // See the lean arm: a preStart daemon without `--drive` has no browser and no session.
+      args: ['server/dist/command/cli.js', '_daemon', '--port', NINE_PORT, '--drive', URL],
+      env: { RETICLE_TOOL_PROFILE: 'merged', RETICLE_PORT: NINE_PORT },
+    },
+  },
 };
+/**
+ * The tool each Reticle arm MUST be served, and the one it must not.
+ *
+ * An arm that silently gets another arm's surface does not fail — it produces a full set of plausible
+ * numbers for the wrong thing. That happened: a `preStart` daemon outlived `stop`, the next cell's
+ * proxy connected to it, and 9 of 10 cells ran the merged surface while the table said otherwise.
+ * There is no symptom to notice, so the run must refuse to start instead.
+ */
+const SURFACE_MARKER = {
+  reticle: { must: 'reticle_snapshot', mustNot: 'reticle_look' },
+  reticle_nine: { must: 'reticle_look', mustNot: 'reticle_snapshot' },
+  reticle_lean: { must: 'reticle_snapshot', mustNot: 'reticle_look' },
+};
+
+function assertSurface(arm, names) {
+  const marker = SURFACE_MARKER[arm];
+  if (marker === undefined) return;
+  const has = (n) => names.includes(n);
+  if (!has(marker.must) || has(marker.mustNot)) {
+    throw new Error(
+      `arm '${arm}' was served the WRONG SURFACE: expected ${marker.must} and not ${marker.mustNot}. ` +
+        `Got ${names.length} tools: ${names.join(', ')}. A daemon from another arm is almost ` +
+        `certainly still on the port — 'stop' cannot end one that 'preStart' spawned, only 'kill' can.`,
+    );
+  }
+}
+
 export const ARMS = [...Object.keys(SERVERS), 'agent_browser_cli'];
-/** Both Reticle arms own the daemon port, so both must hand it back before the next cell. */
-const OWNS_DAEMON = (arm) => 'reticle' === arm || 'reticle_lean' === arm;
+/** Every Reticle arm owns a daemon port, so each must hand it back before the next cell. */
+const OWNS_DAEMON = (arm) => arm.startsWith('reticle');
 
 // ── file tools, identical for every arm ────────────────────────────────────────────────────────
 const safe = (p) => {
@@ -394,7 +478,12 @@ export async function runCell(bugId, arm, opts = {}) {
       }
       const init = await client.start();
       if (OWNS_DAEMON(arm)) await new Promise((r) => setTimeout(r, 3500));
-      browserTools = (await client.listTools()).map((t) => ({
+      const advertised = await client.listTools();
+      assertSurface(
+        arm,
+        advertised.map((t) => t.name),
+      );
+      browserTools = advertised.map((t) => ({
         name: t.name,
         description: (t.description ?? '').slice(0, 900),
         input_schema: t.inputSchema ?? { type: 'object', properties: {} },
@@ -494,16 +583,32 @@ export async function runCell(bugId, arm, opts = {}) {
   } finally {
     await client?.stop();
     if (OWNS_DAEMON(arm)) {
-      try {
-        execFileSync(
-          'node',
-          ['server/dist/command/cli.js', 'stop', '--port', RETICLE_PORT, '--quiet'],
-          {
-            stdio: 'ignore',
-          },
-        );
-      } catch {
-        /* already down */
+      /*
+       * `kill`, not `stop`, and the difference decided a whole measurement.
+       *
+       * `stop` ends the daemon WE started, by its recorded pid. An arm whose daemon comes from
+       * `preStart` — the profile arms — spawns `_daemon` directly, so nothing records it and `stop`
+       * silently finds nothing to do. MEASURED: the merged daemon survived every teardown, the next
+       * cell's proxy found a live daemon on the port and connected to it, and 9 of 10 cells were
+       * served the merged surface. The run read as a clean A/B and was the merged surface
+       * benchmarked against itself.
+       *
+       * `kill` frees the port by its LISTENER, which is exactly the case `stop` cannot see. Both are
+       * run: `stop` is the graceful path for a recorded daemon, `kill` is the backstop that makes
+       * the port actually free before the next arm claims it.
+       */
+      for (const verb of ['stop', 'kill']) {
+        try {
+          execFileSync(
+            'node',
+            ['server/dist/command/cli.js', verb, '--port', RETICLE_PORT, '--quiet'],
+            {
+              stdio: 'ignore',
+            },
+          );
+        } catch {
+          /* already down */
+        }
       }
     }
   }
