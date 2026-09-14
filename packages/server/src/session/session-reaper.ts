@@ -1,4 +1,9 @@
-import { PresenterTone, SESSION_LIFECYCLE, UNDELIVERED_NOTES_LABEL } from '@reticlehq/core';
+import {
+  PresenterTone,
+  SESSION_LEASE,
+  SESSION_LIFECYCLE,
+  UNDELIVERED_NOTES_LABEL,
+} from '@reticlehq/core';
 import type { Session, SessionManager } from './session.js';
 import { log } from '../log.js';
 
@@ -56,6 +61,43 @@ export function reapIdleSessions(sessions: SessionManager): string[] {
   return ended;
 }
 
+/**
+ * Drop sessions that have ENDED and gone quiet, so a listing stops offering them.
+ *
+ * `reticle_session { action: "end" }` sets state and nothing else -- it never calls
+ * `sessions.remove`. `SessionManager.list()` does not filter by state, and `reapIdleSessions`
+ * above skips ended sessions by design. The only code path in the whole server that removes a
+ * session is the socket `close` handler in bridge.ts. So an ended session whose socket is already
+ * gone has nothing left that can remove it, and the row is listed for the life of the daemon
+ * (#938).
+ *
+ * That is what the field report describes: `{ ended: true }` three times, the row back on the next
+ * `reticle_sessions` call each time, still there after every tab on the origin was closed, 17 hours
+ * attached. And Reticle's own advice for a stale session is
+ * `Call reticle_session{action:"end"} to free this session` -- which is the one thing that does not
+ * free it.
+ *
+ * Deliberately NOT "remove on end". The panel is client-side, so `setState` has already pushed the
+ * ended state to the browser and the HUD keeps it; but `end` is documented idempotent, and removing
+ * immediately would make a second call fail to resolve. Waiting for the session to go quiet keeps
+ * that, keeps a just-ended session inspectable, and still collects the case that actually hurts: a
+ * row nobody can get rid of.
+ */
+export function reapEndedSessions(
+  sessions: SessionManager,
+  staleAfterMs: number = SESSION_LEASE.STALE_AFTER_MS,
+): string[] {
+  const dropped: string[] = [];
+  // Snapshot first: `remove` mutates the map this iterates.
+  for (const session of [...sessions.all()]) {
+    if (!session.isEnded()) continue;
+    if (session.staleMs() < staleAfterMs) continue;
+    if (sessions.remove(session)) dropped.push(session.id);
+  }
+  if (dropped.length > 0) log('session_reaped_ended', { sessions: dropped });
+  return dropped;
+}
+
 /** End every active session immediately (the agent / MCP client disconnected → WARN). Returns ended ids. */
 export function endAllSessions(sessions: SessionManager, reason: string): string[] {
   const ended: string[] = [];
@@ -86,6 +128,10 @@ export class SessionReaper {
     if (this.#timer !== undefined) return;
     this.#timer = setInterval(() => {
       reapIdleSessions(this.#sessions);
+      // Second rule, same sweep, kept as its own function: one ends a live session that went
+      // quiet, the other collects one that already ended. Merging them would put "end this" and
+      // "forget this" behind a single condition.
+      reapEndedSessions(this.#sessions);
     }, this.#intervalMs);
     this.#timer.unref();
   }
