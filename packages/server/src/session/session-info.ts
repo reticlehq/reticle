@@ -54,6 +54,12 @@ export interface SessionInfo {
    * A tab that dropped for four seconds and came back is indistinguishable from one that never left
    * (#117), and that difference decides whether a verdict over the window can be trusted. Attached
    * by `SessionManager.list()`, which is the layer that sees every connect and disconnect.
+   *
+   * Scoped to the SDK-to-daemon LINK, and the names do not say so on their own. A zombie tab whose
+   * dev server had died reported `outages: 0` and `connectedSinceMs: 11min`, and both were correct:
+   * the page's socket was still attached to the daemon. Read as app health, they said the app was
+   * up while nothing was listening on the port (#938). The describe() on the `reticle_sessions`
+   * output schema carries that caveat, because that is where an agent reads it.
    */
   attachment?: {
     connectedSinceMs: number;
