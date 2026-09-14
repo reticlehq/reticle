@@ -119,7 +119,7 @@ export const RAW_TOOLS: ToolDef[] = [
               })
               .optional()
               .describe(
-                'Present only when this tab has dropped and reconnected at least once: how long it has been attached in total, how many outages occurred, and when the last one started and how long it lasted. A verdict over this window spans a gap where nothing was observed.',
+                'Continuity of the SDK-to-daemon LINK for this tab, present for any tab the daemon has a record of: how long this attachment has lasted, how many times it dropped and came back, and when the last gap started and how long it lasted. `outages > 0` means a verdict over this window spans a gap where nothing was observed. These are link counters, NOT app health: they say nothing about whether the page origin is still serving, so a tab whose dev server has died reports `outages: 0` with a growing `connectedSinceMs` and is not evidence the app is up.',
               ),
           }),
         )

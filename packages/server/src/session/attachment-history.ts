@@ -16,11 +16,22 @@
  * needs to wait four seconds to check a four-second gap is a test nobody runs.
  */
 
-/** What an agent needs to know about the continuity of one session. */
+/**
+ * What an agent needs to know about the continuity of one session.
+ *
+ * Every field here measures the SDK-to-daemon LINK. None of them measures the app: the origin the
+ * page was served from can stop answering entirely without any of these moving, because the socket
+ * that reports them is between the daemon and a document the browser is already holding. Reported
+ * as a false read of app health in #938, where a tab whose dev server was dead carried `outages: 0`
+ * and `connectedSinceMs: 11min` and was taken for a healthy app.
+ */
 interface Attachment {
   /** How long THIS attachment has lasted. Resets on reconnect — it is not the session's lifetime. */
   connectedSinceMs: number;
-  /** How many times this session dropped and came back. Zero means it never left. */
+  /**
+   * How many times this session dropped and came back. Zero means the LINK never dropped; it does
+   * not mean the app behind it is alive.
+   */
   outages: number;
   /** The most recent gap, when there has been one. */
   lastOutage?: { startedMs: number; durationMs: number };
