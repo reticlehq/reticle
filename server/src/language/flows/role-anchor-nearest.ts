@@ -13,7 +13,7 @@
  * higher than the testid path's: same role, unambiguous, and genuinely close — otherwise null, and
  * the agent is told to add a testid.
  */
-import { editDistance } from './flow-replay.js';
+import { editDistance } from './flow-anchor.js';
 
 /** Present controls, as role + accessible name. */
 export interface RoleCandidate {

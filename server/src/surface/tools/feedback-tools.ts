@@ -22,7 +22,7 @@ import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
 import { submitFeedback, feedbackDisabled } from '../../telemetry/feedback.js';
 import { getTelemetry } from '../../telemetry/telemetry.js';
-import type { ToolDef, ToolDeps } from './tools.js';
+import type { ToolDef, ToolDeps } from './tool-kit.js';
 
 /** One optional string arg, present only when the agent actually supplied it. */
 function optionalText(args: Record<string, unknown>, key: string): Record<string, string> {

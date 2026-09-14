@@ -9,7 +9,7 @@ import {
   type HealChange,
   type HealProposal,
 } from '@reticlehq/core';
-import { editDistance } from './flow-replay.js';
+import { editDistance } from './flow-anchor.js';
 
 /**
  * The pure proposal layer. It turns a `Drift` (with its already-

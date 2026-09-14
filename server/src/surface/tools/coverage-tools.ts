@@ -5,7 +5,7 @@ import { foldToolHitRate } from '../tools/tool-hit-rate.js';
 import { allSessionIntents } from '../../memory/intent/open-intents.js';
 import { ReticleCommand, SnapshotMode } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
-import type { ToolDef, ToolDeps } from './tools.js';
+import type { ToolDef, ToolDeps } from './tool-kit.js';
 import { asString } from '@reticlehq/core';
 import { exercisedCount } from './gaps/coverage-identity.js';
 import { commandOrThrow, sessionIdShape } from './tool-kit.js';

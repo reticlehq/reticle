@@ -1,5 +1,5 @@
 import { ReticleTool } from '@reticlehq/core';
-import type { ToolDef } from './tools.js';
+import type { ToolDef } from './tool-kit.js';
 
 /**
  * There is ONE tool surface. This is not a menu.

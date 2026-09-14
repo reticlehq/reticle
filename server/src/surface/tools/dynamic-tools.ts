@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ToolDef, ToolDeps } from './tools.js';
+import type { ToolDef, ToolDeps } from './tool-kit.js';
 import { runTool } from './invoke-tool.js';
 import { buildErrorPayload } from './error-recovery.js';
 import { mergedNameRedirect, mergedNameMessage, retiredToolNames } from './merged-name-redirect.js';

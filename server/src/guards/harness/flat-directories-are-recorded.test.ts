@@ -93,7 +93,12 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   'server/src/command/cli': 18, // + tutorial.ts: one sequence, two audiences, ending at a verdict
   'server/src/command/setup': 15,
   'server/src/portal/session': 20,
-  'server/src/language/flows': 30,
+  // 32 since two leaves were extracted out of `flow-replay.ts` to break the last runtime cycle in
+  // this directory: `flow-replay-types.ts` (shapes two collaborators share) and `flow-anchor.ts`
+  // (resolving a step's anchor). Breaking a cycle costs files — a module that sits UNDER two others
+  // cannot also be one of them. Raised deliberately, and the grouping this directory still wants is
+  // a `replay/` subdirectory for the nine files that cluster there, which is its own commit.
+  'server/src/language/flows': 32,
   'server/src/memory/journal': 11,
   'server/src/telemetry': 32,
   'spec-runner/src': 11,

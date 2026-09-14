@@ -14,7 +14,7 @@
 import { z } from 'zod';
 import { ReticleTool } from '@reticlehq/core';
 import { stepCountSchema } from './args/numeric-bounds.js';
-import type { ToolDef, ToolDeps } from './tools.js';
+import type { ToolDef, ToolDeps } from './tool-kit.js';
 import { exploreApp, harnessAvailable, MSG_NO_HARNESS_KEY } from './harness-explore.js';
 import { StopReason } from '../../features/harness/harness.js';
 

@@ -15,7 +15,7 @@ import { FlowErrorCode, FlowFileSchema, type FlowFile } from '@reticlehq/core';
 import type { ZodError } from 'zod';
 import { PredicateSchema } from '@reticlehq/engine/question/predicate/predicate.js';
 import { predicateToExpect } from '../../judgement/outcome/predicate-to-expect.js';
-import type { FlowResult } from './flows.js';
+import type { FlowResult } from './flow-result.js';
 
 export const FlowParseNote = {
   NOT_JSON: 'flow file is not valid JSON — fix the syntax or regenerate it with reticle_flow_save',

@@ -36,7 +36,7 @@ import {
   recordImpact,
 } from '../../memory/impact/impact-recorder.js';
 import { type FrictionKind, frictionOf, inviteFor } from './feedback-invite.js';
-import type { ToolDef, ToolDeps } from './tools.js';
+import type { ToolDef, ToolDeps } from './tool-kit.js';
 
 /**
  * The live-session tools whose result MUST carry the

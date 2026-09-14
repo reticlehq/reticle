@@ -13,7 +13,7 @@
 
 import { z } from 'zod';
 import { ReticleTool } from '@reticlehq/core';
-import type { ToolDef, ToolDeps } from './tools.js';
+import type { ToolDef, ToolDeps } from './tool-kit.js';
 import { traceLineage } from '@reticlehq/engine/question/lineage.js';
 import { asString } from '@reticlehq/core';
 import { cursorSchema } from './args/numeric-bounds.js';

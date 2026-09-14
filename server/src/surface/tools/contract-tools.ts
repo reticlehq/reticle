@@ -15,7 +15,7 @@ import {
   readContract,
   writeContract,
 } from '../../memory/project/dir/reticle-dir.js';
-import type { ToolDef, ToolDeps } from './tools.js';
+import type { ToolDef, ToolDeps } from './tool-kit.js';
 
 /**
  * The capability-contract tools. `reticle_capabilities` reads the live session, or the

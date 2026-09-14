@@ -16,7 +16,7 @@ import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
 import { sessionIdShape, commandOrThrow } from './tool-kit.js';
 import { timeoutMsSchema } from './args/numeric-bounds.js';
-import type { ToolDef } from './tools.js';
+import type { ToolDef } from './tool-kit.js';
 
 export const BROWSER_TOOLS: ToolDef[] = [
   {

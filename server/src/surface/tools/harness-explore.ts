@@ -9,7 +9,7 @@
  */
 
 import { ReticleEnv } from '@reticlehq/core';
-import type { ToolDeps } from './tools.js';
+import type { ToolDeps } from './tool-kit.js';
 import { harnessDriver, harnessOptionsFromEnv } from '../../features/harness/driver.js';
 import {
   DEFAULT_MAX_STEPS,
