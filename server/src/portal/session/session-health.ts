@@ -6,7 +6,18 @@ import {
   THROTTLED_WARNING,
   type ReticleEvent,
 } from '@reticlehq/core';
-import type { Session } from './session.js';
+/**
+ * What these functions need from a session, named structurally rather than imported.
+ *
+ * `Session` imports this module for `readHealthEvent`/`pendingNavigationMs`, so naming the class
+ * here made a cycle out of three method signatures. The real `Session` satisfies this by having the
+ * methods, and a test can now pass a two-line stand-in instead of a whole session.
+ */
+interface HealthSubject {
+  bufferHealth(): { total: number; dropped: number };
+  health(): SessionHealth;
+  throttled(): boolean;
+}
 
 /**
  * The health block spliced onto act/assert results. Defined here rather than in session.ts: this is
@@ -111,7 +122,7 @@ interface BufferEnvelope {
  * an actionable note. OMITTED entirely when nothing was dropped: silence means the buffer is intact,
  * so a clean/empty result there is trustworthy and costs zero tokens.
  */
-export function bufferEnvelope(session: Session): BufferEnvelope {
+export function bufferEnvelope(session: HealthSubject): BufferEnvelope {
   const { total, dropped } = session.bufferHealth();
   if (0 === dropped) return {};
   return { buffer: { held: total, dropped, note: BUFFER_EVICTION_WARNING } };
@@ -130,7 +141,7 @@ interface HealthEnvelope {
  * overhead. The block (and a throttled `warning`) appears only when something is actually wrong,
  * so no health signal is lost — absence means healthy.
  */
-export function healthEnvelope(session: Session): HealthEnvelope {
+export function healthEnvelope(session: HealthSubject): HealthEnvelope {
   const health = session.health();
   // A request stuck in flight makes a session non-nominal even when the tab is fine, because it is
   // the one condition where every observation is about to be about a page that is not moving.
@@ -155,7 +166,7 @@ export function healthEnvelope(session: Session): HealthEnvelope {
  * agent does not drive a tab where timers/rAF/pointer gestures may silently no-op. Default is
  * warn-only so background testing never breaks.
  */
-export function refuseIfThrottled(session: Session, refuse: unknown): void {
+export function refuseIfThrottled(session: HealthSubject, refuse: unknown): void {
   if (true === refuse && session.throttled()) {
     throw new Error(`refusing to act: ${THROTTLED_WARNING}`);
   }
@@ -190,7 +201,7 @@ const STARVED_WAIT_NOTE =
  */
 export function annotateStarvedFailure<
   V extends { pass?: boolean; failureReason?: string; inconclusive?: string },
->(session: Session, verdict: V): V {
+>(session: HealthSubject, verdict: V): V {
   if (true === verdict.pass || verdict.failureReason === undefined) return verdict;
   if (true !== session.throttled()) return verdict;
   if (THROTTLED_STARVED_NOTE !== verdict.inconclusive) return verdict;

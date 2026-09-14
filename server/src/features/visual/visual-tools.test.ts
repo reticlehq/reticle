@@ -14,7 +14,8 @@ import { ProjectStore } from '../../memory/project/project-store.js';
 import { AnnotationStore } from '../../language/flows/stores/annotation-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '../../memory/project/fs/fs-port.js';
 import type { RealInputProvider } from '../../portal/input/real-input.js';
-import type { Session, SessionManager } from '../../portal/session/session.js';
+import type { Session } from '../../portal/session/session.js';
+import type { SessionManager } from '../../portal/session/session-manager.js';
 
 const now = (): number => 0;
 const SESSION_URL = 'http://localhost:3100/';

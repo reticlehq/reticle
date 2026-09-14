@@ -11,7 +11,8 @@ import { TOOLS, type ToolDef, type ToolDeps } from '../../surface/tools/tools.js
 import { ReticleTool } from '@reticlehq/core';
 import { CAPPED_SNAPSHOT_NOTE, type CrawlReport } from './crawl.js';
 import { CRAWL_TOOLS } from './crawl-tools.js';
-import type { Session, SessionManager } from '../../portal/session/session.js';
+import type { Session } from '../../portal/session/session.js';
+import type { SessionManager } from '../../portal/session/session-manager.js';
 
 /** Scripted session: one interactive control whose click does nothing (a dead control). */
 function deadButtonSession(): Session {

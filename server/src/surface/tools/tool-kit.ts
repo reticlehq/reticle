@@ -6,7 +6,7 @@
  */
 import { z } from 'zod';
 import { ReticleCommand, SnapshotMode } from '@reticlehq/core';
-import type { SessionManager } from '../../portal/session/session.js';
+import type { SessionManager } from '../../portal/session/session-manager.js';
 import type { RealInputProvider } from '../../portal/input/real-input.js';
 import type { BaselineStore } from '../../memory/project/baselines.js';
 import { normalizeLines } from '../../memory/project/baselines.js';

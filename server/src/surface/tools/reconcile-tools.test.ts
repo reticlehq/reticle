@@ -3,7 +3,8 @@ import { EventType, ReticleCommand, SessionState } from '@reticlehq/core';
 import { RECONCILE_TOOLS } from './reconcile-tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from './tools.js';
-import type { Session, SessionManager } from '../../portal/session/session.js';
+import type { Session } from '../../portal/session/session.js';
+import type { SessionManager } from '../../portal/session/session-manager.js';
 
 const RESPONSE = {
   type: EventType.NET_REQUEST,

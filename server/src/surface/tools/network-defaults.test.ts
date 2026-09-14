@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { EventType, ReticleTool, type ReticleEvent } from '@reticlehq/core';
 import { OBSERVE_TOOLS } from './observe-tools.js';
 import type { ToolDeps } from './tools.js';
-import type { Session, SessionManager } from '../../portal/session/session.js';
+import type { Session } from '../../portal/session/session.js';
+import type { SessionManager } from '../../portal/session/session-manager.js';
 
 /**
  * The token saving on `reticle_network` actually happens, and says so.

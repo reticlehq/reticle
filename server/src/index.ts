@@ -39,6 +39,8 @@ import { createSharedServer } from './surface/http-server.js';
 import { openLoopbackAlias } from './command/daemon/binding/loopback-alias.js';
 import { reportAppInstrumented } from './telemetry/app-instrumented.js';
 import { resolveBridgeSecurityWithAutoToken } from './portal/bridge/bridge-security.js';
+import type { StartOptions } from './start-options.js';
+export type { StartOptions } from './start-options.js';
 import { Bridge } from './portal/bridge/bridge.js';
 import { sdkFixForDirectory } from './command/version/sdk-fix.js';
 import { SERVER_VERSION } from './command/version/identity/server-version.js';
@@ -90,11 +92,7 @@ import {
   pruneSessions,
   pruneVisualDiffs,
 } from './memory/journal/on-disk/retention.js';
-import type {
-  OwnedRealInputProvider,
-  RealInputProvider,
-  InjectConnectOptions,
-} from './portal/input/real-input.js';
+import type { RealInputProvider } from './portal/input/real-input.js';
 import { log } from './log.js';
 
 /** A human-facing one-liner for a panel replay verdict — ✓ passed / ⚠ drifted / ✗ errored. */
@@ -110,7 +108,8 @@ function replayVerdictLine(result: FlowReplayResult): string {
 export { ReticleTool } from '@reticlehq/core';
 export { RingBuffer } from '@reticlehq/engine/window/ring-buffer.js';
 export { Bridge } from './portal/bridge/bridge.js';
-export { Session, SessionManager } from './portal/session/session.js';
+export { Session } from './portal/session/session.js';
+export { SessionManager } from './portal/session/session-manager.js';
 export type { SessionInfo, SessionHealth } from './portal/session/session.js';
 export { buildSessionRecommendation } from './portal/session/presence/session-recommendation.js';
 export type { RecommendationInputs } from './portal/session/presence/session-recommendation.js';
@@ -153,167 +152,6 @@ export { crawl } from './features/crawl/crawl.js';
  * this product is judged on, and the one nobody dogfoods is the one that rots.
  */
 export { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';
-/**
- * The MCP server factory, so a consumer can serve the tool surface it composed.
- *
- * Without this the composition seam is unreachable from outside the package: a consumer can build the
- * list and has nothing to hand it to.
- */
-export { createMcpServer } from './surface/mcp/mcp.js';
-export type {
-  Contradiction,
-  ContradictionOptions,
-} from '@reticlehq/engine/disagreement/contradictions.js';
-export {
-  registerContradictionFold,
-  registeredContradictionFolds,
-} from '@reticlehq/engine/disagreement/contradiction-folds.js';
-export type { ContradictionFold } from '@reticlehq/engine/disagreement/contradiction-folds.js';
-export { MCP_SSE_PATH, MCP_MESSAGE_PATH } from '@reticlehq/core';
-export { BrowserPool, DEFAULT_LEASE_TTL_MS } from './portal/pool/browser-pool.js';
-export type { Lease, Launcher, PooledBrowser } from './portal/pool/browser-pool.js';
-export { playwrightLauncher, resolveMaxContexts } from './portal/pool/playwright-launcher.js';
-export { appendReticleParams } from './surface/tools/lease-tools.js';
-export {
-  writePid,
-  removePid,
-  isRunning,
-  logPath,
-  readPid,
-  isAlive,
-} from './command/daemon/daemon.js';
-// The daemon's own liveness vocabulary, exported so a GATE can read a daemon log back and say how
-// that daemon ended. Without this the battery would re-implement the rule, and a guard that
-// re-implements what it guards is insensitive to it.
-export {
-  classifyDaemonLife,
-  DaemonEnd,
-  DAEMON_HEARTBEAT_EVENT,
-  DAEMON_HEARTBEAT_MS,
-  type DaemonLife,
-} from './command/daemon/lifetime/heartbeat.js';
-export type {
-  CrawlReport,
-  CrawlAnomaly,
-  CrawlOptions,
-  CrawlSession,
-} from './features/crawl/crawl.js';
-export { scrollToFind } from './portal/input/scroll-find.js';
-export type {
-  ScrollFindResult,
-  ScrollFindQuery,
-  ScrollFindSession,
-} from './portal/input/scroll-find.js';
-export {
-  CORE_TOOL_NAMES,
-  TOOL_SURFACE,
-  TOOL_PROFILE_ENV,
-  filterTools,
-  resolveToolSurface,
-} from './surface/tools/tool-surface.js';
-export type { ToolSurface } from './surface/tools/tool-surface.js';
-export { AnnotationStore } from './language/flows/stores/annotation-store.js';
-export { replayFlow, nearestTestid } from './language/flows/flow-replay.js';
-export type { FlowReplaySession, WaitForSignal } from './language/flows/flow-replay.js';
-export {
-  ensureReticleDir,
-  writeContract,
-  readContract,
-  reticleDirPaths,
-  flowPath,
-  baselinePath,
-} from './memory/project/dir/reticle-dir.js';
-export type { ReticleDirPaths, ReadContractResult } from './memory/project/dir/reticle-dir.js';
-export { createNodeFileSystem } from './memory/project/fs/fs-port.js';
-export type { FileSystemPort } from './memory/project/fs/fs-port.js';
-// Replay/Verify API — the programmatic surface an OEM/CI pipeline drives (see docs/platform-integration.md).
-export { ReticleRunner } from './judgement/runs/reticle-runner.js';
-export type { RunnerPort, VerifyOptions } from './judgement/runs/reticle-runner.js';
-export { createRunnerPort, defaultRunId } from './judgement/runs/runner-port.js';
-export {
-  buildVerificationRun,
-  computeVerdict,
-} from './judgement/runs/artifact/build-verification-run.js';
-export type { VerificationRunInput } from './judgement/runs/artifact/build-verification-run.js';
-export { RunStore } from './judgement/runs/artifact/run-store.js';
-export type { ReadRunResult } from './judgement/runs/artifact/run-store.js';
-export { classifyChangedFiles, buildRisks, risksForPath } from './judgement/runs/risk-classify.js';
-export type { ChangedFileInput, RiskPolicy } from './judgement/runs/risk-classify.js';
-export { buildRepairPacket, buildRepairPackets } from './judgement/runs/repair-prompt.js';
-export { redactForProfile, REDACTED } from './judgement/runs/artifact/profile-redact.js';
-export { renderRunReport } from './judgement/runs/artifact/render-report.js';
-export { handleVerifyRequest, tokenOk, VERIFY_PATH } from './judgement/runs/verify-http.js';
-export type { VerifyHttpRequest, VerifyHttpResponse } from './judgement/runs/verify-http.js';
-export {
-  createVerifyRequestListener,
-  startVerifyServer,
-  TOKEN_HEADER,
-} from './judgement/runs/verify-server.js';
-export type { VerifyServerOptions } from './judgement/runs/verify-server.js';
-export {
-  evaluatePredicate,
-  waitForPredicate,
-  PredicateSchema,
-} from '@reticlehq/engine/question/predicate/predicate.js';
-export type { Predicate, EvalResult } from '@reticlehq/engine/question/predicate/predicate.js';
-export { buildReactionReport } from '@reticlehq/engine/question/reaction.js';
-export {
-  CdpRealInputProvider,
-  LaunchedRealInputProvider,
-  DriveError,
-  performGesture,
-  boxCenter,
-  isPointerAction,
-} from './portal/input/real-input.js';
-export type {
-  RealInputProvider,
-  OwnedRealInputProvider,
-  LaunchFn,
-  LaunchedProviderOptions,
-  ElementBox,
-  RealInputArgs,
-} from './portal/input/real-input.js';
-
-export interface StartOptions {
-  port?: number;
-  /** Bind address. Non-loopback hosts require a token. Defaults to RETICLE_HOST or localhost. */
-  host?: string;
-  /** Browser/bridge pairing token. Defaults to RETICLE_TOKEN. */
-  token?: string;
-  /** Browser origins allowed in addition to localhost. Defaults to RETICLE_ALLOWED_ORIGINS. */
-  allowedOrigins?: string[];
-  /** When false, skip the MCP stdio transport (used in tests). */
-  mcp?: boolean;
-  /** CDP endpoint for native real-input mode. Defaults to env RETICLE_CDP_URL. No-op if unset. */
-  cdpUrl?: string;
-  /** launch+own a Playwright Chromium at this url and route pointer actions through it. */
-  driveUrl?: string;
-  /** launch headless (default true; CLI `--headed` sets false). */
-  headless?: boolean;
-  /** injected so tests swap in a fake launched provider instead of real Playwright. */
-  realInputFactory?: (opts: { driveUrl: string; headless: boolean }) => OwnedRealInputProvider;
-  /** When driving, force the page's SDK to (re)connect to our bridge with this token — verify a hosted preview. */
-  injectConnect?: InjectConnectOptions;
-  /** Path to a Playwright storageState JSON so the driven browser starts authenticated (past a login wall). */
-  storageState?: string;
-  /** absolute .reticle root. Defaults to process.cwd()/.reticle. Injectable for tests. */
-  reticleRoot?: string;
-  /** Directory holding the auto-provisioned pairing token. Defaults to ~/.reticle. Injectable for tests. */
-  pairingTokenDir?: string;
-  /** injectable clock for contract.json's generatedAt stamp. Defaults to Date.now. */
-  now?: () => number;
-  /**
-   * Retired profile name (`core`/`full`/…). Old values still map. The live switch is
-   * RETICLE_ADVERTISE_ALL_TOOLS=1; the default is the lean surface.
-   */
-  toolProfile?: string;
-  /** Start the OEM/CI verify HTTP endpoint alongside the daemon (`reticle serve --http`). */
-  httpVerify?: boolean;
-  /** Port for the verify endpoint. Defaults to RETICLE_VERIFY_DEFAULT_PORT. */
-  httpVerifyPort?: number;
-  /** Shared token for the verify endpoint. Defaults to env RETICLE_VERIFY_TOKEN, else open (localhost). */
-  httpVerifyToken?: string;
-}
 
 /** Default localhost port for the verify HTTP endpoint (see docs/platform-integration.md). */
 export const RETICLE_VERIFY_DEFAULT_PORT = 7331;
@@ -953,3 +791,124 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
 // complete and unusable.
 export { WebRealm, type WebRealmDeps } from './portal/realm/web-realm.js';
 export { conformanceClient, type ConformanceClient } from './portal/realm/conformance-client.js';
+
+/**
+ * The MCP server factory, so a consumer can serve the tool surface it composed.
+ *
+ * Without this the composition seam is unreachable from outside the package: a consumer can build the
+ * list and has nothing to hand it to.
+ */
+export { createMcpServer } from './surface/mcp/mcp.js';
+export type {
+  Contradiction,
+  ContradictionOptions,
+} from '@reticlehq/engine/disagreement/contradictions.js';
+export {
+  registerContradictionFold,
+  registeredContradictionFolds,
+} from '@reticlehq/engine/disagreement/contradiction-folds.js';
+export type { ContradictionFold } from '@reticlehq/engine/disagreement/contradiction-folds.js';
+export { MCP_SSE_PATH, MCP_MESSAGE_PATH } from '@reticlehq/core';
+export { BrowserPool, DEFAULT_LEASE_TTL_MS } from './portal/pool/browser-pool.js';
+export type { Lease, Launcher, PooledBrowser } from './portal/pool/browser-pool.js';
+export { playwrightLauncher, resolveMaxContexts } from './portal/pool/playwright-launcher.js';
+export { appendReticleParams } from './surface/tools/lease-tools.js';
+export {
+  writePid,
+  removePid,
+  isRunning,
+  logPath,
+  readPid,
+  isAlive,
+} from './command/daemon/daemon.js';
+// The daemon's own liveness vocabulary, exported so a GATE can read a daemon log back and say how
+// that daemon ended. Without this the battery would re-implement the rule, and a guard that
+// re-implements what it guards is insensitive to it.
+export {
+  classifyDaemonLife,
+  DaemonEnd,
+  DAEMON_HEARTBEAT_EVENT,
+  DAEMON_HEARTBEAT_MS,
+  type DaemonLife,
+} from './command/daemon/lifetime/heartbeat.js';
+export type {
+  CrawlReport,
+  CrawlAnomaly,
+  CrawlOptions,
+  CrawlSession,
+} from './features/crawl/crawl.js';
+export { scrollToFind } from './portal/input/scroll-find.js';
+export type {
+  ScrollFindResult,
+  ScrollFindQuery,
+  ScrollFindSession,
+} from './portal/input/scroll-find.js';
+export {
+  CORE_TOOL_NAMES,
+  TOOL_SURFACE,
+  TOOL_PROFILE_ENV,
+  filterTools,
+  resolveToolSurface,
+} from './surface/tools/tool-surface.js';
+export type { ToolSurface } from './surface/tools/tool-surface.js';
+export { AnnotationStore } from './language/flows/stores/annotation-store.js';
+export { replayFlow, nearestTestid } from './language/flows/flow-replay.js';
+export type { FlowReplaySession, WaitForSignal } from './language/flows/flow-replay.js';
+export {
+  ensureReticleDir,
+  writeContract,
+  readContract,
+  reticleDirPaths,
+  flowPath,
+  baselinePath,
+} from './memory/project/dir/reticle-dir.js';
+export type { ReticleDirPaths, ReadContractResult } from './memory/project/dir/reticle-dir.js';
+export { createNodeFileSystem } from './memory/project/fs/fs-port.js';
+export type { FileSystemPort } from './memory/project/fs/fs-port.js';
+// Replay/Verify API — the programmatic surface an OEM/CI pipeline drives (see docs/platform-integration.md).
+export { ReticleRunner } from './judgement/runs/reticle-runner.js';
+export type { RunnerPort, VerifyOptions } from './judgement/runs/reticle-runner.js';
+export { createRunnerPort, defaultRunId } from './judgement/runs/runner-port.js';
+export {
+  buildVerificationRun,
+  computeVerdict,
+} from './judgement/runs/artifact/build-verification-run.js';
+export type { VerificationRunInput } from './judgement/runs/artifact/build-verification-run.js';
+export { RunStore } from './judgement/runs/artifact/run-store.js';
+export type { ReadRunResult } from './judgement/runs/artifact/run-store.js';
+export { classifyChangedFiles, buildRisks, risksForPath } from './judgement/runs/risk-classify.js';
+export type { ChangedFileInput, RiskPolicy } from './judgement/runs/risk-classify.js';
+export { buildRepairPacket, buildRepairPackets } from './judgement/runs/repair-prompt.js';
+export { redactForProfile, REDACTED } from './judgement/runs/artifact/profile-redact.js';
+export { renderRunReport } from './judgement/runs/artifact/render-report.js';
+export { handleVerifyRequest, tokenOk, VERIFY_PATH } from './judgement/runs/verify-http.js';
+export type { VerifyHttpRequest, VerifyHttpResponse } from './judgement/runs/verify-http.js';
+export {
+  createVerifyRequestListener,
+  startVerifyServer,
+  TOKEN_HEADER,
+} from './judgement/runs/verify-server.js';
+export type { VerifyServerOptions } from './judgement/runs/verify-server.js';
+export {
+  evaluatePredicate,
+  waitForPredicate,
+  PredicateSchema,
+} from '@reticlehq/engine/question/predicate/predicate.js';
+export type { Predicate, EvalResult } from '@reticlehq/engine/question/predicate/predicate.js';
+export { buildReactionReport } from '@reticlehq/engine/question/reaction.js';
+export {
+  CdpRealInputProvider,
+  LaunchedRealInputProvider,
+  DriveError,
+  performGesture,
+  boxCenter,
+  isPointerAction,
+} from './portal/input/real-input.js';
+export type {
+  RealInputProvider,
+  OwnedRealInputProvider,
+  LaunchFn,
+  LaunchedProviderOptions,
+  ElementBox,
+  RealInputArgs,
+} from './portal/input/real-input.js';

@@ -12,7 +12,8 @@ import { ProjectStore } from '../../memory/project/project-store.js';
 import { AnnotationStore } from '../../language/flows/stores/annotation-store.js';
 import type { CausalSummary } from '../../judgement/capsule/causal-summary.js';
 import type { HonestyBlock } from '@reticlehq/engine/evidence/honesty.js';
-import type { Session, SessionManager } from '../../portal/session/session.js';
+import type { Session } from '../../portal/session/session.js';
+import type { SessionManager } from '../../portal/session/session-manager.js';
 
 /**
  * An act over an app with NO subscribed store returns `stateDiffs: []` — which reads as "the app

@@ -13,7 +13,7 @@ import {
 } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from '../../surface/tools/tools.js';
-import type { SessionManager } from '../../portal/session/session.js';
+import type { SessionManager } from '../../portal/session/session-manager.js';
 import { BaselineStore } from '../../memory/project/baselines.js';
 import { RecordingStore } from '../../language/flows/recording/tape/recordings.js';
 import { FlowStore } from '../../language/flows/flows.js';

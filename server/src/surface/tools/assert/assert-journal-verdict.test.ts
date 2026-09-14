@@ -11,7 +11,8 @@ import {
 } from '@reticlehq/core';
 import { JournalRecorder, type JournalSink } from '../../../memory/journal/journal-recorder.js';
 import { provenFromJournal } from '../../../judgement/runs/artifact/run-context.js';
-import { Session, type SessionManager } from '../../../portal/session/session.js';
+import { Session } from '../../../portal/session/session.js';
+import { type SessionManager } from '../../../portal/session/session-manager.js';
 import { TOOLS, type ToolDef, type ToolDeps } from '../tools.js';
 import { ReticleTool } from '@reticlehq/core';
 

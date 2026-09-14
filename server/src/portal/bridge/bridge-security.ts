@@ -1,5 +1,5 @@
 import { ReticleEnv } from '@reticlehq/core';
-import type { StartOptions } from '../../index.js';
+import type { StartOptions } from '../../start-options.js';
 import {
   defaultPairingTokenDir,
   nodePairingTokenDeps,

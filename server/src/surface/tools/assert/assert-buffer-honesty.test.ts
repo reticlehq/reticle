@@ -3,7 +3,8 @@ import { LastAct } from '../../../portal/session/last-act.js';
 import { BUFFER_EVICTION_WARNING, SessionState, Verified, VerifiedReason } from '@reticlehq/core';
 import { TOOLS, type ToolDef, type ToolDeps } from '../tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import type { Session, SessionManager } from '../../../portal/session/session.js';
+import type { Session } from '../../../portal/session/session.js';
+import type { SessionManager } from '../../../portal/session/session-manager.js';
 import { EventType, type ReticleEvent } from '@reticlehq/core';
 
 /**

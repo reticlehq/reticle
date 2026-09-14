@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { EventType, Verified, VerifiedReason } from '@reticlehq/core';
 import { TOOLS, type ToolDef, type ToolDeps } from '../tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import type { SessionManager } from '../../../portal/session/session.js';
+import type { SessionManager } from '../../../portal/session/session-manager.js';
 import type { ReticleEvent } from '@reticlehq/core';
 import { createFakeSession } from '../../../portal/session/fake-session.js';
 

@@ -8,7 +8,8 @@ import {
   type HelloMessage,
 } from '@reticlehq/core';
 import { UNDELIVERED_NOTES_LABEL } from '@reticlehq/core';
-import { Session, SessionManager } from './session.js';
+import { Session } from './session.js';
+import { SessionManager } from './session-manager.js';
 import {
   reapIdleSessions,
   endAllSessions,

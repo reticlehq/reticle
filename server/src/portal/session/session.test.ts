@@ -13,7 +13,8 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import { AppRuntime } from '@reticlehq/core/telemetry';
-import { Session, SessionManager } from './session.js';
+import { Session } from './session.js';
+import { SessionManager } from './session-manager.js';
 
 const HELLO: HelloMessage = {
   kind: MessageKind.HELLO,

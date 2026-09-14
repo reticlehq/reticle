@@ -3,7 +3,8 @@ import { SessionState } from '@reticlehq/core';
 import { LastAct } from '../../portal/session/last-act.js';
 import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import type { Session, SessionManager } from '../../portal/session/session.js';
+import type { Session } from '../../portal/session/session.js';
+import type { SessionManager } from '../../portal/session/session-manager.js';
 
 /**
  * "No console errors" is the single most common claim an agent makes, and a quiet page and a dead

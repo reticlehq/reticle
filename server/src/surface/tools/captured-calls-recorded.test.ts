@@ -19,7 +19,8 @@ import { FlowStore } from '../../language/flows/flows.js';
 import { ProjectStore } from '../../memory/project/project-store.js';
 import { AnnotationStore } from '../../language/flows/stores/annotation-store.js';
 import type { ToolDef, ToolDeps } from './tools.js';
-import type { Session, SessionManager } from '../../portal/session/session.js';
+import type { Session } from '../../portal/session/session.js';
+import type { SessionManager } from '../../portal/session/session-manager.js';
 
 const ROOT = '/tmp/reticle-captured-calls-test/.reticle';
 const SESSION_ID = 'sA';

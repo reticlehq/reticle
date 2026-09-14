@@ -46,6 +46,7 @@ import { LIVE_CONTROL_TOOLS } from '../../portal/session/live-control-tools.js';
 import { type ToolDef, sessionIdShape, commandOrThrow } from './tool-kit.js';
 import { applyMerges, type MergePlan } from './merge-tools.js';
 import { ACT_TOOLS } from './act-tools.js';
+import { ACT_SEQUENCE_TOOL } from './act-sequence-tool.js';
 import { OBSERVE_TOOLS } from './observe-tools.js';
 import { LINEAGE_TOOLS } from './lineage-tools.js';
 import { RECONCILE_TOOLS } from './reconcile-tools.js';
@@ -647,6 +648,7 @@ export const RAW_TOOLS: ToolDef[] = [
   // reticle_navigate / reticle_refresh — browser navigation tools. See browser-tools.ts.
   ...BROWSER_TOOLS,
   ...ACT_TOOLS,
+  ACT_SEQUENCE_TOOL,
   ...OBSERVE_TOOLS,
   ...LINEAGE_TOOLS,
   ...READ_TOOLS,

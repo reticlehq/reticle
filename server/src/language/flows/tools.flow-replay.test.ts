@@ -34,7 +34,8 @@ import { AnnotationStore } from './stores/annotation-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '../../memory/project/fs/fs-port.js';
 import { flowPath } from '../../memory/project/dir/reticle-dir.js';
 import { asRecord, asString } from '@reticlehq/core';
-import type { Session, SessionManager } from '../../portal/session/session.js';
+import type { Session } from '../../portal/session/session.js';
+import type { SessionManager } from '../../portal/session/session-manager.js';
 import type { CompiledProgram, RecordedStep } from './recording/tape/recordings.js';
 
 const clock = { now: (): number => 1234 };

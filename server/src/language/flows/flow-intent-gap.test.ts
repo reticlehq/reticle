@@ -20,7 +20,8 @@ import { FLOW_TOOLS } from './flow-tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { flowIntentId } from './flow-intent.js';
 import type { ToolDeps } from '../../surface/tools/tools.js';
-import type { Session, SessionManager } from '../../portal/session/session.js';
+import type { Session } from '../../portal/session/session.js';
+import type { SessionManager } from '../../portal/session/session-manager.js';
 
 const ROOT = '/repo/.reticle';
 const NOW = 1_000;

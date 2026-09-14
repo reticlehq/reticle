@@ -5,16 +5,11 @@
  * verdict logic, so this layer carries no decisions.
  */
 
-import { randomUUID } from 'node:crypto';
-import { asRunId, type RunId } from '@reticlehq/core';
 import { replayNamedFlow } from '../../language/flows/flow-tools.js';
 import type { ToolDeps } from '../../surface/tools/tool-kit.js';
 import type { RunnerPort } from './reticle-runner.js';
-
-/** The default run-id generator — a branded uuid. Isolated so it can be swapped/tested independently. */
-export function defaultRunId(): RunId {
-  return asRunId(randomUUID());
-}
+import { defaultRunId } from './default-run-id.js';
+export { defaultRunId } from './default-run-id.js';
 
 /** Wire a RunnerPort to the live session. Pass sessionId to disambiguate when several tabs are open. */
 export function createRunnerPort(deps: ToolDeps, sessionId?: string): RunnerPort {

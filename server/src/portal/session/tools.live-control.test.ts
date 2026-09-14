@@ -11,7 +11,8 @@ import { FlowStore } from '../../language/flows/flows.js';
 import { ProjectStore } from '../../memory/project/project-store.js';
 import { AnnotationStore } from '../../language/flows/stores/annotation-store.js';
 import { PAUSE_HINT } from './control-envelope.js';
-import type { InboxMessage, Session, SessionManager } from './session.js';
+import type { InboxMessage, Session } from './session.js';
+import type { SessionManager } from './session-manager.js';
 
 const SESSION_URL = 'http://localhost:5173/app';
 

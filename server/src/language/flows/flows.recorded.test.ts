@@ -22,7 +22,8 @@ import { FLOW_TOOLS } from './flow-tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '../../memory/project/baselines.js';
 import { RecordingStore } from './recording/tape/recordings.js';
-import type { Session, SessionManager } from '../../portal/session/session.js';
+import type { Session } from '../../portal/session/session.js';
+import type { SessionManager } from '../../portal/session/session-manager.js';
 import type { ToolDeps } from '../../surface/tools/tools.js';
 
 const FROZEN = 1234;

@@ -991,6 +991,3 @@ export class Session implements HandshakeFacts {
     }
   }
 }
-
-/** Re-exported so the public import path (`./session.js`) is unchanged. */
-export { SessionManager } from './session-manager.js';

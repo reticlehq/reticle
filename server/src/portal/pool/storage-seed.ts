@@ -1,5 +1,5 @@
 import { REDACTED_VALUE, scrubKnownSecrets, type SeedStorage } from '@reticlehq/core';
-import type { InitScriptHandle, PooledContext, PooledCookie, PooledPage } from './browser-pool.js';
+import type { InitScriptHandle, PooledContext, PooledCookie, PooledPage } from './pool-contract.js';
 
 export function targetOriginOf(navUrl: string): string | undefined {
   try {

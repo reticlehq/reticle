@@ -16,7 +16,8 @@ import {
   SessionState,
   type HelloMessage,
 } from '@reticlehq/core';
-import { Session, SessionManager } from './session.js';
+import { Session } from './session.js';
+import { SessionManager } from './session-manager.js';
 
 interface Captured {
   name?: string;

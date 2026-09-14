@@ -32,7 +32,9 @@ describe('retired RETICLE_TOOL_PROFILE is not advertised as the live knob', () =
   });
 
   it('StartOptions.toolProfile JSDoc does not claim the retired env is the live default', () => {
-    const text = read('server/src/index.ts');
+    // `StartOptions` left the package barrel for its own leaf when `bridge-security` needed to name
+    // it without importing the barrel that imports `bridge-security`.
+    const text = read('server/src/start-options.ts');
     expect(text).not.toMatch(/Defaults to env RETICLE_TOOL_PROFILE, else 'full'/);
     expect(text).toContain(ADVERTISE_ALL_ENV);
   });

@@ -18,3 +18,12 @@ export function anchorFieldName(anchor: FlowAnchor): string | undefined {
   if (AnchorKind.SIGNAL === anchor.kind) return anchor.name;
   return undefined;
 }
+
+/**
+ * What a redacted fill value is replaced WITH.
+ *
+ * Replaced, never dropped. Replay still needs a step there, and a flow that silently loses its
+ * password step drifts at sign-in forever with no explanation of why. The placeholder also tells a
+ * reader what to do: the value belongs in the environment, not in a file they are about to commit.
+ */
+export const REDACTED_FILL = '<redacted: supply at replay>';

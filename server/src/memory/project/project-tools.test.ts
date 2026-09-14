@@ -12,7 +12,8 @@ import { FlowStore } from '../../language/flows/flows.js';
 import { ProjectStore } from './project-store.js';
 import { AnnotationStore } from '../../language/flows/stores/annotation-store.js';
 import { createNodeFileSystem, type FileSystemPort } from './fs/fs-port.js';
-import type { Session, SessionManager } from '../../portal/session/session.js';
+import type { Session } from '../../portal/session/session.js';
+import type { SessionManager } from '../../portal/session/session-manager.js';
 
 const clock = { now: (): number => 1234 };
 

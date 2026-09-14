@@ -37,7 +37,8 @@ import { RecordingStore } from './recording/tape/recordings.js';
 import { asString } from '@reticlehq/core';
 import { flowPath } from '../../memory/project/dir/reticle-dir.js';
 import type { FileSystemPort } from '../../memory/project/fs/fs-port.js';
-import type { Session, SessionManager } from '../../portal/session/session.js';
+import type { Session } from '../../portal/session/session.js';
+import type { SessionManager } from '../../portal/session/session-manager.js';
 import type { ToolDeps } from '../../surface/tools/tools.js';
 
 const FROZEN = 1234;

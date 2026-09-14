@@ -9,7 +9,8 @@ import { RecordingStore } from '../../language/flows/recording/tape/recordings.j
 import { FlowStore } from '../../language/flows/flows.js';
 import { ProjectStore } from '../../memory/project/project-store.js';
 import { AnnotationStore } from '../../language/flows/stores/annotation-store.js';
-import type { Session, SessionInfo, SessionManager } from './session.js';
+import type { Session, SessionInfo } from './session.js';
+import type { SessionManager } from './session-manager.js';
 import { createFakeSession } from './fake-session.js';
 
 const SESSION_URL = 'http://localhost:5173/app';

@@ -1,4 +1,4 @@
-import { REDACTED_FILL } from './flows.js';
+import { REDACTED_FILL } from './fields/flow-secret-field.js';
 import {
   DANGEROUS_ACTION_CONFIRM_ARG,
   ReticleCommand,

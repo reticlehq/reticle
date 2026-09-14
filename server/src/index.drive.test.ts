@@ -24,7 +24,8 @@ import {
   type OwnedRealInputProvider,
   type RealInputProvider,
 } from './portal/input/real-input.js';
-import type { Session, SessionManager } from './portal/session/session.js';
+import type { Session } from './portal/session/session.js';
+import type { SessionManager } from './portal/session/session-manager.js';
 
 const DRIVE_URL = 'http://localhost:3000/app';
 const SOURCE_BOX: ElementBox = { x: 0, y: 0, width: 200, height: 100 };

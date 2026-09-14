@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import type { WebSocket } from 'ws';
 import { RETICLE_PROTOCOL_VERSION, MessageKind, type HelloMessage } from '@reticlehq/core';
-import { Session, SessionManager } from './session.js';
+import { Session } from './session.js';
+import { SessionManager } from './session-manager.js';
 import { decideOpen, summarizeStatus } from '../../command/cli/launch/cli-launch.js';
 
 /**

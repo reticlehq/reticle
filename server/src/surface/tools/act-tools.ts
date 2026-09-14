@@ -1,23 +1,26 @@
 /**
- * Action tools — reticle_act, reticle_act_sequence, reticle_act_and_wait. Split out of tools.ts to keep
- * that file under the line cap and assembled back into the tool list there via ...ACT_TOOLS; the
- * native-input attempt itself lives in real-input-attempt.ts for the same reason.
+ * Action tools — reticle_act and reticle_act_and_wait. Split out of tools.ts to keep that file under
+ * the line cap and assembled back into the tool list there via ...ACT_TOOLS; the native-input attempt
+ * itself lives in real-input-attempt.ts for the same reason.
+ *
+ * `reticle_act_sequence` is a sibling file and is assembled by `tools.ts` directly. It used to be
+ * re-exported through this list, which made a cycle out of nothing: that file needs `actCommand` from
+ * here, and a registry is the right place to collect a definition from.
  */
 import type { Session } from '../../portal/session/session.js';
 import { z } from 'zod';
 import { aliasParam } from './args/alias-args.js';
 import { resolveSessionWithin } from '../../portal/session/timing/resolve-within.js';
 import { WALL_CLOCK } from '../../portal/session/timing/wall-clock.js';
-import { ACT_SEQUENCE_TOOL } from './act-sequence-tool.js';
 import { timeoutMsSchema } from './args/numeric-bounds.js';
 import { captureAct } from '../../language/flows/replay.js';
 import {
   ActionType,
   ActionWarning,
+  ReticleCommand,
   CaptureLoss,
   DEFAULT_ASSERT_TIMEOUT_MS,
   InputMode,
-  ReticleCommand,
   Verified,
   VerifiedReason,
   PredicateKind,
@@ -98,6 +101,28 @@ import { tryRealInput, rewriteUploadArgs, HOVER_NEEDS_POINTER_MSG } from './real
 import { gradeOfPredicate } from './assert/assert-grade.js';
 
 /**
+ * Narrow the wire's `action` to a real ActionType, or undefined.
+ *
+ * It used to be `asString(args['action']) ?? ''`, so an unknown or missing action became the empty
+ * string and travelled on — reaching the browser as a command it could not perform, and reported back
+ * as a generic failure rather than "that is not an action". Validate at the boundary, per the project's
+ * unknown-plus-narrowing rule, so a typo is rejected where it can still be explained.
+ */
+
+/**
+ * The action vocabulary, derived from ActionType — never retyped.
+ *
+ * The description used to list thirteen actions while ActionType had seventeen: blur, upload, drag
+ * and webmcp were real, callable, and undocumented, because a hand-copied list drifts the moment
+ * someone adds an arm. Deriving both the schema and the prose from the enum makes that impossible.
+ *
+ * The handler already refused an unknown action with a good message; the schema now refuses it
+ * one layer earlier, before any session is resolved or any work is done.
+ */
+const ACTION_TYPE_VALUES = Object.values(ActionType);
+const actionTypeEnum = z.enum(ACTION_TYPE_VALUES as [string, ...string[]]);
+
+/**
  * Single dispatch point for every ACT and ACT_SEQUENCE command.
  *
  * This is the seam the reviewer asked for: instead of wiring rewriteUploadArgs at three separate
@@ -139,28 +164,6 @@ export async function actCommand(
     ? session.command(ReticleCommand.ACT, bridgeArgs, timeoutMs)
     : session.command(ReticleCommand.ACT, bridgeArgs);
 }
-
-/**
- * Narrow the wire's `action` to a real ActionType, or undefined.
- *
- * It used to be `asString(args['action']) ?? ''`, so an unknown or missing action became the empty
- * string and travelled on — reaching the browser as a command it could not perform, and reported back
- * as a generic failure rather than "that is not an action". Validate at the boundary, per the project's
- * unknown-plus-narrowing rule, so a typo is rejected where it can still be explained.
- */
-
-/**
- * The action vocabulary, derived from ActionType — never retyped.
- *
- * The description used to list thirteen actions while ActionType had seventeen: blur, upload, drag
- * and webmcp were real, callable, and undocumented, because a hand-copied list drifts the moment
- * someone adds an arm. Deriving both the schema and the prose from the enum makes that impossible.
- *
- * The handler already refused an unknown action with a good message; the schema now refuses it
- * one layer earlier, before any session is resolved or any work is done.
- */
-const ACTION_TYPE_VALUES = Object.values(ActionType);
-const actionTypeEnum = z.enum(ACTION_TYPE_VALUES as [string, ...string[]]);
 
 export const ACT_TOOLS: ToolDef[] = [
   {
@@ -960,5 +963,4 @@ export const ACT_TOOLS: ToolDef[] = [
     },
   },
   // Split into its own module for size; still shipped as one of the acting tools.
-  ACT_SEQUENCE_TOOL,
 ];

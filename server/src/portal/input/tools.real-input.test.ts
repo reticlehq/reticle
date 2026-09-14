@@ -11,7 +11,8 @@ import { FlowStore } from '../../language/flows/flows.js';
 import { ProjectStore } from '../../memory/project/project-store.js';
 import { AnnotationStore } from '../../language/flows/stores/annotation-store.js';
 import { boxCenter, type ElementBox, type RealInputProvider } from './real-input.js';
-import type { Session, SessionManager } from '../session/session.js';
+import type { Session } from '../session/session.js';
+import type { SessionManager } from '../session/session-manager.js';
 import type { BrowserPool } from '../pool/browser-pool.js';
 import { HOVER_NEEDS_POINTER_MSG } from '../../surface/tools/real-input-attempt.js';
 

@@ -3,7 +3,8 @@ import { LastAct } from '../../portal/session/last-act.js';
 import { EventType, type ReticleEvent } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import type { Session, SessionManager } from '../../portal/session/session.js';
+import type { Session } from '../../portal/session/session.js';
+import type { SessionManager } from '../../portal/session/session-manager.js';
 
 function ev(type: EventType, data: Record<string, unknown>): ReticleEvent {
   return { t: 1, type, sessionId: 's', data };

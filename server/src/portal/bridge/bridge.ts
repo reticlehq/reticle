@@ -22,7 +22,8 @@ import {
   type HelloMessage,
   CONTRACT_FINGERPRINT,
 } from '@reticlehq/core';
-import { Session, SessionManager } from '../session/session.js';
+import { Session } from '../session/session.js';
+import { SessionManager } from '../session/session-manager.js';
 import { tokensMatch } from './token-auth.js';
 import { pairingTokenSource } from './pairing-token.js';
 import { log } from '../../log.js';

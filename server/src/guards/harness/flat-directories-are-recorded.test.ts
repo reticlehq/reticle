@@ -83,7 +83,10 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // rather than grouped -- this directory IS the vocabulary, and splitting it would put nouns an
   // implementer reads together into two places.
   'openverification/src/vocabulary': 12,
-  'server/src/judgement/runs': 11,
+  // 12 since `defaultRunId` moved out of `runner-port.ts` into its own leaf: `verification-sync`
+  // wanted that one function and imported a module that pulls the whole flow-replay stack, closing a
+  // cycle. Same trade as `language/flows` below — a cycle is paid for in files.
+  'server/src/judgement/runs': 12,
   'server/src/surface/tools': 32,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,

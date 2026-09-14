@@ -1,5 +1,6 @@
 import { PresenterTone, SESSION_LIFECYCLE, UNDELIVERED_NOTES_LABEL } from '@reticlehq/core';
-import type { Session, SessionManager } from './session.js';
+import type { Session } from './session.js';
+import type { SessionManager } from './session-manager.js';
 import { log } from '../../log.js';
 
 /**

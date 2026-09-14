@@ -3,7 +3,7 @@ import { CDP_NO_PROVIDER_REASON } from '@reticlehq/core';
 import { VIEWPORT_TOOLS } from './viewport-tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import type { RealInputProvider } from './real-input.js';
-import type { SessionManager } from '../session/session.js';
+import type { SessionManager } from '../session/session-manager.js';
 import type { ToolDeps } from '../../surface/tools/tools.js';
 
 function tool() {

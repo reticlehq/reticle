@@ -1,4 +1,6 @@
 import { asFlowName, type FlowName } from '@reticlehq/core';
+import { REDACTED_FILL } from './fields/flow-secret-field.js';
+export { REDACTED_FILL } from './fields/flow-secret-field.js';
 import { safeProjectId, type FlowResult } from './flow-result.js';
 import { changeInPlace } from './narrow-write.js';
 export type { FlowResult } from './flow-result.js';
@@ -133,15 +135,6 @@ function subStepToFlowStep(raw: unknown): FlowStep {
   if (expect !== undefined) step.expect = expect;
   return step;
 }
-
-/**
- * What a redacted fill value is replaced WITH.
- *
- * Replaced, never dropped. Replay still needs a step there, and a flow that silently loses its
- * password step drifts at sign-in forever with no explanation of why. The placeholder also tells a
- * reader what to do: the value belongs in the environment, not in a file they are about to commit.
- */
-export const REDACTED_FILL = '<redacted: supply at replay>';
 
 /**
  * Strip credentials from what gets written to disk.

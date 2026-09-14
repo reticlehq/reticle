@@ -9,7 +9,8 @@ import {
   type HumanMarkData,
   type ReticleEvent,
 } from '@reticlehq/core';
-import { Session, type SessionManager } from './session.js';
+import { Session } from './session.js';
+import { type SessionManager } from './session-manager.js';
 import { LIVE_CONTROL_TOOLS } from './live-control-tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDeps } from '../../surface/tools/tools.js';

@@ -41,7 +41,8 @@ import { FlowStore } from '../../language/flows/flows.js';
 import { ProjectStore } from '../../memory/project/project-store.js';
 import { AnnotationStore } from '../../language/flows/stores/annotation-store.js';
 import { createNodeFileSystem } from '../../memory/project/fs/fs-port.js';
-import type { Session, SessionManager } from '../../portal/session/session.js';
+import type { Session } from '../../portal/session/session.js';
+import type { SessionManager } from '../../portal/session/session-manager.js';
 
 const src = (file: string): string => readFileSync(join(import.meta.dirname, file), 'utf8');
 

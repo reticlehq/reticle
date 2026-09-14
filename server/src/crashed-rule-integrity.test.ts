@@ -9,7 +9,8 @@ import { SessionState, Verified, type ReticleEvent } from '@reticlehq/core';
 import { LastAct } from './portal/session/last-act.js';
 import { TOOLS, type ToolDef, type ToolDeps } from './surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
-import type { Session, SessionManager } from './portal/session/session.js';
+import type { Session } from './portal/session/session.js';
+import type { SessionManager } from './portal/session/session-manager.js';
 
 /** A healthy session with nothing wrong with it, so any UNKNOWN below comes from the crashed rule. */
 function deps(): ToolDeps {
