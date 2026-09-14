@@ -87,6 +87,16 @@ reticle_flow {action:"load"}({ flowName: "create-task" })   // → the flow JSON
 reticle_flow_replay({ flowName: "create-task" }) // re-resolve each anchor against the LIVE DOM, run it
 ```
 
+## Delete a flow
+
+```jsonc
+reticle_flow {action:"delete"}({ flowName: "create-task" })  // → { deleted: true }
+```
+
+A renamed or obsolete flow otherwise lingers in `reticle_flow {action:"list"}` and in every `reticle_verify {action:"flows"}` suite run, where it fails forever against a screen nobody intends to keep.
+
+**Deleting a flow that is not there is an error, not a no-op.** It answers `{ error, code: "not_found" }` rather than `{ deleted: true }`, so a mistyped name cannot read as a completed cleanup while the real flow stays in the suite. Check the spelling against `reticle_flow {action:"list"}` and try again.
+
 **Watch it replay on the page.** When the presenter is on (`present: true`), a replay isn't silent. Each step drives the real page, so the synthetic cursor flies to the element, the focus ring lands, and the activity log streams the journey live. You (or a teammate) literally watch the saved journey re-walk itself on your app, then see the verdict land. It's the fastest way to _see_ that a flow still works, not just read a green checkmark.
 
 `reticle_flow_replay` returns a status:
@@ -164,6 +174,7 @@ With `apply: false` the flow file is **never modified**; you get the proposed di
 | `reticle_flow_save_recorded` | `{ flowName? }` | persist a human-recorded (toolbar) flow |
 | `reticle_flow {action:"list"}` | `{}` | flows on disk |
 | `reticle_flow {action:"load"}` | `{ flowName }` | the flow JSON |
+| `reticle_flow {action:"delete"}` | `{ flowName }` | `{ deleted: true }`, or `{ error, code }` (`not_found` when no such flow) |
 | `reticle_flow_replay` | `{ flowName }` | `{ status, steps, decision? }` (decision on drift/fail) |
 | `reticle_verify {action:"flows"}` | `{ names?, sessionId? }` | suite verdict `{ status, passed, failed, failures[] }` |
 | `reticle_flow_heal` | `{ flowName, apply? }` | propose / apply nearest-match rebind |

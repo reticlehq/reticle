@@ -274,3 +274,97 @@ describe('reticle_flow_save / reticle_flow_load handlers', () => {
     expect(loaded.error).toBeDefined();
   });
 });
+
+/**
+ * `reticle_flow { action: "delete" }` had a working handler, a stated contract and no test.
+ *
+ * Enumerating the merged actions against what the repo references turned up three with zero
+ * evidence anywhere — no test, no doc, no e2e (#556). Two of them (`session narrate`/`tune`) have
+ * since gained both. This one had neither, which made "should it be documented or removed" an
+ * unanswerable question: nothing recorded what it currently promises, so nothing would notice if it
+ * stopped keeping the promise.
+ *
+ * The contract is the interesting part, and it is a deliberate choice rather than an accident:
+ * deleting a flow that is not there is an ERROR, not a silent no-op, so a typo'd name cannot read
+ * as a successful cleanup. That is the behaviour worth pinning — a `rm -f` shape would have been
+ * the easier thing to write and the wrong thing to have.
+ */
+describe('reticle_flow { action: "delete" }', () => {
+  async function savedFlow(): Promise<ToolDeps> {
+    const recordings = new RecordingStore();
+    recordings.saveCompiled(
+      program('checkout', [
+        {
+          tool: ReticleTool.ACT,
+          stable: true,
+          args: { by: QueryBy.TESTID, value: 'pay', action: ActionType.CLICK, args: {} },
+        },
+      ]),
+    );
+    const deps = fakeDeps(memoryFs(), recordings);
+    await tool(ReticleTool.FLOW_SAVE).handler(deps, { flowName: 'checkout' });
+    return deps;
+  }
+
+  it('removes the flow, and the replay list stops offering it', async () => {
+    const deps = await savedFlow();
+    const before = (await tool(ReticleTool.FLOW).handler(deps, { action: 'list' })) as {
+      flows: { name: string }[];
+    };
+    expect(before.flows.map((f) => f.name)).toContain('checkout');
+
+    const res = (await tool(ReticleTool.FLOW).handler(deps, {
+      action: 'delete',
+      flowName: 'checkout',
+    })) as { deleted?: boolean; error?: string };
+    expect(res).toMatchObject({ deleted: true });
+    expect(res.error).toBeUndefined();
+
+    // The point of deleting: a renamed or obsolete flow stops lingering in the list an agent
+    // replays from. Asserting on the handler's own answer alone would not have shown that.
+    const after = (await tool(ReticleTool.FLOW).handler(deps, { action: 'list' })) as {
+      flows: { name: string }[];
+    };
+    expect(after.flows.map((f) => f.name)).not.toContain('checkout');
+  });
+
+  it('deleting a flow that does not exist is NOT_FOUND, not a silent success', async () => {
+    // The whole reason this is worth a test. A typo'd flow name answering `deleted: true` would
+    // read as a completed cleanup while the real flow stayed in the suite.
+    const deps = await savedFlow();
+    const res = (await tool(ReticleTool.FLOW).handler(deps, {
+      action: 'delete',
+      flowName: 'checkuot',
+    })) as { deleted?: boolean; error?: string; code?: string };
+    expect(res.code).toBe(FlowErrorCode.NOT_FOUND);
+    expect(res.error).toBeDefined();
+    expect(res.deleted).toBeUndefined();
+
+    // And it took nothing with it.
+    const list = (await tool(ReticleTool.FLOW).handler(deps, { action: 'list' })) as {
+      flows: { name: string }[];
+    };
+    expect(list.flows.map((f) => f.name)).toContain('checkout');
+  });
+
+  it('refuses a traversing name instead of resolving it', async () => {
+    // Same guard `flow_save` carries, on the one action that would delete what it resolved to.
+    const deps = await savedFlow();
+    const res = (await tool(ReticleTool.FLOW).handler(deps, {
+      action: 'delete',
+      flowName: '../escape',
+    })) as { code?: string };
+    expect(res.code).toBe(FlowErrorCode.INVALID_NAME);
+  });
+
+  it('accepts `flow` as the alias for `flowName`, like the other flow actions', async () => {
+    // reticle_annotate names it `flow`, so an agent that carried that key over must not get a
+    // NOT_FOUND for a flow that is plainly there.
+    const deps = await savedFlow();
+    const res = (await tool(ReticleTool.FLOW).handler(deps, {
+      action: 'delete',
+      flow: 'checkout',
+    })) as { deleted?: boolean };
+    expect(res).toMatchObject({ deleted: true });
+  });
+});
