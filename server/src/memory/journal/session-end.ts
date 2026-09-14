@@ -1,4 +1,9 @@
 import { driveFlowsFrom, type DriveProgram, type TapeStep } from './drive-flow.js';
+import {
+  OnboardingPhase,
+  OnboardingStepStatus,
+  type OnboardingStep,
+} from '@reticlehq/core/telemetry';
 import { AmbientStore } from './ambient-store.js';
 import type { AmbientCounts } from '@reticlehq/engine/window/ambient.js';
 import { subjectOf, type JournalAction } from '@reticlehq/core';
@@ -74,6 +79,11 @@ interface SessionEndDeps {
    * nobody needed. `directory-reach.test.ts` refused it, and its advice was right.
    */
   takeAmbientTape?: () => { steps: readonly TapeStep[]; startPath?: string } | undefined;
+  /**
+   * Report one funnel step. Injected rather than imported, because this module is teardown and the
+   * reach guard is right that it should not grow a dependency on the telemetry tree to say so.
+   */
+  reportStep?: (step: OnboardingStep) => Promise<boolean>;
   flows?: {
     save: (program: DriveProgram, annotations?: undefined, projectId?: string) => Promise<unknown>;
   };
@@ -208,8 +218,20 @@ async function saveDrivenFlow(deps: SessionEndDeps, session: SessionEndTarget): 
   const flows = deps.flows;
   if (takeTape === undefined || flows === undefined) return;
   // One flow per journey the session contained, not one flow per session — see drive-flow.ts.
-  const { programs } = driveFlowsFrom(session.id, takeTape());
+  const { programs, outcome } = driveFlowsFrom(session.id, takeTape());
   for (const program of programs) {
     await flows.save(program, undefined, session.projectId);
   }
+  // The funnel step that makes the SECOND run cheap.
+  //
+  // SKIPPED, not failed, when a drive proved nothing: the agent drove and declared no consequence,
+  // which is a real outcome and not our bug. Counting it as a failure would blame the product for a
+  // choice the agent made, and counting it as success would claim a regression test that cannot go
+  // red. `unprovenSteps` is what separates "drove and proved nothing" from "drove nothing at all".
+  await deps.reportStep?.({
+    phase: OnboardingPhase.FIRST_RUN,
+    step: 'flow_recorded',
+    status: 0 === programs.length ? OnboardingStepStatus.SKIPPED : OnboardingStepStatus.COMPLETED,
+    ...(outcome.unprovenSteps === undefined ? {} : { reason: 'no_declared_consequence' }),
+  });
 }

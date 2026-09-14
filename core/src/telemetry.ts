@@ -16,6 +16,26 @@
  * `z.nativeEnum`, timestamps are epoch-ms NUMBERS, no `any`.
  */
 import { z } from 'zod';
+import {
+  OnboardingPhase,
+  OnboardingStepSchema,
+  OnboardingStepStatus,
+  OnboardingSteps,
+  type OnboardingStep,
+} from './onboarding.js';
+
+/**
+ * The setup funnel's vocabulary, re-exported so every existing `@reticlehq/core/telemetry` import
+ * keeps working. It lives in `onboarding.ts` because it is its own subject and this file had grown
+ * past the size cap — the split is where the line already was.
+ */
+export {
+  OnboardingPhase,
+  OnboardingStepSchema,
+  OnboardingStepStatus,
+  OnboardingSteps,
+  type OnboardingStep,
+};
 import { ToolRefusalSchema } from './telemetry-refusal.js';
 import {
   MachineSnapshotSchema,
@@ -158,6 +178,7 @@ export const TelemetryEventKind = {
    * failed on a missing dependency was indistinguishable from a user who never tried.
    */
   INIT_COMPLETED: 'init_completed',
+  ONBOARDING_STEP: 'onboarding_step',
   /**
    * Reticle found a defect in the app under test.
    *
@@ -899,6 +920,8 @@ export const TelemetryEventSchema = z.object({
   connection: McpConnectionSchema.optional(),
   /** Only on `init_completed`. */
   init: InitOutcomeSchema.optional(),
+  /** Only on `onboarding_step`: one step of install / onboard / first run. */
+  onboarding: OnboardingStepSchema.optional(),
   /** Only on `bug_found`. */
   bug: BugFoundSchema.optional(),
   /** Only on `tool_refused`: which tool, why, and whether the agent tried the same thing again. */

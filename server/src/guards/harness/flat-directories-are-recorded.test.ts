@@ -103,8 +103,15 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it
   // hit the line cap, and splitting them again would scatter one cohesive unit across two homes.
   'server/src/surface/tools/act': 11,
-  'server/src/command/cli': 18, // + tutorial.ts: one sequence, two audiences, ending at a verdict
-  'server/src/command/setup': 15,
+  // 19 since `setup-mcp-cli.ts`: the terminal half of `reticle setup mcp`, which the one-line
+  // installer runs before any project exists. It sits HERE and not in `setup/` because the reach
+  // guard refused `command -> setup` and CLI handlers already live in this directory.
+  'server/src/command/cli': 19, // + tutorial.ts: one sequence, two audiences, ending at a verdict
+  // 17 since the installer's Node half: `setup-mcp.ts` (which agents are here, and merging into the
+  // configs they already keep) and `setup-install.ts` (the three steps only the shell could time).
+  // Both are pure — their telemetry reporter is INJECTED, because this directory does not own a
+  // telemetry client and the reach guard was right to say so.
+  'server/src/command/setup': 17,
   'server/src/portal/session': 20,
   // 32 since two leaves were extracted out of `flow-replay.ts` to break the last runtime cycle in
   // this directory: `flow-replay-types.ts` (shapes two collaborators share) and `flow-anchor.ts`
@@ -117,7 +124,11 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // teardown is the only caller and the tape is data by then — the reach guard already refused the
   // alternative, which was for this file to live near the recorder and pull teardown into it.
   'server/src/memory/journal': 12,
-  'server/src/telemetry': 32,
+  // 35 since the setup funnel: `onboarding-funnel.ts` (the one emit chokepoint), `onboarding-firsts.ts`
+  // (the first look / act / verdict of a run, which only the daemon can witness) and
+  // `install-trace.ts` (draining what the installer could not report, because it ran before there
+  // was a CLI). Three files rather than one: they answer at three different moments.
+  'server/src/telemetry': 35,
   'spec-runner/src': 11,
 };
 

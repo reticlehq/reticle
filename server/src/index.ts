@@ -86,6 +86,8 @@ import { probeChromium } from './command/cli/doctor/browser/chromium-hint.js';
 import { makeJournalAttach } from './memory/journal/attach-journal.js';
 import { makeSessionEnd } from './memory/journal/session-end.js';
 import type { TapeStep } from './memory/journal/drive-flow.js';
+import type { OnboardingStep } from '@reticlehq/core/telemetry';
+import { reportOnboardingStep } from './telemetry/onboarding-funnel.js';
 import { AMBIENT_RECORDING } from './language/flows/recording/tape/recordings.js';
 import { AmbientStore } from './memory/journal/ambient-store.js';
 import { ensureWorkspaceGitignore } from './memory/journal/on-disk/workspace-gitignore.js';
@@ -255,6 +257,7 @@ function attachJournal(
     reticleRoot: string;
     enabled: boolean;
     takeAmbientTape?: () => { steps: readonly TapeStep[]; startPath?: string } | undefined;
+    reportStep?: (step: OnboardingStep) => Promise<boolean>;
     flows?: FlowStore;
   },
 ): void {
@@ -468,6 +471,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       enabled: journalEnabled,
       // Bound HERE, where the recorder is already in hand: teardown gets the tape, not the recorder.
       takeAmbientTape: () => recordings.stop(AMBIENT_RECORDING),
+      reportStep: reportOnboardingStep,
       flows,
     });
     const project = new ProjectStore(fs, reticleRoot, { now });
@@ -614,6 +618,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     reticleRoot,
     enabled: journalEnabled,
     takeAmbientTape: () => recordings.stop(AMBIENT_RECORDING),
+    reportStep: reportOnboardingStep,
     flows,
   });
   const project = new ProjectStore(fs, reticleRoot, { now });

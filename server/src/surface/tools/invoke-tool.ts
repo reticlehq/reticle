@@ -18,6 +18,9 @@ import { noteToolServed, reportToolRefused } from '../../telemetry/tool-refused.
 import { buildErrorPayload, refusalReasonFor } from './error-recovery.js';
 import { resultIsError } from '../mcp/faults/mcp-is-error.js';
 import { verificationOf } from '../../telemetry/verification-of.js';
+import { reportOnboardingStep } from '../../telemetry/onboarding-funnel.js';
+import { noteFirstVerdict, noteOnboardingFirst } from '../../telemetry/onboarding-firsts.js';
+import { OnboardingPhase, OnboardingStepStatus } from '@reticlehq/core/telemetry';
 import { asString } from '@reticlehq/core';
 import { sessionIdFromArgs, spentRefFromArgs } from './tools-helpers.js';
 import { EnvelopeKey } from './tool-kit.js';
@@ -194,6 +197,24 @@ function recordVerification(
     actor: TelemetryActor.AGENT,
     verification,
   });
+  // THE conversion event, and the reason the funnel exists.
+  //
+  // Everything before this is setup that proved nothing, and no existing event marks the moment a
+  // user's own app is actually verified: `init_completed` fires when files are written, minutes
+  // earlier. Emitted from the same site as `verification_completed` so the two can never disagree
+  // about whether a verdict happened — a second listener is a second thing that can stop firing.
+  //
+  // Idempotency is deliberately NOT applied: the funnel step is per verdict, and a session that
+  // proves ten things is a different shape from one that proves one. The FIRST is what a funnel
+  // query takes; the rest are how much the product was used after conversion.
+  // The ONBOARD half of the same moment: the first verdict of this run, once.
+  noteFirstVerdict();
+  void reportOnboardingStep({
+    phase: OnboardingPhase.FIRST_RUN,
+    step: 'verdict_produced',
+    status: OnboardingStepStatus.COMPLETED,
+    elapsedMs: Math.max(0, Math.round(durationMs)),
+  });
 }
 
 /**
@@ -315,6 +336,9 @@ export async function runTool<Ext>(
   // closure carries this call's own identity, which is also what makes peak-concurrency measurable.
   // A daemon that has served even one tool call is doing a job for somebody; see daemon-usefulness.
   noteToolCall();
+  // The ONBOARD firsts, at the chokepoint every call already passes through — so a second dispatch
+  // path cannot quietly stop reporting them the way an extra listener would.
+  noteOnboardingFirst(tool.name, args);
   // The impact record needs the project's own `.reticle` root, and this is the first place every
   // call knows it. Idempotent: the first root wins for the daemon's lifetime.
   initImpact({ reticleRoot: deps.reticleRoot });

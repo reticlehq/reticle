@@ -3,6 +3,8 @@
  * plan (pure), optionally write the apply-steps, and print a human-readable report. All filesystem
  * access goes through `InitIo` so the orchestration is unit-testable with an in-memory IO.
  */
+import { OnboardingPhase, OnboardingStepStatus } from '@reticlehq/core/telemetry';
+import { detectMcpClients } from './register/detect-clients.js';
 import type { InitOptions, InitIo, InitResult, InitContext } from './run-types.js';
 export type { InitOptions, InitIo, InitResult } from './run-types.js';
 
@@ -60,13 +62,7 @@ import {
 import { claudeAvailableProbe, claudeExistsProbe } from './register/mcp.js';
 import { reticleDevLocation } from './patch/next-patch.js';
 import { scanTestids, storeHints, scanStores } from './detect/capabilities.js';
-import {
-  fileBackedClients,
-  clientMarkerRelPath,
-  ConfigScope,
-  McpClient,
-  CURSOR_PROJECT_MARKER,
-} from './register/mcp-clients.js';
+import { CURSOR_PROJECT_MARKER } from './register/mcp-clients.js';
 import { deriveProjectId, packageName } from './project/project-id.js';
 import {
   VITE_DEV_MODULE_PATH,
@@ -276,6 +272,21 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
     nodeModulesMarkers,
   };
   const detection = detect(detectInput);
+  /*
+   * `project_detected` — the first thing the funnel can know about a real project.
+   *
+   * Reported even when the stack is unknown, because "we could not tell what this is" is the answer
+   * that matters most: a funnel that only records successful detections cannot show the stacks
+   * Reticle silently does not serve.
+   */
+  // `unattended` is deliberately NOT set here: the telemetry envelope already carries `automation`
+  // (no_tty / ci), and a second spelling of the same fact can only ever disagree with the first.
+  io.host.reportStep({
+    phase: OnboardingPhase.FIRST_RUN,
+    step: 'project_detected',
+    status: OnboardingStepStatus.COMPLETED,
+    stack: detection.framework,
+  });
 
   const vitePath = firstPresent(rootFiles, VITE_CONFIG_CANDIDATES);
   const viteSource = null === vitePath ? null : io.readFile(vitePath);
@@ -301,28 +312,7 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
   // Every MCP client this machine shows evidence of. Conservative and one-directional: we write
   // into a config a client ALREADY has, and never create ~/.gemini or ~/.codeium for somebody who
   // does not use them.
-  const detectedClients = options.mcp
-    ? fileBackedClients()
-        .map((spec) => {
-          const marker = clientMarkerRelPath(spec);
-          const absolute =
-            spec.scope === ConfigScope.HOME ? join(io.homeDir(), spec.relPath) : spec.relPath;
-          const markerPath = spec.scope === ConfigScope.HOME ? join(io.homeDir(), marker) : marker;
-          // A fresh Cursor profile has not written ~/.cursor yet; the project-level .cursor/ is the
-          // fallback that kept that real case working. Same signal, project scope.
-          const projectFallback =
-            spec.id === McpClient.CURSOR && !io.exists(markerPath)
-              ? io.exists(CURSOR_PROJECT_MARKER)
-              : false;
-          if (!io.exists(markerPath) && !projectFallback) return null;
-          return {
-            id: spec.id,
-            configPath: absolute,
-            existing: io.readFile(absolute),
-          };
-        })
-        .filter((entry) => entry !== null)
-    : [];
+  const detectedClients = options.mcp ? detectMcpClients(io) : [];
 
   const astroPath = firstPresent(rootFiles, ASTRO_CONFIG_CANDIDATES);
   const astroSource = null === astroPath ? null : io.readFile(astroPath);
@@ -879,6 +869,38 @@ function runInitSteps(options: InitOptions, io: InitIo): InitResult {
     ...(undefined === devCommand ? {} : { devCommand }),
     ...(true === options.redirected ? { redirectedTo: options.cwd } : {}),
   };
+  /*
+   * The two INSTALL steps `init` is the only thing that can answer.
+   *
+   * `mcp_registered` reads the step's REAL resolved status rather than "nothing failed" — the same
+   * distinction `mcpRegistered` above already makes, and for the same reason: a step that was
+   * SKIPPED never registered anything, and reporting it as success is how a funnel shows an install
+   * completing that never gave the agent any tools.
+   *
+   * `instrumented` is FILES WRITTEN and nothing more. The page still has to load and dial the
+   * bridge, which `app_connected` reports minutes later from the daemon — keeping them separate is
+   * the whole reason this funnel exists.
+   */
+  const mcpOk = wasMcpRegistered(resolvedStatus(plan, MCP_TARGET, failed, skipped));
+  io.host.reportStep({
+    phase: OnboardingPhase.INSTALL,
+    step: 'agents_detected',
+    status: OnboardingStepStatus.COMPLETED,
+    stack: plan.framework,
+  });
+  io.host.reportStep({
+    phase: OnboardingPhase.INSTALL,
+    step: 'mcp_registered',
+    status: mcpOk ? OnboardingStepStatus.COMPLETED : OnboardingStepStatus.SKIPPED,
+    stack: plan.framework,
+  });
+  io.host.reportStep({
+    phase: OnboardingPhase.FIRST_RUN,
+    step: 'instrumented',
+    status: result.ok ? OnboardingStepStatus.COMPLETED : OnboardingStepStatus.FAILED,
+    stack: plan.framework,
+    ...(result.ok ? {} : { reason: classifyInitFailure(failed) }),
+  });
   if (true === options.deferOutcome) return { ...result, context, outcome };
   io.host.reportOutcome(outcome);
   return { ...result, context };

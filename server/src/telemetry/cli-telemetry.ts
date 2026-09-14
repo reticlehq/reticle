@@ -7,6 +7,12 @@
 import { TelemetryEventKind } from '@reticlehq/core/telemetry';
 import { DAEMON_INNER_COMMAND, knownCommand } from '../command/cli/cli-parse.js';
 import { getTelemetry } from './telemetry.js';
+import { drainInstallTrace } from './install-trace.js';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
+/** Where the installer left its breadcrumbs. Same directory the telemetry id and opt-out live in. */
+const RETICLE_STATE_DIR = process.env['RETICLE_STATE_DIR'] ?? join(homedir(), '.reticle');
 import { describeCliFlags } from './argument-shape.js';
 import { resolveInstallSource } from './install-source.js';
 
@@ -39,6 +45,19 @@ export function isHumanCliCommand(command: string): boolean {
 
 export function reportCliRun(argv: readonly string[]): void {
   const firstArg = argv[0];
+  /*
+   * BEFORE the `_daemon` filter, deliberately.
+   *
+   * The installer's breadcrumbs have to be drained on the very next invocation whatever it is, and
+   * on most machines that is the agent spawning `reticle mcp`, which starts a daemon. Draining
+   * after the filter would leave the file sitting until somebody happened to run a human command —
+   * which on an agent-driven machine may be never.
+   *
+   * Idempotent by deletion rather than by a flag: the file is gone after the first drain, so a
+   * second invocation finds nothing. A flag would have to live somewhere, and somewhere is another
+   * file that can disagree with this one.
+   */
+  drainInstallTrace(RETICLE_STATE_DIR);
   if (firstArg === DAEMON_INNER_COMMAND) return;
   const command = knownCommand(firstArg);
   const telemetry = getTelemetry();

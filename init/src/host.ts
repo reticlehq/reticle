@@ -1,4 +1,4 @@
-import type { InitOutcome } from '@reticlehq/core/telemetry';
+import type { InitOutcome, OnboardingStep } from '@reticlehq/core/telemetry';
 
 /**
  * Everything the scaffolder needs that only the daemon knows.
@@ -21,6 +21,19 @@ export interface InitHost {
   span<T>(name: string, fields: Record<string, unknown>, fn: () => T): T;
   /** Report how the run went. Best-effort — setup must never fail because a metric did. */
   reportOutcome(outcome: InitOutcome): void;
+  /**
+   * Report ONE step of the setup funnel, as it happens.
+   *
+   * `reportOutcome` fires once, at the end, and says whether the whole run succeeded. That cannot
+   * answer the question the funnel exists for — WHERE people stop — because a run that dies at the
+   * MCP registration and one that dies before it ever looked for a package.json are the same single
+   * row. A step reported as it happens is the difference between "init failed" and "init failed at
+   * this step, on this stack, after this long".
+   *
+   * REQUIRED for the same reason `reportOutcome` is: an optional reporter is one somebody forgets to
+   * pass and nobody notices is missing, because telemetry fails silently.
+   */
+  reportStep(step: OnboardingStep): void;
   /**
    * The daemon's pairing token, minted if nothing has written one yet.
    *
@@ -45,6 +58,9 @@ export const SILENT_HOST: InitHost = {
     return fn();
   },
   reportOutcome() {
+    /* nothing to report to */
+  },
+  reportStep() {
     /* nothing to report to */
   },
   pairingToken() {

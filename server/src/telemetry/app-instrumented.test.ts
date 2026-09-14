@@ -33,18 +33,29 @@ beforeEach(() => {
 
 const facts = { initialized: true, agentAttached: true };
 
+/**
+ * How many times THIS event fired, not how many events fired.
+ *
+ * These assertions counted every emit from the call, which made them a claim about the whole site
+ * rather than about `app_instrumented`'s idempotency — so adding any other event to the same path
+ * broke them while the property they exist to protect was untouched. The same site now also reports
+ * the `app_connected` funnel step, which is a different question asked of the same moment.
+ */
+const instrumentedCalls = (): number =>
+  emit.mock.calls.filter((c) => c[0] === TelemetryEventKind.APP_INSTRUMENTED).length;
+
 describe('app_instrumented', () => {
   it('fires on the first app to connect', () => {
     markInstrumentationClock(1_000);
     reportAppInstrumented(facts, () => 4_000);
-    expect(emit).toHaveBeenCalledTimes(1);
+    expect(instrumentedCalls()).toBe(1);
     expect(emit.mock.calls[0]?.[0]).toBe(TelemetryEventKind.APP_INSTRUMENTED);
   });
 
   it('fires exactly once no matter how many sessions follow', () => {
     markInstrumentationClock(1_000);
     for (let i = 0; i < 5; i += 1) reportAppInstrumented(facts, () => 2_000);
-    expect(emit).toHaveBeenCalledTimes(1);
+    expect(instrumentedCalls()).toBe(1);
   });
 
   it('arms again for the next daemon run', () => {
@@ -52,7 +63,7 @@ describe('app_instrumented', () => {
     reportAppInstrumented(facts, () => 2_000);
     markInstrumentationClock(9_000);
     reportAppInstrumented(facts, () => 9_500);
-    expect(emit).toHaveBeenCalledTimes(2);
+    expect(instrumentedCalls()).toBe(2);
   });
 
   it('reports how long the daemon sat with nothing wired', () => {

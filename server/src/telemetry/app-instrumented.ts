@@ -16,8 +16,13 @@
  * `project_profiled` already carries it on the same daemon run, so the two join on sessionId.
  */
 
-import { TelemetryEventKind } from '@reticlehq/core/telemetry';
+import {
+  OnboardingPhase,
+  OnboardingStepStatus,
+  TelemetryEventKind,
+} from '@reticlehq/core/telemetry';
 import { getTelemetry } from './telemetry.js';
+import { reportOnboardingStep } from './onboarding-funnel.js';
 
 let reported = false;
 /** Set at daemon start so the first connect can report how long the install sat un-instrumented. */
@@ -60,6 +65,22 @@ export function reportAppInstrumented(
         // Reticle was up, the agent had the tools, and nothing was wired for that whole time.
         msToFirstApp: daemonStartedAt === undefined ? 0 : Math.max(0, now() - daemonStartedAt),
       },
+    });
+    // The same fact, in the funnel's vocabulary.
+    //
+    // `app_instrumented` answers "did this install EVER wire an app" once per daemon run, which is
+    // the adoption question. The funnel asks a different one — where in the sequence people stop —
+    // and needs this step in the same ordered series as the ones either side of it. Reported here,
+    // at the one site that already knows, rather than by a second listener that could drift from it.
+    //
+    // This is the step the whole funnel exists for: `instrumented` means files were written, and
+    // THIS means a page actually dialled the bridge. Every silent install bug so far has lived in
+    // the gap between those two.
+    void reportOnboardingStep({
+      phase: OnboardingPhase.FIRST_RUN,
+      step: 'app_connected',
+      status: OnboardingStepStatus.COMPLETED,
+      ...(daemonStartedAt === undefined ? {} : { elapsedMs: Math.max(0, now() - daemonStartedAt) }),
     });
   } catch {
     /* never let a metric interfere with a page connecting */

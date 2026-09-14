@@ -191,9 +191,24 @@ const KNOWN_COMMANDS: ReadonlySet<string> = new Set([
   'regression',
   'share',
   'doctor',
+  'setup',
   'tutorial',
   'help',
 ]);
+
+/**
+ * A non-negative integer flag, or 0.
+ *
+ * 0 means NOT MEASURED here, and that is safe only because these are elapsed times the shell always
+ * passes — an absent one is a caller that is not our installer, and reporting zero for it is more
+ * honest than inventing a duration.
+ */
+function numberFlag(args: readonly string[], name: string): number {
+  const at = args.indexOf(name);
+  if (at < 0) return 0;
+  const raw = Number(args[at + 1]);
+  return Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : 0;
+}
 
 /** The subcommand name if we recognize it, else `unknown`. Bare `reticle` reports `help`. */
 export function knownCommand(arg: string | undefined): string {
@@ -319,6 +334,8 @@ export type CliResult =
   | { kind: 'version' }
   | { kind: 'help' }
   | { kind: 'doctor'; port: number }
+  | { kind: 'setup-mcp' }
+  | { kind: 'setup-install'; runtimeSecs: number; installSecs: number; mcp: boolean }
   | { kind: 'tutorial'; audience: TutorialAudience }
   | { kind: 'open'; port: number; url?: string }
   | {
@@ -779,6 +796,42 @@ export function parseCliArgs(
     case 'doctor': {
       const port = parsePortFlag(rest, defaultPort);
       return { kind: 'doctor', port };
+    }
+    /*
+     * `setup mcp` — register the MCP server with the coding agents on this machine.
+     *
+     * Separate from `init` because it answers a different question. `init` wires ONE PROJECT: the
+     * plugin, the connect snippet, the config. This registers the server for the USER, across every
+     * agent they have, and is what the one-line installer runs when there is no project yet.
+     *
+     * There is NO `--yes`, and the absence is deliberate. Zero human input is the default, so
+     * nothing is ever asked — and a flag that reads as consent while gating nothing is worse than
+     * no flag: it tells a reader a confirmation exists. What this writes is stated before it runs
+     * and printed after, which is the honest version of the same reassurance.
+     */
+    case 'setup': {
+      const what = rest[0];
+      /*
+       * `setup install` — the Node half of the one-line installer.
+       *
+       * The shell script does the three things that cannot be Node (is there a runtime, put the CLI
+       * on the machine, hand over) and nothing else, because a .sh and a .ps1 holding the same logic
+       * drift the first time somebody fixes a bug in one of them — the rule setup/reticle.sh already
+       * states. The timings arrive as flags because only the shell could measure them: they span the
+       * period before this binary existed.
+       */
+      if ('install' === what) {
+        return {
+          kind: 'setup-install',
+          runtimeSecs: numberFlag(rest, '--runtime-secs'),
+          installSecs: numberFlag(rest, '--install-secs'),
+          mcp: !rest.includes('--no-mcp'),
+        };
+      }
+      // Only `mcp` today. A bare `reticle setup` falls to help rather than guessing, because the
+      // next subcommand here will not be a synonym for this one.
+      if (what !== 'mcp') return { kind: 'help' };
+      return { kind: 'setup-mcp' };
     }
     case LICENSE_COMMAND:
       return { kind: 'license' };

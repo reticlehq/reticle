@@ -105,6 +105,7 @@ The single exception is `daemon_stopped`, which is **awaited**, because the proc
 | `app_instrumented` | the first app carrying the SDK reached this daemon | **the funnel step everything turns on**; see below |
 | `mcp_connection_lost` | the proxy lost its daemon | **the transport-stability metric.** The disconnect that makes a user reopen `/mcp` is invisible without it |
 | `init_completed` | `reticle init` finished | does install actually work, outside the fixtures gate |
+| `onboarding_step` | each step of install / onboard / first run | WHERE people stop, which no other kind can answer |
 | `bug_found` | a defect was detected in the app under test | the value delivered, as opposed to the work done |
 | `tool_refused` | a tool could not do what was asked | WHY the largest cohort in the funnel goes quiet. See below |
 
@@ -388,3 +389,24 @@ The second is the one that matters. It drives the real built modules against a r
 ## The privacy line, in one sentence
 
 We measure **that** something happened and **what class** of thing it was, never **what** it was, in whose app, or containing what.
+
+## The setup funnel: `onboarding_step`
+
+One kind for every step of every phase, rather than an event name per step. A name per step means that every funnel query names the steps it spans, so moving, renaming or inserting one silently breaks the query that was watching it. A `phase` + `step` pair keeps the funnel a `GROUP BY` instead of a union, and a new step arrives in the existing chart rather than beside it.
+
+```
+install    script_started → runtime_ready → cli_installed → agents_detected → mcp_registered
+onboard    tour_started → concept_shown → first_look → first_act → first_verdict
+first_run  project_detected → instrumented → app_connected → driven → flow_recorded → verdict_produced
+```
+
+Four decisions are written into the shape, and each exists because the alternative loses something:
+
+- **`instrumented` and `app_connected` are separate steps.** Files written is not a page that dialled the bridge, and every silent install bug so far has lived in exactly that gap.
+- **Both tours end at a verdict.** `verdict_produced` is THE conversion event: everything before it is setup that proved nothing, and `init_completed` fires minutes earlier when files are written.
+- **`abandoned` is distinct from `failed`.** With one losing status both read as "never got there", and only one of them is our bug.
+- **`skipped` is a real answer.** No coding agent on the machine, or a drive that declared no consequence worth saving, is not a failure, counting it as one hides the failures that are.
+
+`step` is a CLOSED SET, validated against the funnel's own vocabulary. It was `z.string().max(48)` with a comment promising it was never user text, and a cap is not a promise: `/Users/someone/secret/ project` is 28 characters and validated cleanly. That is a rule-3 leak from the one payload a person can edit, the installer's breadcrumb file, on disk, in their own home directory.
+
+`elapsedMs` absent means NOT MEASURED, never zero. A zero enters every average as a real duration and drags it toward a number nobody experienced.

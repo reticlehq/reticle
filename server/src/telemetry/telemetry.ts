@@ -36,6 +36,7 @@ import {
   type BugFound,
   isSessionScoped,
   type InitOutcome,
+  type OnboardingStep,
   type InstallSource,
   type McpConnection,
   type McpOutage,
@@ -330,6 +331,13 @@ export interface TelemetryExtra {
   connection?: McpConnection;
   /** `init_completed`: how `reticle init` went. */
   init?: InitOutcome;
+  /**
+   * `onboarding_step`: one step of install / onboard / first run.
+   *
+   * A block rather than top-level fields, like every other event's payload here, so a funnel query
+   * reads one shape and adding a field to it cannot collide with another event's.
+   */
+  onboarding?: OnboardingStep;
   /** `bug_found`: one defect Reticle found in the app under test. */
   bug?: BugFound;
   /** `tool_refused`: a call Reticle could not serve, and why. */
@@ -468,6 +476,7 @@ export const createTelemetry = (opts: {
       ...(extra?.identity !== undefined ? { identity: extra.identity } : {}),
       ...(extra?.connection !== undefined ? { connection: extra.connection } : {}),
       ...(extra?.init !== undefined ? { init: extra.init } : {}),
+      ...(extra?.onboarding !== undefined ? { onboarding: extra.onboarding } : {}),
       ...(extra?.bug !== undefined ? { bug: extra.bug } : {}),
       ...(extra?.refusal !== undefined ? { refusal: extra.refusal } : {}),
       ...(extra?.outage !== undefined ? { outage: extra.outage } : {}),
@@ -506,6 +515,7 @@ export const createTelemetry = (opts: {
       identity,
       connection,
       init,
+      onboarding,
       bug,
       refusal,
       outage,
@@ -538,6 +548,7 @@ export const createTelemetry = (opts: {
       identity,
       connection,
       init,
+      onboarding,
       bug,
       refusal,
       outage,

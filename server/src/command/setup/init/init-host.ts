@@ -8,9 +8,10 @@
  * metric that is silently, permanently absent, which is the failure mode telemetry always has.
  */
 import type { InitHost } from '@reticlehq/init';
-import type { InitOutcome } from '@reticlehq/core/telemetry';
+import type { InitOutcome, OnboardingStep } from '@reticlehq/core/telemetry';
 import { spanSync } from '../../../trace.js';
 import { reportInitOutcome } from '../../../telemetry/init-telemetry.js';
+import { reportOnboardingStep } from '../../../telemetry/onboarding-funnel.js';
 import {
   defaultPairingTokenDir,
   readOrCreatePairingTokenSync,
@@ -24,6 +25,16 @@ export function serverInitHost(): InitHost {
     },
     reportOutcome(outcome: InitOutcome): void {
       reportInitOutcome(outcome);
+    },
+    /**
+     * One funnel step, fire-and-forget.
+     *
+     * `void` rather than awaited on purpose: `init` is writing files, and a step report that can
+     * slow a write down — or fail one — is a metric changing what the product does, which the
+     * telemetry contract forbids outright.
+     */
+    reportStep(step: OnboardingStep): void {
+      void reportOnboardingStep(step);
     },
     /**
      * Minted here if nothing has written it yet. `init` used to READ the file and return empty when

@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { handleSetupMcp, handleSetupInstall } from './cli/setup-mcp-cli.js';
+import { reportStepFromCli, reportTutorialShown } from './cli-onboarding.js';
+
 import { renderTutorial } from './cli/tutorial.js';
 import { pathToFileURL } from 'node:url';
 import { openFailureNote } from './cli/answers/open-note.js';
@@ -903,8 +906,22 @@ export function main(): void {
     case 'doctor':
       void handleDoctor(parsed.port);
       break;
+    case 'setup-mcp':
+      handleSetupMcp(reportStepFromCli);
+      break;
+    case 'setup-install':
+      handleSetupInstall(
+        {
+          runtimeSecs: parsed.runtimeSecs,
+          installSecs: parsed.installSecs,
+          mcp: parsed.mcp,
+        },
+        reportStepFromCli,
+      );
+      break;
     case 'tutorial':
       process.stdout.write(`${renderTutorial(parsed.audience)}\n`);
+      reportTutorialShown();
       break;
     case 'open':
       handleOpen(parsed.port, parsed.url);

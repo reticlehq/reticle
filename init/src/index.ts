@@ -39,3 +39,22 @@ export { refreshAgentRules } from './project/refresh-rules.js';
 export { diagnoseDesktop, isDesktopProject } from './diagnose/desktop-doctor.js';
 export { diagnoseWebCsp } from './diagnose/csp-doctor.js';
 export { reticleConfigContent } from './patch/snippets.js';
+
+/**
+ * MCP registration, for a caller that has no project.
+ *
+ * `reticle setup mcp` registers the server for the USER across every agent on the machine, which is
+ * what the one-line installer runs before any project exists. It needs the same client table and
+ * the same detection `init` uses — a second copy would be a second answer to "which agents are
+ * here", and the two would disagree the first time a client was added to one of them.
+ */
+export {
+  McpClient,
+  ConfigScope,
+  MCP_CLIENTS,
+  ClientMergeStatus,
+  clientSpec,
+  mergeClientConfig,
+} from './register/mcp-clients.js';
+export { claudeAddCommand } from './register/mcp.js';
+export { detectMcpClients, type DetectedClient } from './register/detect-clients.js';
