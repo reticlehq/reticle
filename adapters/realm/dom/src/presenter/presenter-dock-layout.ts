@@ -15,7 +15,7 @@ import {
   isHudDragged,
   readHudPosition,
   relayoutHudPosition,
-} from './presenter-drag.js';
+} from './presenter-hud-position.js';
 
 const HUD_ATTR = 'data-reticle-hud';
 const DOCK_PANEL_GAP_PX = 8;

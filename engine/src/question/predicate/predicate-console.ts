@@ -7,7 +7,7 @@
  */
 
 import { CONSOLE_ATTACH_NOTE, EventType, PredicateKind, type ReticleEvent } from '@reticlehq/core';
-import type { EvalResult } from './predicate-eval.js';
+import type { EvalResult } from './predicate-eval-kit.js';
 import type { Predicate } from './predicate-schema.js';
 
 /** The only console levels Reticle instruments (console.info/debug/trace are NOT patched). */

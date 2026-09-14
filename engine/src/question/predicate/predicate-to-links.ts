@@ -1,5 +1,5 @@
 import { ConsequenceKind, PredicateKind } from '@reticlehq/core';
-import type { Predicate } from './predicate.js';
+import type { Predicate } from './predicate-schema.js';
 import type { ExpectedLink } from '@reticlehq/core';
 
 /**

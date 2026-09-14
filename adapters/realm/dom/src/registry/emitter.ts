@@ -5,7 +5,7 @@
  * breaks in production or before `reticle.connect`, and `@reticlehq/browser` stays out of the prod bundle.
  */
 
-import { reticle } from '../index.js';
+import { reticle } from '../reticle-singleton.js';
 
 /** Structural emitter the host app's components depend on. */
 export interface ReticleEmitter {

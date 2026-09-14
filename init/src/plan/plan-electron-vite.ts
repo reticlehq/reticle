@@ -6,7 +6,7 @@
  * into a preload and a main process that the web frameworks have no equivalent of.
  */
 
-import { StepStatus, type PlanInput, type Step } from './plan.js';
+import { StepStatus, type PlanInput, type Step } from './plan-types.js';
 import { StepTitle } from './connect-steps.js';
 import { capabilitiesStep, patchStep } from './plan-framework.js';
 import { patchElectronViteConfig } from '../patch/electron-vite-patch.js';

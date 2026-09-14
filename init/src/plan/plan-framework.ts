@@ -50,12 +50,11 @@ import {
   htmlManual,
 } from '../patch/snippets.js';
 import { hasOptOut, OPT_OUT_MARKER } from '../detect/declared/init-opt-out.js';
-import { StepStatus, type PlanInput, type Step } from './plan.js';
+import { StepStatus, type PlanInput, type Step } from './plan-types.js';
 import { RETICLE_DEFAULT_PORT } from '@reticlehq/core';
 import { CSP_STEP_TITLE } from '../diagnose/csp-check.js';
 import { StepTitle } from './connect-steps.js';
 import { tanstackStartManual, TANSTACK_START_ROOT_PATH } from '../patch/tanstack-start.js';
-import { FRAMEWORK_ADAPTERS } from './framework-adapter.js';
 import { diagnoseWebCsp } from '../diagnose/csp-doctor.js';
 import { patchNuxtConfig } from '../patch/nuxt-patch.js';
 
@@ -908,16 +907,4 @@ export function htmlSteps(input: PlanInput): Step[] {
       detail: htmlManual(input.options.port, input.options.projectId, input.pairingToken),
     },
   ];
-}
-
-/**
- * The per-framework half of the plan, looked up rather than switched.
- *
- * `FRAMEWORK_ADAPTERS` is a `Record<Framework, FrameworkAdapter>`, so a member added to `Framework`
- * is a compile error in that one table instead of a framework the plan quietly does not serve. The
- * exhaustive switch this replaced gave the same guarantee for the steps alone; the record gives it
- * for the packages, the connect-step titles and the unverified-note flag in the same edit.
- */
-export function frameworkSteps(input: PlanInput): Step[] {
-  return FRAMEWORK_ADAPTERS[input.detection.framework].steps(input);
 }

@@ -1,5 +1,5 @@
 import { ContradictionKind, EventType, type ReticleEvent } from '@reticlehq/core';
-import type { OwnContradiction } from './contradictions.js';
+import type { OwnContradiction } from './contradiction-types.js';
 
 /**
  * A request that returned 2xx and reported failure INSIDE its body.

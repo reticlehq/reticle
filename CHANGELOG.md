@@ -4,6 +4,14 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Added
+
+- **`@reticlehq/engine` — three new published entry points, all of them shapes moving DOWN rather than new behaviour.** `disagreement/contradiction-types.js` (what a contradiction is, separated from the rules that find one), `question/predicate/predicate-eval-kit.js` (what an evaluation answers, and the four comparisons every oracle is written in) and `question/predicate/predicate-session.js` (the subset of a session the predicate engine needs, so a fake can be written without loading the evaluator). Each existed because a module that is CALLED by another had to import back out of its caller to declare its own signature. Adding a file under these directories is an import path somebody outside this repository may write, which is why it is recorded here and not only in the pinned list. Nothing moved out of an existing entry point: every previous import path still resolves to the same thing.
+
+### Changed
+
+- **Every package in this repository is now free of import cycles except one, which is named and explained where it lives.** Nothing about what any package DOES changed — the fix in every case was to move a type or a small helper below the two modules that were reaching across each other for it. The one that stays is `reticle_verify { action: "explore" }`: a tool that drives the whole tool surface is reached from the registry that lists it, and the alternatives are a mutable registry holder (a load-order trap that would let the toolset's own test pass against an empty list) or a partial surface, which would contradict the rule that a harness run must drive exactly what an agent drives.
+
 ## [3.0.0] — 2026-09-13
 
 A major, and the number is doing real work: the protocol a verdict is derived from is now its own published package, and the repository that implements it was rearranged around that fact.

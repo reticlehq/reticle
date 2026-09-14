@@ -1,5 +1,5 @@
 import { ContradictionKind, EventType, MUTATING_METHODS, type ReticleEvent } from '@reticlehq/core';
-import type { OwnContradiction } from './contradictions.js';
+import type { OwnContradiction } from './contradiction-types.js';
 
 /**
  * A write that returned OK and quietly did not apply part of what it was asked to.

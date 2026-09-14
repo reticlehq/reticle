@@ -3,6 +3,7 @@ import { CROSS_STEP_ADDRESS, FlowStepTool } from './flow-step-tool.js';
 export { CROSS_STEP_ADDRESS, FlowStepTool } from './flow-step-tool.js';
 import { ActionType } from '../wire/constants/constants.js';
 import type { Contradiction } from '../verdict/findings.js';
+import { CONSEQUENCE_KINDS } from '../verdict/consequence.js';
 // Its own directory's constants, which this file had been reaching through `wire/constants/constants.js`
 // to get -- the clearest cost of that re-export: artifacts went out to wire to fetch a symbol
 // that had been sitting next door the whole time.
@@ -901,4 +902,35 @@ export function staleKnownBugs(
   return (notes ?? []).filter(
     (note) => 0 === note.assertions.length || !note.assertions.every((a) => present.has(a)),
   );
+}
+
+/** True when a FlowExpect asserts at least one consequence (any of the ConsequenceKind fields set). */
+export function flowExpectHasConsequence(expect: FlowExpect | undefined): boolean {
+  if (expect === undefined) return false;
+  const fields = expect as Record<string, unknown>;
+  for (const kind of CONSEQUENCE_KINDS) {
+    if (fields[kind] !== undefined) return true;
+  }
+  return false;
+}
+
+/**
+ * True when a FlowExpect checks ONLY presence — an element, rendered text or a route, no consequence.
+ *
+ * `text` counts here for the same reason `element` does, and leaving it out would have been the
+ * expensive kind of omission: a text-only expect would have been neither a consequence nor
+ * presence-only, so it would have fallen through to `assertion-free` — a permanent green wearing
+ * an assertion (#811). `route` is here for exactly that reason and no other.
+ *
+ * PRESENCE rather than a consequence, deliberately, and it is a close call. A route change is
+ * observed on a channel rather than queried from the DOM, so unlike `element` it cannot be
+ * satisfied by a healed-but-wrong locator — an argument for promoting it. What settles it the other
+ * way is that the LIVE verdict already grades a route assertion `presence`, and one of the two had
+ * to follow the other: a flow that graded stronger on disk than the drive that produced it would be
+ * a saved claim nobody made. Promoting both is a defensible change and a separate one, with the
+ * false-green question — can the route commit while the view does not render? — answered first.
+ */
+export function flowExpectIsPresenceOnly(expect: FlowExpect | undefined): boolean {
+  if (expect === undefined || flowExpectHasConsequence(expect)) return false;
+  return expect.element !== undefined || expect.text !== undefined || expect.route !== undefined;
 }

@@ -20,7 +20,7 @@ import {
   describeNetFilter,
   str,
   type EvalResult,
-} from './predicate-eval.js';
+} from './predicate-eval-kit.js';
 import type { PredicateKind } from '@reticlehq/core';
 import type { Predicate } from './predicate-schema.js';
 

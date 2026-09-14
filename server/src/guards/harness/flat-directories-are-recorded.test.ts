@@ -54,7 +54,10 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   'adapters/build/vite/src': 11,
   'adapters/realm/dom/src/dom': 12,
   'adapters/realm/dom/src/observers': 23,
-  'adapters/realm/dom/src/presenter': 16,
+  // 17 since the HUD's position primitives left `presenter-drag.ts` for their own leaf: the drag
+  // gesture re-syncs the dock layout, and the dock layout reads the HUD's position, so the two files
+  // needed each other over primitives that belong to neither.
+  'adapters/realm/dom/src/presenter': 17,
   'core/src/verdict': 11,
   'core/src/wire': 15,
   // 15 since the shared step-effect builder. Recorded rather than grouped: the note above explains
@@ -67,7 +70,10 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    */
   'core/src/artifacts': 11,
   'engine/src/evidence': 17,
-  'engine/src/question/predicate': 16,
+  // 18 since the last two cycles in this package were removed: `predicate-eval-kit.ts` (the result
+  // type and the four comparisons the oracles are written in) and `predicate-session.ts` (what the
+  // engine needs from a session). Both were reached back out of the modules that call their readers.
+  'engine/src/question/predicate': 18,
   /*
    * Crossed ten when the fast-drive budget and a portable byte counter landed. The guard asks for
    * grouping rather than recording at this moment, and grouping is the wrong move HERE specifically:

@@ -1,5 +1,5 @@
 import type { ReticleEvent } from '@reticlehq/core';
-import type { Contradiction, ContradictionOptions } from './contradictions.js';
+import type { Contradiction, ContradictionOptions } from './contradiction-types.js';
 
 /**
  * Rules a CONSUMER adds to the contradiction pass, without editing the ones this package ships.

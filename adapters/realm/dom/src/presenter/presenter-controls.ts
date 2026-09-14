@@ -1,6 +1,7 @@
 import { HumanControlKind, PresenterTone, SessionState, type FlowChip } from '@reticlehq/core';
 import { nativeSetTimeout, nativeClearTimeout } from '../timers/native/native-timers.js';
 import { CHAT_TOGGLE_ATTR, CLEAR_MARKS_ATTR, MARKERS_BTN_ATTR } from './presenter-config.js';
+export type { ControlIntent, ControlHandler } from './presenter-config.js';
 import {
   PresenterIcon,
   PRESENTER_ICON_SIZE,
@@ -39,13 +40,6 @@ const COPIED_TEXT = 'Copied ✓';
 const RUN_FILENAME = 'reticle-run.json';
 /** Border fade-out delay after a session ends (native timer; presenter-only tunable). */
 export const ENDED_FADE_MS = 4000;
-
-/** Payload the panel hands to its host when the human drives a control. */
-export interface ControlIntent {
-  kind: HumanControlKind;
-  text?: string;
-}
-export type ControlHandler = (intent: ControlIntent) => void;
 
 /** CSS for the control surface (injected with the rest of the presenter stylesheet). */
 export const CONTROLS_CSS = `

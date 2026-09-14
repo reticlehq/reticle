@@ -1,4 +1,4 @@
-import type { ControlHandler } from './presenter-controls.js';
+import type { HumanControlKind } from '@reticlehq/core';
 
 /**
  * Presenter tunables + option surface. Split out of presenter.ts so that file is just the controller
@@ -227,3 +227,10 @@ export const THROTTLED_ATTR = 'data-reticle-throttled';
  * declared z-index rather than pinning the number, so a future panel cannot quietly overtake it.
  */
 export const Z_HUD_TOOLTIP = 100;
+
+/** Payload the panel hands to its host when the human drives a control. */
+export interface ControlIntent {
+  kind: HumanControlKind;
+  text?: string;
+}
+export type ControlHandler = (intent: ControlIntent) => void;

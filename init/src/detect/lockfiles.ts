@@ -6,7 +6,7 @@
  */
 import { dirname, join } from 'node:path';
 import { namesAPackageManager } from './detect.js';
-import type { InitIo } from '../run.js';
+import type { InitIo } from '../run-types.js';
 
 /** Lockfile basenames, in package-manager preference order (mirrors detect.ts). */
 const LOCKFILE_NAMES = [

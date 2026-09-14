@@ -60,7 +60,13 @@ const CORE = join(
  * `identity <-> wire` and `artifacts <-> wire` both stopped being mutual. Lowered here in the
  * same commit that earned it, which is what the equality below is for.
  */
-const MUTUAL_PAIRS_TODAY = 2;
+/**
+ * Two until the last import cycle in this package was removed. `verdict/consequence.ts` named
+ * `FlowExpect` only to answer two questions ABOUT a `FlowExpect`, so both moved beside the type in
+ * `artifacts/flow-types.ts` and `artifacts <-> verdict` stopped being mutual. Lowered in the same
+ * commit that earned it.
+ */
+const MUTUAL_PAIRS_TODAY = 1;
 
 describe('the contract knows only what it is allowed to know', () => {
   it('finds directories to check, so a passing run cannot mean it read nothing', () => {

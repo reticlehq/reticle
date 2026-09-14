@@ -21,8 +21,8 @@ import { UiLibrary } from '../detect/detect.js';
 // function bodies rather than at module scope, which is what keeps the pair safe to import in
 // both directions. If a third value is ever needed here, move the vocabulary to its own module
 // rather than widening this.
-import { MCP_TARGET, StepStatus } from './plan.js';
-import type { PlanInput, Step } from './plan.js';
+import { MCP_TARGET, StepStatus } from './plan-types.js';
+import type { PlanInput, Step } from './plan-types.js';
 
 const WINDOWS_MCP_TITLE = 'Windows MCP spawn';
 

@@ -23,7 +23,7 @@ import {
 // Type-only, so the cycle back to `predicate.ts` is erased at compile time and never exists at
 // runtime. `PredicateSession` is the predicate layer's interface to a session and belongs with the
 // evaluator that defines it.
-import type { PredicateSession } from './predicate.js';
+import type { PredicateSession } from './predicate-session.js';
 import { describeTestidMiss } from './testid-near-miss.js';
 import { describeSplitTextMiss } from './split-text-miss.js';
 

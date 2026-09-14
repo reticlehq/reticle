@@ -1,5 +1,5 @@
 import { ContradictionKind, EventType, type ReticleEvent } from '@reticlehq/core';
-import type { OwnContradiction } from './contradictions.js';
+import type { OwnContradiction } from './contradiction-types.js';
 
 /**
  * The app sent a money value back in a DIFFERENT unit than the API gave it.

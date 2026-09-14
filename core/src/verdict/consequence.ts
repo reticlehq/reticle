@@ -1,5 +1,3 @@
-import type { FlowExpect } from '../artifacts/flow-types.js';
-
 /**
  * The product thesis, in one place: a verification "kind" is either a CONSEQUENCE (the app provably
  * did something a locator healed to the WRONG element, or a stale render, cannot fake) or a mere
@@ -52,7 +50,7 @@ export const PredicateKind = {
 } as const;
 export type PredicateKind = (typeof PredicateKind)[keyof typeof PredicateKind];
 
-const CONSEQUENCE_KINDS: ReadonlySet<string> = new Set(Object.values(ConsequenceKind));
+export const CONSEQUENCE_KINDS: ReadonlySet<string> = new Set(Object.values(ConsequenceKind));
 const PRESENCE_KINDS: ReadonlySet<string> = new Set(Object.values(PresenceKind));
 
 /** True when `kind` (a predicate/expect kind) asserts a consequence (signal/net/state). */
@@ -63,37 +61,6 @@ export function isConsequenceKind(kind: string): boolean {
 /** True when `kind` is a weak presence check (element/text). */
 export function isPresenceKind(kind: string): boolean {
   return PRESENCE_KINDS.has(kind);
-}
-
-/** True when a FlowExpect asserts at least one consequence (any of the ConsequenceKind fields set). */
-export function flowExpectHasConsequence(expect: FlowExpect | undefined): boolean {
-  if (expect === undefined) return false;
-  const fields = expect as Record<string, unknown>;
-  for (const kind of CONSEQUENCE_KINDS) {
-    if (fields[kind] !== undefined) return true;
-  }
-  return false;
-}
-
-/**
- * True when a FlowExpect checks ONLY presence — an element, rendered text or a route, no consequence.
- *
- * `text` counts here for the same reason `element` does, and leaving it out would have been the
- * expensive kind of omission: a text-only expect would have been neither a consequence nor
- * presence-only, so it would have fallen through to `assertion-free` — a permanent green wearing
- * an assertion (#811). `route` is here for exactly that reason and no other.
- *
- * PRESENCE rather than a consequence, deliberately, and it is a close call. A route change is
- * observed on a channel rather than queried from the DOM, so unlike `element` it cannot be
- * satisfied by a healed-but-wrong locator — an argument for promoting it. What settles it the other
- * way is that the LIVE verdict already grades a route assertion `presence`, and one of the two had
- * to follow the other: a flow that graded stronger on disk than the drive that produced it would be
- * a saved claim nobody made. Promoting both is a defensible change and a separate one, with the
- * false-green question — can the route commit while the view does not render? — answered first.
- */
-export function flowExpectIsPresenceOnly(expect: FlowExpect | undefined): boolean {
-  if (expect === undefined || flowExpectHasConsequence(expect)) return false;
-  return expect.element !== undefined || expect.text !== undefined || expect.route !== undefined;
 }
 
 /**

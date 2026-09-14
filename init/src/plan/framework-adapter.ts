@@ -34,7 +34,7 @@ import {
   viteSteps,
 } from './plan-framework.js';
 import { electronViteSteps } from './plan-electron-vite.js';
-import type { PlanInput, Step } from './plan.js';
+import type { PlanInput, Step } from './plan-types.js';
 
 // An app dev installs exactly the audience-scoped browser-side dependencies — never the retired
 // `@reticlehq/core` umbrella (which dragged the Node MCP server + ws into every app). The kit is the
@@ -181,3 +181,15 @@ export const FRAMEWORK_ADAPTERS: Record<Framework, FrameworkAdapter> = {
     carriesOwnUnverifiedNote: false,
   },
 };
+
+/**
+ * The per-framework half of the plan, looked up rather than switched.
+ *
+ * `FRAMEWORK_ADAPTERS` is a `Record<Framework, FrameworkAdapter>`, so a member added to `Framework`
+ * is a compile error in that one table instead of a framework the plan quietly does not serve. The
+ * exhaustive switch this replaced gave the same guarantee for the steps alone; the record gives it
+ * for the packages, the connect-step titles and the unverified-note flag in the same edit.
+ */
+export function frameworkSteps(input: PlanInput): Step[] {
+  return FRAMEWORK_ADAPTERS[input.detection.framework].steps(input);
+}
