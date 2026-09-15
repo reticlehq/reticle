@@ -1,9 +1,6 @@
-import {
-  OnboardingPhase,
-  OnboardingStepStatus,
-  type OnboardingStep,
-} from '@reticlehq/core/telemetry';
+import type { OnboardingStep } from '@reticlehq/core/telemetry';
 import { reportOnboardingStep } from '../telemetry/onboarding-funnel.js';
+import { tutorialShownSteps } from './cli/tutorial.js';
 
 /**
  * The CLI's half of the setup funnel.
@@ -26,11 +23,5 @@ export const reportStepFromCli = (step: OnboardingStep): void => {
  * by the daemon at the first look / act / verdict of a run, which is the only place they are a fact.
  */
 export function reportTutorialShown(): void {
-  for (const step of ['tour_started', 'concept_shown'] as const) {
-    reportStepFromCli({
-      phase: OnboardingPhase.ONBOARD,
-      step,
-      status: OnboardingStepStatus.COMPLETED,
-    });
-  }
+  for (const step of tutorialShownSteps()) reportStepFromCli(step);
 }

@@ -16,7 +16,7 @@ export {
   type InitOptions,
   type InitResult,
 } from './run.js';
-export { buildNodeIo } from './node-io.js';
+export { buildNodeIo, probeCli } from './node-io.js';
 export { type InitHost, SILENT_HOST } from './host.js';
 export { RETICLE_VERSION, RETICLE_NPM_PACKAGE } from './version.js';
 export { InitFailure } from './diagnose/init-failure.js';
@@ -56,5 +56,12 @@ export {
   clientSpec,
   mergeClientConfig,
 } from './register/mcp-clients.js';
-export { claudeAddCommand } from './register/mcp.js';
+export {
+  claudeAddCommand,
+  // The two probes `run.ts` uses to decide about Claude Code. Exported because `reticle setup mcp`
+  // asks the same question and had no way to ask it: Claude Code keeps no config file, so the
+  // file-reading detector cannot see it, and the installer silently skipped the commonest client.
+  claudeAvailableProbe,
+  claudeExistsProbe,
+} from './register/mcp.js';
 export { detectMcpClients, type DetectedClient } from './register/detect-clients.js';

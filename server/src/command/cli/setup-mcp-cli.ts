@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { homedir } from 'node:os';
-import { execFileSync } from 'node:child_process';
+import { probeCli } from '@reticlehq/init';
+import { installClosing, tutorialShownSteps } from './tutorial.js';
 import { setupMcp, knownClientLabels, type SetupMcpIo } from '../setup/setup-mcp.js';
 import { reportInstallSteps } from '../setup/setup-install.js';
 import type { OnboardingStep } from '@reticlehq/core/telemetry';
@@ -39,16 +40,13 @@ export function handleSetupMcp(reportStep: StepReporter): void {
     homeDir: () => homedir(),
     print: (line) => process.stdout.write(`${line}\n`),
     reportStep,
-    runCli: (command, args) => {
-      try {
-        execFileSync(command, [...args], { stdio: 'ignore' });
-        return true;
-      } catch {
-        // The client's own CLI refused or is not installed. Not fatal: the others still register,
-        // and reporting one refusal as a whole-run failure would hide the ones that worked.
-        return false;
-      }
-    },
+    // `probeCli`, not a bare `execFileSync`: on Windows `claude` is a `.cmd` shim that cannot be
+    // spawned without a shell, so the plain call threw ENOENT for every Windows user and the
+    // installer reported their machine had no coding agent on it. init has always spawned through
+    // the shell-and-quoting rules `probeCli` carries; this used to be a second copy without them.
+    // A refusal is still not fatal — the other clients register, and calling one refusal a failed
+    // run would hide the ones that worked.
+    runCli: (command, args) => probeCli(command, args),
   };
 
   const result = setupMcp(io);
@@ -87,10 +85,11 @@ export function handleSetupInstall(
   } else {
     process.stdout.write('Skipping MCP registration (--no-mcp).\n');
   }
-  process.stdout.write('\n');
-  process.stdout.write('Reticle is installed. Next:\n');
-  process.stdout.write('  cd <your project> && reticle init     # wire it into the app\n');
-  process.stdout.write(
-    '  reticle tutorial                      # what Reticle is, in two minutes\n',
-  );
+  // A person gets the tour; a pipe gets the pointer. See installClosing for why the TTY decides.
+  const showTour = true === process.stdout.isTTY;
+  process.stdout.write(`${installClosing(showTour)}\n`);
+  // Only claim the ONBOARD steps when the tour was actually put in front of somebody. Reporting
+  // them for a piped install would record a journey nobody took, which is the one thing a funnel
+  // must never do.
+  if (showTour) for (const step of tutorialShownSteps()) reportStep(step);
 }

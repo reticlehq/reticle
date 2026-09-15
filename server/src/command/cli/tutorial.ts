@@ -15,6 +15,34 @@
  * check and a rationalisation written afterwards.
  */
 
+import {
+  OnboardingPhase,
+  OnboardingStepStatus,
+  type OnboardingStep,
+} from '@reticlehq/core/telemetry';
+
+/**
+ * The two ONBOARD steps a SHOWN tour can honestly answer.
+ *
+ * Here rather than in `command/cli-onboarding.ts`, because both callers live on this side of that
+ * line: `cli/setup-mcp-cli.ts` shows the tour when a person is watching, and reaching back into
+ * `command/` for the step names made `cli <-> command` a mutual pair — which `directory-reach`
+ * refused, with the right advice: the thing being reached for was simply filed in the wrong place.
+ * `command/` importing from `cli/` is the direction that already exists.
+ *
+ * The tour RENDERS; it does not run anything. So it knows the tour was asked for and the concept
+ * was put in front of somebody, and nothing about whether they then looked, acted or proved. The
+ * remaining three ONBOARD steps are observed by the daemon at the first look, act and verdict,
+ * which is the only place they are a fact.
+ */
+export function tutorialShownSteps(): OnboardingStep[] {
+  return (['tour_started', 'concept_shown'] as const).map((step) => ({
+    phase: OnboardingPhase.ONBOARD,
+    step,
+    status: OnboardingStepStatus.COMPLETED,
+  }));
+}
+
 export const TutorialAudience = {
   /** Prose, and a reason per step. */
   HUMAN: 'human',
@@ -85,8 +113,76 @@ export function tutorialScript(audience: TutorialAudience): TutorialStep[] {
  * the call learns what to type and not what it means, which is the reader that later reports a green
  * it cannot explain.
  */
+/**
+ * What to do now the tour is over.
+ *
+ * Every other stage of setup ends by naming the next command — `install.sh` points at `reticle init`
+ * and this tutorial, `init` points at the dev server and `status`. This one ended at step 4 and
+ * stopped, so the stage whose entire job is to teach the sequence was the only one that never said
+ * how to start it. The steps above describe tools that need an instrumented, running app, and a
+ * reader who has just been told that a verdict is the point and shown no way to reach one is exactly
+ * where a funnel stalls.
+ *
+ * Split from `renderTutorial` so the closing block is a value a caller can assert on, rather than a
+ * string only findable by matching rendered prose.
+ */
+export function tutorialNextSteps(audience: TutorialAudience): string {
+  const lines =
+    TutorialAudience.AGENT === audience
+      ? [
+          'Next:',
+          '  reticle init            # instrument the project in this directory',
+          '  reticle status          # confirms the app connected, or says why it has not',
+          '  then run the four steps above against it, and report the verdict',
+        ]
+      : [
+          'Next:',
+          '  cd <your project> && reticle init   # wire Reticle into the app',
+          '  npm run dev                        # then load it in a browser',
+          '  reticle status                     # confirms the app connected, or says why not',
+          '',
+          'Then ask your agent to drive one real flow and report the verdict. That is the install',
+          'proving itself, and it is the agent’s job rather than a command you run.',
+        ];
+  return lines.join('\n');
+}
+
+/**
+ * What the installer prints when it has finished.
+ *
+ * The tour used to be a command nobody was told to run twice: one line at the end of
+ * `setup install` naming it, and no mention at all from `reticle init`. Unless somebody read that
+ * line and chose to type it, the ONBOARD phase never happened — Installation went straight to
+ * First run, and the funnel would have shown `tour_started` at nearly zero and read as "nobody
+ * wants the tour" rather than "nobody was shown one".
+ *
+ * Whether to SHOW it or merely name it turns on who is reading. The installer's own rule is zero
+ * human input, because the common case is an agent following a link somebody pasted, and
+ * twenty-five lines of prose into a pipe helps nobody. A TTY is the honest signal for which of the
+ * two is at the other end — so a person gets onboarding as a stage, and a script gets one line.
+ *
+ * Shown, it ends with the tour's OWN closing, which already names `reticle init`. Adding a second
+ * "Next:" under it would be the same instruction twice in ten lines.
+ */
+export function installClosing(showTour: boolean): string {
+  if (!showTour) {
+    return [
+      '',
+      'Reticle is installed. Next:',
+      '  cd <your project> && reticle init     # wire it into the app',
+      '  reticle tutorial                      # what Reticle is, in two minutes',
+    ].join('\n');
+  }
+  return [
+    '',
+    'Reticle is installed. Here is what it does, in four steps:',
+    '',
+    renderTutorial(TutorialAudience.HUMAN),
+  ].join('\n');
+}
+
 export function renderTutorial(audience: TutorialAudience): string {
-  return tutorialScript(audience)
+  const steps = tutorialScript(audience)
     .map((step, index) => {
       const head = `${String(index + 1)}. ${step.say}`;
       const why = `   why: ${step.why}`;
@@ -95,6 +191,7 @@ export function renderTutorial(audience: TutorialAudience): string {
         : `${head}\n${why}\n   ${step.call}`;
     })
     .join('\n\n');
+  return `${steps}\n\n${tutorialNextSteps(audience)}`;
 }
 
 /**

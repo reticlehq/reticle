@@ -71,6 +71,28 @@ function runnable(command: string): string {
   return found;
 }
 
+/**
+ * Run one allowed CLI quietly and say whether it succeeded — the `probe` above, without an `InitIo`.
+ *
+ * Exported because `reticle setup mcp` needs exactly this and had reimplemented it as a bare
+ * `execFileSync(command, args)`. That works everywhere except Windows, where `claude` is a `.cmd`
+ * shim that cannot be spawned without a shell: the probe threw ENOENT, the installer concluded the
+ * machine had no Claude Code on it, and said so. The three rules that make this correct —
+ * `runnable`, `shellSafe`, `shellOpt` — already lived here and were private, which is the whole
+ * reason a second, broken copy existed.
+ */
+export function probeCli(command: string, args: readonly string[]): boolean {
+  try {
+    const result = spawnSync(runnable(command), shellSafe(args), {
+      stdio: 'ignore',
+      ...shellOpt(),
+    });
+    return 0 === result.status;
+  } catch {
+    return false;
+  }
+}
+
 export function buildNodeIo(cwd: string, host: InitHost): InitIo {
   // Project-relative by default; absolute paths (e.g. ~/.cursor/mcp.json) pass through unchanged.
   const abs = (rel: string): string => (isAbsolute(rel) ? rel : join(cwd, rel));

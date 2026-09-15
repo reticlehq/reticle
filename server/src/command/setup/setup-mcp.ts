@@ -1,8 +1,9 @@
 import {
   McpClient,
-  ConfigScope,
   MCP_CLIENTS,
   claudeAddCommand,
+  claudeAvailableProbe,
+  claudeExistsProbe,
   detectMcpClients,
   mergeClientConfig,
   clientSpec,
@@ -50,19 +51,39 @@ export interface SetupMcpResult {
 }
 
 export function setupMcp(io: SetupMcpIo): SetupMcpResult {
-  const detected = detectMcpClients(io);
+  const detected: string[] = [];
   const registered: string[] = [];
   const alreadyThere: string[] = [];
 
-  for (const client of detected) {
-    const spec = clientSpec(client.id);
-    // Claude Code owns its own registration and has a CLI for it; writing its file by hand is how
-    // two sources of truth appear for one registration.
-    if (ConfigScope.CLI === spec.scope) {
+  /*
+   * Claude Code first, because nothing else can find it.
+   *
+   * `detectMcpClients` reads config files and Claude Code keeps none — it owns its registration
+   * behind `claude mcp add`, which is why its spec is `ConfigScope.CLI`. `fileBackedClients()`
+   * filters CLI scope out by construction, so this used to be a `ConfigScope.CLI` branch INSIDE
+   * the loop below, over a list that can never contain a CLI client. It was unreachable, and the
+   * effect was that the one-line installer told anybody running Reticle's most common client
+   * "No coding agent config found" and left their agent with no tools.
+   *
+   * Its own CLI is the probe, and it is the honest one: a config file only says the client was
+   * installed once, while `claude --version` says it is here now. Absent, this registers nothing
+   * and claims nothing — the negative control in the test file.
+   */
+  const available = claudeAvailableProbe();
+  if (io.runCli(available.command, available.args)) {
+    detected.push(McpClient.CLAUDE_CODE);
+    const already = claudeExistsProbe();
+    if (io.runCli(already.command, already.args)) {
+      alreadyThere.push(McpClient.CLAUDE_CODE);
+    } else {
       const cmd = claudeAddCommand();
-      if (io.runCli(cmd.command, cmd.args)) registered.push(client.id);
-      continue;
+      if (io.runCli(cmd.command, cmd.args)) registered.push(McpClient.CLAUDE_CODE);
     }
+  }
+
+  for (const client of detectMcpClients(io)) {
+    detected.push(client.id);
+    const spec = clientSpec(client.id);
     const merged = mergeClientConfig(spec, client.existing);
     if (ClientMergeStatus.ALREADY === merged.status) {
       alreadyThere.push(client.id);
@@ -97,7 +118,7 @@ export function setupMcp(io: SetupMcpIo): SetupMcpResult {
           : OnboardingStepStatus.COMPLETED,
   });
 
-  return { detected: detected.map((c) => c.id), registered, alreadyThere };
+  return { detected, registered, alreadyThere };
 }
 
 /** Everything this machine could be asked about, for the report when nothing was found. */
