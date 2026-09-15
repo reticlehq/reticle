@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Declaration, Verdict } from '@reticlehq/openverification';
+import { Declaration, Verdict } from 'open-verification';
 import { ChannelId, MessageKind, ReticleCommand } from '@reticlehq/core';
 import { conformanceClient } from './conformance-client.js';
 import { WebRealm } from './web-realm.js';

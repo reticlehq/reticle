@@ -336,7 +336,7 @@ export type CliResult =
   | { kind: 'doctor'; port: number }
   | { kind: 'setup-mcp' }
   | { kind: 'setup-install'; runtimeSecs: number; installSecs: number; mcp: boolean }
-  | { kind: 'tutorial'; audience: TutorialAudience }
+  | { kind: 'tutorial'; audience: TutorialAudience; run: boolean; port: number; headless: boolean }
   | { kind: 'open'; port: number; url?: string }
   | {
       kind: '_daemon';
@@ -791,7 +791,16 @@ export function parseCliArgs(
       // `--agent` is the opt-in, because a person typing this is the common case and should not have
       // to ask for prose. An agent knows to pass the flag; a human would not know to avoid it.
       const audience = argv.includes('--agent') ? TutorialAudience.AGENT : TutorialAudience.HUMAN;
-      return { kind: 'tutorial', audience };
+      // `--run` drives the demo instead of describing it. Opt-in rather than the default: the tour
+      // starts a daemon and opens a browser, and a command that did that to somebody who typed it
+      // expecting a page of text would be a surprise in the one place surprises are least welcome.
+      return {
+        kind: 'tutorial',
+        audience,
+        run: argv.includes('--run'),
+        port: parsePortFlag(rest, defaultPort),
+        headless: !argv.includes('--headed'),
+      };
     }
     case 'doctor': {
       const port = parsePortFlag(rest, defaultPort);

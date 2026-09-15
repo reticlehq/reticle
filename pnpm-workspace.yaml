@@ -1,6 +1,6 @@
 packages:
   # The open specification. First, because everything else is an implementation of it.
-  - 'openverification'
+  - 'open-verification'
   # The rules that decide a verdict. They implement the specification and nothing else.
   - 'engine'
   # The shared vocabulary: the names and shapes both ends of the connection agree on.

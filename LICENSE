@@ -7,15 +7,15 @@ license that applies depends on the package. Each package contains its own
 LICENSE file, which is authoritative.
 
 1. Apache License, Version 2.0 — the protocol, the wire contract, the embeddable SDK
-   Packages: @reticlehq/openverification, @reticlehq/core, @reticlehq/engine,
+   Packages: open-verification, @reticlehq/core, @reticlehq/engine,
    @reticlehq/browser, @reticlehq/react, @reticlehq/electron,
    @reticlehq/babel-plugin, @reticlehq/next, @reticlehq/vite-plugin,
    @reticlehq/eslint-plugin
-   @reticlehq/openverification is the Open Verification Protocol — the vocabulary and
+   open-verification is the Open Verification Protocol — the vocabulary and
    rules a verdict is derived from — and is Apache-2.0 so anyone can implement it,
    including implementations that compete with ours. @reticlehq/core is the
    bottom-of-graph wire contract (constants + zod schemas; it depends on
-   @reticlehq/openverification and zod, and on nothing else). @reticlehq/engine holds
+   open-verification and zod, and on nothing else). @reticlehq/engine holds
    the rules that decide a verdict, with no browser, daemon or CLI attached; it was
    carved out of the FSL-licensed server tree and is released under Apache-2.0
    deliberately, so that the part which DECIDES can be audited and reimplemented by

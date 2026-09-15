@@ -72,8 +72,9 @@ describe('tool profiles', () => {
    * surface, so an agent that did as it was told got `unknown tool` — and an agent that did not,
    * left the panel reading "live" forever.
    *
-   * The RETICLE_LOOP_GUIDE deliberately is NOT covered here: it names reticle_record/reticle_replay
-   * as optional next steps, which reticle_run reaches fine. Mandatory ≠ suggested.
+   * A guidance block that merely SUGGESTS a next step is deliberately not covered here: naming a
+   * tool as optional is fine wherever the surface can still reach it. Mandatory is the property
+   * under test, not mentioned.
    */
   it('4a: a tool an always-on instruction ORDERS the agent to call is advertised', () => {
     for (const block of [PAUSE_HINT, buildSessionLease('s1', 0).IMPORTANT]) {
@@ -103,9 +104,12 @@ describe('tool profiles', () => {
     expect(resolveToolSurface()).toBe(TOOL_SURFACE.ALL);
   });
 
-  it('7: resolveToolSurface — defaults to HYBRID, an unknown value fails open to HYBRID, explicit full is honored', () => {
-    expect(resolveToolSurface()).toBe(TOOL_SURFACE.DEFAULT);
-    expect(resolveToolSurface('bogus')).toBe(TOOL_SURFACE.DEFAULT);
+  it('7: resolveToolSurface — defaults to MERGED, an unknown value fails open to MERGED, explicit full is honored', () => {
+    // The fallback is the NINE-tool surface. An unrecognised value fails open to it rather than to
+    // the wider one: failing open to more tools would make a typo silently cost every agent the
+    // tokens the merge exists to save, and nothing would report it.
+    expect(resolveToolSurface()).toBe(TOOL_SURFACE.MERGED);
+    expect(resolveToolSurface('bogus')).toBe(TOOL_SURFACE.MERGED);
     expect(resolveToolSurface(TOOL_SURFACE.ALL)).toBe(TOOL_SURFACE.ALL);
   });
 });
@@ -178,9 +182,9 @@ describe('one surface, plus two switches', () => {
 
   it('verify is the smallest surface, and is not reachable by accident', () => {
     expect(advertisedTools(TOOL_SURFACE.VERIFY).length).toBeLessThan(
-      advertisedTools(TOOL_SURFACE.DEFAULT).length,
+      advertisedTools(TOOL_SURFACE.MERGED).length,
     );
-    expect(resolveToolSurface(undefined), 'never the default').toBe(TOOL_SURFACE.DEFAULT);
+    expect(resolveToolSurface(undefined), 'never the default').toBe(TOOL_SURFACE.MERGED);
   });
 
   it.each([['core'], ['standard'], ['hybrid'], ['dynamic']])(
@@ -214,7 +218,7 @@ describe('one surface, plus two switches', () => {
 
   it('treats a non-truthy switch value as off, rather than as "set"', () => {
     process.env[ADVERTISE_ALL_ENV] = '0';
-    expect(resolveToolSurface()).toBe(TOOL_SURFACE.DEFAULT);
+    expect(resolveToolSurface()).toBe(TOOL_SURFACE.MERGED);
     delete process.env[ADVERTISE_ALL_ENV];
   });
 });

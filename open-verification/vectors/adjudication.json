@@ -1,0 +1,799 @@
+{
+  "$comment": "Adjudication test vectors for the Open Verification Protocol, one per ground of the normative order in SPEC.md 7.1. An implementation that agrees with every expectation here agrees with the adjudication order; one that does not can name the exact clause it differs on, because the ground is the join key between a sentence in the spec, a schema, and a test. Generated from the reference adjudicator and pinned by adjudication-vectors.test.ts, so these cannot drift from the implementation they describe.",
+  "version": "1.0",
+  "vectors": [
+    {
+      "ground": "proved",
+      "input": {
+        "claim": {
+          "id": "c1",
+          "statement": "placing an order creates it",
+          "declaredAt": "before-action",
+          "assertions": [
+            {
+              "id": "a1",
+              "predicate": {},
+              "reads": "the order POST returns 201",
+              "channels": ["net"]
+            }
+          ]
+        },
+        "window": {
+          "id": "w1",
+          "openedAt": 0,
+          "budgetMs": 1000,
+          "closes": "quiescence",
+          "subject": {
+            "surface": "web",
+            "instance": "i1"
+          },
+          "closedAt": 10,
+          "closedBy": "quiescence"
+        },
+        "channels": [
+          {
+            "id": "net",
+            "independence": "independent",
+            "grade": "consequence"
+          }
+        ],
+        "evidence": [
+          {
+            "id": "e1",
+            "window": "w1",
+            "channel": "net",
+            "at": 5,
+            "value": {},
+            "summary": "POST /orders 201",
+            "provenance": {
+              "class": "observed",
+              "source": "net",
+              "method": "cdp",
+              "subject": {
+                "surface": "web",
+                "instance": "i1"
+              },
+              "at": 5
+            },
+            "independence": "independent",
+            "grade": "consequence"
+          }
+        ],
+        "coverage": {
+          "window": "w1",
+          "observed": ["net"],
+          "blindSpots": []
+        },
+        "anomalies": [],
+        "assertionsHeld": true
+      },
+      "expected": {
+        "verdict": "yes",
+        "ground": "proved",
+        "grade": "consequence"
+      }
+    },
+    {
+      "ground": "nothing-declared",
+      "input": {
+        "claim": {
+          "id": "c1",
+          "statement": "placing an order creates it",
+          "declaredAt": "before-action",
+          "assertions": []
+        },
+        "window": {
+          "id": "w1",
+          "openedAt": 0,
+          "budgetMs": 1000,
+          "closes": "quiescence",
+          "subject": {
+            "surface": "web",
+            "instance": "i1"
+          },
+          "closedAt": 10,
+          "closedBy": "quiescence"
+        },
+        "channels": [
+          {
+            "id": "net",
+            "independence": "independent",
+            "grade": "consequence"
+          }
+        ],
+        "evidence": [
+          {
+            "id": "e1",
+            "window": "w1",
+            "channel": "net",
+            "at": 5,
+            "value": {},
+            "summary": "POST /orders 201",
+            "provenance": {
+              "class": "observed",
+              "source": "net",
+              "method": "cdp",
+              "subject": {
+                "surface": "web",
+                "instance": "i1"
+              },
+              "at": 5
+            },
+            "independence": "independent",
+            "grade": "consequence"
+          }
+        ],
+        "coverage": {
+          "window": "w1",
+          "observed": ["net"],
+          "blindSpots": []
+        },
+        "anomalies": [],
+        "assertionsHeld": true
+      },
+      "expected": {
+        "verdict": "no-fault",
+        "ground": "nothing-declared"
+      }
+    },
+    {
+      "ground": "channel-not-observed",
+      "input": {
+        "claim": {
+          "id": "c1",
+          "statement": "placing an order creates it",
+          "declaredAt": "before-action",
+          "assertions": [
+            {
+              "id": "a1",
+              "predicate": {},
+              "reads": "a log line",
+              "channels": ["log"]
+            }
+          ]
+        },
+        "window": {
+          "id": "w1",
+          "openedAt": 0,
+          "budgetMs": 1000,
+          "closes": "quiescence",
+          "subject": {
+            "surface": "web",
+            "instance": "i1"
+          },
+          "closedAt": 10,
+          "closedBy": "quiescence"
+        },
+        "channels": [
+          {
+            "id": "net",
+            "independence": "independent",
+            "grade": "consequence"
+          }
+        ],
+        "evidence": [
+          {
+            "id": "e1",
+            "window": "w1",
+            "channel": "net",
+            "at": 5,
+            "value": {},
+            "summary": "POST /orders 201",
+            "provenance": {
+              "class": "observed",
+              "source": "net",
+              "method": "cdp",
+              "subject": {
+                "surface": "web",
+                "instance": "i1"
+              },
+              "at": 5
+            },
+            "independence": "independent",
+            "grade": "consequence"
+          }
+        ],
+        "coverage": {
+          "window": "w1",
+          "observed": ["net"],
+          "blindSpots": []
+        },
+        "anomalies": [],
+        "assertionsHeld": true
+      },
+      "expected": {
+        "verdict": "unknown",
+        "ground": "channel-not-observed"
+      }
+    },
+    {
+      "ground": "contradicted",
+      "input": {
+        "claim": {
+          "id": "c1",
+          "statement": "placing an order creates it",
+          "declaredAt": "before-action",
+          "assertions": [
+            {
+              "id": "a1",
+              "predicate": {},
+              "reads": "the order POST returns 201",
+              "channels": ["net"]
+            }
+          ]
+        },
+        "window": {
+          "id": "w1",
+          "openedAt": 0,
+          "budgetMs": 1000,
+          "closes": "quiescence",
+          "subject": {
+            "surface": "web",
+            "instance": "i1"
+          },
+          "closedAt": 10,
+          "closedBy": "quiescence"
+        },
+        "channels": [
+          {
+            "id": "net",
+            "independence": "independent",
+            "grade": "consequence"
+          },
+          {
+            "id": "log",
+            "independence": "independent",
+            "grade": "consequence"
+          }
+        ],
+        "evidence": [
+          {
+            "id": "e1",
+            "window": "w1",
+            "channel": "net",
+            "at": 5,
+            "value": {},
+            "summary": "POST /orders 201",
+            "provenance": {
+              "class": "observed",
+              "source": "net",
+              "method": "cdp",
+              "subject": {
+                "surface": "web",
+                "instance": "i1"
+              },
+              "at": 5
+            },
+            "independence": "independent",
+            "grade": "consequence"
+          }
+        ],
+        "coverage": {
+          "window": "w1",
+          "observed": ["net"],
+          "blindSpots": []
+        },
+        "anomalies": [
+          {
+            "kind": "channel-disagreement",
+            "tier": "observed",
+            "claim": "c1",
+            "counter": "net says created, log says failed",
+            "between": ["net", "log"],
+            "evidence": ["e1"]
+          }
+        ],
+        "assertionsHeld": true
+      },
+      "expected": {
+        "verdict": "no",
+        "ground": "contradicted"
+      }
+    },
+    {
+      "ground": "assertion-failed",
+      "input": {
+        "claim": {
+          "id": "c1",
+          "statement": "placing an order creates it",
+          "declaredAt": "before-action",
+          "assertions": [
+            {
+              "id": "a1",
+              "predicate": {},
+              "reads": "the order POST returns 201",
+              "channels": ["net"]
+            }
+          ]
+        },
+        "window": {
+          "id": "w1",
+          "openedAt": 0,
+          "budgetMs": 1000,
+          "closes": "quiescence",
+          "subject": {
+            "surface": "web",
+            "instance": "i1"
+          },
+          "closedAt": 10,
+          "closedBy": "quiescence"
+        },
+        "channels": [
+          {
+            "id": "net",
+            "independence": "independent",
+            "grade": "consequence"
+          }
+        ],
+        "evidence": [
+          {
+            "id": "e1",
+            "window": "w1",
+            "channel": "net",
+            "at": 5,
+            "value": {},
+            "summary": "POST /orders 201",
+            "provenance": {
+              "class": "observed",
+              "source": "net",
+              "method": "cdp",
+              "subject": {
+                "surface": "web",
+                "instance": "i1"
+              },
+              "at": 5
+            },
+            "independence": "independent",
+            "grade": "consequence"
+          }
+        ],
+        "coverage": {
+          "window": "w1",
+          "observed": ["net"],
+          "blindSpots": []
+        },
+        "anomalies": [],
+        "assertionsHeld": false
+      },
+      "expected": {
+        "verdict": "no",
+        "ground": "assertion-failed"
+      }
+    },
+    {
+      "ground": "window-not-closed",
+      "input": {
+        "claim": {
+          "id": "c1",
+          "statement": "placing an order creates it",
+          "declaredAt": "before-action",
+          "assertions": [
+            {
+              "id": "a1",
+              "predicate": {},
+              "reads": "the order POST returns 201",
+              "channels": ["net"]
+            }
+          ]
+        },
+        "window": {
+          "id": "w1",
+          "openedAt": 0,
+          "budgetMs": 1000,
+          "closes": "quiescence",
+          "subject": {
+            "surface": "web",
+            "instance": "i1"
+          }
+        },
+        "channels": [
+          {
+            "id": "net",
+            "independence": "independent",
+            "grade": "consequence"
+          }
+        ],
+        "evidence": [
+          {
+            "id": "e1",
+            "window": "w1",
+            "channel": "net",
+            "at": 5,
+            "value": {},
+            "summary": "POST /orders 201",
+            "provenance": {
+              "class": "observed",
+              "source": "net",
+              "method": "cdp",
+              "subject": {
+                "surface": "web",
+                "instance": "i1"
+              },
+              "at": 5
+            },
+            "independence": "independent",
+            "grade": "consequence"
+          }
+        ],
+        "coverage": {
+          "window": "w1",
+          "observed": ["net"],
+          "blindSpots": []
+        },
+        "anomalies": [],
+        "assertionsHeld": true
+      },
+      "expected": {
+        "verdict": "unknown",
+        "ground": "window-not-closed"
+      }
+    },
+    {
+      "ground": "coverage-impeached",
+      "input": {
+        "claim": {
+          "id": "c1",
+          "statement": "placing an order creates it",
+          "declaredAt": "before-action",
+          "assertions": [
+            {
+              "id": "a1",
+              "predicate": {},
+              "reads": "the order POST returns 201",
+              "channels": ["net"]
+            }
+          ]
+        },
+        "window": {
+          "id": "w1",
+          "openedAt": 0,
+          "budgetMs": 1000,
+          "closes": "quiescence",
+          "subject": {
+            "surface": "web",
+            "instance": "i1"
+          },
+          "closedAt": 10,
+          "closedBy": "quiescence"
+        },
+        "channels": [
+          {
+            "id": "net",
+            "independence": "independent",
+            "grade": "consequence"
+          }
+        ],
+        "evidence": [
+          {
+            "id": "e1",
+            "window": "w1",
+            "channel": "net",
+            "at": 5,
+            "value": {},
+            "summary": "POST /orders 201",
+            "provenance": {
+              "class": "observed",
+              "source": "net",
+              "method": "cdp",
+              "subject": {
+                "surface": "web",
+                "instance": "i1"
+              },
+              "at": 5
+            },
+            "independence": "independent",
+            "grade": "consequence"
+          }
+        ],
+        "coverage": {
+          "window": "w1",
+          "observed": ["net"],
+          "blindSpots": [
+            {
+              "kind": "redacted",
+              "detail": "body hidden",
+              "impeaching": true,
+              "channel": "net"
+            }
+          ]
+        },
+        "anomalies": [],
+        "assertionsHeld": true
+      },
+      "expected": {
+        "verdict": "unknown",
+        "ground": "coverage-impeached"
+      }
+    },
+    {
+      "ground": "suspicion-unresolved",
+      "input": {
+        "claim": {
+          "id": "c1",
+          "statement": "placing an order creates it",
+          "declaredAt": "before-action",
+          "assertions": [
+            {
+              "id": "a1",
+              "predicate": {},
+              "reads": "the order POST returns 201",
+              "channels": ["net"]
+            }
+          ]
+        },
+        "window": {
+          "id": "w1",
+          "openedAt": 0,
+          "budgetMs": 1000,
+          "closes": "quiescence",
+          "subject": {
+            "surface": "web",
+            "instance": "i1"
+          },
+          "closedAt": 10,
+          "closedBy": "quiescence"
+        },
+        "channels": [
+          {
+            "id": "net",
+            "independence": "independent",
+            "grade": "consequence"
+          }
+        ],
+        "evidence": [
+          {
+            "id": "e1",
+            "window": "w1",
+            "channel": "net",
+            "at": 5,
+            "value": {},
+            "summary": "POST /orders 201",
+            "provenance": {
+              "class": "observed",
+              "source": "net",
+              "method": "cdp",
+              "subject": {
+                "surface": "web",
+                "instance": "i1"
+              },
+              "at": 5
+            },
+            "independence": "independent",
+            "grade": "consequence"
+          }
+        ],
+        "coverage": {
+          "window": "w1",
+          "observed": ["net"],
+          "blindSpots": []
+        },
+        "anomalies": [
+          {
+            "kind": "expected-signal-absent",
+            "tier": "absence-derived",
+            "claim": "c1",
+            "counter": "no order:created signal",
+            "between": ["net", "signal"],
+            "evidence": ["e1"]
+          }
+        ],
+        "assertionsHeld": true
+      },
+      "expected": {
+        "verdict": "unknown",
+        "ground": "suspicion-unresolved"
+      }
+    },
+    {
+      "ground": "declared-after-action",
+      "input": {
+        "claim": {
+          "id": "c1",
+          "statement": "placing an order creates it",
+          "declaredAt": "after-action",
+          "assertions": [
+            {
+              "id": "a1",
+              "predicate": {},
+              "reads": "the order POST returns 201",
+              "channels": ["net"]
+            }
+          ]
+        },
+        "window": {
+          "id": "w1",
+          "openedAt": 0,
+          "budgetMs": 1000,
+          "closes": "quiescence",
+          "subject": {
+            "surface": "web",
+            "instance": "i1"
+          },
+          "closedAt": 10,
+          "closedBy": "quiescence"
+        },
+        "channels": [
+          {
+            "id": "net",
+            "independence": "independent",
+            "grade": "consequence"
+          }
+        ],
+        "evidence": [
+          {
+            "id": "e1",
+            "window": "w1",
+            "channel": "net",
+            "at": 5,
+            "value": {},
+            "summary": "POST /orders 201",
+            "provenance": {
+              "class": "observed",
+              "source": "net",
+              "method": "cdp",
+              "subject": {
+                "surface": "web",
+                "instance": "i1"
+              },
+              "at": 5
+            },
+            "independence": "independent",
+            "grade": "consequence"
+          }
+        ],
+        "coverage": {
+          "window": "w1",
+          "observed": ["net"],
+          "blindSpots": []
+        },
+        "anomalies": [],
+        "assertionsHeld": true
+      },
+      "expected": {
+        "verdict": "unknown",
+        "ground": "declared-after-action"
+      }
+    },
+    {
+      "ground": "no-independent-consequence",
+      "input": {
+        "claim": {
+          "id": "c1",
+          "statement": "placing an order creates it",
+          "declaredAt": "before-action",
+          "assertions": [
+            {
+              "id": "a1",
+              "predicate": {},
+              "reads": "the order POST returns 201",
+              "channels": ["net"]
+            }
+          ]
+        },
+        "window": {
+          "id": "w1",
+          "openedAt": 0,
+          "budgetMs": 1000,
+          "closes": "quiescence",
+          "subject": {
+            "surface": "web",
+            "instance": "i1"
+          },
+          "closedAt": 10,
+          "closedBy": "quiescence"
+        },
+        "channels": [
+          {
+            "id": "net",
+            "independence": "actuation-derived",
+            "grade": "consequence"
+          }
+        ],
+        "evidence": [
+          {
+            "id": "e1",
+            "window": "w1",
+            "channel": "net",
+            "at": 5,
+            "value": {},
+            "summary": "POST /orders 201",
+            "provenance": {
+              "class": "observed",
+              "source": "net",
+              "method": "cdp",
+              "subject": {
+                "surface": "web",
+                "instance": "i1"
+              },
+              "at": 5
+            },
+            "independence": "actuation-derived",
+            "grade": "consequence"
+          }
+        ],
+        "coverage": {
+          "window": "w1",
+          "observed": ["net"],
+          "blindSpots": []
+        },
+        "anomalies": [],
+        "assertionsHeld": true
+      },
+      "expected": {
+        "verdict": "unknown",
+        "ground": "no-independent-consequence"
+      }
+    },
+    {
+      "ground": "already-true",
+      "input": {
+        "claim": {
+          "id": "c1",
+          "statement": "placing an order creates it",
+          "declaredAt": "before-action",
+          "assertions": [
+            {
+              "id": "a1",
+              "predicate": {},
+              "reads": "the order POST returns 201",
+              "channels": ["net"]
+            }
+          ]
+        },
+        "window": {
+          "id": "w1",
+          "openedAt": 0,
+          "budgetMs": 1000,
+          "closes": "quiescence",
+          "subject": {
+            "surface": "web",
+            "instance": "i1"
+          },
+          "closedAt": 10,
+          "closedBy": "quiescence"
+        },
+        "channels": [
+          {
+            "id": "net",
+            "independence": "independent",
+            "grade": "consequence"
+          }
+        ],
+        "evidence": [
+          {
+            "id": "e1",
+            "window": "w1",
+            "channel": "net",
+            "at": 5,
+            "value": {},
+            "summary": "POST /orders 201",
+            "provenance": {
+              "class": "observed",
+              "source": "net",
+              "method": "cdp",
+              "subject": {
+                "surface": "web",
+                "instance": "i1"
+              },
+              "at": 5
+            },
+            "independence": "independent",
+            "grade": "consequence"
+          }
+        ],
+        "coverage": {
+          "window": "w1",
+          "observed": ["net"],
+          "blindSpots": []
+        },
+        "anomalies": [],
+        "assertionsHeld": true,
+        "consequenceHeldBefore": true
+      },
+      "expected": {
+        "verdict": "unknown",
+        "ground": "already-true"
+      }
+    }
+  ]
+}

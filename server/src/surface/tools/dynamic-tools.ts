@@ -123,8 +123,23 @@ export function buildDynamicTools(
   };
   const reticleTools: ToolDef = {
     name: ReticleTool.TOOLS,
+    // The "invoke them with reticle_run" half is true only where reticle_run exists. On a closed
+    // surface it is the first thing an agent reads about this tool and it names a tool that is not
+    // there, so it is said only where it can be acted on.
     description:
-      'Discover Reticle tools on demand. Call with no arguments to list every tool (name + one-line summary); call with names:["reticle_network", …] to load full descriptions and parameters for specific tools. Then invoke them with reticle_run. This avoids paying for every tool definition on every turn. To make a verification REUSABLE (record once, replay free forever), the flow workflow lives here: reticle_record{action:"start"} → act → reticle_flow_save → reticle_verify{action:"flows"} (and reticle_flow_heal on drift). Load those names when you want to save or re-run a flow.',
+      'Discover Reticle tools on demand. Call with no arguments to list every tool (name + one-line summary); call with names:["reticle_network", …] to load full descriptions and parameters for specific tools.' +
+      (callable === undefined
+        ? ' Then invoke them with reticle_run.'
+        : ' Every tool it lists is callable directly by name.') +
+      ' This avoids paying for every tool definition on every turn.' +
+      // The flow workflow is taught ONLY where it can be followed. Three of its four calls —
+      // reticle_record, reticle_flow_save, reticle_verify { action: "heal" } — are in the merged table but are not
+      // advertised, and a closed surface has no dispatch hatch to reach them, so naming them here
+      // hands the reader a four-step recipe of which one step works. Replaying flows that already
+      // exist is reachable either way, via reticle_verify, so that half is still offered.
+      (callable === undefined
+        ? ' To make a verification REUSABLE (record once, replay free forever), the flow workflow lives here: reticle_record{action:"start"} → act → reticle_flow_save → reticle_verify{action:"flows"} (and reticle_verify { action: "heal" } on drift). Load those names when you want to save or re-run a flow.'
+        : ' Flows that already exist replay with reticle_verify { action: "flows" }. RECORDING a new one is not reachable from this surface; start the daemon with RETICLE_ADVERTISE_ALL_TOOLS=1 if you need to build one.'),
     inputSchema: toolsShape,
     handler: (_deps: ToolDeps, args: Record<string, unknown>) => {
       // The discovery tool declared one parameter and checked none, so a call that misnamed it had
@@ -161,7 +176,16 @@ export function buildDynamicTools(
           tools: catalog,
           retired,
           ...profileBlock,
-          next: `All ${catalog.length} tools above are callable, advertised or not. Load full params with reticle_tools { names:[…] }, then call reticle_run { tool, args }. \`retired\` maps names that are no longer tools to the call that replaced each.`,
+          // Two sentences for two different surfaces, because one sentence was wrong on one of
+          // them. This told every reader to "call reticle_run { tool, args }" — and on a closed
+          // surface reticle_run is not advertised OR callable, so the instruction resolves to
+          // "Tool reticle_run not found". It also contradicted the profile note directly above it,
+          // which already said there is no dispatch hatch. An agent reading both cannot tell which
+          // half of one answer to believe, and the one it acted on was the wrong one.
+          next:
+            callable === undefined
+              ? `All ${catalog.length} tools above are callable, advertised or not. Load full params with reticle_tools { names:[…] }, then call reticle_run { tool, args }. \`retired\` maps names that are no longer tools to the call that replaced each.`
+              : `All ${catalog.length} tools above are advertised and callable directly by name — there is no dispatch hatch on this surface. Load full params with reticle_tools { names:[…] }. \`retired\` maps names that are no longer tools to the call that replaced each.`,
         });
       }
       // The grammar rides ONLY on a `names:[…]` reply that asked for a tool taking a predicate, so

@@ -16,16 +16,19 @@ Needs Reticle wired in the project. Not there? `RETICLE_INSTALL_SOURCE=npx_skill
 
 ## Record
 
+You do not have to ask. **A drive is saved as a flow automatically** when the session ends, written to `.reticle/flows/`. **Commit it**: any agent on the repo can then replay it.
+
+What decides whether it is worth committing is how you drove it. A step keeps a consequence only when you declared one, so drive the golden path like this:
+
 ```
-reticle_run({ tool: "reticle_record", sessionId, args: { action: "start", recordingName: "create-task" } })
-   … drive the golden path with reticle_act / reticle_act_sequence …
-reticle_run({ tool: "reticle_record", sessionId, args: { action: "stop", recordingName: "create-task" } })
-reticle_run({ tool: "reticle_flow_save", sessionId, args: { flowName: "create-task" } })
+reticle_act_and_wait({ sessionId, ref, action: "click", until: { kind: "signal", name: "task:created" } })
 ```
 
-That writes `.reticle/flows/create-task.json`. **Commit it**: any agent on the repo can then replay it.
+That step replays as a test. A bare `reticle_act` saves a click with nothing to prove, and replays green through any regression.
 
-Annotate the business outcome, not just the clicks, so a replay proves the journey _achieved_ something:
+To name a flow deliberately rather than take the automatic one, `reticle_record` and `reticle_flow_save` do it through `reticle_run`. Both live on the extended surface: the default nine advertise no dispatch hatch, so they need a daemon started with `RETICLE_ADVERTISE_ALL_TOOLS=1`.
+
+Annotate the business outcome, not just the clicks, so a replay proves the journey _achieved_ something. Extended surface, like the two above:
 
 ```
 reticle_run({ tool: "reticle_annotate", sessionId, args: { flow: "create-task", kind: "intent", text: "create a task and see it in the list" } })
@@ -37,8 +40,10 @@ reticle_run({ tool: "reticle_annotate", sessionId, args: { flow: "create-task", 
 ## Replay
 
 ```
-reticle_run({ tool: "reticle_flow_replay", sessionId, args: { flowName: "create-task" } })
+reticle_verify({ sessionId, action: "change", files: ["src/tasks/TaskList.tsx"] })
 ```
+
+That replays the flows covering those files. To replay one named flow directly, `reticle_flow_replay` is reached through `reticle_run` on the extended surface.
 
 Three statuses, and the failures are legible rather than blind:
 
@@ -48,12 +53,12 @@ Three statuses, and the failures are legible rather than blind:
 | `drift` | an anchor missed: a renamed testid, a signal that never fired | read `decision.nextAction`; it names the file:line and the closest surviving anchor |
 | `error` | the flow file is missing or invalid, or a step failed at runtime | fix from the error envelope's failed step |
 
-On drift, `reticle_flow_heal` proposes the nearest-match rebind so flows do not rot. Apply it when the rename was intentional; treat it as a finding when it was not.
+On drift, `reticle_verify { action: "heal" }` proposes the nearest-match rebind so flows do not rot. Apply it when the rename was intentional; treat it as a finding when it was not.
 
 ## Re-verify the whole suite after any change
 
 ```
-reticle_run({ tool: "reticle_verify", sessionId, args: { action: "flows" } })
+reticle_verify({ sessionId, action: "flows" })
 // → { status, total, passed, failed, failures: [{ flow, verdict, whatChanged, whereInSource, nextAction }] }
 ```
 
@@ -64,7 +69,7 @@ One call, every saved flow, no model per flow. Only failures carry detail, so a 
 On a large suite, replaying everything after a one-file edit is waste. Hand it the diff instead:
 
 ```
-reticle_run({ tool: "reticle_verify", sessionId, args: { action: "change", since: "HEAD~1" } })
+reticle_verify({ sessionId, action: "change", since: "HEAD~1" })
 ```
 
 It works out which saved flows cover the files you edited and replays only those. Give it a git ref or the file list. Use this in the inner loop and `flow_verify` before you ship: the narrow one is fast, the whole one is the guarantee.
@@ -72,7 +77,7 @@ It works out which saved flows cover the files you edited and replays only those
 ### Which of your flows actually prove anything
 
 ```
-reticle_run({ tool: "reticle_domain", sessionId })
+reticle_run({ tool: "reticle_domain", sessionId })   // extended surface
 // → { flowCount, coverage: { asserted, presenceOnly, assertionFree }, gaps: { declaredUntestedSignals, … } }
 ```
 

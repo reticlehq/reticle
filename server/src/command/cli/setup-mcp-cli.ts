@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { setupMcp, knownClientLabels, type SetupMcpIo } from '../setup/setup-mcp.js';
 import { reportInstallSteps } from '../setup/setup-install.js';
+import { registerOtherAgents } from '../setup/setup-command.js';
 import type { OnboardingStep } from '@reticlehq/core/telemetry';
 
 /**
@@ -54,6 +55,10 @@ export function handleSetupMcp(reportStep: StepReporter): void {
   const result = setupMcp(io);
 
   if (0 === result.detected.length) {
+    // Even with no file-backed client, the broader set may still have somewhere to write.
+    registerOtherAgents((line) => {
+      io.print(line);
+    });
     // Named rather than a bare "none found". A person whose agent IS installed needs to know
     // whether we looked for it at all, and the list is the difference between "we did not find
     // yours" and "we do not support yours".
@@ -63,6 +68,22 @@ export function handleSetupMcp(reportStep: StepReporter): void {
   }
   for (const id of result.registered) io.print(`  registered  ${id}`);
   for (const id of result.alreadyThere) io.print(`  already     ${id}`);
+  /*
+   * The OTHER agents, which `init` already reaches and this did not.
+   *
+   * There are two registration paths and I shipped one: `MCP_CLIENTS` covers eight file-backed
+   * clients, and `registerOtherAgents` covers the rest — VS Code's USER scope, Zed, Copilot CLI,
+   * Warp, Kiro, Amazon Q, Cline, Amp, Continue, Factory Droid. Found by running the installer and
+   * `init` back to back in one sandbox: the installer said "registered cursor" and init then said
+   * "registered the MCP server with 10 more agent(s)".
+   *
+   * "Set up the MCP everywhere" has to mean everywhere, and an installer that reaches fewer agents
+   * than `init` sends somebody to a project directory to finish a job that had no reason to be
+   * half-done.
+   */
+  registerOtherAgents((line) => {
+    io.print(line);
+  });
   // Said on every run, attended or not: a registration only takes effect when the agent re-reads
   // its config, and an agent that was already open is the commonest reason "it did not work".
   io.print('');

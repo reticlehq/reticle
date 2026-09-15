@@ -57,7 +57,7 @@ const alive = () => client.proc !== null && client.proc.exitCode === null && !cl
 async function callAnswered() {
   const started = Date.now();
   try {
-    await client.callTool('reticle_sessions', {}, ANSWER_BUDGET_MS);
+    await client.callTool('reticle_session', {}, ANSWER_BUDGET_MS);
     return { answered: true, ms: Date.now() - started, how: 'result' };
   } catch (err) {
     const text = String(err);

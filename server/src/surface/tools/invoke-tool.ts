@@ -148,7 +148,9 @@ export const SESSION_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
   ReticleTool.FLOW, // merged list/load/delete — sessionId only scopes the project; all disk-side
   ReticleTool.FLOW_REPLAY, // returns its own FlowReplayResult contract (+ auto-records a run)
   ReticleTool.FLOW_SAVE_RECORDED, // reads the recording buffer, writes disk
-  ReticleTool.FLOW_HEAL, // returns its own FlowHealResult contract
+  // FLOW_HEAL is no longer a name runTool ever sees: it became `reticle_verify {action:"heal"}`,
+  // and VERIFY is already listed here, so the exemption is inherited from the parent. Left as a
+  // dangling name it would be a lie this file's own test 6 is written to catch.
   ReticleTool.INTENT, // reads/writes .reticle/intent.json; sessionId only picks the project
   ReticleTool.CONTEXT, // folds the journal + intent ledger; must still answer when nothing is connected
   ReticleTool.PROJECT, // reads .reticle/project.json
@@ -411,7 +413,7 @@ export async function runTool<Ext>(
   // `reportRefusal` and `bugsInResult` exclude it — its handler calls `runTool` on the real tool, so
   // the inner call is already counted under the name that RAN, and counting the wrapper too would
   // both double the total and hide the run-only tier behind a single wrapper name. That tier is
-  // precisely the one the decision hinges on. See honesty/tool-hit-rate.ts.
+  // precisely the one the decision hinges on. See surface/tools/tool-hit-rate.ts.
   if (ReticleTool.RUN !== tool.name) {
     let target = session;
     if (target === undefined) {

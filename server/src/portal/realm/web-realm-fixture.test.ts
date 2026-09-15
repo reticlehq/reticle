@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fixtureIsUsable, type FixtureRef } from '@reticlehq/openverification';
+import { fixtureIsUsable, type FixtureRef } from 'open-verification';
 import { WebRealm } from './web-realm.js';
 import { createFakeSession } from '../session/fake-session.js';
 

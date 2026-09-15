@@ -4,7 +4,7 @@ description: 'Record an interactive run once and replay it forever as a git-chec
 icon: repeat
 ---
 
-A **flow** is a recorded interactive run that Reticle stores as JSON under `.reticle/flows/` and replays forever with no AI model in the loop. Steps are anchored on **meaning** (a testid, a signal, or an auto-derived component + source location), never on a `eXX` ref or a coordinate, so they survive refactors; when an anchor does drift, `reticle_flow_replay` names what changed and `reticle_flow_heal` can rebind it.
+A **flow** is a recorded interactive run that Reticle stores as JSON under `.reticle/flows/` and replays forever with no AI model in the loop. Steps are anchored on **meaning** (a testid, a signal, or an auto-derived component + source location), never on a `eXX` ref or a coordinate, so they survive refactors; when an anchor does drift, `reticle_flow_replay` names what changed and `reticle_verify { action: "heal" }` can rebind it.
 
 Reticle turns an interactive run into a **git-checked, replayable program** stored under `.reticle/`. Flows are anchored on **meaning** (testid + signal), not volatile element refs or coordinates, so they survive refactors, and when an anchor does drift, Reticle tells you _why_ and can repair it. This is what makes Reticle "the project's living test suite a human seeds and an agent maintains."
 
@@ -129,14 +129,14 @@ Passing flows are counted; only failures carry detail (token-cheap). Build → `
 
 ## Self-healing: the agent maintains the flow
 
-When a testid is renamed, the flow drifts. `reticle_flow_heal` proposes (and optionally applies) the nearest-match rebind, so flows don't rot:
+When a testid is renamed, the flow drifts. `reticle_verify { action: "heal" }` proposes (and optionally applies) the nearest-match rebind, so flows don't rot:
 
 ```jsonc
-reticle_flow_heal({ flowName: "create-task" })               // PROPOSE only, never writes
+reticle_verify({ action: "heal", flowName: "create-task" })               // PROPOSE only, never writes
 // → { status: "drift", applied: false,
 //     proposals: [{ step: 0, from: "add-tassk", to: "add-task", confidence: 0.8 }] }
 
-reticle_flow_heal({ flowName: "create-task", apply: true })  // rewrite the anchor on disk
+reticle_verify({ action: "heal", flowName: "create-task", apply: true })  // rewrite the anchor on disk
 // → { status: "healed", applied: true, proposals: [...] }
 ```
 
@@ -166,7 +166,7 @@ With `apply: false` the flow file is **never modified**; you get the proposed di
 | `reticle_flow {action:"load"}` | `{ flowName }` | the flow JSON |
 | `reticle_flow_replay` | `{ flowName }` | `{ status, steps, decision? }` (decision on drift/fail) |
 | `reticle_verify {action:"flows"}` | `{ names?, sessionId? }` | suite verdict `{ status, passed, failed, failures[] }` |
-| `reticle_flow_heal` | `{ flowName, apply? }` | propose / apply nearest-match rebind |
+| `reticle_verify { action: "heal" }` | `{ flowName, apply? }` | propose / apply nearest-match rebind |
 | `reticle_annotate` | `{ kind, … }` | compile a structured annotation into the flow |
 
 > Flow `name` must be a single safe path segment (no `/`, `\`, `..`, or leading dot).

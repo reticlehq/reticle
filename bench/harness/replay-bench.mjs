@@ -112,6 +112,31 @@ const summary = {
     playwright_mcp_redrive_tokens: LLM_REDRIVE.playwright_mcp,
     chrome_devtools_mcp_redrive_tokens: LLM_REDRIVE.chrome_devtools_mcp,
   },
+  /*
+   * The DENOMINATOR, recorded so the next comparison is possible at all.
+   *
+   * `reticle_replay_mean_tokens` is a mean over whichever flows this pass happened to replay, and
+   * the history row kept the mean and threw the denominator away. So when the gate reported 263 ->
+   * 463 there was no way to tell a per-step regression from a suite that simply grew longer flows:
+   * the earlier row records no flow names and no step counts, and the number cannot be reproduced
+   * from it. A benchmark whose baseline cannot be reproduced is a number, not a measurement.
+   *
+   * `per_step` is the figure that survives the suite changing shape, which is the comparison anybody
+   * reading a token regression actually wants.
+   */
+  measured: {
+    flows: rows.length,
+    steps: rows.reduce((sum, r) => sum + (r.stepCount ?? 0), 0),
+    flow_names: rows.map((r) => r.flow).sort(),
+    per_step:
+      rows.reduce((sum, r) => sum + (r.stepCount ?? 0), 0) > 0
+        ? Math.round(
+            (rows.reduce((sum, r) => sum + (r.replay_tokens ?? 0), 0) /
+              rows.reduce((sum, r) => sum + (r.stepCount ?? 0), 0)) *
+              10,
+          ) / 10
+        : null,
+  },
   ratio_vs_playwright: meanReplay ? Math.round(LLM_REDRIVE.playwright_mcp / meanReplay) : null,
   note: 'Reticle replay is deterministic (no model). Competitors have no replay — an agent re-drives every run at the Layer B cost. Ratio compounds: over N runs Reticle pays ~author-once + N*replay; competitors pay N*re-drive.',
   rows,

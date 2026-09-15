@@ -92,9 +92,9 @@ describe('reticle_run_export (MCP persona)', () => {
     expect(out.run?.runId).toBe('run-a');
   });
 
-  it('returns the OpenVerification artifact with format:"openverification"', async () => {
+  it('returns the OpenVerification artifact with format:"open-verification"', async () => {
     if (tool === undefined) return;
-    const out = (await tool.handler(deps, { format: 'openverification' })) as {
+    const out = (await tool.handler(deps, { format: 'open-verification' })) as {
       artifact?: { kind?: string; runId?: string; subject?: { name?: string } };
     };
     // The protocol shape, not Reticle's own run shape: a consumer who implements OVP and has never
@@ -109,8 +109,14 @@ describe('reticle_run_export (MCP persona)', () => {
     // `toArtifact` is pure by design -- it reads no clock, precisely so that exporting one run
     // twice cannot produce two different documents. Wiring it to a tool is the step that could
     // break that, by stamping a time on the way out.
-    const a = (await tool.handler(deps, { format: 'openverification' })) as Record<string, unknown>;
-    const b = (await tool.handler(deps, { format: 'openverification' })) as Record<string, unknown>;
+    const a = (await tool.handler(deps, { format: 'open-verification' })) as Record<
+      string,
+      unknown
+    >;
+    const b = (await tool.handler(deps, { format: 'open-verification' })) as Record<
+      string,
+      unknown
+    >;
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 

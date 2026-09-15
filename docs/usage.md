@@ -287,7 +287,7 @@ List interactive elements + console-error count for autonomous exploration. See 
 
 ### Flows, recorder & self-healing (`.reticle/`)
 
-`reticle_contract_save`, `reticle_flow_save` / `reticle_flow_save_recorded` / `reticle_flow {action:"list"}` / `reticle_flow {action:"load"}` / `reticle_flow_replay` / `reticle_verify {action:"flows"}`, `reticle_flow_heal`, `reticle_annotate`: record once, replay forever (anchored on testid/signal, or on an auto-derived component/source anchor when there's no testid), with legible drift + self-heal. Full guide: [Flows, the recorder & self-healing](flows.md).
+`reticle_contract_save`, `reticle_flow_save` / `reticle_flow_save_recorded` / `reticle_flow {action:"list"}` / `reticle_flow {action:"load"}` / `reticle_flow_replay` / `reticle_verify {action:"flows"}`, `reticle_verify { action: "heal" }`, `reticle_annotate`: record once, replay forever (anchored on testid/signal, or on an auto-derived component/source anchor when there's no testid), with legible drift + self-heal. Full guide: [Flows, the recorder & self-healing](flows.md).
 
 - **`reticle_verify({ action: "flows", names?, sessionId? })`** is the regression-suite call: it replays EVERY saved flow (or a subset) deterministically and returns one verdict `{ status, passed, failed, failures: [{ flow, verdict, whatChanged, whereInSource, nextAction }] }`. Passing flows are counted; only failures carry detail. Run it after any change: one call, no LLM per flow.
 - **Decision envelope:** on a drift/fail, `reticle_flow_replay` (and each `reticle_verify {action:"flows"}` failure) returns the actionable fix: `whatChanged`, `whereInSource` (`file:line`), and a one-line `nextAction` (e.g. "rebind the anchor to 'new-deploy', or update the flow if intended").
@@ -597,7 +597,7 @@ export default [
 ];
 ```
 
-`mutators` lists the callee names that change state; `signalCallee` (default `['reticleSignal', 'signal']`) is the name that counts as firing a signal. See [`packages/eslint-plugin/README.md`](../packages/eslint-plugin/README.md) for scoping and matching details.
+`mutators` lists the callee names that change state; `signalCallee` (default `['reticleSignal', 'signal']`) is the name that counts as firing a signal. See [`adapters/lint/eslint/README.md`](../adapters/lint/eslint/README.md) for scoping and matching details.
 
 ---
 

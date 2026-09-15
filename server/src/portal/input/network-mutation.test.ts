@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MutationKind } from '@reticlehq/openverification';
+import { MutationKind } from 'open-verification';
 import { mutationPortFor } from './network-mutation.js';
 import type { MockRule } from './network-mock.js';
 import type { RealInputProvider } from './real-input.js';

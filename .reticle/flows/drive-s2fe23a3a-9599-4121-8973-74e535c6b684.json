@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "name": "drive-s2fe23a3a-9599-4121-8973-74e535c6b684",
+  "createdAt": 1789455301310,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "login-submit",
+        "source": {
+          "file": "src/components/Login.tsx",
+          "line": 81,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "route": {
+          "contains": "/overview"
+        }
+      }
+    }
+  ],
+  "startPath": "/"
+}

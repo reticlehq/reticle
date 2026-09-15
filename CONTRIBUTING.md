@@ -68,8 +68,8 @@ The packages sit at the top level — there is no `packages/` directory; it was 
 ### The shipped product
 
 ```
-core          @reticlehq/core         — wire contract, constants, zod schemas (deps: openverification, zod)
-openverification   @reticlehq/openverification  — the Open Verification Protocol: vocabulary, rules, `Realm`, `adjudicate()`
+core          @reticlehq/core         — wire contract, constants, zod schemas (deps: open-verification, zod)
+open-verification   open-verification  — the Open Verification Protocol: vocabulary, rules, `Realm`, `adjudicate()`
 engine        @reticlehq/engine       — the rules that decide a verdict, with no browser, daemon or CLI attached
 server        @reticlehq/server       — bridge + MCP server, the `reticle` CLI (Node-side)
 init          @reticlehq/init         — project scaffolder: `reticle init`'s codemod, no runtime (Node-side)

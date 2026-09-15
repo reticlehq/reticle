@@ -20,10 +20,12 @@ export const reportStepFromCli = (step: OnboardingStep): void => {
 /**
  * The two ONBOARD steps `reticle tutorial` can honestly answer.
  *
- * The tutorial RENDERS; it does not run anything. So it knows the tour was asked for and the concept
- * was put in front of somebody, and it knows nothing about whether they then looked, acted or
- * proved. Claiming those here would report a journey nobody took. The remaining three are observed
- * by the daemon at the first look / act / verdict of a run, which is the only place they are a fact.
+ * Asking for the tour is a fact here, and so is having been shown what Reticle is. Whether the
+ * reader then looked, acted or proved is not — even on `tutorial --run`, which drives the demo: those
+ * three are reported by the daemon at the first look / act / verdict it actually witnesses, through
+ * the dispatch chokepoint, because that is the only place they are observations rather than claims.
+ * Reporting them from here would turn "the tour reached step four" into "somebody verified something",
+ * which is the same substitution the fourth step of the tour exists to warn about.
  */
 export function reportTutorialShown(): void {
   for (const step of ['tour_started', 'concept_shown'] as const) {

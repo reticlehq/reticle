@@ -115,7 +115,7 @@ chk(
 
 // 3. Demand brings it back, and the agent never sees the difference.
 const t0 = Date.now();
-const result = await call('reticle_sessions');
+const result = await call('reticle_session');
 const answeredMs = Date.now() - t0;
 chk('the next tool call is answered anyway', Array.isArray(result?.sessions), JSON.stringify(result).slice(0, 60));
 const secondPid = daemonPid();

@@ -77,8 +77,8 @@ Run from a workspace root with several apps, it refuses to guess, names them, an
 
 ```
 Several apps found in this workspace. Re-run `reticle init` inside the one you want:
-  packages/next
-  packages/vite-plugin
+  adapters/build/next
+  adapters/build/vite
   apps/atlas
   apps/bench-app
   apps/electron-smoke
@@ -87,7 +87,7 @@ Several apps found in this workspace. Re-run `reticle init` inside the one you w
   apps/tauri-smoke
   apps/vibe-builder-demo
 
-Or name one without changing directory:  reticle init --app packages/next
+Or name one without changing directory:  reticle init --app apps/next-smoke
 ```
 
 Given `--app`, it says which directory it moved to before printing the plan:

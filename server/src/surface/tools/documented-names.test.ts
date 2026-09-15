@@ -17,7 +17,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { ReticleTool, FlowStepTool } from '@reticlehq/core';
 import { REPO_ROOT } from '../../machine/repo-root.js';
-import { CORE_TOOL_NAMES } from './tool-surface.js';
+import { CORE_TOOL_NAMES, defaultAdvertisedNames } from './tool-surface.js';
 
 const REPO = REPO_ROOT;
 /** The docs an AGENT is pointed at. Internal design notes are not a contract with anyone. */
@@ -49,6 +49,16 @@ const AGENT_DOCS = [
  * why: a tool an agent must already know about is a tool that never gets called.
  */
 const ADVERTISED: ReadonlySet<string> = new Set([
+  /*
+   * The LIVE default surface first, then the wider table.
+   *
+   * `CORE_TOOL_NAMES` alone stopped describing what a reader is handed when the nine became the
+   * default: `reticle_look` is advertised there and absent from that list, so a doc showing the
+   * correct call was reported as sending readers to a tool they do not have. Both are kept, because
+   * this guard asks "could a reader make this call" across the surfaces the docs serve, and a name
+   * on either is a name somebody can reach.
+   */
+  ...defaultAdvertisedNames(),
   ...CORE_TOOL_NAMES,
   ReticleTool.RUN,
   ReticleTool.TOOLS,

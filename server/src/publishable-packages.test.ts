@@ -12,7 +12,7 @@ import { dirname, join, resolve } from 'node:path';
  * nothing, and logs a failure in the console of every app embedding the SDK. On `@reticlehq/browser`
  * that was 36% of the download for nothing.
  *
- * Nine packages ran it and two did not. `@reticlehq/openverification` — the protocol, added this release
+ * Nine packages ran it and two did not. `open-verification` — the protocol, added this release
  * — shipped its five compiled test files and every map; `@reticlehq/engine` shipped 890 such
  * entries and had been doing so for longer. Neither is visible to any gate short of `npm pack`,
  * which is why this exists: the last time a `prepack` was wrong it broke publishing for five of

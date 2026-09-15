@@ -1,7 +1,7 @@
 /**
  * One record per realm, in a table the compiler refuses to leave a hole in.
  *
- * NOT the protocol's `Realm`. That is an abstract class in `@reticlehq/openverification` describing what
+ * NOT the protocol's `Realm`. That is an abstract class in `open-verification` describing what
  * a realm can DO -- eight questions an implementation answers. This describes what a realm IS LIKE:
  * four fixed traits the rest of the codebase branches on. Both were called `Realm` for a while,
  * in one repository, which is how a barrel export starts refusing to compile and how a reader
@@ -39,7 +39,7 @@ import {
   type DeterminismProfile,
   Surface,
   type SubjectRef,
-} from '@reticlehq/openverification';
+} from 'open-verification';
 import { AppRuntime } from '../telemetry-feedback.js';
 import { PlatformProfile } from '../wire/platform.js';
 

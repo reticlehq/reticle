@@ -9,6 +9,7 @@ import {
   ReticleVerificationRunSchema,
   Verified,
   type ReticleVerificationRun,
+  asSessionId,
 } from '@reticlehq/core';
 import { AmbientStore } from './ambient-store.js';
 import { makeSessionEnd, type SessionEndTarget } from './session-end.js';
@@ -116,7 +117,7 @@ describe('journal retention is bounded on a long-running daemon', () => {
       const end = makeSessionEnd({ fs, reticleRoot: root, enabled: true });
       const overBound = DEFAULT_SESSION_RETENTION + 5;
       for (let i = 0; i < overBound; i++) {
-        const dir = sessionDirPath(root, `s${i}`);
+        const dir = sessionDirPath(root, asSessionId(`s${i}`));
         await fs.mkdir(dir);
         await fs.writeFile(join(dir, 'events.jsonl'), '{}\n');
       }

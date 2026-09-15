@@ -144,6 +144,12 @@ export function demoPlan(
     ok: true,
     ref: safe.ref,
     name: safe.name,
-    call: `reticle_act_and_wait { ref: "${safe.ref}", action: "click", until: { element: { testid: "<what should appear>" } } }`,
+    // `{ element: { testid } }` reads naturally and is REFUSED: a consequence is a predicate with a
+    // `kind`, and act_and_wait says so in its own refusal text. This line is a call the reader is
+    // meant to paste, so a plausible-but-unparseable spelling here teaches the exact mistake that
+    // tool exists to catch.
+    call:
+      `reticle_act_and_wait { ref: "${safe.ref}", action: "click", ` +
+      `until: { kind: "element", by: "testid", value: "<what should appear>" } }`,
   };
 }

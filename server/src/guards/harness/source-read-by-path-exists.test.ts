@@ -79,7 +79,7 @@ function sourceFiles(): string[] {
   return (
     execFileSync(
       'git',
-      ['ls-files', 'server/src', 'core/src', 'engine/src', 'init/src', 'openverification/src'],
+      ['ls-files', 'server/src', 'core/src', 'engine/src', 'init/src', 'open-verification/src'],
       { cwd: REPO_ROOT, encoding: 'utf8' },
     )
       .split('\n')

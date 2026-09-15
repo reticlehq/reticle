@@ -212,7 +212,7 @@ export const RECOVERY = {
     'once the cause is addressed.',
   FLOW_STEP_MISSING:
     'A recorded step points at an element that is not on the page now. Either the app changed under ' +
-    'the flow — run reticle_flow_heal to re-anchor it, then reticle_verify{action:"flows"} — or an earlier step ' +
+    'the flow — run reticle_verify { action: "heal" } to re-anchor it, then reticle_verify{action:"flows"} — or an earlier step ' +
     'did not do what it used to, leaving the run on the wrong page: check reticle_snapshot to see ' +
     'where it actually is. This is app/flow drift, which is exactly what the flow exists to catch.',
   NO_POOL:

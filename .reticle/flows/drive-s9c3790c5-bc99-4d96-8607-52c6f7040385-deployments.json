@@ -1,0 +1,166 @@
+{
+  "version": 1,
+  "name": "drive-s9c3790c5-bc99-4d96-8607-52c6f7040385-deployments",
+  "createdAt": 1789453878568,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "new-deploy",
+        "source": {
+          "file": "src/views/Deployments.tsx",
+          "line": 104,
+          "column": 10
+        }
+      },
+      "args": {},
+      "action": "click"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "deploy-name",
+        "source": {
+          "file": "src/components/NewDeployModal.tsx",
+          "line": 53,
+          "column": 8
+        }
+      },
+      "args": {
+        "value": "   "
+      },
+      "action": "fill"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "deploy-submit",
+        "source": {
+          "file": "src/components/NewDeployModal.tsx",
+          "line": 88,
+          "column": 10
+        }
+      },
+      "args": {},
+      "action": "click"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "new-deploy",
+        "source": {
+          "file": "src/views/Deployments.tsx",
+          "line": 104,
+          "column": 10
+        }
+      },
+      "args": {},
+      "action": "click"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "deploy-name",
+        "source": {
+          "file": "src/components/NewDeployModal.tsx",
+          "line": 53,
+          "column": 8
+        }
+      },
+      "args": {
+        "value": "   "
+      },
+      "action": "fill"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "deploy-submit",
+        "source": {
+          "file": "src/components/NewDeployModal.tsx",
+          "line": 88,
+          "column": 10
+        }
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "element": {
+          "testid": "deploy-modal"
+        }
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "deploy-name",
+        "source": {
+          "file": "src/components/NewDeployModal.tsx",
+          "line": 53,
+          "column": 8
+        }
+      },
+      "args": {
+        "value": "my-service"
+      },
+      "action": "fill"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "deploy-submit",
+        "source": {
+          "file": "src/components/NewDeployModal.tsx",
+          "line": 88,
+          "column": 10
+        }
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "element": {
+          "testid": "deploy-modal"
+        }
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "new-deploy",
+        "source": {
+          "file": "src/views/Deployments.tsx",
+          "line": 104,
+          "column": 10
+        }
+      },
+      "args": {},
+      "action": "click"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "deploy-name",
+        "source": {
+          "file": "src/components/NewDeployModal.tsx",
+          "line": 53,
+          "column": 8
+        }
+      },
+      "args": {
+        "value": "  valid-service  "
+      },
+      "action": "fill"
+    }
+  ],
+  "startPath": "/deployments"
+}

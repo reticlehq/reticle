@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CROSS_STEP_ADDRESS, FlowStepTool } from './flow-step-tool.js';
+import { StepEffect } from './step-effect.js';
 export { CROSS_STEP_ADDRESS, FlowStepTool } from './flow-step-tool.js';
 import { ActionType } from '../wire/constants/constants.js';
 import type { Contradiction } from '../verdict/findings.js';
@@ -202,6 +203,17 @@ export interface FlowStep {
    * never say which files it covers, and a scoped re-verify had nothing to scope by.
    */
   source?: { file: string; line?: number };
+  /**
+   * A name for this step that survives editing the flow.
+   *
+   * Resume targets a step, and targeting it by POSITION breaks the moment one is inserted, removed
+   * or healed: "resume from 4" quietly means a different step than it did yesterday, and nothing
+   * reports the shift. Optional and back-compat — a flow without ids resumes by index exactly as
+   * before, which is every flow recorded before this shipped.
+   */
+  id?: string;
+  /** What this step does to the subject; absent means unknown. See StepEffect. */
+  effect?: StepEffect;
   action?: ActionType;
   args?: Record<string, unknown>;
   expect?: FlowExpect;
@@ -253,6 +265,17 @@ const baseFlowStep = z.object({
   source: z
     .object({ file: z.string().min(1), line: z.number().int().positive().optional() })
     .optional(),
+  /**
+   * A name for this step that survives editing the flow.
+   *
+   * Resume targets a step, and targeting it by POSITION breaks the moment one is inserted, removed
+   * or healed: "resume from 4" quietly means a different step than it did yesterday and nothing
+   * reports the shift. Optional and back-compat — a flow without ids resumes by index exactly as
+   * before, which is every flow recorded before this shipped.
+   */
+  id: z.string().min(1).optional(),
+  /** What this step does to the subject; absent means unknown. See StepEffect. */
+  effect: z.nativeEnum(StepEffect).optional(),
   action: z.nativeEnum(ActionType).optional(),
   args: z.record(z.unknown()).optional(),
   expect: FlowExpectSchema.optional(),
@@ -675,6 +698,24 @@ export const FlowFileSchema = z.object({
   // FUTURE: fixtures/preconditions — schema slot reserved, unpopulated this cut. The recorder
   // never writes it and no fixture runner exists.
   fixture: z.string().optional(),
+  /**
+   * What must already be true for this flow to mean anything, and what it leaves true.
+   *
+   * These are the two halves of composition. Replaying flows back to back only works when the state
+   * one leaves is the state the next expects, and nothing said so — so a suite either got lucky or
+   * produced a failure that looked like a regression and was a missing precondition. `requires` lets
+   * a replay report THAT instead: not met is `unknown` (nothing ran, nothing proved), never a
+   * failure, which is the same honesty rule an uncovered change already follows.
+   *
+   * `ensures` is the other side, and is what makes A-then-B checkable before either runs.
+   *
+   * Both optional and both absent from every flow recorded before this shipped, where absent means
+   * what it has always meant: replay from wherever the app already is, and let the steps speak.
+   * Same predicate shape as a step's `expect`, deliberately — a precondition is just a consequence
+   * somebody else's flow was responsible for.
+   */
+  requires: z.array(FlowExpectSchema).optional(),
+  ensures: z.array(FlowExpectSchema).optional(),
   /** From the injected clock (ms) — deterministic in tests, byte-stable on disk. */
   createdAt: z.number(),
   steps: z.array(FlowStepSchema),

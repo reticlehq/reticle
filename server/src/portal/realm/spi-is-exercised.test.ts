@@ -36,7 +36,7 @@ const REPO = execFileSync('git', ['rev-parse', '--show-toplevel'], {
  * a member nothing checks can be stubbed or thrown from and the implementation still earns a
  * profile. The vacuity assertion below is what caught it.
  */
-const SPI_FILES = ['openverification/src/spi/realm.ts', 'openverification/src/spi/witness.ts'];
+const SPI_FILES = ['open-verification/src/spi/realm.ts', 'open-verification/src/spi/witness.ts'];
 
 function requiredMembers(): string[] {
   const source = SPI_FILES.map((file) => readFileSync(join(REPO, file), 'utf8')).join('\n');

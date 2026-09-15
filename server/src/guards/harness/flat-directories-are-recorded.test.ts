@@ -67,8 +67,17 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * Crossed ten when `flow-step-tool.ts` was split out of `flow-types.ts`. Recorded rather than
    * grouped: the split is the POINT — those constants are imported by the browser SDK, and living
    * beside eleven zod schemas meant every page Reticle instruments loaded schemas it can never use.
+   *
+   * 13 since the replay language grew the two things a flow must say about ITSELF rather than about
+   * a step: `step-effect.ts` (read / idempotent / commits) and `flow-composition.ts` (`canFollow`).
+   * Both are LEAVES on purpose. `step-effect.ts` was born inside `flow-types.ts` and the SDK's
+   * first-load guard caught it immediately: every instrumented page was paying for a constant it
+   * can never use, because importing it dragged in eleven zod schemas. Moving it here bought back
+   * exactly one byte, which is how we learned the cost was the schema and not the constant -- but a
+   * leaf the browser can import without the schemas is still the right shape, and the guard's
+   * ceiling was raised with that reasoning written beside it.
    */
-  'core/src/artifacts': 11,
+  'core/src/artifacts': 13,
   'engine/src/evidence': 17,
   // 18 since the last two cycles in this package were removed: `predicate-eval-kit.ts` (the result
   // type and the four comparisons the oracles are written in) and `predicate-session.ts` (what the
@@ -88,7 +97,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // than about what it can see: how it may be driven, and the state a suite starts from. Recorded
   // rather than grouped -- this directory IS the vocabulary, and splitting it would put nouns an
   // implementer reads together into two places.
-  'openverification/src/vocabulary': 12,
+  'open-verification/src/vocabulary': 12,
   // 12 since `defaultRunId` moved out of `runner-port.ts` into its own leaf: `verification-sync`
   // wanted that one function and imported a module that pulls the whole flow-replay stack, closing a
   // cycle. Same trade as `language/flows` below — a cycle is paid for in files.

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { handleSetupMcp, handleSetupInstall } from './cli/setup-mcp-cli.js';
 import { reportStepFromCli, reportTutorialShown } from './cli-onboarding.js';
+import { runDemoTour } from './cli/demo/demo-run.js';
 
 import { renderTutorial } from './cli/tutorial.js';
 import { pathToFileURL } from 'node:url';
@@ -920,8 +921,20 @@ export function main(): void {
       );
       break;
     case 'tutorial':
-      process.stdout.write(`${renderTutorial(parsed.audience)}\n`);
+      // Reported for BOTH paths, and before either: a run is a tour too, and these two steps are
+      // about the tour being asked for, which is already true by the time we get here.
       reportTutorialShown();
+      if (parsed.run) {
+        void runDemoTour({
+          port: parsed.port,
+          headless: parsed.headless,
+          say: (line) => process.stdout.write(`${line}\n`),
+        }).then((result) => {
+          process.exit(result.code);
+        });
+        break;
+      }
+      process.stdout.write(`${renderTutorial(parsed.audience)}\n`);
       break;
     case 'open':
       handleOpen(parsed.port, parsed.url);

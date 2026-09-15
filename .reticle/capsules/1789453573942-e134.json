@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1789453573942-e134",
+  "createdAt": 1789453573943,
+  "origin": "failed-assert",
+  "expected": "declared consequence",
+  "observed": "no element matched {\"text\":\"1 of 40\"}",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "filter-search",
+        "source": {
+          "file": "src/views/Deployments.tsx",
+          "line": 53,
+          "column": 12
+        }
+      },
+      "action": "fill"
+    }
+  ]
+}

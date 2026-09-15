@@ -48,7 +48,7 @@ If you are writing one, open an issue naming the build tool. The interface is st
 
 ## realm — the door is not there yet either
 
-A realm teaches Reticle about an environment that is not a browser tab. It answers four questions and only these four: _what is here_, _do this_, _what happened_, _show me_. `@reticlehq/electron` is the reference, and `openverification`'s `Realm` is the contract.
+A realm teaches Reticle about an environment that is not a browser tab. It answers four questions and only these four: _what is here_, _do this_, _what happened_, _show me_. `@reticlehq/electron` is the reference, and `open-verification`'s `Realm` is the contract.
 
 Two things are already open, and they are the parts that used to be scattered: what a realm IS lives in one table (`core/src/realm/registry.ts`), and what it may CLAIM is checked by the protocol — `perform()` refuses an undeclared capability before an action is spent, and `typecheckProgram` refuses a whole document before one is dispatched. So a realm cannot quietly overstate itself.
 

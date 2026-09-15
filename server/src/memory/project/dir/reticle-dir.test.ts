@@ -3,7 +3,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asFlowName, ContractReadError, type CapabilitiesContract } from '@reticlehq/core';
+import {
+  asFlowName,
+  ContractReadError,
+  type CapabilitiesContract,
+  asSessionId,
+} from '@reticlehq/core';
 import {
   baselinePath,
   ensureReticleDir,
@@ -153,12 +158,18 @@ describe('reticle-dir — temp-dir filesystem, never touches the repo', () => {
 
   it('15: journal paths compose under sessions/<id> and guard the id', () => {
     expect(reticleDirPaths(root).sessions.endsWith(join('.reticle', 'sessions'))).toBe(true);
-    expect(sessionDirPath(root, 'demo').endsWith(join('.reticle', 'sessions', 'demo'))).toBe(true);
-    expect(journalEventsPath(root, 'demo').endsWith(join('sessions', 'demo', 'events.jsonl'))).toBe(
-      true,
-    );
     expect(
-      journalActionsPath(root, 'demo').endsWith(join('sessions', 'demo', 'actions.jsonl')),
+      sessionDirPath(root, asSessionId('demo')).endsWith(join('.reticle', 'sessions', 'demo')),
+    ).toBe(true);
+    expect(
+      journalEventsPath(root, asSessionId('demo')).endsWith(
+        join('sessions', 'demo', 'events.jsonl'),
+      ),
+    ).toBe(true);
+    expect(
+      journalActionsPath(root, asSessionId('demo')).endsWith(
+        join('sessions', 'demo', 'actions.jsonl'),
+      ),
     ).toBe(true);
     expect(isValidSessionId('unique-123')).toBe(true);
     expect(isValidSessionId('alianpost')).toBe(true);

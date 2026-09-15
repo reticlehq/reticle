@@ -98,7 +98,7 @@ export class CaptureLedger {
    *
    * Separate from `note` because it answers a different question and is bounded differently: this
    * map cannot outgrow the tool table however long the session runs, so it needs no cap and never
-   * has to report a floor. See honesty/tool-hit-rate.ts for what it feeds.
+   * has to report a floor. See surface/tools/tool-hit-rate.ts for what it feeds.
    */
   noteTool(tool: string): void {
     this.#tools.set(tool, (this.#tools.get(tool) ?? 0) + 1);

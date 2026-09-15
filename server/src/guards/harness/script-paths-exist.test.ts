@@ -150,3 +150,97 @@ describe('a dist path a loose script requires still exists', () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * The same check, over the paths a CI workflow names.
+ *
+ * THE INCIDENT. `ci.yml`'s "Platform surface" job listed twelve paths so that adding a test to it
+ * would be a deliberate act — the comment above it says exactly that, and warns that a glob would
+ * let the job silently re-grow. The list silently SHRANK instead: ten of the twelve moved during the
+ * directory regrouping, and `--passWithNoTests` turned "six named files matched nothing" into a
+ * green tick. Two of the four that still ran did so by accident, because vitest treats these
+ * arguments as substring filters and `src/cli` happens to match `cli.test.ts`. Measured at the time
+ * of this fix: the job ran 4 files / 109 tests where the intended list runs 71 files / 661 tests, so
+ * the only macOS coverage of spawn, `lsof`, temp/state dirs and port resolution was mostly absent —
+ * the class that produced the `lsof`-kills-the-proxy and daemon-spawn incidents.
+ *
+ * WHY IT LIVES HERE rather than in a new guard. The check above already caught this exact defect in
+ * `package.json` scripts, after `lint:docs` named six files that a regrouping had moved. Same
+ * defect, same release, same kind of string — it simply happened in a file this guard did not read.
+ * CLAUDE.md rule 13 says to prefer fixing the ONE shared function over adding a guard beside it, so
+ * the input set grew instead of the guard count.
+ *
+ * Directories are checked only when written with a trailing slash. A bare `src/cli` is
+ * indistinguishable from an argument that merely contains one, and guessing would produce the false
+ * positives that get a guard switched off — so the workflow says `src/command/cli/` and means it.
+ *
+ * Backslash continuations are joined FIRST. A `run: |` block wraps one command over many lines, and
+ * `--filter @reticlehq/server` routinely sits on a different line from the paths it scopes; reading
+ * line by line resolved those paths against the repo root and reported every one of them missing.
+ * The first version of this check did exactly that and failed on the paths it had just fixed.
+ */
+function workflows(): string[] {
+  return execFileSync('git', ['ls-files', '.github/workflows/*.yml', '.github/workflows/*.yaml'], {
+    cwd: REPO,
+    encoding: 'utf8',
+  })
+    .split('\n')
+    .filter((f) => '' !== f);
+}
+
+/** One logical command per entry: backslash-continued lines rejoined. */
+function commandLines(text: string): string[] {
+  return text.replace(/\\\n\s*/g, ' ').split('\n');
+}
+
+/**
+ * A token that is a directory argument, and not prose or a `sed` script.
+ *
+ * Trailing-slash alone matched a backtick in a comment, `app/` inside an English sentence, and the
+ * `'s/^/` half of a sed expression. A guard that reports three things that are fine teaches the
+ * reader to stop looking, so the shape is pinned: path segments only, starting with a letter.
+ */
+const DIRECTORY_ARGUMENT = /^[A-Za-z0-9_@.][A-Za-z0-9_@.-]*(?:\/[A-Za-z0-9_@.-]+)*\/$/;
+
+/** Paths a workflow line names: the script form, plus explicit `dir/` arguments. */
+function workflowPathsIn(line: string): string[] {
+  // A YAML comment is prose; it names things rhetorically and none of it is executed.
+  if (line.trim().startsWith('#')) return [];
+  const directories = line.split(/\s+/).filter((token) => DIRECTORY_ARGUMENT.test(token));
+  return [...pathsNamedIn(line), ...directories];
+}
+
+describe('a path named in a CI workflow still exists', () => {
+  it('finds workflows, so a passing run cannot mean it read nothing', () => {
+    expect(workflows().length).toBeGreaterThan(0);
+    const named = workflows().flatMap((rel) =>
+      commandLines(readFileSync(join(REPO, rel), 'utf8')).flatMap(workflowPathsIn),
+    );
+    // If the extractor stops matching, every assertion below passes over an empty list.
+    expect(named.length).toBeGreaterThan(10);
+  });
+
+  it('names no file that is not there', () => {
+    const missing: string[] = [];
+    for (const rel of workflows()) {
+      const text = readFileSync(join(REPO, rel), 'utf8');
+      for (const line of commandLines(text)) {
+        // `pnpm --filter <pkg> exec …` runs in THAT package's directory, exactly as above.
+        const filtered = /--filter\s+(@?[\w/-]+)/.exec(line)?.[1];
+        const filteredDir =
+          filtered === undefined ? undefined : packageDirectory(filtered, manifests());
+        for (const path of workflowPathsIn(line)) {
+          if (filteredDir !== undefined && existsSync(join(filteredDir, path))) continue;
+          if (existsSync(join(REPO, path))) continue;
+          missing.push(`${rel} → ${path}`);
+        }
+      }
+    }
+    expect(
+      missing,
+      'these CI workflow steps name files or directories that do not exist, so the step cannot do ' +
+        'what it says. A job whose paths all stopped matching still reported success for weeks, ' +
+        'because `--passWithNoTests` cannot tell "nothing to run" from "nothing broken".',
+    ).toEqual([]);
+  });
+});

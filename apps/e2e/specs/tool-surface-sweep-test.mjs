@@ -270,7 +270,7 @@ await record('reticle_flow_save', { flowName: 'sweep-flow' });
 await record('reticle_flow_save_recorded', { flowName: 'sweep-flow-recorded' });
 await record('reticle_flow_replay', { flowName: 'sweep-flow', confirmDangerous: true });
 await record('reticle_verify', { action: 'flows', names: ['sweep-flow'] });
-await record('reticle_flow_heal', { flowName: 'sweep-flow' });
+await record('reticle_verify { action: "heal" }', { flowName: 'sweep-flow' });
 await record('reticle_verify', { action: 'crawl', maxSteps: 2, confirmDangerous: true });
 await record('reticle_session', { action: 'yield', mode: 'waiting' });
 

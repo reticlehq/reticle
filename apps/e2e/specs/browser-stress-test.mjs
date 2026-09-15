@@ -71,7 +71,7 @@ async function openTab(url = APP) {
 }
 
 async function listSessions() {
-  const r = await settled(call('reticle_sessions', {}));
+  const r = await settled(call('reticle_session', {}));
   if (!r.answered) return [];
   return payload(r.value).sessions ?? [];
 }
@@ -99,7 +99,7 @@ try {
   await sleep(1500);
   const remaining = (await ourIds()).filter((id) => opened.has(id));
   let sid = remaining[0];
-  const afterClose = await settled(call('reticle_snapshot', { mode: 'interactive', sessionId: sid }));
+  const afterClose = await settled(call('reticle_look', { action: 'page',  mode: 'interactive', sessionId: sid }));
   chk('closing one tab does not strand the other', afterClose.answered, afterClose.how);
   chk(
     '  and the dead session is gone from the list',
@@ -110,7 +110,7 @@ try {
   // ── 3. Close a tab WHILE a command is in flight ──────────────────────────────────────────────
   // The nastiest ordering on this channel: the page accepts the command and dies before replying.
   {
-    const inFlight = settled(call('reticle_snapshot', { mode: 'full', sessionId: sid }, 45_000));
+    const inFlight = settled(call('reticle_look', { action: 'page',  mode: 'full', sessionId: sid }, 45_000));
     await sleep(30);
     await tabB.close();
     const r = await inFlight;
@@ -120,7 +120,7 @@ try {
   // ── 4. Everything gone: no session at all ────────────────────────────────────────────────────
   {
     // Addressed by the id of the tab that just died: the refusal must NAME it, not hang.
-    const r = await settled(call('reticle_snapshot', { sessionId: sid }));
+    const r = await settled(call('reticle_look', { action: 'page',  sessionId: sid }));
     chk('with every tab closed, the tool refuses instead of hanging', r.answered, r.how);
   }
 
@@ -130,7 +130,7 @@ try {
     what: `a fresh tab on ${APP}`,
   });
   sid = idOf(fresh);
-  const back = await settled(call('reticle_snapshot', { mode: 'interactive', sessionId: sid }));
+  const back = await settled(call('reticle_look', { action: 'page',  mode: 'interactive', sessionId: sid }));
   chk('a new tab restores a driveable session', back.answered && !payload(back.value ?? {}).error, back.how);
 
   // ── 6. Hidden page: the throttling case, on the channel rather than in a WKWebView ───────────
@@ -138,7 +138,7 @@ try {
     // A second tab in the same context pushes the first to the background.
     const front = await openTab('about:blank');
     await sleep(1500);
-    const r = await settled(call('reticle_snapshot', { mode: 'interactive', sessionId: sid }, 45_000));
+    const r = await settled(call('reticle_look', { action: 'page',  mode: 'interactive', sessionId: sid }, 45_000));
     chk('a backgrounded page still answers, or says why', r.answered, r.how);
     await front.close();
   }
@@ -146,7 +146,7 @@ try {
   // ── 7. Reload underneath a live ref ──────────────────────────────────────────────────────────
   // The ref is invalidated by the reload; the contract is a NAMED refusal, never a wrong element.
   {
-    const snap = await settled(call('reticle_snapshot', { mode: 'interactive', sessionId: sid }));
+    const snap = await settled(call('reticle_look', { action: 'page',  mode: 'interactive', sessionId: sid }));
     const tree = JSON.stringify(payload(snap.value ?? {}));
     const ref = /\(ref=([A-Za-z0-9_-]+)\)/.exec(tree)?.[1];
     if (ref === undefined) {

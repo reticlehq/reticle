@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { ReticleTool } from '@reticlehq/core';
+import { CORE_TOOL_NAMES } from '../tools/tool-surface.js';
 import { buildServerInstructions } from './server-instructions.js';
 
 /**
@@ -24,12 +26,15 @@ describe('buildServerInstructions', () => {
 
     it('names the command to run and how to confirm it worked', () => {
       expect(text).toContain('init');
-      expect(text).toContain('reticle_sessions');
+      // Resolved from the live surface, so this is `reticle_session` now that the nine is the
+      // default. Asserting the literal `reticle_sessions` would pin a name the reader is not given.
+      expect(text).toContain(ReticleTool.SESSION);
     });
 
     it('still carries the verdict discipline and the feedback ask', () => {
-      expect(text).toContain('reticle_act_and_wait');
-      expect(text).toContain('reticle_feedback');
+      expect(text).toContain(ReticleTool.ACT_AND_WAIT);
+      // Feedback is an action on the session tool wherever the family is merged.
+      expect(text).toMatch(/reticle_feedback|reticle_session \{action:"feedback"\}/);
     });
   });
 
@@ -41,12 +46,14 @@ describe('buildServerInstructions', () => {
     });
 
     it('leads with what the tools are for', () => {
-      expect(text.slice(0, 200)).toContain('reticle_snapshot');
+      // The LOOKING tool, whatever this surface calls it: `reticle_snapshot` unmerged,
+      // `reticle_look {action:"page"}` on the nine.
+      expect(text.slice(0, 200)).toMatch(/reticle_snapshot|reticle_look/);
     });
 
     it('keeps the verdict discipline and the feedback ask', () => {
-      expect(text).toContain('reticle_act_and_wait');
-      expect(text).toContain('reticle_feedback');
+      expect(text).toContain(ReticleTool.ACT_AND_WAIT);
+      expect(text).toMatch(/reticle_feedback|reticle_session \{action:"feedback"\}/);
     });
 
     /**
@@ -56,8 +63,15 @@ describe('buildServerInstructions', () => {
      * This is the only channel that reaches an agent that never read the skill file.
      */
     it('names the two tools an agent would otherwise never learn exist', () => {
-      expect(text).toContain('reticle_context');
-      expect(text).toContain('reticle_intent');
+      // On a surface WITH a dispatch hatch. The nine has none, and the briefing correctly stays
+      // silent there rather than naming two tools that answer "not found" — which is the same rule
+      // this pair of tests was written to enforce, applied to a surface that did not exist yet.
+      const wider = buildServerInstructions({
+        previouslyConnected: true,
+        advertised: [...CORE_TOOL_NAMES, ReticleTool.TOOLS, ReticleTool.RUN],
+      });
+      expect(wider).toContain(ReticleTool.CONTEXT);
+      expect(wider).toContain(ReticleTool.INTENT);
     });
 
     /**
@@ -66,8 +80,14 @@ describe('buildServerInstructions', () => {
      * instructions cannot be trusted — which is more expensive than never having been told.
      */
     it('gives both of them the reticle_run call that actually reaches them', () => {
-      expect(text).toContain('reticle_run({ tool: "reticle_context"');
-      expect(text).toContain('reticle_run({ tool: "reticle_intent"');
+      const wider = buildServerInstructions({
+        previouslyConnected: true,
+        advertised: [...CORE_TOOL_NAMES, ReticleTool.TOOLS, ReticleTool.RUN],
+      });
+      expect(wider).toContain('reticle_run({ tool: "reticle_context"');
+      expect(wider).toContain('reticle_run({ tool: "reticle_intent"');
+      // And the nine, which cannot reach them, names neither rather than both.
+      expect(text).not.toContain(ReticleTool.CONTEXT);
     });
   });
 
@@ -109,8 +129,20 @@ describe('buildServerInstructions', () => {
     // spent 14 and 18 calls BEFORE its first edit where a competitor spent 8 and 9, and per-turn
     // cost was identical on the hardest cell — so the whole gap was turns spent asking a browser a
     // question only source can answer. ~150 bytes charged once against turns charged every run.
+    // FOURTH raise, to 4,000, for the replay rule — 479 characters on the connected branch, and the
+    // measurement behind it is the largest any of these has had. Across 13 agent cells and 323 tool
+    // calls, with 29 saved flows on disk the whole time, replay was invoked ZERO times: the engine
+    // was built, tested and reachable, and nothing ever told an agent it existed. `reticle_verify`
+    // explains it in its own description, and both shipping surfaces trim that from 1,791
+    // characters to 93, which removes every word about flows — so this string is the only channel
+    // that survives. Measured price of the thing it avoids: one scenario cost 14-22 turns and
+    // 201k-325k tokens to drive, against roughly 460 tokens to replay a flow that covers it. 479
+    // characters charged once per session against a drive charged every time nothing replays.
+    //
+    // The ratchet warning above still stands, and this raise accepts its terms: if the next one
+    // cannot show a number like that, cut an older sentence instead.
     for (const previouslyConnected of [true, false]) {
-      expect(buildServerInstructions({ previouslyConnected }).length).toBeLessThan(3500);
+      expect(buildServerInstructions({ previouslyConnected }).length).toBeLessThan(4000);
     }
   });
 });
@@ -138,5 +170,69 @@ describe('the one instruction that asks for less work', () => {
       expect(text).toMatch(/clean capture IS the answer/);
       expect(text).toMatch(/stop\./);
     }
+  });
+});
+
+/**
+ * The replay rule reaches the agent, on the surfaces that can act on it.
+ *
+ * THE INCIDENT. Measured across 13 agent cells and 323 tool calls, with 29 saved flows present on
+ * disk throughout: replay was invoked ZERO times. The capability was built, tested, reachable and
+ * completely invisible — `reticle_verify`'s description explains it in full, and both shipping
+ * surfaces trim that description from 1,791 characters to 93, deleting every mention of flows. The
+ * briefing is the only text that survives the trim, so the rule has to live there and has to keep
+ * naming calls the live surface really advertises.
+ */
+describe('the briefing tells an agent to replay before it drives', () => {
+  const NINE = [
+    ReticleTool.NAVIGATE,
+    ReticleTool.ACT,
+    ReticleTool.ACT_AND_WAIT,
+    ReticleTool.ASSERT,
+    ReticleTool.OBSERVE,
+    ReticleTool.LOOK,
+    ReticleTool.SESSION,
+    ReticleTool.VERIFY,
+    ReticleTool.TOOLS,
+  ];
+
+  it('names the replay route on a surface that advertises it', () => {
+    const text = buildServerInstructions({ previouslyConnected: true, advertised: NINE });
+    // The merged surface reaches replay through actions on reticle_verify, never a bare tool name.
+    expect(text).toContain(`${ReticleTool.VERIFY} {action:"change"}`);
+    expect(text).toContain(`${ReticleTool.VERIFY} {action:"affected"}`);
+  });
+
+  it('says what each verdict means, and that unknown is not a pass', () => {
+    const text = buildServerInstructions({ previouslyConnected: true, advertised: NINE });
+    // The whole safety property: an agent that reads `unknown` as "fine" has turned the cheapest
+    // path into a false green. If this sentence goes, the feature becomes a hazard.
+    expect(text).toMatch(/unknown/i);
+    expect(text).toMatch(/never report it as passing|nothing was proved/i);
+    expect(text).toMatch(/replay before you drive/i);
+  });
+
+  it('reaches a project that has never connected, because that is where reach fails', () => {
+    /*
+     * This asserted the OPPOSITE for one commit, and the reasoning was wrong in a way worth keeping
+     * written down. Gating on `previouslyConnected` sounds right — replay presupposes saved flows —
+     * but that flag needs `readProjectId(cwd)` to resolve, and in a monorepo driven from the repo
+     * root it is undefined. The rule would have been missing exactly where an agent is most likely
+     * to be working, to save 479 characters on a first run.
+     *
+     * It is safe with no flows: `affected` names nothing, `change` answers `unknown`, and `unknown`
+     * already means drive it. The advice degrades into the correct first move.
+     */
+    const text = buildServerInstructions({ previouslyConnected: false, advertised: NINE });
+    expect(text).toMatch(/replay before you drive/i);
+  });
+
+  it('names no replay call a surface cannot reach', () => {
+    // A briefing that names an unavailable tool does not merely confuse an agent — this module's
+    // own header records that it makes the agent stop using the product.
+    const withoutVerify = NINE.filter((n) => n !== ReticleTool.VERIFY);
+    const text = buildServerInstructions({ previouslyConnected: true, advertised: withoutVerify });
+    expect(text).not.toMatch(/replay before you drive/i);
+    expect(text).not.toContain(ReticleTool.VERIFY);
   });
 });

@@ -144,7 +144,7 @@ let answered = 0;
 let killed = 0;
 for (let i = 0; i < 10; i++) {
   if (killDaemon()) killed += 1;
-  const r = await settled(client.request('tools/call', { name: 'reticle_sessions', arguments: {} }, 30_000));
+  const r = await settled(client.request('tools/call', { name: 'reticle_session', arguments: {} }, 30_000));
   if (r.answered) answered += 1;
   else console.log(`      (round ${i}: ${r.how})`);
 }
@@ -155,7 +155,7 @@ chk('  and answered every call in between', 10 === answered, `${answered}/10 ans
 // The nastiest ordering: the daemon dies after accepting the request and before replying, so the
 // answer can only come from the proxy noticing and recovering.
 {
-  const inFlight = client.request('tools/call', { name: 'reticle_sessions', arguments: {} }, 30_000);
+  const inFlight = client.request('tools/call', { name: 'reticle_session', arguments: {} }, 30_000);
   await sleep(60);
   killDaemon();
   const r = await settled(inFlight);
@@ -166,7 +166,7 @@ chk('  and answered every call in between', 10 === answered, `${answered}/10 ans
 // ── 3. A burst of concurrent calls across a kill ──────────────────────────────────────────────
 {
   const burst = Array.from({ length: 20 }, () =>
-    settled(client.request('tools/call', { name: 'reticle_sessions', arguments: {} }, 30_000)),
+    settled(client.request('tools/call', { name: 'reticle_session', arguments: {} }, 30_000)),
   );
   await sleep(40);
   killDaemon();
@@ -197,13 +197,13 @@ chk('  and answered every call in between', 10 === answered, `${answered}/10 ans
   await sleep(200);
   const squatter = net.createServer((s) => s.destroy());
   await listenWhenFree(squatter, PORT);
-  const r = await settled(client.request('tools/call', { name: 'reticle_sessions', arguments: {} }, 30_000));
+  const r = await settled(client.request('tools/call', { name: 'reticle_session', arguments: {} }, 30_000));
   chk('a squatter on the port does not hang the client', r.answered, r.how);
   chk('  server still alive with the port stolen', alive(client));
   await new Promise((r) => squatter.close(r));
   // …and it recovers once the port is free again.
   await sleep(300);
-  const back = await settled(client.request('tools/call', { name: 'reticle_sessions', arguments: {} }, 45_000));
+  const back = await settled(client.request('tools/call', { name: 'reticle_session', arguments: {} }, 45_000));
   chk('recovers once the port is free again', back.answered, back.how);
 }
 
@@ -265,7 +265,7 @@ killDaemon();
           jsonrpc: '2.0',
           id: msg.id,
           result: {
-            tools: [{ name: 'reticle_sessions', description: 'x', inputSchema: { type: 'object' } }],
+            tools: [{ name: 'reticle_session', description: 'x', inputSchema: { type: 'object' } }],
           },
         });
       }
@@ -281,7 +281,7 @@ killDaemon();
   );
   await resetClient.start();
   const r = await settled(
-    resetClient.request('tools/call', { name: 'reticle_sessions', arguments: {} }, 25_000),
+    resetClient.request('tools/call', { name: 'reticle_session', arguments: {} }, 25_000),
   );
   chk('a POST reset with the stream still up still answers the call', r.answered, r.how);
   chk('  server still alive after the reset', alive(resetClient));

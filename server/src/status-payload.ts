@@ -4,7 +4,7 @@
  * Carries the daemon's OWN version, because a daemon outlives every agent attached to it: after an
  * upgrade the new CLI attaches to the old daemon and serves its code, and until this field existed
  * there was no surface anywhere — not /status, not `reticle status` — naming the version actually
- * answering requests. See describeDaemonSkew.
+ * answering requests. See takeVersionSkewOnto in command/version/version-nudge.ts.
  */
 import type { SessionInfo } from './portal/session/session-info.js';
 import { CONTRACT_FINGERPRINT } from '@reticlehq/core';

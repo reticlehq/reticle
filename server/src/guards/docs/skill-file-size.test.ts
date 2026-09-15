@@ -35,8 +35,17 @@ const SKILL = readFileSync(join(REPO_ROOT, 'SKILL.md'), 'utf8');
  *
  * Going over is not forbidden, it is a DECISION. Move the number and write the reason here, the way
  * the tool-surface ratchet does. Coming in well under, move it down and keep the win.
+ *
+ * RAISED to 13,200 for the replay-first ladder, and this is the measurement that bought it: across
+ * 13 agent cells and 323 tool calls, with 29 saved flows sitting on disk the whole time, replay was
+ * invoked ZERO times. The engine was built, tested and reachable, and nothing an agent reads ever
+ * mentioned it. What the extra bytes buy is the order of operations, which is the whole saving: a
+ * covered journey re-verifies for a few hundred tokens where driving the same one measured
+ * 201k-325k. Paid for in part rather than simply appended: two table rows the prose already covered
+ * were cut, and the sections around them were tightened instead of extended. If a future raise
+ * cannot show a number like that, cut a section instead of moving this again.
  */
-const SKILL_BYTE_BUDGET = 12_800;
+const SKILL_BYTE_BUDGET = 13_200;
 
 /** Where the file stops being general advice and starts being about one situation or the other. */
 const SETUP_HEADING = '\n# SETUP\n';

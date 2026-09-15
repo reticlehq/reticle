@@ -9,7 +9,7 @@ import {
   Grade,
   ProvenanceClass,
   Verdict,
-} from '@reticlehq/openverification';
+} from 'open-verification';
 import { decideVerified } from './verified.js';
 import { HonestyGrade, type HonestyBlock } from './honesty.js';
 import { ChannelId, ContradictionKind, Verified } from '@reticlehq/core';
@@ -17,7 +17,7 @@ import { ChannelId, ContradictionKind, Verified } from '@reticlehq/core';
 /**
  * Reticle's adjudicator, checked against the one the specification says is normative.
  *
- * `openverification`'s `adjudicate()` carries a sentence that has to be either true or removed: *where
+ * `open-verification`'s `adjudicate()` carries a sentence that has to be either true or removed: *where
  * an implementation disagrees with this function, this function is what the specification means*.
  * That sentence was written and never tested. An implementation is entitled to reach these
  * verdicts by another route — this one does, through eleven clauses and a great deal of

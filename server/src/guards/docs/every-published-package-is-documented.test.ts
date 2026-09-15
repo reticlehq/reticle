@@ -9,7 +9,7 @@ import { REPO_ROOT } from '../../machine/repo-root.js';
  *
  * `docs/packages.mdx` is where a reader goes to find out what the `@reticlehq/*` names are and
  * which ones they need. Nothing kept it in step with what is actually published, so v3 added
- * two packages to npm — `@reticlehq/openverification`, the specification itself, and
+ * two packages to npm — `open-verification`, the specification itself, and
  * `@reticlehq/engine`, the rules that decide a verdict — and neither appeared on it. The
  * protocol is the headline of the release and the page listing the packages did not know it
  * existed.
@@ -59,7 +59,16 @@ const CRATE = 'reticle-tauri';
 
 function documentedNames(): string[] {
   const page = readFileSync(join(REPO_ROOT, PAGE), 'utf8');
-  return [...page.matchAll(/^## (@reticlehq\/[a-z-]+|reticle-tauri)\s*$/gm)]
+  /*
+   * Any package-shaped heading, not just `@reticlehq/*`.
+   *
+   * The pattern used to name the scope, which made it structurally unable to see a package that
+   * leaves it: `open-verification` moved out of the org to stand on its own as the specification,
+   * kept its section on this page, and was reported missing anyway. A guard about whether a reader
+   * can find a package must not assume who publishes it. Extra headings that are not packages are
+   * harmless here — the comparison below only asks whether every PUBLISHED name appears.
+   */
+  return [...page.matchAll(/^## (@?[a-z0-9][a-z0-9@/-]*)\s*$/gm)]
     .map((match) => match[1] ?? '')
     .sort();
 }

@@ -1,4 +1,5 @@
 import type { z, ZodTypeAny } from 'zod';
+import type { SessionId } from '@reticlehq/core';
 import {
   JournalActionSchema,
   ReticleEventSchema,
@@ -30,7 +31,7 @@ import {
 export class SessionJournal {
   readonly #fs: FileSystemPort;
   readonly #root: string;
-  readonly #sessionId: string;
+  readonly #sessionId: SessionId;
   #dirEnsured = false;
   // Parse-cache for the append-only EVENTS journal. queryEvents falls through to readEvents on every
   // observe/network/console call once the ring buffer has evicted (permanent ~60s into any session), so

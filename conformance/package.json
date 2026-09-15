@@ -8,6 +8,6 @@
     "test:unit": "vitest run"
   },
   "dependencies": {
-    "@reticlehq/openverification": "workspace:*"
+    "open-verification": "workspace:*"
   }
 }

@@ -12,7 +12,7 @@ import { REPO_ROOT } from '../../machine/repo-root.js';
  * do not exist: `packages/react`, `packages/vite-plugin`, `packages/babel-plugin`,
  * `packages/next`, `packages/electron`, `packages/tauri` and `eslint-plugin`, all of which
  * moved under `adapters/` and none of which was updated here. It also had no line at all for
- * `openverification`, `engine` or `conformance`.
+ * `open-verification`, `engine` or `conformance`.
  *
  * A wrong map is worse than no map, and this one has a measurable cost already recorded: a
  * repository-wide grep once missed fifty-eight tracked files because the searcher was looking

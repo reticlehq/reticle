@@ -6,7 +6,7 @@ import {
   type CommandResult,
 } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
-import { formatStepAddress } from '@reticlehq/openverification';
+import { formatStepAddress } from 'open-verification';
 import {
   predicateToExpect,
   enforcedOnReplay,

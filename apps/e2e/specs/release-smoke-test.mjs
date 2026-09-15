@@ -47,13 +47,13 @@ const call = async (name, args = {}) => {
 // then every check below runs against somebody else's app.
 let sessionId;
 for (let i = 0; 60 > i && sessionId === undefined; i += 1) {
-  const listed = (await call('reticle_sessions')).sessions ?? [];
+  const listed = (await call('reticle_session')).sessions ?? [];
   sessionId = listed.find((s) => String(s.url ?? '').startsWith(APP.replace(/\/$/, '')))?.sessionId;
   if (sessionId === undefined) await new Promise((r) => setTimeout(r, 500));
 }
 chk('the app connects and Reticle can see it', sessionId !== undefined, sessionId ?? 'no session');
 
-const snapshot = await call('reticle_snapshot', { mode: 'interactive', sessionId });
+const snapshot = await call('reticle_look', { action: 'page',  mode: 'interactive', sessionId });
 const tree = JSON.stringify(snapshot);
 chk('a snapshot comes back with something to drive', /\(ref=/.test(tree), `${tree.length} bytes`);
 
@@ -112,7 +112,7 @@ chk('an action dispatches', true === acted.dispatched || true === acted.result?.
 
 // ── A tool that refuses must not blame Reticle for the caller's mistake ───────────────────────
 {
-  const bad = await call('reticle_query', { by: 'css', value: 'body', sessionId });
+  const bad = await call('reticle_look', { action: 'find',  by: 'css', value: 'body', sessionId });
   const body = JSON.stringify(bad);
   chk(
     'an unsupported query strategy is refused, not answered with zero matches',

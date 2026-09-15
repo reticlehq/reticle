@@ -4,7 +4,7 @@
 # Journals contain URLs, request and response bodies and page text from the app under test, so
 # they are worth keeping out of a shared repository on their own account.
 #
-# Deliberately NOT ignored: contract.json, flows/, baselines/ and
+# Deliberately NOT ignored: contract.json, flows/, intent.json and
 # capsules/. Those are meant to be committed — a saved flow only earns its keep
 # when a teammate or CI can replay it.
 #
@@ -13,10 +13,14 @@
 sessions/
 runs/
 visual/
+feedback/
 project.json
 ambient.json
 envelopes.json
 flake.json
 assertion-tiers.json
+impact.json
+cloud-state.json
+issues.json
 *.log
 *.tmp

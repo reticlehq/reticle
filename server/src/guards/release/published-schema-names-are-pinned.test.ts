@@ -6,16 +6,16 @@ import { REPO_ROOT } from '../../machine/repo-root.js';
 /**
  * The filenames two packages publish as `schema/*.json`, and the `$id` inside each one.
  *
- * `@reticlehq/openverification` and `@reticlehq/core` both export `"./schema/*.json"`. That makes every
+ * `open-verification` and `@reticlehq/core` both export `"./schema/*.json"`. That makes every
  * emitted filename a public entry point, exactly like the source filenames pinned in
  * `public-subpaths-are-pinned.test.ts` -- and that file deliberately excludes JSON, because it pins
  * SOURCE filenames and these are generated. The exclusion is right and left this surface with
  * nothing watching it at all.
  *
- * These names are load-bearing twice over. `openverification/README.md` tells an implementer: "JSON
+ * These names are load-bearing twice over. `open-verification/README.md` tells an implementer: "JSON
  * Schema for every noun, generated from the source. Implement in any language by validating against
  * these; you need none of this code." Somebody taking that offer writes the filename down. And each
- * openverification schema carries `$id: https://openverification.dev/schema/v1/<name>.json`, which is the
+ * open-verification schema carries `$id: https://open-verification.dev/schema/v1/<name>.json`, which is the
  * identifier a validator dereferences and another document `$ref`s. The generator already says so
  * next to the constant -- "Stable: a moved schema url is a broken contract" -- and an intention
  * written in a comment is not a check.
@@ -41,8 +41,8 @@ interface SchemaSurface {
 
 const PINNED: readonly SchemaSurface[] = [
   {
-    package: 'openverification',
-    idBase: 'https://openverification.dev/schema/v1',
+    package: 'open-verification',
+    idBase: 'https://open-verification.dev/schema/v1',
     files: [
       'action-receipt.json',
       'action.json',

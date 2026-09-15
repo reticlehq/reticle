@@ -200,7 +200,17 @@ export function buildSuiteVerdict(
   let passed = 0;
   for (const { replay, flow } of runs) {
     if (replay.status === ReplayStatus.OK) {
-      const reason = unverifiableReason(flow);
+      /*
+       * The REPLAY's own answer first, then the grader's.
+       *
+       * This recomputed from the flow file alone, which can only see the one thing a file can say
+       * about itself: whether it asserts anything. It cannot see what happened at run time - and an
+       * unmet PRECONDITION is exactly that: the flow is fine, its assertions are fine, and it never
+       * ran because the state it needs was not there. Ignoring `replay.unverifiable` counted that as
+       * a PASS, which is the worst of the three available answers: a flow that did nothing, reported
+       * as a flow that proved something.
+       */
+      const reason = replay.unverifiable?.reason ?? unverifiableReason(flow);
       // A green that cannot go red is not a pass. Counted apart, so `passed` stays a count of things
       // actually verified rather than of replays that merely completed.
       if (reason !== undefined) unverifiable.push({ flow: replay.name, reason });

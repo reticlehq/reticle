@@ -1,6 +1,6 @@
 import { ReticleTool } from '@reticlehq/core';
 import { SHARED_PARAM_GUIDANCE } from './shared-params.js';
-import { CORE_TOOL_NAMES } from '../tools/tool-surface.js';
+import { defaultAdvertisedNames } from '../tools/tool-surface.js';
 import { surfaceVocabulary, listOf, type SurfaceVocabulary } from './surface-vocabulary.js';
 /**
  * What every connected agent is told, before it has asked anything.
@@ -54,6 +54,38 @@ Only ${v.actAndWait} and ${v.assert} produce a verdict. ${v.act.length > 0 ? `${
 A "yes" over a clean capture IS the answer — re-reading the page after one finds the same state. When every consequence you set out to check has one, stop.
 
 DIAGNOSING a bug? Read the source first — Reticle proves what the app DOES, not why. Drive to CONFIRM a fix, not to find one.`;
+
+/**
+ * Replay before you drive, when a saved flow already covers the change.
+ *
+ * WHY THIS IS IN THE BRIEFING AND NOT IN A TOOL DESCRIPTION. Measured across 13 agent cells and 323
+ * tool calls, with 29 saved flows on disk for every one of them: replay was invoked ZERO times. Not
+ * once. It was never a question of the recording being absent — the daemon saves a flow from every
+ * drive at teardown, so coverage accumulates whether or not anybody asks. The agent simply had no
+ * way to know. `reticle_verify` carries the whole explanation in its own description, and both
+ * shipping surfaces trim that from 1,791 characters to 93, which removes every mention of flows. A
+ * rule that must survive the trim has to be here.
+ *
+ * THE ORDER IS THE POINT. Replaying after a drive proves nothing the drive did not already prove,
+ * and you paid for the drive. The saving is avoided TURNS: one scenario measured here cost 14-22
+ * turns and 201k-325k tokens to drive, against roughly 460 tokens to replay a flow that covers it.
+ * That difference only exists if the question is asked BEFORE the browser is opened.
+ *
+ * `unknown` is load-bearing and is stated explicitly. It means no saved flow covers this change, so
+ * nothing ran and nothing was proved — and an agent that reads it as "fine" has turned the cheapest
+ * path into a false green, which is the one failure this product exists to prevent. It is the
+ * trigger to drive, never a pass.
+ *
+ * Every call is resolved from the LIVE surface, and the section disappears entirely when the surface
+ * cannot reach any of them. Naming a tool the agent was not given is the failure this module's own
+ * header warns about.
+ */
+const replayFirst = (v: SurfaceVocabulary): string => {
+  if (0 === v.replayChange.length) return '';
+  const ask =
+    v.affected.length > 0 ? `${v.affected} names the saved flows covering your edits; ` : '';
+  return `Changed code? Replay before you drive. ${ask}${v.replayChange} replays them for one verified + because — hundreds of tokens where driving the same journey costs tens of thousands. "yes": proved, stop. "no": names the step that broke. "unknown": NO saved flow covers it, so nothing was proved — drive it, and never report it as passing. What you drive by hand is saved as a flow automatically.`;
+};
 
 /**
  * The first move, for a project no app has ever connected to.
@@ -145,12 +177,32 @@ export function buildServerInstructions(state: InstructionState): string {
   // The two meta-tools are added by `buildDynamicTools`, not by the surface filter, so they are
   // absent from CORE_TOOL_NAMES — and without them the cold-tail sentence goes silent on the very
   // surface that has a cold tail. The default surface always carries both.
-  const v = surfaceVocabulary(
-    state.advertised ?? [...CORE_TOOL_NAMES, ReticleTool.TOOLS, ReticleTool.RUN],
-  );
+  // The fallback is the LIVE default surface, not a list. It used to be `CORE_TOOL_NAMES` plus both
+  // meta-tools, which stopped being the default the day the nine became it — and the proxy briefs
+  // WITHOUT passing a surface, so that stale fallback was what every agent reaching Reticle through
+  // `reticle mcp` actually read. It named reticle_snapshot, reticle_query and reticle_wait_for at a
+  // surface that has none of them.
+  const v = surfaceVocabulary(state.advertised ?? defaultAdvertisedNames());
   const firstMove = firstMoveFor(v);
+  /*
+   * Said in BOTH states, and gated only on whether the surface can reach replay.
+   *
+   * The first cut gated this on `previouslyConnected`, reasoning that replay presupposes saved
+   * flows. That was wrong in the one way that mattered: `previouslyConnected` needs
+   * `readProjectId(cwd)` to resolve, and in a monorepo where the agent runs from the repo root and
+   * the app lives in a subdirectory it returns undefined — so the rule would have been absent
+   * exactly where it is most needed, and reach is the entire problem it exists to fix (measured:
+   * zero replay calls in 323, with 29 saved flows on disk).
+   *
+   * It is safe to say with no flows, because the tool is honest without help: `affected` names
+   * nothing, `change` answers `unknown`, and `unknown` already means "drive it" — which is what a
+   * first-time reader should do anyway. The advice degrades into the correct first move rather than
+   * into a dead end.
+   */
+  const replay = replayFirst(v);
   const base = state.previouslyConnected
     ? `${verdictDiscipline(v)}\n\n${reachFor(v)}\n\n${feedbackAsk(v)}`
     : `${firstMove}\n\n${verdictDiscipline(v)}\n\n${feedbackAsk(v)}`;
-  return `${base}\n\n${SHARED_PARAM_GUIDANCE}`;
+  const withReplay = replay.length > 0 ? `${base}\n\n${replay}` : base;
+  return `${withReplay}\n\n${SHARED_PARAM_GUIDANCE}`;
 }

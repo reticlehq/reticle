@@ -272,22 +272,6 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
     nodeModulesMarkers,
   };
   const detection = detect(detectInput);
-  /*
-   * `project_detected` — the first thing the funnel can know about a real project.
-   *
-   * Reported even when the stack is unknown, because "we could not tell what this is" is the answer
-   * that matters most: a funnel that only records successful detections cannot show the stacks
-   * Reticle silently does not serve.
-   */
-  // `unattended` is deliberately NOT set here: the telemetry envelope already carries `automation`
-  // (no_tty / ci), and a second spelling of the same fact can only ever disagree with the first.
-  io.host.reportStep({
-    phase: OnboardingPhase.FIRST_RUN,
-    step: 'project_detected',
-    status: OnboardingStepStatus.COMPLETED,
-    stack: detection.framework,
-  });
-
   const vitePath = firstPresent(rootFiles, VITE_CONFIG_CANDIDATES);
   const viteSource = null === vitePath ? null : io.readFile(vitePath);
   const viteConfig =
@@ -881,6 +865,24 @@ function runInitSteps(options: InitOptions, io: InitIo): InitResult {
    * bridge, which `app_connected` reports minutes later from the daemon — keeping them separate is
    * the whole reason this funnel exists.
    */
+  /*
+   * REPORTED HERE, not where detection happens, and the reason is a measured one.
+   *
+   * These are fire-and-forget POSTs. Emitted mid-run, `project_detected` never arrived: the CLI
+   * exited before the request landed, exactly as `daemon_stopped` once did microseconds before
+   * `process.exit(0)` — the failure the telemetry contract opens with. The steps below survive
+   * because init keeps working after them, so the request has time to complete.
+   *
+   * Grouping them is a workaround and worth naming as one: the real fix is a flush before exit, and
+   * until there is one, ANY emit that is not followed by work is a coin toss. Nothing fails loudly
+   * when it loses; the data is just quietly absent.
+   */
+  io.host.reportStep({
+    phase: OnboardingPhase.FIRST_RUN,
+    step: 'project_detected',
+    status: OnboardingStepStatus.COMPLETED,
+    stack: planInput.detection.framework,
+  });
   const mcpOk = wasMcpRegistered(resolvedStatus(plan, MCP_TARGET, failed, skipped));
   io.host.reportStep({
     phase: OnboardingPhase.INSTALL,

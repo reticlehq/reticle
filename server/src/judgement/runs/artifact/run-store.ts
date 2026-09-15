@@ -90,7 +90,10 @@ export class RunStore {
   async #pruneOld(): Promise<void> {
     const ids = await this.list();
     if (ids.length <= this.#retention + this.#slack) return;
-    const stamped: Array<{ id: string; at: number }> = [];
+    // `id: RunId`, not `string`. `list()` already returns RunId[]; annotating the local as string
+    // silently discarded the brand and handed a bare string to runPath — which is the transposition
+    // the brand exists to prevent, reintroduced by a type annotation rather than by a bad call.
+    const stamped: Array<{ id: RunId; at: number }> = [];
     for (const id of ids) {
       const result = await this.read(id);
       stamped.push({ id, at: result.ok ? result.run.createdAt : 0 });

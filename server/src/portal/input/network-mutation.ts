@@ -11,7 +11,7 @@
  * shape the demotion grade exists to catch.
  */
 
-import { MutationKind, type Reversal } from '@reticlehq/openverification';
+import { MutationKind, type Reversal } from 'open-verification';
 import type { MockRule } from './network-mock.js';
 import type { RealInputProvider } from './real-input.js';
 

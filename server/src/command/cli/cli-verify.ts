@@ -307,8 +307,18 @@ async function waitForSession(
   return sessions.count() > 0;
 }
 
-/** Reconstruct the disk-backed ToolDeps over the live bridge + driven browser the daemon owns. */
-function buildVerifyDeps(running: RunningServer, reticleRoot: string, now: () => number): ToolDeps {
+/**
+ * Reconstruct the disk-backed ToolDeps over the live bridge + driven browser the daemon owns.
+ *
+ * Exported because the demo tour needs the same thing, and a second copy of this constructor is a
+ * second place to forget a field when `ToolDeps` grows one — the failure being a tool that refuses
+ * at runtime for want of a store nobody noticed was missing.
+ */
+export function buildVerifyDeps(
+  running: RunningServer,
+  reticleRoot: string,
+  now: () => number,
+): ToolDeps {
   const fs = createNodeFileSystem();
   const deps: ToolDeps = {
     sessions: running.bridge.sessions,

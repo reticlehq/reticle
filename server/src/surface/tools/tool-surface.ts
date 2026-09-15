@@ -417,6 +417,20 @@ function envFlagOn(raw: string | undefined): boolean {
  *
  * `explicit` is the programmatic override (tests, `advertisedTools` callers). Otherwise the ALL
  * switch decides, and the retired setting is honoured last so an old shell profile still works.
+ *
+ * THE FALLBACK IS `merged`, and that is the whole point of it.
+ *
+ * `merged` advertises NINE tools where `default` advertises nineteen, and it reaches the rest of the
+ * registry the same way every surface does — by name, through the meta-tool. It existed, it was
+ * measured, and it was reachable only by exporting an environment variable that the DAEMON reads at
+ * startup, which meant an agent exporting it saw no change and had no way to tell. A surface nobody
+ * can switch to is a surface nobody uses: every real client was served nineteen tools while the nine
+ * sat behind a setting.
+ *
+ * `default` is kept as a NAME so the A/B that justified this can still be run — the bench arms it by
+ * passing `explicit`, and deleting it would delete the ability to measure the trade rather than the
+ * trade itself. Accuracy outranks tokens here: a cheaper surface that verifies less is a loss at any
+ * price, so the arm that proves this one does not lose accuracy has to stay runnable.
  */
 export function resolveToolSurface(explicit?: string): ToolSurface {
   if (explicit === TOOL_SURFACE.LEAN) return TOOL_SURFACE.LEAN;
@@ -437,7 +451,7 @@ export function resolveToolSurface(explicit?: string): ToolSurface {
   if (envFlagOn(process.env[VERIFY_SURFACE_ENV])) return TOOL_SURFACE.VERIFY;
   if (envFlagOn(process.env[ADVERTISE_ALL_ENV])) return TOOL_SURFACE.ALL;
   const retiredEnv = RETIRED_PROFILE_VALUES[process.env[TOOL_PROFILE_ENV] ?? ''];
-  return retiredEnv ?? TOOL_SURFACE.DEFAULT;
+  return retiredEnv ?? TOOL_SURFACE.MERGED;
 }
 
 /** The live surface plus what chose it — see describeToolSurface. */
@@ -490,6 +504,39 @@ export function describeToolSurface(active: ToolSurface, requested?: string): To
         source: `the one tool surface (${ADVERTISE_ALL_ENV} unset when the daemon started)`,
       }
     : { active, source: `the one tool surface (${ADVERTISE_ALL_ENV}='${flag}' is off)` };
+}
+
+/**
+ * The names a daemon started RIGHT NOW advertises, meta-tools included.
+ *
+ * Exists because a fallback got left behind. `buildServerInstructions` defaulted its vocabulary to
+ * `CORE_TOOL_NAMES` plus both meta-tools, which was the default surface until the nine became it.
+ * The proxy briefs without passing a surface, so every agent reaching Reticle through `reticle mcp`
+ * was told to call `reticle_snapshot`, `reticle_query` and `reticle_wait_for` while being served a
+ * surface that has none of them. That is the exact failure surface-coherence.test.ts was written
+ * after: the agent tries a tool it was shown, fails, tries again, and abandons the product — drive
+ * calls 96 to 2, verdicts 20 to 1, and it read as a token saving because a product nobody uses is
+ * cheap.
+ *
+ * Derived, never listed: whatever `resolveToolSurface` answers is what this describes.
+ */
+export function defaultAdvertisedNames(): readonly string[] {
+  const surface = resolveToolSurface();
+  const names = [...filterToolNames(surface)];
+  // `reticle_run` is real only where the surface keeps a dispatch hatch. The merged surface ships
+  // the catalogue without one, and naming a hatch that is not there is the same defect one level in.
+  return TOOL_SURFACE.MERGED === surface
+    ? [...names, ReticleTool.TOOLS]
+    : [...names, ReticleTool.TOOLS, ReticleTool.RUN];
+}
+
+/** The advertised NAME set for a surface, without needing the tool table. */
+function filterToolNames(surface: ToolSurface): ReadonlySet<string> {
+  if (surface === TOOL_SURFACE.VERIFY) return VERIFY_TOOL_NAMES;
+  if (surface === TOOL_SURFACE.LEAN) return LEAN_TOOL_NAMES;
+  if (surface === TOOL_SURFACE.MERGED) return MERGED_TOOL_NAMES;
+  if (surface === TOOL_SURFACE.DEFAULT) return CORE_TOOL_NAMES;
+  return new Set([...CORE_TOOL_NAMES, ...EXTENDED_TOOL_NAMES]);
 }
 
 export function filterTools(tools: ToolDef[], surface: ToolSurface): ToolDef[] {

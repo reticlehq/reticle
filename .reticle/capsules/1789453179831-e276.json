@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1789453179831-e276",
+  "createdAt": 1789453179831,
+  "origin": "failed-assert",
+  "expected": "state app.compose.title",
+  "observed": "state \"app.compose.title\" never changed",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "deploy-name",
+        "source": {
+          "file": "src/components/NewDeployModal.tsx",
+          "line": 53,
+          "column": 8
+        }
+      },
+      "action": "type"
+    }
+  ]
+}

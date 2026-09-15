@@ -18,7 +18,7 @@ import { ReticleRunner, type RunnerPort, type VerifyOptions } from './reticle-ru
  * This is the property a vision/LLM-narrated QA harness lacks: a verdict that is MECHANICAL, derived
  * only from observed replay outcomes, so a broken or unreachable app can never read as PASS. These
  * tests are the deterministic, in-CI core of that guarantee; the runnable live demo (connected vs
- * severed backend) lives at bench/harness/false-green.mjs.
+ * severed backend) lives in bench/false-green-corpus/.
  */
 
 const replay = (

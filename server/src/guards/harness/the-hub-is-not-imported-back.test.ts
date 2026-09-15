@@ -51,8 +51,14 @@ describe('the tool aggregator is composed, never consumed', () => {
     let importers: string[] = [];
     try {
       importers = importersOf('tools');
-    } catch {
-      importers = []; // git grep exits 1 on no matches, which is the passing case
+    } catch (error: unknown) {
+      // ONLY exit 1, which is git grep's "no matches" and the genuinely passing case. A bare catch
+      // read every other failure as a clean bill of health too: exit 128 on a bad pathspec, ENOENT
+      // when git is not on PATH, or `server/src` not being there at all. Each of those produced an
+      // empty list and a green tick, so the guard reported "no sibling imports the aggregator"
+      // precisely when it had been unable to look.
+      if (1 !== (error as { status?: unknown }).status) throw error;
+      importers = [];
     }
     const offenders = importers.filter((f) =>
       OUTSIDE_SURFACE.some((dir) => f.startsWith(`server/src/${dir}/`)),

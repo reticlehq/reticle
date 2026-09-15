@@ -14,6 +14,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { mergedNameRedirect } from './merged-name-redirect.js';
+import { unadvertisedToolHelp } from './unadvertised-help.js';
 import { ReticleTool } from '@reticlehq/core';
 import { TOOLS, MERGED_TOOLS } from './tools.js';
 
@@ -38,8 +39,25 @@ describe('an old member name points at where the capability went', () => {
     expect(redirect?.note).toBeTruthy();
   });
 
-  it('a live tool is not redirected — it is callable as it stands', () => {
-    expect(mergedNameRedirect(ReticleTool.SNAPSHOT)).toBeUndefined();
+  it('a tool the surface advertises is never redirected — it is callable as it stands', () => {
+    /*
+     * This used to assert that `reticle_snapshot` has no redirect at all, on the grounds that it is
+     * a live tool. That stopped being true of every surface: on the nine-tool one it IS merged away,
+     * into `reticle_look { action: "page" }`, and having no redirect there was the defect — the SDK
+     * answered "Tool reticle_snapshot not found" to an agent following our own instructions.
+     *
+     * So the invariant moved to where the decision is actually made. `mergedNameRedirect` is
+     * surface-agnostic and answers "where did this name go under a merge"; `unadvertisedToolHelp`
+     * is what consults it, and only for a name the live surface does NOT advertise. A redirect
+     * offered for a tool the agent can already call is the failure this guards, and it is a
+     * property of that gate, not of the map.
+     */
+    const advertised = new Set<string>([ReticleTool.SNAPSHOT, ReticleTool.QUERY]);
+    const known = new Set(TOOLS.map((tool) => tool.name));
+    expect(unadvertisedToolHelp(ReticleTool.SNAPSHOT, advertised, known)).toBeUndefined();
+    // …and the same name on a surface WITHOUT it gets the move rather than a dead end.
+    const help = unadvertisedToolHelp(ReticleTool.SNAPSHOT, new Set([ReticleTool.LOOK]), known);
+    expect(help).toContain(ReticleTool.LOOK);
   });
 
   it('a name Reticle does not own is not redirected either', () => {

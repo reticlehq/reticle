@@ -157,8 +157,18 @@ describe('the docs inside the published package still resolve', () => {
         stdio: 'ignore',
       });
 
+      const staged = markdown(dest);
+      // The scan below reports "no dead links" just as convincingly over an empty directory. If
+      // pack-docs ever stages under a different name, `markdown(dest)` returns nothing and this
+      // guard passes having read no file at all. The sibling describe asserts on the script's own
+      // output; this asserts on what actually landed on disk, which is what the loop reads.
+      expect(
+        staged.length,
+        'no markdown was staged, so the link scan below would pass having checked nothing',
+      ).toBeGreaterThan(5);
+
       const dead: string[] = [];
-      for (const rel of markdown(dest)) {
+      for (const rel of staged) {
         const file = join(dest, rel);
         for (const [, target] of readFileSync(file, 'utf8').matchAll(LINK)) {
           if (undefined === target || /^(?:[a-z][a-z0-9+.-]*:|#|\/)/i.test(target)) continue;

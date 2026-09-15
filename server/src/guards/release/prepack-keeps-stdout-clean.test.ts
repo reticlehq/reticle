@@ -12,7 +12,7 @@ import { REPO_ROOT } from '../../machine/repo-root.js';
  * a supply-chain audit is scripted, and `package-quality.yml` already parses exactly that.
  *
  * `core/scripts/gen-schema.mjs` and `scripts/prepare-dist.mjs` both learned this and both wrote
- * the reason down beside the fix. `openverification` was added afterwards, did not inherit either
+ * the reason down beside the fix. `open-verification` was added afterwards, did not inherit either
  * comment, and shipped a `console.log` in the same position — on the package whose whole
  * purpose is being audited by other people. Two files carrying the explanation were not enough
  * to stop the third making the mistake, which is the argument for a check rather than a third

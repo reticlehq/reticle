@@ -103,7 +103,7 @@ let called = null;
 try {
   const r = await client.request(
     'tools/call',
-    { name: 'reticle_sessions', arguments: {} },
+    { name: 'reticle_session', arguments: {} },
     30_000,
   );
   called = (r?.content ?? []).map((c) => c.text ?? '').join('\n');

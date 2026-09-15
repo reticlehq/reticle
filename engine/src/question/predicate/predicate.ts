@@ -244,7 +244,7 @@ async function evalState(
   if (storeName === undefined) {
     // With no store registered there is nothing to read, and with two stores that both carry the
     // path there is no way to pick — neither is a finding about the app, no assertion was evaluated,
-    // so both are inconclusive rather than failed. See honesty/inconclusive.
+    // so both are inconclusive rather than failed: an unevaluated predicate is never a failure.
     //
     // Zero candidates is the one case that is NOT a question: every registered store was searched
     // and none exposes the path, so the assertion cannot hold anywhere. That is the same verdict a

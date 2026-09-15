@@ -25,6 +25,13 @@ export type Brand<T, B extends string> = T & { readonly [brand]: B };
  * interchangeable to the compiler and get swapped by accident (both feed path helpers!)" — and for a
  * long time only RunId was branded, so the pair the warning describes was half-fixed. `flowPath` and
  * `runPath` sit beside each other and take the same shape; the compiler could not tell them apart.
+ *
+ * Both halves now carry it, along with `sessionDirPath` and the two journal path helpers under it.
+ * The last gap was not a missing brand but a discarded one: `RunStore.list()` already returned
+ * `RunId[]`, and a local `Array<{ id: string }>` annotation threw it away three lines before the
+ * value reached `runPath`. A brand is only worth the weakest annotation between its mint and its
+ * use — so `driveFlowName` and `isValidSessionId` now hand back the branded type directly, rather
+ * than a `string` each caller has to re-bless.
  */
 export type FlowName = Brand<string, 'FlowName'>;
 

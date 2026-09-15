@@ -129,7 +129,7 @@ describe('every shipped integration is covered by an app AND a gate', () => {
       // implement, the realm the SDK itself is, the daemon, and dev tooling. None of these teaches
       // Reticle about somebody's framework or build tool, so none of them needs an app proving it.
       'core',
-      'openverification',
+      'open-verification',
       'engine',
       'dom',
       'server',

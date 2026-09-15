@@ -714,7 +714,7 @@ export const MERGE_PLANS: MergePlan[] = [
   {
     name: ReticleTool.VERIFY,
     description:
-      'What is proved, and what is not — by action. Start from a change: { action: "affected" } names which saved flows must re-verify for the files you edited (pass `files`, and/or `since` for a git ref), and "change" goes further and actually replays them, answering with one `verified` plus `because`. `unknown` there is the honest answer when NO saved flow covers the change: nothing ran, so nothing was proved, and it is never reported as green. Without a change to start from: "flows" replays every saved flow for one consolidated suite verdict (deterministic, no LLM per flow), and "coverage" lists the interactive controls you have and have NOT driven this session — an untouched list still holding the controls your change affects means you are not done. "crawl" is the no-script option: it drives every reachable control itself and reports single-channel faults (console errors, failed requests, dead controls) and CONTRADICTIONS, two channels disagreeing about the same click — the false greens a human cannot see, because a human watches the screen and the screen looks correct. "explore" is the one to reach for on a project with NO saved flows: a model inside the daemon drives the app for you — pass a `persona` and it completes that whole journey — and RECORDS what it drove, so the next run replays it with no model in the loop and none of the driving costs your context. "mutate" grades the FLOW rather than the app: it breaks the endpoint a saved flow declared it depends on and replays it, and a flow that stays GREEN through a broken subject is a click sequence, not a test. DESTRUCTIVE: crawl and explore really click, and may navigate or mutate state; "mutate" really fails a request on a driven page, and always puts it back.',
+      'What is proved, and what is not — by action. Start from a change: { action: "affected" } names which saved flows must re-verify for the files you edited (pass `files`, and/or `since` for a git ref), and "change" goes further and actually replays them, answering with one `verified` plus `because`. `unknown` there is the honest answer when NO saved flow covers the change: nothing ran, so nothing was proved, and it is never reported as green. Without a change to start from: "flows" replays every saved flow for one consolidated suite verdict (deterministic, no LLM per flow), and "coverage" lists the interactive controls you have and have NOT driven this session — an untouched list still holding the controls your change affects means you are not done. "crawl" is the no-script option: it drives every reachable control itself and reports single-channel faults (console errors, failed requests, dead controls) and CONTRADICTIONS, two channels disagreeing about the same click — the false greens a human cannot see, because a human watches the screen and the screen looks correct. "explore" is the one to reach for on a project with NO saved flows: a model inside the daemon drives the app for you — pass a `persona` and it completes that whole journey — and RECORDS what it drove, so the next run replays it with no model in the loop and none of the driving costs your context. "mutate" grades the FLOW rather than the app: it breaks the endpoint a saved flow declared it depends on and replays it, and a flow that stays GREEN through a broken subject is a click sequence, not a test. "heal" repairs a flow whose LOCATOR drifted (a renamed testid), re-asserting the saved consequence before it writes and refusing when that stops firing — it heals a locator, never an intent. DESTRUCTIVE: crawl and explore really click, and may navigate or mutate state; "mutate" really fails a request on a driven page, and always puts it back.',
     members: {
       change: ReticleTool.VERIFY_CHANGE,
       flows: ReticleTool.FLOW_VERIFY,
@@ -726,6 +726,12 @@ export const MERGE_PLANS: MergePlan[] = [
       // whether it notices. An action rather than a nineteenth tool, because the surface is meant
       // to be shaped like the work.
       mutate: ReticleTool.FLOW_MUTATE,
+      // The other half of the replay loop, and the half that was unreachable: heal is advertised by
+      // no capped surface, and the nine-tool one has no dispatch hatch, so an agent could DETECT
+      // drift and never repair it — one renamed testid and that journey is driven by hand forever.
+      // An action rather than a tenth tool, and safe to fold in because heal only rebinds a LOCATOR:
+      // it re-asserts the saved consequence before writing and refuses when that stops firing.
+      heal: ReticleTool.FLOW_HEAL,
     },
     // No default action ON PURPOSE. The name implies no single member, and one of them really
     // clicks: a fallthrough that guessed wrong would drive the app rather than read it. Every action
@@ -927,33 +933,39 @@ export const SURFACE_MERGE_PLANS: MergePlan[] = [
  * The `merged` surface's table. Built from the SAME raw tools and the same handlers — a merge can
  * change the advertised shape and nothing else, which is what makes the two surfaces comparable.
  */
-const MERGED_BASE: ToolDef[] = applyMerges(
-  RAW_TOOLS,
-  [
-    ...MERGE_PLANS.map((plan) =>
-      plan.name === ReticleTool.SESSION
-        ? {
-            ...plan,
-            // `list` and `feedback` join the session family HERE and not in MERGE_PLANS, so the
-            // harness toolset — which builds from TOOLS — keeps excluding `reticle_feedback` by
-            // name. A model driving in a loop reports its own confusion as a product defect.
-            members: {
-              ...plan.members,
-              list: ReticleTool.SESSIONS,
-              feedback: ReticleTool.FEEDBACK,
-            },
-            // A bare `reticle_session` is "what is connected?" — the FIRST call an agent makes, and
-            // the one `reticle_sessions` answered before it was folded in here. Only on this
-            // surface: on the default one `reticle_sessions` still exists and this tool is purely
-            // lifecycle, where no member is the obvious bare meaning.
-            defaultAction: 'list',
-          }
-        : plan,
-    ),
-    ...SURFACE_MERGE_PLANS,
-  ],
-  RETIRED_FROM_SURFACE,
-);
+/**
+ * Every merge the `merged` surface applies, as ONE list.
+ *
+ * Extracted from `applyMerges`' argument because a second reader needed it: `mergedNameRedirect`
+ * builds its tombstones from the plans, and the `list`/`feedback` members below were injected
+ * inline here — so `reticle_sessions`, the first call most agents make, was the one merged name
+ * with no redirect and answered "not found" on the surface where it had just stopped existing.
+ */
+export const MERGED_SURFACE_PLANS: MergePlan[] = [
+  ...MERGE_PLANS.map((plan) =>
+    plan.name === ReticleTool.SESSION
+      ? {
+          ...plan,
+          // `list` and `feedback` join the session family HERE and not in MERGE_PLANS, so the
+          // harness toolset — which builds from TOOLS — keeps excluding `reticle_feedback` by
+          // name. A model driving in a loop reports its own confusion as a product defect.
+          members: {
+            ...plan.members,
+            list: ReticleTool.SESSIONS,
+            feedback: ReticleTool.FEEDBACK,
+          },
+          // A bare `reticle_session` is "what is connected?" — the FIRST call an agent makes, and
+          // the one `reticle_sessions` answered before it was folded in here. Only on this
+          // surface: on the default one `reticle_sessions` still exists and this tool is purely
+          // lifecycle, where no member is the obvious bare meaning.
+          defaultAction: 'list',
+        }
+      : plan,
+  ),
+  ...SURFACE_MERGE_PLANS,
+];
+
+const MERGED_BASE: ToolDef[] = applyMerges(RAW_TOOLS, MERGED_SURFACE_PLANS, RETIRED_FROM_SURFACE);
 
 /**
  * The `merged` table: the plans above, plus the one merge the plan machinery cannot express.
