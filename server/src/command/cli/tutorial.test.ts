@@ -91,31 +91,38 @@ describe('the tour says what to do when it ends', () => {
  * The funnel would have recorded `tour_started` at roughly zero and read as "nobody wants the
  * tour", when in fact nobody was shown one.
  *
- * Showing it depends on whether a HUMAN is watching. The installer's rule is zero human input,
- * because the common case is an agent following a pasted link; twenty-five lines of prose into a
- * pipe helps nobody. A TTY is the honest signal for which of the two is reading.
+ * The first fix gated it on `process.stdout.isTTY`, on the theory that an agent following a pasted
+ * link does not want twenty-five lines of prose. That property is `undefined` through every pipe,
+ * so the answer was always "nobody is watching" and the tour still reached no one — the same bug
+ * with a more confident implementation. Installation and onboarding are one script; the tour is
+ * part of what the script does, and it is not conditional on anything.
  */
-describe('the installer shows the tour to a person and names it to a pipe', () => {
-  it('prints the whole tour when somebody is watching', () => {
-    const shown = installClosing(true);
+describe('the installer shows the tour, every time', () => {
+  it('prints the whole tour', () => {
+    const shown = installClosing();
     expect(shown).toContain('Take a semantic snapshot');
     expect(shown).toContain('Reticle is installed');
   });
 
   it('does not then tell them to go and run the thing they just read', () => {
-    expect(installClosing(true)).not.toContain('reticle tutorial');
+    expect(installClosing()).not.toContain('reticle tutorial');
   });
 
-  it('keeps the terse pointer when the output is piped', () => {
-    const piped = installClosing(false);
-    expect(piped).toContain('reticle tutorial');
-    expect(piped).not.toContain('Take a semantic snapshot');
+  it('leaves the reader knowing the one command that comes next', () => {
+    expect(installClosing()).toContain('reticle init');
   });
 
-  // Whichever branch, the reader must leave knowing the one command that comes next.
-  it('names `reticle init` either way', () => {
-    for (const tty of [true, false]) {
-      expect(installClosing(tty), `tty=${String(tty)}`).toContain('reticle init');
+  // The regression that matters: anything that makes this depend on the environment brings back a
+  // stage of onboarding that silently reaches nobody.
+  it('says the same thing whether or not anything looks like a terminal', () => {
+    const real = process.stdout.isTTY;
+    try {
+      Object.defineProperty(process.stdout, 'isTTY', { value: undefined, configurable: true });
+      const piped = installClosing();
+      Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true });
+      expect(installClosing()).toBe(piped);
+    } finally {
+      Object.defineProperty(process.stdout, 'isTTY', { value: real, configurable: true });
     }
   });
 });

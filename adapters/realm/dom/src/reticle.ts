@@ -20,6 +20,7 @@ import {
   CONTRACT_FINGERPRINT,
   newDocumentId,
   NO_EDITS_OBSERVED,
+  PresenterMode,
   type CommandMessage,
   type HelloMessage,
   type RedactionConfig,
@@ -488,6 +489,29 @@ export class Reticle {
         const panel = new Presenter(panelOptions);
         this.#presenter = panel;
         panel.mount();
+        /*
+         * The first-run tour, once, over the app the person just wired up.
+         *
+         * After the panel, because the tour explains the panel and points at it. It declines on its
+         * own when it has been seen or when a tool is mid-drive — see mountTour — so this is a call
+         * rather than a condition.
+         *
+         * Keyed on the lease's project id when the URL carries one, and on the origin otherwise. A
+         * plain `npm run dev` load has no lease stamp, which is exactly the load the tour exists
+         * for, so keying only on the stamp would have shown it to nobody.
+         */
+        void import('./presenter/tour/tour.js').then((tour) => {
+          tour.mountTour({
+            document,
+            storage: tour.safeLocalStorage(),
+            // This file already reads that param; importing the panel-side reader for it pulled
+            // 14 kB of the panel into every page load, which first-load-size caught.
+            projectId:
+              reticleParamsFromSearch(window.location.search).projectId ?? window.location.origin,
+            isDriving: () => PresenterMode.IDLE !== panel.mode,
+            copy: (text) => void navigator.clipboard?.writeText(text).catch(() => undefined),
+          });
+        });
         // The glow and panel wake on bridge connect, so if the bridge got there first, say so now.
         if (this.#bridgeConnected) panel.sessionStart();
         if (this.#annotator !== undefined) panel.bindAnnotator(this.#annotator);

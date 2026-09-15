@@ -24,7 +24,7 @@ import type { OnboardingStep } from '@reticlehq/core/telemetry';
  */
 export type StepReporter = (step: OnboardingStep) => void;
 
-export function handleSetupMcp(reportStep: StepReporter): void {
+export function handleSetupMcp(reportStep: StepReporter, standalone = true): void {
   const io: SetupMcpIo = {
     exists: (p) => existsSync(p),
     readFile: (p) => {
@@ -86,7 +86,10 @@ export function handleSetupMcp(reportStep: StepReporter): void {
   // its config, and an agent that was already open is the commonest reason "it did not work".
   io.print('');
   io.print('Restart your agent for it to pick up the new server.');
-  io.print('Then: cd <your project> && reticle init');
+  // Only when this IS the whole command. Inside the installer the tour follows, and its own closing
+  // already names `reticle init` — printing it here too put the same instruction twice, ten lines
+  // apart, with the tour sandwiched between them.
+  if (standalone) io.print('Then: cd <your project> && reticle init');
 }
 
 /**
@@ -102,15 +105,13 @@ export function handleSetupInstall(
 ): void {
   reportInstallSteps({ runtimeSecs: opts.runtimeSecs, installSecs: opts.installSecs }, reportStep);
   if (opts.mcp) {
-    handleSetupMcp(reportStep);
+    handleSetupMcp(reportStep, false);
   } else {
     process.stdout.write('Skipping MCP registration (--no-mcp).\n');
   }
-  // A person gets the tour; a pipe gets the pointer. See installClosing for why the TTY decides.
-  const showTour = true === process.stdout.isTTY;
-  process.stdout.write(`${installClosing(showTour)}\n`);
-  // Only claim the ONBOARD steps when the tour was actually put in front of somebody. Reporting
-  // them for a piped install would record a journey nobody took, which is the one thing a funnel
-  // must never do.
-  if (showTour) for (const step of tutorialShownSteps()) reportStep(step);
+  // Installation and onboarding are one script, so the tour prints here and is not gated on
+  // anything — see installClosing for the heuristic this replaced and why it reached nobody.
+  process.stdout.write(`${installClosing()}\n`);
+  // Shown, so the ONBOARD steps are a fact rather than a guess.
+  for (const step of tutorialShownSteps()) reportStep(step);
 }

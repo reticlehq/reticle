@@ -18,3 +18,12 @@
  * underneath it once, and its buttons could not be clicked at all.
  */
 export const Z_OVERLAY = 2147483600;
+
+/**
+ * The first-run tour, above the panel.
+ *
+ * It explains the panel, so it cannot sit under it — and it is the one surface here that must take
+ * clicks while the shield is up, because its whole job is to be clicked through. Added to
+ * `Z_OVERLAY` rather than given its own large number, for the reason this file exists.
+ */
+export const Z_TOUR = Z_OVERLAY + 30;

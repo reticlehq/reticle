@@ -119,7 +119,22 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * how we know the cost is the SCHEMA and not the vocabulary. Splitting the flow schemas further is
  * the way to stop paying it, and that is its own commit rather than a line in this one.
  */
-const MAX_FIRST_LOAD_BYTES = 237_760;
+/*
+ * 237_760 -> 238_100, for the first-run tour to exist at all. 171 B measured.
+ *
+ * The tour is a carousel drawn over the user's own app the first time it loads instrumented — the
+ * onboarding stage that, before it, reached nobody: a pointer somebody had to choose to follow,
+ * then a `process.stdout.isTTY` check that is `undefined` through every pipe.
+ *
+ * What is NOT in this number is the point. The slides, their prose and ~3 kB of CSS sit behind a
+ * dynamic `import('./presenter/tour/tour.js')` inside the block that already lazy-loads the panel,
+ * and the shared step list is a `@reticlehq/core/tour` SUBPATH rather than a root export — the
+ * first attempt put it on core's root entry and this guard caught 2 kB landing on every page load,
+ * plus 14 kB more when the project id was read through a panel-side helper instead of the reader
+ * `reticle.ts` already owns. Both were fixed rather than absorbed. The 171 B left is the mount call
+ * itself, which a page cannot avoid downloading if the tour is ever to appear.
+ */
+const MAX_FIRST_LOAD_BYTES = 238_100;
 /*
  * Raised a fifth time, 233_300 -> 233_400, for a route to be assertable in a SAVED flow. 57 B.
  *

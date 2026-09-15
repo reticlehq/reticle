@@ -20,6 +20,21 @@ import {
   OnboardingStepStatus,
   type OnboardingStep,
 } from '@reticlehq/core/telemetry';
+import { TOUR_STEPS } from '@reticlehq/core/tour';
+
+/**
+ * The steps, from the one place both surfaces read them.
+ *
+ * They used to be a private array here, which is why the browser could not render the same tour:
+ * nothing outside this package could see them. `title` and `anchor` are the carousel's business and
+ * a terminal ignores them.
+ */
+const STEPS: readonly TutorialStep[] = TOUR_STEPS.map((s) => ({
+  id: s.id,
+  say: s.say,
+  why: s.why,
+  ...(undefined === s.call ? {} : { call: s.call }),
+}));
 
 /**
  * The two ONBOARD steps a SHOWN tour can honestly answer.
@@ -60,33 +75,6 @@ export interface TutorialStep {
   /** The exact call, for the audience that would otherwise have to infer it from the prose. */
   call?: string;
 }
-
-const STEPS: readonly TutorialStep[] = [
-  {
-    id: 'connect',
-    say: 'Check that your app is actually talking to Reticle. One session listed here is the proof; until one appears, nothing else can tell you anything about this app.',
-    why: 'Having the tools is not the same as being set up. Every later answer is about a page that must already be connected.',
-    call: 'reticle_sessions',
-  },
-  {
-    id: 'look',
-    say: 'Take a semantic snapshot. You get the controls and their refs, not pixels, so you can point at things by name.',
-    why: 'A ref is stable across snapshots, which is what lets you plan several steps before spending any of them.',
-    call: 'reticle_snapshot { mode: "interactive" }',
-  },
-  {
-    id: 'declare',
-    say: 'Decide what should happen BEFORE you touch anything. "Clicking Pay makes the receipt appear" is a claim that can be wrong.',
-    why: 'This is the whole idea. A consequence named first is a check; the same sentence written after the fact is a rationalisation, and it is the difference between a verdict and a story.',
-    call: '// choose the consequence you will pass as `until`',
-  },
-  {
-    id: 'verdict',
-    say: 'Act and prove in one call. The answer says verified yes / no / unknown, and `because` names the evidence that decided it.',
-    why: 'Only `reticle_act_and_wait` and `reticle_assert` produce a verdict. A drive that ends without one has no result, however many tools it used — and "unknown" is an honest answer, not a pass.',
-    call: 'reticle_act_and_wait { ref, action: "click", until: { signal: "order:placed" } }',
-  },
-];
 
 /**
  * The same steps, shaped for who is reading.
@@ -156,23 +144,17 @@ export function tutorialNextSteps(audience: TutorialAudience): string {
  * First run, and the funnel would have shown `tour_started` at nearly zero and read as "nobody
  * wants the tour" rather than "nobody was shown one".
  *
- * Whether to SHOW it or merely name it turns on who is reading. The installer's own rule is zero
- * human input, because the common case is an agent following a link somebody pasted, and
- * twenty-five lines of prose into a pipe helps nobody. A TTY is the honest signal for which of the
- * two is at the other end — so a person gets onboarding as a stage, and a script gets one line.
+ * Installation and onboarding are ONE script, so the tour is not conditional on anything. An
+ * earlier version showed it only when `process.stdout.isTTY` was true — which is `undefined`
+ * through every pipe, so in practice nobody ever saw it, including the person who asked four times
+ * where it had gone. A heuristic that silently answers "nobody is watching" is worse than no
+ * heuristic, and "twenty-five lines is too many for an agent" was never worth a stage of onboarding
+ * that reached no one.
  *
- * Shown, it ends with the tour's OWN closing, which already names `reticle init`. Adding a second
- * "Next:" under it would be the same instruction twice in ten lines.
+ * It ends with the tour's OWN closing, which already names `reticle init`. Adding a second "Next:"
+ * under it would be the same instruction twice in ten lines.
  */
-export function installClosing(showTour: boolean): string {
-  if (!showTour) {
-    return [
-      '',
-      'Reticle is installed. Next:',
-      '  cd <your project> && reticle init     # wire it into the app',
-      '  reticle tutorial                      # what Reticle is, in two minutes',
-    ].join('\n');
-  }
+export function installClosing(): string {
   return [
     '',
     'Reticle is installed. Here is what it does, in four steps:',
