@@ -419,7 +419,7 @@ A replay against a drifted app names what moved and where. This is `reticle_veri
 
 Passing flows are counted, not described. Only failures carry detail, because the detail is the actionable part. `flaky` lists flows seen to both pass and fail on unchanged code, which is a bug in the flow rather than in the app.
 
-`reticle_flow_heal` proposes the rebind. It refuses when it is not confident:
+`reticle_verify { action: "heal" }` proposes the rebind. It refuses when it is not confident:
 
 ```json
 {

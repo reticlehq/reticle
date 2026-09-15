@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "name": "drive-sa0339282-ee47-45a3-9574-1df18068d4c9-deployments",
+  "createdAt": 1789453942949,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "new-deploy",
+        "source": {
+          "file": "src/views/Deployments.tsx",
+          "line": 104,
+          "column": 10
+        }
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "element": {
+          "testid": "deploy-modal"
+        }
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "deploy-name",
+        "source": {
+          "file": "src/components/NewDeployModal.tsx",
+          "line": 53,
+          "column": 8
+        }
+      },
+      "args": {
+        "value": "   "
+      },
+      "action": "fill"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "deploy-submit",
+        "source": {
+          "file": "src/components/NewDeployModal.tsx",
+          "line": 88,
+          "column": 10
+        }
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "element": {
+          "testid": "deploy-modal"
+        }
+      }
+    }
+  ],
+  "startPath": "/deployments"
+}

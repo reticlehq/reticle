@@ -6,7 +6,7 @@ Give it what happened in a running app — the clicks, the network calls, the st
 
 ## Why it is on its own
 
-Reticle's whole claim is that a verdict means something. The part that makes that claim is small and depends on almost nothing, so it should be possible to take it without taking a daemon you did not ask for. Somebody implementing the [OpenVerification](../openverification) specification for a different kind of environment — a phone, a game, a terminal — needs these rules and none of the machinery around them.
+Reticle's whole claim is that a verdict means something. The part that makes that claim is small and depends on almost nothing, so it should be possible to take it without taking a daemon you did not ask for. Somebody implementing the [OpenVerification](../open-verification) specification for a different kind of environment — a phone, a game, a terminal — needs these rules and none of the machinery around them.
 
 ## What is inside
 

@@ -12,7 +12,7 @@
  * fixture, no recorded response, no stub in the product path: a witness consulting a canned answer
  * is the subject describing itself with extra steps, and the evidence would be worth nothing.
  *
- * `openverification` ships the abstraction and requires it be proved twice. This is the second proof.
+ * `open-verification` ships the abstraction and requires it be proved twice. This is the second proof.
  */
 
 import {
@@ -29,7 +29,7 @@ import {
   type Observation,
   type SubjectRef,
   type Window,
-} from '@reticlehq/openverification';
+} from 'open-verification';
 
 /** Everything it needs from outside itself — no globals, no ambient clock. */
 export interface HttpWitnessInput {

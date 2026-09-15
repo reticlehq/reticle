@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ChannelId, Independence, witnessDisagreement } from '@reticlehq/openverification';
+import { ChannelId, Independence, witnessDisagreement } from 'open-verification';
 import { HttpWitness } from './http-witness.js';
 
 /**

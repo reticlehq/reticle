@@ -202,14 +202,23 @@ jobs:
       # The POSIX-but-not-Linux surface: paths, spawn, `lsof`, temp/state dirs, port resolution.
       # Named as directories and files rather than a pattern so that adding a test here is a
       # deliberate act — a glob would silently re-grow this job back into the Linux tier.
+      # NO --passWithNoTests. That flag is what let this job rot: ten of its twelve paths moved in a
+      # directory regrouping, six named files matched nothing, and the run stayed green on four files
+      # — two of which only matched because vitest treats these arguments as SUBSTRING filters, so
+      # `src/cli` caught `cli.test.ts` by accident. A path that stops matching must now fail the job,
+      # which is the only thing that makes the explicit list below worth writing.
       - name: Platform surface (paths, spawn, lsof, temp/state dirs)
         run: |
-          pnpm --filter @reticlehq/server exec vitest run --passWithNoTests \
-            src/cli src/daemon src/project \
-            src/daemon-spawn.test.ts src/daemon-state-home.test.ts src/daemon-reclaim.test.ts \
+          pnpm --filter @reticlehq/server exec vitest run \
+            src/command/cli/ src/command/daemon/ src/memory/project/ \
+            src/command/daemon/daemon-spawn.test.ts \
+            src/command/daemon/daemon-state-home.test.ts \
+            src/command/daemon/daemon-reclaim.test.ts \
             src/multi-project.test.ts src/library-path-boundary.test.ts \
-            src/setup/listeners.test.ts src/setup/node-effects.test.ts \
-            src/tools/harness-kills-only-listeners.test.ts src/tools/upload-path-rewrite.test.ts
+            src/command/setup/terminal/listeners.test.ts \
+            src/command/setup/node-effects.test.ts \
+            src/guards/harness/harness-kills-only-listeners.test.ts \
+            src/surface/tools/upload-path-rewrite.test.ts
       - name: Daemon runtime (no app, no browser)
         run: |
           node apps/e2e/specs/daemon-lifecycle-test.mjs
@@ -501,7 +510,7 @@ jobs:
           # SPI; the two functions in core that build a protocol subject; and the two fixture apps
           # the scenarios are planted into. Narrower than `desktop` in some places and wider in
           # others, so it gets its own filter rather than borrowing one.
-          if echo "$CHANGED" | grep -qE '^(openverification/|conformance/|server/src/portal/realm/|core/src/realm/|core/src/verdict/verification-run\.ts|apps/bench-app/|apps/electron-smoke/|\.github/workflows/ci\.yml)'; then
+          if echo "$CHANGED" | grep -qE '^(open-verification/|conformance/|server/src/portal/realm/|core/src/realm/|core/src/verdict/verification-run\.ts|apps/bench-app/|apps/electron-smoke/|\.github/workflows/ci\.yml)'; then
             echo "conformance=true" >> "$GITHUB_OUTPUT"
           else
             echo "conformance=false" >> "$GITHUB_OUTPUT"

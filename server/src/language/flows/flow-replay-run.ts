@@ -28,6 +28,7 @@ import { anchorQueryArgs } from './flow-step-runners.js';
 import { queryRefs } from './replay.js';
 import { assertSuccess, dynamicTestids, successLabel, SUCCESS_STEP_TOOL } from './flow-success.js';
 import { buildDecision, unverifiableReason } from './decision.js';
+import { assertStepExpect, type FlowReplaySession } from './flow-replay.js';
 import { classifyFlowAssertions, flattenSteps } from './flow-classify.js';
 import { dischargeFlowIntent, flowIntentStatement, flowReplayVerdictId } from './flow-intent.js';
 import { IntentStore } from '../../memory/intent/intent-store.js';
@@ -412,6 +413,33 @@ async function loadInvokedFlows(
   return out;
 }
 
+/**
+ * The first precondition this flow declares that does not hold, described for a reader.
+ *
+ * Undefined means every declared claim held, OR that the flow declared none — and those two are the
+ * same answer on purpose. Silence is permissive: every flow recorded before `requires` existed
+ * declares nothing, and treating "did not say" as "not satisfied" would make every one of them
+ * unverifiable on the day this shipped.
+ *
+ * Only the FIRST is reported. A reader fixes preconditions one at a time, and the second is usually
+ * a consequence of the first being absent.
+ */
+async function firstUnmetPrecondition(
+  session: FlowReplaySession,
+  flow: FlowFile,
+  since: number,
+): Promise<string | undefined> {
+  for (const claim of flow.requires ?? []) {
+    // Zero budget: a precondition is a claim about the state you are starting FROM. Waiting for one
+    // turns "was it true" into "did it become true", which is a different and much weaker question.
+    const drift = await assertStepExpect(session, claim, new Set(), waitForPredicate, 0, since);
+    if (drift !== undefined) {
+      return `a precondition of this flow does not hold (${JSON.stringify(claim)}), so nothing ran and nothing was proved. Run the flow that establishes it first, or drive that state yourself.`;
+    }
+  }
+  return undefined;
+}
+
 export async function replayNamedFlow(
   deps: ToolDeps,
   args: Record<string, unknown>,
@@ -474,6 +502,33 @@ export async function replayNamedFlow(
   // what it runs, and a grader that cannot see the sub-flows reports `unverifiable` on a journey
   // that checks itself thoroughly — right about the file, wrong about the journey.
   const invokedFlows = await loadInvokedFlows(deps, replayable, projectId);
+  /*
+   * The flow's own preconditions, before a single step runs.
+   *
+   * A flow states what must already be true for it to mean anything. Replaying one whose `requires`
+   * does not hold is not a test of the app: it drives a journey from a state it was never recorded
+   * in, and whatever happens next is noise. Until this existed that noise arrived as a FAILURE, and
+   * a red that is really a missing precondition is the most expensive kind — it sends a reader into
+   * product code that is fine.
+   *
+   * So an unmet precondition is `unverifiable`, never a failure: nothing ran, so nothing was proved.
+   * That is the same honesty rule an uncovered change already follows, and `unverifiable` is already
+   * the bucket the suite counts apart from both passes and failures.
+   *
+   * Judged with the SAME function that judges a step's `expect`, because they are the same shape and
+   * two judges drift. Evaluated against the replay floor with no waiting: a precondition is a claim
+   * about the state you are starting from, and a claim you have to wait for was not true when you
+   * asked.
+   */
+  const unmet = await firstUnmetPrecondition(session, replayable, replayFloor);
+  if (unmet !== undefined) {
+    return {
+      name: replayable.name,
+      status: ReplayStatus.OK,
+      steps: [],
+      unverifiable: { reason: unmet },
+    };
+  }
   const steps = await replayFlow(
     session,
     replayable,

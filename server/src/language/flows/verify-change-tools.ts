@@ -138,7 +138,17 @@ export const VERIFY_CHANGE_TOOLS: ToolDef[] = [
       if (0 === affected.length) {
         return {
           verified: Verified.UNKNOWN,
-          because: `no saved flow covers ${1 === changedFiles.length ? 'this file' : 'these files'} — record one with reticle_record { action: "start" } then reticle_flow_save, or verify by driving the app directly`,
+          /*
+           * The way out named here has to be one the CALLER can take.
+           *
+           * This used to say "record one with reticle_record { action: start } then
+           * reticle_flow_save". Neither is advertised on the default surface, and that surface has
+           * no dispatch hatch — so the honest answer to "nothing covers this change" ended in two
+           * calls that come back "Tool not found". Driving is reachable from every surface, and a
+           * drive is captured as a flow automatically at teardown, so it is also the instruction
+           * that makes the NEXT change to these files replay instead of drive.
+           */
+          because: `no saved flow covers ${1 === changedFiles.length ? 'this file' : 'these files'} — nothing ran, so nothing is proved. Drive it and prove it directly; the drive is saved as a flow, so the next change here replays instead`,
           changedFiles,
           flowsRun: [],
           unknownProvenance,

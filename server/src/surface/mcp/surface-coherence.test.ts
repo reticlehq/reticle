@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { TOOL_SURFACE, CORE_TOOL_NAMES } from '../tools/tool-surface.js';
+import { TOOL_SURFACE, CORE_TOOL_NAMES, resolveToolSurface } from '../tools/tool-surface.js';
 import { ReticleTool } from '@reticlehq/core';
 import { buildServerInstructions } from './server-instructions.js';
 import { advertisedTools } from './mcp.js';
@@ -25,12 +25,23 @@ import { REPO_ROOT } from '../../machine/repo-root.js';
  * evidence. A tool that load-bearing, handed over as a name and a one-line description with no word
  * on when to reach for it, is a tool the model will not reach for.
  *
- * So: named implies reachable, advertised implies mentioned. The advertised set is read from
- * `CORE_TOOL_NAMES` rather than restated here, because a hand-maintained copy of the surface is the
- * same defect one level up.
+ * So: named implies reachable, advertised implies mentioned. The advertised set is read from the
+ * LIVE DEFAULT SURFACE rather than restated here, because a hand-maintained copy of the surface is
+ * the same defect one level up.
+ *
+ * It used to read `CORE_TOOL_NAMES`, and that stopped being the default the day the nine-tool
+ * surface became it. The distinction is the whole point of this file: `CORE_TOOL_NAMES` is the
+ * nineteen-tool table, and a reader handed the nine would have been judged against a product they
+ * were not given — which is the failure recorded further down, where drive calls fell 96 to 2.
+ * `resolveToolSurface()` answers what a daemon started today actually serves.
  */
 const REPO = REPO_ROOT;
 const SKILL = join(REPO, 'SKILL.md');
+
+/** What a daemon started right now advertises. The documents are judged against THIS. */
+const DEFAULT_ADVERTISED: ReadonlySet<string> = new Set(
+  advertisedTools(resolveToolSurface()).map((tool) => tool.name),
+);
 
 /** Any `reticle_*` token. Narrowed against DECLARED below: most of them were never tools. */
 const ANY_TOOL_MENTION = /reticle_[a-z0-9_]+/g;
@@ -87,8 +98,12 @@ describe('the instructions, SKILL.md and the advertised surface describe the sam
     // The derivation being LIVE is the point: if CORE_TOOL_NAMES is what this reads, a tool added
     // there arrives here on its own. Pinned against the two anchors the checks below depend on.
     expect(CORE_TOOL_NAMES.size).toBeGreaterThan(10);
-    expect(CORE_TOOL_NAMES.has(ReticleTool.OBSERVE)).toBe(true);
-    expect(CORE_TOOL_NAMES.has(ReticleTool.CONTEXT)).toBe(false);
+    // And the set the documents are judged against is the LIVE one, which is smaller and is not
+    // this list. Both anchors matter: the first says the module still resolves, the second says
+    // this file is asking about the product a reader is actually handed.
+    expect(DEFAULT_ADVERTISED.size).toBeGreaterThan(5);
+    expect(DEFAULT_ADVERTISED.has(ReticleTool.OBSERVE)).toBe(true);
+    expect(DEFAULT_ADVERTISED.has(ReticleTool.CONTEXT)).toBe(false);
   });
 
   it('finds both sources, with enough text in each to judge', () => {
@@ -102,7 +117,7 @@ describe('the instructions, SKILL.md and the advertised surface describe the sam
     for (const { label, text } of sources()) {
       const reachable = runFormTools(text);
       for (const name of mentionedTools(text)) {
-        if (CORE_TOOL_NAMES.has(name) || META.has(name) || reachable.has(name)) continue;
+        if (DEFAULT_ADVERTISED.has(name) || META.has(name) || reachable.has(name)) continue;
         unreachable.push(`${label}: ${name}`);
       }
     }
@@ -180,7 +195,7 @@ describe('the instructions, SKILL.md and the advertised surface describe the sam
       .map((s) => s.text)
       .join('\n');
     const named = mentionedTools(combined);
-    const silent = [...CORE_TOOL_NAMES].filter((n) => !named.has(n));
+    const silent = [...DEFAULT_ADVERTISED].filter((n) => !named.has(n));
     expect(
       silent,
       'These tools are advertised on every turn and no document an agent reads mentions them, so ' +

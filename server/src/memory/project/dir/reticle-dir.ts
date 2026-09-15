@@ -68,22 +68,22 @@ export function reticleDirPaths(root: string): ReticleDirPaths {
 }
 
 /** The verification-run artifact path for `runId`.reticle/runs/<runId>.json). */
-export function runPath(root: string, runId: string): string {
+export function runPath(root: string, runId: RunId): string {
   return join(root, ReticleDir.RUNS_SUBDIR, `${runId}.json`);
 }
 
 /** The journal directory for `sessionId` (.reticle/sessions/<id>). Guard the id first. */
-export function sessionDirPath(root: string, sessionId: string): string {
+export function sessionDirPath(root: string, sessionId: SessionId): string {
   return join(root, ReticleDir.SESSIONS_SUBDIR, sessionId);
 }
 
 /** The append-only event ledger path for a session (.reticle/sessions/<id>/events.jsonl). */
-export function journalEventsPath(root: string, sessionId: string): string {
+export function journalEventsPath(root: string, sessionId: SessionId): string {
   return join(sessionDirPath(root, sessionId), ReticleDir.JOURNAL_EVENTS_FILE);
 }
 
 /** The append-only action ledger path for a session (.reticle/sessions/<id>/actions.jsonl). */
-export function journalActionsPath(root: string, sessionId: string): string {
+export function journalActionsPath(root: string, sessionId: SessionId): string {
   return join(sessionDirPath(root, sessionId), ReticleDir.JOURNAL_ACTIONS_FILE);
 }
 

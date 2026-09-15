@@ -1,7 +1,7 @@
 /**
  * The wiring, which is the half that can silently stop working.
  *
- * The fold in honesty/feature-capture.ts is pure and pinned by its own spec. Nothing there notices
+ * The fold in surface/tools/feature-capture.ts is pure and pinned by its own spec. Nothing there notices
  * if the dispatch point stops feeding it — and a feature-use instrument that quietly records nothing
  * reports "not observed" forever, which is exactly the unfalsifiable state it exists to end.
  */

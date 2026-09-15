@@ -429,7 +429,7 @@ registerCapabilities({
 
 Once the loop works, these turn ad-hoc runs into a maintained suite:
 
-- **[Flows, recorder & self-healing](flows.md)**: record a golden path once; Reticle saves it to a git-checked `.reticle/` flow anchored on testid+signal, replays it (with legible drift), and `reticle_flow_heal` repairs renamed anchors.
+- **[Flows, recorder & self-healing](flows.md)**: record a golden path once; Reticle saves it to a git-checked `.reticle/` flow anchored on testid+signal, replays it (with legible drift), and `reticle_verify { action: "heal" }` repairs renamed anchors.
 - **[Testing with `@reticlehq/test`](testing.md)** gives you declarative `reticleTest` specs you run headless / in CI; flows can _become_ the specs.
 - **[Human-in-the-loop control](human-control.md)**: with `present: true`, pause / message / end the agent from the floating panel.
 - **[Integration patterns](integration-patterns.md)** covers the recommended zero-prod-bundle emit adapter, store-layer signals, and incremental adoption.

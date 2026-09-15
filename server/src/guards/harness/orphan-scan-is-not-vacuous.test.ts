@@ -41,7 +41,7 @@ describe('a scan that found nothing is an error, not a clean result', () => {
   it('still scans a real package, so the guard above is not simply breaking it', () => {
     // The other half of the control. A throw-on-empty that throws on everything would satisfy
     // the expectation above and disable all ten guards, which is a worse outcome than the bug.
-    const scanned = scanPackage(join(__dirname, '..', '..', '..', '..', 'openverification'));
+    const scanned = scanPackage(join(__dirname, '..', '..', '..', '..', 'open-verification'));
     expect(scanned.entries.length).toBeGreaterThan(0);
   });
 });

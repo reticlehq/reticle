@@ -1,7 +1,8 @@
 {
   "version": 1,
   "name": "console-compose",
-  "createdAt": 1789287555136,
+  "startPath": "/",
+  "createdAt": 1789464922076,
   "steps": [
     {
       "tool": "reticle_act",
@@ -14,10 +15,10 @@
           "column": 8
         }
       },
+      "action": "fill",
       "args": {
         "value": "admin@reticle.dev"
-      },
-      "action": "fill"
+      }
     },
     {
       "tool": "reticle_act",
@@ -30,10 +31,10 @@
           "column": 8
         }
       },
+      "action": "fill",
       "args": {
         "value": "<redacted: supply at replay>"
-      },
-      "action": "fill"
+      }
     },
     {
       "tool": "reticle_act",
@@ -46,8 +47,8 @@
           "column": 8
         }
       },
-      "args": {},
-      "action": "click"
+      "action": "click",
+      "args": {}
     },
     {
       "tool": "reticle_act",
@@ -60,8 +61,8 @@
           "column": 8
         }
       },
-      "args": {},
-      "action": "click"
+      "action": "click",
+      "args": {}
     },
     {
       "tool": "reticle_act",
@@ -74,10 +75,10 @@
           "column": 8
         }
       },
+      "action": "fill",
       "args": {
         "value": "shipped a faster build pipeline"
-      },
-      "action": "fill"
+      }
     },
     {
       "tool": "reticle_act",
@@ -90,15 +91,21 @@
           "column": 8
         }
       },
-      "args": {},
-      "action": "click"
+      "action": "click",
+      "args": {}
     }
   ],
-  "startPath": "/",
   "success": {
     "console": {
       "level": "error",
       "absent": true
     }
-  }
+  },
+  "learned": [
+    {
+      "kind": "request-never-settled",
+      "step": 5,
+      "state": "open"
+    }
+  ]
 }

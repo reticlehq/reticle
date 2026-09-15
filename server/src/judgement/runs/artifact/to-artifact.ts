@@ -24,7 +24,7 @@ import {
 /** What this document is, said in the document, so a reader never has to guess from its shape. */
 export const OVP_ARTIFACT_KIND = 'ovp.verification';
 
-/** The version of the specification this document follows. See openverification/SPEC.md. */
+/** The version of the specification this document follows. See open-verification/SPEC.md. */
 export const OVP_ARTIFACT_VERSION = 1;
 
 /** One thing that was claimed, and what checking it came out as. */

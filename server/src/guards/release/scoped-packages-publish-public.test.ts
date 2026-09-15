@@ -10,7 +10,7 @@ import { REPO_ROOT } from '../../machine/repo-root.js';
  * npm's default access for a SCOPED name is restricted. A package without
  * `publishConfig.access: "public"` is therefore asking to be published private, and on its FIRST
  * publish that is either a 402 or a package nobody outside the org can install. Ten of the
- * thirteen here said `public`; `@reticlehq/openverification`, `@reticlehq/engine` and
+ * thirteen here said `public`; `open-verification`, `@reticlehq/engine` and
  * `@reticlehq/electron` did not.
  *
  * The first two are new in this release, which is exactly when it matters: an existing package

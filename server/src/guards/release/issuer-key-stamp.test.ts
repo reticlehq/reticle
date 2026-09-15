@@ -37,7 +37,7 @@ const TARGET = join(REPO_ROOT, 'server', 'dist', 'features', 'license', 'license
  * They used to be concatenated, so a test asserting the eval-mode message could not tell which
  * stream carried it — and the script wrote it to stdout, which is what `npm pack --json` parses.
  * Release tooling reading that JSON got a line of prose before the array and could not parse it.
- * The same defect was found and fixed in openverification's prepack earlier in this release.
+ * The same defect was found and fixed in open-verification's prepack earlier in this release.
  */
 function run(env: Record<string, string>): { out: string; err: string; code: number } {
   /*

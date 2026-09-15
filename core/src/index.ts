@@ -39,6 +39,8 @@ export * from './wire/event-payloads.js'; // per-event payload schemas + wire vo
 export * from './wire/event-priority.js'; // which events survive the bridge rate cap
 export * from './artifacts/flow-constants.js'; // moved off wire/constants/constants, which had no use for them
 export * from './artifacts/flow-types.js'; // FlowStep, FlowExpect, FlowStepTool, replay result shapes
+export * from './artifacts/step-effect.js'; // StepEffect: a leaf, so the page never downloads it
+export * from './artifacts/flow-composition.js'; // canFollow: may B replay straight after A
 export * from './verdict/verification-run.js'; // run/verdict shapes for the CI surface
 export * from './wire/types.js';
 export * from './identity/brand.js'; // RunId / SessionId / Ref brands + validators
@@ -77,7 +79,7 @@ export * from './verdict/revision.js';
 export * from './realm/registry.js';
 // The protocol is NOT re-exported here, deliberately.
 //
-// `@reticlehq/openverification` is the specification this codebase implements, and it is a separate
+// `open-verification` is the specification this codebase implements, and it is a separate
 // package precisely so that somebody implementing it does not have to install the product. Blanket
 // re-exporting it from core erases that line: a consumer reaches a protocol name through Reticle
 // and now depends on Reticle for a contract that was written not to need it. Import the protocol

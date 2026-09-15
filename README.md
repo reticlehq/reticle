@@ -462,7 +462,7 @@ A pnpm + turbo monorepo — each audience installs only what it needs (apps embe
 | `@reticlehq/vite-plugin` · `-next` · `-babel-plugin` | dev-only source mapping + `connect()` injection (Vite / Next.js / React 19) |
 | `@reticlehq/electron` | the Electron adapter: makes main-process IPC observable and the window screenshottable, from the two places the renderer cannot reach |
 | `@reticlehq/server` | the bridge + MCP server + the `reticle` CLI |
-| `@reticlehq/openverification` | the Open Verification Protocol: the vocabulary, the rules, and the interface an implementation answers. Depends only on `zod`, so implementing the contract does not mean installing the product |
+| `open-verification` | the Open Verification Protocol: the vocabulary, the rules, and the interface an implementation answers. Depends only on `zod`, so implementing the contract does not mean installing the product |
 | `@reticlehq/engine` | the rules that decide a verdict, with no browser, daemon or CLI attached |
 | `@reticlehq/test` · `-eslint-plugin` | write your own checks in code, no agent needed (and run them in CI) · the "state change must fire a signal" lint rule |
 

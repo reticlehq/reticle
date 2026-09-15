@@ -13,7 +13,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { TOOL_SURFACE, type ToolSurface } from './tool-surface.js';
+import { resolveToolSurface, TOOL_SURFACE, type ToolSurface } from './tool-surface.js';
 import { advertisedTools } from '../mcp/mcp.js';
 import { TOOLS } from './tools.js';
 import { buildDynamicTools } from './dynamic-tools.js';
@@ -141,7 +141,14 @@ describe('advertised surface sizes', () => {
 describe('docs state a surface size exactly once, correctly', () => {
   const ROOT = REPO_ROOT;
   /** The one sentence in the docs allowed to carry counts. Built from the numbers the gate proves. */
-  const CANONICAL = `\`default\` ${String(EXPECTED_SIZE[TOOL_SURFACE.DEFAULT])}, \`all\` ${String(EXPECTED_SIZE[TOOL_SURFACE.ALL])}`;
+  /*
+   * Built from the surface a daemon started TODAY serves, not from `TOOL_SURFACE.DEFAULT`.
+   *
+   * Those were the same thing until the nine-tool surface became the default. Reading the constant
+   * would have had this gate insist SKILL.md advertise "19" to a reader who is handed nine, which is
+   * the contradiction the whole describe exists to prevent, printed by the guard itself.
+   */
+  const CANONICAL = `\`default\` ${String(EXPECTED_SIZE[resolveToolSurface()])}, \`all\` ${String(EXPECTED_SIZE[TOOL_SURFACE.ALL])}`;
   /**
    * Anything that reads like a count of the surface: "46 tools", "33 advertised", "`=full` (48)".
    * Deliberately blind to whether the number is right — a SECOND statement of it is the defect, because

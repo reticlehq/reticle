@@ -22,7 +22,7 @@ import {
   type Reversal,
   type SubjectRef,
   type Window as ProtocolWindow,
-} from '@reticlehq/openverification';
+} from 'open-verification';
 import {
   CONTRADICTION_CHANNELS,
   SettleReason,

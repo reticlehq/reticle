@@ -40,7 +40,7 @@ const DECLARED_UNWIRED: Record<string, string> = {
   'memory/project/memory-fs.ts':
     'an in-memory FileSystemPort, so a test can exercise project code without touching disk.',
   'portal/realm/http-witness.ts':
-    'the reference Witness. openverification ships the abstraction and requires it be proved TWICE — a ' +
+    'the reference Witness. open-verification ships the abstraction and requires it be proved TWICE — a ' +
     'protocol with one implementation is a description of that implementation. This is the second ' +
     'proof, and it is deliberately not wired to a tool yet: a witness must be named per run (which ' +
     'endpoint watches which subject) and there is no user asking for that. Exercised by its own ' +

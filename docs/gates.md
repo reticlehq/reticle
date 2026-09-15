@@ -54,12 +54,12 @@ Find the row that matches what you changed. Run its commands. That is the whole 
 | You changed | Run | Cost |
 | --- | --- | --- |
 | **Anything at all** | `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:unit` | ~2 min |
-| The tool surface, the wire contract (`packages/core`), or an observer | ↑ **and** `pnpm test:e2e` | +~8 min |
+| The tool surface, the wire contract (`core`), or an observer | ↑ **and** `pnpm test:e2e` | +~8 min |
 | `reticle init`, `@reticlehq/vite-plugin`, `@reticlehq/next`, `@reticlehq/babel-plugin`, anything a user runs before their first session | ↑ **and** `pnpm gate:install` | +~15 min |
-| `@reticlehq/electron`, `packages/tauri`, the IPC observer, desktop capture | ↑ **and** `pnpm test:e2e:desktop` | +~3 min |
-| `@reticlehq/openverification`, the adjudicator, `WebRealm`, or anything a verdict is derived from | ↑ **and** `pnpm gate:conformance` | +~3 min |
+| `@reticlehq/electron`, `adapters/realm/tauri`, the IPC observer, desktop capture | ↑ **and** `pnpm test:e2e:desktop` | +~3 min |
+| `open-verification`, the adjudicator, `WebRealm`, or anything a verdict is derived from | ↑ **and** `pnpm gate:conformance` | +~3 min |
 | Telemetry, feedback, or anything that emits an event | ↑ **and** read [`telemetry-contract.md`](./telemetry-contract.md) first. `pnpm test:e2e` covers it (`telemetry-events-test`) | n/a |
-| `packages/tauri` (Rust) | ↑ **and** `cd packages/tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings` | +~2 min |
+| `adapters/realm/tauri` (Rust) | ↑ **and** `cd adapters/realm/tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings` | +~2 min |
 | Docs, README, comments only | `pnpm format:check` | seconds |
 
 **Why routing exists.** The full set is roughly 35 minutes. A gate people resent is a gate people route around, so only the tier that can see your change is worth your time.
@@ -72,7 +72,7 @@ Which means a gate skipped locally can also be skipped in CI, if what you change
 | --- | --- |
 | `verify` (format, lint, types, unit tests) | always |
 | `windows`, `macos` | always, but only a narrow platform-sensitive slice of the tests |
-| `rust` (Linux) | always. It is the only job in CI that compiles `packages/tauri` at all, so a skip would be a real hole |
+| `rust` (Linux) | always. It is the only job in CI that compiles `adapters/realm/tauri` at all, so a skip would be a real hole |
 | `rust-macos` | only when the Rust crate changed. A second opinion on the same crate, on a runner that bills at ten times the rate |
 | `install-gate` | only when something a user runs before their first session changed |
 | the install gate's self-test | only when the gate's own machinery changed, or on a push to main. It proves the gate can still fail, and that only changes when the gate changes |
@@ -101,7 +101,7 @@ Each gate exists because the ones above it are blind to something. That blindnes
 | **Matrix records** | `pnpm matrix:validate` | every submitted client-compat record is well-formed | whether the client actually works | `matrix-records` |
 | **Windows** | (CI only) | that the code runs at all on the majority platform | e2e; Windows is unit-only | `windows` |
 | **macOS** | (CI only) | the POSIX-but-not-Linux surface (paths, spawn, `lsof`, temp/state dirs) plus a real daemon's lifecycle | everything Linux already covers; it deliberately no longer re-runs the unit tier at a 10x billing multiplier | `macos` |
-| **Rust** | `cargo fmt/clippy/check` | `packages/tauri` compiles and lints on Linux, macOS, and cross-checks Windows | everything JS | `rust` (always), `rust-macos` (only when Rust changes) |
+| **Rust** | `cargo fmt/clippy/check` | `adapters/realm/tauri` compiles and lints on Linux, macOS, and cross-checks Windows | everything JS | `rust` (always), `rust-macos` (only when Rust changes) |
 
 **The single required status check is `gate`.** It passes when every job above either succeeded or was deliberately skipped by path routing, and fails on anything else. Adding a job to `ci.yml` is half the work; adding it to `gate`'s `needs:` list is the other half. A job missing from that list runs, reports, and is structurally incapable of blocking a merge.
 

@@ -1,7 +1,7 @@
 {
   "files": [],
   "references": [
-    { "path": "openverification" },
+    { "path": "open-verification" },
     { "path": "core" },
     { "path": "engine" },
     { "path": "init" },

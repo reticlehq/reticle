@@ -321,6 +321,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   cloud: ['cli', 'fs', 'intent'],
   command: [
     'answers',
+    'demo',
     'lifetime',
     'binding',
     'drive',
@@ -339,6 +340,21 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'telemetry',
     'update',
   ],
+  /**
+   * The tutorial's demo run: a page carrying the real SDK, driven to a verdict.
+   *
+   * Four reaches, and each is the thing itself rather than a convenience. `tools` is the registry
+   * and the dispatch chokepoint, because the tour calls tools — in-process, since it starts the
+   * daemon it drives and going back out over a socket would add a transport that can fail to a
+   * command whose whole job is to not fail. `bridge` is the pairing token, which the page must
+   * present or the daemon refuses its hello. `cli` is the tutorial script and the safe-control rule,
+   * shared with the printed tour so one sequence cannot become two.
+   *
+   * It was EIGHT. Five of those existed only to rebuild `ToolDeps` — a constructor `cli-verify`
+   * already had, kept private, so the demo grew a second copy of it. Reaching for the one that
+   * exists removed five edges and the second place to forget a field when that type grows one.
+   */
+  demo: ['tools', 'bridge', 'cli'],
   crawl: ['args', 'project', 'tools', 'facts'],
   daemon: ['lifetime', 'binding', 'telemetry'],
   domain: ['args', 'dir', 'flows', 'oracles', 'project', 'tools'],

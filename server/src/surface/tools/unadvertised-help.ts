@@ -30,7 +30,7 @@ export function unadvertisedToolHelp(
   if (advertised.has(name)) return undefined;
   // A name that MOVED gets the move, not a profile lecture — it is not un-advertised, it is gone.
   const moved = mergedNameRedirect(name);
-  if (moved !== undefined) return mergedNameMessage(name, moved);
+  if (moved !== undefined) return mergedNameMessage(name, moved, advertised.has(moved.tool));
   if (!known.has(name)) return undefined;
   return (
     `${name} exists and works, but is not advertised under this tool profile — the schemas for all ` +

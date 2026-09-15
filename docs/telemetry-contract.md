@@ -6,7 +6,7 @@ icon: file-contract
 
 > For anyone (human or agent) adding a tool, an event, a finding kind, or a failure path to Reticle.
 >
-> The rules here are enforced by `packages/server/src/telemetry/telemetry-contract.test.ts`. If you break one, that test tells you which and where. This page is why.
+> The rules here are enforced by `server/src/telemetry/telemetry-contract.test.ts`. If you break one, that test tells you which and where. This page is why.
 
 ## Why this has its own contract
 
@@ -363,7 +363,7 @@ One deliberate exception to the rules above: `RETICLE_TELEMETRY_FILE` keeps tele
 | You are adding | Do this | Enforced by |
 | --- | --- | --- |
 | **A tool** | Add it to `TOOLS`. Nothing else. If its name implies a verdict (`assert`/`verify`), also add it to `VERDICT_TOOLS` | `telemetry-contract.test.ts` |
-| **A verdict-producing tool** | Add it to `VERDICT_TOOLS` (`packages/server/src/surface/tools/feedback-tools.ts`). Otherwise it emits no `verification_completed` and stops counting toward the product's headline metric | ✓ |
+| **A verdict-producing tool** | Add it to `VERDICT_TOOLS` (`server/src/surface/tools/feedback-tools.ts`). Otherwise it emits no `verification_completed` and stops counting toward the product's headline metric | ✓ |
 | **A contradiction / anomaly kind** | Add it to core's enum only. `bug-found.ts` derives from it | ✓ |
 | **A new finding shape** in a tool result | Teach `bugsInResult` the field. Add a case to the contract test | ✓ |
 | **A failure path** (connect, install, crash) | Classify it into an enum with an explicit `OTHER` bucket; a classifier that cannot say "I don't know" lies instead | ✓ |

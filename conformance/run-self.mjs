@@ -9,7 +9,7 @@
 //
 // It boots the bench app and a daemon in one process, drives each plantable scenario through
 // `conformanceClient`, and prints what was earned. Not a gate: it is a measurement, and the
-// number it prints today is five of fourteen because our SUBJECT is incomplete, not because the
+// number it prints today is eight of sixteen because our SUBJECT is incomplete, not because the
 // implementation failed. Making it a gate before the subject is finished would turn a known gap
 // into a red board nobody can clear.
 //

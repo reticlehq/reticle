@@ -51,6 +51,7 @@ Everything here is published to [docs.reticle.sh](https://docs.reticle.sh) by `d
 | [reticle-manual.md](reticle-manual.md) | GENERATED: what each tool actually returned when it was called, per argument shape |
 | [for-agents.md](for-agents.md) | how to fetch these docs as Markdown or `llms.txt` |
 | [architecture.md](architecture.md) | how it works, and why it is built this way |
+| [protocol.mdx](protocol.mdx) | the Open Verification Protocol: the rules Reticle decides by, published separately so you can check them |
 | [platform-integration.md](platform-integration.md) | Vite, Next, Remix, Astro, plain HTML |
 | [http-transport.md](http-transport.md) | driving the tools over plain HTTP/SSE, for clients that cannot reload MCP |
 | [desktop.mdx](desktop.mdx) | Electron and Tauri in full: setup, IPC, screenshots, headless, troubleshooting |

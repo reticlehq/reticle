@@ -33,7 +33,7 @@ describe('the subject only claims scenarios that exist', () => {
   });
 
   it('is honest about the majority it cannot plant', () => {
-    // Not an aspiration. Nine of fourteen have no entry, they are scored ABSENT rather than
+    // Not an aspiration. Eight of sixteen have no entry, they are scored ABSENT rather than
     // passed, and the file says why. A subject map that grew to cover everything by loosening
     // what counts as planting would be worse than this one.
     expect(plantable().length).toBeLessThan(SCENARIOS.length);
@@ -105,5 +105,34 @@ describe('what profile this subject could claim, and why it does not', () => {
       'this subject can now plant a scenario above `effect` — raise the claimed profile in ' +
         'run-self.mjs, and delete this expectation for the ones it covers',
     ).toEqual([]);
+  });
+});
+
+/**
+ * The numbers the prose quotes are the numbers the code has.
+ *
+ * README.md, run-self.mjs and the comment above all state a coverage fraction in words. Those were
+ * "five of fourteen" and "nine of fourteen" long after the scenario list had grown to sixteen and
+ * the subject catalogue to eight: the arithmetic stayed internally consistent, which is what made
+ * it survive, and every number in it was wrong. A reader comparing an implementation against a
+ * published fraction was comparing it against a denominator that no longer existed.
+ *
+ * Pinned by equality rather than by a floor, because either side moving is the thing to notice: a
+ * scenario added without a subject entry is coverage going DOWN while the prose still claims the
+ * old ratio.
+ */
+describe('the published coverage fraction', () => {
+  it('matches the scenarios and the subject catalogue', () => {
+    const total = SCENARIOS.length;
+    // `plantable()` takes NO argument: it returns the catalogue's ids. Calling it per scenario
+    // returns a truthy array every time, which counted all sixteen as covered and is how the
+    // first version of this test agreed with a number that was wrong.
+    const catalogue = new Set(plantable());
+    const covered = SCENARIOS.filter((scenario) => catalogue.has(scenario.id)).length;
+    expect({ total, covered, absent: total - covered }).toEqual({
+      total: 16,
+      covered: 8,
+      absent: 8,
+    });
   });
 });

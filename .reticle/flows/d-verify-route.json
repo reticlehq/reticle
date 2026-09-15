@@ -1,7 +1,8 @@
 {
   "version": 1,
   "name": "d-verify-route",
-  "createdAt": 1789287451176,
+  "startPath": "/",
+  "createdAt": 1789464814580,
   "steps": [
     {
       "tool": "reticle_act",
@@ -14,10 +15,10 @@
           "column": 8
         }
       },
+      "action": "fill",
       "args": {
         "value": "admin@reticle.dev"
-      },
-      "action": "fill"
+      }
     },
     {
       "tool": "reticle_act",
@@ -30,10 +31,10 @@
           "column": 8
         }
       },
+      "action": "fill",
       "args": {
         "value": "<redacted: supply at replay>"
-      },
-      "action": "fill"
+      }
     },
     {
       "tool": "reticle_act",
@@ -46,8 +47,8 @@
           "column": 8
         }
       },
-      "args": {},
-      "action": "click"
+      "action": "click",
+      "args": {}
     },
     {
       "tool": "reticle_act",
@@ -60,9 +61,16 @@
           "column": 8
         }
       },
-      "args": {},
-      "action": "click"
+      "action": "click",
+      "args": {}
     }
   ],
-  "startPath": "/"
+  "learned": [
+    {
+      "kind": "request-never-settled",
+      "step": 2,
+      "state": "open",
+      "cleanRuns": 1
+    }
+  ]
 }

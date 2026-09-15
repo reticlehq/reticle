@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MutationKind, MutationOutcome } from '@reticlehq/openverification';
+import { MutationKind, MutationOutcome } from 'open-verification';
 import { mutationTest } from './mutation-run.js';
 
 /**

@@ -680,15 +680,15 @@ importers:
 
   conformance:
     dependencies:
-      '@reticlehq/openverification':
+      open-verification:
         specifier: workspace:*
-        version: link:../openverification
+        version: link:../open-verification
 
   core:
     dependencies:
-      '@reticlehq/openverification':
+      open-verification:
         specifier: workspace:*
-        version: link:../openverification
+        version: link:../open-verification
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -706,9 +706,9 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
-      '@reticlehq/openverification':
+      open-verification:
         specifier: workspace:*
-        version: link:../openverification
+        version: link:../open-verification
 
   init:
     dependencies:
@@ -716,7 +716,7 @@ importers:
         specifier: workspace:*
         version: link:../core
 
-  openverification:
+  open-verification:
     dependencies:
       zod:
         specifier: ^3.23.8
@@ -731,6 +731,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
         version: 1.30.0(zod@3.25.76)
+      '@reticlehq/browser':
+        specifier: workspace:*
+        version: link:../adapters/realm/dom
       '@reticlehq/core':
         specifier: workspace:*
         version: link:../core
@@ -740,9 +743,9 @@ importers:
       '@reticlehq/init':
         specifier: workspace:*
         version: link:../init
-      '@reticlehq/openverification':
+      open-verification:
         specifier: workspace:*
-        version: link:../openverification
+        version: link:../open-verification
       ws:
         specifier: ^8.21.3
         version: 8.21.3

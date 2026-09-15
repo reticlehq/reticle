@@ -45,7 +45,24 @@ describe('reticle_verify_change — an uncovered change is never a pass', () => 
       string,
       unknown
     >;
-    expect(String(result['because'])).toMatch(/reticle_flow_save|driving the app/);
+    const because = String(result['because']);
+    // It must name a way FORWARD, not merely the gap.
+    expect(because).toMatch(/drive it|driving the app/i);
+
+    /*
+     * And the way forward has to be one the caller can actually take.
+     *
+     * This message used to say "record one with reticle_record { action: start } then
+     * reticle_flow_save". Neither is advertised on the default surface, and that surface carries no
+     * dispatch hatch — so the answer to "nothing covers this change" ended in two calls that come
+     * back "Tool not found". Driving is reachable everywhere, and the drive is captured as a flow
+     * automatically, which is what makes the next change to this file replay.
+     */
+    for (const unreachable of [ReticleTool.RECORD, ReticleTool.FLOW_SAVE, ReticleTool.RUN]) {
+      expect(because, `${unreachable} is not callable on the default surface`).not.toContain(
+        unreachable,
+      );
+    }
   });
 
   it('says UNKNOWN when no files were given, instead of verifying nothing', async () => {

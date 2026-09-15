@@ -573,7 +573,7 @@ export class Session implements HandshakeFacts {
   readonly gaps = new GapLedger();
   /**
    * The read-only calls the journal does not keep, so "was `reticle_context` ever called" has
-   * something to fold. See honesty/feature-capture.ts — it is the only state that instrument adds.
+   * something to fold. See surface/tools/feature-capture.ts — it is the only state that instrument adds.
    */
   readonly capture = new CaptureLedger();
 

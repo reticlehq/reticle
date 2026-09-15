@@ -39,7 +39,7 @@
     "typecheck": "tsc -b",
     "lint": "eslint src",
     "test:unit": "vitest run src --passWithNoTests",
-    "prepack": "tsc -b && node ../../../scripts/prepare-dist.mjs dist"
+    "prepack": "node ../../../scripts/prepare-dist.mjs --clean dist && tsc -b --force && node ../../../scripts/prepare-dist.mjs dist"
   },
   "dependencies": {
     "@reticlehq/core": "workspace:*"

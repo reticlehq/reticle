@@ -78,7 +78,7 @@ export const SIDE = Object.freeze({
   // `schema/` are GENERATED from those definitions at build time, so an implementation in another
   // language validates against JSON and imports none of this. Hand-written JSON Schema beside
   // hand-written types is the drift problem wearing a solution's clothes.
-  '@reticlehq/openverification': 'iso',
+  'open-verification': 'iso',
 });
 
 /** Node-runtime npm packages a browser/build/iso package must never depend on (a "needs a server" proxy). */
@@ -95,6 +95,22 @@ export const DOM_ONLY_EXTERNALS = Object.freeze(['@testing-library/dom']);
 // No exemptions: `@reticlehq/core` is now the isomorphic, zod-only foundation, so it is guarded like
 // any other package. (It was briefly exempt while it was still the umbrella being inverted.)
 export const EXEMPT = Object.freeze(new Set());
+
+/**
+ * Edges allowed against the side policy, each because the relationship is not the one the policy
+ * describes. `from->to`, and every entry needs the sentence explaining itself.
+ *
+ * `@reticlehq/server -> @reticlehq/browser`: the server SERVES the SDK's files as bytes. `reticle
+ * tutorial --run` stands up a demo page carrying the real SDK — a demo instrumented by anything
+ * other than the thing being demonstrated proves nothing — and the shipped server has no bundler, so
+ * the files have to be on disk beside it. That is a packaging relationship, not an import: nothing
+ * Node-side ever evaluates this code, it is read with `readFileSync` and written to a socket.
+ *
+ * The dangerous half of this edge — server code actually IMPORTING from the browser package, which
+ * would touch `document` in a process that has none — stays forbidden, and is enforced at the source
+ * level by server/src/browser-bytes-only.test.ts. The exception is only sound while that holds.
+ */
+export const ALLOWED_EDGES = Object.freeze(new Set(['@reticlehq/server->@reticlehq/browser']));
 
 /**
  * The policy for each side: which sides its workspace deps may point at, and which external packages
@@ -141,7 +157,7 @@ export function findViolations(manifests, side = SIDE) {
       if (dep.startsWith('@reticlehq/')) {
         // Workspace edge: the dependency's side must be one this side is allowed to import.
         const depSide = sideOf(dep);
-        if (!policy.allow.includes(depSide)) {
+        if (!policy.allow.includes(depSide) && !ALLOWED_EDGES.has(`${from}->${dep}`)) {
           violations.push({
             from,
             to: dep,

@@ -12,7 +12,7 @@
  */
 
 import { mutationTargetsFor, ReticleTool, asString, type FlowFile } from '@reticlehq/core';
-import { MutationOutcome } from '@reticlehq/openverification';
+import { MutationOutcome } from 'open-verification';
 import { z } from 'zod';
 import { sessionMutationPort } from '../../surface/tools/lease-tools.js';
 import { mutationTest } from './mutation-run.js';

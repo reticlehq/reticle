@@ -163,7 +163,7 @@ export function buildCoverageTools(toolNames: () => readonly string[]): ToolDef[
         // Folded here rather than given a tool of its own: this is already the "am I done, and what is
         // this verdict worth" read, and a number nobody has a reason to ask for separately is one
         // nobody ever sees. It is a fold over the journal and the intent ledger plus the one thing
-        // neither records — see honesty/feature-capture.ts.
+        // neither records — see surface/tools/feature-capture.ts.
         const featureUse = foldFeatureCapture({
           calls: session.capture.calls(),
           dropped: session.capture.dropped,
@@ -172,7 +172,7 @@ export function buildCoverageTools(toolNames: () => readonly string[]): ToolDef[
           finalActions: session.actionCount,
         });
         // Same fold, same reason, one level out: which of the whole tool table this session reached
-        // for, crossed with how reachable each name was. See honesty/tool-hit-rate.ts for what it can
+        // for, crossed with how reachable each name was. See surface/tools/tool-hit-rate.ts for what it can
         // and cannot establish — the limits matter more than usual, because this is the number a
         // decision to DELETE tools would be made on.
         const toolHitRate = foldToolHitRate({

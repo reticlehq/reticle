@@ -8,12 +8,11 @@
 | wire Reticle into a project      | `reticle init`, which lives in [`init/`](../init/)      |
 | break either of those on purpose | here                                                    |
 
-What lives here is the negative control: 26 hostile environments driven against the **shipped CLI** and the **real launchers**, plus the machine profiles that describe where it runs.
+What lives here is the negative control: 26 hostile environments driven against the **shipped CLI** and the **real launchers**.
 
 ```bash
 node break/break-matrix.mjs          # 26 hostile environments
 node break/break-matrix.mjs --only <name>
-node break/machines.mjs              # the profiles the matrix is described against
 ```
 
 ## Why there is a harness at all

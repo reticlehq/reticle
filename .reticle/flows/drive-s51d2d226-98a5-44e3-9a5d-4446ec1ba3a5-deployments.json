@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "name": "drive-s51d2d226-98a5-44e3-9a5d-4446ec1ba3a5-deployments",
+  "createdAt": 1789453069237,
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "login-submit",
+        "source": {
+          "file": "src/components/Login.tsx",
+          "line": 81,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "click"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "nav-deployments",
+        "source": {
+          "file": "src/components/Sidebar.tsx",
+          "line": 45,
+          "column": 8
+        }
+      },
+      "args": {},
+      "action": "click"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "new-deploy",
+        "source": {
+          "file": "src/views/Deployments.tsx",
+          "line": 104,
+          "column": 10
+        }
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "element": {
+          "testid": "deploy-modal"
+        }
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "deploy-name",
+        "source": {
+          "file": "src/components/NewDeployModal.tsx",
+          "line": 53,
+          "column": 8
+        }
+      },
+      "args": {
+        "value": "test-service"
+      },
+      "action": "fill"
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "deploy-submit",
+        "source": {
+          "file": "src/components/NewDeployModal.tsx",
+          "line": 88,
+          "column": 10
+        }
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "element": {
+          "testid": "deploy-modal"
+        }
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "new-deploy",
+        "source": {
+          "file": "src/views/Deployments.tsx",
+          "line": 104,
+          "column": 10
+        }
+      },
+      "args": {},
+      "action": "click",
+      "expect": {
+        "element": {
+          "role": "heading",
+          "name": "New deployment"
+        }
+      }
+    },
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "deploy-cancel",
+        "source": {
+          "file": "src/components/NewDeployModal.tsx",
+          "line": 39,
+          "column": 10
+        }
+      },
+      "args": {},
+      "action": "click"
+    }
+  ],
+  "startPath": "/deployments"
+}

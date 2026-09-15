@@ -1,5 +1,5 @@
-import { mayResumeByReplayingPrefix } from '@reticlehq/core';
-import { Surface, formatStepAddress } from '@reticlehq/openverification';
+import { mayResumeByReplayingPrefix, StepEffect } from '@reticlehq/core';
+import { Surface, formatStepAddress } from 'open-verification';
 import { span } from '../../trace.js';
 import { anchorLabel, expectElementDrift, resolveTestid, testidDrift } from './flow-anchor.js';
 export {
@@ -184,7 +184,15 @@ async function runTestidStep(
  * Turning this on makes previously-green flows go red. That is the point — they were green because
  * nothing was looking.
  */
-async function assertStepExpect(
+/**
+ * Exported so a PRECONDITION is judged by the same code that judges a consequence.
+ *
+ * `requires` and `expect` are the same shape on purpose: a precondition is a consequence somebody
+ * else's flow was responsible for. Evaluating them with two different functions is how the two
+ * quietly stop agreeing, and the disagreement would land as a flow that replays green against a
+ * state it was never meant to run in.
+ */
+export async function assertStepExpect(
   session: FlowReplaySession,
   expect: NonNullable<FlowStep['expect']>,
   dynamic: ReadonlySet<string>,
@@ -309,10 +317,25 @@ export interface ReplayFromOptions {
  * than a local reading of `replayPrefix`. A refusal resumes from 0 — the whole journey is reported,
  * nothing is skipped and nothing is silently repeated beyond what a plain replay already does.
  */
-function resumableFrom(options: ReplayFromOptions): number {
+function resumableFrom(options: ReplayFromOptions, steps: readonly FlowStep[]): number {
   const asked = Math.max(0, options.from ?? 0);
   if (0 === asked) return 0;
-  return mayResumeByReplayingPrefix(options.surface ?? Surface.WEB) ? asked : 0;
+  if (!mayResumeByReplayingPrefix(options.surface ?? Surface.WEB)) return 0;
+  /*
+   * The surface answers for the SUBJECT; a step answers for itself.
+   *
+   * `web` is the permissive profile and it is right about a browser in general and wrong about the
+   * one click that charges a card. The surface check cannot see that, because the distinction is
+   * not a property of the realm — it is a property of the step. A flow that declares a prefix step
+   * as `commits` is saying: re-running me is not free, whatever the surface thinks.
+   *
+   * Refusing means resuming from 0, which is the same fail-safe the surface refusal already uses:
+   * the whole journey is reported and nothing is silently repeated beyond what a plain replay does.
+   * Absent effect is UNKNOWN and stays permissive — every flow recorded before this shipped has no
+   * effect on any step, and assuming the worst there would refuse every resume in existence.
+   */
+  const commitsInPrefix = steps.slice(0, asked).some((step) => StepEffect.COMMITS === step.effect);
+  return commitsInPrefix ? 0 : asked;
 }
 
 /**
@@ -405,7 +428,7 @@ export async function replayFlow(
    * about -- which is what makes "fix the break, resume, find the next one" a loop rather than a
    * full re-read each time.
    */
-  const from = resumableFrom(options);
+  const from = resumableFrom(options, flow.steps);
   // testids whose region is LLM-dynamic — their expect-presence is NOT asserted.
   const dynamic = new Set<string>(
     (flow.dynamic ?? [])

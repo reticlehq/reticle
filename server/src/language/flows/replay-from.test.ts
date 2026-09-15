@@ -11,6 +11,7 @@ import {
   type ElementDescriptor,
   type FlowFile,
   type FlowStep,
+  StepEffect,
 } from '@reticlehq/core';
 import { replayFlow, type FlowReplaySession } from './flow-replay.js';
 import { waitForPredicate } from '@reticlehq/engine/question/predicate/predicate.js';
@@ -124,5 +125,78 @@ describe('replaying from a step', () => {
     const session = new FakeSession(ALL);
     const results = await replayFlow(session, flow(['one', 'two']), waitForPredicate, FAST);
     expect(results.map((r) => r.step)).toEqual([0, 1]);
+  });
+});
+
+/**
+ * A resume re-drives the prefix. A prefix step that COMMITS must not be re-driven silently.
+ *
+ * THE HAZARD, in this file's own words: resuming "is re-driving the prefix, not restoring state:
+ * there is no way to put an app back". `flow-replay.ts` already knew the cost is real on a subject
+ * that commits, and the surface profile was the only thing that could refuse — which answers for the
+ * REALM and cannot see that one click in an otherwise harmless browser journey charges a card.
+ * `web` is the permissive profile, so a payment step in a prefix was re-sent on every resume.
+ *
+ * Refusal means resuming from 0: the whole journey is reported, nothing is skipped, and nothing is
+ * repeated beyond what a plain replay already does. That is the same fail-safe the surface refusal
+ * uses, so the two disagreeing is impossible rather than merely unlikely.
+ */
+describe('resuming past a step that commits', () => {
+  const committing = (values: string[], commitsAt: number): FlowFile => {
+    const f = flow(values);
+    const target = f.steps[commitsAt];
+    if (target !== undefined) target.effect = StepEffect.COMMITS;
+    return f;
+  };
+
+  it('refuses the resume and reports the whole journey instead', async () => {
+    const session = new FakeSession(ALL);
+    const results = await replayFlow(
+      session,
+      committing(['one', 'two', 'three', 'four'], 1),
+      waitForPredicate,
+      FAST,
+      false,
+      undefined,
+      { from: 2 },
+    );
+
+    // Every step still runs — that is what a plain replay does and is not what is being prevented.
+    expect(session.acted).toEqual(['e-one', 'e-two', 'e-three', 'e-four']);
+    // But the resume is refused, so the reader sees the journey from 0 rather than a report that
+    // quietly hid a committing step it had just re-run.
+    expect(results.map((r) => r.step)).toEqual([0, 1, 2, 3]);
+  });
+
+  it('allows the resume when the committing step is AFTER the resume point', async () => {
+    // The step is not in the prefix, so resuming never re-runs it. Refusing here would cost every
+    // flow that ends in a commit its resume, which is most flows worth recording.
+    const session = new FakeSession(ALL);
+    const results = await replayFlow(
+      session,
+      committing(['one', 'two', 'three', 'four'], 3),
+      waitForPredicate,
+      FAST,
+      false,
+      undefined,
+      { from: 2 },
+    );
+    expect(results.map((r) => r.step)).toEqual([2, 3]);
+  });
+
+  it('allows the resume when no step says what it does, which is every older flow', async () => {
+    // Absent is UNKNOWN and stays permissive. Assuming `commits` would refuse every resume recorded
+    // before the field existed.
+    const session = new FakeSession(ALL);
+    const results = await replayFlow(
+      session,
+      flow(['one', 'two', 'three', 'four']),
+      waitForPredicate,
+      FAST,
+      false,
+      undefined,
+      { from: 2 },
+    );
+    expect(results.map((r) => r.step)).toEqual([2, 3]);
   });
 });

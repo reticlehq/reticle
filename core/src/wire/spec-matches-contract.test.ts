@@ -8,13 +8,13 @@ import { CHANNEL_INDEPENDENCE, ChannelId } from './channel.js';
 import { VerdictStatus } from '../verdict/verification-run.js';
 import { Verified } from '../verdict/verified-constants.js';
 import { ContradictionKind } from '../verdict/findings.js';
-import { AnomalyKind } from '@reticlehq/openverification';
+import { AnomalyKind } from 'open-verification';
 import { RefusalReason } from '../telemetry-refusal.js';
 
 /**
  * The written specification must describe the contract this code actually enforces.
  *
- * `openverification/SPEC.md` is meant to be readable by somebody outside this repository who is deciding
+ * `open-verification/SPEC.md` is meant to be readable by somebody outside this repository who is deciding
  * whether to implement it. That makes it the easiest thing here to get quietly wrong: prose does not
  * compile, nothing imports it, and a message kind added in code leaves the document describing a
  * protocol that no longer exists. A specification that is subtly untrue is worse than none, because
@@ -30,7 +30,7 @@ const REPO_ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], {
   cwd: import.meta.dirname,
   encoding: 'utf8',
 }).trim();
-const SPEC = readFileSync(join(REPO_ROOT, 'openverification', 'SPEC.md'), 'utf8');
+const SPEC = readFileSync(join(REPO_ROOT, 'open-verification', 'SPEC.md'), 'utf8');
 
 /** The values in the first column of every table row, which is where the document lists names. */
 function backtickedNamesIn(spec: string): Set<string> {
@@ -50,7 +50,7 @@ describe('the written specification describes the contract the code enforces', (
     const missing = inCode.filter((kind) => !named.has(kind));
     expect(
       missing,
-      'These message kinds exist in the code and are not in openverification/SPEC.md. Somebody reading ' +
+      'These message kinds exist in the code and are not in open-verification/SPEC.md. Somebody reading ' +
         'the specification would build something that cannot talk to this.',
     ).toEqual([]);
   });
@@ -60,7 +60,7 @@ describe('the written specification describes the contract the code enforces', (
     const missing = Object.values(Verified).filter((verdict) => !named.has(verdict));
     expect(
       missing,
-      'These verdicts exist in the code and are not in openverification/SPEC.md. The two that get ' +
+      'These verdicts exist in the code and are not in open-verification/SPEC.md. The two that get ' +
         'dropped from documents are `unknown` and `no-fault`, and they are the two that make the ' +
         'other two mean anything.',
     ).toEqual([]);
@@ -69,7 +69,7 @@ describe('the written specification describes the contract the code enforces', (
   it('states the protocol version the code speaks', () => {
     expect(
       SPEC.includes(`version is **${String(RETICLE_PROTOCOL_VERSION)}**`),
-      `openverification/SPEC.md does not say the protocol version is ${String(RETICLE_PROTOCOL_VERSION)}.`,
+      `open-verification/SPEC.md does not say the protocol version is ${String(RETICLE_PROTOCOL_VERSION)}.`,
     ).toBe(true);
   });
 
@@ -91,7 +91,7 @@ describe('the written specification describes the contract the code enforces', (
     const missing = Object.values(AnomalyKind).filter((kind) => !named.has(kind));
     expect(
       missing,
-      'These anomaly kinds are defined in @reticlehq/openverification and are not named in SPEC.md.',
+      'These anomaly kinds are defined in open-verification and are not named in SPEC.md.',
     ).toEqual([]);
   });
 
@@ -127,7 +127,7 @@ describe('the written specification describes the contract the code enforces', (
     const missing = Object.values(ChannelId).filter((channel) => !named.has(channel));
     expect(
       missing,
-      'These channels exist in the code and are not in openverification/SPEC.md.',
+      'These channels exist in the code and are not in open-verification/SPEC.md.',
     ).toEqual([]);
   });
 
@@ -139,7 +139,7 @@ describe('the written specification describes the contract the code enforces', (
       const row = new RegExp(`^\\| \`${channel}\`.*\\b${marking}\\b`, 'm');
       expect(
         SPEC,
-        `openverification/SPEC.md does not say that \`${channel}\` is ${marking}.`,
+        `open-verification/SPEC.md does not say that \`${channel}\` is ${marking}.`,
       ).toMatch(row);
     }
   });
@@ -151,7 +151,7 @@ describe('the written specification describes the contract the code enforces', (
     // only ever been told about four verdicts.
     const named = backtickedNamesIn(SPEC);
     const missing = Object.values(VerdictStatus).filter((status) => !named.has(status));
-    expect(missing, 'These run summary values are not in openverification/SPEC.md.').toEqual([]);
+    expect(missing, 'These run summary values are not in open-verification/SPEC.md.').toEqual([]);
   });
 
   it('states the rule for correcting a verdict once late evidence lands', () => {
@@ -190,7 +190,7 @@ const ABSENCE_CLAIMS: readonly { readonly phrase: RegExp; readonly falsifiedBy: 
   { phrase: /No conformance driver/i, falsifiedBy: 'conformance/drive.mjs' },
   {
     phrase: /the (only|sole) implementation is/i,
-    falsifiedBy: 'openverification/src/reference/service-realm.ts',
+    falsifiedBy: 'open-verification/src/reference/service-realm.ts',
   },
 ];
 
@@ -201,7 +201,7 @@ describe('the specification does not claim to be missing something it has', () =
       if (!exists) return;
       expect(
         SPEC,
-        `openverification/SPEC.md lists this as a gap, and ${falsifiedBy} exists. Either the entry is ` +
+        `open-verification/SPEC.md lists this as a gap, and ${falsifiedBy} exists. Either the entry is ` +
           'stale or the file is not what it looks like -- and a specification that understates ' +
           'itself is read by somebody deciding not to build on it.',
       ).not.toMatch(phrase);

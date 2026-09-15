@@ -18,7 +18,7 @@ import { toArtifact } from './artifact/to-artifact.js';
  * legible ✓/✗ text report instead of raw JSON. The RunStore is built inline from the injected fs +
  * reticleRoot (it is stateless), so this needs no new ToolDeps wiring.
  *
- * format:"openverification" is where the protocol leaves this tool. `toArtifact` had been built, tested
+ * format:"open-verification" is where the protocol leaves this tool. `toArtifact` had been built, tested
  * and exported with no caller anywhere -- a run could be exported in Reticle's own shape and in no
  * other, so the specification this repository publishes could be implemented by everybody except
  * us. It surfaces HERE rather than as a new tool or a file written beside the run, because the
@@ -37,10 +37,10 @@ export const RUN_TOOLS: ToolDef[] = [
         .optional()
         .describe('The run id to export. Omit to return the most recent run.'),
       format: z
-        .enum(['json', 'report', 'diff', 'openverification'])
+        .enum(['json', 'report', 'diff', 'open-verification'])
         .optional()
         .describe(
-          'json (default) returns the full run; report returns a legible text summary; diff returns the delta vs the previous run; openverification returns the run as an OpenVerification (OVP) artifact a non-Reticle consumer can read.',
+          'json (default) returns the full run; report returns a legible text summary; diff returns the delta vs the previous run; open-verification returns the run as an OpenVerification (OVP) artifact a non-Reticle consumer can read.',
         ),
       ...sessionIdShape,
     },
@@ -94,7 +94,7 @@ export const RUN_TOOLS: ToolDef[] = [
       }
       const format = asString(args['format']);
       if ('report' === format) return { report: renderRunReport(run) };
-      if ('openverification' === format) return { artifact: toArtifact(run) };
+      if ('open-verification' === format) return { artifact: toArtifact(run) };
       return { run };
     },
   },

@@ -68,7 +68,7 @@ const PACKAGES: Readonly<Record<string, Recorded>> = {
     mutual: 0,
     note: 'FLAT. Two rules and their shared constants.',
   },
-  openverification: {
+  'open-verification': {
     directories: 4,
     mutual: 0,
     note: 'the protocol. FOUR directories since `language/` landed — the compiler phases and the typecheck that refuses a document before an action is spent. Still nothing mutual, which is the number that matters: `language` reads the vocabulary and the vocabulary has never heard of it, so the grammar can change without the nouns moving. Until this entry existed the package had no coupling record at all, which for the one the release is named after was the gap worth finding.',

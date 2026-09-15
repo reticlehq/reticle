@@ -19,7 +19,7 @@ area/server:
 
 area/react:
   - changed-files:
-      - any-glob-to-any-file: ['packages/react/**']
+      - any-glob-to-any-file: ['adapters/framework/react/**']
 
 area/vite-plugin:
   - changed-files:
@@ -27,16 +27,16 @@ area/vite-plugin:
 
 area/babel-plugin:
   - changed-files:
-      - any-glob-to-any-file: ['packages/babel-plugin/**']
+      - any-glob-to-any-file: ['adapters/build/babel-plugin/**']
 
 area/next:
   - changed-files:
-      - any-glob-to-any-file: ['packages/next/**']
+      - any-glob-to-any-file: ['adapters/build/next/**']
 
 area/electron:
   - changed-files:
       - any-glob-to-any-file:
-          ['packages/electron/**', 'apps/electron-smoke/**', 'apps/electron-vue-pinia/**']
+          ['adapters/realm/electron/**', 'apps/electron-smoke/**', 'apps/electron-vue-pinia/**']
 
 area/tauri:
   - changed-files:

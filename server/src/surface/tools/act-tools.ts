@@ -558,7 +558,7 @@ export const ACT_TOOLS: ToolDef[] = [
       // Was the declared consequence ALREADY TRUE? Only asked for predicates that read live DOM
       // state — event-based ones are floored at this act's cursor and cannot be satisfied by the
       // past, so they need no pre-check and pay nothing. One extra query, on the path where a green
-      // is otherwise unfalsifiable. See honesty/already-true.
+      // is otherwise unfalsifiable. See engine/src/evidence/already-true.ts.
       const alreadyTruePrecheck =
         until !== undefined && readsDomState(until)
           ? await evaluatePredicate(session, until, since, false)

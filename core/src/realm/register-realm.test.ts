@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { Surface } from '@reticlehq/openverification';
+import { Surface } from 'open-verification';
 import {
   registerRealm,
   realmOf,

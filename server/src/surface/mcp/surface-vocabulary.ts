@@ -40,6 +40,14 @@ export interface SurfaceVocabulary {
   feedback: string;
   /** The discovery sentence, or empty when this surface advertises everything it can call. */
   coldTail: string;
+  /** Which saved flows cover an edit, or empty when this surface cannot ask. */
+  affected: string;
+  /** Replay the flows an edit touches and answer with a verdict, or empty. */
+  replayChange: string;
+  /** Replay every saved flow for one suite verdict, or empty. */
+  replayAll: string;
+  /** Rebind a drifted locator, or empty when the surface cannot reach it. */
+  heal: string;
 }
 
 /** `reticle_look { action: "find" }` when the family is merged, `reticle_query` when it is not. */
@@ -87,5 +95,20 @@ export function surfaceVocabulary(advertisedNames: readonly string[]): SurfaceVo
       advertised.has(ReticleTool.TOOLS) && advertised.has(ReticleTool.RUN)
         ? `Everything else is one hop: ${ReticleTool.TOOLS} lists it, ${ReticleTool.RUN} calls it.`
         : '',
+    /*
+     * The replay route, resolved like every other call here.
+     *
+     * These four were the only capability the briefing never mentioned, and the omission was
+     * MEASURED rather than suspected: across 13 agent cells and 323 tool calls, with 29 saved flows
+     * sitting on disk the whole time, replay was invoked zero times. Nothing told the agent it
+     * existed. `reticle_verify`'s own description carries the full explanation — and both shipping
+     * surfaces trim it from 1,791 characters to 93, which deletes every word about flows. A rule
+     * that has to survive that trim cannot live in a tool description; it lives here, where the
+     * string is sent once per session and never trimmed.
+     */
+    affected: call(ReticleTool.AFFECTED, ReticleTool.VERIFY, 'affected'),
+    replayChange: call(ReticleTool.VERIFY_CHANGE, ReticleTool.VERIFY, 'change'),
+    replayAll: call(ReticleTool.FLOW_REPLAY, ReticleTool.VERIFY, 'flows'),
+    heal: advertised.has(ReticleTool.FLOW_HEAL) ? ReticleTool.FLOW_HEAL : '',
   };
 }

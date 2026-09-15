@@ -100,7 +100,26 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * buys gestures that were previously undriveable rather than merely awkward: a `touchstart`
  * handler never ran for a synthetic click, and a page could be scrolled forward but never back.
  */
-const MAX_FIRST_LOAD_BYTES = 237_600;
+/*
+ * Raised to 237_760 for the three fields that let a flow describe its own safety: a step's `effect`
+ * and `id`, and a flow's `requires`/`ensures`. 79 B, and the page pays them because a zod object is
+ * not provably side-effect free, so the barrel retains the flow schemas whether or not a page ever
+ * validates one. That is the same reason `flow-step-tool.ts` was split out, and the same reason this
+ * ceiling exists at all.
+ *
+ * What the 79 bytes buy: `effect: "commits"` is what lets a resume REFUSE to re-drive a prefix that
+ * charges a card. Resuming re-drives the steps before the one you asked for — it cannot restore
+ * state — and until a step could say what it does, the only thing that could refuse was the surface
+ * profile, which answers for the realm and cannot see that one click in a harmless browser journey
+ * takes payment. A silent re-send is not a slow page; it is somebody's money.
+ *
+ * The cheaper alternative was considered and rejected: `StepEffect` itself was first put in
+ * `flow-constants.ts`, which the recorder imports for `FLOW_FILE_VERSION`, and that shipped the
+ * whole enum to every page. It moved to a leaf of its own and bought back exactly 1 byte, which is
+ * how we know the cost is the SCHEMA and not the vocabulary. Splitting the flow schemas further is
+ * the way to stop paying it, and that is its own commit rather than a line in this one.
+ */
+const MAX_FIRST_LOAD_BYTES = 237_760;
 /*
  * Raised a fifth time, 233_300 -> 233_400, for a route to be assertable in a SAVED flow. 57 B.
  *
@@ -185,7 +204,7 @@ const MAX_FIRST_LOAD_BYTES = 237_600;
  *
  *   adapters/realm/dom   126,941 -> 127,400   +459   the previous release's SDK work
  *   core                  31,745 ->  32,508   +763   see below
- *   @reticlehq/openverification 8,352 ->   8,658   +306   the `measure` predicate's schema
+ *   open-verification 8,352 ->   8,658   +306   the `measure` predicate's schema
  *   zod                   59,536 unchanged
  *
  * **328 B of core's growth is a server-only helper on every page load.** `global-press` answers
@@ -212,7 +231,7 @@ const MAX_FIRST_LOAD_BYTES = 237_600;
  *
  * The cause, attributed from the same metafile rather than guessed at: `core/index.js`
  * re-exports `verdict/verification-run`, and this release gave it an import of
- * `@reticlehq/openverification`, because a run artifact now carries a `SubjectRef`. That one import
+ * `open-verification`, because a run artifact now carries a `SubjectRef`. That one import
  * is of the protocol's barrel, and the barrel re-exports the whole vocabulary -- every one of
  * which builds a zod schema at module scope, so none of it can be shaken out. Ten protocol
  * files, 8,352 B minified, arrive on every page load to give one schema to one field.
@@ -247,6 +266,23 @@ const MAX_FIRST_LOAD_BYTES = 237_600;
  */
 const MAX_PANEL_BYTES_IN_FIRST_LOAD = 2_000;
 
+/**
+ * Where the in-page panel's source lives, as a path substring.
+ *
+ * Named once because two accumulators read it and a rename must move both together — the whole point
+ * of the companion assertion is that a rename can no longer pass silently.
+ */
+const PANEL_DIR = '/presenter/';
+
+/**
+ * The panel is tens of KB wherever it sits, so this floor is far below the truth and far above zero.
+ * It exists to separate "almost none of the panel loads eagerly" — the thing being asserted — from
+ * "PANEL_DIR matches nothing any more", which produces the identical 0 and the identical green tick.
+ * CLAUDE.md names this file as a past false green for the adjacent reason: it asserted that a
+ * bundler was FOUND rather than that the number meant anything.
+ */
+const MIN_PANEL_BYTES_SOMEWHERE = 20_000;
+
 interface Chunk {
   readonly bytes: number;
   readonly imports?: readonly { readonly path: string; readonly kind: string }[];
@@ -263,7 +299,12 @@ interface Chunk {
  * Node shim there and puts the real `.exe` in `@esbuild/win32-x64`. So the path existed, the
  * check below reported a bundler, and the spawn died `ENOENT` on every Windows run.
  */
-function firstLoad(): { bytes: number; panelBytes: number; deferredBytes: number } {
+function firstLoad(): {
+  bytes: number;
+  panelBytes: number;
+  panelBytesAnywhere: number;
+  deferredBytes: number;
+} {
   const meta = buildSync({
     entryPoints: [DIST_ENTRY],
     bundle: true,
@@ -294,14 +335,21 @@ function firstLoad(): { bytes: number; panelBytes: number; deferredBytes: number
   for (const name of onTheWayIn) {
     bytes += chunks[name]?.bytes ?? 0;
     for (const [source, piece] of Object.entries(chunks[name]?.inputs ?? {})) {
-      if (source.includes('/presenter/')) panelBytes += piece.bytesInOutput;
+      if (source.includes(PANEL_DIR)) panelBytes += piece.bytesInOutput;
     }
   }
   let deferredBytes = 0;
+  // The panel wherever it landed, first-load or not. `panelBytes` alone cannot tell "almost none of
+  // the panel loads eagerly" from "the substring stopped matching", and 0 is the passing answer to
+  // both — see the companion assertion below.
+  let panelBytesAnywhere = 0;
   for (const [name, chunk] of Object.entries(chunks)) {
     if (!onTheWayIn.has(name) && name.endsWith('.js')) deferredBytes += chunk.bytes;
+    for (const [source, piece] of Object.entries(chunk.inputs ?? {})) {
+      if (source.includes(PANEL_DIR)) panelBytesAnywhere += piece.bytesInOutput;
+    }
   }
-  return { bytes, panelBytes, deferredBytes };
+  return { bytes, panelBytes, panelBytesAnywhere, deferredBytes };
 }
 
 describe('what a page downloads just for loading the SDK', () => {
@@ -333,7 +381,15 @@ describe('what a page downloads just for loading the SDK', () => {
   });
 
   it('keeps almost none of the in-page panel in that first load', () => {
-    const { panelBytes } = firstLoad();
+    const { panelBytes, panelBytesAnywhere } = firstLoad();
+    // Asserted FIRST: if the panel cannot be found at all, the ceiling below is being cleared by a
+    // measurement of nothing, and every later reader is told the panel is lean when it is missing.
+    expect(
+      panelBytesAnywhere,
+      `only ${String(panelBytesAnywhere)} B of panel source was found in the bundle at all. ` +
+        `This check keys on the path substring ${PANEL_DIR}; if that directory was renamed or ` +
+        'moved, both counters read 0 and the ceiling below passes over a measurement of nothing.',
+    ).toBeGreaterThan(MIN_PANEL_BYTES_SOMEWHERE);
     expect(
       panelBytes,
       `${String(panelBytes)} B of the panel is downloaded before anybody asks for it. This creeps ` +

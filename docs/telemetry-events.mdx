@@ -12,15 +12,15 @@ If you want to know what Reticle collects about you and how to turn it off, read
 
 </Warning>
 
-Every event Reticle emits is listed below with the same three things: **when it fires**, **what it carries**, and **why it exists**. The authoritative list is `TelemetryEventKind` in `packages/core/src/telemetry.ts`; if this page and that file disagree, the file wins and this page is a bug.
+Every event Reticle emits is listed below with the same three things: **when it fires**, **what it carries**, and **why it exists**. The authoritative list is `TelemetryEventKind` in `core/src/telemetry.ts`; if this page and that file disagree, the file wins and this page is a bug.
 
 Source of truth for everything below:
 
 | File | Defines |
 | --- | --- |
-| `packages/core/src/telemetry.ts` | `TelemetryEventKind`, the envelope, and most payload blocks |
-| `packages/core/src/telemetry-session.ts` | `SessionSummarySchema`, `ProjectProfileSchema`, `MachineSnapshotSchema` |
-| `packages/core/src/telemetry-feedback.ts` | `FeedbackSchema`, `IdentitySchema`, and the enums they use |
+| `core/src/telemetry.ts` | `TelemetryEventKind`, the envelope, and most payload blocks |
+| `core/src/telemetry-session.ts` | `SessionSummarySchema`, `ProjectProfileSchema`, `MachineSnapshotSchema` |
+| `core/src/telemetry-feedback.ts` | `FeedbackSchema`, `IdentitySchema`, and the enums they use |
 
 ## The shared envelope
 
@@ -32,7 +32,7 @@ Source of truth for everything below:
 | `anonymousId` | string, 1 to 128 | yes | Random UUID persisted at `~/.reticle/telemetry-id`. Distinct count of this is users |
 | `projectId` | string, 1 to 128 | no | One-way hash of the git remote, repo root, package root, or cwd. Counts distinct projects without revealing one |
 | `sessionId` | string, 1 to 64 | no | One daemon run. Present only on session-scoped events |
-| `event` | `TelemetryEventKind` | yes | Which kind this is. The full list is `TelemetryEventKind` in `packages/core/src/telemetry.ts` |
+| `event` | `TelemetryEventKind` | yes | Which kind this is. The full list is `TelemetryEventKind` in `core/src/telemetry.ts` |
 | `ts` | int, epoch ms | yes | Client time. The server stamps its own receive time too |
 | `version` | string, 1 to 64 | yes | The Reticle version emitting |
 | `ci` | boolean | yes | Running inside CI. Separates human activity from pipeline traffic |
@@ -65,7 +65,7 @@ The other six are one-shot. A per-process id on `reticle status` is not a sessio
 
 ## reticle_installed
 
-**Wire name:** `reticle_installed`. **Emitted from:** `packages/server/src/telemetry/cli-telemetry.ts:51`. **Session-scoped:** no. **Payload block:** none.
+**Wire name:** `reticle_installed`. **Emitted from:** `server/src/telemetry/cli-telemetry.ts:51`. **Session-scoped:** no. **Payload block:** none.
 
 Fires on the first ever run on a machine. Carries `installSource`.
 
@@ -73,7 +73,7 @@ Fires on the first ever run on a machine. Carries `installSource`.
 | --- | --- | --- |
 | `installSource` | `InstallSource`, optional | Which published route brought this install in: `skill_file`, `npx_skill`, `plugin`, `docs_site`, `readme`, `cli_direct`, `unknown` |
 
-`installSource` is **declared, never detected**. A channel sets `RETICLE_INSTALL_SOURCE` on the process that runs the install and anything unrecognised reports `unknown`, so `unknown` is expected to be the largest bucket while the marker spreads across four separately published artifacts. Read a small `unknown` as a marker that spread, never as success. Nothing infers it: `npm_config_user_agent` only says npx ran us and every route goes through npx; the presence of a plugin directory or a skill folder says a route exists rather than that it ran the install. `installSource` is **not** limited to this event. It is resolved once per process (`packages/server/src/telemetry/telemetry.ts:392`) and stamped on every event that process sends (`:453`), so any chart can group by it. It is also sourced **config first, then environment**: `projectInstallSource()` prefers the value recorded in `.reticle.json`, because the environment variable exists for exactly one command and is gone by the next, which is why the field originally reached a handful of events and nothing else.
+`installSource` is **declared, never detected**. A channel sets `RETICLE_INSTALL_SOURCE` on the process that runs the install and anything unrecognised reports `unknown`, so `unknown` is expected to be the largest bucket while the marker spreads across four separately published artifacts. Read a small `unknown` as a marker that spread, never as success. Nothing infers it: `npm_config_user_agent` only says npx ran us and every route goes through npx; the presence of a plugin directory or a skill folder says a route exists rather than that it ran the install. `installSource` is **not** limited to this event. It is resolved once per process (`server/src/telemetry/telemetry.ts:392`) and stamped on every event that process sends (`:453`), so any chart can group by it. It is also sourced **config first, then environment**: `projectInstallSource()` prefers the value recorded in `.reticle.json`, because the environment variable exists for exactly one command and is gone by the next, which is why the field originally reached a handful of events and nothing else.
 
 **The question it answers:** how many machines have installed this, and what does the new-user curve look like? There is deliberately no uninstall event, because npm 7 and pnpm run no uninstall lifecycle script. Churn is inferred server-side from inactivity instead.
 
@@ -81,7 +81,7 @@ Fires on the first ever run on a machine. Carries `installSource`.
 
 ## cli_command_run
 
-**Wire name:** `cli_command_run`. **Emitted from:** `packages/server/src/telemetry/cli-telemetry.ts:58`. **Session-scoped:** no. **Payload:** two envelope fields.
+**Wire name:** `cli_command_run`. **Emitted from:** `server/src/telemetry/cli-telemetry.ts:58`. **Session-scoped:** no. **Payload:** two envelope fields.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -105,7 +105,7 @@ Fires on the first ever run on a machine. Carries `installSource`.
 
 ## daemon_started
 
-**Wire name:** `daemon_started`. **Emitted from:** `packages/server/src/telemetry/daemon-telemetry.ts:75`. **Session-scoped:** yes. **Payload block:** none.
+**Wire name:** `daemon_started`. **Emitted from:** `server/src/telemetry/daemon-telemetry.ts:75`. **Session-scoped:** yes. **Payload block:** none.
 
 **The question it answers:** how many active daemon runs are there? This is the numerator of daily, weekly and monthly actives, and the first step of the install funnel.
 
@@ -113,7 +113,7 @@ Fires on the first ever run on a machine. Carries `installSource`.
 
 ## daemon_stopped
 
-**Wire name:** `daemon_stopped`. **Emitted from:** `packages/server/src/telemetry/daemon-telemetry.ts:138`. **Session-scoped:** yes. **Payload block:** `session`, a `SessionSummary` with `final: true`.
+**Wire name:** `daemon_stopped`. **Emitted from:** `server/src/telemetry/daemon-telemetry.ts:138`. **Session-scoped:** yes. **Payload block:** `session`, a `SessionSummary` with `final: true`.
 
 The rich one. One event carries the entire session rolled up, replacing the hundreds a per-tool-call event would send. PostHog bills per ingested event and a single verification loop is a great many tool calls, so aggregation here is a design decision, not an optimisation.
 
@@ -162,7 +162,7 @@ The rich one. One event carries the entire session rolled up, replacing the hund
 
 ## session_progress
 
-**Wire name:** `session_progress`. **Emitted from:** `packages/server/src/telemetry/daemon-telemetry.ts:116`. **Session-scoped:** yes. **Payload block:** `session`, the same `SessionSummary` shape with `final: false` and no `exit`.
+**Wire name:** `session_progress`. **Emitted from:** `server/src/telemetry/daemon-telemetry.ts:116`. **Session-scoped:** yes. **Payload block:** `session`, the same `SessionSummary` shape with `final: false` and no `exit`.
 
 A periodic roll-up from a daemon that is still running.
 
@@ -179,7 +179,7 @@ A periodic roll-up from a daemon that is still running.
 
 ## verification_completed
 
-**Wire name:** `verification_completed`. **Emitted from:** `packages/server/src/tools/invoke-tool.ts:144` and `packages/server/src/telemetry/run-telemetry.ts:39`. **Session-scoped:** yes. **Payload block:** `verification`.
+**Wire name:** `verification_completed`. **Emitted from:** `server/src/tools/invoke-tool.ts:144` and `server/src/telemetry/run-telemetry.ts:39`. **Session-scoped:** yes. **Payload block:** `verification`.
 
 ### `VerificationSchema`
 
@@ -201,7 +201,7 @@ A periodic roll-up from a daemon that is still running.
 
 ## project_profiled
 
-**Wire name:** `project_profiled`. **Emitted from:** `packages/server/src/telemetry/daemon-telemetry.ts:91`. **Session-scoped:** yes. **Payload block:** `project`. Once per daemon start, so it is cheap.
+**Wire name:** `project_profiled`. **Emitted from:** `server/src/telemetry/daemon-telemetry.ts:91`. **Session-scoped:** yes. **Payload block:** `project`. Once per daemon start, so it is cheap.
 
 ### `ProjectProfileSchema`
 
@@ -226,7 +226,7 @@ A periodic roll-up from a daemon that is still running.
 
 ## version_changed
 
-**Wire name:** `version_changed`. **Emitted from:** `packages/server/src/update/updater.ts:35`. **Session-scoped:** no. **Payload block:** `versionChange`.
+**Wire name:** `version_changed`. **Emitted from:** `server/src/update/updater.ts:35`. **Session-scoped:** no. **Payload block:** `versionChange`.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -241,7 +241,7 @@ A periodic roll-up from a daemon that is still running.
 
 ## runtime_crashed
 
-**Wire name:** `runtime_crashed`. **Emitted from:** `packages/server/src/daemon/daemon-resilience.ts:155`. **Session-scoped:** yes. **Payload block:** `crash`.
+**Wire name:** `runtime_crashed`. **Emitted from:** `server/src/daemon/daemon-resilience.ts:155`. **Session-scoped:** yes. **Payload block:** `crash`.
 
 ### `CrashSchema`
 
@@ -267,7 +267,7 @@ A periodic roll-up from a daemon that is still running.
 
 ## feedback_submitted
 
-**Wire name:** `feedback_submitted`. **Emitted from:** `packages/server/src/telemetry/feedback.ts:256` and `:270`. **Session-scoped:** yes. **Payload block:** `feedback`.
+**Wire name:** `feedback_submitted`. **Emitted from:** `server/src/telemetry/feedback.ts:256` and `:270`. **Session-scoped:** yes. **Payload block:** `feedback`.
 
 The one kind that carries author-written free text, which is exactly why it is never emitted passively. It exists only because an agent called `reticle_feedback` or a human ran [`reticle feedback`](/cli/feedback). It has its own kill switch.
 
@@ -299,7 +299,7 @@ The one kind that carries author-written free text, which is exactly why it is n
 
 ## identified
 
-**Wire name:** `identified`. **Emitted from:** `packages/server/src/telemetry/identify.ts:77`. **Session-scoped:** no. **Payload block:** `identity`.
+**Wire name:** `identified`. **Emitted from:** `server/src/telemetry/identify.ts:77`. **Session-scoped:** no. **Payload block:** `identity`.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -313,7 +313,7 @@ The one kind that carries author-written free text, which is exactly why it is n
 
 ## mcp_client_connected
 
-**Wire name:** `mcp_client_connected`. **Emitted from:** `packages/server/src/telemetry/mcp-connection.ts:29`. **Session-scoped:** yes. **Payload block:** `connection`.
+**Wire name:** `mcp_client_connected`. **Emitted from:** `server/src/telemetry/mcp-connection.ts:29`. **Session-scoped:** yes. **Payload block:** `connection`.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -327,7 +327,7 @@ The one kind that carries author-written free text, which is exactly why it is n
 
 ## app_instrumented
 
-**Wire name:** `app_instrumented`. **Emitted from:** `packages/server/src/telemetry/app-instrumented.ts:55`. **Session-scoped:** yes. **Payload block:** `instrumentation`.
+**Wire name:** `app_instrumented`. **Emitted from:** `server/src/telemetry/app-instrumented.ts:55`. **Session-scoped:** yes. **Payload block:** `instrumentation`.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -343,7 +343,7 @@ Fired **once per daemon run**, on the first connect only, so `daemon_started` to
 
 ## mcp_connection_lost
 
-**Wire name:** `mcp_connection_lost`. **Emitted from:** `packages/server/src/mcp/mcp-outage.ts:53`. **Session-scoped:** no. **Payload block:** `outage`.
+**Wire name:** `mcp_connection_lost`. **Emitted from:** `server/src/mcp/mcp-outage.ts:53`. **Session-scoped:** no. **Payload block:** `outage`.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -360,7 +360,7 @@ Fired **once per daemon run**, on the first connect only, so `daemon_started` to
 
 ## init_completed
 
-**Wire name:** `init_completed`. **Emitted from:** `packages/server/src/telemetry/init-telemetry.ts:32`. **Session-scoped:** no. **Payload block:** `init`.
+**Wire name:** `init_completed`. **Emitted from:** `server/src/telemetry/init-telemetry.ts:32`. **Session-scoped:** no. **Payload block:** `init`.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -375,7 +375,7 @@ Fired **once per daemon run**, on the first connect only, so `daemon_started` to
 
 ## bug_found
 
-**Wire name:** `bug_found`. **Emitted from:** `packages/server/src/tools/invoke-tool.ts:166` and `packages/server/src/telemetry/run-telemetry.ts:59`. **Session-scoped:** yes. **Payload block:** `bug`.
+**Wire name:** `bug_found`. **Emitted from:** `server/src/tools/invoke-tool.ts:166` and `server/src/telemetry/run-telemetry.ts:59`. **Session-scoped:** yes. **Payload block:** `bug`.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -400,7 +400,7 @@ The payload never carries a selector, a URL, an element, or any description of t
 
 ## tool_refused
 
-**Wire name:** `tool_refused`. **Emitted from:** `packages/server/src/telemetry/tool-refused.ts:49`, reached from four call sites in `packages/server/src/tools/invoke-tool.ts` (`:285` a handler threw, `:325` the wrong-tab guard, `:346` a message-shaped refusal, `:376` the `{error}` return convention). **Session-scoped:** yes. **Payload block:** `refusal`.
+**Wire name:** `tool_refused`. **Emitted from:** `server/src/telemetry/tool-refused.ts:49`, reached from four call sites in `server/src/tools/invoke-tool.ts` (`:285` a handler threw, `:325` the wrong-tab guard, `:346` a message-shaped refusal, `:376` the `{error}` return convention). **Session-scoped:** yes. **Payload block:** `refusal`.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -422,12 +422,12 @@ The message itself never leaves. It interpolates whatever the caller asked for (
 
 Read [`docs/telemetry-contract.md`](/telemetry-contract) before you touch anything that emits. The short version:
 
-1. Add the kind to `TelemetryEventKind` in `packages/core/src/telemetry.ts`, with a doc comment saying what question it answers.
+1. Add the kind to `TelemetryEventKind` in `core/src/telemetry.ts`, with a doc comment saying what question it answers.
 2. Define its payload schema in the same file, or in `telemetry-session.ts` if it is a rollup.
 3. Add the payload key to `TelemetryEventSchema`.
 4. Add it to the emitter's key allowlist, or it will be silently dropped.
 5. Decide whether it is session-scoped and add it to `SESSION_SCOPED` if so.
-6. If it produces a verdict, add the tool to `VERDICT_TOOLS` (`packages/server/src/tools/feedback-tools.ts`). If it introduces a finding kind, add that to core's enum and never re-list it locally.
+6. If it produces a verdict, add the tool to `VERDICT_TOOLS` (`server/src/tools/feedback-tools.ts`). If it introduces a finding kind, add that to core's enum and never re-list it locally.
 
 `telemetry-contract.test.ts` enforces the parts that can be enforced, and `pnpm test:e2e` runs a spec that fires every event kind against a real capture endpoint and asserts each one lands.
 

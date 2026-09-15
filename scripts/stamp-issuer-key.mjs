@@ -90,7 +90,7 @@ if (pem === undefined || pem.length === 0) {
   }
   // stderr, not stdout: `npm pack --json` parses stdout, and a line of prose here makes the output
   // unparseable for any release tooling that reads it. The same defect was found and fixed in
-  // openverification's prepack earlier in this release; this is the second copy of it.
+  // open-verification's prepack earlier in this release; this is the second copy of it.
   process.stderr.write('stamp-issuer-key: RETICLE_ISSUER_PUBLIC_KEY unset, leaving eval mode\n');
   process.exit(0);
 }

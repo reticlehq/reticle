@@ -133,7 +133,7 @@ export type CrashKind = (typeof CrashKind)[keyof typeof CrashKind];
 /**
  * The ports Reticle itself uses, so a refusal can be classified as ours or somebody else's.
  *
- * Read here rather than threaded through `installCrashHandlers`: a crash handler is installed once,
+ * Read here rather than threaded through `installDaemonResilience`: a crash handler is installed once,
  * at startup, and the port can be set after it. The values are only ever compared against — the
  * port a crash names is turned into an enum and then discarded.
  */

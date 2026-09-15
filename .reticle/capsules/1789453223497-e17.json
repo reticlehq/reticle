@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1789453223497-e17",
+  "createdAt": 1789453223498,
+  "origin": "failed-assert",
+  "expected": "declared consequence",
+  "observed": "no element matched {\"text\":\"To:\"}",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "nav-compose",
+        "source": {
+          "file": "src/components/Sidebar.tsx",
+          "line": 45,
+          "column": 8
+        }
+      },
+      "action": "click"
+    }
+  ]
+}

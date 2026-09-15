@@ -105,7 +105,7 @@ describe('how much of the protocol the shipping product uses', () => {
     //   WebRealm                constructed only by conformance     (asserted above)
     //   toArtifact              exported, imported by nothing       (NO LONGER TRUE)
     //
-    // The third is joined: `reticle_run_export` gained `format:"openverification"`. The reason it took
+    // The third is joined: `reticle_run_export` gained `format:"open-verification"`. The reason it took
     // so long is worth keeping, because the shape recurs -- each piece was individually honest
     // (`to-artifact.ts` sat in server's DECLARED_UNWIRED list with the reason "no production path
     // reaches it"), and no single declaration said that the three together meant the specification
@@ -121,7 +121,7 @@ describe('how much of the protocol the shipping product uses', () => {
     expect(
       callers,
       'the artifact exporter grew or lost a caller. One call site is the intended state — the ' +
-        '`format:"openverification"` branch of reticle_run_export. If the export now surfaces somewhere ' +
+        '`format:"open-verification"` branch of reticle_run_export. If the export now surfaces somewhere ' +
         'else too, say so here and in the changelog.',
     ).toEqual(['server/src/judgement/runs/run-tools.ts']);
   });

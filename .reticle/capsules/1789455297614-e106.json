@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "1789455297614-e106",
+  "createdAt": 1789455297614,
+  "origin": "failed-assert",
+  "expected": "declared consequence",
+  "observed": "current route (no route change in the window) '/' does not contain '/overview'",
+  "steps": [
+    {
+      "tool": "reticle_act",
+      "anchor": {
+        "kind": "testid",
+        "value": "login-submit",
+        "source": {
+          "file": "src/components/Login.tsx",
+          "line": 81,
+          "column": 8
+        }
+      },
+      "action": "click"
+    }
+  ]
+}

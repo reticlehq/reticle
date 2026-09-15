@@ -30,13 +30,14 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "@reticlehq/browser": "workspace:*",
     "@reticlehq/core": "workspace:*",
     "@reticlehq/engine": "workspace:*",
     "@reticlehq/init": "workspace:*",
+    "open-verification": "workspace:*",
     "ws": "^8.21.3",
     "zod": "^3.24.1",
-    "zod-to-json-schema": "^3.24.0",
-    "@reticlehq/openverification": "workspace:*"
+    "zod-to-json-schema": "^3.24.0"
   },
   "devDependencies": {
     "@types/pngjs": "^6.0.5",

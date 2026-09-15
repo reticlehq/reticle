@@ -56,7 +56,7 @@ export async function assertVerdict(
    */
   evidence: unknown,
   since: number,
-  /** Set when the assertion was never evaluated — see honesty/verified.ts. */
+  /** Set when the assertion was never evaluated — see engine/src/evidence/verified.ts. */
   inconclusive?: string,
   /**
    * Set when the tab went away mid-wait, so the assertion was never OBSERVED. `reticle_assert` and

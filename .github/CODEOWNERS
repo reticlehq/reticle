@@ -13,7 +13,7 @@
 
 # Packages — the shipped product.
 /core/                     @divshekhar
-/openverification/              @divshekhar
+/open-verification/              @divshekhar
 /engine/                   @divshekhar
 /server/                   @divshekhar
 /init/                     @divshekhar

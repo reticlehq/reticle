@@ -141,7 +141,7 @@ describe('replayFlow expect.element drift is not anchor drift', () => {
   });
 
   it('no longer proposes a heal that could never apply', async () => {
-    // proposeRebind only fires on TESTID_NOT_FOUND, and applyProposals drops a change whose `from`
+    // proposeRebind only fires on TESTID_NOT_FOUND, and applyHealChanges drops a change whose `from`
     // is not the step's anchor. Under the old reason kind this produced a proposal keyed to the
     // assertion's testid that was then silently discarded.
     const session = new FakeSession(new Set(['confirm', 'sibling']));

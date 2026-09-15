@@ -176,7 +176,7 @@
             "groups": [
               {
                 "group": "How it works",
-                "pages": ["architecture", "benchmarks", "token-efficiency"]
+                "pages": ["architecture", "protocol", "benchmarks", "token-efficiency"]
               },
               {
                 "group": "Compare",

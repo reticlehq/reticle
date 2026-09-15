@@ -130,10 +130,29 @@ const SERVERS = {
     args: ['-y', 'chrome-devtools-mcp@1.3.0', '--headless', '--isolated'],
     env: {},
   },
+  /**
+   * The DEFAULT-surface control: nineteen tools.
+   *
+   * It used to rely on the daemon's own default and carry no preStart. That stopped being safe the
+   * day the default BECAME the nine-tool surface: this arm would have been served `reticle_look`,
+   * the control and the `reticle_nine` arm would have measured the same thing, and the table would
+   * still have said otherwise. `assertSurface` catches that now — it is exactly the failure it was
+   * added for — but catching it aborts the run, so the surface is pinned instead of assumed.
+   *
+   * `hybrid` is the retired name that still resolves to the nineteen-tool surface, which is what
+   * makes it expressible at all now that nothing else selects it.
+   */
   reticle: {
     command: 'node',
     args: ['server/dist/command/cli.js', 'mcp', '--port', RETICLE_PORT, '--drive', URL],
     env: { RETICLE_PORT },
+    // On the DAEMON, not the proxy — see the lean arm's note, which cost a whole run.
+    preStart: {
+      command: 'node',
+      // `--drive` is not optional: without it this arm has no browser and never gets a session.
+      args: ['server/dist/command/cli.js', '_daemon', '--port', RETICLE_PORT, '--drive', URL],
+      env: { RETICLE_TOOL_PROFILE: 'hybrid', RETICLE_PORT },
+    },
   },
   /**
    * The same server advertising the LEAN surface — ten tools instead of eighteen.

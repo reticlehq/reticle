@@ -3,10 +3,10 @@ name: Publish to npm
 # Publishes the public @reticlehq/* packages when a GitHub Release is published, or on manual
 # dispatch. THIRTEEN of them, and the list is worth naming because it is longer than people
 # assume: core, browser, react, server, init, vite-plugin, next, babel-plugin, test,
-# eslint-plugin, electron, engine, openverification.
+# eslint-plugin, electron, engine, open-verification.
 #
 # The last three were absent from this comment while being published by every run. `engine` and
-# `openverification` were carved out during v3 and nobody updated the line; `electron` predates that.
+# `open-verification` were carved out during v3 and nobody updated the line; `electron` predates that.
 # The true list is whatever `pnpm -r publish` selects -- every workspace package that is not
 # `private` -- and it was read off `pnpm -r publish --dry-run` rather than counted by hand.
 #

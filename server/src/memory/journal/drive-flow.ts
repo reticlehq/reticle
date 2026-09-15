@@ -1,5 +1,5 @@
-import { REPLAY_PROGRAM_VERSION } from '@reticlehq/core';
-import type { FlowExpect } from '@reticlehq/core';
+import { REPLAY_PROGRAM_VERSION, asFlowName } from '@reticlehq/core';
+import type { FlowExpect, FlowName } from '@reticlehq/core';
 
 /**
  * What this module needs a recorded step to BE, named structurally rather than imported.
@@ -51,7 +51,7 @@ export function carriesAnAssertion(steps: readonly TapeStep[]): boolean {
  * teardown fires on every socket close and a reconnecting tab keeps its id, so a random name would
  * leave one journey scattered across several files, each a partial copy of the others.
  */
-export function driveFlowName(sessionId: string, route?: string): string {
+export function driveFlowName(sessionId: string, route?: string): FlowName {
   const safe = sessionId.replace(/[^a-zA-Z0-9-]/g, '-').slice(0, 40);
   // The route is part of the name, so two journeys in one session do not overwrite each other —
   // and so a re-drive of the same journey rewrites its own flow rather than adding a near-duplicate.
@@ -59,7 +59,12 @@ export function driveFlowName(sessionId: string, route?: string): string {
     .replace(/[^a-zA-Z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 24);
-  return 0 === leg.length ? `drive-${safe}` : `drive-${safe}-${leg}`;
+  // Minted here, not at the call site. This function is where a drive's flow name comes into
+  // existence, and every character it can emit has just been forced through the safe-segment
+  // replacements above — so this IS the validated boundary the brand is meant to be created at.
+  // Returning `string` pushed a cast onto each caller, which is the hole `flowPath`'s parameter
+  // type was added to close.
+  return asFlowName(0 === leg.length ? `drive-${safe}` : `drive-${safe}-${leg}`);
 }
 
 export interface DriveFlowOutcome {
