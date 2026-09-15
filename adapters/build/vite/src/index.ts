@@ -28,10 +28,9 @@ import {
 } from './installed.js';
 
 import {
-  DEV_INJECTION_GRACE_MS,
-  htmlHookNeverRanMessage,
+  createInjectionWatch,
   notInjectedMessage,
-  unconfirmedInjectionMessage,
+  type InjectionWatch,
 } from './injection-postcondition.js';
 import { RETICLE_VITE_PLUGIN_NAME } from './plugin-name.js';
 
@@ -323,6 +322,8 @@ export interface ReticleVitePlugin {
   /** Runs the dev-mode injection check immediately. Test seam for the deferred timer. */
   checkInjectedForTest?: () => void;
   checkHtmlHookForTest?: () => void;
+  /** The post-condition watch itself, so a test drives the real predicate and not a copy of it. */
+  injectionWatchForTest?: InjectionWatch;
 }
 
 /**
@@ -352,7 +353,13 @@ export interface ViteDevServerLike {
     // red-builds every project that typechecks its config. Methods are checked bivariantly, which is
     // the latitude a structural stand-in is asking for in the first place. See
     // vite-types-assignable.test.ts, which fails at `tsc` if this drifts back.
-    use(handler: (req: { url?: string | undefined }, res: unknown, next: () => void) => void): void;
+    use(
+      handler: (
+        req: { url?: string | undefined; headers?: { accept?: string | undefined } | undefined },
+        res: unknown,
+        next: () => void,
+      ) => void,
+    ): void;
   };
   moduleGraph: {
     getModuleById(id: string): object | undefined;
@@ -695,20 +702,17 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
   let connectChanges = 0;
 
   /**
-   * Warn when the HTML hook never ran. Scheduled from `configureServer`, NOT from
-   * `transformIndexHtml` — the desktop check below is armed inside that hook, which means a hook
-   * that never runs also never arms it, and the check is unreachable in exactly the case it is for.
+   * When to conclude injection failed, and which of the three messages to say. Lives beside those
+   * messages rather than here: choosing between them is the subtlety, and it was a thousand lines
+   * from the wording it chose. The flags are read through getters because both flip mid-session.
    */
-  const checkHtmlHookRan = (): void => {
-    if (desktop || !inject || htmlTransformed) return;
-    warn(htmlHookNeverRanMessage());
-  };
-
-  /** Warn (never throw) in dev — a running dev server should report the doubt, not die of it. */
-  const checkInjected = (): void => {
-    if (!desktop || !inject || injected) return;
-    warn(unconfirmedInjectionMessage());
-  };
+  const watch = createInjectionWatch({
+    desktop,
+    inject,
+    injected: () => injected,
+    htmlTransformed: () => htmlTransformed,
+    warn,
+  });
 
   return {
     name: RETICLE_VITE_PLUGIN_NAME,
@@ -885,16 +889,13 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
      */
     configureServer(server) {
       if (!inject) return;
-      // Arm the web post-condition HERE rather than in `transformIndexHtml`.
+      // The web post-condition is armed by the first DOCUMENT REQUEST, in the middleware below.
       //
-      // This is the whole point: if the framework renders its own HTML, that hook never runs — so a
-      // timer started inside it would never be started either, and the app fails silently. Anchoring
-      // to the server means the check fires whether or not the hook was ever called. Unref'd so a
-      // dev server is never held open by it.
-      if (!desktop) {
-        const htmlTimer = setTimeout(checkHtmlHookRan, DEV_INJECTION_GRACE_MS);
-        (htmlTimer as { unref?: () => void }).unref?.();
-      }
+      // Not from `transformIndexHtml`, because a framework that renders its own HTML never calls it
+      // and the check would be unreachable in the one case it exists for. But not from here either:
+      // armed at boot it fired ten seconds after the server started whether or not anybody had
+      // opened the app, and told a healthy project it would never connect. The request is the
+      // earliest moment the plugin knows enough to have an opinion.
       // Tell `~/.reticle` this dev server exists, the moment it is actually listening.
       //
       // This is the one fact nobody outside this process could observe: the plugin is loaded in the
@@ -939,6 +940,10 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
         announce();
       }
       server.middlewares.use((req, _res, next) => {
+        // One middleware, two observations. A second `use()` would work equally well in Vite and
+        // is the obvious way to write this, but it makes the ORDER of registration load-bearing for
+        // anything that records a single handler — so both live here instead.
+        if (!desktop && watch.isDocumentRequest(req)) watch.noteHtmlRequest();
         // Matched against BOTH forms: plugin middlewares run ahead of Vite's own base
         // middleware, so the request still carries `base` here, while a middleware-mode host may
         // have stripped it already.
@@ -963,17 +968,12 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
       if (!desktop || !inject || injected) return;
       throw new Error(notInjectedMessage());
     },
-    checkInjectedForTest: checkInjected,
-    checkHtmlHookForTest: checkHtmlHookRan,
+    checkInjectedForTest: watch.checkInjected,
+    checkHtmlHookForTest: watch.checkHtmlHookRan,
+    injectionWatchForTest: watch,
     transformIndexHtml() {
       htmlTransformed = true;
-      // In serve, the HTML is sent BEFORE the browser requests the entry module, so the check has to
-      // be deferred — asserting here would fire on every healthy start. Unref'd so a dev server is
-      // never held open by it.
-      if (desktop && inject && 'serve' === command) {
-        const timer = setTimeout(checkInjected, DEV_INJECTION_GRACE_MS);
-        (timer as { unref?: () => void }).unref?.();
-      }
+      if (desktop && inject && 'serve' === command) watch.armDesktopCheck();
       // Desktop injects via the entry module instead (see transform) — a tag here would be a dead
       // URL in a packaged build. A Vitest run gets nothing unless `inject: true` says otherwise —
       // see isVitestBrowserServer.

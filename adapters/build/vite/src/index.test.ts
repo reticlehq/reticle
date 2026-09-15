@@ -17,6 +17,20 @@ import {
 // The attribute the babel plugin stamps (mirrors DATA_RETICLE_SOURCE_ATTR in core).
 const SOURCE_ATTR = 'data-reticle-source';
 
+/**
+ * One request through the plugin's own predicate, rather than a boolean the test decides.
+ *
+ * "Which requests count as somebody opening the app" is the part that can be wrong, so a test that
+ * set a flag directly would assert the fix and never the rule.
+ */
+const serveRequest = (
+  plugin: ReturnType<typeof reticle>,
+  req: { url?: string; headers?: { accept?: string } },
+): void => {
+  const watch = plugin.injectionWatchForTest;
+  if (true === watch?.isDocumentRequest(req)) watch.noteHtmlRequest();
+};
+
 // Point the token lookup at an empty temp dir so tests never pick up a real ~/.reticle/pairing-token.
 const emptyTokenDir = mkdtempSync(join(tmpdir(), 'reticle-vite-token-'));
 const savedTokenDir = process.env[ReticleEnv.PAIRING_TOKEN_DIR];
@@ -324,6 +338,8 @@ describe('desktop injection is loud in dev too, not only in build', () => {
     const warnings: string[] = [];
     const plugin = reticle({ onWarn: (m) => warnings.push(m) });
     plugin.configResolved?.({ root: '/app', command: 'serve' });
+    // Somebody opened a page: that is what makes "the hook never ran" mean anything.
+    plugin.injectionWatchForTest?.noteHtmlRequest();
     // transformIndexHtml is deliberately NOT called — this is the framework-owns-its-HTML case.
     plugin.checkHtmlHookForTest?.();
     const text = warnings.join(' ');
@@ -332,6 +348,60 @@ describe('desktop injection is loud in dev too, not only in build', () => {
     );
     // Name the likely cause in plain words, so the fix is obvious without reading our source.
     expect(text).toMatch(/renders its own HTML|owns its HTML/i);
+  });
+
+  /**
+   * A dev server nobody has opened yet is not a broken integration.
+   *
+   * The timer was armed in `configureServer`, so it fired ten seconds after BOOT whether or not a
+   * browser had ever asked for a page — and `transformIndexHtml` only runs when one does. Start a
+   * dev server, go and make coffee, come back to "this app will never connect" about an app that is
+   * completely fine. Observed on a second dev server started and never opened.
+   *
+   * The claim is permanent ("will never") and unconditional, in the one file whose own header says
+   * a false alarm is the tool contradicting its entire pitch. The other two messages in that file
+   * were already weakened for exactly this reason; this one still had the bug they were fixed for.
+   */
+  it('says nothing when no page has been requested yet, however long it waits', () => {
+    const warnings: string[] = [];
+    const plugin = reticle({ onWarn: (m) => warnings.push(m) });
+    plugin.configResolved?.({ root: '/app', command: 'serve' });
+    // No request, no transform — the plugin knows nothing about this app yet.
+    plugin.checkHtmlHookForTest?.();
+    expect(
+      warnings,
+      'a dev server nobody opened proves nothing about whether the app can connect',
+    ).toEqual([]);
+  });
+
+  it('arms on a document request, and not on a module or asset fetch', () => {
+    const armed: string[] = [];
+    const plugin = reticle({ onWarn: (m) => armed.push(m) });
+    plugin.configResolved?.({ root: '/app', command: 'serve' });
+
+    // A module fetch: Vite asks for these constantly and none of them is somebody opening the app.
+    serveRequest(plugin, { url: '/src/main.tsx', headers: { accept: '*/*' } });
+    plugin.checkHtmlHookForTest?.();
+    expect(armed, 'a module fetch is not a page view').toEqual([]);
+
+    // A navigation. Browsers send text/html for a document and only for a document.
+    serveRequest(plugin, {
+      url: '/',
+      headers: { accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' },
+    });
+    plugin.checkHtmlHookForTest?.();
+    expect(armed.join(' ')).toMatch(/never connect/i);
+  });
+
+  it('still says nothing after a document request when the hook did run', () => {
+    // The negative control for the arming: a request makes the check MEANINGFUL, not automatic.
+    const warnings: string[] = [];
+    const plugin = reticle({ onWarn: (m) => warnings.push(m) });
+    plugin.configResolved?.({ root: '/app', command: 'serve' });
+    serveRequest(plugin, { url: '/', headers: { accept: 'text/html' } });
+    plugin.transformIndexHtml('<html></html>');
+    plugin.checkHtmlHookForTest?.();
+    expect(warnings).toEqual([]);
   });
 
   it('stays quiet on the web once the HTML hook has run', () => {
