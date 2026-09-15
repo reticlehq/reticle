@@ -6,12 +6,13 @@
  * run-setup.ts and the pieces it calls.
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { planAgentConfigs, type PlatformPaths } from './agent-configs.js';
 import { AppShape, readShape } from './desktop-shape.js';
 import { stopOnInterrupt } from './terminal/interrupt.js';
+import { stopOnCrash } from './terminal/crash.js';
 import { applyAgentPlan, applyAgentSkills } from './agent-writer.js';
 import { ApprovalOutcome, grantAutoApproval } from './auto-approve.js';
 import { agentIo } from './agent-io.js';
@@ -53,6 +54,34 @@ let activeDevServerStop: (() => void) | null = null;
 /** Stop the dev server setup started, if it is still running. Safe to call when there is none. */
 export function stopRunningDevServer(): void {
   activeDevServerStop?.();
+}
+
+/** Where a crash of our own leaves its trace. Never a stream — see terminal/crash.ts. */
+const CRASH_LOG_NAME = '.reticle-setup-crash.log';
+
+/**
+ * Catch our own faults for the whole process, and take the dev server with them.
+ *
+ * Here rather than in `cli/`, where it started: the handler it installs lives in `terminal/`, and
+ * `cli` is not allowed to reach that directory. `directory-reach` was right to refuse it — the
+ * installer stops the dev server THIS file owns, so this is where it belonged all along.
+ *
+ * Installed at the CLI entry rather than inside the phase below, because a fault can fire in any
+ * phase: the first attempt sat inside the runtime phase and caught nothing in two different
+ * environments, because init had already returned by the time the handler existed.
+ */
+export function installCrashGuard(): () => void {
+  return stopOnCrash(stopRunningDevServer, process, (message, stack) => {
+    const crashLog = join(process.cwd(), CRASH_LOG_NAME);
+    try {
+      writeFileSync(crashLog, stack);
+    } catch {
+      /* an unwritable directory is not worth a second crash */
+    }
+    process.stderr.write(
+      `reticle hit a bug of its own and stopped: ${message}. Anything it had already done is done, and re-running is safe. Please report it — the trace is in ${crashLog}.\n`,
+    );
+  });
 }
 
 interface SetupCommandInput extends Omit<SetupInput, 'shape'> {

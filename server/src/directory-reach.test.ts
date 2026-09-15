@@ -337,6 +337,19 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'prior',
     'resolve',
     'init',
+    /**
+     * `setup`, for one thing: the crash guard.
+     *
+     * `cli.ts` is the composition root and already reaches nineteen directories; this is the
+     * twentieth, and it is deliberate rather than accidental. The guard that turns a bug of ours
+     * into one sentence has to be installed for the WHOLE process — a fault can fire in any phase,
+     * and an earlier attempt that installed it inside the runtime phase caught nothing in two
+     * different environments because init had already returned. What it cleans up is the detached
+     * dev server `setup-command.ts` owns, so the installer lives there and the entry point calls it.
+     *
+     * It adds no mutual pair: `setup` does not reach `command`, and must not start.
+     */
+    'setup',
     'telemetry',
     'update',
   ],
