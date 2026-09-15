@@ -2,7 +2,7 @@
 /**
  * The negative control for `reticle.sh`: environments built to BREAK it.
  *
- *   node setup/break-matrix.mjs [--only <name>] [--keep]
+ *   node break/break-matrix.mjs [--only <name>] [--keep]
  *
  * A setup script is judged by its failures, not its successes. The success path has one shape and a
  * real app behind it (reticle-fixtures); the failure paths are where a user actually lives, and
@@ -44,7 +44,10 @@ if (!existsSync(CLI)) {
   process.exit(2);
 }
 /** The shell entry point, whose OWN guards two scenarios below exist to judge. */
-const LAUNCHER_SH = join(HERE, 'reticle.sh');
+// The launcher users actually run. It used to be `setup/reticle.sh`, the prototype's launcher —
+// which meant the two Node-guard scenarios below were proving the guards of a script nobody
+// installs. `install/install.sh` carries the same two guards and is what the one-line install runs.
+const LAUNCHER_SH = join(HERE, '..', 'install', 'install.sh');
 const args = process.argv.slice(2);
 const only = args.includes('--only') ? args[args.indexOf('--only') + 1] : undefined;
 const keep = args.includes('--keep');
@@ -73,8 +76,11 @@ const quietSync = (c) => spawnSync('sh', ['-c', c], { encoding: 'utf8' }).stdout
 function runLauncher(dir, extraArgs = [], env = {}, timeoutMs = 90_000) {
   try {
     const out = execFileSync(
+      // No `--json --timeout --no-drive --no-open`: the installer takes none of them, it forwards
+      // what it is given to `reticle setup install`, and both scenarios here die in the Node guard
+      // long before that. Passing them would only describe a command nobody types.
       '/bin/sh',
-      [LAUNCHER_SH, '--json', '--timeout', '3', '--no-drive', '--no-open', ...extraArgs],
+      [LAUNCHER_SH, ...extraArgs],
       {
         cwd: dir,
         encoding: 'utf8',
@@ -142,23 +148,25 @@ const SCENARIOS = [
     why: 'the launcher runs on a machine with no Node at all — the most basic possible failure',
     build: () => app({ 'package.json': pkg({ dev: 'true' }) }),
     run: (dir) => runLauncher(dir, [], { PATH: '/usr/bin:/bin' }),
-    expect: 'needs Node',
+    expect: 'is required and no',
   },
   {
     name: 'node-too-old',
     why: "Node 16 has no global fetch. The script would die on `fetch is not defined` several phases in, long after it has edited the user's files",
     build: () => app({ 'package.json': pkg({ dev: 'true' }) }),
-    // A faithful stand-in for Node 16: it reports v16 AND fails the launcher's version probe the
-    // way a real old Node would (`process.exit(major >= 18 ? 0 : 1)` exits 1 there). Delegating the
-    // probe to the real Node made this scenario green while the guard did nothing.
+    // A faithful stand-in for Node 16: it answers v16 to every shape of version question the
+    // launcher asks. `-p` is the one that matters now — `install.sh` reads the major with
+    // `node -p 'process.versions.node.split(".")[0]'`, and a shim that only knew `-v` and `-e`
+    // fell through to the REAL node, which answered 24 and sailed past the guard. Delegating any
+    // part of the probe to the real Node makes this scenario green while the guard does nothing.
     run: (dir) =>
       runLauncher(dir, [], {
         PATH: shimmedPath(
           dir,
-          '#!/bin/sh\ncase "$1" in\n  -v|--version) echo v16.20.2; exit 0 ;;\n  -e) exit 1 ;;\nesac\nexec /usr/bin/env -i PATH=/usr/bin:/bin:/usr/local/bin node "$@"\n',
+          '#!/bin/sh\ncase "$1" in\n  -v|--version) echo v16.20.2; exit 0 ;;\n  -p) echo 16; exit 0 ;;\n  -e) exit 1 ;;\nesac\nexec /usr/bin/env -i PATH=/usr/bin:/bin:/usr/local/bin node "$@"\n',
         ),
       }),
-    expect: 'Node 18',
+    expect: 'is too old',
   },
   {
     name: 'package-json-malformed',
@@ -588,9 +596,15 @@ const SCENARIOS = [
     build: () => app({ 'package.json': pkg({ dev: 'true' }) }),
     // NODE_OPTIONS injects a throw into the module's own tick: the closest thing to a real internal
     // fault that a test can arrange from outside.
-    // Straight at reticle.mjs, not through the launcher: NODE_OPTIONS also applies to the
-    // launcher's `node -e` version probe, and breaking that made this scenario measure the Node
-    // guard instead of the crash handler.
+    //
+    // Straight at the CLI, not through a launcher: NODE_OPTIONS also applies to the launcher's own
+    // version probe, and breaking that made this scenario measure the Node guard instead of the
+    // crash handler.
+    //
+    // It used to run `setup/reticle.mjs`, the prototype — and so it passed for as long as that
+    // file existed while the SHIPPED CLI dumped a raw Node stack trace and left the dev server it
+    // started running behind it. The handler was never ported; nothing could see that, because the
+    // only thing watching was pointed at code no user runs. It is the CLI's now.
     run: (dir) => {
       const boom = join(dir, 'boom.cjs');
       // AFTER the module body has run, because that is when its handlers exist — and when a real
@@ -608,8 +622,8 @@ const SCENARIOS = [
             [
               '--require',
               boom,
-              join(HERE, 'reticle.mjs'),
-              '--json',
+              CLI,
+              'init',
               '--timeout',
               '3',
               '--no-drive',
@@ -631,7 +645,7 @@ const SCENARIOS = [
     },
     // One sentence naming what happened, and where the trace went. The harness's own no-stack check
     // does the rest of the work on this scenario.
-    expect: 'setup hit a bug of its own',
+    expect: 'hit a bug of its own',
   },
   {
     name: 'a-failed-run-says-how-to-finish-by-hand',

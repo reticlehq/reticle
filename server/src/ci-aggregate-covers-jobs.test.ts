@@ -38,7 +38,7 @@ const PR_JOBS_OUTSIDE_THE_AGGREGATE: Record<string, string> = {
   'dco.yml': 'sign-off check on contributions',
   'labeler.yml': 'adds labels; nothing depends on it passing',
   'package-quality.yml': 'publint / are-the-types-wrong / SDK size budget',
-  'setup-gates.yml': 'the onboarding gates',
+  'break-gates.yml': 'the install-path gates',
 };
 
 /**

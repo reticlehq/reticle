@@ -1,0 +1,121 @@
+# The install path's own gates, on every OS it claims to support.
+#
+# This exists because "Windows is supported" was, until now, a claim backed by reading. The refusal
+# paths below only ever EXECUTE per-platform, and a path nothing executes is a path nobody has
+# checked.
+#
+# What it gates changed when the prototype went. These jobs used to drive `setup/reticle.mjs` — the
+# script `init`'s runtime phase was ported from — and that is exactly how the CLI came to ship with
+# no crash handler while a scenario named `a-bug-of-our-own-is-not-a-stack-trace` passed on every
+# run. A gate pointed at code no user runs is not a gate. Everything here now drives the shipped
+# CLI, or one of the two launchers a user actually pipes into a shell.
+#
+# The break matrix stays POSIX-only by construction: its scenarios build fake `node`/`npx`/`claude`
+# shims as /bin/sh scripts. Saying so here is better than pretending the number covers Windows.
+name: setup gates
+
+on:
+  pull_request:
+    paths: ['break/**', 'install/**', '.github/workflows/break-gates.yml']
+  push:
+    branches: [main]
+    paths: ['break/**', 'install/**', '.github/workflows/break-gates.yml']
+
+jobs:
+  # The two launchers parse, on the shell that has to run them. Cheap, and it is the whole class of
+  # bug that reaches a user as `curl | sh`: a launcher that does not parse has no failure mode worth
+  # the name, it simply does nothing. install.ps1 was written with here-strings and typographic
+  # dashes and did exactly that — Windows PowerShell reads a BOM-less .ps1 as ANSI, so the UTF-8
+  # punctuation became mojibake and the file would not parse at all.
+  launchers:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: install.sh parses
+        shell: bash
+        run: sh -n install/install.sh
+      - name: install.ps1 parses
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $errs = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            "$env:GITHUB_WORKSPACE\install\install.ps1", [ref]$null, [ref]$errs)
+          if ($errs) { $errs | ForEach-Object { Write-Host $_.Message }; throw 'install.ps1 does not parse' }
+      # ASCII only, in both launchers. Not style: `install.sh` already carries a comment about a
+      # multibyte ellipsis that `dash` swallowed whole, printing two broken bytes instead of the
+      # package name, and `install.ps1` would not parse at all for the same reason on Windows.
+      # The author's shell is never the one it runs in.
+      - name: the launchers are pure ASCII
+        shell: bash
+        run: |
+          for f in install/install.sh install/install.ps1; do
+            if LC_ALL=C grep -qP '[^\x00-\x7F]' "$f"; then
+              echo "$f contains non-ASCII bytes:"; LC_ALL=C grep -nP '[^\x00-\x7F]' "$f"; exit 1
+            fi
+          done
+
+  # The refusals a user meets before anything has been written, on every OS. These run the SHIPPED
+  # CLI: the same three questions used to be asked of the prototype, where passing proved nothing
+  # about what anybody installs.
+  early-gates:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: corepack enable && pnpm install --frozen-lockfile
+      - run: pnpm exec turbo run build --filter=@reticlehq/server...
+      - name: no package.json is refused, by path
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/empty" && cd "$RUNNER_TEMP/empty"
+          out=$(node "$GITHUB_WORKSPACE/server/dist/command/cli.js" init --timeout 2 --no-drive --no-open 2>&1 || true)
+          echo "$out" | grep -qi "no package.json" || { echo "$out"; exit 1; }
+      - name: malformed package.json names the file, not a stack trace
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/bad" && cd "$RUNNER_TEMP/bad"
+          printf '{ "name": "x", }' > package.json
+          out=$(node "$GITHUB_WORKSPACE/server/dist/command/cli.js" init --timeout 2 --no-drive --no-open 2>&1 || true)
+          echo "$out" | grep -q "not valid JSON" || { echo "$out"; exit 1; }
+          echo "$out" | grep -qE "^\s+at .+:[0-9]+:[0-9]+" && { echo "leaked a stack trace"; exit 1; }
+          exit 0
+      - name: a project with no dev script stops rather than inventing one
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/nodev" && cd "$RUNNER_TEMP/nodev"
+          printf '{"name":"x","version":"1.0.0","scripts":{"build":"true"}}' > package.json
+          out=$(node "$GITHUB_WORKSPACE/server/dist/command/cli.js" init --timeout 2 --no-drive --no-open 2>&1 || true)
+          echo "$out" | grep -q "rather than invent" || { echo "$out"; exit 1; }
+
+  # POSIX-only, and labelled as such: the scenarios shim /bin/sh executables.
+  break-matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      # The matrix drives the SHIPPED cli for every scenario that reaches `init`, so dist has to
+      # exist. Without this the whole matrix failed with `Cannot find module dist/cli.js` and
+      # reported it as a missing diagnosis, which is a different bug entirely.
+      - run: corepack enable && pnpm install --frozen-lockfile
+      # `turbo run build --filter=...` rather than a hand-listed pair: server's dependency set grew
+      # (openverification, engine) and a hand-listed pair does not notice. Turbo reads the graph.
+      - run: pnpm exec turbo run build --filter=@reticlehq/server...
+      # Scenarios that reach `init` need the registry; the rest are hermetic. A failure here is a
+      # regression in a diagnosis, which is the thing this path is judged on.
+      - run: node break/break-matrix.mjs
+        timeout-minutes: 25

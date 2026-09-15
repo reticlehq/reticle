@@ -467,11 +467,11 @@ jobs:
           # Anything a user runs BEFORE their first session, plus the gate itself and the dependency
           # graph it installs through. Deliberately broad — the cost of a false positive is CI time,
           # the cost of a false negative is the 0%-connect class shipping again.
-          # `server/src/command/setup/` and the top-level `setup/` script are named here as of 2.13.0. They
+          # `server/src/command/setup/`, `install/` and `break/` are named here. They
           # are the whole of one-command onboarding — agent registration, pre-approval, the skill
-          # file, the drive — and neither was on this list, so the release that made `init` an
+          # file, the drive — and none of them was on this list, so the release that made `init` an
           # install could edit every one of them without the install gate running once.
-          if echo "$CHANGED" | grep -qE '^((init|core)/|server/src/command/setup/|adapters/|setup/|apps/e2e/(install-gate|gate-harness|install-baseline)|package\.json|pnpm-lock\.yaml|\.github/workflows/ci\.yml)'; then
+          if echo "$CHANGED" | grep -qE '^((init|core)/|server/src/command/setup/|adapters/|break/|install/|apps/e2e/(install-gate|gate-harness|install-baseline)|package\.json|pnpm-lock\.yaml|\.github/workflows/ci\.yml)'; then
             echo "install=true" >> "$GITHUB_OUTPUT"
           else
             echo "install=false" >> "$GITHUB_OUTPUT"

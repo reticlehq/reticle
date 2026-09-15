@@ -7,7 +7,7 @@ import {
 /**
  * What the one-line installer did, reported by the half that can report.
  *
- * `setup/install.sh` measures three durations it alone can see — they span the time before this
+ * `install/install.sh` (and its PowerShell twin) measures three durations it alone can see — they span the time before this
  * binary existed — and hands them over. Everything after that is decided here, because a `.sh` and
  * a `.ps1` carrying the same logic drift the first time somebody fixes a bug in one of them. The
  * shell's whole job is: is there a runtime, put the CLI on the machine, exec this.

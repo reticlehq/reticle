@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { openFailureNote } from './cli/answers/open-note.js';
 import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
+import { installCrashGuard } from './cli/crash-guard.js';
 import { stateDirProblem } from './daemon/state-dir.js';
 import { readDevServers } from './daemon/dev-servers.js';
 import {
@@ -787,6 +788,8 @@ function handleDaemonInner(parsed: {
 }
 
 export function main(): void {
+  // A bug of OURS arrives as one sentence and a tidy machine, never a Node stack trace.
+  installCrashGuard();
   // Before anything reads process.env — notably the telemetry gate and the bridge's security
   // options — fold in a project-local `.env`. Values already in the environment always win.
   loadDotEnv(process.cwd());

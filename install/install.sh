@@ -1,11 +1,13 @@
 #!/bin/sh
 # Reticle, in one line:
 #
-#   curl -fsSL https://px0.ai/install.sh | sh
+#   curl -fsSL https://reticle.sh/install.sh | sh
 #
-# A LAUNCHER, not the implementation — the same rule `setup/reticle.sh` states next door, and for
-# the same reason: Windows is most of Reticle's users, `sh` there means Git Bash or WSL, and a .sh
-# and a .ps1 holding the same logic drift the first time somebody fixes a bug in one of them.
+# A LAUNCHER, not the implementation. Its twin is `install.ps1`, for the stock Windows box that has
+# no `sh` at all -- and the pair is safe for one reason only: there is almost nothing here to drift.
+# Both do the same three things and hand every real decision to `reticle setup install`, which is
+# Node and exists once. The moment either launcher grows a fourth responsibility that stops being
+# true, and the logic belongs in the Node command instead.
 #
 # So this does only the three things that CANNOT be Node, because Node may not exist yet:
 #
@@ -36,7 +38,7 @@ die() {
 
 # The ONE thing this script reports on its own, and only on failure.
 #
-# A pre-Node failure has nobody to emit it — that is the whole reason for the handoff below. One
+# A pre-Node failure has nobody to emit it -- that is the whole reason for the handoff below. One
 # line on disk means that if the person fixes the cause and installs later, the CLI drains it and
 # the funnel shows a retry after a failure, which is exactly the shape worth seeing. If they never
 # install, nothing is ever sent; that hole is real and bounded to machines with no Reticle on them.
@@ -64,7 +66,7 @@ machine without asking is not something you should run, from us or from anybody.
   major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
   [ "$major" -ge "$NODE_MIN_MAJOR" ] || {
     note_failure runtime_ready node_too_old
-    die "Node $major is too old — Reticle needs $NODE_MIN_MAJOR or newer."
+    die "Node $major is too old -- Reticle needs $NODE_MIN_MAJOR or newer."
   }
 }
 
@@ -73,8 +75,8 @@ install_cli() {
     note_failure cli_installed no_npm
     die "npm was not found, and it ships with Node. Reinstall Node from nodejs.org."
   }
-  # Braced, and ASCII. `$RETICLE_PKG…` put a multibyte ellipsis directly against the variable name
-  # and `dash` swallowed the expansion whole — the line printed "Installing " and two broken bytes.
+  # Braced, and ASCII. `$RETICLE_PKG...` put a multibyte ellipsis directly against the variable name
+  # and `dash` swallowed the expansion whole -- the line printed "Installing " and two broken bytes.
   # bash was fine with it, which is exactly how a `curl | sh` bug reaches users: the author's shell
   # is not the one it runs in.
   say "Installing ${RETICLE_PKG}..."
@@ -104,7 +106,7 @@ main() {
   install_cli
   installed="$(date +%s)"
   # Everything else is Node's: writing the steps, registering the MCP server with the agents that
-  # are here, and saying what happened. Seconds, not milliseconds — `date +%s%3N` is GNU-only and
+  # are here, and saying what happened. Seconds, not milliseconds -- `date +%s%3N` is GNU-only and
   # macOS has no %N at all, and a duration silently 1000x out is worse than one that is coarse.
   exec reticle setup install \
     --runtime-secs "$((runtime_done - started))" \

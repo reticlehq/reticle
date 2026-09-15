@@ -35,12 +35,16 @@ apps/atlas             @reticlehq/atlas        — adversarial fixture: one real
 apps/large-dom-bench   @reticlehq/large-dom-bench — benchmark target: non-virtualized grid, vanilla (non-React) TS
 apps/vibe-builder-demo @reticlehq/vibe-builder-demo — product demo: AI app-builder with Reticle as the QA layer
 apps/examples          —                       — integration proof for frameworks with no smoke app (Remix, Astro)
+install/               — the one-line installers: install.sh + install.ps1, served from reticle.sh
+break/                 — adversarial harness: 26 hostile environments + whole-machine profiles (never shipped)
 docs/                  — user-facing docs (getting-started, usage, token-efficiency, local-registry)
 SKILL.md               — PUBLIC skill for users integrating Reticle into their own project (the canonical paste-URL)
 plan/                  — research/design docs only, no code (ALWAYS gitignored)
 ```
 
-This is **one git repo** at the root (pnpm + turbo monorepo). The TS library packages are strict TypeScript; `@reticlehq/babel-plugin`/`@reticlehq/next` are plain CJS tooling, `packages/tauri` is Rust and invisible to every JS gate, and everything under `apps/` is a local fixture — all excluded from the build/lint/test gates. See [`apps/README.md`](apps/README.md) for what belongs under `apps/` and why.
+**Three directories carry the three stages of getting started, and they are easy to confuse.** `install/` puts the CLI on a machine (Installation). `init/` is the package that wires Reticle into a project (First run). `server/src/command/setup/` is the runtime phase that boots the app and drives it — unrelated to the old top-level `setup/`, which is now `break/` for exactly that reason.
+
+This is **one git repo** at the root (pnpm + turbo monorepo). The TS library packages are strict TypeScript; `@reticlehq/babel-plugin`/`@reticlehq/next` are plain CJS tooling, `adapters/realm/tauri` is Rust and invisible to every JS gate, and everything under `apps/` is a local fixture — all excluded from the build/lint/test gates. See [`apps/README.md`](apps/README.md) for what belongs under `apps/` and why.
 
 ## Service boundaries (who owns what)
 
@@ -94,7 +98,7 @@ This is **one git repo** at the root (pnpm + turbo monorepo). The TS library pac
 
 **Touching `@reticlehq/openverification`, the adjudicator, `WebRealm`, or anything a verdict is derived from?** Also run **`pnpm gate:conformance`** (~3 min). It drives the published specification's own scenarios against this implementation on a real browser AND a real Electron shell, and every verdict is decided by the spec's `adjudicate` rather than by Reticle's kernel — scoring an implementation against its own rules makes every implementation conformant by construction. It gates REGRESSION, never the score: `earned` stays `none` until the fixture grows, and `--gate` fails only when a scenario that COULD be planted was driven and answered wrongly. It is deliberately not a spec inside `pnpm test:e2e`, because the battery boots the demo API with `REFLECT_MS=6000` and a conformance run folded into it would score every scenario against a deliberately-slowed backend while still printing a number. See [`docs/gates.md`](docs/gates.md).
 
-**Touching desktop — `@reticlehq/electron`, `packages/tauri`, the IPC observer, or desktop capture?** Also run `pnpm test:e2e:desktop`. It starts two real Electron main processes (plain Vite + electron-vite) and a **packaged** Tauri binary and drives them headless (~3 min, most of it the Rust build). The web battery boots three HTTP servers and no desktop runtime, so it is blind to all of this — which is how v2.3.0 shipped Electron and Tauri support with no automated coverage at all, and why a `no-visual-provider` lie on concurrent captures lived in code that no gate touched. `packages/tauri` is Rust and outside every JS gate; CI's `rust` / `rust-macos` jobs are the only thing that compiles it.
+**Touching desktop — `@reticlehq/electron`, `adapters/realm/tauri`, the IPC observer, or desktop capture?** Also run `pnpm test:e2e:desktop`. It starts two real Electron main processes (plain Vite + electron-vite) and a **packaged** Tauri binary and drives them headless (~3 min, most of it the Rust build). The web battery boots three HTTP servers and no desktop runtime, so it is blind to all of this — which is how v2.3.0 shipped Electron and Tauri support with no automated coverage at all, and why a `no-visual-provider` lie on concurrent captures lived in code that no gate touched. `adapters/realm/tauri` is Rust and outside every JS gate; CI's `rust` / `rust-macos` jobs are the only thing that compiles it.
 
 **Touching `reticle init`, `@reticlehq/vite-plugin`, `@reticlehq/next`, or anything a user runs before their first session?** Run **`pnpm gate:install`** (~15 min). Nothing else in this repo can see the install: every app in `apps/` is already instrumented, so re-running `init` over one reports "already wired" for every step and proves nothing — which is exactly how v2.3.0 shipped a Next.js install that connected **0% of the time** through three independent defects, none of which any check short of opening a browser could see.
 

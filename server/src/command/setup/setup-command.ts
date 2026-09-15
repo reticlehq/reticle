@@ -40,6 +40,21 @@ import {
 /** The capabilities file init scaffolds, in the order a project is likely to have it. */
 const CAPABILITY_FILES = ['reticle-dev.tsx', 'reticle-dev.ts', 'reticle-dev.jsx', 'reticle-dev.js'];
 
+/**
+ * The dev server a crash should take with it, if one is running right now.
+ *
+ * A `let` rather than a parameter because the crash handler is installed at the CLI entry point —
+ * a bug of ours can fire in any phase, and the first attempt at this installed the handler inside
+ * the runtime phase, where it caught nothing in either environment I tried: init had already
+ * returned. Only this phase ever owns a detached server, so only this phase fills it in.
+ */
+let activeDevServerStop: (() => void) | null = null;
+
+/** Stop the dev server setup started, if it is still running. Safe to call when there is none. */
+export function stopRunningDevServer(): void {
+  activeDevServerStop?.();
+}
+
 interface SetupCommandInput extends Omit<SetupInput, 'shape'> {
   /** Where setup was invoked, which is not the app directory in a monorepo. */
   readonly invokedAt: string;
@@ -252,6 +267,11 @@ export async function runSetupCommand(
   const releaseSignals = stopOnInterrupt(() => {
     server.stop();
   }, process);
+  // The crash handler lives at the CLI entry, because a bug of ours can fire in any phase — but
+  // only this one owns a detached dev server, so this is where it learns what to stop.
+  activeDevServerStop = () => {
+    server.stop();
+  };
   try {
     const outcome = await runSetupPhases({ ...input, shape }, effects);
     // The app stays up only when there is something worth watching.
@@ -264,6 +284,7 @@ export async function runSetupCommand(
     };
   } finally {
     releaseSignals();
+    activeDevServerStop = null;
     server.stop();
   }
 }

@@ -2,7 +2,7 @@
 /**
  * Whole MACHINES, not single faults.
  *
- *   node setup/machines.mjs [--only <name>] [--drive] [--keep]
+ *   node break/machines.mjs [--only <name>] [--drive] [--keep]
  *
  * break-matrix.mjs breaks one thing at a time, which is how you find a specific bug and not how
  * anybody's laptop actually is. A real machine is a COMBINATION: a path with a space in it, three
@@ -51,12 +51,16 @@ if (!existsSync(CLI)) {
  * The shell entry point, for the profiles that judge ITS guards rather than the install.
  *
  * `noob` shims `node` to report v16 and expects the version refusal — a guard that lives in the
- * launcher, because a Node too old to parse reticle.mjs never reaches anything inside it. Running
+ * launcher, because a Node too old to parse the CLI never reaches anything inside it. Running
  * that through `process.execPath` is not a weaker test, it is a MEANINGLESS one: execPath is an
  * absolute path, so it ignores the PATH the profile just built and finds a healthy Node every time.
  * break-matrix.mjs keeps two scenarios on the launcher for exactly this reason.
+ *
+ * It is `install/install.sh` now. It used to be the prototype's `reticle.sh`, which means this
+ * profile was judging the Node guard of a launcher nobody installs — and once that file was
+ * deleted it pointed at nothing at all.
  */
-const LAUNCHER = join(HERE, 'reticle.sh');
+const LAUNCHER = join(HERE, '..', 'install', 'install.sh');
 /** A real, small, never-instrumented app. Scaffolded once and cloned per profile. */
 const BASE = '/tmp/aha/app';
 const args = process.argv.slice(2);
@@ -165,16 +169,19 @@ const MACHINES = [
         const realNode = spawnSync('sh', ['-c', 'command -v node'], {
           encoding: 'utf8',
         }).stdout.trim();
-        // Reports v16 and fails the version probe, exactly as a real old Node does.
+        // Reports v16 to every shape of version question the launcher asks. `-p` is the one that
+        // matters: install.sh reads the major with `node -p '…split(".")[0]'`, and a shim that
+        // knew only `-v` and `-e` fell through to the REAL node, which answered 24 and sailed
+        // straight past the guard this profile exists to exercise.
         writeFileSync(
           join(bin, 'node'),
-          `#!/bin/sh\ncase "$1" in\n  -v|--version) echo v16.20.2; exit 0 ;;\n  -e) exit 1 ;;\nesac\nexec ${realNode} "$@"\n`,
+          `#!/bin/sh\ncase "$1" in\n  -v|--version) echo v16.20.2; exit 0 ;;\n  -p) echo 16; exit 0 ;;\n  -e) exit 1 ;;\nesac\nexec ${realNode} "$@"\n`,
         );
         chmodSync(join(bin, 'node'), 0o755);
         return p;
       })(),
     }),
-    expect: (out) => out.includes('Node 18'),
+    expect: (out) => out.includes('is too old'),
   },
   {
     name: 'locked-down-corp',
@@ -229,18 +236,21 @@ for (const m of selected) {
   if (!m.expect(out)) failures.push('did not do the thing this machine is about');
   // Every machine must end with something a person can act on, whether it worked or not.
   //
-  // The shape is the CLI's SetupOutcome, not the prototype's: `agentTodo` was reticle.mjs's field and
-  // does not exist in `init --json`, which answers { ok, reachedPhase, notes, fallback, ... }. A
-  // machine that could not work is a fine outcome; one that ends with no object, or an object naming
-  // nothing to do, is not — that is the failure this whole file exists to catch.
-  // Two entry points, two object shapes: the launcher's reticle.mjs answers `agentTodo`, and the
-  // CLI answers SetupOutcome { ok, reachedPhase, notes, fallback }. Requiring the CLI's shape of a
-  // launcher profile failed `noob` for having done exactly the right thing.
-  const hasOutcome = /"ok":\s*(true|false)/.test(out) || out.includes('"agentTodo"');
+  // The shape is the CLI's SetupOutcome: { ok, reachedPhase, notes, fallback, ... }. A machine that
+  // could not work is a fine outcome; one that ends with no object, or an object naming nothing to
+  // do, is not — that is the failure this whole file exists to catch.
+  //
+  // `agentTodo` used to be accepted alongside it, because there were two entry points and the
+  // prototype answered that field instead. There is one entry point now, nothing emits `agentTodo`,
+  // and leaving it here would only mean a future run could satisfy this check with a field no part
+  // of Reticle produces.
+  //
+  // A launcher profile refuses BEFORE any of this, so it is judged by `expect` and the stack-trace
+  // check above rather than by an outcome object it was never going to reach.
+  const isLauncher = true === m.launcher;
+  const hasOutcome = isLauncher || /"ok":\s*(true|false)/.test(out);
   const saysWhatNext =
-    out.includes('"ok": true') ||
-    out.includes('"agentTodo"') ||
-    /"(fallback|notes)":\s*\[\s*"/.test(out);
+    isLauncher || out.includes('"ok": true') || /"(fallback|notes)":\s*\[\s*"/.test(out);
   if (!hasOutcome || !saysWhatNext) failures.push('produced no machine-readable result at all');
   rows.push({
     name: m.name,

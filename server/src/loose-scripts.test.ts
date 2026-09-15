@@ -26,14 +26,24 @@ import { REPO_ROOT } from './machine/repo-root.js';
  * by searching for the name WITH the extension only, so both forms are checked.
  */
 
-/** Directories holding runnable files that no package's source tree covers. */
-const LOOSE_SCRIPT_DIRECTORIES = ['scripts', 'setup', 'bench', 'apps/e2e'];
+/**
+ * Directories holding runnable files that no package's source tree covers.
+ *
+ * `install` is the one a user actually runs, and it was not on this list until the launchers got
+ * their own directory — before that they lived in `setup`, which is now `break`.
+ */
+const LOOSE_SCRIPT_DIRECTORIES = ['scripts', 'install', 'break', 'bench', 'apps/e2e'];
 
 /** Loose scripts that sit at the repo root rather than in one of the directories above. */
 const ROOT_LEVEL_SCRIPTS = ['pre-commit.sh', 'prepare-commit-msg.sh'];
 
-/** Extensions that make a file runnable rather than data. */
-const RUNNABLE = /\.(mjs|sh|cmd)$/;
+/**
+ * Extensions that make a file runnable rather than data.
+ *
+ * `ps1` is here because `install.ps1` is a launcher a user pipes into a shell, and without it the
+ * one runnable file on the platform with the most users was the one this guard could not see.
+ */
+const RUNNABLE = /\.(mjs|sh|cmd|ps1)$/;
 
 /**
  * Scripts allowed to have no reference anywhere, each with the reason.

@@ -23,7 +23,7 @@ Set these as required status checks on the default branch:
 | --- | --- | --- |
 | `gate` | every job in `ci.yml`: build, tests, e2e, desktop, install, Rust, Windows, macOS, bench | a red build of any kind |
 | `package-quality` | the published packages: exports and types correctness, and the browser SDK's size budget | a package that installs but cannot be imported, or a silently growing SDK |
-| `setup-gates` | onboarding | a broken first-run experience |
+| `break-gates` | onboarding | a broken first-run experience |
 | `codeql` | security scan | a flagged vulnerability |
 | `dco` | contributions are signed off | an unsigned contribution |
 

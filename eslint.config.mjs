@@ -210,7 +210,7 @@ export default tseslint.config(
     // apps/bench-app's bug injector (1036 lines) is known debt and wants splitting by category —
     // deliberately not done in the same pass that is verifying those fixtures' behaviour.
     files: ['**/src/**/*.ts', '**/src/**/*.tsx'],
-    ignores: ['**/*.test.ts', '**/*.test.tsx', 'apps/**', 'bench/**', 'setup/**', 'test/**'],
+    ignores: ['**/*.test.ts', '**/*.test.tsx', 'apps/**', 'bench/**', 'break/**', 'test/**'],
     rules: { 'max-lines': ['error', { max: 1000, skipBlankLines: false, skipComments: false }] },
   },
   {
