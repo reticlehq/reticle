@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/engine",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "The rules that decide a verdict: read what happened in a running app and say whether the declared consequence held. No browser, no daemon, no command line - an implementation of the OpenVerification specification you can use on its own.",
   "keywords": [
     "verification",

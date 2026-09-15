@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/init",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Reticle project scaffolder \u2014 detects the framework, writes the config, patches the build and registers the MCP server. The build-time half of `reticle init`.",
   "type": "module",
   "main": "./dist/index.js",

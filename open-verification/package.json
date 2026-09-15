@@ -1,6 +1,6 @@
 {
   "name": "open-verification",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "The Open Verification Protocol: the vocabulary, the rules and the interface an implementation answers, so that \"it works\" can be checked from outside the thing claiming it.",
   "keywords": [
     "verification",
