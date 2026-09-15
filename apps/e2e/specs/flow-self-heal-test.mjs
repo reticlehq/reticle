@@ -31,9 +31,9 @@ const file=path.join(reticleRoot,'flows','ht.json');
 // corrupt the testid
 nfs.writeFileSync(file, nfs.readFileSync(file,'utf8').replaceAll('add-task','add-tassk'));
 const bytesBefore=nfs.readFileSync(file,'utf8');
-const proposeOnly=await T('reticle_verify { action: "heal" }',{flowName:'ht',apply:false});
+const proposeOnly=await T('reticle_verify',{action:'heal',flowName:'ht',apply:false});
 chk('heal(apply:false) proposes a rebind but does NOT write', /add-task/.test(JSON.stringify(proposeOnly)) && nfs.readFileSync(file,'utf8')===bytesBefore, JSON.stringify(proposeOnly).slice(0,120));
-const applied=await T('reticle_verify { action: "heal" }',{flowName:'ht',apply:true});
+const applied=await T('reticle_verify',{action:'heal',flowName:'ht',apply:true});
 chk('heal(apply:true) rewrites the anchor back to add-task', nfs.readFileSync(file,'utf8').includes('add-task') && applied.applied===true, JSON.stringify(applied).slice(0,110));
 const rep=await T('reticle_flow_replay',{flowName:'ht'});
 chk('replay is green again after self-heal', rep.status==='ok'||rep.ok!==false&&!rep.drift, JSON.stringify(rep).slice(0,90));
@@ -48,7 +48,7 @@ await T('reticle_flow_save',{flowName:'bare'});
 const bareFile=path.join(reticleRoot,'flows','bare.json');
 nfs.writeFileSync(bareFile, nfs.readFileSync(bareFile,'utf8').replaceAll('add-task','add-tassk'));
 const bareBytes=nfs.readFileSync(bareFile,'utf8');
-const refused=await T('reticle_verify { action: "heal" }',{flowName:'bare',apply:true});
+const refused=await T('reticle_verify',{action:'heal',flowName:'bare',apply:true});
 chk('REFUSES to heal a flow with no consequence, and leaves the file alone',
   refused.status==='unfalsifiable' && refused.applied===false && refused.proposals.length===1
   && nfs.readFileSync(bareFile,'utf8')===bareBytes, JSON.stringify(refused).slice(0,120));

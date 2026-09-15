@@ -39,6 +39,24 @@ const client = new McpStdioClient(
   { RETICLE_PORT: PORT, RETICLE_TELEMETRY: '0' },
 );
 
+/**
+ * The second surface, because SKILL.md now describes two.
+ *
+ * This spec was written when the default surface carried `reticle_run`, and its premise was that
+ * the cold-tail tools could only be reached through that envelope. The default is now the merged
+ * nine, which drops the dispatch hatch BY NAME -- so the envelope section below was calling a tool
+ * that no longer exists and the whole spec died on its first `viaRun`.
+ *
+ * SKILL.md was already right about this: its `reticle_run` examples sit under a heading that says
+ * "Extended surface only". So each half is now checked against the surface the skill assigns it,
+ * which is what keeps this spec measuring the instructions rather than a past release.
+ */
+const extended = new McpStdioClient(
+  'node',
+  ['server/dist/command/cli.js', 'mcp', '--port', PORT, '--drive', APP],
+  { RETICLE_PORT: PORT, RETICLE_TELEMETRY: '0', RETICLE_ADVERTISE_ALL_TOOLS: '1' },
+);
+
 /** Call through the skill's own envelope and hand back whatever came out, refusals included. */
 let SID;
 /**
@@ -59,7 +77,7 @@ let SID;
 const CALL_BUDGET_MS = 240_000;
 
 async function viaRun(tool, args) {
-  const result = await client.request(
+  const result = await extended.request(
     'tools/call',
     { name: 'reticle_run', arguments: { tool, args, ...(SID === undefined ? {} : { sessionId: SID }) } },
     CALL_BUDGET_MS,
@@ -80,9 +98,13 @@ const rejected = (answer) =>
   typeof answer?.error === 'string' &&
   /unknown tool|does not accept|unknown parameter|required/i.test(answer.error);
 
-process.on('exit', () => client.stop?.());
+process.on('exit', () => {
+  client.stop?.();
+  extended.stop?.();
+});
 
 await client.start();
+await extended.start();
 console.log('\n=== SKILL.md one-call paths, over real MCP at the DEFAULT surface ===');
 
 const advertised = await client.listTools();
@@ -95,9 +117,12 @@ chk('the default surface is the lean one, not the full list', names.size < 40, `
 // list: the skill now teaches the direct call for it. The other three are still cold-tail, and the
 // envelope is still the only way to reach them.
 for (const tool of ['reticle_flow_replay', 'reticle_record', 'reticle_flow_save']) {
-  chk(`  ${tool} is NOT advertised, so the skill must teach reticle_run`, !names.has(tool));
+  chk(`  ${tool} is NOT advertised here, so the skill must scope it to the extended surface`, !names.has(tool));
 }
-chk('reticle_run IS advertised, since everything above depends on it', names.has('reticle_run'));
+// Inverted deliberately. It used to read "reticle_run IS advertised, since everything above depends
+// on it" -- true of the old default and false the day the merged nine became it. A closed surface
+// has no dispatch hatch, and the skill has to say so rather than hand out an envelope that refuses.
+chk('reticle_run is NOT advertised: the default nine are a CLOSED surface', !names.has('reticle_run'));
 chk('reticle_verify IS advertised, so the skill teaches it directly', names.has('reticle_verify'));
 
 // A real driven session first, or every answer below is "no browser session connected" — which the
@@ -105,7 +130,7 @@ chk('reticle_verify IS advertised, so the skill teaches it directly', names.has(
 // tools actually answer. The skill's claims are about the answers.
 const [driven] = await waitForSession(
   async () => {
-    const r = await client.request('tools/call', { name: 'reticle_sessions', arguments: {} }, 30_000);
+    const r = await client.request('tools/call', { name: 'reticle_session', arguments: { action: 'list' } }, 30_000);
     const text = (r?.content ?? []).filter((c) => c.type === 'text').map((c) => c.text).join('\n');
     try {
       return JSON.parse(text)?.sessions ?? [];
@@ -177,4 +202,5 @@ console.log(
   `\n${fail === 0 ? '✅' : '❌'} SKILL ONE-CALL PATHS (${pass} passed, ${fail} failed)`,
 );
 client.stop?.();
+extended.stop?.();
 process.exit(fail === 0 ? 0 : 1);
