@@ -53,14 +53,20 @@ describe('the browser SDK knows only what it is allowed to know', () => {
     expect(reaches(BROWSER).size).toBeGreaterThan(5);
   });
 
-  it('has 21 directories, and each one was a decision', () => {
+  it('has 22 directories, and each one was a decision', () => {
     // the SDK. Twenty-one directories and one mutual pair, dom <-> registry, which is the best ratio in the repository.
     //
     // Recorded by EQUALITY, not as a floor. The check above only proves the scan read
     // something; it stays green when a directory appears, and appearing unnoticed is how a
     // grouping gets made without anybody looking at what it did to the shape of the package.
     // Adding or removing one here means writing the new number down in the same commit.
-    expect(directories(BROWSER).length).toBe(21);
+    //
+    // 21 -> 22 for `presenter/tour`, the first-run carousel. Its own directory rather than more
+    // files in `presenter/`, because it is the one part of the panel that is fetched separately:
+    // the slides, their prose and their CSS sit behind a dynamic import so a page that never shows
+    // a tour never downloads one, and a boundary a bundler honours is easier to keep when it is
+    // also a boundary on disk.
+    expect(directories(BROWSER).length).toBe(22);
   });
 
   it('has no two directories sharing a basename', () => {
