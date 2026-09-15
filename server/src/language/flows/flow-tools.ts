@@ -8,6 +8,7 @@ import {
   RecordedSaveError,
   ReplayStatus,
   type FlowReplayResult,
+  SuiteIsolation,
 } from '@reticlehq/core';
 import type { FlowFile } from '@reticlehq/core';
 import { recordSuiteFlakes } from './suite/suite-flakes.js';
@@ -584,6 +585,12 @@ export const FLOW_TOOLS: ToolDef[] = [
       failed: z.number(),
       summary: z.string(),
       failures: z.array(z.unknown()),
+      isolation: z
+        .string()
+        .optional()
+        .describe(
+          'How the flows were kept apart: "shared-session" (sequential, one live tab, state carries between flows) or "per-flow-lease" (each flow its own context). Counts from the two are NOT comparable — a sequential pass can rest on state an earlier flow left behind.',
+        ),
       flaky: z
         .array(z.string())
         .optional()
@@ -723,7 +730,11 @@ export const FLOW_TOOLS: ToolDef[] = [
         }));
         const flaky = await recordSuiteFlakes(deps.fs, deps.reticleRoot, parallelRuns);
         await persistAndSyncVerificationRun(deps, timed, projectId);
-        const verdict = buildSuiteVerdict(parallelRuns, selected.knownRoutes);
+        const verdict = buildSuiteVerdict(
+          parallelRuns,
+          selected.knownRoutes,
+          SuiteIsolation.PER_FLOW_LEASE,
+        );
         return {
           ...verdict,
           ...(flaky.length > 0 ? { flaky: [...flaky] } : {}),
@@ -760,7 +771,7 @@ export const FLOW_TOOLS: ToolDef[] = [
       const flaky = await recordSuiteFlakes(deps.fs, deps.reticleRoot, runs);
       // Emit the consolidated run artifact (Runs tab) + best-effort cloud push. Never blocks the verdict.
       await persistAndSyncVerificationRun(deps, timed, projectId);
-      const verdict = buildSuiteVerdict(runs, selected.knownRoutes);
+      const verdict = buildSuiteVerdict(runs, selected.knownRoutes, SuiteIsolation.SHARED_SESSION);
       // A flow that has both passed and failed on UNCHANGED code is a different thing from a
       // regression, and an agent that cannot tell them apart either chases a ghost or ignores a real
       // break. Present only when the ledger has seen enough runs to say so.

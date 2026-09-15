@@ -1,4 +1,4 @@
-import { REDACTED_FILL } from './fields/flow-secret-field.js';
+import { REDACTED_FILL, secretEnvKey } from './fields/flow-secret-field.js';
 import {
   DANGEROUS_ACTION_CONFIRM_ARG,
   ReticleCommand,
@@ -36,16 +36,6 @@ export function queryRefs(result: CommandResult): string[] {
   const elements = Array.isArray(payload['elements']) ? payload['elements'] : [];
   return elements.map((e) => asString(asRecord(e)['ref']) ?? '').filter((r) => r.length > 0);
 }
-
-/**
- * The environment variable that supplies one redacted field.
- *
- * Named after the field so it is guessable from the flow alone: `auth-password` is read from
- * `RETICLE_SECRET_AUTH_PASSWORD`. A scheme requiring a lookup table would mean the flow says a
- * value is missing and cannot say what to set.
- */
-const secretEnvKey = (field: string): string =>
-  `RETICLE_SECRET_${field.replace(/[^a-zA-Z0-9]+/g, '_').toUpperCase()}`;
 
 /**
  * A destructive-action confirmation is one-shot and must never persist into a recording.

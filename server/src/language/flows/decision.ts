@@ -1,5 +1,6 @@
 import {
   AnchorKind,
+  DriftReason,
   ReplayStatus,
   type FlowFile,
   type FlowReplayResult,
@@ -10,6 +11,7 @@ import {
   type SuiteVerdict,
   type SuiteContradiction,
   unreachedRoutes,
+  SuiteIsolation,
 } from '@reticlehq/core';
 import { classifyFlowAssertions, FlowAssertionGrade } from './flow-classify.js';
 import { SUCCESS_STEP_TOOL } from './flow-success.js';
@@ -107,6 +109,46 @@ export function buildDecision(
 
   if (status === ReplayStatus.DRIFT && step?.drift !== undefined) {
     const { drift } = step;
+    /*
+     * The step's anchor resolved and its action ran; what never appeared is the thing the step
+     * ASSERTED afterwards. Everything below this line is written for the other case, and applying
+     * it here produced three wrong answers from one cause — MEASURED on the bench app, where a
+     * click on `login-submit` expecting `nav-deployments` reported the file of the button, advised
+     * rebinding an anchor that had resolved, and named `login-submit` as the replacement for it,
+     * i.e. rebinding the anchor to the value it already had.
+     *
+     * `DriftReason.EXPECT_ELEMENT_NOT_FOUND` exists precisely to separate the two; only this
+     * function had not read it.
+     */
+    if (DriftReason.EXPECT_ELEMENT_NOT_FOUND === drift.reasonKind) {
+      /*
+       * `nearest` is the closest testid PRESENT when the assertion was evaluated, which for this
+       * kind of drift is a page the journey may never have reached — after a sign-in that did not
+       * happen, the survivors are the login form. It is worth proposing only when it is not the
+       * step's own anchor, and even then it is a rename of the EXPECTATION, never of the anchor.
+       */
+      const renamed =
+        drift.nearest !== null && drift.ambiguous !== true && drift.nearest !== step.anchor
+          ? `the consequence may have been renamed: update this step's expect to "${drift.nearest}"`
+          : undefined;
+      return {
+        verdict: 'drift',
+        summary: withIntent(
+          `"${name}" ran step ${step.step} (${step.anchor}) and its consequence never appeared.`,
+          intentSaid,
+        ),
+        whatChanged: drift.reason,
+        // No `whereInSource`. The anchor's source is the element that was ACTED ON, and this step's
+        // anchor is not what failed; nothing recorded a source for the expected element. A locator
+        // pointing at the wrong file costs more than no locator, which is the same reasoning that
+        // removed the `step.page` fallback above.
+        ...(renamed !== undefined ? { suggestedFix: renamed } : {}),
+        nextAction:
+          renamed !== undefined
+            ? `${renamed}, or check the handler behind the action if the consequence should still fire.`
+            : 'the action ran and the expected consequence never appeared — check the handler behind it, or whether this flow needs a state it did not start in. The locator is not the problem.',
+      };
+    }
     const fix =
       drift.nearest !== null && drift.ambiguous !== true
         ? `rebind the anchor to "${drift.nearest}" (closest survivor)`
@@ -194,6 +236,11 @@ export function unverifiableReason(
 export function buildSuiteVerdict(
   runs: ReadonlyArray<{ replay: FlowReplayResult; flow?: FlowFile }>,
   knownRoutes: readonly string[] = [],
+  /**
+   * How the flows were kept apart. Omitted by callers that have not been taught to say, and then
+   * nothing is claimed — an invented isolation would be worse than a missing one.
+   */
+  isolation?: SuiteIsolation,
 ): SuiteVerdict {
   const failures: SuiteFlowResult[] = [];
   const unverifiable: { flow: string; reason: string }[] = [];
@@ -304,13 +351,26 @@ export function buildSuiteVerdict(
           ? `all ${total} flow${1 === total ? '' : 's'} pass`
           : `${String(passed)}/${String(total)} flows verified${cannotFail}`
         : `${passed}/${total} flows pass — ${failed} need attention: ${failures.map((f) => f.flow).join(', ')}${cannotFail}`;
+  /*
+   * A shared-session pass can be inherited, so the count is not comparable with a leased one.
+   *
+   * MEASURED: the same 34 flows answered 13 sequentially and 11 under per-flow leases, both
+   * reproducible. The four that differ click a nav item behind a sign-in and never sign in — they
+   * pass only because an earlier flow in the run signed in, and would pass with sign-in entirely
+   * broken. Saying which mode produced the number is what stops the two being read as a regression.
+   */
+  const sharedState =
+    SuiteIsolation.SHARED_SESSION === isolation && total > 1
+      ? ' — these flows shared one session and ran in order, so a pass here may rest on state an earlier flow left behind; replay with `parallel` to give each its own context'
+      : '';
   return {
     status,
     total,
     passed,
     failed,
-    summary: summary + silentSteps + neverOpened + disagreed,
+    summary: summary + silentSteps + neverOpened + disagreed + sharedState,
     failures,
+    ...(isolation === undefined ? {} : { isolation }),
     ...(unverifiable.length > 0 ? { unverifiable } : {}),
     ...(coverage === undefined ? {} : { coverage }),
     ...(0 === unreached.length ? {} : { unreached }),

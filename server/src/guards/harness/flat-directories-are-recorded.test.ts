@@ -106,7 +106,11 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // the call rather than on an `action` name because `act` already owns that parameter. It is its
   // own file rather than a branch inside `merge-tools.ts` for exactly that reason — it is the one
   // merge the plan machinery cannot express, and burying it there would hide why.
-  'server/src/surface/tools': 33,
+  // 34 since `live-call-text.ts`: rewriting advice so every tool it names is one the reader was
+  // actually given. It sits HERE and not beside the briefing's `surface-vocabulary.ts` because it
+  // runs at the MCP result boundary over every payload, not only the instructions -- which is the
+  // gap that let three pieces of guidance route to a dispatch hatch the surface removes by name.
+  'server/src/surface/tools': 34,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it

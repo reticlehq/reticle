@@ -22,6 +22,7 @@ import { resultIsError } from './faults/mcp-is-error.js';
 import { consumerVerdictRefusal, reservedVerdictKeysIn } from './consumer-verdict-guard.js';
 import { buildServerInstructions } from './server-instructions.js';
 import { unadvertisedToolHelp } from '../tools/unadvertised-help.js';
+import { liveCallText } from '../tools/live-call-text.js';
 
 /** The JSON-RPC method the SDK registers its tool dispatcher under. */
 export const CALL_TOOL_METHOD = 'tools/call';
@@ -340,7 +341,13 @@ export function advertisedConfig(
   const outputSchema = lean ? undefined : withSessionEnvelope(tool.name, tool.outputSchema);
   return {
     description: withExample(
-      terse ? firstSentence(tool.description) : tool.description,
+      // Against the advertised set, for the same reason results are: `reticle_navigate`'s own
+      // description told the reader to confirm a reload with `reticle_sessions`, on the surface
+      // where that name is gone. A description is advice like any other.
+      liveCallText(
+        terse ? firstSentence(tool.description) : tool.description,
+        new Set(advertised.map((each) => each.name)),
+      ),
       tool.example,
     ),
     inputSchema: terse
@@ -590,6 +597,9 @@ export function createMcpServer(
   // reticle_flow_save's own description instructs the agent to call. `full` advertises everything
   // directly and needs no hatch.
   const advertised = advertisedTools(profile, tools);
+  // The names this surface actually hands the agent. Every piece of advice leaving this server is
+  // rewritten against it, so a static string cannot route a reader to a tool they were not given.
+  const advertisedNames = new Set(advertised.map((tool) => tool.name));
   installFriendlyArgErrors(
     server,
     new Map(
@@ -653,7 +663,7 @@ export function createMcpServer(
             };
           }
         }
-        const text = encodeResult(result, encoding);
+        const text = liveCallText(encodeResult(result, encoding), advertisedNames);
         // A tool that RETURNS `{ error, recovery }` refused just as surely as one that threw, and
         // `isError` is the field a caller branches on. Without this it was set only on the throw
         // path, so half the surface reported a refusal as a success. See mcp-is-error.
@@ -682,7 +692,10 @@ export function createMcpServer(
           content: [
             {
               type: 'text' as const,
-              text: JSON.stringify(takeVersionSkewOnto(buildErrorPayload(message))),
+              text: liveCallText(
+                JSON.stringify(takeVersionSkewOnto(buildErrorPayload(message))),
+                advertisedNames,
+              ),
             },
           ],
         };

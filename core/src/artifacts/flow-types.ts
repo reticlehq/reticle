@@ -15,6 +15,7 @@ import {
   FlowStatus,
   type HealStatus,
   type ReplayStatus,
+  type SuiteIsolation,
 } from './flow-constants.js';
 
 /**
@@ -504,6 +505,13 @@ export interface SuiteVerdict {
   summary: string;
   /** Only the failing flows, with their decision (verdict, what changed, where, next action). */
   failures: SuiteFlowResult[];
+  /**
+   * How the flows were kept apart — see `SuiteIsolation`.
+   *
+   * Absent when the caller did not say. Present, it is the difference between two counts that can
+   * be compared and two that cannot: a shared-session pass may be inherited from an earlier flow.
+   */
+  isolation?: SuiteIsolation;
   /**
    * Flows that replayed without error but assert nothing, so their green means nothing. Counted
    * apart from `passed` — a number that includes them is not a count of anything verified.

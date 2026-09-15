@@ -14,7 +14,7 @@ import {
   type HealChange,
   type HealProposal,
 } from '@reticlehq/core';
-import { asString } from '@reticlehq/core';
+import { asString, DriftReason } from '@reticlehq/core';
 import { waitForPredicate } from '@reticlehq/engine/question/predicate/predicate.js';
 import { replayFlow } from './flow-replay.js';
 import { applyHealChanges, collectProposals } from './heal.js';
@@ -30,11 +30,33 @@ const HEAL_MESSAGES = {
     "rewrote drifted testid anchors to their nearest surviving match and re-verified the flow's success consequence still fires",
   DRIFT_DRY: 'confident rebind(s) proposed — re-run with apply:true to write them to disk',
   UNHEALABLE: `drift found, but no nearest match cleared the confidence floor (HEAL_CONFIDENCE_MIN=${HEAL_CONFIDENCE_MIN}); file left untouched; add a data-testid or fix the flow by hand`,
+  /**
+   * Heal can only rebind a locator, and not every drift is one.
+   *
+   * Reported as a confidence failure until it was measured: a flow whose EXPECTATION stopped
+   * appearing exits `proposeRebindWith` at its first line, before any candidate is scored, and the
+   * old message still named the floor — so replay confidently naming a survivor and heal citing a
+   * threshold read as the two disagreeing about the same candidate. They were answering different
+   * questions.
+   */
+  NOT_A_REBIND:
+    'drift found, but none of it is a renamed locator, so there is nothing to rebind — the anchors resolved and what failed was what the steps assert afterwards. The confidence floor was never consulted. Fix the app so the consequence fires again, or update the step expectations by hand',
   HEALED_UNVERIFIED:
     "rewrote drifted testid anchors. This flow declares its consequences per STEP rather than as a flow `success`, so the rebind was not re-verified end to end — the steps will assert on the next replay, but nothing proved the healed flow still reaches its outcome. Set the flow's `success` (reticle_annotate) to have future heals re-verified before they are written.",
   CONSEQUENCE_BROKEN:
     'rebind resolves the drifted locator to a surviving element, but the healed flow no longer satisfies its success consequence — refusing to write (a heal that loses the intent would ship a green-but-dead test). Fix by hand and verify',
 } as const;
+
+/**
+ * Why heal produced no proposal: a floor it consulted, or a kind of drift it cannot rebind.
+ *
+ * Exported for its own test — the distinction is a sentence a reader ACTS on, and the wrong one
+ * sends them to lower a threshold that had no part in the refusal.
+ */
+export function unhealableMessage(reasons: readonly string[]): string {
+  const rebindable = reasons.some((reason) => DriftReason.TESTID_NOT_FOUND === reason);
+  return rebindable ? HEAL_MESSAGES.UNHEALABLE : HEAL_MESSAGES.NOT_A_REBIND;
+}
 
 function toChange(proposal: HealProposal): HealChange {
   return { step: proposal.step, from: proposal.from, to: proposal.to };
@@ -101,7 +123,9 @@ export async function healFlow(
       applied: false,
       proposals: [],
       changed: [],
-      message: HEAL_MESSAGES.UNHEALABLE,
+      message: unhealableMessage(
+        steps.flatMap((step) => (step.drift === undefined ? [] : [step.drift.reasonKind])),
+      ),
     };
   }
 

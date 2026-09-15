@@ -274,3 +274,25 @@ export type AnnotationErrorCode = (typeof AnnotationErrorCode)[keyof typeof Anno
 
 /** Leading word of the compiled-predicate confirmation ("will assert …"). */
 export const COMPILED_PREDICATE_PREFIX = 'will';
+
+/**
+ * How a suite kept its flows apart from each other.
+ *
+ * Sequential replay runs every flow in ONE live session, so each starts wherever the last one left
+ * the app. MEASURED on the bench app: four flows that click a nav item behind a sign-in, and never
+ * sign in, pass sequentially because an earlier flow signed in — and fail under per-flow leases,
+ * which is the correct answer. The same corpus reported 13/34 and 11/34 with nothing changed but
+ * this, and both numbers were reproducible.
+ *
+ * Resetting between sequential flows was tried and reverted (see flow-tools.ts): storageState
+ * restores cookies and localStorage but not sessionStorage, which leaves an app holding two thirds
+ * of an auth session. So the modes genuinely differ, and the verdict names which one it is rather
+ * than letting two incomparable numbers look like a regression.
+ */
+export const SuiteIsolation = {
+  /** Every flow replayed in the agent's live session, in order. State carries between them. */
+  SHARED_SESSION: 'shared-session',
+  /** Every flow got its own leased context, seeded once. Flows cannot affect each other. */
+  PER_FLOW_LEASE: 'per-flow-lease',
+} as const;
+export type SuiteIsolation = (typeof SuiteIsolation)[keyof typeof SuiteIsolation];

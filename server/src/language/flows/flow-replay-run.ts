@@ -28,6 +28,7 @@ import { anchorQueryArgs } from './flow-step-runners.js';
 import { queryRefs } from './replay.js';
 import { assertSuccess, dynamicTestids, successLabel, SUCCESS_STEP_TOOL } from './flow-success.js';
 import { buildDecision, unverifiableReason } from './decision.js';
+import { unsuppliedSecrets } from './fields/flow-secret-field.js';
 import { assertStepExpect, type FlowReplaySession } from './flow-replay.js';
 import { classifyFlowAssertions, flattenSteps } from './flow-classify.js';
 import { dischargeFlowIntent, flowIntentStatement, flowReplayVerdictId } from './flow-intent.js';
@@ -520,6 +521,34 @@ export async function replayNamedFlow(
    * about the state you are starting from, and a claim you have to wait for was not true when you
    * asked.
    */
+  /*
+   * A credential nobody supplied is not a regression, and must not be reported as one.
+   *
+   * This sits beside the precondition gate because it is the same mistake in a different coat: the
+   * flow cannot run from the state it was recorded in, so whatever happens next says nothing about
+   * the app. Replay used to type the literal `<redacted: supply at replay>` into the password box
+   * and report the missing dashboard further down as `drift`, pointing at a component nobody had
+   * touched. MEASURED on the bench app: supplying one variable moved the suite from 4/30 to 13/34.
+   *
+   * Checked before the preconditions, because a flow that signs in cannot satisfy anything it
+   * requires until it can sign in, and the first reason is the one worth reporting.
+   */
+  const missing = unsuppliedSecrets(replayable, process.env);
+  if (missing.length > 0) {
+    const names = missing.map((each) => each.envKey).join(', ');
+    return {
+      name: replayable.name,
+      status: ReplayStatus.OK,
+      steps: [],
+      unverifiable: {
+        reason:
+          `this flow fills a redacted field and nothing supplied it, so nothing ran and nothing ` +
+          `was proved. Set ${names} in the environment the daemon runs in, then replay. Until then ` +
+          `the value typed would be the placeholder itself, and any failure after it would be ` +
+          `about this and not about the application.`,
+      },
+    };
+  }
   const unmet = await firstUnmetPrecondition(session, replayable, replayFloor);
   if (unmet !== undefined) {
     return {
