@@ -52,7 +52,11 @@ interface NextActionFacts {
    */
   previouslyConnected?: boolean;
   /**
-   * A page reached this daemon and was REFUSED on the pairing token.
+   * A page reached this daemon and was REFUSED on the pairing token, and nothing has connected since.
+   *
+   * The second clause is load-bearing, and belongs to whoever computes this rather than to the
+   * branches that read it: a refusal the daemon merely REMEMBERS says nothing about why nothing is
+   * connected right now, and a branch that treats it as current blames the token for a closed tab.
    *
    * Positive evidence, and the only fact here that proves the app is both running and instrumented:
    * nothing dials the bridge but an SDK, so a refused hello means the wiring works and the daemon
@@ -84,7 +88,20 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
     return { action: NoSessionAction.DAEMON_SPLIT, reason: splitBrain };
   }
 
-  if (facts.everConnected) {
+  // `authRefused` is checked here and not only further down, because this branch short-circuits.
+  //
+  // Both refusal branches below were already written and already right, and neither could be
+  // reached once a session had ever connected: `everConnected` is a LIFETIME fact and won. The
+  // payload then disagreed with itself — the message said the daemon had refused a page on its
+  // token while the next action beside it said the tab had been closed and offered to reopen it,
+  // which reopens a page that will be refused again. Measured on a token rotation: `status` said
+  // "reopen the tab" while the daemon's own log said `authentication failed: wrong pairing token`.
+  //
+  // This is only correct because `authRefused` means "refused, and nothing has connected since"
+  // (`connectedSinceLastClosure` in the manager). Read as the weaker "a refusal was recorded at
+  // some point", the flip trades this bug for its mirror image and blames the token for a tab the
+  // human closed. The ordering belongs to the fact; what this branch does with it is then obvious.
+  if (facts.everConnected && true !== facts.authRefused) {
     const listening = facts.listening;
     const only = 1 === listening.length ? listening[0] : undefined;
     const bound =

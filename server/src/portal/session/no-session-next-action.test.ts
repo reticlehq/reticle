@@ -297,3 +297,35 @@ describe('nextActionFor — the app is on another daemon', () => {
     expect(next.action).toBe(NoSessionAction.START_DEV_SERVER);
   });
 });
+
+/**
+ * A refusal outranks "somebody connected once".
+ *
+ * Both refusal branches were already here and already right, and neither could be reached once any
+ * session had ever connected: `everConnected` is a LIFETIME fact and short-circuited first, while a
+ * refusal is a fact about the last hello. So the payload contradicted itself — the message said the
+ * daemon had refused a page on its token, and the next action beside it said the tab was closed and
+ * offered to reopen it. Reopening produces another refusal.
+ */
+describe('a refused page is not a closed tab', () => {
+  const refused = {
+    everConnected: true,
+    initialized: true,
+    previouslyConnected: true,
+    authRefused: true,
+    listening: [5173],
+    dev: undefined,
+  };
+
+  it('answers the token, not the tab, even after a session connected earlier', () => {
+    const next = nextActionFor(refused);
+    expect(next.reason).toMatch(/token/i);
+    expect(next.reason).not.toMatch(/tab was closed/i);
+  });
+
+  // The negative control: with no refusal recorded, reopening is still the right advice.
+  it('still says reopen when nothing was refused', () => {
+    const next = nextActionFor({ ...refused, authRefused: false });
+    expect(next.reason).toMatch(/tab was closed/i);
+  });
+});

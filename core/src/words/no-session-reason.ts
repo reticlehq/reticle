@@ -15,6 +15,11 @@
  * received would be worse than none.
  */
 export const NoSessionReason = {
+  /**
+   * A page dialled and was REFUSED on its pairing token. The only positive evidence in the set:
+   * only an SDK dials the bridge, so the app is running and instrumented and this daemon said no.
+   */
+  AUTH_REFUSED: 'auth_refused',
   /** Connected before; the session that went was a pooled lease that aged out. */
   LEASE_EXPIRED: 'lease_expired',
   /** Connected before; the tab was closed, navigated away, or hard-reloaded. */

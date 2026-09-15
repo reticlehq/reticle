@@ -92,6 +92,20 @@ export interface NoSessionFacts {
    */
   previouslyConnected?: boolean;
   /**
+   * The bridge refused the last hello on its token.
+   *
+   * The only POSITIVE evidence in this whole structure. Every other fact here is an absence being
+   * interpreted — nothing listening, no config, nobody connected — but only an SDK dials the
+   * bridge, so a refused hello proves the app is running, instrumented, and pointed at this daemon.
+   *
+   * It outranks everything, including `everConnected`. Without it the daemon answered "one WAS
+   * connected to this daemon earlier … the tab was closed, navigated away, or hard-reloaded" about
+   * a page that was being turned away on every attempt, and the reader goes looking at browsers.
+   * `noteClosure(WS_CLOSE_REASON.AUTH_FAILED)` has recorded this for a while and the NEXT ACTION
+   * already read it; the message did not.
+   */
+  authRefused?: boolean;
+  /**
    * The framework `.reticle.json` declares, when there is one.
    *
    * Used to RANK the causes rather than to print a static differential. Nuxt is the case that made
@@ -509,6 +523,24 @@ export function explainNoSession(facts: NoSessionFacts): {
     facts.directory === undefined
       ? 'the directory this daemon is running in'
       : `the directory this daemon is running in (${facts.directory})`;
+
+  // Before everything, including `everConnected`: a refusal is the only positive evidence here,
+  // and it is CURRENT. Every branch below reasons from an absence, and an absence cannot outrank
+  // a page that dialled this daemon and was turned away.
+  if (true === facts.authRefused) {
+    return reason(
+      NoSessionReason.AUTH_REFUSED,
+      'no browser session connected, and the reason is not the app: this daemon REFUSED the last ' +
+        'page that dialled it, because the pairing token it presented is not the one this daemon ' +
+        'holds. Only an SDK dials the bridge, so the wiring is correct and the app is running. The ' +
+        'token is read by the build plugin when the dev server STARTS, so the usual cause is a ' +
+        'daemon restarted (or a `~/.reticle` cleared) after the dev server was already up, and the ' +
+        'fix is to restart the dev server so it picks up the current token. If the two were started ' +
+        'from different environments — an editor spawning the MCP server globally while the dev ' +
+        'server runs from a shell — they can be reading different `~/.reticle` directories instead. ' +
+        'The page says the same thing in the browser console.',
+    );
+  }
 
   if (everConnected) {
     // A reaped lease first, because it is the one cause we have POSITIVE evidence for. Reported

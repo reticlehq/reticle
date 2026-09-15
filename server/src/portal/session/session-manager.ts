@@ -134,6 +134,10 @@ export class SessionManager {
 
   add(session: Session): Session | undefined {
     this.#everConnected = true;
+    // Ordering, not lifetime: this is what makes a remembered refusal distinguishable from a live
+    // one. Here for the same reason `#everConnected` is — `add` is the one method every path that
+    // registers a session goes through.
+    this.#connectedSinceLastClosure = true;
     this.#recordConnection?.(session.projectId);
     const previous = this.#sessions.get(session.id);
     this.#sessions.set(session.id, session);
@@ -330,11 +334,30 @@ export class SessionManager {
   noteClosure(reason: string, at: number): void {
     this.#recentClosures.push({ at, reason });
     if (this.#recentClosures.length > MAX_REMEMBERED_CLOSURES) this.#recentClosures.shift();
+    this.#connectedSinceLastClosure = false;
   }
 
   /** The most recent bridge-initiated close, if any. */
   lastClosure(): { at: number; reason: string } | undefined {
     return this.#recentClosures[this.#recentClosures.length - 1];
+  }
+
+  /**
+   * Has a session registered since the most recent bridge-initiated close?
+   *
+   * The ordering fact, and the reason it has to exist: `lastClosure` records only the closes the
+   * BRIDGE initiated, so an ordinary disconnect never reaches it. A refusal at 10:00 followed by a
+   * good session at 10:05 and a closed tab at 10:10 leaves `lastClosure` still reading
+   * `AUTH_FAILED`, and a diagnosis that trusts it blames the token for a tab the human closed.
+   *
+   * This distinguishes a refusal that is the CURRENT state of the bridge from one the daemon merely
+   * remembers. A boolean rather than a timestamp because `add` is not given a clock, and the only
+   * question anybody asks of it is "did anything get in after that?".
+   */
+  #connectedSinceLastClosure = false;
+
+  connectedSinceLastClosure(): boolean {
+    return this.#connectedSinceLastClosure;
   }
 
   /**

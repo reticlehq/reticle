@@ -287,19 +287,26 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
   timer.unref();
 
   /**
-   * Did the most recent bridge-initiated close refuse a page on its token?
+   * Is a refusal on the pairing token the CURRENT state of the bridge?
    *
-   * The bridge records it (`noteClosure(WS_CLOSE_REASON.AUTH_FAILED)`) and nothing read it as a
-   * DIAGNOSIS. It is the one fact that proves an app is running and instrumented: only an SDK dials
-   * the bridge, so a refused hello means the wiring works and this daemon would not serve it.
+   * The bridge records the refusal (`noteClosure(WS_CLOSE_REASON.AUTH_FAILED)`) and nothing read it
+   * as a DIAGNOSIS. It is the one fact that proves an app is running and instrumented: only an SDK
+   * dials the bridge, so a refused hello means the wiring works and this daemon would not serve it.
+   *
+   * Two clauses, because `lastClosure` alone answers a slightly different question than the one the
+   * diagnosis asks. It records only the closes the BRIDGE initiated, so an ordinary disconnect never
+   * reaches it: a refusal, then a good session, then a closed tab leaves it still reading
+   * `AUTH_FAILED` hours later. `connectedSinceLastClosure` is the ordering fact that tells a live
+   * refusal from a remembered one, and without it this reports a token problem for a closed tab.
    *
    * Called optionally because this watch is constructed against a structural slice of the manager,
-   * and several callers pass a double that predates `lastClosure`. A manager that cannot answer has
+   * and several callers pass a double that predates these methods. A manager that cannot answer has
    * recorded no refusal, which falls through to the behaviour that was there before -- the safe
-   * direction for a fact whose only job is to SUPPRESS an `init` suggestion.
+   * direction for a fact whose job is to SUPPRESS advice rather than to add any.
    */
   const lastCloseWasAuthFailure = (): boolean =>
-    options.sessions.lastClosure?.()?.reason === WS_CLOSE_REASON.AUTH_FAILED;
+    options.sessions.lastClosure?.()?.reason === WS_CLOSE_REASON.AUTH_FAILED &&
+    true !== options.sessions.connectedSinceLastClosure?.();
 
   const nextAction = (scope: ProjectScopeFacts): NoSessionNextAction => {
     const split = splitBrain();
@@ -345,6 +352,11 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
       // The one fact that outranks every absence below it, and the reason a fresh daemon stopped
       // claiming that an install which has demonstrably worked has never worked.
       previouslyConnected: connectedBefore(),
+      // Already read for the NEXT ACTION and, until now, not for the message — so the daemon could
+      // suppress an `init` suggestion because it knew a page had been refused, while the sentence
+      // beside it still said the tab had been closed. One fact, two answers, and only one of them
+      // was right. Read when asked, like the rest: a page can be refused at any moment.
+      authRefused: lastCloseWasAuthFailure(),
       // Ranks the causes. Read when asked, like the rest: `init` writes this file after the daemon
       // starts on an ordinary first install.
       ...(() => {

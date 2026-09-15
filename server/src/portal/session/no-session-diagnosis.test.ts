@@ -742,3 +742,51 @@ describe('a stalled install is surfaced in the diagnosis', () => {
     expect(msg).not.toMatch(/\d+ minutes.*no.+app/i);
   });
 });
+
+/**
+ * A refused hello outranks every absence, because it is the only POSITIVE evidence here.
+ *
+ * Only an SDK dials the bridge. So a connection refused on its token proves the app is running,
+ * instrumented, and pointed at this daemon — the three things every other branch is guessing at.
+ *
+ * The bridge has recorded this for a while (`noteClosure(WS_CLOSE_REASON.AUTH_FAILED)`) and the
+ * NEXT ACTION already read it. The MESSAGE did not, and that is the gap: with a stale token the
+ * daemon answered "one WAS connected to this daemon earlier … the tab was closed, navigated away,
+ * or hard-reloaded", which is wrong on every clause and sends the reader to look at browsers. The
+ * browser console had the real answer the whole time: "bridge refused the connection:
+ * authentication failed: wrong pairing token". Found by hitting it.
+ */
+describe('a page that was refused is not a page that never came', () => {
+  const refused: NoSessionFacts = {
+    everConnected: true,
+    initialized: true,
+    listening: [5173],
+    port: 4400,
+    previouslyConnected: true,
+    authRefused: true,
+  };
+
+  it('names the token, not the tab', () => {
+    const msg = diagnoseNoSession(refused);
+    expect(msg).toMatch(/token/i);
+    expect(msg).not.toMatch(/tab was closed|navigated away/i);
+  });
+
+  it('says the wiring is fine, because a refusal proves it', () => {
+    expect(diagnoseNoSession(refused)).not.toMatch(/reticle init/);
+  });
+
+  // The same refusal on a daemon that has never served anyone. Without this the message falls to
+  // "no browser has opened the app yet", which is equally wrong and equally misdirecting.
+  it('outranks a daemon that has never seen a session', () => {
+    const msg = diagnoseNoSession({ ...refused, everConnected: false, previouslyConnected: false });
+    expect(msg).toMatch(/token/i);
+    expect(msg).not.toMatch(/no browser has opened/i);
+  });
+
+  // The negative control: without the refusal, the old message is still the right one.
+  it('leaves the tab explanation alone when nothing was refused', () => {
+    const msg = diagnoseNoSession({ ...refused, authRefused: false });
+    expect(msg).not.toMatch(/token/i);
+  });
+});

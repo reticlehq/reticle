@@ -134,13 +134,38 @@ describe('the branches it must not disturb', () => {
     expect(next.action).toBe(NoSessionAction.DAEMON_SPLIT);
   });
 
-  it('still reopens for a project that connected earlier', () => {
+  it('answers the refusal even for a project that connected earlier', () => {
+    // This row asserted REOPEN_APP, recording that adding `authRefused` disturbed no other branch.
+    // That was true of the five rows around it and wrong here, because the two facts are not about
+    // the same moment: `everConnected` is the daemon's lifetime, `authRefused` is now. Reopening a
+    // page whose token this daemon will not accept produces another refusal, and the payload said
+    // so in the same breath — the prose named the token, the action beside it named the tab.
+    //
+    // Reproduced on a token rotation, where `status` advised reopening the tab indefinitely.
+    //
+    // The mirror bug the old order was protecting against is handled where it belongs: `authRefused`
+    // now means "refused, and nothing connected after it", so a remembered refusal never gets here.
+    // `session-manager` owns that, and `still reopens once something connected after the refusal`
+    // below is the control.
     const next = nextActionFor({
       everConnected: true,
       initialized: false,
       listening: LISTENING,
       dev: undefined,
       authRefused: true,
+    });
+
+    expect(next.action).not.toBe(NoSessionAction.REOPEN_APP);
+    expect(next.reason).toContain('refused on the pairing token');
+  });
+
+  it('still reopens for a project that connected earlier and was NOT refused', () => {
+    const next = nextActionFor({
+      everConnected: true,
+      initialized: false,
+      listening: LISTENING,
+      dev: undefined,
+      authRefused: false,
     });
 
     expect(next.action).toBe(NoSessionAction.REOPEN_APP);
