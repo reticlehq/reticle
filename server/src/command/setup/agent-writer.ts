@@ -16,6 +16,7 @@ import {
   type AgentPlanStep,
   type PlatformPaths,
   joinFor,
+  parentOf,
 } from './agent-configs.js';
 
 /** The filesystem, injected so the writer is testable without one. */
@@ -42,8 +43,6 @@ interface AgentWriteResult {
   readonly action: AgentAction | 'created' | 'merged';
   readonly why: string;
 }
-
-const parentOf = (path: string): string => path.slice(0, Math.max(0, path.lastIndexOf('/')));
 
 /**
  * Write what the plan says to write, and nothing else.

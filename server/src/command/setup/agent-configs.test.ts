@@ -3,6 +3,7 @@ import {
   AGENT_CLIENTS,
   AgentAction,
   AgentConfidence,
+  parentOf,
   planAgentConfigs,
   type AgentPlanStep,
 } from './agent-configs.js';
@@ -130,6 +131,67 @@ describe('a plan belongs to the platform it was asked for, not the host', () => 
       expect(rows.length).toBeGreaterThan(0);
       for (const row of rows) expect(row.file).not.toContain(wrong);
     }
+  });
+});
+
+// The other half of the same bug joinFor fixed: the planners learned to WRITE the right separator
+// and the writers never learned to READ it. `parentOf` was `slice(0, lastIndexOf('/'))`, so on a
+// win32 path — which has no '/' at all — lastIndexOf returned -1, the slice returned '' and the
+// writer called mkdir(''). A Windows install of 3.1.0 lost twelve of thirteen agent registrations
+// to `ENOENT: mkdir ''` in one run, Claude Code among them, while reporting the rest as fine.
+describe('the parent of a path is read with the separator the path actually uses', () => {
+  it('finds the directory of a win32 path, which has no forward slash in it', () => {
+    expect(parentOf('C:\\Users\\u\\AppData\\Roaming\\Code\\User\\mcp.json')).toBe(
+      'C:\\Users\\u\\AppData\\Roaming\\Code\\User',
+    );
+  });
+
+  it('finds the directory of a posix path', () => {
+    expect(parentOf('/home/u/.config/zed/settings.json')).toBe('/home/u/.config/zed');
+  });
+
+  it('never answers with the empty string, which is what mkdir cannot take', () => {
+    for (const path of ['mcp.json', 'C:\\mcp.json', '/mcp.json', 'C:\\Users\\u\\mcp.json']) {
+      expect(parentOf(path), `parentOf(${path})`).not.toBe('');
+    }
+  });
+
+  it('answers for every path the planner produces, on every platform', () => {
+    for (const [platform, home] of [
+      ['darwin', HOME],
+      ['linux', HOME],
+      ['win32', WIN_HOME],
+    ] as const) {
+      for (const row of planAgentConfigs({ home, platform, ...fs({}) })) {
+        expect(parentOf(row.file), `${platform}: ${row.file}`).not.toBe('');
+      }
+    }
+  });
+});
+
+// A YAML config is created once and never rewritten, which was right — but "exists" was standing in
+// for "somebody else wrote this". On the SECOND `reticle init`, the file Reticle itself wrote on the
+// first run came back as MANUAL, and the run closed by telling the user to go and add, by hand, the
+// exact entry sitting in that file. Every re-run after the first said it, and re-running init is the
+// documented upgrade path, so it is the run most people see.
+describe('a YAML config we already wrote is not somebody else to defer to', () => {
+  const CONTINUE = `${HOME}/.continue/config.yaml`;
+  const OURS =
+    'mcpServers:\n  - name: reticle\n    type: stdio\n    command: npx\n    args: ["@reticlehq/server", "mcp"]\n';
+
+  it('writes one when there is none', () => {
+    expect(by(plan({}), 'continue')?.action).toBe(AgentAction.CREATE_YAML);
+  });
+
+  it('reports the one it already wrote as done, not as a manual step', () => {
+    expect(by(plan({ [CONTINUE]: OURS }), 'continue')?.action).toBe(AgentAction.ALREADY);
+  });
+
+  // The negative control, and the reason the MANUAL branch exists at all: a config somebody else
+  // owns still gets left alone, comments and ordering intact.
+  it('still defers to a config that is somebody else’s', () => {
+    const theirs = '# my setup\nmcpServers:\n  - name: something-else\n    command: node\n';
+    expect(by(plan({ [CONTINUE]: theirs }), 'continue')?.action).toBe(AgentAction.MANUAL);
   });
 });
 

@@ -250,6 +250,18 @@ export const AGENT_CLIENTS: readonly AgentClient[] = [
   },
 ];
 
+/**
+ * Does this YAML already carry OUR entry?
+ *
+ * Deliberately a text match and not a YAML parse: the reason this format is never rewritten is that
+ * we will not take a dependency on round-tripping somebody's comments and ordering, and a parser
+ * here would be the first half of exactly that. Both halves are required so a file that merely
+ * mentions the word in a comment is not mistaken for a registration.
+ */
+function yamlHasReticle(text: string): boolean {
+  return text.includes(`name: ${RETICLE_KEY}`) && text.includes(SERVER_PACKAGE);
+}
+
 /** What to do for one client, decided without touching the disk. */
 export interface AgentPlanStep {
   readonly id: string;
@@ -288,6 +300,21 @@ export const joinFor = (os: keyof PlatformPaths): ((...parts: string[]) => strin
   'win32' === os ? win32.join : posix.join;
 
 /**
+ * The directory holding a path the planner already produced.
+ *
+ * This READS a separator rather than writing one, so unlike `joinFor` it takes no platform: the
+ * path in hand already carries the separator it was planned with, and the writers that call this
+ * have a plan, not an os. `win32.dirname` is the one that can answer for both, because Windows
+ * accepts either separator and the planned posix paths never contain a backslash.
+ *
+ * Both callers used to hand-roll `slice(0, Math.max(0, lastIndexOf('/')))`. On a win32 path there
+ * is no '/' to find, so that returned '' and the writer called `mkdir('')` — which is how a Windows
+ * install registered one agent out of thirteen and reported `ENOENT: mkdir ''` for the other
+ * twelve. Returning a root is the point: `dirname` never answers with the empty string.
+ */
+export const parentOf = (path: string): string => win32.dirname(path);
+
+/**
  * Decide what to do for every client. Pure: the filesystem arrives as two functions, which is what
  * makes the Windows rows testable from any machine.
  */
@@ -301,6 +328,13 @@ export function planAgentConfigs(input: AgentPlanInput): AgentPlanStep[] {
     // A NEW yaml file has nobody's formatting to destroy. An existing one does: `mcpServers` there
     // is a list of named entries, and a naive rewrite loses comments, anchors and ordering.
     if ('yaml-manual' === c.format) {
+      // "Exists" was standing in for "somebody else wrote this", and the file Reticle wrote on the
+      // first run is not somebody else. Without this the second init reported MANUAL and closed by
+      // telling the user to add by hand the entry already sitting in that file — on every re-run,
+      // which is the documented upgrade path. Read for OUR entry, not for the file.
+      if (exists(file) && yamlHasReticle(readFile(file))) {
+        return { id: c.id, name: c.name, file, action: AgentAction.ALREADY, why: 'already wired' };
+      }
       return exists(file)
         ? {
             id: c.id,

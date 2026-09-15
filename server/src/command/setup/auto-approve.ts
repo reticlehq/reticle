@@ -25,7 +25,7 @@
  * headless form, `codex exec`, does not prompt at all — which is the form the drive uses.
  */
 
-import { joinFor, type PlatformPaths } from './agent-configs.js';
+import { joinFor, parentOf, type PlatformPaths } from './agent-configs.js';
 import type { AgentWriterIo } from './agent-writer.js';
 
 const RETICLE_KEY = 'reticle';
@@ -190,7 +190,7 @@ export function grantAutoApproval(
         : ({} as Record<string, unknown>);
       const next = grant.grant(current);
       if (next === current) return { ...base, outcome: ApprovalOutcome.ALREADY };
-      io.mkdirp(file.slice(0, Math.max(0, file.lastIndexOf('/'))));
+      io.mkdirp(parentOf(file));
       io.writeFile(file, `${JSON.stringify(next, null, INDENT)}\n`);
       return { ...base, outcome: ApprovalOutcome.GRANTED };
     } catch (err) {
