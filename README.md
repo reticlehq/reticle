@@ -35,7 +35,27 @@ Where the work happens in the open: what's being built this cycle, what's up for
 
 ## Install in 30 seconds
 
-**One paste, and your agent does the rest.** `init` is the install path: one command that knows the five steps and which of them silently half-work. Your agent runs it, then keeps going until it has driven a real flow in your app and handed back a verdict — because a config file is not an install.
+Two moves, and they are different jobs. **Once per machine** you put the CLI there and register it with your coding agents. **Once per project** you wire it into an app and prove it works. If you only ever do the second, your agent does the first for you as part of it.
+
+### Once per machine
+
+```bash
+curl -fsSL https://reticle.sh/install.sh | sh
+```
+
+On a stock Windows box, in PowerShell:
+
+```powershell
+irm https://reticle.sh/install.ps1 | iex
+```
+
+It finds a usable Node, installs the CLI, registers the MCP server with every coding agent it finds, and then shows you what Reticle actually does in four steps. Nothing is asked. Nothing is written outside your agent configs and `~/.reticle`. Afterwards `reticle` is on your PATH.
+
+**Restart your agent once.** A client reads its MCP server list at startup and cannot reload it, so the `reticle_*` tools do not appear until you do. It is the single step most installs stall on.
+
+### Once per project
+
+**One paste, and your agent does the rest.** `init` wires the app: one command that knows the five steps and which of them silently half-work. Your agent runs it, then keeps going until it has driven a real flow in your app and handed back a verdict — because a config file is not an install. It also registers the MCP server if the step above never happened, so this paste works on its own.
 
 **Paste this into your coding agent — Claude Code, Cursor, Copilot, Codex, Windsurf, OpenCode, or any MCP agent:**
 
@@ -86,7 +106,7 @@ Use it whenever you change any user-facing behaviour.
 
 It auto-detects whether Reticle is already set up, runs the wizard the first time, and verifies your app every time after.
 
-**If you would rather run it yourself than paste it.** One command, every agent, every framework — it installs the kit and the build plugin, writes the config, registers the MCP server, then boots your app and proves it connected:
+**If you would rather run it yourself than paste it.** One command, every agent, every framework — it installs the kit and the build plugin, writes the config, registers the MCP server, then boots your app and proves it connected. This is the project half; if you ran the one-liner above, the CLI is already on your PATH and `reticle init` is the same command:
 
 ```bash
 RETICLE_INSTALL_SOURCE=readme npx @reticlehq/server init

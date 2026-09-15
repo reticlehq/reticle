@@ -14,6 +14,8 @@ RETICLE_INSTALL_SOURCE=skill_file npx @reticlehq/server@latest init --flow "<the
 
 It is idempotent: on a project that is already wired it reports `·` for what is already there and goes straight to proving the app still works. Run it now, then read **SETUP** below for what to pass it and what to do with what it returns.
 
+This command is the PROJECT half of an install: it wires the app in front of you and, if nobody has done it on this machine yet, registers the MCP server too. There is also a machine half, which puts the CLI on PATH and registers the agents without needing a project: `curl -fsSL https://reticle.sh/install.sh | sh`, or `irm https://reticle.sh/install.ps1 | iex` on Windows. A human may have run it already. You do not need it, and running the command above is never wrong.
+
 Everything between here and there is a rule the steps assume. Read it as you go, not before you act.
 
 ## Installed means a verdict was produced

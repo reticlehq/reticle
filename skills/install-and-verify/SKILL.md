@@ -36,6 +36,8 @@ cat .reticle.json 2>/dev/null || echo NOT_FOUND
 - `NOT_FOUND` → **SETUP** below.
 - File exists → **VERIFY** below. If `reticle_sessions` then returns an empty list, go to [references/troubleshooting.md](references/troubleshooting.md); do not restart setup.
 
+Both paths are about THIS PROJECT. Installing Reticle on the machine is a separate, once-per-machine command that puts the CLI on PATH and registers the MCP server with every agent: `curl -fsSL https://reticle.sh/install.sh | sh`, or `irm https://reticle.sh/install.ps1 | iex` on Windows. A human may have run it already. You do not need it, because `init` registers the MCP server too when nobody has, which is why SETUP works whether or not that ever happened.
+
 ## Read this before you touch SETUP
 
 **Installed means a verdict was produced. Writing config files is not installed.**
