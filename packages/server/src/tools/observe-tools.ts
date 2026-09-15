@@ -18,7 +18,9 @@ import {
   countSchema,
   cursorSchema,
   httpStatusSchema,
+  MCP_CALL_BUDGET_MS,
   timeoutMsSchema,
+  waitForTimeoutMsSchema,
   windowMsSchema,
 } from './numeric-bounds.js';
 import { buildReactionReport } from '../events/reaction.js';
@@ -260,10 +262,10 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       ),
       // Same concept, the neighbouring tool's name. See alias-args.ts.
       until: PredicateSchema.optional().describe("Alias for `predicate` (act_and_wait's name)."),
-      timeout_ms: timeoutMsSchema
+      timeout_ms: waitForTimeoutMsSchema
         .optional()
         .describe(
-          'Maximum wait in milliseconds. Default: 4000. Capped at 55000: your MCP client aborts the request before a longer wait can return, so a bound above this would be advertised and not deliverable. To outlast it, poll — several short waits, each of which returns a verdict.',
+          `Maximum wait in milliseconds. Default: 4000. Accepts higher values than reticle_assert/reticle_act_and_wait because this tool never blocks the request past the per-call limit (${String(MCP_CALL_BUDGET_MS)} ms): when the budget is reached before the predicate is seen, resume_ms carries the remaining budget and the caller re-invokes. Values above ${String(MCP_CALL_BUDGET_MS)} are therefore honoured across multiple calls without holding the transport open that long.`,
         ),
       since: cursorSchema
         .optional()
@@ -314,6 +316,12 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         .describe(
           'Where the code behind this verdict lives, as `file:line`. For an element/text assertion it is the matched element itself; for a FAILING signal/net/state assertion — which has no element to point at — it is the control last acted on, where the handler that should have fired lives. OMITTED when neither is known: this tool never borrows an unrelated location.',
         ),
+      resume_ms: z
+        .number()
+        .optional()
+        .describe(
+          `Present when the call returned before the full timeout_ms because the per-call limit (${String(MCP_CALL_BUDGET_MS)} ms) was reached and the predicate was not yet seen. Call reticle_wait_for again with the same predicate, the same since, and timeout_ms set to this value to continue waiting.`,
+        ),
     },
     handler: async (deps, args) => {
       const waitBudget = asNumber(args['timeout_ms']) ?? DEFAULT_ASSERT_TIMEOUT_MS;
@@ -332,7 +340,14 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       if (bodyRefusal !== undefined) throw new Error(bodyRefusal);
       // Honesty: explicit since wins; else default to the last act's cursor; else the whole buffer.
       const since = asNumber(args['since']) ?? session.lastAct.cursor() ?? 0;
-      const verdict = await waitForPredicate(session, predicate, waitBudget, since);
+      // Cap each call to MCP_CALL_BUDGET_MS so the wait cannot outlast the MCP client's request
+      // timeout (SDK default 60 s, some clients lower). A larger requested budget is honoured via
+      // resume_ms: the caller re-invokes with the same predicate + since and timeout_ms: resume_ms.
+      const requestedMs = asNumber(args['timeout_ms']) ?? DEFAULT_ASSERT_TIMEOUT_MS;
+      const perCallMs = Math.min(requestedMs, MCP_CALL_BUDGET_MS);
+      const verdict = await waitForPredicate(session, predicate, perCallMs, since);
+      const resumeMs =
+        !verdict.pass && requestedMs > perCallMs ? requestedMs - perCallMs : undefined;
       // match reticle_assert — wrap with control + session health (throttle matters most while blocking)
       // and the buffer envelope, so a verdict reached over an evicted window says so.
       return withControl(session, {
@@ -341,6 +356,18 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         // `lastActSourceOnFailure` — an assert used to be blamed on the previous act's file:line.
         ...annotateStarvedFailure(session, verdict),
         ...assertionSource(session, predicate, verdict),
+        ...(resumeMs !== undefined
+          ? {
+              resume_ms: resumeMs,
+              // A capped wait is undecidable, not a failure: the predicate was not observed in
+              // this window because the call was cut short to stay within the client's request
+              // timeout, not because the app produced the wrong outcome. Setting inconclusive
+              // causes decideVerified to return Verified.UNKNOWN rather than Verified.NO, so an
+              // agent that ignores resume_ms gets an honest "I could not tell" instead of a false
+              // failure verdict.
+              inconclusive: `per-call limit (${String(MCP_CALL_BUDGET_MS)} ms) reached; predicate not seen in this window — re-invoke with the same predicate, same since, and timeout_ms: resume_ms`,
+            }
+          : {}),
         ...healthEnvelope(session),
         ...bufferEnvelope(session),
       });

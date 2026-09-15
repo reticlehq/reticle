@@ -27,22 +27,23 @@ export const MAX_RESULT_COUNT = RING_BUFFER_DEFAULTS.MAX_EVENTS;
 export const MAX_TIMEOUT_MS = 120_000;
 
 /**
- * Hard cap on a wait the CALLER BLOCKS ON, which is a different ceiling from the one above.
+ * Per-call ceiling so a reticle_wait_for call cannot outlast the MCP client's request timeout.
  *
- * A blocking wait is bounded by the client's patience, not by ours. The MCP SDK's default request
- * timeout is 60s and clients configure it lower; we advertised 120s. A caller who believed the
- * advertised bound and asked for 90s got a TRANSPORT error at 60s — not a Reticle verdict, not a
- * near-miss diagnosis, nothing to act on. The wait was honoured right up to the point where the
- * only thing that could report it had gone.
+ * The MCP SDK default is 60 s; some clients are configured lower. A timeout_ms larger than this
+ * is honoured across multiple calls: the handler waits one chunk and returns resume_ms with the
+ * remaining budget, so the caller can re-invoke with the same predicate and since until the
+ * predicate is satisfied or the full budget is spent.
+ */
+export const MCP_CALL_BUDGET_MS = 50_000;
+
+/**
+ * Hard cap on a blocking wait. Tools that hold the request open for the full wait duration
+ * (reticle_assert, reticle_act_and_wait) must return a verdict before the MCP client times out.
+ * Set below the SDK default (60 s) so Reticle's answer beats the client's abort.
  *
- * So the ceiling is set below the SDK default rather than at it: the margin is what lets Reticle's
- * own "timed out, here is the near miss" answer beat the client's abort. A refused argument is a
- * bad ceiling costing one round trip; an accepted one that cannot be delivered costs the drive.
- *
- * This does not make long waits possible, and is not meant to — it makes the ADVERTISED bound one
- * that can actually be honoured. A caller that genuinely needs to outlast this polls: several short
- * waits, each of which returns a verdict. See #601 for the bounded-wait cursor that would let one
- * call do it properly.
+ * reticle_wait_for is different: it never blocks past MCP_CALL_BUDGET_MS per call, returns
+ * resume_ms when the budget is exhausted, and lets the caller re-invoke. It therefore uses its
+ * own, higher schema bound (waitForTimeoutMsSchema).
  */
 const MCP_SDK_DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
 export const MAX_BLOCKING_WAIT_MS = MCP_SDK_DEFAULT_REQUEST_TIMEOUT_MS - 5_000;
@@ -79,9 +80,18 @@ export const MAX_VIEWPORT_PX = 10_000;
 export const cursorSchema = z.number().finite().int().nonnegative();
 
 /**
- * A wait budget in ms. 0 means evaluate now (documented on assert). Negative cannot be honoured.
+ * A wait budget in ms for tools that block the caller's request (reticle_assert,
+ * reticle_act_and_wait). Bounded by MAX_BLOCKING_WAIT_MS so the server can return a verdict
+ * before the MCP client times out. 0 means evaluate now.
  */
 export const timeoutMsSchema = z.number().finite().int().nonnegative().max(MAX_BLOCKING_WAIT_MS);
+
+/**
+ * A wait budget in ms for reticle_wait_for. Unlike blocking tools, wait_for returns resume_ms
+ * when the per-call budget (MCP_CALL_BUDGET_MS) is reached and lets the caller re-invoke, so it
+ * can honour a timeout_ms up to MAX_TIMEOUT_MS without holding the request open that long.
+ */
+export const waitForTimeoutMsSchema = z.number().finite().int().nonnegative().max(MAX_TIMEOUT_MS);
 
 /**
  * A count / cap. 0 means "return none", which is a real request. Negative is not.
