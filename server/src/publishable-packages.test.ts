@@ -60,7 +60,10 @@ function hasTests(dir: string): boolean {
     .some((f) => f.includes('.test.'));
 }
 
-describe('a package that is published strips what must not ship', () => {
+// 60s because every case here walks the whole workspace: `publishable()` reads each package's
+// manifest and `hasTests` stats its tree. That is under a second on a warm mac and over the vitest
+// default on Windows, where this reddened while asserting nothing about how long it took.
+describe('a package that is published strips what must not ship', { timeout: 60_000 }, () => {
   it('finds the workspace to check', () => {
     // A guard that silently matched nothing would pass forever. This is the negative control.
     expect(publishable().length).toBeGreaterThan(8);

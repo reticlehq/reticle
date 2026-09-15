@@ -80,12 +80,18 @@ describe('the layer that decides a verdict does not ask what kind of app this is
   it('the search works at all', () => {
     // Without this, a rename of AppRuntime would empty the search and the check below would pass by
     // having nothing left to find.
+    // Asked in Node rather than through `bash -c 'grep | wc -l'`: the shell pipeline made this guard
+    // die with ENOENT on Windows, where the rest of the file was already portable. It now asks git
+    // the same question `filesThatAsk` does, so both halves of the guard read one list.
     const anywhere = execFileSync(
-      'bash',
-      ['-c', `grep -rl "AppRuntime\\." server/src | grep -v test | wc -l`],
+      'git',
+      ['ls-files', '--cached', '--others', '--exclude-standard', 'server/src'],
       { cwd: REPO_ROOT, encoding: 'utf8' },
-    ).trim();
-    expect(Number(anywhere)).toBeGreaterThan(0);
+    )
+      .split('\n')
+      .filter((file) => file.endsWith('.ts') && !file.includes('.test.'))
+      .filter((file) => readFileSync(join(REPO_ROOT, file), 'utf8').includes('AppRuntime.'));
+    expect(anywhere.length).toBeGreaterThan(0);
   });
 
   it('only the listed files ask, and every one that does is listed', () => {

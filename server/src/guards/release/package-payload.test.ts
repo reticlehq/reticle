@@ -136,7 +136,11 @@ describe('the published package does not carry the docs site assets', () => {
  * `github.com/reticlehq/reticle/blob/main/...`; existence in the staged tree is the test, not
  * counting `..`, because a link into a pruned directory escapes nothing and is just as dead.
  */
-describe('the docs inside the published package still resolve', () => {
+// 60s because this guard BUILDS the staged copy: it shells out to pack-docs.mjs, which walks and
+// copies the whole docs tree. That is comfortably under 5s on a warm mac and over it on Windows,
+// where the same spec timed out at the vitest default while asserting nothing about duration. The
+// sibling release guards declare the same bound for the same reason.
+describe('the docs inside the published package still resolve', { timeout: 60_000 }, () => {
   /** Inline links with a local target: not a URL, not an anchor, not a site-absolute path. */
   const LINK = /\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
 

@@ -71,7 +71,10 @@ describe('formatGeneratedSource', () => {
       JSON.stringify({ printWidth: 80, semi: true, singleQuote: true }),
     );
     mkdirSync(join(root, 'node_modules'));
-    symlinkSync(prettierPkg, join(root, 'node_modules', 'prettier'));
+    // 'junction' is ignored off Windows; on Windows it is the difference between a green
+    // suite and EPERM, because a directory symlink there needs Administrator or Developer
+    // Mode and a junction needs neither. Found running the gate on Windows for the first time.
+    symlinkSync(prettierPkg, join(root, 'node_modules', 'prettier'), 'junction');
     // Deliberately ugly: one long line prettier must wrap when sync format is available.
     const ugly = 'export const x = { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9 };\n';
     const formatted = formatGeneratedSource(ugly, 'src/reticle-dev.ts', root);
