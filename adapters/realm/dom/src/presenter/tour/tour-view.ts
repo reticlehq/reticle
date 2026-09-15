@@ -149,6 +149,11 @@ export const TOUR_CSS = `
   font:13px/1.55 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
 [${TOUR_ATTR}] .reticle-tour-scrim{position:absolute;inset:0;background:rgba(6,8,14,.55);
   backdrop-filter:blur(1.5px);pointer-events:auto;}
+/* Ringed slides dim through the ring's own 9999px shadow, which leaves a hole over the thing being
+   pointed at. The scrim would cover that hole -- dimming the HUD the slide is ABOUT, and washing
+   the page twice (~80% rather than 55%). Cleared, not removed: it is also what swallows clicks
+   meant for the app underneath, and a tour that lets you click through is not a tour. */
+[${TOUR_ATTR}] .reticle-tour-scrim.is-clear{background:transparent;backdrop-filter:none;}
 [${TOUR_ATTR}] .reticle-tour-card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
   width:min(430px,calc(100vw - 32px));box-sizing:border-box;pointer-events:auto;
   background:#14161d;color:#e8eaf0;border:1px solid #2b303d;border-radius:14px;padding:20px 20px 16px;
@@ -163,8 +168,9 @@ export const TOUR_CSS = `
 [${TOUR_ATTR}] .reticle-tour-body{margin:0 0 10px;color:#c9cedb;}
 [${TOUR_ATTR}] .reticle-tour-why{margin:0 0 10px;color:#8a93a6;font-size:12.5px;}
 [${TOUR_ATTR}] .reticle-tour-call{display:block;margin:0 0 12px;padding:8px 10px;border-radius:8px;
-  background:#0c0e14;border:1px solid #23283400;border-color:#232834;color:#9fb6ff;
-  font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;overflow-x:auto;white-space:pre;}
+  background:#0c0e14;border:1px solid #232834;color:#9fb6ff;
+  font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
+  white-space:pre-wrap;overflow-wrap:anywhere;}
 [${TOUR_ATTR}] .reticle-tour-prompt{margin:0 0 12px;}
 [${TOUR_ATTR}] .reticle-tour-prompt-text{width:100%;box-sizing:border-box;margin:0;
   white-space:pre-wrap;overflow-wrap:anywhere;max-height:190px;overflow-y:auto;

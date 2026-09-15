@@ -213,6 +213,60 @@ describe('driving the carousel on a real document', () => {
     expect(document.querySelector('[data-reticle-tour] .reticle-tour-ring')).toBeNull();
     handle?.destroy();
   });
+
+  /**
+   * The spotlight has to actually light something.
+   *
+   * The ring dims the page with its own `0 0 0 9999px` shadow, which leaves a HOLE where the ringed
+   * element is — that is the whole trick. The scrim is a separate full-viewport element, so it went
+   * on covering that hole: the HUD the slide points AT was dimmed by the same 55% wash as the app
+   * behind it, and the page took the wash twice over (~80%). Found in a screenshot, where the ringed
+   * slides are visibly darker than the ones with no ring and the HUD icons inside the ring are
+   * barely legible.
+   *
+   * A `jsdom` document has no layout, so the real `getBoundingClientRect` reports 0 and the ring
+   * declines. Stubbed to give the HUD a box, which is what a browser would report.
+   */
+  const withHud = (run: () => void): void => {
+    const hud = document.createElement('div');
+    hud.setAttribute('data-reticle-hud', '');
+    hud.getBoundingClientRect = () => ({ left: 10, top: 20, width: 300, height: 40 }) as DOMRect;
+    document.body.appendChild(hud);
+    try {
+      run();
+    } finally {
+      hud.remove();
+    }
+  };
+
+  it('clears the scrim on the slide that rings the HUD, so the spotlight is a real hole', () => {
+    withHud(() => {
+      const handle = mountTour(freshDeps());
+      const ringed = TOUR_STEPS.findIndex((s) => TourAnchor.HUD === s.anchor);
+      for (let i = 0; i < ringed; i += 1) click('next');
+
+      expect(document.querySelector('[data-reticle-tour] .reticle-tour-ring')).not.toBeNull();
+      const scrim = document.querySelector('[data-reticle-tour] .reticle-tour-scrim');
+      expect(scrim?.className).toContain('is-clear');
+      handle?.destroy();
+    });
+  });
+
+  // The negative control. With no ring there is no hole, so the scrim is the only thing dimming the
+  // page and it must stay opaque — clearing it unconditionally would leave the tour on a bright app.
+  it('keeps the scrim opaque on a slide that rings nothing', () => {
+    withHud(() => {
+      const handle = mountTour(freshDeps());
+      const plain = TOUR_STEPS.findIndex((s) => TourAnchor.HUD !== s.anchor);
+      expect(plain).toBeGreaterThanOrEqual(0);
+      for (let i = 0; i < plain; i += 1) click('next');
+
+      expect(document.querySelector('[data-reticle-tour] .reticle-tour-ring')).toBeNull();
+      const scrim = document.querySelector('[data-reticle-tour] .reticle-tour-scrim');
+      expect(scrim?.className ?? '').not.toContain('is-clear');
+      handle?.destroy();
+    });
+  });
 });
 
 /**
@@ -233,6 +287,29 @@ describe('the card cannot be restyled by the page it is drawn over', () => {
     'reticle-tour-call',
     'reticle-tour-prompt-text',
   ];
+
+  /**
+   * A call the card cuts in half is worse than no call.
+   *
+   * `.reticle-tour-call` was `white-space:pre` with `overflow-x:auto`, so a line wider than the card
+   * scrolled sideways behind an edge with nothing to say it could be scrolled. On the slide that
+   * matters most it rendered as `reticle_act_and_wait { ref, action: "click", until: { si` — and
+   * `until` is the exact half that makes the call a verdict rather than a click. The two short
+   * slides fit, which is why every DOM assertion and every earlier screenshot missed it.
+   *
+   * The prompt block next door already wraps; this is the same treatment.
+   */
+  it('wraps the example call instead of cutting it off at the card edge', () => {
+    const flat = TOUR_CSS.replace(/\s*\n\s*/g, '');
+    const rule = /[.]reticle-tour-call[{][^}]*[}]/.exec(flat)?.[0] ?? '';
+    expect(rule, 'no .reticle-tour-call rule found').not.toBe('');
+    expect(rule, 'a call that scrolls sideways is a call nobody reads to the end').toContain(
+      'white-space:pre-wrap',
+    );
+    expect(rule, 'long unbroken tokens still need a break opportunity').toMatch(
+      /overflow-wrap:(anywhere|break-word)/,
+    );
+  });
 
   it('sets an explicit colour on every text class, rather than inheriting one', () => {
     const missing = TEXT_CLASSES.filter((cls) => {

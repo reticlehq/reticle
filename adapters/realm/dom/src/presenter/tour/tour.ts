@@ -126,6 +126,11 @@ export function mountTour(deps: TourDeps): TourHandle | undefined {
         ring.style.width = `${String(Math.round(box.width + 12))}px`;
         ring.style.height = `${String(Math.round(box.height + 12))}px`;
         root.appendChild(ring);
+        // The ring dims the page itself and leaves a hole where the HUD is. Leaving the scrim opaque
+        // fills that hole back in, so the one element the slide is pointing at ends up dimmed like
+        // everything else — and the page takes the wash twice. Only ever set alongside a ring: with
+        // no hole to preserve, the scrim is the only thing doing the dimming.
+        root.querySelector('.reticle-tour-scrim')?.classList.add('is-clear');
       }
     }
   };
