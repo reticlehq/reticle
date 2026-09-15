@@ -23,20 +23,8 @@ import type { InitHost } from './host.js';
 import { windowsShellArg } from './register/windows-quote.js';
 
 /**
- * `shell: true` ONLY where it earns its keep.
- *
- * It exists so package-manager shims (`pnpm.cmd`, `npx.cmd`) resolve on Windows. On POSIX it buys
- * nothing and costs correctness: under a shell, arguments are re-parsed, so a path containing a
- * space — `/Users/ada/My Projects/app` — silently becomes two arguments and registration fails with
- * no error anyone can read.
- */
-function shellOpt(): { shell?: true } {
-  return NodePlatform.WINDOWS === process.platform ? { shell: true } : {};
-}
-
-/**
  * Under a shell, quote what the shell would otherwise split or interpret. Windows only, where
- * `shell: true` is required (see shellOpt). The rule itself lives in windows-quote.ts as a pure
+ * `shell: true` is required (see spawnAllowed). The rule itself lives in windows-quote.ts as a pure
  * function so it can be tested on every platform — keeping it inside this branch is why it was
  * wrong for as long as it was.
  */
@@ -50,7 +38,7 @@ function shellSafe(args: readonly string[]): string[] {
  *
  * The set is closed and tiny — the four package managers, `npx`, and the Claude CLI — because those
  * are the only things the plan can ask for. It is a named constant for the same reason every other
- * wire string here is one, and it is CHECKED because of `shellOpt`: on Windows these spawn through
+ * wire string here is one, and it is CHECKED because of the shell: on Windows these spawn through
  * a shell, and a shell turns the command name into something the shell parses rather than a file it
  * executes. Arguments are quoted by `shellSafe`; the command name was the half nothing covered.
  *
@@ -72,21 +60,51 @@ function runnable(command: string): string {
 }
 
 /**
+ * Every spawn `init` makes, in the one shape Node does not deprecate.
+ *
+ * Passing an args ARRAY together with `shell: true` is DEP0190, and on Windows — the only platform
+ * where this turns the shell on — every single `init` and `curl | sh` install printed this
+ * into the middle of its output:
+ *
+ *   [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead
+ *   to security vulnerabilities, as the arguments are not escaped, only concatenated.
+ *
+ * A security warning in the middle of an install is a bad first thing to show somebody, and on the
+ * platform with the most users it was every install. The deprecation is also RIGHT about the
+ * reason: Node does not escape, it concatenates. We already escape — `windowsShellArg` implements
+ * the `CommandLineToArgvW` rule and is tested on every platform — so the fix is to own the
+ * concatenation rather than hand Node an array it will join unsafely. Same command line, same
+ * quoting, no warning.
+ *
+ * POSIX keeps the array and no shell, where argv is passed through untouched and a path with a
+ * space cannot be re-split.
+ */
+function spawnAllowed(
+  command: string,
+  args: readonly string[],
+  options: { cwd?: string; stdio: 'inherit' | 'ignore' },
+): ReturnType<typeof spawnSync> {
+  const name = runnable(command);
+  if (NodePlatform.WINDOWS !== process.platform) {
+    return spawnSync(name, [...args], options);
+  }
+  // The name is one of RUNNABLE_COMMANDS, so it never needs quoting itself.
+  return spawnSync([name, ...shellSafe(args)].join(' '), [], { ...options, shell: true });
+}
+
+/**
  * Run one allowed CLI quietly and say whether it succeeded — the `probe` above, without an `InitIo`.
  *
  * Exported because `reticle setup mcp` needs exactly this and had reimplemented it as a bare
  * `execFileSync(command, args)`. That works everywhere except Windows, where `claude` is a `.cmd`
  * shim that cannot be spawned without a shell: the probe threw ENOENT, the installer concluded the
  * machine had no Claude Code on it, and said so. The three rules that make this correct —
- * `runnable`, `shellSafe`, `shellOpt` — already lived here and were private, which is the whole
+ * `runnable`, `shellSafe` and the shell decision — already lived here and were private, which is the whole
  * reason a second, broken copy existed.
  */
 export function probeCli(command: string, args: readonly string[]): boolean {
   try {
-    const result = spawnSync(runnable(command), shellSafe(args), {
-      stdio: 'ignore',
-      ...shellOpt(),
-    });
+    const result = spawnAllowed(command, args, { stdio: 'ignore' });
     return 0 === result.status;
   } catch {
     return false;
@@ -150,11 +168,7 @@ export function buildNodeIo(cwd: string, host: InitHost): InitIo {
     },
     exec(command, args) {
       // Inherit stdio so the install's own progress is visible to the user.
-      const result = spawnSync(runnable(command), shellSafe(args), {
-        cwd,
-        stdio: 'inherit',
-        ...shellOpt(),
-      });
+      const result = spawnAllowed(command, args, { cwd, stdio: 'inherit' });
       return 0 === result.status;
     },
     /** One access check, rather than discovering it as an EACCES stack four phases later. */
@@ -168,11 +182,7 @@ export function buildNodeIo(cwd: string, host: InitHost): InitIo {
     },
     probe(command, args) {
       // Quiet yes/no check (CLI availability, existing registration). Never throws.
-      const result = spawnSync(runnable(command), shellSafe(args), {
-        cwd,
-        stdio: 'ignore',
-        ...shellOpt(),
-      });
+      const result = spawnAllowed(command, args, { cwd, stdio: 'ignore' });
       return 0 === result.status;
     },
     print(line) {
