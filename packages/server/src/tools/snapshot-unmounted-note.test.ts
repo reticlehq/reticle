@@ -18,12 +18,16 @@ const snapshot = TOOLS.find((t) => t.name === ReticleTool.SNAPSHOT);
 const noteFor = async (
   raw: Record<string, unknown>,
   mode: SnapshotMode = SnapshotMode.FULL,
+  events?: { type: string; data?: Record<string, unknown> }[],
 ): Promise<string> => {
   const deps = {
     sessions: {
       resolve: () => ({
         id: 's1',
         command: () => Promise.resolve({ ok: true, result: raw }),
+        // Only present when a test supplies a buffer, so the sessions that cannot answer for
+        // theirs go down the same path a real one without `eventsSince` would.
+        ...(events === undefined ? {} : { eventsSince: () => events }),
       }),
     },
   } as never;
@@ -61,5 +65,74 @@ describe('an empty tree over an unmounted app', () => {
 
   it('says nothing on a status read, which never walks', async () => {
     expect(await noteFor({ tree: '', nodes: 0, domElements: 0 }, SnapshotMode.STATUS)).toBe('');
+  });
+});
+
+/**
+ * An unmounted root has two readings — "has not started" and "started and threw" — and they want
+ * opposite next moves. The count of DOM elements settles that it is unmounted and cannot settle
+ * which; the session's own error buffer usually can, and the server is already holding it (#899).
+ */
+describe('an unmounted root with uncaught errors beside it', () => {
+  const EMPTY = { tree: '', nodes: 0, domElements: 1 };
+  const crash = [
+    {
+      type: 'error.uncaught',
+      data: { message: 'Rendered more hooks than during the previous render' },
+    },
+    { type: 'error.uncaught', data: { message: 'The above error occurred in <Payables>' } },
+  ];
+
+  it('says the app CRASHED, not merely that it is unmounted', async () => {
+    const note = await noteFor(EMPTY, SnapshotMode.FULL, crash);
+    expect(note).toMatch(/CRASHED/);
+    expect(note).toContain('2 uncaught error(s)');
+  });
+
+  it('quotes the first error, so the cause arrives with the symptom', async () => {
+    const note = await noteFor(EMPTY, SnapshotMode.FULL, crash);
+    expect(note).toContain('Rendered more hooks than during the previous render');
+  });
+
+  it('does not tell the reader to load the app again — that reproduces it', async () => {
+    const note = await noteFor(EMPTY, SnapshotMode.FULL, crash);
+    expect(note).not.toMatch(/has genuinely not started yet/);
+    expect(note).toMatch(/reproduce it rather than fix it/);
+  });
+
+  it('counts console errors too, which is where a framework logs its own teardown', async () => {
+    const note = await noteFor(EMPTY, SnapshotMode.FULL, [
+      { type: 'console.error', data: { message: 'Uncaught Error: boom' } },
+    ]);
+    expect(note).toContain('1 uncaught error(s)');
+    expect(note).toContain('Uncaught Error: boom');
+  });
+
+  it('ignores events that are not errors', async () => {
+    const note = await noteFor(EMPTY, SnapshotMode.FULL, [
+      { type: 'console.log', data: { message: 'hello' } },
+      { type: 'dom.added', data: {} },
+    ]);
+    expect(note).not.toMatch(/CRASHED/);
+    expect(note).toMatch(/has genuinely not started yet/);
+  });
+
+  it('keeps the unmounted note when the session cannot answer for its buffer', async () => {
+    const note = await noteFor(EMPTY);
+    expect(note).toMatch(/unmounted/i);
+    expect(note).not.toMatch(/CRASHED/);
+  });
+
+  it('stays out of the way when the tree is not empty', async () => {
+    expect(await noteFor({ tree: 'button "Save"', nodes: 1 }, SnapshotMode.FULL, crash)).toBe('');
+  });
+
+  it('still defers to a more specific note that is already there', async () => {
+    const note = await noteFor(
+      { ...EMPTY, note: 'the leanness explanation' },
+      SnapshotMode.INTERACTIVE,
+      crash,
+    );
+    expect(note).toBe('the leanness explanation');
   });
 });
