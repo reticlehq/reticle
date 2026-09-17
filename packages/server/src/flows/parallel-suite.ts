@@ -10,7 +10,7 @@
  * aborts on the first crash tells you nothing about the other 199 flows.
  */
 
-export interface Outcome<T> {
+interface Outcome<T> {
   ok: boolean;
   value?: T;
   error?: string;

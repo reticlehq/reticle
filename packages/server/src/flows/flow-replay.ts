@@ -211,7 +211,7 @@ export function testidDrift(value: string, hint: QueryEmptyHint | undefined): Dr
  * step's locator and goes hunting for a rename, while the truth is the step ran and its
  * consequence did not hold.
  */
-export function expectElementDrift(value: string, hint: QueryEmptyHint | undefined): Drift {
+function expectElementDrift(value: string, hint: QueryEmptyHint | undefined): Drift {
   const present = hint?.presentTestids ?? [];
   const drift: Drift = {
     reasonKind: DriftReason.EXPECT_ELEMENT_NOT_FOUND,

@@ -34,14 +34,14 @@ import { ReticleTool } from '../tools/tool-names.js';
  */
 
 /** What a one-shot verdict reports back to the caller. */
-export interface AdhocVerdict {
+interface AdhocVerdict {
   /** Process exit code: 0 only when the predicate was PROVED. */
   code: number;
   /** Lines to print, in order. */
   lines: string[];
 }
 
-export interface AdhocVerdictOptions {
+interface AdhocVerdictOptions {
   port: number;
   /** Navigated to first when given; omitted to assert against wherever the session already is. */
   url?: string;

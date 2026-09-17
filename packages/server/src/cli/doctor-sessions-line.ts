@@ -46,7 +46,7 @@ function forAHuman(why: string): string {
 }
 
 /** What this reads off `/status`. Everything is optional — an older daemon may send none of it. */
-export interface SessionFacts {
+interface SessionFacts {
   sessionCount?: unknown;
   why?: unknown;
 }

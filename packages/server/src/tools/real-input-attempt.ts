@@ -107,7 +107,7 @@ const UPLOAD_MAX_BYTES = Math.floor((TRANSPORT_LIMITS.MAX_MESSAGE_BYTES / (4 / 3
  * Expand a leading `~` against the caller's home directory. Absolute and relative paths pass
  * through unchanged. `home` is injected so unit tests do not depend on the machine's real home.
  */
-export function expandUserPath(rawPath: string, home: string): string {
+function expandUserPath(rawPath: string, home: string): string {
   if ('~' === rawPath) return home;
   if (rawPath.startsWith('~/') || rawPath.startsWith('~\\')) return join(home, rawPath.slice(2));
   return rawPath;

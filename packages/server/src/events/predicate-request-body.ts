@@ -39,7 +39,7 @@ interface RequestBodyPredicate {
  * Accumulated during the single pass over events rather than recomputed after it, the way the
  * response-side trackers already are.
  */
-export interface RequestBodyState {
+interface RequestBodyState {
   /** A call matched everything else but carried no recorded request body. */
   unrecorded: boolean;
   /** The request body a clause was checked against and did not match. */

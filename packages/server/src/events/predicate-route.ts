@@ -56,7 +56,7 @@ export function routePathOf(pathname: string, hash: string): string {
  * is the NAVIGABLE value a `reticle_navigate` can be pointed at. Call sites pick; collapsing
  * them into one string is how a hash-router miss lands as "every page is `/`".
  */
-export interface RouteParts {
+interface RouteParts {
   routePath: string;
   docPath: string;
   hash: string;
