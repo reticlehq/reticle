@@ -9,7 +9,7 @@
 
 import { PackageManager, installCommandParts } from './detect.js';
 
-export interface InstallRetry {
+interface InstallRetry {
   command: string;
   args: string[];
   note: string;
