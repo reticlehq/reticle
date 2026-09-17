@@ -43,12 +43,12 @@ import type { PlanInput, Step } from './plan.js';
 export const RETICLE_REACT_KIT = '@reticlehq/react';
 /** The framework-neutral sensor, for stacks the React adapter has nothing to attach to. */
 export const RETICLE_BROWSER_SDK = '@reticlehq/browser';
-export const RETICLE_VITE_PLUGIN = '@reticlehq/vite-plugin';
-export const RETICLE_NEXT_PLUGIN = '@reticlehq/next';
+const RETICLE_VITE_PLUGIN = '@reticlehq/vite-plugin';
+const RETICLE_NEXT_PLUGIN = '@reticlehq/next';
 /** The Electron main/preload helper — what makes IPC and screenshots exist at all. */
-export const RETICLE_ELECTRON = '@reticlehq/electron';
+const RETICLE_ELECTRON = '@reticlehq/electron';
 
-export interface FrameworkAdapter {
+interface FrameworkAdapter {
   /**
    * The dev dependencies `init` installs, given the kit the UI-library check chose
    * (`@reticlehq/react` or the neutral sensor). A framework that knows its own renderer ignores the

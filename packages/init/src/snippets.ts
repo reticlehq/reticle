@@ -769,7 +769,7 @@ export const REACT_ROUTER_ENTRY_PATH = 'app/entry.client.tsx';
 const RETICLE_CONNECT_MODULE = '/@reticle-connect';
 
 /** The one line that puts Reticle in a React Router client entry. */
-export const REACT_ROUTER_CONNECT_LINE = `if (import.meta.env.DEV) void import('/@reticle-connect');`;
+const REACT_ROUTER_CONNECT_LINE = `if (import.meta.env.DEV) void import('/@reticle-connect');`;
 
 /**
  * The client entry `init` writes when React Router framework mode has none.
@@ -824,7 +824,7 @@ export function reactRouterEntryPatch(source: string): string | null {
 }
 
 /** Where a Nuxt dev-only client plugin belongs. `.client` keeps it out of SSR; Nuxt auto-registers it. */
-export const NUXT_PLUGIN_PATH = 'app/plugins/reticle.client.ts';
+const NUXT_PLUGIN_PATH = 'app/plugins/reticle.client.ts';
 
 /**
  * The plugin directory Nuxt actually scans, which is not the same on 3 and 4.
