@@ -23,13 +23,13 @@ import { EventType, type ReticleEvent } from '@reticlehq/core';
 import { asString } from '../tools/tools-helpers.js';
 
 /** What the caller is asking about. `value` narrows a path that changed more than once. */
-export interface LineageQuery {
+interface LineageQuery {
   path: string;
   value?: string;
 }
 
 /** One line of the chain, with the confidence that produced it. */
-export interface LineageLink {
+interface LineageLink {
   /** Which stream this came from. */
   kind: 'state' | 'signal' | 'net';
   /** The rendered line, already carrying its own hedge. */
@@ -40,7 +40,7 @@ export interface LineageLink {
   candidates?: string[];
 }
 
-export interface Lineage {
+interface Lineage {
   /** False when the path was never seen to change — a different answer from an empty chain. */
   found: boolean;
   chain: LineageLink[];

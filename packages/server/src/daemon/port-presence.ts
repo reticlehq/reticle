@@ -94,7 +94,7 @@ export async function probePresence(
  * these lets the sentence tell them apart when — and only when — the recorded pid for the port
  * matches the process actually holding it.
  */
-export interface PortHolder {
+interface PortHolder {
   /** The pid we recorded for this port, from the daemon pid file. `null` when there is none. */
   ourPid: number | null;
   /** The pid actually holding the port, when the caller could determine it. */

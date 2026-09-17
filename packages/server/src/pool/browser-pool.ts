@@ -97,7 +97,7 @@ export interface PooledCookie {
  * One interception rule the pool can install. Same fields as the drive-path mock rule, kept here so
  * the pool does not import Playwright.
  */
-export interface PooledMockRule {
+interface PooledMockRule {
   urlContains: string;
   method?: string;
   status?: number;

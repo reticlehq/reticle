@@ -26,7 +26,7 @@
  */
 
 /** The bridge port. NOT the dev server's, and conflating them is a documented setup failure. */
-export const DEFAULT_BRIDGE_PORT = 4400;
+const DEFAULT_BRIDGE_PORT = 4400;
 /** Per-phase budget. The drive gets its own, much larger one. */
 export const DEFAULT_PHASE_TIMEOUT_MS = 120_000;
 /** What the drive may spend before it is stopped. */

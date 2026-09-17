@@ -8,7 +8,7 @@ import {
 } from '@reticlehq/core';
 
 /** One project this machine has paired before, in the shape the no-session facts already carry. */
-export interface RegisteredProject {
+interface RegisteredProject {
   directory: string;
   projectId?: string;
 }

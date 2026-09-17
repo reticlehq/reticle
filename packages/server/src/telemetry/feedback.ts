@@ -74,7 +74,7 @@ const REDACTIONS: readonly { readonly pattern: RegExp; readonly label: string }[
   { pattern: /(?:\/Users\/|\/home\/|[A-Z]:\\Users\\)[^\s/\\:"']+/g, label: 'home-path' },
 ];
 
-export interface Redaction {
+interface Redaction {
   text: string;
   /** Which rules fired, deduped. Surfaced back to the author so a redaction is never silent. */
   removed: string[];

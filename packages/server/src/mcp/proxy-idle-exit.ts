@@ -14,7 +14,7 @@ export const PROXY_IDLE_EXIT_MS = 24 * 60 * 60_000;
 /** The local diagnostic emitted before an abandoned proxy exits. */
 export const PROXY_IDLE_EXIT_EVENT = 'reticle_mcp_proxy_idle_exit';
 
-export interface ProxyIdleExitOptions {
+interface ProxyIdleExitOptions {
   /** Called once after the client link has stayed quiet for the whole grace. */
   onExit: (idleMs: number) => void;
   /** True while a request or queued message still needs an answer. */

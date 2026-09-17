@@ -69,7 +69,7 @@ const POOL_UNAVAILABLE =
   'browser pool unavailable — the lease tools need the daemon-managed pool (start Reticle via `reticle mcp`).';
 
 /** The origin of a URL, or undefined when it does not parse. */
-export function originOf(url: string): string | undefined {
+function originOf(url: string): string | undefined {
   try {
     return new URL(url).origin;
   } catch {
@@ -344,7 +344,7 @@ interface ProbeableSession {
  * turning a lease that works into a refusal over a probe that could not run would be a worse
  * failure than the one being fixed.
  */
-export async function probeLeaseAlive(
+async function probeLeaseAlive(
   session: ProbeableSession | undefined,
   timeoutMs: number = LEASE_PROBE_TIMEOUT_MS,
 ): Promise<boolean> {
