@@ -59,7 +59,7 @@ export function resetHudDockPosition(hud: HTMLElement): void {
 }
 
 /** Return the HUD's laid-out box (rounded to whole pixels for stable clamping). */
-export function hudLayoutBox(hud: HTMLElement): {
+function hudLayoutBox(hud: HTMLElement): {
   left: number;
   top: number;
   width: number;

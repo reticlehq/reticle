@@ -15,7 +15,7 @@ const COPIED_PATH_LABEL = 'Copied';
 const WORKSPACE_FALLBACK = 'This page';
 
 /** Read the Vite-injected repo root, when present. */
-export function readWorkspaceRoot(): string | undefined {
+function readWorkspaceRoot(): string | undefined {
   const value = (globalThis as Record<string, unknown>)[RETICLE_ROOT_GLOBAL];
   return 'string' === typeof value && value.length > 0 ? value : undefined;
 }
@@ -29,13 +29,13 @@ export function workspaceFolderLabel(root: string): string {
 }
 
 /** Project id from the URL lease stamp, when present. */
-export function readProjectIdFromUrl(): string | undefined {
+function readProjectIdFromUrl(): string | undefined {
   if ('undefined' === typeof window) return undefined;
   const id = new URLSearchParams(window.location.search).get(RETICLE_URL_PARAM.PROJECT);
   return id !== null && id.length > 0 ? id : undefined;
 }
 
-export function workspaceSummary(): { folder: string; root?: string; projectId?: string } {
+function workspaceSummary(): { folder: string; root?: string; projectId?: string } {
   const root = readWorkspaceRoot();
   const projectId = readProjectIdFromUrl();
   const folder = root !== undefined ? workspaceFolderLabel(root) : WORKSPACE_FALLBACK;

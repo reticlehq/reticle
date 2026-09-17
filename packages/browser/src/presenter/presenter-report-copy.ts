@@ -30,7 +30,7 @@ export const REPORT_LINKS = {
  * Empty until somebody who owns the account fills it in, and the share URL omits the parameter
  * while it is - a guessed handle credits a stranger, and there is no way for code to know.
  */
-export const SHARE_VIA_HANDLE = '';
+const SHARE_VIA_HANDLE = '';
 
 export const REPORT_TEXT = {
   TITLE: 'Impact',

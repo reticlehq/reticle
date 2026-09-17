@@ -72,7 +72,7 @@ interface SnapshotStatus {
   overlayHidingPage?: string;
 }
 
-export interface SnapshotResult {
+interface SnapshotResult {
   tree: string;
   status: SnapshotStatus;
   nodes: number;

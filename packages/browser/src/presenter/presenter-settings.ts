@@ -37,14 +37,14 @@ export type OutputDetail = (typeof OutputDetail)[keyof typeof OutputDetail];
  * reads as a progression (working -> waiting -> done) and against a dark app, so the choice is
  * "which mood", not "which four hex values".
  */
-export const StatusThemeId = {
+const StatusThemeId = {
   SIGNAL: 'signal',
   TRAFFIC: 'traffic',
   MONO: 'mono',
   NEON: 'neon',
   EMBER: 'ember',
 } as const;
-export type StatusThemeId = (typeof StatusThemeId)[keyof typeof StatusThemeId];
+type StatusThemeId = (typeof StatusThemeId)[keyof typeof StatusThemeId];
 
 interface StatusTheme {
   id: StatusThemeId;
@@ -54,7 +54,7 @@ interface StatusTheme {
   ended: string;
 }
 
-export const STATUS_THEMES: readonly StatusTheme[] = [
+const STATUS_THEMES: readonly StatusTheme[] = [
   {
     id: StatusThemeId.SIGNAL,
     label: 'Signal',
@@ -286,7 +286,7 @@ export interface SettingsHost {
 }
 
 /** Apply persisted settings onto the overlay + dock. */
-export function applyPresenterSettings(root: HTMLElement, settings: PresenterSettings): void {
+function applyPresenterSettings(root: HTMLElement, settings: PresenterSettings): void {
   const theme = statusTheme(settings.statusThemeId);
   root.style.setProperty('--reticle-mark-accent', theme.active);
   root.style.setProperty('--reticle-accent', theme.active);
