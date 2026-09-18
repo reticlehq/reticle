@@ -38,6 +38,7 @@ import {
   isValidFlowName,
 } from '@/memory/project/dir/reticle-dir.js';
 import { describeFlowZodFailure, parseFlowFileText } from './flow-expect-grammar.js';
+import { asServerZodError } from '@/surface/schema-interop.js';
 import type { Clock } from '@/machine/clock.js';
 
 /**
@@ -387,7 +388,7 @@ export class FlowStore {
       return {
         ok: false,
         code: FlowErrorCode.PARSE_FAILED,
-        detail: describeFlowZodFailure(parsed.error),
+        detail: describeFlowZodFailure(asServerZodError(parsed.error)),
       };
     }
     const valid = await this.#linkIntent(parsed.data);

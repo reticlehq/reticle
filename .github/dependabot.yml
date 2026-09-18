@@ -14,10 +14,15 @@ updates:
           - minor
           - patch
     # The published SDK carries zod as a real dependency; treat its majors as deliberate, reviewed changes.
+    # Pinned exact at 3.22.4 (not a range) because zod 3.23.0+ ships `??`/`?.` in its own dist —
+    # the same webpack-4-parse failure issue #680 fixed in this package's own code (see
+    # legacy-syntax-guard.test.ts's zod-dist case). A minor/patch bump would silently reopen that
+    # hole through this dependency's own build, so it is blocked here rather than left to the
+    # semver-major-only ignore below, which a routine "minor-and-patch" grouped PR would sail past.
     ignore:
       - dependency-name: zod
-        update-types:
-          - version-update:semver-major
+        versions:
+          - '> 3.22.4'
       # astro 7.2 stops the Astro example connecting to the bridge; 7.0.3 works, and the SDK is not at
       # fault (the connect script runs and dials). Measured and written up in #347. Held here rather
       # than pinned in each grouped PR, because pinning inside the group makes Dependabot supersede

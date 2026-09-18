@@ -93,26 +93,23 @@ jobs:
           #     be indistinguishable from a page with no Reticle in it
           #   - desktop capture for the Electron and Tauri shells
           #
-          # MEASURED 2026-09-11: 660,466 bytes. The paragraph above used to end "the package is
-          # ~954KB after that, so this leaves ~46KB of headroom", and both halves were wrong by
-          # the time anybody read them: 2.14.0's SDK reduction took the package to 556,271 bytes
-          # and nobody came back to this comment. A reader planning a change believed they had
-          # 46KB to spend when they had 332KB.
+          # MEASURED 2026-09-11 (pre-ES2017): 660,466 bytes, and the ceiling was brought down to
+          # 700,000 on that measurement — see git history for that reasoning.
           #
-          # The ceiling was 1,000,000, which is 45% slack, and slack is how the package grew from
-          # 556,271 to 660,466 across this release without one check going red. That growth is
-          # not a defect — a new protocol package, the realm registry and desktop capture all
-          # landed — but it should have been a number somebody chose rather than one nobody saw.
-          #
-          # So the ceiling comes down to 700,000: today's measurement plus about 40KB, the same
-          # shape of margin this comment has always described, and now actually true. The rule is
-          # unchanged and is the reason the number moved down rather than up: a raise to make a
-          # red check green is what this comment exists to prevent, so if the reason is not in
-          # the diff, do not move the number.
+          # RAISED again here. The cause is in this diff: adapters/realm/browser and core now emit
+          # ES2017 so webpack 4 (react-scripts 4) can parse them — issue #680 — and below ES2022 tsc
+          # must downlevel class fields and private members from their native form into
+          # WeakMap/assign helpers. That downlevel is real, measured growth on top of the
+          # 660,466-byte baseline above, not a hypothetical one; nothing configurable avoids it
+          # (ES2018 measures the same). MEASURED with this diff's actual ES2017 build: 736,229 bytes.
+          # The ceiling is that measurement plus ~44KB, the same ~40-46KB shape of headroom this
+          # comment has always used. The rule is unchanged: a raise to make a red check green is
+          # what this comment exists to prevent, so if the reason is not in the diff, do not move
+          # the number.
           bytes=$(cd adapters/realm/browser && npm pack --dry-run --json 2>/dev/null | node -e "process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d)[0].unpackedSize))")
           echo "browser SDK unpacked: $bytes bytes"
-          if [ "$bytes" -gt 700000 ]; then
-            echo "::error::@reticlehq/browser unpacked size $bytes exceeds the 700KB budget"
+          if [ "$bytes" -gt 780000 ]; then
+            echo "::error::@reticlehq/browser unpacked size $bytes exceeds the 780KB budget"
             exit 1
           fi
 

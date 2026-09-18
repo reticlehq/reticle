@@ -8,6 +8,7 @@ import {
   type HelloMessage,
 } from '@reticlehq/core';
 import { Transport } from './transport.js';
+import { at } from '../test-support/array-at.js';
 
 class FakeWebSocket {
   static readonly OPEN = 1;
@@ -98,7 +99,9 @@ describe('Transport security', () => {
   });
 
   it('redacts and serializes arbitrary command results', async () => {
-    const value: Record<string, unknown> = { password: 'secret', count: 2n };
+    // BigInt(2), not 2n: the browser package compiles to ES2017 for webpack 4 (issue #680),
+    // and BigInt literals need ES2020. Same runtime value; tests do not ship.
+    const value: Record<string, unknown> = { password: 'secret', count: BigInt(2) };
     value['self'] = value;
     const transport = new Transport({
       url: 'ws://localhost/reticle',
@@ -117,7 +120,7 @@ describe('Transport security', () => {
     });
     await Promise.resolve();
     await Promise.resolve();
-    const response = JSON.parse(socket?.sent.at(-1) ?? '{}') as {
+    const response = JSON.parse(at(socket?.sent, -1) ?? '{}') as {
       result?: Record<string, unknown>;
     };
     expect(response.result).toEqual({
@@ -143,7 +146,7 @@ describe('Transport security', () => {
       ref: undefined,
       data: { hidden: false, focused: true, reason: 'initial' },
     });
-    const event = JSON.parse(socket?.sent.at(-1) ?? '{}') as {
+    const event = JSON.parse(at(socket?.sent, -1) ?? '{}') as {
       event?: Record<string, unknown>;
     };
     expect(event.event).not.toHaveProperty('ref');
@@ -169,6 +172,6 @@ describe('Transport security', () => {
     });
     await Promise.resolve();
     await Promise.resolve();
-    expect(() => CommandResultSchema.parse(JSON.parse(socket?.sent.at(-1) ?? '{}'))).not.toThrow();
+    expect(() => CommandResultSchema.parse(JSON.parse(at(socket?.sent, -1) ?? '{}'))).not.toThrow();
   });
 });

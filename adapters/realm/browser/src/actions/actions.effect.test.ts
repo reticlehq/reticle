@@ -157,7 +157,9 @@ describe('action effect: valueChanged', () => {
       '<select><option value="en">English</option><option value="fr">French</option></select>';
     const sel = document.querySelector('select') as HTMLSelectElement;
     await expect(executeAction(refs.refFor(sel), 'select', { value: 'English' })).rejects.toThrow(
-      /en.*fr|fr.*en/s,
+      // No /s flag: the browser package compiles to ES2017 for webpack 4 (issue #680), and the
+      // dotAll flag needs ES2018. [\s\S] matches the same newlines here.
+      /en[\s\S]*fr|fr[\s\S]*en/,
     );
   });
 

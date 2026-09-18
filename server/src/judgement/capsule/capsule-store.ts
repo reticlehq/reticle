@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { FlowStepSchema, type FlowStep } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
+import { asServerZodType } from '@/surface/schema-interop.js';
 
 /**
  * Bug capsules. When an assertion fails, the evidence that explains it is in hand exactly once —
@@ -33,7 +34,7 @@ const CapsuleSchema = z.object({
   /** What was observed instead — the first-divergence sentence. */
   observed: z.string(),
   /** Minimal steps to reproduce (prefix-trimmed). */
-  steps: z.array(FlowStepSchema),
+  steps: z.array(asServerZodType<FlowStep>(FlowStepSchema)),
 });
 export type Capsule = z.infer<typeof CapsuleSchema>;
 

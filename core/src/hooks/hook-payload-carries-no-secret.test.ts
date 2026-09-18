@@ -72,7 +72,7 @@ describe('a hook payload has nowhere to put a credential', () => {
       verified: 'yes',
       pairingToken: 'super-secret',
     });
-    expect(Object.hasOwn(parsed, 'pairingToken')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(parsed, 'pairingToken')).toBe(false);
   });
 
   it('names every event in HOOK_EVENT_NAMES, so a config can be validated against it', () => {

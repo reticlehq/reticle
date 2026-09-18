@@ -17,6 +17,7 @@ import {
   FREEZE_WATCHDOG_MS,
 } from './clock.js';
 import { captureMethod } from '@/patching/capture-method.js';
+import { at } from '@/test-support/array-at.js';
 
 type SlotMap = Record<string, (...args: unknown[]) => unknown>;
 const slots = window as unknown as SlotMap;
@@ -92,7 +93,7 @@ describe('the frozen clock is restored by a watchdog', () => {
     try {
       freezeClock();
       expect(isClockFrozen()).toBe(true);
-      const watchdog = native.armed.at(-1);
+      const watchdog = at(native.armed, -1);
       expect(watchdog?.delay).toBe(FREEZE_WATCHDOG_MS);
 
       watchdog?.cb();
@@ -112,7 +113,7 @@ describe('the frozen clock is restored by a watchdog', () => {
       advanceClock(1000);
       expect(native.armed.length).toBe(armedAfterFreeze + 1);
       expect(native.cleared).toHaveLength(1);
-      expect(native.armed.at(-1)?.delay).toBe(FREEZE_WATCHDOG_MS);
+      expect(at(native.armed, -1)?.delay).toBe(FREEZE_WATCHDOG_MS);
     } finally {
       resetClock();
       native.restore();

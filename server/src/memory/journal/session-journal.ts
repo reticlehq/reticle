@@ -13,6 +13,7 @@ import {
   journalEventsPath,
   sessionDirPath,
 } from '@/memory/project/dir/reticle-dir.js';
+import { asServerZodType } from '@/surface/schema-interop.js';
 
 /**
  * The durable per-session journal: append-only JSONL for events and actions, the ledger the ring
@@ -142,7 +143,10 @@ export class SessionJournal {
   }
 
   async readActions(): Promise<JournalAction[]> {
-    return this.#readLines(journalActionsPath(this.#root, this.#sessionId), JournalActionSchema);
+    return this.#readLines(
+      journalActionsPath(this.#root, this.#sessionId),
+      asServerZodType<JournalAction>(JournalActionSchema),
+    );
   }
 
   async #ensureDir(): Promise<void> {

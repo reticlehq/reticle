@@ -152,7 +152,18 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * `@reticlehq/core` and wants deciding rather than doing under a size guard — but it is the
  * reason this ceiling keeps climbing, and every raise borrows against it.
  */
-const MAX_FIRST_LOAD_BYTES = 239_100;
+/*
+ * 239_100 -> 258_000, for this package (and core) to compile to ES2017 instead of ES2022, so a
+ * webpack 4 app (`react-scripts` 4) can install `@reticlehq/browser` again at all (issue #680):
+ * ES2022 syntax — `??`, `?.`, `??=` — shipped verbatim in dist and broke the app's compile before a
+ * session could connect. Below ES2022, tsc must downlevel class fields and private members from
+ * their native form into `WeakMap`/`__classPrivateFieldGet`/`Set` helpers, and that downlevel is
+ * the growth: measured at 257,587 B, about 18.5 kB over the old ceiling, with nothing configurable
+ * avoiding it (ES2018 measures the same — see the SDK-wide budget in `package-quality.yml` for the
+ * unpacked-size side of the same cause). The new ceiling is the measurement plus ~400 B, the same
+ * shape of headroom this comment has always used for an unrelated ordinary change.
+ */
+const MAX_FIRST_LOAD_BYTES = 258_000;
 /*
  * Raised a fifth time, 233_300 -> 233_400, for a route to be assertable in a SAVED flow. 57 B.
  *

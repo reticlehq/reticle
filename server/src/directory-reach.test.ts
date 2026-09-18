@@ -292,7 +292,10 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'telemetry',
     'version',
   ],
-  capsule: ['dir', 'fs'],
+  // `surface` here is one file, schema-interop.ts: capsule-store.ts composes a core-built schema
+  // (`z.array(asServerZodType(FlowStepSchema))`) and needs the cross-zod-instance bridge every
+  // other composition site in this repo reaches the same way — see schema-interop.ts's own doc.
+  capsule: ['dir', 'fs', 'surface'],
   cli: [
     'answers',
     'binding',
@@ -412,6 +415,10 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'recording',
     'runs',
     'session',
+    // schema-interop.ts, for the same cross-zod-instance bridge described at `capsule` above:
+    // flows.ts and narrow-write.ts both call describeFlowZodFailure(asServerZodError(...)) on a
+    // FlowFileSchema.safeParse result, FlowFileSchema being core-built.
+    'surface',
     'tape',
     'tools',
   ],
@@ -420,7 +427,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // and sharing the shaper is what stops `scroll: true` being a different tool wearing one name.
   // One way only — `read` reaches nothing, which is the property that keeps it movable.
   input: ['args', 'pool', 'telemetry', 'tools'],
-  intent: ['dir', 'fs', 'machine', 'project', 'tools'],
+  // schema-interop.ts, for the same cross-zod-instance bridge described at `capsule` above:
+  // intent-shard.ts composes core's IntentSchema with `.extend()` and `z.array()`.
+  intent: ['dir', 'fs', 'machine', 'project', 'surface', 'tools'],
   // What a run artifact is FOR once it exists -- stored, compared, and read back as established
   // fact -- as against the rest of `runs`, which produces one. Named `artifact`, singular, and it
   // must stay singular: `core/src/artifacts` is a different package and a different node, and
@@ -439,7 +448,10 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   faults: ['telemetry'],
   // `hooks` for the same reason `tools`, `bridge` and `cloud` reach it: a verdict landing is what
   // tells a drive to publish its run, and the bus is a sink that can never reach back.
-  journal: ['on-disk', 'artifact', 'dir', 'fs', 'hooks', 'project', 'runs'],
+  // schema-interop.ts, for the same cross-zod-instance bridge described at `capsule` above:
+  // session-journal.ts composes core's JournalActionSchema/ReticleEventSchema with a generic
+  // `ZodTypeAny` parameter.
+  journal: ['on-disk', 'artifact', 'dir', 'fs', 'hooks', 'project', 'runs', 'surface'],
   license: ['config'],
   mcp: [
     'binding',
@@ -667,6 +679,10 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'resolve',
     'runs',
     'session',
+    // schema-interop.ts, one level up: lease-tools.ts composes core's SeedStorageSchema with
+    // `.optional()` in LEASE_ACQUIRE_TOOL's inputSchema, the same cross-zod-instance bridge every
+    // other composition site in this repo reaches the same way — see `capsule` above.
+    'surface',
     'tape',
     'telemetry',
     'update',

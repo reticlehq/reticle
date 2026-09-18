@@ -42,6 +42,7 @@ import {
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
 import { asString } from '@reticlehq/core';
+import { asServerZodType } from '@/surface/schema-interop.js';
 import { chromiumHint } from '@/command/cli/doctor/browser/chromium-hint.js';
 
 /**
@@ -483,9 +484,11 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       .string()
       .optional()
       .describe('Stable project id to stamp on the leased tab so the agent can scope to it.'),
-    seedStorage: SeedStorageSchema.optional().describe(
-      'Initial storage state (localStorage, sessionStorage, cookies) to seed before the first navigation (e.g. to start already authenticated).',
-    ),
+    seedStorage: asServerZodType<SeedStorage>(SeedStorageSchema)
+      .optional()
+      .describe(
+        'Initial storage state (localStorage, sessionStorage, cookies) to seed before the first navigation (e.g. to start already authenticated).',
+      ),
   },
   outputSchema: {
     sessionId: z.string(),

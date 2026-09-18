@@ -2,6 +2,7 @@ import { FlowErrorCode, FlowFileSchema, type FlowFile } from '@reticlehq/core';
 import { describeFlowZodFailure } from './flow-expect-grammar.js';
 import { isValidFlowName } from '@/memory/project/dir/reticle-dir.js';
 import { safeProjectId, type FlowResult } from './flow-result.js';
+import { asServerZodError } from '@/surface/schema-interop.js';
 
 /**
  * Change one thing about a saved flow, and write the same file that load resolved.
@@ -48,7 +49,7 @@ export async function changeInPlace<T>(
     return {
       ok: false,
       code: FlowErrorCode.PARSE_FAILED,
-      detail: describeFlowZodFailure(parsed.error),
+      detail: describeFlowZodFailure(asServerZodError(parsed.error)),
     };
   }
   await port.write(path, port.serialize(parsed.data));

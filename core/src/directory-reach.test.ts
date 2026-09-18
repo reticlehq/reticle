@@ -67,7 +67,11 @@ describe('the contract knows only what it is allowed to know', () => {
     // something; it stays green when a directory appears, and appearing unnoticed is how a
     // grouping gets made without anybody looking at what it did to the shape of the package.
     // Adding or removing one here means writing the new number down in the same commit.
-    expect(directories(CORE).length).toBe(9);
+    //
+    // 9 -> 10 for `test-support`, holding the `at()` replacement for `Array.prototype.at`
+    // (ES2022, removed from this package's ES2017 `lib` — see legacy-syntax-guard.test.ts in
+    // adapters/realm/browser, which enforces the same target here).
+    expect(directories(CORE).length).toBe(10);
   });
 
   it('has no two directories sharing a basename', () => {

@@ -10,6 +10,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { EventType } from '@reticlehq/core';
 import { installStorage } from './storage.js';
+import { at } from '@/test-support/array-at.js';
 
 describe('a storage write that changes nothing emits nothing', () => {
   let events: Array<{ type: EventType; data: Record<string, unknown> }>;
@@ -43,7 +44,7 @@ describe('a storage write that changes nothing emits nothing', () => {
     localStorage.setItem('ui', 'a');
     localStorage.setItem('ui', 'b');
     expect(changes()).toBe(2);
-    expect(events.at(-1)?.data).toMatchObject({ key: 'ui', old: 'a', new: 'b' });
+    expect(at(events, -1)?.data).toMatchObject({ key: 'ui', old: 'a', new: 'b' });
   });
 
   it('emits the first write of a key that was absent', () => {

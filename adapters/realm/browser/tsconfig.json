@@ -1,6 +1,7 @@
 {
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
+    "target": "ES2017",
     "outDir": "./dist",
     "rootDir": "./src",
     "baseUrl": ".",
@@ -10,7 +11,12 @@
     // .d.ts, about 43% of the package, none of it useful to a consumer. Stripping them is the
     // "take the waste out first" step the size budget in ci.yml demands before the number moves.
     "removeComments": true,
-    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+    // ES2017, plus one narrow, documented exception: WeakRef (ES2021) has no downlevel-able
+    // equivalent, so it is allowed back in via the narrower ES2021.WeakRef lib fragment rather
+    // than reopening the whole ES2023 surface. lib matches target (see #680 / issue tracked in
+    // legacy-syntax-guard.test.ts) so the compiler itself catches a newer runtime API (e.g.
+    // Array.prototype.at, Object.hasOwn) shipping verbatim in dist for a pre-ES2022 browser.
+    "lib": ["ES2017", "ES2021.WeakRef", "DOM", "DOM.Iterable"]
   },
   "include": ["src/**/*"],
   "references": [{ "path": "../../../core" }]

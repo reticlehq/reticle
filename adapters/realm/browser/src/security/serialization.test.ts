@@ -81,7 +81,9 @@ describe('transport serialization', () => {
   });
 
   it('handles BigInt and cycles without throwing', () => {
-    const value: Record<string, unknown> = { count: 2n };
+    // BigInt(2), not 2n: the browser package compiles to ES2017 for webpack 4 (issue #680),
+    // and BigInt literals need ES2020. Same runtime value; tests do not ship.
+    const value: Record<string, unknown> = { count: BigInt(2) };
     value['self'] = value;
     expect(() => safeStringify(value)).not.toThrow();
     expect(JSON.parse(safeStringify(value))).toEqual({

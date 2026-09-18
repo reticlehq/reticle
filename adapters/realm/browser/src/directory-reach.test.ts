@@ -66,7 +66,12 @@ describe('the browser SDK knows only what it is allowed to know', () => {
     // the slides, their prose and their CSS sit behind a dynamic import so a page that never shows
     // a tour never downloads one, and a boundary a bundler honours is easier to keep when it is
     // also a boundary on disk.
-    expect(directories(BROWSER).length).toBe(22);
+    //
+    // 22 -> 23 for `test-support`, holding the `at()` replacement for `Array.prototype.at`
+    // (ES2022, removed from this package's ES2017 `lib` — see legacy-syntax-guard.test.ts). Test
+    // files across observers/transport/recorder/actions/presenter/timers share it, so it earns a
+    // directory of its own rather than living inside any one of theirs.
+    expect(directories(BROWSER).length).toBe(23);
   });
 
   it('has no two directories sharing a basename', () => {

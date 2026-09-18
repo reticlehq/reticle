@@ -21,6 +21,7 @@
 
 import { z } from 'zod';
 import { EVENT_PAYLOAD_SCHEMAS, EventType, type ReticleEvent } from '@reticlehq/core';
+import { asServerZodType } from '@/schema-interop.js';
 
 /** A value that satisfies a schema while carrying as little as the contract allows. */
 function barestValue(schema: z.ZodTypeAny): unknown {
@@ -95,7 +96,7 @@ export function barestEvents(): ReticleEvent[] {
     return {
       type,
       t: index + 1,
-      data: barestValue(payload) ?? {},
+      data: barestValue(asServerZodType(payload)) ?? {},
     } as unknown as ReticleEvent;
   });
 }

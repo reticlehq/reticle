@@ -5,6 +5,7 @@ import {
   OnboardingStepSchema,
   OnboardingStepStatus,
 } from './telemetry.js';
+import { at } from './test-support/array-at.js';
 
 /**
  * The funnel has to be answerable as ONE question: where do people stop.
@@ -25,10 +26,10 @@ describe('the onboarding funnel is one ordered vocabulary', () => {
 
   it('ends at a VERDICT, because everything before it proved nothing', () => {
     const firstRun = OnboardingSteps[OnboardingPhase.FIRST_RUN];
-    expect(firstRun.at(-1)).toBe('verdict_produced');
+    expect(at(firstRun, -1)).toBe('verdict_produced');
     // And the tour ends at one too: a tour that ends at "you can see the page" teaches the least
     // valuable half, and an agent that learns only to look will report that it looked.
-    expect(OnboardingSteps[OnboardingPhase.ONBOARD].at(-1)).toBe('first_verdict');
+    expect(at(OnboardingSteps[OnboardingPhase.ONBOARD], -1)).toBe('first_verdict');
   });
 
   it('names app_connected separately from instrumented, which is the whole point', () => {

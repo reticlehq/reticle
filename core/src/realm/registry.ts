@@ -145,7 +145,7 @@ export const REALMS: Record<AppRuntime, RealmTraits> = {
  * and the compiler would stop catching a runtime this package does not know.
  */
 export function isKnownRealm(runtime: string | undefined): runtime is AppRuntime {
-  return runtime !== undefined && Object.hasOwn(REALMS, runtime);
+  return runtime !== undefined && Object.prototype.hasOwnProperty.call(REALMS, runtime);
 }
 
 /**
@@ -200,7 +200,7 @@ export function registerRealm(runtime: string, traits: RealmTraits): void {
         'package might later ship from colliding with yours, and tells a reader whose realm it is.',
     );
   }
-  if (Object.hasOwn(REALMS, runtime)) {
+  if (Object.prototype.hasOwnProperty.call(REALMS, runtime)) {
     throw new Error(`realm "${runtime}" is built in and cannot be redefined`);
   }
   REGISTERED.set(runtime, traits);
@@ -218,7 +218,7 @@ export function resetRegisteredRealms(): void {
 
 export function realmOf(runtime: string | undefined): RealmTraits {
   const name = runtime ?? '';
-  if (Object.hasOwn(REALMS, name)) return REALMS[name as AppRuntime];
+  if (Object.prototype.hasOwnProperty.call(REALMS, name)) return REALMS[name as AppRuntime];
   return REGISTERED.get(name) ?? REALMS[AppRuntime.WEB];
 }
 

@@ -17,7 +17,12 @@ import { scanPackage } from '../../scripts/orphan-scan.mjs';
 const PACKAGE_DIR = join(__dirname, '..');
 
 /** Modules with no production importer, each with the reason it is allowed to stay. */
-const DECLARED_UNWIRED: Record<string, string> = {};
+const DECLARED_UNWIRED: Record<string, string> = {
+  'test-support/array-at.ts':
+    "Test-only `Array.prototype.at` replacement (ES2022 API removed from this package's ES2017 " +
+    'lib) shared by specs across this package. Production code indexes arrays directly and has ' +
+    'no reason to import it.',
+};
 
 describe('no undeclared orphan modules', () => {
   const { orphans, stale } = scanPackage(PACKAGE_DIR, DECLARED_UNWIRED);

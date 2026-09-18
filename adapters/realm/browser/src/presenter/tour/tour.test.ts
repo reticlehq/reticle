@@ -23,6 +23,7 @@ import {
   TOUR_CSS,
 } from './tour-view.js';
 import { mountTour, tourAlreadySeen, tourSeenKey, type TourStorage } from './tour.js';
+import { at } from '@/test-support/array-at.js';
 
 /**
  * Where a slide with this anchor SITS, which is not where its step sits.
@@ -79,9 +80,9 @@ describe('the tour is the same tour the CLI prints', () => {
   });
 
   it('ends at a verdict, then hands over — looking is not verifying', () => {
-    const last = TOUR_STEPS.at(-1);
+    const last = at(TOUR_STEPS, -1);
     expect(last?.id).toBe('verdict');
-    expect(tourSlides().at(-1)?.prompts).toEqual(TOUR_HANDOFF_PROMPTS);
+    expect(at(tourSlides(), -1)?.prompts).toEqual(TOUR_HANDOFF_PROMPTS);
   });
 
   // The handoff is generated here rather than kept in TOUR_STEPS, so the CLI does not print a
@@ -107,7 +108,7 @@ describe('the carousel cannot walk off either end', () => {
 
 describe('what a slide puts on the page', () => {
   it('offers Done rather than Next on the last slide', () => {
-    const last = tourSlides().at(-1);
+    const last = at(tourSlides(), -1);
     expect(last).toBeDefined();
     const html = slideHtml(last as NonNullable<typeof last>);
     expect(html).toContain('"done"');
@@ -115,7 +116,7 @@ describe('what a slide puts on the page', () => {
   });
 
   it('carries every prompt, each with its own way to copy it', () => {
-    const last = tourSlides().at(-1);
+    const last = at(tourSlides(), -1);
     const html = slideHtml(last as NonNullable<typeof last>);
     for (const prompt of TOUR_HANDOFF_PROMPTS) {
       expect(html).toContain(escapeHtml(prompt.text));

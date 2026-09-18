@@ -25,7 +25,12 @@ const PACKAGE_DIR = join(__dirname, '..');
  * `directory-reach.mjs`, so the file is excluded structurally and the exception has nothing left to
  * excuse. A declared exception that compensates for a scanner's blind spot hides the blind spot.
  */
-const DECLARED_UNWIRED: Record<string, string> = {};
+const DECLARED_UNWIRED: Record<string, string> = {
+  'test-support/array-at.ts':
+    "Test-only `Array.prototype.at` replacement (ES2022 API removed from this package's ES2017 " +
+    'lib) shared by specs across observers/transport/recorder/actions. Production code indexes ' +
+    'arrays directly and has no reason to import it.',
+};
 
 describe('no undeclared orphan modules', () => {
   const { orphans, stale } = scanPackage(PACKAGE_DIR, DECLARED_UNWIRED);
