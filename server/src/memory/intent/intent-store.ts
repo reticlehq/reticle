@@ -4,7 +4,7 @@ import {
   dischargeIntent,
   emptyIntentFile,
   openIntents,
-  parseIntentFile,
+  IntentFileSchema,
   upsertIntent,
   type Intent,
   type IntentFile,
@@ -45,19 +45,17 @@ export class IntentStore {
   }
 
   /**
-   * Load the ledger, failing soft to empty.
-   *
-   * This is a git-checked file an agent can write and a human can hand-merge, so a malformed one is
-   * genuinely reachable — a conflict marker left in place is the obvious case. Throwing here would
-   * take down the verdict that was only asking what was still open, which trades a small problem for
-   * a large one.
+   * Only a missing ledger is empty. A read or parse failure must stop a read-modify-write before
+   * it can replace the existing document. Best-effort verdict bookkeeping catches failures at
+   * its own boundary; the store must not disguise an unreadable ledger as a writable empty one.
    */
   async #load(): Promise<IntentFile> {
     try {
       const raw = await this.#fs.readFile(this.#path());
-      return parseIntentFile(JSON.parse(raw) as unknown);
-    } catch {
-      return emptyIntentFile();
+      return IntentFileSchema.parse(JSON.parse(raw) as unknown);
+    } catch (error) {
+      if (this.#fs.isNotFound(error)) return emptyIntentFile();
+      throw error;
     }
   }
 

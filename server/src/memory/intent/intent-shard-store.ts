@@ -19,7 +19,7 @@
  * an older build still reading the flat file keeps working, because nothing removes it. Deleting it
  * is a separate decision somebody can take once they believe the migration.
  */
-import { parseIntentFile, type Intent } from '@reticlehq/core/artifacts';
+import { IntentFileSchema, type Intent } from '@reticlehq/core/artifacts';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { withFileLock } from '@/memory/project/file-lock.js';
@@ -83,7 +83,7 @@ export class IntentShardStore {
     const file = await readJsonFile(
       this.#fs,
       reticleDirPaths(this.#root).intent,
-      (raw) => parseIntentFile(raw),
+      (raw) => IntentFileSchema.parse(raw),
       { version: 1 as const, intents: {} },
     );
     return new Map(Object.values(file.intents).map((i) => [i.id, recordFromIntent(i)] as const));
@@ -113,9 +113,10 @@ export class IntentShardStore {
       return entries
         .filter((e) => e.endsWith(SHARD_SUFFIX) && INDEX_FILE !== e)
         .map((e) => e.slice(0, -SHARD_SUFFIX.length));
-    } catch {
-      // No directory yet — an unmigrated project, which the legacy fold below still answers for.
-      return [];
+    } catch (error) {
+      // Only a missing directory is an unmigrated project; other failures must not hide shards.
+      if (this.#fs.isNotFound(error)) return [];
+      throw error;
     }
   }
 

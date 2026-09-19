@@ -170,7 +170,7 @@ const sortKeys = (value: unknown): unknown => {
   );
 };
 
-/** Read + validate one JSON file, failing soft: a hand-merged file with a conflict marker is real. */
+/** Read and validate a JSON document. Only absence permits a fallback, never a read failure. */
 export const readJsonFile = async <T>(
   fs: FileSystemPort,
   path: string,
@@ -179,7 +179,8 @@ export const readJsonFile = async <T>(
 ): Promise<T> => {
   try {
     return parse(JSON.parse(await fs.readFile(path)) as unknown);
-  } catch {
-    return fallback;
+  } catch (error) {
+    if (fs.isNotFound(error)) return fallback;
+    throw error;
   }
 };

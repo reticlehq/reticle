@@ -66,23 +66,18 @@ describe('IntentStore', () => {
     expect(intent?.amended).toEqual([{ statement: 'first', at: 1_000 }]);
   });
 
-  /**
-   * Fails soft, deliberately. This is a git-checked file an agent can edit and a human can
-   * hand-merge, so a malformed one is reachable — and taking a verdict down over it would trade a
-   * small problem for a large one.
-   */
-  it('reads an unparseable ledger as empty rather than throwing', async () => {
+  it('distinguishes an unparseable ledger from a missing one', async () => {
     const { fs, written } = createMemoryFs();
     written.set(`${ROOT}/intent.json`, '{ this is not json');
     const s = new IntentStore(fs, ROOT, { now: () => 1 });
-    await expect(s.read()).resolves.toEqual([]);
+    await expect(s.read()).rejects.toThrow();
   });
 
-  it('survives a ledger that parses but is the wrong shape', async () => {
+  it('reports a ledger that parses but is the wrong shape', async () => {
     const { fs, written } = createMemoryFs();
     written.set(`${ROOT}/intent.json`, JSON.stringify({ version: 1, intents: { a: {} } }));
     const s = new IntentStore(fs, ROOT, { now: () => 1 });
-    await expect(s.read()).resolves.toEqual([]);
+    await expect(s.read()).rejects.toThrow();
   });
 
   it('reports only what is still open', async () => {
