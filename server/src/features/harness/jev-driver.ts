@@ -209,8 +209,6 @@ export interface JevDriverOptions {
    * nothing, which is why every caller inside the repo passes it.
    */
   maxSteps?: number;
-  /** What to call the recording, and so the saved flow. Defaults to `harness-drive`. */
-  recordingName?: string;
   /** Injected for tests. Defaults to the platform `fetch`. */
   fetch?: HarnessFetch;
 }
@@ -294,13 +292,15 @@ interface Candidate {
 
 /** What the history says has happened so far, reduced to the few facts the next call depends on. */
 interface DriveState {
-  recording: boolean;
-  recordStopped: boolean;
-  flowSaved: boolean;
+  /** The recording currently open, if one is, and the route it was opened for. */
+  open: { name: string; slug: string } | undefined;
+  /** Recordings stopped but not yet saved, oldest first. */
+  unsaved: string[];
+  /** Flow names already written. Used to keep a second visit to a page from colliding. */
+  saved: string[];
+
   /** The most recent snapshot tree, or undefined when the last thing we did was change the page. */
   tree: string | undefined;
-  /** The name recording started under, so the stop and the save agree with it. */
-  name: string | undefined;
   /** Where the app is, as the last snapshot reported it. A declaration is built from this. */
   route: string | undefined;
   /** Every action already driven, so the choice set can prefer something new. */
@@ -331,11 +331,10 @@ interface DriveState {
  */
 function readState(history: readonly HistoryEntry[]): DriveState {
   const state: DriveState = {
-    recording: false,
-    recordStopped: false,
-    flowSaved: false,
+    open: undefined,
+    unsaved: [],
+    saved: [],
     tree: undefined,
-    name: undefined,
     route: undefined,
     acted: [],
     blocked: [],
@@ -347,14 +346,26 @@ function readState(history: readonly HistoryEntry[]): DriveState {
     for (const outcome of entry.outcomes) {
       if (Tool.RECORD === outcome.name) {
         const args = asRecord(outcome.args);
-        const started = args['recordingName'];
-        if ('start' === args['action'] && !outcome.isError) {
-          state.recording = true;
-          if ('string' === typeof started) state.name = started;
+        const named = args['recordingName'];
+        if ('string' === typeof named) {
+          if ('start' === args['action'] && !outcome.isError) {
+            state.open = { name: named, slug: slugAfter(named) };
+          }
+          if ('stop' === args['action']) {
+            state.open = undefined;
+            // A stop that ERRORED still closes our side of it: re-stopping a recording that is not
+            // running loops forever, and the save below is refused either way, which is visible.
+            state.unsaved.push(named);
+          }
         }
-        if ('stop' === args['action']) state.recordStopped = true;
       }
-      if (Tool.FLOW_SAVE === outcome.name && !outcome.isError) state.flowSaved = true;
+      if (Tool.FLOW_SAVE === outcome.name) {
+        const flowName = asRecord(outcome.args)['flowName'];
+        if ('string' === typeof flowName) {
+          state.unsaved = state.unsaved.filter((n) => n !== flowName);
+          if (!outcome.isError) state.saved.push(flowName);
+        }
+      }
       if (Tool.SNAPSHOT === outcome.name && !outcome.isError) {
         const result = asRecord(outcome.result);
         const tree = result['tree'];
@@ -450,6 +461,35 @@ async function callJev(
 const DEFAULT_RECORDING_NAME = 'harness-drive';
 
 /**
+ * A flow is opened per PAGE, not per drive, and the page names it.
+ *
+ * One recording for a whole drive is one enormous flow, and a saved flow is the entire product of
+ * an explore — it is what replays deterministically forever with no model in the loop. Measured
+ * against a real dashboard the frontier driver, which segments its recordings into named journeys,
+ * left 12 flows behind; this driver left 1. Same coverage, a twelfth of the durable output.
+ *
+ * A System One model cannot name anything, so the name comes from the route — which is both
+ * deterministic and the most honest label available, since the route is what actually scopes the
+ * journey. Segmenting on route change means every page a drive visits becomes its own replayable
+ * flow, and a flow that goes red names the page it belongs to.
+ */
+function slugOf(route: string | undefined): string {
+  const path = (route ?? '').replace(/^.*#/, '').replace(/[?#].*$/, '');
+  const slug = path
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase();
+  return 0 === slug.length ? 'home' : slug;
+}
+
+/** The slug back out of a recording name, so a name and a route can be compared. */
+function slugAfter(name: string): string {
+  return name.startsWith(`${DEFAULT_RECORDING_NAME}-`)
+    ? name.slice(DEFAULT_RECORDING_NAME.length + 1)
+    : name;
+}
+
+/**
  * Build a driver backed by a System One model.
  *
  * Every turn emits exactly ONE call. The loop dispatches a turn's calls with `Promise.all`, so an
@@ -461,8 +501,19 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
   const model = options.model ?? DEFAULT_JEV_MODEL;
   const baseUrl = options.baseUrl ?? DEFAULT_JEV_BASE_URL;
   const doFetch = options.fetch ?? ((url, init) => fetch(url, init));
-  const chosenName = options.recordingName ?? DEFAULT_RECORDING_NAME;
   const budget = options.maxSteps;
+  /**
+   * The one fact the history cannot carry.
+   *
+   * Everything else this driver needs is DERIVED from the history the loop hands it, because the
+   * loop owns what is remembered. "The model has said the app is covered" leaves no trace there —
+   * the only thing it produces is a `record stop`, which is indistinguishable from the stop that
+   * happens on every route change. Without it the drive closes the last journey, saves it, and
+   * then cheerfully opens another one on the same page.
+   *
+   * Held rather than derived, and it only ever goes one way, for one drive.
+   */
+  let windingUp = false;
   // Tool-call ids only have to be unique within a turn, and this driver emits one call per turn.
   // A per-instance counter is therefore enough, and it keeps the clock out of pure logic.
   let callSeq = 0;
@@ -480,56 +531,95 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
   return {
     async turn(input): Promise<ModelTurn> {
       const drive = readState(input.history);
-      // The name recording actually started under wins over the one we would have picked, so the
-      // stop and the save can never address a recording that does not exist.
-      const name = drive.name ?? chosenName;
-
       // ── deterministic scaffolding ────────────────────────────────────────────────────────────
-      // These four steps have exactly one right answer, so asking a model would spend a call to be
+      // Every step here has exactly one right answer, so asking a model would spend a call to be
       // told what the code already knows. The model is only consulted where there is a real choice.
-      if (!drive.recording && !drive.recordStopped)
-        return only(
-          request(Tool.RECORD, { action: 'start', recordingName: name }),
-          'start recording the journey',
-        );
 
-      if (drive.recordStopped && !drive.flowSaved)
+      // Banking what has been driven always wins over driving more. A stopped recording that is
+      // never saved is a journey nobody can replay, which is the whole point of the drive.
+      const unsaved = drive.unsaved[0];
+      if (unsaved !== undefined)
         return only(
-          // `intent` is not decoration. A flow saved without one still replays, but when it goes red
-          // the report can only name the step that broke, not the thing that stopped being true.
+          // `intent` is not decoration. A flow saved without one still replays, but when it goes
+          // red the report can only name the step that broke, not the thing that stopped being true.
           request(Tool.FLOW_SAVE, {
-            flowName: name,
-            intent: `Autonomous coverage drive: ${String(drive.acted.length)} actions through the app.`,
+            flowName: unsaved,
+            intent: `Autonomous coverage drive of ${slugAfter(unsaved)}: ${String(drive.acted.length)} actions.`,
           }),
-          'save the recorded journey',
-        );
-
-      if (drive.recordStopped && drive.flowSaved)
-        return only(
-          request(Tool.FINISH, {
-            summary: `Drove ${String(drive.acted.length)} actions and saved ${name}.`,
-          }),
-          'done',
+          `save ${unsaved}`,
         );
 
       if (drive.tree === undefined)
         return only(request(Tool.SNAPSHOT, { mode: 'interactive' }), 'look at the page');
 
-      // Out of budget to explore: bank what has been driven rather than spend the last turns on one
-      // more click nobody will ever be able to replay.
-      if (budget !== undefined && drive.turns >= budget - TEARDOWN_TURNS)
+      const slug = slugOf(drive.route);
+      const outOfBudget = budget !== undefined && drive.turns >= budget - TEARDOWN_TURNS;
+
+      // Out of budget, or told to wind up: close the open recording and stop opening new ones.
+      if (outOfBudget || windingUp) {
+        if (drive.open !== undefined)
+          return only(
+            request(Tool.RECORD, { action: 'stop', recordingName: drive.open.name }),
+            'wind up; stop recording so the journey can be saved',
+          );
         return only(
-          request(Tool.RECORD, { action: 'stop', recordingName: name }),
-          'out of budget to explore; stop recording and save what was driven',
+          request(Tool.FINISH, {
+            summary: `Drove ${String(drive.acted.length)} actions and saved ${String(drive.saved.length)} flow(s): ${drive.saved.join(', ')}.`,
+          }),
+          'done',
+        );
+      }
+
+      /**
+       * A page reached for the FIRST time ends the journey before it and opens its own.
+       *
+       * "Any route change" was too aggressive and produced a loop with a receipt:
+       * `harness-drive-home-2` through `-41`. This dashboard has destinations that render nothing
+       * and bounce straight back, so the route oscillates, and segmenting on every change closed and
+       * reopened a recording on each bounce — 40 junk flows and a spent budget.
+       *
+       * Bounding it by "has this page been recorded yet" gives exactly one flow per page, which was
+       * the point, and makes oscillation free: returning to somewhere already recorded just keeps
+       * driving under the open recording. Those actions land in the previous page's flow, which is
+       * untidy and is a great deal better than the alternative.
+       */
+      const alreadyRecorded = (candidate: string): boolean =>
+        [...drive.saved, ...drive.unsaved].some((n) => slugAfter(n) === candidate);
+
+      if (drive.open !== undefined && drive.open.slug !== slug && !alreadyRecorded(slug))
+        return only(
+          request(Tool.RECORD, { action: 'stop', recordingName: drive.open.name }),
+          `left ${drive.open.slug}; close that journey before starting the next`,
+        );
+
+      if (drive.open === undefined)
+        return only(
+          request(Tool.RECORD, {
+            action: 'start',
+            recordingName: `${DEFAULT_RECORDING_NAME}-${slug}`,
+          }),
+          `start recording ${slug}`,
         );
 
       // ── the one real decision ────────────────────────────────────────────────────────────────
       const candidates = candidatesFrom(drive.tree);
-      if (0 === candidates.length)
+      /**
+       * A page with nothing to act on ends the DRIVE, not just the journey.
+       *
+       * Closing the journey here and returning was an infinite loop with a receipt: the scaffolding
+       * above saves the stopped recording, sees no open one, and opens another for the same page —
+       * which still has nothing on it. Measured against a real dashboard it produced
+       * `harness-drive-settings-2` through `-49` and spent the entire 250-step budget on 28 actions.
+       *
+       * Winding up instead closes the open recording once, saves it, and finishes.
+       */
+      if (0 === candidates.length) {
+        windingUp = true;
         return only(
-          request(Tool.RECORD, { action: 'stop', recordingName: name }),
-          'nothing interactive here; stop recording',
+          request(Tool.RECORD, { action: 'stop', recordingName: drive.open.name }),
+          'nothing interactive on this page; wind up',
         );
+      }
 
       const criteria: Record<string, string> = {
         [FINISH_OPTION]:
@@ -570,12 +660,14 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
       const chosen = response.answers?.['next_action']?.choice ?? FINISH_OPTION;
       const complete = response.answers?.['journey_complete']?.noul ?? 0;
 
-      if (FINISH_OPTION === chosen || COMPLETE_THRESHOLD < complete)
+      if (FINISH_OPTION === chosen || COMPLETE_THRESHOLD < complete) {
+        windingUp = true;
         return only(
-          request(Tool.RECORD, { action: 'stop', recordingName: name }),
-          'journey covered; stop recording',
+          request(Tool.RECORD, { action: 'stop', recordingName: drive.open.name }),
+          'app covered; close the last journey and wind up',
           usage,
         );
+      }
 
       if (RELOOK_OPTION === chosen)
         return only(request(Tool.SNAPSHOT, { mode: 'interactive' }), 'look again', usage);

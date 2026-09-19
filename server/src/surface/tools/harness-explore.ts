@@ -153,7 +153,7 @@ export async function exploreApp(
     options.driverName ?? env[ReticleEnv.HARNESS_DRIVER] ?? (await preferredDriver(env, options));
   const built =
     options.driver === undefined
-      ? buildDriver(env, maxSteps, freeFlowName(before), requested)
+      ? buildDriver(env, maxSteps, requested)
       : { driver: options.driver, name: CUSTOM_DRIVER_NAME };
   const driver = built.driver;
 
@@ -208,23 +208,6 @@ export function reconcileFlows(
     savedFlows: after.filter((name) => !before.has(name)),
     rewroteFlows: [...new Set(claimed.filter((name) => before.has(name)))],
   };
-}
-
-/**
- * A flow name this drive can use without destroying an earlier one.
- *
- * Only the Jev driver needs this: it cannot invent a name, so one has to be chosen for it, and a
- * fixed one meant every autonomous drive silently overwrote the previous drive's flow. The
- * Anthropic driver names its own flows from what it drove, which is better, and is left alone.
- */
-function freeFlowName(existing: ReadonlySet<string>): string {
-  const base = 'harness-drive';
-  if (!existing.has(base)) return base;
-  for (let n = 2; n < 1000; n++) {
-    const candidate = `${base}-${String(n)}`;
-    if (!existing.has(candidate)) return candidate;
-  }
-  return base;
 }
 
 /**
@@ -284,7 +267,6 @@ function pinned(options: ExploreOptions): { sessionId?: string } {
 function buildDriver(
   env: Record<string, string | undefined>,
   maxSteps: number,
-  recordingName: string,
   requested?: string,
 ): { driver: ModelDriver; name: string } {
   const jev = jevOptionsFromEnv(env);
@@ -299,7 +281,7 @@ function buildDriver(
     // The Jev driver is told the budget because it has a teardown to reach; the Anthropic driver is
     // not, because it calls `finish` itself and being handed a number it did not ask for is how a
     // second copy of the budget starts drifting from the loop's.
-    return { driver: jevDriver({ ...jev, maxSteps, recordingName }), name: JEV_DRIVER_NAME };
+    return { driver: jevDriver({ ...jev, maxSteps }), name: JEV_DRIVER_NAME };
   }
   if (ANTHROPIC_DRIVER_NAME === asked) {
     if (anthropic === undefined) throw new Error(MSG_NO_HARNESS_KEY);
@@ -314,7 +296,6 @@ function buildDriver(
 
   if (anthropic !== undefined)
     return { driver: harnessDriver(anthropic), name: ANTHROPIC_DRIVER_NAME };
-  if (jev !== undefined)
-    return { driver: jevDriver({ ...jev, maxSteps, recordingName }), name: JEV_DRIVER_NAME };
+  if (jev !== undefined) return { driver: jevDriver({ ...jev, maxSteps }), name: JEV_DRIVER_NAME };
   throw new Error(MSG_NO_HARNESS_KEY);
 }

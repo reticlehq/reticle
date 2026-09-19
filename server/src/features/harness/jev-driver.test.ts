@@ -50,23 +50,25 @@ function outcome(name: string, args: Record<string, unknown>, result: unknown): 
   return { id: `x-${name}`, name, args, result, isError: false };
 }
 
-/** History for a drive that has started recording and just taken a snapshot. */
+const snapshotOf = (route: string) =>
+  outcome('reticle_snapshot', { mode: 'interactive' }, { tree: TREE, status: { route } });
+
+const recordStart = (name: string) =>
+  outcome('reticle_record', { action: 'start', recordingName: name }, { ok: true });
+
+const recordStop = (name: string) =>
+  outcome('reticle_record', { action: 'stop', recordingName: name }, { ok: true });
+
+/**
+ * A drive that has looked at the page and opened a recording for it.
+ *
+ * LOOK then RECORD, on purpose: a flow is opened per page and named by the route, so the driver
+ * cannot name the recording until it knows where it is.
+ */
 const READY: HistoryEntry[] = [
   { role: 'user', text: 'The app is loaded and connected.' },
-  {
-    role: 'tool',
-    outcomes: [
-      outcome('reticle_record', { action: 'start', recordingName: 'harness-drive' }, { ok: true }),
-      outcome(
-        'reticle_snapshot',
-        { mode: 'interactive' },
-        {
-          tree: TREE,
-          status: { route: '/#/home' },
-        },
-      ),
-    ],
-  },
+  { role: 'tool', outcomes: [snapshotOf('/#/home')] },
+  { role: 'tool', outcomes: [recordStart('harness-drive-home')] },
 ];
 
 const turn = (
@@ -83,22 +85,23 @@ const turn = (
 };
 
 describe('the jev driver builds every call from the page', () => {
-  it('starts by recording, before it has looked at anything', async () => {
+  /** It cannot name the recording until it knows which page it is on, so it looks first. */
+  it('looks at the page before it opens a recording', async () => {
     const result: ModelTurn = await turn([{ role: 'user', text: 'go' }], chose('e5'));
+    expect(result.calls[0]?.name).toBe('reticle_snapshot');
+  });
+
+  it('names the recording after the page it is on', async () => {
+    const history: HistoryEntry[] = [
+      { role: 'user', text: 'go' },
+      { role: 'tool', outcomes: [snapshotOf('/#/transactions')] },
+    ];
+    const result = await turn(history, chose('e5'));
     expect(result.calls[0]?.name).toBe('reticle_record');
     expect(result.calls[0]?.args).toMatchObject({
       action: 'start',
-      recordingName: 'harness-drive',
+      recordingName: 'harness-drive-transactions',
     });
-  });
-
-  it('looks at the page once recording has started', async () => {
-    const history: HistoryEntry[] = [
-      { role: 'user', text: 'go' },
-      { role: 'tool', outcomes: [outcome('reticle_record', { action: 'start' }, { ok: true })] },
-    ];
-    const result = await turn(history, chose('e5'));
-    expect(result.calls[0]?.name).toBe('reticle_snapshot');
   });
 
   it('acts on the ref the model chose', async () => {
@@ -145,31 +148,98 @@ describe('the jev driver builds every call from the page', () => {
   it('stops recording when the model says the journey is covered', async () => {
     const result = await turn(READY, chose('finish'));
     expect(result.calls[0]?.name).toBe('reticle_record');
-    expect(result.calls[0]?.args).toMatchObject({ action: 'stop', recordingName: 'harness-drive' });
+    expect(result.calls[0]?.args).toMatchObject({
+      action: 'stop',
+      recordingName: 'harness-drive-home',
+    });
   });
 
   it('stops recording when the model is confident enough that it is done', async () => {
     const result = await turn(READY, chose('e5', 0.95));
-    expect(result.calls[0]?.args).toMatchObject({ action: 'stop', recordingName: 'harness-drive' });
+    expect(result.calls[0]?.args).toMatchObject({
+      action: 'stop',
+      recordingName: 'harness-drive-home',
+    });
   });
 
-  it('saves the flow after stopping, then finishes', async () => {
+  it('saves a stopped recording before doing anything else', async () => {
     const stopped: HistoryEntry[] = [
       ...READY,
-      { role: 'tool', outcomes: [outcome('reticle_record', { action: 'stop' }, { ok: true })] },
+      { role: 'tool', outcomes: [recordStop('harness-drive-home')] },
     ];
     const save = await turn(stopped, chose('e5'));
     expect(save.calls[0]?.name).toBe('reticle_flow_save');
-    expect(save.calls[0]?.args['flowName']).toBe('harness-drive');
+    expect(save.calls[0]?.args['flowName']).toBe('harness-drive-home');
     // A flow with no intent replays, but names only the broken step when it goes red.
     expect(typeof save.calls[0]?.args['intent']).toBe('string');
+  });
 
-    const saved: HistoryEntry[] = [
-      ...stopped,
-      { role: 'tool', outcomes: [outcome('reticle_flow_save', { flowName: 'f' }, { ok: true })] },
+  /**
+   * The defect this closes: one drive used to leave ONE enormous flow behind.
+   *
+   * A saved flow is the entire product of an explore — it replays forever with no model in the
+   * loop. Measured against a real dashboard, the frontier driver segments its recordings into named
+   * journeys and left 12 flows; this driver left 1 for the same coverage. The route is the honest
+   * name, since it is what actually scopes the journey, and it is one no model has to invent.
+   */
+  it('closes the journey when the page changes, so each page becomes its own flow', async () => {
+    const moved: HistoryEntry[] = [
+      ...READY,
+      {
+        role: 'tool',
+        outcomes: [outcome('reticle_act_and_wait', { ref: 'e2', action: 'click' }, { ok: true })],
+      },
+      { role: 'tool', outcomes: [snapshotOf('/#/transactions')] },
     ];
-    const done = await turn(saved, chose('e5'));
-    expect(done.calls[0]?.name).toBe('finish');
+    const result = await turn(moved, chose('e5'));
+    expect(result.calls[0]?.args).toMatchObject({
+      action: 'stop',
+      recordingName: 'harness-drive-home',
+    });
+  });
+
+  it('opens a fresh recording named after the page it arrived on', async () => {
+    const arrived: HistoryEntry[] = [
+      ...READY,
+      {
+        role: 'tool',
+        outcomes: [
+          recordStop('harness-drive-home'),
+          outcome('reticle_flow_save', { flowName: 'harness-drive-home' }, { ok: true }),
+          snapshotOf('/#/settlements'),
+        ],
+      },
+    ];
+    const result = await turn(arrived, chose('e5'));
+    expect(result.calls[0]?.args).toMatchObject({
+      action: 'start',
+      recordingName: 'harness-drive-settlements',
+    });
+  });
+
+  /**
+   * Returning to a page already recorded does NOT open another recording for it.
+   *
+   * Suffixing a revisit (`-2`, `-3`, …) looked tidy and produced `harness-drive-home-2` through
+   * `-41` against a real dashboard: destinations that render nothing bounce the route straight
+   * back, so it oscillates, and a new recording opened on every bounce. One flow per page is the
+   * bound that makes oscillation free.
+   */
+  it("reuses a page's own flow name on a revisit rather than minting a new one", async () => {
+    const revisit: HistoryEntry[] = [
+      ...READY,
+      {
+        role: 'tool',
+        outcomes: [
+          recordStop('harness-drive-home'),
+          outcome('reticle_flow_save', { flowName: 'harness-drive-home' }, { ok: true }),
+          snapshotOf('/#/home'),
+        ],
+      },
+    ];
+    const result = await turn(revisit, chose('e5'));
+    // The page's own name, not `-2`. A revisit refreshes that page's flow; it never adds a new one.
+    expect(result.calls[0]?.args['recordingName']).toBe('harness-drive-home');
   });
 
   it('looks again after acting, rather than choosing from a page that has moved', async () => {
@@ -258,21 +328,8 @@ describe('the jev driver builds every call from the page', () => {
     const seen = { bodies: [] as string[] };
     const atRoot: HistoryEntry[] = [
       { role: 'user', text: 'go' },
-      {
-        role: 'tool',
-        outcomes: [
-          outcome(
-            'reticle_record',
-            { action: 'start', recordingName: 'harness-drive' },
-            { ok: true },
-          ),
-          outcome(
-            'reticle_snapshot',
-            { mode: 'interactive' },
-            { tree: TREE, status: { route: '/' } },
-          ),
-        ],
-      },
+      { role: 'tool', outcomes: [snapshotOf('/')] },
+      { role: 'tool', outcomes: [recordStart('harness-drive-home')] },
     ];
     await turn(atRoot, chose('e5'), seen);
     const body = JSON.parse(seen.bodies[1] ?? '{}') as {
@@ -452,5 +509,56 @@ describe('a control the destructive gate refused', () => {
       confirmDangerous: true,
       value: 'reticle harness',
     });
+  });
+});
+
+/**
+ * The loop this closes had a receipt: `harness-drive-settings-2` through `-49`.
+ *
+ * Closing the journey on an empty page and returning let the scaffolding save it, see no open
+ * recording, and open another for the SAME page — which still had nothing on it. Against a real
+ * dashboard that spent the whole 250-step budget on 28 actions and wrote 48 junk flows.
+ */
+describe('a page with nothing to act on', () => {
+  const EMPTY = '- heading "Nothing here"';
+
+  it('winds the drive up instead of reopening a recording for the same page', async () => {
+    // ONE driver across both turns, which is how the loop uses it: "the app is covered" leaves no
+    // trace in the history, so it is the one fact this driver holds rather than derives.
+    const fake = fakeJev(chose('e5'));
+    const driver = jevDriver({ apiKey: 'k', fetch: fake.doFetch });
+    const blank: HistoryEntry[] = [
+      ...READY,
+      {
+        role: 'tool',
+        outcomes: [
+          outcome(
+            'reticle_snapshot',
+            { mode: 'interactive' },
+            { tree: EMPTY, status: { route: '/#/home' } },
+          ),
+        ],
+      },
+    ];
+
+    const stop = await driver.turn({ system: 's', tools: [], history: blank });
+    expect(stop.calls[0]?.args).toMatchObject({
+      action: 'stop',
+      recordingName: 'harness-drive-home',
+    });
+
+    // Once that recording is saved the drive FINISHES; it does not open another on the same page.
+    const after: HistoryEntry[] = [
+      ...blank,
+      {
+        role: 'tool',
+        outcomes: [
+          recordStop('harness-drive-home'),
+          outcome('reticle_flow_save', { flowName: 'harness-drive-home' }, { ok: true }),
+        ],
+      },
+    ];
+    const done = await driver.turn({ system: 's', tools: [], history: after });
+    expect(done.calls[0]?.name).toBe('finish');
   });
 });
