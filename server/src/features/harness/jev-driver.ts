@@ -30,7 +30,20 @@ import type { HarnessFetch } from './driver.js';
 
 export const DEFAULT_JEV_MODEL = 'jev-latest';
 export const DEFAULT_JEV_BASE_URL = 'https://api.typesafe.ai';
+/**
+ * TypeSafe's own path, and the platform's.
+ *
+ * They differ, and forgetting that broke the one claim this whole feature exists to make. A daemon
+ * holding only a platform key correctly chose the `jev` driver, and then posted to the upstream's
+ * path on the platform's host: `jev 404: Route POST:/v1/systemone not found`. Nothing was driven.
+ *
+ * It was not caught earlier because the daemon under test also had a direct `JEV_API_KEY` exported,
+ * so it took the direct branch and never went near the platform — the "only a platform key" run was
+ * not, in fact, only a platform key. The sibling OpenAI driver already routed on this exact
+ * distinction; this one did not.
+ */
 const SYSTEMONE_PATH = '/v1/systemone';
+const PLATFORM_PATH = '/v1/model/systemone';
 
 /**
  * Tool names this driver emits.
@@ -430,12 +443,13 @@ async function callJev(
   options: Required<Pick<JevDriverOptions, 'apiKey'>> & {
     model: string;
     baseUrl: string;
+    path: string;
     doFetch: HarnessFetch;
   },
   state: string,
   questions: Record<string, unknown>,
 ): Promise<JevResponse> {
-  const res = await options.doFetch(`${options.baseUrl}${SYSTEMONE_PATH}`, {
+  const res = await options.doFetch(`${options.baseUrl}${options.path}`, {
     method: 'POST',
     headers: {
       authorization: `Bearer ${options.apiKey}`,
@@ -501,6 +515,9 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
   const model = options.model ?? DEFAULT_JEV_MODEL;
   const baseUrl = options.baseUrl ?? DEFAULT_JEV_BASE_URL;
   const doFetch = options.fetch ?? ((url, init) => fetch(url, init));
+  // A base URL that is not TypeSafe's is the platform's, which is the only other thing this talks
+  // to — and it serves the same wire shape under its own path.
+  const path = DEFAULT_JEV_BASE_URL === baseUrl ? SYSTEMONE_PATH : PLATFORM_PATH;
   const budget = options.maxSteps;
   /**
    * The one fact the history cannot carry.
@@ -634,7 +651,7 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
       }
 
       const response = await callJev(
-        { apiKey: options.apiKey, model, baseUrl, doFetch },
+        { apiKey: options.apiKey, model, baseUrl, path, doFetch },
         buildState(input.system, input.history, drive),
         {
           next_action: {
@@ -691,7 +708,7 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
       // costs nothing from the STEP budget, which is what is actually scarce here.
       const offered = consequencesFor(drive.route);
       const expectation = await callJev(
-        { apiKey: options.apiKey, model, baseUrl, doFetch },
+        { apiKey: options.apiKey, model, baseUrl, path, doFetch },
         `${buildState(input.system, input.history, drive)}\n\nABOUT TO: ${action} ${picked.desc}`,
         {
           expected_consequence: {

@@ -562,3 +562,51 @@ describe('a page with nothing to act on', () => {
     expect(done.calls[0]?.name).toBe('finish');
   });
 });
+
+/**
+ * Where the driver POSTs, which is not the same host-to-host.
+ *
+ * TypeSafe serves `/v1/systemone`; Reticle's platform serves the same wire shape at
+ * `/v1/model/systemone` and forwards with ITS key. Getting this wrong broke the one claim the
+ * feature exists to make — a daemon holding only a platform key chose the `jev` driver correctly
+ * and then 404'd against the upstream's path on the platform's host, driving nothing. It survived
+ * an earlier "end to end" run only because that daemon also had a direct JEV_API_KEY exported, so
+ * it never went near the platform.
+ */
+describe('which endpoint the jev driver posts to', () => {
+  const seen = () => {
+    const urls: string[] = [];
+    const doFetch = (url: string) => {
+      urls.push(url);
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({ answers: chose('e5'), usage: { input_tokens: 1, output_tokens: 1 } }),
+          ),
+      });
+    };
+    return { urls, doFetch };
+  };
+
+  it('posts to TypeSafe directly when no base URL is configured', async () => {
+    const fake = seen();
+    await jevDriver({ apiKey: 'k', fetch: fake.doFetch }).turn({
+      system: 's',
+      tools: [],
+      history: READY,
+    });
+    expect(fake.urls[0]).toBe('https://api.typesafe.ai/v1/systemone');
+  });
+
+  it('posts to the platform path when driving through the platform', async () => {
+    const fake = seen();
+    await jevDriver({
+      apiKey: 'rk_live_x',
+      baseUrl: 'https://app.reticle.sh',
+      fetch: fake.doFetch,
+    }).turn({ system: 's', tools: [], history: READY });
+    expect(fake.urls[0]).toBe('https://app.reticle.sh/v1/model/systemone');
+  });
+});

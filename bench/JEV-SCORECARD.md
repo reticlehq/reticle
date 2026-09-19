@@ -53,16 +53,11 @@ It **cannot write prose**, which is why `explore`'s summary is now DERIVED from 
 
 ## The whole path, driven
 
-Every number above comes from a daemon holding a direct `JEV_API_KEY`. The path a USER takes is different and longer, so it was driven separately rather than assumed:
+Every performance number above comes from a daemon holding a direct `JEV_API_KEY`. The path a USER takes is different and longer, and it is checked separately by `reticle-cloud/scripts/harness-sync-check.mjs`, which drives it with nothing mocked: a real API process, a real account through the ordinary signup and email-code login, a real `rk_live_` key from `POST /v1/keys`, the config endpoint answering `provider: jev, harnessEnabled: true`, each provider proxy reaching its upstream with the PLATFORM's key rather than the caller's, a revoked key going dead, and finally a daemon whose environment contains no model key of any kind driving a real app and reporting `driver: "jev"`.
 
-1. a real platform instance, booted from the API's own source;
-2. a real account, through the ordinary signup and email-code login;
-3. a real key minted from `POST /v1/keys` — `rk_live_…`, the same thing the console issues;
-4. `GET /v1/model/config` answering `provider: jev, harnessEnabled: true`;
-5. `POST /v1/model/systemone` reaching TypeSafe through the platform and answering correctly in about a second, with the platform's own key rather than the caller's;
-6. a daemon given **only** `RETICLE_CLOUD_URL` and `RETICLE_CLOUD_KEY` — no `JEV_API_KEY`, no `ANTHROPIC_API_KEY` anywhere in its environment — driving apps/bench-app, reporting `driver: "jev"`, proving 4 of 4 actions and saving a replayable flow.
+**An earlier version of this section claimed that last step already passed. It did not.** The daemon in that run also had a direct `JEV_API_KEY` exported, so it took the direct branch and never went near the platform — the "only a platform key" run was not only a platform key. When the check finally blanked every provider key, the drive died on `jev 404: Route POST:/v1/systemone not found`: TypeSafe serves `/v1/systemone`, Reticle's platform serves the same wire shape at `/v1/model/systemone`, and the driver only ever knew the first. The sibling OpenAI driver had always routed on that distinction. This one did not, and nothing noticed, because both halves' own tests were green — the API's tests assert what the API returns, the daemon's assert what the daemon sends, and nothing asserted they were the same thing.
 
-That last step is the product claim in one line: somebody who has never held a model API key drove their own app and got a verdict. It is recorded here because the unit gates cover each half and could not have caught a seam between them, and because this repository has shipped a feature whose every gate passed and which connected 0% of the time in the field.
+That is the entire reason the check exists, and it is why a claim about two systems meeting should never be written from a run where one of them was not actually involved.
 
 ## Standing limits
 
