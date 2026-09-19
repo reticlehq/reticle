@@ -6,6 +6,7 @@
 import { OnboardingPhase, OnboardingStepStatus } from '@reticlehq/core/telemetry';
 import { detectMcpClients } from './register/detect-clients.js';
 import type { InitOptions, InitIo, InitResult, InitContext } from './run-types.js';
+import type { InitHost } from './host.js';
 export type { InitOptions, InitIo, InitResult } from './run-types.js';
 
 import { dirname, join } from 'node:path';
@@ -257,6 +258,23 @@ function agentRootOf(options: InitOptions): string | undefined {
   return root === undefined || root === options.cwd ? undefined : root;
 }
 
+/**
+ * The release to pin the SDK install at: the daemon's, and this package's only as a last resort.
+ *
+ * The host is asked because the scaffolder's own manifest answers a different question — "which
+ * scaffolder is this", not "which Reticle is running" — and the two are only the same fact inside
+ * this repository. See `InitHost.releaseVersion`.
+ *
+ * An EMPTY answer falls back rather than being passed through. `pinnedPackages` treats an empty
+ * version as "do not pin", so a host that cannot name a release would silently turn the pinned
+ * install into `npm i -D @reticlehq/react` — the unpinned resolution the pin exists to close, and
+ * the one that installs whatever the registry currently calls latest.
+ */
+function releaseToPin(host: InitHost): string {
+  const declared = host.releaseVersion();
+  return 0 === declared.length ? RETICLE_VERSION : declared;
+}
+
 function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanInput {
   // Stable identity derived from the app's package.json name + root, so it survives port changes.
   const projectId = deriveProjectId(packageName(pkg), options.cwd);
@@ -432,8 +450,8 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
       mcp: options.mcp,
       install: options.install,
       projectId,
-      // The SDK must match the CLI asking for it — see pinnedPackages.
-      sdkVersion: RETICLE_VERSION,
+      // The SDK must match the RUNNING Reticle asking for it — see pinnedPackages and releaseToPin.
+      sdkVersion: releaseToPin(io.host),
     },
   };
 }

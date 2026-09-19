@@ -532,8 +532,25 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * and what happens after the files are written. Both were flat in setup/, and taking them out
    * is why setup no longer reaches bridge, proxy or telemetry at all — those three reaches were
    * these two files and nothing else.
+   *
+   * `identity` is reached for the one fact it holds, which is the reason that directory was
+   * extracted at all: this daemon's own version, as a fact and not as a comparison.
+   * `@reticlehq/init` cannot know which Reticle is running it, and answering that question for
+   * itself off its own manifest is #990 — a daemon pinning the SDK install two minors behind
+   * itself, with every step green. `identity` reaches for nothing, so the edge cannot make a
+   * mutual pair, and the frozen pair count is unchanged.
    */
-  init: ['binding', 'bridge', 'bringup', 'launch', 'proxy', 'setup', 'telemetry', 'terminal'],
+  init: [
+    'binding',
+    'bridge',
+    'bringup',
+    'identity',
+    'launch',
+    'proxy',
+    'setup',
+    'telemetry',
+    'terminal',
+  ],
   /**
    * A file changed: which flows must re-verify, what the gate does about it, and how a
    * save-heavy editor's burst becomes one flush. Four files that import nothing whatsoever,

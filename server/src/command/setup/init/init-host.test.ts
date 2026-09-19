@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ReticleDir, ReticleEnv } from '@reticlehq/core';
 import { serverInitHost } from './init-host.js';
+import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 
 /**
  * The daemon half of the `init` seam.
@@ -35,6 +36,22 @@ describe('the init host', () => {
     process.env[ReticleEnv.PAIRING_TOKEN_DIR] = dir;
     const host = serverInitHost();
     expect(host.pairingToken()).toBe(host.pairingToken());
+  });
+
+  /**
+   * The other half of the SDK pin (#990).
+   *
+   * `@reticlehq/init` pins the install to whatever its host names, and its own tests prove it asks
+   * and that the answer reaches the argv. Nothing over there can prove the answer is the version of
+   * the daemon actually running — that manifest belongs to this package, and the whole defect was
+   * the scaffolder answering the question for itself off a manifest that is only the same file by
+   * assumption once npm has assembled a user's tree.
+   */
+  it('names the version of the daemon that is running, not the scaffolder’s', () => {
+    expect(serverInitHost().releaseVersion()).toBe(SERVER_VERSION);
+    // Read out of a manifest, not left undefined by a build that could not find one. An empty
+    // answer makes `init` drop the pin, which is the unpinned resolution the pin exists to close.
+    expect(serverInitHost().releaseVersion()).toMatch(/^\d+\.\d+\.\d+/);
   });
 
   it('runs a traced stage exactly once and returns its value', () => {

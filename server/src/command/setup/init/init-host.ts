@@ -2,13 +2,15 @@
  * The daemon half of `reticle init`.
  *
  * `@reticlehq/init` writes files and runs a package manager and knows nothing else — no tracer, no
- * telemetry client, no bridge state directory. Those four capabilities are declared by `InitHost`
- * and supplied here, which is the whole seam between the scaffolder and the daemon. Built in one
- * place rather than at each call site so a caller cannot half-wire it: a missing reporter is a
- * metric that is silently, permanently absent, which is the failure mode telemetry always has.
+ * telemetry client, no bridge state directory, and no idea which Reticle is running it. Those
+ * capabilities are declared by `InitHost` and supplied here, which is the whole seam between the
+ * scaffolder and the daemon. Built in one place rather than at each call site so a caller cannot
+ * half-wire it: a missing reporter is a metric that is silently, permanently absent, which is the
+ * failure mode telemetry always has.
  */
 import type { InitHost } from '@reticlehq/init';
 import type { InitOutcome, OnboardingStep } from '@reticlehq/core/telemetry';
+import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 import { spanSync } from '@/trace.js';
 import { reportInitOutcome } from '@/telemetry/init-telemetry.js';
 import { reportOnboardingStep } from '@/telemetry/onboarding-funnel.js';
@@ -47,6 +49,18 @@ export function serverInitHost(): InitHost {
     },
     installSource(): string | undefined {
       return declaredInstallSource();
+    },
+    /**
+     * This daemon's own version, which is what the SDK install must be pinned at.
+     *
+     * Read off `SERVER_VERSION` — the manifest of the process actually running — rather than left
+     * to `@reticlehq/init`, which can only read its own. Those two agree by construction in this
+     * repository and by ASSUMPTION on a user's machine, and #990 is what the assumption costs when
+     * it is false: a 3.1.0 daemon installed the 2.14.0 SDK on a clean `init`, reported every step
+     * green, and the app never dialled the bridge.
+     */
+    releaseVersion(): string {
+      return SERVER_VERSION;
     },
   };
 }

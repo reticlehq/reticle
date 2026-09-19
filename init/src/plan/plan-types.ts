@@ -269,7 +269,14 @@ export interface PlanInput {
     install: boolean;
     /** Stable project identity derived at init (package.json name + root). Baked into snippets/.reticle.json. */
     projectId?: string;
-    /** The CLI's own version, pinned onto the SDK install so a stale registry cache cannot skew it. */
+    /**
+     * The RUNNING Reticle's release, pinned onto the SDK install.
+     *
+     * Two things ride on it: a stale registry cache cannot resolve the packages somewhere else, and
+     * the app cannot be handed a different contract from the daemon it is about to dial. It comes
+     * from `InitHost.releaseVersion()` rather than from `@reticlehq/init`'s own manifest — see
+     * `releaseToPin` in `run.ts` and #990.
+     */
     sdkVersion?: string;
   };
 }

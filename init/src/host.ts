@@ -1,4 +1,5 @@
 import type { InitOutcome, OnboardingStep } from '@reticlehq/core/telemetry';
+import { RETICLE_VERSION } from './version.js';
 
 /**
  * Everything the scaffolder needs that only the daemon knows.
@@ -44,6 +45,25 @@ export interface InitHost {
   pairingToken(): string;
   /** The install channel the environment declares, or undefined when nothing declared one. */
   installSource(): string | undefined;
+  /**
+   * The Reticle release DRIVING this run — the daemon's own version, not the scaffolder's.
+   *
+   * `init` pins the SDK install to an exact version so a stale registry cache cannot hand the app a
+   * different release from the one the daemon speaks. Which version that is, it cannot know for
+   * itself: it can only read `@reticlehq/init`'s manifest, and that answers "which scaffolder is
+   * this" rather than "which Reticle is running". The two are the same package graph in this
+   * repository and are NOT the same fact on a user's machine, where npm assembles the tree.
+   *
+   * Reported from the field (#990): a daemon reporting 3.1.0 installed `@reticlehq/react@2.14.0`
+   * and `@reticlehq/next@2.14.0` on a clean install — every step green, nothing naming the
+   * disagreement, and the agent then handed the version-skew remediation for a skew `init` had just
+   * created. Asking the host closes the gap at the seam it opens at: the daemon knows its own
+   * version, and it is the only participant that does.
+   *
+   * REQUIRED, like the two reporters above it. An optional version is one somebody forgets to pass,
+   * and the failure is a silently skewed install that reports success.
+   */
+  releaseVersion(): string;
 }
 
 /**
@@ -68,5 +88,13 @@ export const SILENT_HOST: InitHost = {
   },
   installSource() {
     return undefined;
+  },
+  /**
+   * The scaffolder's own release, which is the only version a host with no daemon behind it can
+   * truthfully name — and still a real pin, so a host-less caller cannot fall through to an
+   * unpinned install.
+   */
+  releaseVersion() {
+    return RETICLE_VERSION;
   },
 };

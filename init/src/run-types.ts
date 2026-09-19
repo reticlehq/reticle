@@ -85,9 +85,10 @@ export interface InitIo {
   canWrite(): boolean;
   print(line: string): void;
   /**
-   * The capabilities only the daemon has: the release version's tracer, the outcome reporter, the
-   * bridge pairing token and the declared install channel. See host.ts for why they are carried
-   * here rather than as a second parameter, and why none of them is optional.
+   * The capabilities only the daemon has: a tracer, the outcome and funnel-step reporters, the
+   * bridge pairing token, the declared install channel, and the release version the SDK install is
+   * pinned at. See host.ts for why they are carried here rather than as a second parameter, and why
+   * none of them is optional.
    */
   host: InitHost;
 }
