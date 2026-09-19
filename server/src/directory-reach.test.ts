@@ -675,7 +675,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   update: ['machine', 'identity', 'project', 'telemetry'],
   version: ['identity', 'project', 'tools'],
-  visual: ['args', 'dir', 'fs', 'input', 'tools'],
+  visual: ['args', 'dir', 'fs', 'input', 'project', 'tools'],
 };
 
 /**
