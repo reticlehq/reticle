@@ -17,6 +17,7 @@
 import { ReticleTool } from '@reticlehq/core';
 import { ADVERTISE_ALL_ENV } from './tool-surface.js';
 import { mergedNameRedirect, mergedNameMessage } from './merged-name-redirect.js';
+import { TOOL_REACH, hatchCall, noRouteAdvice, toolReach } from './tool-reach.js';
 
 /**
  * Guidance for `name`, or undefined when there is nothing useful to add — the tool IS advertised (so
@@ -27,10 +28,18 @@ export function unadvertisedToolHelp(
   advertised: ReadonlySet<string>,
   known: ReadonlySet<string>,
 ): string | undefined {
-  if (advertised.has(name)) return undefined;
-  // A name that MOVED gets the move, not a profile lecture — it is not un-advertised, it is gone.
+  const reach = toolReach(name, advertised);
+  if (TOOL_REACH.DIRECT === reach) return undefined;
+  /*
+   * A name that MOVED gets the move, not a profile lecture — it is not un-advertised, it is gone.
+   *
+   * The reach is asked about the TARGET, which is a different question from the one just asked
+   * about `name`, and answering it with the same value is how `reticle_diff` came to be answered
+   * "through reticle_run" on a surface with no hatch: the old call passed a bare "is the target
+   * advertised" boolean, and `false` meant both "dispatch to it" and "you cannot get there".
+   */
   const moved = mergedNameRedirect(name);
-  if (moved !== undefined) return mergedNameMessage(name, moved, advertised.has(moved.tool));
+  if (moved !== undefined) return mergedNameMessage(name, moved, toolReach(moved.tool, advertised));
   if (!known.has(name)) return undefined;
   /*
    * The hatch is not on every profile, and advice that names a tool this surface does not have is
@@ -42,21 +51,11 @@ export function unadvertisedToolHelp(
    * reticle_run", and `reticle_run` answered "Tool reticle_run not found". The one message whose
    * whole job is to stop an agent concluding "this does not exist" spent its turn proving it.
    */
-  if (!advertised.has(ReticleTool.RUN)) {
-    return (
-      `${name} exists in this build but is not reachable on this tool surface, which advertises the ` +
-      `verify loop and nothing else — there is no dispatch tool here to route through. It is NOT a ` +
-      `missing feature and NOT a retired name. To use it, start the daemon with ` +
-      `${ADVERTISE_ALL_ENV}=1, which advertises the wider surface including ${name}; the daemon reads ` +
-      `that at startup, so it takes effect on the next one. Until then, prefer what this surface ` +
-      `does advertise — ${ReticleTool.TOOLS} {} lists it.`
-    );
-  }
+  if (TOOL_REACH.CLOSED === reach) return `${name} exists in this build. ${noRouteAdvice(name)}`;
   return (
     `${name} exists and works, but is not advertised under this tool profile — the schemas for all ` +
     `tools are re-sent every turn, so the default advertises a subset and keeps the rest one call ` +
-    `away. It is NOT missing: invoke it with ` +
-    `${ReticleTool.RUN} { tool: "${name}", args: { ... } }. ` +
+    `away. It is NOT missing: invoke it with ${hatchCall(name)}. ` +
     `Call ${ReticleTool.TOOLS} { names: ["${name}"] } for its parameters. ` +
     `If you need it repeatedly, start the daemon with ${ADVERTISE_ALL_ENV}=1 for the extended ` +
     `surface. That is read by the DAEMON at startup, so it takes effect on the next daemon, and it ` +

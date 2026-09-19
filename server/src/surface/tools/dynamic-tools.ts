@@ -6,6 +6,7 @@ import { mergedNameRedirect, mergedNameMessage, retiredToolNames } from './merge
 import { takeVersionSkewOnto } from '@/command/version/version-nudge.js';
 import { ReticleTool } from '@reticlehq/core';
 import { ADVERTISE_ALL_ENV, type ToolSurfaceOrigin } from './tool-surface.js';
+import { TOOL_REACH, toolReach, type ToolReach } from './tool-reach.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import {
   isPredicateParam,
@@ -95,6 +96,20 @@ export function buildDynamicTools(
   const reachable =
     callable === undefined ? allTools : allTools.filter((tool) => callable.has(tool.name));
   const byName = new Map(reachable.map((t) => [t.name, t]));
+  /**
+   * How this surface reaches `tool`, for every piece of routing advice these two tools emit.
+   *
+   * `callable === undefined` is the surface that ships `reticle_run`, which reaches any name in the
+   * registry — so the hatch is the answer for anything, and the advice keeps its hedge about
+   * whether the target is also advertised directly. A surface that passed a `callable` set ships no
+   * hatch, so it can invoke exactly what is in that set and nothing else: there is no third route
+   * to offer, and offering one anyway is #978.
+   *
+   * `byName` is NOT the set to ask. It carries both meta-tools unconditionally — they are filtered
+   * off the advertised surface one level up — so a closed surface would look like it had the hatch.
+   */
+  const reachOf = (tool: string): ToolReach =>
+    callable === undefined ? TOOL_REACH.HATCH : toolReach(tool, callable);
   // The profile is a DAEMON-startup decision, so an agent that exported RETICLE_TOOL_PROFILE into its
   // own environment sees no change and has, until now, no way to tell. Reported with the catalog.
   const profileBlock =
@@ -205,7 +220,7 @@ export function buildDynamicTools(
             ? { name: n, error: 'unknown tool' }
             : {
                 name: n,
-                error: mergedNameMessage(n, moved),
+                error: mergedNameMessage(n, moved, reachOf(moved.tool)),
                 tool: moved.tool,
                 ...(moved.action === undefined ? {} : { action: moved.action }),
               };
@@ -269,7 +284,7 @@ export function buildDynamicTools(
         const moved = mergedNameRedirect(name);
         if (moved !== undefined) {
           return {
-            error: mergedNameMessage(name, moved),
+            error: mergedNameMessage(name, moved, reachOf(moved.tool)),
             tool: moved.tool,
             ...(moved.action === undefined ? {} : { action: moved.action }),
           };

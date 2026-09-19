@@ -134,7 +134,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // assemble responses that carry gaps, and it holds session-scoped state -- so it belongs at the
   // surface, not in the pure engine that computes the gaps. Recorded rather than grouped: one
   // filter is not a cluster, and `tools/act/` is for the act path specifically.
-  'server/src/surface/tools': 36,
+  // tool-reach.ts shares live-surface routing across catalog and unadvertised-name recovery.
+  'server/src/surface/tools': 37,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it

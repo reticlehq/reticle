@@ -13,6 +13,7 @@
  */
 import { MERGE_PLANS, MERGED_SURFACE_PLANS, RETIRED_FROM_SURFACE } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
+import { TOOL_REACH, hatchCall, noRouteAdvice, type ToolReach } from './tool-reach.js';
 
 interface MergedNameRedirect {
   /** The tool to call instead. */
@@ -102,23 +103,35 @@ export function mergedNameMessage(
   name: string,
   redirect: MergedNameRedirect,
   /**
-   * Is the tool it moved INTO advertised on this surface? Pass it and the reader is told the one
-   * route that works here. Omit it only where the surface is genuinely unknown.
+   * How THIS surface reaches the tool it moved into, from `toolReach`.
    *
-   * The message used to end "through reticle_run if it is not advertised under this profile" for
-   * everybody. On the nine-tool surface that is two errors in one clause: the target IS advertised,
-   * and `reticle_run` is neither advertised nor callable there — so the sentence sent an agent that
-   * had just been handed a working call off to a tool that answers "not found".
+   * REQUIRED, and that is the correction. It was an optional boolean — "is the target advertised?"
+   * — which is a two-state answer to a three-state question, so every caller that did not know, and
+   * the one that knew only half, fell through to a sentence asserting a dispatch hatch. On the
+   * default surface there is none, so the message whose entire job is to stop an agent concluding
+   * "this does not exist" named a tool that does not exist (#978). Not answering is now a type
+   * error rather than a wrong sentence.
    */
-  targetAdvertised?: boolean,
+  reach: ToolReach,
 ): string {
   if (redirect.action === undefined) {
     return `${name} no longer exists — ${redirect.note ?? `use ${redirect.tool}`}.`;
   }
   const call = `Call ${redirect.tool} { action: "${redirect.action}", ... }`;
-  if (true === targetAdvertised) return `${name} was merged into ${redirect.tool}. ${call}.`;
+  if (TOOL_REACH.DIRECT === reach) return `${name} was merged into ${redirect.tool}. ${call}.`;
+  if (TOOL_REACH.HATCH === reach) {
+    // The hedge is deliberate and stays: a caller reading a catalogue knows its surface ships the
+    // hatch without necessarily knowing whether THIS target is advertised, and both routes work
+    // there. What changed is only that the sentence is no longer produced where neither does.
+    return (
+      `${name} was merged into ${redirect.tool}. ${call} — or ` +
+      `${hatchCall(redirect.tool, `{ action: "${redirect.action}", ... }`)} if ${redirect.tool} ` +
+      `is not advertised under this profile.`
+    );
+  }
+  // Leading with "Call …" would be the same defect one level in: the call is unreachable here too.
   return (
-    `${name} was merged into ${redirect.tool}. ${call} — ` +
-    `through reticle_run if it is not advertised under this profile.`
+    `${name} was merged into ${redirect.tool} { action: "${redirect.action}" }. ` +
+    noRouteAdvice(redirect.tool)
   );
 }

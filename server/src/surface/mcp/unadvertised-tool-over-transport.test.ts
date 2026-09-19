@@ -13,21 +13,25 @@
 
 import { describe, expect, it } from 'vitest';
 import { createMcpServer } from './mcp.js';
-import { TOOL_SURFACE } from '@/surface/tools/tool-surface.js';
-import type { ToolDeps } from '@/surface/tools/tools.js';
+import { TOOL_SURFACE, type ToolSurface } from '@/surface/tools/tool-surface.js';
+import { tableForSurface, type ToolDeps } from '@/surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 
 /** Enough of the dep surface to construct a server; no tool is actually executed here. */
 const toolDepsForTest = (): ToolDeps =>
   ({ sessions: { resolve: () => ({ id: 'x' }) } }) as unknown as ToolDeps;
 
-const openServer = async (): Promise<{
+const openServer = async (
+  surface: ToolSurface = TOOL_SURFACE.DEFAULT,
+): Promise<{
   client: import('@modelcontextprotocol/sdk/client/index.js').Client;
   close: () => Promise<void>;
 }> => {
   const { InMemoryTransport } = await import('@modelcontextprotocol/sdk/inMemory.js');
   const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
-  const server = createMcpServer(toolDepsForTest(), TOOL_SURFACE.DEFAULT);
+  // The table follows the surface: `merged` is the one surface whose tools are not the shipped
+  // ones, and handing it the default table would serve a different product than a daemon does.
+  const server = createMcpServer(toolDepsForTest(), surface, false, tableForSurface(surface));
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
   const client = new Client({ name: 'c', version: '0' });
@@ -76,6 +80,60 @@ describe('calling a known tool the default surface does not advertise', () => {
       );
       expect(reply).toContain(ReticleTool.EXPLORE);
       expect(reply, 'it must name the hatch that works').toContain(ReticleTool.RUN);
+    } finally {
+      await close();
+    }
+  });
+});
+
+/**
+ * The same question on the surface a daemon actually serves, where the hatch is gone.
+ *
+ * `resolveToolSurface` falls back to `merged`, and `advertisedTools` drops `reticle_run` there — so
+ * the advice above, which is right on the surface it was written for, becomes the defect it exists
+ * to remove. Driven against a released daemon with one call: `reticle_tools { names:
+ * ["reticle_coverage"] }` answered "through reticle_run if it is not advertised under this profile"
+ * while `reticle_verify` was advertised and `reticle_run` was not registered at all (#978).
+ *
+ * Over the transport rather than against the builders, and for the reason this file already gives:
+ * the message can be perfect and never reach the wire. It also catches the half a builder test
+ * cannot see — `liveCallValues` rewrites every string leaving this server, and it does NOT rewrite
+ * `reticle_run`, because that name has nowhere to be redirected to.
+ */
+describe('the closed default surface, driven the way an agent drives it', () => {
+  /** The hatch, matched on a word boundary — `reticle_run_export` is a different tool entirely. */
+  const NAMES_THE_HATCH = /\breticle_run\b/;
+
+  it('advertises no dispatch hatch — the premise the assertions below rest on', async () => {
+    const { client, close } = await openServer(TOOL_SURFACE.MERGED);
+    try {
+      const names = (await client.listTools()).tools.map((tool) => tool.name);
+      expect(names).not.toContain(ReticleTool.RUN);
+      expect(names).toContain(ReticleTool.TOOLS);
+    } finally {
+      await close();
+    }
+  });
+
+  it('resolves a merged name without sending the agent to a tool it was not given', async () => {
+    const { client, close } = await openServer(TOOL_SURFACE.MERGED);
+    try {
+      const reply = await replyText(
+        client.callTool({ name: ReticleTool.TOOLS, arguments: { names: [ReticleTool.COVERAGE] } }),
+      );
+      expect(reply, 'the issue’s own reproduction').not.toMatch(NAMES_THE_HATCH);
+      expect(reply, 'the call that does work here').toContain(ReticleTool.VERIFY);
+    } finally {
+      await close();
+    }
+  });
+
+  it('answers an old name called directly with a route that exists on this surface', async () => {
+    const { client, close } = await openServer(TOOL_SURFACE.MERGED);
+    try {
+      const reply = await replyText(client.callTool({ name: ReticleTool.DIFF, arguments: {} }));
+      expect(reply).not.toMatch(/not found/i);
+      expect(reply).not.toMatch(NAMES_THE_HATCH);
     } finally {
       await close();
     }

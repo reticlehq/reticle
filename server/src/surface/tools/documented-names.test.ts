@@ -42,9 +42,17 @@ const AGENT_DOCS = [
 /**
  * The tools an agent is handed directly, so a bare `name({...})` in a doc is a call it can make.
  *
- * Everything else exists but is NOT advertised, and reaching it takes one `reticle_run` hop. The
- * root SKILL.md states that rule explicitly and follows it; the `skills/` directory did not, and a
- * skill that shows `reticle_clock({ ... })` as a bare call sends the reader to a tool that is not
+ * Everything else exists but is NOT advertised, and what it costs to reach DEPENDS ON THE SURFACE:
+ * one `reticle_run` hop where the dispatch hatch is advertised, and a restart with
+ * `RETICLE_ADVERTISE_ALL_TOOLS=1` on the default surface, which ships no hatch at all. This comment
+ * used to state the hop as a universal fact, which is the same false premise #978 was filed about —
+ * though it was never what made this guard pass: it reads DOCS, not the tool surface, so it could
+ * not have caught a wrong string in `dynamic-tools.ts` under any wording. Both halves are kept in
+ * the set below on purpose, because the docs serve readers on both surfaces and a name on either is
+ * a name somebody can reach.
+ *
+ * The root SKILL.md states the rule explicitly and follows it; the `skills/` directory did not, and
+ * a skill that shows `reticle_clock({ ... })` as a bare call sends the reader to a tool that is not
  * on their list. That is worse than saying nothing, and the repo's own tool-surface comment says
  * why: a tool an agent must already know about is a tool that never gets called.
  */
