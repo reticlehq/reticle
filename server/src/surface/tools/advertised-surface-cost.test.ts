@@ -105,8 +105,28 @@ const bytesOf = (json: string): number => Buffer.byteLength(json, 'utf8');
  * labels are a UNION (ask for two, get either), and a quarantined flow never runs however it is
  * labelled. Everything else about selection lives in the tool description, which is sent once.
  */
-const DEFAULT_SURFACE_BYTE_BUDGET = 24_600;
-// Raised TWICE, each time deliberately, each time with the measurement that bought it.
+const DEFAULT_SURFACE_BYTE_BUDGET = 24_700;
+// Raised, each time deliberately, each time with the measurement that bought it.
+//
+// LATEST RAISE, 24_600 -> 24_700. `reticle_verify { action: "explore" }` gained a `driver`
+// parameter and a `rewroteFlows` output field: 86 B on the wire (24,600 -> 24,686, ~21
+// tokens/turn) against 0 B of headroom. The prose was cut first — the parameter description went
+// through three rewrites and lost half its length — and 86 B is what is left once the enum's two
+// values and their JSON-Schema scaffolding are paid for, which no rewording removes.
+//
+// What it buys, and it is two separate things:
+//
+// `driver` is the only way to run an A/B between the models that drive. It was previously settable
+// only per-daemon through an environment variable, which means restarting the daemon between arms
+// — and that is precisely the setup that had a STALE daemon answer three consecutive runs of our
+// own benchmark with one configuration, reporting `steps: 24` on a run whose budget was 8. A
+// comparison that cannot switch arms within a session is a comparison that silently does not.
+//
+// `rewroteFlows` fixes a false report, which is the more serious of the two. `savedFlows` was a
+// before/after diff of flow NAMES, and a second drive records the same journeys under the same
+// names — so the ORDINARY second run came back with an empty list and the tool told its caller
+// "nothing is proved and nothing will replay" about a ten-step flow sitting on disk. A false
+// "nothing was verified" is the same class of mistake as a false "everything passed".
 //
 // SECOND RAISE, 24_100 -> 24_500. `reticle_verify { action: "mutate" }` costs 185 B on the wire
 // (24,050 -> 24,235, ~46 tokens/turn), and the 24_100 ratchet had 50 B of headroom.

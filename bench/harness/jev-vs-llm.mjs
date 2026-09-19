@@ -165,6 +165,9 @@ async function runArm(name) {
     // A drive with no steps is not a measurement of a cheap driver; it is a driver that never ran.
     if (!(0 < (result.steps ?? 0)))
       throw new Error(`the drive took no steps: ${JSON.stringify(result).slice(0, 300)}`);
+    // An arm that reports a different driver than the one it was told to use is not a result.
+    if (result.driver !== undefined && result.driver !== name)
+      throw new Error(`asked for the ${name} driver and the daemon drove with ${result.driver}`);
     const price = PRICE[name];
 
     return {
@@ -172,6 +175,10 @@ async function runArm(name) {
       status: 'MEASURED',
       wall_ms: Date.now() - startedAt,
       port,
+      // The driver the DAEMON says drove, not the one this bench asked for. They agree today; the
+      // point of reading it back is that a run where they disagree is a mislabelled arm, which is
+      // the one way a comparison can be wrong without looking wrong.
+      driver_reported: result.driver ?? null,
       stop_reason: result.stopReason ?? null,
       steps: result.steps ?? 0,
       // The budget this arm was actually given. Printed because the run that made this bench
@@ -187,6 +194,10 @@ async function runArm(name) {
       usd: Number(usd(usage, price).toFixed(6)),
       ...(result.error === undefined ? {} : { error: result.error }),
       ...(result.note === undefined ? {} : { note: result.note }),
+      // What a coding agent actually receives. Kept in the raw output because the READABILITY of
+      // this is a product property, and a benchmark that measures only cost would never notice it
+      // regressing to an empty string — which is exactly what it was for the Jev arm.
+      summary: result.summary ?? '',
     };
   } catch (error) {
     return { arm: name, status: 'NOT MEASURED', reason: String(error?.message ?? error) };
@@ -205,15 +216,53 @@ if (!(await up(API_HEALTH)) || !(await up(URL))) {
 }
 
 const names = null === only ? Object.keys(ARMS) : [only];
+/**
+ * How many times each arm is driven.
+ *
+ * One run per arm is not a measurement of a driver, it is a measurement of one drive. These arms
+ * put a model in a loop against a live app: the path taken varies, and so does what gets recorded —
+ * the Anthropic arm saved 3 flows on one run and 2 on the next, from an identical configuration.
+ * A scorecard quoting a single run would be quoting that variance as if it were a property.
+ */
+const REPEATS = Number(process.env.BENCH_REPEATS ?? '1');
 const rows = [];
-for (const name of names) {
-  console.error(`driving: ${name}…`);
-  const row = await runArm(name);
-  rows.push(row);
-  console.error(`  ${JSON.stringify(row)}`);
+for (let run = 1; run <= REPEATS; run++) {
+  for (const name of names) {
+    console.error(`driving: ${name} (run ${String(run)}/${String(REPEATS)})…`);
+    const row = { run, ...(await runArm(name)) };
+    rows.push(row);
+    console.error(`  ${JSON.stringify(row)}`);
+  }
 }
 
 const measured = rows.filter((r) => 'MEASURED' === r.status);
+
+/** Median, because these are small samples and one slow run should not move the headline. */
+const median = (xs) => {
+  const sorted = [...xs].sort((a, b) => a - b);
+  if (0 === sorted.length) return null;
+  const mid = Math.floor(sorted.length / 2);
+  return 0 === sorted.length % 2 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+};
+const summarise = (arm) => {
+  const got = measured.filter((r) => arm === r.arm);
+  if (0 === got.length) return null;
+  return {
+    runs: got.length,
+    wall_ms_median: median(got.map((r) => r.wall_ms)),
+    usd_median: median(got.map((r) => r.usd)),
+    // Reported as a RANGE as well as a median: this is the column that decides whether a cheaper
+    // driver actually won, and it is also the one that varies most between runs.
+    flows: got.map((r) => r.flows),
+    flows_median: median(got.map((r) => r.flows)),
+    stop_reasons: got.map((r) => r.stop_reason),
+  };
+};
+const perArm = Object.fromEntries(
+  Object.keys(ARMS)
+    .map((a) => [a, summarise(a)])
+    .filter(([, v]) => null !== v),
+);
 const out = {
   bench: 'jev-vs-llm',
   at: new Date().toISOString(),
@@ -222,21 +271,22 @@ const out = {
   focus: FOCUS,
   note: 'Same app, same tools, same loop; only the ModelDriver differs. Tokens are NOT comparable across arms (different billing units) — dollars and flows are.',
   rows,
-  ...(2 === measured.length
+  per_arm: perArm,
+  ...(perArm['anthropic'] !== undefined && perArm['jev'] !== undefined
     ? {
         comparison: {
           usd_ratio_anthropic_over_jev: Number(
-            (
-              (measured.find((r) => 'anthropic' === r.arm)?.usd ?? 0) /
-              Math.max(measured.find((r) => 'jev' === r.arm)?.usd ?? 0, 1e-9)
-            ).toFixed(1),
+            (perArm['anthropic'].usd_median / Math.max(perArm['jev'].usd_median, 1e-9)).toFixed(1),
           ),
           wall_ratio_anthropic_over_jev: Number(
             (
-              (measured.find((r) => 'anthropic' === r.arm)?.wall_ms ?? 0) /
-              Math.max(measured.find((r) => 'jev' === r.arm)?.wall_ms ?? 1, 1)
+              perArm['anthropic'].wall_ms_median / Math.max(perArm['jev'].wall_ms_median, 1)
             ).toFixed(2),
           ),
+          // Stated so nobody has to infer it: cheaper is only better at equal coverage, and these
+          // two arms do NOT record the same number of journeys per drive.
+          flows_median_anthropic: perArm['anthropic'].flows_median,
+          flows_median_jev: perArm['jev'].flows_median,
         },
       }
     : {}),

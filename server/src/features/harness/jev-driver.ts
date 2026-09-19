@@ -76,6 +76,68 @@ const COMPLETE_THRESHOLD = 0.7;
  */
 const TEARDOWN_TURNS = 3;
 
+/**
+ * The consequences the driver can declare, and the predicate each one becomes.
+ *
+ * Declaring one is not optional decoration — it is the difference between a drive and a click. The
+ * first version of this driver emitted `act_and_wait` with no `until` at all, and the engine said
+ * so in every single result: "the page settled and no channel reported a problem, but nothing was
+ * declared to prove — this is not verification". Six actions, zero proved. A flow recorded from that
+ * drive passes even when the feature is broken, which is the exact failure this product exists to
+ * catch, sitting inside the thing meant to catch it.
+ *
+ * Every predicate here is BARE — a kind with no specifics — because before acting the driver does
+ * not know which endpoint, signal or route to expect. Bare is still consequence-grade evidence: it
+ * asserts the app's own machinery moved, which a presence check on screen text does not.
+ *
+ * Only SIGNAL and NET can be declared bare, and that is a fact about the engine rather than a
+ * preference. `engine/src/evidence/already-true.ts` lists the kinds that read live state — element,
+ * text, route and state — and those are checked BEFORE the action as well as after, precisely so a
+ * condition that already held cannot be sold as something the action caused. A bare predicate of
+ * one of those kinds is unconditionally true: there is always a current route, and there is always
+ * some store. That file says so in as many words at its `ROUTE` case.
+ *
+ * This driver tried all four anyway and the engine refused all four, every time, with
+ * `already_true` — "the declared consequence was already true before this action, so it proves
+ * nothing about it". Signal and net are event-based and floored at the act's own cursor, so they
+ * cannot be answered by the past, which is exactly what makes them safe to declare with no
+ * specifics. Route and state come back the moment the driver can name a pathname or a store path
+ * instead of a bare kind, and they are the stronger evidence when it can.
+ *
+ * `anyOf` is not a loophole: it reports as live-reading if ANY branch does, so it holds only the
+ * two safe kinds for the same reason.
+ *
+ * ponytail: bare `net` can in principle be satisfied by unrelated traffic inside the action's
+ * window — a page polling every second would answer for a button that did nothing. The window is
+ * the action's own, not "ever", so the exposure is small but real. The upgrade is to learn the
+ * app's vocabulary first (one `reticle_observe` early in the drive gives the actual signal names
+ * and endpoint paths) and declare `urlContains`/`name` instead of a bare kind. Until then `state`
+ * and `signal` are the trustworthy ones and `net` is the one to distrust on a chatty app.
+ */
+const CONSEQUENCES = {
+  signal: {
+    predicate: { kind: 'signal' },
+    describes: 'The app fires one of its own signals (the strongest evidence it did something).',
+  },
+  net: {
+    predicate: { kind: 'net' },
+    describes: 'The app sends a request to its backend — expect this for anything that saves.',
+  },
+  any: {
+    predicate: { kind: 'anyOf', predicates: [{ kind: 'signal' }, { kind: 'net' }] },
+    describes: 'Something the app owns moves, but which one is not predictable from here.',
+  },
+} as const;
+
+/**
+ * Declaring nothing, named so it can be CHOSEN rather than defaulted to.
+ *
+ * A control that genuinely changes nothing observable — opening a menu, focusing a field — should
+ * be recorded as such, not given an expectation it will fail. The verdict then comes back
+ * `no-fault`, which is honest: nothing was claimed, so nothing was proved.
+ */
+const NO_CONSEQUENCE = 'nothing';
+
 /** Roles that want text typed into them rather than clicked. */
 const TEXT_ROLES = new Set(['textbox', 'searchbox', 'spinbutton']);
 /** Roles that toggle. */
@@ -461,9 +523,52 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
         );
 
       const action = actionFor(picked.role);
-      const args: Record<string, unknown> = { ref: picked.ref, action };
+
+      // A SECOND call, deliberately. Jev answers every question in one pass and the answers are
+      // independent, so "what should I expect from the element I am about to choose" cannot be
+      // asked in the same breath as "which element". It costs another ~350ms and ~$0.00004, and it
+      // costs nothing from the STEP budget, which is what is actually scarce here.
+      const expectation = await callJev(
+        { apiKey: options.apiKey, model, baseUrl, doFetch },
+        `${buildState(input.system, input.history, drive)}\n\nABOUT TO: ${action} ${picked.desc}`,
+        {
+          expected_consequence: {
+            type: 'choice',
+            instructions:
+              'If this action works, what should the application itself be observed to do? Name the consequence you would check for. Choose `nothing` only for a control that genuinely changes nothing observable, such as focusing a field.',
+            criteria: {
+              ...Object.fromEntries(
+                Object.entries(CONSEQUENCES).map(([key, value]) => [key, value.describes]),
+              ),
+              [NO_CONSEQUENCE]: 'Nothing observable should change.',
+            },
+          },
+        },
+      );
+      const expected = expectation.answers?.['expected_consequence']?.choice ?? NO_CONSEQUENCE;
+      const consequence = CONSEQUENCES[expected as keyof typeof CONSEQUENCES];
+
+      const args: Record<string, unknown> = {
+        ref: picked.ref,
+        action,
+        // The element's own description, so the drive reads back as a journey rather than as refs.
+        // A ref is a handle that expired when the page changed; this survives being read tomorrow.
+        intent: `${action} ${picked.desc}`,
+        ...(consequence === undefined ? {} : { until: consequence.predicate }),
+      };
       if ('fill' === action) args['args'] = { value: fillValueFor(nameOf(picked.desc)) };
-      return only(request(Tool.ACT_AND_WAIT, args), `${action} ${picked.desc}`, usage);
+
+      const spent: ModelTurn['usage'] = {
+        input: usage.input + (expectation.usage?.input_tokens ?? 0),
+        output: usage.output + (expectation.usage?.output_tokens ?? 0),
+        cacheRead: 0,
+        cacheWrite: 0,
+      };
+      return only(
+        request(Tool.ACT_AND_WAIT, args),
+        `${action} ${picked.desc}, expecting ${expected}`,
+        spent,
+      );
     },
   };
 }

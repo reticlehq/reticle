@@ -17,6 +17,7 @@ import { stepCountSchema } from './args/numeric-bounds.js';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
 import { exploreApp, harnessAvailable, MSG_NO_HARNESS_KEY } from './harness-explore.js';
 import { DRIVER_NAMES } from '@/features/harness/drivers.js';
+import { describeDrive } from '@/features/harness/drive-report.js';
 import { StopReason, type HarnessResult } from '@/features/harness/harness.js';
 
 export const EXPLORE_TOOLS: ToolDef[] = [
@@ -40,7 +41,7 @@ export const EXPLORE_TOOLS: ToolDef[] = [
         .enum(DRIVER_NAMES)
         .optional()
         .describe(
-          'Which model drives this run. `jev` is a System One model: it cannot generate a tool call, so it picks from the elements actually on the page — far cheaper and faster, and structurally unable to name a control that is not there. `anthropic` generates its calls and segments its recordings into better-named journeys. Naming one that is not configured is an ERROR, never a substitution, so an A/B between them cannot silently measure the same driver twice. Omit to use the daemon default.',
+          'Which model drives. An unconfigured one is an error, never a substitution, so an A/B cannot measure the same driver twice. Omit for the default.',
         ),
       sessionId: z
         .string()
@@ -58,7 +59,12 @@ export const EXPLORE_TOOLS: ToolDef[] = [
       savedFlows: z.array(z.string()),
       /** Flows that already existed and were driven and written again. A second run's ordinary result. */
       rewroteFlows: z.array(z.string()),
-      /** The model's own account of what it drove. NOT a verdict — the flows are the evidence. */
+      /**
+       * What the drive did, derived from the calls it made and the verdicts the engine returned.
+       *
+       * Not the driver's narration. A driver that cannot write a sentence used to leave this empty,
+       * and a driver that can is the one witness with a reason to round "unknown" up to "worked".
+       */
       summary: z.string(),
       /** Present when the drive broke: a model that would not answer, a wedged browser. */
       error: z.string().optional(),
@@ -90,7 +96,12 @@ export const EXPLORE_TOOLS: ToolDef[] = [
         steps: drive.steps,
         savedFlows: [...savedFlows],
         rewroteFlows: [...rewroteFlows],
-        summary: drive.summary,
+        // Derived, not narrated. The driver's own `summary` is appended only when it said
+        // something — it is the one part of this a model authored, so it goes last and is labelled.
+        summary: [
+          describeDrive(drive.toolCalls, [...savedFlows, ...rewroteFlows]),
+          ...(0 === drive.summary.length ? [] : [`The driver's own account: ${drive.summary}`]),
+        ].join('\n'),
         ...(drive.error === undefined ? {} : { error: drive.error }),
         usage: drive.usage,
         // The note only fires when the drive left NOTHING behind. A rewritten flow is a flow: it

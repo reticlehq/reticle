@@ -177,9 +177,56 @@ describe('the jev driver builds every call from the page', () => {
     expect(result.calls[0]?.name).toBe('reticle_snapshot');
   });
 
-  it('reports what the turn cost', async () => {
+  it('reports what the turn cost, including the second question it had to ask', async () => {
     const result = await turn(READY, chose('e5'));
-    expect(result.usage).toEqual({ input: 700, output: 30, cacheRead: 0, cacheWrite: 0 });
+    // Two calls: one to choose the action, one to choose the consequence to declare. They cannot be
+    // merged — Jev answers every question in one pass and the answers are independent, so "what
+    // should I expect from the element I am about to choose" cannot be asked alongside the choice.
+    expect(result.usage).toEqual({ input: 1400, output: 60, cacheRead: 0, cacheWrite: 0 });
+  });
+
+  /**
+   * The defect this pins is the one that made the whole driver worthless without looking like it.
+   *
+   * It emitted `act_and_wait` with no `until`, so the engine returned `no-fault` on every action —
+   * "nothing was declared to prove — this is not verification" — and a flow recorded from that
+   * drive passes even when the feature is broken. Six actions driven, zero proved, and the run
+   * reported as a cheap success.
+   */
+  it('declares a consequence before acting', async () => {
+    const result = await turn(READY, {
+      ...chose('e5'),
+      expected_consequence: { type: 'choice', choice: 'net', confidence: 0.9 },
+    });
+    expect(result.calls[0]?.args['until']).toEqual({ kind: 'net' });
+  });
+
+  it('declares nothing when nothing observable should change, rather than inventing an expectation', async () => {
+    const result = await turn(READY, {
+      ...chose('e5'),
+      expected_consequence: { type: 'choice', choice: 'nothing', confidence: 0.9 },
+    });
+    expect(result.calls[0]?.args['until']).toBeUndefined();
+  });
+
+  /**
+   * Only signal and net may be declared bare. Route and state read LIVE state, so a bare one of
+   * those is unconditionally true — there is always a current route — and the engine refuses it as
+   * `already_true`. Offering them at all is how this driver spent three runs proving nothing.
+   */
+  it('never offers a consequence that would be true before the action', async () => {
+    const seen = { bodies: [] as string[] };
+    await turn(READY, chose('e5'), seen);
+    const body = JSON.parse(seen.bodies[1] ?? '{}') as {
+      questions: { expected_consequence: { criteria: Record<string, string> } };
+    };
+    const offered = Object.keys(body.questions.expected_consequence.criteria);
+    expect(offered.sort()).toEqual(['any', 'net', 'nothing', 'signal']);
+  });
+
+  it('carries the element description so the drive reads back as a journey, not as refs', async () => {
+    const result = await turn(READY, chose('e5'));
+    expect(result.calls[0]?.args['intent']).toContain('New deployment');
   });
 
   it('tells the model which refs it has already driven', async () => {
