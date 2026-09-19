@@ -18,6 +18,12 @@ export default defineConfig({
   // Every package shares one bound; see vitest.shared.ts for the gate this kept red.
   test: {
     environment: 'jsdom',
+    environmentOptions: {
+      jsdom: {
+        url: 'http://localhost/',
+      },
+    },
+    setupFiles: ['./vitest.setup.ts'],
     /**
      * jsdom is slow, and this package's heaviest tests mount an entire HUD into it. Under a loaded
      * runner — CI, or a machine running several suites at once — that exceeds vitest's 5s default,
