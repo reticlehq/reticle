@@ -11,7 +11,7 @@
  * MEASURED, and stay silent where it measured nothing. A synthesised `status: 200` would turn a
  * blind spot into a false green, which is a worse defect than the one being fixed.
  */
-import { describe, expect, it, vi, afterEach } from 'vitest';
+import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
 import { EventType, NetInitiator } from '@reticlehq/core';
 import { installNavigation } from './navigation.js';
 
@@ -19,6 +19,33 @@ interface Captured {
   type: EventType;
   data: Record<string, unknown>;
 }
+
+/**
+ * The Performance Timeline, installed here because the test environment does not implement one.
+ *
+ * jsdom's `Performance` is `now`, `toJSON` and `timeOrigin` — there is no `getEntriesByType` to spy
+ * on, and `vi.spyOn` refuses a property that does not exist. The spy below used to work anyway
+ * because the globals-copy worker left Node's `perf_hooks` `performance` on the global under the
+ * same name; that was an accident of the runner rather than anything a browser guarantees, and this
+ * package now runs its tests inside the jsdom VM context so synthetic UIEvents can carry a real
+ * `Window` (see `vitest.config.ts`).
+ *
+ * So the browser API is supplied explicitly, and supplied EMPTY: every case below still says for
+ * itself what the navigation entry is. Nothing here stands in for the code under test, and the
+ * genuinely-absent case stays covered by `navigationEntry()`'s own `try`/`catch` — a call to an
+ * undefined member throws, which is the same path `blocked in this context` drives.
+ */
+const TIMELINE_METHOD = 'getEntriesByType';
+const EMPTY_TIMELINE = (): PerformanceEntry[] => [];
+
+beforeEach(() => {
+  if (TIMELINE_METHOD in performance) return;
+  Reflect.defineProperty(performance, TIMELINE_METHOD, {
+    value: EMPTY_TIMELINE,
+    configurable: true,
+    writable: true,
+  });
+});
 
 /** Stub `performance.getEntriesByType('navigation')` with one entry, or make it throw. */
 function withEntry(entry: unknown, throws = false): Captured[] {
@@ -40,7 +67,14 @@ const NAV = {
   responseStatus: 200,
 };
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  // Leave the environment as it was found: remove only the method this file installed, never one a
+  // future jsdom implements for real.
+  if (EMPTY_TIMELINE === Reflect.get(performance, TIMELINE_METHOD)) {
+    Reflect.deleteProperty(performance, TIMELINE_METHOD);
+  }
+});
 
 describe('the document request is reported from the browser own record', () => {
   it('emits the navigation as a net request', () => {
