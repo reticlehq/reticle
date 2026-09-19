@@ -12,7 +12,7 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ReticleDir, type AccountState } from '@reticlehq/core';
+import { ReticleDir, type AccountState, apiKeyFrom } from '@reticlehq/core';
 import { CloudEnv } from './cloud-sync.js';
 import { SESSION_FILE } from '@/command/cli/cloud-kit.js';
 
@@ -60,9 +60,10 @@ function fromSessionFile(home: string): AccountState | undefined {
  * acting.
  */
 export function readAccountState(home: string, env: NodeJS.ProcessEnv): AccountState {
-  const key = env[CloudEnv.KEY];
+  // Through the resolver, so a machine still exporting the key's previous name is still signed in.
+  const key = apiKeyFrom(env);
   const url = env[CloudEnv.URL];
-  if ('string' === typeof key && key.length > 0) {
+  if (key !== undefined) {
     return {
       signedIn: true,
       ...('string' === typeof url && url.length > 0 ? { host: url.replace(/\/+$/, '') } : {}),

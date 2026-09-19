@@ -719,6 +719,10 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     project,
     fs,
     reticleRoot,
+    // The same resolution cloud sync uses, handed to the tool surface as a port. The harness reads
+    // it so a linked machine needs no exported key; see `withLinkedCredential`.
+    linkedCloud: async () =>
+      (await resolveProjectCloud(fs, reticleRoot, homedir(), process.env)).config,
     // The long-lived daemon needs this MORE than the standalone MCP process does, not less: it is
     // the one that outlives a single project and serves every app on the machine. Omitting it here
     // silently disabled per-session artifact resolution for every agent that attaches to a running

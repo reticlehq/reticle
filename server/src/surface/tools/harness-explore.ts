@@ -8,7 +8,7 @@
  * deterministically with no model in the loop at all.
  */
 
-import { ReticleEnv, ReticleTool, asRecord } from '@reticlehq/core';
+import { ReticleEnv, ReticleTool, apiKeyFrom, asRecord } from '@reticlehq/core';
 import type { ToolDeps } from './tool-kit.js';
 import { harnessDriver, harnessOptionsFromEnv } from '@/features/harness/driver.js';
 import {
@@ -110,6 +110,44 @@ export const MSG_NO_OPENAI_KEY =
 
 const msgUnknownDriver = (asked: string): string =>
   `Unknown harness driver \`${asked}\`. Known drivers: ${DRIVER_NAMES.join(', ')}.`;
+
+/**
+ * The environment, plus the credential this machine already has.
+ *
+ * `reticle link` mints a project-scoped key and files it in `~/.reticle/credentials.json`; the CLI
+ * has read it from there for as long as it has existed. The harness did not, and read only
+ * `process.env` — so somebody who had signed in, linked their project and been told they were
+ * connected still got "no model configured to drive the app", and the only way out was to find the
+ * key in the console and export it by hand. Five manual steps to reach a feature they had already
+ * finished setting up.
+ *
+ * Resolved into the env rather than threaded through four call sites: the drivers and the
+ * preference lookup all read an env record, and giving them a completed one leaves each of them
+ * exactly as simple as it was. An EXPLICIT variable still wins — someone who exported a key meant
+ * that key, and CI has no linked project to read.
+ *
+ * The credential arrives through `deps.linkedCloud`, a port, because resolving it here would make
+ * the tool surface reach into `memory/cloud` — a reach the directory guard refused, correctly.
+ */
+export async function withLinkedCredential(
+  deps: ToolDeps,
+  env: Record<string, string | undefined>,
+): Promise<Record<string, string | undefined>> {
+  if (apiKeyFrom(env) !== undefined) return env;
+  try {
+    const linked = await deps.linkedCloud?.();
+    if (linked === undefined || null === linked) return env;
+    return {
+      ...env,
+      [ReticleEnv.API_KEY]: linked.apiKey,
+      [ReticleEnv.CLOUD_URL]: env[ReticleEnv.CLOUD_URL] ?? linked.url,
+    };
+  } catch {
+    // A credential store that cannot be read is "not linked", not an error. The harness is optional
+    // and its absence is a routine answer; a drive must never fail because a JSON file was odd.
+    return env;
+  }
+}
 
 /** Is there a model the harness can drive with? A read, because "not configured" is not a failure. */
 export function harnessAvailable(env: Record<string, string | undefined>): boolean {

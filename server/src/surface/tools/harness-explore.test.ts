@@ -13,6 +13,7 @@ import {
   maxStepsFromEnv,
   reconcileFlows,
   knownDriver,
+  withLinkedCredential,
   MSG_NO_HARNESS_KEY,
   MSG_NO_JEV_KEY,
   MSG_NO_OPENAI_KEY,
@@ -278,5 +279,64 @@ describe('a stored preference this build cannot honour', () => {
         { maxSteps: 1, skipPlatformConfig: true, driverName: 'openai' },
       ),
     ).rejects.toThrow(MSG_NO_OPENAI_KEY);
+  });
+});
+
+/**
+ * The credential `reticle link` already filed.
+ *
+ * It mints a project-scoped key into `~/.reticle/credentials.json`, and the CLI has read it from
+ * there for as long as it has existed. The harness read only `process.env` — so somebody who had
+ * signed in, linked their project and been told they were connected still got "no model configured
+ * to drive the app", and the only way out was to find the key in the console and export it by hand.
+ */
+describe('finding the key a linked machine already has', () => {
+  const linked = (cloud: { url: string; apiKey: string } | null): ToolDeps =>
+    ({ linkedCloud: () => Promise.resolve(cloud) }) as unknown as ToolDeps;
+
+  const FILED = { url: 'https://app.reticle.sh', apiKey: 'rk_live_filed' };
+
+  it('uses the filed credential when nothing is exported', async () => {
+    const env = await withLinkedCredential(linked(FILED), {});
+    expect(env['RETICLE_API_KEY']).toBe('rk_live_filed');
+    expect(env['RETICLE_CLOUD_URL']).toBe('https://app.reticle.sh');
+  });
+
+  /** Someone who exported a key meant that key — and CI has no linked project to read. */
+  it('leaves an explicitly exported key alone', async () => {
+    const env = await withLinkedCredential(linked(FILED), { RETICLE_API_KEY: 'rk_live_exported' });
+    expect(env['RETICLE_API_KEY']).toBe('rk_live_exported');
+  });
+
+  it('honours the legacy name as explicit too, rather than overwriting it', async () => {
+    const env = await withLinkedCredential(linked(FILED), { RETICLE_CLOUD_KEY: 'rk_live_legacy' });
+    expect(env['RETICLE_API_KEY']).toBeUndefined();
+    expect(env['RETICLE_CLOUD_KEY']).toBe('rk_live_legacy');
+  });
+
+  it('keeps an explicitly named host, so a proxy is not overridden by the linked one', async () => {
+    const env = await withLinkedCredential(linked(FILED), {
+      RETICLE_CLOUD_URL: 'http://localhost:1',
+    });
+    expect(env['RETICLE_CLOUD_URL']).toBe('http://localhost:1');
+  });
+
+  it('changes nothing on a machine that was never linked', async () => {
+    const env = await withLinkedCredential(linked(null), {});
+    expect(env['RETICLE_API_KEY']).toBeUndefined();
+  });
+
+  /** An embedder with no filesystem supplies no port at all. Not linked, never an error. */
+  it('changes nothing when the host supplies no resolver', async () => {
+    const env = await withLinkedCredential({} as unknown as ToolDeps, {});
+    expect(env['RETICLE_API_KEY']).toBeUndefined();
+  });
+
+  /** A credential store that cannot be read is "not linked", never a failed drive. */
+  it('survives a resolver that throws', async () => {
+    const angry = {
+      linkedCloud: () => Promise.reject(new Error('unreadable')),
+    } as unknown as ToolDeps;
+    await expect(withLinkedCredential(angry, {})).resolves.toEqual({});
   });
 });

@@ -49,9 +49,9 @@ describe('reading the account state', () => {
     expect(state.host).toBe('https://app.reticle.sh');
   });
 
-  it('is signed in from RETICLE_CLOUD_KEY, which is how an agent authenticates', () => {
+  it('is signed in from RETICLE_API_KEY, which is how an agent authenticates', () => {
     const state = readAccountState(tempHome(), {
-      RETICLE_CLOUD_KEY: 'k-123',
+      RETICLE_API_KEY: 'k-123',
       RETICLE_CLOUD_URL: 'https://reticle.internal',
     });
     expect(state.signedIn).toBe(true);
@@ -65,7 +65,7 @@ describe('reading the account state', () => {
     // anything else running there.
     const fromFile = JSON.stringify(readAccountState(tempHome(SESSION), {}));
     const fromEnv = JSON.stringify(
-      readAccountState(tempHome(), { RETICLE_CLOUD_KEY: 'k-123', RETICLE_CLOUD_URL: 'https://x' }),
+      readAccountState(tempHome(), { RETICLE_API_KEY: 'k-123', RETICLE_CLOUD_URL: 'https://x' }),
     );
     expect(fromFile).not.toContain('super-secret-token-value');
     expect(fromFile).not.toMatch(/token/i);
@@ -92,9 +92,27 @@ describe('reading the account state', () => {
   it('prefers the explicit env key over a stale session file', () => {
     // An agent that was handed a key is authenticating as that key, whatever a human left on disk.
     const state = readAccountState(tempHome(SESSION), {
-      RETICLE_CLOUD_KEY: 'k-123',
+      RETICLE_API_KEY: 'k-123',
       RETICLE_CLOUD_URL: 'https://reticle.internal',
     });
     expect(state.host).toBe('https://reticle.internal');
+  });
+});
+
+/**
+ * The key's previous name still signs a machine in.
+ *
+ * The console printed `RETICLE_CLOUD_KEY` to everybody who ever connected a project, so it is
+ * exported in shells and CI configs nobody here can edit. Reading only the new name would report
+ * those machines as signed OUT — which shows up as sync quietly doing nothing.
+ */
+describe('the key under its previous name', () => {
+  it('still counts as signed in', () => {
+    const state = readAccountState('/home', {
+      RETICLE_CLOUD_KEY: 'rk_live_legacy',
+      RETICLE_CLOUD_URL: 'https://app.reticle.sh',
+    });
+    expect(state.signedIn).toBe(true);
+    expect(state.host).toBe('https://app.reticle.sh');
   });
 });

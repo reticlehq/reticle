@@ -35,6 +35,18 @@ export interface ToolDeps<Ext = unknown> {
   recordings: RecordingStore;
   /** on-disk anchored-flow store (.reticle/flows/). */
   flows: FlowStore;
+  /**
+   * The credential this machine already holds for the linked project, if it is linked.
+   *
+   * INJECTED rather than read here. `reticle link` files a project-scoped key in
+   * `~/.reticle/credentials.json`, and the harness needs it so that somebody who has signed in and
+   * linked is not also asked to export a key by hand. Resolving it inside the tool surface would
+   * make `tools` reach into `memory/cloud`, which the directory guard refused — and it was right
+   * to: this is a port, and the daemon already resolves exactly this for cloud sync.
+   *
+   * Absent ⇒ nothing is linked, or the caller is an embedder with no filesystem. Never an error.
+   */
+  linkedCloud?: () => Promise<{ url: string; apiKey: string } | null>;
   /** structured annotations accumulating for the live recording. */
   annotations: AnnotationStore;
   /**

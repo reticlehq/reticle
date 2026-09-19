@@ -15,7 +15,12 @@ import { z } from 'zod';
 import { ReticleTool, asRecord } from '@reticlehq/core';
 import { stepCountSchema } from './args/numeric-bounds.js';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
-import { exploreApp, harnessAvailable, MSG_NO_HARNESS_KEY } from './harness-explore.js';
+import {
+  exploreApp,
+  harnessAvailable,
+  withLinkedCredential,
+  MSG_NO_HARNESS_KEY,
+} from './harness-explore.js';
 import { DRIVER_NAMES } from '@/features/harness/drivers.js';
 import { describeDrive } from '@/features/harness/drive-report.js';
 import { StopReason, type HarnessResult } from '@/features/harness/harness.js';
@@ -79,12 +84,15 @@ export const EXPLORE_TOOLS: ToolDef[] = [
       note: z.string().optional(),
     },
     handler: async (deps: ToolDeps, args: Record<string, unknown>) => {
-      if (!harnessAvailable(process.env)) throw new Error(MSG_NO_HARNESS_KEY);
+      // The credential `reticle link` already filed counts as configured, so somebody who has
+      // signed in and linked does not also have to export a key by hand.
+      const env = await withLinkedCredential(deps, process.env);
+      if (!harnessAvailable(env)) throw new Error(MSG_NO_HARNESS_KEY);
       const persona = args['persona'];
       const maxSteps = args['maxSteps'];
       const sessionId = args['sessionId'];
       const driver = args['driver'];
-      const { drive, savedFlows, rewroteFlows, driverName } = await exploreApp(deps, process.env, {
+      const { drive, savedFlows, rewroteFlows, driverName } = await exploreApp(deps, env, {
         ...('string' === typeof persona ? { focus: persona } : {}),
         ...('number' === typeof maxSteps ? { maxSteps } : {}),
         ...('string' === typeof sessionId ? { sessionId } : {}),
