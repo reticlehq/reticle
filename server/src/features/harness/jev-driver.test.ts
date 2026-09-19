@@ -393,7 +393,7 @@ describe('where the driver gets its key', () => {
   it('uses the platform key against the platform, which is the ordinary path', () => {
     expect(
       jevOptionsFromEnv({
-        RETICLE_CLOUD_KEY: 'rk_live_x',
+        RETICLE_API_KEY: 'rk_live_x',
         RETICLE_CLOUD_URL: 'https://app.reticle.sh',
       }),
     ).toEqual({
@@ -404,13 +404,13 @@ describe('where the driver gets its key', () => {
 
   /** Reticle ships no Jev key, so a platform key with nowhere to send it is not a usable driver. */
   it('is unavailable with a platform key and no host', () => {
-    expect(jevOptionsFromEnv({ RETICLE_CLOUD_KEY: 'rk_live_x' })).toBeUndefined();
+    expect(jevOptionsFromEnv({ RETICLE_API_KEY: 'rk_live_x' })).toBeUndefined();
   });
 
   it('prefers a direct key, so debugging the upstream never lands on the proxy', () => {
     const options = jevOptionsFromEnv({
       JEV_API_KEY: 'j',
-      RETICLE_CLOUD_KEY: 'rk_live_x',
+      RETICLE_API_KEY: 'rk_live_x',
       RETICLE_CLOUD_URL: 'https://app.reticle.sh',
     });
     expect(options?.apiKey).toBe('j');

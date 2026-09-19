@@ -273,7 +273,7 @@ async function explore(
 
 /**
  * Best-effort push of a finished run to the cloud dashboard. Opt-in: only fires when the user has set
- * RETICLE_CLOUD_URL + RETICLE_CLOUD_KEY (the "shifted to server" step). Absent → no-op, nothing leaves the
+ * RETICLE_CLOUD_URL + RETICLE_API_KEY (the "shifted to server" step). Absent → no-op, nothing leaves the
  * machine (the no-phone-home default). A push failure NEVER changes the verdict or exit code — the run is
  * already reported locally; the cloud copy is an enhancement.
  */

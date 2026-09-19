@@ -204,7 +204,7 @@ export const ReticleEnv = {
    * A direct Jev key, for this repo's own benchmarks and for anyone holding a TypeSafe account.
    *
    * Users are not expected to have one. The ordinary path is the key they already minted on the
-   * platform (`RETICLE_CLOUD_KEY`), which reaches Jev through the proxy at `RETICLE_CLOUD_URL` —
+   * platform (`RETICLE_API_KEY`), which reaches Jev through the proxy at `RETICLE_CLOUD_URL` —
    * this variable is the escape hatch that skips it, and it takes precedence when both are set so
    * that a developer debugging the upstream is never silently talking to the proxy instead.
    */
@@ -218,14 +218,37 @@ export const ReticleEnv = {
   /**
    * The API key minted on the platform, and the host it belongs to.
    *
-   * Both long predate this block and were spelled inline wherever they were read — `cloud-kit.ts`
-   * has one copy, and the harness driver would have been the second. Named here because the rule is
-   * that a wire string is a constant, and because two spellings of one environment variable is a
-   * rename waiting to half-land.
+   * Read through `apiKeyFrom()`, never directly — see the note on that function for why there are
+   * two names for one key and why neither may be dropped.
    */
+  API_KEY: 'RETICLE_API_KEY',
+  /** The name this key had until 2026-09. Still honoured; see `apiKeyFrom()`. */
   CLOUD_KEY: 'RETICLE_CLOUD_KEY',
   CLOUD_URL: 'RETICLE_CLOUD_URL',
 } as const;
+
+/**
+ * The platform API key, whichever name it arrives under.
+ *
+ * `RETICLE_API_KEY` is the name. `RETICLE_CLOUD_KEY` is what it was called until 2026-09, and it
+ * keeps working — not out of politeness, but because the console printed that name to every user
+ * who ever connected a project, so it is exported in shells and CI configs we cannot see or edit.
+ * A rename that silently stops reading the old name does not look like a rename to those people;
+ * it looks like the product quietly losing their credentials.
+ *
+ * ONE function, because the alternative is each caller remembering both names and one of them
+ * forgetting. That is not hypothetical: this key was read inline in several places before it was
+ * named here at all, which is exactly how a rename half-lands.
+ *
+ * The new name wins when both are set, so a user migrating can export the new one and confirm it
+ * works before removing the old.
+ */
+export function apiKeyFrom(env: Record<string, string | undefined>): string | undefined {
+  const current = env[ReticleEnv.API_KEY];
+  if (current !== undefined && 0 < current.length) return current;
+  const legacy = env[ReticleEnv.CLOUD_KEY];
+  return legacy !== undefined && 0 < legacy.length ? legacy : undefined;
+}
 
 /** Hard transport bounds shared by the browser and bridge. */
 export const TRANSPORT_LIMITS = {

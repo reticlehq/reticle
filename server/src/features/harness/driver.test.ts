@@ -193,7 +193,7 @@ describe('the harness driver', () => {
  * beginning `rk_live_`, which works and reads like a mistake.
  */
 describe('where the anthropic driver gets its key', () => {
-  const CLOUD = { RETICLE_CLOUD_KEY: 'rk_live_x', RETICLE_CLOUD_URL: 'https://app.reticle.sh' };
+  const CLOUD = { RETICLE_API_KEY: 'rk_live_x', RETICLE_CLOUD_URL: 'https://app.reticle.sh' };
 
   it('is unavailable with nothing configured', () => {
     expect(harnessOptionsFromEnv({})).toBeUndefined();
@@ -212,7 +212,7 @@ describe('where the anthropic driver gets its key', () => {
 
   /** A platform key with no host to send it to is not a usable driver; Reticle ships no key. */
   it('is unavailable with a platform key and no host', () => {
-    expect(harnessOptionsFromEnv({ RETICLE_CLOUD_KEY: 'rk_live_x' })).toBeUndefined();
+    expect(harnessOptionsFromEnv({ RETICLE_API_KEY: 'rk_live_x' })).toBeUndefined();
   });
 
   it('prefers an explicit Anthropic key, because exporting one is a decision', () => {

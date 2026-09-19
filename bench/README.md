@@ -129,7 +129,7 @@ ANTHROPIC_API_KEY=sk-... JEV_API_KEY=... BENCH_REPEATS=3 node bench/harness/jev-
 # 5d. Do the platform and the harness actually MEET? Drives a daemon holding only a platform key
 #     against a real app, with every provider key blanked. Called by reticle-cloud's
 #     scripts/harness-sync-check.mjs, which drives the whole chain from signup onwards.
-RETICLE_CLOUD_URL=... RETICLE_CLOUD_KEY=rk_live_... node bench/harness/platform-drive.mjs
+RETICLE_CLOUD_URL=... RETICLE_API_KEY=rk_live_... node bench/harness/platform-drive.mjs
 
 # 6. Layer C — deterministic regression suite (no API key). Records each flow once, then replays it
 #    with NO model and asserts a declared consequence. This is the RRE / regression story + the

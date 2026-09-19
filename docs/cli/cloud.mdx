@@ -20,7 +20,7 @@ These are thin clients over the `/v1` API. The logic is server-side; these verbs
 | `~/.reticle/credentials.json` | Project-scoped API keys from `reticle link`, keyed by `projectId` | Yes |
 | `<repo>/.reticle/cloud.json` | `{ projectId, projectName, url, sync, verify }`. The non-secret binding | No, commit it |
 
-Auth for any command is `RETICLE_CLOUD_KEY` from the environment (the agent path) if set, otherwise the login token. `RETICLE_CLOUD_URL` overrides the endpoint; the default is `http://localhost:8890`. When a command falls back to that default without `RETICLE_CLOUD_URL` (or a saved session URL), it prints a one-line notice on stderr; stdout stays pure JSON for agents.
+Auth for any command is `RETICLE_API_KEY` from the environment (the agent path) if set, otherwise the login token. `RETICLE_CLOUD_URL` overrides the endpoint; the default is `http://localhost:8890`. When a command falls back to that default without `RETICLE_CLOUD_URL` (or a saved session URL), it prints a one-line notice on stderr; stdout stays pure JSON for agents.
 
 ## The commands
 
@@ -70,7 +70,7 @@ An unattached repo also gets a next-step nudge on stderr, telling you to run `re
 npx @reticlehq/server link [--project <name|id>]
 ```
 
-Binds this repository to a cloud project. With a login token it **mints** a project-scoped key, so there is nothing to paste. With `RETICLE_CLOUD_KEY` already set, it resolves that key's project instead. `--project` accepts a slug id or a display name; omitted, it uses the `default` project. Writes `cloud.json` and the key.
+Binds this repository to a cloud project. With a login token it **mints** a project-scoped key, so there is nothing to paste. With `RETICLE_API_KEY` already set, it resolves that key's project instead. `--project` accepts a slug id or a display name; omitted, it uses the `default` project. Writes `cloud.json` and the key.
 
 ### `reticle project`
 
@@ -137,7 +137,7 @@ reticle: cloud not attached here ... run `reticle link` (or set RETICLE_CLOUD_UR
 | ---- | ----------------------------------------------------------------------------------- |
 | `0`  | Success                                                                             |
 | `1`  | The API call failed, or the repository is not attached where attachment is required |
-| `2`  | Usage error, or not signed in and no `RETICLE_CLOUD_KEY`                            |
+| `2`  | Usage error, or not signed in and no `RETICLE_API_KEY`                            |
 | `3`  | `regression` only: at least one flow broke                                          |
 
 Output is pretty-printed JSON on stdout. Errors and next-step nudges go to stderr, so an agent parsing stdout is unaffected.

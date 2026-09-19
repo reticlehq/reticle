@@ -8,6 +8,7 @@
  * `cloud-login` is the first to move — and it is a real seam rather than a file-size dodge: nothing
  * here knows what a project, a credential or a link is.
  */
+import { apiKeyFrom } from '@reticlehq/core';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -101,11 +102,8 @@ export const baseUrl = (session: { url: string } | null, explicit?: string): str
 };
 
 /** Bearer for a command: an explicit api key (agent) wins, else the human login token. */
-export const bearer = (session: { token: string } | null): string | null => {
-  const key = process.env['RETICLE_CLOUD_KEY'];
-  if (key !== undefined && key.length > 0) return key;
-  return session?.token ?? null;
-};
+export const bearer = (session: { token: string } | null): string | null =>
+  apiKeyFrom(process.env) ?? session?.token ?? null;
 
 /** One `/v1` call. Throws a friendly Error on a non-2xx so the command surfaces it and exits 1. */
 export const api = async (

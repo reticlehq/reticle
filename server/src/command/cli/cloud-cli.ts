@@ -3,8 +3,9 @@
  * These are thin clients over the `/v1` API; the logic is server-side and these verbs just surface it.
  * Credentials live under `~/.reticle`: `session.json` (human token from `reticle login`) and
  * `credentials.json` (per-project api keys from `reticle link`). The non-secret repo binding + sync policy
- * is `<repo>/.reticle/cloud.json`. Auth for a command = `RETICLE_CLOUD_KEY` env (agent) OR the login token.
+ * is `<repo>/.reticle/cloud.json`. Auth for a command = `RETICLE_API_KEY` env (agent) OR the login token.
  */
+import { apiKeyFrom } from '@reticlehq/core';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { homedir } from 'node:os';
@@ -227,8 +228,8 @@ const cmdProject = async (argv: readonly string[]): Promise<number> => {
     // baffling to somebody who just did — the useful fact is that they logged in somewhere else.
     err(
       null !== active && normalizeUrl(active.url) !== url
-        ? `signed in to ${normalizeUrl(active.url)}, but this command targets ${url} — run \`reticle login --url ${url}\`, or set RETICLE_CLOUD_KEY`
-        : `not signed in to ${url} — run \`reticle login --url ${url}\`, or set RETICLE_CLOUD_KEY`,
+        ? `signed in to ${normalizeUrl(active.url)}, but this command targets ${url} — run \`reticle login --url ${url}\`, or set RETICLE_API_KEY`
+        : `not signed in to ${url} — run \`reticle login --url ${url}\`, or set RETICLE_API_KEY`,
     );
     return 2;
   }
@@ -275,7 +276,7 @@ const cmdProject = async (argv: readonly string[]): Promise<number> => {
 
 /**
  * `reticle link [--project <id>]` — bind THIS repo to a cloud project. With a login token it MINTS a
- * project-scoped key (no pasting); with a pre-set RETICLE_CLOUD_KEY it resolves the key's project via
+ * project-scoped key (no pasting); with a pre-set RETICLE_API_KEY it resolves the key's project via
  * whoami. Writes the non-secret binding to <repo>/.reticle/cloud.json and the secret key to
  * ~/.reticle/credentials.json (keyed by projectId).
  */
@@ -284,7 +285,7 @@ const cmdLink = async (argv: readonly string[]): Promise<number> => {
   const url = baseUrl(await readSession(), f['url']);
   // Same rule as every other authed verb: the token is looked up by the host it will be sent to.
   const session = await readSessionFor(url);
-  const envKey = process.env['RETICLE_CLOUD_KEY'];
+  const envKey = apiKeyFrom(process.env);
   /*
    * Read the existing binding FIRST, because it decides which project a bare `link` targets.
    * Re-running `link` is ordinary — rotating a key, repointing an environment — and it must land in
@@ -410,7 +411,7 @@ const cmdLink = async (argv: readonly string[]): Promise<number> => {
       orgId = session.orgId;
     }
   } else {
-    err('run `reticle login` first, or set RETICLE_CLOUD_KEY to link with an existing key');
+    err('run `reticle login` first, or set RETICLE_API_KEY to link with an existing key');
     return 2;
   }
 

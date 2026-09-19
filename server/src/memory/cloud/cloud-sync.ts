@@ -15,12 +15,18 @@ import {
   type ReticleVerificationRun,
   type RunRecord,
   type VerifyProgressEvent,
+  apiKeyFrom,
 } from '@reticlehq/core';
 
-/** Env var names — the presence of BOTH is what "logged in" means for cloud sync. */
+/**
+ * Env var names — the presence of BOTH is what "logged in" means for cloud sync.
+ *
+ * `KEY` names the CURRENT spelling only. The previous one is still honoured, through `apiKeyFrom`
+ * below, which is the one place that knows there are two.
+ */
 export const CloudEnv = {
   URL: 'RETICLE_CLOUD_URL',
-  KEY: 'RETICLE_CLOUD_KEY',
+  KEY: 'RETICLE_API_KEY',
 } as const;
 
 /** Paths the OSS server pushes to (match the cloud app's contract). */
@@ -39,9 +45,9 @@ export interface CloudConfig {
 /** Resolve cloud credentials from the environment, or null when not logged in (sync disabled). */
 export function resolveCloudConfig(env: NodeJS.ProcessEnv): CloudConfig | null {
   const url = env[CloudEnv.URL];
-  const apiKey = env[CloudEnv.KEY];
+  const apiKey = apiKeyFrom(env);
   if (typeof url !== 'string' || 0 === url.length) return null;
-  if (typeof apiKey !== 'string' || 0 === apiKey.length) return null;
+  if (apiKey === undefined) return null;
   return { url: url.replace(/\/+$/, ''), apiKey };
 }
 

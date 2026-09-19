@@ -149,7 +149,7 @@ describe('driving over Chat Completions', () => {
 });
 
 describe('where the openai driver gets its key', () => {
-  const CLOUD = { RETICLE_CLOUD_KEY: 'rk_live_x', RETICLE_CLOUD_URL: 'https://app.reticle.sh' };
+  const CLOUD = { RETICLE_API_KEY: 'rk_live_x', RETICLE_CLOUD_URL: 'https://app.reticle.sh' };
 
   it('is unavailable with nothing configured', () => {
     expect(openAiOptionsFromEnv({})).toBeUndefined();

@@ -2,7 +2,7 @@
  * Is this machine signed in to a Reticle workspace?
  *
  * Asked by the HUD, and there are two sources that must not be reimplemented per caller: the session
- * file `reticle login` writes to `~/.reticle/session.json`, and `RETICLE_CLOUD_KEY` for an agent that
+ * file `reticle login` writes to `~/.reticle/session.json`, and `RETICLE_API_KEY` for an agent that
  * was handed a key instead. Everything that gates on login — the defect sync button, the prompt to sign
  * in — resolves through here.
  *

@@ -7,7 +7,7 @@ import { fetchPlatformConfig, type ConfigFetch } from './platform-config.js';
  * stopped by a settings endpoint being slow or absent.
  */
 
-const LINKED = { RETICLE_CLOUD_KEY: 'rk_live_x', RETICLE_CLOUD_URL: 'https://app.reticle.sh' };
+const LINKED = { RETICLE_API_KEY: 'rk_live_x', RETICLE_CLOUD_URL: 'https://app.reticle.sh' };
 
 const answering = (body: unknown, ok = true, status = 200): ConfigFetch =>
   vi.fn(() => Promise.resolve({ ok, status, text: () => Promise.resolve(JSON.stringify(body)) }));

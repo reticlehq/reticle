@@ -8,7 +8,7 @@
 // Prints one JSON object on the last line, which is what the caller reads. Driven by
 // reticle-cloud's scripts/harness-sync-check.mjs; runnable on its own for a quick manual check:
 //
-//   RETICLE_CLOUD_URL=... RETICLE_CLOUD_KEY=rk_live_... node bench/harness/platform-drive.mjs
+//   RETICLE_CLOUD_URL=... RETICLE_API_KEY=rk_live_... node bench/harness/platform-drive.mjs
 //
 import { execFileSync } from 'node:child_process';
 import { McpStdioClient } from './mcp-client.mjs';
@@ -29,9 +29,14 @@ const PORT = process.env.RETICLE_PORT ?? '4400';
 const MAX_STEPS = process.env.PLATFORM_DRIVE_STEPS ?? '14';
 
 const cloudUrl = process.env.RETICLE_CLOUD_URL;
-const cloudKey = process.env.RETICLE_CLOUD_KEY;
+const cloudKey = process.env.RETICLE_API_KEY ?? process.env.RETICLE_CLOUD_KEY;
 if (cloudUrl === undefined || cloudKey === undefined) {
-  console.log(JSON.stringify({ status: 'NOT MEASURED', reason: 'RETICLE_CLOUD_URL and RETICLE_CLOUD_KEY are required' }));
+  console.log(
+    JSON.stringify({
+      status: 'NOT MEASURED',
+      reason: 'RETICLE_CLOUD_URL and RETICLE_API_KEY are required',
+    }),
+  );
   process.exit(0);
 }
 
@@ -48,7 +53,9 @@ if (cloudUrl === undefined || cloudKey === undefined) {
  * nothing to do with Reticle.
  */
 try {
-  const pids = execFileSync('lsof', ['-ti', `tcp:${PORT}`, '-sTCP:LISTEN'], { encoding: 'utf8' }).trim();
+  const pids = execFileSync('lsof', ['-ti', `tcp:${PORT}`, '-sTCP:LISTEN'], {
+    encoding: 'utf8',
+  }).trim();
   for (const pid of pids.split('\n').filter(Boolean)) {
     try {
       process.kill(Number(pid));
@@ -67,7 +74,7 @@ const client = new McpStdioClient(
     RETICLE_PORT: PORT,
     RETICLE_HARNESS_MAX_STEPS: MAX_STEPS,
     RETICLE_CLOUD_URL: cloudUrl,
-    RETICLE_CLOUD_KEY: cloudKey,
+    RETICLE_API_KEY: cloudKey,
     // Said out loud rather than merely omitted: the claim is that these are not needed, and an
     // inherited one from the caller's shell would prove the opposite of what this measures.
     JEV_API_KEY: '',
@@ -91,7 +98,9 @@ try {
   const deadline = Date.now() + 90_000;
   let sessionId;
   while (Date.now() < deadline) {
-    const listed = await client.callTool('reticle_session', { action: 'list' }, 15_000).catch(() => null);
+    const listed = await client
+      .callTool('reticle_session', { action: 'list' }, 15_000)
+      .catch(() => null);
     const text = listed?.result?.content?.[0]?.text ?? listed?.content?.[0]?.text ?? '{}';
     const sessions = JSON.parse(text).sessions ?? [];
     const match = sessions.find((session) =>

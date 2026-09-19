@@ -22,7 +22,7 @@
  * thing Reticle sells the absence of.
  */
 
-import { ReticleEnv, ReticleTool, asRecord, parseInteractive } from '@reticlehq/core';
+import { ReticleEnv, ReticleTool, apiKeyFrom, asRecord, parseInteractive } from '@reticlehq/core';
 
 import { FINISH_TOOL } from './harness.js';
 import type { HistoryEntry, ModelDriver, ModelTurn, ToolRequest } from './harness.js';
@@ -246,7 +246,7 @@ export function jevOptionsFromEnv(
   }
   // The ordinary path: the key the user minted on the platform, against the platform's own proxy.
   // Reticle never ships a Jev key, so without a base URL to send it to this is not a usable driver.
-  const cloudKey = env[ReticleEnv.CLOUD_KEY];
+  const cloudKey = apiKeyFrom(env);
   const cloudUrl = env[ReticleEnv.CLOUD_URL];
   if (cloudKey === undefined || 0 === cloudKey.length) return undefined;
   if (cloudUrl === undefined || 0 === cloudUrl.length) return undefined;
