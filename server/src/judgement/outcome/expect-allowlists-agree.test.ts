@@ -124,4 +124,47 @@ describe('the three gates an assertion passes through', () => {
         'predicate, so replay is checking something the agent did not ask for.',
     ).toEqual([]);
   });
+
+  it('round-trips the POLARITY, so a proven absence never comes back as a presence check', () => {
+    /*
+     * The same three gates, read for direction rather than for kind — and the direction is where
+     * the third drift landed (#988). `element` had no `absent` on the FlowExpect side, so the field
+     * was dropped at gate 1 and the surviving locator compiled back at gate 3 as something to FIND.
+     * The kind round-tripped perfectly; the claim came back inverted.
+     *
+     * That failure is invisible to every assertion above, and it is the worse one: a lost assertion
+     * leaves a flow that cannot go red, while a reversed one is red on a working app and green on
+     * the regression it was recorded to catch.
+     */
+    const negatives: Predicate[] = [
+      { kind: PredicateKind.ELEMENT, query: { testid: 'error-banner' }, absent: true },
+      {
+        kind: PredicateKind.ELEMENT,
+        query: { role: 'alert', name: 'Upload failed' },
+        absent: true,
+      },
+      { kind: PredicateKind.CONSOLE, absent: true },
+      { kind: PredicateKind.TEXT, contains: 'Saving…', absent: true },
+    ];
+
+    const stillAbsent = (predicate: Predicate): boolean =>
+      ('absent' in predicate && true === predicate.absent) ||
+      (predicate.kind === PredicateKind.ALL_OF &&
+        predicate.predicates.some((part) => stillAbsent(part)));
+
+    const flipped: string[] = [];
+    for (const negative of negatives) {
+      const kept = enforcedOnReplay(predicateToExpect(negative));
+      // Refusing to record it is honest — the flow is then assertion-free, which is graded and
+      // warned about. Recording it and losing the `absent` is not.
+      if (kept === undefined) continue;
+      const back = successToPredicate(kept, new Set());
+      if (back === undefined || !stillAbsent(back)) flipped.push(JSON.stringify(negative));
+    }
+    expect(
+      flipped,
+      'these were recorded as assertions and came back POSITIVE, so the replayed flow asserts the ' +
+        'opposite of what the agent proved — green exactly when the feature is broken.',
+    ).toEqual([]);
+  });
 });

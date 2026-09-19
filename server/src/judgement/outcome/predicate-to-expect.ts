@@ -24,6 +24,34 @@ function merge(into: FlowExpect, from: FlowExpect): FlowExpect {
   return { ...from, ...into };
 }
 
+/** The `ElementQuery` fields `FlowExpect.element` has somewhere to put. Everything else is dropped. */
+const CARRIED_QUERY_FIELDS: ReadonlySet<string> = new Set(['testid', 'role', 'name']);
+
+/** The element predicate's state filter, named for the diagnostic below — FlowExpect has no field for it. */
+const ELEMENT_STATE_CLAUSE = 'state';
+
+/**
+ * What an element ABSENCE says that a saved flow has no way to say back.
+ *
+ * Empty for a presence predicate, always, and the asymmetry is the whole point. Dropping a narrowing
+ * clause from "X is here" leaves a WEAKER claim — lossy in the direction this file already accepts
+ * everywhere, because a weaker check still only passes on a page where the element exists. Dropping
+ * the same clause from "X is NOT here" leaves a STRONGER one: `{ role:'button', name:'Remove',
+ * scope:'#row-2', absent:true }` would be saved as "no Remove button ANYWHERE", which fails on a page
+ * that is working perfectly. An assertion nobody made is exactly what this file refuses to write, so
+ * a negative predicate is carried whole or not at all.
+ *
+ * Returns the clause NAMES rather than a boolean so the flow-file parse path can say which one it
+ * could not carry, instead of listing kinds the author did not use.
+ */
+export function absenceClausesNotCarried(predicate: Predicate): readonly string[] {
+  if (predicate.kind !== PredicateKind.ELEMENT || true !== predicate.absent) return [];
+  const clauses = Object.entries(predicate.query)
+    .filter(([field, value]) => value !== undefined && !CARRIED_QUERY_FIELDS.has(field))
+    .map(([field]) => field);
+  return predicate.state === undefined ? clauses : [...clauses, ELEMENT_STATE_CLAUSE];
+}
+
 export function predicateToExpect(predicate: Predicate): FlowExpect | undefined {
   switch (predicate.kind) {
     case PredicateKind.SIGNAL: {
@@ -68,7 +96,15 @@ export function predicateToExpect(predicate: Predicate): FlowExpect | undefined 
       if (predicate.query.testid !== undefined) element.testid = predicate.query.testid;
       if (predicate.query.role !== undefined) element.role = predicate.query.role;
       if (predicate.query.name !== undefined) element.name = predicate.query.name;
-      return 0 === Object.keys(element).length ? undefined : { element };
+      if (0 === Object.keys(element).length) return undefined;
+      // The POLARITY, carried. Dropping it did not weaken the flow, it reversed it: an agent that
+      // proved a banner was dismissed saved a step asserting the banner is there, which is green on
+      // exactly the broken app it was recorded to catch. `absent: false` is presence and is written
+      // as presence, so a saved flow keeps one spelling for it.
+      if (true !== predicate.absent) return { element };
+      return absenceClausesNotCarried(predicate).length > 0
+        ? undefined
+        : { element: { ...element, absent: true } };
     }
     case PredicateKind.STATE: {
       const state: NonNullable<FlowExpect['state']> = { path: predicate.path };
@@ -118,9 +154,13 @@ export function predicateToExpect(predicate: Predicate): FlowExpect | undefined 
 export function enforcedOnReplay(expect: FlowExpect | undefined): FlowExpect | undefined {
   if (expect === undefined) return undefined;
   const kept: FlowExpect = {};
-  // The step runner asserts a testid against the live DOM before the predicate engine. Role and
-  // name are not that path: successToPredicate compiles them, and dropping them here made a
+  // The step runner asserts a PRESENT testid against the live DOM before the predicate engine. Role
+  // and name are not that path: successToPredicate compiles them, and dropping them here made a
   // recorded `until` by button name vanish so the saved flow could not go red.
+  //
+  // Kept as the whole object, deliberately. Picking fields out of it here would drop `absent`, and
+  // an expectation that loses its polarity on the way to disk is not a weaker check — it is the
+  // opposite check, passing precisely when the app is broken.
   const element = expect.element;
   if (
     undefined !== element &&

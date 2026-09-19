@@ -151,7 +151,14 @@ async function runTestidStep(
   // assert the step's expect.element testid is present AFTER the action —
   // unless that testid was marked DYNAMIC (the LLM-output case), in which case its presence/content
   // is NOT asserted (only the action ran). The skip is scoped strictly to the dynamic set.
-  const expectTestid = step.expect?.element?.testid;
+  //
+  // An ABSENCE is left to the predicate engine below. This check can only say "present, or drift",
+  // so running it on `absent: true` asserts the exact opposite of the step: it failed the flow when
+  // the element was gone (which is what the agent proved) and passed it when the element was still
+  // there (which is the regression). Nothing is lost by skipping — assertStepExpect keeps the
+  // element for that case precisely because this runner does not handle it.
+  const expectElement = step.expect?.element;
+  const expectTestid = true === expectElement?.absent ? undefined : expectElement?.testid;
   if (expectTestid !== undefined && !dynamic.has(expectTestid)) {
     const expectRefs = await resolveTestid(session, expectTestid, sleep);
     if (0 === expectRefs.refs.length) {
@@ -200,11 +207,15 @@ export async function assertStepExpect(
   timeoutMs: number,
   since: number,
 ): Promise<Drift | undefined> {
-  // A testid is already asserted against the live DOM by the step runner. A role/name locator is
-  // not that path — stripping every element made a recorded `until` by button name a no-op, so a
-  // flow that proved the control at capture time could not go red when it was gone.
+  // A PRESENT testid is already asserted against the live DOM by the step runner. A role/name
+  // locator is not that path — stripping every element made a recorded `until` by button name a
+  // no-op, so a flow that proved the control at capture time could not go red when it was gone.
+  //
+  // An ABSENT one is not that path either: the step runner skips it on purpose, because a query is
+  // the wrong instrument for "it is gone". Dropping it here too would leave the polarity checked by
+  // nobody, which is how the reversed assertion stayed invisible.
   const consequences: FlowExpect = { ...expect };
-  if (undefined !== consequences.element?.testid) {
+  if (undefined !== consequences.element?.testid && true !== consequences.element.absent) {
     delete consequences.element;
   }
   const predicate = successToPredicate(consequences, dynamic);

@@ -131,7 +131,21 @@ export function successToPredicate(
       if (testid !== undefined) query['testid'] = testid;
       if (element.role !== undefined) query['role'] = element.role;
       if (element.name !== undefined) query['name'] = element.name;
-      if (Object.keys(query).length > 0) parts.push({ kind: PredicateKind.ELEMENT, query });
+      if (Object.keys(query).length > 0) {
+        const part: Extract<Predicate, { kind: typeof PredicateKind.ELEMENT }> = {
+          kind: PredicateKind.ELEMENT,
+          query,
+        };
+        if (true === element.absent) {
+          part.absent = true;
+          // Same post-settle reasoning as `console.absent` and `text.absent`: a wait-until-true
+          // waiter reads "not there yet" on its first poll and passes BEFORE the element it is
+          // watching has even rendered. Gate on `settled` so the read happens after the page quiets,
+          // by which point an element that was going to appear has.
+          parts.push({ kind: PredicateKind.SETTLED });
+        }
+        parts.push(part);
+      }
     }
   }
 

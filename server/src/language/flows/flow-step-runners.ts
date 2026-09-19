@@ -401,7 +401,13 @@ export async function runSequenceStep(
 
   /** The sub-step's own expectation, unless its testid is deliberately unasserted. */
   const declaredBy = (sub: FlowStep): string | undefined => {
-    const testid = sub.expect?.element?.testid;
+    const element = sub.expect?.element;
+    // An ABSENCE is not this check's question. `assertDeclared` below can only answer "present, or
+    // drift", so running it on `absent: true` inverts the sub-step: green when the element the agent
+    // watched disappear is still there. The predicate engine evaluates it instead — replay walks
+    // every sub-step expect through assertStepExpect after the sequence runs.
+    if (true === element?.absent) return undefined;
+    const testid = element?.testid;
     return testid === undefined || dynamic.has(testid) ? undefined : testid;
   };
 

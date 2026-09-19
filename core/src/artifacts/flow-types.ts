@@ -136,6 +136,22 @@ export const FlowExpectSchema = z
         testid: z.string().optional(),
         role: z.string().optional(),
         name: z.string().optional(),
+        /**
+         * Assert the element is GONE — the polarity the agent actually declared.
+         *
+         * Without it this object could only say "present", so an `act_and_wait` that proved an error
+         * banner had been dismissed was recorded as an assertion that the banner is THERE. That is
+         * not a weaker flow; it is a flow asserting the opposite of what was proved, green exactly
+         * when the feature is broken and red when it works. Reported from the field (#988).
+         *
+         * `text` and `console` have carried their own `absent` since they were added, for the same
+         * reason and with the same meaning; element was the one channel that could not say it.
+         *
+         * Additive and optional, so a flow file written before it still parses and FLOW_FILE_VERSION
+         * stays 1 — the same treatment `route`, `signalData` and `signalCount` had. Omitted rather
+         * than written `false` on a presence claim, so a saved flow keeps one spelling for presence.
+         */
+        absent: z.boolean().optional(),
       })
       .strict()
       .optional(),

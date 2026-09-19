@@ -92,6 +92,28 @@ describe('coerceFlowExpect', () => {
     if (coerced.ok) throw new Error('expected a refusal');
     expect(coerced.detail).toBe(FlowParseNote.UNENFORCED);
   });
+
+  it('loads an element absence, which a saved flow can now express', () => {
+    expect(coerceFlowExpect({ kind: 'element', query: { testid: 'toast' }, absent: true })).toEqual(
+      { ok: true, value: { element: { testid: 'toast', absent: true } } },
+    );
+  });
+
+  it('names the clause when an absence is narrowed by something a flow cannot hold', () => {
+    // The generic note lists kinds, and the kind here is fine — it is the `scope` that cannot be
+    // carried, and carrying only role+name would widen "gone from this row" to "gone from the page".
+    const coerced = coerceFlowExpect({
+      kind: 'element',
+      query: { role: 'button', name: 'Remove', scope: '#row-2' },
+      absent: true,
+    });
+    expect(coerced.ok).toBe(false);
+    if (coerced.ok) throw new Error('expected a refusal');
+    expect(coerced.detail).toContain('scope');
+    expect(coerced.detail, 'and it does not blame a kind the author never wrote').not.toBe(
+      FlowParseNote.UNENFORCED,
+    );
+  });
 });
 
 describe('parseFlowFileText', () => {

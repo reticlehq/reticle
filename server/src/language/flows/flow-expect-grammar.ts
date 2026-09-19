@@ -14,7 +14,10 @@
 import { FlowErrorCode, FlowFileSchema, type FlowFile } from '@reticlehq/core';
 import type { ZodError } from 'zod';
 import { PredicateSchema } from '@reticlehq/engine/question/predicate/predicate.js';
-import { predicateToExpect } from '@/judgement/outcome/predicate-to-expect.js';
+import {
+  absenceClausesNotCarried,
+  predicateToExpect,
+} from '@/judgement/outcome/predicate-to-expect.js';
 import type { FlowResult } from './flow-result.js';
 
 export const FlowParseNote = {
@@ -23,6 +26,17 @@ export const FlowParseNote = {
   UNSUPPORTED_SHAPE: 'valid JSON, unsupported expect shape',
   UNENFORCED:
     'valid JSON, but this expect uses a predicate kind a saved flow cannot enforce (settled, route, animation, anyOf, not)',
+  /**
+   * The refusal that has to NAME its clause, because the generic note above would misdescribe it.
+   *
+   * An element absence is refused for the opposite reason to the kinds listed there: the kind IS
+   * enforceable, and what a saved flow cannot hold is the clause NARROWING it. Answering
+   * "unsupported kind (settled, route, animation, anyOf, not)" to somebody who wrote an `element`
+   * expect sends them looking for a kind they did not use — the complaint in #988 that a rejection
+   * "did not name the thing it rejected".
+   */
+  unrecordableAbsence: (clauses: readonly string[]): string =>
+    `valid JSON, but this expect asserts an ABSENCE narrowed by ${clauses.map((c) => `\`${c}\``).join(', ')}, which a saved flow cannot express — dropping the narrowing would widen it to the whole page and assert something you did not. Drop the clause, or assert the narrowed element as a presence.`,
 } as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -53,7 +67,16 @@ export function coerceFlowExpect(raw: unknown): CoerceExpectResult {
       return { ok: false, detail: describePredicateExpectFailure(parsed.error) };
     }
     const expect = predicateToExpect(parsed.data);
-    if (undefined === expect) return { ok: false, detail: FlowParseNote.UNENFORCED };
+    if (undefined === expect) {
+      const clauses = absenceClausesNotCarried(parsed.data);
+      return {
+        ok: false,
+        detail:
+          clauses.length > 0
+            ? FlowParseNote.unrecordableAbsence(clauses)
+            : FlowParseNote.UNENFORCED,
+      };
+    }
     return { ok: true, value: expect };
   }
   if (!isRecord(raw)) return { ok: true, value: raw };
