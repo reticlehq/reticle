@@ -57,7 +57,14 @@ const READY: HistoryEntry[] = [
     role: 'tool',
     outcomes: [
       outcome('reticle_record', { action: 'start', recordingName: 'harness-drive' }, { ok: true }),
-      outcome('reticle_snapshot', { mode: 'interactive' }, { tree: TREE }),
+      outcome(
+        'reticle_snapshot',
+        { mode: 'interactive' },
+        {
+          tree: TREE,
+          status: { route: '/#/home' },
+        },
+      ),
     ],
   },
 ];
@@ -221,7 +228,66 @@ describe('the jev driver builds every call from the page', () => {
       questions: { expected_consequence: { criteria: Record<string, string> } };
     };
     const offered = Object.keys(body.questions.expected_consequence.criteria);
-    expect(offered.sort()).toEqual(['any', 'net', 'nothing', 'signal']);
+    expect(offered.sort()).toEqual(['any', 'navigates', 'net', 'nothing', 'signal']);
+  });
+
+  /**
+   * The false-red fix, and the defect it closes.
+   *
+   * With only `signal` and `net` on offer, every click on a nav link — which changes the route
+   * client-side and touches neither — was handed a declaration it could not satisfy. Driving a real
+   * dashboard, 21 of 42 actions came back `no` and not one was a bug in the application.
+   *
+   * `not(route contains <the route we are on>)` is falsifiable in both directions: false before the
+   * click, true after a real navigation, and still false when the control is dead — which is a
+   * CORRECT red.
+   */
+  it('can declare that an action leaves the current page', async () => {
+    const result = await turn(READY, {
+      ...chose('e2'),
+      expected_consequence: { type: 'choice', choice: 'navigates', confidence: 0.9 },
+    });
+    expect(result.calls[0]?.args['until']).toEqual({
+      kind: 'not',
+      predicate: { kind: 'route', contains: '/#/home' },
+    });
+  });
+
+  /** At the root every route contains `/`, so the negation could never hold. Not offered there. */
+  it('does not offer navigation away from the root, where it could never hold', async () => {
+    const seen = { bodies: [] as string[] };
+    const atRoot: HistoryEntry[] = [
+      { role: 'user', text: 'go' },
+      {
+        role: 'tool',
+        outcomes: [
+          outcome(
+            'reticle_record',
+            { action: 'start', recordingName: 'harness-drive' },
+            { ok: true },
+          ),
+          outcome(
+            'reticle_snapshot',
+            { mode: 'interactive' },
+            { tree: TREE, status: { route: '/' } },
+          ),
+        ],
+      },
+    ];
+    await turn(atRoot, chose('e5'), seen);
+    const body = JSON.parse(seen.bodies[1] ?? '{}') as {
+      questions: { expected_consequence: { criteria: Record<string, string> } };
+    };
+    expect(Object.keys(body.questions.expected_consequence.criteria)).not.toContain('navigates');
+  });
+
+  /** An unrecognised consequence claims nothing, rather than guessing one that reads as a defect. */
+  it('declares nothing when the answer is not a consequence it offered', async () => {
+    const result = await turn(READY, {
+      ...chose('e5'),
+      expected_consequence: { type: 'choice', choice: 'route', confidence: 0.9 },
+    });
+    expect(result.calls[0]?.args['until']).toBeUndefined();
   });
 
   it('carries the element description so the drive reads back as a journey, not as refs', async () => {
@@ -291,5 +357,100 @@ describe('where the driver gets its key', () => {
       RETICLE_CLOUD_URL: 'https://app.reticle.sh',
     });
     expect(options?.apiKey).toBe('j');
+  });
+});
+
+/**
+ * The gap that cost the cheap driver the headline defect.
+ *
+ * A refund button is behind `confirmDangerous`, a permission gate a generating driver clears by
+ * reading the refusal and re-issuing. Driving a real payments dashboard, the frontier-model arm did
+ * exactly that and found a 100x under-refund; this driver could not read an error, moved on, and
+ * never reached the flow at all. The retry is mechanical now, which is where it belongs.
+ */
+describe('a control the destructive gate refused', () => {
+  const refused = (ref: string): HistoryEntry => ({
+    role: 'tool',
+    outcomes: [
+      {
+        id: 'x',
+        name: 'reticle_act_and_wait',
+        args: { ref, action: 'click' },
+        result: {
+          error: 'potentially destructive action blocked; retry with args.confirmDangerous=true',
+        },
+        isError: true,
+      },
+    ],
+  });
+
+  it('retries it carrying the permission', async () => {
+    const history: HistoryEntry[] = [
+      ...READY,
+      refused('e5'),
+      {
+        role: 'tool',
+        outcomes: [
+          outcome(
+            'reticle_snapshot',
+            { mode: 'interactive' },
+            { tree: TREE, status: { route: '/#/home' } },
+          ),
+        ],
+      },
+    ];
+    const result = await turn(history, chose('e5'));
+    expect(result.calls[0]?.args['args']).toMatchObject({ confirmDangerous: true });
+  });
+
+  it('does not grant the permission to a control that was never refused', async () => {
+    const result = await turn(READY, chose('e5'));
+    expect(result.calls[0]?.args['args']).toBeUndefined();
+  });
+
+  /** A refused act never reached the app, so it is not something this drive has driven. */
+  it('does not count it as already driven', async () => {
+    const seen = { bodies: [] as string[] };
+    const history: HistoryEntry[] = [
+      ...READY,
+      refused('e5'),
+      {
+        role: 'tool',
+        outcomes: [
+          outcome(
+            'reticle_snapshot',
+            { mode: 'interactive' },
+            { tree: TREE, status: { route: '/#/home' } },
+          ),
+        ],
+      },
+    ];
+    await turn(history, chose('e2'), seen);
+    const body = JSON.parse(seen.bodies[0] ?? '{}') as {
+      questions: { next_action: { criteria: Record<string, string> } };
+    };
+    expect(body.questions.next_action.criteria['e5']).not.toContain('already driven');
+  });
+
+  it('keeps the fill value when the permission is also granted', async () => {
+    const history: HistoryEntry[] = [
+      ...READY,
+      refused('e6'),
+      {
+        role: 'tool',
+        outcomes: [
+          outcome(
+            'reticle_snapshot',
+            { mode: 'interactive' },
+            { tree: TREE, status: { route: '/#/home' } },
+          ),
+        ],
+      },
+    ];
+    const result = await turn(history, chose('e6'));
+    expect(result.calls[0]?.args['args']).toEqual({
+      confirmDangerous: true,
+      value: 'reticle harness',
+    });
   });
 });

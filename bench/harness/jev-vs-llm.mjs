@@ -303,7 +303,8 @@ const out = {
   note: 'Same app, same tools, same loop; only the ModelDriver differs. Tokens are NOT comparable across arms (different billing units) — dollars and flows are.',
   rows,
   per_arm: perArm,
-  ...(perArm['anthropic']?.usd_median != null && perArm['jev']?.usd_median != null
+  ...(null !== (perArm['anthropic']?.usd_median ?? null) &&
+  null !== (perArm['jev']?.usd_median ?? null)
     ? {
         comparison: {
           usd_ratio_anthropic_over_jev: Number(

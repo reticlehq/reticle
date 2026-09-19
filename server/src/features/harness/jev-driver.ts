@@ -52,6 +52,9 @@ const FINISH_OPTION = 'finish';
 /** The synthetic option meaning "I cannot tell from this page; look again". */
 const RELOOK_OPTION = 'look_again';
 
+/** The permission gate on a destructive control, as the refusal names it. */
+const DANGEROUS_ARG = 'confirmDangerous';
+
 /**
  * How many interactive elements may go into one choice set.
  *
@@ -114,20 +117,58 @@ const TEARDOWN_TURNS = 3;
  * and endpoint paths) and declare `urlContains`/`name` instead of a bare kind. Until then `state`
  * and `signal` are the trustworthy ones and `net` is the one to distrust on a chatty app.
  */
-const CONSEQUENCES = {
-  signal: {
-    predicate: { kind: 'signal' },
-    describes: 'The app fires one of its own signals (the strongest evidence it did something).',
-  },
-  net: {
-    predicate: { kind: 'net' },
-    describes: 'The app sends a request to its backend — expect this for anything that saves.',
-  },
-  any: {
-    predicate: { kind: 'anyOf', predicates: [{ kind: 'signal' }, { kind: 'net' }] },
-    describes: 'Something the app owns moves, but which one is not predictable from here.',
-  },
-} as const;
+interface Consequence {
+  predicate: Record<string, unknown>;
+  describes: string;
+}
+
+/**
+ * The consequences on offer, given where the app currently is.
+ *
+ * A function of the CURRENT ROUTE rather than a constant, and that is the whole of the fix below.
+ */
+function consequencesFor(route: string | undefined): Record<string, Consequence> {
+  const base: Record<string, Consequence> = {
+    signal: {
+      predicate: { kind: 'signal' },
+      describes: 'The app fires one of its own signals (the strongest evidence it did something).',
+    },
+    net: {
+      predicate: { kind: 'net' },
+      describes: 'The app sends a request to its backend — expect this for anything that saves.',
+    },
+    any: {
+      predicate: { kind: 'anyOf', predicates: [{ kind: 'signal' }, { kind: 'net' }] },
+      describes: 'The app sends a request OR fires a signal, but which one is not predictable.',
+    },
+  };
+
+  /**
+   * "This takes us off the page we are on."
+   *
+   * A bare `{ kind: 'route' }` is unconditionally true — there is always a current route — so it
+   * cannot be declared. Negating a route we have actually READ is a different thing entirely, and
+   * it is properly falsifiable: before the click we are on that route, so the pre-check is false
+   * and nothing is `already_true`; after a real navigation we are not, so it holds; and if the
+   * control is dead the route never changes and the verdict is a CORRECT red.
+   *
+   * Its absence was a defect with teeth. Driving a real dashboard, the only consequences on offer
+   * were `signal` and `net` — so every click on a nav link, which changes the route client-side and
+   * touches neither, was handed a declaration it could not satisfy. 21 of 42 actions came back
+   * `no`, and not one of them was a bug in the application. A false red is exactly as dishonest as
+   * a false green, and it is worse here than saying nothing would have been.
+   *
+   * Skipped at the root (`/`), where `contains` would match every route and the negation could
+   * never hold.
+   */
+  if (route !== undefined && 1 < route.length) {
+    base['navigates'] = {
+      predicate: { kind: 'not', predicate: { kind: 'route', contains: route } },
+      describes: `The app leaves the current page (${route}) — expect this for a navigation link or anything that opens another screen.`,
+    };
+  }
+  return base;
+}
 
 /**
  * Declaring nothing, named so it can be CHOSEN rather than defaulted to.
@@ -260,8 +301,23 @@ interface DriveState {
   tree: string | undefined;
   /** The name recording started under, so the stop and the save agree with it. */
   name: string | undefined;
+  /** Where the app is, as the last snapshot reported it. A declaration is built from this. */
+  route: string | undefined;
   /** Every action already driven, so the choice set can prefer something new. */
   acted: string[];
+  /**
+   * Refs the destructive-action gate refused, so the next attempt can carry the permission.
+   *
+   * `confirmDangerous` is a permission gate, and a generating driver clears it by READING the
+   * refusal and re-issuing the call — which is what the frontier-model arm did on this dashboard's
+   * refund button, and why it reached the money bug at all. A System One model cannot read an error
+   * and adapt, so the retry has to be mechanical, and mechanical is the right place for it: the
+   * code handles the retry, the model only ever chooses.
+   *
+   * Scoped to refs that were ACTUALLY refused rather than set on every action, so the permission is
+   * granted in response to evidence instead of blanket-enabled for the whole drive.
+   */
+  blocked: string[];
   /** Turns the loop has spent. The budget is counted in turns, so this must be too. */
   turns: number;
 }
@@ -280,7 +336,9 @@ function readState(history: readonly HistoryEntry[]): DriveState {
     flowSaved: false,
     tree: undefined,
     name: undefined,
+    route: undefined,
     acted: [],
+    blocked: [],
     turns: 0,
   };
   for (const entry of history) {
@@ -298,12 +356,23 @@ function readState(history: readonly HistoryEntry[]): DriveState {
       }
       if (Tool.FLOW_SAVE === outcome.name && !outcome.isError) state.flowSaved = true;
       if (Tool.SNAPSHOT === outcome.name && !outcome.isError) {
-        const tree = asRecord(outcome.result)['tree'];
+        const result = asRecord(outcome.result);
+        const tree = result['tree'];
         if ('string' === typeof tree) state.tree = tree;
+        const route = asRecord(result['status'])['route'];
+        if ('string' === typeof route) state.route = route;
       }
       if (Tool.ACT_AND_WAIT === outcome.name) {
         const ref = asRecord(outcome.args)['ref'];
-        if ('string' === typeof ref) state.acted.push(ref);
+        const failure = asRecord(outcome.result)['error'];
+        const refused =
+          outcome.isError && 'string' === typeof failure && failure.includes(DANGEROUS_ARG);
+        if ('string' === typeof ref) {
+          // A refused act never happened, so it is not something this drive has driven. Recording
+          // it as driven would retire the control after an attempt that never reached the app.
+          if (refused) state.blocked.push(ref);
+          else state.acted.push(ref);
+        }
         // The page has almost certainly moved; the tree we hold describes a page that is gone.
         state.tree = undefined;
       }
@@ -528,6 +597,7 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
       // independent, so "what should I expect from the element I am about to choose" cannot be
       // asked in the same breath as "which element". It costs another ~350ms and ~$0.00004, and it
       // costs nothing from the STEP budget, which is what is actually scarce here.
+      const offered = consequencesFor(drive.route);
       const expectation = await callJev(
         { apiKey: options.apiKey, model, baseUrl, doFetch },
         `${buildState(input.system, input.history, drive)}\n\nABOUT TO: ${action} ${picked.desc}`,
@@ -535,28 +605,34 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
           expected_consequence: {
             type: 'choice',
             instructions:
-              'If this action works, what should the application itself be observed to do? Name the consequence you would check for. Choose `nothing` only for a control that genuinely changes nothing observable, such as focusing a field.',
+              'If this action works, what should the application itself be observed to do? Choose the consequence you are CONFIDENT of. A wrong guess is reported as a defect in the application, so when no listed consequence clearly follows from this control, choose `nothing` — claiming less is always better than claiming wrongly.',
             criteria: {
-              ...Object.fromEntries(
-                Object.entries(CONSEQUENCES).map(([key, value]) => [key, value.describes]),
-              ),
-              [NO_CONSEQUENCE]: 'Nothing observable should change.',
+              ...Object.fromEntries(Object.entries(offered).map(([key, v]) => [key, v.describes])),
+              [NO_CONSEQUENCE]:
+                'Nothing predictable happens, or you are not confident which of the above would. Nothing is claimed and nothing is proved.',
             },
           },
         },
       );
       const expected = expectation.answers?.['expected_consequence']?.choice ?? NO_CONSEQUENCE;
-      const consequence = CONSEQUENCES[expected as keyof typeof CONSEQUENCES];
+      const consequence = offered[expected];
 
+      // Granted only to a ref the gate has already refused — see `DriveState.blocked`.
+      const wasRefused = drive.blocked.includes(picked.ref);
       const args: Record<string, unknown> = {
         ref: picked.ref,
         action,
+        ...(wasRefused ? { args: { [DANGEROUS_ARG]: true } } : {}),
         // The element's own description, so the drive reads back as a journey rather than as refs.
         // A ref is a handle that expired when the page changed; this survives being read tomorrow.
         intent: `${action} ${picked.desc}`,
         ...(consequence === undefined ? {} : { until: consequence.predicate }),
       };
-      if ('fill' === action) args['args'] = { value: fillValueFor(nameOf(picked.desc)) };
+      if ('fill' === action)
+        args['args'] = {
+          ...asRecord(args['args']),
+          value: fillValueFor(nameOf(picked.desc)),
+        };
 
       const spent: ModelTurn['usage'] = {
         input: usage.input + (expectation.usage?.input_tokens ?? 0),
