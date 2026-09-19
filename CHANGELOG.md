@@ -4,7 +4,9 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **`@reticlehq/server` — `reticle_screenshot`, `reticle_visual_diff` and `reticle_flow_replay` write their artifacts into the session's project, not the daemon's cwd.** The visual baseline store, the assertion-tiers baseline a green replay records and the deviation envelopes still took the daemon's own `.reticle`, while every other artifact writer had moved to the per-session resolver. A user-scoped MCP daemon starts wherever the editor likes — `/` in the field — so these three failed with `ENOENT: mkdir '/.reticle'`, or quietly wrote into an unrelated checkout. They now resolve through `sessionRoot`, the same seam flows, runs and intents use. Part of [#999](https://github.com/reticlehq/reticle/issues/999).
 
 ## [3.1.0] — 2026-09-18
 

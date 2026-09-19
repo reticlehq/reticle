@@ -8,6 +8,7 @@ import { VisualReason } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from '@/surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '@/memory/project/baselines.js';
+import { ArtifactRootReason } from '@/memory/project/artifact-root.js';
 import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
 import { FlowStore } from '@/language/flows/flows.js';
 import { ProjectStore } from '@/memory/project/project-store.js';
@@ -164,6 +165,33 @@ describe('visual tools — temp dir, never touches the repo', () => {
       // Flat, because a driven browser IS web — never under visual/tauri/.
       expect(result.path).toBe(join(root, 'visual', 'home.png'));
       expect(result.path).not.toContain(join('visual', 'tauri'));
+    });
+  });
+
+  /**
+   * The baseline belongs to the project the session is verifying, not to wherever the daemon was
+   * launched. A user-scoped MCP daemon starts in the editor's cwd — `/` in the field — and the
+   * screenshot then died on `mkdir '/.reticle'` (#999). Same seam every other artifact writer uses.
+   */
+  describe('a visual baseline lands in the session project', () => {
+    it('writes and reads back through artifactRootFor, never deps.reticleRoot', async () => {
+      const projectRoot = join(root, '..', 'project', '.reticle');
+      const sessionDeps: ToolDeps = {
+        ...deps(fakeProvider(solidPng([255, 255, 255]))),
+        artifactRootFor: () => ({ root: projectRoot, reason: ArtifactRootReason.MATCHED_PROJECT }),
+      };
+      const shot = (await tool(ReticleTool.SCREENSHOT).handler(sessionDeps, { name: 'home' })) as {
+        path: string;
+      };
+      expect(shot.path).toBe(join(projectRoot, 'visual', 'home.png'));
+      expect((await stat(shot.path)).isFile()).toBe(true);
+      await expect(stat(join(root, 'visual', 'home.png'))).rejects.toThrow();
+
+      const diff = (await tool(ReticleTool.VISUAL_DIFF).handler(sessionDeps, {
+        baseline: 'home',
+      })) as { ok: boolean; matched?: boolean };
+      expect(diff.ok).toBe(true);
+      expect(diff.matched).toBe(true);
     });
   });
 });
