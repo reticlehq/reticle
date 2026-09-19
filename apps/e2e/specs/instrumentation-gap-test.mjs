@@ -21,6 +21,7 @@
 import { chromium } from 'playwright';
 import { start, TOOLS } from '@reticlehq/server';
 import { waitForSession } from '../wait-for-session.mjs';
+import { createMemoryFs } from '../../../server/dist/memory/project/memory-fs.js';
 
 let pass = 0,
   fail = 0;
@@ -39,6 +40,11 @@ const server = await start({ port: PORT, mcp: false });
 // earlier run left behind.
 let raised = null;
 const deps = {
+  // Coverage reads the intent ledger too. Use an actual empty filesystem, not an absent adapter
+  // whose TypeError the old fail-soft ledger happened to mistake for a missing document.
+  fs: createMemoryFs().fs,
+  reticleRoot: '/instrumentation-gap/.reticle',
+  now: Date.now,
   sessions: server.bridge.sessions,
   project: {
     recordRoutes: async () => {},
