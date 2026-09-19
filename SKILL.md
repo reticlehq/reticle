@@ -174,7 +174,7 @@ Prefer `reticle_act_and_wait({ ref, action, until })`. It names the expected con
 
 Then report what you drove, what it produced, and the `file:line` for anything broken.
 
-The surface is deliberately small: `default` 9, `all` 30, the wider one behind `RETICLE_ADVERTISE_ALL_TOOLS=1`. Editors budget tools across every MCP server you have connected (Cursor allows 40 in total), so the count is capped rather than allowed to grow.
+The surface is deliberately small: `default` 10, `all` 30, the wider one behind `RETICLE_ADVERTISE_ALL_TOOLS=1`. Editors budget tools across every MCP server you have connected (Cursor allows 40 in total), so the count is capped rather than allowed to grow.
 
 The nine are a CLOSED surface: they advertise everything they can call, with no dispatch hatch behind them. `reticle_tools { names: [...] }` loads the full argument grammar for any of them. A name that used to be its own tool answers with where it went rather than "not found", so instructions written against an older release still land on the call that replaced it. Anything wider, `reticle_run` included, needs the extended surface.
 

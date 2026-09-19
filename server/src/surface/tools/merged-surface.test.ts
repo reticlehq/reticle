@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/core';
-import { TOOL_SURFACE } from './tool-surface.js';
+import { TOOL_SURFACE, EXTENDED_TOOL_NAMES } from './tool-surface.js';
 import { advertisedTools } from '@/surface/mcp/mcp.js';
 import { SURFACE_MERGE_PLANS, MERGED_TOOLS, TOOLS } from './tools.js';
 
@@ -22,7 +22,7 @@ const names = (surface: Parameters<typeof advertisedTools>[0]): Set<string> =>
   new Set(advertisedTools(surface).map((t) => t.name));
 
 describe('the merged surface trims names, never capabilities', () => {
-  it('advertises exactly nine tools', () => {
+  it('advertises exactly ten tools', () => {
     expect([...names(TOOL_SURFACE.MERGED)].sort()).toEqual(
       [
         ReticleTool.LOOK,
@@ -33,16 +33,34 @@ describe('the merged surface trims names, never capabilities', () => {
         ReticleTool.OBSERVE,
         ReticleTool.VERIFY,
         ReticleTool.SESSION,
-        // Kept, while `reticle_run` is not: this surface advertises everything, so there is nothing
-        // left to DISPATCH to, but a lean input schema still needs somewhere to get full parameters
-        // from — and recovery messages across the server name this tool by hand.
+        // Both meta-tools. `reticle_tools` because a lean input schema needs somewhere to get full
+        // parameters from, and recovery messages across the server name it by hand. `reticle_run`
+        // because this surface does NOT advertise everything — see the test below.
         ReticleTool.TOOLS,
+        ReticleTool.RUN,
       ].sort(),
     );
   });
 
-  it('drops reticle_run, because nothing is left for it to reach', () => {
-    expect([...names(TOOL_SURFACE.MERGED)]).not.toContain(ReticleTool.RUN);
+  /**
+   * It used to drop `reticle_run`, "because nothing is left for it to reach". That was false, and
+   * had been for some time: `MERGED_TOOL_NAMES` excludes every name in `EXTENDED_TOOL_NAMES`, so
+   * eleven registered tools were advertised by nothing, callable by nothing and catalogued by
+   * nothing — `reticle_tools { names: ['reticle_screenshot'] }` answered `unknown tool` on a build
+   * where that tool exists. The extended set is demoted on the stated promise that each member is
+   * "still one reticle_run hop away"; dropping the hatch cancelled the half of that trade we owed
+   * the caller.
+   *
+   * This asserts the PROPERTY rather than the tool name, so it fails again the day something else
+   * leaves the advertised set without a route back.
+   */
+  it('keeps reticle_run, because the surface does not advertise everything', () => {
+    const merged = names(TOOL_SURFACE.MERGED);
+    expect([...merged]).toContain(ReticleTool.RUN);
+
+    const unadvertised = [...EXTENDED_TOOL_NAMES].filter((name) => !merged.has(name));
+    expect(unadvertised.length).toBeGreaterThan(0);
+    expect(unadvertised).toContain(ReticleTool.SCREENSHOT);
   });
 
   it('every tool the DEFAULT surface advertises is still reachable on merged', () => {

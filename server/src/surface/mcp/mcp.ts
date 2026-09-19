@@ -268,24 +268,33 @@ export function advertisedTools(
   const shipped = new Set(tableForSurface(surface).map((tool) => tool.name));
   const ours = tools.filter((tool) => shipped.has(tool.name));
   const theirs = tools.filter((tool) => !shipped.has(tool.name));
-  // The `merged` surface keeps `reticle_tools` and drops `reticle_run`, which is not symmetry for
-  // its own sake. `reticle_run` exists to DISPATCH to a tool the surface does not advertise, and
-  // this surface advertises everything, so it has no job left. `reticle_tools` has a second job that
-  // survives: every input schema on a trimmed surface is LEAN, and `{ names: [...] }` is the only
-  // way to get a tool's full parameters — which matters more here than anywhere, because a merged
-  // tool's schema is the union of its members' fields with all of them optional. Recovery messages
-  // across this server also say "Call reticle_tools", and a surface without it turns that advice
-  // into a dead end (see surface-sizes.test.ts).
-  // A surface with no `reticle_run` can invoke only what it advertises, so the catalogue is told to
-  // list exactly that. Anything else is a menu of names the agent cannot order from.
+  /*
+   * `merged` used to drop `reticle_run`, on the reasoning that the hatch "exists to DISPATCH to a
+   * tool the surface does not advertise, and this surface advertises everything, so it has no job
+   * left".
+   *
+   * THE PREMISE WAS FALSE, and it had been false for some time. `MERGED_TOOL_NAMES` is
+   * `CORE_TOOL_NAMES` minus the merged-away names plus `LOOK`; `EXTENDED_TOOL_NAMES` — screenshot,
+   * visual diff, clock, network mock, storage, record, the flow pair, intent, context, capabilities
+   * — is not in it. So eleven registered tools were advertised by nothing, callable by nothing, and
+   * catalogued by nothing: `reticle_tools { names: ["reticle_screenshot"] }` answered `unknown
+   * tool`, on a build where the tool exists and is registered.
+   *
+   * The extended set's own comments say each demoted tool is "still one `reticle_run` hop from any
+   * agent that wants it". That is the trade the demotion was justified by, and dropping the hatch
+   * silently cancelled the half of it we owed the caller. One of the casualties was
+   * `reticle_visual_diff`, which covers the only bug class the registry marks as one Reticle cannot
+   * otherwise see.
+   *
+   * So the hatch stays, and the catalogue lists everything the hatch can reach. `reticle_tools`
+   * keeps its second job either way: every input schema on a trimmed surface is LEAN, and
+   * `{ names: [...] }` is the only way to get full parameters — which matters most here, because a
+   * merged tool's schema is the union of its members' fields with all of them optional. Recovery
+   * messages across this server also say "Call reticle_tools", and a surface without it turns that
+   * advice into a dead end (see surface-sizes.test.ts).
+   */
   const advertisedHere = filterTools([...ours], surface);
-  const callable =
-    surface === TOOL_SURFACE.MERGED
-      ? new Set([...advertisedHere, ...theirs].map((tool) => tool.name))
-      : undefined;
-  const meta = buildDynamicTools([...tools], origin, callable).filter(
-    (tool) => surface !== TOOL_SURFACE.MERGED || tool.name !== ReticleTool.RUN,
-  );
+  const meta = buildDynamicTools([...tools], origin, undefined);
   return [...advertisedHere, ...theirs, ...meta];
 }
 

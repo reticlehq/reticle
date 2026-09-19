@@ -204,3 +204,16 @@ export async function resolveProjectCloud(
     key !== null ? { url: link.url.replace(/\/+$/, ''), apiKey: key } : null;
   return { config, policy, verify: link.verify, projectId: link.projectId };
 }
+
+/**
+ * The linked credential, as a port the tool surface can be handed.
+ *
+ * Lives here, beside the resolver it wraps, rather than in the daemon bootstrap: `index.ts` sits
+ * exactly on the thousand-line cap, so a caller that needs this in three lines has to put those
+ * three lines somewhere they belong. The harness reads it so a machine that has run `reticle link`
+ * needs no exported key — see `withLinkedCredential`.
+ */
+export const linkedCloudPort =
+  (fs: FileSystemPort, reticleRoot: string, homeDir: string, env: NodeJS.ProcessEnv) =>
+  async (): Promise<CloudConfig | null> =>
+    (await resolveProjectCloud(fs, reticleRoot, homeDir, env)).config;

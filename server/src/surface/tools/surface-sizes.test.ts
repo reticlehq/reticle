@@ -43,9 +43,15 @@ const EXPECTED_SIZE: Record<ToolSurface, number> = {
   [TOOL_SURFACE.LEAN]: 10,
   // The same capabilities as `default`, under merged names: look (snapshot/query/inspect/state),
   // observe (observe/network/console), assert (assert/wait_for), act absorbing act_sequence,
-  // sessions folded into session. NINE, and no meta-tools: this surface IS the product rather than
-  // a window onto it, so there is no cold tail for them to reach.
-  [TOOL_SURFACE.MERGED]: 9,
+  // sessions folded into session — plus BOTH meta-tools.
+  //
+  // This said NINE, on the reasoning that the surface "IS the product rather than a window onto it,
+  // so there is no cold tail for them to reach". There is a cold tail: `MERGED_TOOL_NAMES` excludes
+  // every name in `EXTENDED_TOOL_NAMES`, so eleven registered tools — screenshot, visual diff,
+  // clock, network mock, storage, record, the flow pair, intent, context, capabilities — were
+  // advertised by nothing and reachable by nothing. `reticle_run` is what reaches them, which is
+  // the trade the extended set's own comments promise ("still one reticle_run hop away"), so TEN.
+  [TOOL_SURFACE.MERGED]: 10,
 };
 
 /**

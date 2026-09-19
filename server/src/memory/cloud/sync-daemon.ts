@@ -25,7 +25,8 @@ import { log } from '@/log.js';
 import { emitSyncHook } from '@/hooks/hook-emit.js';
 import { describeSync, runSyncCycle, type SyncReport } from './sync-cycle.js';
 import { diskSink, diskSource, readCloudState } from './sync-disk.js';
-import type { ProjectCloud } from './cloud-config.js';
+import { resolveProjectCloud, type ProjectCloud } from './cloud-config.js';
+import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 
 /** How often the daemon cycles. See the note above on why this is a constant and not a curve. */
 const DAEMON_SYNC_INTERVAL_MS = 60_000;
@@ -85,7 +86,7 @@ interface SyncDaemonDeps {
   ) => Promise<{ status: number; text: string }>;
 }
 
-interface SyncDaemon {
+export interface SyncDaemon {
   /** Run one cycle now, whatever the timer is doing. Returns undefined when not linked. */
   syncNow: () => Promise<SyncReport | undefined>;
   /**
@@ -315,4 +316,34 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
       timer = undefined;
     },
   };
+}
+
+/**
+ * Start cloud sync for a daemon and hand back the two hooks the daemon wires to it.
+ *
+ * The wiring lived in `index.ts`, which sits exactly on the thousand-line cap — so the next thing
+ * anyone needed there could not be added without a split, and this is the block that most obviously
+ * did not belong in a bootstrap file. Four calls that are all one concern: what to sync, where else
+ * to look, how a landed run wakes it, and what the panel's button does.
+ *
+ * Returns the daemon itself: the caller still owns when to nudge, when to sync now, and when to
+ * stop. Only the CONSTRUCTION moved, which is the part that was four interdependent arguments about
+ * resolving a credential — and the part a bootstrap file has no business spelling out.
+ */
+export function attachCloudSync(deps: {
+  fs: FileSystemPort;
+  reticleRoot: string;
+  homeDir: string;
+  env: NodeJS.ProcessEnv;
+  otherRoots: () => readonly string[];
+}): SyncDaemon {
+  return startSyncDaemon({
+    reticleRoot: deps.reticleRoot,
+    cloud: () => resolveProjectCloud(deps.fs, deps.reticleRoot, deps.homeDir, deps.env),
+    // Every OTHER linked repo on this machine, not just the directory the daemon was started in.
+    // One daemon serves many projects, and pushing only its own root left the rest silently
+    // reporting nothing — indistinguishable, on the dashboard, from nobody having verified anything.
+    otherRoots: () => Promise.resolve(deps.otherRoots()),
+    cloudFor: (root) => resolveProjectCloud(deps.fs, root, deps.homeDir, deps.env),
+  });
 }

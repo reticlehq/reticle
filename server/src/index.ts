@@ -1,8 +1,8 @@
 import { join } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { resolveProjectCloud } from './memory/cloud/cloud-config.js';
-import { startSyncDaemon } from './memory/cloud/sync-daemon.js';
+import { linkedCloudPort } from './memory/cloud/cloud-config.js';
+import { attachCloudSync } from './memory/cloud/sync-daemon.js';
 import { wireHooks } from './hooks/hook-commands.js';
 import {
   PROJECT_REGISTRY_FILE,
@@ -643,7 +643,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   /*
    * Bound AFTER the sync daemon exists, read only when a run is actually written.
    *
-   * `attachJournal` runs before `startSyncDaemon` because the journal has to be capturing before
+   * `attachJournal` runs before `attachCloudSync` because the journal has to be capturing before
    * anything can connect, and reordering them so this could be a direct reference would put sync
    * setup ahead of session capture for the sake of one callback.
    */
@@ -679,18 +679,16 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
    * events a user most wants: the ones at the start of a run.
    */
   wireHooks(reticleRoot, readProjectId(process.cwd()));
-  const cloudSync = startSyncDaemon({
+  const cloudSync = attachCloudSync({
+    fs,
     reticleRoot,
-    cloud: () => resolveProjectCloud(fs, reticleRoot, homedir(), process.env),
-    // Every OTHER linked repo on this machine, not just the directory the daemon was started in.
-    // One daemon serves many projects, and pushing only its own root left the rest silently
-    // reporting nothing — indistinguishable, on the dashboard, from nobody having verified anything.
-    otherRoots: () => Promise.resolve(knownProjectRoots()),
-    cloudFor: (root) => resolveProjectCloud(fs, root, homedir(), process.env),
+    homeDir: homedir(),
+    env: process.env,
+    otherRoots: knownProjectRoots,
   });
   syncNudge.run = (): void => cloudSync.nudge();
-  // The panel's sync button. `syncNow`, not `nudge`: a nudge schedules a cycle soon, which is right
-  // for "a run landed" and wrong for a button somebody is watching. Never awaited.
+  // `syncNow`, not `nudge`: a nudge schedules a cycle soon, which is right for "a run landed" and
+  // wrong for a button somebody is watching. Never awaited.
   bridge.attachSyncRequest(() => void cloudSync.syncNow());
   // Scope auto-selection to the active project (from .reticle.json) so a stray tab from another app is
   // never picked when the agent omits a sessionId. Explicit per-call scope/sessionId still overrides.
@@ -719,10 +717,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     project,
     fs,
     reticleRoot,
-    // The same resolution cloud sync uses, handed to the tool surface as a port. The harness reads
-    // it so a linked machine needs no exported key; see `withLinkedCredential`.
-    linkedCloud: async () =>
-      (await resolveProjectCloud(fs, reticleRoot, homedir(), process.env)).config,
+    linkedCloud: linkedCloudPort(fs, reticleRoot, homedir(), process.env),
     // The long-lived daemon needs this MORE than the standalone MCP process does, not less: it is
     // the one that outlives a single project and serves every app on the machine. Omitting it here
     // silently disabled per-session artifact resolution for every agent that attaches to a running
