@@ -49,7 +49,7 @@
     "build:cjs": "node scripts/build-cjs.mjs"
   },
   "dependencies": {
-    "@babel/core": "^7.26.0",
+    "@babel/core": "^8.0.5",
     "@reticlehq/babel-plugin": "workspace:*",
     "@reticlehq/core": "workspace:*"
   },
