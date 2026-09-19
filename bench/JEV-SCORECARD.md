@@ -9,13 +9,13 @@ Same app, same MCP surface, same loop, same 24-step budget. The ONLY thing that 
 |                         | `anthropic` (claude-sonnet-5) | `jev` (jev-latest) |
 | ----------------------- | ----------------------------: | -----------------: |
 | Wall clock              |                        62.7 s |         **17.5 s** |
-| Cost per drive          |                       $0.3795 |      **$0.001233** |
+| Cost per drive          |                       $0.2530 |      **$0.001233** |
 | Flows recorded          |                       1, 1, 1 |            1, 1, 1 |
 | Actions driven          |                    11, 13, 10 |         10, 10, 10 |
 | **Actions PROVED**      |                       3, 6, 5 |        **8, 9, 8** |
 | **Real failures found** |                       0, 0, 0 |        **1, 0, 1** |
 
-**3.6x faster, 308x cheaper, same number of flows, and it proves roughly twice as much per drive.**
+**3.6x faster, 205x cheaper, same number of flows, and it proves roughly twice as much per drive.**
 
 ## The caveat that has to come before the victory lap
 
@@ -23,13 +23,15 @@ Same app, same MCP surface, same loop, same 24-step budget. The ONLY thing that 
 
 So the honest claim is **not** "Jev finds more bugs than Claude". It is:
 
-> The decision the harness actually needs is a SELECTION, and once you enumerate the candidates deterministically, a model that cannot do anything except select does the job — at 1/300th the cost, and with a discipline that is easier to enforce when the model cannot improvise.
+> The decision the harness actually needs is a SELECTION, and once you enumerate the candidates deterministically, a model that cannot do anything except select does the job — at about 1/200th the cost, and with a discipline that is easier to enforce when the model cannot improvise.
 
 The `1, 0, 1` failures column is real and worth having — those are `verified: "no"` verdicts from the engine on a live app, not the driver's opinion — but read it as evidence that _declaring consequences works_, which is a thing this repo already believed.
 
 ## Why it can be this much cheaper
 
 Jev prices the STATE, not the questions: seven questions cost **1.029x** the input tokens of one against an identical 17k-character state, and latency is flat. So every decision the driver makes is batched into one call, and adding a decision is nearly free.
+
+**The first published version of this table priced the Anthropic arm at $0.3795 and claimed 308x.** That was wrong, in our favour, because the price table carried $3/$15 per MTok — Sonnet 4.6's rate — while the arm actually drives claude-sonnet-5 at $2/$10. The figures above are recomputed from the same recorded token counts at the correct price. It is written down rather than quietly fixed because a competitive benchmark that gets a number wrong in its own favour is worth less than no benchmark, and the only defence is checking the provider's own pricing page rather than recalling it.
 
 Tokens are **not** comparable across the two arms and are deliberately never summed into a single number — Anthropic bills input + output with a cache tier, Jev bills input only and gives output away, so one "tokens" column would be three units stacked. Dollars are the comparable figure and are computed from each provider's published price, recorded in the raw output so a stale price is visible rather than silent.
 
@@ -55,6 +57,7 @@ It **cannot write prose**, which is why `explore`'s summary is now DERIVED from 
 - **Both arms end on `budget`**, so neither "finished"; this measures 24 steps of driving, not completion.
 - **Evidence grade is `presence`**, the weakest tier that still counts. The engine says so on every passing action. Naming a real signal name or endpoint path — which needs one `reticle_observe` early in the drive to learn the app's vocabulary — would move it to consequence grade, and that is the next piece of work rather than a thing this scorecard is quietly assuming.
 - **Bare `net` is pollutable in principle**: a page polling inside the action's window could answer for a button that did nothing. The window is the action's own rather than "ever", so the exposure is small, but it is real and it is the same fix as the line above.
+- **A third arm exists and is unpriced.** `openai` is a real driver and the runner will drive it, but no published price is hard-coded for it, so its `usd` comes back `null` with a note rather than a guessed figure. Set `BENCH_OPENAI_PRICE="in,out,cacheRead"` to price that arm.
 - The Jev driver keeps **one long recording** for the whole drive; the Anthropic driver segments into separately-named journeys, which are better flows. The flow COUNT ties; the flow quality does not, and nothing here measures that.
 
 ## Reproducing
@@ -66,6 +69,8 @@ RETICLE_PORT=4460 pnpm --filter @reticlehq/bench-app exec vite --port 4312 --str
 JEV_API_KEY=... node bench/harness/jev-probe.mjs                      # de-risk, no browser
 ANTHROPIC_API_KEY=... JEV_API_KEY=... BENCH_REPEATS=3 \
   node bench/harness/jev-vs-llm.mjs                                   # the measurement
+
+node bench/harness/jev-vs-llm.mjs --only openai                       # the third arm
 ```
 
 A missing key makes that arm report `NOT MEASURED` and the run continues; no number here is ever fabricated from a missing key.

@@ -14,8 +14,11 @@ export const ANTHROPIC_DRIVER_NAME = 'anthropic';
 /** Answers typed questions; picks from the elements on the page and cannot invent one. */
 export const JEV_DRIVER_NAME = 'jev';
 
+/** Generates its tool calls, over Chat Completions. Here so an A/B has a third arm. */
+export const OPENAI_DRIVER_NAME = 'openai';
+
 /** What a caller may name. Order is the order a reader sees them in the tool description. */
-export const DRIVER_NAMES = [ANTHROPIC_DRIVER_NAME, JEV_DRIVER_NAME] as const;
+export const DRIVER_NAMES = [ANTHROPIC_DRIVER_NAME, JEV_DRIVER_NAME, OPENAI_DRIVER_NAME] as const;
 
 /** An injected driver: not selectable, because only a caller in-process can supply one. */
 export const CUSTOM_DRIVER_NAME = 'custom';

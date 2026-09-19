@@ -211,6 +211,10 @@ export const ReticleEnv = {
   HARNESS_JEV_KEY: 'JEV_API_KEY',
   /** Base URL for the Jev API, for a proxy or a gateway. Defaults to TypeSafe's own endpoint. */
   HARNESS_JEV_URL: 'RETICLE_HARNESS_JEV_URL',
+  /** A direct OpenAI key. As with Jev, the ordinary path is the platform key and its proxy. */
+  HARNESS_OPENAI_KEY: 'OPENAI_API_KEY',
+  /** Model the OpenAI driver uses. Defaults to a small one — see `DEFAULT_OPENAI_MODEL`. */
+  HARNESS_OPENAI_MODEL: 'RETICLE_HARNESS_OPENAI_MODEL',
   /**
    * The API key minted on the platform, and the host it belongs to.
    *

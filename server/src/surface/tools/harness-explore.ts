@@ -16,8 +16,10 @@ import {
   CUSTOM_DRIVER_NAME,
   DRIVER_NAMES,
   JEV_DRIVER_NAME,
+  OPENAI_DRIVER_NAME,
 } from '@/features/harness/drivers.js';
 import { jevDriver, jevOptionsFromEnv } from '@/features/harness/jev-driver.js';
+import { openAiDriver, openAiOptionsFromEnv } from '@/features/harness/openai-driver.js';
 import { fetchPlatformConfig } from '@/features/harness/platform-config.js';
 import {
   DEFAULT_MAX_STEPS,
@@ -100,12 +102,22 @@ export const MSG_NO_JEV_KEY =
   `${ReticleEnv.HARNESS_JEV_KEY}, or run \`reticle link\` and set ${ReticleEnv.CLOUD_KEY}. ` +
   `Refusing rather than quietly driving with another model, which would misattribute the result.`;
 
+/** Asked for OpenAI specifically and it is not configured. Never substituted, same as Jev. */
+export const MSG_NO_OPENAI_KEY =
+  `The \`${OPENAI_DRIVER_NAME}\` driver was asked for but is not configured: set ` +
+  `${ReticleEnv.HARNESS_OPENAI_KEY}, or run \`reticle link\` and set ${ReticleEnv.CLOUD_KEY}. ` +
+  `Refusing rather than quietly driving with another model, which would misattribute the result.`;
+
 const msgUnknownDriver = (asked: string): string =>
   `Unknown harness driver \`${asked}\`. Known drivers: ${DRIVER_NAMES.join(', ')}.`;
 
 /** Is there a model the harness can drive with? A read, because "not configured" is not a failure. */
 export function harnessAvailable(env: Record<string, string | undefined>): boolean {
-  return harnessOptionsFromEnv(env) !== undefined || jevOptionsFromEnv(env) !== undefined;
+  return (
+    harnessOptionsFromEnv(env) !== undefined ||
+    jevOptionsFromEnv(env) !== undefined ||
+    openAiOptionsFromEnv(env) !== undefined
+  );
 }
 
 /**
@@ -292,6 +304,11 @@ function buildDriver(
   if (ANTHROPIC_DRIVER_NAME === asked) {
     if (anthropic === undefined) throw new Error(MSG_NO_HARNESS_KEY);
     return { driver: harnessDriver(anthropic), name: ANTHROPIC_DRIVER_NAME };
+  }
+  if (OPENAI_DRIVER_NAME === asked) {
+    const openai = openAiOptionsFromEnv(env);
+    if (openai === undefined) throw new Error(MSG_NO_OPENAI_KEY);
+    return { driver: openAiDriver(openai), name: OPENAI_DRIVER_NAME };
   }
   if (asked !== undefined && 0 < asked.length) throw new Error(msgUnknownDriver(asked));
 

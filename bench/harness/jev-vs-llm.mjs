@@ -38,13 +38,37 @@ const API_HEALTH = process.env.BENCH_API_HEALTH ?? 'http://localhost:8787/api/he
 const OUT = 'bench/raw/jev-vs-llm.json';
 const MAX_STEPS = process.env.BENCH_MAX_STEPS ?? '24';
 
-/** Published list prices, $ per million tokens. Recorded in the output so a stale one is visible. */
+/**
+ * Published list prices, $ per million tokens, recorded in the output so a stale one is visible.
+ *
+ * This table was wrong once, in OUR favour, which is the direction that costs a benchmark its
+ * credibility: the Anthropic arm was priced at $3/$15 — Sonnet 4.6's rate — while the arm actually
+ * runs claude-sonnet-5 at $2/$10. Every published comparison ratio was ~1.5x too flattering until
+ * it was checked. Check the provider's own pricing page before trusting a row here.
+ */
 const PRICE = {
-  // claude-sonnet-5, the harness default (DEFAULT_HARNESS_MODEL).
-  anthropic: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+  // claude-sonnet-5, the harness default (DEFAULT_HARNESS_MODEL). Cache reads are ~0.1x input,
+  // cache writes ~1.25x.
+  anthropic: { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
   // jev-latest. Output is free, which is why it is zero here rather than absent.
   jev: { input: 0.042, output: 0, cacheRead: 0, cacheWrite: 0 },
+  /**
+   * DELIBERATELY UNPRICED until somebody sets it.
+   *
+   * No price is published here for the OpenAI model this bench drives, and inventing one would put
+   * a fabricated number in a comparison whose whole argument is that its numbers are real. The arm
+   * still reports tokens and wall clock, which are measured; `usd` comes back null with a note.
+   * Set BENCH_OPENAI_PRICE="in,out,cacheRead" to price it.
+   */
+  openai: priceFromEnv(process.env.BENCH_OPENAI_PRICE),
 };
+
+function priceFromEnv(raw) {
+  if (raw === undefined || 0 === raw.length) return null;
+  const [input, output, cacheRead] = raw.split(',').map(Number);
+  if (![input, output, cacheRead].every((n) => Number.isFinite(n))) return null;
+  return { input, output, cacheRead, cacheWrite: 0 };
+}
 
 const FOCUS =
   'Sign in with admin@reticle.dev / password, then move through the product the way somebody using ' +
@@ -65,11 +89,13 @@ const only = process.argv.includes('--only')
   ? process.argv[process.argv.indexOf('--only') + 1]
   : null;
 const usd = (usage, price) =>
-  ((usage.input ?? 0) * price.input +
-    (usage.output ?? 0) * price.output +
-    (usage.cacheRead ?? 0) * price.cacheRead +
-    (usage.cacheWrite ?? 0) * price.cacheWrite) /
-  1_000_000;
+  null === price
+    ? null
+    : ((usage.input ?? 0) * price.input +
+        (usage.output ?? 0) * price.output +
+        (usage.cacheRead ?? 0) * price.cacheRead +
+        (usage.cacheWrite ?? 0) * price.cacheWrite) /
+      1_000_000;
 
 async function up(url) {
   try {
@@ -191,7 +217,12 @@ async function runArm(name) {
       flow_names: [...(result.savedFlows ?? []), ...(result.rewroteFlows ?? [])],
       usage,
       price_per_mtok: price,
-      usd: Number(usd(usage, price).toFixed(6)),
+      usd: null === price ? null : Number(usd(usage, price).toFixed(6)),
+      ...(null === price
+        ? {
+            usd_note: `no published price configured for ${name}; set BENCH_OPENAI_PRICE to price it`,
+          }
+        : {}),
       ...(result.error === undefined ? {} : { error: result.error }),
       ...(result.note === undefined ? {} : { note: result.note }),
       // What a coding agent actually receives. Kept in the raw output because the READABILITY of
@@ -250,7 +281,7 @@ const summarise = (arm) => {
   return {
     runs: got.length,
     wall_ms_median: median(got.map((r) => r.wall_ms)),
-    usd_median: median(got.map((r) => r.usd)),
+    usd_median: median(got.map((r) => r.usd).filter((n) => null !== n)),
     // Reported as a RANGE as well as a median: this is the column that decides whether a cheaper
     // driver actually won, and it is also the one that varies most between runs.
     flows: got.map((r) => r.flows),
@@ -272,7 +303,7 @@ const out = {
   note: 'Same app, same tools, same loop; only the ModelDriver differs. Tokens are NOT comparable across arms (different billing units) — dollars and flows are.',
   rows,
   per_arm: perArm,
-  ...(perArm['anthropic'] !== undefined && perArm['jev'] !== undefined
+  ...(perArm['anthropic']?.usd_median != null && perArm['jev']?.usd_median != null
     ? {
         comparison: {
           usd_ratio_anthropic_over_jev: Number(

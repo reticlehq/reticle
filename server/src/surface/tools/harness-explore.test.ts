@@ -15,6 +15,7 @@ import {
   knownDriver,
   MSG_NO_HARNESS_KEY,
   MSG_NO_JEV_KEY,
+  MSG_NO_OPENAI_KEY,
 } from './harness-explore.js';
 
 /** One completed flow-save call, as the loop records it. */
@@ -240,11 +241,17 @@ describe('a stored preference this build cannot honour', () => {
   it('keeps a driver it has', () => {
     expect(knownDriver('jev')).toBe('jev');
     expect(knownDriver('anthropic')).toBe('anthropic');
+    expect(knownDriver('openai')).toBe('openai');
   });
 
-  it('ignores one it does not, rather than refusing to drive', () => {
-    expect(knownDriver('openai')).toBeUndefined();
-    expect(knownDriver('something-invented-later')).toBeUndefined();
+  /**
+   * `openai` was the example here until this build grew a driver for it, which is the case this
+   * asymmetry exists for: the platform offers providers a given daemon may not have yet, and the
+   * daemon catches up later. The test moved to a name this build does not know rather than being
+   * deleted, because the situation it describes did not go away — it just moved along one.
+   */
+  it('ignores one it does not have, rather than refusing to drive', () => {
+    expect(knownDriver('a-provider-added-after-this-build')).toBeUndefined();
   });
 
   it('ignores an absent preference', () => {
@@ -257,12 +264,19 @@ describe('a stored preference this build cannot honour', () => {
       exploreApp(
         depsWithFlows([]),
         { JEV_API_KEY: 'j' },
-        {
-          maxSteps: 1,
-          skipPlatformConfig: true,
-          driverName: 'openai',
-        },
+        { maxSteps: 1, skipPlatformConfig: true, driverName: 'a-provider-added-after-this-build' },
       ),
     ).rejects.toThrow('Unknown harness driver');
+  });
+
+  /** A driver this build HAS but has no key for is refused BY NAME, never quietly swapped. */
+  it('refuses a known driver it cannot configure, rather than substituting', async () => {
+    await expect(
+      exploreApp(
+        depsWithFlows([]),
+        { JEV_API_KEY: 'j' },
+        { maxSteps: 1, skipPlatformConfig: true, driverName: 'openai' },
+      ),
+    ).rejects.toThrow(MSG_NO_OPENAI_KEY);
   });
 });
