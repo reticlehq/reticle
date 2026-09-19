@@ -52,7 +52,8 @@ const FLAT_FILE_LIMIT = 10;
  */
 const OVER_THE_LINE: Readonly<Record<string, number>> = {
   'adapters/build/vite/src': 11,
-  'adapters/realm/browser/src/dom': 12,
+  // app-dialog.ts shares the host-dialog predicate between snapshots and HUD keyboard handling.
+  'adapters/realm/browser/src/dom': 13,
   'adapters/realm/browser/src/observers': 23,
   // 17 since the HUD's position primitives left `presenter-drag.ts` for their own leaf: the drag
   // gesture re-syncs the dock layout, and the dock layout reads the HUD's position, so the two files
