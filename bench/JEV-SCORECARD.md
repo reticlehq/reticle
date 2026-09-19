@@ -51,6 +51,19 @@ It **cannot write prose**, which is why `explore`'s summary is now DERIVED from 
 
 **Then it declared consequences that could not fail.** A bare `{kind:'state', path:''}` and a bare `{kind:'route'}` are unconditionally true — there is always a current route — so two more runs came back `already_true`. Only `signal` and `net` are safe to declare bare, because they are event-based and floored at the act's own cursor. `engine/src/evidence/already-true.ts` already said so, in those words.
 
+## The whole path, driven
+
+Every number above comes from a daemon holding a direct `JEV_API_KEY`. The path a USER takes is different and longer, so it was driven separately rather than assumed:
+
+1. a real platform instance, booted from the API's own source;
+2. a real account, through the ordinary signup and email-code login;
+3. a real key minted from `POST /v1/keys` — `rk_live_…`, the same thing the console issues;
+4. `GET /v1/model/config` answering `provider: jev, harnessEnabled: true`;
+5. `POST /v1/model/systemone` reaching TypeSafe through the platform and answering correctly in about a second, with the platform's own key rather than the caller's;
+6. a daemon given **only** `RETICLE_CLOUD_URL` and `RETICLE_CLOUD_KEY` — no `JEV_API_KEY`, no `ANTHROPIC_API_KEY` anywhere in its environment — driving apps/bench-app, reporting `driver: "jev"`, proving 4 of 4 actions and saving a replayable flow.
+
+That last step is the product claim in one line: somebody who has never held a model API key drove their own app and got a verdict. It is recorded here because the unit gates cover each half and could not have caught a seam between them, and because this repository has shipped a feature whose every gate passed and which connected 0% of the time in the field.
+
 ## Standing limits
 
 - **One app** (`apps/bench-app`), n=3 per arm. This is not a claim about applications in general.
