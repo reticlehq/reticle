@@ -34,6 +34,31 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return 'object' === typeof value && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Whether the value under an error key carries an actual error.
+ *
+ * An API that always sends its error slot and leaves it EMPTY is saying the opposite of a failure,
+ * and every empty shape below was being read as one — because the test was the key's PRESENCE, with
+ * `[]` and `''` carved out by hand and nothing else. Reported from the field on a 200 whose error
+ * container was empty: `verified: "no"`, "its body reports the operation FAILED", nothing in the
+ * body reporting anything of the kind.
+ *
+ * `false` and `0` are the two that look like judgement calls and are not. `{"error": false}` is the
+ * envelope flag for "there was none" — the exact dual of the `ok`/`success` flags read above — and
+ * an errno-style `{"error": 0}` spells the same thing; under the plural key, `{"errors": 0}` is a
+ * count of none. Each says "none" in both available readings, and the non-empty side of each is
+ * untouched: a populated map, a non-zero code, `error: true` and a real message all still report.
+ */
+function carriesError(value: unknown): boolean {
+  if (value === undefined || null === value) return false;
+  if (Array.isArray(value)) return value.length > 0;
+  if ('string' === typeof value) return value.trim().length > 0;
+  if ('boolean' === typeof value) return value;
+  if ('number' === typeof value) return 0 !== value;
+  if (isRecord(value)) return Object.keys(value).length > 0;
+  return true;
+}
+
 /** Whether one object reports a failure of its own. */
 function reportsFailure(item: unknown): boolean {
   if (!isRecord(item)) return false;
@@ -41,15 +66,7 @@ function reportsFailure(item: unknown): boolean {
     if (false === item[flag]) return true;
   }
   for (const key of ERROR_KEYS) {
-    const value = item[key];
-    if (value === undefined || null === value) continue;
-    if (Array.isArray(value)) {
-      if (value.length > 0) return true;
-      continue;
-    }
-    // An empty string or an explicit null is an API saying "no error", not an error.
-    if ('string' === typeof value && 0 === value.length) continue;
-    return true;
+    if (carriesError(item[key])) return true;
   }
   return false;
 }
