@@ -4,6 +4,7 @@ import { isFrame } from './realm.js';
 import { getAccessibleName, getRole, getStates, getValue, isVisible } from './a11y.js';
 import { refs } from './addressing/refs.js';
 import { isIgnored, isReticleOverlay } from './dom-ignore.js';
+import { APP_DIALOG_SELECTOR } from './app-dialog.js';
 
 const INTERACTIVE = new Set([
   'button',
@@ -415,7 +416,7 @@ function walk(parent: Element, depth: number, ctx: WalkCtx, inLive = false): voi
  * excluded here via `isReticleOverlay`.
  */
 function collectDialogs(root: ParentNode): string[] {
-  const nodes = root.querySelectorAll('[role="dialog"], dialog[open], [aria-modal="true"]');
+  const nodes = root.querySelectorAll(APP_DIALOG_SELECTOR);
   const names: string[] = [];
   for (const node of nodes) {
     if (isReticleOverlay(node)) continue;
@@ -444,9 +445,7 @@ function collectDialogs(root: ParentNode): string[] {
 function overlayHidingPage(root: ParentNode): string | undefined {
   // Only meaningful for a whole-page snapshot; a scoped snapshot is the subtree the caller chose.
   if (root !== document.body) return undefined;
-  const dialogs = document.body.querySelectorAll(
-    '[role="dialog"], dialog[open], [aria-modal="true"]',
-  );
+  const dialogs = document.body.querySelectorAll(APP_DIALOG_SELECTOR);
   let modal: Element | undefined;
   /**
    * A candidate that is present but does NOT compute visible.

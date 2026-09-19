@@ -1,5 +1,7 @@
 import { PresenterReport, reportPanelHtml } from './presenter-report.js';
 import type { AccountState } from '@reticlehq/core';
+import { appDialogIsOpen } from '@/dom/app-dialog.js';
+import { isReticleUi } from '@/dom/dom-ignore.js';
 import { paintToolbarAccount, TOOLBAR_ACCOUNT_ATTR } from './presenter-workspace.js';
 import { mountAccountControl, type AccountDetails } from './presenter-account.js';
 import { paintSettingsAccount } from './presenter-settings.js';
@@ -492,8 +494,27 @@ export class HudShell {
     if (this.#settings.contains(target)) return;
     this.#settings.close();
   };
+  /**
+   * Escape, but only the presses that are Reticle's to answer.
+   *
+   * The HUD cancels the key it acts on, and cancelling Escape cancels the browser's close request:
+   * a `<dialog>` opened with `showModal()` then does not close, in dev only, in an app whose author
+   * is testing that very modal (#995). A library modal that declines to dismiss an event somebody
+   * else already answered goes the same way. An instrumentation layer that eats a key the app was
+   * waiting for is participating, not observing.
+   *
+   * So two presses are not ours, and both are checked before any state is touched — a press the HUD
+   * stands down from must leave the HUD exactly as it found it, or one key gets two answers:
+   *
+   * - one another handler already answered (`defaultPrevented`), and
+   * - one belonging to a dialog the APP has open, which Escape closes whether or not the HUD is up.
+   *
+   * The exception is a press that came from inside Reticle's own UI: nothing else can be what the
+   * user meant to dismiss, so the HUD keeps it even with an app dialog on screen.
+   */
   #onKeyDown = (e: KeyboardEvent): void => {
     if ('Escape' !== e.key || this.#root === undefined) return;
+    if (e.defaultPrevented) return;
     const target = e.target;
     if (
       target instanceof HTMLElement &&
@@ -503,6 +524,8 @@ export class HudShell {
     ) {
       return;
     }
+    const fromOurUi = isReticleUi(target instanceof Element ? target : null);
+    if (!fromOurUi && appDialogIsOpen(document)) return;
     if (this.isChatOpen()) {
       e.preventDefault();
       this.closeChat();
