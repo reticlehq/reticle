@@ -457,6 +457,18 @@ describe('an unknown parameter is refused, never silently dropped', () => {
     expect(text(result), 'the reply must name what it does declare').toContain('names');
     await close();
   });
+
+  it('accepts reticle_tools { action: "list" } as the no-argument catalogue', async () => {
+    const { client, close } = await openServer();
+    const result = await client.callTool({
+      name: ReticleTool.TOOLS,
+      arguments: { action: 'list' },
+    });
+    expect(result.isError).not.toBe(true);
+    expect(text(result)).not.toMatch(/Unknown parameter/i);
+    expect(text(result)).toContain('"total"');
+    await close();
+  });
 });
 
 /**
