@@ -18,6 +18,7 @@ import {
   JEV_DRIVER_NAME,
 } from '@/features/harness/drivers.js';
 import { jevDriver, jevOptionsFromEnv } from '@/features/harness/jev-driver.js';
+import { fetchPlatformConfig } from '@/features/harness/platform-config.js';
 import {
   DEFAULT_MAX_STEPS,
   runHarness,
@@ -44,6 +45,13 @@ export interface ExploreOptions {
   driverName?: string;
   /** Injected for tests, and for anyone driving with a model this repo does not ship a binding for. */
   driver?: ModelDriver;
+  /**
+   * Skip asking the platform which driver this project prefers.
+   *
+   * Set by tests and by callers that have already decided. Not a user-facing switch: naming a
+   * driver explicitly already skips the lookup, which is the only reason anybody would want to.
+   */
+  skipPlatformConfig?: boolean;
 }
 
 export interface ExploreResult {
@@ -129,9 +137,11 @@ export async function exploreApp(
 ): Promise<ExploreResult> {
   const maxSteps = options.maxSteps ?? maxStepsFromEnv(env);
   const before = new Set(await deps.flows.list());
+  const requested =
+    options.driverName ?? env[ReticleEnv.HARNESS_DRIVER] ?? (await preferredDriver(env, options));
   const built =
     options.driver === undefined
-      ? buildDriver(env, maxSteps, freeFlowName(before), options.driverName)
+      ? buildDriver(env, maxSteps, freeFlowName(before), requested)
       : { driver: options.driver, name: CUSTOM_DRIVER_NAME };
   const driver = built.driver;
 
@@ -205,6 +215,43 @@ function freeFlowName(existing: ReadonlySet<string>): string {
   return base;
 }
 
+/**
+ * The driver this project chose on the platform, if it chose one, we can reach it, and we have it.
+ *
+ * Only asked when nobody has been explicit, so the cost is paid exactly once per drive and never on
+ * a path where it could not change the answer. An unreachable platform returns undefined and the
+ * environment decides, exactly as it did before this lookup existed.
+ *
+ * A preference naming a driver this build does not have is IGNORED rather than refused, and that
+ * asymmetry with the per-call argument is deliberate. The platform offers providers this daemon may
+ * be too old to know about — it already offers `openai`, which has no binding here — so a stored
+ * preference is a statement about the account, not an instruction for this drive, and a daemon that
+ * refused to run because a web UI knew one more word than it does would be broken by its own
+ * upgrade cycle. Naming a driver in the CALL is an instruction, and an unknown one is still an
+ * error there.
+ *
+ * It is not a silent substitution either way: the result reports the driver that actually drove.
+ */
+async function preferredDriver(
+  env: Record<string, string | undefined>,
+  options: ExploreOptions,
+): Promise<string | undefined> {
+  if (true === options.skipPlatformConfig) return undefined;
+  const config = await fetchPlatformConfig(env);
+  return knownDriver(config?.provider);
+}
+
+/**
+ * A stored preference, kept only if this build can actually honour it.
+ *
+ * Exported because it is the whole of the asymmetry with the per-call argument, and the asymmetry
+ * is the part somebody will later think is a bug.
+ */
+export function knownDriver(provider: string | undefined): string | undefined {
+  if (provider === undefined) return undefined;
+  return DRIVER_NAMES.some((name) => name === provider) ? provider : undefined;
+}
+
 function pinned(options: ExploreOptions): { sessionId?: string } {
   return options.sessionId === undefined ? {} : { sessionId: options.sessionId };
 }
@@ -230,7 +277,7 @@ function buildDriver(
 ): { driver: ModelDriver; name: string } {
   const jev = jevOptionsFromEnv(env);
   const anthropic = harnessOptionsFromEnv(env);
-  const asked = requested ?? env[ReticleEnv.HARNESS_DRIVER];
+  const asked = requested;
 
   // A driver that was ASKED for and is not configured is an error, never a substitution. Quietly
   // falling back would make every comparison between two drivers a possible lie about which one

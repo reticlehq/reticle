@@ -12,6 +12,7 @@ import {
   harnessAvailable,
   maxStepsFromEnv,
   reconcileFlows,
+  knownDriver,
   MSG_NO_HARNESS_KEY,
   MSG_NO_JEV_KEY,
 } from './harness-explore.js';
@@ -53,7 +54,7 @@ describe('exploring an app', () => {
     const result = await exploreApp(
       depsWithFlows(['login'], ['login', 'checkout']),
       {},
-      { driver: finishing('drove checkout') },
+      { driver: finishing('drove checkout'), skipPlatformConfig: true },
     );
 
     expect(result.savedFlows).toEqual(['checkout']);
@@ -64,7 +65,7 @@ describe('exploring an app', () => {
     const result = await exploreApp(
       depsWithFlows(['login'], ['login']),
       {},
-      { driver: finishing('I saved a flow called checkout') },
+      { driver: finishing('I saved a flow called checkout'), skipPlatformConfig: true },
     );
 
     // The model said it saved one. Nothing appeared. The answer is what is on disk.
@@ -175,12 +176,18 @@ describe('choosing which model drives', () => {
   const BOTH = { JEV_API_KEY: 'j', ANTHROPIC_API_KEY: 'a' };
 
   it('defaults to anthropic when both are configured', async () => {
-    const result = await exploreApp(depsWithFlows([]), BOTH, { maxSteps: 1 });
+    const result = await exploreApp(depsWithFlows([]), BOTH, {
+      maxSteps: 1,
+      skipPlatformConfig: true,
+    });
     expect(result.driverName).toBe('anthropic');
   });
 
   it('uses jev when it is the only one configured', async () => {
-    const result = await exploreApp(depsWithFlows([]), JEV_ENV, { maxSteps: 1 });
+    const result = await exploreApp(depsWithFlows([]), JEV_ENV, {
+      maxSteps: 1,
+      skipPlatformConfig: true,
+    });
     expect(result.driverName).toBe('jev');
   });
 
@@ -193,7 +200,7 @@ describe('choosing which model drives', () => {
     const result = await exploreApp(
       depsWithFlows([]),
       { ...BOTH, RETICLE_HARNESS_DRIVER: 'jev' },
-      { maxSteps: 1 },
+      { maxSteps: 1, skipPlatformConfig: true },
     );
     expect(result.driverName).toBe('jev');
   });
@@ -212,7 +219,50 @@ describe('choosing which model drives', () => {
   });
 
   it('calls an injected driver custom, because it is not ours to name', async () => {
-    const result = await exploreApp(depsWithFlows([]), {}, { driver: finishing('') });
+    const result = await exploreApp(
+      depsWithFlows([]),
+      {},
+      { driver: finishing(''), skipPlatformConfig: true },
+    );
     expect(result.driverName).toBe('custom');
+  });
+});
+
+/**
+ * A preference the daemon cannot honour is ignored; an instruction it cannot honour is refused.
+ *
+ * The platform offers providers a given daemon may be too old to know — it already offers `openai`,
+ * which has no binding here. A stored preference is a statement about the account, so a daemon that
+ * refused to drive because a web UI knew one more word than it does would be broken by its own
+ * upgrade cycle. Naming a driver in the CALL is an instruction, and an unknown one still throws.
+ */
+describe('a stored preference this build cannot honour', () => {
+  it('keeps a driver it has', () => {
+    expect(knownDriver('jev')).toBe('jev');
+    expect(knownDriver('anthropic')).toBe('anthropic');
+  });
+
+  it('ignores one it does not, rather than refusing to drive', () => {
+    expect(knownDriver('openai')).toBeUndefined();
+    expect(knownDriver('something-invented-later')).toBeUndefined();
+  });
+
+  it('ignores an absent preference', () => {
+    expect(knownDriver(undefined)).toBeUndefined();
+  });
+
+  /** The same word, asked for explicitly, is still an error — that is the asymmetry. */
+  it('still refuses the same name when the CALL asks for it', async () => {
+    await expect(
+      exploreApp(
+        depsWithFlows([]),
+        { JEV_API_KEY: 'j' },
+        {
+          maxSteps: 1,
+          skipPlatformConfig: true,
+          driverName: 'openai',
+        },
+      ),
+    ).rejects.toThrow('Unknown harness driver');
   });
 });
