@@ -6,6 +6,7 @@ import {
 } from '@reticlehq/core';
 import { IntentStore } from '@/memory/intent/intent-store.js';
 import { classifyFlowAssertions } from './flow-classify.js';
+import type { IntentDeclaration } from '@/memory/intent/intent-input.js';
 
 /**
  * The link between a saved flow and the intent ledger — what the flow is FOR.
@@ -71,7 +72,14 @@ export async function linkFlowIntent(store: IntentStore, flow: FlowFile): Promis
   const id = intentIdOf(flow);
   if (id === undefined) return flow;
   if (flow.intent !== undefined) {
-    await store.declare([{ id, statement: flow.intent, surface: { flow: flow.name } }]);
+    // Annotated rather than passed inline: `declare` takes `unknown`, because one of its callers is
+    // an unchecked tool argument, so a typo here would only surface as a refusal at runtime.
+    const declaration: IntentDeclaration = {
+      id,
+      statement: flow.intent,
+      surface: { flow: flow.name },
+    };
+    await store.declare([declaration]);
   }
   if (classifyFlowAssertions(flow).hasConsequenceAssertion) {
     await store.bind(id, { flow: flow.name });

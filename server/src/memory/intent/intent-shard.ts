@@ -49,15 +49,18 @@ export const IntentStatus = {
 } as const;
 export type IntentStatus = (typeof IntentStatus)[keyof typeof IntentStatus];
 
-const IntentRecordSchema = IntentSchema.extend({
+/** Named once and reused, so the record, the index and the write path cannot disagree on the set. */
+export const IntentStatusSchema = z.enum([
+  IntentStatus.PROPOSED,
+  IntentStatus.AGREED,
+  IntentStatus.PROVED,
+  IntentStatus.STALE,
+]);
+
+export const IntentRecordSchema = IntentSchema.extend({
   /** Which shard this lives in. Stored as well as implied, so a file read alone is self-describing. */
   subject: z.string().min(1),
-  status: z.enum([
-    IntentStatus.PROPOSED,
-    IntentStatus.AGREED,
-    IntentStatus.PROVED,
-    IntentStatus.STALE,
-  ]),
+  status: IntentStatusSchema,
   /** WHY it must be true. The half the old file had no room for. */
   why: z.string().optional(),
   /** Where it came from — "the user, in conversation" beats an anonymous assertion in six months. */
@@ -93,12 +96,7 @@ const IntentIndexEntrySchema = z.object({
   id: z.string().min(1),
   subject: z.string().min(1),
   statement: z.string().min(1),
-  status: z.enum([
-    IntentStatus.PROPOSED,
-    IntentStatus.AGREED,
-    IntentStatus.PROVED,
-    IntentStatus.STALE,
-  ]),
+  status: IntentStatusSchema,
 });
 export type IntentIndexEntry = z.infer<typeof IntentIndexEntrySchema>;
 

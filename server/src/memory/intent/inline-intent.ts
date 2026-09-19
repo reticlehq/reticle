@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { IntentStore } from './intent-store.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
+import type { IntentDeclaration } from './intent-input.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 
 /**
@@ -158,7 +159,11 @@ export async function linkInlineIntent(
     // Declared WITHOUT a surface on purpose: see dischargeInlineIntent for why the route that
     // describes this record only exists after the action it is about.
     const declaredHere = existing === undefined;
-    if (declaredHere) await store.declare([{ id, statement: intent }]);
+    // Annotated rather than passed inline, for the reason `declare` takes `unknown`: its other
+    // caller is a tool argument nothing shape-checked, so the compiler can only help where a call
+    // site says what it is building.
+    const declaration: IntentDeclaration = { id, statement: intent };
+    if (declaredHere) await store.declare([declaration]);
     /*
      * A binding may be INVENTED only for a row this call also declared.
      *

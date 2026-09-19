@@ -19,11 +19,12 @@
  * an older build still reading the flat file keeps working, because nothing removes it. Deleting it
  * is a separate decision somebody can take once they believe the migration.
  */
-import { parseIntentFile, type Intent } from '@reticlehq/core/artifacts';
+import { parseIntentFile } from '@reticlehq/core/artifacts';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { withFileLock } from '@/memory/project/file-lock.js';
 import { subjectFor } from './intent-subject.js';
+import { parseRecordInput } from './intent-input.js';
 import type { Clock } from '@/machine/clock.js';
 import {
   emptyShard,
@@ -42,18 +43,6 @@ import {
 const INTENT_DIR = 'intent';
 const INDEX_FILE = 'index.json';
 const SHARD_SUFFIX = '.json';
-
-/** What a caller supplies to write an intent. Everything optional is genuinely optional. */
-interface IntentInput {
-  id: string;
-  statement: string;
-  subject?: string | undefined;
-  why?: string | undefined;
-  source?: string | undefined;
-  status?: IntentStatus | undefined;
-  surface?: Intent['surface'];
-  binding?: unknown;
-}
 
 export class IntentShardStore {
   readonly #fs: FileSystemPort;
@@ -185,33 +174,41 @@ export class IntentShardStore {
    * Merges onto whatever is already stored, so a caller adding a `why` to a migrated record does not
    * have to restate its binding — and cannot silently drop it by omission, which is the failure mode
    * that makes agents afraid to touch a store.
+   *
+   * `input` is `unknown` for the same reason `IntentStore.declare`'s batch is: it arrives as tool
+   * arguments that only `reticle_intent`'s advertised schema ever saw, and `reticle_run` reaches the
+   * same handler without that check. A record with a `status` outside the enum, or with the empty
+   * statement an absent argument used to be coerced into, takes its whole SHARD out of readability —
+   * `#readShard` then answers with an empty shard that the next write persists over every record
+   * that subject held. Parsed before the lock, so a refusal touches neither shard nor index.
    */
-  async record(input: IntentInput): Promise<IntentRecord> {
+  async record(input: unknown): Promise<IntentRecord> {
+    const given = parseRecordInput(input);
     return withFileLock(this.#indexPath(), async () => {
-      const existing = await this.get(input.id);
+      const existing = await this.get(given.id);
       const now = this.#clock.now();
       const subject =
-        input.subject ??
+        given.subject ??
         existing?.subject ??
-        subjectFor({ surface: input.surface, binding: input.binding });
+        subjectFor({ surface: given.surface, binding: given.binding });
 
       const next: IntentRecord = {
         ...(existing ?? {
-          id: input.id,
-          statement: input.statement,
+          id: given.id,
+          statement: given.statement,
           state: 'declared',
           declaredAt: now,
           subject,
           status: IntentStatus.PROPOSED,
         }),
-        statement: input.statement,
+        statement: given.statement,
         subject,
-        status: input.status ?? existing?.status ?? IntentStatus.PROPOSED,
+        status: given.status ?? existing?.status ?? IntentStatus.PROPOSED,
         updatedAt: now,
-        ...(input.why === undefined ? {} : { why: input.why }),
-        ...(input.source === undefined ? {} : { source: input.source }),
-        ...(input.surface === undefined ? {} : { surface: input.surface }),
-        ...(input.binding === undefined ? {} : { binding: input.binding }),
+        ...(given.why === undefined ? {} : { why: given.why }),
+        ...(given.source === undefined ? {} : { source: given.source }),
+        ...(given.surface === undefined ? {} : { surface: given.surface }),
+        ...(given.binding === undefined ? {} : { binding: given.binding }),
       };
 
       await this.#write(next, existing?.subject);

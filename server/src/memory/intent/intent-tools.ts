@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { IntentStore } from './intent-store.js';
 import { IntentShardStore } from './intent-shard-store.js';
 import { IntentStatus } from './intent-shard.js';
+import { IntentDeclarationSchema } from './intent-input.js';
 import { ReticleTool } from '@reticlehq/core';
 import { sessionIdShape } from '@/surface/tools/tool-kit.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
@@ -59,20 +60,12 @@ export const INTENT_TOOLS: ToolDef[] = [
         .enum([IntentStatus.PROPOSED, IntentStatus.AGREED, IntentStatus.PROVED, IntentStatus.STALE])
         .optional()
         .describe('record only: how settled it is. Defaults to proposed.'),
+      // The ADVERTISED shape is the enforced one, rather than a hand-written copy of it. The copy
+      // that used to sit here had already drifted — no minimum on `id` or `statement` — and a
+      // schema an agent is shown that differs from the schema its call is judged by is the shape
+      // of #994, one layer up.
       intents: z
-        .array(
-          z.object({
-            id: z.string(),
-            statement: z.string(),
-            surface: z
-              .object({
-                route: z.string().optional(),
-                flow: z.string().optional(),
-                files: z.array(z.string()).optional(),
-              })
-              .optional(),
-          }),
-        )
+        .array(IntentDeclarationSchema)
         .optional()
         .describe('declare only. Batchable — declare every intent for a feature in one call.'),
       id: z.string().optional().describe('bind only: which intent the predicate proves.'),
@@ -123,13 +116,17 @@ export const INTENT_TOOLS: ToolDef[] = [
       if (GET === action) return { record: await shards.get(asString(args['id']) ?? '') };
       if (MIGRATE === action) return { ...(await shards.migrate()), path: root };
       if (RECORD === action) {
+        // Handed over unread. Coercing here — `asString(...) ?? ''` for the two required fields, a
+        // cast to the status enum for the third — is what turned an argument the caller got wrong
+        // into a record the shard could not be read back with. The store is the one that knows what
+        // a record may be, so it is the one that decides.
         const written = await shards.record({
-          id: asString(args['id']) ?? '',
-          statement: asString(args['statement']) ?? '',
-          subject: asString(args['subject']),
-          why: asString(args['why']),
-          source: asString(args['source']),
-          status: asString(args['status']) as IntentStatus | undefined,
+          id: args['id'],
+          statement: args['statement'],
+          subject: args['subject'],
+          why: args['why'],
+          source: args['source'],
+          status: args['status'],
           binding: args['binding'],
         });
         return { record: written, path: root };
@@ -156,11 +153,10 @@ export const INTENT_TOOLS: ToolDef[] = [
         const fromShards = (await shards.all()).filter((record) => !seen.has(record.id));
         return { intents: [...flat, ...fromShards] };
       }
-      const raw = args['intents'];
-      const entries = Array.isArray(raw)
-        ? (raw as { id: string; statement: string; surface?: never }[])
-        : [];
-      const declared = await store.declare(entries);
+      // Passed through as it arrived. The cast that used to stand here asserted the very shape
+      // nothing had checked, and `Array.isArray` was the only thing between an agent's argument and
+      // the ledger — so a non-array answered "declared nothing" and a bad entry was written.
+      const declared = await store.declare(args['intents']);
       return { intents: declared, path: root };
     },
   },

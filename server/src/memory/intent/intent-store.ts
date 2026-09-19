@@ -13,6 +13,7 @@ import {
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { withFileLock } from '@/memory/project/file-lock.js';
+import { parseDeclarations } from './intent-input.js';
 import type { Clock } from '@/machine/clock.js';
 
 /**
@@ -82,17 +83,27 @@ export class IntentStore {
    *
    * Batched because the marginal cost of the whole mechanism has to stay at one call per feature; an
    * agent that must make five calls to declare five things will make none.
+   *
+   * `entries` is `unknown` rather than a declaration array, and that is the fix for #994 rather than
+   * a looseness. One of the four callers is a tool argument that nothing upstream shape-checks — a
+   * static parameter type there is the CALLER'S claim, and the claim was wrong: `surface` arrived as
+   * the string `/authorize` and was written. Refused here, before the lock, so no path reaches a
+   * write with input the reader could not parse back.
    */
-  async declare(
-    entries: readonly { id: string; statement: string; surface?: IntentSurface }[],
-  ): Promise<Intent[]> {
-    if (0 === entries.length) return [];
+  async declare(entries: unknown): Promise<Intent[]> {
+    const declarations = parseDeclarations(entries);
+    if (0 === declarations.length) return [];
     return withFileLock(this.#path(), async () => {
       let file = await this.#load();
       const now = this.#clock.now();
       const declared: Intent[] = [];
-      for (const entry of entries) {
-        const intent = declareIntent({ ...entry, now });
+      for (const entry of declarations) {
+        const intent = declareIntent({
+          id: entry.id,
+          statement: entry.statement,
+          now,
+          ...(entry.surface === undefined ? {} : { surface: entry.surface }),
+        });
         file = upsertIntent(file, intent);
         const stored = file.intents[intent.id];
         if (stored !== undefined) declared.push(stored);
