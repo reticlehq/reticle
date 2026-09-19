@@ -13,6 +13,7 @@ import {
 import { UiLibrary } from '@/detect/detect.js';
 import type { FoundStore } from '@/detect/capabilities.js';
 import { RETICLE_VERSION } from '@/version.js';
+import { VITE_ENV_DEV_DECLARATION } from './vite-env-types.js';
 
 /**
  * The SDK as one import a plain page can actually resolve.
@@ -473,7 +474,8 @@ ${storeBlock}
     stores: [${found.map((s) => `'${s.key}'`).join(', ')}], // the keys you registered above
   });
 }
-`;
+
+${VITE_ENV_DEV_DECLARATION}`;
 }
 
 /** Where that module goes. Matches @reticlehq/vite-plugin's convention list. */
