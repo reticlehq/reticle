@@ -105,7 +105,7 @@ const bytesOf = (json: string): number => Buffer.byteLength(json, 'utf8');
  * labels are a UNION (ask for two, get either), and a quarantined flow never runs however it is
  * labelled. Everything else about selection lives in the tool description, which is sent once.
  */
-const DEFAULT_SURFACE_BYTE_BUDGET = 24_600;
+const DEFAULT_SURFACE_BYTE_BUDGET = 24_750;
 // Raised TWICE, each time deliberately, each time with the measurement that bought it.
 //
 // SECOND RAISE, 24_100 -> 24_500. `reticle_verify { action: "mutate" }` costs 185 B on the wire
@@ -146,6 +146,17 @@ const DEFAULT_SURFACE_BYTE_BUDGET = 24_600;
 // two clicks a superseded-response bug needs to overlap, so the defect cannot fire at all — that
 // class was established by Playwright MCP and missed by Reticle until this parameter existed. A
 // whole defect class against 28 tokens a turn is not a close trade.
+//
+// THIRD RAISE, 24_600 -> 24_750 — with the measurement that bought it.
+//
+// `reticle_tools` gained `action: "list"`, a synonym for the no-argument catalogue. It costs 105 B
+// on the wire (24,596 -> 24,701, ~26 tokens/turn); 38 B of that is the bare optional literal with
+// no prose at all, so no description fits in the 4 B of headroom that was left.
+//
+// What it buys: `action` is the organising verb of the whole surface — every other advertised tool
+// dispatches on it — and `reticle_tools` was the one tool refusing it. It is also the tool an agent
+// reaches for when it is already lost, so the refusal landed on the caller least able to recover
+// from it (#982). One retry saved on the orienting call pays for 26 tokens a turn many times over.
 //
 // The ratchet stays a ratchet: every raise names its evidence, and the next one has to do the same.
 

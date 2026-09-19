@@ -64,6 +64,9 @@ function unknownParamsError(toolName: string, unknown: readonly string[]): strin
   return `unknown ${1 === unknown.length ? 'parameter' : 'parameters'} for ${toolName}: ${unknown.join(', ')} — NOT applied, so any result would be an answer to a different question`;
 }
 
+/** The one `action` reticle_tools takes: every other tool on the surface is action-dispatched. */
+const TOOLS_LIST_ACTION = 'list';
+
 /** What to write instead — the one parameter reticle_tools declares, and the no-argument form. */
 const TOOLS_ARG_HINT =
   'name the tools you want in `names`: reticle_tools { names: ["reticle_act_and_wait"] } — or call it with no arguments for the full catalog';
@@ -114,6 +117,10 @@ export function buildDynamicTools(
         };
 
   const toolsShape = {
+    action: z
+      .literal(TOOLS_LIST_ACTION)
+      .optional()
+      .describe('"list": the catalogue, same as no arguments.'),
     names: z
       .array(z.string())
       .optional()
