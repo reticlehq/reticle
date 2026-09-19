@@ -8,6 +8,7 @@ import {
 } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { sessionIdShape } from '@/surface/tools/tool-kit.js';
+import { sessionRoot } from '@/memory/project/session-root.js';
 import { ratioSchema } from '@/surface/tools/args/numeric-bounds.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { diffPng, type VisualRect } from './visual-diff.js';
@@ -279,7 +280,7 @@ export const VISUAL_TOOLS: ToolDef[] = [
         return reason === VisualReason.NO_PROVIDER ? noProvider : { ok: false, reason };
       }
       const name = asString(args['name']) ?? 'default';
-      const store = new VisualStore(deps.fs, deps.reticleRoot);
+      const store = new VisualStore(deps.fs, sessionRoot(deps, sessionId));
       // Scoped to the runtime that produced it: an Electron window, a Tauri webview and a browser
       // tab do not render the same url the same way, and one shared baseline makes every
       // cross-runtime diff wrong. See visualDir.
@@ -321,14 +322,14 @@ export const VISUAL_TOOLS: ToolDef[] = [
     },
     handler: async (deps: ToolDeps, args) => {
       const baseline = asString(args['baseline']) ?? '';
-      const store = new VisualStore(deps.fs, deps.reticleRoot);
+      const sessionId = asString(args['sessionId']);
+      const store = new VisualStore(deps.fs, sessionRoot(deps, sessionId));
 
       // Capture FIRST, then fetch the baseline for the runtime that produced these pixels. Reading it
       // by the session's runtime looked equivalent and is not: the route decides the renderer, so a
       // desktop session captured through a driven browser must be compared against the WEB baseline,
       // not the desktop one. Comparing across renderers is a confident wrong diff in one direction
       // and a silently overwritten baseline in the other.
-      const sessionId = asString(args['sessionId']);
       const { png: current, reason, runtime } = await capture(deps, sessionId, args);
       if (current === undefined) {
         return reason === VisualReason.NO_PROVIDER ? noProvider : { ok: false, reason };

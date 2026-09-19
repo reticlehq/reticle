@@ -33,6 +33,8 @@ import { ProjectStore } from '@/memory/project/project-store.js';
 import { AnnotationStore } from './stores/annotation-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { flowPath } from '@/memory/project/dir/reticle-dir.js';
+import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
+import { ArtifactRootReason } from '@/memory/project/artifact-root.js';
 import { asRecord, asString } from '@reticlehq/core';
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
@@ -498,5 +500,56 @@ describe('reticle_flow_replay — the business intent a flow discharges', () => 
     expect(res.status).toBe(ReplayStatus.OK);
     expect(res.steps).toHaveLength(1);
     expect(await new IntentStore(fs, root, clock).read()).toEqual([]);
+  });
+});
+
+/**
+ * Every artifact a replay writes lands in the SESSION's `.reticle`, not the daemon's.
+ *
+ * The intent ledger and the run record already resolved through `sessionRoot`; the assertion-tiers
+ * baseline and the deviation envelopes still took `deps.reticleRoot`. A user-scoped MCP daemon is
+ * launched wherever the editor likes — `/` in the field — so a green replay of a flow in the right
+ * project then died on `mkdir '/.reticle'` writing its baseline (#999).
+ */
+describe('reticle_flow_replay writes every artifact under the session project', () => {
+  let dir: string;
+  let daemonRoot: string;
+  let projectRoot: string;
+  let fs: FileSystemPort;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'reticle-replay-root-'));
+    daemonRoot = join(dir, 'daemon', '.reticle');
+    projectRoot = join(dir, 'project', '.reticle');
+    fs = createNodeFileSystem();
+  });
+
+  afterEach(async () => {
+    await removeTempDir(dir);
+  });
+
+  it('records the passing baseline in the project root, never the daemon root', async () => {
+    const saved = await new FlowStore(fs, projectRoot, clock).save(
+      program('green', [actStep('chat-send')]),
+    );
+    if (!saved.ok) throw new Error(`save failed: ${saved.code}`);
+    const session: Partial<Session> = {
+      ...scriptedSession((testid) => ({ elements: [{ ref: `e-${testid}` }] })),
+      projectId: 'acme-web-9f3c1d',
+    };
+    const deps: ToolDeps = {
+      ...fakeDeps(fs, daemonRoot, session),
+      artifactRootFor: (projectId) =>
+        'acme-web-9f3c1d' === projectId
+          ? { root: projectRoot, reason: ArtifactRootReason.MATCHED_PROJECT }
+          : { root: daemonRoot, reason: ArtifactRootReason.NO_MATCH },
+    };
+
+    const res = (await tool(ReticleTool.FLOW_REPLAY).handler(deps, {
+      flowName: 'green',
+    })) as FlowReplayResult;
+    expect(res.status).toBe(ReplayStatus.OK);
+    expect(await fs.exists(reticleDirPaths(projectRoot).tiers)).toBe(true);
+    expect(await fs.exists(reticleDirPaths(daemonRoot).tiers)).toBe(false);
   });
 });
