@@ -28,7 +28,7 @@
     "@iconify-json/heroicons-solid": "^1.2.1",
     "@tanstack/query-core": "^5.101.4",
     "esbuild": "^0.28.2",
-    "jotai": "^2.20.2",
+    "jotai": "^3.0.0",
     "jsdom": "^30.0.1",
     "mobx": "^7.0.3",
     "pinia": "^4.0.3",
