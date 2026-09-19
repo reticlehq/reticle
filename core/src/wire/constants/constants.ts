@@ -190,6 +190,37 @@ export const ReticleEnv = {
   HARNESS_BASE_URL: 'RETICLE_HARNESS_BASE_URL',
   /** Hard ceiling on harness model turns in one drive. Bounds cost, not value. */
   HARNESS_MAX_STEPS: 'RETICLE_HARNESS_MAX_STEPS',
+  /**
+   * Which model backs the harness driver: `anthropic` (the default) or `jev`.
+   *
+   * Two drivers exist because the driver's job turns out not to need a text generator. It picks the
+   * next action and says what it expects; the verdict is decided afterwards by the engine, with no
+   * model anywhere near it. A System One model answers typed questions against a state, which is
+   * exactly that job and none of the rest, so it can drive without being able to generate a
+   * sentence. Unset keeps the existing behaviour for everybody who has not asked for this.
+   */
+  HARNESS_DRIVER: 'RETICLE_HARNESS_DRIVER',
+  /**
+   * A direct Jev key, for this repo's own benchmarks and for anyone holding a TypeSafe account.
+   *
+   * Users are not expected to have one. The ordinary path is the key they already minted on the
+   * platform (`RETICLE_CLOUD_KEY`), which reaches Jev through the proxy at `RETICLE_CLOUD_URL` —
+   * this variable is the escape hatch that skips it, and it takes precedence when both are set so
+   * that a developer debugging the upstream is never silently talking to the proxy instead.
+   */
+  HARNESS_JEV_KEY: 'JEV_API_KEY',
+  /** Base URL for the Jev API, for a proxy or a gateway. Defaults to TypeSafe's own endpoint. */
+  HARNESS_JEV_URL: 'RETICLE_HARNESS_JEV_URL',
+  /**
+   * The API key minted on the platform, and the host it belongs to.
+   *
+   * Both long predate this block and were spelled inline wherever they were read — `cloud-kit.ts`
+   * has one copy, and the harness driver would have been the second. Named here because the rule is
+   * that a wire string is a constant, and because two spellings of one environment variable is a
+   * rename waiting to half-land.
+   */
+  CLOUD_KEY: 'RETICLE_CLOUD_KEY',
+  CLOUD_URL: 'RETICLE_CLOUD_URL',
 } as const;
 
 /** Hard transport bounds shared by the browser and bridge. */

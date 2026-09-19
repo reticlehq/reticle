@@ -24,8 +24,8 @@ import { diffLines } from '@/memory/project/baselines.js';
 import { selectPath, capDepth, projectComponentState } from '@/portal/session/state-select.js';
 import { costHint } from '@/portal/session/output-budget.js';
 import { buildReactionReport, summarizeReaction } from '@reticlehq/engine/question/reaction.js';
-import { asNumber, asString } from '@reticlehq/core';
-import { parseInteractive } from './tools-helpers.js';
+import { asNumber, asString, parseInteractive } from '@reticlehq/core';
+
 import { type ToolDef, sessionIdShape, commandOrThrow, snapshotTree } from './tool-kit.js';
 import { bufferEnvelope } from '@/portal/session/session-health.js';
 import { routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route.js';

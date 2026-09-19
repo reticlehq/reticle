@@ -1,23 +1,6 @@
 import { asRecord, asString } from '@reticlehq/core';
 /** Small pure helpers shared by the MCP tool handlers. */
 
-interface InteractiveItem {
-  ref: string;
-  desc: string;
-}
-
-/** Parse interactive elements (with refs) out of a snapshot tree for exploration. */
-export function parseInteractive(tree: string): InteractiveItem[] {
-  const items: InteractiveItem[] = [];
-  for (const line of tree.split('\n')) {
-    const match = /\(ref=(e\d+)\)/.exec(line);
-    if (match !== null) {
-      items.push({ ref: match[1] ?? '', desc: line.replace(/\s*\(ref=e\d+\)/, '').trim() });
-    }
-  }
-  return items;
-}
-
 /**
  * The session this call is aimed at: a top-level `sessionId`, or the same key on sequence steps.
  *

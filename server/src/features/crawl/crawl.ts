@@ -17,7 +17,8 @@ import {
 } from '@reticlehq/core';
 import { crawlEmptyNote } from './crawl-empty.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
-import { parseInteractive, sourceOf } from '@/surface/tools/tools-helpers.js';
+import { parseInteractive } from '@reticlehq/core';
+import { sourceOf } from '@/surface/tools/tools-helpers.js';
 import { isSessionReplacedError } from '@/portal/session/facts/session-replaced.js';
 import { ReticleTool } from '@reticlehq/core';
 import { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';

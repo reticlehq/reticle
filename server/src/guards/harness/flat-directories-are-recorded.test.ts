@@ -74,7 +74,13 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // fixed in one of them, so the duplicate was not an option.
   'adapters/realm/browser/src/presenter/chrome': 11,
   'core/src/verdict': 11,
-  'core/src/wire': 15,
+  'core/src/wire': 16,
+  // 16 since `snapshot-tree.ts`. The snapshot tree is a format the BROWSER writes and several
+  // things on the Node side read back, and its parser was living beside the MCP tool handlers — so
+  // every other reader imported from the tool surface to parse a string the tool surface does not
+  // own, and the directory-reach guard refused the second layer that needed it. Moving it here put
+  // it with the other wire formats and took a cross-layer reach OUT of `features/crawl` as well.
+  //
   // 15 since the shared step-effect builder. Recorded rather than grouped: the note above explains
   // why this directory cannot come down by the usual rule — its FILENAMES are published API, so
   // moving one to tidy the count would be a breaking change for somebody outside this repository.
