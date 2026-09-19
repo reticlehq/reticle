@@ -121,6 +121,11 @@ ANTHROPIC_API_KEY=sk-... node bench/harness/claude-agent-loop.mjs
 #     machine to a goal. No browser is involved, so nothing it prints may be quoted as a benchmark.
 JEV_API_KEY=... node bench/harness/jev-probe.mjs
 
+# 5c. The measurement that CAN be quoted: the same app, tools and loop driven by each model in turn,
+#     with only the ModelDriver differing. Writes JEV-SCORECARD.md's numbers. BENCH_REPEATS>1,
+#     because one run per arm measures one drive rather than a driver.
+ANTHROPIC_API_KEY=sk-... JEV_API_KEY=... BENCH_REPEATS=3 node bench/harness/jev-vs-llm.mjs
+
 # 6. Layer C — deterministic regression suite (no API key). Records each flow once, then replays it
 #    with NO model and asserts a declared consequence. This is the RRE / regression story + the
 #    Reticle-only catches. Needs the demo (step 1) up; each harness self-drives its own reticle session.
