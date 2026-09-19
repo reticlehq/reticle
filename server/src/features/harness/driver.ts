@@ -103,15 +103,36 @@ export interface HarnessDriverOptions {
 export function harnessOptionsFromEnv(
   env: Record<string, string | undefined>,
 ): HarnessDriverOptions | undefined {
-  const apiKey = env[ReticleEnv.HARNESS_KEY];
-  if (apiKey === undefined || 0 === apiKey.length) return undefined;
   const model = env[ReticleEnv.HARNESS_MODEL];
   const baseUrl = env[ReticleEnv.HARNESS_BASE_URL];
-  return {
-    apiKey,
-    ...(model === undefined || 0 === model.length ? {} : { model }),
-    ...(baseUrl === undefined || 0 === baseUrl.length ? {} : { baseUrl }),
+  const withOptions = (apiKey: string, fallbackUrl?: string): HarnessDriverOptions => {
+    const url = baseUrl === undefined || 0 === baseUrl.length ? fallbackUrl : baseUrl;
+    return {
+      apiKey,
+      ...(model === undefined || 0 === model.length ? {} : { model }),
+      ...(url === undefined || 0 === url.length ? {} : { baseUrl: url }),
+    };
   };
+
+  const apiKey = env[ReticleEnv.HARNESS_KEY];
+  if (apiKey !== undefined && 0 < apiKey.length) return withOptions(apiKey);
+
+  /**
+   * The platform key, against the platform.
+   *
+   * Reticle's own service answers the Messages API at `/v1/messages` and forwards with ITS provider
+   * key, so a user who has run `reticle link` can drive with a frontier model having never held an
+   * Anthropic key at all. Without this they would be told to set `ANTHROPIC_API_KEY` to a value
+   * beginning `rk_live_` — which works, and reads like a mistake, and is the sort of instruction
+   * people correct on the way past and then cannot explain why nothing runs.
+   *
+   * An explicit `ANTHROPIC_API_KEY` still wins: someone who exported one meant it.
+   */
+  const cloudKey = env[ReticleEnv.CLOUD_KEY];
+  const cloudUrl = env[ReticleEnv.CLOUD_URL];
+  if (cloudKey === undefined || 0 === cloudKey.length) return undefined;
+  if (cloudUrl === undefined || 0 === cloudUrl.length) return undefined;
+  return withOptions(cloudKey, cloudUrl);
 }
 
 /** Build a driver backed by the Messages API. */

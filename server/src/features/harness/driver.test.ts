@@ -183,3 +183,47 @@ describe('the harness driver', () => {
     expect(DEFAULT_HARNESS_MODEL).toBe('claude-sonnet-5');
   });
 });
+
+/**
+ * One key, both drivers.
+ *
+ * The platform answers the Messages API at its own `/v1/messages` and forwards with its provider
+ * key, so somebody who has run `reticle link` can drive with a frontier model having never held an
+ * Anthropic key. The alternative on offer was telling them to set `ANTHROPIC_API_KEY` to a value
+ * beginning `rk_live_`, which works and reads like a mistake.
+ */
+describe('where the anthropic driver gets its key', () => {
+  const CLOUD = { RETICLE_CLOUD_KEY: 'rk_live_x', RETICLE_CLOUD_URL: 'https://app.reticle.sh' };
+
+  it('is unavailable with nothing configured', () => {
+    expect(harnessOptionsFromEnv({})).toBeUndefined();
+  });
+
+  it('uses a real Anthropic key against Anthropic', () => {
+    expect(harnessOptionsFromEnv({ ANTHROPIC_API_KEY: 'sk-ant' })).toEqual({ apiKey: 'sk-ant' });
+  });
+
+  it('falls back to the platform key against the platform', () => {
+    expect(harnessOptionsFromEnv(CLOUD)).toEqual({
+      apiKey: 'rk_live_x',
+      baseUrl: 'https://app.reticle.sh',
+    });
+  });
+
+  /** A platform key with no host to send it to is not a usable driver; Reticle ships no key. */
+  it('is unavailable with a platform key and no host', () => {
+    expect(harnessOptionsFromEnv({ RETICLE_CLOUD_KEY: 'rk_live_x' })).toBeUndefined();
+  });
+
+  it('prefers an explicit Anthropic key, because exporting one is a decision', () => {
+    expect(harnessOptionsFromEnv({ ...CLOUD, ANTHROPIC_API_KEY: 'sk-ant' })?.apiKey).toBe('sk-ant');
+  });
+
+  it('lets an explicit base URL override the platform, for a proxy or a gateway', () => {
+    const options = harnessOptionsFromEnv({
+      ...CLOUD,
+      RETICLE_HARNESS_BASE_URL: 'http://localhost:9999',
+    });
+    expect(options?.baseUrl).toBe('http://localhost:9999');
+  });
+});
