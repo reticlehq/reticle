@@ -9,6 +9,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
+import {
+  PredicateKind,
+  RUN_FILE_VERSION,
+  RunAgentKind,
+  RunFramework,
+  RunProfile,
+  RunTrigger,
+  Verified,
+} from '@reticlehq/core';
+import { buildVerificationRun } from '@/judgement/runs/artifact/build-verification-run.js';
 import { runCloudCommand } from './cloud-cli.js';
 
 interface RecordedRequest {
@@ -675,6 +685,136 @@ describe('cloud-cli verb contracts (#555)', () => {
       '/v1/sync/pull',
     ]);
     expect(requests.every((r) => r.authorization === `Bearer ${TEST_KEY}`)).toBe(true);
+  });
+
+  /**
+   * `push` reported success while the dashboard threw away everything it was handed.
+   *
+   * From the field: a repo whose artifacts the cloud refused got `{"ok":true, …, "rejected":[…]}`
+   * on stdout and exit 0. Every fact needed to diagnose it was in that payload, and the two things
+   * a script actually reads — the boolean and the exit code — both said the push had worked.
+   *
+   * Driven through the real verb with a real artifact: the run file is written by the SAME builder
+   * the daemon writes with, so this cannot pass against a hand-rolled shape the product never
+   * produces. Only the HTTP responses are scripted, which is where the refusal comes from — this
+   * build validates no run artifact locally on the way out.
+   */
+  describe('push when the cloud refuses the artifacts it was sent', () => {
+    const REFUSAL = 'run artifact failed validation: schemaVersion: Invalid literal value';
+    const FROZEN = 1_700_000_000_000;
+
+    /** One run artifact, stamped by the writer, on disk where `push` reads them from. */
+    const writeCurrentRunArtifact = async (runId: string): Promise<void> => {
+      const run = buildVerificationRun(
+        {
+          runId,
+          durationMs: 1_200,
+          profile: RunProfile.DEV,
+          project: { name: 'checkout', framework: RunFramework.REACT },
+          agent: { id: 'claude-code', kind: RunAgentKind.CODING_AGENT },
+          trigger: { kind: RunTrigger.EDIT },
+          changedFiles: [],
+          flows: [],
+          checks: [
+            { kind: PredicateKind.NET, predicate: 'POST /api/orders', status: Verified.YES },
+            { kind: PredicateKind.ROUTE, predicate: '/orders/confirmed', status: Verified.YES },
+            { kind: PredicateKind.TEXT, predicate: 'Order confirmed', status: Verified.YES },
+          ],
+          risks: [],
+          evidence: {
+            consoleErrors: [],
+            networkAnomalies: [],
+            stateAssertions: [],
+            timeline: [],
+          },
+        },
+        () => FROZEN,
+      );
+      const dir = join(cwd, RETICLE_DIR, 'runs');
+      await mkdir(dir, { recursive: true });
+      await writeFile(join(dir, `${runId}.json`), JSON.stringify(run, null, 2));
+    };
+
+    /** Answer the three sync doors; the push door refuses every run it is offered. */
+    const refusingCloud = (url: string): StubResponse => {
+      if (url.includes('/v1/sync/status')) return { body: { knownRunIds: [], stateHashes: {} } };
+      if (url.includes('/v1/sync/pull')) return { body: { triage: [], cursor: '0:' } };
+      return { body: { runs: { accepted: 0, rejected: [{ index: 0, reason: REFUSAL }] } } };
+    };
+
+    beforeEach(() => {
+      process.env['RETICLE_CLOUD_URL'] = TEST_URL;
+      process.env['RETICLE_CLOUD_KEY'] = TEST_KEY;
+    });
+
+    it('exits non-zero, because a caller reads the exit code and nothing else', async () => {
+      await writeCurrentRunArtifact('run_refused');
+      responder = refusingCloud;
+
+      const code = await runCloudCommand(['push']);
+
+      expect(code, 'exit 0 tells a CI step the sync worked').toBe(1);
+    });
+
+    it('says ok:false on stdout, where an agent parsing the JSON will see it', async () => {
+      await writeCurrentRunArtifact('run_refused');
+      responder = refusingCloud;
+
+      await runCloudCommand(['push']);
+
+      expect((lastJsonOutput() as Record<string, unknown>)['ok']).toBe(false);
+    });
+
+    it('still carries the rejection and its reason, which is the only actionable half', async () => {
+      await writeCurrentRunArtifact('run_refused');
+      responder = refusingCloud;
+
+      await runCloudCommand(['push']);
+
+      const out = lastJsonOutput() as Record<string, unknown>;
+      expect(out['sent']).toEqual({
+        runs: 0,
+        flows: 0,
+        records: [],
+        rejected: [{ index: 0, reason: REFUSAL }],
+      });
+      // And on stderr, where a human reading a terminal is looking.
+      expect(stderrBuf).toContain(REFUSAL);
+    });
+
+    it('the artifact really was offered — the refusal came from the cloud, not from here', async () => {
+      // The other half of the report this came from claimed `push` validates artifacts locally
+      // against an older schema. It does not: the bundle goes out untouched and the verdict on it
+      // is the server's. Pinned so a future local validator cannot be added silently.
+      await writeCurrentRunArtifact('run_refused');
+      responder = refusingCloud;
+
+      await runCloudCommand(['push']);
+
+      const pushed = requests.find((r) => 'POST' === r.method && r.url.endsWith('/v1/sync'));
+      const runs = (pushed?.body as { runs?: Array<Record<string, unknown>> } | undefined)?.runs;
+      expect(runs).toHaveLength(1);
+      expect(runs?.[0]?.['runId']).toBe('run_refused');
+      expect(runs?.[0]?.['schemaVersion']).toBe(RUN_FILE_VERSION);
+    });
+
+    it('exits 0 for the same artifact once the cloud accepts it', async () => {
+      // The control. Without it, "push exits 1" could be true for every push, which would be a
+      // worse bug than the one being fixed.
+      await writeCurrentRunArtifact('run_accepted');
+      responder = (url) => {
+        if (url.includes('/v1/sync/status')) return { body: { knownRunIds: [], stateHashes: {} } };
+        if (url.includes('/v1/sync/pull')) return { body: { triage: [], cursor: '0:' } };
+        return { body: { runs: { accepted: 1, rejected: [] } } };
+      };
+
+      const code = await runCloudCommand(['push']);
+
+      expect(code).toBe(0);
+      const out = lastJsonOutput() as Record<string, unknown>;
+      expect(out['ok']).toBe(true);
+      expect(out['sent']).toEqual({ runs: 1, flows: 0, records: [] });
+    });
   });
 
   it('runs lists the linked project runs with the key as bearer', async () => {

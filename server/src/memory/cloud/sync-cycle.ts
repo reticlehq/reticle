@@ -102,6 +102,10 @@ export interface CloudSyncState {
 }
 
 export interface SyncReport {
+  /**
+   * False if the cycle failed or any offered run was rejected. A completed HTTP exchange alone
+   * is not a successful push. Accepted counts and rejection reasons still describe partial success.
+   */
   ok: boolean;
   /** Runs the server accepted this cycle. */
   runsSent: number;
@@ -321,7 +325,8 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
     deps.sink.writeState(nextState);
 
     return {
-      ok: true,
+      // Keep transport errors separate: rejection reasons already identify the failed artifacts.
+      ok: 0 === runsRejected.length,
       runsSent,
       runsRejected,
       flowsSent,
