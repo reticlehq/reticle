@@ -107,7 +107,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * revisits engine's public subpaths, not in a feature commit.
    */
   'engine/src/window': 11,
-  'init/src/patch': 14,
+  // vite-env-types.ts owns the type-only environment declaration emitted by the dev-module generator.
+  'init/src/patch': 15,
   // Crossed the line as the protocol grew the two things a subject must declare about ITSELF rather
   // than about what it can see: how it may be driven, and the state a suite starts from. Recorded
   // rather than grouped -- this directory IS the vocabulary, and splitting it would put nouns an
