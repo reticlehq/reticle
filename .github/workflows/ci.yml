@@ -65,6 +65,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -73,6 +75,25 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # No build: prettier reads the tree, which is the entire reason this can run ahead of `verify`.
       - run: pnpm format:check
+      # A changelog entry belongs in `.changes/`, one file per entry, because every PR appends to the
+      # same `[Unreleased]` section and two PRs that do cannot both merge. `.changes/` was added for
+      # exactly that reason after a count of the open PRs editing `CHANGELOG.md`; the PR template said
+      # so and CONTRIBUTING.md still said the opposite, so it kept happening. When this landed, 20 of
+      # the 55 open pull requests were editing the file, and ten of those were mutually conflicting
+      # with each other on it alone. Docs are what tells a contributor; this is what tells a branch.
+      #
+      # Release branches DO assemble the file, so they are exempt by branch name.
+      - name: A changelog entry is a new file in .changes/, not an edit to CHANGELOG.md
+        if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'release/')
+        run: |
+          if git diff --name-only "origin/${{ github.base_ref }}"...HEAD | grep -qx 'CHANGELOG.md'; then
+            echo "::error file=CHANGELOG.md::This PR edits CHANGELOG.md. Add your own new file under .changes/ instead"
+            echo "CHANGELOG.md is assembled from .changes/ at release time (see .changes/README.md)."
+            echo "Move your entry to its own file there and drop the CHANGELOG.md change:"
+            echo "  git checkout origin/${{ github.base_ref }} -- CHANGELOG.md"
+            exit 1
+          fi
+          echo "no CHANGELOG.md edit — entries belong in .changes/"
 
   verify:
     runs-on: ubuntu-latest
@@ -520,7 +541,16 @@ jobs:
           # are the whole of one-command onboarding — agent registration, pre-approval, the skill
           # file, the drive — and none of them was on this list, so the release that made `init` an
           # install could edit every one of them without the install gate running once.
-          if echo "$CHANGED" | grep -qE '^((init|core)/|server/src/command/setup/|adapters/|break/|install/|apps/e2e/(install-gate|gate-harness|install-baseline)|package\.json|pnpm-lock\.yaml|\.github/workflows/ci\.yml)'; then
+          #
+          # `adapters/` is spelled out rather than taken whole. Before the directory move this list
+          # named eight paths, and `packages/(vite-plugin|next|babel-plugin|browser|react)` were five
+          # of them; collapsing them to `adapters/` silently added three that were never in scope —
+          # the lint plugin, and the Electron and Tauri realms. This gate scaffolds ten WEB apps, so a
+          # dev-only lint rule or a desktop realm cannot change whether one of them installs, and a
+          # Tauri change is Rust that no JS gate compiles at all. The build plugins do the wiring, the
+          # browser realm is what dials, and `init` installs the framework adapter, so those three
+          # stay. This restores the pre-move scope exactly; it is not a new judgement about coverage.
+          if echo "$CHANGED" | grep -qE '^((init|core)/|server/src/command/setup/|adapters/(build/|realm/browser/|framework/)|break/|install/|apps/e2e/(install-gate|gate-harness|install-baseline)|package\.json|pnpm-lock\.yaml|\.github/workflows/ci\.yml)'; then
             echo "install=true" >> "$GITHUB_OUTPUT"
           else
             echo "install=false" >> "$GITHUB_OUTPUT"

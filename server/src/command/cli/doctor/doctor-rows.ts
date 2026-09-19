@@ -41,6 +41,18 @@ export const DoctorRow = {
    * verification." Every row in this list checks a COMPONENT; none checked a LINK.
    */
   AGENT_LINK: 'agent link',
+  /**
+   * Which of `localhost`'s two answers reaches the bridge, printed only when they disagree.
+   *
+   * The daemon binds `127.0.0.1` and `loopback-alias.ts` forwards `[::1]` to it, best-effort —
+   * a machine with IPv6 off, or something already holding `[::1]:port`, leaves the daemon serving
+   * IPv4 alone and must not be fatal. But `localhost` is a NAME, and Windows Chrome tries the IPv6
+   * answer first, so on that combination the SDK's documented default URL cannot reach a daemon that
+   * is running perfectly. The only record of the alias failing was a field on one JSON log line.
+   *
+   * Conditional like `version`: a healthy machine answers on both and prints nothing.
+   */
+  LOOPBACK: 'loopback',
   BRIDGE_PORT: 'bridge port',
   PORT_CHECK: 'port check',
   SIBLING: 'sibling',

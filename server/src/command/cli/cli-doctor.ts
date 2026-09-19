@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { ReticleEnv } from '@reticlehq/core';
 import { readPid, reticleStateHome } from '@/command/daemon/daemon.js';
 import { PortPresence, probePresence } from '@/command/daemon/binding/port-presence.js';
+import { isLocalhostSplit, probeLoopbackReach } from '@/command/daemon/binding/loopback-reach.js';
 import { probeDaemon } from '@/surface/mcp/mcp-proxy.js';
 import { fetchStatus } from './launch/cli-launch.js';
 import { daemonLine, type DaemonIdentity } from './doctor/doctor-daemon-line.js';
@@ -104,6 +105,22 @@ export async function handleDoctor(port: number): Promise<void> {
     // `version` off it and dropping the rest. Without this the command is silent on the one step the
     // funnel stalls on: wired correctly, daemon up, and no page has ever dialled in.
     sessions = sessionsLine('object' === typeof payload && null !== payload ? payload : {});
+    // Only meaningful with a daemon answering: this asks which ADDRESS it answers on. `localhost` is
+    // a name with two answers and Windows Chrome tries the IPv6 one first, so a daemon that is up,
+    // healthy and bound to 127.0.0.1 alone is unreachable at the URL the SDK is told to dial. The
+    // alias that forwards `[::1]` is best-effort by contract, and its failure was recorded only as a
+    // field on one JSON log line — so every other row here goes green while the page cannot connect.
+    const reach = await probeLoopbackReach(port);
+    if (isLocalhostSplit(reach)) {
+      line(
+        doctorRow(
+          DoctorRow.LOOPBACK,
+          `✗ :${port} answers on 127.0.0.1 but NOT on [::1], and \`localhost\` tries [::1] first on ` +
+            'Windows — so a page told to dial `localhost` cannot reach this daemon. Dial ' +
+            `\`127.0.0.1:${port}\` explicitly, or free whatever holds [::1]:${port}.`,
+        ),
+      );
+    }
   } else if (presence === PortPresence.FOREIGN) {
     // Name the holder when we can. `doctor` exists for exactly this moment, and "another process"
     // leaves the reader to find a shell command themselves — the obvious one being the `lsof -ti`

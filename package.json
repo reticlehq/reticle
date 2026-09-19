@@ -54,6 +54,7 @@
     "hooks:install": "ln -sf ../../pre-commit.sh .git/hooks/pre-commit && ln -sf ../../prepare-commit-msg.sh .git/hooks/prepare-commit-msg && echo \"pre-commit + sign-off hooks installed\"",
     "check:stale-issues": "node scripts/check-stale-issues.mjs",
     "check:stale-issues:self-test": "node scripts/check-stale-issues.mjs --self-test",
+    "remap:prs": "node scripts/remap-stranded-prs.mjs",
     "gate:conformance:self-test": "node conformance/run-self.mjs --self-test && node conformance/run-desktop.mjs --self-test"
   },
   "pnpm": {
@@ -94,7 +95,7 @@
     "@reticlehq/next": "workspace:*",
     "@reticlehq/server": "workspace:*",
     "@types/node": "^26.4.0",
-    "@vitest/coverage-v8": "3.2.6",
+    "@vitest/coverage-v8": "4.1.11",
     "eslint": "^9.18.0",
     "eslint-plugin-react-hooks": "^5.1.0",
     "jsdom": "^30.0.1",
@@ -106,7 +107,7 @@
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.67.0",
     "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "^3.2.6",
+    "vitest": "^4.1.11",
     "ws": "^8.21.3"
   }
 }

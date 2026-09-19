@@ -1,0 +1,3 @@
+### Fixed
+
+- **Build: a change to a `scripts/*.mjs` that produces `dist` now invalidates the cached build.** Ten packages run a root script as part of their build — `alias-dist.mjs` in every one, which is what rewrites `@/…` imports back to relative paths — and turbo's `build` task did not name those scripts among its inputs. So a fix to one of them left every cached `dist` valid, and CI could replay bytes produced by the older script under a cache hash that claimed to be current. Five other tasks already declared `$TURBO_ROOT$/scripts/**`; the one task whose output those scripts write did not.
