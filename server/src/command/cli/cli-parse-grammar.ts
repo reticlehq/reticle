@@ -42,3 +42,10 @@ export const missingOperand = (command: string, what: string): ParseError => ({
 export const HEADED_FLAG = '--headed';
 export const PORT_FLAG = '--port';
 export const VERIFY_COMMAND = 'verify';
+/**
+ * The predicate flag, shared for the same reason the rest of this file is: two places have to name
+ * it. The grammar reads it, and `verify` itself has to say IN PROSE which flag it could not honour
+ * when the port is not serving a daemon — a refusal that never names the flag is how this one was
+ * missed for a release.
+ */
+export const EXPECT_FLAG = '--expect';

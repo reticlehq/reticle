@@ -7,6 +7,7 @@
  * the CLI put together.
  */
 import {
+  EXPECT_FLAG,
   HEADED_FLAG,
   PORT_FLAG,
   VERIFY_COMMAND,
@@ -18,8 +19,25 @@ import {
 
 const TIMEOUT_FLAG = '--timeout';
 const STORAGE_STATE_FLAG = '--storage-state';
-const EXPECT_FLAG = '--expect';
 const SESSION_ID_FLAG = '--session-id';
+
+/**
+ * `--expect` and `--storage-state` cannot both be honoured, so the pair is refused rather than
+ * half-applied.
+ *
+ * `--expect` takes its verdict from the tab a running daemon already owns — it binds nothing and
+ * launches nothing, which is exactly what makes it work while the port is busy. There is nowhere in
+ * that path to load a storage state, and the flag was not refused, it was dropped: a restricted-user
+ * absence assertion was graded against a logged-in admin tab and PASSED. A false green is worse than
+ * a missing answer, and the only honest reply to a question this command cannot ask is to say so.
+ */
+const MSG_EXPECT_WITH_STORAGE_STATE =
+  `${EXPECT_FLAG} cannot be combined with ${STORAGE_STATE_FLAG}: the predicate is graded against ` +
+  'the tab the running daemon already owns, so the storage state would never be loaded and the ' +
+  'verdict would be about whoever is signed in there.\n' +
+  `  Use one of them: ${EXPECT_FLAG} on its own asserts against the session you have, and ` +
+  `${STORAGE_STATE_FLAG} without ${EXPECT_FLAG} makes Reticle drive the url with that state and ` +
+  'replay the saved flows.';
 /** Let Reticle drive the app itself and record what it drove, when nothing is saved yet. */
 const EXPLORE_FLAG = '--explore';
 /** Who to be while exploring — a persona, or the business outcome to reach. Implies --explore. */
@@ -130,6 +148,11 @@ export function parseVerifySuffix(args: string[], defaultPort: number): VerifySu
     i++;
   }
   if (url === undefined) return missingOperand(VERIFY_COMMAND, 'a url');
+  // Refused here, where nothing has been bound and no browser exists yet, because the damage this
+  // pair does is a verdict taken against the wrong user.
+  if (expect !== undefined && storageState !== undefined) {
+    return { kind: 'error', message: MSG_EXPECT_WITH_STORAGE_STATE };
+  }
   return {
     kind: 'ok',
     url,

@@ -76,9 +76,11 @@ export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticl
                        [--explore] [--persona <who>]   (no saved flows? let Reticle drive the app itself and record them)
                        [--select <label>]              (repeatable: verify only flows carrying these labels — no model, exit 0=pass)
                 [--expect '<json predicate>']            (one verdict, no saved flows needed — asks
-                the daemon that is already running, so nothing is bound and nothing is stopped. This
-                is the path when your client never loaded the reticle_* tools. exit 0 ONLY on
-                verified:"yes" — "unknown" is not a pass)
+                the daemon that is already running, so nothing is bound and nothing is stopped. It
+                NEEDS that daemon: with none on the port it refuses and names the flag, rather than
+                reporting on your saved flows instead. Cannot be combined with --storage-state,
+                which this path has nowhere to load. This is the path when your client never loaded
+                the reticle_* tools. exit 0 ONLY on verified:"yes" — "unknown" is not a pass)
   reticle affected [--since <ref>] [file...]           (which saved flows must re-verify for the changed files)
   reticle gate [--since <ref>] [file...]               (exit non-zero unless passing artifacts cover the affected flows)
   reticle watch [url]                                  (on save, report which saved flows must re-verify)

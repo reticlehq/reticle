@@ -38,7 +38,12 @@ import {
   type ReticleVerificationRun,
 } from '@reticlehq/core';
 import { start, type RunningServer } from '@/index.js';
-import { probePresence, PortPresence } from '@/command/daemon/binding/port-presence.js';
+import {
+  probePresence,
+  describePresence,
+  PortPresence,
+} from '@/command/daemon/binding/port-presence.js';
+import { EXPECT_FLAG } from './cli-parse-grammar.js';
 import { probeDaemon } from '@/surface/mcp/mcp-proxy.js';
 import { fetchStatus } from './launch/cli-launch.js';
 import {
@@ -484,6 +489,72 @@ export function portBusyMessage(port: number): string {
   );
 }
 
+/**
+ * What `--expect` is answered with when the port is not serving a daemon.
+ *
+ * It used to be answered with nothing at all. The predicate was read only inside the daemon branch,
+ * so on a free or foreign port the flag was dropped without a word and the command carried on into
+ * the saved-flows path — where it reported, accurately and about something else entirely, that there
+ * were no saved flows to verify. Byte-identical output to the same command with no `--expect` on it.
+ *
+ * That is the documented recovery for a client that never loaded the `reticle_*` tools, so it failed
+ * for the people with no other route to a verdict, and it failed in the one way they could not
+ * diagnose: the refusal they got was true.
+ */
+export function expectNeedsDaemonMessage(port: number, presence: PortPresence): string {
+  return (
+    `${EXPECT_FLAG} asks the Reticle daemon that already owns port ${String(port)} for the ` +
+    'verdict — it binds nothing and launches nothing, which is what lets it answer while the port ' +
+    `is busy. Right now ${describePresence(presence, port)}.\n\n` +
+    '  The predicate did not run, and nothing was proved.\n\n' +
+    '  • Start a daemon on that port, pointed at the app, then re-run this command: ' +
+    `npx @reticlehq/server serve --port ${String(port)} --drive <url>\n` +
+    `  • Or drop ${EXPECT_FLAG}, and verify drives the url itself and replays your saved flows — ` +
+    'a different question, and it proves nothing about your predicate.'
+  );
+}
+
+/** What `verify` does next, once the options and the state of the port are both known. */
+export const VerifyRoute = {
+  /** Ask the daemon that already owns the port for a one-shot verdict on the predicate. */
+  ADHOC: 'adhoc',
+  /** Boot our own daemon, drive the url, replay the flows saved on disk. */
+  FLOWS: 'flows',
+  /** Answer the caller, and run nothing. */
+  REFUSE: 'refuse',
+} as const;
+export type VerifyRoute = (typeof VerifyRoute)[keyof typeof VerifyRoute];
+
+export type VerifyPlan =
+  | { route: typeof VerifyRoute.ADHOC }
+  | { route: typeof VerifyRoute.FLOWS }
+  | { route: typeof VerifyRoute.REFUSE; message: string };
+
+/**
+ * All four routes this command has, in one pure function.
+ *
+ * They used to be a pair of nested `if`s that consulted `--expect` only after the port had already
+ * answered as a daemon, which is how one of the four went missing: a predicate on any other port
+ * state fell through to a path that cannot see it. Stating the cases together is what makes an
+ * unhandled one visible, and it lets every one of them be driven with no port, no daemon and no
+ * browser — which is where an argument-level decision belongs.
+ */
+export function routeVerify(args: {
+  /** True when the caller supplied `--expect`. */
+  hasPredicate: boolean;
+  presence: PortPresence;
+  port: number;
+}): VerifyPlan {
+  if (args.hasPredicate) {
+    return args.presence === PortPresence.DAEMON
+      ? { route: VerifyRoute.ADHOC }
+      : { route: VerifyRoute.REFUSE, message: expectNeedsDaemonMessage(args.port, args.presence) };
+  }
+  return args.presence === PortPresence.DAEMON
+    ? { route: VerifyRoute.REFUSE, message: portBusyMessage(args.port) }
+    : { route: VerifyRoute.FLOWS };
+}
+
 export function handleVerify(parsed: {
   url: string;
   /** A parsed predicate for a flow-free, one-shot verdict against the running daemon. */
@@ -525,18 +596,23 @@ export function handleVerify(parsed: {
   // this used to reach the user as a raw node stack rather than as an answer.
   void (async () => {
     const port = parsed.port ?? RETICLE_DEFAULT_PORT;
-    if (
-      (await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus })) ===
-      PortPresence.DAEMON
-    ) {
+    const presence = await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus });
+    const plan = routeVerify({ hasPredicate: parsed.expect !== undefined, presence, port });
+    switch (plan.route) {
+      // Either the busy port, or a predicate this state cannot answer. Both are refusals that name
+      // what was asked for — never a report about a check nobody requested.
+      case VerifyRoute.REFUSE:
+        ports.fail(plan.message);
+        ports.exit(EXIT_FAIL);
+        return;
       // A daemon owning the port is the NORMAL state after a working install, and it used to be the
       // end of the road: `verify` refused, the other verdict paths need saved flows a first-install
       // project does not have, and stopping the daemon cuts the agent's own MCP link. An agent could
       // hold a live, correctly-wired app and have no way to reach a verdict at all.
       //
-      // With `--expect` there is now a way, and it does not need the port: ask the daemon that
-      // already owns it. See runAdhocVerdict.
-      if (parsed.expect !== undefined) {
+      // With `--expect` there is a way, and it does not need the port: ask the daemon that already
+      // owns it. See runAdhocVerdict.
+      case VerifyRoute.ADHOC: {
         const verdict = await runAdhocVerdict({
           port,
           ...(parsed.url !== undefined && '' !== parsed.url ? { url: parsed.url } : {}),
@@ -550,19 +626,18 @@ export function handleVerify(parsed: {
         ports.exit(verdict.code);
         return;
       }
-      ports.fail(portBusyMessage(port));
-      ports.exit(1);
-      return;
+      case VerifyRoute.FLOWS:
+        await runVerify(
+          {
+            url: parsed.url,
+            timeoutMs: parsed.timeoutMs ?? DEFAULT_SESSION_TIMEOUT_MS,
+            ...(true === parsed.explore ? { explore: true } : {}),
+            ...(parsed.persona === undefined ? {} : { persona: parsed.persona }),
+            ...(parsed.select === undefined ? {} : { select: parsed.select }),
+          },
+          ports,
+        );
+        return;
     }
-    await runVerify(
-      {
-        url: parsed.url,
-        timeoutMs: parsed.timeoutMs ?? DEFAULT_SESSION_TIMEOUT_MS,
-        ...(true === parsed.explore ? { explore: true } : {}),
-        ...(parsed.persona === undefined ? {} : { persona: parsed.persona }),
-        ...(parsed.select === undefined ? {} : { select: parsed.select }),
-      },
-      ports,
-    );
   })();
 }
