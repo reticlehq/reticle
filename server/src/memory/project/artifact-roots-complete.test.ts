@@ -88,6 +88,21 @@ const DELIBERATE: Readonly<Record<string, { uses: number; why: string }>> = {
   },
 };
 
+/**
+ * The working tree, NOT `git ls-files` — and that is deliberate, because the alternative is the
+ * failure this whole file exists to prevent.
+ *
+ * A guard that enumerates through git is blind to a file nobody has staged yet, so running it
+ * before `git add` reports success about code it never read. That shipped six unrecorded
+ * cross-directory reaches through a green `pnpm verify` on this branch, which is why the shared
+ * enumerator in `scripts/directory-reach.mjs` now REFUSES when it finds an untracked source file
+ * rather than passing over it. This walker takes the other road to the same place: it reads what is
+ * on disk, so an unstaged file is caught on the spot and there is nothing to refuse.
+ *
+ * Verified, not assumed: an untracked file using the daemon root was planted under `server/src` and
+ * this scan named it. If you ever swap this for a git-backed listing, you must bring the refusal
+ * with it, or the pin starts passing over exactly the new writer it was built to catch.
+ */
 function sourceFiles(dir: string, acc: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
