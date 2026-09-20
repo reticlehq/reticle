@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/engine` + `@reticlehq/browser`: an exact role+name miss now says which labels that role really has, in both query spellings.** A failed element predicate such as `{ role: "button", name: "Mesh" }` read the same for a page with no such button and for one showing `button "2 Mesh"`, so a one-call recovery looked like a missing element. The verdict now names the near-miss labels, as `reticle_query` already did, and says which role they belong to. The `{ by: "role", value, name }` spelling gets the same hint as `{ role, name }`; before, it missed silently in `reticle_query` and fell back to "the page has" in verdicts. Closes [#875](https://github.com/reticlehq/reticle/issues/875).

@@ -137,7 +137,11 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // `predicate-eval.ts`: it is a pure rule with an incident behind it, and it is the kind of thing
   // that gets quietly re-broken when it lives inside the evaluator it constrains. This directory is
   // now the largest flat one in the package and is the next thing here worth grouping.
-  'engine/src/question/predicate': 20,
+  // 21 with `name-near-miss.ts`, the clause that names the labels a role really carries when an
+  // exact role+name predicate misses (#875). A sibling of `split-text-miss.ts` and
+  // `testid-near-miss.ts` rather than folded into either: each of those is named for the field it
+  // explains, and a filename here is published API (see public-subpaths-are-pinned.test.ts).
+  'engine/src/question/predicate': 21,
   /*
    * Crossed ten when the fast-drive budget and a portable byte counter landed. The guard asks for
    * grouping rather than recording at this moment, and grouping is the wrong move HERE specifically:
