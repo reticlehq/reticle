@@ -610,3 +610,116 @@ describe('which endpoint the jev driver posts to', () => {
     expect(fake.urls[0]).toBe('https://app.reticle.sh/v1/model/systemone');
   });
 });
+
+/**
+ * Following the plan the caller read out of `.reticle`.
+ *
+ * The cheap half runs FIRST and costs no model call at all: a journey already recorded replays
+ * deterministically, and re-driving it pays a loop to rediscover what is on disk. Before this, every
+ * run started from zero.
+ */
+describe('a drive that was handed a plan', () => {
+  const PLAN = [
+    { kind: 'replay', target: 'sign-in', why: 'must still hold: signal auth:ok' },
+    { kind: 'replay', target: 'checkout', why: 'must still hold: net POST /api/order' },
+    { kind: 'drive', target: 'order:placed', why: 'declared and never asserted' },
+  ];
+
+  const withPlan = (
+    history: HistoryEntry[],
+    answers: Record<string, unknown>,
+    seen?: { bodies: string[] },
+  ) => {
+    const fake = fakeJev(answers, seen);
+    return jevDriver({ apiKey: 'k', plan: PLAN, fetch: fake.doFetch }).turn({
+      system: 'drive it',
+      tools: [],
+      history,
+    });
+  };
+
+  const replayed = (name: string): HistoryEntry => ({
+    role: 'tool',
+    outcomes: [outcome('reticle_flow_replay', { flowName: name }, { passed: true })],
+  });
+
+  it('replays a recorded journey before it drives anything', async () => {
+    const result = await withPlan(READY, chose('e5'));
+    expect(result.calls[0]?.name).toBe('reticle_flow_replay');
+    expect(result.calls[0]?.args['flowName']).toBe('sign-in');
+  });
+
+  /** No decision to take, so no model call: the caller already decided this was worth doing. */
+  it('spends no model call on a replay', async () => {
+    const seen = { bodies: [] as string[] };
+    await withPlan(READY, chose('e5'), seen);
+    expect(seen.bodies).toHaveLength(0);
+  });
+
+  it('advances to the next recorded journey rather than looping on the first', async () => {
+    const result = await withPlan([...READY, replayed('sign-in')], chose('e5'));
+    expect(result.calls[0]?.args['flowName']).toBe('checkout');
+  });
+
+  /** A replay that went red is a FINDING; re-running it would bury it in a loop. */
+  it('moves on from a replay that failed, rather than repeating it', async () => {
+    const failed: HistoryEntry = {
+      role: 'tool',
+      outcomes: [outcome('reticle_flow_replay', { flowName: 'sign-in' }, { passed: false })],
+    };
+    const result = await withPlan([...READY, failed], chose('e5'));
+    expect(result.calls[0]?.args['flowName']).toBe('checkout');
+  });
+
+  it('drives only once every recorded journey has been replayed', async () => {
+    const done = [...READY, replayed('sign-in'), replayed('checkout')];
+    const result = await withPlan(done, chose('e5'));
+    expect(result.calls[0]?.name).toBe('reticle_act_and_wait');
+  });
+
+  /** A model choosing a control should be reading what it is trying to prove, not recalling it. */
+  it('tells the model which declared intent it is currently trying to prove', async () => {
+    const seen = { bodies: [] as string[] };
+    await withPlan([...READY, replayed('sign-in'), replayed('checkout')], chose('e5'), seen);
+    expect(sent(seen.bodies[0]).state).toContain('order:placed');
+    expect(sent(seen.bodies[0]).state).toContain('declared and never asserted');
+  });
+});
+
+/**
+ * Routing to a TOOL, not just to a control.
+ *
+ * The driver used to hard-code every tool and ask only which element — so a drive could never
+ * decide to go and look at what the app actually did, only to click something else. Reading a
+ * channel is the choice that turns "the page looks fine" into evidence.
+ */
+describe('choosing which tool to use next', () => {
+  it('offers reading the app’s own channels, not only its controls', async () => {
+    const seen = { bodies: [] as string[] };
+    await turn(READY, chose('e5'), seen);
+    const offered = Object.keys(sent(seen.bodies[0]).questions.next_action.criteria);
+    expect(offered).toContain('observe_what_the_app_did');
+    expect(offered).toContain('read_app_state');
+  });
+
+  it('routes to the observation channel when it picks one', async () => {
+    const result = await turn(READY, chose('observe_what_the_app_did'));
+    expect(result.calls[0]?.name).toBe('reticle_observe');
+  });
+
+  it('routes to the app state when it picks that', async () => {
+    const result = await turn(READY, chose('read_app_state'));
+    expect(result.calls[0]?.name).toBe('reticle_state');
+  });
+
+  /** A read changes nothing, so it is not something the drive has "driven". */
+  it('does not count a read as an action already driven', async () => {
+    const seen = { bodies: [] as string[] };
+    const read: HistoryEntry = {
+      role: 'tool',
+      outcomes: [outcome('reticle_observe', {}, { events: [] })],
+    };
+    await turn([...READY, read], chose('e5'), seen);
+    expect(sent(seen.bodies[0]).state).toContain('(nothing yet)');
+  });
+});

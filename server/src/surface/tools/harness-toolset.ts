@@ -26,7 +26,18 @@ import type { HarnessTool, HarnessToolset } from '@/features/harness/harness.js'
  * only through a discovery hop — and a hop the model has to take on every journey is a hop it will
  * sometimes skip, which silently turns the cheap path off.
  */
-const HARNESS_EXTRA_TOOLS: readonly string[] = [ReticleTool.RECORD, ReticleTool.FLOW_SAVE];
+/**
+ * Beyond the default surface, the three tools a drive cannot do its job without.
+ *
+ * RECORD and FLOW_SAVE are how a drive keeps what it drove. FLOW_REPLAY is how it avoids driving
+ * the same thing twice — it was absent, so a driver handed a plan full of already-recorded journeys
+ * had no way to run one, and every run paid a model to rediscover what was on disk.
+ */
+const HARNESS_EXTRA_TOOLS: readonly string[] = [
+  ReticleTool.RECORD,
+  ReticleTool.FLOW_SAVE,
+  ReticleTool.FLOW_REPLAY,
+];
 
 /**
  * The one deliberate subtraction.

@@ -22,7 +22,7 @@ import {
   MSG_NO_HARNESS_KEY,
 } from './harness-explore.js';
 import { DRIVER_NAMES } from '@/features/harness/drivers.js';
-import { describeDrive } from '@/features/harness/drive-report.js';
+import { describeDrive, replayedFlows } from '@/features/harness/drive-report.js';
 import { StopReason, type HarnessResult } from '@/features/harness/harness.js';
 
 export const EXPLORE_TOOLS: ToolDef[] = [
@@ -122,7 +122,14 @@ export const EXPLORE_TOOLS: ToolDef[] = [
         // The note only fires when the drive left NOTHING behind. A rewritten flow is a flow: it
         // replays, it proves what it asserts, and telling its author that "nothing will replay" is
         // a lie this tool used to tell on every second run.
-        ...(0 === savedFlows.length && 0 === rewroteFlows.length
+        /*
+         * The note fires only when the run left NOTHING behind — and a run that REPLAYED left
+         * plenty. Sixteen recorded journeys re-proved for zero model tokens is the cheap half of
+         * the plan doing its job, and telling its author to "raise maxSteps" reads as a failure.
+         */
+        ...(0 === savedFlows.length &&
+        0 === rewroteFlows.length &&
+        0 === replayedFlows(drive.toolCalls).length
           ? { note: `${NOTHING_RECORDED[drive.stopReason]}${failureDetail(drive)}` }
           : {}),
       };

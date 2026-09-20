@@ -140,7 +140,12 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // assemble responses that carry gaps, and it holds session-scoped state -- so it belongs at the
   // surface, not in the pure engine that computes the gaps. Recorded rather than grouped: one
   // filter is not a cluster, and `tools/act/` is for the act path specifically.
-  'server/src/surface/tools': 36,
+  // 37 since `harness-plan.ts`: what a drive is FOR, read out of `.reticle` before it starts —
+  // every recorded journey with the consequence that must still hold, and the declared intent no
+  // flow asserts. Recorded rather than grouped, and it belongs beside `harness-explore.ts` for the
+  // reason the directory-reach guard insists on: `features/harness` is a SINK that imports nothing
+  // from this package, so anything the drive needs to be HANDED has to be assembled out here.
+  'server/src/surface/tools': 37,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it

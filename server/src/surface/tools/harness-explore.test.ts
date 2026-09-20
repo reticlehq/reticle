@@ -6,6 +6,7 @@ import {
   FINISH_TOOL,
   type ModelDriver,
   type ModelTurn,
+  type ToolOutcome,
 } from '@/features/harness/harness.js';
 import {
   exploreApp,
@@ -13,6 +14,7 @@ import {
   maxStepsFromEnv,
   reconcileFlows,
   knownDriver,
+  openRecordingName,
   withLinkedCredential,
   MSG_NO_HARNESS_KEY,
   MSG_NO_JEV_KEY,
@@ -338,5 +340,64 @@ describe('finding the key a linked machine already has', () => {
       linkedCloud: () => Promise.reject(new Error('unreadable')),
     } as unknown as ToolDeps;
     await expect(withLinkedCredential(angry, {})).resolves.toEqual({});
+  });
+});
+
+/**
+ * Saving is not a decision, and not something a step budget gets to cut off.
+ *
+ * The driver reserves turns for its own teardown, which covers the ordinary ending. It does not
+ * cover a drive that BROKE, or one whose model went quiet, or one cut short by a budget the caller
+ * shortened — and in every one of those the app really was driven and the record of it was thrown
+ * away. Measured before this existed: a 24-step journey through a real dashboard, saving nothing.
+ *
+ * What is pinned here is the DECISION — is a recording still open — because that is the part that
+ * can be wrong. Whether the save then lands is the toolset's job, and a fake toolset would only
+ * test the fake.
+ */
+describe('deciding whether a drive left a recording open', () => {
+  const rec = (action: string, recordingName: string, isError = false): ToolOutcome => ({
+    id: 'x',
+    name: 'reticle_record',
+    args: { action, recordingName },
+    result: {},
+    isError,
+  });
+
+  it('finds the recording a drive started and never closed', () => {
+    expect(openRecordingName([rec('start', 'harness-drive-home')])).toBe('harness-drive-home');
+  });
+
+  it('finds nothing when the drive closed it properly', () => {
+    expect(
+      openRecordingName([rec('start', 'harness-drive-home'), rec('stop', 'harness-drive-home')]),
+    ).toBeUndefined();
+  });
+
+  it('finds nothing when the drive never recorded at all', () => {
+    expect(openRecordingName([])).toBeUndefined();
+  });
+
+  /** A start that was REFUSED opened nothing, so there is nothing to bank. */
+  it('ignores a recording that failed to start', () => {
+    expect(openRecordingName([rec('start', 'harness-drive-home', true)])).toBeUndefined();
+  });
+
+  /** One flow per page means several recordings per drive; only the last can still be open. */
+  it('reports the one still open after several pages', () => {
+    expect(
+      openRecordingName([
+        rec('start', 'harness-drive-home'),
+        rec('stop', 'harness-drive-home'),
+        rec('start', 'harness-drive-transactions'),
+      ]),
+    ).toBe('harness-drive-transactions');
+  });
+
+  /** A stop naming a DIFFERENT recording closes nothing — that is a mismatch, not a close. */
+  it('does not treat a stop for another recording as closing this one', () => {
+    expect(
+      openRecordingName([rec('start', 'harness-drive-home'), rec('stop', 'something-else')]),
+    ).toBe('harness-drive-home');
   });
 });

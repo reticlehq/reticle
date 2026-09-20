@@ -118,3 +118,67 @@ describe('the account an agent reads', () => {
     expect(summary).toContain('navigate http://localhost:4312/orders');
   });
 });
+
+/**
+ * A run that only REPLAYED is not a run that did nothing.
+ *
+ * "Nothing was driven" was true of the actions and wrong about the run: sixteen recorded journeys
+ * replayed deterministically, for zero model tokens, and the report called it empty — while the
+ * tool advised raising `maxSteps`, as though the cheap half of the plan working were a failure.
+ */
+describe('a run that replayed rather than drove', () => {
+  const replay = (name: string, status?: string): ToolOutcome =>
+    call('reticle_flow_replay', { flowName: name }, status === undefined ? {} : { status });
+
+  it('reports the replays as the result, not as an empty run', () => {
+    const summary = describeDrive([replay('sign-in', 'ok'), replay('checkout', 'ok')], []);
+    expect(summary).toContain('Replayed 2 recorded journey(s)');
+    expect(summary).toContain('NO model in the loop');
+    expect(summary).toContain('2 still hold');
+    expect(summary).not.toContain('Nothing was driven');
+  });
+
+  /**
+   * The verdict is `status`, not `passed`. Reading the wrong key reported ten replays as undecided
+   * on a run where every one had answered — the same false-nothing this report exists to stop.
+   */
+  it('reads the verdict the replay tool actually returns', () => {
+    expect(describeDrive([replay('sign-in', 'ok')], [])).toContain('1 still hold');
+  });
+
+  it('names a journey that failed, as a regression', () => {
+    const summary = describeDrive([replay('sign-in', 'ok'), replay('checkout', 'error')], []);
+    expect(summary).toContain('1 failed');
+    expect(summary).toContain('FAILED: checkout');
+    expect(summary).toContain('regressions');
+  });
+
+  /** Drift is the app moving under a recording — fixing the app would be fixing working code. */
+  it('keeps drift apart from failure, and says which needs the fix', () => {
+    const summary = describeDrive([replay('sign-in', 'drift')], []);
+    expect(summary).toContain('1 drifted');
+    expect(summary).toContain('re-anchoring, not the app fixing');
+    expect(summary).not.toContain('regressions');
+  });
+
+  it('counts a replay the tool refused as a failure rather than a pass', () => {
+    const refused: ToolOutcome = {
+      id: 'x',
+      name: 'reticle_flow_replay',
+      args: { flowName: 'gone' },
+      result: { error: 'no such flow' },
+      isError: true,
+    };
+    expect(describeDrive([refused], [])).toContain('1 failed');
+  });
+
+  it('reports replays alongside actions when the run did both', () => {
+    const summary = describeDrive([replay('sign-in', 'ok'), acted('button "X"', 'yes')], []);
+    expect(summary).toContain('Replayed 1 recorded journey(s)');
+    expect(summary).toContain('1 proved');
+  });
+
+  it('still says plainly when a run did neither', () => {
+    expect(describeDrive([], [])).toContain('nothing was replayed');
+  });
+});

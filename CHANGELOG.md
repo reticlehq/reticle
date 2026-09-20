@@ -10,6 +10,9 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 - **An OpenAI driver**, so the comparison has the two models you might otherwise reach for rather than one.
 - **The harness reads `.reticle` before it drives.** Every saved flow with the consequence that must still hold, plus the signals and controls the app declares that no flow has ever asserted. The drive is aimed at that rather than at whatever looks interesting on the first page, and `explore` returns the plan it followed.
 - **One flow per page, named after the page.** A drive used to leave a single enormous recording behind; it now closes a journey when the app moves and saves it under the route it happened on.
+- **The harness follows the plan, and replays instead of re-driving.** A journey already recorded is replayed deterministically with no model call at all, before anything else happens. Measured against a real dashboard: eight recorded journeys re-proved for **zero model tokens**, where the same run previously paid a model to rediscover them. A replay that goes red is reported as a regression, and one that DRIFTS is reported separately — the app moved under the recording, which needs re-anchoring rather than a code change.
+- **The model routes among tools, not just controls.** It can choose to read what the app did or what its store holds, which is the choice that turns "the page looks fine" into evidence. The candidates are still enumerated by Reticle, so it cannot name a tool it does not have.
+- **Saving a drive is no longer something that can be skipped.** A run that broke, went quiet, or ran out of budget used to throw away everything it drove; the recording is now closed and saved after the loop ends, whatever happened inside it.
 
 ### Changed
 

@@ -55,8 +55,11 @@ const PLATFORM_PATH = '/v1/model/systemone';
 const Tool = {
   SNAPSHOT: ReticleTool.SNAPSHOT,
   ACT_AND_WAIT: ReticleTool.ACT_AND_WAIT,
+  OBSERVE: ReticleTool.OBSERVE,
+  STATE: ReticleTool.STATE,
   RECORD: ReticleTool.RECORD,
   FLOW_SAVE: ReticleTool.FLOW_SAVE,
+  FLOW_REPLAY: ReticleTool.FLOW_REPLAY,
   FINISH: FINISH_TOOL.name,
 } as const;
 
@@ -64,6 +67,20 @@ const Tool = {
 const FINISH_OPTION = 'finish';
 /** The synthetic option meaning "I cannot tell from this page; look again". */
 const RELOOK_OPTION = 'look_again';
+
+/**
+ * Tools the model may route to, beyond acting on a control.
+ *
+ * This driver used to hard-code every tool and ask only WHICH ELEMENT — so a drive could never
+ * decide to go and look at what the app actually did, only to click something else. Reading a
+ * channel is a real choice with a real cost, and it is the choice that turns "the page looks fine"
+ * into evidence, so it belongs to the model rather than to a branch in this file.
+ *
+ * The candidates are still ENUMERATED here. Jev picks a key from a set we built, which is what
+ * makes a driver that cannot name a tool it does not have.
+ */
+const OBSERVE_OPTION = 'observe_what_the_app_did';
+const STATE_OPTION = 'read_app_state';
 
 /** The permission gate on a destructive control, as the refusal names it. */
 const DANGEROUS_ARG = 'confirmDangerous';
@@ -209,6 +226,25 @@ interface JevResponse {
   usage?: { input_tokens?: number; output_tokens?: number };
 }
 
+/**
+ * One step of the plan the caller built from `.reticle`.
+ *
+ * Structural rather than imported: this package is a SINK — it is handed a toolset and a driver and
+ * reaches into nothing — so the plan arrives as data with the shape it needs and no dependency on
+ * where it was built.
+ */
+export interface DrivePlanStep {
+  /** `replay` for a journey already recorded, `drive` for declared intent nobody has proved. */
+  kind: string;
+  /** The flow to replay, or the signal/control a drive step is aimed at. */
+  target: string;
+  /** Why this step is worth taking, in the project's own words. */
+  why: string;
+}
+
+/** The plan kinds, as the caller spells them. */
+const PLAN_REPLAY = 'replay';
+
 export interface JevDriverOptions {
   apiKey: string;
   model?: string;
@@ -222,6 +258,15 @@ export interface JevDriverOptions {
    * nothing, which is why every caller inside the repo passes it.
    */
   maxSteps?: number;
+  /**
+   * What this drive is FOR, read from `.reticle` before it started.
+   *
+   * Replay steps run FIRST and deterministically, with no model call at all — a journey already on
+   * disk must never be re-driven, which is the whole reason the plan exists. Only once they are
+   * done is the model asked anything, and then it is asked against the intent these steps carry
+   * rather than against whatever happens to be on the page.
+   */
+  plan?: readonly DrivePlanStep[];
   /** Injected for tests. Defaults to the platform `fetch`. */
   fetch?: HarnessFetch;
 }
@@ -316,6 +361,8 @@ interface DriveState {
   tree: string | undefined;
   /** Where the app is, as the last snapshot reported it. A declaration is built from this. */
   route: string | undefined;
+  /** Flows this drive has already replayed, so the plan advances instead of looping. */
+  replayed: string[];
   /** Every action already driven, so the choice set can prefer something new. */
   acted: string[];
   /**
@@ -349,6 +396,7 @@ function readState(history: readonly HistoryEntry[]): DriveState {
     saved: [],
     tree: undefined,
     route: undefined,
+    replayed: [],
     acted: [],
     blocked: [],
     turns: 0,
@@ -371,6 +419,12 @@ function readState(history: readonly HistoryEntry[]): DriveState {
             state.unsaved.push(named);
           }
         }
+      }
+      if (Tool.FLOW_REPLAY === outcome.name) {
+        // Recorded whether it passed or failed: a replay that went red is a FINDING, and re-running
+        // it would bury the finding under a loop instead of moving on to the next plan step.
+        const flowName = asRecord(outcome.args)['flowName'];
+        if ('string' === typeof flowName) state.replayed.push(flowName);
       }
       if (Tool.FLOW_SAVE === outcome.name) {
         const flowName = asRecord(outcome.args)['flowName'];
@@ -421,7 +475,12 @@ function candidatesFrom(tree: string): Candidate[] {
  * snapshot is already a line-per-element format a reader can follow, and wrapping it in braces costs
  * tokens to say nothing.
  */
-function buildState(system: string, history: readonly HistoryEntry[], drive: DriveState): string {
+function buildState(
+  system: string,
+  history: readonly HistoryEntry[],
+  drive: DriveState,
+  objective: DrivePlanStep | undefined,
+): string {
   const goal = history.find((entry) => 'user' === entry.role)?.text ?? '';
   const driven =
     0 === drive.acted.length
@@ -431,6 +490,12 @@ function buildState(system: string, history: readonly HistoryEntry[], drive: Dri
     system,
     '',
     `OPENING INSTRUCTION: ${goal}`,
+    // The one plan step this drive is currently FOR, said again next to the page rather than left
+    // in a standing instruction twenty turns back. A model choosing a control should be reading
+    // what it is trying to prove, not remembering it.
+    ...(objective === undefined
+      ? []
+      : [`CURRENTLY TRYING TO PROVE: ${objective.target} — ${objective.why}`]),
     `ACTIONS DRIVEN SO FAR:${driven}`,
     '',
     'CURRENT PAGE (interactive elements only):',
@@ -519,6 +584,7 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
   // to — and it serves the same wire shape under its own path.
   const path = DEFAULT_JEV_BASE_URL === baseUrl ? SYSTEMONE_PATH : PLATFORM_PATH;
   const budget = options.maxSteps;
+  const plan = options.plan ?? [];
   /**
    * The one fact the history cannot carry.
    *
@@ -564,6 +630,26 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
             intent: `Autonomous coverage drive of ${slugAfter(unsaved)}: ${String(drive.acted.length)} actions.`,
           }),
           `save ${unsaved}`,
+        );
+
+      /*
+       * THE PLAN'S CHEAP HALF, and it runs before the model is asked anything.
+       *
+       * A journey already recorded replays deterministically for a few hundred tokens. Re-driving
+       * it pays a frontier-priced loop to rediscover something sitting on disk, which is what every
+       * run did before the plan existed. No Jev call is made here at all: there is no decision to
+       * take, only work the caller already decided was worth doing.
+       *
+       * A replay that goes RED is a finding and the drive moves on — re-running it would bury the
+       * finding in a loop. The verdict is on the tool result either way.
+       */
+      const nextReplay = plan.find(
+        (step) => PLAN_REPLAY === step.kind && !drive.replayed.includes(step.target),
+      );
+      if (nextReplay !== undefined && !windingUp)
+        return only(
+          request(Tool.FLOW_REPLAY, { flowName: nextReplay.target }),
+          `replay ${nextReplay.target} — ${nextReplay.why}`,
         );
 
       if (drive.tree === undefined)
@@ -619,6 +705,9 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
         );
 
       // ── the one real decision ────────────────────────────────────────────────────────────────
+      // What the drive is currently for: the first plan step that is not a replay. Replays are all
+      // done by the time we reach here, so whatever is left is the intent nobody has proved.
+      const objective = plan.find((step) => PLAN_REPLAY !== step.kind);
       const candidates = candidatesFrom(drive.tree);
       /**
        * A page with nothing to act on ends the DRIVE, not just the journey.
@@ -643,6 +732,10 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
           'Stop driving: the app has been covered, or nothing here leads anywhere new.',
         [RELOOK_OPTION]:
           'Look at the page again without acting, because this reading looks incomplete.',
+        [OBSERVE_OPTION]:
+          'Read what the application DID since the last action — the requests it made and what it logged. Choose this when something was driven and it is not yet clear whether it worked.',
+        [STATE_OPTION]:
+          "Read the application's own state, which is the strongest evidence there is and the one thing a screen cannot fake.",
       };
       for (const candidate of candidates) {
         const verb = actionFor(candidate.role);
@@ -652,7 +745,7 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
 
       const response = await callJev(
         { apiKey: options.apiKey, model, baseUrl, path, doFetch },
-        buildState(input.system, input.history, drive),
+        buildState(input.system, input.history, drive, objective),
         {
           next_action: {
             type: 'choice',
@@ -689,6 +782,13 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
       if (RELOOK_OPTION === chosen)
         return only(request(Tool.SNAPSHOT, { mode: 'interactive' }), 'look again', usage);
 
+      // Routing to a READ rather than an action. Neither changes the app, so neither is recorded as
+      // something driven — they are how the drive finds out whether what it drove worked.
+      if (OBSERVE_OPTION === chosen)
+        return only(request(Tool.OBSERVE, {}), 'read what the app did', usage);
+      if (STATE_OPTION === chosen)
+        return only(request(Tool.STATE, {}), 'read the app state', usage);
+
       const picked = candidates.find((candidate) => candidate.ref === chosen);
       if (picked === undefined)
         // Jev answers with one of the keys it was given, so this is unreachable by construction —
@@ -709,7 +809,7 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
       const offered = consequencesFor(drive.route);
       const expectation = await callJev(
         { apiKey: options.apiKey, model, baseUrl, path, doFetch },
-        `${buildState(input.system, input.history, drive)}\n\nABOUT TO: ${action} ${picked.desc}`,
+        `${buildState(input.system, input.history, drive, objective)}\n\nABOUT TO: ${action} ${picked.desc}`,
         {
           expected_consequence: {
             type: 'choice',

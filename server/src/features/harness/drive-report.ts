@@ -64,6 +64,35 @@ function targetOf(args: Record<string, unknown>, result: Record<string, unknown>
   return asString(args['ref']) ?? 'the page';
 }
 
+/**
+ * Replays this drive ran, and what each came back with.
+ *
+ * The verdict is `status`, not `passed`. Reading the wrong key reported ten replays as "undecided"
+ * on a run where every one of them had answered — which is the same false-nothing this report was
+ * written to stop, made by the report itself.
+ *
+ * Three outcomes, kept apart because they mean different things to whoever reads this. `ok` is the
+ * journey still holding. `error` is it failing. `drift` is the flow's own anchors no longer
+ * resolving — the app moved under a recording, which is a finding about the RECORDING rather than
+ * proof the feature broke, and collapsing it into "failed" would send somebody to fix working code.
+ */
+export const ReplayOutcome = { OK: 'ok', DRIFT: 'drift', ERROR: 'error' } as const;
+
+export function replayedFlows(
+  toolCalls: readonly ToolOutcome[],
+): { name: string; status: string | undefined }[] {
+  const out: { name: string; status: string | undefined }[] = [];
+  for (const call of toolCalls) {
+    if (ReticleTool.FLOW_REPLAY !== call.name) continue;
+    const name = asString(asRecord(call.args)['flowName']) ?? 'a flow';
+    out.push({
+      name,
+      status: call.isError ? ReplayOutcome.ERROR : asString(asRecord(call.result)['status']),
+    });
+  }
+  return out;
+}
+
 /** Reduce the raw call log to the actions that actually drove the app. */
 export function drivenSteps(toolCalls: readonly ToolOutcome[]): DrivenStep[] {
   const steps: DrivenStep[] = [];
@@ -97,7 +126,42 @@ export function describeDrive(
   savedFlows: readonly string[],
 ): string {
   const steps = drivenSteps(toolCalls);
-  if (0 === steps.length) return 'Nothing was driven: the run made no action against the app.';
+  const replays = replayedFlows(toolCalls);
+
+  /*
+   * A run that only REPLAYED is not a run that did nothing.
+   *
+   * "Nothing was driven" was true of the actions and wrong about the run: sixteen recorded journeys
+   * replayed deterministically, for zero model tokens, and the report called it empty. That is the
+   * cheap half of the plan working exactly as intended, and it has to read as a result.
+   */
+  const replayLine =
+    0 === replays.length
+      ? undefined
+      : (() => {
+          const held = replays.filter((r) => ReplayOutcome.OK === r.status);
+          const failed = replays.filter((r) => ReplayOutcome.ERROR === r.status);
+          const drifted = replays.filter((r) => ReplayOutcome.DRIFT === r.status);
+          const lines = [
+            `Replayed ${String(replays.length)} recorded journey(s) with NO model in the loop: ` +
+              `${String(held.length)} still hold, ${String(failed.length)} failed, ${String(drifted.length)} drifted.`,
+          ];
+          if (0 < failed.length)
+            lines.push(
+              `  FAILED: ${failed.map((r) => r.name).join(', ')} — regressions in journeys that used to pass.`,
+            );
+          if (0 < drifted.length)
+            lines.push(
+              `  DRIFTED: ${drifted.map((r) => r.name).join(', ')} — the app moved under these recordings; the flow needs re-anchoring, not the app fixing.`,
+            );
+          return lines.join('\n');
+        })();
+
+  if (0 === steps.length)
+    return (
+      replayLine ??
+      'Nothing was driven and nothing was replayed: the run made no action against the app.'
+    );
 
   const proved = steps.filter((step) => Verified.YES === step.verified);
   const failed = steps.filter((step) => Verified.NO === step.verified);
@@ -106,6 +170,7 @@ export function describeDrive(
   );
 
   const lines: string[] = [
+    ...(replayLine === undefined ? [] : [replayLine]),
     `Drove ${String(steps.length)} action(s): ${String(proved.length)} proved, ` +
       `${String(failed.length)} failed, ${String(undecided.length)} not decided.`,
   ];

@@ -18,7 +18,7 @@ import {
   JEV_DRIVER_NAME,
   OPENAI_DRIVER_NAME,
 } from '@/features/harness/drivers.js';
-import { jevDriver, jevOptionsFromEnv } from '@/features/harness/jev-driver.js';
+import { jevDriver, jevOptionsFromEnv, type DrivePlanStep } from '@/features/harness/jev-driver.js';
 import { buildDomainModel } from '@/judgement/domain/domain-model.js';
 import { readContract } from '@/memory/project/dir/reticle-dir.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
@@ -29,7 +29,9 @@ import {
   DEFAULT_MAX_STEPS,
   runHarness,
   type HarnessResult,
+  type HarnessToolset,
   type ModelDriver,
+  type ToolOutcome,
 } from '@/features/harness/harness.js';
 import { reticleToolset } from './harness-toolset.js';
 
@@ -201,11 +203,12 @@ export async function exploreApp(
     options.driverName ?? env[ReticleEnv.HARNESS_DRIVER] ?? (await preferredDriver(env, options));
   const built =
     options.driver === undefined
-      ? buildDriver(env, maxSteps, requested)
+      ? buildDriver(env, maxSteps, plan.steps, requested)
       : { driver: options.driver, name: CUSTOM_DRIVER_NAME };
   const driver = built.driver;
 
-  const drive = await runHarness(driver, reticleToolset(deps, pinned(options)), {
+  const toolset = reticleToolset(deps, pinned(options));
+  const drive = await runHarness(driver, toolset, {
     maxSteps,
     // The plan rides in as standing instruction, so it is in front of the model on every turn
     // rather than remembered from a first one. `focus` is the caller's own words and goes last:
@@ -215,6 +218,12 @@ export async function exploreApp(
       ...(options.focus === undefined ? [] : [`Focus: ${options.focus}`]),
     ].join('\n\n'),
   });
+
+  // MANDATORY, and deliberately outside the loop. A drive that runs out of budget mid-journey, or
+  // breaks, or whose model simply stops asking for tools, leaves a recording open and everything it
+  // drove unsaved — work paid for and thrown away. Saving is not a decision any model gets to make
+  // and not something a step budget gets to cut off, so it happens here, after the loop, always.
+  await bankOpenRecording(toolset, drive);
 
   const after = await deps.flows.list();
   return { drive, plan, driverName: built.name, ...reconcileFlows(before, after, drive.toolCalls) };
@@ -302,6 +311,46 @@ export function knownDriver(provider: string | undefined): string | undefined {
 }
 
 /**
+ * Close and save whatever recording the drive left open.
+ *
+ * The driver reserves turns for its own teardown, which covers the ordinary ending. It does NOT
+ * cover a drive that broke, or one whose model went quiet, or one cut off by a budget the caller
+ * shortened — and in every one of those the app really was driven and the record of it is thrown
+ * away. Measured before this existed: a 24-step journey through a real dashboard, saved nothing.
+ *
+ * Failures are swallowed on purpose. This is a last chance, not a checkpoint: if the recording was
+ * already closed the stop is refused and there is nothing to do, and a drive must not fail at the
+ * finish line because the thing it was trying to rescue did not need rescuing.
+ */
+async function bankOpenRecording(toolset: HarnessToolset, drive: HarnessResult): Promise<void> {
+  const open = openRecordingName(drive.toolCalls);
+  if (open === undefined) return;
+  try {
+    await toolset.invoke(ReticleTool.RECORD, { action: 'stop', recordingName: open });
+    await toolset.invoke(ReticleTool.FLOW_SAVE, {
+      flowName: open,
+      intent: `Autonomous drive of ${open}, banked after the run ended.`,
+    });
+  } catch {
+    /* last chance, not a checkpoint */
+  }
+}
+
+/** The recording started and never stopped, if there is one. Exported because it is the decision. */
+export function openRecordingName(toolCalls: readonly ToolOutcome[]): string | undefined {
+  let open: string | undefined;
+  for (const call of toolCalls) {
+    if (ReticleTool.RECORD !== call.name) continue;
+    const args = asRecord(call.args);
+    const name = args['recordingName'];
+    if ('string' !== typeof name) continue;
+    if ('start' === args['action'] && !call.isError) open = name;
+    if ('stop' === args['action'] && name === open) open = undefined;
+  }
+  return open;
+}
+
+/**
  * Read the project's own record of what it does and what is proved about it.
  *
  * No browser, no model, no source. A failure here is "nothing is recorded yet", which is the
@@ -349,6 +398,7 @@ function pinned(options: ExploreOptions): { sessionId?: string } {
 function buildDriver(
   env: Record<string, string | undefined>,
   maxSteps: number,
+  plan: readonly DrivePlanStep[],
   requested?: string,
 ): { driver: ModelDriver; name: string } {
   const jev = jevOptionsFromEnv(env);
@@ -363,7 +413,7 @@ function buildDriver(
     // The Jev driver is told the budget because it has a teardown to reach; the Anthropic driver is
     // not, because it calls `finish` itself and being handed a number it did not ask for is how a
     // second copy of the budget starts drifting from the loop's.
-    return { driver: jevDriver({ ...jev, maxSteps }), name: JEV_DRIVER_NAME };
+    return { driver: jevDriver({ ...jev, maxSteps, plan }), name: JEV_DRIVER_NAME };
   }
   if (ANTHROPIC_DRIVER_NAME === asked) {
     if (anthropic === undefined) throw new Error(MSG_NO_HARNESS_KEY);
@@ -378,6 +428,7 @@ function buildDriver(
 
   if (anthropic !== undefined)
     return { driver: harnessDriver(anthropic), name: ANTHROPIC_DRIVER_NAME };
-  if (jev !== undefined) return { driver: jevDriver({ ...jev, maxSteps }), name: JEV_DRIVER_NAME };
+  if (jev !== undefined)
+    return { driver: jevDriver({ ...jev, maxSteps, plan }), name: JEV_DRIVER_NAME };
   throw new Error(MSG_NO_HARNESS_KEY);
 }
