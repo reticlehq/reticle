@@ -85,7 +85,7 @@ export type IntentShard = z.infer<typeof IntentShardSchema>;
  */
 const SUMMARY_MAX = 72;
 
-export const summarise = (statement: string): string =>
+const summarise = (statement: string): string =>
   statement.length <= SUMMARY_MAX ? statement : `${statement.slice(0, SUMMARY_MAX - 1).trimEnd()}…`;
 
 /** One line per intent: enough to decide whether to open the shard, and no more. */

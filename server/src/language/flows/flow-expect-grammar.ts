@@ -29,7 +29,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return 'object' === typeof value && null !== value && !Array.isArray(value);
 }
 
-export type CoerceExpectResult = { ok: true; value: unknown } | { ok: false; detail: string };
+type CoerceExpectResult = { ok: true; value: unknown } | { ok: false; detail: string };
 
 /**
  * Flatten `signal: { name, count }` into the on-disk fields. Other channels already match FlowExpect.

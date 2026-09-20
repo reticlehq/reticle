@@ -14,7 +14,7 @@
 import type { FlowStepResult } from '@reticlehq/core';
 
 /** Set on a replay that stopped early; omitted entirely otherwise, so a clean pass stays flat. */
-export interface ReplayHalt {
+interface ReplayHalt {
   /** Index of the step that stopped the run. */
   atStep: number;
   /** How many of the flow's steps were never attempted because of it. */

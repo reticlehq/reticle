@@ -19,7 +19,7 @@ function asString(value: unknown): string | undefined {
  * A startPath is stored as pathname+hash (`/#/search`); a ROUTE_CHANGE carries them separately.
  * Without this, every hash-router page compares as `/` and a backtrack is invisible.
  */
-export function recordingRouteOf(pathname: string, hash = ''): string {
+function recordingRouteOf(pathname: string, hash = ''): string {
   const hashIdx = pathname.indexOf('#/');
   if (hashIdx >= 0) {
     return routePathOf(pathname.slice(0, hashIdx) || '/', pathname.slice(hashIdx));

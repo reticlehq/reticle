@@ -195,7 +195,7 @@ export const FEEDBACK_TOOLS: ToolDef[] = [
  * Delivered ONCE per server process. A prompt on every verification would be nagging, and a nagged
  * user opts out of telemetry entirely, which costs us the counters too.
  */
-export const FEEDBACK_PROMPT = {
+const FEEDBACK_PROMPT = {
   ask: 'Ask the human, in your own words and only once: how did this verification go, and what would have made Reticle more useful? If they answer, file it with `reticle feedback` (they run it) or relay it yourself.',
   command: 'reticle feedback',
 } as const;

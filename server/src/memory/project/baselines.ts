@@ -1,4 +1,4 @@
-export interface Baseline {
+interface Baseline {
   name: string;
   lines: string[];
   route: string;

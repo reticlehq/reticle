@@ -42,7 +42,7 @@ export const PortState = {
   /** Answered with a document: a dev server serving an app. */
   SERVES_DOCUMENT: 'serves-document',
 } as const;
-export type PortState = (typeof PortState)[keyof typeof PortState];
+type PortState = (typeof PortState)[keyof typeof PortState];
 
 /** The probe's answer for one port, however it was obtained. */
 export function classifyPort(

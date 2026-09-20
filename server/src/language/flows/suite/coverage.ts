@@ -27,7 +27,7 @@ interface CoverageDimension {
   uncovered: string[];
 }
 
-export interface Coverage {
+interface Coverage {
   testids: CoverageDimension;
   signals: CoverageDimension;
   flows: CoverageDimension;

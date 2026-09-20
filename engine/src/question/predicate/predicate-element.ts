@@ -27,7 +27,7 @@ import type { PredicateSession } from './predicate-session.js';
 import { describeTestidMiss } from './testid-near-miss.js';
 import { describeSplitTextMiss } from './split-text-miss.js';
 
-export async function matchOnce(
+async function matchOnce(
   session: PredicateSession,
   query: ElementQuery,
   state: ElementState | undefined,

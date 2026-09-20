@@ -13,7 +13,7 @@ import {
  * scanning by the agent: the layer names the fault, the agent acts on the name. `pre-hydration-click`
  * lands once the hydration signal (a later item) exists; the three here need only journal data.
  */
-export interface Finding {
+interface Finding {
   phenomenon: PhenomenonType;
   evidence: Record<string, unknown>;
 }

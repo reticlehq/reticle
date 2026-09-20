@@ -61,7 +61,7 @@ export function normalizeCookies(cookies: SeedStorage['cookies'], navUrl: string
   return out;
 }
 
-export interface StorageSeedResult {
+interface StorageSeedResult {
   handle?: InitScriptHandle;
   checkError?: () => void;
 }
