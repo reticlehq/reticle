@@ -6,6 +6,7 @@ import { SETTINGS_CSS } from './presenter-settings-styles.js';
 import { ACCOUNT_CSS } from './presenter-account-styles.js';
 import { HUD_CHROME_CSS, HUD_LOG_WELL_CSS } from './chrome/presenter-hud-chrome.js';
 import { REPORT_CSS } from './presenter-report-styles.js';
+import { OFFER_CSS } from './presenter-offer.js';
 /**
  * All presenter overlay CSS - glow border, synthetic cursor/ring/ripple, and the floating HUD shell.
  * Assembled from the shell-styles, controls and log modules.
@@ -69,5 +70,6 @@ ${SHELL_CSS}
 ${SETTINGS_CSS}
 ${REPORT_CSS}
 ${ACCOUNT_CSS}
+${OFFER_CSS}
 ${LOG_CSS}
 ${CONTROLS_CSS}`;

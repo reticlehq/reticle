@@ -211,6 +211,8 @@ export class Presenter {
         // The menu's detail rows come from the SAME snapshot as the avatar, so the two can never
         // describe different moments. Project counts, not machine-wide: the question the menu answers
         // is "what has happened HERE".
+        // The one thing this HUD advertises, from the same snapshot as everything else it shows.
+        this.#shell.paintOffer(snapshot.harnessOffer);
         this.#shell.paintAccount(snapshot.account, snapshot.dashboardUrl, {
           projectName: snapshot.projectName,
           dashboardUrl: snapshot.dashboardUrl,

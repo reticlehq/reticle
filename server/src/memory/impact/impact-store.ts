@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { readAccountState } from '@/memory/cloud/account-state.js';
+import { harnessOfferSource, type OfferSource } from '@/memory/cloud/harness-offer.js';
 import {
   ReticleDir,
   IMPACT_DAILY_BUCKETS,
@@ -225,6 +226,8 @@ export class ImpactStore {
   #timer: ReturnType<typeof setTimeout> | undefined;
   #onChange: (() => void) | undefined;
   readonly #account: () => AccountState;
+  /** Where this workspace stands with the free harness offer. Cached; see harness-offer.ts. */
+  readonly #offer: OfferSource;
 
   constructor(opts: {
     reticleRoot: string;
@@ -234,6 +237,8 @@ export class ImpactStore {
     globalRoot?: string;
     /** Reads whether this machine is signed in. Injected so the store stays testable and pure-ish. */
     account?: () => AccountState;
+    /** Where the workspace stands with the free harness offer. Injected so no test touches a network. */
+    offer?: OfferSource;
   }) {
     this.#paths = impactPaths(opts.reticleRoot, opts.globalRoot ?? homedir());
     // Resolved per snapshot, not cached: a user who runs `reticle login` in another terminal must
@@ -242,6 +247,9 @@ export class ImpactStore {
     this.#now = opts.now ?? ((): number => Date.now());
     this.#projectName = opts.projectName;
     this.#dashboardUrl = readDashboardUrl(opts.reticleRoot);
+    // The claim happens in the console, so the link this project was linked to IS the claim link —
+    // built here rather than in the HUD, which has no way to know where this project points.
+    this.#offer = opts.offer ?? harnessOfferSource(process.env, () => this.#dashboardUrl);
     const now = this.#now();
     this.#project = readScope(this.#paths.project, now);
     this.#global = readScope(this.#paths.global, now);
@@ -272,6 +280,10 @@ export class ImpactStore {
     if (this.#projectName !== undefined) snap.projectName = this.#projectName;
     if (this.#dashboardUrl !== undefined) snap.dashboardUrl = this.#dashboardUrl;
     snap.account = this.#account();
+    const offer = this.#offer.read();
+    // Absent means "we have not heard", which the HUD renders as nothing at all. Never defaulted to
+    // `{claimed:false}`: that would advertise the offer to everyone who is offline.
+    if (offer !== undefined) snap.harnessOffer = offer;
     return snap;
   }
 

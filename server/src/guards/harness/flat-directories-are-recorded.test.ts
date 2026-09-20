@@ -66,7 +66,11 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // different gaps and avatar sizes. Raised rather than grouped because this directory already pairs
   // a component with its stylesheet — settings, report and shell all do — so the file sits where the
   // convention puts it, and moving one pair out would be the inconsistent choice.
-  'adapters/realm/browser/src/presenter': 19,
+  // 20 with `presenter-offer.ts`, the one thing this HUD advertises: the card, its copy, the rules
+  // that keep it from nagging, and its stylesheet, in one file. Raised rather than grouped for the
+  // same reason as the line above -- it is a presenter surface beside every other presenter surface,
+  // and a `promo/` directory holding exactly one file would be a category invented for a single member.
+  'adapters/realm/browser/src/presenter': 20,
   // Newly over the line at 11, with `presenter-safe-html.ts`. It crossed because two SECURITY
   // helpers left `presenter-report.ts` when the account capsule became their second caller: HTML
   // escaping, and the dashboard-url scheme check that exists because `javascript:` once produced a

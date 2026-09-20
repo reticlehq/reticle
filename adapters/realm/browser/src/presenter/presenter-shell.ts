@@ -18,6 +18,7 @@ import {
   SETTINGS_ATTR,
   SETTINGS_BTN_ATTR,
 } from './presenter-config.js';
+import { OFFER_SLOT_ATTR, paintOffer, type OfferState } from './presenter-offer.js';
 import { BRAND_NAME, FAB_TOGGLE_HTML, MARK_SVG } from './chrome/presenter-brand.js';
 import { settleLogAtLatest } from './chrome/presenter-log.js';
 import { installHudDragHandles, installHudPositionGuards } from './presenter-drag.js';
@@ -141,6 +142,29 @@ export class HudShell {
     // the same snapshot through `setSnapshot`.
     paintSettingsAccount(this.#root, account, dashboardUrl, details);
   }
+  /**
+   * The last offer push, replayed at mount for the same reason the account one is: the daemon pushes
+   * the impact snapshot on connect, which races this shell's mount, and on an idle page the next
+   * snapshot never comes.
+   */
+  #pushedOffer: OfferState | undefined;
+
+  /** Paint the harness offer into the chat panel. Nothing to say is the common answer. */
+  paintOffer(offer: OfferState | undefined): void {
+    this.#pushedOffer = offer;
+    if (this.#root === undefined) return;
+    paintOffer(this.#root, offer, this.#storage());
+  }
+
+  /** Local storage, or nothing when the page refuses it. Read through a getter so a test can't race it. */
+  #storage(): Pick<Storage, 'getItem' | 'setItem'> | undefined {
+    try {
+      return globalThis.localStorage;
+    } catch {
+      return undefined;
+    }
+  }
+
   constructor(callbacks: HudShellCallbacks = {}) {
     this.#callbacks = callbacks;
     this.#settings = new PresenterSettingsPanel({
@@ -176,6 +200,7 @@ export class HudShell {
         ${actStripHtml}
         <span class="reticle-tally" data-reticle-tally hidden></span>
         ${bannerHtml}
+        <div ${OFFER_SLOT_ATTR}></div>
         <div class="${HUD_LOG_WELL_CLASS}"><div ${logAttr}></div></div>
         ${flowsHtml}
         ${footHtml}
@@ -367,6 +392,7 @@ export class HudShell {
       const pushed = this.#pushedAccount;
       this.paintAccount(pushed.account, pushed.dashboardUrl, pushed.details);
     }
+    if (this.#pushedOffer !== undefined) this.paintOffer(this.#pushedOffer);
   }
   teardown(): void {
     this.#accountTeardown?.();
