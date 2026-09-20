@@ -4,7 +4,7 @@ description: Coverage, storage, fake clocks, autonomous crawling, visual diffing
 icon: sparkles
 ---
 
-These are the Reticle tools that do something other than look, act, observe and assert: control coverage, client storage, a fake clock, autonomous crawling, semantic and visual baselines, network mocking, flow recording and replay, and the CI artifact. Reach for them when the verify loop is not the shape of the question. They are **not on the default tool surface, and the default surface has no `reticle_run` to reach them**: start the daemon with `RETICLE_ADVERTISE_ALL_TOOLS=1` (read once at startup, so restart it) and call them by name. The `reticle_run({ tool, args })` spelling on this page works only on that surface.
+These are the Reticle tools that do something other than look, act, observe and assert: control coverage, client storage, a fake clock, autonomous crawling, semantic and visual baselines, network mocking, flow recording and replay, and the CI artifact. Reach for them when the verify loop is not the shape of the question. They are **not advertised on the default tool surface, but they are reachable from it**: `reticle_run({ tool, args })` dispatches to any registered tool by name, advertised or not, which is the spelling used on this page. To have them advertised outright instead, with their output schemas, start the daemon with `RETICLE_ADVERTISE_ALL_TOOLS=1` (read once at startup, so restart it) and call them by name.
 
 Most of the time you want the verify loop. Look, act, observe, assert. These are the tools for the times you want something else, and they are the ones people are most surprised exist.
 

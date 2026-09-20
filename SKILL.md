@@ -126,7 +126,7 @@ Replay before you drive. A covered journey re-verifies for a few hundred tokens;
 
 ## Two more you have to be told about
 
-Extended surface only. The default nine carry no dispatch hatch, so `reticle_run` is absent and these two are out of reach without `RETICLE_ADVERTISE_ALL_TOOLS=1`. Intent needs none of that: pass it on the verdict itself, which is the better shape anyway.
+Not advertised, but reachable: `reticle_run { tool, args }` calls any registered tool by name. Intent needs neither, pass it on the verdict itself, which is the better shape anyway.
 
 **Context compacted, a turn starting, or a sub-agent taking over?** Ask what this run already established, instead of re-snapshotting to rediscover what you already knew:
 
@@ -176,7 +176,7 @@ Then report what you drove, what it produced, and the `file:line` for anything b
 
 The surface is deliberately small: `default` 10, `all` 30, the wider one behind `RETICLE_ADVERTISE_ALL_TOOLS=1`. Editors budget tools across every MCP server you have connected (Cursor allows 40 in total), so the count is capped rather than allowed to grow.
 
-The nine are a CLOSED surface: they advertise everything they can call, with no dispatch hatch behind them. `reticle_tools { names: [...] }` loads the full argument grammar for any of them. A name that used to be its own tool answers with where it went rather than "not found", so instructions written against an older release still land on the call that replaced it. Anything wider, `reticle_run` included, needs the extended surface.
+What is advertised is not all there is. `reticle_tools` lists EVERY registered tool, `{ names: [...] }` loads full argument grammar, and `reticle_run { tool, args }` calls any of them, advertised or not. That hatch is the promise a trimmed surface is built on. A name that used to be its own tool answers with where it went rather than "not found".
 
 - Batching, regression suites, reading a verdict: `https://docs.reticle.sh/agent-cheatsheet.md`
 - Every predicate and action: `https://docs.reticle.sh/predicates.md`, `https://docs.reticle.sh/actions.md`

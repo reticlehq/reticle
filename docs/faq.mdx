@@ -102,7 +102,7 @@ What is measured is detection: 10 of 10 injected regressions caught, with zero f
 <Accordion title="Why does my agent only see some of Reticle's tools?">
   Because MCP re-sends every advertised tool definition on **every turn**, so the tool list is rent, not a one-time cost. Reticle advertises the verify loop directly and keeps the cold tail one call away.
 
-`reticle_tools` lists every tool (pass `names: [...]` for full parameters), but on the default surface listing is all it does: that surface is closed and ships no `reticle_run`, so a name outside the nine cannot be called until the daemon advertises it. If you want the whole surface advertised directly, set `RETICLE_ADVERTISE_ALL_TOOLS=1` in the **daemon's** environment and restart it, which costs roughly seven times the per-turn schema tax and is meant for suites that call by name rather than for running agents.
+`reticle_tools` lists every registered tool (pass `names: [...]` for full parameters), and `reticle_run { tool, args }` calls any of them by name, whether or not it is advertised. That hatch is what makes a trimmed surface honest: a tool it does not show is one hop away rather than out of reach. If you want the whole surface advertised directly, set `RETICLE_ADVERTISE_ALL_TOOLS=1` in the **daemon's** environment and restart it, which costs roughly seven times the per-turn schema tax and is meant for suites that call by name rather than for running agents.
 
   <Card title="The surface, explained" icon="wrench" href="/tools/overview">
     Which tools are advertised directly, and why each earned its slot.

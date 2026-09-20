@@ -13,7 +13,7 @@ That is not a limitation, it's the design. MCP re-sends every advertised tool de
 
 A wider surface costs tokens on every message. Less obviously, it makes the model wander: give it fifty ways to look at a page and it will try several before doing anything useful.
 
-What the nine do **not** reach are the specialised tools: `reticle_screenshot`, `reticle_visual_diff`, `reticle_storage`, `reticle_network_mock`, `reticle_clock`. There is no dispatch hatch on this surface by design, so those need a daemon started with `RETICLE_ADVERTISE_ALL_TOOLS=1`.
+What the verify loop does **not** advertise are the specialised tools: `reticle_screenshot`, `reticle_visual_diff`, `reticle_storage`, `reticle_network_mock`, `reticle_clock`. Each is one `reticle_run { tool, args }` hop away, and a daemon started with `RETICLE_ADVERTISE_ALL_TOOLS=1` advertises them outright.
 
 <Note>
   Measured off the real wire on 2026-09-16, by reading `tools/list` from a fresh daemon: the default

@@ -150,10 +150,15 @@ chk('the default surface is the lean one, not the full list', names.size < 40, `
 for (const tool of ['reticle_flow_replay', 'reticle_record', 'reticle_flow_save']) {
   chk(`  ${tool} is NOT advertised here, so the skill must scope it to the extended surface`, !names.has(tool));
 }
-// Inverted deliberately. It used to read "reticle_run IS advertised, since everything above depends
-// on it" -- true of the old default and false the day the merged nine became it. A closed surface
-// has no dispatch hatch, and the skill has to say so rather than hand out an envelope that refuses.
-chk('reticle_run is NOT advertised: the default nine are a CLOSED surface', !names.has('reticle_run'));
+// Inverted TWICE, and the second inversion is the one that matters. This read "reticle_run IS
+// advertised" on the old default, then "is NOT advertised: the nine are a CLOSED surface" when the
+// merged nine became the default -- and that second claim was true for exactly as long as it took
+// somebody to notice that eleven registered tools were then reachable by nothing at all. The
+// surface demotes the extended set on the promise that each member is still one reticle_run hop
+// away; dropping the hatch cancelled the half of the trade we owed the caller. The hatch is back,
+// so it is advertised here, and the skill teaches the envelope rather than telling an agent that a
+// tool it can reach is out of reach.
+chk('reticle_run IS advertised: the hatch is what makes the unadvertised tail reachable', names.has('reticle_run'));
 chk('reticle_verify IS advertised, so the skill teaches it directly', names.has('reticle_verify'));
 
 // Proving the SECOND surface is actually extended. Without this the envelope section below can run

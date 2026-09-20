@@ -57,7 +57,7 @@ Measured live, all servers in one run, same tokenizer (`bench/harness/schema-tax
 
 _Measured 2026-08-12 (`bench/raw/schema-tax.json`). Reticle's default surface has gained a tool since, so treat the first row as a floor._
 
-The default surface is the verify loop plus `reticle_tools`, and it is CLOSED: those nine names are the whole of what can be called. There is no `reticle_run` dispatch hatch on it, so the cold tail is not merely un-advertised, it is unreachable until the daemon is started with `RETICLE_ADVERTISE_ALL_TOOLS=1`.
+The default surface is the verify loop plus `reticle_tools` and `reticle_run`. The cold tail is un-advertised rather than unreachable: `reticle_run { tool, args }` calls any registered tool by name, and `RETICLE_ADVERTISE_ALL_TOOLS=1` advertises the whole table outright for suites that prefer that. Dropping the hatch was tried, and it left eleven registered tools callable by nothing at all.
 
 `RETICLE_ADVERTISE_ALL_TOOLS=1` advertises everything WITH output schemas. It is a verification switch for suites that call by name, not a mode to run agents in. It is roughly 7x the per-turn cost, which is why it is opt-in.
 
