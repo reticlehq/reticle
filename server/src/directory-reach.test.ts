@@ -578,6 +578,31 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * one was ever useful to anybody, and how long an idle one is given before it shuts itself
    * down. Five files, none of which imports anything.
    */
+  /**
+   * `serve`, `stop`, `restart` -- and six reaches, which deserve their own sentence because the
+   * number looks like a finding and is not one.
+   *
+   * Every one of these six is already in `command`'s list above. Nothing here reaches for anything
+   * cli.ts was not reaching for yesterday: the code moved, and the edges moved with it. A split
+   * always shows up as new PAIRS in a guard that counts directory-to-directory edges, even when the
+   * package's total tangle is unchanged -- and this is that case, not a new dependency anybody
+   * acquired.
+   *
+   * What the split did do is make the reach legible. Six collaborators for three commands reads as
+   * a lot until you name them: probe the port (`binding`), read and signal the pid (`daemon`),
+   * read why a start failed (`lifetime`), ask the daemon what it serves (`launch`), open a socket
+   * to see if anything answers (`mcp`), and free the port before rebinding it (`cli`). That is one
+   * job -- decide whether a daemon exists and report honestly -- done against six facts about the
+   * machine.
+   *
+   * The genuine finding underneath is one directory over: `probePresence` is handed the identical
+   * `{ tcpOpen: probeDaemon, status: fetchStatus }` pair at EIGHT call sites, and two of the six
+   * edges here exist only to carry those two functions to it. A pre-wired `livePresence(port)`
+   * would delete the duplication and two of these reaches at once. Not done here because its home
+   * is a real decision -- putting it in `binding` coupled that directory to `mcp` and `launch`,
+   * which is moving the problem -- and a release branch is the wrong place to make it.
+   */
+  lifecycle: ['binding', 'cli', 'daemon', 'launch', 'lifetime', 'mcp'],
   lifetime: [],
   /**
    * Facts and chores about the computer this daemon is running on: the `process.platform` values
