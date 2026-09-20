@@ -6,19 +6,11 @@ import { attachCloudSync } from './memory/cloud/sync-daemon.js';
 import { wireHooks } from './hooks/hook-commands.js';
 import {
   PROJECT_REGISTRY_FILE,
-  emptyProjectRegistry,
   parseProjectRegistry,
   projectCandidates,
 } from '@reticlehq/core/artifacts';
-import {
-  discoverProjectConfigs,
-  type ConfigDiscovery,
-} from './command/cli/config/config-discovery.js';
-import {
-  projectCandidatesFrom,
-  resolveArtifactRoot,
-  type ArtifactRoot,
-} from './memory/project/artifact-root.js';
+import { discoverProjectConfigs } from './command/cli/config/config-discovery.js';
+import { artifactRootResolver } from './memory/project/artifact-root-resolver.js';
 import type { Server } from 'node:http';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -421,32 +413,6 @@ function knownProjectRoots(): string[] {
     // Same: a diagnostic walk that throws must not take the sync loop with it.
   }
   return [...roots];
-}
-
-function artifactRootResolver(daemonRoot: string): (projectId: string | undefined) => ArtifactRoot {
-  return (projectId) => {
-    let registry = emptyProjectRegistry();
-    try {
-      const path = join(homedir(), ReticleDir.ROOT, PROJECT_REGISTRY_FILE);
-      registry = existsSync(path)
-        ? parseProjectRegistry(JSON.parse(readFileSync(path, 'utf8')))
-        : registry;
-    } catch {
-      // A cache that cannot be read is an empty cache, never an error: the daemon still resolves
-      // through discovery, and falls back to its own root exactly as it did before this existed.
-    }
-    let discovery: ConfigDiscovery = { found: [], searched: [] };
-    try {
-      discovery = discoverProjectConfigs(process.cwd());
-    } catch {
-      // Same reasoning: a diagnostic search that throws must not take a tool call with it.
-    }
-    return resolveArtifactRoot({
-      projectId,
-      candidates: projectCandidatesFrom(discovery, registry),
-      daemonRoot,
-    });
-  };
 }
 
 export async function start(options: StartOptions = {}): Promise<RunningServer> {

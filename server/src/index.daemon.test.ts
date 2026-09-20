@@ -2,7 +2,7 @@ import { removeTempDir } from './machine/temp-dir.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as http from 'node:http';
 import { mkdtemp } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ReticleEnv, LOOPBACK_HOST } from '@reticlehq/core';
@@ -118,9 +118,13 @@ describe('a daemon that nothing connected to', () => {
     expect(existsSync(root)).toBe(false);
   });
 
-  it('writes the workspace ignore once a session actually connects', async () => {
+  it('writes the workspace ignore once a session connects, when this IS a Reticle project', async () => {
     dir = await mkdtemp(join(tmpdir(), 'reticle-daemon-connected-'));
     const root = join(dir, '.reticle');
+    // A daemon a developer started in their OWN app: the directory is already a Reticle workspace,
+    // so an unmatched session still belongs here. This is the case the daemon-root fallback was
+    // written for, and the only one it still covers.
+    mkdirSync(root, { recursive: true });
     server = await startDaemon({
       port: 0,
       reticleRoot: root,
@@ -132,5 +136,26 @@ describe('a daemon that nothing connected to', () => {
     await browser.open();
     await waitUntil(() => existsSync(join(root, '.gitignore')));
     browser.close();
+  });
+
+  it('writes nothing into a directory that is not a Reticle project at all', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'reticle-daemon-guest-'));
+    const root = join(dir, '.reticle');
+    // No `.reticle.json`, no `.reticle/` — a backend the user's editor happened to be sitting in.
+    // A session that cannot be matched to a project must not make this directory into a workspace;
+    // its evidence goes to the user's own `~/.reticle/unmatched/<projectId>` instead.
+    server = await startDaemon({
+      port: 0,
+      reticleRoot: root,
+      pairingTokenDir: join(dir, 'token'),
+      token: 'pair-me',
+      now: () => 1_700_000_000_000,
+    });
+    const browser = new FakeBrowser(await server.bridge.ready, 'sess-guest', false, 'pair-me');
+    await browser.open();
+    // Give the session-create handlers the time they would have needed to write.
+    await new Promise((r) => setTimeout(r, 250));
+    browser.close();
+    expect(existsSync(root)).toBe(false);
   });
 });

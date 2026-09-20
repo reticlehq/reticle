@@ -78,6 +78,10 @@ const DELIBERATE: Readonly<Record<string, { uses: number; why: string }>> = {
     uses: 6,
     why: 'Sync walks EVERY root it can find and treats the daemon root as one of them; the comparison at :183 exists to avoid pushing it twice.',
   },
+  'features/visual/visual-tools.ts': {
+    uses: 2,
+    why: "Fallback beside the session's own stamped root, for a capture with no session to ask.",
+  },
   'surface/tools/real-input-attempt.ts': {
     uses: 1,
     why: 'Upload trust boundary. Scoping to the daemon tree fails CLOSED — a wrong root refuses a legitimate file rather than reading one it should not.',

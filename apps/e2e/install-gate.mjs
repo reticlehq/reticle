@@ -931,6 +931,9 @@ async function driveScaffold(scaffold, index) {
     mkdtempSync(join(tmpdir(), `reticle-install-${scaffold.id}-`)),
   );
   const app = join(workdir, scaffold.appDir ?? DEFAULT_APP_DIR);
+  // Where the DAEMON is started: inside the workdir, beside the app and outside it. A user's agent
+  // starts the daemon in its own working directory, which is not the app being verified.
+  const daemonCwd = join(workdir, 'daemon-cwd');
   // Where `init` is invoked. Defaults to the app, which is the only shape that used to exist here.
   const initFrom = scaffold.initFrom === undefined ? app : join(workdir, scaffold.initFrom);
   let daemon;
@@ -1165,7 +1168,20 @@ async function driveScaffold(scaffold, index) {
     }
 
     // ── 5. own the daemon before the app can dial it (harness rule 2) ───────────────────────────
-    daemon = await startOwnedDaemon(bridgePort, { cliPath: CLI, cwd: ROOT });
+    //
+    // Started in a directory that is NEITHER the app nor a Reticle checkout, and that is the point.
+    //
+    // It used to run in `ROOT`, this repo — which is a Reticle project, whose own `.gitignore`
+    // hides `.reticle/`. So the daemon was always inside a tree that expected its files, and the
+    // question "does Reticle write into directories it was not invited into?" could not be asked
+    // by any gate. It shipped twice: a `.reticle/` created by the mere act of booting, in whatever
+    // directory the user's agent was started in, and a session journal — URLs, request and response
+    // bodies, page text — written to that same directory while the ignore file went to the app.
+    //
+    // A user's daemon is started by their editor, wherever that editor's cwd happens to be. This is
+    // that, and `daemonCwd` below is asserted empty after the drive.
+    mkdirSync(daemonCwd, { recursive: true });
+    daemon = await startOwnedDaemon(bridgePort, { cliPath: CLI, cwd: daemonCwd });
     const transport = watchTransport(bridgePort);
 
     // ── 6. boot, and open it in a real browser ──────────────────────────────────────────────────
@@ -1294,6 +1310,22 @@ async function driveScaffold(scaffold, index) {
       // whole CI round trip for exactly this reason: it named a status and not an origin.
       if (!passed) dumpEvidence(consoleLines, bridgePort, failedResponses, wsAttempts);
     }
+
+    // ── 9. Reticle wrote nothing into the directory it was merely STARTED in ────────────────────
+    //
+    // The one negative assertion in this gate, and the only kind that can catch this class: every
+    // other check here asks whether a file Reticle promised to write is there. Nothing asked
+    // whether a file it never promised is somewhere else, so a daemon quietly filling a stranger's
+    // repository passed every gate this project has.
+    //
+    // Listed rather than counted: "the daemon's directory is clean ❌" with no names is a check
+    // somebody will delete rather than debug.
+    const strays = existsSync(daemonCwd) ? readdirSync(daemonCwd) : [];
+    chk(
+      'the daemon wrote nothing where it was started',
+      strays.length === 0,
+      strays.length === 0 ? '' : `left behind: ${strays.join(', ')}`,
+    );
 
     await browser.close();
   } catch (err) {

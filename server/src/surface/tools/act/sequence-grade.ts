@@ -81,6 +81,19 @@ export function gradeSequence(
     };
   }
 
+  /*
+   * `unknown` rather than `no-fault`, and the distinction is load-bearing.
+   *
+   * "Nothing was declared" is what `no-fault` means for a single action -- but the engine only says
+   * it over a SETTLED window, because no-fault claims the whole window was observed. Nothing on
+   * this path observes settledness: the caller tracks dispatch and stalls, never settle. Saying
+   * `no-fault` here would claim evidence nobody collected, in the one place this product cannot
+   * afford to overclaim.
+   *
+   * So the enum stays conservative and the SENTENCE carries the whole answer: it names declaring a
+   * consequence as the next move, which is what an agent reading `no-fault` would have done.
+   * Upgrading means plumbing `settled` from the act results through `SequencePlan`.
+   */
   if (0 === declared) {
     return {
       verified: Verified.UNKNOWN,

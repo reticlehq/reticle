@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import {
+  SAFE_SEGMENT_PATTERN,
   ReticleDir,
   projectCandidates,
   type ProjectCandidate,
@@ -139,4 +140,46 @@ export function projectCandidatesFrom(
       : [{ projectId: config.projectId, directory: config.directory }],
   );
   return [...discovered, ...projectCandidates(registry)];
+}
+
+/** Where evidence goes when no project could be named and the daemon is a guest in this tree. */
+export const UNMATCHED_SUBDIR = 'unmatched';
+
+/** What an unnameable project is called on disk. Never blank, so the path is always a real one. */
+const UNNAMED_PROJECT = 'unnamed';
+
+/**
+ * The fallback root for a session whose project could not be resolved.
+ *
+ * Falling back to the daemon's own root was unconditional and silent, and that is how Reticle came
+ * to create `.reticle/` — session journals included, carrying URLs, request and response bodies and
+ * page text — in a user's BACKEND directory. Their editor starts the daemon there; the directory
+ * was never instrumented and never agreed to hold anybody's session data. They deleted it, and the
+ * next session wrote it again.
+ *
+ * Two cases, and only one of them was ever the intended behaviour:
+ *
+ *   - the daemon is sitting IN a Reticle project (a developer who ran `reticle serve` in their own
+ *     app). Its root is the right answer, and it is the case the old fallback was written for.
+ *   - the daemon is a guest — no `.reticle.json`, no `.reticle/` already there. Then the evidence
+ *     goes to the user's own `~/.reticle/unmatched/<projectId>`, which is Reticle's to write.
+ *
+ * It is never dropped. A verdict with nowhere to live is a worse failure than one in an unexpected
+ * place, and the caller says out loud where it went.
+ *
+ * `projectId` arrives in HELLO from the page, so it is untrusted input on a path join and is held
+ * to one safe segment — the same guard session ids and flow names already pass.
+ */
+export function unmatchedRoot(query: {
+  daemonRoot: string;
+  /** Whether the daemon's own directory is a Reticle project — an IO question, answered by the caller. */
+  daemonIsProject: boolean;
+  /** The user's home directory. Passed in rather than read, so this stays pure. */
+  home: string;
+  projectId?: string | undefined;
+}): string {
+  if (query.daemonIsProject) return query.daemonRoot;
+  const id = query.projectId ?? '';
+  const safe = SAFE_SEGMENT_PATTERN.test(id) && !id.includes('..') ? id : UNNAMED_PROJECT;
+  return join(query.home, ReticleDir.ROOT, UNMATCHED_SUBDIR, safe);
 }

@@ -8,7 +8,23 @@ const silent = (): StepExpectation => ({ declared: false });
 
 describe('grading a plan by what it declared', () => {
   it('is unknown when no step declared anything — a plan that asserts nothing proves nothing', () => {
-    // The same rule `no-fault` states for a single action: driving is not verifying.
+    /*
+     * `unknown`, deliberately, and NOT `no-fault` -- which this comment used to claim it was "the
+     * same rule" as, while asserting the opposite enum. Two words for one state is how an agent
+     * ends up taking the opposite next step, so the difference is worth stating.
+     *
+     * The engine emits `no-fault` for "nothing was declared" ONLY over a settled window
+     * (`engine/src/evidence/verified.ts`): no-fault claims the whole window was observed, and a
+     * call that returned while the app was still moving has not earned that claim. This path
+     * tracks no settledness at all -- `act-sequence-tool.ts` never asks for it and no step result
+     * carries it -- so `no-fault` here would be an assertion about evidence nobody collected.
+     * `unknown` is the conservative word and the honest one.
+     *
+     * The agent is not left guessing either way: `because` names the exact next move, which is to
+     * give each step an `expect`. Upgrading this to `no-fault` means plumbing `settled` through
+     * `SequencePlan` from the act results, and it is not worth doing until something reads the
+     * difference.
+     */
     const grade = gradeSequence([silent(), silent(), silent()]);
     expect(grade.verified).toBe(Verified.UNKNOWN);
     expect(grade.declared).toBe(0);

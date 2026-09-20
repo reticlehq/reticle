@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
 import { emptyProjectRegistry, rememberProject } from '@reticlehq/core/artifacts';
-import { ArtifactRootReason, projectCandidatesFrom, resolveArtifactRoot } from './artifact-root.js';
+import {
+  ArtifactRootReason,
+  UNMATCHED_SUBDIR,
+  projectCandidatesFrom,
+  resolveArtifactRoot,
+  unmatchedRoot,
+} from './artifact-root.js';
 import type { ConfigDiscovery } from '@/command/cli/config/config-discovery.js';
 
 /**
@@ -229,5 +235,61 @@ describe('candidates from both sources', () => {
       emptyProjectRegistry(),
     );
     expect(candidates).toEqual([]);
+  });
+});
+
+/**
+ * Where a session's artifacts go when we CANNOT name the project.
+ *
+ * The fallback was the daemon's own root, unconditionally and silently, which is how Reticle came
+ * to create `.reticle/` — journals included — in a user's backend directory. The daemon is started
+ * by the user's editor, in whatever directory that editor was in, and a tree that was never
+ * instrumented is a tree that never agreed to hold anybody's session data.
+ *
+ * Reported from the field as `.reticle/` reappearing in a backend after every delete.
+ *
+ * So: the daemon's root stays the fallback when the daemon really is sitting in a Reticle project
+ * (the developer who ran `reticle serve` in their app — the case this behaviour was written for),
+ * and otherwise the evidence goes to the user's own `~/.reticle/unmatched/<projectId>` rather than
+ * into somebody's repository. It is never DROPPED: a verdict with nowhere to live is a worse
+ * failure than one in an unexpected place, and the reason travels with the answer so the daemon can
+ * say out loud which it did.
+ */
+describe('a root for a session whose project we cannot name', () => {
+  it('uses the daemon root when the daemon is itself in a Reticle project', () => {
+    expect(
+      unmatchedRoot({ daemonRoot: '/repo/app/.reticle', daemonIsProject: true, home: '/home/u' }),
+    ).toBe('/repo/app/.reticle');
+  });
+
+  it('keeps out of a directory that never asked for Reticle', () => {
+    expect(
+      unmatchedRoot({
+        daemonRoot: '/repo/backend/.reticle',
+        daemonIsProject: false,
+        home: '/home/u',
+        projectId: 'shop-web',
+      }),
+    ).toBe(join('/home/u', ReticleDir.ROOT, UNMATCHED_SUBDIR, 'shop-web'));
+  });
+
+  it('still lands somewhere when the session named no project at all', () => {
+    const root = unmatchedRoot({
+      daemonRoot: '/repo/backend/.reticle',
+      daemonIsProject: false,
+      home: '/home/u',
+    });
+    expect(root.startsWith(join('/home/u', ReticleDir.ROOT, UNMATCHED_SUBDIR))).toBe(true);
+  });
+
+  it('never lets a projectId off the wire choose a directory', () => {
+    // The id arrives in HELLO from the page, so it is untrusted input on a path join.
+    const root = unmatchedRoot({
+      daemonRoot: '/repo/backend/.reticle',
+      daemonIsProject: false,
+      home: '/home/u',
+      projectId: '../../../etc/passwd',
+    });
+    expect(root.includes('..')).toBe(false);
   });
 });
