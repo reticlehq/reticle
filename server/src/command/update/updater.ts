@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { loadManifest, saveManifest } from './update-checker.js';
 import { RETICLE_NPM_PACKAGE, SERVER_VERSION } from '@/command/version/identity/server-version.js';
 import { log } from '@/log.js';
+import { windowsShellArg } from '@reticlehq/init';
 import { TelemetryEventKind } from '@reticlehq/core/telemetry';
 import { getTelemetry } from '@/telemetry/telemetry.js';
 import { wasNudged } from './nudge-credit.js';
@@ -41,7 +42,6 @@ export async function reportVersionChange(
   }
 }
 
-const NPM_BIN = NodePlatform.WINDOWS === platform() ? 'npm.cmd' : 'npm';
 const NPM_TIMEOUT_MS = 120_000;
 
 /** How this reticle process was launched — determines which npm strategy to use for updates. */
@@ -104,12 +104,47 @@ interface RunNpmOptions {
   cwd?: string;
 }
 
+/**
+ * Spawn npm, through a shell on Windows because `npm.cmd` cannot be spawned without one.
+ *
+ * Since the CVE-2024-27980 fix -- in every supported Node -- spawning a `.cmd` with no shell throws
+ * EINVAL. This repo has already paid for that lesson once, at `init/src/node-io.ts`: `reticle setup
+ * mcp` probed for the Claude CLI with a bare `execFileSync`, the probe threw, and the installer
+ * told the user their machine had no Claude Code on it. The same shape sat here, in the SELF-UPDATE
+ * path -- the channel every other fix reaches a user through, and the one place a silent failure
+ * strands somebody on an old version indefinitely.
+ *
+ * Arguments are quoted with init's own rule rather than a second copy of it. They are internal
+ * today (`install`, `-g`, and a package spec whose version comes from the registry), but a shell
+ * turns "internal" into "whatever the registry said", and the quoting is one import.
+ */
+export function npmSpawn(
+  args: string[],
+  /**
+   * Injected so the Windows branch is testable on every platform.
+   *
+   * The bug this fixes could only be OBSERVED on Windows, and a check that can only fail on a
+   * machine nobody here runs is a check that fails in CI at the earliest and in the field at the
+   * latest. The rule is a pure function of the platform string, so it is one.
+   */
+  on: string = platform(),
+): { file: string; argv: string[]; shell: boolean } {
+  const bin = NodePlatform.WINDOWS === on ? 'npm.cmd' : 'npm';
+  if (NodePlatform.WINDOWS !== on) return { file: bin, argv: args, shell: false };
+  return { file: [bin, ...args.map(windowsShellArg)].join(' '), argv: [], shell: true };
+}
+
 function runNpm(args: string[], opts: RunNpmOptions = {}): Promise<void> {
+  const spawn = npmSpawn(args);
   return new Promise((resolve, reject) => {
     execFile(
-      NPM_BIN,
-      args,
-      { timeout: NPM_TIMEOUT_MS, ...(opts.cwd !== undefined ? { cwd: opts.cwd } : {}) },
+      spawn.file,
+      spawn.argv,
+      {
+        timeout: NPM_TIMEOUT_MS,
+        ...(spawn.shell ? { shell: true } : {}),
+        ...(opts.cwd !== undefined ? { cwd: opts.cwd } : {}),
+      },
       (err, _stdout, stderr) => {
         if (err !== null) {
           reject(

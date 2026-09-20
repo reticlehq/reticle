@@ -16,6 +16,16 @@ export {
   type InitOptions,
   type InitResult,
 } from './run.js';
+/**
+ * Exported for the ONE other place in this repo that spawns a package manager: `reticle update`.
+ *
+ * It is a pure string rule with its own tests, and it was private while a second caller needed it
+ * -- which is exactly the shape that let `reticle setup mcp` reimplement the spawn as a bare
+ * `execFileSync` and break on Windows. Two copies of a quoting rule is the version of this bug that
+ * is hardest to see, so there is one.
+ */
+export { windowsShellArg } from './register/windows-quote.js';
+
 export { buildNodeIo, probeCli } from './node-io.js';
 export { type InitHost, SILENT_HOST } from './host.js';
 export { RETICLE_VERSION, RETICLE_NPM_PACKAGE } from './version.js';

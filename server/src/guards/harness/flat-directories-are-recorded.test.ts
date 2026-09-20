@@ -149,7 +149,11 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // flow asserts. Recorded rather than grouped, and it belongs beside `harness-explore.ts` for the
   // reason the directory-reach guard insists on: `features/harness` is a SINK that imports nothing
   // from this package, so anything the drive needs to be HANDED has to be assembled out here.
-  'server/src/surface/tools': 37,
+  // 38 with `first-sentence.ts`, the one implementation of a summary that two surfaces had a copy
+  // of -- and only one copy knew that `e.g.` does not end a sentence, so the tool catalogue cut
+  // `reticle_session`'s MANDATORY handback out of its own summary. It sits beside the surfaces that
+  // call it rather than in a `text/` directory holding one file.
+  'server/src/surface/tools': 38,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it
@@ -188,6 +192,15 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // final write of that artifact, and the flush is the same write on a different trigger. Putting it
   // near the event bus instead would pull the run store and the journal in behind it.
   'server/src/memory/journal': 13,
+  // 11 when the artifact-address files landed: `project-for-root.ts`, `artifact-root-resolver.ts`
+  // and the roster that pins them. Recorded rather than grouped, and the reason is the sibling
+  // guard: the natural home for "which directory does this write to" is `project/dir`, whose whole
+  // subject that is — but these four files ask the question with a ToolDeps, a discovered config
+  // and a project store in hand, so moving them there would add `dir -> tools`, `dir -> config`,
+  // `dir -> resolve` and `dir -> project`, turning a leaf directory into one that reaches for four
+  // others. A flat file is cheaper than a new mutual pair. Group them when the address question
+  // stops needing the caller's dependencies to answer it.
+  'server/src/memory/project': 11,
   // 35 since the setup funnel: `onboarding-funnel.ts` (the one emit chokepoint), `onboarding-firsts.ts`
   // (the first look / act / verdict of a run, which only the daemon can witness) and
   // `install-trace.ts` (draining what the installer could not report, because it ran before there

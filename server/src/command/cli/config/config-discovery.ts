@@ -128,6 +128,25 @@ function firstSegment(glob: string): string {
   return first ?? '';
 }
 
+/**
+ * Has this directory ever been through `init` — is there a `.reticle.json` in it?
+ *
+ * A single directory, not a walk: the caller is asking whether THIS tree invited Reticle in, which
+ * is what decides whether a session with no resolvable project may write here at all. An ancestor's
+ * config says nothing about that, so the up-walk `discoverProjectConfigs` does would answer a
+ * different question and answer it yes too often.
+ *
+ * Lives here so the question stays in the directory that owns the config file, rather than every
+ * caller importing the basename and re-deriving the join.
+ */
+export function hasProjectConfig(directory: string): boolean {
+  try {
+    return existsSync(join(directory, RETICLE_CONFIG_BASENAME));
+  } catch {
+    return false;
+  }
+}
+
 export function discoverProjectConfigs(cwd: string): ConfigDiscovery {
   const searched: string[] = [];
   const found: FoundConfig[] = [];
