@@ -341,6 +341,10 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   command: [
     'answers',
     'demo',
+    // `serve`, `stop` and `restart`, lifted out of cli.ts when that file reached the thousand-line
+    // cap with zero headroom. One idea -- does a daemon exist, and did the command that changed
+    // that report what is actually the case -- so it moved as a unit rather than by line count.
+    'lifecycle',
     'lifetime',
     'binding',
     'drive',
