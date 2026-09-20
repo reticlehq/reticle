@@ -14,23 +14,23 @@ Four kinds, and they are not equally open. This says which door is actually ther
 A framework adapter never touches the environment. It answers one question: _given this element, which component is it and where is that component defined?_ Every web framework shares one realm, because they all end up as a page — which is the point of separating the layers. Otherwise the number of integrations is frameworks × environments.
 
 ```ts
-import { registerFrameworkAdapter } from '@reticlehq/browser';
+import { registerAdapter } from '@reticlehq/browser';
 
-registerFrameworkAdapter({
+registerAdapter({
   name: 'svelte',
-  // Return undefined when this is not your framework's element. Never guess: a wrong component name
+  // Return null when this is not your framework's element. Never guess: a wrong component name
   // sends somebody to the wrong file, which is more expensive than no name at all.
-  componentFor(el: Element) {
+  identify(el: Element) {
     const meta = (el as { __svelte_meta?: { loc?: { file: string; line: number } } }).__svelte_meta;
-    if (meta?.loc === undefined) return undefined;
-    return { component: 'Component', source: { file: meta.loc.file, line: meta.loc.line } };
+    if (meta?.loc === undefined) return null;
+    return { componentStack: ['Component'], source: { file: meta.loc.file, line: meta.loc.line } };
   },
 });
 ```
 
 The rules, each of which exists because breaking it produced a real bad verdict:
 
-- **Return `undefined` rather than a guess.** A source pointer is acted on. `file:line` on a failure is measured at 83/85 with a control at 0/22, and that only holds while a pointer means something.
+- **Return `null` rather than a guess**, and `null` specifically: the registry takes the first adapter whose `identify` returns non-null, so returning `undefined` both stops the chain and reaches the snapshot as a value it will dereference. A source pointer is acted on, and that only holds while a pointer means something.
 - **Never throw.** An adapter that throws takes the snapshot with it, and the agent loses the page rather than one component name.
 - **Be pure and synchronous.** This runs inside a snapshot, per element.
 

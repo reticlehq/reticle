@@ -3,6 +3,7 @@ import type { ToolDef, ToolDeps } from './tool-kit.js';
 import { runTool } from './invoke-tool.js';
 import { buildErrorPayload } from './error-recovery.js';
 import { mergedNameRedirect, mergedNameMessage, retiredToolNames } from './merged-name-redirect.js';
+import { CATALOGUE_SUMMARY_LENGTH, firstSentence } from './first-sentence.js';
 import { takeVersionSkewOnto } from '@/command/version/version-nudge.js';
 import { ReticleTool } from '@reticlehq/core';
 import { ADVERTISE_ALL_ENV, type ToolSurfaceOrigin } from './tool-surface.js';
@@ -29,15 +30,6 @@ import {
  * The model lists once, loads the 2–3 tools it actually needs, and calls them — paying for tool
  * detail only when used, not every turn. Works with any MCP client (no client-side support needed).
  */
-
-/** First sentence (purpose) of a description — keeps the catalog one line per tool. */
-function firstSentence(description: string): string {
-  const nl = description.indexOf('\n');
-  const base = nl >= 0 ? description.slice(0, nl) : description;
-  const dot = base.search(/\.\s/);
-  const sentence = dot >= 0 ? base.slice(0, dot + 1) : base;
-  return sentence.length > 140 ? `${sentence.slice(0, 139)}…` : sentence;
-}
 
 interface ParamInfo {
   name: string;
@@ -161,7 +153,7 @@ export function buildDynamicTools(
         // turns "these are the tools" into "these are the tools I was shown".
         const catalog = reachable.map((t) => ({
           name: t.name,
-          summary: firstSentence(t.description),
+          summary: firstSentence(t.description, CATALOGUE_SUMMARY_LENGTH),
         }));
         // Names that USED to be tools, against the call that replaces each. Instructions written
         // against an earlier release are a permanent fact of the product — `reticle_crawl` is still

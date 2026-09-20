@@ -604,7 +604,11 @@ export const MERGE_PLANS: MergePlan[] = [
   {
     name: ReticleTool.SESSION,
     description:
-      'Session lifecycle and the human channel, by action: "tune" adjusts the presenter session (e.g. idle-end window); "yield" hands control back to the human between turns (mode: waiting|ask) and is MANDATORY before you stop driving; "end" terminates the session for good; "resume" clears a human pause; "messages" drains the human→agent inbox; "review" lists/resolves the mistakes a human pinned to elements; "narrate" states your intent on the presenter HUD.',
+      // `yield` leads, and that is not a style choice. A catalogue prints ONE line per tool, so
+      // whatever comes first is what an agent discovers; when this sentence opened with `tune` the
+      // MANDATORY handback sat past the cut and no agent reading the catalogue ever learned it
+      // existed. The rule is: if a tool has an obligation, the obligation goes first.
+      'Session lifecycle and the human channel, by action: "yield" hands control back to the human and is MANDATORY before you stop driving (mode: waiting|ask, between turns); "tune" adjusts the presenter session (e.g. idle-end window); "end" terminates the session for good; "resume" clears a human pause; "messages" drains the human→agent inbox; "review" lists/resolves the mistakes a human pinned to elements; "narrate" states your intent on the presenter HUD.',
     members: {
       tune: ReticleTool.SESSION_TUNE,
       yield: ReticleTool.YIELD,

@@ -84,20 +84,9 @@ function withExample(description: string, example?: Record<string, unknown>): st
  * and any contract stated after it gone too. Silent, and it degraded the DEFAULT profile only, which
  * is the one nobody reads the raw strings for.
  */
-const ABBREVIATIONS = ['e.g.', 'i.e.', 'etc.', 'vs.', 'cf.'];
-
-export function firstSentence(description: string): string {
-  const nl = description.indexOf('\n');
-  const base = nl >= 0 ? description.slice(0, nl) : description;
-  // Mask abbreviations with an equal-length filler so offsets stay valid in the original string.
-  const masked = ABBREVIATIONS.reduce(
-    (text, abbr) => text.split(abbr).join('\u0000'.repeat(abbr.length)),
-    base,
-  );
-  const dot = masked.search(/\.\s/);
-  const sentence = dot >= 0 ? base.slice(0, dot + 1) : base;
-  return sentence.length > 160 ? `${sentence.slice(0, 159)}…` : sentence;
-}
+// Re-exported because callers (and `mcp.test.ts`) have imported it from here since it lived here.
+export { firstSentence } from '@/surface/tools/first-sentence.js';
+import { firstSentence } from '@/surface/tools/first-sentence.js';
 
 /**
  * Parameters carrying the recursive predicate grammar. Advertised compactly in lean profiles.

@@ -53,7 +53,7 @@ Measured live, all servers in one run, same tokenizer (`bench/harness/schema-tax
 | **Reticle, the tool surface**            |    18 |    **~4,930** |
 | Playwright MCP                           |    23 |         3,725 |
 | Chrome DevTools MCP                      |    29 |         5,116 |
-| Reticle, `RETICLE_ADVERTISE_ALL_TOOLS=1` |    48 |       ~30,200 |
+| Reticle, `RETICLE_ADVERTISE_ALL_TOOLS=1` |    30 |       ~30,200 |
 
 _Measured 2026-08-12 (`bench/raw/schema-tax.json`). Reticle's default surface has gained a tool since, so treat the first row as a floor._
 

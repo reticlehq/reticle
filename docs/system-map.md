@@ -56,11 +56,13 @@ Three different counts, all measured, and the difference between them matters:
 
 | Count | What it is |
 | --- | --- |
-| **68** | name constants in `ReticleTool` |
-| **48** | tools advertised under `RETICLE_ADVERTISE_ALL_TOOLS=1`, i.e. what `tool-surface-sweep-test` drives (51 calls) |
-| **19** | advertised by default; the rest are reached through `reticle_run` |
+| **76** | name constants in `ReticleTool` |
+| **30** | tools advertised under `RETICLE_ADVERTISE_ALL_TOOLS=1`, i.e. what `tool-surface-sweep-test` drives |
+| **10** | advertised by default; the rest are reached through `reticle_run { tool, args }` |
 
-68 → 48 is **family folding**: `reticle_baseline`, `reticle_session`, `reticle_record`, `reticle_flow` and `reticle_lease` each absorb their members behind an `action` parameter. So "every tool is callable" is asserted over 48 surfaces, not 68 behaviours; a family member reachable only through an `action` value the sweep never passes is not covered by it. Worth closing when the per-tool budget lands (see [`gate-plan.md`](./gate-plan.md), Phase 4).
+The middle number is **family folding**: `reticle_baseline`, `reticle_session`, `reticle_record`, `reticle_flow` and `reticle_lease` each absorb their members behind an `action` parameter. So "every tool is callable" is asserted over the advertised surfaces, not over every named behaviour; a family member reachable only through an `action` value the sweep never passes is not covered by it. Worth closing when the per-tool budget lands (see [`gate-plan.md`](./gate-plan.md), Phase 4).
+
+These three were each wrong by the time somebody checked: the table read 68 / 48 / 19 against a measured 76 / 30 / 10, and the middle one had a derived token cost hanging off it. `surface-sizes.test.ts` is the authority and fails when a surface changes size, so prefer reading it to trusting this row.
 
 | Token | Produced by | Consumed by | Invalidated by |
 | --- | --- | --- | --- |
