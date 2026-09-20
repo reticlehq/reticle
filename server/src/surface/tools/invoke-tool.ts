@@ -610,6 +610,26 @@ export async function runTool<Ext>(
   // early-return skipped them whenever a handler returned its own health (which a throttled tab always
   // does) — so a long-running backgrounded session, the case most likely to leak, never got the
   // one-time pool-lease reminder or the age cleanup nudge. Splice them regardless.
+  // An ACT over a skewed pair is not a verdict, and this rides on EVERY one of them.
+  //
+  // `version_skew` above is a nudge and correctly one-shot. That cadence is wrong here: the nudge
+  // is spent on whatever tool the agent happened to call first, and every act after it comes back
+  // clean. Measured in the field as eight attempts across three interaction strategies, each
+  // reporting `dispatched: true` / `settled: true` while React state never moved, before the
+  // reporter suspected the skew (#812). The caveat has to be attached to the thing it discredits.
+  //
+  // Read off the session rather than the nudge queue, so it does not compete with the one-shot for
+  // the same state, and it keeps saying so for as long as the pair is actually mismatched.
+  if (ACTION_TOOLS.has(tool.name) && resolved.versionSkew !== undefined) {
+    envelope[EnvelopeKey.SKEW_SUSPECTED] = {
+      reason: resolved.versionSkew,
+      effect:
+        'this action ran over a mismatched SDK/daemon pair: dispatched/settled/domMutatedWithin ' +
+        'describe what was SENT, not what the app did, and a click can report all three while the ' +
+        'component never changes state. Converge the versions before trusting this result, or ' +
+        'confirm the consequence directly (reticle_query on aria-checked/data-state).',
+    };
+  }
   const lease = resolved.takeSessionLease();
   if (lease !== undefined) envelope[EnvelopeKey.SESSION_LEASE] = lease;
   const warning = resolved.ageWarning();

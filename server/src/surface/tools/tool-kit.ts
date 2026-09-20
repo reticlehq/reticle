@@ -231,6 +231,18 @@ export const EnvelopeKey = {
   FEEDBACK_INVITE: 'feedback_invite',
   /** SDK/daemon version skew — often the one fact that explains everything else in the session. */
   VERSION_SKEW: 'version_skew',
+  /**
+   * This ACT ran over a skewed SDK/daemon pair, so its effect fields are not evidence.
+   *
+   * Distinct from `VERSION_SKEW`, and deliberately not sharing its cadence. That one is a nudge:
+   * it rides out once and goes quiet, because a banner on every call is one an agent learns to
+   * skip. This is a caveat ON A VERDICT, and it has to be on every verdict it applies to -- a
+   * skewed click reported `dispatched: true`, `settled: true` and `domMutatedWithin: 12-40ms`
+   * while React state never moved, and the reporter spent eight attempts across three interaction
+   * strategies trusting those numbers before suspecting the skew at all (#812). Seven of those
+   * eight calls carried nothing, because the nudge had already been spent on an earlier one.
+   */
+  SKEW_SUSPECTED: 'skew_suspected',
   /** A feedback report that was accepted and then failed to send. Only the reporter can act on it. */
   FEEDBACK_UNDELIVERED: 'feedback_undelivered',
 } as const;
@@ -244,12 +256,27 @@ export type EnvelopeKey = (typeof EnvelopeKey)[keyof typeof EnvelopeKey];
  * Derived from `EnvelopeKey` rather than re-listed: this shape and the splice sites disagreed for a
  * whole release, and every key that went missing was a channel nobody could see was missing.
  */
+/**
+ * The two keys carrying a shape an agent has to READ, rather than forward.
+ *
+ * `warning` is a sentence. `skew_suspected` is the caveat on an act verdict, and its `describe` is
+ * the part that does the work: beside `dispatched: true` an opaque envelope is something an agent
+ * steps over, and the whole finding in #812 is that it stepped over exactly this for eight
+ * attempts. Everything else stays `z.unknown()` on purpose -- an opaque envelope the client
+ * forwards costs nothing to declare and nothing to read.
+ */
+const TYPED_ENVELOPE: Partial<Record<string, z.ZodTypeAny>> = {
+  [EnvelopeKey.WARNING]: z.string().optional(),
+  [EnvelopeKey.SKEW_SUSPECTED]: z
+    .object({ reason: z.string(), effect: z.string() })
+    .optional()
+    .describe(
+      'Present when the page SDK and daemon versions disagree. The effect fields describe what was SENT, not what the app did: a click can report dispatched/settled/domMutatedWithin while the component never changes state. Not a verdict.',
+    ),
+};
+
 export const sessionEnvelopeShape: z.ZodRawShape = Object.fromEntries(
-  Object.values(EnvelopeKey).map((key) => [
-    key,
-    // `warning` is the one with a narrower type; the rest are opaque envelopes the client forwards.
-    EnvelopeKey.WARNING === key ? z.string().optional() : z.unknown().optional(),
-  ]),
+  Object.values(EnvelopeKey).map((key) => [key, TYPED_ENVELOPE[key] ?? z.unknown().optional()]),
 );
 
 /** Unwrap a browser command result or throw its error so the agent sees a clean failure. */
