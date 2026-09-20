@@ -559,7 +559,7 @@ st.html(
  * `<head>`, so the SDK sees a parsed document.
  */
 export function djangoMiddlewareSnippet(connectArgLiteral: string): string {
-  return `# reticle_dev.py — add to MIDDLEWARE while DEBUG is on:
+  return `# reticle_dev.py: add to MIDDLEWARE while DEBUG is on:
 #   MIDDLEWARE = [..., "reticle_dev.ReticleDevMiddleware"]
 from django.conf import settings
 
