@@ -215,8 +215,12 @@ function loopBody(text: string, headOpen: number): string | null {
  * the file one of them writes, which is the same shape again — fast on a quiet laptop, seconds on a
  * loaded runner. It declares `HOOK_SPAWN_TIMEOUT_MS`, so it satisfies the rule and only this count
  * moved.
+ *
+ * 15th: `journal/session-journal.lossy-conformance.test.ts`. Two of its tests append one event and
+ * re-read the file ten times over, to prove the parse-cache stays bounded across many small reads —
+ * which is a loop whose whole subject is repeated real IO. It declares `APPEND_READ_LOOP_TIMEOUT_MS`.
  */
-const EXPECTED_IO_LOOP_FILES = 14;
+const EXPECTED_IO_LOOP_FILES = 15;
 
 function testFiles(dir: string): string[] {
   const out: string[] = [];

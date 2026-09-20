@@ -629,12 +629,18 @@ export class Session implements HandshakeFacts {
   }
 
   /**
-   * Did the buffer lose scarce evidence from a window opened at `cursor`? The input to whether a
+   * Did the EVENT STORE lose scarce evidence from a window opened at `cursor`? The input to whether a
    * verdict's capture was clean — see `RingBuffer.lostSince`, and never the raw drop counter, which
-   * moves for the age and churn evictions that every live page produces continuously.
+   * moves for the age and churn evictions that every live page produces continuously. The journal is
+   * the other half of that store, so a durable read that could not reach back to `cursor` lost
+   * exactly what an eviction would have. Both boundaries are INCLUSIVE (`t` is a millisecond many
+   * records share) and an absent `lostThroughT` impeaches every window rather than none — the
+   * conservative direction, both times.
    */
   lostSince(cursor: number): boolean {
-    return this.#buffer.lostSince(cursor);
+    if (this.#buffer.lostSince(cursor)) return true;
+    const lost = this.#journalReader?.readLoss?.();
+    return lost !== undefined && (lost.lostThroughT === undefined || lost.lostThroughT >= cursor);
   }
 
   onEvent(listener: (event: ReticleEvent) => void): () => void {
