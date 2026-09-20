@@ -628,7 +628,7 @@ export async function replayNamedFlow(
   // Anti-reward-hacking baseline: record what this flow asserted ONLY when it passed clean. A
   // failing run must never become the baseline a later weakening is measured against.
   if (status === ReplayStatus.OK) {
-    await new AssertionTiersStore(deps.fs, deps.reticleRoot).recordPassing(
+    await new AssertionTiersStore(deps.fs, replayRoot).recordPassing(
       name,
       loaded.value.steps.map((s, i) => ({
         step: i,
@@ -651,7 +651,7 @@ export async function replayNamedFlow(
     }
   }
   // Push-default: the deviation report over this drive's segments, learned across runs. Best-effort.
-  const deviation = await computeReplayDeviation(deps, session, replayFloor);
+  const deviation = await computeReplayDeviation(deps, session, replayFloor, replayRoot);
   /*
    * What the team already knows about this flow, fetched on the agent's behalf.
    *
@@ -782,11 +782,13 @@ async function computeReplayDeviation(
   deps: ToolDeps,
   session: { eventsSince(cursor: number): ReticleEvent[] },
   floor: number,
+  /** The APP's root — the same one the replay resolved eleven lines above the old call. */
+  root: string,
 ): Promise<DeviationReport | undefined> {
   try {
     const segments = computeSegments(session.eventsSince(floor));
     if (0 === segments.length) return undefined;
-    return await reportAndAccumulate(new EnvelopeStore(deps.fs, deps.reticleRoot), segments);
+    return await reportAndAccumulate(new EnvelopeStore(deps.fs, root), segments);
   } catch {
     return undefined;
   }

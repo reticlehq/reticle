@@ -11,7 +11,8 @@ const SERVER_SRC = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
  * `deps.reticleRoot` is where the DAEMON was launched — for a user-scoped MCP registration, the
  * editor's cwd, which is usually not the app being verified. The correct address comes from the
  * session: `sessionRoot()`, `rootForProjectId()`, `flowsForSession()`, `projectForRoot()`, or
- * `session.artifactRoot`. Every one of those has existed since v2.11.0. The defect is not that the
+ * `session.artifactRoot`. Every one of those has existed since the daemon
+ * first learned to serve more than one project. The defect is not that the
  * helper is missing; it is that callers were migrated ONE AT A TIME, and every straggler wrote a
  * user's data into a repository they never instrumented — silently, because a write to the wrong
  * tree succeeds.

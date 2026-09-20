@@ -8,6 +8,7 @@ import type { ToolDef, ToolDeps } from '@/surface/tools/tool-kit.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { workerCountSchema } from '@/surface/tools/args/numeric-bounds.js';
 import { loadNamedFlows, resolveChangedFiles } from '@/command/cli/cli-flow-commands.js';
+import { projectDirFor } from '@/memory/project/session-root.js';
 import { affectedSavedFlows } from './change/flow-sources.js';
 import { FLOW_TOOLS } from './flow-tools.js';
 import { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';
@@ -97,10 +98,16 @@ export const VERIFY_CHANGE_TOOLS: ToolDef[] = [
         ? (args['files'] as unknown[]).filter((f): f is string => 'string' === typeof f)
         : [];
       const since = asString(args['since']);
-      // The daemon's cwd is not the project — it is wherever the MCP host started it, which for a
-      // globally-registered server is `/` or `$HOME`. `deps.reticleRoot` is the project directory
-      // this daemon was configured with, and it is the right tree to diff.
-      const changed = await resolveChangedFiles(files, since, deps.reticleRoot);
+      // The tree to diff is the SESSION's project, and it is neither of the two things this line
+      // used to say it was: `deps.reticleRoot` is the daemon's `.reticle` SUBDIRECTORY, and the
+      // daemon's cwd is wherever the MCP host started it — `/` or `$HOME` for a globally-registered
+      // server. Both answer about the wrong repository while reporting a clean "nothing changed",
+      // which reads as a pass. `projectDirFor` is the directory holding the resolved root.
+      const changed = await resolveChangedFiles(
+        files,
+        since,
+        projectDirFor(deps, asString(args['sessionId'])),
+      );
       const changedFiles = changed.files;
       // Same root flow_save wrote to. A read that resolved differently would report "no flows
       // covered this change" over flows that exist, which reads as a clean result rather than

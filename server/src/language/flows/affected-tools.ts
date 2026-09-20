@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from '@/surface/tools/tool-kit.js';
 import { loadNamedFlows, resolveChangedFiles } from '@/command/cli/cli-flow-commands.js';
+import { projectDirFor } from '@/memory/project/session-root.js';
 import { sessionRoot, sessionProjectId } from '@/memory/project/session-root.js';
 import { affectedSavedFlows } from './change/flow-sources.js';
 
@@ -47,9 +48,11 @@ export const AFFECTED_TOOLS: ToolDef[] = [
         ? (args['files'] as unknown[]).filter((f): f is string => 'string' === typeof f)
         : [];
       const since = 'string' === typeof args['since'] ? args['since'] : undefined;
-      // Same address as verify_change, resolved the same way: `deps.reticleRoot` is the configured
-      // project directory (the daemon's cwd is not), and the session names which project's flows.
-      const changed = await resolveChangedFiles(files, since, deps.reticleRoot);
+      // Same address as verify_change, resolved the same way. `deps.reticleRoot` is NOT the project
+      // directory this line used to claim it was — it is the daemon's `.reticle` subdirectory, in
+      // whichever tree the MCP host was started in. `undefined` here resolves the single connected
+      // session, which is the same rule the flow lookup below already follows.
+      const changed = await resolveChangedFiles(files, since, projectDirFor(deps, undefined));
       const changedFiles = changed.files;
       // No `sessionId` on this tool's surface, and it does not need one: passing `undefined`
       // resolves the single connected session, and falls back exactly as before when it cannot.

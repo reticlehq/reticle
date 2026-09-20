@@ -7,6 +7,17 @@ import { SessionJournal } from './session-journal.js';
 /** The minimal Session surface the journal attachment needs (Session satisfies it structurally). */
 export interface JournalTarget {
   readonly id: string;
+  /**
+   * The `.reticle` this session's artifacts belong in, stamped on session-create before this runs.
+   *
+   * The journal used to go to the daemon's own root — wherever the agent was launched — while the
+   * run artifact written at teardown already used this one. The journal is the worse half to
+   * misroute: it carries URLs, request and response bodies and DOM text from the app under test, so
+   * a daemon started in a backend wrote that app's traffic into a repository nobody instrumented,
+   * and the `.reticle/.gitignore` meant to keep journals out of a shared repo was being written into
+   * the OTHER tree. Undefined only when no project could be resolved, which keeps the old fallback.
+   */
+  readonly artifactRoot?: string | undefined;
   /** Milliseconds since the session connected — the recorder's injected clock. */
   elapsed(): number;
   setJournal(recorder: JournalRecorder, reader?: JournalReader): void;
@@ -35,7 +46,11 @@ export function makeJournalAttach(deps: JournalAttachDeps): (session: JournalTar
       log('journal_skipped_unsafe_session_id', { sessionId: session.id });
       return;
     }
-    const journal = new SessionJournal(deps.fs, deps.reticleRoot, session.id);
+    const journal = new SessionJournal(
+      deps.fs,
+      session.artifactRoot ?? deps.reticleRoot,
+      session.id,
+    );
     // Same SessionJournal is both the write sink and the read fall-through for queries after eviction.
     session.setJournal(new JournalRecorder(journal, { now: () => session.elapsed() }), journal);
   };

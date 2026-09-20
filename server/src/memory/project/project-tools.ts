@@ -92,9 +92,13 @@ function lastTwoFor(runs: RunRecord[], name: string): [RunRecord, RunRecord] | u
  * The per-flow diff between the two most-recent verification ARTIFACTS (.reticle/runs), or undefined when
  * fewer than two exist. Never throws — a missing/unreadable artifact must not break reading run history.
  */
-async function lastTwoRunArtifacts(deps: ToolDeps): Promise<VerificationRunDiff | undefined> {
+async function lastTwoRunArtifacts(
+  deps: ToolDeps,
+  /** The session's root — the same address `persistAndSyncVerificationRun` wrote the pair to. */
+  root: string,
+): Promise<VerificationRunDiff | undefined> {
   try {
-    const pair = await new RunStore(deps.fs, deps.reticleRoot).latestTwo();
+    const pair = await new RunStore(deps.fs, root).latestTwo();
     return pair === undefined ? undefined : diffVerificationRuns(pair[0], pair[1]);
   } catch {
     return undefined;
@@ -173,7 +177,10 @@ export const PROJECT_TOOLS: ToolDef[] = [
       // instead of — the lightweight RunRecord diff above: `diff` answers "did this named run behave like
       // last time?" from project.json, while `runDiff` answers "what changed between the last two full
       // verification runs?" from .reticle/runs. Best-effort: no artifacts simply means no runDiff.
-      const runDiff = await lastTwoRunArtifacts(deps);
+      const runDiff = await lastTwoRunArtifacts(
+        deps,
+        sessionRoot(deps, asString(args['sessionId'])),
+      );
       const forName = read.file.runs.filter((r) => r.name === name);
       return withCloud({
         runs: recent(forName),

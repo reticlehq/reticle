@@ -33,6 +33,7 @@ import type { SuiteVerdict } from '@reticlehq/core';
 import { type FlowAnnotations } from './flows.js';
 import type { ToolDef, ToolDeps } from '@/surface/tools/tool-kit.js';
 import { flowsForSession } from './flow-store-for-session.js';
+import { rootForProjectId } from '@/memory/project/session-root.js';
 import { resolveSuiteSelection } from './suite-selection.js';
 import {
   replayNamedFlow,
@@ -61,7 +62,15 @@ async function syncSavedFlowToCloud(
   projectId: string | undefined,
 ): Promise<void> {
   // Per-project cloud: sync a saved flow only when cloud is attached AND flow sync is enabled.
-  const cloud = await resolveProjectCloud(deps.fs, deps.reticleRoot, homedir(), process.env);
+  // The link file of the project this flow belongs to — the flow itself was already saved through
+  // `flowsForSession`, and reading the credential from a different tree is how one project's work
+  // reaches another project's dashboard.
+  const cloud = await resolveProjectCloud(
+    deps.fs,
+    rootForProjectId(deps, projectId),
+    homedir(),
+    process.env,
+  );
   if (null === cloud.config || !cloud.policy.flows) return; // not attached / flows disabled → local only
   const result = await syncFlowToCloud(flow, cloud.config, projectId, cloudFetch);
   if (result.outcome !== SyncOutcome.SYNCED) {
@@ -662,7 +671,12 @@ export const FLOW_TOOLS: ToolDef[] = [
         ...(selected.unsatisfied === undefined ? {} : { unsatisfied: selected.unsatisfied }),
       };
       // verify:server — hand the whole suite to the hosted runner; it records the verification itself.
-      const cloud = await resolveProjectCloud(deps.fs, deps.reticleRoot, homedir(), process.env);
+      const cloud = await resolveProjectCloud(
+        deps.fs,
+        rootForProjectId(deps, projectId),
+        homedir(),
+        process.env,
+      );
       const server = await runServerVerify(deps, cloud, sessionId, requested);
       if (server !== null) return server;
       // PARALLEL: flows race the DOM only when they share ONE tab. Given the lease pool, each
@@ -733,7 +747,11 @@ export const FLOW_TOOLS: ToolDef[] = [
               : leaseFailureReplay(requested[i] ?? '', o.error),
           durationMs: o.ok && o.value !== undefined ? o.value.durationMs : 0,
         }));
-        const flaky = await recordSuiteFlakes(deps.fs, deps.reticleRoot, parallelRuns);
+        const flaky = await recordSuiteFlakes(
+          deps.fs,
+          rootForProjectId(deps, projectId),
+          parallelRuns,
+        );
         await persistAndSyncVerificationRun(deps, timed, projectId);
         const verdict = buildSuiteVerdict(
           parallelRuns,
@@ -773,7 +791,7 @@ export const FLOW_TOOLS: ToolDef[] = [
       // `reticle flow` on the command line, so an AGENT running this tool a hundred times learned
       // nothing about which flows are intermittent. Same product, same ledger, two surfaces, and the
       // one an agent uses was the blind half.
-      const flaky = await recordSuiteFlakes(deps.fs, deps.reticleRoot, runs);
+      const flaky = await recordSuiteFlakes(deps.fs, rootForProjectId(deps, projectId), runs);
       // Emit the consolidated run artifact (Runs tab) + best-effort cloud push. Never blocks the verdict.
       await persistAndSyncVerificationRun(deps, timed, projectId);
       const verdict = buildSuiteVerdict(runs, selected.knownRoutes, SuiteIsolation.SHARED_SESSION);

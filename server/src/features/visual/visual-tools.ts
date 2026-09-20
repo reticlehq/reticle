@@ -12,6 +12,7 @@ import { ratioSchema } from '@/surface/tools/args/numeric-bounds.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { diffPng, type VisualRect } from './visual-diff.js';
 import { VisualStore } from './visual-store.js';
+import { sessionRoot } from '@/memory/project/session-root.js';
 import { trackCaptureDirectory } from './capture-cleanup.js';
 import { readFile, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -279,7 +280,10 @@ export const VISUAL_TOOLS: ToolDef[] = [
         return reason === VisualReason.NO_PROVIDER ? noProvider : { ok: false, reason };
       }
       const name = asString(args['name']) ?? 'default';
-      const store = new VisualStore(deps.fs, deps.reticleRoot);
+      // Beside the app that was captured. The tool RETURNS this path to the agent, so a wrong root
+      // is not only a stray PNG — it is a path the agent is told to look at in a tree that has
+      // nothing to do with the screenshot.
+      const store = new VisualStore(deps.fs, sessionRoot(deps, sessionId));
       // Scoped to the runtime that produced it: an Electron window, a Tauri webview and a browser
       // tab do not render the same url the same way, and one shared baseline makes every
       // cross-runtime diff wrong. See visualDir.
@@ -321,7 +325,7 @@ export const VISUAL_TOOLS: ToolDef[] = [
     },
     handler: async (deps: ToolDeps, args) => {
       const baseline = asString(args['baseline']) ?? '';
-      const store = new VisualStore(deps.fs, deps.reticleRoot);
+      const store = new VisualStore(deps.fs, sessionRoot(deps, asString(args['sessionId'])));
 
       // Capture FIRST, then fetch the baseline for the runtime that produced these pixels. Reading it
       // by the session's runtime looked equivalent and is not: the route decides the renderer, so a

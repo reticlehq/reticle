@@ -109,7 +109,10 @@ export function makeSessionEnd(deps: SessionEndDeps): (session: SessionEndTarget
       // a failed flush must not block ambient persistence, and must never throw at teardown
     }
     try {
-      const store = new AmbientStore(deps.fs, deps.reticleRoot);
+      // The session's own root, like the run artifact below: a churn map learned from one app is
+      // not about another, and writing it to the daemon's cwd both mixed two apps' maps together and
+      // left an `ambient.json` in a tree the user never instrumented.
+      const store = new AmbientStore(deps.fs, session.artifactRoot ?? deps.reticleRoot);
       const persisted = await store.load();
       // Accumulate history + what is NEW. `ownAmbientCounts` excludes the map this session was
       // seeded from at startup; `ambientCounts` includes it, and adding that onto `persisted` wrote
@@ -167,7 +170,10 @@ export function makeSessionEnd(deps: SessionEndDeps): (session: SessionEndTarget
       //
       // Safe against deleting the session that just ended: pruning selects the OLDEST by mtime, and the
       // directory written moments ago is the newest.
-      await pruneSessions(deps.fs, deps.reticleRoot);
+      // The root this session actually journalled into. Pruning the daemon's tree instead meant a
+      // per-project workspace was never swept at all, so the one place journals really accumulate
+      // was the one place retention never ran.
+      await pruneSessions(deps.fs, session.artifactRoot ?? deps.reticleRoot);
     } catch {
       // retention is best-effort maintenance; never surface at teardown
     }

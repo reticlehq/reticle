@@ -110,3 +110,52 @@ describe('a session that cannot be journalled says so', () => {
     expect(attached).toBe(true);
   });
 });
+
+/**
+ * The journal is the ONE artifact whose misrouting costs more than tidiness.
+ *
+ * It carries URLs, request and response bodies and DOM text from the app under test. It was written
+ * to the daemon's own root — wherever the agent was launched — while the run artifact beside it
+ * (session-end.ts) already used the session's. So a daemon started in a backend wrote that app's
+ * traffic into a repository nobody had instrumented, and the `.reticle/.gitignore` that exists to
+ * keep journals out of a shared repo was being written into the OTHER tree, covering nothing.
+ *
+ * Measured before the fix: driving an app configured at `apps/web` from a daemon started in
+ * `backend/` left `backend/.reticle/sessions/<id>/events.jsonl` with no ignore file beside it.
+ */
+describe('a session journals into the app it belongs to', () => {
+  let root: string;
+  let fs: FileSystemPort;
+
+  beforeEach(async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'reticle-attach-root-'));
+    root = join(dir, '.reticle');
+    fs = createNodeFileSystem();
+  });
+
+  afterEach(async () => {
+    await removeTempDir(join(root, '..'));
+  });
+
+  it("writes to the session's artifact root, not the daemon's", async () => {
+    const appRoot = join(root, '..', 'app', '.reticle');
+    const attach = makeJournalAttach({ fs, reticleRoot: root, enabled: true });
+    const s = { ...target('demo'), artifactRoot: appRoot };
+    attach(s);
+    s.recorder?.observe({ t: 0, seq: 0, type: EventType.DOM_ADDED, sessionId: 'demo', data: {} });
+    await s.recorder?.flush();
+
+    expect(await fs.exists(join(appRoot, 'sessions', 'demo', 'events.jsonl'))).toBe(true);
+    // The daemon's own tree is the one the user never instrumented. Nothing of theirs goes there.
+    expect(await fs.exists(join(root, 'sessions', 'demo'))).toBe(false);
+  });
+
+  it('still falls back to the daemon root when no project could be resolved', async () => {
+    const attach = makeJournalAttach({ fs, reticleRoot: root, enabled: true });
+    const s = target('demo');
+    attach(s);
+    s.recorder?.observe({ t: 0, seq: 0, type: EventType.DOM_ADDED, sessionId: 'demo', data: {} });
+    await s.recorder?.flush();
+    expect(await fs.exists(join(root, 'sessions', 'demo', 'events.jsonl'))).toBe(true);
+  });
+});

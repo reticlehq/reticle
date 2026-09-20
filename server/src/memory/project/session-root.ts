@@ -1,3 +1,4 @@
+import { dirname } from 'node:path';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 
 /**
@@ -14,7 +15,30 @@ import type { ToolDeps } from '@/surface/tools/tool-kit.js';
  * behaviour every call site had before the resolver existed.
  */
 export function sessionRoot(deps: ToolDeps, sessionId: string | undefined): string {
-  return deps.artifactRootFor?.(sessionProjectId(deps, sessionId)).root ?? deps.reticleRoot;
+  return rootForProjectId(deps, sessionProjectId(deps, sessionId));
+}
+
+/**
+ * The same answer for a caller that already holds the projectId rather than a sessionId.
+ *
+ * The suite paths resolve the project ONCE and thread it down — the run artifact, the cloud link,
+ * the flake ledger and the flows all belong to that one project — so asking them to go back to the
+ * session manager for an id they already have is how a caller ends up taking the root from one
+ * place and the id from another. `sessionRoot` is now this function plus a lookup, so the two
+ * cannot disagree about what a resolved root is.
+ */
+export function rootForProjectId(deps: ToolDeps, projectId: string | undefined): string {
+  return deps.artifactRootFor?.(projectId).root ?? deps.reticleRoot;
+}
+
+/**
+ * The PROJECT directory — one level above `.reticle` — for a caller that runs a tool in a tree
+ * rather than writing a file into one. `git diff` is the case: it was being run in the daemon's
+ * `.reticle` subdirectory, which answers about the wrong repository (or, from a globally-registered
+ * daemon at `/` or `$HOME`, about none) while reporting a clean "nothing changed".
+ */
+export function projectDirFor(deps: ToolDeps, sessionId: string | undefined): string {
+  return dirname(sessionRoot(deps, sessionId));
 }
 
 /**

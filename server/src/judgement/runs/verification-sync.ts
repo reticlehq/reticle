@@ -28,6 +28,7 @@ import { RunStore } from './artifact/run-store.js';
 import { cloudFetch, syncRunToCloud, SyncOutcome } from '@/memory/cloud/cloud-sync.js';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
 import { log } from '@/log.js';
+import { rootForProjectId } from '@/memory/project/session-root.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 
 /** The author of record when no MCP peer introduced itself — a CLI run, or a client that skipped the handshake. */
@@ -87,9 +88,15 @@ export async function persistAndSyncVerificationRun(
 ): Promise<string | undefined> {
   if (0 === timed.length) return undefined;
   let run: ReticleVerificationRun;
+  // The project the suite ran for, not the directory the daemon was started in. Both halves below
+  // take it: the artifact `reticle_run` reads back through `sessionRoot`, and the cloud link that
+  // decides WHICH DASHBOARD this run is pushed to. The daemon's own directory has no link file, so
+  // a misrouted read silently meant "not attached" — and where it DID have one, the run was pushed
+  // to a dashboard belonging to whoever that checkout was linked to.
+  const root = rootForProjectId(deps, projectId);
   try {
     run = assembleRun(deps, timed, projectId);
-    await new RunStore(deps.fs, deps.reticleRoot).write(run);
+    await new RunStore(deps.fs, root).write(run);
   } catch (error) {
     log('verification-run-persist-failed', {
       error: error instanceof Error ? error.message : String(error),
@@ -97,7 +104,7 @@ export async function persistAndSyncVerificationRun(
     return undefined;
   }
   // Per-project cloud: only push when THIS project has cloud attached AND its policy allows runs.
-  const cloud = await resolveProjectCloud(deps.fs, deps.reticleRoot, homedir(), process.env);
+  const cloud = await resolveProjectCloud(deps.fs, root, homedir(), process.env);
   if (null === cloud.config || !cloud.policy.runs) return run.runId; // not attached / runs disabled → local only
   const result = await syncRunToCloud(run, cloud.config, cloudFetch);
   if (result.outcome !== SyncOutcome.SYNCED) {
