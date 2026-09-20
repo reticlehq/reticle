@@ -132,7 +132,24 @@ export function liveCallText(text: string, advertised: ReadonlySet<string>): str
     if (needs.every((name) => advertised.has(name))) continue;
     out = out.replace(pattern, instead);
   }
-  return out.replace(TOOL_TOKEN, (name) => {
+  /**
+   * A sentence explaining where a name WENT keeps that name, even though it is unreachable.
+   *
+   * These messages open with their own subject — "reticle_act_sequence was merged into reticle_act",
+   * "reticle_refresh no longer exists" — and the rewrite is precisely a rule for replacing
+   * unreachable names, so it replaced the subject too. Asking about `reticle_act_sequence` answered
+   * "reticle_act no longer exists", which is false: `reticle_act` is a tool, and the one thing the
+   * reader needed to know was which name had moved.
+   *
+   * Only the leading token, and only in front of those two phrases. Every other mention in the same
+   * sentence — including the tool to call INSTEAD — is still rewritten, which is the whole job.
+   */
+  const explainsItsSubject = /^(reticle_[a-z_]+)(?= (?:was merged into|no longer exists))/.exec(
+    out,
+  );
+  const subject = explainsItsSubject?.[1];
+  return out.replace(TOOL_TOKEN, (name, offset: number) => {
+    if (name === subject && 0 === offset) return name;
     if (advertised.has(name)) return name;
     return replacementFor(name, advertised) ?? name;
   });

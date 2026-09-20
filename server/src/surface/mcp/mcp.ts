@@ -651,7 +651,25 @@ export function createMcpServer(
   const advertised = advertisedTools(profile, tools);
   // The names this surface actually hands the agent. Every piece of advice leaving this server is
   // rewritten against it, so a static string cannot route a reader to a tool they were not given.
-  const advertisedNames = new Set(advertised.map((tool) => tool.name));
+  /**
+   * What a name in advice can actually REACH, which is not the same as what is advertised.
+   *
+   * `liveCallText` rewrites mentions of tools this surface cannot reach — it exists because advice
+   * naming `reticle_flow_save` on a surface without it sent agents at a tool that answered "not
+   * reachable on this tool surface". Gated on the ADVERTISED set, it kept firing once the dispatch
+   * hatch came back: `reticle_flow_save` and `reticle_record` are reachable through
+   * `reticle_run` but not advertised, so every mention of them — INCLUDING their own names and the
+   * parameter docs that name the recording to save — was rewritten to
+   * `reticle_verify { action: "explore", persona }`. Two tools with the same wrong name, and a
+   * `flowName` description telling the reader to pass the name that a tool which is not the one
+   * they called was called with.
+   *
+   * With a hatch, every registered tool is reachable and no rewriting is owed. Without one,
+   * advertised IS reachable, which is the case this was written for.
+   */
+  const advertisedNames = advertised.some((tool) => ReticleTool.RUN === tool.name)
+    ? new Set(tools.map((tool) => tool.name))
+    : new Set(advertised.map((tool) => tool.name));
   installFriendlyArgErrors(
     server,
     new Map(

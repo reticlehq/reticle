@@ -173,3 +173,72 @@ describe('advice names a call the reader can actually make', () => {
     expect(out).not.toContain('reticle_sessions');
   });
 });
+
+/**
+ * Advice is rewritten for what a surface cannot REACH, which stopped meaning "not advertised" the
+ * day the dispatch hatch came back.
+ *
+ * Gated on the advertised set alone, the rewrite fired on tools that are reachable through
+ * `reticle_run` but not advertised — so `reticle_flow_save` and `reticle_record` were BOTH renamed
+ * to `reticle_verify { action: "explore", persona }` in the catalogue, and `flow_save`'s own
+ * `flowName` description told the reader to pass "the name reticle_verify { action: "explore",
+ * persona } was called with". Two tools with one wrong name, and parameter docs naming a tool the
+ * reader had not called.
+ */
+describe('advice on a surface that has a dispatch hatch', () => {
+  const REACHABLE = new Set([ReticleTool.RECORD, ReticleTool.FLOW_SAVE, ReticleTool.VERIFY]);
+
+  it('leaves a reachable tool named as itself', () => {
+    const text = 'Which RECORDING to save — the name reticle_record{start} was called with.';
+    expect(liveCallText(text, REACHABLE)).toBe(text);
+  });
+
+  it('leaves the record-then-save pair alone when both are reachable', () => {
+    const text = 'Call reticle_record { action: "start" } then reticle_flow_save.';
+    expect(liveCallText(text, REACHABLE)).toBe(text);
+  });
+
+  /** Without a hatch, advertised IS reachable — the case the rewrite was written for. */
+  it('still rewrites a tool the surface genuinely cannot reach', () => {
+    const rewritten = liveCallText(
+      'Save it with reticle_flow_save.',
+      new Set([ReticleTool.VERIFY]),
+    );
+    expect(rewritten).not.toContain('reticle_flow_save');
+    expect(rewritten).toContain('reticle_verify');
+  });
+});
+
+/**
+ * A redirect message is ABOUT an unreachable name, so it must keep it.
+ *
+ * The rewrite is a rule for replacing unreachable names, and these sentences open with exactly
+ * that — so asking about `reticle_act_sequence` answered "reticle_act no longer exists". False:
+ * `reticle_act` is a tool, and which name had moved was the one thing the reader needed.
+ */
+describe('a sentence that explains where a name went', () => {
+  const ADVERTISED = new Set([ReticleTool.ACT, ReticleTool.LOOK]);
+
+  it('keeps the retired name it is explaining', () => {
+    const out = liveCallText(
+      'reticle_act_sequence no longer exists — a sequence is now reticle_act { steps: [...] }.',
+      ADVERTISED,
+    );
+    expect(out.startsWith('reticle_act_sequence no longer exists')).toBe(true);
+  });
+
+  it('keeps the merged name while still naming the tool to call instead', () => {
+    const out = liveCallText(
+      'reticle_snapshot was merged into reticle_look. Call reticle_look { action: "page" }.',
+      ADVERTISED,
+    );
+    expect(out.startsWith('reticle_snapshot was merged into')).toBe(true);
+    expect(out).toContain('reticle_look');
+  });
+
+  /** Only the subject, and only leading — a mention anywhere else is still advice, and rewritten. */
+  it('still rewrites the same name when it is not the subject', () => {
+    const out = liveCallText('Save it with reticle_flow_save.', ADVERTISED);
+    expect(out).not.toContain('reticle_flow_save');
+  });
+});
