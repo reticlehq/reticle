@@ -16,7 +16,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { AttachmentHistory } from './attachment-history.js';
+import { TOOLS } from '@/surface/tools/tools.js';
+import { ReticleTool } from '@reticlehq/core';
 
 describe('AttachmentHistory', () => {
   it('a session seen once has no outages and is attached since it arrived', () => {
@@ -89,5 +92,52 @@ describe('AttachmentHistory', () => {
     h.attached('s1');
     h.forget('s1');
     expect(h.of('s1')).toBeUndefined();
+  });
+
+  /**
+   * These counters describe the SDK-to-daemon LINK, and nothing else.
+   *
+   * A zombie tab whose dev server had died reported `outages: 0` with a `connectedSinceMs` of 11
+   * minutes, and both numbers were right: the page's socket was still attached. Read as app health
+   * they said the app was up while nothing was listening on the port (#938). Nothing here can be
+   * changed to fix that — the daemon cannot see the origin from this side — so the fix is that the
+   * surface stops implying it, which is what these two pin.
+   */
+  describe('what these numbers do NOT measure', () => {
+    it('a live link over a dead origin still reports zero outages', () => {
+      // Nothing in this module is reachable from the origin dying, which is exactly the point: the
+      // socket is between the daemon and a document the browser already holds.
+      let now = 1_000;
+      const h = new AttachmentHistory(() => now);
+      h.attached('s1');
+      now = 661_000; // 11 minutes, the reported figure
+      expect(h.of('s1')).toEqual({ connectedSinceMs: 660_000, outages: 0 });
+    });
+
+    it('the reticle_sessions schema says so, where an agent actually reads it', () => {
+      // The counters cannot be made honest by arithmetic, only by description. If that sentence is
+      // ever dropped, the field goes back to over-claiming silently.
+      const sessions = TOOLS.find((t) => t.name === ReticleTool.SESSIONS);
+      const rows = (
+        sessions?.outputSchema as Record<string, z.ZodArray<z.ZodObject<z.ZodRawShape>>>
+      )['sessions'];
+      const described = rows?.element.shape['attachment']?.description ?? '';
+      expect(
+        described,
+        'the counters are honest only if the surface says what they scope to',
+      ).toContain('NOT app health');
+      // And the claim it replaced, which made the field's presence read as a warning.
+      expect(described).not.toContain('Present only when this tab has dropped');
+    });
+
+    it('is reported for a tab that never dropped, not only after an outage', () => {
+      // The schema used to say this field was "present only when this tab has dropped and
+      // reconnected at least once", which made its mere presence read as a stability warning. It is
+      // attached for any session the daemon has a record of.
+      const h = new AttachmentHistory(() => 0);
+      h.attached('fresh');
+      expect(h.of('fresh')).toBeDefined();
+      expect(h.of('fresh')?.outages).toBe(0);
+    });
   });
 });
