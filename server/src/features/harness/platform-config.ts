@@ -36,6 +36,14 @@ export interface PlatformModelConfig {
   provider: string;
   /** Whether the person wants autonomous driving at all. */
   harnessEnabled: boolean;
+  /**
+   * Whether this workspace may drive on OUR model spend — a claimed free period, or a paid plan.
+   *
+   * Deliberately a second boolean rather than folded into `harnessEnabled`. One is a switch a person
+   * set, the other is a fact about their account, and a daemon that could not tell them apart would
+   * report "you turned this off" to somebody whose free months quietly ran out.
+   */
+  harnessEntitled: boolean;
 }
 
 /** A GET, narrowed to what this file uses, so a test can answer it without a network. */
@@ -54,7 +62,14 @@ function parse(body: string): PlatformModelConfig | undefined {
     // Absent reads as enabled: the platform's own default is on, and a daemon that treated a
     // missing field as "off" would silently disable the feature for anyone on an older API.
     const enabled = record['harnessEnabled'];
-    return { provider, harnessEnabled: 'boolean' === typeof enabled ? enabled : true };
+    // Same rule for both, for the same reason: an older API that reports neither must not have its
+    // silence read as a refusal.
+    const entitled = record['harnessEntitled'];
+    return {
+      provider,
+      harnessEnabled: 'boolean' === typeof enabled ? enabled : true,
+      harnessEntitled: 'boolean' === typeof entitled ? entitled : true,
+    };
   } catch {
     return undefined;
   }

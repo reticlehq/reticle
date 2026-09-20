@@ -229,6 +229,16 @@ export const RECOVERY = {
     chromiumInstallCommand(bundledPlaywrightVersion()) +
     '` if that is what is missing. Meanwhile drive ' +
     'a tab the human already has open — reticle_sessions lists them.',
+  /**
+   * The two ways a platform answer can refuse a drive. Neither is a fault, and both were telling the
+   * agent that a perfectly understood refusal might be a defect in Reticle — which is how a person
+   * who deliberately switched the harness off gets a bug report filed about their own decision.
+   */
+  HARNESS_OFF:
+    'A human turned autonomous driving off for this project, or has not claimed the free harness ' +
+    'months. This is a deliberate refusal and there is nothing to report: drive the app yourself ' +
+    'through the MCP tools — reticle_navigate, then reticle_act_and_wait with an `until` — which is ' +
+    'the same verification without a model driving it.',
 } as const;
 
 /**
@@ -267,6 +277,8 @@ const REASON_OF: Record<keyof typeof RECOVERY, RefusalReason> = {
   WRONG_TARGET: RefusalReason.UNSUPPORTED,
   BAD_ARGUMENTS: RefusalReason.BAD_ARGS,
   INVALID_NAME: RefusalReason.BAD_ARGS,
+  // Nothing about the app or the call is wrong; the feature is switched off or unpaid for.
+  HARNESS_OFF: RefusalReason.UNSUPPORTED,
 };
 
 /** Hint text back to its reason. The hints are distinct strings, so this inverts cleanly. */
@@ -283,6 +295,10 @@ const RULES: readonly { readonly match: RegExp; readonly hint: string }[] = [
   { match: /no baseline named/i, hint: RECOVERY.MISSING_BASELINE },
   { match: /no (?:active|compiled) recording named/i, hint: RECOVERY.MISSING_RECORDING },
   { match: /pairing token is required/i, hint: RECOVERY.TOKEN_REQUIRED },
+  {
+    match: /Autonomous driving is turned OFF|no harness entitlement/i,
+    hint: RECOVERY.HARNESS_OFF,
+  },
   // Three conditions the daemon understands perfectly and still asked for a bug report about. Each
   // needs its own rule: none of them contains "no browser session connected" (the scope miss is
   // "no browser session FOR project 'x'", which is the opposite claim — sessions exist).

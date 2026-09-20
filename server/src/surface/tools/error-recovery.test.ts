@@ -63,6 +63,24 @@ describe('recoveryFor — every known error carries an actionable next move', ()
     ).toBe(RECOVERY.TOKEN_REQUIRED);
   });
 
+  /**
+   * Measured against a live platform: a daemon refused to drive because a person had switched the
+   * harness off, and the refusal came back attached to "this may be a defect in Reticle … that
+   * report is the only way this gets fixed". Asking for a bug report about somebody's own setting.
+   */
+  it('treats a switched-off or unclaimed harness as a decision, not a defect', () => {
+    expect(
+      recoveryFor(
+        'Autonomous driving is turned OFF for this project. Turn it back on in the Reticle dashboard.',
+      ),
+    ).toBe(RECOVERY.HARNESS_OFF);
+    expect(
+      recoveryFor(
+        'This workspace has no harness entitlement, so autonomous driving would run on Reticle\u2019s model budget.',
+      ),
+    ).toBe(RECOVERY.HARNESS_OFF);
+  });
+
   it('returns undefined for an unrecognized error (never invents a hint)', () => {
     expect(recoveryFor('save failed: disk_full')).toBeUndefined();
     expect(recoveryFor('')).toBeUndefined();

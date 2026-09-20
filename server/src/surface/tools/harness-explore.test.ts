@@ -19,6 +19,8 @@ import {
   MSG_NO_HARNESS_KEY,
   MSG_NO_JEV_KEY,
   MSG_NO_OPENAI_KEY,
+  MSG_HARNESS_DISABLED,
+  MSG_HARNESS_UNCLAIMED,
 } from './harness-explore.js';
 
 /** One completed flow-save call, as the loop records it. */
@@ -399,5 +401,99 @@ describe('deciding whether a drive left a recording open', () => {
     expect(
       openRecordingName([rec('start', 'harness-drive-home'), rec('stop', 'something-else')]),
     ).toBe('harness-drive-home');
+  });
+});
+
+/**
+ * A switch that does not switch anything.
+ *
+ * `harnessEnabled` persisted on the platform, round-tripped through the API, and the daemon read it
+ * and threw it away — so turning autonomous driving OFF changed a database value and nothing else.
+ * Somebody turns it off, watches Reticle drive their app anyway, and is then right to distrust
+ * every other control in the product.
+ */
+describe('turning the harness off', () => {
+  /** The platform's answer, as the daemon reads it over the wire. */
+  const platformSays = (body: Record<string, unknown>) => () =>
+    Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(body)) });
+
+  const linked = { [ReticleEnv.API_KEY]: 'rk_live_x', [ReticleEnv.CLOUD_URL]: 'https://api.test' };
+
+  it('refuses to drive, and says where to turn it back on', async () => {
+    await expect(
+      exploreApp(depsWithFlows([]), linked, {
+        maxSteps: 1,
+        driver: finishing(''),
+        configFetch: platformSays({ provider: 'jev', harnessEnabled: false }),
+      }),
+    ).rejects.toThrow(MSG_HARNESS_DISABLED);
+  });
+
+  /** Absent means ON: a machine that cannot reach the platform must not lose a feature silently. */
+  it('drives when the platform cannot be reached at all', async () => {
+    const result = await exploreApp(
+      depsWithFlows([]),
+      { JEV_API_KEY: 'j' },
+      { maxSteps: 1, skipPlatformConfig: true, driver: finishing('') },
+    );
+    expect(result.drive).toBeDefined();
+  });
+
+  it('drives when the platform says the harness is on', async () => {
+    const result = await exploreApp(depsWithFlows([]), linked, {
+      maxSteps: 1,
+      driver: finishing(''),
+      configFetch: platformSays({ provider: 'jev', harnessEnabled: true }),
+    });
+    expect(result.drive).toBeDefined();
+  });
+});
+
+/**
+ * Entitlement is about WHOSE MONEY, and it is not the same question as the switch above.
+ *
+ * A drive through the platform proxy spends Reticle's model budget. Free for three months, included
+ * on a paid plan, and otherwise nobody is paying for it. Told as "the harness is off" that becomes a
+ * support ticket from somebody who never turned anything off, so it is refused in its own words —
+ * and never refused at all to somebody driving on a key of their own.
+ */
+describe('a workspace with no entitlement', () => {
+  const platformSays = (body: Record<string, unknown>) => () =>
+    Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(body)) });
+  const unentitled = platformSays({
+    provider: 'jev',
+    harnessEnabled: true,
+    harnessEntitled: false,
+  });
+  const linked = { [ReticleEnv.API_KEY]: 'rk_live_x', [ReticleEnv.CLOUD_URL]: 'https://api.test' };
+
+  it('is told to claim the free months rather than that something is switched off', async () => {
+    await expect(
+      exploreApp(depsWithFlows([]), linked, {
+        maxSteps: 1,
+        driver: finishing(''),
+        configFetch: unentitled,
+      }),
+    ).rejects.toThrow(MSG_HARNESS_UNCLAIMED);
+  });
+
+  /** Their key, their spend. Entitlement has no business stopping a drive that costs us nothing. */
+  it('drives anyway for somebody who brought their own model key', async () => {
+    const result = await exploreApp(
+      depsWithFlows([]),
+      { ...linked, [ReticleEnv.HARNESS_KEY]: 'sk-ant-own' },
+      { maxSteps: 1, driver: finishing(''), configFetch: unentitled },
+    );
+    expect(result.drive).toBeDefined();
+  });
+
+  /** An older platform reports neither field; silence must not read as a refusal. */
+  it('drives when the platform says nothing about entitlement', async () => {
+    const result = await exploreApp(depsWithFlows([]), linked, {
+      maxSteps: 1,
+      driver: finishing(''),
+      configFetch: platformSays({ provider: 'jev' }),
+    });
+    expect(result.drive).toBeDefined();
   });
 });

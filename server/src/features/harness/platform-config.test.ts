@@ -18,7 +18,7 @@ describe('reading the driver preference from the platform', () => {
       LINKED,
       answering({ provider: 'jev', harnessEnabled: true }),
     );
-    expect(got).toEqual({ provider: 'jev', harnessEnabled: true });
+    expect(got).toEqual({ provider: 'jev', harnessEnabled: true, harnessEntitled: true });
   });
 
   it('sends the platform key as a bearer, to the config path', async () => {
@@ -34,6 +34,27 @@ describe('reading the driver preference from the platform', () => {
     const doFetch = answering({ provider: 'jev' });
     expect(await fetchPlatformConfig({}, doFetch)).toBeUndefined();
     expect(doFetch).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Entitlement and the switch are separate facts and must stay separate here.
+   *
+   * One is what a person set, the other is whether anybody is paying for the model spend. Folding
+   * them would make the daemon tell somebody whose free months quietly lapsed that they had turned
+   * verification off, which is a support ticket rather than an answer.
+   */
+  it('reports entitlement apart from the switch', async () => {
+    const got = await fetchPlatformConfig(
+      LINKED,
+      answering({ provider: 'jev', harnessEnabled: true, harnessEntitled: false }),
+    );
+    expect(got).toEqual({ provider: 'jev', harnessEnabled: true, harnessEntitled: false });
+  });
+
+  /** An older API reports neither field, and silence must not read as a refusal on either. */
+  it('treats a missing harnessEntitled as entitled', async () => {
+    const got = await fetchPlatformConfig(LINKED, answering({ provider: 'jev' }));
+    expect(got?.harnessEntitled).toBe(true);
   });
 
   /** The platform's own default is on; a daemon reading absence as "off" would disable the feature. */

@@ -24,7 +24,7 @@ import { readContract } from '@/memory/project/dir/reticle-dir.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
 import { buildHarnessPlan, planAsText, type HarnessPlan } from './harness-plan.js';
 import { openAiDriver, openAiOptionsFromEnv } from '@/features/harness/openai-driver.js';
-import { fetchPlatformConfig } from '@/features/harness/platform-config.js';
+import { fetchPlatformConfig, type ConfigFetch } from '@/features/harness/platform-config.js';
 import {
   DEFAULT_MAX_STEPS,
   runHarness,
@@ -60,6 +60,14 @@ export interface ExploreOptions {
    * driver explicitly already skips the lookup, which is the only reason anybody would want to.
    */
   skipPlatformConfig?: boolean;
+  /**
+   * The GET that asks the platform what this project wants. Injected ONLY by tests.
+   *
+   * It exists because the two things this answer decides — a driver preference and whether the drive
+   * may happen at all — were both unreachable without a network, and the refusal test that was
+   * supposed to cover the OFF switch was asserting on a path where the platform is never asked.
+   */
+  configFetch?: ConfigFetch;
 }
 
 export interface ExploreResult {
@@ -193,6 +201,9 @@ export async function exploreApp(
   env: Record<string, string | undefined>,
   options: ExploreOptions = {},
 ): Promise<ExploreResult> {
+  const refusal = await refusedByPlatform(env, options);
+  if (refusal !== undefined) throw new Error(refusal);
+
   const maxSteps = options.maxSteps ?? maxStepsFromEnv(env);
   const before = new Set(await deps.flows.list());
   // `.reticle` FIRST, before the app and before anything reads a line of source. It already holds
@@ -295,8 +306,74 @@ async function preferredDriver(
   options: ExploreOptions,
 ): Promise<string | undefined> {
   if (true === options.skipPlatformConfig) return undefined;
-  const config = await fetchPlatformConfig(env);
-  return knownDriver(config?.provider);
+  return knownDriver((await platformConfig(env, options))?.provider);
+}
+
+/**
+ * What a person said about autonomous driving on the platform, honoured here.
+ *
+ * The switch existed, persisted and round-tripped, and the daemon read it and threw it away — so
+ * turning the harness OFF changed a value in a database and nothing else. A control that does not
+ * control anything is worse than no control: somebody turns it off, watches Reticle drive their app
+ * anyway, and now correctly distrusts every other switch in the product.
+ *
+ * Absent means ON. The platform's own default is on, and a machine that cannot reach the platform —
+ * offline, CI, no link — must not silently lose a feature it was never told to stop using.
+ */
+export const MSG_HARNESS_DISABLED =
+  'Autonomous driving is turned OFF for this project. Turn it back on in the Reticle dashboard ' +
+  '(Settings → Verification model), or drive the app yourself through the MCP tools.';
+
+/**
+ * The other reason a drive can be refused, and it is NOT the same reason.
+ *
+ * A drive through the platform spends Reticle's model budget. That is free for three months and
+ * included on a paid plan, and outside both it is somebody else's money being spent on nothing. The
+ * message says which of the two it is and what to do, because "the harness is off" told to a person
+ * who never turned anything off is a support ticket rather than an answer.
+ */
+export const MSG_HARNESS_UNCLAIMED =
+  'This workspace has no harness entitlement, so autonomous driving would run on Reticle’s model ' +
+  'budget with nothing paying for it. Claim the free 3 months in the Reticle dashboard, or export a ' +
+  'model API key of your own and drive with that.';
+
+/**
+ * Whether a drive would be paid for by the person asking for it.
+ *
+ * Entitlement gates OUR spend, so it has no business stopping somebody who brought their own key:
+ * their harness costs us nothing whether they ever claim anything or not. Reading the same options
+ * the drivers read keeps the two answers from drifting apart.
+ */
+function ownsAModelKey(env: Record<string, string | undefined>): boolean {
+  // The DIRECT variables only. Every driver also accepts the platform key as a fallback, so asking
+  // `jevOptionsFromEnv` here would answer "they have a key" for exactly the person whose drive would
+  // be billed to us — which is the one case this gate exists for.
+  return [ReticleEnv.HARNESS_KEY, ReticleEnv.HARNESS_JEV_KEY, ReticleEnv.HARNESS_OPENAI_KEY].some(
+    (name) => {
+      const value = env[name];
+      return value !== undefined && 0 < value.length;
+    },
+  );
+}
+
+/** One read, however many questions are asked of the answer. */
+function platformConfig(env: Record<string, string | undefined>, options: ExploreOptions) {
+  return options.configFetch === undefined
+    ? fetchPlatformConfig(env)
+    : fetchPlatformConfig(env, options.configFetch);
+}
+
+/** The reason this drive must not start, or `undefined` to go ahead. */
+async function refusedByPlatform(
+  env: Record<string, string | undefined>,
+  options: ExploreOptions,
+): Promise<string | undefined> {
+  if (true === options.skipPlatformConfig) return undefined;
+  const config = await platformConfig(env, options);
+  if (config === undefined) return undefined;
+  if (!config.harnessEnabled) return MSG_HARNESS_DISABLED;
+  if (!config.harnessEntitled && !ownsAModelKey(env)) return MSG_HARNESS_UNCLAIMED;
+  return undefined;
 }
 
 /**
