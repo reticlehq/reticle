@@ -88,6 +88,17 @@ export function journalActionsPath(root: string, sessionId: SessionId): string {
 }
 
 /**
+ * The event ledger's closure report for a session (.reticle/sessions/<id>/events.closed.json).
+ *
+ * A sidecar rather than a header inside `events.jsonl`, because the ledger is append-only and
+ * readers track a byte offset into it: a header would have to be rewritten in place, which shrinks
+ * or shifts the file and silently invalidates every cursor pointing at it.
+ */
+export function journalClosedPath(root: string, sessionId: SessionId): string {
+  return join(sessionDirPath(root, sessionId), ReticleDir.JOURNAL_EVENTS_CLOSED_FILE);
+}
+
+/**
  * A sessionId must be a single safe path segment before it is joined into a disk path (rejects
  * '../', slashes, absolute, dotfiles). Session labels are user/tab-supplied, so this guard runs
  * before any journal write.

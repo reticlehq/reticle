@@ -140,6 +140,9 @@ describe('the partition of what .reticle holds', () => {
     ReticleDir.ROOT,
     ReticleDir.JOURNAL_EVENTS_FILE,
     ReticleDir.JOURNAL_ACTIONS_FILE,
+    // Beside the event ledger, inside the same session dir, and ignored by the same `sessions/`
+    // entry. It records that a ledger stopped writing, which is a fact about one machine's disk.
+    ReticleDir.JOURNAL_EVENTS_CLOSED_FILE,
     // ~/.reticle, deliberately outside any repository: a pairing token must never reach one.
     ReticleDir.PAIRING_TOKEN_FILE,
   ];
