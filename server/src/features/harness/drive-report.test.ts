@@ -219,6 +219,22 @@ describe('a failed action says what it expected', () => {
     expect(text).toContain('claimed to leave');
   });
 
+  /**
+   * `no-fault` without the claim is unreadable: "the consequence was already true" about WHAT? It
+   * is the line that exposed a GET offer being satisfied by a dashboard's own background polling,
+   * seven times in one run.
+   */
+  it('names the claim behind a no-fault too, not just behind a red', () => {
+    const noFault = [
+      call(
+        'reticle_act_and_wait',
+        { ref: 'e5', action: 'click', intent: 'click x', until: { kind: 'net', method: 'GET' } },
+        { verified: 'no-fault', because: 'the declared consequence was already true' },
+      ),
+    ];
+    expect(describeDrive(noFault, [])).toContain('claimed a GET request');
+  });
+
   /** A pass does not need it, and this report is read on every drive. */
   it('stays quiet about the claim when the action passed', () => {
     const passed = [

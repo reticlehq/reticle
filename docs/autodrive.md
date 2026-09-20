@@ -59,6 +59,16 @@ Three other dials, all optional:
 | `RETICLE_HARNESS_MAX_STEPS` | Ceiling on model turns in one drive. Bounds cost, not value. |
 | `RETICLE_HARNESS_BASE_URL` | A proxy or gateway instead of the default API host. |
 
+## Two models, and what each one is for
+
+The `jev` driver decides; it cannot write. Every choice a drive makes is a selection from candidates Reticle enumerated off the page: which element, which tool, what consequence to claim. That is why it costs a fraction of a generating model and answers in a few hundred milliseconds.
+
+One thing in a drive is not a selection. A text field is a composition: "a business name", "a statement descriptor", "a search term that returns results" cannot be enumerated from the page. Where the field's label is enough to guess, a small table answers it. Where it is not, and a generating model is configured, that model writes the value, and nothing else.
+
+Measured across 91 recorded flows on a production dashboard: 413 clicks against 26 text steps. Text is about 6% of what a drive does, so this is escalation rather than a second model in the loop, and a drive with no text fields never calls it at all.
+
+What it writes is a FIXTURE, not an opinion. Generated values are saved to `.reticle/fill-values.json` and reused forever: the second drive pays nothing, a replay sends exactly what the recording sent, and a value you dislike is a line in a git-checked file you can edit rather than an argument with a model.
+
 ## Turning it off, and who pays for it
 
 A project linked to a Reticle workspace reads two things from it before a drive starts, and honours both:

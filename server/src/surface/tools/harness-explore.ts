@@ -11,7 +11,13 @@
 import { ReticleEnv, ReticleTool, apiKeyFrom, asRecord } from '@reticlehq/core';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
 import type { ToolDeps } from './tool-kit.js';
-import { harnessDriver, harnessOptionsFromEnv } from '@/features/harness/driver.js';
+import {
+  harnessDriver,
+  harnessOptionsFromEnv,
+  type HarnessDriverOptions,
+} from '@/features/harness/driver.js';
+import { fillValues } from '@/features/harness/fill-values.js';
+import { openFillValues, type FillValueStore } from '@/memory/project/dir/fill-value-store.js';
 import {
   ANTHROPIC_DRIVER_NAME,
   CUSTOM_DRIVER_NAME,
@@ -211,11 +217,21 @@ export async function exploreApp(
   // every saved flow, the consequence that must hold for each, and the declared intent nobody has
   // tested — which is the whole of what a drive should be deciding against.
   const plan = await readPlan(deps, options.sessionId);
+  /*
+   * The fixtures this project has already paid for.
+   *
+   * A drive is a sequence of DECISIONS and, occasionally, one COMPOSITION: what to type into a box
+   * whose label nothing can guess from. The cheap driver cannot write a string at all, so those
+   * boxes used to receive the words "reticle harness". This is the seam where a generating model
+   * answers instead -- for about 6% of steps, once per label, and never again on any later drive,
+   * because the answer is written into `.reticle` beside the flows that use it.
+   */
+  const fills = await openFillValues(deps.fs, safeRoot(deps, options.sessionId));
   const requested =
     options.driverName ?? env[ReticleEnv.HARNESS_DRIVER] ?? (await preferredDriver(env, options));
   const built =
     options.driver === undefined
-      ? buildDriver(env, maxSteps, plan, requested)
+      ? buildDriver(env, maxSteps, plan, requested, fills)
       : { driver: options.driver, name: CUSTOM_DRIVER_NAME };
   const driver = built.driver;
 
@@ -230,6 +246,10 @@ export async function exploreApp(
       ...(options.focus === undefined ? [] : [`Focus: ${options.focus}`]),
     ].join('\n\n'),
   });
+
+  // Written once, after the drive, whatever the drive did: a run that broke still learned what it
+  // learned, and the next one should not pay for it again.
+  await fills.flush();
 
   // MANDATORY, and deliberately outside the loop. A drive that runs out of budget mid-journey, or
   // breaks, or whose model simply stops asking for tools, leaves a recording open and everything it
@@ -461,6 +481,22 @@ async function readPlan(deps: ToolDeps, sessionId?: string): Promise<HarnessPlan
   }
 }
 
+/**
+ * The project directory, or nothing.
+ *
+ * `sessionRoot` needs a session and a project to answer, and a drive can legitimately be asked for
+ * before either is resolvable. Everything else that reads `.reticle` here already treats that as
+ * "no project record" rather than as a failure; the fixtures file is no different, and a throw on
+ * this path would turn a missing directory into a refused drive.
+ */
+function safeRoot(deps: ToolDeps, sessionId?: string): string | undefined {
+  try {
+    return sessionRoot(deps, sessionId);
+  } catch {
+    return undefined;
+  }
+}
+
 function pinned(options: ExploreOptions): { sessionId?: string } {
   return options.sessionId === undefined ? {} : { sessionId: options.sessionId };
 }
@@ -483,11 +519,27 @@ function buildDriver(
   maxSteps: number,
   plan: HarnessPlan,
   requested?: string,
+  fills?: FillValueStore,
 ): { driver: ModelDriver; name: string } {
   // The two halves of what `.reticle` knows, handed to the one driver that can use both: what is
   // worth doing, and the names the app uses for what it does. The second is what lets a declared
   // consequence be SAVED rather than merely proved; see `consequencesFor`.
-  const fromReticle = { plan: plan.steps as readonly DrivePlanStep[], vocabulary: plan.vocabulary };
+  const fromReticle = {
+    plan: plan.steps as readonly DrivePlanStep[],
+    vocabulary: plan.vocabulary,
+    /*
+     * Generation is offered ONLY when a generating model is already configured, and it stays out of
+     * the per-turn loop either way: put a text model on every turn and you pay its per-turn tax on
+     * the 94% of steps that are clicks, which is the entire cost the cheap driver exists to avoid.
+     * With no such key the label heuristic answers, exactly as it did before this existed.
+     */
+    fillValue: fillValues({
+      ...(fills === undefined ? {} : { cache: fills }),
+      ...(harnessOptionsFromEnv(env) === undefined
+        ? {}
+        : { generator: harnessOptionsFromEnv(env) as HarnessDriverOptions }),
+    }),
+  };
   const jev = jevOptionsFromEnv(env);
   const anthropic = harnessOptionsFromEnv(env);
   const asked = requested;

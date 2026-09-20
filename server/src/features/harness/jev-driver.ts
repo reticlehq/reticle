@@ -32,6 +32,7 @@ import {
 } from '@reticlehq/core';
 
 import { FINISH_TOOL } from './harness.js';
+import { heuristicFillValue } from './fill-values.js';
 import type { HistoryEntry, ModelDriver, ModelTurn, ToolRequest } from './harness.js';
 import type { HarnessFetch } from './driver.js';
 
@@ -251,11 +252,18 @@ export function consequencesFor(
     describes: 'The app PATCHes its backend — expect this for a setting or an edit being saved.',
     recordable: true,
   };
-  base['loads'] = {
-    predicate: { kind: 'net', method: 'GET' },
-    describes: 'The app fetches data — expect this for a filter, a search or a page of results.',
-    recordable: true,
-  };
+  /*
+   * There is deliberately no GET offer.
+   *
+   * It was there for one run and cost 7 of 9 actions: a dashboard polls, so a GET is in flight
+   * before most clicks, and the engine correctly answers `no-fault` -- the consequence was already
+   * true, so the action proved nothing about it. A claim that background traffic satisfies is not a
+   * claim. Mutations are the opposite: a POST or a PATCH inside the action's own window is almost
+   * always the action's own doing, which is why those two survive and reading does not.
+   *
+   * A filter or a search therefore has nothing specific to claim here, and should claim `nothing`
+   * rather than something that cannot fail.
+   */
   base['any'] = {
     predicate: { kind: 'anyOf', predicates: [{ kind: 'signal' }, { kind: 'net' }] },
     describes:
@@ -371,6 +379,15 @@ export interface JevDriverOptions {
    * simply an app with less to claim.
    */
   vocabulary?: readonly string[];
+  /**
+   * What to type into a text field, when the label alone is not enough to guess.
+   *
+   * The one place a drive is a COMPOSITION rather than a decision, and therefore the one place worth
+   * paying a generating model for. Absent ⇒ the label heuristic answers, which is what every drive
+   * did before this seam existed; a drive with no text fields never reaches it either way. See
+   * `fill-values.ts` for why it is escalation rather than a second model in the loop.
+   */
+  fillValue?: (label: string) => Promise<string>;
   /** Injected for tests. Defaults to the platform `fetch`. */
   fetch?: HarnessFetch;
 }
@@ -415,28 +432,6 @@ function roleOf(desc: string): string {
 /** The accessible name, which the snapshot quotes. */
 function nameOf(desc: string): string {
   return /"([^"]*)"/.exec(desc)?.[1] ?? '';
-}
-
-/**
- * What to type into a field, chosen from its label.
- *
- * A System One model answers questions; it does not write strings, so the value cannot come from it.
- * That is less of a loss than it sounds: an exploration drive needs PLAUSIBLE input, not creative
- * input — the engine is judging what the app did with the value, not the value. A field that rejects
- * everything here is itself worth finding, and shows up as an act that did not settle.
- */
-function fillValueFor(label: string): string {
-  const l = label.toLowerCase();
-  if (l.includes('email')) return 'harness@reticle.dev';
-  if (l.includes('password')) return 'password';
-  if (l.includes('url') || l.includes('link')) return 'https://example.com';
-  if (l.includes('phone') || l.includes('tel')) return '5550100';
-  if (l.includes('date')) return '2026-01-01';
-  if (l.includes('amount') || l.includes('price') || l.includes('qty') || l.includes('quantity'))
-    return '2';
-  if (l.includes('search') || l.includes('filter')) return 'a';
-  if (l.includes('number') || l.includes('count')) return '42';
-  return 'reticle harness';
 }
 
 /** The action verb a role wants. */
@@ -941,11 +936,13 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
         intent: `${action} ${picked.desc}`,
         ...(consequence === undefined ? {} : { until: consequence.predicate }),
       };
-      if ('fill' === action)
+      if ('fill' === action) {
+        const label = nameOf(picked.desc);
         args['args'] = {
           ...asRecord(args['args']),
-          value: fillValueFor(nameOf(picked.desc)),
+          value: await (options.fillValue?.(label) ?? Promise.resolve(heuristicFillValue(label))),
         };
+      }
 
       const spent: ModelTurn['usage'] = {
         input: usage.input + (expectation.usage?.input_tokens ?? 0),

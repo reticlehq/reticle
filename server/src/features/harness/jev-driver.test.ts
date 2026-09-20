@@ -118,6 +118,29 @@ describe('the jev driver builds every call from the page', () => {
     expect(result.calls[0]?.args['args']).toEqual({ value: 'reticle harness' });
   });
 
+  /**
+   * The one seam where a generating model is worth paying for, and the only place a drive composes
+   * anything rather than choosing it. A System One model cannot write a string; the label heuristic
+   * guesses, and where it cannot it types the words "reticle harness" into whatever the app asked
+   * for. This is where a text model answers instead -- for the roughly 6% of steps that are text,
+   * once per label, cached into `.reticle` and never asked again.
+   */
+  it('asks for a filled value through the seam, and types what comes back', async () => {
+    const asked: string[] = [];
+    const fake = fakeJev(chose('e6'));
+    const result = await jevDriver({
+      apiKey: 'k',
+      fetch: fake.doFetch,
+      fillValue: (label) => {
+        asked.push(label);
+        return Promise.resolve('Northwind Trading Co.');
+      },
+    }).turn({ system: 'drive it', tools: [], history: READY });
+    expect(result.calls[0]?.args['args']).toEqual({ value: 'Northwind Trading Co.' });
+    // Asked by LABEL: a ref expires with the page, a label is what the next drive meets again.
+    expect(asked).toEqual(['Service name']);
+  });
+
   it('offers the model only refs that are on the page', async () => {
     const seen = { bodies: [] as string[] };
     await turn(READY, chose('e5'), seen);

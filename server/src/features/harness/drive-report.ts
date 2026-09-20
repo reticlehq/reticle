@@ -219,8 +219,11 @@ export function describeDrive(
     const because = step.because === undefined ? '' : ` — ${step.because}`;
     // The claim, on failures only: it is what separates "the app is broken" from "the drive guessed
     // wrong", and those two readings need opposite responses from whoever reads this.
+    // Shown on anything that did not pass, not just on a red. `no-fault` means "the consequence was
+    // already true, so this proved nothing" -- which is unreadable without knowing WHAT was claimed,
+    // and is the line that exposed a GET offer being satisfied by a dashboard's own polling.
     const claimed =
-      Verified.NO === step.verified && step.claimed !== undefined
+      Verified.YES !== step.verified && step.claimed !== undefined
         ? ` (claimed ${step.claimed})`
         : '';
     lines.push(`  ${step.action} ${step.target}: ${verdict}${claimed}${because}`);

@@ -345,6 +345,14 @@ export const ReticleDir = {
   IMPACT_FILE: 'impact.json',
   /** what changes were SUPPOSED to make true —.reticle/intent.json (git-checked, reviewed) */
   INTENT_FILE: 'intent.json',
+  /**
+   * what a drive types into a field, keyed by the field's label —.reticle/fill-values.json.
+   *
+   * Git-checked on purpose. A generated value is paid for once and then belongs to the project: the
+   * next drive reuses it for free, a replay sends exactly what the recording sent, and a human who
+   * dislikes one can edit the file rather than argue with a model.
+   */
+  FILL_VALUES_FILE: 'fill-values.json',
   /** opt-in pixel baselines —.reticle/visual/<name>.png + <name>.diff.png. */
   VISUAL_SUBDIR: 'visual',
   /** verification-run artifacts —.reticle/runs/<runId>.json (the OEM/CI-consumable verdict). */

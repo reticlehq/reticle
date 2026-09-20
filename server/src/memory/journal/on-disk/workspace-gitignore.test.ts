@@ -133,6 +133,10 @@ describe('the partition of what .reticle holds', () => {
     // never a credential, so it is safe to commit — the same reasoning that puts `cloud.json` here
     // while its API key stays in ~/.reticle.
     ReticleDir.HOOKS_FILE,
+    // What a drive types into each labelled field. Committed for two reasons: a replay must send
+    // exactly what the recording sent or it is not a replay, and a value a model wrote once should
+    // be reviewable and editable by the team rather than regenerated differently on every machine.
+    ReticleDir.FILL_VALUES_FILE,
   ];
 
   /** Names that are not entries IN `.reticle/` — the root itself, and files inside a session dir. */

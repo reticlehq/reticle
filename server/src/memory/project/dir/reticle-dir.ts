@@ -29,6 +29,8 @@ export interface ReticleDirPaths {
   impact: string;
   /**.../.reticle/intent.json (what changes were supposed to make true — git-checked) */
   intent: string;
+  /**.../.reticle/fill-values.json (what a drive types into each labelled field — git-checked) */
+  fillValues: string;
   /**.../.reticle/visual (PNG baselines + diffs) */
   visual: string;
   /**.../.reticle/runs (verification-run artifacts) */
@@ -56,6 +58,7 @@ export function reticleDirPaths(root: string): ReticleDirPaths {
     project: join(root, ReticleDir.PROJECT_FILE),
     impact: join(root, ReticleDir.IMPACT_FILE),
     intent: join(root, ReticleDir.INTENT_FILE),
+    fillValues: join(root, ReticleDir.FILL_VALUES_FILE),
     visual: join(root, ReticleDir.VISUAL_SUBDIR),
     runs: join(root, ReticleDir.RUNS_SUBDIR),
     sessions: join(root, ReticleDir.SESSIONS_SUBDIR),
