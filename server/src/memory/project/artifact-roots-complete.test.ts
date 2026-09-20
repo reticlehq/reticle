@@ -102,12 +102,17 @@ const DELIBERATE: Readonly<Record<string, { uses: number; why: string }>> = {
  * Verified, not assumed: an untracked file using the daemon root was planted under `server/src` and
  * this scan named it. If you ever swap this for a git-backed listing, you must bring the refusal
  * with it, or the pin starts passing over exactly the new writer it was built to catch.
+ *
+ * Named `...OnDisk` for that reason. The shared enumerator is also called `sourceFiles` and answers
+ * the opposite question — what git TRACKS — so two functions of one name with two meanings is the
+ * kind of thing a later merge resolves by deleting the "duplicate". The name is the guard against
+ * that; this comment is only the explanation.
  */
-function sourceFiles(dir: string, acc: string[] = []): string[] {
+function sourceFilesOnDisk(dir: string, acc: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) {
-      sourceFiles(full, acc);
+      sourceFilesOnDisk(full, acc);
       continue;
     }
     if (entry.endsWith('.ts') && !entry.endsWith('.test.ts') && !entry.endsWith('.test-harness.ts'))
@@ -132,7 +137,7 @@ const key = (file: string): string => relative(SERVER_SRC, file).split(sep).join
 
 describe('every artifact root is a decision somebody made', () => {
   it('has no use of the daemon root that is not on the roster', () => {
-    const offenders = sourceFiles(SERVER_SRC)
+    const offenders = sourceFilesOnDisk(SERVER_SRC)
       .map((file) => ({ file: key(file), uses: daemonRootUses(readFileSync(file, 'utf8')) }))
       .filter((f) => f.uses > 0 && DELIBERATE[f.file] === undefined);
 
@@ -161,12 +166,12 @@ describe('every artifact root is a decision somebody made', () => {
     // Vacuity guard: if the walk or the matcher breaks, the two assertions above go green over
     // nothing. The daemon root IS used deliberately in several places; finding none means the
     // scanner is broken, not that the codebase is clean.
-    const total = sourceFiles(SERVER_SRC).reduce(
+    const total = sourceFilesOnDisk(SERVER_SRC).reduce(
       (n, file) => n + daemonRootUses(readFileSync(file, 'utf8')),
       0,
     );
     expect(total).toBeGreaterThan(10);
-    expect(sourceFiles(SERVER_SRC).length).toBeGreaterThan(200);
+    expect(sourceFilesOnDisk(SERVER_SRC).length).toBeGreaterThan(200);
   });
 
   it('every rostered file still exists', () => {
