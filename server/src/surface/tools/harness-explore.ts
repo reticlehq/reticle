@@ -384,7 +384,21 @@ function platformConfig(env: Record<string, string | undefined>, options: Explor
     : fetchPlatformConfig(env, options.configFetch);
 }
 
-/** The reason this drive must not start, or `undefined` to go ahead. */
+/**
+ * The reason this drive must not start, or `undefined` to go ahead.
+ *
+ * It FAILS OPEN, and that is worth stating plainly because the argument for it changed under it.
+ * `fetchPlatformConfig` answers `undefined` on a network error, a non-2xx, a body that does not
+ * parse, or a two-second timeout, and all four land here as "carry on". When this endpoint only
+ * answered "which model does this project prefer", failing open cost nothing: the drive used the
+ * environment and nobody was worse off. It now also answers "is anybody paying for this", and the
+ * same silence means a drive runs on Reticle's model budget unmetered.
+ *
+ * Kept open anyway, deliberately: a settings endpoint having a slow second must not break somebody
+ * mid-verification, and the exposure is one drive's worth of a very cheap model. But this is
+ * best-effort, not enforcement -- if the spend needs a hard floor, it belongs at the proxy, which
+ * is the only side that cannot be talked out of it by a dropped packet.
+ */
 async function refusedByPlatform(
   env: Record<string, string | undefined>,
   options: ExploreOptions,
