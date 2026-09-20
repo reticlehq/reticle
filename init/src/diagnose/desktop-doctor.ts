@@ -27,7 +27,7 @@ export const DesktopFinding = {
 } as const;
 export type DesktopFinding = (typeof DesktopFinding)[keyof typeof DesktopFinding];
 
-export interface DesktopDiagnosis {
+interface DesktopDiagnosis {
   code: DesktopFinding;
   /** Which file to look at. */
   file: string;

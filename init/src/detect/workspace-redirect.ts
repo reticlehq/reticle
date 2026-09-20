@@ -16,7 +16,7 @@ import { chooseWorkspaceApp, withoutTrailingSlashes } from './declared/app-choic
 import type { InitIo, InitOptions, InitResult } from '@/run-types.js';
 
 /** Re-enter `init`, scoped to one directory of the workspace. */
-export type RunInit = (options: InitOptions, io: InitIo) => InitResult;
+type RunInit = (options: InitOptions, io: InitIo) => InitResult;
 
 const AMBIGUOUS_HEADER =
   'Several apps found in this workspace. Re-run `reticle init` inside the one you want:';
