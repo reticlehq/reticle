@@ -122,6 +122,28 @@ describe('the shared directory graph finds what the five guards are frozen again
   });
 
   /**
+   * The blind spot every guard built on this shares, and the one that reported a red commit green.
+   *
+   * `sourceFiles` enumerates through `git ls-files`, so a file nobody has staged contributes no
+   * directory, no edges and no count. The guard then passes over a tree it never read. It happened
+   * twice in one day: a new `cli/lifecycle/daemon-lifecycle.ts` measured green before `git add`
+   * (the run saw the edge INTO the new directory from a tracked importer, and none of the six out
+   * of it), and the same shape earlier beside the artifact-root work.
+   *
+   * `flat-directories-are-recorded` already warned about this -- in its FAILURE message, which is
+   * the path you never reach when the file is invisible.
+   */
+  it('refuses to answer at all when a source file is not staged', () => {
+    const dir = planted(false);
+    writeFileSync(join(dir, 'src', 'alpha', 'unstaged.ts'), 'export const three = 3;\n');
+    expect(() => reaches(dir)).toThrow(/unstaged source file/i);
+  });
+
+  it('answers normally once everything is staged', () => {
+    expect(() => reaches(planted(false))).not.toThrow();
+  });
+
+  /**
    * The positive counterpart, without which the four `toEqual([])` assertions elsewhere are
    * decoration: they pass over a detector that has been gutted to answer nothing.
    */

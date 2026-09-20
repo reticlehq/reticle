@@ -22,8 +22,45 @@ import { readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { isTestFile } from './test-suffixes.mjs';
 
-/** Source files git knows about under a package's `src`, excluding tests. */
+/**
+ * Source files git knows about under a package's `src`, excluding tests.
+ *
+ * REFUSES rather than answering when the package holds an untracked source file, and that refusal
+ * is the point of this comment.
+ *
+ * Every guard built on this enumerates through `git ls-files`, so a file nobody has staged
+ * contributes NOTHING: no directory, no edges, no count. The guard then passes over a tree it never
+ * read and reports success about it. That is not a hypothetical -- it happened twice in one day, to
+ * two different people working in this repository:
+ *
+ *   - a new `cli/lifecycle/daemon-lifecycle.ts` was measured green before `git add`. The run saw
+ *     the one edge INTO the new directory (from a tracked file that imported it) and none of the
+ *     six edges out of it. The commit was red; a colleague found it.
+ *   - the same shape, earlier, on a file added beside the artifact-root work.
+ *
+ * `flat-directories-are-recorded` already said "A new file is invisible here until it is STAGED" --
+ * but only in its FAILURE message, which is exactly the path you do not reach when the file is
+ * invisible. Saying it here makes it true for every consumer of this function, which is what the
+ * repository's own rule about fixing the one shared thing rather than watching its callers asks for.
+ *
+ * Throwing, rather than quietly including untracked files, because "stage it and run again" is a
+ * two-second instruction and the alternative silently changes what every guard is measuring.
+ */
 export function sourceFiles(packageDir) {
+  const unstaged = execFileSync('git', ['ls-files', '--others', '--exclude-standard', 'src'], {
+    cwd: packageDir,
+    encoding: 'utf8',
+  })
+    .split('\n')
+    .filter((f) => f.endsWith('.ts') && !isTestFile(f));
+  if (0 < unstaged.length) {
+    throw new Error(
+      `this check reads what git TRACKS, and ${packageDir} holds ${String(unstaged.length)} ` +
+        `unstaged source file(s) it cannot see:\n  ${unstaged.join('\n  ')}\n` +
+        'Stage them and run it again — a pass over a file nobody staged is a pass over a tree ' +
+        'this never read.',
+    );
+  }
   return execFileSync('git', ['ls-files', 'src'], { cwd: packageDir, encoding: 'utf8' })
     .split('\n')
     .filter((f) => f.endsWith('.ts') && !isTestFile(f));
