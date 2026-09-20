@@ -156,6 +156,16 @@ export function liveCallText(text: string, advertised: ReadonlySet<string>): str
 }
 
 /**
+ * Keys whose STRING value names a thing rather than advising a call.
+ *
+ * `name` is what the caller asked about and has to match their question against; `tool` is the
+ * already-resolved answer to "call this instead", so redirecting it a second time can only move it
+ * away from the answer. Deliberately two names and not a pattern: every other string in a result is
+ * prose, and prose is exactly what the rewrite is for.
+ */
+const IDENTITY_KEYS: ReadonlySet<string> = new Set(['name', 'tool']);
+
+/**
  * The same rewrite, applied to a result's STRING VALUES instead of to its encoded form.
  *
  * This exists because the encoded form was the wrong place. The replacements above contain double
@@ -166,6 +176,12 @@ export function liveCallText(text: string, advertised: ReadonlySet<string>): str
  * was corrected and the result became unreadable, which is a worse trade than the advice was worth.
  *
  * Values, not keys: a key is a contract with the caller and nothing in a key is advice.
+ *
+ * And not every value is advice either. A field that carries a tool's IDENTITY is an answer to
+ * "which one", not a suggestion about what to call — rewriting it destroys the thing the caller
+ * asked for. `reticle_tools { names: ["reticle_act_sequence"] }` sets `name` to the name it was
+ * asked about, and this rewrote it to `reticle_act`, so a batch query came back with entries the
+ * caller could no longer match to their questions. See `IDENTITY_KEYS`.
  */
 export function liveCallValues(value: unknown, advertised: ReadonlySet<string>): unknown {
   if ('string' === typeof value) return liveCallText(value, advertised);
@@ -173,7 +189,10 @@ export function liveCallValues(value: unknown, advertised: ReadonlySet<string>):
   if (null !== value && 'object' === typeof value) {
     const out: Record<string, unknown> = {};
     for (const [key, each] of Object.entries(value as Record<string, unknown>)) {
-      out[key] = liveCallValues(each, advertised);
+      out[key] =
+        IDENTITY_KEYS.has(key) && 'string' === typeof each
+          ? each
+          : liveCallValues(each, advertised);
     }
     return out;
   }

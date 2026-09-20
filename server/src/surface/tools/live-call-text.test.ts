@@ -242,3 +242,45 @@ describe('a sentence that explains where a name went', () => {
     expect(out).not.toContain('reticle_flow_save');
   });
 });
+
+/**
+ * An identity is not advice.
+ *
+ * `reticle_tools { names: [...] }` echoes back the name it was ASKED about, so a caller can match
+ * each entry to their question. The rewrite treated that field as prose and replaced it, so a batch
+ * query for three retired names came back with entries that no longer said which was which — and
+ * one of them claimed to be a tool the caller had not mentioned.
+ */
+describe('identity fields in a result', () => {
+  const ADVERTISED = new Set([ReticleTool.ACT, ReticleTool.LOOK]);
+
+  it('echoes the requested name verbatim, even when that name is unreachable', () => {
+    const out = liveCallValues(
+      {
+        name: 'reticle_act_sequence',
+        tool: 'reticle_act',
+        error: 'reticle_act_sequence no longer exists — use reticle_act { steps }.',
+      },
+      ADVERTISED,
+    ) as Record<string, string>;
+    expect(out['name']).toBe('reticle_act_sequence');
+  });
+
+  it('leaves the resolved tool alone, rather than redirecting an answer twice', () => {
+    const out = liveCallValues(
+      { name: 'reticle_snapshot', tool: 'reticle_flow_save' },
+      ADVERTISED,
+    ) as Record<string, string>;
+    expect(out['tool']).toBe('reticle_flow_save');
+  });
+
+  /** Prose in the SAME object is still advice, and still rewritten. */
+  it('still rewrites the prose beside them', () => {
+    const out = liveCallValues(
+      { name: 'reticle_snapshot', hint: 'Save it with reticle_flow_save.' },
+      ADVERTISED,
+    ) as Record<string, string>;
+    expect(out['name']).toBe('reticle_snapshot');
+    expect(out['hint']).not.toContain('reticle_flow_save');
+  });
+});
