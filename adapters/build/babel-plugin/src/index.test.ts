@@ -103,3 +103,69 @@ describe('non-DOM reconcilers', () => {
     expect(transform('const x = <svg:rect />;')).not.toContain(SOURCE_ATTR);
   });
 });
+
+/**
+ * Source mapping is JSX-syntactic, and therefore already works on Preact (#129).
+ *
+ * #129 lists source mapping as one of four things Preact is missing: "Preact under
+ * `@preact/preset-vite` needs its own stamping path". It does not. Nothing in this plugin reads
+ * React: it stamps a JSX host element by tag name, and Preact's host elements are the same HTML
+ * tags. `docs/frameworks.mdx` separately records Preact's source pointer as "unproven", which is
+ * the honest thing to say about something nothing tested -- so these tests are what changes the
+ * answer from unproven to measured.
+ *
+ * Pinned as its own block because the properties below are exactly the ones a React-shaped
+ * assumption would break: Preact takes `class` rather than `className`, uses its own JSX import
+ * source, and its idiomatic state layer puts a signal object straight into the tree.
+ */
+describe('Preact', () => {
+  const PREACT_COMPONENT = `/** @jsxImportSource preact */
+import { signal } from '@preact/signals';
+const count = signal(0);
+export function Counter() {
+  return (
+    <div class="counter">
+      <button data-testid="inc" onClick={() => count.value++}>Increment</button>
+      <span>{count}</span>
+    </div>
+  );
+}`;
+
+  it('stamps a Preact component, with no React anywhere in the file', () => {
+    const out = transform(PREACT_COMPONENT, 'src/Counter.jsx');
+    // Every host element in the tree, not just the first: a verdict lands on the control that was
+    // clicked, and the button is the one an agent acts on.
+    expect(out).toContain(`<div class="counter" ${SOURCE_ATTR}="src/Counter.jsx:6:4"`);
+    expect(out).toContain(`${SOURCE_ATTR}="src/Counter.jsx:7:6"`);
+    expect(out).toContain(`${SOURCE_ATTR}="src/Counter.jsx:8:6"`);
+  });
+
+  it('is not confused by `class` where React would write `className`', () => {
+    // The attribute Preact accepts and React does not. A stamper keyed on React's DOM property
+    // names rather than on the tag would have to special-case this; this one never looks.
+    const out = transform('const x = <div class="card" />;', 'src/Card.jsx');
+    expect(out).toContain(SOURCE_ATTR);
+    expect(out).toContain('class="card"');
+  });
+
+  it('leaves a `@jsxImportSource preact` pragma intact', () => {
+    // The pragma is what routes JSX to Preact's runtime. Rewriting or dropping it would change
+    // which framework renders the file, which is a far larger thing to get wrong than a missing
+    // source pointer.
+    const out = transform(PREACT_COMPONENT, 'src/Counter.jsx');
+    expect(out).toContain('@jsxImportSource preact');
+  });
+
+  it('stamps a `.tsx` Preact component too', () => {
+    const out = transform(
+      'export const Badge = ({ label }: { label: string }) => <span class="badge">{label}</span>;',
+      'src/Badge.tsx',
+    );
+    expect(out).toContain('src/Badge.tsx:1:');
+  });
+
+  it('still does not stamp a Preact component element, only host elements', () => {
+    // Same rule as React: `<Counter />` is not a DOM node and cannot take a data- attribute.
+    expect(transform('const x = <Counter />;', 'src/App.jsx')).not.toContain(SOURCE_ATTR);
+  });
+});
