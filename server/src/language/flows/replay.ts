@@ -107,7 +107,7 @@ export function captureAct(
   // that is never recorded cannot contribute to either.
   const step = compileActStep(args, res);
   // Keep the assertion the agent actually made. `act_and_wait { until }` IS the agent saying what
-  // success means — 12 of 14 calls in a day carried one — and dropping it produced a flow graded
+  // success means — the large majority of calls carry one — and dropping it produced a flow graded
   // "assertion-free: it will pass even if the feature is broken", which is the regression-suite
   // story failing at its last step. Only kinds FlowExpect can express survive; see
   // predicate-to-expect.ts.

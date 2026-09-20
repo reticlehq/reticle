@@ -220,9 +220,10 @@ export function buildDynamicTools(
     args: z.record(z.unknown()).optional().describe('Arguments object for that tool.'),
     // Accepted AND FORWARDED, not merely tolerated. reticle_run is the only way to reach an
     // unadvertised tool, so on a machine running several projects it has to be aimable — and
-    // `sessionId` is the shape an agent already uses on every other tool. Reported across 6 of 6
-    // apps: it took this key, dropped it, resolved by the daemon's cwd project, and failed with
-    // "no browser session for project X" while naming the very session it had been given.
+    // `sessionId` is the shape an agent already uses on every other tool. Reported from the field
+    // against every app it was tried on: it took this key, dropped it, resolved by the daemon's cwd
+    // project, and failed with "no browser session for project X" while naming the very session it
+    // had been given.
     sessionId: z
       .string()
       .optional()

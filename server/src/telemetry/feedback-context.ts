@@ -121,9 +121,9 @@ export function detectStack(
 
   // Otherwise look for the app. The daemon's cwd is wherever the agent's client happened to launch,
   // which for a real repo is the ROOT while the app sits in `frontend/`, `web/`, or a declared
-  // workspace. Reading one directory and giving up is why this returned nothing for every project
-  // that actually had Reticle set up: 0 of 77 instrumented projects, and 0 of 166 `size: huge` ones.
-  // The bigger the repo, the more certainly we failed.
+  // workspace. Reading one directory and giving up is why this returned nothing for essentially
+  // every project that actually had Reticle set up, and why the bigger the repo, the more certainly
+  // we failed. (The measurement that established that came from the field and stays in `plan/`.)
   //
   // `findWorkspaceApps` is init's discovery, reused rather than reimplemented: it already reads
   // declared workspaces (pnpm-workspace.yaml, package.json `workspaces`) AND scans top-level

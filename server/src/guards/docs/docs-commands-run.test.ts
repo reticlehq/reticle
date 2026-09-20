@@ -42,8 +42,20 @@ function textFiles(dir: string, out: string[] = []): string[] {
   return out;
 }
 
+/**
+ * The root documents, which were outside every docs guard until a release nearly shipped without
+ * them.
+ *
+ * `MIGRATION.md` told a 2.x upgrader to run `npx @reticlehq/server daemon` -- a command that does
+ * not exist, on the one page somebody reads when a major version has already broken them. The
+ * parser oracle below would have caught it for free on the day it was written; nothing was pointing
+ * at the file. Rule 13's "fix the ONE shared function" case: widen the input, do not write a
+ * second guard.
+ */
+const ROOT_DOCS = ['README.md', 'SKILL.md', 'MIGRATION.md', 'CONTRIBUTING.md', 'RELEASING.md'];
+
 function sources(): string[] {
-  const out = [join(REPO, 'README.md'), join(REPO, 'SKILL.md')];
+  const out = ROOT_DOCS.map((name) => join(REPO, name));
   out.push(...textFiles(join(REPO, 'docs')), ...textFiles(join(REPO, 'skills')));
   for (const dir of publishedPackageDirs()) {
     const readme = join(dir, 'README.md');
@@ -75,29 +87,52 @@ function isTemplate(rest: string): boolean {
   return rest.includes('<') || rest.includes('[');
 }
 
+/**
+ * The marker that says "this command is history, not instruction".
+ *
+ * A migration guide's job is to show the command that STOPPED working beside the one that replaced
+ * it, so a check that every documented command still parses is wrong about exactly that file unless
+ * it can tell the two apart. The prose already distinguishes them for a human reader -- a bolded
+ * **Before:** above the fence -- so the guard reads the same signal rather than inventing a second
+ * one nobody will remember to write.
+ *
+ * Deliberately narrow: it looks at the line immediately preceding the fence, so it cannot silently
+ * excuse a whole document.
+ */
+const HISTORICAL = /^\s*(?:\*\*)?(?:before|old|2\.x|previously)\b/i;
+
 function documentedCommands(): DocCommand[] {
   const found: DocCommand[] = [];
   for (const file of sources()) {
     let fence: string | null = null;
-    readFileSync(file, 'utf8')
-      .split('\n')
-      .forEach((line, i) => {
-        const open = /^\s*```(\w*)/.exec(line);
-        if (open) {
-          fence = null === fence ? (open[1] ?? '') : null;
-          return;
+    let historical = false;
+    const lines = readFileSync(file, 'utf8').split('\n');
+    lines.forEach((line, i) => {
+      const open = /^\s*```(\w*)/.exec(line);
+      if (open) {
+        if (null === fence) {
+          // The nearest non-blank line above the fence decides whether what follows is an
+          // instruction or a record of what used to work.
+          const above = lines
+            .slice(0, i)
+            .reverse()
+            .find((prev) => 0 < prev.trim().length);
+          historical = above !== undefined && HISTORICAL.test(above);
         }
-        if (null === fence || !RUNNABLE_FENCES.has(fence)) return;
-        const m = INVOCATION.exec(line.replace(/\s+#.*$/, ''));
-        const rest = m?.[1];
-        if (rest === undefined || isTemplate(rest)) return;
-        found.push({
-          file: file.replace(REPO, ''),
-          line: i + 1,
-          raw: line.trim(),
-          argv: tokenize(rest),
-        });
+        fence = null === fence ? (open[1] ?? '') : null;
+        return;
+      }
+      if (null === fence || !RUNNABLE_FENCES.has(fence) || historical) return;
+      const m = INVOCATION.exec(line.replace(/\s+#.*$/, ''));
+      const rest = m?.[1];
+      if (rest === undefined || isTemplate(rest)) return;
+      found.push({
+        file: file.replace(REPO, ''),
+        line: i + 1,
+        raw: line.trim(),
+        argv: tokenize(rest),
       });
+    });
   }
   return found;
 }

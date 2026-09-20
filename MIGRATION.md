@@ -71,24 +71,32 @@ Check these places for any of the ten old names in the table above:
 
 **The symptom if you miss it:** the agent asks for `reticle_snapshot`, your allowlist does not contain it, the call is refused before Reticle is asked, and Reticle looks broken when it is not.
 
-**The safest edit:** allow the nine current names — `reticle_act`, `reticle_act_and_wait`, `reticle_assert`, `reticle_look`, `reticle_navigate`, `reticle_observe`, `reticle_session`, `reticle_tools`, `reticle_verify` — and delete the old ones.
+**The safest edit:** allow the ten current names — `reticle_act`, `reticle_act_and_wait`, `reticle_assert`, `reticle_look`, `reticle_navigate`, `reticle_observe`, `reticle_run`, `reticle_session`, `reticle_tools`, `reticle_verify` — and delete the old ones. Do not leave `reticle_run` out: it is the hatch every unadvertised tool is reached through, and an allowlist without it turns section 3 into a dead end.
 
 ---
 
 ## 3. Twelve tools are no longer callable by default
 
-In 2.x the default surface carried `reticle_run`, a hatch that could invoke any tool by name even if it was not advertised. **The default surface in 3.1.0 is closed: there is no `reticle_run` on it.** Nine names are the whole of what can be called.
+The default surface is smaller than 2.x's: twelve tools that used to be advertised no longer are. They are all still REACHABLE, through `reticle_run { tool, args }`, which dispatches to any registered tool by name whether or not it is advertised.
 
-These twelve are affected. Unlike the ten in section 1, they have **no redirect** — calling one on a default daemon simply fails:
+3.1.0 shipped one release in which the hatch was absent and those twelve were reachable by nothing at all. That was a defect, and it is fixed: if you are reading this against 3.1.0 exactly, upgrade rather than working around it.
 
-`reticle_capabilities` · `reticle_clock` · `reticle_context` · `reticle_flow_replay` · `reticle_flow_save` · `reticle_intent` · `reticle_network_mock` · `reticle_record` · `reticle_run` · `reticle_screenshot` · `reticle_storage` · `reticle_visual_diff`
+These twelve are affected. Unlike the ten in section 1, they are not renamed — you call them through the hatch, or advertise them outright:
 
-**If you use any of them, do one of these two things.**
+`reticle_capabilities` · `reticle_clock` · `reticle_context` · `reticle_flow_replay` · `reticle_flow_save` · `reticle_intent` · `reticle_network_mock` · `reticle_record` · `reticle_screenshot` · `reticle_storage` · `reticle_visual_diff`
 
-**Either** start the daemon with the full surface, and call them directly by name:
+**If you use any of them, do one of these three things.**
+
+**The one-liner**, which needs no restart and no configuration — the hatch is on the default surface:
+
+```jsonc
+reticle_run { tool: "reticle_screenshot", args: { … } }
+```
+
+**Or** start the daemon with the full surface, and call them directly by name:
 
 ```bash
-RETICLE_ADVERTISE_ALL_TOOLS=1 npx @reticlehq/server daemon
+RETICLE_ADVERTISE_ALL_TOOLS=1 npx @reticlehq/server serve
 ```
 
 That advertises all thirty tools with output schemas. It is read **once, at daemon startup**, so setting it in an already-running daemon does nothing — restart it. It costs roughly seven times the per-turn schema budget, which is why it is not the default; it is meant for test suites that call by name, not for a running agent.
@@ -98,9 +106,9 @@ That advertises all thirty tools with output schemas. It is read **once, at daem
 | Instead of | Use |
 | --- | --- |
 | `reticle_flow_replay` | `reticle_verify { action: "flows" }` — replays every saved flow, no model in the loop |
-| `reticle_record` + `reticle_flow_save` | `reticle_verify { action: "explore", persona: "…" }` — it drives the app and **records what it drove as saved flows** for you, which is the recommended path. Building a flow by hand with `reticle_record` is genuinely not reachable on the default surface and needs the environment variable. |
+| `reticle_record` + `reticle_flow_save` | `reticle_verify { action: "explore", persona: "…" }` — it drives the app and **records what it drove as saved flows** for you, which is the recommended path. Building a flow by hand with `reticle_record` works through `reticle_run`. |
 
-`reticle_capabilities`, `reticle_context`, `reticle_intent`, screenshots, visual diff, the fake clock, network mocking and storage have **no advertised equivalent**. They need the environment variable.
+`reticle_capabilities`, `reticle_context`, `reticle_intent`, screenshots, visual diff, the fake clock, network mocking and storage have **no advertised equivalent**. Reach them through `reticle_run`, or advertise them with the environment variable.
 
 ---
 
