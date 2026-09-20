@@ -1,17 +1,6 @@
 /**
- * `reticle_intent` must never write a ledger into a checkout nobody drove.
- *
- * Reported three times against 2.14.0 (#994): an app connected carrying its own projectId, and
- * `reticle_intent { declare }` over the daemon HTTP transport wrote `intent.json` under the
- * DAEMON's startup cwd — a different project — "instead of refusing or using the connected app
- * project". `.reticle/intent.json` is a git-checked file, so this is uncommanded data loss in
- * somebody's repository, and the one reporter who caught it caught it with `git diff`.
- *
- * The routing half of that cluster is this: an agent that passes `sessionId` has named the project
- * too, and when the id resolves to nothing `sessionRoot` used to swallow the refusal and answer
- * with `deps.reticleRoot`. Driven here through the real tool handler rather than the helper,
- * because the property that matters is about BYTES — `createMemoryFs` exposes where they landed,
- * which is the only way to state "and nothing else was touched".
+ * Regression for #994: an unresolved explicit session must not redirect ledger access to the
+ * daemon's project. Exercise the real tool and assert the resulting filesystem bytes.
  */
 import { describe, expect, it } from 'vitest';
 import { INTENT_TOOLS } from './intent-tools.js';
@@ -30,7 +19,12 @@ const GONE_ID = 'gone-42';
 
 const tool = INTENT_TOOLS.find((t) => ReticleTool.INTENT === t.name);
 
-/** Two intents already in the other project's committed ledger, as a reporter's repo had. */
+/** Match createMemoryFs's normalized map keys on every host platform. */
+function ledgerKey(root: string): string {
+  return reticleDirPaths(root).intent.split('\\').join('/');
+}
+
+/** Existing valid intents in the other project's ledger. */
 const EXISTING_LEDGER = `${JSON.stringify(
   {
     version: 1,
@@ -45,7 +39,7 @@ const EXISTING_LEDGER = `${JSON.stringify(
 
 function scene(options: { liveId?: string; connected?: boolean }) {
   const { fs, written } = createMemoryFs();
-  written.set(reticleDirPaths(DAEMON_ROOT).intent, EXISTING_LEDGER);
+  written.set(ledgerKey(DAEMON_ROOT), EXISTING_LEDGER);
   const session = { id: options.liveId ?? LIVE_ID, projectId: APP_PROJECT };
   const deps = {
     fs,
@@ -87,12 +81,11 @@ describe('reticle_intent against a session id that names nothing', () => {
 
     await expect(tool?.handler(deps, { ...declare, sessionId: GONE_ID })).rejects.toThrow();
 
-    expect(
-      written.get(reticleDirPaths(DAEMON_ROOT).intent),
-      'the pre-call ledger of a repo nobody drove',
-    ).toBe(EXISTING_LEDGER);
+    expect(written.get(ledgerKey(DAEMON_ROOT)), 'the pre-call ledger of a repo nobody drove').toBe(
+      EXISTING_LEDGER,
+    );
     expect([...written.keys()], 'a refused call writes nothing at all').toEqual([
-      reticleDirPaths(DAEMON_ROOT).intent,
+      ledgerKey(DAEMON_ROOT),
     ]);
   });
 
@@ -111,8 +104,8 @@ describe('reticle_intent still routes the cases that were never broken', () => {
 
     await tool?.handler(deps, { ...declare, sessionId: LIVE_ID });
 
-    expect(written.has(reticleDirPaths(APP_ROOT).intent)).toBe(true);
-    expect(written.get(reticleDirPaths(DAEMON_ROOT).intent)).toBe(EXISTING_LEDGER);
+    expect(written.has(ledgerKey(APP_ROOT))).toBe(true);
+    expect(written.get(ledgerKey(DAEMON_ROOT))).toBe(EXISTING_LEDGER);
   });
 
   it("writes into the connected app's project when no session was named", async () => {
@@ -120,8 +113,8 @@ describe('reticle_intent still routes the cases that were never broken', () => {
 
     await tool?.handler(deps, declare);
 
-    expect(written.has(reticleDirPaths(APP_ROOT).intent)).toBe(true);
-    expect(written.get(reticleDirPaths(DAEMON_ROOT).intent)).toBe(EXISTING_LEDGER);
+    expect(written.has(ledgerKey(APP_ROOT))).toBe(true);
+    expect(written.get(ledgerKey(DAEMON_ROOT))).toBe(EXISTING_LEDGER);
   });
 
   /**
@@ -134,8 +127,8 @@ describe('reticle_intent still routes the cases that were never broken', () => {
 
     await tool?.handler(deps, declare);
 
-    const ledger = written.get(reticleDirPaths(DAEMON_ROOT).intent) ?? '';
+    const ledger = written.get(ledgerKey(DAEMON_ROOT)) ?? '';
     expect(ledger).toContain('cfp-delete-submission');
-    expect(written.has(reticleDirPaths(APP_ROOT).intent)).toBe(false);
+    expect(written.has(ledgerKey(APP_ROOT))).toBe(false);
   });
 });
