@@ -25,7 +25,7 @@ import { DATA_RETICLE_SOURCE_ATTR } from '@reticlehq/core';
 /** Stamped by @reticlehq/babel-plugin / @reticlehq/vite-plugin in dev as `file:line:column`. */
 const SOURCE_ATTR = DATA_RETICLE_SOURCE_ATTR;
 
-export interface SourceLocation {
+interface SourceLocation {
   file: string;
   line: number;
 }

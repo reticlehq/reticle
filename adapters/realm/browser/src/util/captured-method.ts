@@ -26,7 +26,7 @@
  * Returns undefined when the property is absent or inherited rather than own — a caller that needs a
  * fallback to the prototype chain should say so at its own call site rather than have it hidden here.
  */
-export function capturedMethod<T>(target: object, key: PropertyKey): T | undefined {
+function capturedMethod<T>(target: object, key: PropertyKey): T | undefined {
   return Object.getOwnPropertyDescriptor(target, key)?.value as T | undefined;
 }
 
