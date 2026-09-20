@@ -19,6 +19,10 @@ import {
   OPENAI_DRIVER_NAME,
 } from '@/features/harness/drivers.js';
 import { jevDriver, jevOptionsFromEnv } from '@/features/harness/jev-driver.js';
+import { buildDomainModel } from '@/judgement/domain/domain-model.js';
+import { readContract } from '@/memory/project/dir/reticle-dir.js';
+import { sessionRoot } from '@/memory/project/session-root.js';
+import { buildHarnessPlan, planAsText, type HarnessPlan } from './harness-plan.js';
 import { openAiDriver, openAiOptionsFromEnv } from '@/features/harness/openai-driver.js';
 import { fetchPlatformConfig } from '@/features/harness/platform-config.js';
 import {
@@ -58,6 +62,8 @@ export interface ExploreOptions {
 
 export interface ExploreResult {
   drive: HarnessResult;
+  /** What the drive set out to do, read from `.reticle` before it started. */
+  plan: HarnessPlan;
   /** Flows that exist now and did not before — the part of a drive that is worth paying for twice. */
   savedFlows: readonly string[];
   /**
@@ -187,6 +193,10 @@ export async function exploreApp(
 ): Promise<ExploreResult> {
   const maxSteps = options.maxSteps ?? maxStepsFromEnv(env);
   const before = new Set(await deps.flows.list());
+  // `.reticle` FIRST, before the app and before anything reads a line of source. It already holds
+  // every saved flow, the consequence that must hold for each, and the declared intent nobody has
+  // tested — which is the whole of what a drive should be deciding against.
+  const plan = await readPlan(deps, options.sessionId);
   const requested =
     options.driverName ?? env[ReticleEnv.HARNESS_DRIVER] ?? (await preferredDriver(env, options));
   const built =
@@ -197,11 +207,17 @@ export async function exploreApp(
 
   const drive = await runHarness(driver, reticleToolset(deps, pinned(options)), {
     maxSteps,
-    ...(options.focus === undefined ? {} : { focus: options.focus }),
+    // The plan rides in as standing instruction, so it is in front of the model on every turn
+    // rather than remembered from a first one. `focus` is the caller's own words and goes last:
+    // somebody who named a journey meant that journey, whatever the project's backlog says.
+    focus: [
+      planAsText(plan),
+      ...(options.focus === undefined ? [] : [`Focus: ${options.focus}`]),
+    ].join('\n\n'),
   });
 
   const after = await deps.flows.list();
-  return { drive, driverName: built.name, ...reconcileFlows(before, after, drive.toolCalls) };
+  return { drive, plan, driverName: built.name, ...reconcileFlows(before, after, drive.toolCalls) };
 }
 
 /**
@@ -283,6 +299,34 @@ async function preferredDriver(
 export function knownDriver(provider: string | undefined): string | undefined {
   if (provider === undefined) return undefined;
   return DRIVER_NAMES.some((name) => name === provider) ? provider : undefined;
+}
+
+/**
+ * Read the project's own record of what it does and what is proved about it.
+ *
+ * No browser, no model, no source. A failure here is "nothing is recorded yet", which is the
+ * ordinary state of a new project and not a reason to refuse to drive — so it answers an empty
+ * plan rather than throwing.
+ */
+async function readPlan(deps: ToolDeps, sessionId?: string): Promise<HarnessPlan> {
+  try {
+    const flows = [];
+    for (const name of await deps.flows.list()) {
+      const loaded = await deps.flows.load(name);
+      if (loaded.ok) flows.push(loaded.value);
+    }
+    const contract = await readContract(deps.fs, sessionRoot(deps, sessionId));
+    const project = await deps.project.read();
+    return buildHarnessPlan(
+      buildDomainModel(
+        flows,
+        contract.ok ? contract.capabilities : null,
+        project.ok ? project.file.runs : [],
+      ),
+    );
+  } catch {
+    return { steps: [], summary: 'The project record could not be read; driving without a plan.' };
+  }
 }
 
 function pinned(options: ExploreOptions): { sessionId?: string } {

@@ -65,6 +65,12 @@ export const EXPLORE_TOOLS: ToolDef[] = [
       /** Flows that already existed and were driven and written again. A second run's ordinary result. */
       rewroteFlows: z.array(z.string()),
       /**
+       * What the drive set out to do, read from `.reticle` BEFORE it started — every recorded
+       * journey with the consequence that must still hold, and the declared intent nobody has
+       * tested. Returned so the caller can see the drive was aimed rather than wandering.
+       */
+      plan: z.object({ summary: z.string(), steps: z.array(z.unknown()) }),
+      /**
        * What the drive did, derived from the calls it made and the verdicts the engine returned.
        *
        * Not the driver's narration. A driver that cannot write a sentence used to leave this empty,
@@ -92,7 +98,7 @@ export const EXPLORE_TOOLS: ToolDef[] = [
       const maxSteps = args['maxSteps'];
       const sessionId = args['sessionId'];
       const driver = args['driver'];
-      const { drive, savedFlows, rewroteFlows, driverName } = await exploreApp(deps, env, {
+      const { drive, savedFlows, rewroteFlows, driverName, plan } = await exploreApp(deps, env, {
         ...('string' === typeof persona ? { focus: persona } : {}),
         ...('number' === typeof maxSteps ? { maxSteps } : {}),
         ...('string' === typeof sessionId ? { sessionId } : {}),
@@ -104,6 +110,7 @@ export const EXPLORE_TOOLS: ToolDef[] = [
         steps: drive.steps,
         savedFlows: [...savedFlows],
         rewroteFlows: [...rewroteFlows],
+        plan: { summary: plan.summary, steps: [...plan.steps] },
         // Derived, not narrated. The driver's own `summary` is appended only when it said
         // something — it is the one part of this a model authored, so it goes last and is labelled.
         summary: [

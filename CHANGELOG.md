@@ -4,7 +4,25 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **A second driver for the harness, which cannot invent a tool call** (`@reticlehq/server`). `reticle_verify { action: "explore" }` takes a `driver`: `anthropic` generates its calls as text, `jev` answers typed questions against a state and picks from the controls actually on the page. Naming one that is not configured is an error, never a substitution — an A/B that quietly measured the same driver twice would be worse than no comparison. The result says which driver drove.
+- **An OpenAI driver**, so the comparison has the two models you might otherwise reach for rather than one.
+- **The harness reads `.reticle` before it drives.** Every saved flow with the consequence that must still hold, plus the signals and controls the app declares that no flow has ever asserted. The drive is aimed at that rather than at whatever looks interesting on the first page, and `explore` returns the plan it followed.
+- **One flow per page, named after the page.** A drive used to leave a single enormous recording behind; it now closes a journey when the app moves and saves it under the route it happened on.
+
+### Changed
+
+- **`RETICLE_CLOUD_KEY` is now `RETICLE_API_KEY`.** The old name keeps working and always will: the console printed it to everybody who ever connected a project, so it lives in shells and CI configs we cannot edit, and a rename that stops reading it looks like Reticle losing your credentials rather than renaming a variable.
+- **The harness uses the key `reticle link` already saved.** Signing in and linking used to leave you with "no model configured to drive the app" until you found the key in the console and exported it by hand. It now reads the one already on disk.
+
+### Fixed
+
+- **Eleven tools were reachable by nothing** (`@reticlehq/server`). `reticle_screenshot`, `reticle_visual_diff`, `reticle_clock`, `reticle_network_mock`, `reticle_storage` and six others were registered, advertised by nothing and answered `unknown tool` when asked about by name. The dispatch hatch that was supposed to reach them had been dropped on the reasoning that the surface "advertises everything" — which it does not. The catalogue went from 8 entries to 36.
+- **Tools were being renamed inside the text that explains them.** `reticle_flow_save` and `reticle_record` were both listed under the name `reticle_verify { action: "explore", persona }`, and their own parameter docs named a tool the reader had not called. Asking about `reticle_act_sequence` answered "reticle_act no longer exists", which is false.
+- **`reticle_tools` echoes the name you asked about.** A batch query for several retired names came back with entries you could not match to your questions.
+- **A drive that overwrote a flow reported saving nothing.** `savedFlows` was a before/after diff of names, so the ordinary second run — which re-drives the same journeys under the same names — said "nothing is proved and nothing will replay" about a flow sitting on disk. Rewrites are now reported separately.
+- **`explore` says WHY a drive kept nothing**: the tool call that failed, or the save that was accepted and wrote nothing. "Raise `maxSteps`" is true of a drive that ran long and of one that was refused at its save, and those need opposite responses.
 
 ## [3.1.0] — 2026-09-18
 
