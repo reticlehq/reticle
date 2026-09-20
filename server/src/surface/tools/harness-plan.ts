@@ -51,6 +51,16 @@ export interface HarnessPlan {
   steps: readonly PlanStep[];
   /** One line an agent or a human can read, derived rather than narrated. */
   summary: string;
+  /**
+   * The app's OWN vocabulary: the signals it declared in its capabilities, untested ones first.
+   *
+   * Carried out of `.reticle` for the same reason the steps are, and then used for something the
+   * plan itself never does. A drive declares what it expects BEFORE it acts, and a declaration can
+   * only be saved into the flow if it names something: `signal "order:placed"` records, a bare
+   * "some signal fires" does not, and a flow that records nothing replays green whatever the
+   * feature does. These are the names that make the difference.
+   */
+  vocabulary: readonly string[];
 }
 
 /**
@@ -157,11 +167,27 @@ export function buildHarnessPlan(domain: DomainModel): HarnessPlan {
     domain.gaps.declaredUntestedSignals.length + domain.gaps.declaredUntestedTestids.length;
   const omitted = totalRecorded - replays.length + (totalGaps - drives.length);
 
+  /*
+   * Untested declarations first: a signal no flow asserts is exactly the one a drive should be
+   * claiming, and it is the same ranking the drive steps above already use.
+   *
+   * Then the signals saved flows ALREADY assert, which is not redundant and not a nicety. Most apps
+   * declare no capabilities at all -- the production dashboard this was measured on has no
+   * `contract.json` -- so a vocabulary built only from declarations is empty for exactly the
+   * projects that most need one. A signal a saved flow asserts is better evidence than a
+   * declaration anyway: it is a name the app has actually been observed to fire.
+   */
+  const vocabulary = [
+    ...domain.gaps.declaredUntestedSignals,
+    ...domain.declared.signals,
+    ...domain.flows.flatMap((flow) => flow.signals),
+  ].filter((name, index, all) => 0 < name.length && all.indexOf(name) === index);
+
   const summary =
     0 === steps.length
       ? 'Nothing is recorded and nothing is declared: there is no plan to follow, so drive the app to find out what it does.'
       : `${String(totalRecorded)} recorded journey(s) and ${String(totalGaps)} untested declaration(s); the plan lists the ${String(steps.length)} worth doing first${0 === omitted ? '' : `, omitting ${String(omitted)}`}.`;
-  return { steps, summary };
+  return { steps, summary, vocabulary };
 }
 
 /**

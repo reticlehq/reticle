@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { sessionRoot } from '@/memory/project/session-root.js';
+import { projectForRoot } from '@/memory/project/project-for-root.js';
 import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
 import { stepCountSchema, timeoutMsSchema } from '@/surface/tools/args/numeric-bounds.js';
@@ -93,7 +95,8 @@ export const CRAWL_TOOLS: ToolDef[] = [
         ...(initialRoute === undefined ? [] : [initialRoute]),
         ...routesFromEvents(session.eventsSince(since)),
       ];
-      if (routes.length > 0) await deps.project.recordRoutes(routes);
+      if (routes.length > 0)
+        await projectForRoot(deps, sessionRoot(deps, session.id)).recordRoutes(routes);
       return report;
     },
   },

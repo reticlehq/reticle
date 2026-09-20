@@ -51,6 +51,7 @@ import { initImpact } from './memory/impact/impact-recorder.js';
 import { FlowStore } from './language/flows/flows.js';
 import { buildFlowChips } from './language/flows/flow-scope.js';
 import { ProjectStore } from './memory/project/project-store.js';
+import { projectStoreResolver } from './memory/project/project-for-root.js';
 import { attachRouteLearning } from './memory/project/learned-routes.js';
 import { AnnotationStore } from './language/flows/stores/annotation-store.js';
 import { createNodeFileSystem, type FileSystemPort } from './memory/project/fs/fs-port.js';
@@ -275,6 +276,11 @@ function attachJournal(
     // verdict is recorded against wherever the daemon was started, which is how one app's evidence
     // reached a different account's production dashboard.
     session.artifactRoot = resolveArtifactRoot(session.projectId).root;
+    // Here rather than on the start path, which was neither the moment we were about to write into a
+    // repository nor the root we were about to write into: it created `.reticle/` — holding nothing
+    // but the ignore file — wherever the daemon was launched, coming back every boot after the user
+    // deleted it, while the journals this ignore protects landed in another tree, uncovered.
+    if (deps.enabled) void ensureWorkspaceGitignore(deps.fs, session.artifactRoot);
     journalAttach(session);
     // Seed the learned ambient map so a fresh session starts knowing which regions churn, instead of
     // re-learning from zero. Best-effort + async: a late seed still helps, a failure is silent.
@@ -311,11 +317,6 @@ function attachJournal(
     void pruneVisualDiffs(deps.fs, deps.reticleRoot);
     // Write-only local copies of reports the outbox already carries.
     void pruneFeedback(deps.fs, deps.reticleRoot);
-    // Here rather than in `init`, because this is the moment we are actually about to write into
-    // somebody's repository — and the paths that reach it without ever running `init` (a plugin
-    // install, a hand-added client config) are exactly the ones that would otherwise leave an
-    // unexplained pile of untracked files behind. Best-effort and write-once; see the helper.
-    void ensureWorkspaceGitignore(deps.fs, deps.reticleRoot);
   }
 }
 
@@ -501,7 +502,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       flows,
     });
     const project = new ProjectStore(fs, reticleRoot, { now });
-    attachRouteLearning(bridge, project);
+    attachRouteLearning(bridge, projectStoreResolver(fs, project, reticleRoot, now));
     const annotations = new AnnotationStore();
     pool = createBrowserPool(options.headless ?? true);
     leaseReaper = new LeaseReaper(pool);
@@ -658,7 +659,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     onRunPersisted: () => syncNudge.run?.(),
   });
   const project = new ProjectStore(fs, reticleRoot, { now });
-  attachRouteLearning(bridge, project);
+  attachRouteLearning(bridge, projectStoreResolver(fs, project, reticleRoot, now));
   const annotations = new AnnotationStore();
   const pool = createBrowserPool(options.headless ?? true);
   const leaseReaper = new LeaseReaper(pool);

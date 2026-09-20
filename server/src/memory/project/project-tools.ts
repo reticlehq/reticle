@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { sessionRoot } from './session-root.js';
+import { projectForRoot } from './project-for-root.js';
 import { ProjectReadError, RunStatus, type RunRecord } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { countSchema } from '@/surface/tools/args/numeric-bounds.js';
@@ -135,7 +137,8 @@ export const PROJECT_TOOLS: ToolDef[] = [
       const cloud = await cloudRegression(deps, asString(args['sessionId']));
       const withCloud = <T extends object>(obj: T): T =>
         cloud === undefined ? obj : { ...obj, cloud };
-      const read = await deps.project.read();
+      const project = projectForRoot(deps, sessionRoot(deps, asString(args['sessionId'])));
+      const read = await project.read();
       if (!read.ok) {
         return withCloud({
           error:
@@ -163,7 +166,7 @@ export const PROJECT_TOOLS: ToolDef[] = [
           learned: read.file.learned,
         });
       }
-      const lastRun = await deps.project.lastRun(name);
+      const lastRun = await project.lastRun(name);
       const pair = lastTwoFor(read.file.runs, name);
       //: the RICH run diff (per-flow duration deltas past a noise floor, status changes, new/removed
       // flows, verdict change) over the last two verification ARTIFACTS. That lives alongside — not

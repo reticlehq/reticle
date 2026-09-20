@@ -181,3 +181,45 @@ describe('a plan on a project with a lot of history', () => {
     expect(plan.steps[0]?.target).toBe('the-one-that-matters');
   });
 });
+
+/**
+ * The names a drive can CLAIM, which is a different question from what it should do.
+ *
+ * A declaration only survives into a saved flow if it names something: `signal "order:placed"`
+ * records and replays, "some signal fires" is dropped at record time and leaves a flow that passes
+ * whatever the feature does. Measured on a real dashboard: 0 of 22 steps across 16 machine-driven
+ * flows carried a single expectation, because every consequence on offer was unbound.
+ */
+describe('the vocabulary a drive is given to claim with', () => {
+  it('offers the declared signals nobody has tested first', () => {
+    const plan = buildHarnessPlan(
+      model({
+        declared: { testids: 0, signals: ['a:fired', 'b:fired'], stores: [] },
+        gaps: {
+          unassertedFlows: [],
+          declaredUntestedSignals: ['b:fired'],
+          declaredUntestedTestids: [],
+        },
+      }),
+    );
+    expect(plan.vocabulary[0]).toBe('b:fired');
+    expect(plan.vocabulary).toContain('a:fired');
+  });
+
+  /** Most apps declare nothing. A vocabulary that only reads declarations is empty where it matters. */
+  it('falls back to the signals saved flows already assert', () => {
+    const asserted = { ...flow('checkout', 'signal order:placed'), signals: ['order:placed'] };
+    const plan = buildHarnessPlan(model({ flows: [asserted] }));
+    expect(plan.vocabulary).toEqual(['order:placed']);
+  });
+
+  it('says the same name once, however many flows assert it', () => {
+    const a = { ...flow('one', 'x'), signals: ['order:placed'] };
+    const b = { ...flow('two', 'y'), signals: ['order:placed'] };
+    expect(buildHarnessPlan(model({ flows: [a, b] })).vocabulary).toEqual(['order:placed']);
+  });
+
+  it('is empty, rather than absent, for a project that knows nothing yet', () => {
+    expect(buildHarnessPlan(model()).vocabulary).toEqual([]);
+  });
+});

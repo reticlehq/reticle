@@ -63,6 +63,8 @@ export class FakeBrowser {
     port: number,
     private readonly sessionId: string,
     private readonly hasCapabilities = false,
+    /** The pairing token to present, for a bridge that enforces one. Omitted = tokenless bridge. */
+    private readonly token: string | undefined = undefined,
   ) {
     // Real browsers always send an Origin on the WS handshake; simulate a loopback app page.
     this.#ws = new WebSocket(`ws://${LOOPBACK_HOST}:${String(port)}${RETICLE_WS_PATH}`, {
@@ -81,6 +83,7 @@ export class FakeBrowser {
           title: 'Checkout',
           adapters: [],
           hasCapabilities: this.hasCapabilities,
+          ...(this.token === undefined ? {} : { token: this.token }),
         });
         this.#ws.on('message', (raw) => {
           this.#onMessage(JSON.parse((raw as Buffer).toString('utf8')) as Record<string, unknown>);

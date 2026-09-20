@@ -22,7 +22,14 @@
  * thing Reticle sells the absence of.
  */
 
-import { ReticleEnv, ReticleTool, apiKeyFrom, asRecord, parseInteractive } from '@reticlehq/core';
+import {
+  RETICLE_URL_PARAM,
+  ReticleEnv,
+  ReticleTool,
+  apiKeyFrom,
+  asRecord,
+  parseInteractive,
+} from '@reticlehq/core';
 
 import { FINISH_TOOL } from './harness.js';
 import type { HistoryEntry, ModelDriver, ModelTurn, ToolRequest } from './harness.js';
@@ -147,30 +154,114 @@ const TEARDOWN_TURNS = 3;
  * and endpoint paths) and declare `urlContains`/`name` instead of a bare kind. Until then `state`
  * and `signal` are the trustworthy ones and `net` is the one to distrust on a chatty app.
  */
-interface Consequence {
+export interface Consequence {
   predicate: Record<string, unknown>;
   describes: string;
+  /**
+   * Whether a SAVED FLOW can carry this claim, which is a different question from whether the drive
+   * can prove it.
+   *
+   * A recorded step keeps an expectation only in the forms a replay can re-check, and that filter
+   * refuses every unbound kind: `signal "export:generated"` survives, a bare "some signal fires"
+   * does not; `net { method: "POST" }` survives, a bare "some request happens" does not; `not` and
+   * `anyOf` have no representation at all.
+   *
+   * Measured on a real dashboard before this field existed: every one of the four consequences on
+   * offer was unbound, so 0 of 22 steps across 16 machine-driven flows recorded a single
+   * expectation, against 211 of 419 in the hand-authored flows beside them. The drive proved things
+   * and then saved flows that had forgotten all of it. Since a flow is meant to BE the regression
+   * suite, that is the product's own claim failing at its last step: those flows can only ever
+   * catch "the click stopped landing", never "the feature broke".
+   */
+  recordable: boolean;
 }
 
 /**
- * The consequences on offer, given where the app currently is.
+ * The app's own route, with Reticle's fingerprints wiped off it.
  *
- * A function of the CURRENT ROUTE rather than a constant, and that is the whole of the fix below.
+ * A pooled launcher appends `__reticle_opened=1` to the URL it opens, and that parameter ended up
+ * inside a declared consequence: "this click leaves a route containing /?__reticle_opened=1". On a
+ * hash-routed app that claim can never hold, because the query string never changes -- only the
+ * fragment does -- so every navigation link was a guaranteed red, and the red was about OUR query
+ * parameter rather than about the application. Found by making a failed action say what it claimed;
+ * before that it read as an ordinary "the declared consequence did not hold".
+ *
+ * The fragment is kept, and is the point: on a hash-routed app it is the only part that moves.
  */
-function consequencesFor(route: string | undefined): Record<string, Consequence> {
-  const base: Record<string, Consequence> = {
-    signal: {
-      predicate: { kind: 'signal' },
-      describes: 'The app fires one of its own signals (the strongest evidence it did something).',
-    },
-    net: {
-      predicate: { kind: 'net' },
-      describes: 'The app sends a request to its backend — expect this for anything that saves.',
-    },
-    any: {
-      predicate: { kind: 'anyOf', predicates: [{ kind: 'signal' }, { kind: 'net' }] },
-      describes: 'The app sends a request OR fires a signal, but which one is not predictable.',
-    },
+export function appRoute(route: string): string {
+  const [pathAndQuery = '', ...hash] = route.split('#');
+  const [path = '', query] = pathAndQuery.split('?');
+  const kept =
+    query === undefined
+      ? ''
+      : query
+          .split('&')
+          .filter((pair) => !Object.values(RETICLE_URL_PARAM).some((p) => pair.startsWith(`${p}=`)))
+          .join('&');
+  const fragment = 0 === hash.length ? '' : `#${hash.join('#')}`;
+  return `${path}${0 === kept.length ? '' : `?${kept}`}${fragment}`;
+}
+
+/**
+ * How many of the app's declared signals are offered as consequences.
+ *
+ * Every one is a line in a prompt and a branch for the model to weigh, and a contract can declare
+ * dozens. The plan hands them over untested-first, so a cap takes the ones a drive most needs to
+ * claim rather than whichever the contract happened to list first.
+ */
+const MAX_SIGNAL_CONSEQUENCES = 6;
+
+/**
+ * The consequences on offer, given where the app currently is and what it says it can do.
+ *
+ * Two things shape this list, and the second one was missing for a whole release.
+ *
+ * It is a function of the CURRENT ROUTE, because "this takes us off the page we are on" is only
+ * falsifiable against a route actually read.
+ *
+ * It is also a function of the app's OWN VOCABULARY, because an unbound claim cannot be saved. A
+ * drive that declares "some signal fires" proves something real at the time and writes a flow that
+ * asserts nothing, so every later replay passes as long as the clicks still land. Offering the
+ * declared signal NAMES turns the same choice into one a flow can keep, and costs nothing extra:
+ * the names are already read out of `.reticle` to build the plan.
+ */
+export function consequencesFor(
+  route: string | undefined,
+  vocabulary: readonly string[] = [],
+): Record<string, Consequence> {
+  const base: Record<string, Consequence> = {};
+
+  // The app's own words first. A signal is the strongest evidence there is -- the application
+  // itself saying what it did -- and a named one is the only form of that a flow can carry.
+  for (const name of vocabulary.slice(0, MAX_SIGNAL_CONSEQUENCES)) {
+    base[`signal ${name}`] = {
+      predicate: { kind: 'signal', name },
+      describes: `The app fires its own "${name}" signal.`,
+      recordable: true,
+    };
+  }
+
+  base['saves'] = {
+    predicate: { kind: 'net', method: 'POST' },
+    describes: 'The app POSTs to its backend — expect this for anything that creates or submits.',
+    recordable: true,
+  };
+  base['updates'] = {
+    predicate: { kind: 'net', method: 'PATCH' },
+    describes: 'The app PATCHes its backend — expect this for a setting or an edit being saved.',
+    recordable: true,
+  };
+  base['loads'] = {
+    predicate: { kind: 'net', method: 'GET' },
+    describes: 'The app fetches data — expect this for a filter, a search or a page of results.',
+    recordable: true,
+  };
+  base['any'] = {
+    predicate: { kind: 'anyOf', predicates: [{ kind: 'signal' }, { kind: 'net' }] },
+    describes:
+      'The app sends a request OR fires a signal, but which one is not predictable. Proves the ' +
+      'action did something; too vague to save as a regression test.',
+    recordable: false,
   };
 
   /**
@@ -195,6 +286,11 @@ function consequencesFor(route: string | undefined): Record<string, Consequence>
     base['navigates'] = {
       predicate: { kind: 'not', predicate: { kind: 'route', contains: route } },
       describes: `The app leaves the current page (${route}) — expect this for a navigation link or anything that opens another screen.`,
+      // A negation has no representation a replay can re-check, so this one proves the click and
+      // saves nothing. Kept anyway: without it, every nav link on a client-routed app was handed a
+      // declaration it could not satisfy, and 21 of 42 actions came back a false red. A drive that
+      // is honest now beats a flow that would have been stronger later.
+      recordable: false,
     };
   }
   return base;
@@ -267,6 +363,14 @@ export interface JevDriverOptions {
    * rather than against whatever happens to be on the page.
    */
   plan?: readonly DrivePlanStep[];
+  /**
+   * The signal names the app declares, untested ones first, read out of `.reticle` with the plan.
+   *
+   * Offered as consequences so a declaration can name something. Absent is not a failure: the
+   * method-bound network consequences are still recordable, and an app that declares no signals is
+   * simply an app with less to claim.
+   */
+  vocabulary?: readonly string[];
   /** Injected for tests. Defaults to the platform `fetch`. */
   fetch?: HarnessFetch;
 }
@@ -438,7 +542,7 @@ function readState(history: readonly HistoryEntry[]): DriveState {
         const tree = result['tree'];
         if ('string' === typeof tree) state.tree = tree;
         const route = asRecord(result['status'])['route'];
-        if ('string' === typeof route) state.route = route;
+        if ('string' === typeof route) state.route = appRoute(route);
       }
       if (Tool.ACT_AND_WAIT === outcome.name) {
         const ref = asRecord(outcome.args)['ref'];
@@ -806,7 +910,7 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
       // independent, so "what should I expect from the element I am about to choose" cannot be
       // asked in the same breath as "which element". It costs another ~350ms and ~$0.00004, and it
       // costs nothing from the STEP budget, which is what is actually scarce here.
-      const offered = consequencesFor(drive.route);
+      const offered = consequencesFor(drive.route, options.vocabulary);
       const expectation = await callJev(
         { apiKey: options.apiKey, model, baseUrl, path, doFetch },
         `${buildState(input.system, input.history, drive, objective)}\n\nABOUT TO: ${action} ${picked.desc}`,
@@ -814,7 +918,7 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
           expected_consequence: {
             type: 'choice',
             instructions:
-              'If this action works, what should the application itself be observed to do? Choose the consequence you are CONFIDENT of. A wrong guess is reported as a defect in the application, so when no listed consequence clearly follows from this control, choose `nothing` — claiming less is always better than claiming wrongly.',
+              'If this action works, what should the application itself be observed to do? Choose the consequence you are CONFIDENT of. A wrong guess is reported as a defect in the application, so when no listed consequence clearly follows from this control, choose `nothing` — claiming less is always better than claiming wrongly. Among consequences you are equally confident of, prefer the most SPECIFIC one: a named signal over a request, a request over anything vaguer, because only a specific claim survives into the saved test.',
             criteria: {
               ...Object.fromEntries(Object.entries(offered).map(([key, v]) => [key, v.describes])),
               [NO_CONSEQUENCE]:

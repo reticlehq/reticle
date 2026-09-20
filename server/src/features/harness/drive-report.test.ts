@@ -182,3 +182,52 @@ describe('a run that replayed rather than drove', () => {
     expect(describeDrive([], [])).toContain('nothing was replayed');
   });
 });
+
+/**
+ * A red that does not say what was claimed is not triageable.
+ *
+ * "3 action(s) FAILED — the app did not do what the drive declared it would" is either three
+ * defects or three wrong guesses, and those need opposite responses. This got sharper the day the
+ * driver started declaring SPECIFIC consequences: a bare "something happened" is nearly always
+ * satisfied, while "a POST request" can be wrong about a control that legitimately does not post.
+ */
+describe('a failed action says what it expected', () => {
+  const failed = (until: unknown) => [
+    call(
+      'reticle_act_and_wait',
+      { ref: 'e5', action: 'click', intent: 'click button "Save"', until },
+      { verified: 'no', because: 'no request was observed' },
+    ),
+  ];
+
+  it('names a declared signal', () => {
+    const text = describeDrive(failed({ kind: 'signal', name: 'order:placed' }), []);
+    expect(text).toContain('claimed signal order:placed');
+  });
+
+  it('names the method of a declared request', () => {
+    expect(describeDrive(failed({ kind: 'net', method: 'POST' }), [])).toContain(
+      'claimed a POST request',
+    );
+  });
+
+  it('reads a route negation as leaving the page', () => {
+    const text = describeDrive(
+      failed({ kind: 'not', predicate: { kind: 'route', contains: '/settings' } }),
+      [],
+    );
+    expect(text).toContain('claimed to leave');
+  });
+
+  /** A pass does not need it, and this report is read on every drive. */
+  it('stays quiet about the claim when the action passed', () => {
+    const passed = [
+      call(
+        'reticle_act_and_wait',
+        { ref: 'e5', action: 'click', intent: 'click x', until: { kind: 'net', method: 'POST' } },
+        { verified: 'yes', because: 'POST /api/save' },
+      ),
+    ];
+    expect(describeDrive(passed, [])).not.toContain('claimed');
+  });
+});

@@ -9,6 +9,7 @@
  */
 
 import { ReticleEnv, ReticleTool, apiKeyFrom, asRecord } from '@reticlehq/core';
+import { projectForRoot } from '@/memory/project/project-for-root.js';
 import type { ToolDeps } from './tool-kit.js';
 import { harnessDriver, harnessOptionsFromEnv } from '@/features/harness/driver.js';
 import {
@@ -214,7 +215,7 @@ export async function exploreApp(
     options.driverName ?? env[ReticleEnv.HARNESS_DRIVER] ?? (await preferredDriver(env, options));
   const built =
     options.driver === undefined
-      ? buildDriver(env, maxSteps, plan.steps, requested)
+      ? buildDriver(env, maxSteps, plan, requested)
       : { driver: options.driver, name: CUSTOM_DRIVER_NAME };
   const driver = built.driver;
 
@@ -441,8 +442,9 @@ async function readPlan(deps: ToolDeps, sessionId?: string): Promise<HarnessPlan
       const loaded = await deps.flows.load(name);
       if (loaded.ok) flows.push(loaded.value);
     }
-    const contract = await readContract(deps.fs, sessionRoot(deps, sessionId));
-    const project = await deps.project.read();
+    const root = sessionRoot(deps, sessionId);
+    const contract = await readContract(deps.fs, root);
+    const project = await projectForRoot(deps, root).read();
     return buildHarnessPlan(
       buildDomainModel(
         flows,
@@ -451,7 +453,11 @@ async function readPlan(deps: ToolDeps, sessionId?: string): Promise<HarnessPlan
       ),
     );
   } catch {
-    return { steps: [], summary: 'The project record could not be read; driving without a plan.' };
+    return {
+      steps: [],
+      summary: 'The project record could not be read; driving without a plan.',
+      vocabulary: [],
+    };
   }
 }
 
@@ -475,9 +481,13 @@ function pinned(options: ExploreOptions): { sessionId?: string } {
 function buildDriver(
   env: Record<string, string | undefined>,
   maxSteps: number,
-  plan: readonly DrivePlanStep[],
+  plan: HarnessPlan,
   requested?: string,
 ): { driver: ModelDriver; name: string } {
+  // The two halves of what `.reticle` knows, handed to the one driver that can use both: what is
+  // worth doing, and the names the app uses for what it does. The second is what lets a declared
+  // consequence be SAVED rather than merely proved; see `consequencesFor`.
+  const fromReticle = { plan: plan.steps as readonly DrivePlanStep[], vocabulary: plan.vocabulary };
   const jev = jevOptionsFromEnv(env);
   const anthropic = harnessOptionsFromEnv(env);
   const asked = requested;
@@ -490,7 +500,7 @@ function buildDriver(
     // The Jev driver is told the budget because it has a teardown to reach; the Anthropic driver is
     // not, because it calls `finish` itself and being handed a number it did not ask for is how a
     // second copy of the budget starts drifting from the loop's.
-    return { driver: jevDriver({ ...jev, maxSteps, plan }), name: JEV_DRIVER_NAME };
+    return { driver: jevDriver({ ...jev, maxSteps, ...fromReticle }), name: JEV_DRIVER_NAME };
   }
   if (ANTHROPIC_DRIVER_NAME === asked) {
     if (anthropic === undefined) throw new Error(MSG_NO_HARNESS_KEY);
@@ -506,6 +516,6 @@ function buildDriver(
   if (anthropic !== undefined)
     return { driver: harnessDriver(anthropic), name: ANTHROPIC_DRIVER_NAME };
   if (jev !== undefined)
-    return { driver: jevDriver({ ...jev, maxSteps, plan }), name: JEV_DRIVER_NAME };
+    return { driver: jevDriver({ ...jev, maxSteps, ...fromReticle }), name: JEV_DRIVER_NAME };
   throw new Error(MSG_NO_HARNESS_KEY);
 }

@@ -49,6 +49,7 @@ import { consultSubjectFor, selectConsulted, type ConsultedMemory } from './flow
 import { log } from '@/log.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { flowsForSession } from './flow-store-for-session.js';
+import { projectForRoot } from '@/memory/project/project-for-root.js';
 import { FlowParseNote } from './flow-expect-grammar.js';
 
 export function latestRecordedFlow(
@@ -106,7 +107,7 @@ async function recordReplayRun(
   recordRoot: string,
 ): Promise<void> {
   const runStatus = replayToRunStatus(status);
-  await deps.project.recordRun({
+  await projectForRoot(deps, recordRoot).recordRun({
     kind: RunKind.FLOW_REPLAY,
     name,
     status: runStatus,

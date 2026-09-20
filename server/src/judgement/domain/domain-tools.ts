@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { projectForRoot } from '@/memory/project/project-for-root.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
 import { asNumber, asString } from '@reticlehq/core';
 import type { FlowFile } from '@reticlehq/core';
@@ -91,8 +92,9 @@ export const DOMAIN_TOOLS: ToolDef[] = [
         const loaded = await deps.flows.load(name);
         if (loaded.ok) flows.push(loaded.value);
       }
-      const contract = await readContract(deps.fs, sessionRoot(deps, asString(args['sessionId'])));
-      const project = await deps.project.read();
+      const root = sessionRoot(deps, asString(args['sessionId']));
+      const contract = await readContract(deps.fs, root);
+      const project = await projectForRoot(deps, root).read();
       const runs = project.ok ? project.file.runs : [];
       const model = buildDomainModel(flows, contract.ok ? contract.capabilities : null, runs);
       // Self-instrumentation: turn located gaps (unasserted flows with a source stamp) into apply-ready diffs.

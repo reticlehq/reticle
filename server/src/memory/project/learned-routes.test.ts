@@ -59,7 +59,7 @@ describe('learned routes', () => {
       },
     };
 
-    attachRouteLearning(bridge, { recordRoutes });
+    attachRouteLearning(bridge, () => ({ recordRoutes }));
     ready?.(session);
     listener?.(routeEvent('/compose'));
     listener?.(routeEvent('/deployments'));
@@ -73,7 +73,51 @@ describe('learned routes', () => {
   });
 });
 
+/**
+ * Learned routes belong to the app that was driven, not to wherever the daemon was launched.
+ *
+ * The store was bound to the daemon's own root at construction, so every session's routes were
+ * written there — which put a `.reticle/project.json` into a directory the user had never
+ * instrumented (reported from the field as `.reticle` reappearing in a backend), and left the
+ * project's own memory empty while a stranger's filled up.
+ */
+describe('learned routes are recorded against the session that learned them', () => {
+  it('writes each session’s routes to its own artifact root', async () => {
+    vi.useFakeTimers();
+    const calls: { root: string; routes: readonly string[] }[] = [];
+    const storeFor = (root: string | undefined) => ({
+      recordRoutes: (routes: readonly string[]): Promise<void> => {
+        calls.push({ root: root ?? 'daemon', routes });
+        return Promise.resolve();
+      },
+    });
+    const sessions: TestSession[] = [
+      {
+        url: 'https://a.test/checkout',
+        artifactRoot: '/repo/web/.reticle',
+        onEvent: () => () => undefined,
+      },
+      {
+        url: 'https://b.test/admin',
+        artifactRoot: '/repo/admin/.reticle',
+        onEvent: () => () => undefined,
+      },
+    ];
+    attachRouteLearning(
+      { sessions: { all: () => sessions }, attachSessionReady: () => undefined },
+      storeFor,
+    );
+    await vi.advanceTimersByTimeAsync(ROUTE_PERSIST_DEBOUNCE_MS);
+
+    expect(calls).toEqual([
+      { root: '/repo/web/.reticle', routes: ['/checkout'] },
+      { root: '/repo/admin/.reticle', routes: ['/admin'] },
+    ]);
+  });
+});
+
 interface TestSession {
   url: string;
+  artifactRoot?: string | undefined;
   onEvent(handler: (event: ReticleEvent) => void): () => void;
 }

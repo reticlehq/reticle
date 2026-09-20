@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { sessionRoot } from '@/memory/project/session-root.js';
+import { projectForRoot } from '@/memory/project/project-for-root.js';
 import { coverageRegressed, observabilityOf } from '@reticlehq/engine/evidence/observability.js';
 import { foldFeatureCapture } from '@/surface/tools/feature-capture.js';
 import { foldToolHitRate } from '@/surface/tools/tool-hit-rate.js';
@@ -182,10 +184,11 @@ export function buildCoverageTools(toolNames: () => readonly string[]): ToolDef[
         // The number, and the floor under it, together. A coverage figure that can only ever be
         // reported and never contradicted is one an agent learns to satisfy rather than to earn.
         const observability = observabilityOf(session.actedRefs(), gaps);
-        const best = await deps.project.bestObservability();
+        const project = projectForRoot(deps, sessionRoot(deps, sessionId));
+        const best = await project.bestObservability();
         const regressed = coverageRegressed(best, observability);
         if (observability.percent !== undefined) {
-          await deps.project.raiseObservability(observability.percent);
+          await project.raiseObservability(observability.percent);
         }
         return {
           total: parseControls(tree).length,

@@ -31,6 +31,15 @@ export interface DrivenStep {
   verified: string | undefined;
   /** The one sentence naming the deciding evidence. */
   because: string | undefined;
+  /**
+   * What the drive CLAIMED would happen, in the words it declared before acting.
+   *
+   * Carried because "3 action(s) FAILED" is not triageable without it. A failure is either a defect
+   * in the app or a wrong guess by the driver, those need opposite responses, and the declared
+   * consequence is the only thing that tells them apart. Shown on failures only: on a pass it is
+   * noise, and the report is read every drive.
+   */
+  claimed: string | undefined;
 }
 
 /** How many steps are listed before the account starts counting instead of naming. */
@@ -93,6 +102,35 @@ export function replayedFlows(
   return out;
 }
 
+/**
+ * The declared consequence, as a short phrase rather than a JSON dump.
+ *
+ * One line per kind, because a reader triaging a red needs "it claimed a POST" and not the
+ * predicate's wire shape. Unknown kinds fall back to the kind name, which is still more than the
+ * nothing this used to say.
+ */
+function describeClaim(until: unknown): string | undefined {
+  const p = asRecord(until);
+  const kind = asString(p['kind']);
+  if (kind === undefined) return undefined;
+  if ('signal' === kind) {
+    const name = asString(p['name']);
+    return name === undefined ? 'a signal' : `signal ${name}`;
+  }
+  if ('net' === kind) {
+    const method = asString(p['method']);
+    const url = asString(p['urlContains']);
+    return `a ${method ?? ''} request${url === undefined ? '' : ` to ${url}`}`.replace('  ', ' ');
+  }
+  if ('route' === kind) return `a route containing ${asString(p['contains']) ?? '?'}`;
+  if ('not' === kind) {
+    const inner = describeClaim(p['predicate']);
+    return inner === undefined ? 'not something' : `to leave ${inner}`;
+  }
+  if ('anyOf' === kind) return 'a request or a signal';
+  return kind;
+}
+
 /** Reduce the raw call log to the actions that actually drove the app. */
 export function drivenSteps(toolCalls: readonly ToolOutcome[]): DrivenStep[] {
   const steps: DrivenStep[] = [];
@@ -107,6 +145,7 @@ export function drivenSteps(toolCalls: readonly ToolOutcome[]): DrivenStep[] {
       target: targetOf(args, result),
       verified: call.isError ? 'error' : asString(result['verified']),
       because: call.isError ? asString(result['error']) : asString(result['because']),
+      claimed: describeClaim(args['until']),
     });
   }
   return steps;
@@ -178,7 +217,13 @@ export function describeDrive(
   for (const step of steps.slice(0, MAX_LISTED)) {
     const verdict = step.verified ?? 'nothing declared';
     const because = step.because === undefined ? '' : ` — ${step.because}`;
-    lines.push(`  ${step.action} ${step.target}: ${verdict}${because}`);
+    // The claim, on failures only: it is what separates "the app is broken" from "the drive guessed
+    // wrong", and those two readings need opposite responses from whoever reads this.
+    const claimed =
+      Verified.NO === step.verified && step.claimed !== undefined
+        ? ` (claimed ${step.claimed})`
+        : '';
+    lines.push(`  ${step.action} ${step.target}: ${verdict}${claimed}${because}`);
   }
   if (MAX_LISTED < steps.length) lines.push(`  … and ${String(steps.length - MAX_LISTED)} more.`);
 

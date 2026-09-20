@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { jevDriver, jevOptionsFromEnv } from './jev-driver.js';
+import { appRoute, consequencesFor, jevDriver, jevOptionsFromEnv } from './jev-driver.js';
+import { readsDomState } from '@reticlehq/engine/evidence/already-true.js';
+import { PredicateSchema } from '@reticlehq/engine/question/predicate/predicate.js';
 import type { HistoryEntry, ModelTurn, ToolOutcome } from './harness.js';
 
 /**
@@ -273,9 +275,12 @@ describe('the jev driver builds every call from the page', () => {
   it('declares a consequence before acting', async () => {
     const result = await turn(READY, {
       ...chose('e5'),
-      expected_consequence: { type: 'choice', choice: 'net', confidence: 0.9 },
+      expected_consequence: { type: 'choice', choice: 'saves', confidence: 0.9 },
     });
-    expect(result.calls[0]?.args['until']).toEqual({ kind: 'net' });
+    // BOUND, not bare. A bare `{ kind: 'net' }` proves the action did something and then vanishes
+    // at record time, because a replay cannot re-check "some request happened" -- which is how
+    // sixteen machine-driven flows came to assert nothing at all.
+    expect(result.calls[0]?.args['until']).toEqual({ kind: 'net', method: 'POST' });
   });
 
   it('declares nothing when nothing observable should change, rather than inventing an expectation', async () => {
@@ -291,14 +296,42 @@ describe('the jev driver builds every call from the page', () => {
    * those is unconditionally true — there is always a current route — and the engine refuses it as
    * `already_true`. Offering them at all is how this driver spent three runs proving nothing.
    */
-  it('never offers a consequence that would be true before the action', async () => {
-    const seen = { bodies: [] as string[] };
-    await turn(READY, chose('e5'), seen);
-    const body = JSON.parse(seen.bodies[1] ?? '{}') as {
-      questions: { expected_consequence: { criteria: Record<string, string> } };
-    };
-    const offered = Object.keys(body.questions.expected_consequence.criteria);
-    expect(offered.sort()).toEqual(['any', 'navigates', 'net', 'nothing', 'signal']);
+  it('never offers a consequence that would be true before the action', () => {
+    // Asserted as the PROPERTY rather than as a list of names, because the list has changed twice
+    // and a name list fails for the wrong reason every time it does. `readsDomState` is the same
+    // function the engine uses to answer `already_true`, so this cannot drift from the rule itself.
+    //
+    // "Live-reading" is not the defect by itself -- it is what `readsDomState` flags as worth
+    // checking BEFORE the act, and the route negation below is flagged for exactly that reason and
+    // is correct. The defect is a live-reading kind offered BARE: there is always a current route
+    // and always live store state, so `{ kind: 'route' }` is unconditionally true and proves
+    // nothing. A negation of the route we are standing on is the opposite: false by construction
+    // before the act, true only if the app really moved.
+    const offending = Object.entries(consequencesFor('/settings', ['order:placed']))
+      .filter(([, c]) => {
+        if ('not' === c.predicate['kind']) return false;
+        const parsed = PredicateSchema.safeParse(c.predicate);
+        return parsed.success && readsDomState(parsed.data);
+      })
+      .map(([name]) => name);
+    expect(offending, `these would be true before the action ran: ${offending.join(', ')}`).toEqual(
+      [],
+    );
+  });
+
+  /**
+   * The other half of a declaration, and the one that was missing.
+   *
+   * A consequence that cannot be SAVED leaves a flow that asserts nothing, so every later replay
+   * passes as long as the clicks still land. Measured before this: 0 of 22 steps across 16
+   * machine-driven flows carried an expectation. The cross-package check lives in
+   * `harness-declares-what-a-flow-can-keep.test.ts`; this one only pins that the app's own
+   * vocabulary reaches the offers at all, since that is what the driver is responsible for.
+   */
+  it('offers the signals the app declares, by name', () => {
+    const offered = Object.keys(consequencesFor('/settings', ['order:placed', 'export:generated']));
+    expect(offered).toContain('signal order:placed');
+    expect(offered).toContain('signal export:generated');
   });
 
   /**
@@ -721,5 +754,37 @@ describe('choosing which tool to use next', () => {
     };
     await turn([...READY, read], chose('e5'), seen);
     expect(sent(seen.bodies[0]).state).toContain('(nothing yet)');
+  });
+});
+
+/**
+ * A declared consequence must be about the APPLICATION, never about Reticle.
+ *
+ * The pooled launcher appends `__reticle_opened=1` to the URL it opens, and that parameter reached a
+ * declared predicate: "this click leaves a route containing /?__reticle_opened=1". On a hash-routed
+ * app the query string never changes -- only the fragment does -- so the claim could never hold and
+ * every navigation link was a guaranteed red about our own query parameter. Measured on a real
+ * dashboard, and visible only once a failed action started reporting what it had claimed.
+ */
+describe('the route a consequence is declared against', () => {
+  it("drops Reticle's own opener parameter", () => {
+    expect(appRoute('/?__reticle_opened=1')).toBe('/');
+  });
+
+  it("keeps the app's own query parameters", () => {
+    expect(appRoute('/orders?status=failed&__reticle_opened=1')).toBe('/orders?status=failed');
+  });
+
+  /** The fragment is the only part that moves on a hash-routed app, so it is the load-bearing part. */
+  it('keeps the fragment, which is the whole route on a hash-routed app', () => {
+    expect(appRoute('/?__reticle_opened=1#/transactions')).toBe('/#/transactions');
+  });
+
+  it('leaves an ordinary route alone', () => {
+    expect(appRoute('/settings/team')).toBe('/settings/team');
+  });
+
+  it('drops every reserved parameter, not just the opener', () => {
+    expect(appRoute('/x?__reticle_session=s1&__reticle_project=p1&keep=1')).toBe('/x?keep=1');
   });
 });
