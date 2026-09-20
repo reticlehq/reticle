@@ -120,6 +120,30 @@ export async function readJournalWriteLoss(
   return (await reader?.readWriteLoss?.()) ?? undefined;
 }
 
+/** The slice of the ring buffer `windowLost` reads. `RingBuffer` satisfies it structurally. */
+export interface LossBuffer {
+  lostSince(cursor: number): boolean;
+}
+
+/**
+ * Did the EVENT STORE lose scarce evidence from a window opened at `cursor`? The input to whether a
+ * verdict's capture was clean — see `RingBuffer.lostSince`, and never the raw drop counter, which
+ * moves for the age and churn evictions that every live page produces continuously. The journal is
+ * the other half of that store, so a durable read that could not reach back to `cursor` lost
+ * exactly what an eviction would have. Both boundaries are INCLUSIVE (`t` is a millisecond many
+ * records share) and an absent `lostThroughT` impeaches every window rather than none — the
+ * conservative direction, both times.
+ */
+export function windowLost(
+  reader: JournalReader | undefined,
+  buffer: LossBuffer,
+  cursor: number,
+): boolean {
+  if (buffer.lostSince(cursor)) return true;
+  const lost = reader?.readLoss?.();
+  return lost !== undefined && (lost.lostThroughT === undefined || lost.lostThroughT >= cursor);
+}
+
 /** Apply since/until/actionId bounds to an event list. */
 export function filterEvents(
   events: readonly ReticleEvent[],

@@ -470,6 +470,9 @@ export function waitForPredicate(
   const reader = withinBudget(session, () => deadline - session.elapsed());
   return new Promise<EvalResult>((resolve) => {
     let done = false;
+    // Released in `finish`, on every exit path. Without it a flood inside the window can evict the
+    // event the predicate is armed on, and the verdict blames the app (#668).
+    const releaseWindow = session.protectWindow?.(since);
     // A read that threw never looked at the app: the page did not answer, or went away. That is
     // "could not tell", not "looked and it was false", so it is inconclusive, which the verdict rule
     // turns into unknown. As a plain false it was graded assertion_failed: a command timeout on a
@@ -505,6 +508,7 @@ export function waitForPredicate(
     const finish = (result: EvalResult): void => {
       if (done) return;
       done = true;
+      releaseWindow?.();
       unsub();
       unsubDisconnect?.();
       clearInterval(interval);

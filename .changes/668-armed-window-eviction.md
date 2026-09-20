@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/engine` + `@reticlehq/server`: a burst of events could evict the one a wait was armed on, and the verdict blamed the app.** A `reticle_wait`, `until` or act-sequence step that matched an event early in its window could lose that event to the ring buffer's count cap if the page then flooded it, so the check read false and came back `assertion_failed` against an app that had done the right thing. The events inside a wait's window are now held against count-cap eviction while it is graded, within bounded headroom. If that headroom runs out, the loss is still recorded and the verdict says it could not tell rather than failing. Closes [#668](https://github.com/reticlehq/reticle/issues/668).
