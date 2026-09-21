@@ -11,7 +11,7 @@ import {
   type QueryResult,
   TRANSPORT_LIMITS,
 } from '@reticlehq/core';
-import { isFrame, isHtmlElement, isInput, isSelect, isTextArea } from './realm.js';
+import { isElement, isFrame, isHtmlElement, isInput, isSelect, isTextArea } from './realm.js';
 import { capturedRootOf } from './shadow-registry.js';
 import {
   getAccessibleName,
@@ -71,17 +71,50 @@ function exactVisibleText(actual: string, expected: string): boolean {
   return normaliseVisibleText(actual) === normaliseVisibleText(expected);
 }
 
+/** Tags whose text content is never rendered, however visible the element computes. */
+const NON_RENDERED_TAGS: readonly string[] = ['script', 'style', 'template', 'noscript'];
+
+function isNonRendered(el: Element): boolean {
+  return NON_RENDERED_TAGS.includes(el.tagName.toLowerCase());
+}
+
 function directText(el: Element): string {
   if (isInput(el)) {
     const type = el.type.toLowerCase();
     if ('submit' === type || 'button' === type || 'reset' === type) return el.value;
   }
-  const tag = el.tagName.toLowerCase();
-  if ('script' === tag || 'style' === tag) return '';
+  if (isNonRendered(el)) return '';
   return Array.from(el.childNodes)
     .filter((node) => Node.TEXT_NODE === node.nodeType)
     .map((node) => node.textContent ?? '')
     .join('');
+}
+
+/**
+ * The text a user can actually SEE under `el`, in document order.
+ *
+ * NOT `textContent`, which is what every caller here used to read, and which is a different
+ * question with the same shape. `textContent` includes `<script>` and `<style>` bodies, `hidden`
+ * and `display:none` subtrees, and `aria-hidden` ones - so a string that a re-render destroyed
+ * still answers "present" while it survives in a server-render payload, and a price the app never
+ * showed answers "present" from a collapsed panel. Both were reported from the field against
+ * `splitText`, whose ENTIRE job is to say "that text IS on the page": a presence claim sourced
+ * from text nobody can see is the one thing it must never make.
+ *
+ * Text nodes are filtered individually rather than whole subtrees being accepted or rejected,
+ * because `isIgnored` answers "is this element ours", and Reticle's HUD makes ANCESTORS of itself
+ * lie: `<body>` is not ours and passes, while `body.textContent` carries the HUD's own button
+ * labels. Walking down and dropping the HUD's nodes where they live keeps the app's text and
+ * leaves ours out, which pointing an agent at "Pause" or "Export" did not.
+ */
+function visibleTextOf(el: Element, memo: Map<Element, boolean>): string {
+  if (isNonRendered(el) || isIgnored(el) || !isVisible(el, memo)) return '';
+  let text = '';
+  for (const node of Array.from(el.childNodes)) {
+    if (Node.TEXT_NODE === node.nodeType) text += node.textContent ?? '';
+    else if (isElement(node)) text += visibleTextOf(node, memo);
+  }
+  return text;
 }
 
 /**
@@ -372,7 +405,16 @@ function findCandidates(query: ElementQuery): { candidates: HTMLElement[]; scope
   // answering `document.body` would be a wrong answer wearing the shape of one.
   if (true === query.self) {
     if (query.scope === undefined) return { candidates: [], scopeMissing };
-    if (query.text !== undefined && !fuzzyVisibleText(container.textContent ?? '', query.text)) {
+    // The SAME visible-text rule the splitText hint uses, and it has to be: this path is the retry
+    // that hint suggests. Read through `textContent`, the two agreed with each other and disagreed
+    // with the page - a scope whose script payload or hidden subtree still held the string came
+    // back as a match, and the assertion built on it returned a verdict of `yes` for text that had
+    // already been destroyed. A recovery that can only be reached by following a claim of presence
+    // must be decided by the same evidence as the claim.
+    if (
+      query.text !== undefined &&
+      !fuzzyVisibleText(visibleTextOf(container, new Map()), query.text)
+    ) {
       return { candidates: [], scopeMissing };
     }
     return { candidates: isIgnored(container) ? [] : [container], scopeMissing };
@@ -592,9 +634,13 @@ function buildPresentRegions(query: ElementQuery): PresentRegion[] {
 function splitTextOwner(container: HTMLElement, wanted: string): HTMLElement | undefined {
   let best: HTMLElement | undefined;
   let bestDepth = -1;
+  // One memo for the whole pass: the visibility walk is O(depth) per element and every sibling
+  // shares its ancestors. Scoped to this synchronous pass, never module-level - see the shadow-root
+  // note above for why a cache that outlives one pass is unsound here.
+  const memo = new Map<Element, boolean>();
   for (const el of elementsUnder(container)) {
     if (isIgnored(el)) continue; // never point an agent at Reticle's own UI
-    if (!fuzzyVisibleText(el.textContent ?? '', wanted)) continue;
+    if (!fuzzyVisibleText(visibleTextOf(el, memo), wanted)) continue;
     let depth = 0;
     for (let parent = el.parentElement; parent !== null; parent = parent.parentElement) depth++;
     if (depth > bestDepth) {
