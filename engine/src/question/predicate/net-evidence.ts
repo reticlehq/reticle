@@ -9,6 +9,7 @@
 
 import { PredicateKind } from '@reticlehq/core';
 import { withoutUrlRaw } from '@/window/event-filters.js';
+import { textContainsAt } from './predicate-eval-kit.js';
 import type { Predicate } from './predicate-schema.js';
 
 /**
@@ -71,7 +72,7 @@ export function netEvidence(
     const body = out[field];
     if ('string' !== typeof body || body.length <= MAX_BODY_IN_EVIDENCE) continue;
     const needle = clause[askedBy];
-    const at = 'string' === typeof needle ? body.indexOf(needle) : -1;
+    const at = 'string' === typeof needle ? textContainsAt(body, needle) : -1;
     if (at < 0) {
       // No clause read this body, or the pass came from elsewhere: the head shows the shape of the
       // answer. The ellipsis is load-bearing — a silently shortened body reads as "the server

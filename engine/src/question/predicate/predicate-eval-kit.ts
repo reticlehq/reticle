@@ -1,4 +1,4 @@
-import { PredicateKind } from '@reticlehq/core';
+import { PredicateKind, REDACTED_VALUE } from '@reticlehq/core';
 import type { Predicate } from './predicate-schema.js';
 
 /**
@@ -156,6 +156,52 @@ function structurallyEqual(got: unknown, want: unknown): boolean {
   const keys = Object.keys(a);
   if (keys.length !== Object.keys(b).length) return false;
   return keys.every((k) => k in b && structurallyEqual(a[k], b[k]));
+}
+
+/**
+ * Where `needle` sits in `haystack`, or -1.
+ *
+ * A needle of only letters, digits and underscores has to be a whole word. `completed` is the
+ * natural assertion for a job state, and it used to pass on the key `completedAt` while `status`
+ * was still `queued`: the only false green in that field export (#987). A needle with any other
+ * character stays a raw substring, which is what `"refunded":11.87` is.
+ */
+const WORD = /^[A-Za-z0-9_]+$/;
+
+export function textContainsAt(haystack: string, needle: string): number {
+  if (!WORD.test(needle)) return haystack.indexOf(needle);
+  const found = new RegExp(`\\b${needle}\\b`).exec(haystack);
+  return null === found ? -1 : found.index;
+}
+
+/** `textContainsAt` as a boolean, for the graders that only need yes or no. */
+export function textContains(haystack: string, needle: string): boolean {
+  return 0 <= textContainsAt(haystack, needle);
+}
+
+/**
+ * Shallow JSON match of a RESPONSE body, the same comparison `requestBodyMatches` uses.
+ *
+ * Keys are not text. `{ status: "completed" }` cannot be satisfied by a key named `completedAt`,
+ * which is the false green a substring makes on this exact shape. A body that is not a JSON object
+ * does not match. A pattern key whose captured value is the redaction sentinel is not a mismatch.
+ */
+export function matchResponseRecord(
+  body: string,
+  pattern: Record<string, unknown>,
+): { ok: true } | { ok: false; redacted?: string } {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    return { ok: false };
+  }
+  if (null === payload || 'object' !== typeof payload || Array.isArray(payload))
+    return { ok: false };
+  const actual = payload as Record<string, unknown>;
+  const redacted = Object.keys(pattern).find((key) => REDACTED_VALUE === actual[key]);
+  if (redacted !== undefined) return { ok: false, redacted };
+  return dataMatches(actual, pattern) ? { ok: true } : { ok: false };
 }
 
 /** Shallow JSON pattern match: each key in `pattern` must match (see matchValue). */

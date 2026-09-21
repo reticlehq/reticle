@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { EventType } from '@reticlehq/core';
+import { EventType, REDACTED_VALUE } from '@reticlehq/core';
 import type { ReticleEvent } from '@reticlehq/core';
 import { evalNet } from './predicate/predicate-eval.js';
 import { parsePredicate } from './predicate/predicate-parse.js';
@@ -266,5 +266,96 @@ describe('evalNet — bodyContains against a truncated body', () => {
     });
     expect(r.inconclusive).toBeDefined();
     expect(r.failureReason).toBeUndefined();
+  });
+});
+
+/**
+ * `completed` matched the key `completedAt` and the verdict was yes while the job was queued (#987).
+ *
+ * That is the one direction a verdict must not fail. A missing body, a contradiction, a refusal:
+ * those cost a turn. A pass on a claim that is false is the product lying.
+ */
+describe('evalNet — a state word is not a key prefix', () => {
+  const QUEUED = netEvent(10, {
+    method: 'GET',
+    url: '/api/jobs/1',
+    status: 200,
+    ok: true,
+    responseBody: '{"status":"queued","completedAt":null}',
+  });
+  const DONE = netEvent(10, {
+    method: 'GET',
+    url: '/api/jobs/1',
+    status: 200,
+    ok: true,
+    responseBody: '{"status":"completed","completedAt":"2020-01-01T00:00:00.000Z"}',
+  });
+
+  it('does not pass bodyContains "completed" on the key completedAt', () => {
+    const r = evalNet([QUEUED], {
+      kind: PredicateKind.NET,
+      urlContains: '/api/jobs',
+      bodyContains: 'completed',
+    });
+    expect(r.pass).toBe(false);
+    expect(r.assertion).toBe('net.bodyContains');
+    expect(r.failureReason).toContain('the response value is what differed');
+  });
+
+  it('still passes when the word is the value', () => {
+    const r = evalNet([DONE], {
+      kind: PredicateKind.NET,
+      urlContains: '/api/jobs',
+      bodyContains: 'completed',
+    });
+    expect(r.pass).toBe(true);
+  });
+
+  it('still matches a JSON fragment, which is not a word', () => {
+    const r = evalNet([DONE], {
+      kind: PredicateKind.NET,
+      urlContains: '/api/jobs',
+      bodyContains: '"status":"completed"',
+    });
+    expect(r.pass).toBe(true);
+  });
+
+  it('bodyMatches compares the field, so a neighbouring key cannot satisfy it', () => {
+    const queued = evalNet([QUEUED], {
+      kind: PredicateKind.NET,
+      urlContains: '/api/jobs',
+      bodyMatches: { status: 'completed' },
+    });
+    expect(queued.pass).toBe(false);
+    expect(queued.assertion).toBe('net.bodyMatches');
+    const done = evalNet([DONE], {
+      kind: PredicateKind.NET,
+      urlContains: '/api/jobs',
+      bodyMatches: { status: 'completed' },
+    });
+    expect(done.pass).toBe(true);
+  });
+
+  it('a redacted response field is unknown, not a mismatch', () => {
+    const r = evalNet(
+      [
+        netEvent(10, {
+          method: 'GET',
+          url: '/api/jobs/1',
+          status: 200,
+          ok: true,
+          responseBody: `{"status":"${REDACTED_VALUE}"}`,
+        }),
+      ],
+      {
+        kind: PredicateKind.NET,
+        urlContains: '/api/jobs',
+        bodyMatches: { status: 'completed' },
+      },
+    );
+    expect(r.pass).toBe(false);
+    expect(r.inconclusive).toContain('REDACTED');
+    expect(r.failureReason).toBeUndefined();
+    expect(r.assertion).toBe('net.bodyMatches');
   });
 });

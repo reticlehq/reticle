@@ -42,8 +42,13 @@ export type Predicate =
       ok?: boolean;
       since?: number;
       count?: number;
-      /** A substring the RESPONSE body must contain — what the server answered, not what was sent. */
+      /**
+       * A substring the RESPONSE body must contain. A word matches a whole word, so `completed`
+       * does not pass on the key `completedAt`. See `bodyMatches` for field equality.
+       */
       bodyContains?: string;
+      /** Shallow JSON match over the RESPONSE body, in the style of `requestBodyMatches`. */
+      bodyMatches?: Record<string, unknown>;
       /** A substring the REQUEST body must contain — what the UI sent, not what came back. */
       requestBodyContains?: string;
       /** Shallow JSON match over the REQUEST body, in the style of `signal.dataMatches`. */
@@ -360,13 +365,25 @@ function predicateUnion() {
          *
          * A substring rather than a JSON path, deliberately: `"refunded":11.87` is the whole assertion
          * for the money case, it needs no schema for the body, and it works the same on JSON, form
-         * encoding and plain text. A path-and-equals form can be added later if a real case needs one;
-         * this is the shape that turns "a blob I read" into a verdict.
+         * encoding and plain text. Field equality is `bodyMatches`, beside this, because a bare word
+         * is also how an enum state gets asserted and that use was a false green (#987).
+         *
+         * A needle of only letters, digits and underscores matches a whole word. `completed` does not
+         * pass because it is the start of the key `completedAt` while `status` is `queued`. A needle
+         * with any other character stays a raw substring, which is what the money assertion needs.
          *
          * Requires body capture (`reticle({ captureNetworkBodies: true })`), and says so when the body
          * was never recorded rather than reporting an ordinary mismatch.
          */
         bodyContains: z.string().min(1).optional(),
+        /**
+         * Shallow JSON match over the RESPONSE body, keyed like `requestBodyMatches`.
+         *
+         * `{ bodyMatches: { status: "completed" } }` compares the value. It cannot pass because a
+         * neighbouring key is named `completedAt`, which is what `bodyContains: "completed"` did
+         * on a job that was still `queued`.
+         */
+        bodyMatches: z.record(z.string(), z.unknown()).optional(),
         /**
          * A substring the REQUEST body must contain — the other half of `bodyContains`.
          *

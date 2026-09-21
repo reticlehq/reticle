@@ -19,6 +19,7 @@ import {
   dataMatches,
   describeNetFilter,
   str,
+  textContains,
   type EvalResult,
 } from './predicate-eval-kit.js';
 import type { PredicateKind } from '@reticlehq/core';
@@ -88,7 +89,7 @@ export function checkRequestBody(
     return false;
   };
 
-  if (requestBodyContains !== undefined && !sent.includes(requestBodyContains)) return note();
+  if (requestBodyContains !== undefined && !textContains(sent, requestBodyContains)) return note();
   if (requestBodyMatches === undefined) return true;
 
   let payload: unknown;

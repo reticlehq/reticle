@@ -65,7 +65,12 @@ export function bodyCaptureRemedy(sdkVersion: string | undefined): string {
 }
 
 /** Clause names that can only be answered from a recorded body. */
-const BODY_CLAUSE_FIELDS = ['bodyContains', 'requestBodyContains'] as const;
+const BODY_CLAUSE_FIELDS = [
+  'bodyContains',
+  'bodyMatches',
+  'requestBodyContains',
+  'requestBodyMatches',
+] as const;
 
 /** Does this predicate, or anything nested in it, ask about a body? */
 function asksAboutBody(predicate: unknown): boolean {

@@ -70,6 +70,14 @@ describe('a request-body clause is a verdict on what the UI sent', () => {
     expect(r.pass).toBe(true);
   });
 
+  it('does not let requestBodyContains "completed" pass on the key completedAt', async () => {
+    const r = await judge(
+      { requestBody: '{"status":"queued","completedAt":null}' },
+      { requestBodyContains: 'completed' },
+    );
+    expect(r.pass).toBe(false);
+  });
+
   it('supports requestBodyContains for a non-JSON payload', async () => {
     const r = await judge(
       { requestBody: 'filter=manual_review&page=1' },

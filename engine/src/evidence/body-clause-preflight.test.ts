@@ -69,6 +69,14 @@ describe('a body clause is refused before the action is spent', () => {
     expect(refusal).toBeTypeOf('string');
   });
 
+  it('sees bodyMatches too', () => {
+    const refusal = bodyClauseRefusal(
+      NET({ bodyContains: undefined, bodyMatches: { status: 'completed' } }),
+      { captureBodies: false },
+    );
+    expect(refusal).toBeTypeOf('string');
+  });
+
   it('sees requestBodyContains too', () => {
     const refusal = bodyClauseRefusal(
       NET({ bodyContains: undefined, requestBodyContains: 'sku-1' }),
