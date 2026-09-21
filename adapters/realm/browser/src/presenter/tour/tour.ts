@@ -253,13 +253,33 @@ export function mountTour(deps: TourDeps): TourHandle | undefined {
   // is worse than one that never listened.
   let detachKeys: () => void = () => undefined;
 
-  const close = (): void => {
+  let stopWatch: () => void = () => undefined;
+
+  const remove = (): void => {
     if (!open) return;
     open = false;
     detachKeys();
-    markSeen(deps.storage, deps.projectId);
+    stopWatch();
     root.remove();
     style.remove();
+  };
+
+  const close = (): void => {
+    if (!open) return;
+    markSeen(deps.storage, deps.projectId);
+    remove();
+  };
+
+  /**
+   * A drive that starts after mount.
+   *
+   * `isDriving()` is false at load, because the agent has not acted yet. The scrim is already up
+   * when the first command lands. Taking it down here is the other half of declining at mount.
+   * It is not "seen": the person never finished it, and the next plain load should still show it.
+   */
+  const yieldToDrive = (): void => {
+    if (!deps.isDriving()) return;
+    remove();
   };
 
   const draw = (): void => {
@@ -424,6 +444,14 @@ export function mountTour(deps: TourDeps): TourHandle | undefined {
 
   draw();
   doc.body.appendChild(root);
+
+  const overlay = doc.querySelector('[data-reticle-overlay]');
+  if (null !== overlay) {
+    const observer = new MutationObserver(yieldToDrive);
+    observer.observe(overlay, { attributes: true, attributeFilter: ['data-reticle-mode'] });
+    stopWatch = () => observer.disconnect();
+    yieldToDrive();
+  }
 
   return {
     destroy: close,
