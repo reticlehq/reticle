@@ -470,6 +470,12 @@ function isEvalResult(value: unknown): value is EvalResult {
   );
 }
 
+/** Drop the throttle note without leaving `inconclusive: undefined` on the object. */
+function dropInconclusive(result: EvalResult): EvalResult {
+  const { inconclusive: _note, ...rest } = result;
+  return rest;
+}
+
 function listItem(value: unknown, index: number): unknown {
   if (!Array.isArray(value)) return undefined;
   const item: unknown = value[index];
@@ -582,9 +588,7 @@ async function evaluatePredicateRaw(
       });
       const graded = painted
         ? results.map((result) =>
-            THROTTLED_STARVED_NOTE === result.inconclusive
-              ? { ...result, inconclusive: undefined }
-              : result,
+            THROTTLED_STARVED_NOTE === result.inconclusive ? dropInconclusive(result) : result,
           )
         : results;
       // A clause that genuinely failed OUTRANKS one nobody could read. Softening a real failure to
