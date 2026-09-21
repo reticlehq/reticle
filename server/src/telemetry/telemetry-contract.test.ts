@@ -6,6 +6,7 @@ import {
   ConnectFailure,
   OutageReason,
   ContradictionKind,
+  ReplayStatus,
   isAbsenceDerived,
   ActionType,
   FeedbackKind,
@@ -21,6 +22,7 @@ import { TOOLS } from '@/surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { VERDICT_TOOLS } from '@/surface/tools/feedback-tools.js';
 import { bugsInResult, type BugCandidate } from './bug-found.js';
+import { verificationOf } from './verification-of.js';
 import { describeParam } from './argument-shape.js';
 import { licenseFacts } from './license-activation.js';
 import {
@@ -310,6 +312,22 @@ describe('no vocabulary is hand-copied', () => {
         `'${param}: ${value}' reports as 'other' — argument-shape.ts is probably hand-listing ` +
           `these instead of deriving them from core.${enumName}.`,
       ).toBe(`${param}:${value}`);
+    }
+  });
+
+  /**
+   * A flow replay's verdict is the one this file's own rule 4 was written about, in a second
+   * vocabulary. `reticle_flow_replay` answers `ok | drift | error` rather than pass/fail, and the
+   * reader that had never heard of those words emitted nothing for any of them — so a fourth status
+   * arriving would silently stop counting in exactly the same way, with nothing going red.
+   */
+  it('maps every replay status to a verdict, derived from core rather than re-listed', () => {
+    for (const status of Object.values(ReplayStatus)) {
+      expect(
+        verificationOf(ReticleTool.FLOW_REPLAY, { name: 'flow', status, steps: [] }, 1),
+        `a replay that answered '${status}' emits no verification_completed — verification-of.ts ` +
+          'is probably hand-listing ReplayStatus instead of covering it.',
+      ).toBeDefined();
     }
   });
 

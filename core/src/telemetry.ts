@@ -282,11 +282,36 @@ export const BrowserLaunchKind = {
 } as const;
 export type BrowserLaunchKind = (typeof BrowserLaunchKind)[keyof typeof BrowserLaunchKind];
 
+/**
+ * WHO drove the verdict.
+ *
+ * `actor` already splits a typed `reticle` command from an agent's own tool call, and both halves of
+ * an explore drive land on the agent side of that line: a model inside the daemon drives through the
+ * same chokepoint, under the same session, and its verdicts were indistinguishable from the ones the
+ * user's own agent earned. That matters for every rate computed per session — a session whose only
+ * verification came from a drive we ran on the user's behalf is not a session that verified.
+ *
+ * Absent means the agent's own call, which is the overwhelming majority: a value on every row would
+ * cost a field to say the ordinary thing.
+ */
+export const VerificationDriver = {
+  /** A model inside the daemon drove this, on the user's behalf. */
+  HARNESS: 'harness',
+} as const;
+export type VerificationDriver = (typeof VerificationDriver)[keyof typeof VerificationDriver];
+
 /** The outcome of one verification. `verified` is Reticle's own honesty grade, not merely pass/fail. */
 export const VerificationSchema = z.object({
   /** Which tool produced the verdict (`reticle_assert`, `reticle_flow_verify`, …). */
   via: z.string().min(1).max(64),
-  /** `yes` | `no` | `unknown` — the honest verdict, where `unknown` means the evidence could not decide. */
+  /**
+   * `yes` | `no` | `unknown` | `no-fault` — the honest verdict, from `Verified`.
+   *
+   * FOUR values, not three. This comment said three for long enough that a dashboard written from it
+   * silently drops the bucket that is most actionable: `no-fault` means the window was clean and
+   * nothing was declared to prove, which is a teachable agent behaviour rather than a Reticle or an
+   * app problem, and `unknown` means the evidence could not decide.
+   */
   verified: z.string().min(1).max(16),
   /** Did the underlying assertion pass? Distinct from `verified` on purpose. */
   passed: z.boolean(),
@@ -341,6 +366,11 @@ export const VerificationSchema = z.object({
    * ownership — Reticle's before the page's. Absent on every verdict whose capture was clean.
    */
   uncleanLoss: z.nativeEnum(CaptureLoss).optional(),
+  /**
+   * Set when one of our OWN drives produced this verdict rather than the user's agent — see
+   * `VerificationDriver`. Absent is the ordinary case and means the agent called the tool itself.
+   */
+  driven: z.nativeEnum(VerificationDriver).optional(),
 });
 export type Verification = z.infer<typeof VerificationSchema>;
 

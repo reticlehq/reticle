@@ -38,6 +38,12 @@ interface Anomaly {
   kind?: unknown;
 }
 
+/** The kinds in a replay's `regressed` list — bare strings, not the `{ kind }` objects above. */
+function regressedKinds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((kind): kind is string => 'string' === typeof kind && kind.length > 0);
+}
+
 function kindsOf(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -151,7 +157,12 @@ export function bugsInResult(toolName: string, result: Record<string, unknown>):
   const passed = true === verdict;
 
   // 1. Contradictions — channels disagreeing. Invisible to a human watching the screen.
-  for (const kind of kindsOf(result['contradictions'])) {
+  //
+  // `crossStep` is read alongside `contradictions` because a flow replay spells them that way: a
+  // step's window closes when the step ends, so a request fired at step 2 and still unanswered at
+  // step 5 sits outside every per-step window and is exactly the shape a long journey produces.
+  // Every whole-span contradiction a replay found was unreportable for want of this one name.
+  for (const kind of [...kindsOf(result['contradictions']), ...kindsOf(result['crossStep'])]) {
     // A contradiction is two of the APP's own channels disagreeing — never the agent's phrasing.
     // Omitted for the one kind Reticle can produce on its own: see contradictionAttribution.
     bugs.push({
@@ -204,7 +215,27 @@ export function bugsInResult(toolName: string, result: Record<string, unknown>):
     });
   }
 
-  // 4. Replay failures — a saved flow that used to pass no longer does. That is a regression caught,
+  // 4. A guarded defect that came BACK. The flow observed it, then observed it gone, and the app
+  //    has now reacquired it — a claim no other detector in this file can make, because only a saved
+  //    flow carries what it has already seen. It is the replay feature's stated payoff and it was
+  //    counted nowhere: `regressed` is a list of KINDS, not of anomaly objects, so neither of the
+  //    array readers above could see it.
+  for (const kind of regressedKinds(result['regressed'])) {
+    bugs.push({
+      source: BugSource.REPLAY,
+      kind,
+      // The replay carries no assertion of its own, so there is no green for this to have hidden
+      // behind. Whether it was a false green is a question about the run that reacquired the defect,
+      // not about the run that noticed.
+      falseGreen: passed,
+      tool: toolName,
+      // Same kind, same owner, wherever it arrives — the line `attributionOf` draws is the one the
+      // verdict already uses, and a defect does not change whose fault it was by coming back.
+      attribution: attributionOf(kind),
+    });
+  }
+
+  // 5. Replay failures — a saved flow that used to pass no longer does. That is a regression caught,
   //    which is a different and stronger claim than "a check failed".
   if ('fail' === result['status'] && Array.isArray(result['failures'])) {
     for (const failure of result['failures'].slice(0, MAX_BUGS_PER_CALL)) {

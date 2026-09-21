@@ -44,6 +44,7 @@ import { log } from '@/log.js';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 import { setMcpClientNameHook } from '@/telemetry/feedback-context.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
+import { reportMcpConnected } from '@/telemetry/mcp-connection.js';
 import { parsePredicate } from '@reticlehq/engine/question/predicate/predicate-parse.js';
 
 /**
@@ -613,7 +614,13 @@ export function createMcpServer(
    */
   server.server.oninitialized = () => {
     const info = server.server.getClientVersion();
-    if (info?.name !== undefined) getSessionMetrics().recordClient(info.name, info.version);
+    if (info?.name === undefined) return;
+    getSessionMetrics().recordClient(info.name, info.version);
+    // The one signal that separates "Reticle is running" from "somebody is USING it", reported from
+    // the first moment it can carry WHO. It used to fire from the SSE `connect()` resolution, which
+    // happens before the handshake — so every connect row was anonymous, and the field meant to say
+    // which agent client converts best was empty on every event ever sent.
+    reportMcpConnected(info.name);
   };
   // Which agent is on the other end, for a feedback report. Registered as a lazy hook rather than
   // read here: the handshake has not happened yet at construction time, and a report filed twenty

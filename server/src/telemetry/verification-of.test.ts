@@ -17,10 +17,18 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { BrowserBrand, CaptureLoss, Verified, VerifiedReason } from '@reticlehq/core';
+import {
+  BrowserBrand,
+  CaptureLoss,
+  ReplayStatus,
+  Verified,
+  VerificationDriver,
+  VerifiedReason,
+} from '@reticlehq/core';
 import { decideVerified } from '@reticlehq/engine/evidence/verified.js';
 import { HonestyGrade } from '@reticlehq/engine/evidence/honesty.js';
 import { verificationOf } from './verification-of.js';
+import { withHarnessDrive } from './harness-drive.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BrowserMode, setBrowserMode, resetBrowserMode } from './browser-mode.js';
 
@@ -246,5 +254,84 @@ describe('an unclean capture says which loss made it unclean', () => {
     );
     expect(proved).toBeDefined();
     expect(proved !== undefined && 'uncleanLoss' in proved).toBe(false);
+  });
+});
+
+/**
+ * A flow replay proves a saved journey still works, and the metric could not see one.
+ *
+ * `reticle_flow_replay` was absent from `VERDICT_TOOLS`, and its own status vocabulary spells itself
+ * `ok | drift | error` where this reader looked for `pass`/`fail` — two independent reasons for the
+ * same silence. So the tool documented as the single-flow companion to the whole-suite replay
+ * produced a verdict counted in no numerator and no denominator.
+ */
+describe('a flow replay carries a verdict', () => {
+  const REPLAY = ReticleTool.FLOW_REPLAY;
+
+  it('a replay that reproduced every step is a pass', () => {
+    expect(
+      verificationOf(REPLAY, { name: 'checkout', status: ReplayStatus.OK, steps: [] }, 10),
+    ).toMatchObject({ via: REPLAY, verified: Verified.YES, passed: true });
+  });
+
+  it('drift is a real no — the anchors the flow declared stopped resolving', () => {
+    expect(
+      verificationOf(REPLAY, { name: 'checkout', status: ReplayStatus.DRIFT, steps: [] }, 10),
+    ).toMatchObject({ verified: Verified.NO, passed: false });
+  });
+
+  /**
+   * `error` is the flow failing to LOAD or an action failing to run — Reticle could not tell, which
+   * is not the same claim as the app being broken. Reporting it as a fail would publish our own
+   * failures as the user's defects, which is the mistake the suite reader already made once.
+   */
+  it('an error is unknown, never a fail the app earned', () => {
+    const verdict = verificationOf(
+      REPLAY,
+      { name: 'checkout', status: ReplayStatus.ERROR, steps: [] },
+      10,
+    );
+    expect(verdict).toMatchObject({ verified: Verified.UNKNOWN, passed: false });
+    expect(verdict?.falseGreenCaught).toBe(false);
+  });
+
+  it('reads the replay vocabulary for the replay tool only', () => {
+    // `ok` is not a verdict word anywhere else, and a merged action that happens to answer with one
+    // must not be counted as a verification it never made.
+    expect(verificationOf(VERIFY, { status: ReplayStatus.OK }, 10)).toBeUndefined();
+  });
+});
+
+/**
+ * Who drove the verdict — the user's own agent, or a model inside our daemon.
+ *
+ * `reticle_verify { action: "explore" }` drives through the same chokepoint, so its inner verdicts
+ * emit correctly and are attributed to the same session under the same `actor: agent`. Nothing said
+ * a verdict came from a drive we ran on the user's behalf, so a session whose only verification was
+ * an explore was indistinguishable from one the agent earned itself.
+ */
+describe('a verdict says who drove it', () => {
+  it('marks a verdict produced inside a harness drive', async () => {
+    await withHarnessDrive(() => {
+      expect(verificationOf(ASSERT, { pass: true, verified: Verified.YES }, 1)?.driven).toBe(
+        VerificationDriver.HARNESS,
+      );
+      return Promise.resolve();
+    });
+  });
+
+  it("leaves the agent's own verdict unmarked — absent means nobody drove it for them", () => {
+    const verdict = verificationOf(ASSERT, { pass: true, verified: Verified.YES }, 1);
+    expect(verdict).toBeDefined();
+    expect(verdict !== undefined && 'driven' in verdict).toBe(false);
+  });
+
+  it('stops marking once the drive is over, including when it threw', async () => {
+    await expect(
+      withHarnessDrive(() => Promise.reject(new Error('the driver gave up'))),
+    ).rejects.toThrow('the driver gave up');
+    expect(
+      verificationOf(ASSERT, { pass: true, verified: Verified.YES }, 1)?.driven,
+    ).toBeUndefined();
   });
 });

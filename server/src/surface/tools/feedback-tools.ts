@@ -267,6 +267,14 @@ export const VERDICT_TOOLS: ReadonlySet<string> = new Set([
   // inflate the count.
   ReticleTool.VERIFY,
   ReticleTool.RECONCILE,
+  // Replaying ONE saved flow proves a journey still works, which is a verification by any reading a
+  // user would give the word — and it was in neither the numerator nor the denominator. It matched
+  // no name tripwire (`/assert|verify/`), it declares no `verified` field for the shape guard to
+  // catch, and its own status vocabulary spells itself `ok | drift | error`, so the three
+  // independent things that could have noticed all said nothing. `verificationOf` maps that
+  // vocabulary; `error` stays UNKNOWN, because a flow that could not load is not a verdict about
+  // anybody's app.
+  ReticleTool.FLOW_REPLAY,
 ]);
 
 /**

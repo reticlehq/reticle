@@ -384,3 +384,49 @@ describe('fingerprintFinding integrates with bugsInResult to produce cross-sessi
     expect(fpA).not.toBe(fpB);
   });
 });
+
+/**
+ * A flow replay finds defects nothing else can, and reported none of them.
+ *
+ * Three separate reasons, all in this file: whole-span contradictions are spelled `crossStep` and
+ * only `contradictions` was read; `regressed` — a guarded defect the app reacquired, which is the
+ * feature's whole stated payoff — was read nowhere; and the replay rule keyed on a `status` of
+ * `fail` next to a `failures` array, neither of which a replay envelope has.
+ */
+describe('a flow replay reports what only it could know', () => {
+  const REPLAY = 'reticle_flow_replay';
+
+  it('counts a contradiction that spans steps, which no per-step window could see', () => {
+    const bugs = bugsInResult(REPLAY, {
+      name: 'checkout',
+      status: 'drift',
+      crossStep: [{ kind: ContradictionKind.SIGNAL_CONTRADICTED }],
+      steps: [],
+    });
+    expect(bugs).toHaveLength(1);
+    expect(bugs[0]).toMatchObject({
+      source: BugSource.CONTRADICTION,
+      kind: ContradictionKind.SIGNAL_CONTRADICTED,
+      tool: REPLAY,
+    });
+  });
+
+  it('counts a guarded defect that came back — the regression only this flow would have known', () => {
+    const bugs = bugsInResult(REPLAY, {
+      name: 'checkout',
+      status: 'drift',
+      regressed: [ContradictionKind.SIGNAL_CONTRADICTED],
+      steps: [],
+    });
+    expect(bugs).toHaveLength(1);
+    expect(bugs[0]).toMatchObject({
+      source: BugSource.REPLAY,
+      kind: ContradictionKind.SIGNAL_CONTRADICTED,
+      tool: REPLAY,
+    });
+  });
+
+  it('a clean replay reports nothing', () => {
+    expect(bugsInResult(REPLAY, { name: 'checkout', status: 'ok', steps: [] })).toEqual([]);
+  });
+});

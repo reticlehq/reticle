@@ -20,7 +20,8 @@ import { resultIsError } from '@/surface/mcp/faults/mcp-is-error.js';
 import { verificationOf } from '@/telemetry/verification-of.js';
 import { emitBugFoundHook, emitVerdictHook } from '@/hooks/hook-emit.js';
 import { reportOnboardingStep } from '@/telemetry/onboarding-funnel.js';
-import { noteFirstVerdict, noteOnboardingFirst } from '@/telemetry/onboarding-firsts.js';
+import { noteActed, noteFirstVerdict, noteOnboardingFirst } from '@/telemetry/onboarding-firsts.js';
+import { withHarnessDrive } from '@/telemetry/harness-drive.js';
 import { OnboardingPhase, OnboardingStepStatus } from '@reticlehq/core/telemetry';
 import { asString } from '@reticlehq/core';
 import { sessionIdFromArgs, spentRefFromArgs } from './tools-helpers.js';
@@ -175,6 +176,18 @@ export const SESSION_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
   // when NO session exists — "nothing ever connected" is feedback we especially want.
   ReticleTool.FEEDBACK,
 ]);
+
+/**
+ * The merged action that hands the drive to a model inside the daemon.
+ *
+ * Derived from the member tool's own name rather than spelled again: the merge dispatches on
+ * `action`, and `reticle_verify` plus `explore` IS `reticle_verify_explore`. A literal here would be
+ * a third spelling of one name, and the one that silently stops matching when the action is renamed.
+ */
+const HARNESS_DRIVE_ACTION = ReticleTool.VERIFY_EXPLORE.slice(`${ReticleTool.VERIFY}_`.length);
+function isHarnessDrive(toolName: string, args: Record<string, unknown>): boolean {
+  return ReticleTool.VERIFY === toolName && HARNESS_DRIVE_ACTION === args['action'];
+}
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return 'object' === typeof value && value !== null && !Array.isArray(value);
@@ -352,7 +365,7 @@ export async function runTool<Ext>(
   noteToolCall();
   // The ONBOARD firsts, at the chokepoint every call already passes through — so a second dispatch
   // path cannot quietly stop reporting them the way an extra listener would.
-  noteOnboardingFirst(tool.name, args);
+  noteOnboardingFirst(tool.name);
   // The impact record needs the project's own `.reticle` root, and this is the first place every
   // call knows it. Idempotent: the first root wins for the daemon's lifetime.
   initImpact({ reticleRoot: deps.reticleRoot });
@@ -383,7 +396,13 @@ export async function runTool<Ext>(
   }
   // An ACTION is what gets abandoned. Counted here, against verifications, so "the agent drove the
   // page and then wandered off" becomes a number instead of an impression.
-  if (ACTION_TOOLS.has(tool.name)) getSessionMetrics().recordAction();
+  if (ACTION_TOOLS.has(tool.name)) {
+    getSessionMetrics().recordAction();
+    // The two funnel rungs this branch is the authority on: the first action of the run, and the
+    // fact that this install has been driven at all. Reported from the set that already decides
+    // what "drove the page" means, so a fourth driving tool inherits both.
+    noteActed(args);
+  }
   const settleTiming = getSessionMetrics().startToolCall(tool.name, args);
   const startedAt = Date.now();
   const rawSessionId = sessionIdFromArgs(args);
@@ -473,9 +492,19 @@ export async function runTool<Ext>(
     // The one dispatch point every tool call passes through, so it is where the trace's root span
     // belongs: with RETICLE_TRACE on, every stage that runs underneath inherits this call's id and
     // nests under it. Free when off — see trace.ts.
-    raw = await span('tool.handler', { tool: tool.name, session: session?.id }, () =>
-      tool.handler(deps, args),
-    );
+    const call = (): Promise<unknown> =>
+      span('tool.handler', { tool: tool.name, session: session?.id }, () =>
+        tool.handler(deps, args),
+      );
+    // A drive we run on the user's behalf, marked for its whole span so the verdicts it produces
+    // underneath are distinguishable from the ones the user's own agent earned.
+    //
+    // The outer call emits no verdict of its own, and that is the honest answer rather than a gap:
+    // it drives and records, it adjudicates nothing, and its result carries no verified/pass field
+    // to read. Deriving one from how far the drive got would be inventing a verdict nobody reached.
+    // What was missing was never an event here — it was that a session driven BY US read exactly
+    // like one the agent earned, which is what the span fixes.
+    raw = await (isHarnessDrive(tool.name, args) ? withHarnessDrive(call) : call());
   } catch (error) {
     // The commonest refusal shape by far, and the one nothing could see: the message is built, handed
     // to the agent by the MCP boundary, and discarded. Reported here rather than at that boundary

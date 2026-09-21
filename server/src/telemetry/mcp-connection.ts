@@ -22,8 +22,22 @@ export function markDaemonStart(now: number): void {
   connectsSeen = 0;
 }
 
-/** Report one client attaching. Best-effort; a metric must never affect whether a client connects. */
+/**
+ * Report one client attaching, BY NAME. Best-effort; a metric must never affect whether a client
+ * connects.
+ *
+ * The name is required in practice, and that is the fix rather than a restriction. `connection.client`
+ * was defined and documented and never once populated: the only caller reported from
+ * `transport.connect().then(...)`, which resolves when the SSE stream opens — before the client has
+ * said who it is. `clientInfo` first exists at `oninitialized`, so the event carried every fact about
+ * the connection except the one that makes "which agent client converts best" answerable at all.
+ *
+ * An unnamed call reports NOTHING. A stream that opens and never completes a handshake is a probe,
+ * not a client attaching, and counting it was what put an unattributable row exactly where the name
+ * belonged.
+ */
 export function reportMcpConnected(client?: string, now: () => number = () => Date.now()): void {
+  if (client === undefined) return;
   try {
     const reconnect = connectsSeen > 0;
     connectsSeen += 1;
@@ -33,7 +47,7 @@ export function reportMcpConnected(client?: string, now: () => number = () => Da
         // A large value on the FIRST connect is the interesting case: Reticle was started and then
         // sat there. On a reconnect it is just how long the daemon has been up.
         daemonAgeMs: daemonStartedAt === undefined ? 0 : Math.max(0, now() - daemonStartedAt),
-        ...(client !== undefined ? { client } : {}),
+        client,
         // WHAT THE AGENT HAD TO LOOK AT. Most clients that attach never call a tool, and that cohort
         // emits nothing at all — an agent that reads the instructions, learns nothing is wired and
         // stops has refused nothing, so `tool_refused` cannot see it either. Read off the same flag

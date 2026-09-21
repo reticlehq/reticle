@@ -10,9 +10,19 @@
  * Kept in one place, out of `runTool`, because a rule this easy to get wrong should be readable and
  * testable on its own rather than inferred from a ternary inside a dispatcher.
  */
-import { type BrowserBrand, CaptureLoss, type Verification, VerifiedReason } from '@reticlehq/core';
+import {
+  type BrowserBrand,
+  CaptureLoss,
+  ReplayStatus,
+  ReticleTool,
+  type Verification,
+  VerificationDriver,
+  Verified,
+  VerifiedReason,
+} from '@reticlehq/core';
 import { VERDICT_TOOLS } from '@/surface/tools/feedback-tools.js';
 import { getBrowserMode } from './browser-mode.js';
+import { harnessDriving } from './harness-drive.js';
 
 /**
  * The deciding clause, read off the result `decideVerified` wrote it onto.
@@ -57,6 +67,33 @@ const SuiteStatus = {
   PASS: 'pass',
   FAIL: 'fail',
 } as const;
+
+/**
+ * A flow replay's verdict, in the vocabulary the rest of this file speaks.
+ *
+ * `ReplayStatus` spells itself `ok | drift | error`, so a reader looking for `pass`/`fail` found
+ * neither and every replay emitted nothing at all — on the tool documented as the single-flow
+ * companion to the whole-suite replay, i.e. a verdict in no numerator and no denominator.
+ *
+ * `error` maps to UNKNOWN rather than to a fail. It is the flow failing to LOAD or an action failing
+ * to run, which is Reticle not being able to tell — publishing that as the app's defect is exactly
+ * the mistake the suite reader made the first time.
+ *
+ * Read for the REPLAY TOOL ONLY. `ok` is not a verdict word anywhere else in this surface, and a
+ * merged action that happens to answer with one must not be counted as a verification it never made.
+ */
+const REPLAY_VERDICTS: ReadonlyMap<string, { verified: Verified; passed: boolean }> = new Map([
+  [ReplayStatus.OK, { verified: Verified.YES, passed: true }],
+  [ReplayStatus.DRIFT, { verified: Verified.NO, passed: false }],
+  [ReplayStatus.ERROR, { verified: Verified.UNKNOWN, passed: false }],
+]);
+function replayVerdict(
+  toolName: string,
+  status: unknown,
+): { verified: Verified; passed: boolean } | undefined {
+  if (ReticleTool.FLOW_REPLAY !== toolName || 'string' !== typeof status) return undefined;
+  return REPLAY_VERDICTS.get(status);
+}
 
 /**
  * Did the assertion itself pass, across three tool shapes that spell it three ways.
@@ -104,13 +141,15 @@ export function verificationOf(
   // verdict field so the agent never reads undefined off it, and that field must not be mistaken
   // here for work that happened.
   if (true === result['paused']) return undefined;
-  const verified = 'string' === typeof result['verified'] ? result['verified'] : undefined;
+  const replay = replayVerdict(toolName, result['status']);
+  const verified =
+    'string' === typeof result['verified'] ? result['verified'] : (replay?.verified ?? undefined);
   // flow_verify reports `status: pass|fail|unverifiable`; assert reports a boolean `pass`. Accept
   // either shape so the whole family is covered without normalizing four tools' contracts for a
   // metric's convenience — but a status that is neither pass nor fail is NOT a verdict, and an empty
   // suite reports exactly that.
   const status = result['status'];
-  const passed = passedOf(result, status);
+  const passed = passedOf(result, status) ?? replay?.passed;
   if (verified === undefined && passed === undefined) return undefined;
   const reason = reasonOf(result);
   const uncleanLoss = uncleanLossOf(result, reason);
@@ -148,5 +187,7 @@ export function verificationOf(
     // WHAT was lost, when the reason was that something was. Three owners, three fixes, one bar
     // until now.
     ...(uncleanLoss === undefined ? {} : { uncleanLoss }),
+    // WHOSE drive this was. Absent is the ordinary case — the agent called the tool itself.
+    ...(harnessDriving() ? { driven: VerificationDriver.HARNESS } : {}),
   };
 }

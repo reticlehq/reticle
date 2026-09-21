@@ -15,7 +15,6 @@ import {
   PEER_CONTRACT_PARAM,
 } from '@/command/version/peer-announce.js';
 import { log } from '@/log.js';
-import { reportMcpConnected } from '@/telemetry/mcp-connection.js';
 import {
   isLoopbackHost,
   isLocalWebOrigin,
@@ -242,10 +241,9 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
         .connect(transport)
         .then(() => {
           log('mcp_client_connected', { sessionId: sid });
-          // The one signal that separates "Reticle is running" from "somebody is USING it": a daemon
-          // can sit up for days with nothing attached. It also exposes reconnect churn, which is
-          // indistinguishable from healthy usage in every other metric.
-          reportMcpConnected();
+          // The telemetry for this moved to `oninitialized`, where the client has said its name.
+          // An SSE stream that opens here and never handshakes is a probe, not a client, and
+          // reporting it from this point produced a row that could never name who attached.
         })
         .catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err);

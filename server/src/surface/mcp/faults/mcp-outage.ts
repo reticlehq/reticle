@@ -6,7 +6,8 @@
  * often does a real user's MCP server go down, and does it come back — had no answer outside the
  * machine it happened on.
  *
- * Capped at two events per proxy process, and the cap is the design rather than a limitation. One
+ * Capped at one benign and one fault event PER STAGE per proxy process, and the cap is the design
+ * rather than a limitation. One
  * measured afternoon produced 547 proxy reconnects; an event per reconnect would bill for the
  * pathology instead of measuring it, which is the same mistake the per-call `tool` event made before
  * it was removed. What a dashboard needs is the SHARE OF SESSIONS that lose MCP at all (the first
@@ -32,7 +33,21 @@ function outageReason(raw: string): OutageReason {
   return KNOWN_REASONS.has(raw) ? (raw as OutageReason) : OutageReason.OTHER;
 }
 
-const reported = new Set<OutageStage>();
+/**
+ * The daemon retiring on schedule is not a fault, and it is by far the commonest drop.
+ *
+ * Kept as the CLASS rather than the reason itself, because the cap is keyed on it: one benign drop
+ * and one fault per stage, not one event per reason. Keying on the reason would put the volume the
+ * cap exists to prevent straight back — a flapping proxy has several reasons available to it and
+ * would bill for each of them — while keying on the stage alone is what let a scheduled shutdown at
+ * minute one permanently suppress a real outage at minute forty, biasing the metric toward exactly
+ * the rows `daemon_shutdown` was introduced to exclude.
+ */
+function isBenign(reason: OutageReason): boolean {
+  return OutageReason.DAEMON_SHUTDOWN === reason;
+}
+
+const reported = new Set<string>();
 
 /** Reset between tests; a real process reports each stage at most once. */
 export function resetOutageReporting(): void {
@@ -48,12 +63,14 @@ export function reportMcpOutage(
   stage: OutageStage,
   facts: { reason: string; attempts: number; pendingLost?: number },
 ): void {
-  if (reported.has(stage)) return;
-  reported.add(stage);
+  const reason = outageReason(facts.reason);
+  const slot = `${stage}:${isBenign(reason) ? 'benign' : 'fault'}`;
+  if (reported.has(slot)) return;
+  reported.add(slot);
   void getTelemetry().emit(TelemetryEventKind.MCP_CONNECTION_LOST, {
     outage: {
       stage,
-      reason: outageReason(facts.reason),
+      reason,
       attempts: facts.attempts,
       // Always sent, including zero: zero is the finding — a drop no agent could feel. See
       // McpOutageSchema.pendingLost.

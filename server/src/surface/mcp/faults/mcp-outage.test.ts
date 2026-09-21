@@ -120,3 +120,46 @@ describe('an outage reports how many in-flight calls it actually killed', () => 
     emit.mockRestore();
   });
 });
+
+/**
+ * The cap was keyed on the STAGE alone, and the commonest drop by far is the daemon retiring on
+ * schedule. So the first benign shutdown of a long-lived proxy consumed the `first` slot, and a real
+ * fault later in the same process was never reported — biasing the metric toward exactly the rows
+ * `daemon_shutdown` was introduced to exclude. The suppression moved from the classifier into the
+ * cap and looked, from the data, like the transport getting better.
+ */
+describe('a benign drop cannot mask a real one', () => {
+  beforeEach(() => {
+    resetOutageReporting();
+  });
+
+  it('still reports a fault after the daemon retired on schedule', () => {
+    const emit = vi.spyOn(getTelemetry(), 'emit').mockResolvedValue(true);
+    reportMcpOutage(OutageStage.FIRST, { reason: OutageReason.DAEMON_SHUTDOWN, attempts: 1 });
+    reportMcpOutage(OutageStage.FIRST, { reason: OutageReason.SSE_ABORTED, attempts: 4 });
+    const reasons = emit.mock.calls.map(
+      (call) => (call[1] as { outage: { reason: string } }).outage.reason,
+    );
+    expect(reasons).toEqual([OutageReason.DAEMON_SHUTDOWN, OutageReason.SSE_ABORTED]);
+    emit.mockRestore();
+  });
+
+  it('still reports one of each class per stage, not one per reason', () => {
+    // Keying the cap on the reason itself would put the volume back: a flapping proxy has several
+    // reasons available and would bill for each of them.
+    const emit = vi.spyOn(getTelemetry(), 'emit').mockResolvedValue(true);
+    reportMcpOutage(OutageStage.FIRST, { reason: OutageReason.SSE_ENDED, attempts: 1 });
+    reportMcpOutage(OutageStage.FIRST, { reason: OutageReason.SSE_ABORTED, attempts: 2 });
+    reportMcpOutage(OutageStage.FIRST, { reason: OutageReason.CONNECT_ERROR, attempts: 3 });
+    expect(emit).toHaveBeenCalledTimes(1);
+    emit.mockRestore();
+  });
+
+  it('reports one benign drop per stage, not one per retirement', () => {
+    const emit = vi.spyOn(getTelemetry(), 'emit').mockResolvedValue(true);
+    reportMcpOutage(OutageStage.FIRST, { reason: OutageReason.DAEMON_SHUTDOWN, attempts: 1 });
+    reportMcpOutage(OutageStage.FIRST, { reason: OutageReason.DAEMON_SHUTDOWN, attempts: 1 });
+    expect(emit).toHaveBeenCalledTimes(1);
+    emit.mockRestore();
+  });
+});

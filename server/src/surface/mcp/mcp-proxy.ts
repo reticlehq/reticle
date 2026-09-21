@@ -510,13 +510,11 @@ export function startMcpProxy(
         if (null === failure) return;
         const msg = parseJsonRpc(line);
         if (null === msg || msg.id === undefined || !pending.take(msg.id)) return;
-        if (failure.transport) {
-          reportMcpOutage(OutageStage.FIRST, {
-            reason: OutageReason.CONNECT_ERROR,
-            attempts: failure.attempts,
-            pendingLost: 1,
-          });
-        }
+        // No outage is reported here, deliberately. A POST leg that died while the SSE stream is
+        // still up is not the agent losing its tools: `postSocketFailures` on the session summary
+        // already counts it, and reporting it as a lost stream both double-counted and — because
+        // the outage cap is per process — let a transient POST failure in the first minute suppress
+        // the real stream outage in the fortieth.
         proxyLog('reticle_mcp_proxy_post_unanswered', {
           port,
           method: String(msg.method),
