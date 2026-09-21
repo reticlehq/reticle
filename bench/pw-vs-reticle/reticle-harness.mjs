@@ -195,12 +195,20 @@ export async function runReticle(bugs) {
       const all = s?.sessions ?? [];
       // Match on URL and NEVER fall back to sessions[0].
       //
-      // The old pick was `find(url matches && !throttled) ?? sessions[0]`. Every headless tab reports
-      // hidden/unfocused, so it is always throttled — the first branch could never win, and every run
-      // silently used sessions[0], which is whichever session the daemon happens to list first,
+      // The old pick was `find(url matches && !throttled) ?? sessions[0]`, and every run silently
+      // used sessions[0] — whichever session the daemon happens to list first,
       // routinely a stale tab from an earlier bug. That is why checks read plausible-but-wrong values
       // (an inspect returning another element's geometry) instead of failing loudly: the queries all
       // succeeded, just against the wrong page. Prefer the freshest URL match; wait rather than guess.
+      //
+      // This comment used to explain the fallback by saying every headless tab reports
+      // hidden/unfocused and is therefore always throttled. That is not true, and it was load-bearing
+      // enough to be worth correcting: a headless page launched the way the pool launches one reports
+      // `visibilityState: "visible"` and `hidden: false`, keeps reporting it when another tab is
+      // opened in front of it, and runs its timers at full rate. Measured, not assumed. It matters
+      // beyond this file, because the same belief would mean a pooled lease — the documented escape
+      // from a throttled tab — has its own verdicts marked inconclusive by the throttle rule, which
+      // would make the escape hatch self-defeating. It is not.
       // Compare ORIGIN + QUERY, never the full href: the app pushes history on nav (/ -> /overview),
       // so an exact match goes empty the moment the app routes and the pick silently keeps a stale sid.
       // The query is what identifies the run (?reticle-bug=… / ?reticle-reset-storage=1); the path drifts.
