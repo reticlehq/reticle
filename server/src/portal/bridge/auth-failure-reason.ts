@@ -35,6 +35,21 @@ const NO_TOKEN = 'authentication failed: no pairing token on the page';
 /** WebSocket close reasons are capped at 123 bytes; a longer one throws and closes with nothing. */
 const MAX_REASON_BYTES = 123;
 
+const DIFFERENT_PROJECT_PREFIX = 'this daemon serves a different project';
+
+/**
+ * Whether a recorded close is a pairing-token refusal.
+ *
+ * The bridge records the specific sentence it sent on the socket, not one fixed string, so a
+ * comparison with a single constant misses a wrong token, a missing token, and a daemon that
+ * belongs to another project. All three are refusals. A later good session is a separate question
+ * the caller answers with `connectedSinceLastClosure`.
+ */
+export function isAuthRefusalReason(reason: string | undefined): boolean {
+  if (reason === undefined) return false;
+  return reason.startsWith('authentication failed') || reason.startsWith(DIFFERENT_PROJECT_PREFIX);
+}
+
 export function authFailureReason(
   servedProjects: ReadonlySet<string>,
   helloProject: string | undefined,
@@ -54,7 +69,7 @@ export function authFailureReason(
     1 === servedProjects.size &&
     !servedProjects.has(helloProject)
   ) {
-    const reason = `this daemon serves a different project — run \`reticle stop\` and retry`;
+    const reason = `${DIFFERENT_PROJECT_PREFIX} — run \`reticle stop\` and retry`;
     return Buffer.byteLength(reason, 'utf8') <= MAX_REASON_BYTES ? reason : PLAIN;
   }
   if (helloToken === undefined || 0 === helloToken.length) return NO_TOKEN;

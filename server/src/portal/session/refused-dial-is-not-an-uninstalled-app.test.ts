@@ -221,8 +221,9 @@ describe('a refused dial against a wired project names the filesystem split', ()
     expect(next().reason).toMatch(/restart the dev server/i);
   });
 
-  it('offers the same-machine cause too, so a stale page is not misread as a container', () => {
+  it('says a reload serves the same inlined token, on this machine as well as in a container', () => {
     expect(next().reason).toMatch(/reload/i);
+    expect(next().reason).not.toMatch(/hard-reload/i);
   });
 
   it('still yields to a daemon split, which outranks every other cause', () => {
