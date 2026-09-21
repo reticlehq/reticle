@@ -22,7 +22,7 @@
 import path from 'node:path';
 import { createServer } from 'node:http';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { McpStdioClient } from '../../../bench/harness/mcp-client.mjs';
@@ -185,6 +185,25 @@ chk(
   `verified=${red?.verified}`,
 );
 
+const FLOW = 'stitch-probe';
+
+// This spec's own scratch flow, removed by PATH rather than by a tool call: `reticle_flow` has no
+// delete action, and an unrecognised one is answered rather than refused, so a cleanup written that
+// way runs green and deletes nothing. `list` is what knows where the file actually went.
+//
+// Run at BOTH ends on purpose. The session has no resolvable project, so the flow lands in the
+// machine-wide `~/.reticle/unmatched/unnamed` bucket and outlives the run. Cleaning up only at the
+// end still leaves the assertion below depending on a machine that has never run this spec before:
+// it passed on fresh CI and failed from the second run onwards on a developer's machine. An
+// assertion about an EMPTY suite has to make the suite empty.
+const removeSavedFlow = async () => {
+  const listed = await call('reticle_flow', { ...S, action: 'list' });
+  for (const entry of Array.isArray(listed?.flows) ? listed.flows : []) {
+    if (entry?.name === FLOW && typeof entry?.path === 'string') rmSync(entry.path, { force: true });
+  }
+};
+await removeSavedFlow();
+
 // 3. The suite gate with nothing saved yet. An empty suite verified nothing and must not pass.
 const empty = await call('reticle_verify', { action: 'flows', ...S });
 chk(
@@ -195,7 +214,6 @@ chk(
 );
 
 // 4. record -> annotate -> save -> replay -> verify, the loop the docs tell agents to run.
-const FLOW = 'stitch-probe';
 await call('reticle_record', { ...S, action: 'start', recordingName: FLOW });
 await call('reticle_act_and_wait', {
   ...S,
@@ -241,6 +259,18 @@ chk(
   suite?.status === 'pass' && suite?.total >= 1,
   `status=${suite?.status} total=${suite?.total}`,
 );
+
+// The flow this spec saved must not outlive it. Step 3 above asserts that a suite with nothing
+// saved does not report pass, and this session has no resolvable project, so the flow lands in the
+// machine-wide `~/.reticle/unmatched/unnamed` bucket and is still there on the next run. The spec
+// then read its own leftover as "1 flow", passed the empty suite, and took the bug count red with
+// it -- a failure that only ever appeared from the SECOND run onwards, on a machine that had run
+// it before, and never on a fresh CI box.
+//
+// Removed by PATH rather than by a tool call: `reticle_flow` has no delete action, and an
+// unrecognised one is answered rather than refused, so a cleanup written that way runs green and
+// deletes nothing. `list` is what knows where the file actually went.
+await removeSavedFlow();
 
 // 5. Clean shutdown — the session summary rides out on this path.
 await sleep(1500);
