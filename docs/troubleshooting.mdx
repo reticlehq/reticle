@@ -227,6 +227,12 @@ React 19 dropped `_debugSource`. Wire up `@reticlehq/babel-plugin`. Or just use 
 
 `@reticlehq/next` declares `peer next >=13` and `@reticlehq/react` declares `peer react >=18`. On a Next canary or React RC, npm refuses. See [the prerelease notes](/getting-started#installing-alongside-a-nextjs-or-react-prerelease).
 
+## The tool list is empty
+
+Some clients read their MCP tool list once, at startup, and never again. Cursor Cloud Agent is the usual report: the daemon is listening on port 4400, the app is instrumented, and `reticle_*` is absent for the whole session. Restarting the client picks the tools up when a restart is possible. When it is not, the same tools are on the HTTP transport.
+
+`GET /mcp/sse` opens the session. The first SSE frame is an `endpoint` event whose data is the path to POST to, including the session id. POST JSON-RPC there. The POST answers `202` with an empty body, and the result comes back on the SSE stream. The handshake and a working client are in [HTTP transport](/http-transport).
+
 ## Restarting things
 
 ```bash
