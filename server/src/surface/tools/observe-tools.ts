@@ -62,6 +62,7 @@ import {
   PRESENCE_ONLY_ADVICE,
 } from './assert/assert-grade.js';
 import { assertVerdict } from './assert/assert-verdict.js';
+import { followLostObservation } from './act/act-observation.js';
 import { withGapNovelty } from './gap-novelty.js';
 import { assertionSource } from './assert/assert-source.js';
 import { isChangeUndeclared } from '@reticlehq/engine/evidence/undeclared-change.js';
@@ -288,6 +289,12 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         .describe(
           'The tab disconnected mid-wait, so this was never observed — the verdict is UNKNOWN, not a failure of the app.',
         ),
+      sessionId: z
+        .string()
+        .optional()
+        .describe(
+          'The session that answered, when a full-document navigation replaced the one this was asked of. Absent when the original session survived.',
+        ),
       inconclusive: z
         .string()
         .optional()
@@ -326,7 +333,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
     handler: async (deps, args) => {
       const waitBudget = asNumber(args['timeout_ms']) ?? DEFAULT_ASSERT_TIMEOUT_MS;
       // Spend the budget waiting for the APP as well as for the predicate. See resolve-within.
-      const session = await resolveSessionWithin(
+      let session = await resolveSessionWithin(
         deps.sessions,
         asString(args['sessionId']),
         waitBudget,
@@ -339,8 +346,21 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       const bodyRefusal = bodyClauseRefusal(predicate, session);
       if (bodyRefusal !== undefined) throw new Error(bodyRefusal);
       // Honesty: explicit since wins; else default to the last act's cursor; else the whole buffer.
-      const since = asNumber(args['since']) ?? session.lastAct.cursor() ?? 0;
-      const verdict = await waitForPredicate(session, predicate, waitBudget, since);
+      let since = asNumber(args['since']) ?? session.lastAct.cursor() ?? 0;
+      // See the note on the assert handler below: a wait cut off by a full-document navigation is
+      // followed to the document that took over, rather than graded as a lost observation there.
+      const predicateStarted = session.elapsed();
+      const followed = await followLostObservation({
+        sessions: deps.sessions,
+        session,
+        verdict: await waitForPredicate(session, predicate, waitBudget, since),
+        timeout: waitBudget,
+        predicateStarted,
+        reevaluate: (next, budget) => waitForPredicate(next, predicate, budget, 0),
+      });
+      if (followed.followed) since = 0;
+      session = followed.session;
+      const verdict = followed.verdict;
       // match reticle_assert — wrap with control + session health (throttle matters most while blocking)
       // and the buffer envelope, so a verdict reached over an evicted window says so.
       return withControl(session, {
@@ -349,6 +369,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         // `lastActSourceOnFailure` — an assert used to be blamed on the previous act's file:line.
         ...annotateStarvedFailure(session, verdict),
         ...assertionSource(session, predicate, verdict),
+        ...(followed.followed ? { sessionId: session.id } : {}),
         ...healthEnvelope(session),
         ...bufferEnvelope(session),
       });
@@ -395,6 +416,12 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         .optional()
         .describe(
           'The tab disconnected mid-wait, so this was never observed — the verdict is UNKNOWN, not a failure of the app.',
+        ),
+      sessionId: z
+        .string()
+        .optional()
+        .describe(
+          'The session that answered, when a full-document navigation replaced the one this was asked of. Absent when the original session survived.',
         ),
       inconclusive: z
         .string()
@@ -454,7 +481,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
     handler: async (deps, args) => {
       const timeout = asNumber(args['timeout_ms']) ?? 0;
       // Spend the budget waiting for the APP as well as for the predicate. See resolve-within.
-      const session = await resolveSessionWithin(
+      let session = await resolveSessionWithin(
         deps.sessions,
         asString(args['sessionId']),
         timeout,
@@ -467,7 +494,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       const bodyRefusal = bodyClauseRefusal(predicate, session);
       if (bodyRefusal !== undefined) throw new Error(bodyRefusal);
       // Honesty: explicit since wins; else default to the last act's cursor; else the whole buffer.
-      const since = asNumber(args['since']) ?? session.lastAct.cursor() ?? 0;
+      let since = asNumber(args['since']) ?? session.lastAct.cursor() ?? 0;
       // Declared BEFORE the verdict, so the undeclared-change read below finds it open and stays
       // quiet on THIS verdict rather than on the next one. Discharged after that read.
       const intentId = await linkInlineIntent(
@@ -476,10 +503,30 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         asString(args['intent']),
         PredicateKind.SETTLED === predicate.kind ? undefined : predicate,
       );
-      const verdict =
-        timeout > 0
-          ? await waitForPredicate(session, predicate, timeout, since)
-          : await evaluatePredicate(session, predicate, since);
+      // A full-document navigation tears the in-page SDK down mid-wait, and the predicate finishes
+      // `observationLost` against a channel that no longer exists. `act_and_wait` has followed the
+      // document that took over since the MPA drive was fixed; this path did not, so an assertion
+      // straddling a navigation came back "Reticle could not tell" while the answer was sitting on
+      // the successor — reported four times from the field, every one of them proving `yes` on the
+      // UNCHANGED predicate after a manual reconnect. Re-asking is not fabricating: the consequence
+      // is evaluated on a live document, and where there is no unique successor to follow,
+      // `followLostObservation` refuses to guess and the honest lost verdict stands.
+      const predicateStarted = session.elapsed();
+      const followed = await followLostObservation({
+        sessions: deps.sessions,
+        session,
+        verdict:
+          timeout > 0
+            ? await waitForPredicate(session, predicate, timeout, since)
+            : await evaluatePredicate(session, predicate, since),
+        timeout,
+        predicateStarted,
+        reevaluate: (next, budget) => waitForPredicate(next, predicate, budget, 0),
+      });
+      // The successor's buffer is its own: the departed session's cursor means nothing there.
+      if (followed.followed) since = 0;
+      session = followed.session;
+      const verdict = followed.verdict;
       // A GREEN presence-only assertion is the dangerous case (a wrong element can fake it) — nudge
       // toward a consequence. Never on a failing verdict (moot) or when a signal/net is asserted.
       // Two nudges, both only on a GREEN verdict (a failing one is moot): a presence-only assertion
@@ -538,6 +585,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       return withControl(session, {
         ...decision,
         ...annotateStarvedFailure(session, verdict),
+        ...(followed.followed ? { sessionId: session.id } : {}),
         ...(contradictions.length > 0 ? { contradictions } : {}),
         // What the app did not tell Reticle, on the same rule the act path uses.
         // Remedy once per session, facts every time. Applied HERE rather than inside
