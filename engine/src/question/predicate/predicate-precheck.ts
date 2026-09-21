@@ -15,7 +15,7 @@
  * Nothing was acted on and no verdict is possible… This is a miss, not a Reticle defect: there is
  * nothing to report." This is that, applied one step earlier.
  */
-import type { ElementQuery } from '@reticlehq/core';
+import { PredicateKind, type ElementQuery } from '@reticlehq/core';
 import { residualQueryChecks } from './predicate-schema.js';
 
 /** Composite predicates nest; the unusable one can be at any depth. */
@@ -54,6 +54,79 @@ export function unevaluablePredicateReason(predicate: unknown): string | undefin
       'Nothing was acted on: this predicate could never have been evaluated, so refusing it costs ' +
       'you nothing and spending the action on it would have cost you the verdict.'
     );
+  }
+  return undefined;
+}
+
+/**
+ * Predicates that are true the moment they are written, and so cannot be evidence of anything.
+ *
+ * Only `signal` and `net` can be declared with no specifics: both read the event stream from the
+ * act's own cursor, so a bare one cannot be answered by something that had already happened. The
+ * kinds checked here are read BEFORE the action as well as after (see `already-true.ts`), precisely
+ * so a condition that already held cannot be sold as something the action caused — and a bare one of
+ * them always already held. There is always a current route, and there is always some store.
+ *
+ * The result was not an error but a `no-fault` verdict with reason `already_true`: a verdict-shaped
+ * object carrying no proof, which an agent skimming for `ok` reads as a pass. A refusal teaches; a
+ * no-fault verdict misleads, and it costs the action as well, because the caller only learns after
+ * the click has landed and the page has moved.
+ */
+const DECLARE_INSTEAD =
+  'Declare something the action CHANGES: a `signal` (by name) or a `net` call (method, urlContains, ' +
+  'status) can be declared without knowing the app, a `route` needs a `pathname` or `contains`, and ' +
+  'a `state` needs a non-empty `path` or a value to compare. One reticle_observe call gives you the ' +
+  "app's real signal names and endpoint paths to name here. Nothing was acted on: this predicate was " +
+  'already true before the action, so the only thing it could ever have proved is that the action ' +
+  'was not needed.';
+
+/** A `path` that selects the whole store root, in any spelling a caller writes it. */
+function selectsWholeStore(path: unknown): boolean {
+  return undefined === path || ('string' === typeof path && 0 === path.trim().length);
+}
+
+/** The reason THIS leaf is unconditionally true, or undefined when it makes a real claim. */
+function vacuousLeafReason(p: Record<string, unknown>): string | undefined {
+  if (
+    PredicateKind.ROUTE === p['kind'] &&
+    undefined === p['pathname'] &&
+    undefined === p['contains']
+  )
+    return (
+      'a bare `route` predicate is true the moment it is written — there is always a current route, ' +
+      `so ${JSON.stringify(p)} would have held before the action as well as after it. ${DECLARE_INSTEAD}`
+    );
+  if (
+    PredicateKind.STATE === p['kind'] &&
+    selectsWholeStore(p['path']) &&
+    undefined === p['equals'] &&
+    undefined === p['satisfies']
+  )
+    return (
+      'a `state` predicate with no path and nothing to compare is true the moment it is written — ' +
+      `there is always some store, so ${JSON.stringify(p)} would have held before the action as ` +
+      `well as after it. ${DECLARE_INSTEAD}`
+    );
+  return undefined;
+}
+
+/**
+ * The reason this predicate proves nothing whatever the app does, or undefined when it makes a claim.
+ *
+ * Checked at any depth, because a composite inherits it: one unconditionally-true branch of an
+ * `anyOf` satisfies the whole thing, so the branch that WOULD have been evidence never has to hold.
+ */
+export function vacuousPredicateReason(predicate: unknown): string | undefined {
+  if (!isRecord(predicate)) return undefined;
+  const leaf = vacuousLeafReason(predicate);
+  if (leaf !== undefined) return leaf;
+  for (const key of NESTED_KEYS) {
+    const nested = predicate[key];
+    const children = Array.isArray(nested) ? nested : [nested];
+    for (const child of children) {
+      const reason = vacuousPredicateReason(child);
+      if (reason !== undefined) return reason;
+    }
   }
   return undefined;
 }

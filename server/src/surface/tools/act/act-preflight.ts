@@ -14,7 +14,10 @@ import { PredicateSchema } from '@reticlehq/engine/question/predicate/predicate-
 import { isGlobalPressCall } from '@reticlehq/core';
 import { SessionReplacedError } from '@/portal/session/page-commands/pending-commands.js';
 import { assertNativeInputSupported } from './act-danger.js';
-import { unevaluablePredicateReason } from '@reticlehq/engine/question/predicate/predicate-precheck.js';
+import {
+  unevaluablePredicateReason,
+  vacuousPredicateReason,
+} from '@reticlehq/engine/question/predicate/predicate-precheck.js';
 
 /**
  * Refuse a sequence whose steps cannot be addressed.
@@ -145,6 +148,10 @@ export function preflightAct(actArgs: Record<string, unknown>, until: unknown): 
   assertNativeInputSupported(actArgs);
   const unevaluable = unevaluablePredicateReason(until);
   if (unevaluable !== undefined) throw new Error(unevaluable);
+  // A predicate that was already true when it was written answered `no-fault` / `already_true` —
+  // verdict-shaped, and carrying no proof of anything the action did. See vacuousPredicateReason.
+  const vacuous = vacuousPredicateReason(until);
+  if (vacuous !== undefined) throw new Error(vacuous);
 }
 
 /**

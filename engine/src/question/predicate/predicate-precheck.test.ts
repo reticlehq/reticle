@@ -8,7 +8,7 @@
  * fix code that is not broken.
  */
 import { describe, expect, it } from 'vitest';
-import { unevaluablePredicateReason } from './predicate-precheck.js';
+import { unevaluablePredicateReason, vacuousPredicateReason } from './predicate-precheck.js';
 
 const el = (query: Record<string, unknown>) => ({ kind: 'element', query });
 
@@ -92,6 +92,80 @@ describe('refusing what could never be evaluated', () => {
   it('tolerates junk rather than throwing on the hot path', () => {
     for (const junk of [undefined, null, 'string', 42, [], {}]) {
       expect(() => unevaluablePredicateReason(junk)).not.toThrow();
+    }
+  });
+});
+
+/**
+ * A predicate that is true the moment it is written is not a check.
+ *
+ * `{ kind: 'route' }` with no pathname, and `{ kind: 'state', path: '' }` with nothing to compare,
+ * are unconditionally true: there is always a current route and there is always some store. Declared
+ * as an `until` they came back `no-fault` / `already_true` — a verdict-shaped object carrying no
+ * proof, which an agent skimming for `ok` reads as a pass. Refusing costs the caller nothing they
+ * had; answering costs them the action and the verdict.
+ */
+describe('refusing what was already true before the action', () => {
+  it('refuses a bare route — there is always a current route', () => {
+    const reason = vacuousPredicateReason({ kind: 'route' });
+    expect(reason).toContain('route');
+    expect(reason).toContain('Nothing was acted on');
+  });
+
+  it('refuses a state predicate with an empty path and nothing to compare', () => {
+    expect(vacuousPredicateReason({ kind: 'state', path: '' })).toContain('state');
+    expect(vacuousPredicateReason({ kind: 'state', path: '   ' })).toContain('state');
+  });
+
+  it('names what to declare instead, and the tool that supplies the vocabulary', () => {
+    // A refusal without a route is a dead end, and the two kinds that CAN be declared bare are the
+    // whole answer for a caller who does not yet know the app.
+    const reason = vacuousPredicateReason({ kind: 'route' }) ?? '';
+    expect(reason).toContain('signal');
+    expect(reason).toContain('net');
+    expect(reason).toContain('reticle_observe');
+  });
+
+  it('allows a route that names a pathname or a substring', () => {
+    expect(vacuousPredicateReason({ kind: 'route', pathname: '/checkout' })).toBeUndefined();
+    expect(vacuousPredicateReason({ kind: 'route', contains: 'checkout' })).toBeUndefined();
+  });
+
+  it('allows a state predicate that names a path, or compares the whole store', () => {
+    expect(vacuousPredicateReason({ kind: 'state', path: 'cart.total' })).toBeUndefined();
+    expect(
+      vacuousPredicateReason({ kind: 'state', path: '', equals: { items: 1 } }),
+    ).toBeUndefined();
+    expect(
+      vacuousPredicateReason({ kind: 'state', path: '', satisfies: { length: { gt: 0 } } }),
+    ).toBeUndefined();
+  });
+
+  it('leaves the kinds that CAN be declared bare alone', () => {
+    // `signal` and `net` read the event stream from the act's own cursor, so a bare one cannot be
+    // answered by the past. `settled` is the documented omit-`until` default and is not a claim.
+    for (const p of [{ kind: 'signal' }, { kind: 'net' }, { kind: 'settled' }]) {
+      expect(vacuousPredicateReason(p), JSON.stringify(p)).toBeUndefined();
+    }
+  });
+
+  it('finds a bare one nested inside a composite', () => {
+    // `anyOf` is the expensive case: one unconditionally-true branch makes the whole thing true, so
+    // the good branch beside it never has to hold.
+    expect(
+      vacuousPredicateReason({
+        kind: 'anyOf',
+        predicates: [{ kind: 'signal', name: 'saved' }, { kind: 'route' }],
+      }),
+    ).toContain('route');
+    expect(
+      vacuousPredicateReason({ kind: 'not', predicate: { kind: 'state', path: '' } }),
+    ).toContain('state');
+  });
+
+  it('tolerates junk rather than throwing on the hot path', () => {
+    for (const junk of [undefined, null, 'string', 42, [], {}]) {
+      expect(() => vacuousPredicateReason(junk)).not.toThrow();
     }
   });
 });
