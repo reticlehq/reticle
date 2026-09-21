@@ -27,10 +27,23 @@ import { observeSafely, type Emit, type Teardown } from './types.js';
  * matches it and a `status: 200` assertion correctly does not. Emitting a completed request with a
  * synthesised 200 would have made every outbound link a false green.
  *
- * CAPTURE PHASE, and deliberately: an app that calls `preventDefault()` in a bubble-phase handler
- * still gets its click recorded here, and the event is a statement about what the anchor pointed at,
- * not a promise that the browser went. A router that intercepts its own links is the common case and
- * is reported by the route channel instead.
+ * CAPTURE PHASE, and deliberately: a handler that calls `stopPropagation()` must not be able to hide
+ * the click from us, so the listener has to be the first one to see it.
+ *
+ * DECIDED AT THE END OF DISPATCH, and equally deliberately. The record used to be written in the
+ * capture handler, where `defaultPrevented` is always false because no app handler has run yet — so
+ * a link a client-side router cancels and handles in-document was recorded as a request the browser
+ * had gone off to make. It never started, so it never settled, and a pending that cannot settle is
+ * read downstream as a request still in flight: clicking a tab that only changes `?tab=` carried a
+ * "request never settled" contradiction on every step, and the declared consequences holding could
+ * not save the verdict. Cancelling the anchor is the router SAYING the browser is not going, and it
+ * is the only statement of that fact available at click time. One microtask after dispatch is where
+ * it can be read, and it is still before the browser acts on a click it did not cancel.
+ *
+ * The cost of this is narrow and taken knowingly: an app that cancels the anchor and then navigates
+ * by hand (`location.href = ...`) loses its departure record. It gets one from the new document's
+ * navigation timing instead, and inventing a departure for every cancelled click to cover it is what
+ * produced the false positive above.
  */
 
 /** Schemes that never take the browser anywhere: no departure, nothing to report. */
@@ -72,15 +85,24 @@ export function installDeparture(emit: Emit): Teardown {
       if (anchor === undefined) return;
       const href = anchor.getAttribute('href') ?? '';
       const here = document.location.href;
-      if (!isDeparture(href, anchor.hasAttribute('download'), here)) return;
-      seq += 1;
-      emit(EventType.NET_PENDING, {
-        id: `nav-${String(seq)}`,
-        method: 'GET',
-        // Resolved, so an assertion can name the provider's host rather than the app's markup.
-        url: new URL(href, here).toString(),
-        initiator: NetInitiator.NAVIGATION,
-        ...(anchor.hasAttribute('download') ? { download: true } : {}),
+      const download = anchor.hasAttribute('download');
+      if (!isDeparture(href, download, here)) return;
+      // Resolved now, against the document as it was when the click happened: an assertion names the
+      // provider's host rather than the app's markup, and a handler that rewrites the href while it
+      // runs cannot change what we say the user clicked.
+      const url = new URL(href, here).toString();
+      queueMicrotask(() => {
+        observeSafely(() => {
+          if (event.defaultPrevented) return;
+          seq += 1;
+          emit(EventType.NET_PENDING, {
+            id: `nav-${String(seq)}`,
+            method: 'GET',
+            url,
+            initiator: NetInitiator.NAVIGATION,
+            ...(download ? { download: true } : {}),
+          });
+        });
       });
     });
   };
