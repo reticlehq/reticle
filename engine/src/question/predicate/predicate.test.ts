@@ -741,6 +741,51 @@ describe('a throttled tab timeout is not a missing render', () => {
     expect(result.inconclusive).toBeUndefined();
   });
 
+  it('an allOf that saw the page does not call the miss a starved tab', async () => {
+    // Three arms in one evaluation found a rendered element. The fourth did not. The tab rendered:
+    // the miss is a miss, and `unknown` would throw away the three observations that prove it.
+    const session = new ThrottledSession([], (query) =>
+      'Selected Date' === query.text
+        ? { matched: true, count: 1, elements: [] }
+        : { matched: false, count: 0, elements: [] },
+    );
+    const seen = { kind: 'element' as const, query: { text: 'Selected Date' } };
+    const result = await evaluatePredicate(session, {
+      kind: 'allOf',
+      predicates: [seen, seen, seen, { kind: 'element', query: { text: 'Confirmation' } }],
+    });
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toBeUndefined();
+  });
+
+  it('an allOf whose only pass is an absence is still a starved tab', async () => {
+    // Finding nothing is the reading a starved tab cannot be trusted for. It must not be treated
+    // as proof the page rendered, or the miss beside it would be graded as a product failure.
+    const session = new ThrottledSession([], () => ({ matched: false, count: 0, elements: [] }));
+    const result = await evaluatePredicate(session, {
+      kind: 'allOf',
+      predicates: [
+        { kind: 'element', query: { text: 'Gone' }, absent: true },
+        { kind: 'element', query: { text: 'Confirmation' } },
+      ],
+    });
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toBe(THROTTLED_STARVED_NOTE);
+  });
+
+  it('an allOf that saw nothing is still a starved tab', async () => {
+    const session = new ThrottledSession([]);
+    const result = await evaluatePredicate(session, {
+      kind: 'allOf',
+      predicates: [
+        { kind: 'element', query: { text: 'Selected Date' } },
+        { kind: 'element', query: { text: 'Confirmation' } },
+      ],
+    });
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toBe(THROTTLED_STARVED_NOTE);
+  });
+
   it('an unthrottled timeout still looks like a near-miss, not a starved tab', async () => {
     const session = new FakeSession([]);
     const result = await waitForPredicate(

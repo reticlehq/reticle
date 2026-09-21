@@ -424,10 +424,26 @@ function annotateThrottledMiss(
  * agent re-drives or walks away from — so the proof it was holding never reached anybody.
  *
  * `not` flips the polarity again, and nests, so this recurses rather than checking one level.
- * Composites (`allOf` / `anyOf`) deliberately fall through to `false`: a composite fails for a
- * reason this cannot name, and keeping the caveat is the conservative half of the trade — an
- * over-cautious `unknown` costs a re-drive, a missing one costs a wrong verdict.
+ * Composites (`allOf` / `anyOf`) deliberately fall through to `false` here. A composite fails for
+ * a reason this cannot name. `allOf` reconsiders afterwards: a sibling arm that found an element
+ * in the same evaluation is proof the tab rendered, and the caveat must not throw that away.
  */
+/**
+ * Did this arm pass by finding something on the page?
+ *
+ * A passing element or text query is a rendered node. An absence that passed found nothing, and
+ * that is the reading a starved tab cannot be trusted for, so it does not count.
+ */
+function armSawThePage(predicate: Predicate, result: EvalResult): boolean {
+  if (!result.pass) return false;
+  if (PredicateKind.ELEMENT !== predicate.kind && PredicateKind.TEXT !== predicate.kind) {
+    return false;
+  }
+  if ('absent' in predicate && true === predicate.absent) return false;
+  if ('count' in predicate && 0 === predicate.count) return false;
+  return true;
+}
+
 function failureRestsOnSeeing(predicate: Predicate): boolean {
   if (PredicateKind.NOT === predicate.kind) return !failureRestsOnSeeing(predicate.predicate);
   if ('absent' in predicate && true === predicate.absent) return true;
@@ -441,11 +457,32 @@ export async function evaluatePredicate(
   since = 0,
   diagnose = true,
 ): Promise<EvalResult> {
-  return annotateThrottledMiss(
-    session,
-    predicate,
-    await evaluatePredicateRaw(session, predicate, since, diagnose),
+  const result = await evaluatePredicateRaw(session, predicate, since, diagnose);
+  // `allOf` already turned a miss into a product failure when a sibling arm found an element.
+  // Annotating again here would put the throttle note back on that failure (#1004).
+  if (allOfSawThePage(predicate, result)) return result;
+  return annotateThrottledMiss(session, predicate, result);
+}
+
+function isEvalResult(value: unknown): value is EvalResult {
+  return (
+    'object' === typeof value && null !== value && 'boolean' === typeof (value as EvalResult).pass
   );
+}
+
+function listItem(value: unknown, index: number): unknown {
+  if (!Array.isArray(value)) return undefined;
+  const item: unknown = value[index];
+  return item;
+}
+
+/** A sibling arm of this `allOf` passed by finding something on the page. */
+function allOfSawThePage(predicate: Predicate, result: EvalResult): boolean {
+  if (PredicateKind.ALL_OF !== predicate.kind) return false;
+  return predicate.predicates.some((arm, index) => {
+    const child = listItem(result.evidence, index);
+    return isEvalResult(child) && armSawThePage(arm, child);
+  });
 }
 
 async function evaluatePredicateRaw(
@@ -536,11 +573,25 @@ async function evaluatePredicateRaw(
       const results = await Promise.all(
         predicate.predicates.map((p) => evaluatePredicate(session, p, since, diagnose)),
       );
+      // A sibling arm found an element in this same evaluation. The tab rendered. A throttle note
+      // on the arm that missed would grade the whole conjunction unknown and throw away the
+      // observations that prove the page was there (#1004).
+      const painted = predicate.predicates.some((arm, index) => {
+        const result = results[index];
+        return undefined !== result && armSawThePage(arm, result);
+      });
+      const graded = painted
+        ? results.map((result) =>
+            THROTTLED_STARVED_NOTE === result.inconclusive
+              ? { ...result, inconclusive: undefined }
+              : result,
+          )
+        : results;
       // A clause that genuinely failed OUTRANKS one nobody could read. Softening a real failure to
       // UNKNOWN would hide the defect the agent came for, which is the more expensive of the two
       // mistakes; the reverse — grading an unreadable clause as a defect in the app — is the one
       // that was happening.
-      const failed = results.find((r) => !r.pass && r.inconclusive === undefined);
+      const failed = graded.find((r) => !r.pass && r.inconclusive === undefined);
       if (failed !== undefined) {
         return {
           pass: false,
@@ -549,12 +600,12 @@ async function evaluatePredicateRaw(
           // rescue it. This is what makes the early exit reach real calls, since an exact count is
           // usually asserted alongside the UI change it is meant to accompany.
           ...(true === failed.decided ? { decided: true } : {}),
-          evidence: results,
+          evidence: graded,
         };
       }
-      const unreadable = results.find((r) => r.inconclusive !== undefined);
-      if (unreadable !== undefined) return unreadableComposite(unreadable, results);
-      return { pass: true, evidence: results.map((r) => r.evidence) };
+      const unreadable = graded.find((r) => r.inconclusive !== undefined);
+      if (unreadable !== undefined) return unreadableComposite(unreadable, graded);
+      return { pass: true, evidence: graded.map((r) => r.evidence) };
     }
     case PredicateKind.ANY_OF: {
       const results = await Promise.all(
