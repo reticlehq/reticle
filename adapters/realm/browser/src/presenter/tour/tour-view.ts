@@ -275,9 +275,13 @@ export const TOUR_CSS = `
 [${TOUR_ATTR}] .reticle-tour-blocker{position:absolute;pointer-events:auto;z-index:0;}
 /* Ringed slides dim through the ring's own 9999px shadow, which leaves a hole over the thing being
    pointed at. The scrim would cover that hole -- dimming the HUD the slide is ABOUT, and washing
-   the page twice (~80% rather than 55%). Cleared, not removed: it is also what swallows clicks
-   meant for the app underneath, and a tour that lets you click through is not a tour. */
-[${TOUR_ATTR}] .reticle-tour-scrim.is-clear{background:transparent;backdrop-filter:none;}
+   the page twice (~80% rather than 55%).
+   It is cleared for the clicks too, and that half was missing. A scrim blocks only while it is
+   VISIBLY blocking: reported from the field on 3.1.0 by several users, one of whom removed the
+   plugin, because a cleared scrim went on eating every press on a page that looked lit and
+   reachable. An overlay that looks transparent and behaves opaque reads as the app being broken. */
+[${TOUR_ATTR}] .reticle-tour-scrim.is-clear{background:transparent;backdrop-filter:none;
+  pointer-events:none;}
 /* Above the ring, and the z-index is the whole point.
    The ring is appended after the card, and both are positioned with an auto z-index, so the ring
    painted on top of it -- and the ring's dimming IS a 9999px shadow, which therefore fell across the

@@ -291,10 +291,10 @@ export function mountTour(deps: TourDeps): TourHandle | undefined {
         // dimmed like everything else — and the page takes the wash twice. Only for a spotlight: an
         // outlined region keeps its dimming, which is the entire difference between the two.
         if (!region) root.querySelector('.reticle-tour-scrim')?.classList.add('is-clear');
-        // An invitation to press it needs the press to actually arrive. The scrim keeps its
-        // `pointer-events:auto` even when cleared, so on an interactive slide it is replaced with
-        // four rects around the control: everything stays blocked except the one thing being
-        // offered. The ring pulses so the page agrees with the sentence in the card.
+        // An invitation to press it needs the press to actually arrive, and the rest of the page
+        // still has to be held: a cleared scrim now blocks nothing at all, so on an interactive
+        // slide it is replaced with four rects around the control. Everything stays blocked except
+        // the one thing being offered. The ring pulses so the page agrees with the card.
         if (isInteractive(slide)) {
           ring.classList.add('is-live');
           root.querySelector('.reticle-tour-scrim')?.remove();

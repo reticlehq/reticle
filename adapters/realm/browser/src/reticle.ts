@@ -508,7 +508,11 @@ export class Reticle {
          * for, so keying only on the stamp would have shown it to nobody.
          */
         void import('./presenter/tour/tour.js').then((tour) => {
-          tour.mountTour({
+          // The page may have disconnected while this was in flight -- the same race the panel
+          // guards against one screen up, and here it strands an overlay nothing can ever close:
+          // `disconnect()` has already emptied the teardown list this would be pushing onto.
+          if (!this.#connected) return;
+          const shown = tour.mountTour({
             document,
             storage: tour.safeLocalStorage(),
             // This file already reads that param; importing the panel-side reader for it pulled
@@ -536,6 +540,11 @@ export class Reticle {
               selection.addRange(range);
             },
           });
+          // Unconditional teardown. The handle used to be dropped on the floor, so the one overlay
+          // in this package that covers the WHOLE viewport was also the only one `disconnect()`
+          // could not take with it: it outlived the session, the daemon and everything else the
+          // SDK owns, and the only way left to remove it was a reload.
+          if (shown !== undefined) this.#teardowns.push(shown.destroy);
         });
         // The glow and panel wake on bridge connect, so if the bridge got there first, say so now.
         if (this.#bridgeConnected) panel.sessionStart();
