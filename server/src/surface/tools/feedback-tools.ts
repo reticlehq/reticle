@@ -70,6 +70,17 @@ function sessionFacts(
   }
 }
 
+/** Said when a report arrives with no body at all. Names both accepted fields so the retry can work. */
+const NO_BODY_REASON =
+  'the report has no body — send it as `text` (or `summary`, which is the same field). Nothing was filed.';
+
+/** `text`, or the `summary` alias, whichever arrived. Empty when neither did — the handler refuses. */
+function feedbackBody(args: Record<string, unknown>): string {
+  const text = asString(args['text'])?.trim();
+  if (text !== undefined && '' !== text) return text;
+  return asString(args['summary'])?.trim() ?? '';
+}
+
 export const FEEDBACK_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.FEEDBACK,
@@ -90,10 +101,24 @@ export const FEEDBACK_TOOLS: ToolDef[] = [
         ),
       text: z
         .string()
-        .min(1)
+        .optional()
         .describe(
           'For a failure: the root-cause analysis — the call you made, what you expected, what you got, and why Reticle is at fault. For a request: what you want, in your own words.',
         ),
+      /**
+       * `text` under the name agents reach for unprompted.
+       *
+       * Incident: field reports of a call carrying a summary and a trace coming back
+       * "String must contain at least 1 character(s)" and being lost. The body had been put in
+       * `summary` — a field this tool never had. The MCP SDK validates input BEFORE the handler, so
+       * a required `text` made those calls unreachable and unanswerable: no handler ran, nothing
+       * could explain the rejection, and the report was dropped.
+       *
+       * So `text` is optional and this is its alias; the handler takes whichever arrived and refuses
+       * — with both names in the reason — only when neither did. Widening the schema is what buys
+       * the chance to say anything at all.
+       */
+      summary: z.string().optional().describe('Alias for `text`; send either.'),
       need: z
         .string()
         .optional()
@@ -158,11 +183,27 @@ export const FEEDBACK_TOOLS: ToolDef[] = [
       model: 'claude-opus-4',
     },
     handler: async (deps, args) => {
+      // Refuse here rather than in core's schema: core validates a REPORT, which has one body field
+      // and knows nothing about the `summary` alias, so its rejection reads "String must contain at
+      // least 1 character(s)" and names neither field. That sentence is what agents were given when
+      // their report was dropped, and it is unactionable — the agent cannot tell which of eight
+      // arguments was wrong.
+      const body = feedbackBody(args);
+      if ('' === body) {
+        return {
+          sent: false,
+          accepted: false,
+          reason: NO_BODY_REASON,
+          redacted: [],
+          context: undefined,
+          note: 'NOT accepted (see reason). Tell the human what you found so it is not lost.',
+        };
+      }
       const receipt = await submitFeedback(
         {
           source: FeedbackSource.AGENT,
           kind: asString(args['kind']) as FeedbackKind,
-          text: asString(args['text']) ?? '',
+          text: body,
           ...optionalText(args, 'trace'),
           ...optionalText(args, 'need'),
           ...optionalText(args, 'impact'),

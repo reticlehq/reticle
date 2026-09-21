@@ -202,3 +202,52 @@ describe('an agent can report that something worked, not only that it broke', ()
     spy.mockRestore();
   });
 });
+
+/**
+ * Incident: three independent field reports said a `reticle_feedback` call carrying a
+ * summary and a trace came back "String must contain at least 1 character(s)" and was lost. They
+ * had put the body in `summary` — a field this tool has never had, which appears nowhere in its
+ * schema, its docs or its CLI. The MCP SDK validates a tool's input BEFORE the handler runs, so
+ * there was no chance to say what was wrong; the report simply did not arrive.
+ *
+ * Those three are the ones who persisted and told us twice. The channel this tool exists to carry
+ * is the one it was dropping, which is the worst possible thing for it to drop silently.
+ */
+describe('reticle_feedback accepts the body under the name agents actually use', () => {
+  const tool = TOOLS.find((t) => t.name === ReticleTool.FEEDBACK);
+  const noSession = (): Parameters<NonNullable<typeof tool>['handler']>[0] =>
+    ({
+      sessions: {
+        resolve: () => {
+          throw new Error('no browser session connected');
+        },
+      },
+    }) as unknown as Parameters<NonNullable<typeof tool>['handler']>[0];
+
+  it('advertises summary so the SDK does not reject the call before the handler sees it', () => {
+    expect(tool?.inputSchema['summary']).toBeDefined();
+  });
+
+  it('does not require text, so a call carrying only summary reaches the handler', () => {
+    const shape = tool?.inputSchema as Record<string, z.ZodTypeAny>;
+    expect(shape['text']?.safeParse(undefined).success).toBe(true);
+  });
+
+  it('files the report when the body arrived as summary', async () => {
+    const result = (await tool?.handler(noSession(), {
+      kind: FeedbackKind.BUG,
+      summary: 'reticle_assert returned pass:true with no verified field',
+    })) as { accepted: boolean };
+    expect(result.accepted).toBe(true);
+  });
+
+  it('refuses a call that carries neither, and names both fields in the reason', async () => {
+    const result = (await tool?.handler(noSession(), { kind: FeedbackKind.BUG })) as {
+      accepted: boolean;
+      reason?: string;
+    };
+    expect(result.accepted).toBe(false);
+    expect(result.reason).toMatch(/summary/);
+    expect(result.reason).toMatch(/text/);
+  });
+});
