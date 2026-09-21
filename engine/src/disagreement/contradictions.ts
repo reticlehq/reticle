@@ -1,6 +1,7 @@
 import {
   ContradictionKind,
   EventType,
+  REQUEST_SHAPE_FIELD,
   isAbsenceDerived,
   isSameDocument,
   isSameEditEpoch,
@@ -46,6 +47,34 @@ export type {
  *
  * Pure: a window of events in, findings out. No session, no IO, no clock.
  */
+
+/**
+ * What this request CARRIED, as far as the record knows — `undefined` when it does not know.
+ *
+ * The page's shape fingerprint first: it is present on every request from an instrumented page,
+ * including the overwhelming majority where body capture is off. A captured body is the fallback for
+ * a realm that records one without a fingerprint (desktop IPC). Neither means the record does not
+ * say what this request carried — a body the page could not read as text, or an SDK too old to
+ * compute a fingerprint — and that is an ABSENCE of identity, not an identity shared with every
+ * other silent request.
+ */
+function identityOf(event: ReticleEvent): string | undefined {
+  const shape = asString(event.data[REQUEST_SHAPE_FIELD]);
+  if (shape !== undefined && 0 !== shape.length) return shape;
+  const body = asString(event.data['requestBody']);
+  return body === undefined || 0 === body.length ? undefined : body;
+}
+
+/** Split calls to one endpoint into the sets that sent the same thing. Callers check first that
+ * every identity is known; an unknown one would otherwise pool with every other unknown. */
+function groupByIdentity<T extends { identity: string | undefined }>(calls: readonly T[]): T[][] {
+  const byIdentity = new Map<string, T[]>();
+  for (const call of calls) {
+    const key = call.identity ?? '';
+    byIdentity.set(key, [...(byIdentity.get(key) ?? []), call]);
+  }
+  return [...byIdentity.values()];
+}
 
 function uiAdvanced(events: readonly ReticleEvent[]): boolean {
   return events.some(
@@ -592,13 +621,23 @@ function findWindowContradictions(
   // window the caller handed in turns two legitimate separate saves into a double submit. See
   // ContradictionOptions.actionSince.
   //
-  // A captured request body joins the identity. A command-bus API posts every mutation to one URL
+  // What the request CARRIED joins the identity. A command-bus API posts every mutation to one URL
   // and discriminates on a body field (`{"command":"study.stage.set"}` vs `{"command":"mesh.plan"}`),
-  // so under URL alone each of those distinct writes read as a repeat of the first, and clean
-  // verdicts degraded to unknown behind doubles that were never doubles. When no body was captured
-  // (capture off, or a non-text body, which reports a type marker instead) there is nothing to
-  // compare and the URL alone stands, as before; a window where only some calls carried bodies
-  // compares nothing rather than guess.
+  // and a submit that intentionally saves and then advances sends two different payloads to the same
+  // endpoint; under URL alone each of those distinct writes read as a repeat of the first, and clean
+  // verdicts degraded to unknown behind doubles that were never doubles.
+  //
+  // The discriminator is `REQUEST_SHAPE_FIELD` — a fingerprint of the body's shape that the page can
+  // compute with body capture OFF, which is the configuration every session runs in. A captured body
+  // is used when there is one and no fingerprint (a realm that records bodies but not shapes).
+  //
+  // When NEITHER is on the record for any call at a URL, the identity of those writes is not known,
+  // and this used to be answered inconsistently and silently: two calls that both lacked a body got
+  // the same key and were reported as a duplicate, while two where only ONE carried a body got
+  // different keys and were reported as nothing at all — so the guess went one way on a false
+  // positive and the other way on a real double submit. An unknown group is now one group, reported
+  // with a finding that SAYS the identity could not be established. That is `unknown`, which is the
+  // honest verdict for it, rather than `unknown` dressed as an accusation.
   const actionSince = options.actionSince;
   if (actionSince !== undefined) {
     /**
@@ -617,20 +656,21 @@ function findWindowContradictions(
     const navigatedAt = events.find(
       (e) => EventType.ROUTE_CHANGE === e.type && e.t >= actionSince,
     )?.t;
-    const writeTimes = new Map<string, { label: string; times: number[]; landed: number }>();
+    const writes = new Map<
+      string,
+      { t: number; landed: boolean; identity: string | undefined }[]
+    >();
     for (const event of events) {
       if (event.type !== EventType.NET_REQUEST || event.t < actionSince) continue;
       if (navigatedAt !== undefined && event.t >= navigatedAt) continue;
       const call = netCall(event);
       if (!isMutating(call)) continue;
       const label = `${call.method} ${call.url}`;
-      const body = asString(event.data['requestBody']);
-      const key = body === undefined || 0 === body.length ? label : `${label} ${body}`;
-      const entry = writeTimes.get(key) ?? { label, times: [], landed: 0 };
-      entry.times.push(event.t);
-      // Counted separately from the occurrences, because the claim is about what APPLIED.
-      if (false !== call.ok) entry.landed += 1;
-      writeTimes.set(key, entry);
+      const calls = writes.get(label) ?? [];
+      // `landed` is tracked per call rather than counted here, because the claim is about what
+      // APPLIED and a group is only formed once the identities are known.
+      calls.push({ t: event.t, landed: false !== call.ok, identity: identityOf(event) });
+      writes.set(label, calls);
     }
     /**
      * Did the assertion name this endpoint?
@@ -643,35 +683,50 @@ function findWindowContradictions(
     const named = options.namedNetUrls;
     const wasNamed = (label: string): boolean =>
       named === undefined || named.some((u) => label.includes(u));
-    for (const [, { label, times, landed }] of writeTimes) {
-      if (times.length < 2) continue;
-      // A DOUBLE SUBMIT is a write that landed twice. Two attempts of which one failed is a RETRY,
-      // and the field case is the commonest retry there is: a 401 that refreshed a token and went
-      // again, one row created, reported here as `duplicate-request ×2`. Two attempts that both
-      // failed are not a double submit either — nothing applied even once, so the claim "one user
-      // action was performed" is not contradicted by them. A call with no verdict at all still
-      // counts, because absence of a status is not evidence the write was rejected.
-      if (landed < 2) continue;
-      // A steady cadence is a POLL, and a poll is not a double submit. An app that polls could not
-      // produce a verdict at all: a camera scan loop POSTing until it acquires a lock had every
-      // assertion that had already seen its consequence come back `unknown` behind writes that
-      // were the app working correctly (#673).
-      if (isSteadyCadence(times)) continue;
-      // A burst the assertion never mentioned is still worth telling the caller about -- a retry
-      // loop or a bursty beacon is a real finding -- but it is not evidence about the consequence
-      // they declared, so it is reported and decides nothing. The named case keeps its downgrade:
-      // "the write you asked about fired twice" is exactly what this rule is for.
-      const related = wasNamed(label);
-      found.push({
-        kind: related
-          ? ContradictionKind.DUPLICATE_REQUEST
-          : ContradictionKind.DUPLICATE_REQUEST_UNRELATED,
-        claim: related
-          ? 'one user action was performed'
-          : 'the assertion did not name this endpoint',
-        counter: `the same write fired ${String(times.length)} times`,
-        detail: `${label} ×${String(times.length)}`,
-      });
+    for (const [label, calls] of writes) {
+      // One unknown identity makes the whole endpoint's traffic one group: the calls that DO have a
+      // fingerprint cannot be told apart from the ones that do not, so splitting on it would answer
+      // a question the record cannot answer.
+      const identified = calls.every((c) => c.identity !== undefined);
+      const groups = identified ? [...groupByIdentity(calls)] : [calls];
+      for (const group of groups) {
+        const times = group.map((c) => c.t);
+        const landed = group.filter((c) => c.landed).length;
+        if (times.length < 2) continue;
+        // A DOUBLE SUBMIT is a write that landed twice. Two attempts of which one failed is a RETRY,
+        // and the field case is the commonest retry there is: a 401 that refreshed a token and went
+        // again, one row created, reported here as `duplicate-request ×2`. Two attempts that both
+        // failed are not a double submit either — nothing applied even once, so the claim "one user
+        // action was performed" is not contradicted by them. A call with no verdict at all still
+        // counts, because absence of a status is not evidence the write was rejected.
+        if (landed < 2) continue;
+        // A steady cadence is a POLL, and a poll is not a double submit. An app that polls could not
+        // produce a verdict at all: a camera scan loop POSTing until it acquires a lock had every
+        // assertion that had already seen its consequence come back `unknown` behind writes that
+        // were the app working correctly (#673).
+        if (isSteadyCadence(times)) continue;
+        // A burst the assertion never mentioned is still worth telling the caller about -- a retry
+        // loop or a bursty beacon is a real finding -- but it is not evidence about the consequence
+        // they declared, so it is reported and decides nothing. The named case keeps its downgrade:
+        // "the write you asked about fired twice" is exactly what this rule is for.
+        const related = wasNamed(label);
+        const count = String(times.length);
+        found.push({
+          kind: related
+            ? ContradictionKind.DUPLICATE_REQUEST
+            : ContradictionKind.DUPLICATE_REQUEST_UNRELATED,
+          claim: related
+            ? 'one user action was performed'
+            : 'the assertion did not name this endpoint',
+          counter: identified
+            ? `the same write fired ${count} times`
+            : `this endpoint was written to ${count} times`,
+          detail: identified
+            ? `${label} ×${count}`
+            : `${label} ×${count} — nothing on the record says what these requests carried, ` +
+              'so whether they were one write repeated or different writes could not be established',
+        });
+      }
     }
   }
 

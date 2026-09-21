@@ -35,7 +35,18 @@ import { fileURLToPath } from 'node:url';
 
 /** Ceilings, not targets. Measured 2026-09-18 over shipped (non-test) sources. */
 const MAX_FILES_IMPORTING_CORE = 41;
-const MAX_DISTINCT_SYMBOLS = 54;
+/**
+ * Raised by one, deliberately, and this is the argument for it.
+ *
+ * `duplicate-request` fired on legitimate sequential writes because method plus URL cannot tell two
+ * different payloads apart, and the field that can — the page's body-shape fingerprint — is a name
+ * that crosses the wire, so it belongs in core and nowhere else. Inlining the string in the rule
+ * would have kept this number flat by breaking the rule the number exists to protect.
+ *
+ * It is one more symbol on the SAME file that already imports core, so the file count is unmoved.
+ * A realm-shaped engine takes the request's identity from the realm, and this goes with the rest.
+ */
+const MAX_DISTINCT_SYMBOLS = 55;
 
 /*
  * `node:path`'s dirname, not a hand-rolled one.

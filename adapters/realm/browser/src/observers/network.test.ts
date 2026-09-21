@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { EventType, RETICLE_WS_PATH, URL_RAW } from '@reticlehq/core';
+import {
+  EventType,
+  REQUEST_SHAPE_FIELD,
+  REQUEST_SHAPE_NONE,
+  RETICLE_WS_PATH,
+  URL_RAW,
+} from '@reticlehq/core';
 import {
   extractTiming,
   firstAppFrame,
@@ -229,6 +235,10 @@ describe('installNetwork (sendBeacon)', () => {
       ok: true,
       queued: true,
     });
+    // A beacon carries a payload and is the bursty case `duplicate-request` sees most, so it is
+    // fingerprinted like every other write — and, like every other write, never quoted.
+    expect(request?.data[REQUEST_SHAPE_FIELD]).toMatch(/^[0-9a-f]{8}$/);
+    expect(request?.data).not.toHaveProperty('requestBody');
   });
 
   it('reports ok:false when the beacon is rejected (queue full)', () => {
@@ -868,5 +878,100 @@ describe('document-initiated subresources (PerformanceObserver)', () => {
     teardown?.();
     teardown = undefined;
     expect(po?.disconnected).toBe(true);
+  });
+});
+
+/**
+ * The discriminator that separates two different writes to one endpoint WITHOUT putting the body on
+ * the wire.
+ *
+ * Request bodies carry passwords, tokens and customer data, so capture is off by default — which
+ * left `duplicate-request` keying on method plus URL and accusing two legitimate sequential saves
+ * of being one double submit. The page therefore fingerprints the body's SHAPE: key names, value
+ * types and the total length, hashed. No character of any value ever reaches the hash input, so
+ * there is nothing in it to recover a secret from.
+ */
+describe('installNetwork (request-body shape fingerprint)', () => {
+  let teardown: Teardown | undefined;
+  const origFetch = requireCapturedMethod<typeof window.fetch>(window, 'fetch');
+
+  beforeEach(() => {
+    window.fetch = vi.fn(() => Promise.resolve(fakeResponse(200)));
+  });
+  afterEach(() => {
+    teardown?.();
+    teardown = undefined;
+    window.fetch = origFetch;
+  });
+
+  /** Post one body with capture OFF and return the fingerprint the observer stamped. */
+  async function shapeOfPost(body: BodyInit): Promise<unknown> {
+    const { emit, events } = collect();
+    const stop = installNetwork(emit);
+    await window.fetch('http://localhost:8787/api/setup', { method: 'POST', body });
+    stop();
+    return eventOf(events, EventType.NET_REQUEST)[REQUEST_SHAPE_FIELD];
+  }
+
+  it('separates two different payloads sent to the same endpoint', async () => {
+    const savePlayer = await shapeOfPost(JSON.stringify({ action: 'save-player', name: 'ada' }));
+    const advanceSetup = await shapeOfPost(JSON.stringify({ action: 'advance-setup', step: 2 }));
+    expect(savePlayer).not.toBe(advanceSetup);
+  });
+
+  it('gives two identical payloads the same fingerprint', async () => {
+    const once = await shapeOfPost(JSON.stringify({ action: 'save-player', name: 'ada' }));
+    const twice = await shapeOfPost(JSON.stringify({ action: 'save-player', name: 'ada' }));
+    expect(once).toBe(twice);
+  });
+
+  it('does not vary with key ORDER, which is not a difference in what was sent', async () => {
+    const a = await shapeOfPost(JSON.stringify({ action: 'save', step: 2 }));
+    const b = await shapeOfPost(JSON.stringify({ step: 2, action: 'save' }));
+    expect(a).toBe(b);
+  });
+
+  it('carries no part of the payload, and none of it back', async () => {
+    const secret = 'req-pass-abcdef123';
+    const shape = String(await shapeOfPost(JSON.stringify({ email: 'a@b.com', password: secret })));
+    expect(shape).not.toContain(secret);
+    expect(shape).not.toContain('a@b.com');
+    expect(shape).not.toContain('password');
+    expect(shape).toMatch(/^[0-9a-f]{8}$/);
+  });
+
+  it('reports a bodyless write as carrying no body, not as an unknown one', async () => {
+    expect(await shapeOfPost('')).toBe(REQUEST_SHAPE_NONE);
+    const { emit, events } = collect();
+    teardown = installNetwork(emit);
+    await window.fetch('http://localhost:8787/api/setup', { method: 'POST' });
+    expect(eventOf(events, EventType.NET_REQUEST)[REQUEST_SHAPE_FIELD]).toBe(REQUEST_SHAPE_NONE);
+  });
+
+  it('stamps no fingerprint at all on a body it cannot read as text', async () => {
+    // FormData, a Blob, a stream: the field's absence is what says the identity is unknown, which is
+    // also what an SDK too old to compute one says.
+    const form = new FormData();
+    form.append('name', 'ada');
+    expect(await shapeOfPost(form)).toBeUndefined();
+  });
+
+  it('fingerprints a form-urlencoded body by its keys, not its values', async () => {
+    const shape = await shapeOfPost(new URLSearchParams({ user: 'alice', pass: 'hunter2' }));
+    const same = await shapeOfPost(new URLSearchParams({ user: 'bobby', pass: 'trust01' }));
+    expect(shape).toBe(same); // identical keys, identical lengths
+    const other = await shapeOfPost(new URLSearchParams({ user: 'alice', token: 'hunter2' }));
+    expect(shape).not.toBe(other);
+  });
+
+  it('still stamps the fingerprint when bodies ARE captured', async () => {
+    const { emit, events } = collect();
+    teardown = installNetwork(emit, { captureBodies: true });
+    await window.fetch('http://localhost:8787/api/setup', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'save-player' }),
+    });
+    await flushBody();
+    expect(eventOf(events, EventType.NET_REQUEST)[REQUEST_SHAPE_FIELD]).toMatch(/^[0-9a-f]{8}$/);
   });
 });

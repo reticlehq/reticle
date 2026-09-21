@@ -217,7 +217,14 @@ describe('findContradictions — cross-channel disagreement', () => {
       ).toContain('/api/v0/studies/1/command');
     });
 
-    it('stay un-compared, and therefore un-flagged, when only one side carried a body', () => {
+    /**
+     * The half-known window used to be answered the opposite way from the fully-unknown one, and
+     * silently: two calls that both lacked a body landed in ONE bucket and were reported as a
+     * duplicate, while two where only one carried a body landed in two and were reported as
+     * nothing at all. So the guess went one way on a false positive and the other way on a real
+     * double submit, and the comment above this rule claimed it compared nothing in both.
+     */
+    it('reports what it cannot tell, when only one side carried a body', () => {
       const withBody = commandBus('study.stage.set');
       const withoutBody = ev(EventType.NET_REQUEST, {
         id: `n${String(seq)}`,
@@ -226,11 +233,10 @@ describe('findContradictions — cross-channel disagreement', () => {
         status: 200,
         ok: true,
       });
-      expect(
-        findContradictions([withBody, withoutBody, domChanged()], {
-          actionSince: withBody.t,
-        }).map((c) => c.kind),
-      ).not.toContain(ContradictionKind.DUPLICATE_REQUEST);
+      const found = findContradictions([withBody, withoutBody, domChanged()], {
+        actionSince: withBody.t,
+      }).find((c) => c.kind === ContradictionKind.DUPLICATE_REQUEST);
+      expect(found?.detail).toContain('could not be established');
     });
   });
 

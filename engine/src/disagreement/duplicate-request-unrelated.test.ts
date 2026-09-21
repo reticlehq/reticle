@@ -19,20 +19,25 @@ import {
   ContradictionKind,
   EventType,
   FindingTier,
+  REQUEST_SHAPE_FIELD,
   isAdvisory,
   tierOfFinding,
   type ReticleEvent,
 } from '@reticlehq/core';
 import { findContradictions } from './contradictions.js';
 
-/** Two writes close together — a burst, not a steady cadence, so the poll rule does not absorb it. */
+/**
+ * Two writes close together — a burst, not a steady cadence, so the poll rule does not absorb it.
+ * They share a body fingerprint, so they are the same write twice rather than two the record cannot
+ * tell apart.
+ */
 function burst(url: string, at: number): ReticleEvent[] {
   return [at, at + 40].map(
     (t) =>
       ({
         type: EventType.NET_REQUEST,
         t,
-        data: { method: 'POST', url, status: 200, ok: true },
+        data: { method: 'POST', url, status: 200, ok: true, [REQUEST_SHAPE_FIELD]: 'a1b2c3d4' },
       }) as unknown as ReticleEvent,
   );
 }

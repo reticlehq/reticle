@@ -215,3 +215,29 @@ export function urlForMatch(data: Record<string, unknown>): string {
   const url = data['url'];
   return 'string' === typeof url ? url : '';
 }
+
+/**
+ * The NET_REQUEST field carrying a DISCRIMINATOR for the request body.
+ *
+ * `duplicate-request` asks whether two writes in one action's window were the same write. Method
+ * plus URL cannot answer that — a command-bus API posts every mutation to one endpoint, and a
+ * submit that intentionally saves and then advances sends two different payloads to the same URL —
+ * and the body that could answer it is not on the record: capturing bodies by default would put
+ * passwords, tokens and customer data on the wire for every request an app makes.
+ *
+ * So the page sends a fingerprint of the body's SHAPE instead: key names, value types and the total
+ * length, hashed. It is equal for two identical payloads and different for two payloads that differ
+ * in structure or size, which is all the rule needs, and it is not a projection of the payload —
+ * no character of any value is ever read into it, so there is nothing in it to recover.
+ */
+export const REQUEST_SHAPE_FIELD = 'requestShape';
+
+/**
+ * The fingerprint of a request that carried NO body.
+ *
+ * A KNOWN discriminator, not a missing one: two bodyless POSTs to one URL are indistinguishable to
+ * the server too, so they are allowed to be a duplicate. A body the page cannot read as text
+ * (FormData, Blob, a stream) omits the field ALTOGETHER, which is the same statement an older SDK
+ * makes by not sending it: a body may have existed and nothing about it is on the record.
+ */
+export const REQUEST_SHAPE_NONE = 'none';

@@ -164,7 +164,21 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  *
  * Raised by 1,000 rather than to the measurement, per the note above.
  */
-const MAX_FIRST_LOAD_BYTES = 240_100;
+/*
+ * 240_100 -> 241_100, for the request-body shape fingerprint. 104 B measured.
+ *
+ * `duplicate-request` accused two legitimate sequential writes to one endpoint of being a double
+ * submit, because method plus URL is all it had: the body that tells them apart is not captured by
+ * default, and capturing it would put passwords and tokens on the wire for every request. The page
+ * instead hashes the body's SHAPE — sorted key names, value types, total length — which is a
+ * hundred bytes of recursion over a parsed body and no new dependency.
+ *
+ * Every page load pays it, and it buys something every page load uses: the rule runs on every
+ * action window, and its false positives were degrading otherwise-clean verdicts to unknown.
+ *
+ * Raised by 1,000 rather than to the measurement, per the note above.
+ */
+const MAX_FIRST_LOAD_BYTES = 241_100;
 /*
  * Raised a fifth time, 233_300 -> 233_400, for a route to be assertable in a SAVED flow. 57 B.
  *

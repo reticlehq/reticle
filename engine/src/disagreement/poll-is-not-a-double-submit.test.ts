@@ -11,7 +11,12 @@
  * double submit is a burst.
  */
 import { describe, expect, it } from 'vitest';
-import { ContradictionKind, EventType, type ReticleEvent } from '@reticlehq/core';
+import {
+  ContradictionKind,
+  EventType,
+  REQUEST_SHAPE_FIELD,
+  type ReticleEvent,
+} from '@reticlehq/core';
 import { findContradictions } from './contradictions.js';
 
 let seq = 0;
@@ -20,6 +25,13 @@ function at(t: number, type: EventType, data: Record<string, unknown> = {}): Ret
   return { t, seq, type, sessionId: 's', data };
 }
 
+/**
+ * One IDENTICAL write, repeated — which is what every case in this file is about. The body
+ * fingerprint the page stamps is part of that: without one the rule can only say that a URL was
+ * written to twice, not that the same thing was sent twice.
+ */
+const SAME_BODY = 'a1b2c3d4';
+
 const write = (t: number, url = '/api/people/match'): ReticleEvent =>
   at(t, EventType.NET_REQUEST, {
     id: `n${String(seq)}`,
@@ -27,6 +39,7 @@ const write = (t: number, url = '/api/people/match'): ReticleEvent =>
     url,
     status: 200,
     ok: true,
+    [REQUEST_SHAPE_FIELD]: SAME_BODY,
   });
 
 const domAt = (t: number): ReticleEvent => at(t, EventType.DOM_REMOVED, { path: 'li' });

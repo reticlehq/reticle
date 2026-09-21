@@ -3,6 +3,7 @@ import { EventType, PerfMetric } from './constants/constants.js';
 import { BlindSpotKind } from '@/verdict/verified-constants.js';
 import { BrowserBrand } from '@/telemetry-feedback.js';
 import { HumanControlDataSchema, HumanMarkDataSchema } from './messages.js';
+import { REQUEST_SHAPE_FIELD } from './net.js';
 
 /**
  * Per-event-type payload schemas — the typed replacement for the envelope's open `data` record.
@@ -125,6 +126,7 @@ const netRequestSchema = z
     durationMs: z.number(),
     initiator: z.string(),
     urlRaw: z.string().optional(),
+    [REQUEST_SHAPE_FIELD]: z.string().optional(),
   })
   .passthrough();
 

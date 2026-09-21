@@ -1,9 +1,12 @@
 import {
   BlindSpotKind,
   EventType,
+  REQUEST_SHAPE_FIELD,
+  REQUEST_SHAPE_NONE,
   RETICLE_WS_PATH,
   StreamTransport,
   StreamDirection,
+  fnv1a,
 } from '@reticlehq/core';
 import { captureMethod } from '@/patching/capture-method.js';
 import { observeSafely, observeValue, type Emit, type Teardown } from './types.js';
@@ -79,26 +82,98 @@ function frameFields(data: unknown, captureBodies: boolean): Record<string, unkn
 }
 
 /**
- * The request body for the transcript. Plain strings and URLSearchParams are captured (redacted, capped);
- * FormData/Blob/ArrayBuffer/stream aren't text so they get a `requestBodyType` marker (the agent still
- * learns a body existed) rather than being silently dropped. Shared by the fetch and XHR paths.
+ * Tokens for a body's SHAPE. Internal to the fingerprint: only the HASH of a shape string ever
+ * leaves the page, so these names are an encoding rather than wire vocabulary.
+ */
+const ShapeToken = { NULL: '0', STRING: 's', NUMBER: 'n', BOOLEAN: 'b', OTHER: '?' } as const;
+
+/**
+ * A parsed body's structure, with every VALUE replaced by its type.
+ *
+ * Object keys are sorted, so `{a,b}` and `{b,a}` — the same payload serialised twice — fingerprint
+ * the same. Nothing a value contains is read: a string contributes the letter `s` whether it is an
+ * email address, a session token or empty.
+ */
+function shapeOf(value: unknown): string {
+  if (null === value) return ShapeToken.NULL;
+  if (Array.isArray(value)) return `[${value.map(shapeOf).join(',')}]`;
+  if ('object' === typeof value) {
+    const fields = value as Record<string, unknown>;
+    return `{${Object.keys(fields)
+      .sort()
+      .map((key) => `${key}:${shapeOf(fields[key])}`)
+      .join(',')}}`;
+  }
+  if ('string' === typeof value) return ShapeToken.STRING;
+  if ('number' === typeof value) return ShapeToken.NUMBER;
+  if ('boolean' === typeof value) return ShapeToken.BOOLEAN;
+  return ShapeToken.OTHER;
+}
+
+/**
+ * The discriminator itself: the shape, plus the body's length, hashed.
+ *
+ * The length is what separates two payloads of identical structure — `{"command":"mesh.plan"}` from
+ * `{"command":"study.stage.set"}` — and it is the ONLY thing here derived from a value. It is a
+ * single number over the whole body, already implied by the `content-length` the transport sends,
+ * and it is not a projection of any one field: a password contributes to it only as part of a sum
+ * it cannot be separated from. Unhashed it would still leak nothing recoverable; hashing it with
+ * the shape is what makes the field opaque to a reader of the journal as well.
+ *
+ * `fnv1a` because this runs in the page and is a discriminator, not a security boundary — see its
+ * own note. A collision costs a false `duplicate-request`, which is the finding this whole field
+ * exists to make rarer, not a leak.
+ */
+function fingerprintBody(shape: string, length: number): string {
+  return fnv1a(`${shape}#${String(length)}`);
+}
+
+/** A JSON body's shape, or an opaque marker when the text is not JSON at all. */
+function jsonShape(text: string): string {
+  try {
+    return shapeOf(JSON.parse(text) as unknown);
+  } catch {
+    return ShapeToken.OTHER;
+  }
+}
+
+/**
+ * The request body for the transcript, and the SHAPE FINGERPRINT that stands in for it.
+ *
+ * The fingerprint is unconditional: `duplicate-request` needs to tell two writes to one endpoint
+ * apart on every session, and body capture is off by default precisely because bodies carry
+ * secrets. See `REQUEST_SHAPE_FIELD` for what the fingerprint is and why it carries nothing back.
+ *
+ * The body itself is captured (redacted, capped) only when asked for. Plain strings and
+ * URLSearchParams are text; FormData/Blob/ArrayBuffer/stream are not, so they carry no fingerprint
+ * and, under capture, a `requestBodyType` marker (the agent still learns a body existed) rather
+ * than being silently dropped. Shared by the fetch and XHR paths.
  */
 function projectRequestBody(body: unknown, captureBodies: boolean): Record<string, unknown> {
-  if (!captureBodies) return {};
   let text: string | undefined;
   let contentType = 'application/json';
+  let shape: string = REQUEST_SHAPE_NONE;
   if ('string' === typeof body) {
     text = body;
+    if (text.length > 0) shape = fingerprintBody(jsonShape(text), text.length);
   } else if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) {
     text = body.toString();
     contentType = 'application/x-www-form-urlencoded';
+    if (text.length > 0) {
+      const fields = Object.fromEntries(new URLSearchParams(text));
+      shape = fingerprintBody(shapeOf(fields), text.length);
+    }
   } else if (body !== undefined && body !== null) {
-    const shape = (body as { constructor?: { name?: string } }).constructor?.name ?? typeof body;
-    return { requestBodyType: shape };
+    // No fingerprint at all: the field's absence is what says the identity is unknown.
+    const kind = (body as { constructor?: { name?: string } }).constructor?.name ?? typeof body;
+    return captureBodies ? { requestBodyType: kind } : {};
   }
-  if (text === undefined || 0 === text.length) return {};
+  const fields: Record<string, unknown> = { [REQUEST_SHAPE_FIELD]: shape };
+  if (!captureBodies || text === undefined || 0 === text.length) return fields;
   const { body: out, truncated } = projectBody(text, contentType);
-  return truncated ? { requestBody: out, requestBodyTruncated: true } : { requestBody: out };
+  return truncated
+    ? { ...fields, requestBody: out, requestBodyTruncated: true }
+    : { ...fields, requestBody: out };
 }
 
 interface XhrMeta {
@@ -688,6 +763,11 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
           durationMs: 0,
           initiator: 'beacon',
           ...(initiatorStack === undefined ? {} : { initiatorStack }),
+          // Fingerprint only, never the payload: a beacon is the bursty-analytics case
+          // `duplicate-request` most often sees, and it needs to tell two of them apart. Body
+          // capture stays off for this transport whatever the option says — nothing asks to read a
+          // beacon's contents, and `false` here is what keeps the answer to that from drifting.
+          ...projectRequestBody(data, false),
         });
       });
       return sent;
