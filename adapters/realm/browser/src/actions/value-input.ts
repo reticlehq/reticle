@@ -36,45 +36,31 @@ export function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value
  * can operate — the same reason the click path reports `occluded`, and the same choice Playwright
  * makes when it refuses to fill a non-editable element.
  */
-/** Monaco and CodeMirror expose a text box without setting `contenteditable`. */
-function isEditorSurface(el: HTMLElement): boolean {
+/**
+ * A rich-text target is UNSUPPORTED, not a mistake by the caller.
+ *
+ * TipTap, Quill, ProseMirror, Slate, and Lexical set `contenteditable`. Monaco and CodeMirror do
+ * not: they are a `role="textbox"` with the document in the EditContext API. Both used to read as
+ * "you picked the wrong element". One sentence covers both, and it stays short because this file
+ * is on the SDK's first load.
+ *
+ * The attribute, not only `isContentEditable`: jsdom does not implement the property, so a test
+ * would pass against a guard that never fires in the environment the unit suite runs in.
+ */
+function isRichText(el: HTMLElement): boolean {
+  const flag = el.getAttribute('contenteditable');
+  if (el.isContentEditable || (null !== flag && 'false' !== flag)) return true;
   if ('textbox' === el.getAttribute('role')) return true;
   if (!('editContext' in el)) return false;
   const surface = el as HTMLElement & { editContext?: object | null };
   return null !== surface.editContext && undefined !== surface.editContext;
 }
 
-/**
- * A rich-text target is UNSUPPORTED, not a mistake by the caller.
- *
- * Every rich-text editor (TipTap, Quill, ProseMirror, Slate, Lexical) is `[contenteditable]`, and
- * these actions handle only input/textarea. `cannot fill a <div>` reads as "you picked the wrong
- * element" and sends the reader hunting for a better selector that does not exist. Support is not
- * faked: assigning textContent would update the DOM while the editor's own model kept the old value,
- * so the tool would report success for content the app will never submit.
- *
- * A `role="textbox"` element with no `contenteditable` is the same refusal. Monaco and CodeMirror
- * keep the document in the EditContext API, so the tag alone (`<div>`) is the wrong diagnosis.
- */
 export function assertNotRichText(el: HTMLElement, action: string): void {
-  // The ATTRIBUTE, not `isContentEditable`: jsdom does not implement the property, so a test would
-  // pass against a guard that never fires in the environment the unit suite runs in.
-  const flag = el.getAttribute('contenteditable');
-  if (el.isContentEditable || (flag !== null && flag !== 'false')) {
-    throw new Error(
-      `cannot ${action} a contenteditable element — rich-text editors keep their own document model, ` +
-        'so writing to the DOM here would look right and submit the old content. This surface is not supported yet.',
-    );
-  }
-  if (isEditorSurface(el)) {
-    const tag = el.tagName.toLowerCase();
-    throw new Error(
-      `cannot ${action} a contenteditable or EditContext editor — this <${tag}> is a text box the ` +
-        'page owns (role="textbox", or the EditContext API). Writing into the DOM would look right ' +
-        'and leave the editor model unchanged. Use `press` for keys the editor already handles, or ' +
-        'drive an <input> or <textarea>.',
-    );
-  }
+  if (!isRichText(el)) return;
+  throw new Error(
+    `cannot ${action} a contenteditable or EditContext editor; use press or an input`,
+  );
 }
 
 export function assertEditable(el: HTMLInputElement | HTMLTextAreaElement, action: string): void {

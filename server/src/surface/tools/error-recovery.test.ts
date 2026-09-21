@@ -274,13 +274,11 @@ describe('browser-side action guards are recognized refusals, not unknown defect
 
   it('an unsupported surface is named as unsupported, not as a possible bug', () => {
     expect(
-      recoveryFor(
-        'cannot fill a contenteditable element — rich-text editors keep their own document model',
-      ),
+      recoveryFor('cannot fill a contenteditable or EditContext editor; use press or an input'),
     ).toBe(RECOVERY.UNSUPPORTED_SURFACE);
     expect(
       recoveryFor(
-        'cannot type into a contenteditable or EditContext editor — this <div> is a text box the page owns',
+        'cannot type into a contenteditable or EditContext editor; use press or an input',
       ),
     ).toBe(RECOVERY.UNSUPPORTED_SURFACE);
   });
