@@ -18,6 +18,12 @@ interface StatusSession {
   sessionId: string;
   url: string;
   throttled: boolean;
+  /**
+   * The tab is backgrounded. Reported by the daemon on every session; `false` on one too old to say,
+   * which reads as visible — the conservative answer, since it keeps the reuse this command has
+   * always done rather than opening a tab on a guess.
+   */
+  hidden: boolean;
   stale: boolean;
   pendingMarks: number;
   /** The tab is attached and answering nothing — see Session.unresponsive. Absent on an older daemon. */
@@ -50,6 +56,7 @@ export function summarizeStatus(payload: unknown): {
         sessionId,
         url: 'string' === typeof r['url'] ? r['url'] : '',
         throttled: true === r['throttled'],
+        hidden: true === r['hidden'],
         stale: true === r['stale'],
         pendingMarks: 'number' === typeof r['pendingMarks'] ? r['pendingMarks'] : 0,
         ...(true === r['unresponsive'] ? { unresponsive: true as const } : {}),
@@ -115,6 +122,7 @@ function sameOrigin(a: string, b: string): boolean {
  * Decide what `reticle open [url]` does, given the currently-connected tabs. Pure.
  * - no url + a tab connected → reuse it (the app is already open; don't spawn a duplicate).
  * - no url + nothing connected → ask for one.
+ * - a HIDDEN tab is not a candidate: the url is opened instead (its own url, when none was given).
  * - url + a tab already AT that url → reuse it (idempotent — re-running never piles up tabs).
  * - url + a tab on that origin but another page → keep it, and say so (`left-as-is`).
  * - url + no matching tab → open it.
@@ -127,16 +135,33 @@ function sameOrigin(a: string, b: string): boolean {
  * is a bigger surprise than being told where the tab actually is.
  */
 export function decideOpen(
-  all: { url: string; unresponsive?: boolean }[],
+  all: { url: string; unresponsive?: boolean; hidden?: boolean }[],
   url: string | undefined,
 ): OpenDecision {
   // A tab that has stopped answering is not a tab you can be handed. `open` is the command a caller
   // reaches for to RECOVER, and reusing the wedged one left no way out short of killing the daemon:
   // ending the session only flips a flag on the record, it does not make the page answer.
-  const sessions = all.filter((s) => true !== s.unresponsive);
+  //
+  // A HIDDEN tab is excluded for the same reason. `open` means "show me the app", and a backgrounded
+  // tab is the one definition of an app nobody is being shown: the browser starves its timers, rAF
+  // and pointer gestures, so checks that depend on them come back inconclusive even where the
+  // behaviour works. Reported from the field as `open` answering `reusing` for a hidden tab and
+  // three checks that could never resolve. Opening the url instead costs one foreground tab and the
+  // hidden one is left exactly where it was — nothing is navigated out from under anybody.
+  //
+  // HIDDEN, not `throttled`: throttled is `hidden || stale`, and a stale-but-visible tab is usually
+  // a quiet page that drives fine. Excluding those would pile up a duplicate tab per run, which is
+  // the thing the origin match below exists to prevent.
+  const sessions = all.filter((s) => true !== s.unresponsive && true !== s.hidden);
   if (url === undefined) {
     const first = sessions[0];
-    return first !== undefined ? { action: 'reuse', url: first.url } : { action: 'need-url' };
+    if (first !== undefined) return { action: 'reuse', url: first.url };
+    // Nothing visible to hand back, but a hidden tab still knows the url the caller would have
+    // typed. Opening it is the whole request; `need-url` would ask for something already in hand.
+    const backgrounded = all.find((s) => true === s.hidden);
+    return backgrounded !== undefined
+      ? { action: 'open', url: backgrounded.url }
+      : { action: 'need-url' };
   }
   const exact = sessions.find((s) => s.url === url);
   if (exact !== undefined) return { action: 'reuse', url: exact.url };

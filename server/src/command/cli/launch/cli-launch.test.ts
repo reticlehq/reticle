@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { decideOpen, openCommand, openInBrowser, launcherFailure } from './cli-launch.js';
+import {
+  decideOpen,
+  openCommand,
+  openInBrowser,
+  launcherFailure,
+  summarizeStatus,
+} from './cli-launch.js';
 
 describe('decideOpen', () => {
   it('with no url + a connected tab → reuse it (do not spawn a duplicate)', () => {
@@ -47,6 +53,77 @@ describe('decideOpen', () => {
       action: 'open',
       url: 'http://localhost:5173/',
     });
+  });
+
+  /**
+   * A hidden tab is not a tab you can be handed, for the same reason an unresponsive one is not.
+   * Reported from the field: the only connected session was a background tab, `reticle open <url>`
+   * answered `reusing` and exited 0, and every timer- or rAF-driven check against that tab came
+   * back inconclusive because a backgrounded page is starved by the browser. Opening the url is
+   * what the command is for -- the fresh tab is foregrounded, and the hidden one is left alone.
+   */
+  it('with a url whose only tab is HIDDEN → open a fresh one rather than hand back the hidden tab', () => {
+    expect(
+      decideOpen(
+        [{ url: 'http://localhost:4310/checkout', hidden: true }],
+        'http://localhost:4310/checkout',
+      ),
+    ).toEqual({ action: 'open', url: 'http://localhost:4310/checkout' });
+  });
+
+  it('with a url whose only same-origin tab is HIDDEN → open, not left-as-is', () => {
+    expect(
+      decideOpen(
+        [{ url: 'http://localhost:4310/dashboard', hidden: true }],
+        'http://localhost:4310/checkout',
+      ),
+    ).toEqual({ action: 'open', url: 'http://localhost:4310/checkout' });
+  });
+
+  /**
+   * No url to open means the hidden tab's own url is the only one there is, so it is opened rather
+   * than reported as reused -- asking for a url the caller already gave the daemon would be a
+   * regression, and `reuse` is the answer the report calls useless.
+   */
+  it('with no url + the only tab hidden → open that tab\u2019s url (bring the app to the front)', () => {
+    expect(decideOpen([{ url: 'http://localhost:4310/app', hidden: true }], undefined)).toEqual({
+      action: 'open',
+      url: 'http://localhost:4310/app',
+    });
+  });
+
+  it('prefers a visible tab over a hidden one rather than opening anything', () => {
+    expect(
+      decideOpen(
+        [{ url: 'http://localhost:4310/app', hidden: true }, { url: 'http://localhost:4310/app' }],
+        'http://localhost:4310/app',
+      ),
+    ).toEqual({ action: 'reuse', url: 'http://localhost:4310/app' });
+  });
+
+  it('a merely THROTTLED (quiet, visible) tab is still reused -- no duplicate tab for a quiet page', () => {
+    expect(
+      decideOpen(
+        [{ url: 'http://localhost:4310/app', hidden: false }],
+        'http://localhost:4310/app',
+      ),
+    ).toEqual({ action: 'reuse', url: 'http://localhost:4310/app' });
+  });
+});
+
+describe('summarizeStatus carries hidden', () => {
+  it('reads `hidden` off the daemon payload so decideOpen can see it', () => {
+    const { sessions } = summarizeStatus({
+      sessions: [{ sessionId: 'a', url: 'http://localhost:4310/', hidden: true }],
+    });
+    expect(sessions[0]?.hidden).toBe(true);
+  });
+
+  it('a daemon too old to report `hidden` reads as visible, not hidden', () => {
+    const { sessions } = summarizeStatus({
+      sessions: [{ sessionId: 'a', url: 'http://localhost:4310/' }],
+    });
+    expect(sessions[0]?.hidden).toBe(false);
   });
 });
 
