@@ -210,7 +210,12 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // (the first look / act / verdict of a run, which only the daemon can witness) and
   // `install-trace.ts` (draining what the installer could not report, because it ran before there
   // was a CLI). Three files rather than one: they answer at three different moments.
-  'server/src/telemetry': 35,
+  // 36 with `harness-drive.ts`: the span that says a verdict came from Reticle driving the app
+  // rather than from the user's own agent. It is a module and not a flag on a call because the two
+  // are indistinguishable at the emit site otherwise, and every activation number built on verdicts
+  // reads a drive we performed as adoption we did not earn. Raised rather than grouped: this
+  // directory is already the largest flat one here and grouping it is its own piece of work.
+  'server/src/telemetry': 36,
   'spec-runner/src': 11,
 };
 

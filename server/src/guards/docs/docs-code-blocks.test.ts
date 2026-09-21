@@ -16,6 +16,14 @@
  * Deliberate exclusions, each because the fence is not claiming to be parseable JSON:
  *  - `jsonc` / `json5`, which permit comments and are used for client configs that have them.
  *  - a fence whose body is elided with `...` or `…`, which is prose showing a shape.
+ *  - `jsonl`, which is one JSON value per LINE and is not a document.
+ *
+ * The walk reads `.mdx` as well as `.md`. It did not, and `docs/` is almost entirely `.mdx`, so
+ * this guard was opening a small fraction of the fences it claims to cover and reporting green over
+ * the rest. What that hid: TWO blocks on the troubleshooting page — the page somebody reads when
+ * nothing works — each quoting a `reticle_session { action: "..." }` call inside a JSON string
+ * without escaping it, so neither parsed. Same mistake twice on one page is the argument for
+ * checking rather than reading.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -31,6 +39,41 @@ const ROOT_DOCS = ['SKILL.md', 'README.md'];
 
 /** A fence whose body is a shape rather than a value — `...` stands in for the parts left out. */
 const ELIDED = /(^|\s)(\.\.\.|…)(\s|$)/;
+
+/**
+ * The three shapes a `json` fence in these docs legitimately takes, all of which a reader copies and
+ * none of which is a whole document:
+ *
+ *  - a DOCUMENT: parses as-is.
+ *  - a FRAGMENT: `"warning": "tab throttled…"` — one field lifted out of a result. Parses once it is
+ *    put back inside the braces it was cut out of.
+ *  - a STACK: several independent values, one per line, showing two calls side by side.
+ *
+ * Accepting all three still catches everything this guard exists for — a trailing comma, a smart
+ * quote, a lost brace — because each of those fails all three readings. Rejecting them would mean
+ * either deleting useful docs or filling this file with exemptions nobody could tell had gone stale.
+ */
+function parsesSomeHonestWay(body: string): boolean {
+  const attempts = [body, `{${body}}`];
+  for (const attempt of attempts) {
+    try {
+      JSON.parse(attempt) as unknown;
+      return true;
+    } catch {
+      /* try the next reading */
+    }
+  }
+  const lines = body.split('\n').filter((line) => '' !== line.trim());
+  if (lines.length < 2) return false;
+  return lines.every((line) => {
+    try {
+      JSON.parse(line) as unknown;
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
 
 interface Block {
   file: string;
@@ -48,7 +91,7 @@ function markdownFiles(): string[] {
         walk(full);
         continue;
       }
-      if (entry.endsWith('.md')) out.push(full);
+      if (entry.endsWith('.md') || entry.endsWith('.mdx')) out.push(full);
     }
   };
   for (const root of DOC_ROOTS) walk(join(REPO, root));
@@ -97,6 +140,7 @@ describe('code blocks a reader is told to copy', () => {
     for (const block of allBlocks) {
       if (block.lang !== 'json') continue;
       if ('' === block.body.trim() || ELIDED.test(block.body)) continue;
+      if (parsesSomeHonestWay(block.body)) continue;
       try {
         JSON.parse(block.body) as unknown;
       } catch (error) {

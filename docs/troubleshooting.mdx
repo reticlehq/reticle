@@ -39,7 +39,7 @@ By far the most common. Reticle's own diagnostic is unusually good here. It tell
 ```json
 {
   "sessionCount": 0,
-  "why": "no browser session connected, but one WAS connected to this daemon earlier, so the wiring is correct. The tab was closed, navigated away, or hard-reloaded. Ask the human to reopen the app (or run `reticle open`), or reload the tab. You do not have to wait for the human: reticle_lease {action:\"acquire\", url} opens a browser Reticle drives itself, and returns a sessionId you can use immediately (reach it with reticle_run {tool:\"reticle_lease\"} if it is not advertised directly; release it when you finish). Then call reticle_session { action: "list" } again."
+  "why": "no browser session connected, but one WAS connected to this daemon earlier, so the wiring is correct. The tab was closed, navigated away, or hard-reloaded. Ask the human to reopen the app (or run `reticle open`), or reload the tab. You do not have to wait for the human: reticle_lease {action:\"acquire\", url} opens a browser Reticle drives itself, and returns a sessionId you can use immediately (reach it with reticle_run {tool:\"reticle_lease\"} if it is not advertised directly; release it when you finish). Then call reticle_session { action: \"list\" } again."
 }
 ```
 
@@ -186,7 +186,7 @@ The usual cause is a throttled tab: throttling suppresses the quiescence detecti
 If it persists on an unthrottled context, that is worth reporting. Reticle's own response says so:
 
 ```json
-"feedback_invite": "Reticle could not tell what happened here. If you expected otherwise, reticle_session { action: "feedback" }. An unknown verdict is our defect, not yours"
+"feedback_invite": "Reticle could not tell what happened here. If you expected otherwise, reticle_session { action: \"feedback\" }. An unknown verdict is our defect, not yours"
 ```
 
 ## A negative result you are not sure about

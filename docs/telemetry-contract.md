@@ -150,7 +150,7 @@ It does **not** say which instruction variant the agent was served. `buildServer
 
 Two questions get asked of `verification_completed` constantly and both have exact answers already in the payload. Neither needs a new field, and both are read wrong without `reason`.
 
-**"A large share of verdicts come back `unknown`."** `verified` has three values and the rule that produces it has eleven clauses, so `unknown` on its own is seven different situations belonging to three different owners. **Always break `unknown` down by `verification.reason`** before treating it as a quality number:
+**"A large share of verdicts come back `unknown`."** `verified` has FOUR values (`yes`, `no`, `unknown`, `no-fault`) and the rule that produces it has eleven clauses, so `unknown` on its own is seven different situations belonging to three different owners. **Always break `unknown` down by `verification.reason`** before treating it as a quality number:
 
 - `inconclusive`, `nothing_declared`, `vacuous_grade` -- the agent's own call. Teach the agent; the product worked.
 - `outcome_pending`, `outcome_unread`, `unsettled`, `evidence_incomplete`, `window_closed_early` -- the app had not finished. Wait and re-check; often a budget that ended early.
@@ -162,6 +162,7 @@ An `unknown` rate quoted without this split is a number about all three at once 
 
 - `verified: 'no'` -- a green actively refuted by another channel. This is `falseGreenCaught`, and it is the thesis.
 - `verified: 'unknown'` -- Reticle declined to endorse a green it could not stand behind. `already_true` (the condition held before the action, so the check proved nothing) is a _correct_ refusal and not a defect anywhere.
+- `verified: 'no-fault'` -- nothing was declared to prove, so there is nothing to endorse or refute. `nothing_declared` is an `act_and_wait` with no `until`, which is the documented deterministic-settle default; the result says in its own words that this is not verification, and names what to declare. **Counting `no-fault` as a failure overstates the problem, and counting it as a pass is the false green this product exists to prevent.** It is neither: it is work done with no question asked.
 
 `falseGreenCaught` is deliberately narrow -- only `passed && verified === 'no'` -- so the wider number can be counted from `reason` without a definition change. **Do not widen it**: a metric whose definition shifts underneath it produces two series that look comparable and are not.
 
@@ -194,6 +195,7 @@ Four counters and one flag were added because the data could not answer question
 | `project.stackUnknownReason` | `project_profiled` | WHY there is no `stack`, from core's closed `StackUnknownReason`: `no_app_found` \| `manifest_unrecognised` (we READ an app's manifest and knew nothing in it, which one line in `STACK_BY_DEP` fixes) \| `workspace_apps_unrecognised` \| `workspace_root_no_apps` (a monorepo root where discovery surfaced no app at all) \| `discovery_failed`. `stack` unknown is one of the largest buckets and an empty field is not a cause: it collapsed four facts with four different fixes. **Absent whenever a stack WAS found**, so its presence marks the unknown bucket. Note `workspace_root_no_apps` is expected to dominate over `workspace_apps_unrecognised`: `findWorkspaceApps` admits a directory only on a Vite/Next config file or a literal `next`/`vite` dependency, so a workspace app on any other framework is never surfaced and its manifest is never read. |
 | `bug.attribution` | `bug_found` | `app` \| `request` \| `reticle`: whose fault the defect was. **Absent means unclassified**, never `app`. See below. |
 | `refusal.noSessionReason` | `tool_refused` | For `no_session` only: WHICH no-session situation, from core's closed `NoSessionReason`: `lease_expired` \| `tab_gone` \| `app_not_reopened` \| `config_elsewhere` \| `no_listener_no_config` \| `no_listener` \| `no_config` \| `sdk_not_reaching_daemon`. `no_session` is the largest refusal cohort and on its own it is a set difference: nothing connected, with no word on which of several opposite situations that was. "Restarted the dev server and it still did not connect" and "never started the app" need opposite fixes and arrived as the same silence. Derived from the branches of `explainNoSession`, not classified beside them, so the code cannot describe a diagnosis different from the sentence the user was shown. **Absent on every other refusal reason.** |
+| `verification.driven` | `verification_completed` | which driver produced the verdict, when it was not the user's own agent. Reticle's own harness drives through the same tools, so without this a session we drove reads exactly like one the user earned, and the two mean opposite things for every activation number built on top. Absent for an ordinary agent-driven verdict. |
 | `outage.stage` / `outage.reason` / `outage.attempts` | `mcp_connection_lost` | which stage of the outage, why the stream went away (closed `OutageReason`, `other` for anything unnamed), and how many reconnects had been tried. See below. |
 | `project.initialized` | `project_profiled` | has `reticle init` run here -- a `.reticle.json` is present. On `project_profiled` rather than `app_instrumented` deliberately: that event fires once per daemon start whatever happens next, so it is the only place a fact about a project reaches us for the users who never instrument anything. **Absent means an older sender, never `false`.** |
 | `project.appConnectedBefore` | `project_profiled` | has an app for THIS project ever connected to Reticle, from durable state -- not from this process. Scoped to project + port like every other reader of that state, so it cannot borrow another project's success on a shared daemon. **Absent when the daemon did not know its own port**, which is not-measured rather than `false`; a `false` invented from a read error would put the working installs into the cohort we are sizing. |
@@ -275,7 +277,7 @@ So `plugin` is the only route detectable without anybody typing anything (the pl
 
 ## Why a verdict came out that way: `verification.reason`
 
-`verified` has three values. The rule that produces it has **eleven clauses**. Everything in between was thrown away at the moment it was known.
+`verified` has four values: `yes`, `no`, `unknown`, `no-fault`. The rule that produces it has **eleven clauses**. Everything in between was thrown away at the moment it was known.
 
 Captured against the real classifier: `verified: 'unknown'` covered "the agent malformed the call", "the consequence was already true", "the app answered 202", "a 2xx body went unread", "the capture was not clean", "nothing was asserted at a real grade" and "the page never settled": **seven causes, two wire payloads**. They belong to three different owners (the agent, the app, Reticle) and need opposite responses: teach the agent, wait and re-check, or ship a fix. On a dashboard they were one bar. `verified: 'no'` collapsed the same way: "channels disagree" (Reticle earning its keep) and "the agent's predicate failed" were the same string.
 
@@ -314,7 +316,10 @@ The transport-stability metric shipped with an **empty payload** for months, and
 
 The lesson is not "wire the field". It is that **the battery asserted the event ARRIVED and never that it carried anything**, and a kind-only assertion cannot see an empty payload. When you add an event kind, the live check has to assert the FIELDS.
 
-- `stage` is the closed `OutageStage`: `first` (this session lost MCP at all), `budget_spent` (it stopped retrying and went dormant), or `recovered` (the link came back on its own). Each is reported **at most once per proxy process**, so the three are a per-session state and never a count.
+- `stage` is the closed `OutageStage`: `first` (this session lost MCP at all), `budget_spent` (it stopped retrying and went dormant), or `recovered` (the link came back on its own). Each is reported **at most once per proxy process per class**, where the class is benign-or-fault and `daemon_shutdown` is the only benign reason.
+
+  The class half of that key is not decoration. With a slot per stage alone, the daemon's own scheduled retirement, much the commonest reason a stream ends and not a fault at all, consumed the only slot, and a genuine `connect_error` later in the same process was never reported. A low outage count was therefore not evidence of health, and could not be distinguished from one. Keyed this way the volume is still bounded (three stages, two classes), which is what the cap exists for, while a real fault can always still be heard. Keying per REASON was rejected: a flapping proxy has six reasons available and would bill for each, which pays for the pathology.
+
 - `reason` is the closed `OutageReason`: `sse_ended` | `daemon_shutdown` | `sse_error` | `sse_aborted` | `sse_closed` | `connect_error` | `other`. The proxy's own reason strings are free text that also feeds a log, so `mcp-outage.ts` narrows them and reports **`other`** for anything unnamed. A classifier that cannot say "I don't know" lies instead, and an unbounded string must never reach the wire.
 - `attempts`: consecutive reconnects tried when this was reported.
 - `pendingLost`: in-flight tool calls this drop actually killed -- the only part an agent can FEEL. Sent always, **including zero**, because zero is the finding.
@@ -327,7 +332,7 @@ The lesson is not "wire the field". It is that **the battery asserted the event 
 
 **`first` alone is unfalsifiable, and the pair is the metric.** `first` with a matching `recovered` is a blip the agent probably never noticed (check `pendingLost`). `first` with `budget_spent` and no `recovered` is a session whose tools never came back on their own, which is the number worth driving down. Counting `first` on its own over-states the problem by roughly the whole of it.
 
-Still true and worth knowing when you query it: `mcp_connection_lost` carries **no `sessionId`** (it fires from the proxy process, not the daemon), and is capped at two per proxy process by design.
+Still true and worth knowing when you query it: `mcp_connection_lost` carries **no `sessionId`** (it fires from the proxy process, not the daemon), so it cannot be joined to a project, a stack or a verdict. Every question of the form "did losing the link stop this person verifying" is therefore unanswerable today, and that is the single most valuable thing missing from this event.
 
 ### Licence activation
 
