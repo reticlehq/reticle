@@ -1,4 +1,4 @@
-import { PredicateKind } from '@reticlehq/core';
+import { PredicateKind, REDACTED_VALUE } from '@reticlehq/core';
 import type { Predicate } from './predicate-schema.js';
 
 /**
@@ -167,6 +167,39 @@ export function dataMatches(
     if (!matchValue(actual[key], want)) return false;
   }
   return true;
+}
+
+/**
+ * What a field-level clause over a captured body came to.
+ *
+ * Three outcomes, not two: a key the SDK redacted before recording cannot be judged at all, and
+ * grading that a mismatch blames the application for the observer's own redaction.
+ */
+export type BodyFieldVerdict = 'match' | 'mismatch' | { redacted: string };
+
+/**
+ * Shallow JSON field match over a captured body, for either half of the exchange.
+ *
+ * One function because both halves ask the identical question, and the request side already had
+ * this exact sequence written out — parse, reject a non-object, check the wanted keys for
+ * `[REDACTED]`, then `dataMatches`.
+ *
+ * A body that is not a JSON object counts as a mismatch rather than an error: guessing at form
+ * encoding here would answer a different question than the one asked, and the substring clauses
+ * exist for those bodies.
+ */
+export function matchJsonBody(body: string, pattern: Record<string, unknown>): BodyFieldVerdict {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    return 'mismatch';
+  }
+  if (null === payload || 'object' !== typeof payload || Array.isArray(payload)) return 'mismatch';
+  const actual = payload as Record<string, unknown>;
+  const redacted = Object.keys(pattern).find((key) => REDACTED_VALUE === actual[key]);
+  if (redacted !== undefined) return { redacted };
+  return dataMatches(actual, pattern) ? 'match' : 'mismatch';
 }
 
 /**

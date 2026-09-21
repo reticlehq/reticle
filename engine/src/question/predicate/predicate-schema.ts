@@ -44,6 +44,8 @@ export type Predicate =
       count?: number;
       /** A substring the RESPONSE body must contain — what the server answered, not what was sent. */
       bodyContains?: string;
+      /** Shallow JSON match over the RESPONSE body: this FIELD holds this value (#987). */
+      bodyMatches?: Record<string, unknown>;
       /** A substring the REQUEST body must contain — what the UI sent, not what came back. */
       requestBodyContains?: string;
       /** Shallow JSON match over the REQUEST body, in the style of `signal.dataMatches`. */
@@ -112,7 +114,7 @@ const PREDICATE_ALIASES: Readonly<Record<string, Readonly<Record<string, string>
   // contains this" is precisely what it does — and asserting a redirect after login is the single
   // most common thing an agent reaches for here.
   [PredicateKind.ROUTE]: { path: 'pathname', urlContains: 'contains', url: 'contains' },
-  [PredicateKind.NET]: { url: 'urlContains' },
+  [PredicateKind.NET]: { url: 'urlContains', responseBodyMatches: 'bodyMatches' },
   // `textContains` on a `console` predicate: the reporter who hit the missing matcher reached for
   // it first, by analogy with `net { urlContains }` — and that parallel is exactly right, since
   // both mean "this entry must contain this substring". Accepted as an alias for `contains`.
@@ -367,6 +369,27 @@ function predicateUnion() {
          * was never recorded rather than reporting an ordinary mismatch.
          */
         bodyContains: z.string().min(1).optional(),
+        /**
+         * Shallow JSON match over the RESPONSE body, keyed like `signal.dataMatches` and sharing its
+         * `matchValue` operators (`*`, `$gte`, `$contains`, …) — the field-level half of
+         * `bodyContains` (#987).
+         *
+         * `bodyContains` is a substring test, and the comment above says why that shape was chosen.
+         * It leaves one assertion unsayable: "this FIELD holds this value". Reported from the field
+         * as the only false green in that export — `bodyContains: "completed"` returned
+         * `verified: "yes"` for a job whose status was `queued`, because the body carried
+         * `"completedAt": null` and the needle matched the KEY. An enum state in a JSON response is
+         * the natural reach for a substring and the one thing a substring cannot decide:
+         * `completed`/`completedAt`, `success`/`successRate`, `sent`/`unsent`.
+         *
+         * `{ bodyMatches: { status: "completed" } }` cannot be satisfied by a key name, by a longer
+         * sibling value, or by key order, whitespace and serialisation — all of which a substring
+         * answers to. Use `bodyContains` for a non-JSON body, or when the substring IS the claim.
+         *
+         * A field whose captured value was REDACTED cannot be matched, and the verdict says so
+         * instead of reporting a mismatch: a redacted field is unknown, not different.
+         */
+        bodyMatches: z.record(z.string(), z.unknown()).optional(),
         /**
          * A substring the REQUEST body must contain — the other half of `bodyContains`.
          *

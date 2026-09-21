@@ -84,6 +84,7 @@ const PINNED: readonly PublicSurface[] = [
       'evidence/verified.ts',
       'question/declared.ts',
       'question/lineage.ts',
+      'question/predicate/body-key-fragment.ts',
       'question/predicate/net-evidence.ts',
       'question/predicate/observed-in-window.ts',
       'question/predicate/predicate-asks.ts',

@@ -105,7 +105,24 @@ const bytesOf = (json: string): number => Buffer.byteLength(json, 'utf8');
  * labels are a UNION (ask for two, get either), and a quarantined flow never runs however it is
  * labelled. Everything else about selection lives in the tool description, which is sent once.
  */
-const DEFAULT_SURFACE_BYTE_BUDGET = 24_700;
+/*
+ * Moved 24_700 -> 24_800 for `net.bodyMatches`.
+ *
+ * The decision, since going over is one: this is EVIDENCE, not a route feature, and it is the fix
+ * for the only false green reported from the field in this release. `bodyContains` is a substring
+ * test over the serialised response body, and it was the only way to say anything about a response
+ * body at all — so "this field holds this value" had to be written as a substring, and a body
+ * carrying `"completedAt": null` satisfied a check for `completed` on a job that was queued. The
+ * verdict IS the product; a predicate that cannot express the commonest assertion about a response
+ * is not a surface worth protecting bytes on.
+ *
+ * Paid for as far as it could be: the `bodyContains` clause in the bug-catching hint was rewritten
+ * to teach `bodyMatches` instead rather than added alongside it, so the hint costs two bytes more,
+ * not forty. The rest is the field itself appearing in the advertised shape, which is the price of
+ * the agent being able to find it — a predicate nothing advertises is a predicate nobody calls,
+ * which is how the substring became the only reach in the first place.
+ */
+const DEFAULT_SURFACE_BYTE_BUDGET = 24_800;
 // Raised, each time deliberately, each time with the measurement that bought it.
 //
 // LATEST RAISE, 24_600 -> 24_700. `reticle_verify { action: "explore" }` gained a `driver`

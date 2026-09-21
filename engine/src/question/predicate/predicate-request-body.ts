@@ -16,8 +16,8 @@
 import { REDACTED_VALUE } from '@reticlehq/core';
 import {
   clipBody,
-  dataMatches,
   describeNetFilter,
+  matchJsonBody,
   str,
   type EvalResult,
 } from './predicate-eval-kit.js';
@@ -91,24 +91,14 @@ export function checkRequestBody(
   if (requestBodyContains !== undefined && !sent.includes(requestBodyContains)) return note();
   if (requestBodyMatches === undefined) return true;
 
-  let payload: unknown;
-  try {
-    payload = JSON.parse(sent);
-  } catch {
-    // Not JSON (a form post, plain text). A shallow key match cannot be applied, and guessing at
-    // form encoding here would answer a different question than the one asked. Use
-    // `requestBodyContains` for those.
-    return note();
-  }
-  if (null === payload || typeof payload !== 'object' || Array.isArray(payload)) return note();
-
-  const actual = payload as Record<string, unknown>;
-  const redacted = Object.keys(requestBodyMatches).find((key) => REDACTED_VALUE === actual[key]);
-  if (redacted !== undefined) {
-    state.redactedField ??= redacted;
-    return false;
-  }
-  return dataMatches(actual, requestBodyMatches) ? true : note();
+  // `matchJsonBody` is the shared one, and a body that is not a JSON object counts as a mismatch
+  // there for the reason this side already had written down: guessing at form encoding would answer
+  // a different question than the one asked, and `requestBodyContains` exists for those bodies.
+  const verdict = matchJsonBody(sent, requestBodyMatches);
+  if ('match' === verdict) return true;
+  if ('mismatch' === verdict) return note();
+  state.redactedField ??= verdict.redacted;
+  return false;
 }
 
 /**

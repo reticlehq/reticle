@@ -20,10 +20,12 @@ import {
   clipBody,
   dataMatches,
   describeNetFilter,
+  matchJsonBody,
   num,
   str,
   type EvalResult,
 } from './predicate-eval-kit.js';
+import { keyFragmentOnly } from './body-key-fragment.js';
 export {
   clipBody,
   dataMatches,
@@ -339,6 +341,17 @@ const PRE_ATTACH_CAVEAT =
   'captured, so a miss here cannot tell a call that was never made apart from one made before the ' +
   'page connected; if the call is expected during startup, assert on the state it produces instead';
 
+/**
+ * The response-body clause as the caller wrote it, for a verdict that has to quote it.
+ *
+ * One expression rather than two, because every body verdict below is the same sentence whichever
+ * clause asked the question, and printing `undefined` where the clause was `bodyMatches` is how a
+ * verdict stops being readable.
+ */
+function wantedBody(p: Extract<Predicate, { kind: typeof PredicateKind.NET }>): string {
+  return JSON.stringify(p.bodyContains ?? p.bodyMatches);
+}
+
 export function evalNet(
   events: ReticleEvent[],
   p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
@@ -375,6 +388,15 @@ export function evalNet(
    * a truncated one cannot (#614).
    */
   let truncatedBody: string | undefined;
+  /**
+   * A `bodyContains` needle that was FOUND, and found only inside a key name (#987).
+   *
+   * Not a match and not a miss: the substring is there, and it supports no claim about any value.
+   * Held with the body it was found in, because the verdict has to show both.
+   */
+  let keyFragment: { key: string; body: string } | undefined;
+  /** A response key whose captured value is `[REDACTED]`, so a `bodyMatches` clause is unjudgeable. */
+  let redactedResponseField: string | undefined;
   const requestState = newRequestBodyState();
   const matches = events.filter((e) => {
     if (e.type !== EventType.NET_REQUEST || e.t < since) return false;
@@ -398,28 +420,41 @@ export function evalNet(
       if (status !== p.status) return false;
     }
     if (p.ok !== undefined && callSucceeded(d) !== p.ok) return false;
-    if (p.bodyContains !== undefined) {
-      // The RESPONSE body only, and this is the whole point of the field. Searching the request too
-      // would let `bodyContains: "1187.01"` pass on the very defect it exists to catch: the app SENT
-      // that number, so it is in the request whatever the server then did with it. The server's answer
-      // is the one channel a UI cannot fake.
+    if (p.bodyContains !== undefined || p.bodyMatches !== undefined) {
+      // The RESPONSE body only, and this is the whole point of these fields. Searching the request
+      // too would let `bodyContains: "1187.01"` pass on the very defect it exists to catch: the app
+      // SENT that number, so it is in the request whatever the server then did with it. The server's
+      // answer is the one channel a UI cannot fake.
       const response = str(d['responseBody']);
       if (response === undefined) {
         matchedButUnrecorded = true;
         return false;
       }
-      if (!response.includes(p.bodyContains)) {
-        // A needle missing from a body we only hold the FIRST N BYTES of is undecidable, not
-        // absent: the rest of the response was never recorded, so nothing here can say whether it
-        // was in there (#614). Grading it `pass: false` with "the response value is what differed"
-        // is the inversion the honesty rules exist to prevent — an unknown reported as decided,
-        // against a response that was very likely correct.
-        if (true === d['responseBodyTruncated']) {
-          truncatedBody ??= response;
+      // A needle missing from a body we only hold the FIRST N BYTES of is undecidable, not absent:
+      // the rest of the response was never recorded, so nothing here can say whether it was in
+      // there (#614). Grading it `pass: false` with "the response value is what differed" is the
+      // inversion the honesty rules exist to prevent — an unknown reported as decided, against a
+      // response that was very likely correct.
+      const missed = (): false => {
+        if (true === d['responseBodyTruncated']) truncatedBody ??= response;
+        else bodyMismatch ??= response;
+        return false;
+      };
+      if (p.bodyContains !== undefined) {
+        if (!response.includes(p.bodyContains)) return missed();
+        const fragment = keyFragmentOnly(response, p.bodyContains);
+        if (fragment !== undefined) {
+          keyFragment ??= { key: fragment, body: response };
           return false;
         }
-        bodyMismatch ??= response;
-        return false;
+      }
+      if (p.bodyMatches !== undefined) {
+        const verdict = matchJsonBody(response, p.bodyMatches);
+        if ('mismatch' === verdict) return missed();
+        if ('match' !== verdict) {
+          redactedResponseField ??= verdict.redacted;
+          return false;
+        }
       }
     }
     if (!checkRequestBody(d, p, requestState)) return false;
@@ -442,8 +477,28 @@ export function evalNet(
       pass: false,
       failureReason: `a call matched but its body was not recorded, so \`bodyContains\` could not be checked — enable it where the app calls connect(): reticle({ captureNetworkBodies: true })`,
       observed: 'a matching call with no recorded body',
-      expected: `a body containing ${JSON.stringify(p.bodyContains)}`,
+      expected: `a body carrying ${wantedBody(p)}`,
       assertion: 'net.bodyContains',
+    };
+  }
+  if (keyFragment !== undefined && 0 === matches.length) {
+    // Ranked above every other body verdict, because it is the only one that used to be a PASS.
+    return {
+      pass: false,
+      inconclusive: `a call matching ${describeNetFilter(p)} was answered with a body where ${JSON.stringify(p.bodyContains)} appears ONLY inside the key name ${JSON.stringify(keyFragment.key)} — no value in the response contains it, so this substring proves nothing about what any field holds. Assert the field itself: \`bodyMatches: { "<field>": <value> }\``,
+      observed: `response body ${JSON.stringify(clipBody(keyFragment.body))}`,
+      expected: `a response body carrying ${JSON.stringify(p.bodyContains)} as a value, or as a whole key`,
+      assertion: 'net.bodyContains',
+    };
+  }
+  if (redactedResponseField !== undefined && 0 === matches.length) {
+    const field = JSON.stringify(redactedResponseField);
+    return {
+      pass: false,
+      inconclusive: `a call matching ${describeNetFilter(p)} was answered, but its ${field} was REDACTED before the body was recorded, so this clause cannot be judged — a redacted field is unknown, not different. Assert on a non-sensitive key, or on the effect the value had`,
+      observed: `a matching response whose ${field} is ${REDACTED_VALUE}`,
+      expected: `a response body matching ${JSON.stringify(p.bodyMatches)}`,
+      assertion: 'net.bodyMatches',
     };
   }
   const requestVerdict = requestBodyVerdict(requestState, p, matches.length);
@@ -454,9 +509,9 @@ export function evalNet(
   if (truncatedBody !== undefined && 0 === matches.length) {
     return {
       pass: false,
-      inconclusive: `a call matching ${describeNetFilter(p)} was answered with a body that was TRUNCATED before it was recorded, and ${JSON.stringify(p.bodyContains)} is not in the part that was kept — so this is undecidable, not a failure. Raise the capture cap or assert on something inside the recorded prefix`,
+      inconclusive: `a call matching ${describeNetFilter(p)} was answered with a body that was TRUNCATED before it was recorded, and ${wantedBody(p)} is not in the part that was kept — so this is undecidable, not a failure. Raise the capture cap or assert on something inside the recorded prefix`,
       observed: `the first ${String(truncatedBody.length)} characters of a truncated response body ${JSON.stringify(clipBody(truncatedBody))}`,
-      expected: `a response body containing ${JSON.stringify(p.bodyContains)}`,
+      expected: `a response body carrying ${wantedBody(p)}`,
       assertion: 'net.bodyContains',
     };
   }
@@ -465,9 +520,9 @@ export function evalNet(
     // points at the wiring, which is the one place the defect is not.
     return {
       pass: false,
-      failureReason: `a call matching ${describeNetFilter(p)} was made and answered ${JSON.stringify(clipBody(bodyMismatch))}, which does not contain ${JSON.stringify(p.bodyContains)} — the request fired, the response value is what differed`,
+      failureReason: `a call matching ${describeNetFilter(p)} was made and answered ${JSON.stringify(clipBody(bodyMismatch))}, which does not carry ${wantedBody(p)} — the request fired, the response value is what differed`,
       observed: `response body ${JSON.stringify(clipBody(bodyMismatch))}`,
-      expected: `a response body containing ${JSON.stringify(p.bodyContains)}`,
+      expected: `a response body carrying ${wantedBody(p)}`,
       assertion: 'net.bodyContains',
     };
   }
