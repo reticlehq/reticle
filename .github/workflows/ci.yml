@@ -1025,6 +1025,49 @@ jobs:
   # succeeded or was deliberately skipped — and FAILS if any of them failed or was cancelled.
   # `always()` is load-bearing: without it this job is itself skipped whenever a dependency is, which
   # reproduces the problem one level up.
+  # `CHANGELOG.md` is assembled from `.changes/*.md` at release time, and a PR that edits it directly
+  # is the thing that mechanism exists to prevent.
+  #
+  # The incident is written down in `.changes/README.md` and was measured, not feared: of 42 open
+  # pull requests, 23 edited `CHANGELOG.md` and 11 were CONFLICTING on it — every one of those an
+  # `[Unreleased]` section two branches appended to in the same place. The directory was created to
+  # end that, and then nothing enforced it: it has held its own README and no entries since, while
+  # every changelog-bearing commit went on editing the file directly. A documented convention with
+  # no teeth is a convention that gets rediscovered the next time a release has twenty open PRs.
+  #
+  # A release branch is exempt: assembling IS editing the file, and that is step four of RELEASING.md.
+  # Both shapes are exempt, because both are in use — `release/v2.14.0` was the branch behind one
+  # release and a bare `v3.2.0` is the branch behind the next. Matching only the prefix would fail
+  # the very PR that is allowed to do this, which is how an exemption teaches people to bypass it.
+  #
+  # Plain git for the same reason the `changes` job uses it, and it fails OPEN: if the base ref
+  # cannot be resolved the diff comes back empty and the check passes, because blocking a merge on
+  # a shallow clone would be a worse failure than missing one stray edit.
+  changelog-policy:
+    if: >-
+      github.event_name == 'pull_request' && !startsWith(github.head_ref, 'release/') && !startsWith(github.head_ref, 'v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: A changelog entry is a file in .changes/, not an edit to CHANGELOG.md
+        run: |
+          BASE="origin/${{ github.base_ref }}"
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}" 2>/dev/null || true
+          CHANGED=$(git diff --name-only "$BASE"...HEAD 2>/dev/null || true)
+          echo "$CHANGED" | grep -qx 'CHANGELOG.md' || { echo "CHANGELOG.md untouched"; exit 0; }
+          echo "This PR edits CHANGELOG.md directly."
+          echo
+          echo "Entries go in the .changes/ directory: one file per entry, named for the issue"
+          echo "and a slug, holding a '### Fixed' heading and the bullet. They are assembled"
+          echo "into CHANGELOG.md at release time."
+          echo "Two PRs adding two files never conflict; two PRs editing one file always might."
+          echo
+          echo "See .changes/README.md. If this IS the release PR, branch from release/."
+          exit 1
+
   gate:
     runs-on: ubuntu-latest
     # Every job that can fail a PR is listed HERE. A job missing from this list runs, reports, and is
@@ -1043,6 +1086,7 @@ jobs:
     needs:
       [
         changes,
+        changelog-policy,
         format-check,
         verify,
         e2e,
