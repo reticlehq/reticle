@@ -50,6 +50,7 @@ jobs:
     environment: Production # NPM_TOKEN lives in this GitHub Environment
     permissions:
       contents: read
+      issues: read # the pending-release check lists open issues
       id-token: write # npm provenance
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -67,6 +68,13 @@ jobs:
         run: |
           echo "refusing to publish from ${{ github.ref }} — dispatch only from main or publish via a Release"
           exit 1
+      # 3.1.0 shipped with this label still on open issues, including five whose fix was only an
+      # unmerged pull request. The label means the fix is on this release. Outstanding ones are
+      # closed, or the label comes off, before npm sees the packages.
+      - name: Refuse a release that still has fixed-pending-release open
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/check-pending-release.mjs
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       # Gate the artifact: never publish code that fails the same checks CI enforces on every PR.

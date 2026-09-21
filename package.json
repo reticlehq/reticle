@@ -54,6 +54,8 @@
     "hooks:install": "ln -sf ../../pre-commit.sh .git/hooks/pre-commit && ln -sf ../../prepare-commit-msg.sh .git/hooks/prepare-commit-msg && echo \"pre-commit + sign-off hooks installed\"",
     "check:stale-issues": "node scripts/check-stale-issues.mjs",
     "check:stale-issues:self-test": "node scripts/check-stale-issues.mjs --self-test",
+    "check:pending-release": "node scripts/check-pending-release.mjs",
+    "check:pending-release:self-test": "node scripts/check-pending-release.mjs --self-test",
     "remap:prs": "node scripts/remap-stranded-prs.mjs",
     "gate:conformance:self-test": "node conformance/run-self.mjs --self-test && node conformance/run-desktop.mjs --self-test && node conformance/run-cli.mjs --self-test"
   },
