@@ -278,6 +278,11 @@ describe('browser-side action guards are recognized refusals, not unknown defect
         'cannot fill a contenteditable element — rich-text editors keep their own document model',
       ),
     ).toBe(RECOVERY.UNSUPPORTED_SURFACE);
+    expect(
+      recoveryFor(
+        'cannot type into a contenteditable or EditContext editor — this <div> is a text box the page owns',
+      ),
+    ).toBe(RECOVERY.UNSUPPORTED_SURFACE);
   });
 
   it('a hover without a real pointer is a named refusal, not a possible bug', () => {

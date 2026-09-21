@@ -36,6 +36,14 @@ export function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value
  * can operate — the same reason the click path reports `occluded`, and the same choice Playwright
  * makes when it refuses to fill a non-editable element.
  */
+/** Monaco and CodeMirror expose a text box without setting `contenteditable`. */
+function isEditorSurface(el: HTMLElement): boolean {
+  if ('textbox' === el.getAttribute('role')) return true;
+  if (!('editContext' in el)) return false;
+  const surface = el as HTMLElement & { editContext?: object | null };
+  return null !== surface.editContext && undefined !== surface.editContext;
+}
+
 /**
  * A rich-text target is UNSUPPORTED, not a mistake by the caller.
  *
@@ -44,6 +52,9 @@ export function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value
  * element" and sends the reader hunting for a better selector that does not exist. Support is not
  * faked: assigning textContent would update the DOM while the editor's own model kept the old value,
  * so the tool would report success for content the app will never submit.
+ *
+ * A `role="textbox"` element with no `contenteditable` is the same refusal. Monaco and CodeMirror
+ * keep the document in the EditContext API, so the tag alone (`<div>`) is the wrong diagnosis.
  */
 export function assertNotRichText(el: HTMLElement, action: string): void {
   // The ATTRIBUTE, not `isContentEditable`: jsdom does not implement the property, so a test would
@@ -53,6 +64,15 @@ export function assertNotRichText(el: HTMLElement, action: string): void {
     throw new Error(
       `cannot ${action} a contenteditable element — rich-text editors keep their own document model, ` +
         'so writing to the DOM here would look right and submit the old content. This surface is not supported yet.',
+    );
+  }
+  if (isEditorSurface(el)) {
+    const tag = el.tagName.toLowerCase();
+    throw new Error(
+      `cannot ${action} a contenteditable or EditContext editor — this <${tag}> is a text box the ` +
+        'page owns (role="textbox", or the EditContext API). Writing into the DOM would look right ' +
+        'and leave the editor model unchanged. Use `press` for keys the editor already handles, or ' +
+        'drive an <input> or <textarea>.',
     );
   }
 }
