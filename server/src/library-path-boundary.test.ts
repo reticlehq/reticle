@@ -23,6 +23,12 @@ import { importsOf, reachableFrom, resolveImport } from './import-graph.js';
  * rather than trusting a grep, because the reach that matters is the transitive one — nobody adds
  * `import '@reticlehq/init'` to `index.ts`, they add it four modules down.
  *
+ * `machine/platform.ts` was declared here until the daemon's `/status` probe moved out of
+ * `command/cli/launch/` and into `command/daemon/binding/`. The library barrel reached the CLI
+ * launcher only to get that probe, and the launcher is what reached `NodePlatform`; with the probe
+ * filed where its callers live, the library door no longer opens onto the launcher at all. Removed
+ * rather than kept: this list is only useful if every line in it is still true.
+ *
  * Only crossings ON the library path are declared below. `telemetry/init-telemetry.ts` also
  * re-exports from the scaffolder and is deliberately absent: the barrel does not reach it, and
  * listing an unreachable module would be an exemption nobody could tell had gone stale.
@@ -48,11 +54,6 @@ const DECLARED_CROSSINGS: Record<string, string> = {
     'lifting them out means editing the install path — the one path in this repo with the worst ' +
     'track record for silent breakage. Left in place deliberately: a consumer embedding the engine ' +
     'takes this module verbatim and never calls the installer, so the crossing costs it nothing.',
-  'machine/platform.ts':
-    'Re-exports `NodePlatform`, four lines naming the two `process.platform` values this daemon ' +
-    'branches on. It is DEFINED in the scaffolder because `node-io.ts` needs it and that package may ' +
-    'not import this one; re-exported here so the five runtime readers are unchanged. A type-level ' +
-    'constant, not a code path — nothing of the installer runs.',
   'command/cli/ports/resolve/cli-port.ts':
     'Re-exports the dev-server port heuristics. `existing-config.ts` diagnoses a `.reticle.json` ' +
     'whose `port` is the app’s own dev-server port, so the set is defined there; the runtime ' +

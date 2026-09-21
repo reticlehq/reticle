@@ -35,7 +35,7 @@ import {
   describePresence,
 } from '@/command/daemon/binding/port-presence.js';
 import { daemonSpawnArgs } from '@/command/cli/daemon-start-options.js';
-import { fetchStatus } from '@/command/cli/launch/cli-launch.js';
+import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { runKill } from '@/command/cli/cli-kill.js';
 
 export function handleServe(parsed: {

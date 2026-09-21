@@ -17,7 +17,7 @@ import { spawnDaemon } from '@/command/daemon/daemon.js';
 import { probePresence, presenceIsUsable } from '@/command/daemon/binding/port-presence.js';
 import { waitForDaemon, probeDaemon } from '@/surface/mcp/mcp-proxy.js';
 import { daemonSpawnArgs } from '@/command/cli/daemon-start-options.js';
-import { fetchStatus } from '@/command/cli/launch/cli-launch.js';
+import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 
 interface EnsureDaemonDeps {
   readonly usable: (port: number) => Promise<boolean>;

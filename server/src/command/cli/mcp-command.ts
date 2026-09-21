@@ -29,7 +29,7 @@ import { resolveMcpPort, daemonProjectAt } from '@/command/daemon/daemon-resolve
 import { daemonSpawnArgs } from './daemon-start-options.js';
 import { WakeAction, decideWake } from '@/command/daemon/wake-decision.js';
 import { pickDaemonPortToBind } from '@/command/daemon/binding/free-port.js';
-import { fetchStatus } from './launch/cli-launch.js';
+import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { migrateApprovals } from '@/command/setup/approval-migration.js';
 import { ReticleEnv } from '@reticlehq/core';
 import { agentIo } from '@/command/setup/agent-io.js';

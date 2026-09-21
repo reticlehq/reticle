@@ -30,7 +30,8 @@
  */
 import { InitConfirmation, RETICLE_DEFAULT_PORT } from '@reticlehq/core';
 import type { DevServerEntry, InitOutcome } from '@reticlehq/core';
-import { fetchStatus, summarizeStatus } from '@/command/cli/launch/cli-launch.js';
+import { summarizeStatus } from '@/command/cli/launch/cli-launch.js';
+import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { readDevServers } from '@/command/daemon/dev-servers.js';
 import { devServersForProject } from '@reticlehq/core/artifacts';
 import { readProjectId } from '@/command/cli/ports/resolve/cli-port.js';

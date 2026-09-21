@@ -4,7 +4,7 @@ import { ReticleEnv } from '@reticlehq/core';
 import { readPid, reticleStateHome } from '@/command/daemon/daemon.js';
 import { PortPresence, probePresence } from '@/command/daemon/binding/port-presence.js';
 import { probeDaemon } from '@/surface/mcp/mcp-proxy.js';
-import { fetchStatus } from './launch/cli-launch.js';
+import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { daemonLine, type DaemonIdentity } from './doctor/doctor-daemon-line.js';
 import { projectWiringLine } from './doctor/doctor-project-line.js';
 import { hasProjectConnectedBefore } from '@/memory/recall/prior/connection-memory.js';

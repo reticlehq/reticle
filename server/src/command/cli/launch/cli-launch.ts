@@ -1,12 +1,11 @@
-import * as http from 'node:http';
 import { NodePlatform } from '@/machine/platform.js';
 import { spawn } from 'node:child_process';
-import { isOpaqueOrigin, LOOPBACK_HOST, STATUS_PATH } from '@reticlehq/core';
+import { isOpaqueOrigin } from '@reticlehq/core';
 import { daemonFix, describeSkew } from '@/command/version/version-skew.js';
 import { CONTRACT_FINGERPRINT } from '@reticlehq/core';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 import { log } from '@/log.js';
-import { loopbackAgent } from '@/surface/loopback-agent.js';
+import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 
 /**
  * CLI launch + status helpers — the daemon-introspection (`reticle status`) and the one-command
@@ -90,43 +89,6 @@ export async function warnOnDaemonSkew(port: number): Promise<void> {
     { version: SERVER_VERSION, contract: CONTRACT_FINGERPRINT },
   );
   if (skew !== undefined) log('reticle_daemon_skew', { port, warning: skew });
-}
-
-/** How long the daemon /status probe waits before giving up — a local loopback call is near-instant. */
-const STATUS_PROBE_TIMEOUT_MS = 1000;
-
-/** GET the daemon's /status JSON. Resolves to the parsed body, or undefined on any failure. */
-export function fetchStatus(port: number): Promise<unknown> {
-  return new Promise((resolve) => {
-    const req = http.get(
-      {
-        host: LOOPBACK_HOST,
-        port,
-        path: STATUS_PATH,
-        timeout: STATUS_PROBE_TIMEOUT_MS,
-        // Shares the proxy's keep-alive agent: the proxy calls this on every reconnect, and a socket
-        // per probe is the same churn the POST leg was fixed for.
-        agent: loopbackAgent,
-      },
-      (res) => {
-        let body = '';
-        res.setEncoding('utf8');
-        res.on('data', (chunk: string) => (body += chunk));
-        res.on('end', () => {
-          try {
-            resolve(JSON.parse(body));
-          } catch {
-            resolve(undefined);
-          }
-        });
-      },
-    );
-    req.on('error', () => resolve(undefined));
-    req.on('timeout', () => {
-      req.destroy();
-      resolve(undefined);
-    });
-  });
 }
 
 /** What `reticle open` should do: reuse an already-connected tab, open a new one, or ask for a url. */

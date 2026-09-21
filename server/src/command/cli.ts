@@ -71,13 +71,13 @@ import { DaemonHeartbeat, resolveHeartbeatMs } from './daemon/lifetime/heartbeat
 import { everServedToolCall } from './daemon/lifetime/daemon-usefulness.js';
 import { DAEMON_START_FAILED_EVENT } from './daemon/lifetime/startup-failure.js';
 import {
-  fetchStatus,
   summarizeStatus,
   warnOnDaemonSkew,
   decideOpen,
   openInBrowser,
   openCommand,
 } from './cli/launch/cli-launch.js';
+import { fetchStatus } from './daemon/binding/daemon-status-probe.js';
 import { handleDrive } from './cli/drive/drive-command.js';
 import { handleVerify } from './cli/cli-verify.js';
 import { runKill } from './cli/cli-kill.js';

@@ -1,5 +1,12 @@
 import * as net from 'node:net';
 import { LOOPBACK_HOST } from '@reticlehq/core';
+import {
+  describePresence,
+  presenceIsUsable,
+  probePresence,
+  PortPresence,
+} from '@/command/daemon/binding/port-presence.js';
+import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 
 const DEFAULT_DAEMON_READY_TIMEOUT_MS = 10_000;
 /**
@@ -45,17 +52,38 @@ export function probeDaemon(port: number): Promise<boolean> {
   });
 }
 
-/** Poll until the daemon's HTTP port accepts connections or the deadline is reached. */
-export async function waitForDaemon(port: number): Promise<void> {
+/**
+ * Poll until a Reticle daemon is SERVING on `port`, or the deadline passes.
+ *
+ * "Accepts a TCP connection" is not the question. A daemon wedged mid-start accepts and never
+ * serves, and so does a stranger holding the port — `port-presence.ts` calls both FOREIGN for
+ * exactly this reason, and every other decision point in the codebase was migrated onto it. This
+ * one was not, so the wake path spawned a daemon, waited on a bare connect, and dialled a corpse.
+ *
+ * Probes are injected (defaulting to the real pair) so the rule is testable without a socket, which
+ * is the same shape `probePresence`'s own callers use.
+ */
+export async function waitForDaemon(
+  port: number,
+  probes: {
+    tcpOpen: (port: number) => Promise<boolean>;
+    status: (port: number) => Promise<unknown>;
+  } = { tcpOpen: probeDaemon, status: fetchStatus },
+): Promise<void> {
   const deadline = Date.now() + DAEMON_READY_TIMEOUT_MS;
   let attempt = 0;
+  let presence: PortPresence = PortPresence.FREE;
   while (Date.now() < deadline) {
-    const reachable = await probeDaemon(port);
-    if (reachable) return;
+    presence = await probePresence(port, probes);
+    if (presenceIsUsable(presence)) return;
     attempt++;
     await delay(daemonPollDelayMs(attempt));
   }
+  // The state we timed out in is the whole diagnosis — FREE means the daemon never came up, FOREIGN
+  // means something is squatting the port. Reporting only the timeout sent readers hunting the
+  // wrong one.
   throw new Error(
-    `reticle daemon did not become ready on port ${port} within ${DAEMON_READY_TIMEOUT_MS}ms`,
+    `reticle daemon did not become ready on port ${String(port)} within ` +
+      `${String(DAEMON_READY_TIMEOUT_MS)}ms — ${describePresence(presence, port)}`,
   );
 }

@@ -17,7 +17,7 @@ import { Socket } from 'node:net';
 import type { Readable } from 'node:stream';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { fetchStatus } from '@/command/cli/launch/cli-launch.js';
+import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import {
   descendants,
   parseLsofPorts,

@@ -22,7 +22,7 @@ import { PortPresence, probePresence } from '@/command/daemon/binding/port-prese
 import { isAlive, readPid, removePid } from '@/command/daemon/daemon.js';
 import { probeDaemon } from '@/surface/mcp/mcp-proxy.js';
 import { log } from '@/log.js';
-import { fetchStatus } from './launch/cli-launch.js';
+import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { captureLookup, findPortHolder, type PortHolder } from './ports/port-holder.js';
 
 /** What the plan says to do with the port. */

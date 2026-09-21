@@ -152,7 +152,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * Getting something running and waiting for it: the bridge port, the daemon, the dev server,
    * the relaunch. Everything `reticle init` does between writing files and having a session.
    */
-  bringup: ['binding', 'cli', 'daemon', 'launch', 'mcp'],
+  bringup: ['binding', 'cli', 'daemon', 'mcp'],
   /**
    * What the daemon remembers between sessions: which projects have registered, what a previous
    * connection looked like, whether an address smells like somebody's dev server.
@@ -190,7 +190,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // already had materialised at once — this is that, not a dependency anybody added. The plan that
   // ordered these moves named the mechanism in advance, and the number that matters did not move:
   // the mutual-pair count is unchanged, so nothing here started needing something that needs it back.
-  launch: ['machine', 'identity', 'version', 'surface'],
+  // `surface` left with `daemon-status-probe.ts`: `loopback-agent` was reached for that probe and
+  // nothing else here. `binding` replaces it, because the skew warning still asks for the status.
+  launch: ['machine', 'identity', 'version', 'binding'],
   /** The mouth and ears: the tool surface and the MCP server, plus the HTTP door they answer on. */
   surface: ['bridge', 'telemetry', 'version'],
   /**
@@ -267,7 +269,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * It reaches for four things and that is honest -- it prints daemon state, port state and
    * telemetry notices, because that is what a setup transcript is made of.
    */
-  terminal: ['daemon', 'launch', 'resolve', 'telemetry'],
+  terminal: ['binding', 'daemon', 'launch', 'resolve', 'telemetry'],
   /** A recorded flow and what became of it: the tape, the rewind, the flake, the halt. */
   recording: [],
   /** What a human wrote on a step, and where they pointed when they wrote it. */
@@ -310,7 +312,6 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'flows',
     'fs',
     'identity',
-    'launch',
     'mcp',
     'outcome',
     'ports',
@@ -450,7 +451,6 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'daemon',
     'faults',
     'identity',
-    'launch',
     'prior',
     'proxy',
     'resolve',
@@ -499,7 +499,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // `resolve` is here because `setup-command` reports the project id in its result, and
   // `readProjectId` lives there. One way, and the same edge `mcp` and `tools` already had -- it
   // is the only module that exports it, so the alternative was a second copy of the reader.
-  setup: ['bringup', 'daemon', 'launch', 'probe', 'resolve', 'terminal'],
+  setup: ['binding', 'bringup', 'daemon', 'launch', 'probe', 'resolve', 'terminal'],
   telemetry: [
     'cli',
     'daemon',
@@ -537,7 +537,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * is why setup no longer reaches bridge, proxy or telemetry at all — those three reaches were
    * these two files and nothing else.
    */
-  init: ['binding', 'bridge', 'bringup', 'launch', 'proxy', 'setup', 'telemetry', 'terminal'],
+  init: ['binding', 'bridge', 'bringup', 'proxy', 'setup', 'telemetry', 'terminal'],
   /**
    * A file changed: which flows must re-verify, what the gate does about it, and how a
    * save-heavy editor's burst becomes one flush. Four files that import nothing whatsoever,
@@ -555,7 +555,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * port itself, which is the whole reason the two files exist and why they reach the daemon,
    * the launcher, the mcp surface and the port table.
    */
-  drive: ['binding', 'daemon', 'launch', 'mcp', 'ports'],
+  drive: ['binding', 'daemon', 'mcp', 'ports'],
   /**
    * This project's dev server: the literal command that starts it, read from the project's own
    * scripts, and which of the usual ports already have something listening. Named dev-server
@@ -571,7 +571,14 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * import nothing at all, which is why they were the most-reached flat files in the package.
    * Naming them also untangled init, which no longer reaches daemon for anything else.
    */
-  binding: [],
+  // `surface` arrived with `daemon-status-probe.ts`, the /status half of `probePresence`. It used
+  // to sit in `launch/`, where it read as a launcher helper and was nothing of the kind: every one
+  // of its callers passes it straight to `probePresence`, which lives here. Moving it took SEVEN
+  // reaches out of this package (`bringup`, `cli`, `drive`, `init`, `lifecycle`, `mcp` and
+  // `terminal` all reached `launch` for that one function and nothing else) and added four, so the
+  // sentence above — that these files import nothing at all — is no longer true of this one, and
+  // the trade was worth making anyway.
+  binding: ['surface'],
   /**
    * How long a daemon lasts: the log event when the child cannot start, the pid of a predecessor
    * that died without exiting, the beat that turns silence in the log into evidence, whether this
@@ -602,7 +609,7 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * is a real decision -- putting it in `binding` coupled that directory to `mcp` and `launch`,
    * which is moving the problem -- and a release branch is the wrong place to make it.
    */
-  lifecycle: ['binding', 'cli', 'daemon', 'launch', 'lifetime', 'mcp'],
+  lifecycle: ['binding', 'cli', 'daemon', 'lifetime', 'mcp'],
   lifetime: [],
   /**
    * Facts and chores about the computer this daemon is running on: the `process.platform` values
