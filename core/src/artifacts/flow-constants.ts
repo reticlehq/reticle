@@ -153,6 +153,16 @@ export const DriftReason = {
    * step whose anchor was fine.
    */
   EXPECT_ELEMENT_NOT_FOUND: 'expect_element_not_found',
+  /**
+   * The step's `expect.net` named a request that was still ON THE WIRE when the budget ended.
+   *
+   * A blind spot, not a failed assertion. Reported as SIGNAL_NOT_OBSERVED it reads as "the request
+   * you declared never happened", which sends a reader hunting a feature that works — the live
+   * verdict path already refuses to grade a named in-flight request as a miss, and replay was the
+   * one reader that had not asked the question. The fix for this drift is a longer budget or a
+   * faster endpoint; the fix for SIGNAL_NOT_OBSERVED is the handler behind the action.
+   */
+  NET_STILL_IN_FLIGHT: 'net_still_in_flight',
 } as const;
 export type DriftReason = (typeof DriftReason)[keyof typeof DriftReason];
 
@@ -173,7 +183,10 @@ export function isConsequenceDrift(reason: DriftReason): boolean {
   return (
     DriftReason.SIGNAL_NOT_OBSERVED === reason ||
     DriftReason.STATE_MISMATCH === reason ||
-    DriftReason.EXPECT_ELEMENT_NOT_FOUND === reason
+    DriftReason.EXPECT_ELEMENT_NOT_FOUND === reason ||
+    // Same class: the anchor resolved, the action ran, and the page is where the step left it. Only
+    // the answer is missing. Excluding it would halt a sweep on a slow endpoint.
+    DriftReason.NET_STILL_IN_FLIGHT === reason
   );
 }
 

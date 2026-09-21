@@ -42,6 +42,8 @@ describe('isConsequenceDrift', () => {
     expect(isConsequenceDrift(DriftReason.SIGNAL_NOT_OBSERVED)).toBe(true);
     expect(isConsequenceDrift(DriftReason.STATE_MISMATCH)).toBe(true);
     expect(isConsequenceDrift(DriftReason.EXPECT_ELEMENT_NOT_FOUND)).toBe(true);
+    // A request still on the wire is the same shape: the action ran, only the answer is missing.
+    expect(isConsequenceDrift(DriftReason.NET_STILL_IN_FLIGHT)).toBe(true);
   });
 
   it('is false where the anchor itself was never resolved', () => {
@@ -62,6 +64,7 @@ describe('isConsequenceDrift', () => {
         DriftReason.SIGNAL_NOT_OBSERVED,
         DriftReason.STATE_MISMATCH,
         DriftReason.EXPECT_ELEMENT_NOT_FOUND,
+        DriftReason.NET_STILL_IN_FLIGHT,
       ].sort(),
     );
   });

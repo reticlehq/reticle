@@ -42,6 +42,13 @@ import {
   runSequenceStep,
 } from './flow-step-runners.js';
 import { successToPredicate } from './flow-success.js';
+import { inFlightRequestLabels } from '@/surface/tools/act/settle-in-flight.js';
+import { namedNetIsInFlight } from '@reticlehq/engine/evidence/unsettled.js';
+
+/** What a still-open named request means, in the drift's own words. */
+const IN_FLIGHT_AT_BUDGET_END =
+  'the request this step declared had not come back when the budget ended — it is still in flight, ' +
+  'so nothing here says the app failed. Raise the step timeout, or look at the endpoint';
 import { ReticleTool } from '@reticlehq/core';
 
 const realSleep: Sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -211,12 +218,25 @@ export async function assertStepExpect(
   if (predicate === undefined) return undefined;
   const verdict = await waitForSignal(session, predicate, timeoutMs, since);
   if (verdict.pass) return undefined;
+  // A request the step NAMED that had not come back yet is a blind spot, not an assertion the app
+  // failed. The live verdict path already draws this line (namedNetIsInFlight); replay read the
+  // same window and never asked, so a slow endpoint was reported as a consequence that never fired.
+  // An unrelated open request does not pardon a named URL that never started — matching decides it.
+  const openRequests =
+    expect.state === undefined ? inFlightRequestLabels(session.eventsSince(since)) : [];
+  const namedInFlight = namedNetIsInFlight(predicate, openRequests);
   return {
     // The store case keeps its own kind because heal and the run report branch on it; everything
     // else is a consequence that did not hold, and the reason carries observed-vs-expected.
     reasonKind:
-      expect.state !== undefined ? DriftReason.STATE_MISMATCH : DriftReason.SIGNAL_NOT_OBSERVED,
-    reason: verdict.failureReason ?? "the step's declared consequence did not hold",
+      expect.state !== undefined
+        ? DriftReason.STATE_MISMATCH
+        : namedInFlight
+          ? DriftReason.NET_STILL_IN_FLIGHT
+          : DriftReason.SIGNAL_NOT_OBSERVED,
+    reason: namedInFlight
+      ? `${IN_FLIGHT_AT_BUDGET_END} (${openRequests.join(', ')})`
+      : (verdict.failureReason ?? "the step's declared consequence did not hold"),
     anchor: expectLabel(expect),
     nearest: null,
   };
