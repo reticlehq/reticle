@@ -29,7 +29,12 @@ import { queryRefs } from './replay.js';
 import { assertSuccess, dynamicTestids, successLabel, SUCCESS_STEP_TOOL } from './flow-success.js';
 import { buildDecision, unverifiableReason } from './decision.js';
 import { unsuppliedSecrets } from './fields/flow-secret-field.js';
-import { assertStepExpect, type FlowReplaySession } from './flow-replay.js';
+import {
+  assertStepExpect,
+  DocumentLostDuringReplay,
+  type FlowReplaySession,
+} from './flow-replay.js';
+import { isDocumentGoneError } from '@/portal/session/facts/session-replaced.js';
 import { classifyFlowAssertions, flattenSteps } from './flow-classify.js';
 import { dischargeFlowIntent, flowIntentStatement, flowReplayVerdictId } from './flow-intent.js';
 import { IntentStore } from '@/memory/intent/intent-store.js';
@@ -358,8 +363,12 @@ export async function navigateAndAwait(
   try {
     const outcome = await session.command(ReticleCommand.NAVIGATE, { url });
     if (!outcome.ok || true !== asRecord(outcome.result)['ok']) return undefined;
-  } catch {
-    return undefined;
+  } catch (error: unknown) {
+    // A navigation that unloads the page rejects the very command that asked for it — the transport
+    // dies with the document. Reading that as "the navigate failed" skipped the arrival poll below
+    // and left replay driving a handle that could never answer again, which is how a flow with a
+    // startPath died at step 1 on an app that had loaded perfectly. Anything else is a real refusal.
+    if (!isDocumentGoneError(error)) return undefined;
   }
   const deadline = clock.now() + timeoutMs;
   for (;;) {
@@ -433,6 +442,38 @@ async function firstUnmetPrecondition(
     }
   }
   return undefined;
+}
+
+/**
+ * The honest answer when the document replay was driving went away mid-run.
+ *
+ * Not a pass: nothing graded the journey, and the steps in hand are only the ones the departed
+ * document answered. Not a failure either — the app was never observed doing anything wrong, and
+ * reporting one would be the false red that sends a reader into product code that is fine. So it
+ * lands in the bucket this engine already has for "nothing was proved", the same one an unmet
+ * precondition uses, with the steps that DID answer attached and no row invented for the one that
+ * did not.
+ *
+ * Why replay reports rather than follows: the successor cannot be identified at the moment the
+ * socket closes. `SessionManager.remove` runs from the close handler, writes the tombstone a
+ * successor is later matched against, and has nothing to match yet — so the rejection is a plain
+ * transport failure by design, and a step in the middle of a journey has no budget to sit and poll
+ * with. `navigateAndAwait` CAN wait, because it knows it asked for the navigation, and it does.
+ */
+export function lostDocumentResult(name: string, lost: DocumentLostDuringReplay): FlowReplayResult {
+  return {
+    name,
+    status: ReplayStatus.OK,
+    steps: lost.steps,
+    unverifiable: {
+      reason:
+        `the page loaded a new document while step ${String(lost.atStep)} was running, so the run ` +
+        `could not be graded — the steps before it are reported and nothing after it was observed. ` +
+        `Nothing here says the app failed. If that navigation is part of the journey, record the ` +
+        `step's consequence with \`expect\` and replay again; if it was not, the flow started ` +
+        `somewhere it no longer belongs.`,
+    },
+  };
 }
 
 export async function replayNamedFlow(
@@ -552,25 +593,31 @@ export async function replayNamedFlow(
       unverifiable: { reason: unmet },
     };
   }
-  const steps = await replayFlow(
-    session,
-    replayable,
-    waitForPredicate,
-    FLOW_SIGNAL_TIMEOUT_MS,
-    true === args['confirmDangerous'],
-    undefined,
-    {
-      // How an `invoke` step finds the flow it runs. Scoped to the same project as the flow being
-      // replayed, so a composite cannot reach into another app's store for a same-named sub-journey.
-      resolveFlow: async (invoked: string) => {
-        const sub = await flowsForSession(deps, projectId).flows.load(invoked, projectId);
-        return sub.ok ? await resolveFlowUploads(deps, sub.value) : undefined;
+  let steps: FlowStepResult[];
+  try {
+    steps = await replayFlow(
+      session,
+      replayable,
+      waitForPredicate,
+      FLOW_SIGNAL_TIMEOUT_MS,
+      true === args['confirmDangerous'],
+      undefined,
+      {
+        // How an `invoke` step finds the flow it runs. Scoped to the same project as the flow being
+        // replayed, so a composite cannot reach into another app's store for a same-named sub-journey.
+        resolveFlow: async (invoked: string) => {
+          const sub = await flowsForSession(deps, projectId).flows.load(invoked, projectId);
+          return sub.ok ? await resolveFlowUploads(deps, sub.value) : undefined;
+        },
+        // Bug-sweep mode: keep going past a step whose action ran and whose consequence merely did
+        // not hold, so one flow reports one verdict per step instead of stopping at the first defect.
+        sweep: true === args['sweep'],
       },
-      // Bug-sweep mode: keep going past a step whose action ran and whose consequence merely did
-      // not hold, so one flow reports one verdict per step instead of stopping at the first defect.
-      sweep: true === args['sweep'],
-    },
-  );
+    );
+  } catch (error: unknown) {
+    if (!(error instanceof DocumentLostDuringReplay)) throw error;
+    return lostDocumentResult(name, error);
+  }
   // Computed HERE, before the synthetic success row is appended below: once that row is pushed,
   // `steps.length` no longer counts only the flow's own steps and the arithmetic is wrong.
   const halted = haltedFrom(steps, loaded.value.steps.length);

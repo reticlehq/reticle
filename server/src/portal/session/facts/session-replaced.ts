@@ -30,3 +30,27 @@ export function isSessionReplacedError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return message.includes(SESSION_REPLACED_PREFIX);
 }
+
+/**
+ * The reason every command still in flight is rejected with when the socket under it closes.
+ *
+ * A full-document navigation closes that socket, so on an MPA — or on any click that loads a new
+ * page — this arrives for the exact command that CAUSED it, and the successor is still connecting.
+ * `SessionManager.remove` cannot tell those two apart at the moment it runs: it is called from the
+ * socket's own close handler, the tombstone it writes is what a successor is later matched against,
+ * and nothing has arrived yet. So the rejection stays a plain transport failure, as
+ * `PendingCommands.rejectAll` documents, and a caller that CAN wait decides what it means.
+ */
+export const SESSION_DISCONNECTED_REASON = 'session disconnected';
+
+/**
+ * Is this failure the page's transport going away, rather than an answer from the page?
+ *
+ * True for both shapes the same event takes: the reconnect that claimed the id back, and the close
+ * that landed before any successor did. A caller holding a budget can follow either; a caller that
+ * cannot must say it stopped watching, never that the app failed.
+ */
+export function isDocumentGoneError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return isSessionReplacedError(error) || message === SESSION_DISCONNECTED_REASON;
+}

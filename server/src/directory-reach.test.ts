@@ -408,6 +408,10 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'cli',
     'cloud',
     'dir',
+    // One sentence about what a dead transport means, shared with the crawl that learned it first:
+    // a full-document navigation rejects the command that caused it, and replay has to tell that
+    // apart from the app failing. Restating the recogniser here is how the two halves drift.
+    'facts',
     'fields',
     'fs',
     'intent',

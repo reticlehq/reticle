@@ -9,6 +9,7 @@ import { Session, type SessionInfo } from './session.js';
 import { AttachmentHistory } from './presence/attachment-history.js';
 import type { NoSessionNextAction } from './no-session-next-action.js';
 import { pickDocumentSuccessor, type SessionIdentity } from './session-successor.js';
+import { SESSION_DISCONNECTED_REASON } from './facts/session-replaced.js';
 
 /**
  * The agent's active project, used to scope auto-selection. `projectId` is the stable build-stamped
@@ -170,7 +171,7 @@ export class SessionManager {
 
   remove(session: Session): boolean {
     if (this.#sessions.get(session.id) !== session) return false;
-    session.rejectAll('session disconnected');
+    session.rejectAll(SESSION_DISCONNECTED_REASON);
     forgetDrivenRedactionKeys(session.id);
     // Recorded, not forgotten: a session that comes back needs its gap measured, and a listing after
     // the reconnect is exactly where that matters.
