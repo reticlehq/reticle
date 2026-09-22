@@ -367,6 +367,15 @@ export function startMcpProxy(
   ensureDaemon?: () => Promise<void>,
   /** Observe the real shutdown boundary in transport tests without terminating their worker. */
   exitProcess: (code: number) => void = (code) => process.exit(code),
+  /**
+   * Tell the resilience layer this session proved itself usable.
+   *
+   * The same `endpoint` frame that earns a fresh retry budget below also clears the disconnect-storm
+   * counter, and for the same reason: response headers are produced by a daemon that accepts SSE and
+   * drops it, and an `endpoint` frame is not. Optional, because a transport test drives this
+   * function with no resilience installed.
+   */
+  onUsableSession: () => void = () => undefined,
 ): Promise<never> {
   return new Promise<never>((_resolve, reject) => {
     // A client just started us, which is the only honest evidence that Reticle is registered with
@@ -547,6 +556,10 @@ export function startMcpProxy(
           reportMcpOutage(OutageStage.RECOVERED, { reason: lastDropReason, attempts: cost });
         attempts = 0;
         attemptsBeforeDormant = 0;
+        // The disconnects behind us were reconnects, not a runaway. Counting them for the life of
+        // the process made twenty daemon restarts over a working week indistinguishable from twenty
+        // in eight seconds, and the proxy left on the former.
+        onUsableSession();
         // The new session's McpServer has never seen the client's initialize — replay it first, then
         // flush whatever the client sent while we were reconnecting.
         for (const line of replay.replayLines()) forward(url, line);

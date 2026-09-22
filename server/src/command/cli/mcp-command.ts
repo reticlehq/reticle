@@ -103,7 +103,7 @@ export async function handleMcp(opts: {
   // swallows stderr, so wiring these to `log` meant a crash was handled and then unrecorded — the
   // failure a user reports as "it disconnected" left nothing behind to read.
   setProxyLogPort(port);
-  installProxyResilience(process, proxyLog);
+  const resilience = installProxyResilience(process, proxyLog);
   /**
    * Make sure a daemon is on the port, spawning one if not.
    *
@@ -187,7 +187,9 @@ export async function handleMcp(opts: {
       // crash. The proxy itself is unaffected — it has already installed its stdin reader and goes
       // on serving from cache, waking a daemon on the next request — which is exactly why this
       // must be logged as the expected condition it is rather than reported as a defect.
-      void startMcpProxy(port, ensure).catch((err: unknown) => {
+      void startMcpProxy(port, ensure, undefined, () => {
+        resilience.noteUsableSession();
+      }).catch((err: unknown) => {
         log('reticle_mcp_proxy_first_connect_failed', {
           port,
           error: err instanceof Error ? err.message : String(err),

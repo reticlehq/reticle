@@ -300,6 +300,19 @@ export function installDaemonResilience(proc: ProcessLike, log: LogFn, onFatal: 
   });
 }
 
+/** The handle the proxy keeps, so it can say when a session proved itself usable. */
+export interface ProxyResilience {
+  /**
+   * A stream reached an `endpoint` frame: there is a working session, so whatever disconnects came
+   * before it were reconnects rather than a runaway.
+   *
+   * The same signal that already earns a fresh RETRY budget in `mcp-proxy.ts`, and chosen there for
+   * the same reason: response headers are produced by a daemon that accepts SSE and drops it, and an
+   * `endpoint` frame is not.
+   */
+  noteUsableSession(): void;
+}
+
 /**
  * Process-level resilience for the MCP PROXY, whose rule is the opposite of the daemon's.
  *
@@ -318,13 +331,16 @@ export function installProxyResilience(
   log: LogFn,
   onCrash: (kind: CrashKind, cause: unknown) => void = reportCrash,
   onGone: () => void = () => process.exit(0),
-): void {
+): ProxyResilience {
   const expected: ExpectedEvents = {
     disconnected: 'reticle_mcp_proxy_client_disconnected',
     unreachable: 'reticle_mcp_proxy_daemon_unreachable',
   };
   // "Absorb the disconnect and keep serving" is right for ONE disconnect and catastrophic for a
-  // stream of them — see DISCONNECT_STORM.
+  // stream of them — see DISCONNECT_STORM. Counted since the last USABLE SESSION rather than since
+  // this process started: a lifetime tally reaches the threshold on a working week, because the
+  // classifier reads `ECONNRESET` as "the peer vanished" and on this leg the peer is the DAEMON,
+  // which restarts routinely and is the thing the proxy exists to survive.
   let disconnects = 0;
   let gone = false;
   const absorb = (value: unknown): boolean => {
@@ -342,6 +358,12 @@ export function installProxyResilience(
     }
     return true;
   };
+  const noteUsableSession = (): void => {
+    // Not after `gone`: the process is already leaving, and a late frame must not look like a
+    // reason to stay. Nothing brings the proxy back from `onGone` by design.
+    if (gone) return;
+    disconnects = 0;
+  };
   proc.on('unhandledRejection', (reason: unknown) => {
     if (absorb(reason)) return;
     log('reticle_mcp_proxy_unhandled_rejection', { reason: describe(reason) });
@@ -356,4 +378,5 @@ export function installProxyResilience(
     });
     onCrash(CrashKind.UNCAUGHT_EXCEPTION, err);
   });
+  return { noteUsableSession };
 }
