@@ -81,6 +81,19 @@ export interface SetupOutcome {
 }
 
 /** Everything the sequence needs from the world, so none of it is reached for directly. */
+/**
+ * The daemon's reason for "no session", in the two lengths its two readers need.
+ *
+ * Same fact, not two facts: `full` is the lead plus the differential behind it, so a reader given
+ * only one of them is never given something the other contradicts.
+ */
+export interface DaemonReason {
+  /** One line, printed to the person watching the install. */
+  readonly lead: string;
+  /** The whole differential, recorded for the agent reading `--json`. Defaults to the lead. */
+  readonly full?: string;
+}
+
 export interface SetupEffects {
   /** Start the dev server. Resolves once started; the caller owns stopping it. */
   readonly startDevServer: (command: string, cwd: string) => Promise<void>;
@@ -124,7 +137,7 @@ export interface SetupEffects {
    * Optional, and allowed to fail: setup must still report what it saw when the daemon cannot be
    * reached, which is itself one of the states this runs in.
    */
-  readonly daemonWhy?: () => Promise<string | undefined>;
+  readonly daemonWhy?: () => Promise<DaemonReason | undefined>;
   readonly now: () => number;
   readonly sleep: (ms: number) => Promise<void>;
   readonly note: (line: string) => void;
@@ -189,11 +202,11 @@ const stop = (
  * A daemon that cannot be reached is one of the states this runs in, so an error here is data, not
  * an exception: the page finding below still prints and the run still ends with its own verdict.
  */
-async function daemonWhy(fx: SetupEffects): Promise<string | undefined> {
+async function daemonWhy(fx: SetupEffects): Promise<DaemonReason | undefined> {
   if (undefined === fx.daemonWhy) return undefined;
   try {
     const why = await fx.daemonWhy();
-    return undefined === why || 0 === why.length ? undefined : why;
+    return undefined === why || 0 === why.lead.length ? undefined : why;
   } catch {
     return undefined;
   }
@@ -382,7 +395,21 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
       // refused, and that outranks anything inferred from an absence. Then the page, which is the
       // one thing the daemon cannot know, and worth one fetch.
       const why = await daemonWhy(fx);
-      if (undefined !== why) note(why);
+      if (undefined !== why) {
+        // Two readers, two lengths, one fetch.
+        //
+        // The person watching an install gets the LEAD — that is what trimming this diagnosis was
+        // for. The agent reads `notes` out of `--json`, and what it acts on is the differential:
+        // which ports were actually scanned (so an empty result is not proof), why a missing
+        // `.reticle.json` is expected in a monorepo, and the lease that opens a URL on a box with
+        // no browser at all.
+        //
+        // Printing only the lead put BOTH readers on the lead, which silently emptied the agent
+        // surface: `init --json` stopped mentioning the lease, and `break/break-matrix.mjs`
+        // (`no-browser-to-open`) went red for exactly that reason.
+        fx.note(why.lead);
+        notes.push(why.full ?? why.lead);
+      }
       note(describePage(readPage(await fx.probePage(url)), url));
     }
     return stop(input, SetupPhase.CONNECT, { url }, notes);

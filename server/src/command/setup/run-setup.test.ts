@@ -481,9 +481,9 @@ describe('a failed connect leads with what the daemon knows', () => {
     const fx = world({
       ...noSession,
       daemonWhy: () =>
-        Promise.resolve(
-          'no browser session connected, and the reason is not the app: this daemon REFUSED the last page that dialled it',
-        ),
+        Promise.resolve({
+          lead: 'no browser session connected, and the reason is not the app: this daemon REFUSED the last page that dialled it',
+        }),
       note: (line: string) => notes.push(line),
     });
     await runSetupPhases(INPUT, fx);
@@ -510,6 +510,40 @@ describe('a failed connect leads with what the daemon knows', () => {
     const fx = world({ ...noSession, note: (line: string) => notes.push(line) });
     await runSetupPhases(INPUT, fx);
     expect(notes.join('\n')).toContain('never dialled the bridge');
+  });
+
+  /*
+   * The agent surface must not be the human one.
+   *
+   * `init --json` is read by an agent, and what it acts on is the differential behind the lead --
+   * the ports actually scanned, and the lease that opens a URL on a machine with no browser. When
+   * the lead alone was both printed AND recorded, that differential vanished from `--json`
+   * entirely: `break/break-matrix.mjs` (`no-browser-to-open`) greps the run for `reticle_lease` and
+   * went red, because nothing in the output said it any more.
+   */
+  it('prints the lead to the person and records the full reason for the agent', async () => {
+    const notes: string[] = [];
+    const fx = world({
+      ...noSession,
+      daemonWhy: () =>
+        Promise.resolve({
+          lead: 'no browser session connected. Two things to weigh.',
+          full: 'no browser session connected. Two things to weigh. The scan covers a fixed set of ports and nothing else, so open it with reticle_lease {action:"acquire", url}.',
+        }),
+      note: (line: string) => notes.push(line),
+    });
+    const out = await runSetupPhases(INPUT, fx);
+    expect(notes.join('\n')).not.toContain('reticle_lease');
+    expect(out.notes.join('\n')).toContain('reticle_lease');
+  });
+
+  it('records the lead when that is all the daemon has', async () => {
+    const fx = world({
+      ...noSession,
+      daemonWhy: () => Promise.resolve({ lead: 'no browser session connected.' }),
+    });
+    const out = await runSetupPhases(INPUT, fx);
+    expect(out.notes.join('\n')).toContain('no browser session connected.');
   });
 
   it('a daemon that cannot be asked does not fail the run', async () => {

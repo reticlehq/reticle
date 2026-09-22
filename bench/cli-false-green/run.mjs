@@ -3,7 +3,7 @@
 //
 //   node bench/cli-false-green/run.mjs [--json]
 //
-// The checkpoint the v3.2.0 plan put after Phase 2, in the shape the web scorecard already uses:
+// A checkpoint on the CLI realm, in the shape the web scorecard already uses:
 // DETERMINISTIC, with no model in the loop. A fix-loop benchmark measures an agent and a checker
 // at once and cannot say which moved; this injects a known defect and asks each checker the one
 // question that matters.
