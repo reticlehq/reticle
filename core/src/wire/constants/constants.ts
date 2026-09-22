@@ -346,6 +346,16 @@ export const ReticleDir = {
   /** what changes were SUPPOSED to make true —.reticle/intent.json (git-checked, reviewed) */
   INTENT_FILE: 'intent.json',
   /**
+   * The sharded form of the same ledger —.reticle/intent/ (git-checked, for the same reason).
+   *
+   * Named here rather than inline at the store that writes it, because the partition guard over
+   * this object is what decides whether a name Reticle creates is committed or ignored. A directory
+   * spelled as a free string somewhere else is one the guard cannot see, so nobody ever makes that
+   * decision: `intent/` was written into users' repositories for that reason alone, neither
+   * classified nor ignored.
+   */
+  INTENT_SUBDIR: 'intent',
+  /**
    * what a drive types into a field, keyed by the field's label —.reticle/fill-values.json.
    *
    * Git-checked on purpose. A generated value is paid for once and then belongs to the project: the

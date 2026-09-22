@@ -20,6 +20,7 @@
  * is a separate decision somebody can take once they believe the migration.
  */
 import { parseIntentFile, type Intent } from '@reticlehq/core/artifacts';
+import { ReticleDir } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { withFileLock } from '@/memory/project/file-lock.js';
@@ -39,7 +40,6 @@ import {
   type IntentShard,
 } from './intent-shard.js';
 
-const INTENT_DIR = 'intent';
 const INDEX_FILE = 'index.json';
 const SHARD_SUFFIX = '.json';
 
@@ -67,7 +67,7 @@ export class IntentShardStore {
   }
 
   #dir(): string {
-    return `${reticleDirPaths(this.#root).root}/${INTENT_DIR}`;
+    return `${reticleDirPaths(this.#root).root}/${ReticleDir.INTENT_SUBDIR}`;
   }
 
   #indexPath(): string {

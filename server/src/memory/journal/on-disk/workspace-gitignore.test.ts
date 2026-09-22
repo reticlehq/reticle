@@ -127,6 +127,10 @@ describe('the partition of what .reticle holds', () => {
     ReticleDir.BASELINES_SUBDIR,
     ReticleDir.CAPSULES_SUBDIR,
     ReticleDir.INTENT_FILE,
+    // The sharded form of the same ledger, and durable for the same reason. It was written into
+    // users' repositories unclassified: its directory name was a free string at the store, so this
+    // partition could not see it and nobody was ever asked which half it belonged to.
+    ReticleDir.INTENT_SUBDIR,
     ReticleDir.CLOUD_LINK_FILE,
     // A hook is a decision the whole team shares, exactly like a package script: one that exists
     // only on the machine that wrote it is a rule nobody else is following. It names COMMANDS and
