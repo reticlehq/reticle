@@ -11,6 +11,8 @@ export { CliChannel } from './channels.js';
 export { NodeSupervisor, exitStatus } from './node-supervisor.js';
 export { nodeWorkspace } from './workspace.js';
 export { detectAnomalies } from './detect.js';
+export { renderReport } from './report.js';
+export type { DriveRecord } from './report.js';
 export type { WorkspacePort } from './workspace.js';
 export { ChangeKind, diffSnapshots, takeSnapshot, EXCLUDED_BY_DEFAULT } from './snapshot.js';
 export type { Change, FileFact, Snapshot, SnapshotOptions } from './snapshot.js';

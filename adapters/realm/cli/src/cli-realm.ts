@@ -426,10 +426,12 @@ export class CliRealm extends Realm {
                 // that can never fire would leave every window silently asserting that nothing was
                 // hidden, which an empty blindSpots array means as a positive claim.
                 kind: BlindSpotKind.EFFECT_ELSEWHERE,
+                // The roots are NOT repeated here. They are already on the subject's `locator`,
+                // and a blind spot that restates them turns every report into a wall of absolute
+                // temp paths a reader has to skip past to find what it says.
                 detail:
-                  `writes outside the declared roots (${workspace.roots.join(', ')}) are ` +
-                  'unobserved, as are files written and removed inside the window, which a ' +
-                  'before-and-after pair sees only the net effect of',
+                  'writes outside the watched roots are unobserved, as are files written and ' +
+                  'removed within the window — a before-and-after pair sees net effect only',
                 impeaching: false,
                 remedy: 'declare more roots, or narrow the claim to what is inside them',
               },
@@ -445,8 +447,8 @@ export class CliRealm extends Realm {
         {
           kind: BlindSpotKind.BOUNDARY_UNCROSSABLE,
           detail:
-            'a child process the tool spawned is not traced, so anything it did, or anything that ' +
-            'outlived the command, is invisible here',
+            'a child process the tool spawned is not traced, so anything it did, or anything ' +
+            'outliving the command, is invisible here',
           impeaching: false,
         },
         ...(invocation !== undefined && invocation.endedAt === undefined
