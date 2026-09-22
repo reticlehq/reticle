@@ -13,7 +13,8 @@ on:
   merge_group:
   # The full Windows install matrix, once a day, off the critical path.
   #
-  # A PR runs THREE Windows scaffolds, not ten (see `install_matrix` in the `changes` job). Ten
+  # A PR and a merge-queue entry run THREE Windows scaffolds, not ten (see `install_matrix` in the
+  # `changes` job). Ten
   # windows-latest runners requested at once is more than the pool hands out: measured on run
   # 35297084015, nine cells started immediately and the tenth waited 37 minutes for a machine, then
   # ran for 8 and ended the build. A third of that run's 56-minute wall clock was one cell queuing.
@@ -591,12 +592,29 @@ jobs:
       - id: install_matrix
         run: |
           ALL='vite-react vite-vue next-app-router next-pages-router monorepo-subdir astro sveltekit cra nuxt react-router'
-          WINDOWS_ON_A_PR='cra next-app-router vite-react'
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            WINDOWS="$WINDOWS_ON_A_PR"
-          else
-            WINDOWS="$ALL"
-          fi
+          WINDOWS_BEFORE_MERGE='cra next-app-router vite-react'
+          # A MERGE QUEUE entry gets the same short Windows list as the pull request, and for a
+          # stronger version of the same reason.
+          #
+          # `merge_group` is not `pull_request`, so it fell into the full-matrix branch and every
+          # entry asked for twenty install cells, ten of them windows-latest -- which the comment at
+          # the top of this file already records as more than the pool hands out, for ONE run. With
+          # `maximumEntriesToBuild` at five, that is a hundred install cells plus five each of e2e,
+          # multi-agent and bench, all wanting machines at once.
+          #
+          # Measured on 2026-09-22: nine jobs of the leading entry finished, the whole second wave
+          # sat queued, and after two hours with zero jobs running anywhere in the repository the
+          # queue's own one-hour check timeout expired. Entries left the queue CLEAN, with no failing
+          # check and no CI run -- #1018, #1019 and #1022 in one morning, which reads as flaky PRs
+          # and is a starved runner pool.
+          #
+          # Coverage is not reduced, it is rescheduled, exactly as it is for a pull request: the
+          # nightly schedule runs every scaffold on Windows, `workflow_dispatch` runs the full matrix
+          # on demand, and a queue entry is the same commit the PR run already graded.
+          case "${{ github.event_name }}" in
+            pull_request|merge_group) WINDOWS="$WINDOWS_BEFORE_MERGE" ;;
+            *) WINDOWS="$ALL" ;;
+          esac
           entries=''
           for s in $ALL; do entries="$entries{\"os\":\"ubuntu-latest\",\"scaffold\":\"$s\"},"; done
           for s in $WINDOWS; do entries="$entries{\"os\":\"windows-latest\",\"scaffold\":\"$s\"},"; done
