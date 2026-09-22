@@ -38,6 +38,16 @@ describe('the sentence each finding contributes', () => {
     expect(describePage(PageFinding.SDK_PRESENT, URL)).toContain('localhost guard');
   });
 
+  it('offers the IPv6 cause and does not claim to know the SDK returned early', () => {
+    const line = describePage(PageFinding.SDK_PRESENT, URL);
+    // A Windows install-gate cell produced this exact case with the page console reading "could not
+    // open a websocket ... 3 attempts, all failed" — the SDK dialled and the socket failed, so the
+    // old tail ("it loaded and returned early") asserted a code path that had not run.
+    expect(line, 'this check cannot see which code path ran').not.toContain('returned early');
+    expect(line, 'the cause a healthy-looking daemon hides').toContain('IPv6');
+    expect(line, 'and where to get it named').toContain('doctor');
+  });
+
   it('gives a different sentence for every finding', () => {
     const all = Object.values(PageFinding).map((f) => describePage(f, URL));
     expect(new Set(all).size).toBe(all.length);

@@ -378,3 +378,64 @@ describe('repo-wide settings invalidate the tasks they govern', () => {
     ).toContain(file);
   });
 });
+
+/**
+ * `build` is the task that RUNS the root scripts, and was the only one that did not name them.
+ *
+ * Ten packages' `build` scripts invoke `../scripts/*.mjs` — `alias-dist.mjs` in every one of them,
+ * plus `gen-schema`, `gen-desktop-contract`, `gen-source-constants`, `embed-heroicons` and
+ * `build-cjs`. Those scripts DECIDE WHAT LANDS IN `dist`. `alias-dist.mjs` is what rewrites `@/…`
+ * back to relative paths, so without it a published `dist` imports a package called `@/vocabulary`
+ * that does not exist.
+ *
+ * `build` declared no `inputs`, so none of that was in its cache key. Five other tasks in this file's
+ * sights already declare `$TURBO_ROOT$/scripts/**`; the one task whose output those scripts produce
+ * did not.
+ *
+ * The incident: on 2026-09-19 the merge queue ejected #932, a DOCS-ONLY pull request, with
+ * `failed_checks`. Its merge group failed `verify` on
+ * `Cannot find package '@/vocabulary' imported from open-verification/dist/spi/realm.js`, and the CI
+ * log shows `open-verification:build` was a `cache hit` — turbo replayed a `dist` built by an older
+ * `alias-dist.mjs` under a hash that claimed to be current. The same hash built correctly on a clean
+ * local tree, which is the signature of a poisoned entry rather than a broken source.
+ *
+ * That is worse than the reads this file already guards. A stale test cache replays a pass; a stale
+ * BUILD cache ships bytes. The same mechanism is what publishes a broken `dist` to npm, and it costs
+ * an unrelated contributor their merge with a diagnosis that points at their own PR.
+ */
+describe('the build cache is invalidated by the scripts that produce dist', () => {
+  /** Packages whose `build` script shells out to a root script, and the scripts each one runs. */
+  function buildsCallingRootScripts(): { pkg: string; scripts: string[] }[] {
+    const found: { pkg: string; scripts: string[] }[] = [];
+    for (const dir of packageDirectories()) {
+      const manifest = join(REPO, dir, 'package.json');
+      if (!existsSync(manifest)) continue;
+      const build = (
+        JSON.parse(readFileSync(manifest, 'utf8')) as { scripts?: Record<string, string> }
+      ).scripts?.build;
+      if (build === undefined) continue;
+      const scripts = [...new Set(build.match(/scripts\/[\w-]+\.mjs/g) ?? [])].sort();
+      if (scripts.length > 0) found.push({ pkg: dir, scripts });
+    }
+    return found;
+  }
+
+  it('finds the builds that run root scripts at all, so an empty scan cannot pass', () => {
+    // Without this, a rename of `scripts/` or a change in how builds invoke them turns the
+    // assertion below into a statement about nothing, and it would keep reporting success.
+    expect(buildsCallingRootScripts().length).toBeGreaterThan(5);
+  });
+
+  it('build declares $TURBO_ROOT$/scripts/** because those scripts decide what dist contains', () => {
+    const callers = buildsCallingRootScripts();
+    expect(
+      declaredInputs('build'),
+      `${String(callers.length)} packages run a root script to produce their dist ` +
+        `(${callers.map((c) => `${c.pkg}: ${c.scripts.join(', ')}`).join('; ')}), and ` +
+        `turbo.json's \`build\` task does not name them. A change to any of those scripts leaves ` +
+        `every cached dist valid, so CI replays bytes built by the old script — which is how a ` +
+        `docs-only PR was ejected from the merge queue for an unrewritten \`@/\` import it never ` +
+        `touched. Add "$TURBO_ROOT$/scripts/**" to the build task's inputs.`,
+    ).toContain('$TURBO_ROOT$/scripts/**');
+  });
+});

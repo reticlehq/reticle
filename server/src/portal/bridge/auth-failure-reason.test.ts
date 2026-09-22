@@ -19,7 +19,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { authFailureReason } from './auth-failure-reason.js';
+import { authFailureReason, isAuthRefusalReason } from './auth-failure-reason.js';
 
 describe('why the bridge refused', () => {
   it('says so when this daemon has only ever served another project', () => {
@@ -137,5 +137,17 @@ describe('a token that was presented and did not match', () => {
     // The cap is why this file exists. A reason over it throws, and the socket closes saying nothing.
     const reason = authFailureReason(new Set(['app-a', 'app-b']), 'app-a', 'a-token');
     expect(Buffer.byteLength(reason, 'utf8')).toBeLessThanOrEqual(123);
+  });
+
+  it('recognises every refusal this function records, including one that names another project', () => {
+    expect(isAuthRefusalReason(authFailureReason(new Set(['app-a']), 'app-c', 'a-token'))).toBe(
+      true,
+    );
+    expect(isAuthRefusalReason(authFailureReason(new Set(['app-a']), 'app-a', 'a-token'))).toBe(
+      true,
+    );
+    expect(isAuthRefusalReason(authFailureReason(new Set(['app-a']), 'app-a', ''))).toBe(true);
+    expect(isAuthRefusalReason('the tab was closed')).toBe(false);
+    expect(isAuthRefusalReason(undefined)).toBe(false);
   });
 });

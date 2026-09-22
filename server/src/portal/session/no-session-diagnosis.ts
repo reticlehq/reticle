@@ -539,8 +539,8 @@ export function explainNoSession(facts: NoSessionFacts): {
       NoSessionReason.TAB_GONE,
       'no browser session connected, but one WAS connected to this daemon earlier, so the wiring ' +
         `is correct. ${tabGoneWhat(facts.lastKnownUrl)} Ask the human to reopen ` +
-        `the app (or run ${OPEN_CMD_BARE}), or reload the tab. ${RETRY}`,
-      `${alreadyListeningClause(listening).trim()} ${leaseAdvice(SELF_SERVE, facts)}`.trim(),
+        `the app (or run ${OPEN_CMD_BARE}), or reload the tab. ${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`,
+      alreadyListeningClause(listening).trim(),
     );
   }
 
@@ -556,8 +556,8 @@ export function explainNoSession(facts: NoSessionFacts): {
         : unattributedListeners(listening);
     return reason(
       NoSessionReason.APP_NOT_REOPENED,
-      `${RESTARTED_LEAD} ${OPEN_THE_APP} ${RETRY}`,
-      `${DO_NOT_REINSTALL} ${listeners} ${rankedCauses(facts)} ${leaseAdvice(SELF_SERVE, facts)}`,
+      `${RESTARTED_LEAD} ${OPEN_THE_APP} ${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`,
+      `${DO_NOT_REINSTALL} ${listeners} ${rankedCauses(facts)}`,
     );
   }
 
@@ -568,10 +568,10 @@ export function explainNoSession(facts: NoSessionFacts): {
     return reason(
       NoSessionReason.CONFIG_ELSEWHERE,
       'no browser session connected, and this daemon has never seen one. ' +
-        `${configsElsewhereClause(facts)} ${OPEN_THE_APP} ${RETRY}`,
+        `${configsElsewhereClause(facts)} ${OPEN_THE_APP} ${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`,
       'This daemon was started somewhere that is not the project, which is the normal outcome when ' +
         `an editor launches it from your home directory. ${unattributedListeners(listening)} ` +
-        `${rankedCauses(facts)} ${leaseAdvice(SELF_SERVE, facts)}`,
+        `${rankedCauses(facts)}`,
     );
   }
 
@@ -648,8 +648,8 @@ export function explainNoSession(facts: NoSessionFacts): {
     NoSessionReason.SDK_NOT_REACHING_DAEMON,
     `${stallClause(facts)}no browser session connected, and this daemon has never seen one for this project, which is ` +
       `wired for Reticle. ${OPEN_THE_APP} If the page IS open and still does not appear, the SDK ` +
-      `is not reaching this daemon (on ${String(port)}). ${RETRY}`,
-    `${unattributedListeners(listening)} ${rankedCauses(facts)} ${leaseAdvice(SELF_SERVE, facts)}`,
+      `is not reaching this daemon (on ${String(port)}). ${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`,
+    `${unattributedListeners(listening)} ${rankedCauses(facts)}`,
   );
 }
 

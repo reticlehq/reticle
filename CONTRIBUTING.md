@@ -207,9 +207,16 @@ From there, point your MCP-capable agent at Reticle and ask it to verify the app
    That symlinks a `prepare-commit-msg` hook which adds the trailer when it is missing (and leaves `git commit -s` alone), plus the pre-commit quality gate.
 
 4. **Use [Conventional Commits](https://www.conventionalcommits.org/)** for commit messages, e.g. `feat(server): add reticle_viewport tool`, `fix(browser): restore patched fetch on teardown`, `docs: clarify install steps`. Common scopes mirror the packages: `protocol`, `browser`, `server`, `react`, plus `docs` / `chore`.
-5. **Keep the gates green:** `pnpm lint && pnpm typecheck && pnpm test:unit`.
-6. **Update docs and `CHANGELOG.md`** when the change is user-facing. New entries go under the `[Unreleased]` section, following [Keep a Changelog](https://keepachangelog.com/).
+5. **Keep the gates green:** run **`pnpm verify`** — one command, not four. It is `format:check && lint && typecheck && test:unit`, and the `&&` is what makes a failure stop the run: pasted as separate lines, only the last one decides the exit code, so a red `lint` in the middle reports success. `format:check` is first because CI enforces it and `pnpm lint` does not run it; `pnpm format` writes the fixes.
+6. **Update docs, and add a changelog entry as a new file in [`.changes/`](.changes/)** when the change is user-facing — **not** by editing `CHANGELOG.md`. Name it `<issue>-<slug>.md`; the format and rules are in [`.changes/README.md`](.changes/README.md), and `pnpm changelog:assemble` folds every entry into `CHANGELOG.md` at release time.
+
+   This instruction used to say to edit `CHANGELOG.md` directly, which is why `.changes/` exists and also why it kept not being used. Every PR appends to the same `[Unreleased]` section, so two open PRs conflict on it as a matter of course — and half of the pull requests open when this line was corrected were editing that file. Two PRs adding two files never conflict.
+
 7. **Open a PR against `main`** and **link the issue** it resolves (e.g. `Closes #123`). Fill out the PR template checklist.
+
+8. **Update your branch with `rebase`, never by merging `main` into it.** `main` moves; when you need it, run `git rebase origin/main` (or `git rebase --signoff origin/main`, which fixes sign-off at the same time) and `git push --force-with-lease`.
+
+   This is not a style preference. `main` merges through a **merge queue**, and the queue has to replay your branch onto whatever is at the head of `main` when your turn comes. A branch carrying merge commits is not rebaseable, so the queue cannot take it, and the pull request reports itself as blocked with **every check green and no reason given** — there is nothing to fix, no failing job to read, and no message saying what is wrong. One PR sat in exactly that state for sixteen days: approved, fully green, and unmergeable, with three `Merge branch 'main'` commits on it and nobody able to say why.
 
 For anything non-trivial, **open an issue first** so we can agree on the approach before you invest time in a PR.
 

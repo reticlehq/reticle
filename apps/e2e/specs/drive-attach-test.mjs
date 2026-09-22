@@ -64,7 +64,11 @@ chk('  and names the session it opened', typeof sessionId === 'string', sessionI
 // The point of attaching rather than binding: the session belongs to the DAEMON, so the tools the
 // agent already has open on that daemon can address it. A drive that opened a browser in its own
 // process would leave /status empty here.
-const status = cli('status', '--port', String(PORT));
+// `--json`, because the question here is structural: WHICH daemon holds the session. `status`
+// answers a person in prose by default and names the session's URL rather than its id, which is the
+// right answer for a reader and the wrong one for this assertion. The id is a machine identifier and
+// lives in the machine form.
+const status = cli('status', '--json', '--port', String(PORT));
 chk(
   'the session lives in the running daemon, where the agent’s tools already are',
   typeof sessionId === 'string' && said(status).includes(sessionId),
