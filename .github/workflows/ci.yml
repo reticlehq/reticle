@@ -76,25 +76,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # No build: prettier reads the tree, which is the entire reason this can run ahead of `verify`.
       - run: pnpm format:check
-      # A changelog entry belongs in `.changes/`, one file per entry, because every PR appends to the
-      # same `[Unreleased]` section and two PRs that do cannot both merge. `.changes/` was added for
-      # exactly that reason after a count of the open PRs editing `CHANGELOG.md`; the PR template said
-      # so and CONTRIBUTING.md still said the opposite, so it kept happening. When this landed, 20 of
-      # the 55 open pull requests were editing the file, and ten of those were mutually conflicting
-      # with each other on it alone. Docs are what tells a contributor; this is what tells a branch.
+      # The changelog rule lives in the `changelog-policy` job, NOT here.
       #
-      # Release branches DO assemble the file, so they are exempt by branch name.
-      - name: A changelog entry is a new file in .changes/, not an edit to CHANGELOG.md
-        if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'release/')
-        run: |
-          if git diff --name-only "origin/${{ github.base_ref }}"...HEAD | grep -qx 'CHANGELOG.md'; then
-            echo "::error file=CHANGELOG.md::This PR edits CHANGELOG.md. Add your own new file under .changes/ instead"
-            echo "CHANGELOG.md is assembled from .changes/ at release time (see .changes/README.md)."
-            echo "Move your entry to its own file there and drop the CHANGELOG.md change:"
-            echo "  git checkout origin/${{ github.base_ref }} -- CHANGELOG.md"
-            exit 1
-          fi
-          echo "no CHANGELOG.md edit — entries belong in .changes/"
+      # It was in both, with two different exemption lists: this copy exempted `release/` and that
+      # job exempts `release/` and `v*`. The comment here said "release branches DO assemble the
+      # file, so they are exempt by branch name" while the condition did not cover the branch names
+      # this repository actually cuts releases on, so the release PR for v3.2.0 was refused by a
+      # guard whose own stated intent exempted it. One rule enforced in two places is one rule that
+      # can disagree with itself; `changelog-policy` is in `gate`'s needs, so nothing is lost.
 
   verify:
     runs-on: ubuntu-latest
