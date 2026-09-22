@@ -114,11 +114,26 @@ const bug = (): HookPayload => ({
   tool: 'reticle_act_and_wait',
 });
 
-/** Wait for a file the hook writes, so the test observes the CHILD rather than a timer. */
+/**
+ * Wait for a file the hook writes, so the test observes the CHILD rather than a timer.
+ *
+ * Waits for CONTENT, not for the path. A shell redirect creates the file and then writes to it, so
+ * existence is true for a window in which the file is still empty -- and this returned on
+ * existence, handing the caller `""` to `JSON.parse`. The failure reads `Unexpected end of JSON
+ * input`, says nothing about a race, and needs the child to lose it: so it passed locally and
+ * ejected unrelated pull requests from the merge queue under CI load instead.
+ *
+ * Non-empty is the right condition rather than parseable: this helper also serves a caller that
+ * does not expect JSON, and a payload small enough to land in one write is complete once it is
+ * there at all.
+ */
 async function waitForFile(path: string, budgetMs = 10_000): Promise<string | undefined> {
   const deadline = Date.now() + budgetMs;
   while (Date.now() < deadline) {
-    if (existsSync(path)) return readFileSync(path, 'utf8');
+    if (existsSync(path)) {
+      const seen = readFileSync(path, 'utf8');
+      if ('' !== seen.trim()) return seen;
+    }
     await new Promise((r) => setTimeout(r, 25));
   }
   return undefined;

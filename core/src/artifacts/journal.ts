@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { TRANSPORT_LIMITS } from '@/wire/constants/constants.js';
+import { TRANSPORT_LIMITS, TruncationChannel } from '@/wire/constants/constants.js';
 import { Verified } from '@/verdict/verified-constants.js';
 
 /**
@@ -40,6 +40,45 @@ export const JournalActionSchema = z.object({
   at: z.number().int().min(0),
 });
 export type JournalAction = z.infer<typeof JournalActionSchema>;
+
+/**
+ * The report written beside `events.jsonl` when its byte ceiling refuses a batch.
+ *
+ * The event ledger is bounded on disk, and a bound means a ledger can be INCOMPLETE. The refusal is
+ * declared twice on purpose, because neither declaration can do the other's job:
+ *
+ *  - IN-BAND, as one `TRUNCATED` record on the event stream, so every existing reader sees it with
+ *    no new field and no new allowlist.
+ *  - OUT-OF-BAND, as this file, because the in-band record carries a `t` and every journal-backed
+ *    query filters on `t`. A window opened after the ceiling was hit contains no marker and no
+ *    events, which is exactly a complete window in which nothing happened.
+ *
+ * Every field but `v` and `channel` is OPTIONAL, and that is a rule rather than a convenience: the
+ * file's PRESENCE is the durable fact ("this ledger was closed"), while its contents are a detail
+ * that a truncated or corrupted write can lose. A reader that cannot parse the details reports them
+ * absent. It must never fill them in from what is true NOW — the current ceiling is not necessarily
+ * the ceiling that closed the ledger — and it must never read an unparseable file as an open one.
+ */
+export const JournalWriteLossSchema = z.object({
+  v: z.literal(JOURNAL_FILE_VERSION),
+  /** Which channel lost data — the same vocabulary the in-band `TRUNCATED` record names. */
+  channel: z.literal(TruncationChannel.JOURNAL),
+  /** The ceiling that refused the write, in bytes. */
+  capBytes: z.number().int().min(1).optional(),
+  /** Bytes already in the ledger when it was closed. */
+  bytesOnDisk: z.number().int().min(0).optional(),
+  /**
+   * Events in the ONE batch that was refused — never a running total of everything dropped after.
+   *
+   * An append-only file cannot revise a line it has already written, and re-emitting a fresh count
+   * per refusal would recreate the growth this bound exists to stop. The load-bearing fact is that
+   * the ledger closed; the count says how much was in the batch that closed it, and nothing more.
+   */
+  droppedInBatch: z.number().int().min(0).optional(),
+  /** Elapsed-ms stamp of the last record in the first refused batch; not a loss-window boundary. */
+  at: z.number().optional(),
+});
+export type JournalWriteLoss = z.infer<typeof JournalWriteLossSchema>;
 
 /**
  * The bounded verdict summary a verification tool writes into a journal action's `effect`.

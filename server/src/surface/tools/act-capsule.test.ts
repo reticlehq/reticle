@@ -52,6 +52,37 @@ function depsWritingTo(): { deps: ToolDeps; written: string[] } {
   return { deps, written };
 }
 
+/**
+ * Deps whose `sessions.resolve` refuses however it is called, with no resolver wired.
+ *
+ * `resolve` throws for three reasons — nothing connected, an id that names no session, several
+ * connected and none named — and the caller's own arguments are what tell them apart.
+ */
+function depsFailingToResolve(): { deps: ToolDeps; written: string[] } {
+  const written: string[] = [];
+  const deps = {
+    fs: {
+      mkdir: () => Promise.resolve(),
+      writeFile: (path: string) => {
+        written.push(path);
+        return Promise.resolve();
+      },
+      readFile: () => Promise.reject(new Error('missing')),
+      exists: () => Promise.resolve(false),
+      readdir: () => Promise.resolve([]),
+      rm: () => Promise.resolve(),
+    },
+    reticleRoot: DAEMON_ROOT,
+    now: () => 1_000,
+    sessions: {
+      resolve: () => {
+        throw new Error('no session');
+      },
+    },
+  } as unknown as ToolDeps;
+  return { deps, written };
+}
+
 const failing = {
   verdict: { pass: false, failureReason: 'expected no error entries but found 1' },
   capsule: { summary: {}, firstDivergence: null, blastRadius: [] } as never,
@@ -109,33 +140,32 @@ describe('where a failed-assert capsule is filed', () => {
   });
 
   it('falls back to the daemon root when no project can be named', async () => {
-    const written: string[] = [];
-    const deps = {
-      fs: {
-        mkdir: () => Promise.resolve(),
-        writeFile: (path: string) => {
-          written.push(path);
-          return Promise.resolve();
-        },
-        readFile: () => Promise.reject(new Error('missing')),
-        exists: () => Promise.resolve(false),
-        readdir: () => Promise.resolve([]),
-        rm: () => Promise.resolve(),
-      },
-      reticleRoot: DAEMON_ROOT,
-      now: () => 1_000,
-      // `sessions.resolve` throws when nothing is connected, when the id names no session, and when
-      // several are connected and none was named. All three mean the same thing: we cannot tell.
-      sessions: {
-        resolve: () => {
-          throw new Error('no session');
-        },
-      },
-    } as unknown as ToolDeps;
+    const { deps, written } = depsFailingToResolve();
 
-    await saveFailedAssertCapsule({ deps, ...failing });
+    // No sessionId: nothing was named, so nothing was mis-addressed and the daemon root is the
+    // honest fallback. The id-bearing half of this case is the test below, and it answers
+    // differently — which is why the two are stated apart rather than sharing `failing.args`.
+    await saveFailedAssertCapsule({ deps, ...failing, args: { ref: 'e44', action: 'click' } });
 
+    // Non-vacuity first: `every` over an empty list is true, so without this the assertion below
+    // would keep passing for a capsule that was never filed anywhere.
+    expect(written.length).toBeGreaterThan(0);
     expect(written.every((p) => p.startsWith(DAEMON_ROOT))).toBe(true);
+  });
+
+  /**
+   * A named session that resolves to nothing files NO capsule, rather than one in the daemon's own
+   * checkout (#994) — and rather than throwing, which would turn a red assertion into a tool error
+   * and lose the verdict that found the bug. Both halves are asserted, because either one alone
+   * would pass for a broken version of the other.
+   */
+  it('files nothing, and fails nothing, when the named session resolves to nothing', async () => {
+    const { deps, written } = depsFailingToResolve();
+
+    const id = await saveFailedAssertCapsule({ deps, ...failing });
+
+    expect(id).toBeUndefined();
+    expect(written).toEqual([]);
   });
 
   it('writes nothing for a passing verdict', async () => {

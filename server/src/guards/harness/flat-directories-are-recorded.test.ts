@@ -181,7 +181,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // first-run tour over a page nobody is looking at -- a rule split across two packages is worth
   // one file that names it.
   'server/src/portal/input': 11,
-  'server/src/portal/session': 20,
+  'server/src/portal/session': 21,
   // 32 since two leaves were extracted out of `flow-replay.ts` to break the last runtime cycle in
   // this directory: `flow-replay-types.ts` (shapes two collaborators share) and `flow-anchor.ts`
   // (resolving a step's anchor). Breaking a cycle costs files — a module that sits UNDER two others

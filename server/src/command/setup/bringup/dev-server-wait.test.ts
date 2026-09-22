@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   announcedUrl,
   judgeWait,
+  portBusyMessage,
   QUIET_MEANS_HUNG_MS,
   urlToWatch,
   WAIT_CEILING_MS,
@@ -73,6 +74,24 @@ describe('which url to watch', () => {
 
   it('has no url when the tool said nothing and nothing was bound', () => {
     expect(urlToWatch('starting...', [])).toBeUndefined();
+  });
+});
+
+describe('a taken port is named, not reported as a silent exit (#802)', () => {
+  it('reads CRA\'s "already running on port" prompt', () => {
+    expect(
+      portBusyMessage(
+        'Something is already running on port 3000.\nWould you like to run the app on another port instead?',
+      ),
+    ).toMatch(/port 3000 is already in use/);
+  });
+
+  it('reads a Vite in-use line', () => {
+    expect(portBusyMessage('Port 5173 is in use, trying another one...')).toMatch(/port 5173/);
+  });
+
+  it('stays quiet when the output does not name a busy port', () => {
+    expect(portBusyMessage('Compiled successfully.')).toBeUndefined();
   });
 });
 
