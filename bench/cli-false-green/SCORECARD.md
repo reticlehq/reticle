@@ -1,6 +1,6 @@
 # CLI false-green scorecard — does a sealed verdict beat a disciplined agent?
 
-> The checkpoint the v3.2.0 plan put after Phase 2, and it answers **against the adapter**. Read this before building anything else on top of `@reticlehq/cli-realm`.
+> A checkpoint on the CLI realm, and it answers **against the adapter**. Read this before building anything else on top of `@reticlehq/cli-realm`.
 
 Deterministic, with no model in the loop — the same shape as the web scorecard next door, and for the same reason: a fix-loop benchmark moves the agent and the checker at once and cannot say which one did the work. Eight defects and two controls, each injected into a tool that is otherwise correct, each exiting 0 and printing something confident.
 

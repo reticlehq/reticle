@@ -89,15 +89,26 @@ describe('what a snapshot notices', () => {
    * changes no content hash at all. A verifier that reported "unchanged" over a `chmod +x` would
    * be silent about the entire class of change that installers and build steps make.
    */
+  /*
+   * Read-only rather than executable, because the executable bit does not exist on Windows.
+   *
+   * This set 0o755 and asserted a change. Node's `chmod` on Windows honours ONE bit -- read-only --
+   * and silently ignores the rest, so the mode never moved, the snapshot correctly reported nothing
+   * changed, and the test failed on a platform where the product was right. Toggling read-only is a
+   * real mode change on both, so one value covers both rather than skipping Windows.
+   *
+   * Restored before the delete: Windows refuses to unlink a read-only file.
+   */
   it('sees a mode change, which leaves the content identical', () => {
     const root = scratch();
     const path = join(root, 'script.sh');
     writeFileSync(path, '#!/bin/sh\n');
     const before = takeSnapshot([root]);
-    chmodSync(path, 0o755);
+    chmodSync(path, 0o444);
     const changes = diffSnapshots(before, takeSnapshot([root]));
     expect(changes).toHaveLength(1);
     expect(changes[0]?.kind).toBe(ChangeKind.MODE_CHANGED);
+    chmodSync(path, 0o644);
     rmSync(root, { recursive: true });
   });
 });

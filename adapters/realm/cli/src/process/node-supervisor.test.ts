@@ -50,12 +50,28 @@ describe('running a real process', () => {
    * have to file a kernel decision on the channel that carries the tool's own self-report, and a
    * crash would become indistinguishable from a tool choosing to fail.
    */
+  /*
+   * Windows has no signals, and pretending otherwise would be the lie this file exists to prevent.
+   *
+   * `process.kill(pid, 'SIGKILL')` there is TerminateProcess: the OS reports an exit CODE and no
+   * signal, so `wasSignalled` is false. That is not a defect in the supervisor -- it reports what
+   * the platform tells it -- it is a real limit on what the CLI realm can know on Windows, and a
+   * killed subject is indistinguishable from one that chose to exit.
+   *
+   * Asserted per-platform rather than skipped, so the limit is pinned: anyone who later makes
+   * Windows claim `wasSignalled: true` has to delete a test that says why it must not.
+   */
   it('reports a kill as imposed from outside, with no exit code to mistake it for one', async () => {
     const run = await supervisor().run(
       'hang',
       ['-e', 'process.kill(process.pid, "SIGKILL")'],
       10_000,
     );
+    if ('win32' === process.platform) {
+      expect(run.exit?.wasSignalled).toBe(false);
+      expect(run.exit?.signal).toBeUndefined();
+      return;
+    }
     expect(run.exit?.wasSignalled).toBe(true);
     expect(run.exit?.signal).toBe('SIGKILL');
     expect(run.exit?.code).toBeUndefined();
@@ -123,7 +139,14 @@ describe('an effect that lands after the process returns', () => {
       workspaceRoot: root,
       tool: { id: 'node', version: process.version, workspace: 'ws' },
       now: () => Date.now(),
-      settleMs: 400,
+      /*
+       * Generous on purpose: this must bound the SLOWEST link, which is spawning a second `node`,
+       * not the 150ms timer the child sets. At 400ms it was a race against interpreter start-up
+       * and lost on Windows CI -- a statement about the machine, which is the one thing a test
+       * must never assert. The invariant is that the settle pass waits at all; the sibling test
+       * below is what pins that a run with no settle stays fast.
+       */
+      settleMs: 3_000,
     });
     await s.run(
       'fork',
