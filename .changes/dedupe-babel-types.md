@@ -1,0 +1,3 @@
+### Fixed
+
+- **The source-stamping plugin stopped compiling when two copies of `@babel/types` were installed** (`@reticlehq/babel-plugin`). The plugin takes its type helpers from `@babel/core`'s re-export while the JSX node it mutates is typed by whichever copy the traversal resolved. With two versions in the tree those are different declarations of the same shape, and the compiler is right to refuse: the error names one property of one node type and says nothing about there being two packages. Resolution is pinned to the version `@babel/core` itself carries, so both halves speak about the same type.
