@@ -234,6 +234,12 @@ importers:
         specifier: ^5.32.5
         version: 5.32.5
 
+  adapters/realm/cli:
+    dependencies:
+      open-verification:
+        specifier: workspace:*
+        version: link:../../../open-verification
+
   adapters/realm/electron:
     dependencies:
       '@reticlehq/core':
