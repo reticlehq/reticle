@@ -140,9 +140,26 @@ jobs:
           #
           # So: 5,400,000, which is ~210KB of room over the measured 5,190,356. The docs are still
           # ~1MB of this package and are the first place to look when this is next hit.
+          #
+          # RAISED to 5,750,000 on 2026-09-23, for v3.2.0, and the docs were NOT what moved. The
+          # branch measured 5,514,235 against main's 5,184,640, and the difference was measured by
+          # packing both rather than guessed at:
+          #
+          #     code  3,160K -> 3,386K   (+226K)
+          #     types 1,106K -> 1,195K   (+89K)
+          #     docs    797K ->   804K   (+7K)
+          #
+          # That is 315KB of compiled code and the type declarations for it -- journal bounds,
+          # intent sharding, the realm registry, the harness-offer read, ProjectId branding and the
+          # status surface, across 188 changed files. The rule above is that the reason must be in
+          # the diff, and here it is, in the half of the package that is the product. Source maps
+          # and declaration maps already do not ship, so the cheap win was taken before this.
+          #
+          # ~235KB of room over the measurement, matching the shape of the previous raise rather
+          # than clearing today's number by a hair. The docs remain the first place to look.
           server_bytes=$(cd server && npm pack --dry-run --json 2>/dev/null | sed -n '/^\[/,$p' | node -e "process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d)[0].unpackedSize))")
           echo "server unpacked: $server_bytes bytes"
-          if [ "$server_bytes" -gt 5400000 ]; then
-            echo "::error::@reticlehq/server unpacked size $server_bytes exceeds the 5400KB budget"
+          if [ "$server_bytes" -gt 5750000 ]; then
+            echo "::error::@reticlehq/server unpacked size $server_bytes exceeds the 5750KB budget"
             exit 1
           fi
