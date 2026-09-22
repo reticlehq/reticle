@@ -227,7 +227,14 @@ export async function runSetupCommand(
     listSessions: () => listSessions(input.bridgePort),
     // `summarizeStatus` already narrows this payload for `reticle status`; reusing it here keeps one
     // reader of the wire shape rather than two that can disagree about which key carries the reason.
-    daemonWhy: async () => summarizeStatus(await fetchStatus(input.bridgePort)).why,
+    // The LEAD, not the whole diagnosis: this line is printed to a person watching an install fail.
+    // The differential behind it is still on /status as `why`, for the agent that needs it. A daemon
+    // too old to report the short one falls back to the long one, because saying the right thing at
+    // length beats saying nothing.
+    daemonWhy: async () => {
+      const status = summarizeStatus(await fetchStatus(input.bridgePort));
+      return status.whyLead ?? status.why;
+    },
     now: () => Date.now(),
     sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
     note: print,
