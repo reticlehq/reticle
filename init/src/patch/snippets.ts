@@ -134,11 +134,13 @@ pointers, not the app.`;
   import { reticle } from '@reticlehq/vite-plugin';
 
   export default defineConfig({
-    plugins: [${frameworkPluginExample(uiLibrary)}, ${call}],
+    plugins: [${call}, ${frameworkPluginExample(uiLibrary)}],
   });
 
-Keep \`reticle()\` LAST so it sees the output of your other plugins. It only applies during \`vite\`
-(dev) — it is dropped from \`vite build\`.${note}`;
+The position in the array does not matter: the plugin declares \`enforce: 'pre'\`, so Vite runs it
+before every normal plugin wherever you put it. Shown first only because that is where \`init\`
+writes it when it patches the config for you. It applies during \`vite\` (dev) only — it is dropped
+from \`vite build\`.${note}`;
 }
 
 /**
