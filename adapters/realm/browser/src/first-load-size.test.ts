@@ -152,7 +152,18 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * `@reticlehq/core` and wants deciding rather than doing under a size guard — but it is the
  * reason this ceiling keeps climbing, and every raise borrows against it.
  */
-const MAX_FIRST_LOAD_BYTES = 239_100;
+/*
+ * 239_100 -> 240_100, for reading `.size` on a Set or a Map through a state path. 94 B measured.
+ *
+ * Worth the bytes because the old answer was not "cannot read that" -- it was a miss that also
+ * reported `totalKeys: 0`, which is a false claim about the app rather than an honest refusal. A
+ * store holding a populated Set answered as though it held nothing, and an assertion written
+ * against that answer would have been graded on it.
+ *
+ * Raised by 1,000 rather than to the measurement, per the note above: an ordinary change should
+ * not fail on rounding. The structural refund named above is still unspent.
+ */
+const MAX_FIRST_LOAD_BYTES = 240_100;
 /*
  * Raised a fifth time, 233_300 -> 233_400, for a route to be assertable in a SAVED flow. 57 B.
  *
