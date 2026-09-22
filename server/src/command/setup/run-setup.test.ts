@@ -457,3 +457,70 @@ describe('opening the browser at the moment the app can be driven', () => {
     expect(outcome.reachedPhase).toBe(SetupPhase.CONNECT);
   });
 });
+
+/**
+ * The daemon's account of why nothing connected, which setup had and did not print.
+ *
+ * `page-probe.ts` says in its own opening paragraph that the daemon's diagnosis "is the one to lead
+ * with" and that the page finding "adds only the page-side fact". Only the second half was ever
+ * wired: on a failed connect, setup printed the page sentence alone.
+ *
+ * That sentence is unconditional on SDK_PRESENT -- "never dialled the bridge", then three candidate
+ * causes. Driven on a machine where a daemon belonging to ANOTHER project held the bridge port, it
+ * was the opposite of the truth: the SDK dialled, presented its pairing token and was REFUSED, and
+ * the daemon had logged `authentication_failed` with both project ids a second earlier. All three
+ * causes it offers are wrong there, and each one sends the reader to inspect something that is fine.
+ */
+describe('a failed connect leads with what the daemon knows', () => {
+  const noSession = {
+    listSessions: (): Promise<CandidateSession[]> => Promise.resolve([]),
+  };
+
+  it("prints the daemon's reason before the page finding", async () => {
+    const notes: string[] = [];
+    const fx = world({
+      ...noSession,
+      daemonWhy: () =>
+        Promise.resolve(
+          'no browser session connected, and the reason is not the app: this daemon REFUSED the last page that dialled it',
+        ),
+      note: (line: string) => notes.push(line),
+    });
+    await runSetupPhases(INPUT, fx);
+    const whyAt = notes.findIndex((n) => n.includes('REFUSED the last page'));
+    const pageAt = notes.findIndex((n) => n.includes('never dialled the bridge'));
+    expect(whyAt).toBeGreaterThanOrEqual(0);
+    expect(pageAt).toBeGreaterThanOrEqual(0);
+    expect(whyAt).toBeLessThan(pageAt);
+  });
+
+  it('still prints the page finding when the daemon has nothing to say', async () => {
+    const notes: string[] = [];
+    const fx = world({
+      ...noSession,
+      daemonWhy: () => Promise.resolve(undefined),
+      note: (line: string) => notes.push(line),
+    });
+    await runSetupPhases(INPUT, fx);
+    expect(notes.join('\n')).toContain('never dialled the bridge');
+  });
+
+  it('is unchanged when nothing supplies a daemon reason at all', async () => {
+    const notes: string[] = [];
+    const fx = world({ ...noSession, note: (line: string) => notes.push(line) });
+    await runSetupPhases(INPUT, fx);
+    expect(notes.join('\n')).toContain('never dialled the bridge');
+  });
+
+  it('a daemon that cannot be asked does not fail the run', async () => {
+    const notes: string[] = [];
+    const fx = world({
+      ...noSession,
+      daemonWhy: () => Promise.reject(new Error('connection refused')),
+      note: (line: string) => notes.push(line),
+    });
+    const out = await runSetupPhases(INPUT, fx);
+    expect(out.ok).toBe(false);
+    expect(notes.join('\n')).toContain('never dialled the bridge');
+  });
+});

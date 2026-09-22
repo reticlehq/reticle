@@ -23,6 +23,8 @@ import { reticleStateHome } from '@/command/daemon/daemon.js';
 import { readDevServers } from '@/command/daemon/dev-servers.js';
 import { urlOfExistingApp } from './probe/existing-app.js';
 import { listSessions, OwnedDevServer, probePage } from './node-effects.js';
+import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
+import { summarizeStatus } from '@/command/cli/launch/cli-launch.js';
 import {
   runSetupPhases,
   type SetupEffects,
@@ -223,6 +225,9 @@ export async function runSetupCommand(
       }
     },
     listSessions: () => listSessions(input.bridgePort),
+    // `summarizeStatus` already narrows this payload for `reticle status`; reusing it here keeps one
+    // reader of the wire shape rather than two that can disagree about which key carries the reason.
+    daemonWhy: async () => summarizeStatus(await fetchStatus(input.bridgePort)).why,
     now: () => Date.now(),
     sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
     note: print,

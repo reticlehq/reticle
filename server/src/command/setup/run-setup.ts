@@ -112,6 +112,19 @@ export interface SetupEffects {
    */
   readonly openBrowser: (url: string) => Promise<void>;
   readonly listSessions: () => Promise<CandidateSession[]>;
+  /**
+   * The daemon's own account of why nothing connected, if it can be asked.
+   *
+   * The daemon is the only party that can see a hello it REFUSED, and a refusal is the one piece of
+   * positive evidence in the whole failure -- only an SDK dials the bridge, so a turned-away page
+   * proves the app is running, instrumented and pointed here. `page-probe.ts` has said since it was
+   * written that this sentence is the one to lead with and that the page finding merely adds the
+   * page-side fact; only the second half was wired.
+   *
+   * Optional, and allowed to fail: setup must still report what it saw when the daemon cannot be
+   * reached, which is itself one of the states this runs in.
+   */
+  readonly daemonWhy?: () => Promise<string | undefined>;
   readonly now: () => number;
   readonly sleep: (ms: number) => Promise<void>;
   readonly note: (line: string) => void;
@@ -170,6 +183,22 @@ const stop = (
  * exception loses the four things it needs — how far this got, the url, the session, and what to do
  * about it.
  */
+/**
+ * Ask the daemon why, and treat every failure as "it did not say".
+ *
+ * A daemon that cannot be reached is one of the states this runs in, so an error here is data, not
+ * an exception: the page finding below still prints and the run still ends with its own verdict.
+ */
+async function daemonWhy(fx: SetupEffects): Promise<string | undefined> {
+  if (undefined === fx.daemonWhy) return undefined;
+  try {
+    const why = await fx.daemonWhy();
+    return undefined === why || 0 === why.length ? undefined : why;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promise<SetupOutcome> {
   const notes: string[] = [];
   const note = (line: string): void => {
@@ -349,7 +378,11 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
           'the capture helper not installed, or a CSP that blocks the bridge: run `npx @reticlehq/server doctor`.',
       );
     } else {
-      // What the page contains is the one thing the daemon cannot know, so it is worth one fetch.
+      // The daemon first, when it has something to say: it is the only party that can see a hello it
+      // refused, and that outranks anything inferred from an absence. Then the page, which is the
+      // one thing the daemon cannot know, and worth one fetch.
+      const why = await daemonWhy(fx);
+      if (undefined !== why) note(why);
       note(describePage(readPage(await fx.probePage(url)), url));
     }
     return stop(input, SetupPhase.CONNECT, { url }, notes);
