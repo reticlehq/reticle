@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NodeSupervisor } from './node-supervisor.js';
@@ -134,6 +134,11 @@ describe('an effect that lands after the process returns', () => {
   it('waits after exit, so a deferred write is on disk before the run is reported', async () => {
     const root = mkdtempSync(join(tmpdir(), 'reticle-settle-'));
     const target = join(root, 'late.txt');
+    // Written by the CHILD itself, before it exits. It separates the two ways this can fail:
+    // the grandchild never ran at all, or it ran and the settle did not wait long enough. On
+    // Windows CI this failed at 3780ms against a 3000ms settle, which fits neither guess I made,
+    // so the next run reports which half broke instead of inviting a third.
+    const spawned = join(root, 'spawned.txt');
     const s = new NodeSupervisor({
       executable: process.execPath,
       workspaceRoot: root,
@@ -154,11 +159,16 @@ describe('an effect that lands after the process returns', () => {
         '-e',
         `const { spawn } = require('node:child_process');
          const c = spawn(process.execPath, ['-e', 'setTimeout(() => require("node:fs").writeFileSync(${JSON.stringify(target)}, "late"), 150)'], { detached: true, stdio: 'ignore' });
-         c.unref();`,
+         c.unref();
+         require('node:fs').writeFileSync(${JSON.stringify(spawned)}, String(c.pid ?? 'no-pid'));`,
       ],
       10_000,
     );
-    expect(existsSync(target)).toBe(true);
+    expect(
+      existsSync(target),
+      `deferred write not observed. child spawned a grandchild: ${String(existsSync(spawned))}; ` +
+        `settledMs=${String(run.settledMs)}; dir now: [${readdirSync(root).join(', ')}]`,
+    ).toBe(true);
     expect(run.settledMs).toBe(3_000);
     rmSync(root, { recursive: true, force: true });
   });
