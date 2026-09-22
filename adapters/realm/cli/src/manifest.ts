@@ -32,6 +32,16 @@ export interface CliCommand {
    * *may I run this for discovery*; this answers *may I replay it*.
    */
   readonly costly?: boolean;
+  /**
+   * Hosts this command is expected to contact, when it is expected to contact any.
+   *
+   * DECLARED, never inferred, and the difference decides whether a rule is usable at all. "The
+   * tool claimed success and dialled nothing" is a defect for `gh pr create` and the normal state
+   * of affairs for a formatter, and nothing about a process tells you which of the two you are
+   * looking at. So the manifest says, and a command that declares nothing here is never accused
+   * of failing to call out.
+   */
+  readonly reaches?: readonly string[];
   /** The arguments, after the tool's own executable. */
   readonly argv: readonly string[];
   /** Parameter shape as JSON Schema, when it takes any. */

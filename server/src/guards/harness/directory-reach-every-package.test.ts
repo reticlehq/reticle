@@ -59,9 +59,9 @@ const PACKAGES: Readonly<Record<string, Recorded>> = {
     note: 'was FLAT, and the recorded zero did its job a second time: the first grouping here went red and this baseline was measured. token/ holds the pairing token and where machine state lives.',
   },
   'adapters/realm/cli': {
-    directories: 0,
+    directories: 3,
     mutual: 0,
-    note: 'FLAT, and deliberately so while it is small. The shape that matters here is not a directory tree but a single dependency direction: `cli-realm` knows the operating system only through the `Supervisor` port, so the realm and the thing that spawns processes can be read, and tested, apart.',
+    note: 'was FLAT, and the recorded zero did its job: the eleventh source file tripped the flat-directory limit and the grouping was measured rather than guessed at. One directory per PORT — process/ spawns and reaps, workspace/ looks at the disk twice, net/ writes down which hosts were dialled — and the realm at the root composes them. Nothing mutual, which is the number that matters: every port knows the operating system and none of them knows the realm, so the dependency direction the design claims is one the compiler now enforces.',
   },
   'adapters/framework/react': {
     directories: 0,

@@ -4,8 +4,8 @@ import { CliRealm } from './cli-realm.js';
 import { CliChannel } from './channels.js';
 import { CliSummary } from './cli-realm.js';
 import type { CommandManifest } from './manifest.js';
-import type { Invocation, Supervisor } from './supervisor.js';
-import type { Snapshot, WorkspacePort } from './workspace.js';
+import type { Invocation, Supervisor } from './process/supervisor.js';
+import type { Snapshot, WorkspacePort } from './workspace/port.js';
 
 const invocation: Invocation = {
   id: 'i1',

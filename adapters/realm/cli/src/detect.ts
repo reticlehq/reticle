@@ -132,6 +132,41 @@ function noTraceAtAll(observations: readonly Observation[]): Anomaly | undefined
 }
 
 /**
+ * A host the command said it would reach, and no connection to it in the window.
+ *
+ * The rule the proxy exists for, and the one a shell can never implement: an agent with `Bash`
+ * cannot see that a command never called out. `exit 0` and a confident line of output look
+ * identical whether the request went or not.
+ *
+ * Absence-derived, like everything else built on a silence. A dial that happened after the window
+ * closed, or through a route the proxy does not sit on, produces this shape while the tool is
+ * working correctly -- so it may downgrade a verdict to `unknown` and may never force a `no`.
+ */
+function neverDialled(
+  observations: readonly Observation[],
+  expected: readonly string[],
+): Anomaly | undefined {
+  if (0 === expected.length) return undefined;
+  const dialled = new Set(
+    on(observations, CliChannel.NET).map((o) =>
+      'object' === typeof o.value && null !== o.value
+        ? String((o.value as { host?: unknown }).host)
+        : '',
+    ),
+  );
+  const missed = expected.filter((host) => !dialled.has(host));
+  if (0 === missed.length) return undefined;
+  return {
+    kind: 'x-never-dialled',
+    tier: AnomalyTier.ABSENCE_DERIVED,
+    claim: `the command was declared to reach ${missed.join(', ')}`,
+    counter: 'no connection to it was seen before the window closed',
+    between: [CliChannel.NET, CliChannel.LOG],
+    evidence: [],
+  };
+}
+
+/**
  * The rules, as a list, so adding one is adding a function.
  *
  * Each takes a window's observations and returns an anomaly or nothing. None of them reads a
@@ -145,6 +180,18 @@ const RULES: readonly ((o: readonly Observation[]) => Anomaly | undefined)[] = [
 ];
 
 /** Every disagreement these rules can see in one window. */
-export function detectAnomalies(observations: readonly Observation[]): readonly Anomaly[] {
-  return RULES.map((rule) => rule(observations)).filter((a): a is Anomaly => undefined !== a);
+export interface DetectContext {
+  /** Hosts the command under test declared it would reach. Empty means it declared none. */
+  readonly reaches?: readonly string[];
+}
+
+/** Every disagreement these rules can see in one window. */
+export function detectAnomalies(
+  observations: readonly Observation[],
+  context: DetectContext = {},
+): readonly Anomaly[] {
+  return [
+    ...RULES.map((rule) => rule(observations)),
+    neverDialled(observations, context.reaches ?? []),
+  ].filter((a): a is Anomaly => undefined !== a);
 }

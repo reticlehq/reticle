@@ -9,8 +9,8 @@ import {
 } from 'open-verification';
 import { CliRealm } from './cli-realm.js';
 import type { CommandManifest } from './manifest.js';
-import type { Invocation, Supervisor } from './supervisor.js';
-import type { Snapshot, WorkspacePort } from './workspace.js';
+import type { Invocation, Supervisor } from './process/supervisor.js';
+import type { Snapshot, WorkspacePort } from './workspace/port.js';
 
 const empty: Snapshot = { files: new Map(), unreadable: [] };
 const withFile = (path: string): Snapshot => ({

@@ -21,15 +21,16 @@ import {
 } from 'open-verification';
 import { CliChannel } from './channels.js';
 import { detectAnomalies } from './detect.js';
+import type { ConnectProxy } from './net/proxy.js';
 import { commandNamed, type CommandManifest } from './manifest.js';
-import type { Invocation, Supervisor } from './supervisor.js';
+import type { Invocation, Supervisor } from './process/supervisor.js';
 import {
   ChangeKind,
   diffSnapshots,
   type Change,
   type Snapshot,
   type WorkspacePort,
-} from './workspace.js';
+} from './workspace/port.js';
 
 /**
  * A realm for a subject that runs and exits.
@@ -63,6 +64,8 @@ export const CliSummary = {
   FS_DELETED: 'cli.fs.deleted',
   /** The bytes inside a path. What the SUBJECT decided, which is why it is a different channel. */
   FS_CONTENT: 'cli.fs.content',
+  /** A host the tool asked to reach. Never what it said to them. */
+  NET_CONNECT: 'cli.net.connect',
 } as const;
 
 /**
@@ -105,6 +108,25 @@ const CLI_CHANNELS: readonly ChannelDescriptor[] = [
     note: 'duration, and whether it ended',
   },
 ];
+
+/**
+ * Which hosts the tool dialled, at PRESENCE grade and no higher.
+ *
+ * Independent without argument: the proxy is another process, and what it records is a connection
+ * the tool opened rather than anything the tool said about itself. What keeps it at presence is
+ * that a dial is not an outcome. `api.github.com:443 was contacted` does not say a pull request
+ * exists, and grading it consequence would let "it called out" buy a proof of whatever the claim
+ * happened to be about.
+ *
+ * Presence is still the difference between `unknown` and a conviction. A tool that exits 0 having
+ * never contacted the host its claim names has been caught by the only party that could see it.
+ */
+const NET_CHANNEL: ChannelDescriptor = {
+  id: CliChannel.NET,
+  independence: Independence.INDEPENDENT,
+  grade: Grade.PRESENCE,
+  note: 'hosts dialled, seen by a proxy that reads none of the traffic',
+};
 
 /**
  * The filesystem, as TWO channels, which is the load-bearing claim of this adapter.
@@ -158,6 +180,14 @@ export interface CliRealmDeps {
    * time. Declaring a channel it cannot report on would be the costlier kind of wrong.
    */
   readonly workspace?: WorkspacePort;
+  /**
+   * A proxy watching which hosts the subject dials, when one is running.
+   *
+   * Absent means no `net` channel is declared at all. The alternative -- declaring it and
+   * reporting nothing -- is the costliest shape of lie available here: every claim reading `net`
+   * would come back `unknown` while the implementation looked capable of answering it.
+   */
+  readonly proxy?: ConnectProxy;
   /** Injected, never read from a global: a window's arithmetic must be reproducible in a test. */
   readonly now: () => number;
 }
@@ -220,9 +250,11 @@ export class CliRealm extends Realm {
    * back `unknown` while the implementation looks capable.
    */
   channels(): readonly ChannelDescriptor[] {
-    return this.#deps.workspace === undefined
-      ? CLI_CHANNELS
-      : [...CLI_CHANNELS, ...ARTIFACT_CHANNELS];
+    return [
+      ...CLI_CHANNELS,
+      ...(this.#deps.workspace === undefined ? [] : ARTIFACT_CHANNELS),
+      ...(this.#deps.proxy === undefined ? [] : [NET_CHANNEL]),
+    ];
   }
 
   /**
@@ -373,6 +405,7 @@ export class CliRealm extends Realm {
       observations.push(...endingOf(window, invocation));
     }
     observations.push(...artifactsOf(window, this.changesIn(window)));
+    observations.push(...dialsOf(window, this.#deps.proxy?.connectsSince(window.openedAt) ?? []));
     return Promise.resolve(observations);
   }
 
@@ -398,7 +431,10 @@ export class CliRealm extends Realm {
    * side over the channel declaration, so a realm cannot convict itself however hard it tries.
    */
   override detect(_window: Window, observed: readonly Observation[]): Promise<readonly Anomaly[]> {
-    return Promise.resolve(detectAnomalies(observed));
+    // The manifest's declaration travels with the rules, so "it never called out" is only ever
+    // said about a command that said it would.
+    const reaches = this.#deps.manifest.commands.flatMap((c) => c.reaches ?? []);
+    return Promise.resolve(detectAnomalies(observed, { reaches }));
   }
 
   coverage(window: Window): Promise<Coverage> {
@@ -437,13 +473,30 @@ export class CliRealm extends Realm {
               },
               ...unreadableSpots(this.#afterLook(window), workspace),
             ]),
-        {
-          kind: BlindSpotKind.CHANNEL_UNOBSERVED,
-          channel: ChannelId.NET,
-          detail: 'nothing here observes whether the tool called out',
-          impeaching: false,
-          remedy: 'run the subject through a recording proxy, or ask the far side afterwards',
-        },
+        ...(this.#deps.proxy === undefined
+          ? [
+              {
+                kind: BlindSpotKind.CHANNEL_UNOBSERVED,
+                channel: CliChannel.NET,
+                detail: 'nothing here observes whether the tool called out',
+                impeaching: false,
+                remedy: 'attach a proxy, or ask the far side afterwards with a witness',
+              },
+            ]
+          : [
+              {
+                // Declared even WITH the proxy, because the proxy answers a narrower question
+                // than a reader will assume. It sees that a host was dialled; it reads none of
+                // the traffic, so it cannot say what was sent or what came back.
+                kind: BlindSpotKind.CHANNEL_UNOBSERVED,
+                channel: CliChannel.NET,
+                detail:
+                  'the proxy records which hosts were dialled and reads none of the traffic, so ' +
+                  'nothing here knows what was sent or what the far side answered',
+                impeaching: false,
+                remedy: 'ask the far side directly with a witness',
+              },
+            ]),
         {
           kind: BlindSpotKind.BOUNDARY_UNCROSSABLE,
           detail:
@@ -617,5 +670,26 @@ function unreadableSpots(after: Snapshot | undefined, workspace: WorkspacePort):
     detail: `the declared root ${root} could not be read, so nothing under it was observed`,
     impeaching: true,
     remedy: 'check the path exists and is readable by the verifier',
+  }));
+}
+
+/**
+ * The hosts this window saw dialled.
+ *
+ * The VALUE carries host and port and nothing else, because nothing else was observed. A summary
+ * that implied more than a CONNECT line contains would be the observer overstating its own reach,
+ * which is the failure the grade on this channel already guards against.
+ */
+function dialsOf(
+  window: Window,
+  dials: readonly { host: string; port: number; at: number }[],
+): Observation[] {
+  return dials.map((dial, index) => ({
+    id: `${window.id}-net-${String(index)}`,
+    window: window.id,
+    channel: CliChannel.NET,
+    at: dial.at,
+    value: { host: dial.host, port: dial.port },
+    summary: CliSummary.NET_CONNECT,
   }));
 }

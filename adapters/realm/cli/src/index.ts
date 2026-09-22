@@ -8,15 +8,28 @@
 export { CliRealm, CliSummary, closedBy } from './cli-realm.js';
 export type { CliRealmDeps } from './cli-realm.js';
 export { CliChannel } from './channels.js';
-export { NodeSupervisor, exitStatus } from './node-supervisor.js';
-export { nodeWorkspace } from './workspace.js';
+export { NodeSupervisor, exitStatus } from './process/node-supervisor.js';
+export { nodeWorkspace } from './workspace/port.js';
 export { detectAnomalies } from './detect.js';
 export { renderReport } from './report.js';
+export { startConnectProxy } from './net/proxy.js';
+export type { ConnectAttempt, ConnectProxy, ConnectProxyInput } from './net/proxy.js';
 export type { DriveRecord } from './report.js';
-export type { WorkspacePort } from './workspace.js';
-export { ChangeKind, diffSnapshots, takeSnapshot, EXCLUDED_BY_DEFAULT } from './snapshot.js';
-export type { Change, FileFact, Snapshot, SnapshotOptions } from './snapshot.js';
-export type { NodeSupervisorInput } from './node-supervisor.js';
+export type { WorkspacePort } from './workspace/port.js';
+export {
+  ChangeKind,
+  diffSnapshots,
+  takeSnapshot,
+  EXCLUDED_BY_DEFAULT,
+} from './workspace/snapshot.js';
+export type { Change, FileFact, Snapshot, SnapshotOptions } from './workspace/snapshot.js';
+export type { NodeSupervisorInput } from './process/node-supervisor.js';
 export { commandNamed } from './manifest.js';
 export type { CliCommand, CommandManifest } from './manifest.js';
-export type { ExitStatus, Invocation, StreamLine, Supervisor, ToolIdentity } from './supervisor.js';
+export type {
+  ExitStatus,
+  Invocation,
+  StreamLine,
+  Supervisor,
+  ToolIdentity,
+} from './process/supervisor.js';

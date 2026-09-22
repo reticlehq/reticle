@@ -3,7 +3,7 @@ import { CloseCondition, Grade, Independence, RefusalReason } from 'open-verific
 import { CliRealm } from './cli-realm.js';
 import { CliChannel } from './channels.js';
 import type { CommandManifest } from './manifest.js';
-import type { Invocation, Supervisor } from './supervisor.js';
+import type { Invocation, Supervisor } from './process/supervisor.js';
 
 /**
  * A supervisor that runs nothing.

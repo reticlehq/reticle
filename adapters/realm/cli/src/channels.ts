@@ -20,6 +20,13 @@ export const CliChannel = {
   /** How long it took, and whether it was still running. */
   TIME: ChannelId.TIME,
   /**
+   * Hosts the tool dialled, when a proxy is watching. Never what it said to them.
+   *
+   * Named here with the others rather than reached for as `ChannelId.NET` at each use, so this
+   * file stays the one place a reader learns what this realm can see.
+   */
+  NET: ChannelId.NET,
+  /**
    * Termination imposed from OUTSIDE the process: a signal, an OOM kill, a supervisor.
    *
    * A separate channel from `EXIT_STATUS` and not a field on it, which is OVP-CHAN-5 applied to

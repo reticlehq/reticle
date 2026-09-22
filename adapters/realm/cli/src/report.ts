@@ -1,6 +1,6 @@
 import { Declaration, Verdict, type BlindSpot, type Grade } from 'open-verification';
-import type { Change } from './snapshot.js';
-import type { ExitStatus } from './supervisor.js';
+import type { Change } from './workspace/snapshot.js';
+import type { ExitStatus } from './process/supervisor.js';
 
 /**
  * What a person sees when an agent verifies its own work.
