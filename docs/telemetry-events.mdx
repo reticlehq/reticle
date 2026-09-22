@@ -418,6 +418,43 @@ The message itself never leaves. It interpolates whatever the caller asked for (
 
 ---
 
+## onboarding_step
+
+**Wire name:** `onboarding_step`. **Emitted from:** `server/src/telemetry/onboarding-funnel.ts:22`, reached from the CLI (`command/cli-onboarding.ts`), the installer (`command/setup/setup-install.ts`, `command/setup/setup-mcp.ts`), `init` (`init/src/host.ts` through the injected `InitHost`) and the tool dispatcher (`surface/tools/invoke-tool.ts`). **Session-scoped:** no. **Payload block:** `onboarding`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `phase` | `OnboardingPhase` | `install`, `onboard` or `first_run` |
+| `step` | `z.enum` over every name in `OnboardingSteps` | A closed set, derived from the table rather than retyped |
+| `status` | `OnboardingStepStatus` | `started`, `completed`, `failed`, `abandoned` or `skipped` |
+| `elapsedMs` | int, optional | How long it took. Absent means NOT MEASURED, never zero |
+| `reason` | string, up to 64, optional | Classified cause on failure. Our vocabulary, never a raw error or a path |
+| `stack` | string, up to 64, optional | The framework, so a phase failing on only one is visible |
+| `unattended` | boolean, optional | Nobody was asked anything: the zero-human-input path an agent takes from a link |
+
+**The question it answers:** where do people stop, between never having heard of Reticle and having a verdict on their own app. No other event can answer it. `init_completed` fires when the files are written, and the story continues for minutes after that; `app_instrumented` sees one moment of it. This is the only event that spans the whole route.
+
+The steps are the funnel, in order, and they live in one table in `core/src/onboarding.ts`:
+
+| Phase | Steps, in the sequence they occur |
+| --- | --- |
+| `install` | `script_started`, `runtime_ready`, `cli_installed`, `agents_detected`, `mcp_registered` |
+| `onboard` | `tour_started`, `concept_shown`, `first_look`, `first_act`, `first_verdict` |
+| `first_run` | `project_detected`, `instrumented`, `app_connected`, `driven`, `flow_recorded`, `verdict_produced` |
+
+`first_run.verdict_produced` is the conversion event. Everything before it is setup that proved nothing.
+
+Four decisions in this shape are worth knowing before you add to it:
+
+- **One kind for every step, not a kind per step.** A phase plus a step keeps a funnel a `GROUP BY` instead of a union, so inserting or renaming a step does not silently break the queries watching it, and a new step appears in the existing chart rather than beside it.
+- **`step` is a closed `z.enum`, not a capped string.** It was `z.string().max(48)`, with a comment promising it was never user text, and a cap is not a promise. `/Users/someone/secret/project` is 28 characters and would have validated cleanly, out of the one payload a person can edit: the installer's breadcrumb file, in their own home directory. The enum is derived from `OnboardingSteps`, so a step added there is accepted on the same edit and a renamed step cannot arrive under both spellings.
+- **`abandoned` is a status of its own.** A step that is `started` and never resolved is indistinguishable from one that was never reached, and both read as "we never got there". Somebody walking away from a step we know they began is a different fact from the step failing, and only one of those is our bug. `reportStepTimed`'s `finally` is what makes it reliable: an exception escaping without a report turns a failure into silence.
+- **`skipped` is neither a loss nor a win.** Already installed, already instrumented. Counting it as either makes a re-run look like a conversion or like a drop.
+
+A malformed step is **dropped**, not sent and not thrown. Sending it would put unvalidated text on the wire; throwing would let a metric change what a user's install does.
+
+---
+
 ## Adding a new event
 
 Read [`docs/telemetry-contract.md`](/telemetry-contract) before you touch anything that emits. The short version:

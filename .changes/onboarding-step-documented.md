@@ -1,0 +1,3 @@
+### Added
+
+- **`onboarding_step` is documented, on both telemetry pages.** It was collected and written about nowhere: absent from the contributor reference whose opening line promises "every event Reticle emits is listed below", and absent from the user-facing page that says what leaves your machine. It is also the event that measures the whole route from installing Reticle to getting a verdict on your own app, so the one event nobody could read about was the one that answers the question most often asked of this data. Both pages now carry it, including the closed list of step names, and a check keeps every future event kind on both.
