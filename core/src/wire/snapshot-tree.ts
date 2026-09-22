@@ -20,15 +20,31 @@ export interface InteractiveItem {
 }
 
 const REF = /\(ref=(e\d+)\)/;
-const REF_GLOBAL = /\s*\(ref=e\d+\)/;
 
-/** Parse interactive elements (those with refs) out of a snapshot tree. */
+/**
+ * Parse interactive elements (those with refs) out of a snapshot tree.
+ *
+ * The description used to be built with a SECOND regex, `/\s*\(ref=e\d+\)/`, whose leading `\s*`
+ * made it quadratic: on a line with a long run of whitespace the engine retries the unbounded
+ * prefix at every position before failing the literal that follows. The tree is page-derived, so
+ * that run is app-controlled, and CodeQL flagged it as a polynomial ReDoS on the release branch.
+ *
+ * `REF` has already located the token, so the description is the line with that exact span cut
+ * out. The `\s*` was NOT redundant -- it ate the gap left behind when a ref sits mid-line, and two
+ * pinned tests failed when it was dropped outright -- so the prefix is trimmed instead. `trimEnd`
+ * is a string method: same result, linear, and one fewer regex to keep in step with the first.
+ */
 export function parseInteractive(tree: string): InteractiveItem[] {
   const items: InteractiveItem[] = [];
   for (const line of tree.split('\n')) {
     const match = REF.exec(line);
     if (match !== null) {
-      items.push({ ref: match[1] ?? '', desc: line.replace(REF_GLOBAL, '').trim() });
+      const token = match[0];
+      const at = line.indexOf(token);
+      items.push({
+        ref: match[1] ?? '',
+        desc: `${line.slice(0, at).trimEnd()}${line.slice(at + token.length)}`.trim(),
+      });
     }
   }
   return items;
