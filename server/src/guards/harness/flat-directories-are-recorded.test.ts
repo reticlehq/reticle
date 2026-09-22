@@ -196,7 +196,12 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // It belongs beside `session-end.ts` for the same reason the line above gives: teardown owns the
   // final write of that artifact, and the flush is the same write on a different trigger. Putting it
   // near the event bus instead would pull the run store and the journal in behind it.
-  'server/src/memory/journal': 13,
+  // 14 with `self-observation.ts`: the rule that Reticle does not durably record the browser
+  // fetching Reticle's own SDK. It is its own file because the predicate has to be a pure function
+  // of the URL and testable without a journal -- both halves of a request/response pair must get the
+  // same answer, or filtering one half leaves the other unpaired and the engine reports a request
+  // that completed as one that hung.
+  'server/src/memory/journal': 14,
   // 11 when the artifact-address files landed: `project-for-root.ts`, `artifact-root-resolver.ts`
   // and the roster that pins them. Recorded rather than grouped, and the reason is the sibling
   // guard: the natural home for "which directory does this write to" is `project/dir`, whose whole

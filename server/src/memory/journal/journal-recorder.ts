@@ -4,6 +4,7 @@ import {
   type JournalAction,
   type ReticleEvent,
 } from '@reticlehq/core';
+import { isSelfObservation } from './self-observation.js';
 
 /** Where a recorder persists. `SessionJournal` satisfies this structurally. */
 export interface JournalSink {
@@ -62,7 +63,14 @@ export class JournalRecorder {
     this.#flushAt = options.flushAt ?? DEFAULT_FLUSH_AT;
   }
 
-  /** Attribute (if an action is active), enqueue for journaling, and return the possibly-stamped event. */
+  /**
+   * Attribute (if an action is active), enqueue for journaling, and return the possibly-stamped event.
+   *
+   * Reticle fetching its own SDK is attributed and returned like anything else but never written to
+   * disk. That is a decision about what is worth KEEPING, so it is taken here, where the journal is
+   * written, and not in a reader: a reader that hid these would leave the bytes on disk and the
+   * cost unpaid, and a second reader would still find them and disagree about what happened.
+   */
   observe(event: ReticleEvent): ReticleEvent {
     let out = event;
     const active = this.#active;
@@ -74,8 +82,12 @@ export class JournalRecorder {
         active.seqTo = active.seqTo === undefined ? event.seq : Math.max(active.seqTo, event.seq);
       }
     }
-    this.#pending.push(out);
-    if (this.#pending.length >= this.#flushAt) this.#enqueueFlush();
+    // Attribution above still runs, and the return value is what the live ring buffer stores — the
+    // session keeps seeing this event. What is declined is the DURABLE copy: see isSelfObservation.
+    if (!isSelfObservation(out)) {
+      this.#pending.push(out);
+      if (this.#pending.length >= this.#flushAt) this.#enqueueFlush();
+    }
     return out;
   }
 
