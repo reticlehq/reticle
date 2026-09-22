@@ -413,7 +413,11 @@ const INSTALL_ARGS: Record<PackageManager, readonly string[]> = {
  * hard failure, which is the opposite of the problem being fixed.
  */
 const QUIET_INSTALL_ARGS: Partial<Record<PackageManager, readonly string[]>> = {
-  [PackageManager.NPM]: ['--no-audit', '--no-fund'],
+  // `--no-update-notifier` joined the other two for the same reason and from the same measurement:
+  // a re-capture of a pristine Vite first run spent five of its lines on an `npm notice` block
+  // announcing a newer npm, its changelog url and the command to install it. Advice about npm,
+  // printed in the middle of somebody wiring up a different tool.
+  [PackageManager.NPM]: ['--no-audit', '--no-fund', '--no-update-notifier'],
 };
 
 interface InstallCommand {

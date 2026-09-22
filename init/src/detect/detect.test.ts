@@ -308,6 +308,14 @@ describe('the dependency install is quiet about things that are not ours', () =>
     expect(args).toContain('--no-fund');
   });
 
+  it('suppresses npm telling the reader to upgrade npm', () => {
+    // Five lines, measured on a re-capture of a pristine Vite first run: a `npm notice` block
+    // announcing a new npm, its changelog url and the command to install it. It is advice about
+    // npm, printed in the middle of somebody wiring up a different tool.
+    const { args } = installCommandParts(PackageManager.NPM, ['@reticlehq/react']);
+    expect(args).toContain('--no-update-notifier');
+  });
+
   it('still installs as a dev dependency', () => {
     const { args } = installCommandParts(PackageManager.NPM, ['@reticlehq/react']);
     expect(args).toContain('-D');
