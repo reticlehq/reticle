@@ -41,10 +41,15 @@ it('doctor and status both report stopped when a live recorded pid has no daemon
     process.env[STATE_DIR_ENV] = stateHome;
     writePid(port); // Records this still-live Vitest process: the exact shortcut that made status lie.
 
+    await handleStatus(port, true);
+    // Then again in its default shape, which is what a person actually reads. Both, because the
+    // parity that matters is no longer only between two payloads: doctor and status now print the
+    // same daemon row, and a reader comparing them must not be told two different things.
+    const jsonOnly = statusOutput;
     await handleStatus(port);
     await handleDoctor(port);
 
-    const statusLine = statusOutput
+    const statusLine = jsonOnly
       .split('\n')
       .find((line) => line.includes('"event":"reticle_status"'));
     expect(statusLine).toBeDefined();
@@ -54,7 +59,10 @@ it('doctor and status both report stopped when a live recorded pid has no daemon
       running: false,
       presence: 'free',
     });
-    expect(doctorOutput).toMatch(new RegExp(`daemon\\s+✗ not running on :${String(port)}`));
+    const notRunning = new RegExp(`daemon\\s+✗ not running on :${String(port)}`);
+    expect(doctorOutput).toMatch(notRunning);
+    // `handleStatus`'s block goes to stdout, which this spy is also collecting.
+    expect(doctorOutput).toMatch(new RegExp(`${notRunning.source}[\\s\\S]*${notRunning.source}`));
   } finally {
     stdout.mockRestore();
     stderr.mockRestore();

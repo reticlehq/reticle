@@ -69,7 +69,7 @@ export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticl
   reticle stop  [--port N] [--quiet]                    (stop the daemon we started, by its recorded pid)
   reticle kill  [--port N] [--force]                   (free the port by its LISTENER, never the agent's mcp proxy)
   reticle restart [--port N] [--force]                 (kill, then start a daemon and wait for a real bind)
-  reticle status [--port N]
+  reticle status [--port N] [--json]                   (a readable block; --json for the event)
   reticle doctor [--port N]                            (one command to diagnose setup: Chromium, daemon, port)
   reticle open  [url] [--port N]                        (show the app: reuse the connected tab, else open one)
   reticle verify <url> [--port N] [--headed] [--timeout N] [--storage-state <file>] [--session-id <id>]  (one-shot: drive the URL, verify saved flows, exit 0=pass)
@@ -327,7 +327,7 @@ export type CliResult =
   | { kind: 'stop'; port: number; quiet: boolean }
   | { kind: 'kill'; port: number; force: boolean }
   | { kind: 'restart'; port: number; force: boolean }
-  | { kind: 'status'; port: number }
+  | { kind: 'status'; port: number; json: boolean }
   | { kind: 'license' }
   | { kind: 'telemetry'; action: TelemetryAction }
   | Extract<ParsedFeedback, { kind: 'feedback' }>
@@ -764,7 +764,10 @@ export function parseCliArgs(
     }
     case STATUS_COMMAND: {
       const port = parsePortFlag(rest, defaultPort);
-      return { kind: 'status', port };
+      // The block is the default and the JSON is the opt-in, which is the way round `tutorial`
+      // already settled on: a person typing this should not have to ask for prose, and a caller
+      // parsing it knows to ask for the object.
+      return { kind: 'status', port, json: rest.includes(JSON_FLAG) };
     }
     case 'tutorial': {
       // `--agent` is the opt-in, because a person typing this is the common case and should not have

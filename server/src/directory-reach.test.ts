@@ -342,6 +342,10 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   command: [
     'answers',
     'demo',
+    // Rendering `status` for a person, rather than only logging it as an event. Out of `cli.ts`
+    // because that file is a composition root already close to the cap, and because a pure
+    // renderer is testable in a way a branch inside a command is not.
+    'status',
     // `serve`, `stop` and `restart`, lifted out of cli.ts when that file reached the thousand-line
     // cap with zero headroom. One idea -- does a daemon exist, and did the command that changed
     // that report what is actually the case -- so it moved as a unit rather than by line count.

@@ -150,8 +150,25 @@ function handleInit(parsed: {
 // `serve`, `stop` and `restart` live in `cli/lifecycle/daemon-lifecycle.ts`: one idea, and the
 // largest group this file could give up without splitting something that belongs together.
 import { handleServe, handleStop, handleRestart } from './cli/lifecycle/daemon-lifecycle.js';
+import { statusLines } from './cli/status/status-lines.js';
 
-export async function handleStatus(port: number): Promise<void> {
+/**
+ * Log the status event AND print it for a person.
+ *
+ * Both, not either: the JSON line is documented and is what a log is for, and the block is for
+ * whoever is reading the terminal — which, once an agent is running the command, is somebody who
+ * did not type it and cannot be assumed to parse it.
+ */
+function reportStatus(fields: Record<string, unknown>, json: boolean): void {
+  if (json) {
+    log('reticle_status', fields);
+    return;
+  }
+  process.stdout.write(`${statusLines(fields).join('\n')}\n`);
+}
+
+export async function handleStatus(port: number, json = false): Promise<void> {
+  const report = (fields: Record<string, unknown>): void => reportStatus(fields, json);
   const pid = readPid(port);
   // Durable, so it survives the daemon idling out — which is the state `status` is most often run in.
   const projectId = readProjectId(process.cwd());
@@ -184,7 +201,7 @@ export async function handleStatus(port: number): Promise<void> {
   // process exists; a Reticle daemon is running only when the shared port probe reaches /status.
   const presence = await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus });
   if (!presenceIsUsable(presence)) {
-    log('reticle_status', {
+    report({
       port,
       running: false,
       presence,
@@ -213,7 +230,7 @@ export async function handleStatus(port: number): Promise<void> {
   const update = availableUpdate();
   const nudge = update === undefined ? {} : { updateAvailable: update };
   if (payload === undefined) {
-    log('reticle_status', {
+    report({
       port,
       running: true,
       pid,
@@ -246,7 +263,7 @@ export async function handleStatus(port: number): Promise<void> {
           devServerPorts,
         })
       : {};
-  log('reticle_status', {
+  report({
     port,
     running: true,
     pid,
@@ -684,7 +701,7 @@ export function main(): void {
       void handleRestart(parsed.port, parsed.force);
       break;
     case 'status':
-      void handleStatus(parsed.port);
+      void handleStatus(parsed.port, parsed.json);
       break;
     case 'license':
       handleLicense();

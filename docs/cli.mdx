@@ -71,25 +71,15 @@ Exits `0`. That parenthetical about the bridge port is doing a lot of work. Mixi
 
 Whether the daemon is up and which apps have connected.
 
-```json
-{
-  "t": "2026-08-15T18:45:58.190Z",
-  "event": "reticle_status",
-  "port": 4400,
-  "running": true,
-  "pid": 72698,
-  "sessionCount": 1,
-  "sessions": [
-    {
-      "sessionId": "s223e0fad-e012-43f9-a23d-6d585470c90d",
-      "url": "http://localhost:4310/",
-      "throttled": false,
-      "stale": false,
-      "pendingMarks": 0
-    }
-  ]
-}
+```text
+reticle status
+  daemon       ✓ running on :4400 (pid 90790)
+  sessions     ✓ 1 page connected
+               http://localhost:4310/
+  agent link   enumerated
 ```
+
+Add `--json` for the same facts as one machine-readable event line. See [`reticle status`](/cli/status) for the fields.
 
 Exits `0`. A session in the list is the install genuinely finished. Not a tick in a checklist, a connected app.
 

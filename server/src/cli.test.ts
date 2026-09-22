@@ -468,7 +468,15 @@ describe('parseCliArgs', () => {
   });
 
   it('status returns status result', () => {
-    expect(parseCliArgs(['status'], PORT)).toEqual({ kind: 'status', port: PORT });
+    expect(parseCliArgs(['status'], PORT)).toEqual({ kind: 'status', port: PORT, json: false });
+  });
+
+  it('status --json asks for the event instead of the readable block', () => {
+    expect(parseCliArgs(['status', '--json'], PORT)).toEqual({
+      kind: 'status',
+      port: PORT,
+      json: true,
+    });
   });
 
   it('license returns license result', () => {
@@ -498,6 +506,7 @@ describe('parseCliArgs', () => {
     expect(parseCliArgs(['status', '--port', '5000'], PORT)).toEqual({
       kind: 'status',
       port: 5000,
+      json: false,
     });
   });
 

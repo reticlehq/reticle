@@ -66,7 +66,7 @@ chk(
   serveSaid.includes('reticle_daemon_spawned') ? 'it still says spawned' : '',
 );
 
-const status = cli('status');
+const status = cli('status', '--json');
 const statusSaid = `${status.stdout ?? ''}${status.stderr ?? ''}`;
 chk(
   'status distinguishes "held by a stranger" from "nothing is here"',
@@ -74,6 +74,16 @@ chk(
   statusSaid.trim().split('\n').slice(-1)[0] ?? '',
 );
 chk('  and does not report the daemon as running', statusSaid.includes('"running":false'));
+
+// The whole complaint this spec was written about is that the true sentence was never said by
+// anything a PERSON sees. `--json` above proves the daemon knows; this proves it says so.
+const statusBlock = cli('status');
+const blockSaid = `${statusBlock.stdout ?? ''}${statusBlock.stderr ?? ''}`;
+chk(
+  '  and says it in the prose a person reads, not only in the event',
+  /not running/.test(blockSaid) && /foreign/.test(blockSaid),
+  blockSaid.trim().split('\n').slice(-1)[0] ?? '',
+);
 
 const doctor = cli('doctor');
 const doctorSaid = `${doctor.stdout ?? ''}${doctor.stderr ?? ''}`;
@@ -91,7 +101,7 @@ await new Promise((resolve) => squatter.close(resolve));
 // The control. Every assertion above is worthless if the same output appears on a FREE port — that
 // would mean the commands are simply pessimistic rather than observant.
 await freePortSafely(PORT);
-const freeStatus = cli('status');
+const freeStatus = cli('status', '--json');
 const freeSaid = `${freeStatus.stdout ?? ''}${freeStatus.stderr ?? ''}`;
 chk(
   'a genuinely free port is reported as free, not as foreign',
