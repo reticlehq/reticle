@@ -173,6 +173,19 @@ describe('when it cannot continue, it says what is left', () => {
     expect(r.notes.join(' ')).toContain('exited');
   });
 
+  it('names the port when CRA says it is already in use (#802)', async () => {
+    const fx = world({
+      devServerExited: () => true,
+      probePage: () => Promise.resolve({ served: false, sdkInPage: false }),
+      devServerOutput: () =>
+        'Something is already running on port 3000.\nWould you like to run the app on another port instead?',
+    });
+    const r = await runSetupPhases(INPUT, fx);
+    expect(r.reachedPhase).toBe(SetupPhase.DEV_SERVER);
+    expect(r.notes.join(' ')).toContain('port 3000 is already in use');
+    expect(r.notes.join(' ')).not.toContain('exited without serving anything');
+  });
+
   // astro dev forks the real server and returns. serving outranks the launcher having exited.
   it('carries on when the launcher exited but the port answers', async () => {
     const fx = world({ devServerExited: () => true });
