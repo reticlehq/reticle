@@ -148,7 +148,7 @@ describe('an effect that lands after the process returns', () => {
        */
       settleMs: 3_000,
     });
-    await s.run(
+    const run = await s.run(
       'fork',
       [
         '-e',
@@ -159,21 +159,31 @@ describe('an effect that lands after the process returns', () => {
       10_000,
     );
     expect(existsSync(target)).toBe(true);
+    expect(run.settledMs).toBe(3_000);
     rmSync(root, { recursive: true, force: true });
   });
 
+  /*
+   * The bound, not the duration.
+   *
+   * This timed the call and asserted `Date.now() - started < 3_000`, with a comment calling it a
+   * generous ceiling. CLAUDE.md names that shape as a bug outright -- it is a statement about the
+   * machine and fails only under parallel load, i.e. only in CI -- and the comment defending it
+   * was the tell. It had also drifted into coincidence: the sibling settle above is 3000, so the
+   * two numbers were one edit from meeting and the test would have passed for the wrong reason.
+   *
+   * The claim is "no settle was ADDED", which is a fact about configuration. The supervisor now
+   * reports it, so it can be read instead of timed, and there is no clock left to flake.
+   */
   it('does not wait when nothing asked it to, so a fast tool stays fast', async () => {
-    const started = Date.now();
     const s = new NodeSupervisor({
       executable: process.execPath,
       workspaceRoot: process.cwd(),
       tool: { id: 'node', version: process.version, workspace: 'ws' },
       now: () => Date.now(),
     });
-    await s.run('quick', ['-e', 'process.exit(0)'], 10_000);
-    // A generous ceiling on purpose: this asserts that no settle was ADDED, not how fast a
-    // process starts, which is a statement about the machine and fails only under load.
-    expect(Date.now() - started).toBeLessThan(3_000);
+    const run = await s.run('quick', ['-e', 'process.exit(0)'], 10_000);
+    expect(run.settledMs).toBe(0);
   });
 });
 

@@ -58,6 +58,16 @@ export interface Invocation {
   readonly exit: ExitStatus | undefined;
   readonly stdout: readonly StreamLine[];
   readonly stderr: readonly StreamLine[];
+  /**
+   * How long we kept watching AFTER the process ended, waiting for a deferred effect to land.
+   *
+   * Reported rather than inferred so a test can assert the settle as a CONFIGURATION fact -- zero
+   * when nothing asked for one -- instead of timing the call and comparing against a wall clock.
+   * That comparison is a statement about the machine and fails only under parallel load; this is
+   * the same fact with no clock in it. It is also honest output in its own right: the subject's
+   * timeline ends at `endedAt`, and this is the part that was ours.
+   */
+  readonly settledMs: number;
 }
 
 /** Who the tool is, and which workspace it is pointed at. Half of it each. */

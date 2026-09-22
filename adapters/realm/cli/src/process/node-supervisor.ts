@@ -97,7 +97,13 @@ export class NodeSupervisor implements Supervisor {
       child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk.toString('utf8')));
 
       let settled = false;
-      const finish = (exit: ExitStatus | undefined, endedAt: number | undefined): void => {
+      // Read once, here, because `finish` reports it and two call sites reach `finish`.
+      const settleMs = this.#input.settleMs ?? 0;
+      const finish = (
+        exit: ExitStatus | undefined,
+        endedAt: number | undefined,
+        settledMs = 0,
+      ): void => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
@@ -110,6 +116,7 @@ export class NodeSupervisor implements Supervisor {
           exit,
           stdout: stdout.lines(),
           stderr: stderr.lines(),
+          settledMs,
         };
         this.#seen.push(invocation);
         resolve(invocation);
@@ -134,7 +141,6 @@ export class NodeSupervisor implements Supervisor {
       child.on('close', (code, signal) => {
         const exit = exitStatus(code, signal);
         const endedAt = this.#input.now();
-        const settleMs = this.#input.settleMs ?? 0;
         if (settleMs <= 0) {
           finish(exit, endedAt);
           return;
@@ -143,7 +149,7 @@ export class NodeSupervisor implements Supervisor {
         // the subject's own ending, and the extra time is ours; recording the later instant would
         // put our patience into the subject's timeline.
         clearTimeout(timer);
-        setTimeout(() => finish(exit, endedAt), settleMs);
+        setTimeout(() => finish(exit, endedAt, settleMs), settleMs);
       });
     });
   }

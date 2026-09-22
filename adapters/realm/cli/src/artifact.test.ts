@@ -16,6 +16,7 @@ const invocation: Invocation = {
   exit: { code: 0, signal: undefined, wasSignalled: false },
   stdout: [{ seq: 0, text: 'wrote dist/index.js' }],
   stderr: [],
+  settledMs: 0,
 };
 
 const supervisor: Supervisor = {
