@@ -58,6 +58,11 @@ const PACKAGES: Readonly<Record<string, Recorded>> = {
     mutual: 0,
     note: 'was FLAT, and the recorded zero did its job a second time: the first grouping here went red and this baseline was measured. token/ holds the pairing token and where machine state lives.',
   },
+  'adapters/realm/cli': {
+    directories: 0,
+    mutual: 0,
+    note: 'FLAT, and deliberately so while it is small. The shape that matters here is not a directory tree but a single dependency direction: `cli-realm` knows the operating system only through the `Supervisor` port, so the realm and the thing that spawns processes can be read, and tested, apart.',
+  },
   'adapters/framework/react': {
     directories: 0,
     mutual: 0,

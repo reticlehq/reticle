@@ -60,6 +60,12 @@ export const SIDE = Object.freeze({
   // `node:fs/promises`, and the preload shim runs in the preload context, which has Node integration
   // and never touches `document` or `window`. It is not the browser side, and it is not isomorphic.
   '@reticlehq/electron': 'node',
+  // The command-line realm. Node on every half and not build-time: it SPAWNS the subject, holds
+  // its pipes and reaps it, which is a runtime relationship with a running process rather than a
+  // step in somebody's build. It never touches the DOM, and unlike every other realm adapter it
+  // has no browser half at all — there is no code inside the subject, which is the whole point of
+  // it.
+  '@reticlehq/cli-realm': 'node',
   // Isomorphic foundation — imported by every side, imports none of them.
   '@reticlehq/core': 'iso',
   // The conformance suite. Isomorphic and dependency-free: it describes behaviours to plant and

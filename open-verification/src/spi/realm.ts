@@ -14,6 +14,7 @@ import type { Reversal } from '@/vocabulary/mutation.js';
 import type { DeterminismProfile } from '@/vocabulary/determinism.js';
 import { type Observation } from '@/vocabulary/evidence.js';
 import type { Anomaly } from '@/vocabulary/verdict.js';
+import { couldEverProve } from './adjudicator.js';
 
 /**
  * What you extend to make a new kind of environment verifiable.
@@ -265,14 +266,25 @@ export abstract class Realm extends Witness {
   }
 
   /**
-   * Has this realm got any independent channel at all?
+   * Could this realm ever reach a `yes`?
    *
    * An implementation for which this is false can still be useful and still be conformant -- it
    * can describe, act and report presence. It can never prove anything, and it should know that
    * about itself at startup rather than discovering it one `unknown` at a time.
+   *
+   * It asks for an independent channel that is ALSO consequence-grade, which is what clause 9
+   * requires, and this used to ask only for an independent one. The two come apart: a channel can
+   * be genuinely independent and still worth nothing towards a proof. A process killed by the
+   * operating system is the worked example -- the kernel decided it, so nobody's code path did,
+   * and what it tells you is that something ENDED rather than what it did. A realm whose every
+   * independent channel is like that was told it could prove things, and then met clause 9 and
+   * never got past it.
+   *
+   * Delegates rather than restating the predicate. `closedCleanly` was duplicated the same way and
+   * the copies drifted, which is how a rule comes to be enforced in one place and not the other.
    */
   canProveAnything(): boolean {
-    return this.channels().some((c) => c.independence === 'independent');
+    return couldEverProve(this.channels());
   }
 
   /** Whether a window ended the way it meant to. A budget-exhausted close cannot support a proof. */

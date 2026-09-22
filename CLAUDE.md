@@ -21,6 +21,7 @@ adapters/build/vite       @reticlehq/vite-plugin  — Vite integration: stamps s
 adapters/build/babel-plugin  @reticlehq/babel-plugin — stamps data-reticle-source (source mapping, React 19)
 adapters/build/next       @reticlehq/next         — Next.js source mapping (keeps SWC) via withReticle (CJS)
 adapters/realm/electron   @reticlehq/electron     — Electron main-process adapter (IPC observer, capture)
+adapters/realm/cli        @reticlehq/cli-realm    — realm for a command-line subject; spawns and watches it, no code inside (Node-side)
 adapters/realm/tauri      reticle-tauri           — Tauri capture backend (RUST — outside every JS gate)
 spec-runner          @reticlehq/test         — spec runner + matchers for CI (peer vitest)
 adapters/lint/eslint  @reticlehq/eslint-plugin — dev-only lint rule: state changed ⇒ signal fired

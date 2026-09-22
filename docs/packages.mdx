@@ -231,6 +231,18 @@ A lint rule makes the signal layer self-enforcing, which is the only way a conve
 
 ---
 
+## @reticlehq/cli-realm
+
+**Verifies a command-line tool, with nothing installed inside it.**
+
+**Why it exists:** every other adapter here is a pair. Half an SDK inside the subject and half a daemon outside it, because a page cannot photograph itself. A command-line tool needs neither: this package spawns the process, holds its pipes, watches what it writes, and reaps it. There is nothing to wire into the subject and no build system to be compatible with.
+
+What it reports is graded honestly, and the grading is the point. The exit code and stdout are the tool describing itself, so neither can buy a `yes`. What the filesystem decided, and a termination the operating system imposed, are not the tool's to choose, and those are what a verdict rests on.
+
+**Depends on:** `open-verification`.
+
+---
+
 ## reticle-tauri
 
 **The Rust crate**, on crates.io. Versioned in lockstep with the npm packages, so `2.11` here and `2.11` there mean the same release.

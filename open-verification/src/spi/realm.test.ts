@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Realm } from './realm.js';
-import { CHANNEL_DEFAULTS, ChannelId } from '@/vocabulary/channel.js';
+import { CHANNEL_DEFAULTS, ChannelId, Grade, Independence } from '@/vocabulary/channel.js';
+import type { ChannelDescriptor } from '@/vocabulary/channel.js';
 import { CloseCondition, RefusalReason } from '@/vocabulary/realm-surface.js';
 import type { Action, ActionReceipt, Capability, Window } from '@/vocabulary/realm-surface.js';
 import type { Coverage, Observation } from '@/vocabulary/evidence.js';
@@ -32,7 +33,7 @@ class Careless extends Realm {
       actions: 'irreversible',
     } as const;
   }
-  channels() {
+  channels(): readonly ChannelDescriptor[] {
     return [
       { id: ChannelId.NET, ...CHANNEL_DEFAULTS[ChannelId.NET] },
       { id: ChannelId.LOG, ...CHANNEL_DEFAULTS[ChannelId.LOG] },
@@ -116,6 +117,35 @@ describe('a realm knows what it cannot answer, before an action is spent', () =>
 
   it('reports honestly that it can prove things, having an independent channel', () => {
     expect(new Careless().canProveAnything()).toBe(true);
+  });
+
+  /**
+   * An independent channel is NECESSARY and not sufficient, and this method said otherwise.
+   *
+   * Its own documentation is unambiguous: an implementation for which this is false "can describe,
+   * act and report presence. It can NEVER PROVE ANYTHING." But the predicate tested independence
+   * alone, so a realm whose every independent channel is presence-grade was told it could prove
+   * things -- and then met clause 9, which asks for independent AND consequence-grade evidence,
+   * and never got past it. Two questions, near-identical names, and the realm's one answered the
+   * wrong one.
+   *
+   * Found by a realm that is exactly this shape: a command-line tool observing only its output,
+   * its exit code and the kill the operating system imposed. That last one is genuinely
+   * independent -- the kernel decided it -- and it is presence-grade, because knowing a process
+   * was killed is not knowing what it did.
+   */
+  it('refuses to claim it can prove anything when every independent channel is presence-grade', () => {
+    class PresenceOnly extends Careless {
+      override channels(): readonly ChannelDescriptor[] {
+        return [
+          // Independent, and worth nothing towards a proof: another party decided it, and what it
+          // tells you is that something ENDED, not what it did.
+          { id: 'x-proc', independence: Independence.INDEPENDENT, grade: Grade.PRESENCE },
+          { id: ChannelId.LOG, ...CHANNEL_DEFAULTS[ChannelId.LOG] },
+        ];
+      }
+    }
+    expect(new PresenceOnly().canProveAnything()).toBe(false);
   });
 });
 
