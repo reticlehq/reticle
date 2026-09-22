@@ -152,7 +152,22 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * `@reticlehq/core` and wants deciding rather than doing under a size guard — but it is the
  * reason this ceiling keeps climbing, and every raise borrows against it.
  */
-const MAX_FIRST_LOAD_BYTES = 239_100;
+/*
+ * 239_100 -> 240_100, for the console channel seeing CSP violations. 184 B measured.
+ *
+ * A Content-Security-Policy violation is not a console error: the browser reports it through
+ * `securitypolicyviolation`, so a page whose script or connection was blocked outright looked, to
+ * an assertion over the console, exactly like a page with nothing wrong. That is the shape this
+ * product exists to refuse -- a clean answer about a page that never got to run.
+ *
+ * It is also the failure mode that hides Reticle's OWN setup problems: a CSP that blocks the
+ * bridge is one of the named causes in the "the SDK is in the page and never dialled" diagnosis,
+ * and until now the channel that should have said so was silent about it.
+ *
+ * Raised by 1,000 rather than to the measurement, per the note above: an ordinary change should
+ * not fail on rounding. The structural refund named above is still unspent.
+ */
+const MAX_FIRST_LOAD_BYTES = 240_100;
 /*
  * Raised a fifth time, 233_300 -> 233_400, for a route to be assertable in a SAVED flow. 57 B.
  *
