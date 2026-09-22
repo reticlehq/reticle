@@ -1,6 +1,8 @@
 {
   "name": "@reticlehq/cli-realm",
   "version": "3.1.0",
+  "_private_why": "NOT published yet, and this flag is the only thing standing between the branch and a one-way door. `pnpm -r publish` selects every workspace package that is not private, so merging this adapter into a release branch is enough to publish it -- and `npm view @reticlehq/cli-realm` is a 404, which makes a first publication a name claimed permanently at a version nobody can take back. The measurement in bench/cli-false-green went AGAINST this adapter: the no-package skill caught 8 of 8 planted defects and this caught 6. Remove this flag when its owner decides it ships, not before.",
+  "private": true,
   "description": "Reticle realm adapter for command-line tools: spawns a process, watches what it does to the filesystem, and reports evidence an adjudicator can reason over. Needs no code inside the subject.",
   "type": "module",
   "main": "./dist/index.js",
