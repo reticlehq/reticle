@@ -162,9 +162,13 @@ export const READ_PATH = Object.freeze({
       'the bounds themselves, exported so a reader can name the ceilings it was held to',
     ],
     SessionJournalOptions: [Declaration.NONE, 'the options type'],
+    JOURNAL_EVENT_BYTES_CAP: [
+      Declaration.NONE,
+      'the write ceiling itself, a number, exported so a test can prove the bound at a few kilobytes and a reader can name what refused a batch; the loss it causes is declared by readWriteLoss() on the entry below, not by this constant',
+    ],
     SessionJournal: [
       Declaration.REPORT,
-      'bounded twice — one durable read materialises at most MAX_READ_BYTES, and the parse-cache it accumulates into is held to MAX_RETAINED_BYTES/EVENTS — so a session whose append-only ledger outgrew a JS string still answers, and keeps the NEWEST records either way; everything either bound removed returns from readLoss() as { droppedBytes, droppedEvents, lostThroughT?, note } beside the events, and Session.lostSince folds that into the same buffer_loss an evicted ring buffer already declares',
+      'bounded twice — one durable read materialises at most MAX_READ_BYTES, and the parse-cache it accumulates into is held to MAX_RETAINED_BYTES/EVENTS — so a session whose append-only ledger outgrew a JS string still answers, and keeps the NEWEST records either way; everything either bound removed returns from readLoss() as { droppedBytes, droppedEvents, lostThroughT?, note } beside the events, and Session.lostSince folds that into the same buffer_loss an evicted ring buffer already declares; bounded on the WRITE side too, where a batch refused by JOURNAL_EVENT_BYTES_CAP returns from readWriteLoss() rather than being dropped in silence',
     ],
   },
   'server/src/memory/project/fs/fs-port.ts': {

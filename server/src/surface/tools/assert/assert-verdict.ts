@@ -136,6 +136,18 @@ export async function assertVerdict(
   // rule — part of what happened was not seen — so both belong in `blindSpots`, which is the only
   // input `decideVerified` reads for that.
   const gap = transportGapNote(windowEvents);
+  /**
+   * The DURABLE half of the same question. `queryEvents` above falls through to the journal once the
+   * ring buffer has evicted, and that ledger refuses writes at its byte ceiling — so a window read
+   * from it after the ceiling was reached is missing whatever the cap turned away. The in-band
+   * marker cannot carry this: it is stamped with a `t`, and any `since` later than that filters it
+   * straight back out, leaving a partial answer that looks exactly like a complete one.
+   *
+   * Called optionally because `Session` is stubbed by cast in a great many suites, and a method
+   * added to it therefore arrives as a runtime `undefined` in files that have nothing to do with
+   * this change — the cost recorded at the top of `fake-session.ts`, four times over.
+   */
+  const ledgerClosed = undefined !== (await session.journalWriteLoss?.());
   // A consumer rule that crashed belongs here too: the engine ran with fewer rules than it claims,
   // so part of what happened may simply not have been looked for.
   const impeachingNotes = [impeaching.note, gap, ...crashedRuleNotes()].filter(
@@ -146,6 +158,29 @@ export async function assertVerdict(
   const stillInFlight = inFlightRequestLabels(windowEvents);
   const effectiveInconclusive =
     inconclusive ?? (!pass ? session.preconditionFailure?.() : undefined);
+  /**
+   * Does a green here rest on the window having been COMPLETE?
+   *
+   * Not a refinement of the two losses below — it is what keeps either of them usable. Scarce loss
+   * is recorded for AGE eviction too, so `lostSince(0)` is true on any session past the 60s cutoff,
+   * and assert takes a caller-chosen `since` that is often 0. Impeaching every verdict over a wide
+   * window would make `unknown` the answer to everything, which is the failure this repo has already
+   * paid for once, when `unclean_capture` became the dominant cause of `unknown` in the field. A
+   * POSITIVE assertion that passed FOUND its evidence; things lost elsewhere do not unmake it.
+   */
+  const restsOnComplete = restsOnCompleteWindow(predicate);
+  /**
+   * The buffer evicted scarce evidence from this window.
+   *
+   * assert never consulted the buffer at all, on the reasoning that it "observes an already-open
+   * window" — but eviction happens on push regardless of who opened the window, so
+   * `{ console, absent: true }` returned `yes` over a window whose evidence was gone, which is
+   * absence of evidence read as evidence of absence. The act path needs no `restsOnComplete` guard:
+   * its cursor is the action's own.
+   */
+  const bufferLost = session.lostSince(since) && restsOnComplete;
+  /** The durable ledger refused writes, on a query path that read from it. Same rule, other store. */
+  const ledgerLost = ledgerClosed && restsOnComplete;
   const decision = decideVerified({
     pass,
     // What this claim needs to read, against what the page said it can see -- the protocol's
@@ -169,27 +204,19 @@ export async function assertVerdict(
     honesty: buildHonestyBlock({
       grade: gradeOfPredicate(predicate),
       attribution: 'window',
-      // Did the buffer evict SCARCE evidence belonging to this window, AND does a green here rest on
-      // the window being complete. assert never consulted the buffer at all, on the reasoning that it
-      // "observes an already-open window" — but eviction happens on push regardless of who opened the
-      // window, so `{ console, absent: true }` returned `yes` over a window whose evidence was gone,
-      // which is absence of evidence read as evidence of absence.
-      //
-      // The second half of the condition is not a refinement, it is what keeps this usable. Scarce
-      // loss is recorded for AGE eviction too, so `lostSince(0)` is true on any session past the 60s
-      // cutoff, and assert takes a caller-chosen `since` that is often 0. Impeaching every verdict
-      // over a wide window would make `unknown` the answer to everything — the failure this repo has
-      // already paid for once, when `unclean_capture` became the dominant cause of `unknown` in the
-      // field. The act path needs no such guard: its cursor is the action's own.
-      truncated: session.lostSince(since) && restsOnCompleteWindow(predicate),
+      truncated: bufferLost,
+      // The durable ledger stopped, and the SAME absence rule applies: a positive assertion that
+      // passed found its evidence, and events missing from the end of a file do not unmake it.
+      ledgerClosed: ledgerLost,
       coveragePartial: Coverage.PARTIAL === statement.coverage,
       ...(statement.note === undefined ? {} : { coverageNote: statement.note }),
       ...(0 === impeachingNotes.length ? {} : { blindSpots: impeachingNotes }),
-      // Which loss, as an enum, beside the prose.
+      // Which loss, as an enum, beside the prose. Ours before the page's, and the memory one before
+      // the disk one: `verification.uncleanLoss` takes the first, and a window that lost both is
+      // more usefully reported as the eviction, which is the one a caller can still drive around.
       losses: [
-        ...(session.lostSince(since) && restsOnCompleteWindow(predicate)
-          ? [CaptureLoss.BUFFER_LOSS]
-          : []),
+        ...(bufferLost ? [CaptureLoss.BUFFER_LOSS] : []),
+        ...(ledgerLost ? [CaptureLoss.JOURNAL_LOSS] : []),
         ...(gap === undefined ? [] : [CaptureLoss.TRANSPORT_GAP]),
         ...(impeaching.note === undefined ? [] : [CaptureLoss.BLIND_SPOT]),
       ],

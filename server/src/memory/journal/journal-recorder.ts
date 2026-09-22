@@ -2,6 +2,7 @@ import {
   EventAttribution,
   JOURNAL_FILE_VERSION,
   type JournalAction,
+  type JournalWriteLoss,
   type ReticleEvent,
 } from '@reticlehq/core';
 import { isSelfObservation } from './self-observation.js';
@@ -65,6 +66,16 @@ export interface JournalReader {
    * that omits it declares no loss, which is the behaviour every partial double already had.
    */
   readLoss?(): JournalReadLoss | undefined;
+  /**
+   * What the WRITER could not put on disk: the ledger's closure report, when its byte ceiling
+   * refused a batch. `undefined` means nothing was refused.
+   *
+   * Optional for the same reason `readActions` is, and absence means NOT MEASURED rather than "no
+   * loss" — a reader that cannot answer must not be made to answer "clean". The separate question
+   * of what a bounded READ declined to hand back belongs to the reader that bounded it; this one is
+   * only ever about writes that never happened.
+   */
+  readWriteLoss?(): Promise<JournalWriteLoss | undefined>;
 }
 
 interface JournalRecorderOptions {

@@ -15,6 +15,39 @@ export const NO_GEOMETRY: ClickGeometry = {
 };
 
 /**
+ * Construct a mouse event with the target document's window, preserving the caller's flags.
+ *
+ * `view` is what a handler reads to reach the window the event happened in — `event.view.scrollTo`,
+ * `event.view.getComputedStyle`, `event.view.addEventListener('mouseup', …)` to follow a drag. It
+ * was omitted from every synthetic event this file dispatches, so those handlers saw `null` and a
+ * control that worked under a real pointer did nothing under a driven one.
+ *
+ * `el.ownerDocument.defaultView`, not the global `window`, because the target may live in an iframe
+ * and an event carrying the PARENT's window is a different lie from carrying none. It is spread
+ * LAST so no call site can pass a `view` of its own: the guarantee is structural rather than a rule
+ * every dispatch site in this package has to remember, which is what it was for one commit and
+ * what made the same expression appear eleven times.
+ */
+export function mouseEventFor(el: Element, type: string, init: MouseEventInit = {}): MouseEvent {
+  return new MouseEvent(type, { ...init, view: el.ownerDocument.defaultView });
+}
+
+/**
+ * The same, as a POINTER event where the environment has one.
+ *
+ * `PointerEvent` is absent on older WebKit and in some embedded webviews, where a mouse event is the
+ * documented fallback — and the fallback needs the window just as much, which is the half that used
+ * to be written out twice per call site and so was the half that drifted. Pointer-only members left
+ * in `init` are ignored by `MouseEventInit`, so one construction serves both.
+ */
+function pointerEventFor(el: Element, type: string, init: PointerEventInit): MouseEvent {
+  const full = { ...init, view: el.ownerDocument.defaultView };
+  return 'function' === typeof PointerEvent
+    ? new PointerEvent(type, full)
+    : new MouseEvent(type, full);
+}
+
+/**
  * Full click as a real user produces it: pointerdown -> mousedown -> focus -> pointerup -> mouseup
  * -> click. A bare `click` event skips pointer- and focus-gated handlers. Returns the click event's
  * `defaultPrevented` so the probe is unchanged. Focus only moves for focusable targets (tabIndex>=0),
@@ -28,7 +61,7 @@ export async function fireClickSequence(
   const from: EventTarget = doc.activeElement ?? doc.body;
   firePointer(el, 'pointerdown', from);
   asSyntheticInput(() =>
-    el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })),
+    el.dispatchEvent(mouseEventFor(el, 'mousedown', { bubbles: true, cancelable: true })),
   );
   if (el.tabIndex >= 0 && 'function' === typeof el.focus) el.focus();
   // The gap that makes hold-to-confirm driveable. With down and up synchronous, a control whose
@@ -46,12 +79,12 @@ export async function fireClickSequence(
   }
   firePointer(el, 'pointerup', from);
   asSyntheticInput(() =>
-    el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true })),
+    el.dispatchEvent(mouseEventFor(el, 'mouseup', { bubbles: true, cancelable: true })),
   );
   // Marked as Reticle's own so the annotator's capture-phase listener lets it through. Without it,
   // the click is swallowed whole in annotate mode while still reporting `dispatched: true`.
   const notPrevented = asSyntheticInput(() =>
-    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })),
+    el.dispatchEvent(mouseEventFor(el, 'click', { bubbles: true, cancelable: true })),
   );
   return { prevented: !notPrevented, heldMs };
 }
@@ -101,13 +134,9 @@ export function firePointer(
   type: string,
   relatedTarget: EventTarget | null = null,
 ): void {
-  asSyntheticInput(() => {
-    if ('function' === typeof PointerEvent) {
-      el.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, relatedTarget }));
-    } else {
-      el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, relatedTarget }));
-    }
-  });
+  asSyntheticInput(() =>
+    el.dispatchEvent(pointerEventFor(el, type, { bubbles: true, cancelable: true, relatedTarget })),
+  );
 }
 
 /** Enter/leave pointer events are non-bubbling per spec; keep them so to avoid double-firing. */
@@ -116,13 +145,11 @@ export function firePointerNonBubbling(
   type: string,
   relatedTarget: EventTarget | null = null,
 ): void {
-  asSyntheticInput(() => {
-    if ('function' === typeof PointerEvent) {
-      el.dispatchEvent(new PointerEvent(type, { bubbles: false, cancelable: true, relatedTarget }));
-    } else {
-      el.dispatchEvent(new MouseEvent(type, { bubbles: false, cancelable: true, relatedTarget }));
-    }
-  });
+  asSyntheticInput(() =>
+    el.dispatchEvent(
+      pointerEventFor(el, type, { bubbles: false, cancelable: true, relatedTarget }),
+    ),
+  );
 }
 
 function makeDataTransfer(data: unknown): DataTransfer | null {
@@ -211,11 +238,12 @@ export async function dragElement(
       button: 0,
       ...(related !== undefined ? { relatedTarget: related } : {}),
     };
-    if ('function' === typeof PointerEvent && type.startsWith('pointer')) {
-      el.dispatchEvent(new PointerEvent(type, { ...init, pointerId: 1, isPrimary: true }));
-    } else {
-      el.dispatchEvent(new MouseEvent(type, init));
-    }
+    // A `mouse*` type stays a MouseEvent even where PointerEvent exists — the pair is the point.
+    el.dispatchEvent(
+      type.startsWith('pointer')
+        ? pointerEventFor(el, type, { ...init, pointerId: 1, isPrimary: true })
+        : mouseEventFor(el, type, init),
+    );
   };
   /** Is this path point inside an element's box? Rects are cached; jsdom reports zeros otherwise. */
   const sourceRect = source.getBoundingClientRect();
@@ -318,29 +346,25 @@ export async function fireTapSequence(
   asSyntheticInput(() => el.dispatchEvent(makeTouchEvent('touchend', [])));
   firePointerTouch(el, 'pointerup');
   const clicked = asSyntheticInput(() =>
-    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })),
+    el.dispatchEvent(mouseEventFor(el, 'click', { bubbles: true, cancelable: true })),
   );
   return { prevented: !clicked, heldMs };
 }
 
 /** A pointer event that says it came from a FINGER — the discriminator a touch handler reads. */
 function firePointerTouch(el: Element, type: string): void {
-  asSyntheticInput(() => {
-    if ('function' === typeof PointerEvent) {
-      el.dispatchEvent(
-        new PointerEvent(type, {
-          bubbles: true,
-          cancelable: true,
-          pointerType: 'touch',
-          isPrimary: true,
-          width: 23,
-          height: 23,
-        }),
-      );
-      return;
-    }
-    el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }));
-  });
+  asSyntheticInput(() =>
+    el.dispatchEvent(
+      pointerEventFor(el, type, {
+        bubbles: true,
+        cancelable: true,
+        pointerType: 'touch',
+        isPrimary: true,
+        width: 23,
+        height: 23,
+      }),
+    ),
+  );
 }
 
 /**
