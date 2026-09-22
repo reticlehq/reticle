@@ -386,6 +386,7 @@ import {
   firePointer,
   firePointerNonBubbling,
   dragElement,
+  mouseEventFor,
 } from './actions-dom.js';
 import { scrollFrom } from './scroll.js';
 
@@ -496,7 +497,7 @@ async function dispatchOther(
   switch (action) {
     case ActionType.DBLCLICK:
       return !asSyntheticInput(() =>
-        el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true })),
+        el.dispatchEvent(mouseEventFor(el, 'dblclick', { bubbles: true, cancelable: true })),
       );
     case ActionType.HOVER: {
       const doc = el.ownerDocument;
@@ -504,13 +505,13 @@ async function dispatchOther(
       const from: EventTarget = doc.activeElement ?? doc.body;
       // Bubbling over/move with relatedTarget so React's delegated root can synthesize enter/leave.
       firePointer(el, 'pointerover', from);
-      el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, relatedTarget: from }));
+      el.dispatchEvent(mouseEventFor(el, 'mouseover', { bubbles: true, relatedTarget: from }));
       // Non-bubbling enter pair (per spec) for direct enter/onMouseEnter listeners.
       firePointerNonBubbling(el, 'pointerenter', from);
-      el.dispatchEvent(new MouseEvent('mouseenter', { relatedTarget: from }));
+      el.dispatchEvent(mouseEventFor(el, 'mouseenter', { relatedTarget: from }));
       firePointer(el, 'pointermove', from);
       const moved = el.dispatchEvent(
-        new MouseEvent('mousemove', { bubbles: true, cancelable: true }),
+        mouseEventFor(el, 'mousemove', { bubbles: true, cancelable: true }),
       );
       // hover-dwell: keep "hovering" for holdMs so timer-gated reveals can mount. Capped like
       // click's: unbounded, it is the same never-returns hazard.
@@ -654,7 +655,11 @@ async function dispatchOther(
       // a cancelled activation was reported as a successful one. Activation behaviour runs either way
       // — a synthetic click toggles the box, which `adversarial.check.test.ts` pins, because the
       // comment this replaces asserted the opposite and was wrong.
-      const event = new MouseEvent('click', { bubbles: true, cancelable: true, composed: true });
+      const event = mouseEventFor(el, 'click', {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+      });
       // Marked as ours so the annotator's capture-phase listener lets it through: in annotate mode
       // it cancels clicks to place a mark, which would otherwise swallow every action we dispatch.
       const notPrevented = asSyntheticInput(() => el.dispatchEvent(event));

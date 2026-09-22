@@ -17,6 +17,16 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     environment: 'jsdom',
+    /**
+     * For the same reason as `@reticlehq/browser`, whose reasoning is written out in full there.
+     *
+     * `drag-select.test.ts` and `actions-controlled.test.ts` drive the browser SDK's synthetic
+     * input against a React tree. That input now carries `view: el.ownerDocument.defaultView`, and
+     * under the default `threads` pool that property has been rewritten to the Node global, which
+     * jsdom's `UIEvent` constructor rejects — 5 tests in those two files fail there and pass here.
+     * This package asks nothing of Node's globals, so the switch costs it nothing.
+     */
+    pool: 'vmThreads',
     // Every package shares one bound; see vitest.shared.ts for the gate this kept red.
     ...sharedTestOptions,
   },

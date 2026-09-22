@@ -149,6 +149,15 @@ export const CaptureLoss = {
   TRANSPORT_GAP: 'transport_gap',
   /** A region the SDK cannot see through — a cross-origin frame, a closed shadow root. */
   BLIND_SPOT: 'blind_spot',
+  /**
+   * The durable event ledger refused writes at its byte ceiling, so evidence is missing from DISK.
+   *
+   * A fourth owner, and the one whose loss does not heal. `buffer_loss` is a window that aged out of
+   * memory and `transport_gap` is a queue that overflowed for a moment; this one is a file that
+   * stopped accepting writes for the rest of the session. Folding it into `buffer_loss` would put
+   * "wait and re-drive" next to a condition no re-drive can fix.
+   */
+  JOURNAL_LOSS: 'journal_loss',
   /** A loss we have not classified. A classifier that cannot say "I don't know" lies instead. */
   OTHER: 'other',
 } as const;
