@@ -141,6 +141,25 @@ export const CloseCondition = {
   SIGNAL: 'signal',
   /** Physical motion stopped and an independent sensor agreed. */
   SETTLED_PHYSICAL: 'settled-physical',
+  /**
+   * The subject's unit of execution ended of its own accord.
+   *
+   * The cleanest close in this list, and the one it was missing. Nothing is inferred from silence
+   * and no deadline is chosen by the verifier: the subject finished. A command, a job, a container
+   * and a request handler all end this way, and none of them can honestly report any of the five
+   * above -- `signal` was the nearest, which meant two implementations using one word for two
+   * different things and no reader able to tell them apart.
+   */
+  EXIT: 'exit',
+  /**
+   * The execution was ended from outside it: a signal, a kill, a supervisor.
+   *
+   * Never a clean close, and the distinction from `exit` is not bookkeeping. The effect may be
+   * half-applied and the subject did not choose the moment, so nothing observed under it supports
+   * a proof. A verifier that ended the execution ITSELF reports `budget-exhausted` instead --
+   * `terminated` is for an ending imposed by something that is neither the subject nor us.
+   */
+  TERMINATED: 'terminated',
   /** The budget ran out before any of the above. Never a clean close. */
   BUDGET_EXHAUSTED: 'budget-exhausted',
 } as const;
@@ -177,6 +196,20 @@ export function closedCleanly(window: Window): boolean {
   return (
     window.closedAt !== undefined &&
     window.closedBy !== undefined &&
-    window.closedBy !== CloseCondition.BUDGET_EXHAUSTED
+    !UNCLEAN_CLOSES.has(window.closedBy)
   );
 }
+
+/**
+ * The ways a window can end without supporting a proof.
+ *
+ * A set rather than a chain of `!==`, because there are two of them now and there was one, and the
+ * second was missed for exactly as long as the predicate was written inline. `budget-exhausted` is
+ * the verifier giving up; `terminated` is the subject being killed. Neither is the subject
+ * finishing, and a verdict resting on either is a statement about something other than the
+ * application.
+ */
+const UNCLEAN_CLOSES: ReadonlySet<CloseCondition> = new Set([
+  CloseCondition.BUDGET_EXHAUSTED,
+  CloseCondition.TERMINATED,
+]);

@@ -214,11 +214,13 @@ A realm MAY return several handles and MUST NOT choose between them. Returning t
 
 Everything a realm reports is scoped to a **window**: a bounded stretch of time with a beginning and an end, holding what was seen in it. A window is not an implementation detail. An observation with no window cannot be argued with — "the request went out" is not checkable unless you can say _when_, and relative to what. So every observation belongs to a window, and any verdict built from observations is a claim about that window and no other.
 
-The **close condition belongs to the realm**: `quiescence`, `ticks`, `ack`, `signal`, `settled-physical`, or `budget-exhausted`.
+The **close condition belongs to the realm**: `quiescence`, `ticks`, `ack`, `signal`, `settled-physical`, `exit`, `terminated`, or `budget-exhausted`.
 
 Quiescence — wait until it goes quiet — is _one_ close condition, not the concept. A game never goes quiet. A service's truth arrives after the acknowledgement. A robot settles physically and a separate sensor confirms it. **An engine that hard-codes quiescence has excluded every asynchronous domain while appearing to support them.**
 
 `budget-exhausted` MUST NOT be treated as a clean close, and a clean close is required for `yes` and for `no-fault`. [OVP-REALITY-5]
+
+Some subjects do not settle — they **end**. A command, a job, a container and a request handler all finish, and `exit` is the cleanest close this document defines: nothing is inferred from silence and no deadline is chosen by the verifier. It is distinct from `terminated`, which is an ending imposed from outside the execution — a signal, a kill, a supervisor. A `terminated` window MUST NOT be treated as a clean close: the effect may be half-applied and the subject did not choose the moment, so nothing observed under it can support a proof. A verifier that ended the execution ITSELF MUST report `budget-exhausted` rather than `terminated`, which is the rule above read in the other direction — an implementation must not report its own impatience as the subject's misfortune. [OVP-REALITY-7]
 
 **"The verifier gave up" and "this realm cannot measure the close condition" are different facts, and an implementation MUST NOT report the second as the first.** A hidden browser tab never flushes the frame that quiescence is read from, and a hidden tab is the _normal_ state for agent-driven verification — so an implementation that reports an unmeasurable settle signal as `budget-exhausted` makes every backgrounded subject permanently unprovable. The honest report is a blind spot on `time` (§6), non-impeaching for a claim that does not read it. [OVP-REALITY-6]
 

@@ -341,6 +341,28 @@ describe('when a window counts as closed', () => {
     expect(closedCleanly(open)).toBe(false);
     expect(closedCleanly({ ...open, closedAt: 10 })).toBe(false);
   });
+
+  /**
+   * A subject whose unit of execution ENDS, and the two ways it can end.
+   *
+   * `exit` is the cleanest close this specification has: nothing was inferred from silence and no
+   * deadline was chosen by the verifier -- the subject simply finished. Nothing in the original
+   * five could say it, so an implementation for a command, a job or a container had to report
+   * `signal` and mean something else, which is how two implementations come to use one word for
+   * two things.
+   *
+   * `terminated` is the half that `closedCleanly` got wrong, and it was found by writing a realm
+   * for a subject that can be killed. A process ended by the operating system did not end of its
+   * own accord and did not exhaust OUR budget, so under the old predicate it was reported as a
+   * CLEAN close -- a verdict built on a crashed run, which is the one shape a close condition
+   * exists to refuse.
+   */
+  it('separates ending of its own accord from being ended by something else', () => {
+    expect(closedCleanly({ ...open, closedAt: 10, closedBy: CloseCondition.EXIT })).toBe(true);
+    expect(closedCleanly({ ...open, closedAt: 10, closedBy: CloseCondition.TERMINATED })).toBe(
+      false,
+    );
+  });
 });
 
 describe('which blind spots bear on a claim', () => {

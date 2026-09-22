@@ -4,8 +4,8 @@ import {
   type ActionReceipt,
   type Action,
   type Window,
-  CloseCondition,
   RefusalReason,
+  closedCleanly as windowClosedCleanly,
 } from '@/vocabulary/realm-surface.js';
 import { type ChannelId } from '@/vocabulary/channel.js';
 import { Witness } from './witness.js';
@@ -277,10 +277,6 @@ export abstract class Realm extends Witness {
 
   /** Whether a window ended the way it meant to. A budget-exhausted close cannot support a proof. */
   protected closedCleanly(window: Window): boolean {
-    return (
-      window.closedAt !== undefined &&
-      window.closedBy !== undefined &&
-      window.closedBy !== CloseCondition.BUDGET_EXHAUSTED
-    );
+    return windowClosedCleanly(window);
   }
 }
