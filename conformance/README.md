@@ -60,7 +60,11 @@ If a plant is refused, the scenario is scored **unplantable** — never passed.
 
 `subjects/bench-app.mjs` is our side of the inverted contract: a scenario id, how to put the app into that state, and what to claim once it is there. Planting is a URL — `apps/bench-app` carries seventy-three injected regressions reachable as `?reticle-bug=<id>`, and five of them happen to be the behaviours five scenarios describe.
 
-**Eight of sixteen.** The other eight have no entry and are scored `absent`, never passed. That number is published rather than smoothed because the gap is the FIXTURE, not the implementation: the bug catalogue was grown for a benchmark, and nobody has yet built a subject that can produce "the result appears somewhere this implementation is not watching".
+**Eight of sixteen.** The other eight have no entry and are scored `absent`, never passed. That number is published rather than smoothed because the gap is the FIXTURE, not the implementation: the bug catalogue was grown for a benchmark.
+
+`subjects/cli-smoke.mjs` is the third subject, and the first that is not a page — a command-line tool, with no DOM, no request to intercept and no screen. It reaches nine, two of which nothing else could. **`consequence-already-true` was the one adjudication ground no run of this suite had ever reached**, and it needed both halves closed at once: no subject could plant it, and no implementation supplied `consequenceHeldBefore`. A realm that snapshots a filesystem before it acts holds the before-state inherently, and a build run twice is the scenario. `outcome-in-an-unwatched-place` was the entry this file used to say nobody had built a subject for; a tool writing outside its declared roots is it, in one line.
+
+Every ground in the adjudication order is now driven by a real subject. `subjects/coverage.test.mjs` asserts that as an equality, so a clause that stops being driven fails rather than quietly rejoining the list.
 
 A subject map is the one place an implementation can cheat unnoticed — name a scenario it cannot really produce, and the driver will drive it, get whatever the app happens to do, and score that as an answer. So `plantUrl` returns `undefined` rather than a plausible base URL for anything it cannot plant, and a test asserts that every id in the map is a scenario the suite defines.
 

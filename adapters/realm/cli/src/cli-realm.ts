@@ -173,6 +173,20 @@ export class CliRealm extends Realm {
    * before-state.
    */
   readonly #before = new Map<string, Snapshot>();
+  /**
+   * The look taken when each window closed, kept so `observe` and `coverage` describe ONE moment.
+   *
+   * They are two questions about a single observation -- what did you see, and what could you not
+   * see -- and taking a fresh look for each would answer them about different instants. A coverage
+   * report that describes a different moment from the evidence beside it is worse than none, and
+   * the reference witness memoises for exactly this reason.
+   *
+   * It also made `coverage` depend on `observe` having run first, which is hidden state: a caller
+   * asking in the other order was told the realm saw everything when it had not looked at all.
+   */
+  readonly #after = new Map<string, Snapshot>();
+  /** The budget of the most recently opened window, which is what a dispatch runs under. */
+  #openBudgetMs: number | undefined;
 
   constructor(deps: CliRealmDeps) {
     super();
@@ -263,7 +277,7 @@ export class CliRealm extends Realm {
       return this.refuse(action, RefusalReason.UNDECLARED, `no command ${action.capability}`);
     }
     try {
-      await this.#deps.supervisor.run(command.name, command.argv, DEFAULT_BUDGET_MS);
+      await this.#deps.supervisor.run(command.name, command.argv, this.#budget());
     } catch (error) {
       // Failing to REACH the tool is a refusal, not a verdict. Nothing was learned about the
       // tool's behaviour, only about our ability to run it.
@@ -291,6 +305,7 @@ export class CliRealm extends Realm {
     // Taken HERE, before anything is dispatched, which is the only moment it is the before-state.
     // A snapshot taken at verification time would be the after-state wearing the other name.
     if (workspace !== undefined) this.#before.set(id, workspace.snapshot());
+    this.#openBudgetMs = budgetMs;
     return {
       id,
       openedAt: this.#deps.now(),
@@ -318,9 +333,20 @@ export class CliRealm extends Realm {
   /** What changed on disk across this window, or nothing when there was nowhere to look. */
   changesIn(window: Window): readonly Change[] {
     const before = this.#before.get(window.id);
+    if (before === undefined) return [];
+    const after = this.#afterLook(window);
+    return after === undefined ? [] : diffSnapshots(before, after);
+  }
+
+  /** One look per window, taken on first ask and shared by everything that needs it. */
+  #afterLook(window: Window): Snapshot | undefined {
     const workspace = this.#deps.workspace;
-    if (before === undefined || workspace === undefined) return [];
-    return diffSnapshots(before, workspace.snapshot());
+    if (workspace === undefined) return undefined;
+    const seen = this.#after.get(window.id);
+    if (seen !== undefined) return seen;
+    const taken = workspace.snapshot();
+    this.#after.set(window.id, taken);
+    return taken;
   }
 
   /**
@@ -407,7 +433,7 @@ export class CliRealm extends Realm {
                 impeaching: false,
                 remedy: 'declare more roots, or narrow the claim to what is inside them',
               },
-              ...unreadableSpots(workspace),
+              ...unreadableSpots(this.#afterLook(window), workspace),
             ]),
         {
           kind: BlindSpotKind.CHANNEL_UNOBSERVED,
@@ -435,6 +461,18 @@ export class CliRealm extends Realm {
           : []),
       ],
     });
+  }
+
+  /**
+   * How long the running command is given: the OPEN window's budget, not a constant.
+   *
+   * This was `DEFAULT_BUDGET_MS` regardless, which meant a caller who opened a 300ms window to
+   * produce a verifier-gives-up scenario waited two minutes instead, and the conformance suite
+   * scored the scenario as timed out rather than answered. A window's budget is the caller saying
+   * how long they are prepared to wait; ignoring it makes the number decorative.
+   */
+  #budget(): number {
+    return this.#openBudgetMs ?? DEFAULT_BUDGET_MS;
   }
 
   /** The run this window is about, if there is one. */
@@ -569,8 +607,9 @@ function artifactsOf(window: Window, changes: readonly Change[]): Observation[] 
  * counting on is simply absent. Reading it as "nothing was there" makes every absence claim over
  * that root true for a reason that has nothing to do with the subject.
  */
-function unreadableSpots(workspace: WorkspacePort): BlindSpot[] {
-  return workspace.snapshot().unreadable.map((root) => ({
+function unreadableSpots(after: Snapshot | undefined, workspace: WorkspacePort): BlindSpot[] {
+  const roots = after?.unreadable ?? workspace.roots;
+  return roots.map((root) => ({
     kind: BlindSpotKind.BOUNDARY_UNCROSSABLE,
     channel: CliChannel.ARTIFACT,
     detail: `the declared root ${root} could not be read, so nothing under it was observed`,

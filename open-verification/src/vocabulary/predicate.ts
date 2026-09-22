@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ChannelIdSchema } from './channel.js';
-import type { Observation } from './evidence.js';
+import { impeachingSpots, type Coverage, type Observation } from './evidence.js';
 
 /**
  * The few predicate shapes this specification evaluates itself.
@@ -240,4 +240,41 @@ export function assertionsHeld(
     .filter((v): v is boolean => undefined !== v);
   if (0 === answers.length) return undefined;
   return answers.every((v) => v);
+}
+
+/**
+ * Did a claim's assertions hold, given what the verifier could not see?
+ *
+ * `assertionsHeld` answers about the OBSERVATIONS. This answers about the WORLD, and the two part
+ * company exactly when the verifier lost its vantage point: an empty window means "nothing
+ * happened" or "nobody was looking", and reporting the second as the first is the failure this
+ * whole specification is built to refuse.
+ *
+ * It matters because of where §7.1 puts things. Clause 4 -- the declared consequence did not hold
+ * -- runs BEFORE clause 5 (the window did not close) and clause 6 (coverage was impeached), while
+ * the order's own rationale says *"'I could not see' is always evaluated before 'it did not
+ * happen'"*. Those two are reconciled only by what a caller passes as `assertionsHeld`, and
+ * nothing said so until an implementation got it wrong.
+ *
+ * The case that found it: a realm whose subject can VANISH mid-window. A command-line tool that
+ * deletes the directory being watched left a window with no observations on the channel its claim
+ * read, `assertionsHeld` reported a confident `false`, and clause 4 returned `no` -- the
+ * application is broken -- for a window in which the verifier had simply stopped being able to
+ * look. The same shape reaches every implementation whose window can end early, which is all of
+ * them.
+ *
+ * An implementation SHOULD prefer this over `assertionsHeld` wherever it has a `Coverage` to hand.
+ */
+export function assertionsHeldUnder(
+  assertions: readonly { readonly predicate?: unknown; readonly channels: readonly string[] }[],
+  observations: readonly Observation[],
+  coverage: Coverage,
+): boolean | undefined {
+  const channelsRead = [...new Set(assertions.flatMap((a) => a.channels))];
+  // Only an IMPEACHING spot on a channel the claim actually reads can do this. A verifier blind to
+  // something the claim never asked about has lost nothing, and letting any blind spot suppress
+  // every assertion would punish an implementation for enumerating its gaps honestly -- which is
+  // the same trap `BlindSpot.impeaching` exists to avoid.
+  if (impeachingSpots(coverage, channelsRead).length > 0) return undefined;
+  return assertionsHeld(assertions, observations);
 }

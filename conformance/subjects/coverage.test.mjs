@@ -3,9 +3,10 @@ import { Profile, SCENARIOS } from '../scenarios/index.mjs';
 import { requiredScenarios } from '../score.mjs';
 import { plantUrl } from './bench-app.mjs';
 import { ELECTRON_SMOKE_SUBJECT } from './electron-smoke.mjs';
+import { CLI_SMOKE_SUBJECT } from './cli-smoke.mjs';
 
 /**
- * What the two subjects reach TOGETHER, which neither runner could say.
+ * What the three subjects reach TOGETHER, which no single runner could say.
  *
  * `run-self.mjs` and `run-desktop.mjs` are separate processes that each print their own absent
  * list, so a reader of the web score sees `fire-and-forget: absent` with no way to learn that
@@ -22,6 +23,14 @@ import { ELECTRON_SMOKE_SUBJECT } from './electron-smoke.mjs';
 const IN_PROFILE = requiredScenarios(Profile.EFFECT).map((s) => s.id);
 const WEB = IN_PROFILE.filter((id) => plantUrl('http://x', id) !== undefined);
 const DESKTOP = IN_PROFILE.filter((id) => ELECTRON_SMOKE_SUBJECT[id] !== undefined);
+/**
+ * The first subject here that is not a page.
+ *
+ * No DOM, no request to intercept, no screen to photograph -- which is what makes it worth having
+ * beyond the two scenarios it uniquely plants: until it existed, the claim that the adjudicator is
+ * realm-blind had only ever been tested against browsers.
+ */
+const CLI = IN_PROFILE.filter((id) => CLI_SMOKE_SUBJECT[id] !== undefined);
 
 /**
  * Planted by neither subject.
@@ -30,17 +39,14 @@ const DESKTOP = IN_PROFILE.filter((id) => ELECTRON_SMOKE_SUBJECT[id] !== undefin
  * MUTUAL_PAIRS_TODAY is: a bound quietly accepts the list growing back. Adding a planter should
  * fail this test and make somebody delete a line, which is the only edit that records progress.
  */
-const PLANTED_NOWHERE = [
-  'consequence-already-true',
-  'accepted-but-not-finished',
-  'outcome-in-an-unwatched-place',
-];
+const PLANTED_NOWHERE = ['accepted-but-not-finished'];
 
 describe('what the web and desktop subjects reach between them', () => {
   it('reads both subject maps, so an empty answer cannot mean it read nothing', () => {
     expect(IN_PROFILE.length).toBeGreaterThan(5);
     expect(WEB.length).toBeGreaterThan(0);
     expect(DESKTOP.length).toBeGreaterThan(0);
+    expect(CLI.length).toBeGreaterThan(0);
   });
 
   it('is complementary rather than nested — each surface reaches something the other cannot', () => {
@@ -63,8 +69,27 @@ describe('what the web and desktop subjects reach between them', () => {
     ]);
   });
 
+  /**
+   * What only the command-line subject can put an implementation into.
+   *
+   * Both entries were published gaps rather than oversights. `consequence-already-true` was the
+   * one ground no run of this suite had ever reached, and `outcome-in-an-unwatched-place` had no
+   * entry on any subject -- the README said so in as many words.
+   *
+   * Neither needed a defect invented for it. A build run twice IS the first, and a tool writing
+   * outside the roots somebody declared IS the second, which is the distinction that scenario
+   * exists to keep: the write really happens, and the verifier really cannot see it.
+   */
+  it('names what the command-line subject reaches and the two page subjects cannot', () => {
+    const pages = new Set([...WEB, ...DESKTOP]);
+    expect(CLI.filter((id) => !pages.has(id)).sort()).toEqual([
+      'consequence-already-true',
+      'outcome-in-an-unwatched-place',
+    ]);
+  });
+
   it('names exactly the scenarios no subject can plant, on any surface', () => {
-    const union = new Set([...WEB, ...DESKTOP]);
+    const union = new Set([...WEB, ...DESKTOP, ...CLI]);
     expect(IN_PROFILE.filter((id) => !union.has(id)).sort()).toEqual([...PLANTED_NOWHERE].sort());
   });
 
@@ -77,37 +102,38 @@ describe('what the web and desktop subjects reach between them', () => {
   /**
    * The one clause no run can reach, named so it stops being a surprise.
    *
-   * `already-true` is clause 10, added this release. It is specified, it has a `Ground`, and the
-   * adjudicator has unit tests for it. It is also reachable by nothing: no subject can plant
-   * `consequence-already-true`, and separately **no implementation sets
-   * `consequenceHeldBefore`** -- `conformance-client.ts` supplies every other field on the
-   * adjudication input and not that one. Either gap alone would be enough.
+   * `already-true` is CLOSED, and closing it took both halves. It was reachable by nothing: no
+   * subject could plant `consequence-already-true`, and separately no implementation set
+   * `consequenceHeldBefore` -- either gap alone was enough. A realm that snapshots a filesystem
+   * before it acts holds the before-state inherently, and a build run twice is the scenario, so
+   * the command-line subject closed both at once and this line was deleted.
    *
-   * The specification is not wrong to allow this: `undefined` there means NOBODY CHECKED, which
-   * is honest and conformant. What was wrong was the release log claiming every clause is
-   * "driven by a real application". Ten of eleven are.
+   * What is left is two grounds that a second scenario asks for and cannot be planted; both are
+   * reached by a scenario that can. The specification was never wrong to allow a gap here --
+   * `undefined` on `consequenceHeldBefore` means NOBODY CHECKED, which is honest and conformant.
+   * What was wrong was a release log claiming every clause is "driven by a real application".
    *
    * Equality, not a bound, for the same reason as the list above: closing either gap should
    * fail this test and make somebody delete a line.
    */
   it('names the grounds the whole suite cannot reach on any surface', () => {
-    const union = new Set([...WEB, ...DESKTOP]);
+    const union = new Set([...WEB, ...DESKTOP, ...CLI]);
     const unreachable = SCENARIOS.filter(
       (s) => s.mustProduce?.ground !== undefined && !union.has(s.id),
     ).map((s) => s.mustProduce.ground);
-    expect([...new Set(unreachable)].sort()).toEqual([
-      'already-true',
-      'contradicted',
-      'coverage-impeached',
-    ]);
-    // `contradicted` and `coverage-impeached` appear here only because a SECOND scenario asking
-    // for them is unplantable; both are reached by a scenario that is. `already-true` is the
-    // only ground with no reachable scenario at all, which is the fact worth keeping.
+    expect([...new Set(unreachable)].sort()).toEqual(['contradicted', 'coverage-impeached']);
+    // `contradicted` and `coverage-impeached` appear above only because a SECOND scenario asking
+    // for them is unplantable; both are reached by a scenario that is.
+    //
+    // EVERY ground is now reachable by some scenario on some surface, and the empty array is the
+    // fact worth keeping. It was `['already-true']` until the command-line subject arrived: that
+    // clause was specified, had a `Ground`, had unit tests, and was fired by nothing, because no
+    // subject could plant it and no implementation supplied `consequenceHeldBefore`. Asserted as
+    // an equality rather than a bound, so a clause that stops being driven fails here instead of
+    // quietly rejoining the list.
     const reachableGrounds = new Set(
       SCENARIOS.filter((s) => union.has(s.id)).map((s) => s.mustProduce?.ground),
     );
-    expect([...new Set(unreachable)].filter((g) => !reachableGrounds.has(g))).toEqual([
-      'already-true',
-    ]);
+    expect([...new Set(unreachable)].filter((g) => !reachableGrounds.has(g))).toEqual([]);
   });
 });

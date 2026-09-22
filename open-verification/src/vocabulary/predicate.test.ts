@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ChannelId } from './channel.js';
 import type { Observation } from './evidence.js';
+import { BlindSpotKind } from './evidence.js';
 import {
   assertionsHeld,
+  assertionsHeldUnder,
   CountOp,
   MeasureOp,
   evaluate,
@@ -200,5 +202,86 @@ describe('a measured quantity, compared with a tolerance', () => {
 
   it('refuses a negative tolerance, which would narrow rather than widen', () => {
     expect(evaluate(measure(MeasureOp.EQUALS, 37, -1), [reading(37)])).toBeUndefined();
+  });
+});
+
+describe('an assertion whose evidence nobody could see', () => {
+  const coverage = (impeaching: boolean) => ({
+    window: 'w1',
+    observed: [ChannelId.NET],
+    blindSpots: [
+      {
+        kind: BlindSpotKind.BOUNDARY_UNCROSSABLE,
+        channel: ChannelId.NET,
+        detail: 'the vantage point went away',
+        impeaching,
+      },
+    ],
+  });
+
+  const present = [
+    {
+      id: 'a1',
+      predicate: { kind: PredicateKind.PRESENT, match: { channel: ChannelId.NET } },
+      reads: 'something was sent',
+      channels: [ChannelId.NET],
+    },
+  ];
+
+  /**
+   * The ordering of §7.1 only works if somebody answers this question honestly.
+   *
+   * Clause 4 ("the declared consequence did not hold") runs BEFORE clause 5 (the window did not
+   * close) and clause 6 (coverage was impeached). The order's own rationale says the opposite is
+   * intended -- *"'I could not see' is always evaluated before 'it did not happen'"* -- and the
+   * two are reconciled only by what the CALLER passes as `assertionsHeld`.
+   *
+   * `assertionsHeld` alone cannot know: it sees zero matching observations and reports `false`,
+   * which is correct about the observations and wrong about the world. An empty window means
+   * "nothing happened" or "nobody was looking", and those are the two facts this specification
+   * exists to keep apart.
+   *
+   * Found by a realm whose subject can vanish mid-window: a command-line tool that deletes the
+   * directory being watched produced `no` -- the application is broken -- for a window in which
+   * the verifier had lost its vantage point. The same shape reaches every implementation whose
+   * window can end early.
+   */
+  it('cannot be evaluated when an impeaching blind spot falls on a channel it reads', () => {
+    expect(assertionsHeldUnder(present, [], coverage(true))).toBeUndefined();
+  });
+
+  /**
+   * A spot on a channel the claim READS impeaches even with the flag false.
+   *
+   * That is `impeachingSpots`' rule and not this function's: a realm does not see the claim, so it
+   * has no honest basis for setting the flag, and every implementation written against the
+   * specification set it to `false` everywhere. Deciding by the flag alone made the whole of
+   * clause 6 unreachable once already.
+   */
+  it('still cannot evaluate when an unflagged spot names a channel it reads', () => {
+    expect(assertionsHeldUnder(present, [], coverage(false))).toBeUndefined();
+  });
+
+  /**
+   * A gap somewhere the claim never looked costs it nothing.
+   *
+   * Without this, an implementation that enumerates its blind spots honestly would have every
+   * assertion suppressed by gaps irrelevant to the question -- and would learn to declare fewer,
+   * which is the trap `impeaching` exists to avoid.
+   */
+  it('is evaluated normally when the gap is somewhere the claim never reads', () => {
+    const elsewhere = {
+      window: 'w1',
+      observed: [ChannelId.NET],
+      blindSpots: [
+        {
+          kind: BlindSpotKind.CHANNEL_UNOBSERVED,
+          channel: ChannelId.UI,
+          detail: 'no screen here',
+          impeaching: false,
+        },
+      ],
+    };
+    expect(assertionsHeldUnder(present, [], elsewhere)).toBe(false);
   });
 });
