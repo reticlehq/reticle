@@ -12,6 +12,8 @@ export { NodeSupervisor, exitStatus } from './process/node-supervisor.js';
 export { nodeWorkspace } from './workspace/port.js';
 export { detectAnomalies } from './detect.js';
 export { renderReport } from './report.js';
+export { buildRun } from './run.js';
+export type { DriveOutcome, RunInput } from './run.js';
 export { startConnectProxy } from './net/proxy.js';
 export type { ConnectAttempt, ConnectProxy, ConnectProxyInput } from './net/proxy.js';
 export type { DriveRecord } from './report.js';
