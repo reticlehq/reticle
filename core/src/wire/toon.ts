@@ -129,12 +129,32 @@ function toText(v: unknown): string {
   return ''; // undefined / null / object / symbol have no representable text on a wire field
 }
 
-function encodeName(name: unknown): string {
-  return `"${toText(name).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
-}
-
-function encodeValue(val: unknown): string {
-  return `"${toText(val).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+/**
+ * Quote a text field for a TOON line.
+ *
+ * Order matters. The backslash goes first, so the escapes added after it are not themselves
+ * re-escaped. Then the double quote, which would otherwise end the field early.
+ *
+ * Then the LINE BREAKS, which is the part a line-oriented format cannot do without. TOON states its
+ * own grammar as "one element per line", and a raw newline inside a quoted name split one element
+ * across two lines: the second line was not an element and matched no rule of the grammar, so a
+ * reader had nothing sane to do with it. Apps supply these routinely rather than exceptionally,
+ * because `val=` is the element's current value and a multi-line value is what a textarea holds.
+ *
+ * Only the two line terminators are escaped. Every other control character is ugly on a line but
+ * does not break the one invariant this format has, and this is a projection for an agent to read
+ * rather than a sanitiser.
+ *
+ * `encodeName` and `encodeValue` were byte-identical and are now one function: two copies of an
+ * escaping rule is how one of them ends up a character behind the other.
+ */
+function quote(text: unknown): string {
+  const escaped = toText(text)
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r');
+  return `"${escaped}"`;
 }
 
 function encodeLine(el: ToonElement, depth: number): string {
@@ -142,9 +162,8 @@ function encodeLine(el: ToonElement, depth: number): string {
   const type = abbreviateRole(el.role);
   const states = encodeStates(Array.isArray(el.states) ? el.states : [], el.visible);
   const ref = toText(el.ref) || '?';
-  const parts: string[] = [indent + type, ref, encodeName(el.name), ...(states ? [states] : [])];
-  if ('string' === typeof el.value && el.value.length > 0)
-    parts.push(`val=${encodeValue(el.value)}`);
+  const parts: string[] = [indent + type, ref, quote(el.name), ...(states ? [states] : [])];
+  if ('string' === typeof el.value && el.value.length > 0) parts.push(`val=${quote(el.value)}`);
   if (el.childCount !== undefined) parts.push(`count=${String(el.childCount)}`);
   return parts.join(' ');
 }
