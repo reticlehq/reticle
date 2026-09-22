@@ -1,0 +1,3 @@
+### Fixed
+
+- **A hook test raced the child process it was watching, and ejected unrelated pull requests from the merge queue** (`@reticlehq/server`). The helper that waits for a hook's output returned as soon as the file existed, but a shell redirect creates the file and then writes to it — so the test could read an empty file and fail parsing it. The error said `Unexpected end of JSON input` and nothing about timing, and the child had to lose the race for it to happen at all, so it passed on every developer machine and failed under CI load on changes that had nothing to do with hooks. It now waits for content.
