@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import {
+  asProjectId,
   AppRuntime,
   ReticleVerificationRunSchema,
   Verified,
@@ -154,7 +155,7 @@ describe('the run a drive leaves behind', () => {
 
   const driven = (verdicts: readonly Verified[]): SessionEndTarget => ({
     ...fakeSession('s-driven', {}),
-    projectId: 'acme-web-1234abcd',
+    projectId: asProjectId('acme-web-1234abcd'),
     artifactRoot: root,
     readJournalActions: () =>
       Promise.resolve(

@@ -1,4 +1,5 @@
 import { dirname } from 'node:path';
+import type { ProjectId } from '@reticlehq/core';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 
 /**
@@ -27,7 +28,7 @@ export function sessionRoot(deps: ToolDeps, sessionId: string | undefined): stri
  * place and the id from another. `sessionRoot` is now this function plus a lookup, so the two
  * cannot disagree about what a resolved root is.
  */
-export function rootForProjectId(deps: ToolDeps, projectId: string | undefined): string {
+export function rootForProjectId(deps: ToolDeps, projectId: ProjectId | undefined): string {
   return deps.artifactRootFor?.(projectId).root ?? deps.reticleRoot;
 }
 
@@ -58,7 +59,7 @@ export function projectDirFor(deps: ToolDeps, sessionId: string | undefined): st
 export function sessionProjectId(
   deps: ToolDeps,
   sessionId: string | undefined,
-): string | undefined {
+): ProjectId | undefined {
   try {
     return deps.sessions.resolve(sessionId).projectId;
   } catch {

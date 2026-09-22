@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ReplayStatus, type FlowReplayResult } from '@reticlehq/core';
+import { asProjectId, ReplayStatus, type FlowReplayResult } from '@reticlehq/core';
 import { persistAndSyncVerificationRun, type TimedReplay } from './verification-sync.js';
 import { RunStore } from './artifact/run-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '@/memory/project/fs/fs-port.js';
@@ -59,7 +59,7 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
     const runId = await persistAndSyncVerificationRun(
       deps,
       [timed('checkout', ReplayStatus.OK)],
-      'shop',
+      asProjectId('shop'),
     );
 
     expect(runId).toBeDefined();
@@ -76,7 +76,7 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
     const runId = await persistAndSyncVerificationRun(
       deps,
       [timed('checkout', ReplayStatus.OK), timed('signup', ReplayStatus.DRIFT)],
-      'shop',
+      asProjectId('shop'),
     );
 
     expect(calls).toHaveLength(1);
@@ -105,13 +105,13 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
     const runId = await persistAndSyncVerificationRun(
       deps,
       [timed('checkout', ReplayStatus.OK)],
-      'shop',
+      asProjectId('shop'),
     );
     expect(runId).toBeDefined(); // swallowed; local artifact still written
   });
 
   it('is a no-op for an empty suite (nothing to verify)', async () => {
-    const runId = await persistAndSyncVerificationRun(deps, [], 'shop');
+    const runId = await persistAndSyncVerificationRun(deps, [], asProjectId('shop'));
     expect(runId).toBeUndefined();
   });
 });

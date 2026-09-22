@@ -10,6 +10,7 @@
 
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { asProjectId, type ProjectId } from '@reticlehq/core';
 
 /** The project config `reticle init` writes. */
 export const RETICLE_CONFIG_BASENAME = '.reticle.json';
@@ -78,9 +79,12 @@ export function readProjectPort(cwd: string): number | undefined {
  * uses it as the default resolve scope so auto-selection stays within the active app. Returns
  * undefined if the file is absent/unreadable or has no non-empty string projectId.
  */
-export function readProjectId(cwd: string): string | undefined {
+export function readProjectId(cwd: string): ProjectId | undefined {
   const id = findProjectConfig(cwd)?.['projectId'];
-  if ('string' === typeof id && id.length > 0) return id;
+  // MINTED HERE. The other provenance boundary: the `projectId` key of a project's own
+  // `.reticle.json`. Like HELLO's field, it is a project's id because of WHERE it was read, not
+  // because of what it looks like.
+  if ('string' === typeof id && id.length > 0) return asProjectId(id);
   return undefined;
 }
 

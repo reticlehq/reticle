@@ -24,11 +24,12 @@
  * returned unchanged.
  */
 import { FlowStore } from './flows.js';
+import type { ProjectId } from '@reticlehq/core';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 
 export function flowsForSession(
   deps: ToolDeps,
-  projectId: string | undefined,
+  projectId: ProjectId | undefined,
 ): { flows: FlowStore; root: string } {
   const resolved = deps.artifactRootFor?.(projectId);
   if (resolved === undefined || resolved.root === deps.reticleRoot) {

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { sessionRoot } from './session-root.js';
 import { projectForRoot } from './project-for-root.js';
-import { ProjectReadError, RunStatus, type RunRecord } from '@reticlehq/core';
+import { type ProjectId, ProjectReadError, RunStatus, type RunRecord } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { countSchema } from '@/surface/tools/args/numeric-bounds.js';
 import { sessionIdShape } from '@/surface/tools/tool-kit.js';
@@ -64,7 +64,7 @@ function numericDelta(before: number | undefined, after: number | undefined): nu
 async function cloudRegression(deps: ToolDeps, sessionId: string | undefined): Promise<unknown> {
   const config = resolveCloudConfig(process.env);
   if (null === config) return undefined;
-  let projectId: string | undefined;
+  let projectId: ProjectId | undefined;
   try {
     projectId = deps.sessions.resolve(sessionId).projectId;
   } catch {

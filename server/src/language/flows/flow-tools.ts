@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { emptyFlowRefusal } from './empty-flow.js';
 import { aliasParam } from '@/surface/tools/args/alias-args.js';
 import {
+  type ProjectId,
   FlowErrorCode,
   RecordedSaveError,
   ReplayStatus,
@@ -59,7 +60,7 @@ import { replayAndLearn } from './flow-learning.js';
 async function syncSavedFlowToCloud(
   deps: ToolDeps,
   flow: FlowFile,
-  projectId: string | undefined,
+  projectId: ProjectId | undefined,
 ): Promise<void> {
   // Per-project cloud: sync a saved flow only when cloud is attached AND flow sync is enabled.
   // The link file of the project this flow belongs to — the flow itself was already saved through
@@ -946,9 +947,11 @@ export const FLOW_TOOLS: ToolDef[] = [
  * would be graded on a promise.
  */
 async function loadInvoked(
-  flows: { load: (name: string, projectId?: string) => Promise<{ ok: boolean; value?: FlowFile }> },
+  flows: {
+    load: (name: string, projectId?: ProjectId) => Promise<{ ok: boolean; value?: FlowFile }>;
+  },
   flow: FlowFile,
-  projectId?: string,
+  projectId?: ProjectId,
 ): Promise<Map<string, FlowFile>> {
   const out = new Map<string, FlowFile>();
   const queue = [flow];

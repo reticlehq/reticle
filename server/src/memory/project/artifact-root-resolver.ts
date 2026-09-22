@@ -16,7 +16,7 @@ import {
   emptyProjectRegistry,
   parseProjectRegistry,
 } from '@reticlehq/core/artifacts';
-import { ReticleDir } from '@reticlehq/core';
+import { type ProjectId, ReticleDir } from '@reticlehq/core';
 import {
   discoverProjectConfigs,
   hasProjectConfig,
@@ -51,7 +51,7 @@ function daemonSitsInAProject(daemonRoot: string): boolean {
 
 export function artifactRootResolver(
   daemonRoot: string,
-): (projectId: string | undefined, origin?: string) => ArtifactRoot {
+): (projectId: ProjectId | undefined, origin?: string) => ArtifactRoot {
   const daemonIsProject = daemonSitsInAProject(daemonRoot);
   return (projectId, origin) => {
     let registry = emptyProjectRegistry();

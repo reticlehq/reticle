@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CommandResult } from '@reticlehq/core';
+import { asProjectId, type ProjectId, type CommandResult } from '@reticlehq/core';
 import { ActionType, QueryBy } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from '@/surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
@@ -37,7 +37,7 @@ const norm = (p: string): string => p.split('\\').join('/');
 function depsFor(
   fs: FileSystemPort,
   recordings: RecordingStore,
-  sessionProjectId: string | undefined,
+  sessionProjectId: ProjectId | undefined,
   artifactRootFor: ToolDeps['artifactRootFor'],
 ): ToolDeps {
   const command = (): Promise<CommandResult> =>
@@ -84,7 +84,7 @@ describe('reticle_flow_save writes to the session project, not the daemon cwd', 
     const recordings = new RecordingStore();
     recordings.saveCompiled(oneStep('login'));
 
-    const deps = depsFor(fs, recordings, 'acme-web-9f3c1d', () => ({
+    const deps = depsFor(fs, recordings, asProjectId('acme-web-9f3c1d'), () => ({
       root: PROJECT_ROOT,
       reason: ArtifactRootReason.MATCHED_PROJECT,
     }));
@@ -108,7 +108,7 @@ describe('reticle_flow_save writes to the session project, not the daemon cwd', 
     const recordings = new RecordingStore();
     recordings.saveCompiled(oneStep('login'));
 
-    const deps = depsFor(fs, recordings, 'acme-web-9f3c1d', () => ({
+    const deps = depsFor(fs, recordings, asProjectId('acme-web-9f3c1d'), () => ({
       root: PROJECT_ROOT,
       reason: ArtifactRootReason.MATCHED_PROJECT,
     }));
@@ -129,7 +129,7 @@ describe('reticle_flow_save writes to the session project, not the daemon cwd', 
     const recordings = new RecordingStore();
     recordings.saveCompiled(oneStep('login'));
 
-    const deps = depsFor(fs, recordings, 'acme-web-9f3c1d', undefined);
+    const deps = depsFor(fs, recordings, asProjectId('acme-web-9f3c1d'), undefined);
     await tool(ReticleTool.FLOW_SAVE).handler(deps, { flowName: 'login' });
 
     expect([...written.keys()].some((p) => p.startsWith(`${DAEMON_ROOT}/flows`))).toBe(true);
@@ -148,7 +148,7 @@ describe('reticle_flow_list reports paths in the session project', () => {
     const recordings = new RecordingStore();
     recordings.saveCompiled(oneStep('login'));
 
-    const deps = depsFor(fs, recordings, 'acme-web-9f3c1d', () => ({
+    const deps = depsFor(fs, recordings, asProjectId('acme-web-9f3c1d'), () => ({
       root: PROJECT_ROOT,
       reason: ArtifactRootReason.MATCHED_PROJECT,
     }));

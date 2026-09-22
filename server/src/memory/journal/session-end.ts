@@ -6,7 +6,7 @@ import {
 } from '@reticlehq/core/telemetry';
 import { AmbientStore } from './ambient-store.js';
 import type { AmbientCounts } from '@reticlehq/engine/window/ambient.js';
-import { subjectOf, type JournalAction } from '@reticlehq/core';
+import { type ProjectId, subjectOf, type JournalAction } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { pruneSessions } from './on-disk/retention.js';
 import { buildVerificationRun } from '@/judgement/runs/artifact/build-verification-run.js';
@@ -50,7 +50,7 @@ export interface SessionEndTarget {
   readJournalActions?(): Promise<JournalAction[]>;
   /** The project's own `.reticle`, so a run lands in the repo it is about. */
   readonly artifactRoot?: string | undefined;
-  readonly projectId?: string | undefined;
+  readonly projectId?: ProjectId | undefined;
 }
 
 interface SessionEndDeps {
@@ -85,7 +85,11 @@ interface SessionEndDeps {
    * this handler follows.
    */
   flows?: {
-    save: (program: DriveProgram, annotations?: undefined, projectId?: string) => Promise<unknown>;
+    save: (
+      program: DriveProgram,
+      annotations?: undefined,
+      projectId?: ProjectId,
+    ) => Promise<unknown>;
   };
   /**
    * Called when a run artifact is written, so cloud sync can cycle instead of waiting for its timer.

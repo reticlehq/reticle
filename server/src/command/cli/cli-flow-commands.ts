@@ -11,7 +11,7 @@ import { gateHookMessage, GATE_SKIP_ENV } from './answers/gate-hook-message.js';
 import { readProjectId } from './ports/resolve/cli-port.js';
 import { changedFilesSince, type ChangedFiles } from '@/language/flows/change/git-changed.js';
 import { join } from 'node:path';
-import { ReticleDir, RunFlowStatus } from '@reticlehq/core';
+import { type ProjectId, ReticleDir, RunFlowStatus } from '@reticlehq/core';
 import { FlowStore } from '@/language/flows/flows.js';
 import { RunStore } from '@/judgement/runs/artifact/run-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '@/memory/project/fs/fs-port.js';
@@ -59,7 +59,7 @@ export async function resolveChangedFiles(
 export async function loadNamedFlows(
   fs: FileSystemPort,
   reticleRoot: string,
-  projectId: string | undefined,
+  projectId: ProjectId | undefined,
 ): Promise<NamedFlow[]> {
   const store = new FlowStore(fs, reticleRoot, { now: () => Date.now() });
   const flows: NamedFlow[] = [];

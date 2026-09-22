@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CommandResult } from '@reticlehq/core';
+import { asProjectId, type ProjectId, type CommandResult } from '@reticlehq/core';
 import { FROM_DISK_ARG } from '@reticlehq/core';
 import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
@@ -208,8 +208,8 @@ describe('contract_save refuses to write one project into another', () => {
   };
 
   function depsFor(
-    sessionProject: string | undefined,
-    daemonProject: string | undefined,
+    sessionProject: ProjectId | undefined,
+    daemonProject: ProjectId | undefined,
   ): ToolDeps {
     const base = fakeDeps(memoryFs());
     const command = (): Promise<CommandResult> =>
@@ -225,29 +225,34 @@ describe('contract_save refuses to write one project into another', () => {
 
   it('refuses when the session belongs to a different project than this daemon', async () => {
     await expect(
-      save().handler(depsFor('rowy-d30b4137', 'next-app-router-a1'), {}),
+      save().handler(depsFor(asProjectId('rowy-d30b4137'), asProjectId('next-app-router-a1')), {}),
     ).rejects.toThrow(/rowy-d30b4137/);
   });
 
   it('names BOTH projects, or the reader cannot tell which way round it is', async () => {
     await expect(
-      save().handler(depsFor('rowy-d30b4137', 'next-app-router-a1'), {}),
+      save().handler(depsFor(asProjectId('rowy-d30b4137'), asProjectId('next-app-router-a1')), {}),
     ).rejects.toThrow(/next-app-router-a1/);
   });
 
   it('saves normally when the session is this daemon’s own project', async () => {
-    const result = (await save().handler(depsFor('same-id', 'same-id'), {})) as { saved: boolean };
+    const result = (await save().handler(
+      depsFor(asProjectId('same-id'), asProjectId('same-id')),
+      {},
+    )) as { saved: boolean };
     expect(result.saved).toBe(true);
   });
 
   it('saves when the daemon has no project id — the pre-existing single-app case', async () => {
     // The guard must not break every daemon that never computed one. Absence is not a mismatch.
-    const result = (await save().handler(depsFor('anything', undefined), {})) as { saved: boolean };
+    const result = (await save().handler(depsFor(asProjectId('anything'), undefined), {})) as {
+      saved: boolean;
+    };
     expect(result.saved).toBe(true);
   });
 
   it('saves when the SESSION is untagged — an unstamped build is not another project', async () => {
-    const result = (await save().handler(depsFor(undefined, 'daemon-proj'), {})) as {
+    const result = (await save().handler(depsFor(undefined, asProjectId('daemon-proj')), {})) as {
       saved: boolean;
     };
     expect(result.saved).toBe(true);

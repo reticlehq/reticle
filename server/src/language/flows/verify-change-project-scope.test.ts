@@ -30,9 +30,10 @@ import { join } from 'node:path';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { FlowStore } from './flows.js';
 import type { CompiledProgram } from './recording/tape/recordings.js';
+import { asProjectId } from '@reticlehq/core';
 
-const SESSION_PROJECT = 'app-under-test';
-const DAEMON_PROJECT = 'somewhere-else';
+const SESSION_PROJECT = asProjectId('app-under-test');
+const DAEMON_PROJECT = asProjectId('somewhere-else');
 
 const program = (name: string): CompiledProgram =>
   ({ name, steps: [] }) as unknown as CompiledProgram;

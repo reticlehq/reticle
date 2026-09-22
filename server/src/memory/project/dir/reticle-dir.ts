@@ -1,5 +1,5 @@
 import { dirname, join } from 'node:path';
-import { realmOf, type FlowName, type SessionId } from '@reticlehq/core';
+import { type ProjectId, realmOf, type FlowName, type SessionId } from '@reticlehq/core';
 import {
   CONTRACT_FILE_VERSION,
   ContractFileSchema,
@@ -147,7 +147,7 @@ export function visualDiffPath(root: string, name: string, runtime?: string): st
  * apps' flows of the same name; without one it's the flat legacy path (`.reticle/flows/<name>.json`),
  * which is also where pre-existing (untagged) flows stay. Callers pass ONLY a validated projectId.
  */
-export function flowPath(root: string, name: FlowName, projectId?: string): string {
+export function flowPath(root: string, name: FlowName, projectId?: ProjectId): string {
   const flowsDir = join(root, ReticleDir.FLOWS_SUBDIR);
   return projectId === undefined
     ? join(flowsDir, `${name}.json`)
@@ -155,7 +155,7 @@ export function flowPath(root: string, name: FlowName, projectId?: string): stri
 }
 
 /** The directory a flow write targets: the per-project subdir, or the flat flows root for global. */
-export function flowDir(root: string, projectId?: string): string {
+export function flowDir(root: string, projectId?: ProjectId): string {
   const flowsDir = join(root, ReticleDir.FLOWS_SUBDIR);
   return projectId === undefined ? flowsDir : join(flowsDir, projectId);
 }
@@ -171,7 +171,7 @@ export function flowDir(root: string, projectId?: string): string {
  * Derived from the resolved path rather than by splitting the name, so it cannot disagree with
  * `flowPath` about where the file actually goes.
  */
-export function flowParentDir(root: string, name: FlowName, projectId?: string): string {
+export function flowParentDir(root: string, name: FlowName, projectId?: ProjectId): string {
   return dirname(flowPath(root, name, projectId));
 }
 

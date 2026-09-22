@@ -10,6 +10,7 @@
  */
 import { mcpClientIdentity } from '@/surface/mcp/peer/client-identity.js';
 import {
+  type ProjectId,
   RunAgentKind,
   RunFramework,
   RunProfile,
@@ -44,7 +45,7 @@ export interface TimedReplay {
 function assembleRun(
   deps: ToolDeps,
   timed: TimedReplay[],
-  projectId: string | undefined,
+  projectId: ProjectId | undefined,
 ): ReticleVerificationRun {
   const flows = timed.map((t) => mapReplayToFlowResult(t.replay, t.durationMs));
   const input: VerificationRunInput = {
@@ -84,7 +85,7 @@ function assembleRun(
 export async function persistAndSyncVerificationRun(
   deps: ToolDeps,
   timed: TimedReplay[],
-  projectId: string | undefined,
+  projectId: ProjectId | undefined,
 ): Promise<string | undefined> {
   if (0 === timed.length) return undefined;
   let run: ReticleVerificationRun;

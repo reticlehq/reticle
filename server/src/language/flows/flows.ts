@@ -1,4 +1,4 @@
-import { asFlowName, type FlowName } from '@reticlehq/core';
+import { asFlowName, asProjectId, type FlowName, type ProjectId } from '@reticlehq/core';
 import { REDACTED_FILL } from './fields/flow-secret-field.js';
 export { REDACTED_FILL } from './fields/flow-secret-field.js';
 import { safeProjectId, type FlowResult } from './flow-result.js';
@@ -339,7 +339,7 @@ export class FlowStore {
   async save(
     program: CompiledProgram,
     annotations?: FlowAnnotations,
-    projectId?: string,
+    projectId?: ProjectId,
   ): Promise<FlowResult<SaveSummary>> {
     if (!isValidFlowName(program.name)) {
       return { ok: false, code: FlowErrorCode.INVALID_NAME };
@@ -374,7 +374,7 @@ export class FlowStore {
    * browser resolved every semantic anchor at capture time; here we only validate the name +
    * re-run FlowFileSchema before writing. save is left untouched.
    */
-  async saveFlow(flow: FlowFile, projectId?: string): Promise<FlowResult<SaveSummary>> {
+  async saveFlow(flow: FlowFile, projectId?: ProjectId): Promise<FlowResult<SaveSummary>> {
     if (!isValidFlowName(flow.name)) return { ok: false, code: FlowErrorCode.INVALID_NAME };
     const pid = safeProjectId(projectId);
     // Stamp the project INTO the file (so a flow carries its own scope) and route it to the matching
@@ -409,7 +409,7 @@ export class FlowStore {
    */
   async #changeInPlace<T>(
     name: string,
-    projectId: string | undefined,
+    projectId: ProjectId | undefined,
     change: (flow: FlowFile) => { next: FlowFile; value: T },
   ): Promise<FlowResult<T>> {
     return await changeInPlace(
@@ -431,7 +431,7 @@ export class FlowStore {
   async recordLearned(
     name: string,
     learned: NonNullable<FlowFile['learned']>,
-    projectId?: string,
+    projectId?: ProjectId,
   ): Promise<FlowResult<{ name: string }>> {
     return await this.#changeInPlace(name, projectId, (flow) => ({
       next: { ...flow, learned },
@@ -451,7 +451,7 @@ export class FlowStore {
   async heal(
     name: string,
     changes: HealChange[],
-    projectId?: string,
+    projectId?: ProjectId,
   ): Promise<FlowResult<{ name: string; changed: HealChange[] }>> {
     return await this.#changeInPlace(name, projectId, (flow) => {
       const { flow: next, applied } = applyHealChanges(flow, changes);
@@ -483,7 +483,7 @@ export class FlowStore {
    * the caller as a reportable error, never be silently filtered away. Callers that build a path from a
    * name must validate first; `flowPath` takes a branded FlowName precisely so the compiler insists.
    */
-  async list(projectId?: string): Promise<string[]> {
+  async list(projectId?: ProjectId): Promise<string[]> {
     const flowsDir = reticleDirPaths(this.#root).flows;
     const pid = safeProjectId(projectId);
     const legacy = await this.#namesIn(flowsDir);
@@ -498,15 +498,18 @@ export class FlowStore {
     } catch {
       return legacy.sort();
     }
+    // Every subdirectory of `.reticle/flows/` is a project's, by construction: this class is the
+    // only thing that creates one, and it creates it from a projectId that already passed
+    // `safeProjectId`. Reading the name back is the third provenance boundary, not a cast.
     const subdirs = entries.filter((e) => !e.endsWith(FLOW_SUFFIX));
     const nested = (
-      await Promise.all(subdirs.map((d) => this.#namesIn(flowDir(this.#root, d))))
+      await Promise.all(subdirs.map((d) => this.#namesIn(flowDir(this.#root, asProjectId(d)))))
     ).flat();
     return [...new Set([...legacy, ...nested])].sort();
   }
 
   /** The path a flow actually lives at: nested (per-project) if present, else legacy flat, else null. */
-  async #resolveReadPath(name: FlowName, pid: string | undefined): Promise<string | null> {
+  async #resolveReadPath(name: FlowName, pid: ProjectId | undefined): Promise<string | null> {
     if (pid !== undefined) {
       const nested = flowPath(this.#root, name, pid);
       if (await this.#fs.exists(nested)) return nested;
@@ -530,8 +533,9 @@ export class FlowStore {
     } catch {
       return null;
     }
+    // Same provenance as `#namesIn`'s scan above: a subdir of `.reticle/flows/` is a projectId.
     for (const dir of entries.filter((e) => !e.endsWith(FLOW_SUFFIX))) {
-      const nested = flowPath(this.#root, name, dir);
+      const nested = flowPath(this.#root, name, asProjectId(dir));
       if (await this.#fs.exists(nested)) return nested;
     }
     return null;
@@ -541,7 +545,7 @@ export class FlowStore {
    * Read + zod-validate a flow by name. With a `projectId`, prefers the per-project copy and falls
    * back to a legacy flat (untagged) flow of the same name — so pre-existing flows keep loading.
    */
-  async load(name: string, projectId?: string): Promise<FlowResult<FlowFile>> {
+  async load(name: string, projectId?: ProjectId): Promise<FlowResult<FlowFile>> {
     if (!isValidFlowName(name)) return { ok: false, code: FlowErrorCode.INVALID_NAME };
     const path = await this.#resolveReadPath(name, safeProjectId(projectId));
     if (null === path) return { ok: false, code: FlowErrorCode.NOT_FOUND };
@@ -565,7 +569,7 @@ export class FlowStore {
    * caller), then removes it. NOT_FOUND when nothing resolves — deleting an absent flow is an error,
    * not a silent no-op, so a typo doesn't read as success.
    */
-  async remove(name: string, projectId?: string): Promise<FlowResult<void>> {
+  async remove(name: string, projectId?: ProjectId): Promise<FlowResult<void>> {
     if (!isValidFlowName(name)) return { ok: false, code: FlowErrorCode.INVALID_NAME };
     const path = await this.#resolveReadPath(name, safeProjectId(projectId));
     if (null === path) return { ok: false, code: FlowErrorCode.NOT_FOUND };

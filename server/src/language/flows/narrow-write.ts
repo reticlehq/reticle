@@ -1,4 +1,4 @@
-import { FlowErrorCode, FlowFileSchema, type FlowFile } from '@reticlehq/core';
+import { type ProjectId, FlowErrorCode, FlowFileSchema, type FlowFile } from '@reticlehq/core';
 import { describeFlowZodFailure } from './flow-expect-grammar.js';
 import { isValidFlowName } from '@/memory/project/dir/reticle-dir.js';
 import { safeProjectId, type FlowResult } from './flow-result.js';
@@ -24,8 +24,8 @@ import { safeProjectId, type FlowResult } from './flow-result.js';
  * every rule the document has ever been subject to.
  */
 export interface NarrowWritePort {
-  load: (name: string, projectId?: string) => Promise<FlowResult<FlowFile>>;
-  resolvePath: (name: string, projectId?: string) => Promise<string | null>;
+  load: (name: string, projectId?: ProjectId) => Promise<FlowResult<FlowFile>>;
+  resolvePath: (name: string, projectId?: ProjectId) => Promise<string | null>;
   write: (path: string, contents: string) => Promise<void>;
   serialize: (flow: FlowFile) => string;
 }
@@ -33,7 +33,7 @@ export interface NarrowWritePort {
 export async function changeInPlace<T>(
   port: NarrowWritePort,
   name: string,
-  projectId: string | undefined,
+  projectId: ProjectId | undefined,
   change: (flow: FlowFile) => { next: FlowFile; value: T },
 ): Promise<FlowResult<T>> {
   if (!isValidFlowName(name)) return { ok: false, code: FlowErrorCode.INVALID_NAME };

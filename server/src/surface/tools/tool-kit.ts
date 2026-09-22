@@ -5,7 +5,7 @@
  * without a circular import — `tools.ts` assembles the groups and re-exports `ToolDef`/`ToolDeps`.
  */
 import { z } from 'zod';
-import { ReticleCommand, SnapshotMode } from '@reticlehq/core';
+import { type ProjectId, ReticleCommand, SnapshotMode } from '@reticlehq/core';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { RealInputProvider } from '@/portal/input/real-input.js';
 import type { BaselineStore } from '@/memory/project/baselines.js';
@@ -79,7 +79,7 @@ export interface ToolDeps<Ext = unknown> {
    * embedding this engine may not have a filesystem to search. Absent ⇒ `reticleRoot`, which is
    * exactly today's behaviour.
    */
-  artifactRootFor?: (projectId: string | undefined) => ArtifactRoot;
+  artifactRootFor?: (projectId: ProjectId | undefined) => ArtifactRoot;
   /**
    * A verification run just landed — wake cloud sync instead of waiting for its next tick.
    *
@@ -99,7 +99,7 @@ export interface ToolDeps<Ext = unknown> {
    * test construction of ToolDeps predates it. Absence means "cannot tell", which must never be
    * treated as a mismatch.
    */
-  projectId?: string;
+  projectId?: ProjectId;
   /** injected clock for the contract's generatedAt stamp. */
   now: () => number;
   /**

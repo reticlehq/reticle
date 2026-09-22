@@ -4,6 +4,8 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  type ProjectId,
+  asProjectId,
   ActionType,
   AnchorKind,
   EventType,
@@ -118,7 +120,7 @@ describe('FlowStore.saveFlow — temp-dir fs', () => {
 
 // ---- reticle_flow_save_recorded handler ----
 
-function fakeDeps(store: FlowStore, events: ReticleEvent[], projectId?: string): ToolDeps {
+function fakeDeps(store: FlowStore, events: ReticleEvent[], projectId?: ProjectId): ToolDeps {
   const command = (): Promise<CommandResult> =>
     Promise.resolve({ kind: 'command_result', id: 'c', ok: true, result: {} });
   const session: Partial<Session> = { id: 'demo', projectId, command, eventsSince: () => events };
@@ -168,9 +170,9 @@ describe('reticle_flow_save_recorded handler', () => {
 
   it("stamps the saved flow with the session's projectId (scopes it to this app)", async () => {
     const ev = recordedEvent('scoped', flowFile('scoped', [clickStep('a')]));
-    const deps = fakeDeps(store, [ev], 'demo-app-abc123');
+    const deps = fakeDeps(store, [ev], asProjectId('demo-app-abc123'));
     await recordedTool().handler(deps, {});
-    const loaded = await store.load('scoped', 'demo-app-abc123');
+    const loaded = await store.load('scoped', asProjectId('demo-app-abc123'));
     expect(loaded.ok && loaded.value.projectId).toBe('demo-app-abc123');
   });
 

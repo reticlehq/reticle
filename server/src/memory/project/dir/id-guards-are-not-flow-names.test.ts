@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { isValidSessionId, isValidRunId, isValidFlowName } from './reticle-dir.js';
 import { safeProjectId } from '@/language/flows/flow-result.js';
+import { asProjectId } from '@reticlehq/core';
 
 /**
  * A session id is a DIRECTORY NAME. A flow name is an ADDRESS. They are not the same guard.
@@ -35,12 +36,12 @@ describe('ids that become directory names', () => {
    * is a project.
    */
   it('refuse a separator in a projectId too, which is a directory name and not an address', () => {
-    expect(safeProjectId('onboarding/signup')).toBeUndefined();
-    expect(safeProjectId('a/b')).toBeUndefined();
+    expect(safeProjectId(asProjectId('onboarding/signup'))).toBeUndefined();
+    expect(safeProjectId(asProjectId('a/b'))).toBeUndefined();
   });
 
   it('still accept an ordinary projectId', () => {
-    expect(safeProjectId('82e20b628df9cb09')).toBe('82e20b628df9cb09');
+    expect(safeProjectId(asProjectId('82e20b628df9cb09'))).toBe('82e20b628df9cb09');
   });
 
   it('still accept the ordinary single-segment ids everything uses', () => {
@@ -55,7 +56,7 @@ describe('ids that become directory names', () => {
       expect(isValidSessionId(bad), bad).toBe(false);
       expect(isValidRunId(bad), bad).toBe(false);
       expect(isValidFlowName(bad), bad).toBe(false);
-      expect(safeProjectId(bad), bad).toBeUndefined();
+      expect(safeProjectId(asProjectId(bad)), bad).toBeUndefined();
     }
   });
 });

@@ -1,4 +1,4 @@
-import type { FlowReplayResult } from '@reticlehq/core';
+import type { ProjectId, FlowReplayResult } from '@reticlehq/core';
 import { asString } from '@reticlehq/core';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { flowsForSession } from './flow-store-for-session.js';
@@ -31,7 +31,7 @@ export async function persistLearning(
   const name = asString(args['flowName']) ?? '';
   if (0 === name.length) return result;
   try {
-    let projectId: string | undefined;
+    let projectId: ProjectId | undefined;
     try {
       projectId = deps.sessions.resolve(asString(args['sessionId'])).projectId;
     } catch {

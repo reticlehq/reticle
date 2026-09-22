@@ -1,9 +1,44 @@
 import { describe, expect, it } from 'vitest';
 import { ArtifactRootReason } from './artifact-root.js';
-import { sessionRoot } from './session-root.js';
+import { rootForProjectId, sessionProjectId, sessionRoot } from './session-root.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
+import { asProjectId, type ProjectId } from '@reticlehq/core';
+
+/**
+ * Does the ProjectId brand actually bite?
+ *
+ * `sessionRoot` and `rootForProjectId` sit two lines apart and used to take the SAME argument type,
+ * so swapping them compiled — and then failed silently to the daemon root on both paths: no throw,
+ * no log, the artifact written into a tree nobody drove, and the tool reporting success.
+ *
+ * A compile error cannot be asserted at runtime, so the assertions are the type aliases below. This
+ * file only typechecks while they hold, and the test files are inside `tsc -b`. Exported so none of
+ * them reads as an unused local; read off the functions rather than restated, so a signature change
+ * moves the assertion with it.
+ */
+type Expect<T extends true> = T;
+type Assignable<From, To> = [From] extends [To] ? true : false;
+
+export type ProjectIdParam = Parameters<typeof rootForProjectId>[1];
+export type SessionIdParam = Parameters<typeof sessionRoot>[1];
+
+/** CAUGHT — the dangerous direction: a plain-string sessionId cannot reach the projectId slot. */
+export type SessionIdIsNotAProjectId = Expect<
+  Assignable<SessionIdParam, ProjectIdParam> extends false ? true : false
+>;
+/** And the mint is what reopens it: a value that came from the session manager still fits. */
+export type AMintedProjectIdFits = Expect<
+  Assignable<ReturnType<typeof sessionProjectId>, ProjectIdParam>
+>;
+/**
+ * NOT CAUGHT, deliberately. `ProjectId` is still a `string`, so the reverse swap compiles; closing
+ * it means branding `sessionId` at every tool-call boundary where it arrives as a raw argument.
+ * Pinned rather than left implicit: whoever does close it fails this line and is sent to correct
+ * the brand's doc, instead of leaving a door labelled shut that is not.
+ */
+export type ProjectIdStillFitsASessionIdParam = Expect<Assignable<ProjectIdParam, SessionIdParam>>;
 
 const DAEMON_ROOT = '/daemon-cwd/.reticle';
 const PROJECT_ROOT = '/repo/apps/web/.reticle';
@@ -22,7 +57,7 @@ function deps(options: { projectId?: string; resolveThrows?: boolean; wired?: bo
     ...(false === options.wired
       ? {}
       : {
-          artifactRootFor: (projectId: string | undefined) =>
+          artifactRootFor: (projectId: ProjectId | undefined) =>
             'acme-9f3c' === projectId
               ? { root: PROJECT_ROOT, reason: ArtifactRootReason.MATCHED_PROJECT }
               : { root: DAEMON_ROOT, reason: ArtifactRootReason.NO_MATCH },
@@ -61,5 +96,17 @@ describe('sessionRoot', () => {
     expect(sessionRoot(deps({ projectId: 'acme-9f3c', wired: false }), undefined)).toBe(
       DAEMON_ROOT,
     );
+  });
+});
+
+describe('rootForProjectId', () => {
+  it('routes a minted projectId to its own project', () => {
+    expect(rootForProjectId(deps({ projectId: 'acme-9f3c' }), asProjectId('acme-9f3c'))).toBe(
+      PROJECT_ROOT,
+    );
+  });
+
+  it('still falls back to the daemon root when the id names no project — unchanged behaviour', () => {
+    expect(rootForProjectId(deps({}), asProjectId('s-7f2a-not-a-project'))).toBe(DAEMON_ROOT);
   });
 });

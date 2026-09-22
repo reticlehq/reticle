@@ -5,6 +5,7 @@ import {
   fnv1a,
   projectCandidates,
   type ProjectCandidate,
+  type ProjectId,
   type ProjectRegistry,
 } from '@reticlehq/core';
 import type { ConfigDiscovery } from '@/command/cli/config/config-discovery.js';
@@ -49,7 +50,7 @@ export type ArtifactRootReason = (typeof ArtifactRootReason)[keyof typeof Artifa
 
 interface ArtifactRootQuery {
   /** The connected session's HELLO projectId, when it sent one. */
-  projectId: string | undefined;
+  projectId: ProjectId | undefined;
   /** Every project this machine knows about. Supplied, not gathered here — this stays pure. */
   candidates: readonly ProjectCandidate[];
   /** Where artifacts go when the project cannot be identified. Already a `.reticle` path. */
@@ -196,7 +197,7 @@ export function unmatchedRoot(query: {
   daemonIsProject: boolean;
   /** The user's home directory. Passed in rather than read, so this stays pure. */
   home: string;
-  projectId?: string | undefined;
+  projectId?: ProjectId | undefined;
   /**
    * Where the session was served from, when it is known. Used ONLY when no project id survives the
    * segment guard — a real id always wins, because it is an identity and this is a stand-in.

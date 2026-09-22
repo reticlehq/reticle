@@ -1,6 +1,7 @@
 import { resolveFlowUploads } from './fields/flow-upload-resolve.js';
 import { learnFromRun } from '@reticlehq/engine/evidence/learned-guards.js';
 import {
+  type ProjectId,
   EventType,
   FLOW_SIGNAL_TIMEOUT_MS,
   FlowErrorCode,
@@ -107,7 +108,7 @@ async function recordReplayRun(
   status: ReplayStatus,
   driftSteps: number,
   durationMs: number,
-  projectId: string | undefined,
+  projectId: ProjectId | undefined,
   /** The APP's `.reticle`, resolved from the session — never the daemon's own. */
   recordRoot: string,
 ): Promise<void> {
@@ -396,7 +397,7 @@ export async function navigateAndAwait(
 async function loadInvokedFlows(
   deps: ToolDeps,
   flow: FlowFile,
-  projectId?: string,
+  projectId?: ProjectId,
 ): Promise<Map<string, FlowFile>> {
   const out = new Map<string, FlowFile>();
   const queue: FlowFile[] = [flow];
@@ -485,7 +486,7 @@ export async function replayNamedFlow(
   // Resolve within the connecting app's scope so a shared daemon replays THIS project's flow, not a
   // same-named flow from another app. Safe-resolve: a missing session degrades to the global store,
   // and the load-then-session order (unchanged) still surfaces a not-found before a no-session error.
-  let projectId: string | undefined;
+  let projectId: ProjectId | undefined;
   try {
     projectId = deps.sessions.resolve(asString(args['sessionId'])).projectId;
   } catch {
@@ -852,14 +853,11 @@ function applyStartPathHint(result: FlowReplayResult, hint: string | undefined):
  * The connecting session's project, or undefined when no browser is attached. Flow tools use it to
  * scope storage to the current app on a shared daemon; resolving must NOT throw here (list/load are
  * documented to work headless), so a missing/unknown session degrades to the global/legacy store.
+ *
+ * Re-exported, not re-implemented. This file carried a BYTE-IDENTICAL second copy, and the two
+ * drifted the moment `ProjectId` was threaded: `session-root`'s copy returned the brand while this
+ * one returned `string`, so every flow tool importing from here was handed a widened value and lost
+ * the brand one line after it was minted. Exactly the weak-annotation failure the brand's own doc
+ * records against `RunStore.list()`.
  */
-export function sessionProjectId(
-  deps: ToolDeps,
-  sessionId: string | undefined,
-): string | undefined {
-  try {
-    return deps.sessions.resolve(sessionId).projectId;
-  } catch {
-    return undefined;
-  }
-}
+export { sessionProjectId } from '@/memory/project/session-root.js';

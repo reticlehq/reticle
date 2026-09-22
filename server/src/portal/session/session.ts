@@ -1,5 +1,5 @@
 import type { WebSocket } from 'ws';
-import type { ChannelId, ImpactSnapshot } from '@reticlehq/core';
+import { asProjectId, type ChannelId, type ImpactSnapshot, type ProjectId } from '@reticlehq/core';
 import type { HandshakeFacts } from './facts/handshake-facts.js';
 import { refusedResult } from './page-commands/undeclared-command.js';
 import { recordImpact } from '@/memory/impact/impact-recorder.js';
@@ -114,8 +114,14 @@ const WS_OPEN = 1;
  */
 export class Session implements HandshakeFacts {
   readonly id: string;
-  /** Stable build-stamped project identity; undefined for v1.0 SDKs that omit it. */
-  readonly projectId: string | undefined;
+  /**
+   * Stable build-stamped project identity; undefined for SDKs old enough to omit it.
+   *
+   * MINTED HERE. This is one of the two places a projectId enters the daemon with its provenance
+   * intact: the field is `projectId` on a zod-parsed HELLO, so the page said what it is. Every
+   * downstream reader takes the brand from this property rather than re-blessing a string.
+   */
+  readonly projectId: ProjectId | undefined;
   /**
    * The `.reticle` directory this session's evidence belongs in — impact counters AND capsules.
    *
@@ -192,7 +198,7 @@ export class Session implements HandshakeFacts {
 
   constructor(hello: HelloMessage, socket: WebSocket, clock: Clock) {
     this.id = hello.sessionId;
-    this.projectId = hello.projectId;
+    this.projectId = hello.projectId === undefined ? undefined : asProjectId(hello.projectId);
     this.url = hello.url;
     this.title = hello.title;
     this.adapters = hello.adapters;
