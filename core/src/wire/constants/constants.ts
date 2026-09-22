@@ -375,6 +375,15 @@ export const ReticleDir = {
   JOURNAL_EVENTS_FILE: 'events.jsonl',
   /** append-only action ledger inside a session dir (one JournalAction per line). */
   JOURNAL_ACTIONS_FILE: 'actions.jsonl',
+  /**
+   * the event ledger's closure report — .reticle/sessions/<id>/events.closed.json.
+   *
+   * Written once, when the byte ceiling refuses a batch, and never removed. Its PRESENCE is what
+   * makes the ceiling durable: a session id survives a reload, so the next connection reopens the
+   * same ledger with an empty memory, and a bound that lives only in one object's field is a bound
+   * per connection. Its CONTENTS are the loss report a time-windowed query cannot filter away.
+   */
+  JOURNAL_EVENTS_CLOSED_FILE: 'events.closed.json',
   /** learned expected-envelopes per route, accumulated across runs (the deviation-report baseline). */
   ENVELOPES_FILE: 'envelopes.json',
   /** learned ambient (action-less churn) region map — excluded from settle/summaries/envelopes. */
@@ -652,6 +661,15 @@ export const RETICLE_HYDRATION_ERROR_SIGNAL = 'reticle:hydration-error';
 /** The observation channel a TRUNCATED event names, so downstream knows WHICH data is incomplete. */
 export const TruncationChannel = {
   DOM: 'dom',
+  /**
+   * The durable per-session event ledger stopped accepting writes at its byte ceiling.
+   *
+   * The only channel here that names a SERVER-side refusal rather than a browser-side batch cap, and
+   * the only one that is terminal: `dom` truncates one flood and keeps observing, while this says the
+   * file is closed and every event after it is absent from disk. A reader that finds it knows a
+   * negative answer drawn from the journal may be "the ledger was full", not "it never happened".
+   */
+  JOURNAL: 'journal',
 } as const;
 export type TruncationChannel = (typeof TruncationChannel)[keyof typeof TruncationChannel];
 

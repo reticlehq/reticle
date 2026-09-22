@@ -58,7 +58,7 @@ It also carries a snapshot of the **machine's** state (our own process's memory,
 
 It exists because `verified: "unknown"` covered seven different situations belonging to three different owners (your app, your agent, and Reticle's own blind spots), and they arrived as one value. It is a **name from our own vocabulary**, never a description of your app: `contradicted` says two channels disagreed, not which ones, about what, or on which page.
 
-When the clause is `unclean_capture`, one further name says which of our three losses caused it: `buffer_loss` (our server's event buffer), `transport_gap` (our browser-side queue), `blind_spot` (a boundary in the page, such as a cross-origin frame), or `other`. All four are facts about **Reticle's** ability to observe, not about what it observed. This field is how we found that Reticle was refusing to answer over windows that were completely intact.
+When the clause is `unclean_capture`, one further name says which of our losses caused it: `buffer_loss` (our server's event buffer), `transport_gap` (our browser-side queue), `journal_loss` (our on-disk event ledger reached its size cap), `blind_spot` (a boundary in the page, such as a cross-origin frame), or `other`. All five are facts about **Reticle's** ability to observe, not about what it observed. This field is how we found that Reticle was refusing to answer over windows that were completely intact.
 
 ### Bugs Reticle finds
 

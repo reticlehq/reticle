@@ -64,6 +64,37 @@ describe('a page Reticle opened for itself', () => {
     expect(harness(`?${RETICLE_URL_PARAM.PROJECT}=acme-9f3c`).handle).toBeUndefined();
   });
 
+  it('steps aside when a drive starts after the page loaded, and does not count that as seen', async () => {
+    const doc = document.implementation.createHTMLDocument('t');
+    const overlay = doc.createElement('div');
+    overlay.setAttribute('data-reticle-overlay', '');
+    overlay.setAttribute('data-reticle-mode', 'idle');
+    doc.body.appendChild(overlay);
+    let driving = false;
+    let seen = false;
+    const handle = mountTour({
+      document: doc,
+      storage: {
+        getItem: () => null,
+        setItem: () => {
+          seen = true;
+        },
+      },
+      projectId: 'p1',
+      isDriving: () => driving,
+      search: '',
+    });
+    expect(handle).toBeDefined();
+    expect(doc.querySelector('[data-reticle-tour]')).not.toBeNull();
+    driving = true;
+    overlay.setAttribute('data-reticle-mode', 'acting');
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    expect(doc.querySelector('[data-reticle-tour]')).toBeNull();
+    expect(seen).toBe(false);
+  });
+
   it('still shows the tour on a plain dev load, which is the load it exists for', () => {
     // No stamp, nobody driving, storage unavailable counts as seen -- so pass storage that says no.
     const doc = document.implementation.createHTMLDocument('t');

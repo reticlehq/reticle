@@ -156,6 +156,28 @@ export const READ_PATH = Object.freeze({
       'eviction is counted and surfaced by bufferHealth() as { total, dropped }, which session health and act summaries read to mark a window truncated',
     ],
   },
+  'server/src/memory/journal/session-journal.ts': {
+    JOURNAL_READ_LIMITS: [
+      Declaration.NONE,
+      'the bounds themselves, exported so a reader can name the ceilings it was held to',
+    ],
+    SessionJournalOptions: [Declaration.NONE, 'the options type'],
+    JOURNAL_EVENT_BYTES_CAP: [
+      Declaration.NONE,
+      'the write ceiling itself, a number, exported so a test can prove the bound at a few kilobytes and a reader can name what refused a batch; the loss it causes is declared by readWriteLoss() on the entry below, not by this constant',
+    ],
+    SessionJournal: [
+      Declaration.REPORT,
+      'bounded twice — one durable read materialises at most MAX_READ_BYTES, and the parse-cache it accumulates into is held to MAX_RETAINED_BYTES/EVENTS — so a session whose append-only ledger outgrew a JS string still answers, and keeps the NEWEST records either way; everything either bound removed returns from readLoss() as { droppedBytes, droppedEvents, lostThroughT?, note } beside the events, and Session.lostSince folds that into the same buffer_loss an evicted ring buffer already declares; bounded on the WRITE side too, where a batch refused by JOURNAL_EVENT_BYTES_CAP returns from readWriteLoss() rather than being dropped in silence',
+    ],
+  },
+  'server/src/memory/project/fs/fs-port.ts': {
+    FileSystemPort: [Declaration.NONE, 'the port type'],
+    createNodeFileSystem: [
+      Declaration.REPORT,
+      "readFileFrom caps what one read materialises (past V8's string ceiling, toString throws rather than shortening) and keeps the NEWEST bytes, returning `from` — where the returned text actually starts — beside the text, so a caller can see that it skipped and how far; `size` stays the file length fstat reported precisely so the two can disagree, which is how a short read becomes visible instead of silently decoding uninitialised memory",
+    ],
+  },
   'engine/src/window/network-detail-merge.ts': {
     mergeNetworkDetail: [
       Declaration.REPORT,
@@ -205,6 +227,7 @@ export const CONFORMANCE_TESTS = Object.freeze([
   'adapters/realm/browser/src/security/serialization.test.ts',
   'adapters/realm/browser/src/transport/transport.overflow-marker.test.ts',
   'engine/src/window/ring-buffer.test.ts',
+  'server/src/memory/journal/session-journal.lossy-conformance.test.ts',
   'server/src/portal/input/network-detail.lossy-conformance.test.ts',
 ]);
 

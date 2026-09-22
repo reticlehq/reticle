@@ -2,6 +2,15 @@ import { asRecord, asString } from '@reticlehq/core';
 /** Small pure helpers shared by the MCP tool handlers. */
 
 /**
+ * The argument a call names a tab with.
+ *
+ * A named constant because dispatch now WRITES this key as well as reading it — see `runTool`,
+ * which pins the session it resolved into the args the handler is given — and a key spelled at both
+ * ends of that can drift without anything saying so.
+ */
+export const SESSION_ID_ARG = 'sessionId';
+
+/**
  * The session this call is aimed at: a top-level `sessionId`, or the same key on sequence steps.
  *
  * `reticle_act_sequence` describes each step as equivalent to one `reticle_act`, so an agent that
@@ -12,13 +21,13 @@ import { asRecord, asString } from '@reticlehq/core';
  * Mixed step ids refuse rather than pick: two named tabs is a guess we will not make.
  */
 export function sessionIdFromArgs(args: Record<string, unknown>): string | undefined {
-  const top = asString(args['sessionId']);
+  const top = asString(args[SESSION_ID_ARG]);
   if (top !== undefined) return top;
   const steps = args['steps'];
   if (!Array.isArray(steps)) return undefined;
   let found: string | undefined;
   for (const raw of steps) {
-    const id = asString(asRecord(raw)['sessionId']);
+    const id = asString(asRecord(raw)[SESSION_ID_ARG]);
     if (id === undefined) continue;
     if (found !== undefined && found !== id) {
       throw new Error(

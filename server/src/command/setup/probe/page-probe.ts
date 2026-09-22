@@ -68,9 +68,16 @@ export function describePage(finding: PageFinding, url: string): string {
         'serving the bundle it built before the build config was edited: restart it and hard-reload.'
       );
     case PageFinding.SDK_PRESENT:
+      // This used to end "so it loaded and returned early", which is a claim about a code path this
+      // check cannot see — and at least one real occurrence was the opposite. On a Windows install
+      // gate cell the page console read "could not open a websocket to ws://localhost:<port>, 3
+      // attempts, all failed": the SDK dialled three times and the socket failed, having returned
+      // early from nothing. What is knowable here is that the SDK is present and no session arrived.
       return (
-        `The SDK IS in the page at ${url} and never dialled the bridge, so it loaded and returned ` +
-        'early: a localhost guard, a production-only check, or a bridge port that differs on the two sides.'
+        `The SDK IS in the page at ${url} and never dialled the bridge: a localhost guard, a ` +
+        'production-only check, a bridge port that differs on the two sides, or `localhost` ' +
+        'resolving to IPv6 where the daemon is only on IPv4 — `npx @reticlehq/server doctor` names ' +
+        'that last one, and the page console names the first three.'
       );
   }
 }

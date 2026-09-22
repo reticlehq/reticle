@@ -53,7 +53,11 @@ export async function saveFailedAssertCapsule(
   // Same rule and same resolver as every other artifact: a capsule written into a sibling repo is
   // evidence filed against a codebase that did not produce it, and it outlives the turn.
   // The caller's answer wins; the resolver is the fallback for callers that have no session.
-  const root = given ?? sessionRoot(deps, asString(args['sessionId']));
+  const root = given ?? bestEffortRoot(deps, asString(args['sessionId']));
+  // No directory this capsule could honestly belong to, so it is not filed. The two things this
+  // must not do are write it somewhere arbitrary and throw: the assertion has already failed, the
+  // verdict is already built, and losing the capsule must never also lose the verdict.
+  if (root === undefined) return undefined;
   const saved = await new CapsuleStore(deps.fs, root).save({
     version: CAPSULE_VERSION,
     id,
@@ -76,4 +80,25 @@ export async function saveFailedAssertCapsule(
     ],
   });
   return saved ? id : undefined;
+}
+
+/**
+ * Where this capsule goes, or nothing — never a throw and never somebody else's checkout.
+ *
+ * `sessionRoot` refuses a `sessionId` that names no session, because for a tool the agent CALLED
+ * the alternative is silently writing into the daemon's own project. Here the caller is not a tool
+ * the agent called: it is the evidence capture hanging off a verdict that has already been decided,
+ * and on this path a refusal would convert a red assertion into a tool error. Both of the answers
+ * that refusal exists to prevent are still prevented — nothing is written, and nothing is written
+ * to the wrong root — by declining to file the capsule at all.
+ *
+ * Reachable only when the act's own session AND its navigation successor are gone by the time the
+ * verdict lands, since `act_and_wait` passes the root of the session it actually drove.
+ */
+function bestEffortRoot(deps: ToolDeps, sessionId: string | undefined): string | undefined {
+  try {
+    return sessionRoot(deps, sessionId);
+  } catch {
+    return undefined;
+  }
 }
