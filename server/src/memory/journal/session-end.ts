@@ -93,6 +93,16 @@ interface SessionEndDeps {
    * Optional, like everything else here: absent simply means the next scheduled cycle picks it up.
    */
   onRunPersisted?: () => void;
+  /**
+   * The ids of the sessions still OPEN, read at each teardown so retention never deletes a journal
+   * that is still being written. A getter rather than a snapshot: this handler is built once at
+   * wiring and fires for every session for the life of the daemon.
+   *
+   * Injected, like the clock and the reporter — teardown needs the answer, not the registry.
+   * Optional so every existing construction keeps compiling, and absent means "none known", which
+   * is exactly the old behaviour.
+   */
+  liveSessionIds?: () => ReadonlySet<string>;
 }
 
 /**
@@ -168,12 +178,26 @@ export function makeSessionEnd(deps: SessionEndDeps): (session: SessionEndTarget
       // because it is precisely when a new directory has just been created, which makes this amortized
       // rather than periodic (no timer to leak) and mirrors what RunStore already does.
       //
-      // Safe against deleting the session that just ended: pruning selects the OLDEST by mtime, and the
-      // directory written moments ago is the newest.
+      // What makes this safe is the `live` set, NOT the order.
+      //
+      // This used to read "safe against deleting the session that just ended: pruning selects the
+      // OLDEST by mtime, and the directory written moments ago is the newest". That is true of the
+      // session that ENDED and says nothing about the ones still open — and it is not even true of
+      // the byte budget, which has no count floor and will evict the single oldest entry the moment
+      // the tier is over, however few there are.
+      //
+      // A session directory's mtime is stamped at creation and never moves again (appending to a
+      // file inside it advances the FILE's mtime), so the longest-running open session is the
+      // oldest-looking thing on disk and was the first candidate for both bounds. Passing the open
+      // ids is what actually holds. The ended session is already out of the registry by the time
+      // this runs — the bridge removes it before firing teardown — so it is eligible again, which
+      // is correct: it is finished, and its journal was flushed above.
       // The root this session actually journalled into. Pruning the daemon's tree instead meant a
       // per-project workspace was never swept at all, so the one place journals really accumulate
       // was the one place retention never ran.
-      await pruneSessions(deps.fs, session.artifactRoot ?? deps.reticleRoot);
+      await pruneSessions(deps.fs, session.artifactRoot ?? deps.reticleRoot, {
+        live: deps.liveSessionIds?.(),
+      });
     } catch {
       // retention is best-effort maintenance; never surface at teardown
     }

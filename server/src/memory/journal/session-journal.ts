@@ -54,17 +54,43 @@ export class SessionJournal {
 
   async appendEvents(events: readonly ReticleEvent[]): Promise<void> {
     if (0 === events.length) return;
-    await this.#ensureDir();
     const text = `${events.map((e) => JSON.stringify(e)).join('\n')}\n`;
-    await this.#fs.appendFile(journalEventsPath(this.#root, this.#sessionId), text);
+    await this.#append(journalEventsPath(this.#root, this.#sessionId), text);
   }
 
   async appendAction(action: JournalAction): Promise<void> {
-    await this.#ensureDir();
-    await this.#fs.appendFile(
+    await this.#append(
       journalActionsPath(this.#root, this.#sessionId),
       `${JSON.stringify(action)}\n`,
     );
+  }
+
+  /**
+   * The one write path, so both ledgers heal the same way.
+   *
+   * The session directory can VANISH under a live session: retention's count bound and byte budget
+   * both used to be able to take it, because a directory's mtime is frozen at creation and a long
+   * drive therefore looks like the oldest thing on disk. Both bounds now skip open sessions, but the
+   * directory can also be removed by a user, by a cleanup script, or by a peer daemon sweeping the
+   * same `.reticle/`, and the journal must not be one `rm` away from silently writing nothing for
+   * the rest of the session.
+   *
+   * Retry on ENOENT rather than dropping `#dirEnsured` and calling `mkdir` before every append:
+   * dropping the latch would still leave a window between the `mkdir` and the `appendFile` — small
+   * is not zero, and the failure it produces is exactly the invisible one — while costing a syscall
+   * on every batch, which is the cost batching exists to avoid. This pays nothing on the path that
+   * works and recovers on the one that does not.
+   */
+  async #append(path: string, text: string): Promise<void> {
+    await this.#ensureDir();
+    try {
+      await this.#fs.appendFile(path, text);
+    } catch (error) {
+      if (!this.#fs.isNotFound(error)) throw error;
+      this.#dirEnsured = false;
+      await this.#ensureDir();
+      await this.#fs.appendFile(path, text);
+    }
   }
 
   async readEvents(): Promise<ReticleEvent[]> {

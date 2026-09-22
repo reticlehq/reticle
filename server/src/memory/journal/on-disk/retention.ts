@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { reticleDirPaths, visualDir } from '@/memory/project/dir/reticle-dir.js';
@@ -67,17 +67,39 @@ export interface TierEntry {
   mtimeMs: number;
 }
 
+/** No session is open. The default everywhere, so an existing caller keeps its old behaviour. */
+const NO_LIVE_SESSIONS: ReadonlySet<string> = new Set<string>();
+
+/**
+ * Is this entry the journal directory of a session that is STILL BEING WRITTEN?
+ *
+ * A session directory is named for its session id, so the id IS the basename. Scoped to the
+ * sessions tier on purpose: a run artifact or a diff that happens to share a session's name is not
+ * a journal, and nothing is holding it open.
+ */
+function isOpenSession(entry: TierEntry, live: ReadonlySet<string>): boolean {
+  return ReticleDir.SESSIONS_SUBDIR === entry.under && live.has(basename(entry.path));
+}
+
 /**
  * Pure: the paths to remove so the EVIDENCE tier fits in `budgetBytes`. Oldest first, memory-tier
  * entries never selected and never counted. No IO — the call site stats and removes, exactly as
  * `selectPrunable` and `pruneByRecency` already split it.
  */
-export function selectOverBudget(entries: readonly TierEntry[], budgetBytes: number): string[] {
+export function selectOverBudget(
+  entries: readonly TierEntry[],
+  budgetBytes: number,
+  live: ReadonlySet<string> = NO_LIVE_SESSIONS,
+): string[] {
   const evidence = entries.filter((entry) => TRANSIENT_DIRS.includes(entry.under));
+  // Live sessions still COUNT — their bytes are on disk and the budget is about the disk. They are
+  // only excluded from the eviction list, so a session over budget on its own is left alone rather
+  // than deleted under its own writer.
   let total = evidence.reduce((sum, entry) => sum + entry.sizeBytes, 0);
   if (total <= budgetBytes) return [];
   const doomed: string[] = [];
   for (const entry of [...evidence].sort((a, b) => a.mtimeMs - b.mtimeMs)) {
+    if (isOpenSession(entry, live)) continue;
     if (total <= budgetBytes) break;
     doomed.push(entry.path);
     total -= entry.sizeBytes;
@@ -147,22 +169,49 @@ async function pruneByRecency(
   }
 }
 
+/** What a sweep is allowed to delete. Every field optional: omitting one keeps the old behaviour. */
+export interface RetentionOptions {
+  /** How many session directories survive the count bound. */
+  retention?: number;
+  /** The TOTAL the evidence tier may occupy. */
+  budgetBytes?: number;
+  /**
+   * The ids of sessions that are STILL OPEN. Neither bound may evict one.
+   *
+   * Without this both bounds could delete the journal of the session currently being written, and
+   * the long-running session was the FIRST candidate rather than the last: a directory's mtime is
+   * stamped when it is created and never moves again — appending to a file inside it advances the
+   * file's mtime, not the directory's — so an hour-long drive looks older than every short session
+   * that started after it. The journal then latched its directory as ensured, every later append
+   * failed ENOENT into a swallowed catch, and reads kept answering from the in-memory cache, so the
+   * session reported healthy with nothing reaching disk.
+   */
+  live?: ReadonlySet<string> | undefined;
+}
+
 /**
  * Bound the journal on disk: keep the `retention` most-recent session directories under
  * `.reticle/sessions/`, remove the rest by mtime. Never throws — retention is best-effort maintenance,
  * so a stat/rm failure on one dir (or a missing sessions/ dir) is swallowed, never crashing a session.
- * Mirrors RunStore's amortized pruning; run on daemon start.
+ * Mirrors RunStore's amortized pruning; run on daemon start and at the end of every session.
+ *
+ * An open session is excluded from BOTH bounds — see `RetentionOptions.live`.
+ *
+ * ponytail: excluded via `keep`, so an open session is not COUNTED toward the retention cap either.
+ * The directory can therefore hold `retention` + (concurrently open sessions) entries, which is a
+ * handful. Count them separately only if somebody runs enough parallel sessions for it to matter.
  */
 export async function pruneSessions(
   fs: FileSystemPort,
   root: string,
-  retention: number = DEFAULT_SESSION_RETENTION,
-  budgetBytes: number = DEFAULT_EVIDENCE_BUDGET_BYTES,
+  options: RetentionOptions = {},
 ): Promise<void> {
-  await pruneByRecency(fs, reticleDirPaths(root).sessions, retention);
+  const live = options.live ?? NO_LIVE_SESSIONS;
+  const retention = options.retention ?? DEFAULT_SESSION_RETENTION;
+  await pruneByRecency(fs, reticleDirPaths(root).sessions, retention, (name) => !live.has(name));
   // The tier total is swept from here because this is the one sweep that runs on BOTH the daemon's
   // start path and the end of every session, and the end of a session is when the bytes arrive.
-  await pruneEvidenceBudget(fs, root, budgetBytes);
+  await pruneEvidenceBudget(fs, root, options.budgetBytes ?? DEFAULT_EVIDENCE_BUDGET_BYTES, live);
 }
 
 /**
@@ -279,9 +328,10 @@ export async function pruneEvidenceBudget(
   fs: FileSystemPort,
   root: string,
   budgetBytes: number = DEFAULT_EVIDENCE_BUDGET_BYTES,
+  live: ReadonlySet<string> = NO_LIVE_SESSIONS,
 ): Promise<void> {
   try {
-    for (const path of selectOverBudget(await collectEvidence(fs, root), budgetBytes)) {
+    for (const path of selectOverBudget(await collectEvidence(fs, root), budgetBytes, live)) {
       try {
         await fs.rm(path);
       } catch {

@@ -286,7 +286,14 @@ function attachJournal(
     }
   });
   // Teardown: flush the journal tail to disk + persist what this session learned.
-  bridge.attachSessionEnd(makeSessionEnd(deps));
+  bridge.attachSessionEnd(
+    makeSessionEnd({
+      ...deps,
+      // Retention runs from teardown, and it must not delete the journal of a session that is still
+      // being written. The registry is the only thing that knows which those are.
+      liveSessionIds: () => new Set(bridge.sessions.all().map((s) => s.id)),
+    }),
+  );
   /*
    * And the same write, DURING the session rather than only at the end of it.
    *
@@ -306,7 +313,11 @@ function attachJournal(
     });
   }
   if (deps.enabled) {
-    void pruneSessions(deps.fs, deps.reticleRoot);
+    // Empty in the ordinary case (nothing has connected yet), but this path also runs on a daemon
+    // that is already serving sessions.
+    void pruneSessions(deps.fs, deps.reticleRoot, {
+      live: new Set(bridge.sessions.all().map((s) => s.id)),
+    });
     // The largest thing in the workspace, and until now the only one with no delete path at all.
     void pruneVisualDiffs(deps.fs, deps.reticleRoot);
     // Write-only local copies of reports the outbox already carries.

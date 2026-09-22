@@ -68,7 +68,7 @@ describe('pruneSessions', () => {
         // stagger mtimes so ordering is deterministic
         await new Promise((r) => setTimeout(r, 5));
       }
-      await pruneSessions(fs, root, 2);
+      await pruneSessions(fs, root, { retention: 2 });
       const remaining = (await readdir(sessions)).sort();
       expect(remaining).toEqual(['s2', 's3']);
     },
@@ -76,8 +76,30 @@ describe('pruneSessions', () => {
   );
 
   it('never throws when there is no sessions dir', async () => {
-    await expect(pruneSessions(fs, root, 2)).resolves.toBeUndefined();
+    await expect(pruneSessions(fs, root, { retention: 2 })).resolves.toBeUndefined();
   });
+
+  /**
+   * A session directory's mtime is stamped when it is CREATED and never moves again: appending to a
+   * file inside it advances the file's mtime, not the directory's. So the longest-running session on
+   * the machine is also the oldest-looking one, and the count bound used to evict it while it was
+   * still being written — after which the journal, which latched its directory as ensured, failed
+   * every subsequent append in silence.
+   */
+  it(
+    'never evicts a session that is still open, even when it is the oldest',
+    async () => {
+      const sessions = join(root, 'sessions');
+      for (const name of ['live', 's2', 's3']) {
+        await mkdir(join(sessions, name), { recursive: true });
+        await writeFile(join(sessions, name, 'events.jsonl'), '', 'utf8');
+        await new Promise((r) => setTimeout(r, 5));
+      }
+      await pruneSessions(fs, root, { retention: 2, live: new Set(['live']) });
+      expect((await readdir(sessions)).sort()).toEqual(['live', 's2', 's3']);
+    },
+    SESSION_PRUNE_TIMEOUT_MS,
+  );
 });
 
 /**
@@ -227,6 +249,14 @@ describe('the evidence tier byte budget', () => {
     expect(selectOverBudget([...memory, evidence('a', 10, 9)], 100)).toEqual([]);
   });
 
+  /** Same defect on the other bound: the byte budget has no count floor at all. */
+  it('never selects an open session, however far over budget', () => {
+    const entries = [evidence('live', 100, 1), evidence('b', 100, 2), evidence('c', 100, 3)];
+    expect(selectOverBudget(entries, 250, new Set(['live']))).toEqual(['b']);
+    // a lone, open, over-budget session is left alone rather than deleted under its own writer
+    expect(selectOverBudget([evidence('live', 100, 1)], 10, new Set(['live']))).toEqual([]);
+  });
+
   it('has a budget somebody chose', () => {
     expect(DEFAULT_EVIDENCE_BUDGET_BYTES).toBeGreaterThan(0);
   });
@@ -277,5 +307,19 @@ describe('pruneEvidenceBudget', () => {
 
   it('never throws when nothing has been written yet', async () => {
     await expect(pruneEvidenceBudget(bfs, broot)).resolves.toBeUndefined();
+  });
+
+  it('leaves an open session on disk even when it is the oldest and over budget', async () => {
+    const sessions = join(broot, ReticleDir.SESSIONS_SUBDIR);
+    for (const [i, name] of ['live', 's2', 's3'].entries()) {
+      await mkdir(join(sessions, name), { recursive: true });
+      await writeFile(join(sessions, name, 'events.jsonl'), 'x'.repeat(1000), 'utf8');
+      const when = new Date(1_700_000_000_000 + i * 1000);
+      utimesSync(join(sessions, name), when, when);
+    }
+
+    await pruneEvidenceBudget(bfs, broot, 2500, new Set(['live']));
+
+    expect((await readdir(sessions)).sort()).toEqual(['live', 's3']);
   });
 });

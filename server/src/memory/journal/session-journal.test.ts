@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   EventType,
+  ReticleDir,
   JOURNAL_FILE_VERSION,
   type JournalAction,
   type ReticleEvent,
@@ -162,5 +163,25 @@ describe('SessionJournal — durable JSONL over a temp dir', () => {
 
     fileText = `${complete}${JSON.stringify(evt(2))}\n`; // the append completes with the newline
     expect((await j.readEvents()).map((e) => e.seq)).toEqual([0, 1, 2]); // event 2 recovered, not dropped
+  });
+
+  /**
+   * A live session's directory can be removed under it — retention used to be able to do exactly
+   * that, because a directory's mtime is frozen at creation and a long drive therefore looks like
+   * the oldest thing on disk. The journal latched `#dirEnsured` on the first append, so after the
+   * removal every later append failed ENOENT forever while the in-memory cache kept answering
+   * reads, and the loss was invisible until somebody opened the file.
+   */
+  it('recreates its directory when it is removed under a live session', async () => {
+    const journal = new SessionJournal(fs, root, 'demo');
+    await journal.appendEvents([evt(1)]);
+    await fs.rm(join(root, ReticleDir.SESSIONS_SUBDIR, 'demo'));
+
+    await journal.appendEvents([evt(2)]);
+    await journal.appendAction(action());
+
+    const reread = new SessionJournal(fs, root, 'demo');
+    expect((await reread.readEvents()).map((e) => e.seq)).toEqual([2]);
+    expect(await reread.readActions()).toHaveLength(1);
   });
 });

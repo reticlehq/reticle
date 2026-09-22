@@ -5,6 +5,19 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import { isSelfObservation } from './self-observation.js';
+import { log } from '@/log.js';
+
+/**
+ * Logged the FIRST time a journal write is lost, and never again for that recorder.
+ *
+ * The swallow stays — a failed local journal write must never break a live session, and a tool call
+ * is not the place to learn the disk is full. But a loss that says nothing is how a journal wrote
+ * nothing for a whole session while the session reported healthy and reads kept answering from the
+ * in-memory cache. Once per recorder, on the existing daemon-log channel: enough to find in the
+ * daemon log when somebody asks why a journal file is short, quiet enough that a full disk does not
+ * produce one line per batch.
+ */
+const JOURNAL_WRITE_LOST = 'journal_write_lost';
 
 /** Where a recorder persists. `SessionJournal` satisfies this structurally. */
 export interface JournalSink {
@@ -56,6 +69,7 @@ export class JournalRecorder {
   #pending: ReticleEvent[] = [];
   #active: ActiveAction | undefined;
   #chain: Promise<void> = Promise.resolve();
+  #lossReported = false;
 
   constructor(sink: JournalSink, options: JournalRecorderOptions) {
     this.#sink = sink;
@@ -117,7 +131,9 @@ export class JournalRecorder {
       at: active.tStart,
     };
     this.#enqueueFlush();
-    this.#chain = this.#chain.then(() => this.#sink.appendAction(action)).catch(() => undefined);
+    this.#chain = this.#chain
+      .then(() => this.#sink.appendAction(action))
+      .catch((error: unknown) => this.#reportLoss(error));
   }
 
   /**
@@ -158,7 +174,9 @@ export class JournalRecorder {
       at,
     };
     this.#enqueueFlush();
-    this.#chain = this.#chain.then(() => this.#sink.appendAction(action)).catch(() => undefined);
+    this.#chain = this.#chain
+      .then(() => this.#sink.appendAction(action))
+      .catch((error: unknown) => this.#reportLoss(error));
   }
 
   /** Persist any buffered events now (call on session end). Awaits the write chain to settle. */
@@ -171,6 +189,15 @@ export class JournalRecorder {
     if (0 === this.#pending.length) return;
     const batch = this.#pending;
     this.#pending = [];
-    this.#chain = this.#chain.then(() => this.#sink.appendEvents(batch)).catch(() => undefined);
+    this.#chain = this.#chain
+      .then(() => this.#sink.appendEvents(batch))
+      .catch((error: unknown) => this.#reportLoss(error));
+  }
+
+  /** Swallow a lost write, but say so once. See JOURNAL_WRITE_LOST. */
+  #reportLoss(error: unknown): void {
+    if (this.#lossReported) return;
+    this.#lossReported = true;
+    log(JOURNAL_WRITE_LOST, { error: error instanceof Error ? error.message : String(error) });
   }
 }
