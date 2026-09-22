@@ -50,6 +50,7 @@ function stubSessions(
     setNoSessionHint: (hint: (() => string | undefined) | undefined) => {
       installed = hint;
     },
+    setNoSessionLead: () => undefined,
     setNoSessionNextAction: () => undefined,
     setConnectionRecorder: () => undefined,
   } as unknown as SessionManager;

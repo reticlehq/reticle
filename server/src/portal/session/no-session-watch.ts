@@ -328,7 +328,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
   // ONE call for both registrations below. The prose and the branch code have to come from the
   // same evaluation or they can describe different branches - the facts are read when asked, so two
   // calls a moment apart can genuinely disagree (#615).
-  const explain = (): { reason: NoSessionReason; message: string } => {
+  const explain = (): { reason: NoSessionReason; message: string; detail?: string } => {
     const scope = projectScopeFacts();
     return explainNoSession({
       everConnected: options.sessions.everConnected(),
@@ -390,16 +390,18 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
     });
   };
 
-  options.sessions.setNoSessionHint(() => {
+  // The lead, then the literal command, then the differential. Both renderings consume the same
+  // scope facts so a discovered workspace config cannot become an `init` recommendation below it,
+  // and both come from ONE `explain()` call so they cannot describe different branches.
+  const rendered = (): { lead: string; full: string } => {
     const scope = projectScopeFacts();
-    return (
-      explain().message +
-      // Prose for the human, then the literal command for the agent. Both consume the same scope
-      // facts so a discovered workspace config cannot become an `init` recommendation below it.
-      ` ${renderNextAction(nextAction(scope))}` +
-      (attachFailure ?? '')
-    );
-  });
+    const { message, detail } = explain();
+    const lead = `${message} ${renderNextAction(nextAction(scope))}${attachFailure ?? ''}`;
+    return { lead, full: undefined === detail ? lead : `${lead} ${detail}` };
+  };
+
+  options.sessions.setNoSessionHint(() => rendered().full);
+  options.sessions.setNoSessionLead(() => rendered().lead);
 
   options.sessions.setNoSessionReason(() => explain().reason);
 
@@ -407,6 +409,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
     clearInterval(timer);
     options.sessions.setConnectionRecorder(undefined);
     options.sessions.setNoSessionHint(undefined);
+    options.sessions.setNoSessionLead(undefined);
     options.sessions.setNoSessionReason(undefined);
     options.sessions.setNoSessionNextAction(undefined);
   };

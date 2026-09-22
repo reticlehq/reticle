@@ -49,6 +49,7 @@ function stubSessions(): {
     setNoSessionHint: (hint: (() => string | undefined) | undefined) => {
       installed = hint;
     },
+    setNoSessionLead: () => undefined,
     setNoSessionNextAction: (next: (() => NoSessionNextAction | undefined) | undefined) => {
       nextAction = next;
     },

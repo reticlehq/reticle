@@ -22,6 +22,15 @@ interface StatusPayload {
    * beside a live session.
    */
   why?: string;
+  /**
+   * The same diagnosis with the differential left off: the lead and the next action.
+   *
+   * Two fields because there are two readers. `why` is for an agent about to spend a drive on a
+   * guess, and carries the ranked causes, the port-scan caveat and the lease offer. `whyLead` is
+   * for a surface a PERSON reads: `reticle init` prints the daemon's account of a failed connect,
+   * and was printing roughly five hundred words of it in one paragraph.
+   */
+  whyLead?: string;
   /** Port of the verify HTTP endpoint this daemon serves — present only when started with `--http`. */
   verifyPort?: number;
 }
@@ -32,6 +41,8 @@ export function statusPayload(
   /** The no-session diagnosis, injected so this stays pure and the port probe stays off this path. */
   why?: string,
   verifyPort?: number,
+  /** The short rendering of the same diagnosis. Absent on a daemon that has no provider wired. */
+  whyLead?: string,
 ): StatusPayload {
   return {
     running: true,
@@ -42,6 +53,7 @@ export function statusPayload(
     // Only when there is nothing to explain away: a diagnosis printed beside a live session would
     // contradict it.
     ...(0 === sessionCount && why !== undefined ? { why } : {}),
+    ...(0 === sessionCount && whyLead !== undefined ? { whyLead } : {}),
     ...(verifyPort === undefined ? {} : { verifyPort }),
   };
 }

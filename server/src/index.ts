@@ -590,6 +590,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
       bridge.sessions.list(),
       bridge.sessions.noSessionHint(),
       verifyHttp?.port,
+      bridge.sessions.noSessionLead(),
     ),
   );
   // Agent-independent presence: the daemon outlives any single agent, so when the LAST agent's MCP

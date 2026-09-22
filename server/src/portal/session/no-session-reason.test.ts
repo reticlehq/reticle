@@ -79,9 +79,14 @@ describe('the prose is the prose it always was', () => {
     facts({ initialized: true, listening: [3000] }),
   ];
 
-  it('diagnoseNoSession returns exactly explainNoSession().message', () => {
+  it('diagnoseNoSession returns the lead and the detail behind it, in that order', () => {
+    // It used to be exactly `.message`, back when there was only one piece of prose. The message is
+    // now the LEAD a person reads and `detail` is the differential behind it; the render surface
+    // still hands back everything, so nothing that reads this function lost a sentence.
     for (const f of cases) {
-      expect(diagnoseNoSession(f)).toBe(explainNoSession(f).message);
+      const { message, detail } = explainNoSession(f);
+      expect(diagnoseNoSession(f)).toBe(undefined === detail ? message : `${message} ${detail}`);
+      expect(diagnoseNoSession(f).startsWith(message)).toBe(true);
     }
   });
 

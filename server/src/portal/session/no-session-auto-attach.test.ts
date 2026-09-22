@@ -71,6 +71,7 @@ function stubSessions(count = 0): Stub {
     setNoSessionHint: (fn: (() => string | undefined) | undefined) => {
       hint = fn;
     },
+    setNoSessionLead: () => undefined,
     setNoSessionNextAction: (fn: (() => NoSessionNextAction | undefined) | undefined) => {
       next = fn;
     },
