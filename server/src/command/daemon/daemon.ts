@@ -17,6 +17,11 @@ import { spawn } from 'node:child_process';
 import { daemonRegistryFileName, ReticleEnv, type DaemonRegistryEntry } from '@reticlehq/core';
 import { log } from '@/log.js';
 import { uncleanPredecessor } from './lifetime/unclean-predecessor.js';
+import { MAX_DAEMON_LOG_BYTES, pruneOldDaemonLogs } from './lifetime/log-cap.js';
+
+// Re-exported from their owner so callers outside this directory — the proxy log, the rotation
+// tests — keep reaching `daemon` rather than `lifetime`, which is a sink. See lifetime/log-cap.ts.
+export { MAX_DAEMON_LOG_BYTES, recoverOversizedLog } from './lifetime/log-cap.js';
 
 /** Env override for the whole state directory — see ReticleEnv.STATE_DIR. */
 export const STATE_DIR_ENV = ReticleEnv.STATE_DIR;
@@ -48,20 +53,9 @@ export function logPath(port: number): string {
 }
 
 /**
- * How large a daemon log may get before it is rolled over to `<name>.1`.
- *
- * It was unbounded. A real dev machine reached **24MB** on one port, which is not merely untidy: it
- * is the difference between a log somebody opens and a log somebody gives up on, and it is disk that
- * nothing ever reclaims. One previous generation is kept, because the question people bring to this
- * file ("what happened just now?") is answered by the current one and the question they bring next
- * ("and just before that?") is answered by the other.
- */
-export const MAX_DAEMON_LOG_BYTES = 8 * 1024 * 1024;
-
-/**
  * Roll the log over if it has grown past the cap. Best-effort: a daemon must still start when the
  * log cannot be rotated, because failing to launch over housekeeping is strictly worse than a large
- * file.
+ * file. The cap itself, the mid-run check and the prune live in lifetime/log-cap.ts.
  */
 export function rotateDaemonLog(
   path: string,
@@ -313,6 +307,9 @@ export function spawnDaemon(
   // Roll the log BEFORE opening the append handle, or the daemon writes into the renamed file
   // through an fd that no longer matches any name anyone can find.
   rotateDaemonLog(logFilePath, deps);
+  // Every OTHER port's leftovers, while we are already here and holding the directory. The clock is
+  // read at this I/O boundary rather than injected, same as the timestamp written below.
+  pruneOldDaemonLogs(deps.home, Date.now());
   let logFd: number;
   try {
     logFd = deps.openFile(logFilePath, 'a');

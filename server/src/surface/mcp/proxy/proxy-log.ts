@@ -11,7 +11,11 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
 import { log } from '@/log.js';
-import { MAX_DAEMON_LOG_BYTES, rotateDaemonLog } from '@/command/daemon/daemon.js';
+import {
+  MAX_DAEMON_LOG_BYTES,
+  recoverOversizedLog,
+  rotateDaemonLog,
+} from '@/command/daemon/daemon.js';
 
 /**
  * Which port this proxy serves, for the log file name. Set once at startup.
@@ -56,32 +60,22 @@ export function accountProxyLogWrite(
 /**
  * Reclaim a proxy log that a previous process already let run away. Returns the bytes reclaimed.
  *
- * An uncapped proxy log has filled a disk and broken unrelated builds, Docker and ordinary shell
- * commands with ENOSPC. Nothing in Reticle degrades first, so the failure surfaces as the operating
- * system refusing to write files. Such files already exist on machines that ran an older build, and
- * the cap alone does not help them: nobody should have to find one with `du`.
+ * Path-shaped wrapper over `recoverOversizedLog`, which is where the rule, the in-place truncation
+ * and the ENOSPC incident behind them are written down. Both of Reticle's logs are capped by that
+ * one function; this keeps the name and the `fileSize`/`truncateFile` deps its callers already pass.
  *
- * TRUNCATED IN PLACE, never renamed or unlinked. A rename moves the bytes without reclaiming a byte,
- * and a file that a running process still holds open keeps its blocks allocated after an unlink
- * until that handle closes — which is why `: > ~/.reticle/proxy-4400.log` is the operation to copy
- * here.
- *
- * Best-effort, in the same spirit as `rotateDaemonLog`: refusing to start the MCP server over
- * housekeeping is strictly worse than a large file.
+ * Such files already exist on machines that ran an older build, and the cap alone does not help
+ * them: nobody should have to find one with `du`.
  */
 export function recoverOversizedProxyLog(
   path: string,
   deps: { fileSize(p: string): number; truncateFile(p: string): void },
   max: number = MAX_DAEMON_LOG_BYTES,
 ): number {
-  try {
-    const size = deps.fileSize(path);
-    if (max >= size) return 0;
-    deps.truncateFile(path);
-    return size;
-  } catch {
-    return 0;
-  }
+  return recoverOversizedLog(
+    { size: () => deps.fileSize(path), truncate: () => deps.truncateFile(path) },
+    max,
+  );
 }
 
 /** The real filesystem behind the two rotation helpers. */

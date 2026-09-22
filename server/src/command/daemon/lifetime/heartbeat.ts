@@ -18,6 +18,8 @@
  * A heartbeat nobody interprets is just log volume.
  */
 
+import { DAEMON_LOG_TRUNCATED_EVENT, guardDaemonLog } from './log-cap.js';
+
 /** The event name a beat carries. One `grep` separates liveness from everything else in the file. */
 export const DAEMON_HEARTBEAT_EVENT = 'reticle_daemon_alive';
 /** Written by installExitTrace when the process exits through Node. */
@@ -73,6 +75,11 @@ interface DaemonHeartbeatOptions {
   intervalMs?: number;
   /** Injected, per the repo rule: never call Date.now() inside logic. */
   clock?: () => number;
+  /**
+   * The log file this beat writes into, for the size check that rides along with it. Injected only
+   * by tests; the default is the daemon's own stderr. See guardDaemonLog.
+   */
+  logGuard?: { size(): number; truncate(): void };
 }
 
 export class DaemonHeartbeat {
@@ -80,6 +87,7 @@ export class DaemonHeartbeat {
   readonly #facts: () => HeartbeatFacts;
   readonly #intervalMs: number;
   readonly #clock: () => number;
+  readonly #logGuard: { size(): number; truncate(): void } | undefined;
   readonly #startedAt: number;
   #timer: ReturnType<typeof setInterval> | undefined;
 
@@ -88,6 +96,7 @@ export class DaemonHeartbeat {
     this.#facts = opts.facts;
     this.#intervalMs = opts.intervalMs ?? DAEMON_HEARTBEAT_MS;
     this.#clock = opts.clock ?? ((): number => Date.now());
+    this.#logGuard = opts.logGuard;
     this.#startedAt = this.#clock();
   }
 
@@ -99,6 +108,12 @@ export class DaemonHeartbeat {
    * ambiguity this exists to remove.
    */
   beat(): void {
+    // The one thing a running daemon does on a timer, so it is also where the log it is filling gets
+    // looked at. `rotateDaemonLog` runs at spawn and never again: a detached daemon then writes for
+    // days with nothing checking the size, which is how a log reaches its cap with no mechanism left
+    // that would ever trim it. The beat is itself one of those writes.
+    const reclaimed = guardDaemonLog(this.#logGuard);
+    if (0 < reclaimed) this.#log(DAEMON_LOG_TRUNCATED_EVENT, { reclaimedBytes: reclaimed });
     const facts = this.#facts();
     this.#log(DAEMON_HEARTBEAT_EVENT, {
       uptimeMs: this.#clock() - this.#startedAt,
