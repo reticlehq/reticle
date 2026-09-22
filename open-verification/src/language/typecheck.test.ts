@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ChannelId } from '@/vocabulary/channel.js';
-import { typecheckProgram, TypeErrorKind } from './typecheck.js';
+import { typecheckProgram, TypeErrorKind, type RealmSurface } from './typecheck.js';
 
 /**
  * The phase that did not exist: refuse a document BEFORE an action is spent.
@@ -67,5 +67,28 @@ describe('typecheckProgram', () => {
     const errors = typecheckProgram([{ capability: 'click' }], { capabilities: [], channels: [] });
     expect(errors).toHaveLength(1);
     expect(errors[0]?.kind).toBe(TypeErrorKind.UNDECLARED_CAPABILITY);
+  });
+
+  /**
+   * An `x-` channel typechecks, and this test's real assertion is that the file COMPILES.
+   *
+   * The extension mechanism reached the schemas and stopped at the type system. `ChannelIdSchema`
+   * admits `x-` and always has; `ProgramStep.reads` and `RealmSurface.channels` were typed as the
+   * closed nine-value `ChannelId`, so a realm whose PRIMARY channel is an extension -- a
+   * command-line tool reporting what it wrote, which is the first such realm -- could declare it,
+   * validate it, and then not express a single criterion that reads it.
+   *
+   * An extension mechanism the compiler refuses is one only the schema believes in. If somebody
+   * re-narrows either type, `tsc` fails here before any assertion runs, which is the point: the
+   * runtime behaviour was never wrong.
+   */
+  it('accepts an x- channel, because a realm may declare one and must be able to read it', () => {
+    const cli: RealmSurface = { capabilities: ['run'], channels: ['x-artifact', ChannelId.LOG] };
+    expect(typecheckProgram([{ capability: 'run', reads: ['x-artifact'] }], cli)).toEqual([]);
+
+    // And still refuses one the realm did not declare, extension or not.
+    const errors = typecheckProgram([{ capability: 'run', reads: ['x-screen'] }], cli);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.kind).toBe(TypeErrorKind.UNOBSERVED_CHANNEL);
   });
 });

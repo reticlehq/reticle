@@ -19,7 +19,7 @@
  * of Reticle's TypeScript.
  */
 
-import type { ChannelId } from '@/vocabulary/channel.js';
+import type { DeclaredChannelId } from '@/vocabulary/channel.js';
 
 export const TypeErrorKind = {
   /** The realm cannot do this. Checked against `capabilities()`. */
@@ -81,13 +81,13 @@ export interface FlowTypeError {
 /** One step, reduced to what a typecheck needs: what it does, and what it reads to know it worked. */
 export interface ProgramStep {
   capability: string;
-  reads?: readonly ChannelId[];
+  reads?: readonly DeclaredChannelId[];
 }
 
 /** What the target realm says it can do and see — `capabilities()` and `channels()`, nothing else. */
 export interface RealmSurface {
   capabilities: readonly string[];
-  channels: readonly ChannelId[];
+  channels: readonly DeclaredChannelId[];
 }
 
 /**

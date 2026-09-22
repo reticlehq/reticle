@@ -13,7 +13,7 @@
  * it could never have failed.
  */
 
-import type { ChannelId } from '@/vocabulary/channel.js';
+import type { DeclaredChannelId } from '@/vocabulary/channel.js';
 import type { ProgramStep } from './typecheck.js';
 
 /** One thing a user wants to be true, in the same terms the protocol already speaks. */
@@ -23,7 +23,7 @@ export interface Criterion {
   /** What the realm must be able to DO to check it — usually a read. */
   capability: string;
   /** Which channels answering it requires. This is what makes a criterion refusable up front. */
-  reads: readonly ChannelId[];
+  reads: readonly DeclaredChannelId[];
 }
 
 /** A criteria set is a program. That is the whole claim of this file. */

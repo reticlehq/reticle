@@ -52,6 +52,26 @@ export const ChannelId = {
 } as const;
 export type ChannelId = (typeof ChannelId)[keyof typeof ChannelId];
 
+/**
+ * A channel id as a REALM may declare one: named by this specification, or somebody's extension.
+ *
+ * `ChannelId` is the closed list of nine this document names, and it stays closed -- that is what
+ * makes `CHANNEL_DEFAULTS` a `Record` the compiler can check. But a realm is explicitly allowed to
+ * observe channels this specification does not name, and until this type existed the permission
+ * reached the SCHEMAS and stopped at the type system: anything typed `ChannelId` refused an `x-`
+ * name outright.
+ *
+ * The cost was exact rather than theoretical. A realm whose primary channel is an extension could
+ * declare it, validate it, and then express no criterion that reads it, because the language layer
+ * types `reads` and `channels`. The first such realm is a command-line tool, whose consequence is
+ * a file on disk and whose name for that is `x-artifact`; the protocol's own extension mechanism
+ * would have refused the first subject that needed it.
+ *
+ * Deliberately NOT used for `CHANNEL_DEFAULTS`, which answers for the nine and must not pretend to
+ * answer for a name it has never seen.
+ */
+export type DeclaredChannelId = ChannelId | `x-${string}`;
+
 export const ChannelIdSchema = z.union([
   z.nativeEnum(ChannelId),
   z
