@@ -79,7 +79,11 @@ install_cli() {
   # and `dash` swallowed the expansion whole -- the line printed "Installing " and two broken bytes.
   # bash was fine with it, which is exactly how a `curl | sh` bug reaches users: the author's shell
   # is not the one it runs in.
+  # npm draws its progress bar only onto a TTY, and under `curl | sh` there is never one -- so it
+  # prints nothing at all between here and its final summary. A cold cache makes that a silent
+  # minute on the first thing anybody runs, reported from a real install as "sticks for a while".
   say "Installing ${RETICLE_PKG}..."
+  say "  npm prints nothing until it finishes. First run on a cold cache takes a minute."
   npm install -g "$RETICLE_PKG" >&2 || {
     note_failure cli_installed npm_install
     die "npm could not install $RETICLE_PKG. Its output above says why."

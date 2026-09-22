@@ -92,6 +92,7 @@ function Install-Cli {
     Die @('npm was not found, and it ships with Node. Reinstall Node from nodejs.org.')
   }
   Say "Installing $ReticlePkg..."
+  Say '  npm prints nothing until it finishes. First run on a cold cache takes a minute.'
   # Native stderr is not a failure signal here; the exit code is. `npm install -g` writes progress
   # to stderr on a perfectly good install, and treating that as an error fails every run.
   & npm install -g $ReticlePkg 2>&1 | ForEach-Object { Say $_ }
