@@ -215,8 +215,9 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
         "own. Point the plugin at the daemon's copy — mount `~/.reticle/pairing-token` into the " +
         `container read-only and set \`${ReticleEnv.PAIRING_TOKEN_DIR}\` to the directory holding ` +
         'it — then ' +
-        'restart the dev server, because the token is inlined when Vite resolves its config. If the ' +
-        'dev server IS on this machine, the page is older than the current token: hard-reload it.',
+        'restart the dev server, because the token is inlined when Vite resolves its config and ' +
+        'kept in the prebundled module. Reloading the page serves that same token, whether the ' +
+        'dev server is on this machine or in a container.',
     };
   }
 
