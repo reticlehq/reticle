@@ -1,5 +1,5 @@
 import { FlowErrorCode } from '@reticlehq/core';
-import { isValidFlowName } from '@/memory/project/dir/reticle-dir.js';
+import { SAFE_SEGMENT_PATTERN } from '@reticlehq/core';
 
 /** Discriminated result so callers never branch on free strings. */
 export type FlowResult<T> =
@@ -11,6 +11,17 @@ export type FlowResult<T> =
  * An unsafe or absent value collapses to `undefined` — the flat, global store — so a malformed id
  * can never escape `.reticle/flows/`. The store defends the disk boundary itself rather than
  * trusting whatever arrived in a session's HELLO.
+ *
+ * Held to one SEGMENT, not to a flow name. A project id becomes a DIRECTORY; a flow name is an
+ * ADDRESS, and since composites began naming sub-journeys as `onboarding/signup` its pattern has
+ * allowed separators. Validating a directory name with the address guard let a page choose how deep
+ * under `.reticle/` Reticle wrote — not an escape, since neither pattern admits `..` or a leading
+ * separator, but the page naming directories all the same.
+ *
+ * The narrowing said it out loud and nobody was listening: `isValidFlowName` narrows its argument to
+ * `FlowName`, for a value that is a project. The sibling guards for session and run ids have used
+ * the segment pattern since that widening, and `id-guards-are-not-flow-names.test.ts` exists to
+ * hold the distinction — this is the fourth id joined into a path, and the one that file missed.
  */
 export const safeProjectId = (projectId?: string): string | undefined =>
-  projectId !== undefined && isValidFlowName(projectId) ? projectId : undefined;
+  projectId !== undefined && SAFE_SEGMENT_PATTERN.test(projectId) ? projectId : undefined;

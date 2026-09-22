@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { isValidSessionId, isValidRunId, isValidFlowName } from './reticle-dir.js';
+import { safeProjectId } from '@/language/flows/flow-result.js';
 
 /**
  * A session id is a DIRECTORY NAME. A flow name is an ADDRESS. They are not the same guard.
@@ -22,6 +23,26 @@ describe('ids that become directory names', () => {
     expect(isValidRunId('onboarding/signup')).toBe(false);
   });
 
+  /**
+   * A projectId is the fourth id joined into a directory path, and it was the one this file did not
+   * cover -- while being validated by `isValidFlowName`, the ADDRESS guard, rather than the segment
+   * guard the other three use.
+   *
+   * It arrives in a session's HELLO, so a page could choose how deep under `.reticle/` Reticle
+   * writes. It could not escape the directory -- no `..`, no leading separator -- so this is a page
+   * naming nested directories rather than a page reaching the disk. Still the wrong guard, and the
+   * brand said so out loud: `isValidFlowName` narrows to `projectId is FlowName`, for a value that
+   * is a project.
+   */
+  it('refuse a separator in a projectId too, which is a directory name and not an address', () => {
+    expect(safeProjectId('onboarding/signup')).toBeUndefined();
+    expect(safeProjectId('a/b')).toBeUndefined();
+  });
+
+  it('still accept an ordinary projectId', () => {
+    expect(safeProjectId('82e20b628df9cb09')).toBe('82e20b628df9cb09');
+  });
+
   it('still accept the ordinary single-segment ids everything uses', () => {
     for (const id of ['s7dbe002a-5c5a-451b', 'run_2026', 'abc123']) {
       expect(isValidSessionId(id), id).toBe(true);
@@ -34,6 +55,7 @@ describe('ids that become directory names', () => {
       expect(isValidSessionId(bad), bad).toBe(false);
       expect(isValidRunId(bad), bad).toBe(false);
       expect(isValidFlowName(bad), bad).toBe(false);
+      expect(safeProjectId(bad), bad).toBeUndefined();
     }
   });
 });
