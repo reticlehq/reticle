@@ -1,4 +1,11 @@
-import type { ReticleEvent } from '@reticlehq/core';
+import type { JournalWriteLoss, ReticleEvent } from '@reticlehq/core';
+import type { JournalReader } from './journal-recorder.js';
+
+/** The slice of the ring buffer a journal-backed query reads. `RingBuffer` satisfies it structurally. */
+export interface QueryBuffer {
+  since(cursor: number): ReticleEvent[];
+  bufferHealth(): { total: number; dropped: number };
+}
 
 /** Filter bounds for a journal-backed event query. All optional; omitted = unbounded on that axis. */
 export interface EventQueryOptions {
@@ -56,6 +63,61 @@ export function mergeEventsBySeq(
     if (a.seq !== undefined && b.seq !== undefined) return a.seq - b.seq;
     return a.t - b.t;
   });
+}
+
+/**
+ * Does a query read the durable journal at all, or is the buffer still authoritative?
+ *
+ * One expression, three callers, because the two public functions below are only honest while this
+ * is true. Kept here rather than on `Session` so the rule sits beside the merge and filter rules it
+ * governs; two copies of it would drift into a verdict that impeached itself over a file it never
+ * opened.
+ */
+function readsJournal(reader: JournalReader | undefined, buffer: QueryBuffer): boolean {
+  return reader !== undefined && buffer.bufferHealth().dropped > 0;
+}
+
+/**
+ * The events a query answers with: the ring buffer's, merged with the durable journal's **only when
+ * the buffer has evicted** (so a healthy session pays no disk cost), then filtered by
+ * since/until/actionId. This is how "what did action N cause" is answered after the buffer has
+ * dropped the evidence — the substrate's whole point.
+ */
+export async function readQueryEvents(
+  reader: JournalReader | undefined,
+  buffer: QueryBuffer,
+  options: EventQueryOptions,
+): Promise<ReticleEvent[]> {
+  if (!readsJournal(reader, buffer)) {
+    return filterEvents(buffer.since(options.since ?? 0), options);
+  }
+  const durable = (await reader?.readEvents()) ?? [];
+  return filterEvents(mergeEventsBySeq(durable, buffer.since(0)), options);
+}
+
+/**
+ * What the durable ledger could not WRITE, when a query would read from it.
+ *
+ * The event ledger stops at a byte ceiling, so a journal-backed window can be missing exactly the
+ * evidence that would have refuted an absence claim. The in-band `truncated` record cannot carry
+ * this on its own: it is stamped with the `t` of the last refused event, and `filterEvents` above
+ * bounds on `t` — so a window opened after the ceiling was reached holds no marker, no events, and
+ * nothing to distinguish it from a window in which nothing happened.
+ *
+ * Reported ONLY while the buffer has evicted, which is the same condition `readQueryEvents` uses to
+ * fall through to disk. While the buffer still holds the window, the ledger's state says nothing
+ * about that window's completeness, and saying it anyway would impeach healthy verdicts for the
+ * rest of every session that ever hit its cap. Live ring data is never discarded over this.
+ *
+ * A reader with no opinion answers `undefined`, which means NOT MEASURED. It must never be read as
+ * "nothing was lost" — see `JournalReader.readWriteLoss`.
+ */
+export async function readJournalWriteLoss(
+  reader: JournalReader | undefined,
+  buffer: QueryBuffer,
+): Promise<JournalWriteLoss | undefined> {
+  if (!readsJournal(reader, buffer)) return undefined;
+  return (await reader?.readWriteLoss?.()) ?? undefined;
 }
 
 /** Apply since/until/actionId bounds to an event list. */

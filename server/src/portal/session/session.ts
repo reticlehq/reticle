@@ -35,6 +35,7 @@ import {
   type BrowserBrand,
   type CommandResult,
   type JournalAction,
+  type JournalWriteLoss,
   type HelloMessage,
   type HumanControlData,
   type ReticleEvent,
@@ -42,8 +43,8 @@ import {
 import { RingBuffer } from '@reticlehq/engine/window/ring-buffer.js';
 import type { JournalReader, JournalRecorder } from '@/memory/journal/journal-recorder.js';
 import {
-  filterEvents,
-  mergeEventsBySeq,
+  readJournalWriteLoss,
+  readQueryEvents,
   type EventQueryOptions,
 } from '@/memory/journal/journal-query.js';
 import { type AmbientCounts } from '@reticlehq/engine/window/ambient.js';
@@ -479,17 +480,17 @@ export class Session implements HandshakeFacts {
   }
 
   /**
-   * Journal-backed event query: the ring buffer's events, merged with the durable journal **only when
-   * the buffer has evicted** (so a healthy session pays no disk cost), then filtered by since/until/
-   * actionId. This is how "what did action N cause" is answered after the buffer has dropped the
-   * evidence — the substrate's whole point. The sync `eventsSince`/`window` stay for the hot path.
+   * Journal-backed event query — the rule itself lives in `readQueryEvents`, beside the merge and
+   * filter it is made of. This is how "what did action N cause" is answered after the buffer has
+   * dropped the evidence. The sync `eventsSince`/`window` stay for the hot path.
    */
   async queryEvents(options: EventQueryOptions): Promise<ReticleEvent[]> {
-    if (this.#journalReader !== undefined && this.#buffer.bufferHealth().dropped > 0) {
-      const durable = await this.#journalReader.readEvents();
-      return filterEvents(mergeEventsBySeq(durable, this.#buffer.since(0)), options);
-    }
-    return filterEvents(this.#buffer.since(options.since ?? 0), options);
+    return readQueryEvents(this.#journalReader, this.#buffer, options);
+  }
+
+  /** What the durable ledger could not WRITE — see `readJournalWriteLoss` for the rule and why. */
+  async journalWriteLoss(): Promise<JournalWriteLoss | undefined> {
+    return readJournalWriteLoss(this.#journalReader, this.#buffer);
   }
 
   /**
@@ -629,12 +630,18 @@ export class Session implements HandshakeFacts {
   }
 
   /**
-   * Did the buffer lose scarce evidence from a window opened at `cursor`? The input to whether a
+   * Did the EVENT STORE lose scarce evidence from a window opened at `cursor`? The input to whether a
    * verdict's capture was clean — see `RingBuffer.lostSince`, and never the raw drop counter, which
-   * moves for the age and churn evictions that every live page produces continuously.
+   * moves for the age and churn evictions that every live page produces continuously. The journal is
+   * the other half of that store, so a durable read that could not reach back to `cursor` lost
+   * exactly what an eviction would have. Both boundaries are INCLUSIVE (`t` is a millisecond many
+   * records share) and an absent `lostThroughT` impeaches every window rather than none — the
+   * conservative direction, both times.
    */
   lostSince(cursor: number): boolean {
-    return this.#buffer.lostSince(cursor);
+    if (this.#buffer.lostSince(cursor)) return true;
+    const lost = this.#journalReader?.readLoss?.();
+    return lost !== undefined && (lost.lostThroughT === undefined || lost.lostThroughT >= cursor);
   }
 
   onEvent(listener: (event: ReticleEvent) => void): () => void {

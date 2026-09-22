@@ -35,7 +35,7 @@ import { stallUptime } from './stall-clock.js';
 import type { SessionManager } from './session-manager.js';
 import { probeDaemon } from '@/surface/mcp/mcp-proxy.js';
 import { findOccupiedSiblings } from '@/command/cli/ports/sibling-ports.js';
-import { WS_CLOSE_REASON } from '@/portal/bridge/bridge.js';
+import { isAuthRefusalReason } from '@/portal/bridge/auth-failure-reason.js';
 
 /** Slow enough to be free, fast enough that a dev server started 15s ago is already reflected. */
 const REFRESH_MS = 15_000;
@@ -286,7 +286,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
   /**
    * Is a refusal on the pairing token the CURRENT state of the bridge?
    *
-   * The bridge records the refusal (`noteClosure(WS_CLOSE_REASON.AUTH_FAILED)`) and nothing read it
+   * The bridge records the refusal (the sentence it closed the socket with) and nothing read it
    * as a DIAGNOSIS. It is the one fact that proves an app is running and instrumented: only an SDK
    * dials the bridge, so a refused hello means the wiring works and this daemon would not serve it.
    *
@@ -302,7 +302,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
    * direction for a fact whose job is to SUPPRESS advice rather than to add any.
    */
   const lastCloseWasAuthFailure = (): boolean =>
-    options.sessions.lastClosure?.()?.reason === WS_CLOSE_REASON.AUTH_FAILED &&
+    isAuthRefusalReason(options.sessions.lastClosure?.()?.reason) &&
     true !== options.sessions.connectedSinceLastClosure?.();
 
   const nextAction = (scope: ProjectScopeFacts): NoSessionNextAction => {

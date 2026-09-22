@@ -19,6 +19,28 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     /**
+     * The jsdom window has to be the REAL one, because this package now constructs events with it.
+     *
+     * Synthetic input carries `view: el.ownerDocument.defaultView` so a handler can reach the window
+     * the event happened in. The default `threads` pool copies jsdom's globals onto the Node global
+     * and then rewrites `document.defaultView` to point at that Node global — which is not a
+     * `Window`, so jsdom's own `UIEvent` constructor rejects it: "member view is not of type
+     * Window". Measured on this package: 95 tests across 16 files, every one of them a click, drag,
+     * hover, tap or check, fail under `threads` and pass here. The VM pool runs the test file inside
+     * jsdom's context, so `globalThis === window === document.defaultView` the way a page has it.
+     *
+     * The alternatives were worse. Not passing `view` is the bug (#995). Passing it only when it
+     * happens to be a `Window` would make the test environment decide what ships, and would swallow
+     * the exact error a real browser would raise. Re-pointing `document.defaultView` from a setup
+     * file patches the runner's own repair in the dark, and leaves `window` still meaning the Node
+     * global, so an assertion could not name what it expected.
+     *
+     * What the pool costs: jsdom's globals no longer have Node's standing in behind them. Node's
+     * `performance` has a Performance Timeline and jsdom's has only `now`/`toJSON`/`timeOrigin`, so
+     * a test that wants `getEntriesByType` installs it — see `observers/navigation.test.ts`.
+     */
+    pool: 'vmThreads',
+    /**
      * jsdom is slow, and this package's heaviest tests mount an entire HUD into it. Under a loaded
      * runner — CI, or a machine running several suites at once — that exceeds vitest's 5s default,
      * and the suite fails for a reason that has nothing to do with the code. It has now been

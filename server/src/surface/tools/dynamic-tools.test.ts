@@ -59,6 +59,22 @@ describe('buildDynamicTools — the dynamic profile meta-tools', () => {
     expect(out.tools.find((t) => 'nope' === t.name)?.error).toBe('unknown tool');
   });
 
+  it('a real tool the surface cannot call is not reported as unknown', async () => {
+    const tools = buildDynamicTools(
+      fakeTools,
+      { active: TOOL_SURFACE.MERGED, source: 'test' },
+      new Set(['reticle_alpha']),
+    );
+    const discover = tools.find((t) => t.name === ReticleTool.TOOLS);
+    const out = (await discover?.handler(NO_DEPS, {
+      names: ['reticle_beta', 'nope'],
+    })) as { tools: { name: string; error?: string }[] };
+    const beta = out.tools.find((t) => 'reticle_beta' === t.name);
+    expect(beta?.error).not.toBe('unknown tool');
+    expect(beta?.error).toContain(ADVERTISE_ALL_ENV);
+    expect(out.tools.find((t) => 'nope' === t.name)?.error).toBe('unknown tool');
+  });
+
   /**
    * A renamed tool has to be reachable FROM THE SURFACE, not only from an error string.
    *

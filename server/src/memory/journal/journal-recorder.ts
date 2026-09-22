@@ -2,6 +2,7 @@ import {
   EventAttribution,
   JOURNAL_FILE_VERSION,
   type JournalAction,
+  type JournalWriteLoss,
   type ReticleEvent,
 } from '@reticlehq/core';
 
@@ -9,6 +10,33 @@ import {
 export interface JournalSink {
   appendEvents(events: readonly ReticleEvent[]): Promise<void>;
   appendAction(action: JournalAction): Promise<void>;
+}
+
+/**
+ * What a durable read could NOT produce — the report that travels beside the events.
+ *
+ * The journal is append-only and one session's file is never pruned, so a long-lived session's
+ * ledger outgrows what a JavaScript string can hold and the read has to stop somewhere; and what a
+ * reader keeps across many reads has to stop somewhere too. Where it stopped is not a detail: an
+ * agent reading a short answer it cannot tell apart from a complete one is the false green this
+ * whole layer exists to prevent. Absent means nothing was lost.
+ */
+export interface JournalReadLoss {
+  /**
+   * Journal bytes not represented in the answer — skipped past by a read that would have exceeded
+   * its ceiling, plus the bytes of records evicted after parsing. A floor, not a total: the record
+   * straddling a cut is discarded with them and is not counted here.
+   */
+  droppedBytes: number;
+  /** Parsed records evicted from the retained set. Exact, unlike `droppedBytes`. */
+  droppedEvents: number;
+  /**
+   * Latest timestamp of parsed cache evictions, inclusive. Omitted after a byte cut skips
+   * unparsed records: their time range is unknown even when newer bytes survive.
+   */
+  lostThroughT?: number;
+  /** Human-and-agent readable summary. Present so a consumer never has to compose one. */
+  note: string;
 }
 
 /** Read side of the durable journal — the fall-through source when the ring buffer has evicted. */
@@ -19,6 +47,21 @@ export interface JournalReader {
    * needs events should be forced to grow a second method to satisfy the type.
    */
   readActions?(): Promise<JournalAction[]>;
+  /**
+   * What the reads so far could not reach. Optional on the same reasoning as `readActions`: a reader
+   * that omits it declares no loss, which is the behaviour every partial double already had.
+   */
+  readLoss?(): JournalReadLoss | undefined;
+  /**
+   * What the WRITER could not put on disk: the ledger's closure report, when its byte ceiling
+   * refused a batch. `undefined` means nothing was refused.
+   *
+   * Optional for the same reason `readActions` is, and absence means NOT MEASURED rather than "no
+   * loss" — a reader that cannot answer must not be made to answer "clean". The separate question
+   * of what a bounded READ declined to hand back belongs to the reader that bounded it; this one is
+   * only ever about writes that never happened.
+   */
+  readWriteLoss?(): Promise<JournalWriteLoss | undefined>;
 }
 
 interface JournalRecorderOptions {

@@ -95,6 +95,34 @@ export function buildDynamicTools(
   const reachable =
     callable === undefined ? allTools : allTools.filter((tool) => callable.has(tool.name));
   const byName = new Map(reachable.map((t) => [t.name, t]));
+  const registered = new Map(allTools.map((tool) => [tool.name, tool]));
+  /**
+   * A name the catalogue cannot hand back as a callable tool.
+   *
+   * A redirect wins, because the capability moved and the old name is how an older instruction
+   * still asks for it. A name that is a real tool on a surface that cannot call it is the other
+   * case: `unknown tool` is what a typo gets, and a headline capability must not get the same
+   * sentence (#977). A name in neither set is a typo.
+   */
+  const explainAbsent = (name: string): { error: string; tool?: string; action?: string } => {
+    const moved = mergedNameRedirect(name);
+    if (moved !== undefined) {
+      return {
+        error: mergedNameMessage(name, moved),
+        tool: moved.tool,
+        ...(moved.action === undefined ? {} : { action: moved.action }),
+      };
+    }
+    if (callable !== undefined && registered.has(name)) {
+      return {
+        error:
+          `${name} is a Reticle tool and this surface cannot call it. Restart the daemon with ` +
+          `${ADVERTISE_ALL_ENV}=1, then call reticle_run { tool: "${name}", args }.`,
+        tool: name,
+      };
+    }
+    return { error: 'unknown tool' };
+  };
   // The profile is a DAEMON-startup decision, so an agent that exported RETICLE_TOOL_PROFILE into its
   // own environment sees no change and has, until now, no way to tell. Reported with the catalog.
   const profileBlock =
@@ -200,15 +228,7 @@ export function buildDynamicTools(
           // `reticle_run` has answered a merged name with its replacement for a while; the tool
           // asked to DISCOVER tools still said "unknown tool", which is the wrong answer in the one
           // place an agent goes to resolve a name it is unsure of. Same redirect, same derivation.
-          const moved = mergedNameRedirect(n);
-          return moved === undefined
-            ? { name: n, error: 'unknown tool' }
-            : {
-                name: n,
-                error: mergedNameMessage(n, moved),
-                tool: moved.tool,
-                ...(moved.action === undefined ? {} : { action: moved.action }),
-              };
+          return { name: n, ...explainAbsent(n) };
         }),
         ...(carriesPredicate ? { predicateGrammar: predicateGrammar() } : {}),
       });
@@ -266,14 +286,8 @@ export function buildDynamicTools(
         getSessionMetrics().recordUnknownTool(name);
         // ...and for 22 of those names the capability DOES exist, it just moved when tools merged.
         // Answering "unknown tool" there is simply wrong; see merged-name-redirect.
-        const moved = mergedNameRedirect(name);
-        if (moved !== undefined) {
-          return {
-            error: mergedNameMessage(name, moved),
-            tool: moved.tool,
-            ...(moved.action === undefined ? {} : { action: moved.action }),
-          };
-        }
+        const absent = explainAbsent(name);
+        if ('unknown tool' !== absent.error) return absent;
         return { error: `unknown tool '${name}'`, available: reachable.map((t) => t.name) };
       }
       // The outer aim, forwarded ONLY to a tool that declares a session — injecting it into one that
