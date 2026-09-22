@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { asProjectId, ReticleDir } from '@reticlehq/core';
 import { emptyProjectRegistry, rememberProject } from '@reticlehq/core/artifacts';
 import {
@@ -327,10 +327,18 @@ describe('an unnameable project does not share a bucket with every other one', (
     );
   });
 
+  /*
+   * Compared through `join`/`basename` rather than as literal text.
+   *
+   * `unmatchedRoot` builds the path with `join`, so on Windows it comes back separated by `\` and
+   * `startsWith('/home/u')` and `endsWith('/unnamed')` are both false against a perfectly correct
+   * answer. The claim is about WHERE the bucket sits and WHAT it is called, not about which slash
+   * the host uses, so it is asserted that way on every platform.
+   */
   it('still answers with a real path when even the origin is unknown', () => {
     const root = unmatchedRoot(base);
-    expect(root.startsWith('/home/u')).toBe(true);
-    expect(root.endsWith('/unnamed')).toBe(true);
+    expect(root.startsWith(join(base.home))).toBe(true);
+    expect(basename(root)).toBe('unnamed');
   });
 
   it('prefers a real project id over the origin — the origin is only the fallback', () => {
@@ -339,6 +347,6 @@ describe('an unnameable project does not share a bucket with every other one', (
       projectId: asProjectId('abc123'),
       origin: 'http://localhost:3000',
     });
-    expect(root.endsWith('/abc123')).toBe(true);
+    expect(basename(root)).toBe('abc123');
   });
 });
