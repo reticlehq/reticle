@@ -267,7 +267,9 @@ function attachJournal(
     // Stamp the project's own `.reticle` before ANY counter fires for this session. Without it every
     // verdict is recorded against wherever the daemon was started, which is how one app's evidence
     // reached a different account's production dashboard.
-    session.artifactRoot = resolveArtifactRoot(session.projectId).root;
+    // The origin is passed for the case where the page never stamped a project id: it is the only
+    // distinguishing fact left, and without it every such app shares one bucket.
+    session.artifactRoot = resolveArtifactRoot(session.projectId, originOf(session.url)).root;
     // Here rather than on the start path, which was neither the moment we were about to write into a
     // repository nor the root we were about to write into: it created `.reticle/` — holding nothing
     // but the ignore file — wherever the daemon was launched, coming back every boot after the user

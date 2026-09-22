@@ -23,8 +23,15 @@ import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
  */
 const FEEDBACK_SUBDIR = 'feedback';
 
-/** Local directories, without the trailing slash the ignore file wants. */
-const TRANSIENT_DIRS: readonly string[] = [
+/**
+ * Local directories, without the trailing slash the ignore file wants.
+ *
+ * Exported because this is also the EVIDENCE tier: the per-session churn that retention is allowed
+ * to delete. Read from here rather than restated next to the byte budget — the partition of what
+ * `.reticle/` holds already exists, is guarded as exhaustive, and a second copy of it would be the
+ * list that silently disagrees.
+ */
+export const TRANSIENT_DIRS: readonly string[] = [
   ReticleDir.SESSIONS_SUBDIR,
   ReticleDir.RUNS_SUBDIR,
   ReticleDir.VISUAL_SUBDIR,

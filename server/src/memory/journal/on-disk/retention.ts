@@ -1,6 +1,8 @@
 import { join } from 'node:path';
+import { ReticleDir } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { reticleDirPaths, visualDir } from '@/memory/project/dir/reticle-dir.js';
+import { TRANSIENT_DIRS } from './workspace-gitignore.js';
 
 /** Keep at most this many session journals on disk; older ones are pruned by recency. */
 export const DEFAULT_SESSION_RETENTION = 20;
@@ -18,6 +20,70 @@ export const DEFAULT_DIFF_RETENTION = 10;
 export const DEFAULT_FEEDBACK_RETENTION = 20;
 
 const DIFF_SUFFIX = '.diff.png';
+const PNG_SUFFIX = '.png';
+
+/**
+ * The TOTAL the evidence tier of one `.reticle/` may occupy, across sessions, runs, overlay diffs
+ * and feedback copies together.
+ *
+ * Every bound above this line counts things, and a count cannot see a size: twenty session
+ * directories is twenty UNBOUNDED directories. A user's `.reticle/sessions` reached 8 GB with all
+ * three counts being honoured the whole time, because one drive against a chatty app appends
+ * response bodies and DOM text for as long as the drive lasts, and nothing was looking at the total.
+ *
+ * Why this number and not one an order of magnitude either side. An ordinary session journal is
+ * hundreds of kilobytes to a few megabytes; a long drive against an app with large JSON responses
+ * runs to tens. Twenty of the ordinary ones fit inside this budget outright, which is the working
+ * set somebody plausibly wants — the evidence a person reads is from the drive they are looking at
+ * and the two before it, and nobody has ever opened the twentieth. A tenth of this (~50 MB) is
+ * smaller than a single bad session, so the budget would evict the newest evidence while it was
+ * still being written and the count bound could never be reached; ten times it (~5 GB) is not a
+ * bound a laptop notices, and 5 GB of untouched journals is the same abandoned-Reticle report with
+ * a different number in it. This is roughly one node_modules: large enough to be invisible in a
+ * project checkout, small enough that it can never be the reason a disk fills.
+ *
+ * Both bounds stay, and they are independent on purpose. The count is the cheap guard — it needs one
+ * stat per entry and it keeps the directory listing readable. The budget is the guard that holds
+ * when the counts are all satisfied and the bytes are not, which is the only situation anybody has
+ * actually been hurt by. Either one alone leaves the other's failure unguarded.
+ */
+export const DEFAULT_EVIDENCE_BUDGET_BYTES = 512 * 1024 * 1024;
+
+/**
+ * One candidate entry inside a `.reticle/`, classified by the top-level directory it lives under.
+ *
+ * `under` is what decides the tier, and it is compared against `TRANSIENT_DIRS` — the same list the
+ * workspace gitignore writes, guarded there as an exhaustive partition of what `.reticle/` holds.
+ * Anything else is MEMORY: flows, capsules, baselines, the contract, the intent ledger. Those are
+ * small, durable and the reason the directory exists, so they are never evicted, never counted, and
+ * must keep being written however full the disk is.
+ */
+export interface TierEntry {
+  /** Absolute path, and what is removed. */
+  path: string;
+  /** The `.reticle/` top-level entry this lives under. */
+  under: string;
+  sizeBytes: number;
+  mtimeMs: number;
+}
+
+/**
+ * Pure: the paths to remove so the EVIDENCE tier fits in `budgetBytes`. Oldest first, memory-tier
+ * entries never selected and never counted. No IO — the call site stats and removes, exactly as
+ * `selectPrunable` and `pruneByRecency` already split it.
+ */
+export function selectOverBudget(entries: readonly TierEntry[], budgetBytes: number): string[] {
+  const evidence = entries.filter((entry) => TRANSIENT_DIRS.includes(entry.under));
+  let total = evidence.reduce((sum, entry) => sum + entry.sizeBytes, 0);
+  if (total <= budgetBytes) return [];
+  const doomed: string[] = [];
+  for (const entry of [...evidence].sort((a, b) => a.mtimeMs - b.mtimeMs)) {
+    if (total <= budgetBytes) break;
+    doomed.push(entry.path);
+    total -= entry.sizeBytes;
+  }
+  return doomed;
+}
 
 /** Where refused feedback reports are copied. Named here because the writer lives in another area. */
 const FEEDBACK_SUBDIR = 'feedback';
@@ -91,8 +157,12 @@ export async function pruneSessions(
   fs: FileSystemPort,
   root: string,
   retention: number = DEFAULT_SESSION_RETENTION,
+  budgetBytes: number = DEFAULT_EVIDENCE_BUDGET_BYTES,
 ): Promise<void> {
   await pruneByRecency(fs, reticleDirPaths(root).sessions, retention);
+  // The tier total is swept from here because this is the one sweep that runs on BOTH the daemon's
+  // start path and the end of every session, and the end of a session is when the bytes arrive.
+  await pruneEvidenceBudget(fs, root, budgetBytes);
 }
 
 /**
@@ -114,18 +184,112 @@ export async function pruneVisualDiffs(
   root: string,
   retention: number = DEFAULT_DIFF_RETENTION,
 ): Promise<void> {
+  for (const dir of await visualDirs(fs, root)) {
+    await pruneByRecency(fs, dir, retention, isDiff);
+  }
+}
+
+/** `visual/` plus its per-runtime subdirectories. Empty when nothing has been captured yet. */
+async function visualDirs(fs: FileSystemPort, root: string): Promise<string[]> {
   const top = visualDir(root);
   const dirs = [top];
   try {
     // A per-runtime subdirectory is anything here that is not itself a PNG.
     for (const entry of await fs.readdir(top)) {
-      if (!entry.endsWith('.png')) dirs.push(join(top, entry));
+      if (!entry.endsWith(PNG_SUFFIX)) dirs.push(join(top, entry));
     }
   } catch {
-    return; // no visual dir yet
+    return [];
   }
-  for (const dir of dirs) {
-    await pruneByRecency(fs, dir, retention, (name) => name.endsWith(DIFF_SUFFIX));
+  return dirs;
+}
+
+const isDiff = (name: string): boolean => name.endsWith(DIFF_SUFFIX);
+
+/**
+ * Bytes under `path`, summed recursively. A session journal is a DIRECTORY, and `stat` on one
+ * reports the dirent, not the megabytes of JSONL inside it.
+ *
+ * readdir-first because the port exposes no `isDirectory`: a readdir that fails is a file, and its
+ * own stat answers. Never throws — an unreadable entry contributes nothing, which can only make the
+ * sweep evict less than it should, never more.
+ */
+async function sizeOf(fs: FileSystemPort, path: string): Promise<number> {
+  let names: string[];
+  try {
+    names = await fs.readdir(path);
+  } catch {
+    try {
+      return (await fs.stat(path)).size;
+    } catch {
+      return 0;
+    }
+  }
+  let total = 0;
+  for (const name of names) total += await sizeOf(fs, join(path, name));
+  return total;
+}
+
+/**
+ * Every evidence entry in this `.reticle/`, sized and dated. The IO half of the byte budget.
+ *
+ * `visual/` is the one evidence directory holding something that is not evidence — the PNG
+ * BASELINES a comparison means anything against — so the same `.diff.png` filter `pruneVisualDiffs`
+ * applies is applied here. The tier list is the coarse rule; that filter is the finer one, and
+ * deleting a baseline to save disk turns the next run's verdict into `baseline-missing`.
+ */
+async function collectEvidence(fs: FileSystemPort, root: string): Promise<TierEntry[]> {
+  const entries: TierEntry[] = [];
+  for (const under of TRANSIENT_DIRS) {
+    const isVisual = ReticleDir.VISUAL_SUBDIR === under;
+    const dirs = isVisual ? await visualDirs(fs, root) : [join(root, under)];
+    for (const dir of dirs) {
+      let names: string[];
+      try {
+        names = await fs.readdir(dir);
+      } catch {
+        continue; // nothing written here yet
+      }
+      for (const name of names) {
+        if (isVisual && !isDiff(name)) continue;
+        const path = join(dir, name);
+        try {
+          const { mtimeMs } = await fs.stat(path);
+          entries.push({ path, under, sizeBytes: await sizeOf(fs, path), mtimeMs });
+        } catch {
+          /* unreadable entry — skip */
+        }
+      }
+    }
+  }
+  return entries;
+}
+
+/**
+ * Hold the evidence tier of one `.reticle/` under a TOTAL byte budget, evicting oldest-first.
+ *
+ * The memory tier is not read, not counted and not touched: the maintainer's constraint is a cap
+ * that never stops memory and flows being created, so a full disk costs somebody their session
+ * journals and never their flows.
+ *
+ * Never throws, like everything else here. Retention is maintenance, and maintenance must never be
+ * the reason a daemon fails to come up or a session dies.
+ */
+export async function pruneEvidenceBudget(
+  fs: FileSystemPort,
+  root: string,
+  budgetBytes: number = DEFAULT_EVIDENCE_BUDGET_BYTES,
+): Promise<void> {
+  try {
+    for (const path of selectOverBudget(await collectEvidence(fs, root), budgetBytes)) {
+      try {
+        await fs.rm(path);
+      } catch {
+        /* best-effort */
+      }
+    }
+  } catch {
+    /* maintenance never fails a daemon */
   }
 }
 

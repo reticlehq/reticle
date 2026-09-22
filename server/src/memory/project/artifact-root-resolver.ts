@@ -51,9 +51,9 @@ function daemonSitsInAProject(daemonRoot: string): boolean {
 
 export function artifactRootResolver(
   daemonRoot: string,
-): (projectId: string | undefined) => ArtifactRoot {
+): (projectId: string | undefined, origin?: string) => ArtifactRoot {
   const daemonIsProject = daemonSitsInAProject(daemonRoot);
-  return (projectId) => {
+  return (projectId, origin) => {
     let registry = emptyProjectRegistry();
     try {
       const path = join(homedir(), ReticleDir.ROOT, PROJECT_REGISTRY_FILE);
@@ -86,6 +86,10 @@ export function artifactRootResolver(
       daemonIsProject,
       home: homedir(),
       ...(projectId === undefined ? {} : { projectId }),
+      // Only reached when no project id survives the guard. Without it every app that never
+      // stamped one shares a single directory -- and that directory holds the durable half, so one
+      // app's learned expectations become another's.
+      ...(origin === undefined ? {} : { origin }),
     });
     if (root !== daemonRoot) {
       log('artifact_root_unmatched', {

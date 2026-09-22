@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import {
   SAFE_SEGMENT_PATTERN,
   ReticleDir,
+  fnv1a,
   projectCandidates,
   type ProjectCandidate,
   type ProjectRegistry,
@@ -145,8 +146,27 @@ export function projectCandidatesFrom(
 /** Where evidence goes when no project could be named and the daemon is a guest in this tree. */
 export const UNMATCHED_SUBDIR = 'unmatched';
 
-/** What an unnameable project is called on disk. Never blank, so the path is always a real one. */
+/** What a project with NO identity at all is called on disk. Never blank, so the path is always real. */
 const UNNAMED_PROJECT = 'unnamed';
+
+/**
+ * The bucket for a project that could not name itself but was served from somewhere.
+ *
+ * `unnamed` used to take every one of these, which made it not a project's directory but the union
+ * of every project that ever failed to identify itself — sharing one `project.json`, one
+ * `envelopes.json`, one `flake.json` and one `assertion-tiers.json`. Those are the durable half:
+ * learned routes, per-route expectations, a quarantine ledger and an anti-downgrade floor. One
+ * app's floor silently becoming another app's floor is a wrong answer, not untidy disk.
+ *
+ * And it is the ORDINARY path, not an edge: a page that never stamped an id is an app instrumented
+ * without a build plugin, a page loaded before the plugin ran, or any tree where the daemon is a
+ * guest.
+ *
+ * The origin is the next-best identity available at that moment. It does not pretend to be a
+ * project id — two apps served on one port at different times still share a bucket — but that is a
+ * far smaller wrong than every unidentified app in the world sharing one.
+ */
+const ORIGIN_BUCKET_PREFIX = 'origin-';
 
 /**
  * The fallback root for a session whose project could not be resolved.
@@ -177,9 +197,25 @@ export function unmatchedRoot(query: {
   /** The user's home directory. Passed in rather than read, so this stays pure. */
   home: string;
   projectId?: string | undefined;
+  /**
+   * Where the session was served from, when it is known. Used ONLY when no project id survives the
+   * segment guard — a real id always wins, because it is an identity and this is a stand-in.
+   */
+  origin?: string | undefined;
 }): string {
   if (query.daemonIsProject) return query.daemonRoot;
   const id = query.projectId ?? '';
-  const safe = SAFE_SEGMENT_PATTERN.test(id) && !id.includes('..') ? id : UNNAMED_PROJECT;
-  return join(query.home, ReticleDir.ROOT, UNMATCHED_SUBDIR, safe);
+  const named = SAFE_SEGMENT_PATTERN.test(id) && !id.includes('..');
+  return join(
+    query.home,
+    ReticleDir.ROOT,
+    UNMATCHED_SUBDIR,
+    named ? id : unnamedSegment(query.origin),
+  );
+}
+
+/** Hashed, not spelled: an origin carries a host and a port, and neither belongs in a path segment. */
+function unnamedSegment(origin: string | undefined): string {
+  if (origin === undefined || 0 === origin.trim().length) return UNNAMED_PROJECT;
+  return `${ORIGIN_BUCKET_PREFIX}${fnv1a(origin.trim())}`;
 }

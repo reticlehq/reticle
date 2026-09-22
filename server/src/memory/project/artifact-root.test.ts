@@ -293,3 +293,48 @@ describe('a root for a session whose project we cannot name', () => {
     expect(root.includes('..')).toBe(false);
   });
 });
+
+/**
+ * `unnamed` was keyed on the ABSENCE of an identity, so it was not one project's directory — it was
+ * the union of every project that ever failed to identify itself, sharing one set of durable files.
+ *
+ * Measured on a real machine: a single `~/.reticle/unmatched/unnamed/` holding `project.json`,
+ * `envelopes.json`, `flake.json` and `assertion-tiers.json` merged across unrelated apps. Those are
+ * the MEMORY tier — learned routes, per-route expectations, a quarantine ledger, an anti-downgrade
+ * floor. One app's assertion tier becoming another app's floor is a wrong ANSWER, not untidy disk.
+ *
+ * A page that never stamped a project id is the ordinary case, not an edge: an app instrumented
+ * without a build plugin, a page loaded before the plugin stamped one, any directory where the
+ * daemon is a guest. So the bucket is reached constantly and by design.
+ *
+ * The origin the session is served from is the next-best identity available at that moment, and it
+ * separates the apps that were colliding. It is not a project id and does not pretend to be: two
+ * different apps served on one port at different times still share a bucket. That is a much smaller
+ * wrong than every unidentified app in the world sharing one.
+ */
+describe('an unnameable project does not share a bucket with every other one', () => {
+  const base = { daemonRoot: '/repo/app/.reticle', daemonIsProject: false, home: '/home/u' };
+
+  it('separates two apps that never stamped a project id', () => {
+    const a = unmatchedRoot({ ...base, origin: 'http://localhost:3000' });
+    const b = unmatchedRoot({ ...base, origin: 'http://localhost:5173' });
+    expect(a).not.toBe(b);
+  });
+
+  it('is stable for one origin, so a project keeps its own memory across sessions', () => {
+    expect(unmatchedRoot({ ...base, origin: 'http://localhost:3000' })).toBe(
+      unmatchedRoot({ ...base, origin: 'http://localhost:3000' }),
+    );
+  });
+
+  it('still answers with a real path when even the origin is unknown', () => {
+    const root = unmatchedRoot(base);
+    expect(root.startsWith('/home/u')).toBe(true);
+    expect(root.endsWith('/unnamed')).toBe(true);
+  });
+
+  it('prefers a real project id over the origin — the origin is only the fallback', () => {
+    const root = unmatchedRoot({ ...base, projectId: 'abc123', origin: 'http://localhost:3000' });
+    expect(root.endsWith('/abc123')).toBe(true);
+  });
+});
