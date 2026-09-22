@@ -368,13 +368,21 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
   // Both routes, because `explore` needs a model: without ANTHROPIC_API_KEY it answers "No model
   // configured to drive the app". Naming only that one hands the reader a dead end on any machine
   // without a key, which is the same defect this release spent its time removing everywhere else.
+  // Three short lines rather than one paragraph, and each says who it is for.
+  //
+  // This was a single 524-character note, measured on a real first run: eighty-three words, no
+  // break, naming `reticle_*` tools at a reader who had just typed `reticle init` in a terminal and
+  // has no such tools to call. The facts were right and the shape made them unreadable, which on
+  // the last line of onboarding is the same as not saying them.
+  note(`Connected. ${url} is instrumented. Onboarding is done; nothing is verified yet.`);
   note(
-    `Connected, and the app at ${url} is instrumented. Onboarding is done. Nothing is PROVED ` +
-      'yet: that is the first run, and it is yours to start. Drive one flow yourself with the ' +
-      '`reticle_*` tools, ending in `reticle_act_and_wait` or `reticle_assert` — those two are ' +
-      'what produce a verdict. Or hand the whole drive to Reticle with `reticle_verify { action: ' +
-      '"explore", persona: "<who does what>" }`, which records what it drove so later runs replay ' +
-      'with no model in the loop; that route needs ANTHROPIC_API_KEY.',
+    'Agent: drive one flow and end it with `reticle_act_and_wait` or `reticle_assert`. Those two ' +
+      'produce a verdict; nothing else does.',
+  );
+  note(
+    'Or hand over the whole drive: `reticle_verify { action: "explore", persona: "<who does ' +
+      'what>" }` records what it drove, so later runs replay with no model in the loop. Needs ' +
+      'ANTHROPIC_API_KEY.',
   );
   return {
     ok: true,

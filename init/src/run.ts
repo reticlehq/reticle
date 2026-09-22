@@ -509,9 +509,15 @@ function report(
         if (isConnectStep(s.title)) connectPending = true;
       }
       for (const line of detail.split('\n')) io.print(`      ${line}`);
-    } else if (detail.length > 0) {
-      io.print(`      ${detail}`);
     }
+    // Everything else gets its row and nothing more. The detail on a step that needs no decision
+    // restates its own title — "reticle already registered with Cursor" under
+    // `[·] MCP server (Cursor)` — and a measured Vite first run spent twelve of its forty-six lines
+    // that way, six tool names deep, before saying anything about the reader's own app.
+    //
+    // The ROW stays on every step: `apps/e2e/install-gate.mjs` reads `[mark] title → target` out of
+    // this report and diffs the shape against a recorded baseline, so a row that stopped printing
+    // would take that guard down with it while looking like tidying.
   }
   io.print('');
   if (connectPending) {

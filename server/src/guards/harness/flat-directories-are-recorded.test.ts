@@ -175,7 +175,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 15 since `drive-agent.ts` and `drive-plan.ts` left with the drive itself: onboarding stops at a
   // connected app, and the stage that proves a flow runs a model inside the daemon rather than
   // spawning a second agent CLI. Lowered in the same commit, which is what locks the gain in.
-  'server/src/command/setup': 15,
+  'server/src/command/setup': 16,
   // Crossed the line with `drive-url-stamp.ts`: the mark that tells a page Reticle opened it for
   // itself. Its own leaf because the SDK reads the same constant to decide not to show a human a
   // first-run tour over a page nobody is looking at -- a rule split across two packages is worth

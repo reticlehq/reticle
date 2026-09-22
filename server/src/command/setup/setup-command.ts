@@ -29,6 +29,7 @@ import {
   type SetupInput,
   type SetupOutcome,
 } from './run-setup.js';
+import { noticeKey, readSaid, rememberSaid, unsaidNotices } from './agent-notice-memory.js';
 
 /**
  * The dev server a crash should take with it, if one is running right now.
@@ -115,10 +116,23 @@ export function registerOtherAgents(print: (line: string) => void): void {
       `registered the MCP server with ${wrote.length} more agent(s): ${wrote.map((r) => r.name).join(', ')}`,
     );
   }
-  // A format we will not rewrite is somebody's to edit, so it has to be said rather than skipped.
-  for (const manual of results.filter((r) => 'manual' === r.action)) {
-    print(`${manual.name}: ${manual.why} — add the reticle entry to ${manual.file} by hand.`);
+  // A format we will not rewrite is somebody's to edit, so it has to be said rather than skipped --
+  // but said ONCE. Two commands call this function by design, so a `curl | sh` followed by
+  // `reticle init` printed the same two paragraphs twice in one sitting, and again on every re-run
+  // after that. See agent-notice-memory.ts: the stamp is keyed on the notice's own text, so a
+  // config that changes is reported again.
+  const stateHome = reticleStateHome();
+  const manual = results
+    .filter((r) => 'manual' === r.action)
+    .map((r) => ({ name: r.name, file: r.file, why: r.why }));
+  const fresh = unsaidNotices(readSaid(stateHome), manual);
+  for (const notice of fresh) {
+    print(`${notice.name}: ${notice.why} — add the reticle entry to ${notice.file} by hand.`);
   }
+  rememberSaid(
+    stateHome,
+    fresh.map((n) => noticeKey(n)),
+  );
   const skills = applyAgentSkills(agentIo, { home, platform });
   if (0 < skills.length) print(`wrote the /reticle skill for ${skills.length} agent(s)`);
 

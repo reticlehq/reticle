@@ -1270,3 +1270,58 @@ describe('init verifies its own wiring landed', () => {
     expect(io.lines.join('\n')).toContain('[✓] Vite plugin → vite.config.ts');
   });
 });
+
+/**
+ * A real Vite+React first run printed 46 lines, 12 of which were Reticle saying it had done
+ * nothing: six `[·] MCP server (<client>)` rows, each followed by an indented line repeating the
+ * title back ("reticle already registered with Cursor"). A first-time reader met six tool names
+ * they may not use before reaching anything about their own app.
+ *
+ * The rows stay — `apps/e2e/install-gate.mjs` reads `[mark] title → target` out of this report and
+ * diffs the shape against a baseline, so a row that vanished would take the guard with it. What
+ * goes is the second line, on every step that needs no decision from the reader.
+ */
+describe('the report is short enough to read', () => {
+  const linesOf = (io: ReturnType<typeof memoryIo>): string[] => io.lines;
+
+  it('gives a step that needs no decision one line, not two', () => {
+    const io = memoryIo(VITE_FILES);
+    runInit(OPTS, io);
+    const printed = linesOf(io);
+    const rows = printed.filter((l) => /^\s*\[.\]\s+.+\s+→\s+.+$/.test(l));
+    // Not vacuous: a run that printed no rows at all would otherwise pass this.
+    expect(rows.length).toBeGreaterThan(3);
+    for (const [i, line] of printed.entries()) {
+      if (!/^\s*\[(·|✓|–)\]\s+.+\s+→\s+.+$/.test(line)) continue;
+      expect((printed[i + 1] ?? '').startsWith('      ')).toBe(false);
+    }
+  });
+
+  it('still prints every step row, because the install gate diffs their shape', () => {
+    const io = memoryIo(VITE_FILES);
+    runInit(OPTS, io);
+    const rows = linesOf(io).filter((l) => /^\s*\[.\]\s+.+\s+→\s+.+$/.test(l));
+    expect(rows.join('\n')).toContain('Vite plugin → vite.config.ts');
+    expect(rows.join('\n')).toContain('Reticle config → .reticle.json');
+  });
+
+  it('keeps the detail on a step that asks the reader to do something', () => {
+    // The same way the vite-plugin test above manufactures a ⚠: write the file with the patch
+    // stripped, so the verify-after-write finds nothing and the step is downgraded.
+    const base = memoryIo(VITE_FILES);
+    const io = {
+      ...base,
+      writeFile: (path: string, content: string): void => {
+        base.writeFile(
+          path,
+          path.endsWith('vite.config.ts') ? content.replace(/reticle/g, 'nope') : content,
+        );
+      },
+    };
+    runInit(OPTS, io);
+    const printed = base.lines;
+    const manualAt = printed.findIndex((l) => l.includes('[⚠]'));
+    expect(manualAt).toBeGreaterThanOrEqual(0);
+    expect((printed[manualAt + 1] ?? '').startsWith('      ')).toBe(true);
+  });
+});
