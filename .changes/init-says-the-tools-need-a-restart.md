@@ -1,0 +1,3 @@
+### Fixed
+
+- **`reticle init` no longer tells an agent to call tools that are not in its session.** An MCP client reads its server list when it starts and never re-reads it, so on the run that first registers Reticle on a machine the `reticle_*` tools are absent from the very session that just asked for them. `init` has said so clearly for a long time, in the closing it prints when it stops at the files. It did not say it on the full run, which is the one the installer sends everybody to, and that run ends by asking the agent to drive a flow and produce a verdict. The precondition is now printed on both paths, and only when this run is the one that registered the server: a machine that already had it gets nothing, because there is no restart to do.

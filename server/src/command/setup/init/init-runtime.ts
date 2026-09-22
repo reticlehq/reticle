@@ -183,6 +183,20 @@ export async function continueAfterInit(
       return;
     }
     io.print('');
+    // The precondition for everything the closing asks for, printed on the path that could not say
+    // it. An agent client reads its MCP server list when it STARTS and never re-reads it, so on the
+    // run that first registers Reticle the `reticle_*` tools are not in the session that just asked
+    // for them -- and this path closes by telling that session to call `reticle_act_and_wait`.
+    // `restartHint` has said this for a long time and is printed only when init stops at the files.
+    if (true === result.mcpNewlyRegistered) {
+      io.print(
+        'Reticle was registered with your agent by this run, and an agent reads its tool list only ' +
+          'when it starts: the `reticle_*` tools are NOT in this session yet. Restart it first — ' +
+          '`npx @reticlehq/server init --relaunch` prints the exact resume command for Claude Code ' +
+          'and Codex. Once per machine.',
+      );
+      io.print('');
+    }
     if (outcome.ok && !outcome.flowSaved) {
       // Success, and no flow. Saying "a flow was driven" here would replace a wrong exit code with
       // a wrong sentence, which is the worse of the two: the exit code is read by CI and the

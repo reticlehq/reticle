@@ -1325,3 +1325,38 @@ describe('the report is short enough to read', () => {
     expect((printed[manualAt + 1] ?? '').startsWith('      ')).toBe(true);
   });
 });
+
+/**
+ * Whether the agent reading this has to restart before it can call a Reticle tool.
+ *
+ * An agent client reads its MCP server list when it STARTS and never re-reads it, so the run that
+ * first registers Reticle on a machine leaves the `reticle_*` tools out of the very session that
+ * asked for them. `restartHint` says so, and is printed ONLY when init stops at the files. The
+ * full run -- the one the installer sends everybody to -- ended by telling the agent to call
+ * `reticle_act_and_wait`, in a session that had no such tool. Captured on a pristine Vite app with
+ * a fresh HOME: `[✓] MCP server (Claude, global)`, then a closing that never mentions a restart.
+ *
+ * `outcome.mcpRegistered` cannot carry this: it is true for APPLY and for ALREADY alike, and those
+ * two have opposite answers.
+ */
+describe('whether this run is the one that registered the MCP', () => {
+  it('says so when the registration was written by this run', () => {
+    const io = memoryIo(VITE_FILES);
+    const r = runInit({ ...OPTS, continuesToRuntime: true }, io);
+    expect(io.lines.join('\n')).toContain('[✓] MCP server');
+    expect(r.mcpNewlyRegistered).toBe(true);
+  });
+
+  it('stays quiet when the MCP was already registered on this machine', () => {
+    const io = memoryIo(VITE_FILES, { mcpExists: true });
+    const r = runInit({ ...OPTS, continuesToRuntime: true }, io);
+    expect(io.lines.join('\n')).not.toContain('[✓] MCP server');
+    expect(r.mcpNewlyRegistered).toBeUndefined();
+  });
+
+  it('stays quiet when this run registered nothing at all', () => {
+    const io = memoryIo(VITE_FILES);
+    const r = runInit({ ...OPTS, mcp: false, continuesToRuntime: true }, io);
+    expect(r.mcpNewlyRegistered).toBeUndefined();
+  });
+});

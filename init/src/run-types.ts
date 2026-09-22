@@ -116,6 +116,16 @@ export interface InitResult {
   ok: boolean;
   applied: number;
   manual: number;
+  /**
+   * The MCP server was registered by THIS run, rather than having been there already.
+   *
+   * `outcome.mcpRegistered` cannot answer this: it is true for both APPLY and ALREADY, and the two
+   * have opposite answers to the only question that matters here — must the agent reading this
+   * restart before it can call a `reticle_*` tool. An agent client reads its server list when it
+   * STARTS and never re-reads it, so on the run that first registers Reticle on a machine the tools
+   * are not in the session that just asked for them.
+   */
+  mcpNewlyRegistered?: boolean;
   /** What this run established. Absent only where init exits before establishing anything. */
   context?: InitContext;
   /**

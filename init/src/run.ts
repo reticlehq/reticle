@@ -527,10 +527,20 @@ function report(
     );
     io.print('');
   }
+  const mcpStatus = resolvedStatus(plan, MCP_TARGET, failed, skipped);
   if (!continuesToRuntime) {
-    io.print(restartHint(resolvedStatus(plan, MCP_TARGET, failed, skipped), devCommand));
+    io.print(restartHint(mcpStatus, devCommand));
   }
-  return { ok: !connectPending, applied, manual };
+  // Carried out even when the hint above was printed, because the RUNTIME path needs the same fact
+  // and could not reach it: `restartHint` is only printed when this run stops at the files, and the
+  // full run -- the one the installer sends everybody to -- ended by telling an agent to call
+  // `reticle_act_and_wait` in a session whose tool list was read before Reticle existed.
+  return {
+    ok: !connectPending,
+    applied,
+    manual,
+    ...(StepStatus.APPLY === mcpStatus ? { mcpNewlyRegistered: true } : {}),
+  };
 }
 
 /**
