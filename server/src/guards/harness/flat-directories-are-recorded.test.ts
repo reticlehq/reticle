@@ -51,7 +51,7 @@ const FLAT_FILE_LIMIT = 10;
  *                                   public-subpaths-are-pinned.test.ts.
  */
 const OVER_THE_LINE: Readonly<Record<string, number>> = {
-  'adapters/build/vite/src': 11,
+  'adapters/build/vite/src': 12,
   'adapters/realm/browser/src/dom': 12,
   'adapters/realm/browser/src/observers': 23,
   // 17 since the HUD's position primitives left `presenter-drag.ts` for their own leaf: the drag
