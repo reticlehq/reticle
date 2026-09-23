@@ -926,6 +926,9 @@ export const ACT_TOOLS: ToolDef[] = [
           // which is why the two are recorded apart rather than assumed alike.
           declaredBeforeActing: true,
           grade: gradeOfPredicate(until),
+          // What the declared consequence READ. The run fold has only the journal, so a kind absent
+          // here was being invented there as `element`. Same field, same reason, on the assert path.
+          kind: until.kind,
         };
         // Recorded on the session, so a later "am I done?" can answer with what is STILL missing
         // rather than with everything that was ever missing. An empty list closes a gap, which is

@@ -50,7 +50,10 @@ const CHECK_GLYPH: Record<Verified, string> = {
 };
 
 function checkLine(c: RunCheck): string {
-  return `  ${CHECK_GLYPH[c.status]} ${c.kind}: ${c.predicate}`;
+  // No kind, no prefix. A check folded from a journal that never recorded one has nothing to name
+  // here, and printing a placeholder would read as a kind.
+  const read = c.kind === undefined ? '' : `${c.kind}: `;
+  return `  ${CHECK_GLYPH[c.status]} ${read}${c.predicate}`;
 }
 
 function riskLine(r: RunRisk): string {

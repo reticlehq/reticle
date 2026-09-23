@@ -7,7 +7,7 @@
  * artifact and therefore synced nothing.
  */
 import { describe, expect, it } from 'vitest';
-import { Verified, type JournalAction } from '@reticlehq/core';
+import { PredicateKind, Verified, type JournalAction } from '@reticlehq/core';
 import {
   buildVerificationRun,
   type VerificationRunInput,
@@ -144,5 +144,30 @@ describe('the run id for a drive', () => {
     const unsafe = '../../etc/passwd';
     expect(driveRunId(unsafe)).not.toContain('..');
     expect(driveRunId(unsafe)).not.toBe(driveRunId(unsafe));
+  });
+});
+
+/**
+ * What the check READ, carried rather than assumed.
+ *
+ * Every check this fold ever wrote was stamped `element`, unconditionally, because the journal had
+ * no field for it. Checks on the artifacts in this checkout said `element` while their own `grade`
+ * in the same object said `net` or `state` — and `channelsRead` routes on `kind`, so a network
+ * verdict reached every consumer as a UI verdict.
+ */
+describe('the kind of evidence a check read', () => {
+  const withKind = (kind: string, grade: string): JournalAction => ({
+    ...action(Verified.YES),
+    effect: { claim: 'the save request goes out', verified: Verified.YES, kind, grade },
+  });
+
+  it('reports a net verdict as net, not as an element', () => {
+    expect(driveRunFrom([withKind(PredicateKind.NET, 'net')], DEPS)?.checks[0]?.kind).toBe(
+      PredicateKind.NET,
+    );
+  });
+
+  it('leaves it absent when the journal never recorded one — a missing field, never a wrong one', () => {
+    expect(driveRunFrom([action(Verified.YES)], DEPS)?.checks[0]?.kind).toBeUndefined();
   });
 });

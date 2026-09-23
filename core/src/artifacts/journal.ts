@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { TRANSPORT_LIMITS, TruncationChannel } from '@/wire/constants/constants.js';
 import { Verified } from '@/verdict/verified-constants.js';
+import { PredicateKind } from '@/verdict/consequence.js';
 
 /**
  * The durable causal journal. Each session gets an append-only pair on disk:
@@ -98,6 +99,18 @@ export const JournalVerdictEffectSchema = z.object({
   verified: z.nativeEnum(Verified),
   /** `file:line` for the element driven, when the page told us one. */
   source: z.string().max(TRANSPORT_LIMITS.MAX_URL_LENGTH).optional(),
+  /**
+   * Which source of truth answering the claim required -- the predicate's own kind.
+   *
+   * A run folded from this journal has to say what a check READ, and with no field here it had
+   * nothing to say it from: every check ever folded was stamped `element`, including the ones whose
+   * own `grade` in the same object said `net`. Channel routing reads this, so a network verdict
+   * arrived as a UI verdict.
+   *
+   * Optional, because a record written before this field existed has no kind and must not be read
+   * as though it had one.
+   */
+  kind: z.nativeEnum(PredicateKind).optional(),
   /**
    * Was the claim written down BEFORE the action, or after it?
    *

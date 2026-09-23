@@ -31,8 +31,13 @@ export const OVP_ARTIFACT_VERSION = 1;
 export interface ExportedCheck {
   /** What was claimed, as the person or agent wrote it. */
   readonly claim: string;
-  /** Which source of truth answering it required. */
-  readonly reads: PredicateKind;
+  /**
+   * Which source of truth answering it required.
+   *
+   * Absent when the run did not record one -- which is the same rule the rest of this file follows:
+   * a kind nobody wrote down is left out, never filled in with a plausible one.
+   */
+  readonly reads?: PredicateKind;
   /**
    * Was the claim written down before the action, or after it?
    *
@@ -133,7 +138,7 @@ function exportedChecks(run: ReticleVerificationRun): ExportedCheck[] {
   for (const check of run.checks) {
     decided.push({
       claim: check.predicate,
-      reads: check.kind,
+      ...(check.kind === undefined ? {} : { reads: check.kind }),
       verdict: check.status,
       // Spread, so a value the run did not record leaves the key out rather than writing a
       // comfortable default. `declaredBeforeActing: false` says the claim came afterwards; absent

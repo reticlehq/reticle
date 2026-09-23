@@ -268,6 +268,9 @@ export async function assertVerdict(
       claim: describeWaitTarget(predicate),
       verified: decision.verified,
       ...(source === undefined ? {} : { source }),
+      // What answering this claim READ. Known here and nowhere later: a run folded from the journal
+      // has only what the journal kept, and without this it stamped `element` on every check.
+      kind: predicate.kind,
       // The three facts that make a verdict something other than a pass/fail line. All three were
       // known right here and none of them survived into the durable record, so nothing downstream
       // could report them however well this moment understood them.

@@ -29,7 +29,6 @@ import { defaultRunId } from './runner-port.js';
 import {
   JournalVerdictEffectSchema,
   RunAgentKind,
-  PredicateKind,
   RunFramework,
   RunProfile,
   RunTrigger,
@@ -113,13 +112,18 @@ export function driveRunFrom(
   const checks: RunCheck[] = [];
   for (const verdict of found) {
     checks.push({
-      kind: PredicateKind.ELEMENT,
       predicate: verdict.claim,
       status: verdict.verified,
       ...(verdict.source === undefined ? {} : { evidence: { source: verdict.source } }),
       // Carried through rather than recomputed. These were established at the moment the verdict
       // was made and written down then; a run built later cannot know any of them, and inferring
       // them here would be inventing evidence about evidence.
+      //
+      // `kind` was the one field that rule was not applied to: it was stamped `element` on every
+      // check ever folded, including the ones whose `grade` in the same object said `net`. A
+      // journal old enough to have no kind now produces a check with no kind, which is the honest
+      // answer -- a missing field, rather than a wrong one nothing downstream can question.
+      ...(verdict.kind === undefined ? {} : { kind: verdict.kind }),
       ...(verdict.declaredBeforeActing === undefined
         ? {}
         : { declaredBeforeActing: verdict.declaredBeforeActing }),

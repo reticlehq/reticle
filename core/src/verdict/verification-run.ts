@@ -244,9 +244,16 @@ export type RunFlowResult = z.infer<typeof RunFlowResultSchema>;
 
 /** A standalone assertion not tied to a flow. `evidence` is opaque (narrowed per kind by the caller). */
 export const RunCheckSchema = z.object({
+  /**
+   * Which source of truth answering this claim required.
+   *
+   * Optional, because a check folded from a journal written before the kind was recorded has none,
+   * and the only alternatives are refusing the whole run or filling in a kind nobody observed. An
+   * absent field says nobody wrote it down; a present one is what the predicate actually read.
+   */
   kind: z.preprocess(
     (given) => ('string' === typeof given ? (OLD_CHECK_KIND_SPELLING[given] ?? given) : given),
-    z.nativeEnum(PredicateKind),
+    z.nativeEnum(PredicateKind).optional(),
   ),
   predicate: z.string(),
   status: z.preprocess(
