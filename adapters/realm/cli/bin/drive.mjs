@@ -16,9 +16,14 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const { CliRealm, NodeSupervisor, nodeWorkspace, createLiveHud, renderReport } = await import(
-  join(HERE, '..', 'dist', 'index.js')
-);
+const {
+  CliRealm,
+  NodeSupervisor,
+  nodeWorkspace,
+  createLiveHud,
+  renderReport,
+  EXCLUDED_BY_DEFAULT,
+} = await import(join(HERE, '..', 'dist', 'index.js'));
 const { adjudicate, Declaration, assertionsHeldUnder } = await import('open-verification');
 
 const argv = process.argv.slice(2);
@@ -47,13 +52,31 @@ const supervisor = new NodeSupervisor({
   tool: { id: command[0], version: 'unknown', workspace: root },
   now: () => Date.now(),
 });
+/*
+ * Never exclude the thing you were asked to watch.
+ *
+ * `dist` is in the default exclusion list -- it is somebody else's build output and hashing it
+ * twice a window is expensive -- and `dist/` is also the single commonest place a CLI writes. So a
+ * caller naming `--path dist/index.js` got a snapshot that structurally could not see it, an empty
+ * diff, and a confident `no` about a build that had worked. A FALSE POSITIVE, which costs more
+ * than a miss, because a check that cries wolf stops being read.
+ *
+ * Found by an agent driving this against a healthy build and refusing to believe the verdict. It
+ * had to read this package's source to work out why, which is the part that makes it serious: the
+ * JSON handed it a contradicted verdict and no hint that the target was invisible.
+ *
+ * A default exclusion is a cost-saving guess. A path the caller named is not a guess, so it wins.
+ */
+const declaredRoot = expectPath.split('/')[0];
+const exclude = EXCLUDED_BY_DEFAULT.filter((dir) => dir !== declaredRoot);
+
 const realm = new CliRealm({
   supervisor,
   manifest: {
     workspaceRoot: root,
     commands: [{ name: command[0], meaning: expectation, mutating: true, argv: command.slice(1) }],
   },
-  workspace: nodeWorkspace([root]),
+  workspace: nodeWorkspace([root], { exclude }),
   now: () => Date.now(),
 });
 

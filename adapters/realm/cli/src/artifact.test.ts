@@ -35,6 +35,7 @@ function scriptedWorkspace(looks: readonly Snapshot[]): WorkspacePort {
   let next = 0;
   return {
     roots: ['/tmp/ws'],
+    excluded: [],
     snapshot: () => looks[Math.min(next++, looks.length - 1)] ?? empty,
   };
 }

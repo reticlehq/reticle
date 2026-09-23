@@ -45,7 +45,11 @@ const manifest: CommandManifest = {
 
 function scripted(looks: readonly Snapshot[]): WorkspacePort {
   let next = 0;
-  return { roots: ['/tmp/ws'], snapshot: () => looks[Math.min(next++, looks.length - 1)] ?? empty };
+  return {
+    roots: ['/tmp/ws'],
+    excluded: [],
+    snapshot: () => looks[Math.min(next++, looks.length - 1)] ?? empty,
+  };
 }
 
 const realm = (supervisor: Supervisor, workspace?: WorkspacePort): CliRealm =>

@@ -485,7 +485,11 @@ export class CliRealm extends Realm {
                 // temp paths a reader has to skip past to find what it says.
                 detail:
                   'writes outside the watched roots are unobserved, as are files written and ' +
-                  'removed within the window — a before-and-after pair sees net effect only',
+                  'removed within the window — a before-and-after pair sees net effect only' +
+                  (workspace.excluded.length > 0
+                    ? `. These directories are skipped INSIDE the roots and nothing under them ` +
+                      `is observed: ${workspace.excluded.join(', ')}`
+                    : ''),
                 impeaching: false,
                 remedy: 'declare more roots, or narrow the claim to what is inside them',
               },

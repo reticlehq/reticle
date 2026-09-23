@@ -1,4 +1,4 @@
-import { takeSnapshot, type SnapshotOptions } from './snapshot.js';
+import { EXCLUDED_BY_DEFAULT, takeSnapshot, type SnapshotOptions } from './snapshot.js';
 
 export type { Snapshot, Change, FileFact } from './snapshot.js';
 export { ChangeKind, diffSnapshots, takeSnapshot, EXCLUDED_BY_DEFAULT } from './snapshot.js';
@@ -19,6 +19,16 @@ export { ChangeKind, diffSnapshots, takeSnapshot, EXCLUDED_BY_DEFAULT } from './
 export interface WorkspacePort {
   /** What is watched. Named so coverage can say what was outside it. */
   readonly roots: readonly string[];
+  /**
+   * Directory names skipped inside those roots.
+   *
+   * Reported so COVERAGE can name them. A generic "writes outside the watched roots are
+   * unobserved" is true and useless when the thing excluded is `dist`, which is where the caller's
+   * build writes: it reads as a note about somewhere else. A caller handed a contradicted verdict
+   * deserves to be told the target was invisible, rather than having to read this package's
+   * source to find out -- which is what actually happened.
+   */
+  readonly excluded: readonly string[];
   /** What is there now. Called twice per window: once before the action, once after. */
   snapshot(): import('./snapshot.js').Snapshot;
 }
@@ -28,5 +38,9 @@ export function nodeWorkspace(
   roots: readonly string[],
   options: SnapshotOptions = {},
 ): WorkspacePort {
-  return { roots, snapshot: () => takeSnapshot(roots, options) };
+  return {
+    roots,
+    excluded: options.exclude ?? EXCLUDED_BY_DEFAULT,
+    snapshot: () => takeSnapshot(roots, options),
+  };
 }
