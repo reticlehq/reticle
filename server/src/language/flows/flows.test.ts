@@ -267,7 +267,13 @@ describe('FlowStore — temp-dir fs, never touches the repo', () => {
     expect(loaded).toMatchObject({ ok: false, code: FlowErrorCode.PARSE_FAILED });
   });
 
-  it('12: load of a schema-invalid flow (wrong version) returns PARSE_FAILED', async () => {
+  /**
+   * This asserted PARSE_FAILED, and its own title already called the case "wrong version" — the
+   * distinction existed in the prose and not in the code. A well-formed file from another format is
+   * not damaged, and answering "malformed, regenerate it" sends somebody hunting a syntax error
+   * that is not there. WRONG_VERSION now says so, as `project.json` already did.
+   */
+  it('12: load of a flow from another format version returns WRONG_VERSION', async () => {
     await mkdir(reticleDirPaths(root).flows, { recursive: true });
     await writeFile(
       flowPath(root, asFlowName('wrong')),
@@ -275,6 +281,18 @@ describe('FlowStore — temp-dir fs, never touches the repo', () => {
       'utf8',
     );
     const loaded = await store.load('wrong');
+    expect(loaded).toMatchObject({ ok: false, code: FlowErrorCode.WRONG_VERSION });
+  });
+
+  /** A genuinely damaged file still reads as damaged — the split must not swallow the old case. */
+  it('12b: load of a structurally broken flow still returns PARSE_FAILED', async () => {
+    await mkdir(reticleDirPaths(root).flows, { recursive: true });
+    await writeFile(
+      flowPath(root, asFlowName('broken')),
+      JSON.stringify({ version: 1, name: 'broken', createdAt: 1, steps: 'not-an-array' }),
+      'utf8',
+    );
+    const loaded = await store.load('broken');
     expect(loaded).toMatchObject({ ok: false, code: FlowErrorCode.PARSE_FAILED });
   });
 

@@ -84,6 +84,19 @@ export const FlowErrorCode = {
   INVALID_NAME: 'flow_invalid_name', // path traversal / illegal chars
   NOT_FOUND: 'flow_not_found', // load of a missing flow
   PARSE_FAILED: 'flow_parse_failed', // on-disk JSON failed zod validation
+  /**
+   * The file is well-formed and carries a `version` this build does not read.
+   *
+   * Distinct from PARSE_FAILED because the two need OPPOSITE fixes, and saying the wrong one costs
+   * somebody a search for damage that is not there. Malformed means "repair or regenerate this
+   * file". Wrong version means the file is fine and the READER is the wrong one -- upgrade or
+   * downgrade Reticle, and do not touch the flow.
+   *
+   * `ProjectReadError.WRONG_VERSION` above draws the same line for `project.json` and for the same
+   * reason; flows simply had no equivalent, so every future format bump would have reported itself
+   * as corruption to every reader already in the field.
+   */
+  WRONG_VERSION: 'flow_wrong_version',
   NO_RECORDING: 'flow_no_recording', // save with no compiled program by that name
 } as const;
 export type FlowErrorCode = (typeof FlowErrorCode)[keyof typeof FlowErrorCode];

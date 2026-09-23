@@ -365,7 +365,14 @@ describe('flowsAsSpecs — enumeration', () => {
     expect(result?.outcome).toBe(SpecOutcome.PASS);
   });
 
-  it('#8b schema-invalid flow file -> ERROR spec with PARSE_FAILED', async () => {
+  /**
+   * The fixture is `version: 99` and the file is named `wrongver` — this case was always about a
+   * FORMAT mismatch, and asserting PARSE_FAILED meant a suite reported an intact flow as damaged.
+   * The load-bearing half is unchanged and is the first assertion: a flow the runner cannot read
+   * becomes an ERROR spec rather than being silently skipped, which is what stops a suite going
+   * green over flows nobody ran.
+   */
+  it('#8b flow file from another format version -> ERROR spec with WRONG_VERSION', async () => {
     const fs = memoryFs({
       [`${FLOWS_DIR}/wrongver.json`]: JSON.stringify({
         version: 99,
@@ -380,7 +387,7 @@ describe('flowsAsSpecs — enumeration', () => {
       waitForSignal: signalWait([]),
     });
     expect(specs[0]?.kind).toBe(SpecKind.ERROR);
-    expect(specs[0]?.loadError?.code).toBe(FlowErrorCode.PARSE_FAILED);
+    expect(specs[0]?.loadError?.code).toBe(FlowErrorCode.WRONG_VERSION);
   });
 
   it('#9 invalid flow name on disk -> ERROR spec with INVALID_NAME, sibling unaffected', async () => {

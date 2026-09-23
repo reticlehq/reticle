@@ -11,7 +11,7 @@
  * re-save writes the canonical shape. A kind a saved flow cannot enforce is refused, not stripped
  * to an empty expect that would grade asserted-while-unchecked.
  */
-import { FlowErrorCode, FlowFileSchema, type FlowFile } from '@reticlehq/core';
+import { FLOW_FILE_VERSION, FlowErrorCode, FlowFileSchema, type FlowFile } from '@reticlehq/core';
 import type { ZodError } from 'zod';
 import { PredicateSchema } from '@reticlehq/engine/question/predicate/predicate.js';
 import { predicateToExpect } from '@/judgement/outcome/predicate-to-expect.js';
@@ -142,6 +142,26 @@ export function parseFlowFileText(text: string): FlowResult<FlowFile> {
     parsed = JSON.parse(text);
   } catch {
     return { ok: false, code: FlowErrorCode.PARSE_FAILED, detail: FlowParseNote.NOT_JSON };
+  }
+  /*
+   * Version BEFORE schema. When the format does not match, nothing else in the file can be trusted
+   * to mean what this reader thinks it means, so the first unrelated field that happens to fail
+   * would be noise about the wrong thing -- and `version` is a `z.literal`, so the schema's own
+   * complaint about it is indistinguishable from a typo.
+   *
+   * Only a NUMBER that is not ours counts. A missing or non-numeric `version` is a damaged field
+   * rather than a different format, and stays PARSE_FAILED.
+   */
+  const declared: unknown = isRecord(parsed) ? parsed['version'] : undefined;
+  if ('number' === typeof declared && declared !== FLOW_FILE_VERSION) {
+    return {
+      ok: false,
+      code: FlowErrorCode.WRONG_VERSION,
+      detail:
+        `this flow file is version ${String(declared)} and this Reticle reads version ` +
+        `${String(FLOW_FILE_VERSION)}. The file is not damaged, the reader is the wrong one. ` +
+        'Upgrade or downgrade Reticle rather than editing the flow.',
+    };
   }
   const coerced = coerceFlowFileExpects(parsed);
   if (!coerced.ok) {

@@ -73,6 +73,8 @@ export function latestRecordedFlow(
 /** Map a structured FlowErrorCode to a legible one-line message for the agent. */
 export function flowErrorMessage(code: FlowErrorCode, detail?: string): string {
   if (FlowErrorCode.PARSE_FAILED === code && undefined !== detail) return detail;
+  // The detail names both versions and the remedy, so it beats anything generic this could say.
+  if (FlowErrorCode.WRONG_VERSION === code && undefined !== detail) return detail;
   switch (code) {
     case FlowErrorCode.INVALID_NAME:
       return 'invalid flow name — use a single safe segment (letters/digits/-/_), no path separators';
@@ -82,6 +84,10 @@ export function flowErrorMessage(code: FlowErrorCode, detail?: string): string {
       return FlowParseNote.MALFORMED;
     case FlowErrorCode.NO_RECORDING:
       return 'no compiled recording by that name — record one (reticle_record{action:"start"|"stop"}) first';
+    // Never "regenerate it": the file is intact and the reader is the wrong one. Telling somebody
+    // to rewrite an undamaged flow is the failure this code was split out of PARSE_FAILED to stop.
+    case FlowErrorCode.WRONG_VERSION:
+      return 'this flow file was written in a different flow-file format — the file is not damaged, this Reticle cannot read that version. Upgrade or downgrade Reticle rather than editing the flow';
   }
 }
 
