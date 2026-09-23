@@ -65,16 +65,35 @@ describe('unadvertised-help header stays in lockstep with the surface-size gate'
     expect(header()).toContain('surface-sizes.test.ts');
   });
 
-  it('any restated size matches advertisedTools / TOOLS, so a drift is a red test', () => {
+  /*
+   * Enforces the rule the header states about itself, rather than proof-reading two spellings of a
+   * restatement. Both assertions used to sit inside `if (null !== regex.exec(...))`, and the header
+   * restates no number today -- so this case executed ZERO assertions, and a header claiming
+   * "3 of 999 tools" passed it. Only the exact phrasing `advertises 3 of 999` was ever caught.
+   *
+   * Forbidding the restatement is also what the header asks for in as many words: counts live in
+   * `surface-sizes.test.ts`, and repeating them here is how the two drift apart. A number that is
+   * not a surface count -- the failure tally from the sweep that prompted this file -- is left
+   * alone, because the vocabulary below is what makes it a COUNT CLAIM rather than a digit.
+   */
+  it('restates no surface count, because that is the drift this header warns about', () => {
     const text = header();
-    const extended = /extended one (\d+)/.exec(text);
-    if (null !== extended) {
-      expect(Number(extended[1])).toBe(advertisedTools(TOOL_SURFACE.ALL).length);
-    }
-    const advertised = /advertises (\d+) of (\d+)/.exec(text);
-    if (null !== advertised) {
-      expect(Number(advertised[1])).toBe(advertisedTools(TOOL_SURFACE.DEFAULT).length);
-      expect(Number(advertised[2])).toBe(TOOLS.length);
-    }
+    const claims = [
+      /\b\d+\s+(?:of\s+\d+\s+)?tools?\b/i,
+      /\badvertises?\s+\d+/i,
+      /\bextended one (?:is |has )?\d+/i,
+      /\bsurface (?:is|has|shows)\s+\d+/i,
+      /\b\d+\s+of\s+\d+\b/,
+    ];
+    const found = claims.map((re) => re.exec(text)?.[0]).filter((m) => m !== undefined);
+    expect(
+      found,
+      'This header restates a surface count. `surface-sizes.test.ts` owns those numbers -- it is ' +
+        `checked against advertisedTools() and TOOLS (today ${String(
+          advertisedTools(TOOL_SURFACE.DEFAULT).length,
+        )} of ${String(TOOLS.length)}, extended ${String(
+          advertisedTools(TOOL_SURFACE.ALL).length,
+        )}), so a copy here goes stale silently. Say WHERE the counts live, not what they are.`,
+    ).toEqual([]);
   });
 });
