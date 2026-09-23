@@ -487,11 +487,29 @@ function predicateUnion() {
         quietMs: z.number().positive().optional(),
       })
       .strict(),
+    /*
+     * `.min(1)` on both combinators, because an EMPTY one is a false green and not an edge case.
+     *
+     * `allOf` over no members is vacuous truth — every member holds because there are none — so it
+     * evaluated `pass: true` and reported `verified: "yes"` for a drive that asserted nothing.
+     * Nobody writes that by hand; an agent that builds `predicates` by mapping over a list of
+     * channels to check emits it the moment the list comes back empty.
+     *
+     * `anyOf` over no members is the mirror and is merely a false RED, which is honest-ish and far
+     * cheaper. It is refused here anyway: one rule is easier to hold than two, and an empty `anyOf`
+     * is a mistake in either direction.
+     */
     z
-      .object({ kind: z.literal(PredicateKind.ALL_OF), predicates: z.array(PredicateSchema) })
+      .object({
+        kind: z.literal(PredicateKind.ALL_OF),
+        predicates: z.array(PredicateSchema).min(1),
+      })
       .strict(),
     z
-      .object({ kind: z.literal(PredicateKind.ANY_OF), predicates: z.array(PredicateSchema) })
+      .object({
+        kind: z.literal(PredicateKind.ANY_OF),
+        predicates: z.array(PredicateSchema).min(1),
+      })
       .strict(),
     z.object({ kind: z.literal(PredicateKind.NOT), predicate: PredicateSchema }).strict(),
   ]);

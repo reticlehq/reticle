@@ -216,8 +216,19 @@ describe('gradeOfPredicate descends into combinators', () => {
     expect(gradeOfPredicate({ kind: 'not', predicate: signal })).toBe(HonestyGrade.PRESENCE);
   });
 
-  it('grades a combinator with no branches at presence rather than crashing', () => {
-    expect(gradeOfPredicate({ kind: 'allOf', predicates: [] })).toBe(HonestyGrade.PRESENCE);
-    expect(gradeOfPredicate({ kind: 'anyOf', predicates: [] })).toBe(HonestyGrade.PRESENCE);
+  /**
+   * This asserted `PRESENCE` and was pinning the defect, not the design.
+   *
+   * Its real concern is in its own title — "rather than crashing" — and `NONE` does not crash
+   * either. `PRESENCE` was the incidental value the code happened to return, and it is one rung
+   * above the floor `combine()`'s doc comment always claimed. That rung is what let an empty
+   * combinator past `VACUOUS_GRADE` and into a `verified: "yes"`.
+   *
+   * The schema refuses an empty combinator now, so reaching this needs a constructed predicate
+   * rather than a parsed one — which is exactly why the floor is still worth asserting.
+   */
+  it('grades a combinator with no branches at the floor rather than crashing', () => {
+    expect(gradeOfPredicate({ kind: 'allOf', predicates: [] })).toBe(HonestyGrade.NONE);
+    expect(gradeOfPredicate({ kind: 'anyOf', predicates: [] })).toBe(HonestyGrade.NONE);
   });
 });

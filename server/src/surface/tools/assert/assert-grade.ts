@@ -132,13 +132,25 @@ export function gradeOfPredicate(predicate: Predicate): HonestyGrade {
   }
 }
 
-/** Fold a combinator's branches on the ladder. No branches proves nothing, so it stays at the floor. */
+/**
+ * Fold a combinator's branches on the ladder. No branches proves nothing, so it stays at the floor.
+ *
+ * The floor is `NONE`, not `PRESENCE`. This sentence has been here since the function was written
+ * and the code returned one rung above it, which is the entire defect: `VACUOUS_GRADE`
+ * (`engine/src/evidence/verified.ts`) fires on `NONE`, so an empty combinator graded `PRESENCE`
+ * walked past the one guard whose job is refusing a green that rests on nothing — and reported
+ * `verified: "yes"` for a drive that asserted nothing at all.
+ *
+ * The schema refuses an empty combinator now, so this is the second defence rather than the only
+ * one. It is kept because the two stop different things: the schema stops it ENTERING through the
+ * documented door, and this stops it COUNTING if it is ever constructed rather than parsed.
+ */
 function combine(
   branches: readonly Predicate[],
   pick: (a: HonestyGrade, b: HonestyGrade) => HonestyGrade,
 ): HonestyGrade {
   const grades = branches.map(gradeOfPredicate);
   const first = grades[0];
-  if (first === undefined) return HonestyGrade.PRESENCE;
+  if (first === undefined) return HonestyGrade.NONE;
   return grades.reduce(pick, first);
 }
