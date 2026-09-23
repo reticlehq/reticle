@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/browser` — an idle Reticle card ate clicks meant for the app.** The activity log fills the chat panel and was hit-testable while the session was idle and nothing was blocking the page, so a second driver retried for half a minute against a control that was visible and enabled. While the overlay is idle and not blocking, the card lets the click through. Its buttons stay clickable. A drive that starts after the onboarding tour has mounted takes the scrim down, and that does not count as the tour having been seen. See [#992](https://github.com/reticlehq/reticle/issues/992).

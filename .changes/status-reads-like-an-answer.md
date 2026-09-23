@@ -1,3 +1,0 @@
-### Changed
-
-- **`reticle status` answers in prose, and keeps the event behind `--json`.** It printed one line of JSON and nothing else, to a reader its own source calls "the one a HUMAN types". That got worse once agents started running it: an agent's terminal is read by the person sitting behind it, so a machine line was a line two readers had to decode and only one of them could. It now prints the same short block `reticle doctor` uses, including which port presence was found and why a session list is empty, so the two commands read as one tool. `--json` prints the unchanged event for anything that parses rather than reads.

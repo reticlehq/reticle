@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — `reticle doctor` now says when `localhost` cannot reach the bridge.** The daemon binds `127.0.0.1` and a best-effort alias forwards `[::1]` to it, because `localhost` is a name with two answers and Windows Chrome tries the IPv6 one first. When that alias cannot open, the daemon serves IPv4 perfectly and a page told to dial `localhost` cannot reach it, while every other check goes green. A `loopback` row now names that split and what to do about it, and the "SDK is in the page and never dialled" diagnosis lists it as a cause instead of asserting the SDK returned early, which it cannot know. See [#818](https://github.com/reticlehq/reticle/issues/818).
