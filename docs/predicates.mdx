@@ -76,6 +76,22 @@ The one that catches the expensive bug:
 
 **Exactly one.** Double-submit fails at two, and nothing on screen would have told you.
 
+Two fields read the RESPONSE BODY, so a request that succeeded with the wrong number is still a failure:
+
+```json
+{ "kind": "net", "urlContains": "/api/refund", "bodyContains": "\"refunded\":11.87" }
+```
+
+`bodyContains` is a substring test over the response body. It is deliberately not a JSON path: the string above is the whole assertion, it needs no schema, and it behaves the same on JSON, form encoding and plain text.
+
+```json
+{ "kind": "net", "urlContains": "/api/job", "bodyMatches": { "status": "completed" } }
+```
+
+`bodyMatches` is a shallow field match, keyed like `signal.dataMatches` and taking the same operators (`*`, `$gte`, `$contains`). Reach for it whenever the value is an enum, because that is the case a substring cannot decide: `bodyContains: "completed"` passes on a body carrying `"completedAt": null`, where the needle matched the KEY and the job was still queued. `completed`/`completedAt`, `success`/`successRate`, `sent`/`unsent` all have that shape.
+
+Both require body capture, `reticle({ captureNetworkBodies: true })`, and say so when the body was never recorded rather than reporting an ordinary mismatch.
+
 ### route
 
 ```json
