@@ -1,7 +1,13 @@
 import { mayResumeByReplayingPrefix, StepEffect } from '@reticlehq/core';
 import { Surface, formatStepAddress } from 'open-verification';
 import { span } from '@/trace.js';
-import { anchorLabel, expectElementDrift, resolveTestid, testidDrift } from './flow-anchor.js';
+import {
+  anchorLabel,
+  expectElementDrift,
+  resolveTestid,
+  testidDrift,
+  ambiguousAnchorDrift,
+} from './flow-anchor.js';
 export {
   anchorLabel,
   componentLabel,
@@ -32,7 +38,7 @@ import {
   PredicateKind,
 } from '@reticlehq/core';
 import { asString, isConsequenceDrift } from '@reticlehq/core';
-import { replayActionArgs, ambiguousTestidNote } from './replay.js';
+import { replayActionArgs } from './replay.js';
 import { anchorFieldName } from './fields/flow-secret-field.js';
 import {
   degradedStepResult,
@@ -157,8 +163,26 @@ async function runTestidStep(
       drift: testidDrift(value, hint),
     };
   }
+  /*
+   * More than one match is DRIFT, not a note on a passing step.
+   *
+   * This used to take refs[0], act, and return ok:true with `ambiguousTestidNote`. The verdict
+   * reads `drift` and `ok` and never reads a note, so "we guessed which element you meant" was
+   * indistinguishable from "it did what it did before" -- the one claim a replay makes.
+   *
+   * The action is NOT dispatched. Acting and then reporting drift would leave the app changed by
+   * a click nobody can attribute, which is worse than the ambiguity it reports.
+   */
+  if (refs.length > 1) {
+    return {
+      step: index,
+      tool: step.tool,
+      anchor: value,
+      ok: false,
+      drift: ambiguousAnchorDrift(value, refs.length),
+    };
+  }
   const ref = refs[0] ?? '';
-  const note = refs.length > 1 ? ambiguousTestidNote(value) : undefined;
   session.beginAction?.(ReticleTool.FLOW_REPLAY, { ref, action: step.action ?? '' });
   let act;
   try {
@@ -177,7 +201,6 @@ async function runTestidStep(
   const result: FlowStepResult = { step: index, tool: step.tool, anchor: value, ok: act.ok };
   if (!act.ok) {
     result.error = act.error ?? 'command failed';
-    if (note !== undefined) result.note = note;
     return result;
   }
   // assert the step's expect.element testid is present AFTER the action —
@@ -199,7 +222,6 @@ async function runTestidStep(
       };
     }
   }
-  if (note !== undefined) result.note = note;
   return result;
 }
 

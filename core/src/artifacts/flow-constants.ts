@@ -146,6 +146,23 @@ export const DriftReason = {
    */
   ANCHOR_DEGRADED: 'anchor_degraded',
   /**
+   * The anchor resolved to MORE THAN ONE live element, so which one the recording meant is no
+   * longer decidable.
+   *
+   * Replay used to take the first match, act on it, and return `ok: true` carrying a note --
+   * "ambiguous testid 'x', used first match". The verdict is computed from `drift` and `ok` alone,
+   * so the note never reached it: a replay that clicked row 3 instead of row 1 reported `ok`.
+   * That is a locator resolving to a different element than the one recorded, reported green,
+   * which is the one thing a replay must never do -- its entire claim is "it did what it did
+   * before".
+   *
+   * Distinct from TESTID_NOT_FOUND for the same reason ANCHOR_DEGRADED is, and the distinction is
+   * what makes it fixable: "your element disappeared" wants a RENAMED anchor, and "your element is
+   * now several elements" wants a NARROWER one. Heal can only propose the second if the reason
+   * says which happened.
+   */
+  ANCHOR_AMBIGUOUS: 'anchor_ambiguous',
+  /**
    * The step's anchor resolved and its action ran; the testid its `expect.element` names was absent
    * afterwards. Distinct from TESTID_NOT_FOUND for the same reason ANCHOR_DEGRADED is: "the element
    * you clicked is gone" and "the thing you asserted afterwards never appeared" need different

@@ -155,6 +155,27 @@ export function testidDrift(value: string, hint: QueryEmptyHint | undefined): Dr
 }
 
 /**
+ * Build the drift for a step whose anchor matched MORE THAN ONE live element.
+ *
+ * `ambiguous: true` is set because that is exactly what it is, and it is the field heal already
+ * reads to refuse an auto-rebind -- an ambiguous drift must never be healed to an arbitrary pick,
+ * which is the same reasoning that made this a drift instead of a note in the first place.
+ *
+ * `nearest` is null on purpose. There is no nearest: the anchor was found, several times over, and
+ * proposing one of the matches as "the" match would re-make the guess this reason exists to stop.
+ * The fix is a NARROWER anchor, and only a human or an agent looking at the page can choose it.
+ */
+export function ambiguousAnchorDrift(value: string, matches: number): Drift {
+  return {
+    reasonKind: DriftReason.ANCHOR_AMBIGUOUS,
+    reason: `testid "${value}" matched ${String(matches)} live elements — which one the recording meant is not decidable; anchor this step to something unique`,
+    anchor: value,
+    nearest: null,
+    ambiguous: true,
+  };
+}
+
+/**
  * Build the drift for a step whose `expect.element` testid was absent after the action ran.
  *
  * Deliberately not `testidDrift`: that one means "this step's anchor is gone", and reusing it here
