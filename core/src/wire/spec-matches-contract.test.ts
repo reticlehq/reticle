@@ -197,8 +197,15 @@ const ABSENCE_CLAIMS: readonly { readonly phrase: RegExp; readonly falsifiedBy: 
 describe('the specification does not claim to be missing something it has', () => {
   for (const { phrase, falsifiedBy } of ABSENCE_CLAIMS) {
     it(`does not say ${String(phrase)} while ${falsifiedBy} exists`, () => {
-      const exists = existsSync(join(REPO_ROOT, falsifiedBy));
-      if (!exists) return;
+      // Asserted, not an early return. Returning green when the path is missing disarms this guard
+      // on exactly the event that makes it wrong -- a rename -- and v3 moved every `packages/*` path
+      // once already. Proved: move the file aside, add the absence claim to SPEC.md, and the whole
+      // file stayed green while the spec lied about its own gap.
+      expect(
+        existsSync(join(REPO_ROOT, falsifiedBy)),
+        `${falsifiedBy} is gone. This guard reads it to decide whether SPEC.md's absence claim is ` +
+          'stale, so a moved file silently switches the check off. Repoint ABSENCE_CLAIMS.',
+      ).toBe(true);
       expect(
         SPEC,
         `open-verification/SPEC.md lists this as a gap, and ${falsifiedBy} exists. Either the entry is ` +

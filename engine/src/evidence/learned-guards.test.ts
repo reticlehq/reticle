@@ -36,6 +36,10 @@ describe('learnFromRun', () => {
     // Asserting "must not happen" while it happens makes the flow red on a known bug, and a check
     // that is red for a reason the user already accepted is a check they learn to ignore.
     const r = learnFromRun({ guards: [], seen: [seen('stale-response-applied')] });
+    // The length first, because `[].every()` is TRUE: without this the assertion below holds just as
+    // well for a run that forgot the finding entirely, and deleting the push that records it leaves
+    // this whole file green. Proved by doing exactly that.
+    expect(r.guards).toHaveLength(1);
     expect(r.guards.every((g) => g.state === GuardState.OPEN)).toBe(true);
   });
 
