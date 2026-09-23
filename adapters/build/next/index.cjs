@@ -162,7 +162,12 @@ const LOADER_MODULE = '@reticlehq/next/loader';
  */
 function supportsTurbopackKey() {
   try {
-    const { version } = require('next/package.json');
+    // From the APP, for the reason `resolveFromApp` records below: a bare require resolves against
+    // THIS package, so the version read could be some other copy of Next than the one about to run.
+    // Reading an older one returns false, no `turbopack` key is emitted, and on Next 16 — where
+    // Turbopack is the default — a config with a `webpack` key and no `turbopack` key is a hard
+    // `next dev` startup error. That is the failure the key exists to prevent.
+    const { version } = require(resolveFromApp('next/package.json'));
     const [major, minor] = String(version)
       .split('.')
       .map((n) => parseInt(n, 10));

@@ -27,6 +27,9 @@ $ReticlePkg = '@reticlehq/server'
 # The floor the package declares in `engines`. Repeated here because nothing can read package.json
 # before Node exists; `engines` stays the source of truth and this is the pre-Node echo of it.
 $NodeMinMajor = 20
+# See install.sh: engines.node is >=20.11, so a major-only check admits 20.0-20.10 and defers the
+# refusal to npm, after this script has already told the user they were fine.
+$NodeMinMinor = 11
 $StateDir = if ($env:RETICLE_STATE_DIR) { $env:RETICLE_STATE_DIR } else { Join-Path $HOME '.reticle' }
 
 function Say([string]$Message) { [Console]::Error.WriteLine($Message) }
@@ -79,10 +82,15 @@ function Check-Node {
   # ErrorRecord, which under $ErrorActionPreference = 'Stop' throws. Passing no quoted argument at
   # all avoids both, and `v24.21.0` is a shape that does not need a JS expression to read.
   $major = 0
-  try { $major = [int]((& node -v).TrimStart('v').Split('.')[0]) } catch { $major = 0 }
-  if ($major -lt $NodeMinMajor) {
+  $minor = 0
+  try {
+    $parts = (& node -v).TrimStart('v').Split('.')
+    $major = [int]$parts[0]
+    $minor = [int]$parts[1]
+  } catch { $major = 0; $minor = 0 }
+  if (($major -lt $NodeMinMajor) -or (($major -eq $NodeMinMajor) -and ($minor -lt $NodeMinMinor))) {
     Note-Failure 'runtime_ready' 'node_too_old'
-    Die @("Node $major is too old -- Reticle needs $NodeMinMajor or newer.")
+    Die @("Node $major.$minor is too old -- Reticle needs $NodeMinMajor.$NodeMinMinor or newer.")
   }
 }
 
