@@ -3,7 +3,7 @@ name: verify-cli-run
 description: Prove that a command-line tool actually did what it said, instead of trusting its exit code and its output. Snapshots the filesystem before and after, names the expected consequence in advance, and returns one of four verdicts with what could not be seen. Use after running a build, a migration, a scaffolder, a formatter, a codegen step, or an AI coding CLI; when a command printed success and you are about to report "done"; when you are about to write "exit code 0, so it worked"; or when a tool claims it edited files. Needs nothing installed.
 license: Apache-2.0
 metadata:
-  version: 3.1.0
+  version: 3.2.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
