@@ -29,7 +29,7 @@ RETICLE_PKG="@reticlehq/server"
 # before Node exists; `engines` stays the source of truth and this is the pre-Node echo of it.
 NODE_MIN_MAJOR=20
 # The MINOR matters too: `engines.node` on the published server is >=20.11, so 20.0-20.10 clears a
-# major-only check and then fails at `npm i` with EBADENGINE — after the installer has said yes.
+# major-only check and then fails at `npm i` with EBADENGINE, after the installer has said yes.
 NODE_MIN_MINOR=11
 STATE_DIR="${RETICLE_STATE_DIR:-$HOME/.reticle}"
 
