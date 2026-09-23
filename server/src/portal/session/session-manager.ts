@@ -214,6 +214,18 @@ export class SessionManager {
     return this.#sessions.get(sessionId);
   }
 
+  /**
+   * Did this id belong to a session that has since disconnected?
+   *
+   * `resolve` answers a departed id with its live SUCCESSOR, which is what keeps a reload working
+   * for everything that observes. A caller that is about to do something DESTRUCTIVE needs the
+   * other answer: whether the thing it named is still there. Ending a session it did not name is
+   * not a recoverable mistake (#983).
+   */
+  departed(sessionId: string): SessionIdentity | undefined {
+    return this.#tombstones.get(sessionId);
+  }
+
   list(): SessionInfo[] {
     return [...this.#sessions.values()].map((s) => {
       const info = s.info();

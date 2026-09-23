@@ -32,6 +32,10 @@ function emptyDeps(): unknown {
   return {
     sessions: {
       count: () => 0,
+      // Nothing connected and nothing remembered: a named id is neither live nor departed, so
+      // `end` falls through to `resolve` exactly as it always did.
+      get: () => undefined,
+      departed: () => undefined,
       resolve: () => {
         throw new Error(NO_SESSION);
       },
@@ -44,6 +48,8 @@ function unknownIdDeps(): unknown {
   return {
     sessions: {
       count: () => 0,
+      get: () => undefined,
+      departed: () => undefined,
       resolve: (id?: string) => {
         throw new Error(id === undefined ? NO_SESSION : `no such session '${String(id)}'`);
       },
