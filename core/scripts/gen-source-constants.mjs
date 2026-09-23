@@ -46,11 +46,16 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   // `src/identity/` and this path did not follow it. The output stays at the dist root, where
   // `@reticlehq/core/source-constants` resolves.
   const mod = await import(pathToFileURL(join(dist, 'identity', 'source-constants.js')).href);
-  const constants = {
-    DATA_RETICLE_SOURCE_ATTR: mod.DATA_RETICLE_SOURCE_ATTR,
-    RETICLE_ROOT_GLOBAL: mod.RETICLE_ROOT_GLOBAL,
-    RETICLE_SDK_VERSION_GLOBAL: mod.RETICLE_SDK_VERSION_GLOBAL,
-  };
+  // DERIVED from the module's own exports, not hand-listed. A hand-written list here is the same
+  // copy this generator exists to remove, one level up: `source-constants.test.ts` requires every
+  // exported constant to reach the CJS view, so a constant added to the module and forgotten here
+  // fails that test with a diff nobody reads as "update the generator". Every export of this module
+  // is a string constant by construction; types erase, so nothing else can appear.
+  const constants = Object.fromEntries(
+    Object.entries(mod)
+      .filter(([, value]) => 'string' === typeof value)
+      .sort(([a], [b]) => a.localeCompare(b)),
+  );
   const outCjs = join(dist, 'source-constants.cjs');
   const outDts = join(dist, 'source-constants.d.cts');
   writeFileSync(outCjs, renderSourceConstants(constants), 'utf8');

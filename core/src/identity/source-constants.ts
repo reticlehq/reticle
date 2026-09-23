@@ -33,3 +33,17 @@ export const RETICLE_ROOT_GLOBAL = '__RETICLE_ROOT__';
  * package's version. See `sdkVersion` on the HELLO message.
  */
 export const RETICLE_SDK_VERSION_GLOBAL = '__RETICLE_SDK_VERSION__';
+
+/**
+ * Compile-time global carrying the daemon's pairing token, for connects the build plugin does not
+ * write itself. The bridge requires the token even on localhost, and nothing in a browser can read
+ * the file it lives in.
+ *
+ * Here rather than in the Vite plugin that defines it, because the DAEMON needs to recognise it
+ * too. When a build's `define` substitution does not run -- Vite 8 / rolldown left all three of
+ * these as raw identifiers, and `vite.define` never reaches an Astro inline script -- the SDK dials
+ * with this literal string as its credential. The daemon then refuses it as a wrong token, which
+ * sends the reader to check a token that was never produced. Recognising the placeholder is what
+ * lets the refusal name the real cause (#996).
+ */
+export const RETICLE_TOKEN_GLOBAL = '__RETICLE_TOKEN__';

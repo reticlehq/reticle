@@ -21,7 +21,23 @@
  * plain reason stands, unless the page sent no token.
  */
 
+import { RETICLE_TOKEN_GLOBAL } from '@reticlehq/core';
+
 const PLAIN = 'authentication failed';
+/**
+ * The page's credential is the build plugin's own placeholder, unsubstituted.
+ *
+ * `define` is what replaces `__RETICLE_TOKEN__` with the real token, and it does not always run:
+ * Vite 8 / rolldown left all three Reticle globals as raw identifiers while `import.meta.env`
+ * replacement worked, and `vite.define` never reaches an Astro inline script. The SDK then dials
+ * with the literal placeholder as its credential.
+ *
+ * Read as a wrong token, that produces the worst available advice -- `reticle status`, to check a
+ * token that was never produced. The build is what is broken, not the credential, and no reload or
+ * daemon restart can fix it (#996).
+ */
+const PLACEHOLDER_TOKEN =
+  'authentication failed: the page sent the literal __RETICLE_TOKEN__ — the build did not substitute it';
 /**
  * A token WAS presented and did not match. That is not "check your credentials" — the page holds a
  * real token from a state directory this daemon does not own, which in the field means a dev server
@@ -73,5 +89,12 @@ export function authFailureReason(
     return Buffer.byteLength(reason, 'utf8') <= MAX_REASON_BYTES ? reason : PLAIN;
   }
   if (helloToken === undefined || 0 === helloToken.length) return NO_TOKEN;
+  // Ahead of WRONG_TOKEN: the placeholder IS a token by every test that clause applies, so left
+  // below it this case can never be reached.
+  if (RETICLE_TOKEN_GLOBAL === helloToken) {
+    return Buffer.byteLength(PLACEHOLDER_TOKEN, 'utf8') <= MAX_REASON_BYTES
+      ? PLACEHOLDER_TOKEN
+      : PLAIN;
+  }
   return Buffer.byteLength(WRONG_TOKEN, 'utf8') <= MAX_REASON_BYTES ? WRONG_TOKEN : PLAIN;
 }

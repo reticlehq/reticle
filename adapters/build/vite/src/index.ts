@@ -13,6 +13,7 @@ import {
   ReticleEnv,
   RETICLE_ROOT_GLOBAL,
   RETICLE_SDK_VERSION_GLOBAL,
+  RETICLE_TOKEN_GLOBAL,
 } from '@reticlehq/core';
 import { resolveProjectId } from './project-id.js';
 import { discoverDaemonPort } from './discover-port.js';
@@ -46,8 +47,12 @@ const RETICLE_SENSOR = '@reticlehq/browser';
  * Compile-time global carrying the daemon's pairing token, for connects the plugin does not write
  * itself. The bridge requires the token even on localhost, and nothing in a browser can read the
  * file it lives in.
+ *
+ * Re-exported from core rather than declared here: the daemon has to recognise this exact literal
+ * to tell an unsubstituted placeholder from a wrong token (#996), and two declarations of one
+ * wire-visible string is how they drift apart.
  */
-export const RETICLE_TOKEN_GLOBAL = '__RETICLE_TOKEN__';
+export { RETICLE_TOKEN_GLOBAL };
 
 /** Files we stamp with source info — JSX/TSX only. */
 const JSX_FILE = /\.[jt]sx$/;
