@@ -324,6 +324,32 @@ describe('it sends only the difference', () => {
     ]);
   });
 
+  /*
+   * The field complaint this protocol has to answer: issues that never reach the dashboard.
+   *
+   * The reported shape is "agents forget to sync". They cannot — nothing here is agent-driven — so
+   * the real risk is a bug found in a session that produced NO verification run, which is the
+   * ordinary shape of exploring an app and hitting a defect. The capsule then rides on the impact
+   * record moving rather than on a run, and the test above proves the run case only.
+   *
+   * If this ever goes red, a defect somebody found is sitting on their laptop and the dashboard
+   * says nothing broke — silently, because a capsule that is not sent raises nothing.
+   */
+  it('carries a capsule when a bug moved the impact record and no run exists', async () => {
+    const { calls } = await cycle(
+      { status: { knownRunIds: [] }, sync: { capsules: { accepted: 1 } } },
+      source({
+        runs: () => [],
+        derived: (kind) => ('impact' === kind ? { counts: { failed: 1 } } : undefined),
+        capsules: () => [{ id: 'c1', summary: 'submit did nothing' }],
+      }),
+    );
+    const post = calls.find((c) => 'POST' === c.method);
+    expect((post?.body as { capsules: unknown[] }).capsules).toEqual([
+      { id: 'c1', summary: 'submit did nothing' },
+    ]);
+  });
+
   it('does not pay a round trip for capsules alone when nothing else moved', async () => {
     const { calls } = await cycle(
       { status: { knownRunIds: [] } },
