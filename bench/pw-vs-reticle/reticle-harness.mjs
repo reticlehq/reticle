@@ -12,7 +12,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, '..', '..');
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const PORT = process.env.BENCH_RETICLE_PORT ?? '4460';
+/**
+ * The daemon this harness spawns, and the port the bench-app must be told to dial.
+ *
+ * Exported because it is HALF a contract: the app bakes its daemon port at dev-server start, so a
+ * caller that spawns a daemon here and boots the app elsewhere has to pass this same value through.
+ * Two independent literals is how the two drift, and when they drift nothing fails loudly — the page
+ * dials a port nobody is on and the run measures an empty tab.
+ */
+export const PORT = process.env.BENCH_RETICLE_PORT ?? '4460';
 /**
  * DevTools port the harness's own Chrome listens on, so the daemon can drive the same tab.
  *

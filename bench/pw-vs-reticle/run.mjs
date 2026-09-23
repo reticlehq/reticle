@@ -6,7 +6,7 @@ import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BUGS, APP_ORIGIN } from './bugs.mjs';
-import { runReticle } from './reticle-harness.mjs';
+import { runReticle, PORT as RETICLE_PORT } from './reticle-harness.mjs';
 import { runPlaywright } from './playwright-harness.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -51,8 +51,14 @@ async function ensure(name, healthUrl, cmd, args, err, env = {}) {
  *
  * An already-running bench-app is reused and its baked port CANNOT be read back, so passing this is
  * necessary and not sufficient. The caller still has to verify a session actually connects.
+ *
+ * Defaulted to the harness's own port rather than left undefined. Undefined meant "bake whatever the
+ * app's vite config defaults to", which worked only while that default happened to equal this
+ * harness's — and when the app's default moved from 4460 to 4400, every caller here that relied on
+ * the coincidence started spawning a daemon on 4460 and serving a page dialling 4400. No session
+ * ever connected, and the runner reported it as a refusal to drive rather than as a port mismatch.
  */
-export async function ensureApp(reticlePort) {
+export async function ensureApp(reticlePort = RETICLE_PORT) {
   const api = await ensure(
     'apps/api',
     `${API_ORIGIN}/api/health`,
