@@ -64,6 +64,16 @@ interface HonestyInputs {
    */
   coverageNote?: string;
   truncated?: boolean;
+  /**
+   * Did the durable event ledger stop accepting writes, on a path this verdict read from?
+   *
+   * Separate from `truncated`, which means the in-memory ring buffer evicted a window that had aged
+   * out. Both make a capture incomplete and both belong in `issues`, but they are opposite kinds of
+   * fact for whoever reads the sentence: an eviction is a window that scrolled past, recoverable by
+   * looking sooner, while a closed ledger is a file that will not take another byte for the rest of
+   * the session. One word for both would tell an agent to re-drive a thing no re-drive can fix.
+   */
+  ledgerClosed?: boolean;
   blindSpots?: readonly string[];
   /**
    * The machine-readable half of `issues` — WHICH kind of loss, from core's closed `CaptureLoss`.
@@ -97,9 +107,14 @@ export interface HonestyBlock {
   settled?: boolean;
 }
 
+/** What `integrity.issues` says when the durable ledger refused writes — see `ledgerClosed`. */
+const LEDGER_CLOSED_ISSUE =
+  'durable event ledger closed at its size cap, so evidence after that point is not on disk';
+
 export function buildHonestyBlock(inputs: HonestyInputs): HonestyBlock {
   const issues: string[] = [];
   if (true === inputs.truncated) issues.push('capture truncated');
+  if (true === inputs.ledgerClosed) issues.push(LEDGER_CLOSED_ISSUE);
   for (const spot of inputs.blindSpots ?? []) issues.push(`blind spot: ${spot}`);
 
   // Report only what was measured. `envelope` used to be emitted unconditionally with samples=0, so

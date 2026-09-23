@@ -506,6 +506,9 @@ describe('a hello the bridge rejected is reported, not silently absent', () => {
     const sessions = new SessionManager();
     sessions.noteClosure(WS_CLOSE_REASON.AUTH_FAILED, 1000);
     expect(() => sessions.resolve()).toThrow(/authentication failed/);
+    // The token is inlined into the served module. Reloading the page fetches that same file.
+    expect(WS_CLOSE_REASON.AUTH_FAILED).not.toMatch(/reload the page/i);
+    expect(WS_CLOSE_REASON.AUTH_FAILED).toMatch(/restart the dev server/i);
   });
 
   it('does not tell the reader to reload when reloading is not the fix', () => {

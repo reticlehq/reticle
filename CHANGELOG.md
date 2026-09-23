@@ -56,6 +56,7 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 - **`reticle_tools` echoes the name you asked about.** A batch query for several retired names came back with entries you could not match to your questions.
 - **A drive that overwrote a flow reported saving nothing.** `savedFlows` was a before/after diff of names, so the ordinary second run — which re-drives the same journeys under the same names — said "nothing is proved and nothing will replay" about a flow sitting on disk. Rewrites are now reported separately.
 - **`explore` says WHY a drive kept nothing**: the tool call that failed, or the save that was accepted and wrote nothing. "Raise `maxSteps`" is true of a drive that ran long and of one that was refused at its save, and those need opposite responses.
+- **`@reticlehq/server` — a CRA launcher that prints "already running on port N" is named as a busy port, not as a silent exit.** Setup used to report only "The dev server exited without serving anything" when Create React App (or webpack) found its default port taken and prompted for another. The prompt already named the port; that sentence is now the diagnosis, with `--url` as the escape when the listening process is this app. Leftover half of [#802](https://github.com/reticlehq/reticle/issues/802).
 
 ## [3.1.0] — 2026-09-18
 

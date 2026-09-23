@@ -12,6 +12,9 @@ import {
   writeFile,
 } from 'node:fs/promises';
 
+/** The JSONL record terminator, as a byte — the only boundary a capped tail read can align to. */
+const NEWLINE_BYTE = 0x0a;
+
 /**
  * The injectable filesystem seam. Server logic depends on this interface, never on node:fs
  * directly — so tests pass an in-memory or temp-dir adapter and never touch the repo's .reticle/.
@@ -26,8 +29,32 @@ export interface FileSystemPort {
    * that lands on a `\n` boundary (the journal's line terminator, 1 ASCII byte) so the returned tail
    * starts on a valid UTF-8 char boundary. Optional — a FileSystemPort that omits it makes readers fall
    * back to a whole-file read.
+   *
+   * `maxBytes` caps what ONE call materialises as a single string. It is not a performance knob: V8
+   * cannot build a string longer than 0x1fffffe8 characters, and `Buffer.prototype.toString` THROWS
+   * past that rather than returning a shorter one — so a tail bigger than the ceiling is not a slow
+   * read, it is a failed one. When the cap bites, the NEWEST bytes are kept (a journal tail is read
+   * to answer about what just happened).
+   *
+   * Two guarantees make the returned text safe to account for in bytes, and an implementation owes
+   * both:
+   *
+   *   - `from` is where the text ACTUALLY starts. It equals `byteOffset` when nothing was skipped,
+   *     and a caller can compare the two to see that a cap bit. (Omitted by a port that does not
+   *     implement the cap — read that as `byteOffset`, since such a port never skips.)
+   *   - When the cap moves the start, `from` lands just past a `\n`, so the text begins at a record
+   *     boundary and never with the replacement char of a character the window cut in half. A
+   *     window holding no `\n` at all returns empty text with `from` at the end of what was read.
+   *
+   * `size` is the file's length as `fstat` reported it, which is NOT where the returned text ends:
+   * a truncation between the stat and the read, or any short read, returns less. Advance a cursor
+   * by what arrived, never by `size`.
    */
-  readFileFrom?(path: string, byteOffset: number): Promise<{ text: string; size: number }>;
+  readFileFrom?(
+    path: string,
+    byteOffset: number,
+    maxBytes?: number,
+  ): Promise<{ text: string; size: number; from?: number }>;
   writeFile(path: string, data: string): Promise<void>;
   /** Append UTF-8 text, creating the file if absent — for the append-only JSONL journal. */
   appendFile(path: string, data: string): Promise<void>;
@@ -56,15 +83,40 @@ export interface FileSystemPort {
 export function createNodeFileSystem(): FileSystemPort {
   return {
     readFile: (path) => readFile(path, 'utf8'),
-    readFileFrom: async (path, byteOffset) => {
+    readFileFrom: async (path, byteOffset, maxBytes) => {
       const fh = await open(path, 'r');
       try {
         const { size } = await fh.stat();
-        if (byteOffset >= size) return { text: '', size };
-        const length = size - byteOffset;
+        if (byteOffset >= size) return { text: '', size, from: byteOffset };
+        // Keep the newest bytes when the tail is over the caller's ceiling. Clamped into the file
+        // rather than trusted: a ceiling of zero would otherwise size a negative buffer.
+        const cut =
+          maxBytes === undefined ? byteOffset : Math.max(byteOffset, size - Math.max(maxBytes, 0));
+        const capped = cut > byteOffset;
+        // One byte BEFORE that cut, so a cut landing exactly on a record boundary is recognised as
+        // one instead of sacrificing the record after it.
+        const start = capped ? cut - 1 : byteOffset;
+        const length = size - start;
         const buf = Buffer.allocUnsafe(length);
-        await fh.read(buf, 0, length, byteOffset);
-        return { text: buf.toString('utf8'), size };
+        const { bytesRead } = await fh.read(buf, 0, length, start);
+        // ONLY what the read returned. `allocUnsafe` hands back whatever was last in that heap
+        // block, and `fstat` runs one syscall ahead of `read` — so a file truncated in between, or
+        // any short read, would otherwise decode that memory and hand it back as journal text.
+        const got = buf.subarray(0, bytesRead);
+        if (!capped) return { text: got.toString('utf8'), size, from: start };
+        // The ceiling moved the start, so the window may open inside a record whose head was never
+        // read. Drop up to the first boundary in BYTES, before decoding: `\n` is one byte and
+        // cannot occur inside a multi-byte sequence, so everything past it is intact UTF-8 and a
+        // whole number of records.
+        const newline = got.indexOf(NEWLINE_BYTE);
+        // No boundary in the whole window: there is no record here that can be read, and half of
+        // one is worse than none. `from` still says how far the read reached.
+        if (-1 === newline) return { text: '', size, from: start + bytesRead };
+        return {
+          text: got.subarray(newline + 1).toString('utf8'),
+          size,
+          from: start + newline + 1,
+        };
       } finally {
         await fh.close();
       }

@@ -69,6 +69,26 @@ export function judgeWait(facts: WaitFacts): WaitVerdict {
     : WaitVerdict.WAITING;
 }
 
+/**
+ * CRA (and webpack) print a prompt rather than a URL when their default port is taken, then exit
+ * or hang waiting for a tty. Setup used to report only "exited without serving anything", which
+ * hid the port that was actually busy (#802).
+ */
+const CRA_PORT_BUSY = /Something is already running on port (\d+)/i;
+const NAMED_PORT_BUSY = /Port (\d+) is (?:already )?in use/i;
+const EADDRINUSE_PORT = /(?:EADDRINUSE|address already in use)[^\d]*(\d+)/i;
+
+export function portBusyMessage(output: string): string | undefined {
+  const match =
+    CRA_PORT_BUSY.exec(output) ?? NAMED_PORT_BUSY.exec(output) ?? EADDRINUSE_PORT.exec(output);
+  const port = match?.[1];
+  if (undefined === port) return undefined;
+  return (
+    `port ${port} is already in use — something else is serving there, so this launcher did not ` +
+    `bind. Pass --url http://localhost:${port} if that process is this app, or free the port and re-run.`
+  );
+}
+
 /** A url the dev server announced, if it has announced one. Never composed, only read. */
 const URL_IN_OUTPUT = /https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]):\d+/;
 

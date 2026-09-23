@@ -111,6 +111,22 @@ describe('SessionJournal — durable JSONL over a temp dir', () => {
     expect(() => new SessionJournal(fs, root, '../escape')).toThrow();
   });
 
+  it('stays correct once the evicted prefix is compacted away', async () => {
+    // Eviction advances a head index and only reclaims the dead prefix once it dominates the
+    // backing array — the branch a handful of evictions never reaches, and therefore the one that
+    // would rot untested. A thousand records in one batch crosses it in a single read.
+    const OVER_COMPACTION_THRESHOLD = 1200;
+    const j = new SessionJournal(fs, root, 'demo', { maxRetainedEvents: 3 });
+    await j.appendEvents(Array.from({ length: OVER_COMPACTION_THRESHOLD }, (_, i) => evt(i)));
+
+    expect((await j.readEvents()).map((e) => e.seq)).toEqual([1197, 1198, 1199]);
+
+    // And the cursor survived the compaction: the next append arrives once, on top of the newest.
+    await j.appendEvents([evt(1200)]);
+    expect((await j.readEvents()).map((e) => e.seq)).toEqual([1198, 1199, 1200]);
+    expect(j.readLoss()?.droppedEvents).toBe(OVER_COMPACTION_THRESHOLD - 2);
+  });
+
   it('bounded read tracks BYTE offsets, not char offsets, across multi-byte unicode payloads', async () => {
     // The trap: the parse offset advances by UTF-16 code units, but a byte-offset file read needs BYTES.
     // An event whose data contains multi-byte chars (é, 世, 🎉) would desync a char-offset read and
@@ -163,6 +179,9 @@ describe('SessionJournal — durable JSONL over a temp dir', () => {
 
     fileText = `${complete}${JSON.stringify(evt(2))}\n`; // the append completes with the newline
     expect((await j.readEvents()).map((e) => e.seq)).toEqual([0, 1, 2]); // event 2 recovered, not dropped
+    // A port that implements neither the ceiling nor `from` declares no loss — the behaviour every
+    // partial double had before the ceiling existed, and the one this must not change.
+    expect(j.readLoss()).toBeUndefined();
   });
 
   /**
@@ -183,5 +202,149 @@ describe('SessionJournal — durable JSONL over a temp dir', () => {
     const reread = new SessionJournal(fs, root, 'demo');
     expect((await reread.readEvents()).map((e) => e.seq)).toEqual([2]);
     expect(await reread.readActions()).toHaveLength(1);
+  });
+});
+
+/**
+ * A read can come back SHORTER than the file it was sized against.
+ *
+ * `readFileFrom` stats the file and then reads it: a truncation, or a plain short read, returns
+ * fewer bytes than the stat promised. The resume cursor must therefore be derived from the bytes
+ * that ARRIVED, never from the file's end — a cursor at the stat'd end skips every record the read
+ * did not return, forever, and reports nothing.
+ */
+describe('SessionJournal — a read that returns less than the file holds', () => {
+  const root = '/root';
+
+  /** A port that hands back at most `chunkBytes` per read, whatever the file holds. */
+  function dribbleFs(file: () => string, chunkBytes: number): FileSystemPort {
+    return {
+      ...unusedFs(),
+      readFileFrom: (path, byteOffset) => {
+        if (!path.endsWith('events.jsonl')) return Promise.resolve({ text: '', size: 0 });
+        const bytes = Buffer.from(file(), 'utf8');
+        if (byteOffset >= bytes.length) {
+          return Promise.resolve({ text: '', size: bytes.length, from: byteOffset });
+        }
+        const end = Math.min(bytes.length, byteOffset + chunkBytes);
+        return Promise.resolve({
+          text: bytes.subarray(byteOffset, end).toString('utf8'),
+          size: bytes.length,
+          from: byteOffset,
+        });
+      },
+    };
+  }
+
+  /** Every member these fixtures never touch; present so the port is whole rather than cast. */
+  function unusedFs(): FileSystemPort {
+    const refuse = (): Promise<never> => Promise.reject(new Error('not used by this fixture'));
+    return {
+      readFile: refuse,
+      writeFile: refuse,
+      appendFile: refuse,
+      readFileBytes: refuse,
+      writeFileBytes: refuse,
+      mkdir: () => Promise.resolve(),
+      exists: () => Promise.resolve(true),
+      readdir: refuse,
+      rename: refuse,
+      rm: refuse,
+      stat: refuse,
+      realpath: refuse,
+      isNotFound: () => false,
+    };
+  }
+
+  it('resumes from the bytes it actually received, not from the end the stat reported', async () => {
+    const all = [evt(0), evt(1), evt(2), evt(3)];
+    const file = `${all.map((e) => JSON.stringify(e)).join('\n')}\n`;
+    const twoRecords = Buffer.byteLength(
+      `${[evt(0), evt(1)].map((e) => JSON.stringify(e)).join('\n')}\n`,
+      'utf8',
+    );
+    const j = new SessionJournal(
+      dribbleFs(() => file, twoRecords),
+      root,
+      'demo',
+    );
+
+    expect((await j.readEvents()).map((e) => e.seq)).toEqual([0, 1]);
+
+    // A cursor taken from the stat'd size would sit at EOF here, and events 2 and 3 would never be
+    // read by anybody, with no loss declared and nothing to say why the answer is short.
+    expect((await j.readEvents()).map((e) => e.seq)).toEqual([0, 1, 2, 3]);
+  });
+
+  it('resumes correctly when the short read ends inside a multi-byte character', async () => {
+    // The trailing bytes of a cut character decode to ONE replacement char, which is not the byte
+    // width of what it replaced — so a cursor measured backwards from the file's end is wrong by
+    // the difference, and every line after it is spliced at the wrong place.
+    const fancy = (seq: number): ReticleEvent => evt(seq, { data: { name: '🎉世界é' } });
+    const all = [fancy(0), fancy(1)];
+    const file = `${all.map((e) => JSON.stringify(e)).join('\n')}\n`;
+    const CUT_INSIDE_LAST_EMOJI = 6;
+    const j = new SessionJournal(
+      dribbleFs(() => file, Buffer.byteLength(file, 'utf8') - CUT_INSIDE_LAST_EMOJI),
+      root,
+      'demo',
+    );
+
+    expect((await j.readEvents()).map((e) => e.seq)).toEqual([0]);
+
+    const back = await j.readEvents();
+    expect(back.map((e) => e.seq)).toEqual([0, 1]);
+    expect(back[1]?.data['name']).toBe('🎉世界é'); // payload intact, no replacement char
+  });
+
+  it('declares no loss for a short read — nothing was skipped, only deferred', async () => {
+    const all = [evt(0), evt(1), evt(2)];
+    const file = `${all.map((e) => JSON.stringify(e)).join('\n')}\n`;
+    const j = new SessionJournal(
+      dribbleFs(() => file, 20),
+      root,
+      'demo',
+    );
+
+    await j.readEvents();
+
+    expect(j.readLoss()).toBeUndefined();
+  });
+});
+
+describe('SessionJournal — the ceiling overrides a caller can pass', () => {
+  // A real port: the bounds are checked at construction, before anything is opened.
+  const fs = createNodeFileSystem();
+
+  it.each([
+    ['zero', 0],
+    ['negative', -1],
+    ['fractional', 1.5],
+    ['not a number', Number.NaN],
+    ['infinite', Number.POSITIVE_INFINITY],
+  ])('refuses a %s byte ceiling instead of reading with a nonsense bound', (_label, value) => {
+    expect(() => new SessionJournal(fs, '/root', 'demo', { maxReadBytes: value })).toThrow(
+      /maxReadBytes/,
+    );
+  });
+
+  it('refuses a nonsense retention bound on the same terms', () => {
+    expect(() => new SessionJournal(fs, '/root', 'demo', { maxRetainedEvents: 0 })).toThrow(
+      /maxRetainedEvents/,
+    );
+    expect(() => new SessionJournal(fs, '/root', 'demo', { maxRetainedBytes: Number.NaN })).toThrow(
+      /maxRetainedBytes/,
+    );
+  });
+
+  it('accepts the bounds it is given', () => {
+    expect(
+      () =>
+        new SessionJournal(fs, '/root', 'demo', {
+          maxReadBytes: 1024,
+          maxRetainedBytes: 2048,
+          maxRetainedEvents: 10,
+        }),
+    ).not.toThrow();
   });
 });

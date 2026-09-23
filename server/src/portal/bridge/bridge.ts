@@ -75,7 +75,8 @@ export const WS_CLOSE_REASON = {
    * this stays as the close-code table's label and as the fallback when the skew cannot be read.
    */
   PROTOCOL_MISMATCH: 'protocol version mismatch — @reticlehq/browser and server disagree',
-  AUTH_FAILED: 'authentication failed — reload the page to pick up the current pairing token',
+  AUTH_FAILED:
+    'authentication failed — restart the dev server; a reload keeps the old pairing token',
   /**
    * The daemon threw while handling a message. Closing is deliberate: an exception leaves the
    * session in a state neither side can describe, and a socket left OPEN and unresponsive is the
@@ -545,7 +546,7 @@ export class Bridge {
               presented: parsed.token !== undefined && 0 < parsed.token.length,
               tokenSource: this.#tokenSource,
             });
-            this.sessions.noteClosure(WS_CLOSE_REASON.AUTH_FAILED, this.#clock());
+            this.sessions.noteClosure(reason, this.#clock());
             socket.close(WS_CLOSE.AUTH_FAILED[0], reason);
             return;
           }

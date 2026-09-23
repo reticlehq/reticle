@@ -99,6 +99,18 @@ export const SHELL_CSS = `
 [${OVERLAY}][${CHAT_ATTR}="1"] [${CHAT_PANEL}]{
   display:flex;pointer-events:auto;}
 /**
+ * Idle, and not blocking the page: the card is not in use.
+ *
+ * The log fills the panel and sets pointer-events itself, so a click meant for a control sitting
+ * under the card landed on an empty transcript. Playwright named that div. The card passes the
+ * event through. The buttons stay clickable, which is the chrome a person still needs (#992).
+ */
+[${OVERLAY}][data-reticle-mode="idle"][data-reticle-block="0"] [${CHAT_PANEL}],
+[${OVERLAY}][data-reticle-mode="idle"][data-reticle-block="0"] [${CHAT_PANEL}] [data-reticle-log]{
+  pointer-events:none;}
+[${OVERLAY}][data-reticle-mode="idle"][data-reticle-block="0"] [${CHAT_PANEL}] :is(button,a,input,select,textarea){
+  pointer-events:auto;}
+/**
  * Minimising the chat leaves a CAPSULE, not a hole: the same glass, the same state dot, the last
  * thing the agent did - sitting directly above the toolbar capsule and reopening the panel when
  * clicked. Leaving the toolbar alone above an empty gap would make a minimised session look

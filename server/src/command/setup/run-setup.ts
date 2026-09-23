@@ -16,6 +16,7 @@
 
 import {
   judgeWait,
+  portBusyMessage,
   QUIET_MEANS_HUNG_MS,
   urlToWatch,
   WaitVerdict,
@@ -285,7 +286,10 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
           break;
         }
         if (WaitVerdict.DEAD === verdict) {
-          note('The dev server exited without serving anything.');
+          note(
+            portBusyMessage(fx.devServerOutput()) ??
+              'The dev server exited without serving anything.',
+          );
           return stop(input, SetupPhase.DEV_SERVER, {}, notes);
         }
         if (WaitVerdict.HUNG === verdict) {

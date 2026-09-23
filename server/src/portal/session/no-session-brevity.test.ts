@@ -22,10 +22,17 @@ import {
 /**
  * What a lead may cost, in characters.
  *
- * Roughly four sentences. The longest lead in the set is the two-possibilities branch, which has
- * genuinely two things to weigh and says so; everything else sits well under this.
+ * Raised from 700 once, deliberately, and the reason is worth keeping: the lease offer belongs in
+ * the LEAD, not the differential. `break/break-matrix.mjs` drives a machine with no browser
+ * launcher on PATH and asserts the output names `reticle_lease`, because on a headless box -- CI, a
+ * container, an SSH session -- it is the ONLY way to get a driveable context, and an agent that is
+ * not told about it waits for a human who is not coming. Splitting it into `detail` made three
+ * leads shorter and made the one environment that needs the remedy stop hearing it.
+ *
+ * So this bounds prose, never a remedy. Roughly five sentences. If a lead is over, the question is
+ * whether the extra words are TELLING SOMEBODY WHAT TO DO — if they are, the budget is wrong.
  */
-const LEAD_BUDGET = 700;
+const LEAD_BUDGET = 950;
 
 /** One representative set of facts per branch, so no branch is measured by another's shape. */
 const BRANCHES: readonly { readonly name: string; readonly facts: NoSessionFacts }[] = [

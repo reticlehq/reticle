@@ -24,7 +24,7 @@ import { noteActed, noteFirstVerdict, noteOnboardingFirst } from '@/telemetry/on
 import { withHarnessDrive } from '@/telemetry/harness-drive.js';
 import { OnboardingPhase, OnboardingStepStatus } from '@reticlehq/core/telemetry';
 import { asString } from '@reticlehq/core';
-import { sessionIdFromArgs, spentRefFromArgs } from './tools-helpers.js';
+import { SESSION_ID_ARG, sessionIdFromArgs, spentRefFromArgs } from './tools-helpers.js';
 import { EnvelopeKey } from './tool-kit.js';
 import { ReticleTool } from '@reticlehq/core';
 import { takeFeedbackPrompt } from './feedback-tools.js';
@@ -347,6 +347,38 @@ function firstOversizedArg(args: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
+/**
+ * The args the handler is dispatched with, pinned to the session THIS call resolved.
+ *
+ * `runTool` resolves the session once and then attributes the whole call to it: the pool lease it
+ * refreshes, the health envelope it splices, the tab a ref is recorded as minted in, the project
+ * ledger the call lands in, the session a verdict is reported under. The handler was then handed
+ * the caller's args untouched, so a call that named no `sessionId` resolved a SECOND time — and a
+ * tab that connects in between can win auto-selection on its fresher heartbeat. The action goes to
+ * one tab and the answer describes another, which is a verdict about a page that was never driven
+ * and reads exactly like a correct one (#983).
+ *
+ * The wrong-tab ref guard is the sharpest case: it is asked whether the ref belongs to the tab
+ * resolution picked, so its permission is only sound if that is also the tab the handler drives.
+ *
+ * A COPY, never a write into the caller's object. `reticle_run`, the merged families and the
+ * programmatic invoker all pass the same record on, and a dispatch decision leaking back into it
+ * would outlive this call.
+ *
+ * Only a GUESSED session is pinned. An explicit id — including one lifted off a sequence step — is
+ * passed through exactly as written, so whether a stale id refuses or rebinds stays the resolver's
+ * decision; and a tool no session was resolved for (disk-only tools, or nothing connected) is left
+ * unscoped, so it answers as it always did.
+ */
+function pinnedArgs(
+  args: Record<string, unknown>,
+  explicitSessionId: string | undefined,
+  session: Session | undefined,
+): Record<string, unknown> {
+  if (explicitSessionId !== undefined || session === undefined) return args;
+  return { ...args, [SESSION_ID_ARG]: session.id };
+}
+
 export async function runTool<Ext>(
   tool: ToolDef<Ext>,
   deps: ToolDeps<Ext>,
@@ -486,15 +518,21 @@ export async function runTool<Ext>(
   }
   const leaseId = session?.id ?? rawSessionId;
   if (leaseId !== undefined) deps.pool?.touch(leaseId);
+  // One identity for the whole call: the handler drives the session everything above is attributed
+  // to, rather than resolving again against a registry that can have changed underneath it.
+  const dispatchArgs = pinnedArgs(args, rawSessionId, session);
 
   let raw: unknown;
   try {
     // The one dispatch point every tool call passes through, so it is where the trace's root span
     // belongs: with RETICLE_TRACE on, every stage that runs underneath inherits this call's id and
     // nests under it. Free when off — see trace.ts.
+    // `dispatchArgs`, not `args`: an inferred session is pinned into the arguments before the
+    // handler sees them, so a tool that resolves the session a second time cannot land on a
+    // different one than the dispatcher chose.
     const call = (): Promise<unknown> =>
       span('tool.handler', { tool: tool.name, session: session?.id }, () =>
-        tool.handler(deps, args),
+        tool.handler(deps, dispatchArgs),
       );
     // A drive we run on the user's behalf, marked for its whole span so the verdicts it produces
     // underneath are distinguishable from the ones the user's own agent earned.
