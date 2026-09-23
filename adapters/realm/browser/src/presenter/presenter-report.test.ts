@@ -15,6 +15,7 @@ import {
   compactDuration,
   compactNumber,
 } from './chrome/presenter-report-copy.js';
+import { SYNC_BTN_ATTR } from './presenter-account.js';
 
 function scope(
   over: Partial<ReturnType<typeof emptyImpactCounts>> = {},
@@ -448,6 +449,51 @@ describe('a snapshot from the daemon, painted', () => {
     report.setSnapshot(snapshotWith([{ at: 1, title: 'Sign in' }]));
     report.open();
     expect(root.querySelector('.reticle-report-defects-more')).toBeNull();
+  });
+
+  /*
+   * The sync control belongs where the issues are, not only in the panel's identity row.
+   *
+   * Somebody reading "What broke" is exactly the person who wants those rows on the server, and the
+   * only push control sat in a different part of the panel next to the account name — where it
+   * reads as "sync my account", not "send these". Same button, same delegated handler; the section
+   * it lives in is the whole change.
+   */
+  it('offers a sync control in the defects section when the project is linked', () => {
+    const { root, report } = mountPanel();
+    report.setSnapshot(snapshotWith([{ at: 1, title: 'Sign in' }], 'https://console.test/issues'));
+    report.open();
+    const wrap = root.querySelector('.reticle-report-defects-wrap');
+    expect(wrap?.querySelector(`[${SYNC_BTN_ATTR}]`)).not.toBeNull();
+  });
+
+  it('pushes when that control is pressed, through the host the panel was given', () => {
+    const root = document.createElement('div');
+    root.innerHTML = reportPanelHtml();
+    document.body.appendChild(root);
+    let pushed = 0;
+    const report = new PresenterReport({ onSyncNow: () => (pushed += 1) });
+    report.mount(root);
+    report.setSnapshot(snapshotWith([{ at: 1, title: 'Sign in' }], 'https://console.test/issues'));
+    report.open();
+
+    const button = root.querySelector<HTMLElement>(
+      `.reticle-report-defects-wrap [${SYNC_BTN_ATTR}]`,
+    );
+    button?.click();
+    expect(pushed).toBe(1);
+  });
+
+  /*
+   * Unlinked there is nowhere to push, and a button that reports success having sent nothing is the
+   * false green this product exists to refuse — on its own HUD.
+   */
+  it('offers no sync control in the defects section when the project is not linked', () => {
+    const { root, report } = mountPanel();
+    report.setSnapshot(snapshotWith([{ at: 1, title: 'Sign in' }]));
+    report.open();
+    const wrap = root.querySelector('.reticle-report-defects-wrap');
+    expect(wrap?.querySelector(`[${SYNC_BTN_ATTR}]`)).toBeNull();
   });
 
   it('escapes app-derived text on the way into the live DOM, not just in the string', () => {

@@ -160,7 +160,20 @@ function defects(scope: ImpactScope, dashboardUrl: string | undefined): string {
   const more = !linked
     ? ''
     : `<a class="reticle-report-defects-more" href="${esc(dashboardUrl)}" target="_blank" rel="noreferrer noopener">${REPORT_TEXT.DEFECTS_MORE}${scope.counts.failed > list.length ? ` (${String(scope.counts.failed)})` : ''}</a>`;
-  return `<div class="reticle-report-defects-wrap"><span class="reticle-report-section">${REPORT_TEXT.DEFECTS}</span><ul class="reticle-report-defects">${rows}</ul>${more}</div>`;
+  /*
+   * The push control, beside the heading of the section it pushes.
+   *
+   * It is the SAME button as the one in the identity row, delegated to the same handler — the
+   * listener matches on `closest`, so a second instance costs no wiring. What it buys is where it
+   * is: next to the account name it reads as "sync my account", and somebody looking at a list of
+   * their own broken things had no way to tell that those rows were the thing being sent.
+   *
+   * `syncButtonHtml` returns nothing for an unlinked project, which is the same rule the row links
+   * follow: with nowhere to push, a button that acknowledges a press having sent nothing is a false
+   * green on our own HUD.
+   */
+  const sync = syncButtonHtml(dashboardUrl);
+  return `<div class="reticle-report-defects-wrap"><div class="reticle-report-defects-head"><span class="reticle-report-section">${REPORT_TEXT.DEFECTS}</span>${sync}</div><ul class="reticle-report-defects">${rows}</ul>${more}</div>`;
 }
 
 export function reportBodyHtml(

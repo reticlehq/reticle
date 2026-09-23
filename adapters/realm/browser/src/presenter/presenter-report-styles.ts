@@ -76,6 +76,10 @@ export const REPORT_CSS = `
   display:block;margin-top:2px;color:var(--reticle-c-active);opacity:.8;
   font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;cursor:help;}
 [${REPORT_PANEL_ATTR}] .reticle-report-defects-wrap{margin-top:14px;}
+/* The heading and its push control on one line, so the button reads as belonging to this section
+   rather than floating above the list. */
+[${REPORT_PANEL_ATTR}] .reticle-report-defects-head{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;}
 [${REPORT_PANEL_ATTR}] .reticle-report-defects{
   display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none;}
 /* A left rule rather than a card per row: ten cards in a 320px panel is a wall, and the rule keeps
