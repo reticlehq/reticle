@@ -16,6 +16,42 @@ import {
 const NEWLINE_BYTE = 0x0a;
 
 /**
+ * The largest single `read(2)` this port will ask for: 2^31 - 1, the int32 ceiling.
+ *
+ * Past it `fs.read` does not throw — it ABORTS the process on a V8 assertion
+ * (`node::fs::Read ... Assertion failed: args[3]->IsInt32()`, where args[3] is the length). That is
+ * not catchable, so one oversized journal takes the daemon down and with it every session on the
+ * machine, including unrelated ones. Reported from the field exactly that way.
+ *
+ * Reachable in practice because `Buffer.allocUnsafe` happily allocates well past this, so a
+ * `size - start` over 2 GiB allocates fine and then kills node at the syscall. A `.reticle/sessions`
+ * has been observed in the multi-gigabyte range, so "no journal is ever that big" is not a bound
+ * anybody is enforcing.
+ *
+ * Clamping rather than throwing is deliberate: a caller reading a tail wants the newest records, and
+ * returning the last 2 GiB of them is a better answer than an error. The boundary realignment below
+ * already handles a window that opens mid-record, which is exactly what a clamp produces.
+ */
+const MAX_SINGLE_READ_BYTES = 2_147_483_647;
+
+/**
+ * Refuse an offset that cannot survive the arithmetic below.
+ *
+ * `length = size - start`, so a non-integer or negative offset produces a non-integer or negative
+ * length, and those fail in two different ways one layer apart: `Buffer.allocUnsafe` throws a
+ * RangeError for a fractional length, while an oversized one reaches `fs.read` and aborts the
+ * process. Checking here means the caller gets one predictable rejection instead of either.
+ */
+function requireByteCount(label: string, value: number | undefined): void {
+  if (value === undefined) return;
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new RangeError(
+      `${label} must be a non-negative safe integer, got ${String(value)} — a fractional or negative byte count cannot reach a read syscall safely`,
+    );
+  }
+}
+
+/**
  * The injectable filesystem seam. Server logic depends on this interface, never on node:fs
  * directly — so tests pass an in-memory or temp-dir adapter and never touch the repo's .reticle/.
  */
@@ -84,6 +120,8 @@ export function createNodeFileSystem(): FileSystemPort {
   return {
     readFile: (path) => readFile(path, 'utf8'),
     readFileFrom: async (path, byteOffset, maxBytes) => {
+      requireByteCount('byteOffset', byteOffset);
+      requireByteCount('maxBytes', maxBytes);
       const fh = await open(path, 'r');
       try {
         const { size } = await fh.stat();
@@ -96,14 +134,18 @@ export function createNodeFileSystem(): FileSystemPort {
         // One byte BEFORE that cut, so a cut landing exactly on a record boundary is recognised as
         // one instead of sacrificing the record after it.
         const start = capped ? cut - 1 : byteOffset;
-        const length = size - start;
+        // Clamped to the int32 ceiling: past it `fs.read` aborts the process rather than throwing.
+        // Keep the NEWEST bytes, matching what every caller of a tail read is asking for.
+        const want = size - start;
+        const length = Math.min(want, MAX_SINGLE_READ_BYTES);
+        const readFrom = start + (want - length);
         const buf = Buffer.allocUnsafe(length);
-        const { bytesRead } = await fh.read(buf, 0, length, start);
+        const { bytesRead } = await fh.read(buf, 0, length, readFrom);
         // ONLY what the read returned. `allocUnsafe` hands back whatever was last in that heap
         // block, and `fstat` runs one syscall ahead of `read` — so a file truncated in between, or
         // any short read, would otherwise decode that memory and hand it back as journal text.
         const got = buf.subarray(0, bytesRead);
-        if (!capped) return { text: got.toString('utf8'), size, from: start };
+        if (!capped && readFrom === start) return { text: got.toString('utf8'), size, from: start };
         // The ceiling moved the start, so the window may open inside a record whose head was never
         // read. Drop up to the first boundary in BYTES, before decoding: `\n` is one byte and
         // cannot occur inside a multi-byte sequence, so everything past it is intact UTF-8 and a
@@ -111,11 +153,11 @@ export function createNodeFileSystem(): FileSystemPort {
         const newline = got.indexOf(NEWLINE_BYTE);
         // No boundary in the whole window: there is no record here that can be read, and half of
         // one is worse than none. `from` still says how far the read reached.
-        if (-1 === newline) return { text: '', size, from: start + bytesRead };
+        if (-1 === newline) return { text: '', size, from: readFrom + bytesRead };
         return {
           text: got.subarray(newline + 1).toString('utf8'),
           size,
-          from: start + newline + 1,
+          from: readFrom + newline + 1,
         };
       } finally {
         await fh.close();
