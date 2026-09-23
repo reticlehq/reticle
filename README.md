@@ -19,11 +19,6 @@ It drives your real running app, reads what actually happened, and hands back **
 
 <br/>
 
-<a href="https://reticle.sh"><img src="assets/readme/demo-montage.webp" width="820"
-     alt="Reticle in action: an agent verifying a real running app from the inside, returning pass/fail verdicts with evidence and the file:line to fix" /></a>
-
-<br/>
-
 <a href="https://www.youtube.com/watch?v=XCC0wST0rJA&loop=1&playlist=XCC0wST0rJA">
   <img src="https://img.youtube.com/vi/XCC0wST0rJA/maxresdefault.jpg" width="800"
        alt="Watch: an agent drives a real app, reads the network and the store, and returns a verdict with the file:line to fix" />
