@@ -215,6 +215,33 @@ This is the predicate that catches a UI-versus-store desync. A deploy that only 
 
 Network and DOM idle. This is the deterministic replacement for a fixed sleep, not a proof of anything: combine it with a real consequence rather than asserting it alone. Omitting `until` on [`reticle_act_and_wait`](/tools/act-and-wait) waits for exactly this.
 
+## Asserting a failure on purpose
+
+A fault-injection test (mock a 500, check the error UI) is asserting that a request **fails**. Say so in the predicate, or the verdict will disagree with you:
+
+```json
+{
+  "kind": "allOf",
+  "predicates": [
+    { "kind": "text", "contains": "Something went wrong" },
+    { "kind": "net", "method": "POST", "urlContains": "/api/save", "status": 503 }
+  ]
+}
+```
+
+Asserting only the error text is not enough, and this is the most common way to get a confusing `verified: "no"`. Reticle watches for "the UI moved forward while a request failed", a swallowed rejection, and one of the most expensive bugs it catches. A fault-injection test looks **exactly** like that bug from the outside: a request failed, the screen changed, nothing said that was the plan.
+
+Naming the failing call is what tells the two apart. A `net` clause with `status` of 400 or more, or `"ok": false`, which is the honest field for IPC, where there is no status code, marks that call as expected to fail, and a failure there stops being a disagreement.
+
+<Warning>
+  Declare it in the top level or inside `allOf`. A declaration inside `anyOf` is deliberately
+  ignored: only one branch of an `anyOf` has to hold, so honouring it would suppress a real
+  contradiction on the strength of a branch that never ran. `not` is ignored for the same reason in
+  reverse: `not { net status: 500 }` asserts the call did *not* fail.
+</Warning>
+
+One case is inferred for you: an `element` or `text` clause naming an access denial ("not authorised", "sign in to continue") marks the auth statuses as expected, because a denial screen is a correct outcome rather than a fault. Everything else has to be named.
+
 ## Combinators
 
 ```json
