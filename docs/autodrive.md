@@ -65,7 +65,7 @@ The `jev` driver decides; it cannot write. Every choice a drive makes is a selec
 
 One thing in a drive is not a selection. A text field is a composition: "a business name", "a statement descriptor", "a search term that returns results" cannot be enumerated from the page. Where the field's label is enough to guess, a small table answers it. Where it is not, and a generating model is configured, that model writes the value, and nothing else.
 
-Typing is a small minority of what a drive does — clicks and navigations are the overwhelming majority — so this is escalation rather than a second model in the loop, and a drive with no text fields never calls it at all.
+Typing is a small minority of what a drive does: clicks and navigations are the overwhelming majority. So this is escalation rather than a second model in the loop, and a drive with no text fields never calls it at all.
 
 What it writes is a FIXTURE, not an opinion. Generated values are saved to `.reticle/fill-values.json` and reused forever: the second drive pays nothing, a replay sends exactly what the recording sent, and a value you dislike is a line in a git-checked file you can edit rather than an argument with a model.
 
