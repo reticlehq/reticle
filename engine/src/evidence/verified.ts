@@ -40,6 +40,13 @@ function undeclaredChannels(inputs: VerifiedInputs): string[] {
 }
 
 interface VerifiedInputs {
+  /**
+   * The page SDK and daemon wire mismatch, when the handshake found one. Absent means they agree.
+   *
+   * Carried rather than re-derived: only the bridge sees both halves of the handshake, and a verdict
+   * that re-guessed it from versions would disagree with the warning the session already printed.
+   */
+  versionSkew?: string;
   /** Did the declared consequence hold? Undefined when the action declared none. */
   pass?: boolean;
   /**
@@ -195,7 +202,26 @@ interface VerifiedVerdict {
 export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
   const { pass, honesty, contradictions = [], settled, outcomePending, outcomeUnread } = inputs;
 
-  // FIRST, ahead of every other clause. A claim that needed to read something nobody was watching
+  // Ahead of everything, with `capability-absent` below it and for the same reason: a skewed wire
+  // means the ACTION may never have happened, so grading the quality of an observation of it is
+  // grading nothing. `session-health` already ranks skew above the throttle warning on this
+  // argument; this is the verdict finally agreeing with the warning it was printing beside.
+  //
+  // UNKNOWN, not NO. Nothing about the app was disproved -- the link under the evidence is what is
+  // in doubt. An empty string is not a skew.
+  const skew = inputs.versionSkew;
+  if (skew !== undefined && skew.length > 0) {
+    return {
+      verified: Verified.UNKNOWN,
+      verifiedReason: VerifiedReason.VERSION_SKEW,
+      because:
+        `the page SDK and this daemon are on different wire contracts (${skew}), so dispatched ` +
+        'and settled may be silent no-ops — nothing was proved or disproved about the app. ' +
+        'Converge the versions and re-run',
+    };
+  }
+
+  // FIRST among the evidence clauses. A claim that needed to read something nobody was watching
   // was never answerable, and any clause reaching a verdict before this one would report that as
   // something else -- most often as a failure, which blames the app for a gap in the tooling.
   const unobservable = undeclaredChannels(inputs);

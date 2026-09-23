@@ -98,6 +98,7 @@ import {
   provenExpectedLinks,
   PredicateSchema,
 } from '@reticlehq/engine/question/predicate/predicate.js';
+import { sessionVerdictFacts } from '@/portal/session/session-verdict-facts.js';
 import { healthEnvelope, refuseIfThrottled } from '@/portal/session/session-health.js';
 import {
   pausedShortCircuit,
@@ -807,9 +808,8 @@ export const ACT_TOOLS: ToolDef[] = [
         const stillInFlight = inFlightRequestLabels(windowEvents);
         const decision = decideVerified({
           pass: verdict.pass,
-          // So the unread-body remedy can check it applies to THIS page. Threaded rather than
-          // looked up inside decideVerified, which is pure and has no session.
-          ...(session.sdkVersion === undefined ? {} : { sdkVersion: session.sdkVersion }),
+          // Threaded rather than looked up: decideVerified is pure and has no session.
+          ...sessionVerdictFacts(session),
           // The caller NAMED the consequence rather than defaulting to "wait for idle". A
           // declaration made before the action is what this tool sells, and idle-settlement was
           // overriding it — see `declaredConsequence`. An explicit `{ kind: "settled" }` is not a

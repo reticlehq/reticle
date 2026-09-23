@@ -400,6 +400,14 @@ describe('nothing declared over a settled window is not the same as not having l
 
 describe('every verdict names the clause that decided it', () => {
   const branches: Record<VerifiedReason, VerifiedVerdictInput> = {
+    // Decided ahead of even `capability-absent`, and the same deliberately-unremarkable row: a
+    // clean capture and `pass: true` that would be a `yes` if the wire contracts agreed. A skewed
+    // link means the ACTION may never have happened, so there is nothing to grade.
+    [VerifiedReason.VERSION_SKEW]: {
+      pass: true,
+      honesty: clean(),
+      versionSkew: 'page 2.14.0 / daemon 3.2.0',
+    },
     // A claim that needed a channel this build never said it watches. Decided before every other
     // clause, so this row is deliberately otherwise unremarkable: `pass: true` and a clean capture
     // would be a `yes` if the channel had been declared.

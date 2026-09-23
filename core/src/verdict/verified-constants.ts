@@ -62,6 +62,15 @@ export const VerifiedReason = {
    * to produce the same empty answer. Saying `no` to the second blames the app for a gap in the
    * tooling, and is the confident wrong answer this whole mechanism exists to remove.
    */
+  /**
+   * The page SDK and the daemon are on different wire contracts, so the evidence behind this claim
+   * cannot be trusted -- `reticle_session` already warns that under skew "dispatched/settled may be
+   * silent no-ops", which is a statement about the EVIDENCE, not about the app.
+   *
+   * UNKNOWN rather than NO, because nothing was disproved. Reported from the field as a `yes` with
+   * exit 0 printed beside an evidence block that named the skew in the same payload.
+   */
+  VERSION_SKEW: 'version_skew',
   CAPABILITY_ABSENT: 'capability-absent',
   /** The assertion was never EVALUATED — under-specified call, or nothing instrumented to read. */
   INCONCLUSIVE: 'inconclusive',
