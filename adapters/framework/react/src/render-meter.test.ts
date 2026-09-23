@@ -42,8 +42,17 @@ describe('render meter — counts React commits via the devtools hook', () => {
   });
 
   it('a faulting original hook never breaks the commit count (host-safe)', () => {
+    // The fault has to be INDUCED, or this test is named for a branch it never reaches.
+    // `original` is a bare vi.fn(): it returned undefined, the try/catch never ran, and deleting
+    // that try/catch outright left all four tests green. A test that passes over the deleted body
+    // of the code it is named for is the false green this product exists to refuse.
+    original.mockImplementationOnce(() => {
+      throw new Error('a real DevTools hook faulted');
+    });
+    const before = getRenderStats().commits;
     const verboten = hookOf().onCommitFiberRoot;
-    // even if the wrapped original throws, the counter still advances and nothing propagates
     expect(() => verboten?.(1, {})).not.toThrow();
+    // And the counter still advanced, which is the other half of the claim in the name.
+    expect(getRenderStats().commits).toBe(before + 1);
   });
 });
