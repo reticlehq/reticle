@@ -8,6 +8,14 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ### Added
 
+- **Autonomous driving is a switch you own, in both places you look for it.** The harness could be turned on or off from nowhere: the daemon had always read a preference from the platform before building a driver, and the endpoint that would answer simply did not exist. There is now a control in the HUD's settings and one in the dashboard, and they are two doors to one row — the panel stores nothing, it asks the platform, and both surfaces read back what the platform says. A switch that lived in the overlay would disagree with the console the first time somebody used both, and neither would be wrong.
+
+  Two facts are kept apart on purpose. Whether you turned it on is yours; whether your workspace may drive on Reticle's model spend is ours. Collapsing them into one "can drive" would tell somebody whose free months quietly ran out that they had switched something off. So a workspace with no live period sees the control disabled and the reason, rather than an off switch and a wrong story.
+
+  Bringing your own key is untouched. The daemon resolves an explicit key before it ever asks the platform, which is also why CI — where there is no linked project at all — keeps working exactly as it did. Signing in is the price of spending our money, not the price of using the harness.
+
+  A machine that has not heard from the platform shows no control at all. Absent is not "off": an offline laptop, an unlinked project or an older platform cannot honour a switch, and offering one that does nothing is worse than offering none.
+
 - **A second driver for the harness, which cannot invent a tool call** (`@reticlehq/server`). `reticle_verify { action: "explore" }` takes a `driver`: `anthropic` generates its calls as text, `jev` answers typed questions against a state and picks from the controls actually on the page. Naming one that is not configured is an error, never a substitution — an A/B that quietly measured the same driver twice would be worse than no comparison. The result says which driver drove.
 - **An OpenAI driver**, so the comparison has the two models you might otherwise reach for rather than one.
 - **The harness reads `.reticle` before it drives.** Every saved flow with the consequence that must still hold, plus the signals and controls the app declares that no flow has ever asserted. The drive is aimed at that rather than at whatever looks interesting on the first page, and `explore` returns the plan it followed.
