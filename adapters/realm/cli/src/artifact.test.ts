@@ -41,8 +41,8 @@ function scriptedWorkspace(looks: readonly Snapshot[]): WorkspacePort {
 }
 
 const empty: Snapshot = { files: new Map(), unreadable: [] };
-const withFile = (path: string, hash: string): Snapshot => ({
-  files: new Map([[path, { hash, size: 4, mode: 0o644, linkTo: undefined }]]),
+const withFile = (path: string, hash: string, size = 4): Snapshot => ({
+  files: new Map([[path, { hash, size, mode: 0o644, linkTo: undefined }]]),
   unreadable: [],
 });
 
@@ -90,6 +90,29 @@ describe('the two artifact channels', () => {
     expect(written?.channel).toBe(CliChannel.ARTIFACT);
     const content = observed.find((o) => o.summary === CliSummary.FS_CONTENT);
     expect(content?.channel).toBe(CliChannel.ARTIFACT_CONTENT);
+  });
+
+  /**
+   * A path that exists and holds nothing is not the consequence anybody asked for.
+   *
+   * Measured in `bench/cli-false-green`: a build writing a zero-byte `out.txt` was a FALSE GREEN
+   * for this adapter and caught by every other checker, because `cli.fs.written` said the same
+   * word about an empty file as about a real one — and `summary` is the only part of a match that
+   * compares EXACTLY, so no claim over that summary could tell the two apart.
+   *
+   * A separate summary rather than a size field to read, because a reader of the value is opting
+   * in and a matcher on the summary is not: "the build produced out.txt" must not be satisfiable
+   * by an empty one BY DEFAULT.
+   */
+  it('says a different word about an empty write than about a real one', async () => {
+    const r = realm(scriptedWorkspace([empty, withFile('/tmp/ws/dist/index.js', 'e3b0c442', 0)]));
+    const window = r.openWindow(5_000);
+    r.closeWindow(window);
+    const observed = await r.observe(window);
+    expect(observed.some((o) => o.summary === CliSummary.FS_WRITTEN)).toBe(false);
+    const hollow = observed.find((o) => o.summary === CliSummary.FS_WRITTEN_EMPTY);
+    expect(hollow?.channel).toBe(CliChannel.ARTIFACT);
+    expect((hollow?.value as { size?: number } | undefined)?.size).toBe(0);
   });
 
   /**

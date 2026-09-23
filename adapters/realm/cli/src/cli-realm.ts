@@ -62,6 +62,15 @@ export const CliSummary = {
   DURATION_MS: 'cli.duration.ms',
   /** A path that appeared, vanished or changed mode. What the FILESYSTEM decided. */
   FS_WRITTEN: 'cli.fs.written',
+  /**
+   * A path that appeared holding NOTHING.
+   *
+   * Its own word, because `summary` is the only part of a match that compares exactly: a claim
+   * reading "the build produced out.txt" is written over this summary, and an empty file must not
+   * satisfy it without somebody saying so. A zero-byte output is the commonest shape of a build
+   * that ran, failed late, and left the path behind -- it passes every existence check there is.
+   */
+  FS_WRITTEN_EMPTY: 'cli.fs.written-empty',
   FS_DELETED: 'cli.fs.deleted',
   /** The bytes inside a path. What the SUBJECT decided, which is why it is a different channel. */
   FS_CONTENT: 'cli.fs.content',
@@ -659,7 +668,11 @@ function artifactsOf(window: Window, changes: readonly Change[]): Observation[] 
       channel: CliChannel.ARTIFACT,
       at: window.openedAt,
       value: { path: change.path, kind: change.kind, size: change.after?.size },
-      summary: deleted ? CliSummary.FS_DELETED : CliSummary.FS_WRITTEN,
+      summary: deleted
+        ? CliSummary.FS_DELETED
+        : 0 === change.after?.size
+          ? CliSummary.FS_WRITTEN_EMPTY
+          : CliSummary.FS_WRITTEN,
     });
     const hash = change.after?.hash;
     if (hash !== undefined) {

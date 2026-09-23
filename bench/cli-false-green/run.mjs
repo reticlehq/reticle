@@ -62,6 +62,20 @@ function workspaceFor(bug) {
  */
 const CLAIM = 'running the tool produces out.txt with real content';
 
+/**
+ * The needle the adapter's arm matches on, and why it is not just `out.txt`.
+ *
+ * `valueContains` is an unanchored substring over the rendered observation value, which the
+ * specification defines as `JSON.stringify` -- so a bare `out.txt` is satisfied by `out.txt.bak`,
+ * and the arm was scoring a PASS on a build that wrote somewhere else entirely. The closing quote
+ * is what makes the claim mean the path it names. Every other arm already checks exactly this, so
+ * the loose needle was the measurement under-stating the claim rather than the adapter meeting it.
+ *
+ * "With real content" is carried by the summary, not by this: `cli.fs.written` is no longer said
+ * about a zero-byte file (see CliSummary.FS_WRITTEN_EMPTY).
+ */
+const EXPECTED_NEEDLE = `/${EXPECTED_PATH}"`;
+
 const CHECKERS = {
   /** What almost every CI pipeline does. Pass iff the process exited zero. */
   'exit-code': ({ exit }) => exit?.code === 0 && exit?.wasSignalled !== true,
@@ -132,7 +146,7 @@ for (const bug of BUGS) {
             match: {
               channel: 'x-artifact',
               summary: 'cli.fs.written',
-              valueContains: EXPECTED_PATH,
+              valueContains: EXPECTED_NEEDLE,
             },
           },
           reads: `${EXPECTED_PATH} was written`,
@@ -166,7 +180,7 @@ for (const bug of BUGS) {
             match: {
               channel: 'x-artifact',
               summary: 'cli.fs.written',
-              valueContains: EXPECTED_PATH,
+              valueContains: EXPECTED_NEEDLE,
             },
           },
           channels: ['x-artifact'],
