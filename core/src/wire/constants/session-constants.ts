@@ -78,6 +78,16 @@ export const SESSION_HEALTH = {
   HEARTBEAT_MS: 5_000,
   /** lastSeenMs beyond this ⇒ throttled (≈ 2 missed heartbeats). */
   STALE_THRESHOLD_MS: 12_000,
+  /**
+   * Fraction of the event ledger's cap past which its size is reported on the health block.
+   *
+   * A quarter, not a near-miss threshold. The point is to be visible while there is still room to
+   * act: a ledger reported only at 90% of its cap tells an agent about a problem it can no longer
+   * do anything about, and the case this exists for (a repeating error writing 13 MB/s) crosses
+   * the last tenth in minutes. Below a quarter the field is absent, so a healthy session carries
+   * nothing.
+   */
+  LEDGER_NOTICE_FRACTION: 0.25,
 } as const;
 
 /**

@@ -20,7 +20,7 @@ import {
   journalEventsPath,
   sessionDirPath,
 } from '@/memory/project/dir/reticle-dir.js';
-import type { JournalReadLoss } from './journal-recorder.js';
+import type { JournalLedgerSize, JournalReadLoss } from './journal-recorder.js';
 
 /**
  * The two ceilings a durable read is held to.
@@ -333,6 +333,17 @@ export class SessionJournal {
    */
   async readWriteLoss(): Promise<JournalWriteLoss | undefined> {
     return this.#closureReport();
+  }
+
+  /**
+   * The ledger's size against its ceiling, once the size is known.
+   *
+   * `undefined` before the first append, because `#eventBytes` is seeded from `stat` at that point
+   * and a zero reported before it is measured would be a claim rather than a reading.
+   */
+  ledger(): JournalLedgerSize | undefined {
+    const bytes = this.#eventBytes;
+    return bytes === undefined ? undefined : { bytes, capBytes: this.#eventBytesCap };
   }
 
   /**
