@@ -1,3 +1,6 @@
+import { writeHarnessSwitch } from '@/memory/cloud/harness-switch.js';
+import { harnessConfigSource } from '@/memory/cloud/harness-config.js';
+import { fetchPlatformConfig } from '@/features/harness/platform-config.js';
 import { join } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -433,7 +436,13 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
   // Open the user's impact record before anything can connect. Not inside the MCP branch: a daemon
   // serving a browser with no agent attached still has a HUD to answer, and a report that reads
   // "nothing recorded yet" over a month of history on disk is the worst version of this feature.
-  initImpact({ reticleRoot: options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT) });
+  initImpact({
+    reticleRoot: options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT),
+    // The daemon owns both sides of this seam, so it is the layer that may join them: the cache
+    // lives in cloud memory, the platform read lives in the harness feature, and neither is allowed
+    // to reach for the other.
+    config: harnessConfigSource(() => fetchPlatformConfig(process.env)),
+  });
   const uninstallHooks = wireHooks(
     options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT),
     readProjectId(process.cwd()),
@@ -568,7 +577,13 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   // was never opened in the process the HUD talks to: tool calls still recorded (the dispatch
   // chokepoint opens it lazily), but a tab that connected before the first tool call was pushed
   // nothing, so the report read "nothing recorded yet" over a file with history in it.
-  initImpact({ reticleRoot: options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT) });
+  initImpact({
+    reticleRoot: options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT),
+    // The daemon owns both sides of this seam, so it is the layer that may join them: the cache
+    // lives in cloud memory, the platform read lives in the harness feature, and neither is allowed
+    // to reach for the other.
+    config: harnessConfigSource(() => fetchPlatformConfig(process.env)),
+  });
 
   const security = await resolveBridgeSecurityWithAutoToken(options);
   const shared = createSharedServer(security.token === undefined ? {} : { token: security.token });
@@ -671,6 +686,11 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   // `syncNow`, not `nudge`: a nudge schedules a cycle soon, which is right for "a run landed" and
   // wrong for a button somebody is watching. Never awaited.
   bridge.attachSyncRequest(() => void cloudSync.syncNow());
+  // The panel's harness switch. Written through to the platform rather than kept locally, so the
+  // console and the panel cannot disagree about a setting they both offer. Nothing is awaited and a
+  // failure is not surfaced: the next snapshot re-reads the platform, so a lost write shows up as
+  // the switch springing back, which is the truthful outcome.
+  bridge.attachHarnessRequest((enabled) => void writeHarnessSwitch(process.env, enabled));
   // Scope auto-selection to the active project (from .reticle.json) so a stray tab from another app is
   // never picked when the agent omits a sessionId. Explicit per-call scope/sessionId still overrides.
   // Scope + the no-session diagnosis: "no browser session connected" is the error that ends most

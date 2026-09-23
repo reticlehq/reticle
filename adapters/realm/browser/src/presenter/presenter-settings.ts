@@ -1,3 +1,4 @@
+import type { HarnessConfig } from '@reticlehq/core';
 import {
   SETTINGS_ATTR,
   SETTINGS_BTN_ATTR,
@@ -242,8 +243,46 @@ function settingsCheckRow(key: string, label: string, checked: boolean): string 
 /** Where the account state lands. Filled from a snapshot, like the workspace capsule. */
 export const SETTINGS_ACCOUNT_ATTR = 'data-reticle-settings-account';
 const SETTINGS_ACCOUNT_ROW_ATTR = 'data-reticle-settings-account-row';
+/** The harness row, hidden until the platform has actually said something about it. */
+const SETTINGS_HARNESS_ROW_ATTR = 'data-reticle-settings-harness-row';
+const HARNESS_HELP =
+  'Let Reticle drive this app by itself to find defects. Set here or in your dashboard — both write to the same place.';
+/** Shown instead of the switch when the workspace has no live period or plan. */
+const HARNESS_LOCKED_HELP =
+  'Autonomous driving runs on Reticle’s model spend, so it needs a plan or the free period. Claim it from the chat panel.';
 const ACCOUNT_HELP =
   'Whether this machine is signed in to a Reticle workspace. Signing in happens in your terminal.';
+
+/**
+ * Show the harness switch, or hide the row entirely.
+ *
+ * Three states, and the difference between the last two is the whole reason `harnessConfig` carries
+ * two booleans:
+ *
+ *   - NOT HEARD (`undefined`): no row. An offline machine, an unlinked project or an older platform
+ *     cannot honour a switch, and offering one that does nothing is worse than offering none.
+ *   - heard, NOT entitled: the row is shown but the switch is disabled, and the help says why. The
+ *     person has not turned anything off — their period lapsed or they never had one — and telling
+ *     them otherwise is the lie this split exists to prevent.
+ *   - heard and entitled: a live switch reflecting what the PLATFORM says, not what this panel
+ *     remembers. The dashboard writes the same row; whichever surface you used last, both read this.
+ */
+export function paintHarnessRow(root: ParentNode, config: HarnessConfig | undefined): void {
+  const row = root.querySelector(`[${SETTINGS_HARNESS_ROW_ATTR}]`);
+  if (!(row instanceof HTMLElement)) return;
+  if (config === undefined) {
+    row.hidden = true;
+    return;
+  }
+  row.hidden = false;
+  const toggle = row.querySelector(`[${SETTING_KEY_ATTR}="harnessEnabled"]`);
+  if (!(toggle instanceof HTMLElement)) return;
+  const usable = config.harnessEntitled;
+  toggle.setAttribute('aria-checked', config.harnessEnabled && usable ? 'true' : 'false');
+  toggle.setAttribute('aria-disabled', usable ? 'false' : 'true');
+  const help = row.querySelector('[data-reticle-help]');
+  if (help instanceof HTMLElement) help.title = usable ? HARNESS_HELP : HARNESS_LOCKED_HELP;
+}
 
 /**
  * Fill the settings panel's account row, or hide it.
@@ -277,6 +316,7 @@ export function settingsPanelHtml(): string {
   const outputHelp = 'How much detail is included when you copy or export the run';
   const reactHelp = 'Include React component paths in exported run state when available';
   const hideHelp = 'Hide the Reticle HUD until you reload the page';
+  const harnessHelp = HARNESS_HELP;
   const tallyHelp = 'Show the pass/fail score pill in the toolbar';
   const timestampsHelp = 'Show relative timestamps on each activity-log row';
   const autoChatHelp =
@@ -305,6 +345,7 @@ export function settingsPanelHtml(): string {
         ${settingsCheckRow('blockPageInteractions', 'Block page interactions', true)}
         ${settingsCheckRow('clearOnCopy', 'Clear on copy/send', false)}
         ${settingsToggleRow('hideUntilRestart', 'Hide Until Restart', hideHelp)}
+        ${settingsToggleRow('harnessEnabled', 'Autonomous driving', harnessHelp, `${SETTINGS_HARNESS_ROW_ATTR} hidden`)}
         ${settingsToggleRow('reduceMotion', 'Reduce motion', motionHelp)}
         <div class="reticle-settings-section">Account</div>
         <div class="reticle-settings-row" ${SETTINGS_ACCOUNT_ROW_ATTR} hidden>
@@ -325,6 +366,12 @@ export function settingsPanelHtml(): string {
 
 export interface SettingsHost {
   onHideUntilRestart?: () => void;
+  /**
+   * The harness switch was flipped. Carries the DESIRED state, not "toggle": the shell forwards it
+   * to the daemon, which writes it to the platform, and a duplicate `true` is harmless where a
+   * duplicate toggle would undo itself.
+   */
+  onHarness?: (enabled: boolean) => void;
   onSettingsChange?: (settings: PresenterSettings) => void;
   onBeforeOpen?: () => void;
 }
@@ -420,7 +467,17 @@ export class PresenterSettingsPanel {
       const activateToggle = (): void => {
         if (!(toggle instanceof HTMLElement)) return;
         const key = toggle.getAttribute(SETTING_KEY_ATTR);
-        if ('reactComponents' === key) {
+        if ('harnessEnabled' === key) {
+          // Emitted, never stored. The platform owns this switch because the dashboard offers the
+          // same one, and a panel that kept its own copy would disagree with the console the first
+          // time somebody used both. The state comes back on the next snapshot.
+          if ('true' === toggle.getAttribute('aria-disabled')) return;
+          const next = 'true' !== toggle.getAttribute('aria-checked');
+          // Optimistic, and safe to be: a failed write shows up as the switch springing back when
+          // the next snapshot lands, which is a truthful outcome rather than a stuck one.
+          toggle.setAttribute('aria-checked', next ? 'true' : 'false');
+          this.#host.onHarness?.(next);
+        } else if ('reactComponents' === key) {
           this.#update({ reactComponents: !activeSettings.reactComponents });
         } else if ('hideUntilRestart' === key) {
           const next = !activeSettings.hideUntilRestart;
@@ -491,6 +548,18 @@ export class PresenterSettingsPanel {
     this.#syncUi();
     applyPresenterSettings(root, activeSettings);
     this.#host.onSettingsChange?.(activeSettings);
+  }
+
+  /**
+   * Fill or hide the harness row.
+   *
+   * Safe before mount and after teardown: the panel simply has no root, and the next snapshot after
+   * a mount paints it. The daemon pushes far more often than somebody opens Settings.
+   */
+  paintHarness(config: HarnessConfig | undefined): void {
+    const root = this.#panel;
+    if (root === undefined) return;
+    paintHarnessRow(root, config);
   }
 
   teardown(): void {

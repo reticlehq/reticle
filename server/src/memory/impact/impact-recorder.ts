@@ -5,6 +5,7 @@ import {
   type ImpactSnapshot,
 } from '@reticlehq/core';
 import { estimateTokens } from '@/portal/session/output-budget.js';
+import type { ConfigSource } from '@/memory/cloud/harness-config.js';
 import { ImpactStore, type ImpactFoldMeta } from './impact-store.js';
 
 /**
@@ -30,7 +31,7 @@ const stores = new Map<string, ImpactStore>();
 /** The daemon's own root — used when a call cannot say which project it was for. */
 let defaultRoot: string | undefined;
 /** Held so a per-root store is built with the same clock and project name as the default. */
-let storeOpts: { projectName?: string; now?: () => number } = {};
+let storeOpts: { projectName?: string; now?: () => number; config?: ConfigSource } = {};
 
 /** Get-or-create the store for one root. */
 function storeFor(root: string | undefined): ImpactStore | undefined {
@@ -52,6 +53,13 @@ function storeFor(root: string | undefined): ImpactStore | undefined {
  * project passes one, and this is the fallback for calls that do not.
  */
 export function initImpact(opts: {
+  /**
+   * The harness-config source, supplied by whoever wired the daemon.
+   *
+   * Passed in rather than built here: reading the platform lives in `features/harness`, and this
+   * directory may not reach for it. The daemon owns both sides.
+   */
+  config?: ConfigSource;
   reticleRoot: string | undefined;
   projectName?: string;
   now?: () => number;
@@ -61,10 +69,11 @@ export function initImpact(opts: {
   if (opts.reticleRoot === undefined || 0 === opts.reticleRoot.length) return storeFor(undefined);
   if (defaultRoot === undefined) {
     defaultRoot = opts.reticleRoot;
-    const { projectName, now } = opts;
+    const { projectName, now, config } = opts;
     storeOpts = {
       ...(projectName === undefined ? {} : { projectName }),
       ...(now === undefined ? {} : { now }),
+      ...(config === undefined ? {} : { config }),
     };
   }
   return storeFor(opts.reticleRoot);

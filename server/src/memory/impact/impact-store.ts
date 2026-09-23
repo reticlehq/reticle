@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { readAccountState } from '@/memory/cloud/account-state.js';
 import { harnessOfferSource, type OfferSource } from '@/memory/cloud/harness-offer.js';
+import type { ConfigSource } from '@/memory/cloud/harness-config.js';
 import {
   ReticleDir,
   IMPACT_DAILY_BUCKETS,
@@ -228,6 +229,7 @@ export class ImpactStore {
   readonly #account: () => AccountState;
   /** Where this workspace stands with the free harness offer. Cached; see harness-offer.ts. */
   readonly #offer: OfferSource;
+  readonly #config: ConfigSource;
 
   constructor(opts: {
     reticleRoot: string;
@@ -239,6 +241,7 @@ export class ImpactStore {
     account?: () => AccountState;
     /** Where the workspace stands with the free harness offer. Injected so no test touches a network. */
     offer?: OfferSource;
+    config?: ConfigSource;
   }) {
     this.#paths = impactPaths(opts.reticleRoot, opts.globalRoot ?? homedir());
     // Resolved per snapshot, not cached: a user who runs `reticle login` in another terminal must
@@ -250,6 +253,9 @@ export class ImpactStore {
     // The claim happens in the console, so the link this project was linked to IS the claim link —
     // built here rather than in the HUD, which has no way to know where this project points.
     this.#offer = opts.offer ?? harnessOfferSource(process.env, () => this.#dashboardUrl);
+    // No default: the loader lives in `features/harness` and this file may not reach for it.
+    // A store built without one simply reports no harness config, which the HUD renders as no row.
+    this.#config = opts.config ?? { read: () => undefined };
     const now = this.#now();
     this.#project = readScope(this.#paths.project, now);
     this.#global = readScope(this.#paths.global, now);
@@ -284,6 +290,9 @@ export class ImpactStore {
     // Absent means "we have not heard", which the HUD renders as nothing at all. Never defaulted to
     // `{claimed:false}`: that would advertise the offer to everyone who is offline.
     if (offer !== undefined) snap.harnessOffer = offer;
+    // Absent stays absent: the HUD reads that as "we have not heard" and renders no control.
+    const cfg = this.#config.read();
+    if (cfg !== undefined) snap.harnessConfig = cfg;
     return snap;
   }
 

@@ -172,6 +172,10 @@ export class Presenter {
         },
         onHideUntilRestart: () => this.#applyHideUntilRestart(),
         onSettingsChange: (s) => this.#onSettingsChange(s),
+        // Emitted like every other human control. The panel does not store this: the platform owns
+        // it, because the dashboard offers the same switch.
+        onHarness: (enabled) =>
+          this.#onControl?.({ kind: HumanControlKind.HARNESS, text: enabled ? 'on' : 'off' }),
       },
     });
   }
@@ -213,6 +217,8 @@ export class Presenter {
         // is "what has happened HERE".
         // The one thing this HUD advertises, from the same snapshot as everything else it shows.
         this.#shell.paintOffer(snapshot.harnessOffer);
+        // Same snapshot, same moment: the switch cannot disagree with the card above it.
+        this.#shell.paintHarness(snapshot.harnessConfig);
         this.#shell.paintAccount(snapshot.account, snapshot.dashboardUrl, {
           projectName: snapshot.projectName,
           dashboardUrl: snapshot.dashboardUrl,

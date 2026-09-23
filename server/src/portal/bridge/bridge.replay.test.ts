@@ -102,6 +102,46 @@ describe('replay-from-panel wiring (bridge)', () => {
     expect(calls).toHaveLength(0);
   });
 
+  it('routes the panel harness switch to the daemon, carrying the desired state', async () => {
+    const { bridge, client } = await connect('panel-h1');
+    const seen: boolean[] = [];
+    bridge.attachHarnessRequest((enabled) => seen.push(enabled));
+    client.emitControl({ kind: HumanControlKind.HARNESS, text: 'off' });
+    await waitUntil(() => 1 === seen.length);
+    expect(seen[0]).toBe(false);
+  });
+
+  it('is idempotent: the same state twice lands on the same state, not back where it started', async () => {
+    const { bridge, client } = await connect('panel-h2');
+    const seen: boolean[] = [];
+    bridge.attachHarnessRequest((enabled) => seen.push(enabled));
+    // A double-click on a flaky connection sends two. Carrying the DESIRED state rather than
+    // meaning "toggle" is what makes the second one harmless.
+    client.emitControl({ kind: HumanControlKind.HARNESS, text: 'on' });
+    client.emitControl({ kind: HumanControlKind.HARNESS, text: 'on' });
+    await waitUntil(() => 2 === seen.length);
+    expect(seen).toEqual([true, true]);
+  });
+
+  it('ignores a state it does not recognise rather than guessing', async () => {
+    const { bridge, client } = await connect('panel-h3');
+    const seen: boolean[] = [];
+    bridge.attachHarnessRequest((enabled) => seen.push(enabled));
+    client.emitControl({ kind: HumanControlKind.HARNESS, text: 'maybe' });
+    await new Promise((r) => setTimeout(r, 60));
+    // Guessing here would write a real setting from a frame we did not understand.
+    expect(seen).toHaveLength(0);
+  });
+
+  it('does not route a harness control into the replay handler', async () => {
+    const { bridge, client } = await connect('panel-h4');
+    const replays: string[] = [];
+    bridge.attachReplay((_s, flowName) => replays.push(flowName));
+    client.emitControl({ kind: HumanControlKind.HARNESS, text: 'on' });
+    await new Promise((r) => setTimeout(r, 60));
+    expect(replays).toHaveLength(0);
+  });
+
   it('fires the session-ready hook on connect so the daemon can push the flow list', async () => {
     const bridge = new Bridge({ port: 0 });
     bridges.push(bridge);

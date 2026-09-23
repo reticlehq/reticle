@@ -1,3 +1,4 @@
+import type { HarnessConfig } from '@reticlehq/core';
 import { PresenterReport, reportPanelHtml } from './presenter-report.js';
 import type { AccountState } from '@reticlehq/core';
 import { paintToolbarAccount, TOOLBAR_ACCOUNT_ATTR } from './presenter-workspace.js';
@@ -129,6 +130,16 @@ export class HudShell {
   #accountTeardown: (() => void) | undefined;
 
   /** Paint the account control, and remember it in case the push beat the mount. */
+  /**
+   * Hand the harness state to the settings panel.
+   *
+   * Routed through the shell like every other painter rather than reaching into the panel: the
+   * panel may not be mounted yet, and the shell is the layer that knows.
+   */
+  paintHarness(config: HarnessConfig | undefined): void {
+    this.#settings.paintHarness(config);
+  }
+
   paintAccount(
     account: AccountState | undefined,
     dashboardUrl: string | undefined,

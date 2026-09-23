@@ -193,6 +193,21 @@ export const HarnessOfferSchema = z.object({
 });
 export type HarnessOffer = z.infer<typeof HarnessOfferSchema>;
 
+/**
+ * What the platform says about autonomous driving for this project.
+ *
+ * Mirrors `PlatformModelConfig` on the server side; both are the same wire answer read by different
+ * layers. Kept here because it crosses daemon -> browser, which is what makes it a wire type.
+ */
+export const HarnessConfigSchema = z.object({
+  provider: z.string(),
+  /** The switch somebody set. The platform's default is on. */
+  harnessEnabled: z.boolean(),
+  /** Whether this workspace may drive on OUR model spend. Never folded into the switch. */
+  harnessEntitled: z.boolean(),
+});
+export type HarnessConfig = z.infer<typeof HarnessConfigSchema>;
+
 export const ImpactSnapshotSchema = z.object({
   schemaVersion: z.number().int().positive(),
   project: ImpactScopeSchema,
@@ -216,6 +231,19 @@ export const ImpactSnapshotSchema = z.object({
    * `HarnessOfferSchema` for why that asymmetry is deliberate.
    */
   harnessOffer: HarnessOfferSchema.optional(),
+  /**
+   * The harness switch and whether this workspace may drive on our spend.
+   *
+   * Two fields, never one, and the HUD renders them differently: `harnessEnabled` is a switch the
+   * person owns, `harnessEntitled` is a fact about their account. A panel that collapsed them would
+   * show "off" to somebody whose free months lapsed and invite them to turn on something they no
+   * longer have.
+   *
+   * Absent means the daemon has not heard -- an offline machine, an unlinked project, an older
+   * platform -- and the panel shows no control at all rather than guessing. Showing a switch that
+   * cannot be honoured is worse than showing none.
+   */
+  harnessConfig: HarnessConfigSchema.optional(),
 });
 export type ImpactSnapshot = z.infer<typeof ImpactSnapshotSchema>;
 

@@ -43,6 +43,20 @@ export const HumanControlKind = {
    * what to send is the daemon's question, and a panel that named artifacts could disagree with it.
    */
   SYNC: 'sync',
+  /**
+   * Human flipped the harness switch in the panel. `text` carries `on` or `off`.
+   *
+   * The panel does NOT keep this state. It emits the intent and the daemon writes it to the
+   * platform, because the same preference is settable from the dashboard and two writable copies of
+   * one switch is two sources of truth — the HUD would disagree with the console the first time
+   * somebody used both, and neither would be wrong. So: the console and the panel both WRITE
+   * through to the platform, and both READ what it says.
+   *
+   * Carries the desired state rather than meaning "toggle". A toggle sent twice by a double-click
+   * lands back where it started; an explicit `on` is idempotent, which is what a flaky connection
+   * and an impatient finger both need.
+   */
+  HARNESS: 'harness',
 } as const;
 export type HumanControlKind = (typeof HumanControlKind)[keyof typeof HumanControlKind];
 
