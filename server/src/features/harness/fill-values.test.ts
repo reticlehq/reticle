@@ -5,10 +5,10 @@ import type { HarnessFetch } from './driver.js';
 /**
  * The one place in a drive worth paying a generating model for, and the rules that keep it there.
  *
- * Measured across 91 recorded flows on a production dashboard: 413 clicks against 26 text steps.
- * Text is about 6% of what a drive does, so a model that writes text belongs on that 6% and nowhere
- * near the other 94% -- put it in the per-turn loop and it costs the per-turn tax the cheap driver
- * exists to avoid. Most of these tests are therefore about NOT calling it.
+ * Typing is a small minority of what a drive does -- clicks and navigations are the overwhelming
+ * majority -- so a model that writes text belongs on those few steps and nowhere near the many:
+ * put it in the per-turn loop and it costs the per-turn tax the cheap driver exists to avoid. Most
+ * of these tests are therefore about NOT calling it.
  */
 
 const answering = (text: string): HarnessFetch =>

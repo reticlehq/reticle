@@ -11,9 +11,10 @@
  * ## Why this is escalation rather than partnership
  *
  * Put a generating model in the per-turn loop and you pay its per-turn tax on every step, which is
- * the cost the cheap driver exists to avoid. Measured across 91 recorded flows on a production
- * dashboard: 413 clicks, 26 text steps. Text is about 6% of what a drive does. So the model is
- * called for the 6%, never for the 94%, and a drive with no text fields never calls it at all.
+ * the cost the cheap driver exists to avoid. Typing is a small minority of what a drive does —
+ * clicks and navigations are the overwhelming majority — so the model is called for the few steps
+ * that compose text, never for the many that select, and a drive with no text fields never calls it
+ * at all.
  *
  * ## Why it is cached, and cached where it is
  *
