@@ -1,5 +1,12 @@
 import { spawn } from 'node:child_process';
-import type { ExitStatus, Invocation, StreamLine, Supervisor, ToolIdentity } from './supervisor.js';
+import type {
+  ExitStatus,
+  Invocation,
+  RunWatcher,
+  StreamLine,
+  Supervisor,
+  ToolIdentity,
+} from './supervisor.js';
 
 /**
  * The `Supervisor` port, over real processes.
@@ -77,7 +84,12 @@ export class NodeSupervisor implements Supervisor {
    * signal WE sent would make our own impatience look like the operating system's verdict on the
    * subject. So the kill happens and the absence is what gets recorded.
    */
-  run(command: string, argv: readonly string[], budgetMs: number): Promise<Invocation> {
+  run(
+    command: string,
+    argv: readonly string[],
+    budgetMs: number,
+    watcher?: RunWatcher,
+  ): Promise<Invocation> {
     this.#seq += 1;
     const id = `i${String(this.#seq)}`;
     const startedAt = this.#input.now();
@@ -91,8 +103,11 @@ export class NodeSupervisor implements Supervisor {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
-      const stdout = new LineReader();
-      const stderr = new LineReader();
+      // The watcher is handed each line as it is COMPLETED, not each chunk as it arrives: a
+      // chunk boundary is not a line boundary, and a live view showing half a word is a view
+      // somebody stops trusting.
+      const stdout = new LineReader(watcher?.onStdout);
+      const stderr = new LineReader(watcher?.onStderr);
       child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk.toString('utf8')));
       child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk.toString('utf8')));
 
@@ -183,12 +198,20 @@ export function exitStatus(code: number | null, signal: string | null): ExitStat
 class LineReader {
   #pending = '';
   readonly #lines: StreamLine[] = [];
+  readonly #onLine: ((line: string) => void) | undefined;
+
+  constructor(onLine?: (line: string) => void) {
+    this.#onLine = onLine;
+  }
 
   push(chunk: string): void {
     const parts = (this.#pending + chunk).split('\n');
     // The last part has no newline yet: it is either an unfinished line or an empty string.
     this.#pending = parts.pop() ?? '';
-    for (const text of parts) this.#lines.push({ seq: this.#lines.length, text });
+    for (const text of parts) {
+      this.#lines.push({ seq: this.#lines.length, text });
+      this.#onLine?.(text);
+    }
   }
 
   /** Everything seen, including a trailing line the process never terminated. */

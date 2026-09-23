@@ -210,12 +210,57 @@ for (const [id, outcome] of Object.entries(report.outcomes ?? {})) {
  * regression, which is the same rule the other two runners apply.
  */
 const failed = report.failed ?? [];
+const passed = Object.values(report.outcomes ?? {}).filter((o) => 'passed' === o).length;
 console.error(
   `\n${Object.values(report.outcomes ?? {}).filter((o) => o === 'passed').length} passed, ` +
     `${failed.length} failed, ` +
     `${Object.values(report.outcomes ?? {}).filter((o) => o === 'absent').length} absent`,
 );
-if (args.includes('--gate') && failed.length > 0) {
-  console.error(`\nFAILED: ${failed.join(', ')}`);
-  process.exit(1);
+/**
+ * A floor, because "0 failed" is also what a suite that measured NOTHING reports.
+ *
+ * Every scenario this subject cannot plant is scored `absent`, and absent is correctly never a
+ * failure -- that is the fixture's limit rather than the implementation's. But the two facts
+ * compose into a hole: a realm that regressed so far that every plant was refused would report
+ * zero failures and exit green, having verified nothing at all.
+ *
+ * Which is the same shape this project spent a night measuring elsewhere. A check that cannot go
+ * red is not a check, and it is worse than no check because it reads as one.
+ *
+ * The floor is an equality against what this subject reaches TODAY rather than a bound. A bound
+ * quietly accepts the number falling; raising it is a thing to do deliberately, in a commit that
+ * says the coverage went up.
+ */
+const FLOOR = 9;
+if (args.includes('--gate')) {
+  if (failed.length > 0) {
+    console.error(`\nFAILED: ${failed.join(', ')}`);
+    process.exit(1);
+  }
+  if (passed < FLOOR) {
+    console.error(
+      `\nMEASURED TOO LITTLE: ${String(passed)} scenarios passed and this subject reaches ` +
+        `${String(FLOOR)}. Nothing failed, which is exactly what a suite that stopped planting ` +
+        'anything also reports. Either a plant broke, or coverage genuinely moved and this floor ' +
+        'should move with it in the same commit.',
+    );
+    process.exit(1);
+  }
+}
+
+/**
+ * The negative control: mis-answer on purpose and require the gate to go RED.
+ *
+ * CI runs this BEFORE the real gate for the reason the sibling runners do: if a deliberately
+ * broken run still comes back green, the real run's green means nothing. It inverts the exit code,
+ * so a PASS here is a failure of the gate itself.
+ */
+if (args.includes('--self-test')) {
+  const wouldFail = failed.length > 0 || passed < FLOOR;
+  console.error(
+    wouldFail
+      ? '\nself-test: the gate refuses a broken run, as it must'
+      : '\nself-test FAILED: a deliberately broken run was accepted, so a green gate proves nothing',
+  );
+  process.exit(wouldFail ? 0 : 1);
 }

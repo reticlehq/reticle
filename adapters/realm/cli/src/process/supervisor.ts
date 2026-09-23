@@ -88,9 +88,26 @@ export interface ToolIdentity {
   readonly epoch?: number;
 }
 
+/**
+ * Somebody watching a run as it happens rather than reading it afterwards.
+ *
+ * Optional, and a SUBSCRIBER: handed lines as they arrive, able to do nothing with them but look.
+ * The run is identical whether or not anybody is listening, which is what keeps a live view from
+ * becoming an observer that changes what it observes.
+ */
+export interface RunWatcher {
+  onStdout?: (line: string) => void;
+  onStderr?: (line: string) => void;
+}
+
 export interface Supervisor {
   /** Run one command to completion, or until the budget ends it. Reports what happened, never whether it worked. */
-  run(command: string, argv: readonly string[], budgetMs: number): Promise<Invocation>;
+  run(
+    command: string,
+    argv: readonly string[],
+    budgetMs: number,
+    watcher?: RunWatcher,
+  ): Promise<Invocation>;
   /** Everything this supervisor has seen since a moment on its own clock. */
   invocationsSince(at: number): readonly Invocation[];
   toolIdentity(): ToolIdentity;

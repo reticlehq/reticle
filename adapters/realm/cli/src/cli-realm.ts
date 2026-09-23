@@ -21,6 +21,7 @@ import {
 } from 'open-verification';
 import { CliChannel } from './channels.js';
 import { detectAnomalies } from './detect.js';
+import { contractSatisfies } from './state-contract.js';
 import type { ConnectProxy } from './net/proxy.js';
 import { commandNamed, type CommandManifest } from './manifest.js';
 import type { Invocation, Supervisor } from './process/supervisor.js';
@@ -277,6 +278,23 @@ export class CliRealm extends Realm {
       observation: 'exact',
       actions: 'irreversible',
     };
+  }
+
+  /**
+   * Whether one step leaves the next what it needs, answered in paths.
+   *
+   * Overriding this is what lets a composite be refused BEFORE it is run, rather than inside a
+   * sub-journey that is working correctly. The base class returns `undefined` -- a realm with no
+   * notion of a state contract has no honest answer -- and inheriting that default would make
+   * every declared sequence come back `unjudged-requirement`, which is a check that can only ever
+   * pass.
+   *
+   * It still returns `undefined` for a vocabulary it does not speak, which is the honest answer
+   * and a different one from `false`: "teach the realm" and "reorder the composite" are opposite
+   * instructions, and collapsing them would hide which is needed.
+   */
+  override satisfies(ensures: unknown, requires: unknown): boolean | undefined {
+    return contractSatisfies(ensures, requires);
   }
 
   capabilities(): readonly Capability[] {

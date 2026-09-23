@@ -12,6 +12,10 @@ export { NodeSupervisor, exitStatus } from './process/node-supervisor.js';
 export { nodeWorkspace } from './workspace/port.js';
 export { detectAnomalies } from './detect.js';
 export { renderReport } from './report.js';
+export { renderFrame } from './hud/frame.js';
+export type { HudState, HudPhase } from './hud/frame.js';
+export { createLiveHud } from './hud/live.js';
+export type { HudEvent, LiveHud, LiveHudInput } from './hud/live.js';
 export { buildRun } from './run.js';
 export type { DriveOutcome, RunInput } from './run.js';
 export { startConnectProxy } from './net/proxy.js';
@@ -30,6 +34,7 @@ export { commandNamed } from './manifest.js';
 export type { CliCommand, CommandManifest } from './manifest.js';
 export type {
   ExitStatus,
+  RunWatcher,
   Invocation,
   StreamLine,
   Supervisor,

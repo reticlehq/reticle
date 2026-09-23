@@ -54,7 +54,13 @@ const drive: DriveOutcome = {
 };
 
 const run = (over: Partial<DriveOutcome> = {}) =>
-  buildRun({ id: 'run-1', drives: [{ ...drive, ...over }], startedAt: 0, endedAt: 100 });
+  buildRun({
+    id: 'run-1',
+    verifierVersion: '9.9.9',
+    drives: [{ ...drive, ...over }],
+    startedAt: 0,
+    endedAt: 100,
+  });
 
 describe('the artifact a human and an agent share', () => {
   /**
@@ -109,6 +115,7 @@ describe('the artifact a human and an agent share', () => {
   it('does not let a window of unknowns read as success', () => {
     const unknowns = buildRun({
       id: 'r',
+      verifierVersion: '9.9.9',
       startedAt: 0,
       endedAt: 1,
       drives: [
@@ -123,6 +130,17 @@ describe('the artifact a human and an agent share', () => {
       ],
     });
     expect(outcomeOf(unknowns)).toBe(RunOutcome.UNKNOWN);
+  });
+
+  /**
+   * The version is the caller's to supply, because a literal here is outside every release step.
+   *
+   * `set-version.mjs` reaches manifests, docs and the crate files and has never touched a string
+   * inside a `.ts`. A hardcoded one would have every emitted run claiming the previous version
+   * indefinitely, which is the shape of silent staleness this project has shipped before.
+   */
+  it('reports the version it was given rather than one compiled into it', () => {
+    expect(run().verifier.version).toBe('9.9.9');
   });
 
   it('carries the coverage each verdict was reached under, not just the verdict', () => {

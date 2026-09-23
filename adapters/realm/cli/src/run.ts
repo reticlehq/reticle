@@ -29,6 +29,9 @@ import {
  * two of them be diffed and what makes it safe to attach to a build.
  */
 
+/** Who produced these runs. A named constant, because a wire string is never a free string. */
+const VERIFIER_NAME = '@reticlehq/cli-realm';
+
 /** One claim, driven and adjudicated. Everything a verdict needs to be re-checked. */
 export interface DriveOutcome {
   readonly claim: Claim;
@@ -49,6 +52,19 @@ export interface DriveOutcome {
 
 export interface RunInput {
   readonly id: string;
+  /**
+   * The verifier's own version, supplied rather than written down here.
+   *
+   * It was a literal, and a literal in SOURCE is outside everything that stamps a release:
+   * `set-version.mjs` reaches manifests, docs.json, SKILL frontmatter and the crate files, and
+   * nothing it has ever done touches a string inside a `.ts`. So every run this realm emitted
+   * would have gone on claiming the previous version, for as long as nobody looked -- the exact
+   * shape of the crate that sat at 0.1.0 for months while its publish step printed "nothing to
+   * do" and exited green.
+   *
+   * A caller reads it from the package manifest, which set-version does reach.
+   */
+  readonly verifierVersion: string;
   readonly drives: readonly DriveOutcome[];
   readonly startedAt: number;
   readonly endedAt: number;
@@ -68,8 +84,8 @@ export function buildRun(input: RunInput): VerificationRun {
     ovp: OVP_VERSION,
     id: input.id,
     verifier: {
-      name: '@reticlehq/cli-realm',
-      version: '3.1.0',
+      name: VERIFIER_NAME,
+      version: input.verifierVersion,
       // No profile claimed, and that is the honest answer rather than a missing one. The
       // conformance floor names `net` and `log`, and this realm's consequence-grade channel is
       // the filesystem, so it reaches no profile as the table is written. Profiles score an
