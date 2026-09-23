@@ -187,19 +187,30 @@ chk(
 
 const FLOW = 'stitch-probe';
 
-// This spec's own scratch flow, removed by PATH rather than by a tool call: `reticle_flow` has no
+// Everything the suite would run, removed by PATH rather than by a tool call: `reticle_flow` has no
 // delete action, and an unrecognised one is answered rather than refused, so a cleanup written that
-// way runs green and deletes nothing. `list` is what knows where the file actually went.
+// way runs green and deletes nothing. `list` is what knows where the files actually went.
 //
-// Run at BOTH ends on purpose. The session has no resolvable project, so the flow lands in the
-// machine-wide `~/.reticle/unmatched/unnamed` bucket and outlives the run. Cleaning up only at the
-// end still leaves the assertion below depending on a machine that has never run this spec before:
-// it passed on fresh CI and failed from the second run onwards on a developer's machine. An
-// assertion about an EMPTY suite has to make the suite empty.
+// Run at BOTH ends on purpose. The session has no resolvable project, so a flow lands in the
+// machine-wide `~/.reticle/unmatched/unnamed` bucket and outlives the run. An assertion about an
+// EMPTY suite has to make the suite empty.
+//
+// EVERY flow, not just this spec's own. It removed only `stitch-probe`, which made the assertion
+// true on fresh CI and false on any machine where ANOTHER spec had left one behind. Measured:
+// `verify-500.json`, saved by a sibling spec, sat in that bucket and was replayed by the empty-suite
+// check below -- and a replay hard-navigates, which resets bench-app's deliberately in-memory auth
+// to the Login screen. The next step then recorded a click on a nav item that no longer existed, so
+// the recording captured nothing and the four checks after it failed, naming annotation and flow
+// grading for a cause that was neither. The battery was green on CI and red on a developer machine,
+// from the second run onwards, for a reason no message mentioned.
+//
+// Safe to take the whole bucket: it is the machine-wide bin for sessions with no resolvable
+// project, every spec that needs a flow saves its own inside its own run, and this spec is the only
+// one asserting the bucket is empty.
 const removeSavedFlow = async () => {
   const listed = await call('reticle_flow', { ...S, action: 'list' });
   for (const entry of Array.isArray(listed?.flows) ? listed.flows : []) {
-    if (entry?.name === FLOW && typeof entry?.path === 'string') rmSync(entry.path, { force: true });
+    if (typeof entry?.path === 'string') rmSync(entry.path, { force: true });
   }
 };
 await removeSavedFlow();
