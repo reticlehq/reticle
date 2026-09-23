@@ -60,6 +60,16 @@ const FIRST_CYCLE_DELAY_MS = 5_000;
  */
 const NUDGE_DELAY_MS = 1_500;
 
+/**
+ * How long a flush waits for a cycle already in flight before running its own.
+ *
+ * Shutdown budget, not a sync budget: every call inside a cycle already carries its own timeout, so
+ * this only bounds the WAIT. Generous enough for an ordinary cycle to finish, short enough that a
+ * stalled one cannot hold a daemon open.
+ */
+const FLUSH_WAIT_MS = 3_000;
+const FLUSH_POLL_MS = 25;
+
 interface SyncDaemonDeps {
   reticleRoot: string;
   /** Resolved per tick, not once: a repo linked while the daemon is alive starts syncing itself. */
@@ -101,6 +111,19 @@ export interface SyncDaemon {
    */
   nudge: () => void;
   stop: () => void;
+  /**
+   * Stop, but send what is still owed first.
+   *
+   * `stop()` cancels the pending timer, and the last thing a session writes is the run artifact the
+   * whole drive produced — so a daemon asked to close moments after a verdict dropped the one push
+   * anybody was waiting on. Measured against app.reticle.sh: a drive wrote its run, the daemon
+   * exited, and the dashboard's newest row stayed three weeks old.
+   *
+   * Bounded, because shutdown is not allowed to hang: an in-flight cycle is waited out only until
+   * the deadline, and a cycle that cannot finish in time is simply the interval's problem next
+   * time — the artifact is still on disk and the next daemon for this project sends it.
+   */
+  flush: () => Promise<void>;
 }
 
 const defaultRequest = async (
@@ -314,6 +337,17 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
       stopped = true;
       if (timer !== undefined) clearTimeout(timer);
       timer = undefined;
+    },
+    flush: async (): Promise<void> => {
+      stopped = true;
+      if (timer !== undefined) clearTimeout(timer);
+      timer = undefined;
+      // A cycle already running may have started BEFORE the write being flushed, so its report says
+      // nothing about that artifact. Wait it out rather than skipping on the overlap guard.
+      const deadline = Date.now() + FLUSH_WAIT_MS;
+      while (running && Date.now() < deadline)
+        await new Promise((resolve) => setTimeout(resolve, FLUSH_POLL_MS));
+      await cycle();
     },
   };
 }

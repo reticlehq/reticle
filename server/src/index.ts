@@ -853,7 +853,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
       const vh = verifyHttp;
       if (vh !== undefined) await new Promise<void>((resolve) => vh.server.close(() => resolve()));
       leaseReaper.stop();
-      cloudSync.stop();
+      await cloudSync.flush(); // not stop(): the last run written is the one nobody has yet
       await loopbackAlias.close?.();
       await pool.shutdown();
       await owned?.dispose();

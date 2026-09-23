@@ -464,3 +464,60 @@ describe('how often it runs follows whether anything moved', () => {
     d.stop();
   });
 });
+
+/**
+ * Shutdown. The last thing a session writes is the run artifact everybody is waiting on, and the
+ * daemon closing is the ordinary end of a drive — a one-shot CI run, an idle exit, an agent that
+ * finished. Dropping that push is how a drive's whole evidence stays on the machine that found it.
+ */
+describe('the last push', () => {
+  it('flushes what a nudge scheduled, rather than cancelling it on the way out', async () => {
+    // `stop()` clears the pending timer, so a run written moments before shutdown was never sent:
+    // measured against app.reticle.sh on 2026-09-23, where a drive's run artifact sat on disk and
+    // the dashboard's newest row was three weeks old.
+    const server = counting();
+    const d = startSyncDaemon({
+      reticleRoot: root,
+      cloud: () => Promise.resolve(LINKED),
+      request: server.request,
+      intervalMs: 60_000,
+    });
+    // Let the first cycle pass, so what follows is only the nudge.
+    await vi.advanceTimersByTimeAsync(30_000);
+    const before = server.count();
+
+    // A run lands, and the process is asked to stop before the nudge's delay has elapsed.
+    d.nudge();
+    await d.flush();
+
+    expect(server.count()).toBeGreaterThan(before);
+  });
+
+  it('is safe to call when nothing is linked, and when called twice', async () => {
+    const server = counting();
+    const d = startSyncDaemon({
+      reticleRoot: root,
+      cloud: () => Promise.resolve(UNLINKED),
+      request: server.request,
+      intervalMs: 60_000,
+    });
+    await d.flush();
+    await d.flush();
+    expect(server.count()).toBe(0);
+  });
+
+  it('stops the timer, so a flushed daemon never cycles again', async () => {
+    const server = counting();
+    const d = startSyncDaemon({
+      reticleRoot: root,
+      cloud: () => Promise.resolve(LINKED),
+      request: server.request,
+      intervalMs: 1_000,
+    });
+    await vi.advanceTimersByTimeAsync(5_000);
+    await d.flush();
+    const settled = server.count();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(server.count()).toBe(settled);
+  });
+});
