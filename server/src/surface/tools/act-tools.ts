@@ -805,7 +805,7 @@ export const ACT_TOOLS: ToolDef[] = [
         // this is the only one that has to be interpreted, and now it interprets itself.
         const outcomePending = acceptedWriteLabels(windowEvents);
         const outcomeUnread = unreadWriteLabels(windowEvents);
-        const stillInFlight = inFlightRequestLabels(windowEvents);
+        const stillInFlight = inFlightRequestLabels(windowEvents, session.url);
         const decision = decideVerified({
           pass: verdict.pass,
           // Threaded rather than looked up: decideVerified is pure and has no session.

@@ -270,7 +270,9 @@ export async function assertStepExpect(
   // same window and never asked, so a slow endpoint was reported as a consequence that never fired.
   // An unrelated open request does not pardon a named URL that never started — matching decides it.
   const openRequests =
-    expect.state === undefined ? inFlightRequestLabels(session.eventsSince(since)) : [];
+    expect.state === undefined
+      ? inFlightRequestLabels(session.eventsSince(since), session.url)
+      : [];
   const namedInFlight = namedNetIsInFlight(predicate, openRequests);
   return {
     // The store case keeps its own kind because heal and the run report branch on it; everything

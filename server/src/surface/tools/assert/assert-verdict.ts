@@ -156,7 +156,7 @@ export async function assertVerdict(
   );
   const outcomePending = acceptedWriteLabels(windowEvents);
   const outcomeUnread = unreadWriteLabels(windowEvents);
-  const stillInFlight = inFlightRequestLabels(windowEvents);
+  const stillInFlight = inFlightRequestLabels(windowEvents, session.url);
   const effectiveInconclusive =
     inconclusive ?? (!pass ? session.preconditionFailure?.() : undefined);
   /**

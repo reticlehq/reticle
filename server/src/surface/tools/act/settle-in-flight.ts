@@ -28,7 +28,7 @@
  *     limit instead of an early exit.
  */
 
-import { EventType, NetInitiator, isDevToolingUrl } from '@reticlehq/core';
+import { EventType, NetInitiator, isDevToolingUrl, isThirdPartyUrl } from '@reticlehq/core';
 
 /**
  * The dev toolchain talking about ITSELF is not the app finishing its work.
@@ -40,6 +40,28 @@ import { EventType, NetInitiator, isDevToolingUrl } from '@reticlehq/core';
  */
 const isDevTooling = (data: Record<string, unknown>): boolean =>
   isDevToolingUrl('string' === typeof data['url'] ? data['url'] : undefined);
+
+/**
+ * Somebody else's host is not the app finishing its work.
+ *
+ * The comment above makes this argument for dev tooling and it holds identically here:
+ * `splitForeignTraffic` drops dev tooling AND third-party traffic, and this file dropped only the
+ * first — so the exclusion stayed cosmetic exactly where it decides a verdict, for the other half.
+ *
+ * Reported from the field repeatedly: an app embedding a wallet SDK that continuously POSTs
+ * telemetry to its vendor host never settles, so EVERY assertion on that app returns
+ * `unknown / outcome_pending` whatever the feature under test was. A third-party beacon cannot
+ * answer "has the app finished?", and nothing makes it stop, so waiting for it is waiting forever.
+ *
+ * Fails OPEN: with no known app origin nothing is foreign, because suppressing a request we cannot
+ * classify is how a verdict starts resting on evidence it discarded.
+ *
+ * SAME-ORIGIN background traffic is deliberately NOT covered. Nothing in a URL separates the app's
+ * telemetry from the app's work, and guessing would suppress the requests a verdict rests on. That
+ * one needs a declaration from the project.
+ */
+const isForeign = (data: Record<string, unknown>, appOrigin: string | undefined): boolean =>
+  isThirdPartyUrl('string' === typeof data['url'] ? data['url'] : undefined, appOrigin);
 
 /**
  * A departure records where the browser was SENT, not a request whose result we will see — the
@@ -76,6 +98,7 @@ const idOf = (data: Record<string, unknown>): string | undefined =>
  */
 export function inFlightRequestIds(
   events: readonly { type: string; data: Record<string, unknown> }[],
+  appOrigin?: string,
 ): string[] {
   const settled = new Set<string>();
   for (const e of events) {
@@ -86,6 +109,7 @@ export function inFlightRequestIds(
   const open: string[] = [];
   for (const e of events) {
     if (e.type !== EventType.NET_PENDING || isDevTooling(e.data) || isDeparture(e.data)) continue;
+    if (isForeign(e.data, appOrigin)) continue;
     const id = idOf(e.data);
     if (id !== undefined && !settled.has(id) && !open.includes(id)) open.push(id);
   }
@@ -102,8 +126,9 @@ export function inFlightRequestIds(
  */
 export function inFlightRequestLabels(
   events: readonly { type: string; data: Record<string, unknown> }[],
+  appOrigin?: string,
 ): string[] {
-  const open = new Set(inFlightRequestIds(events));
+  const open = new Set(inFlightRequestIds(events, appOrigin));
   const labels: string[] = [];
   for (const e of events) {
     if (e.type !== EventType.NET_PENDING) continue;

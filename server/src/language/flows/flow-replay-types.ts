@@ -28,6 +28,13 @@ export interface FlowReplaySession {
   onEvent(listener: (event: ReticleEvent) => void): () => void;
   /** Buffer clock (ms since connect) — required by the predicate engine's `settled` check. */
   elapsed(): number;
+  /**
+   * Where the app under test lives, so a third-party beacon is not mistaken for the app still
+   * working. Optional for the same reason `beginAction` is — a minimal test double should not have
+   * to invent an origin — and it FAILS OPEN: with no origin nothing is foreign, so an omitted value
+   * suppresses nothing rather than silently widening what a replay ignores.
+   */
+  url?: string;
 }
 
 /**
