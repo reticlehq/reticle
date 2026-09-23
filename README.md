@@ -204,6 +204,11 @@ This isn't something your agent forgot. A coding agent is built to **produce a c
 >
 > **Agent, via Reticle:** clicks **Sign in** → `POST /api/login → 200 (14 ms)` → dashboard rendered → store holds `auth: { email: "admin@…" }` → **PASS**, evidence attached.
 
+<p align="center">
+  <img src="assets/readme/verdict-not-view.png" width="760"
+       alt="Reticle watches the app from the inside: a broken Pay button traced to onPay.tsx line 46, handed to the coding agent as a repair packet." />
+</p>
+
 ```mermaid
 flowchart LR
     A["Your agent<br/>(Claude Code, Cursor…)"] -->|"look · act · observe · assert"| B(("Reticle"))
