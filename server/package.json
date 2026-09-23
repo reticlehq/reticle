@@ -42,11 +42,11 @@
   "devDependencies": {
     "@types/pngjs": "^6.0.5",
     "@types/ws": "^8.5.13",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.1"
   },
   "optionalDependencies": {
     "pixelmatch": "^7.2.0",
-    "playwright": "^1.62.1",
+    "playwright": "^1.63.0",
     "pngjs": "^7.0.0"
   },
   "license": "FSL-1.1-ALv2",

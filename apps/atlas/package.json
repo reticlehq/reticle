@@ -10,17 +10,17 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@reticlehq/browser": "workspace:*",
     "@reticlehq/react": "workspace:*",
     "@reticlehq/vite-plugin": "workspace:*",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
-    "@vitejs/plugin-react": "^6.1.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
     "typescript": "^5.7.3",
     "vite": "^8.2.1"
   }
