@@ -55,7 +55,7 @@
     "check:stale-issues": "node scripts/check-stale-issues.mjs",
     "check:stale-issues:self-test": "node scripts/check-stale-issues.mjs --self-test",
     "remap:prs": "node scripts/remap-stranded-prs.mjs",
-    "gate:conformance:self-test": "node conformance/run-self.mjs --self-test && node conformance/run-desktop.mjs --self-test"
+    "gate:conformance:self-test": "node conformance/run-self.mjs --self-test && node conformance/run-desktop.mjs --self-test && node conformance/run-cli.mjs --self-test"
   },
   "pnpm": {
     "overrides": {

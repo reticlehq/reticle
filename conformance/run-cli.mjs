@@ -187,7 +187,32 @@ function probeRealm() {
   return realm;
 }
 
-const report = await driveAll(client(), {
+/**
+ * The negative control: answer `yes` to everything, and require the gate to REFUSE it.
+ *
+ * The first version of this inspected the run it was handed and inverted the exit code, which is
+ * not a control at all -- on a healthy tree nothing had failed and the floor was met, so it
+ * exited 1 and would have reddened CI on a working build. A control has to PLANT the fault, then
+ * demand it be caught.
+ *
+ * `yes` to every claim is the right lie to plant, because a false green is the thing this whole
+ * product exists to refuse. Injected at the client seam the way `run-self.mjs` does it.
+ *
+ * What it proves and what it does not: it exercises the real driver, the real scenarios, the real
+ * adjudicator and the real scoring, and proves the path from a wrong answer to a non-zero exit is
+ * connected. It does NOT prove the realm observes anything -- the lie is injected above the realm,
+ * so a supervisor that spawned nothing would still be caught here, and is not caught by this alone.
+ */
+function dishonestIfSelfTesting(bound) {
+  if (!args.includes('--self-test')) return bound;
+  return {
+    ...bound,
+    verify: () =>
+      Promise.resolve({ verdict: 'yes', ground: 'proved', reason: 'self-test: always yes' }),
+  };
+}
+
+const report = await driveAll(dishonestIfSelfTesting(client()), {
   name: '@reticlehq/cli-realm',
   version: '3.1.0',
   platform: 'native',
@@ -232,6 +257,18 @@ console.error(
  * says the coverage went up.
  */
 const FLOOR = 9;
+if (args.includes('--self-test')) {
+  // Every scenario that asks for something OTHER than a confident yes must now FAIL, because the
+  // client is answering yes to all of them. A gate that still reports zero failures here has gone
+  // blind, and its green on a real run means nothing.
+  const refused = failed.length > 0;
+  console.error(
+    refused
+      ? `\nself-test: the gate refused a run that answered yes to everything (${String(failed.length)} caught)`
+      : '\nself-test FAILED: a run that answered yes to everything was accepted, so a green gate proves nothing',
+  );
+  process.exit(refused ? 0 : 1);
+}
 if (args.includes('--gate')) {
   if (failed.length > 0) {
     console.error(`\nFAILED: ${failed.join(', ')}`);
@@ -246,21 +283,4 @@ if (args.includes('--gate')) {
     );
     process.exit(1);
   }
-}
-
-/**
- * The negative control: mis-answer on purpose and require the gate to go RED.
- *
- * CI runs this BEFORE the real gate for the reason the sibling runners do: if a deliberately
- * broken run still comes back green, the real run's green means nothing. It inverts the exit code,
- * so a PASS here is a failure of the gate itself.
- */
-if (args.includes('--self-test')) {
-  const wouldFail = failed.length > 0 || passed < FLOOR;
-  console.error(
-    wouldFail
-      ? '\nself-test: the gate refuses a broken run, as it must'
-      : '\nself-test FAILED: a deliberately broken run was accepted, so a green gate proves nothing',
-  );
-  process.exit(wouldFail ? 0 : 1);
 }
