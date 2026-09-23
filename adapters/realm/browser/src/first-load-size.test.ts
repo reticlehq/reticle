@@ -152,7 +152,23 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * `@reticlehq/core` and wants deciding rather than doing under a size guard — but it is the
  * reason this ceiling keeps climbing, and every raise borrows against it.
  */
-const MAX_FIRST_LOAD_BYTES = 239_100;
+/*
+ * 239_100 -> 240_100, for bounding a repeating uncaught error. 91 B measured.
+ *
+ * An uncaught error is recorded as an event, and recording it can raise the same error, so the
+ * path feeds itself. Reported from the field: one repeating `TypeError` wrote a session's
+ * `events.jsonl` to 685 GB at 13 MB/s over 14 hours and filled a 926 GB disk (#986). The limiter
+ * this pays for lets the first few occurrences through, then only order-of-magnitude checkpoints,
+ * so a runaway costs O(log n) events instead of O(n).
+ *
+ * 91 bytes on every page load against a bounded worst case of half a terabyte on one developer's
+ * machine is not a close trade, and it has to be spent in the page: the daemon cannot decline what
+ * the SDK has already sent, and the send is the cost.
+ *
+ * Raised by 1,000 rather than to the measurement, per the note above: an ordinary change should
+ * not fail on rounding.
+ */
+const MAX_FIRST_LOAD_BYTES = 240_100;
 /*
  * Raised a fifth time, 233_300 -> 233_400, for a route to be assertable in a SAVED flow. 57 B.
  *

@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/browser` — one repeating uncaught error could fill the disk.** An uncaught error is recorded as an event, and recording it can raise the same error, so the path feeds itself. A single repeating `TypeError` wrote one session's `events.jsonl` to 685 GB at 13 MB/s over 14 hours and filled a 926 GB disk. The first few occurrences of an error now pass through as before, and after that only order-of-magnitude checkpoints do, each carrying the count it stands for — so a runaway costs a handful of events instead of an unbounded stream, and still says it is still happening. Part of [#986](https://github.com/reticlehq/reticle/issues/986).
