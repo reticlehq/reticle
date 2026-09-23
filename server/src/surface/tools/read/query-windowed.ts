@@ -11,7 +11,7 @@
  * is not advertised on the default surface, so the agent that needed it could not see it and had no
  * way to learn it existed. A capability reachable only by already knowing about it is not reachable.
  *
- * The SCROLLING half lives in `portal/input/scrolling-find.ts`, because it drives the page and this
+ * The SCROLLING half lives in `portal/input/scroll-find.ts`, because it drives the page and this
  * directory must not reach into `input/` — doing so completed a mutual pair, and two directories
  * that need each other cannot be read, moved or tested apart. Shaping an answer and scrolling a list
  * are different jobs anyway; the guard made that visible before it was a habit.
