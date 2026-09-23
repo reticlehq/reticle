@@ -14,6 +14,35 @@ import { RiskSurface } from '@/verdict/verification-run.js';
 import type { FlowExpect } from '@/artifacts/flow-types.js';
 
 /**
+ * Attribute NAMES to project. `name=value` is refused, never quietly half-honoured.
+ *
+ * `attrs` has only ever been a projection: the browser reads each string with `getAttribute` and
+ * omits what is absent (adapters/realm/browser/src/dom/query.ts). So `["data-status=complete"]`
+ * looked up an attribute literally called `data-status=complete`, found none anywhere, and left the
+ * verdict resting on the locator alone — reported from the field (#1057) as three contradictory
+ * values all answering `verified:"yes"` on one element, one of them used to call a pipeline stage
+ * finished while it was still running.
+ *
+ * REFUSED rather than taught to match, because `attrs` is a projection list and a filter list is a
+ * different thing: `["href", "data-status=done"]` would have to mean both at once, and an `=` is
+ * legal inside an attribute value, so any split is a guess. The value comparison already exists as
+ * the query's own `value` residual, and the projected map answers everything else. A predicate that
+ * cannot express a value is honest; one that pretends to is a false green.
+ */
+export const AttrNamesSchema = z.array(
+  z.string().refine(
+    (name) => !name.includes('='),
+    (name) => ({
+      message:
+        `\`attrs\` takes attribute NAMES only, not \`name=value\` — got ${JSON.stringify(name)}. ` +
+        'It PROJECTS each attribute onto the match, it does not filter on it. Drop the `=value` ' +
+        'half and read the returned `attrs` map, or assert the value with an `element` predicate ' +
+        'carrying `value`.',
+    }),
+  ),
+);
+
+/**
  * A query describing which element(s) to find, Testing-Library style.
  *
  * Strict, for the same reason the predicate union that wraps it is: a key nobody spells is a schema
@@ -40,7 +69,7 @@ export const ElementQuerySchema = z
      * Attribute names to project onto each match (e.g. `['href']` to inventory links, `['src']` for
      * images). Without this the descriptor carries only semantics, so URLs are unreachable.
      */
-    attrs: z.array(z.string()).optional(),
+    attrs: AttrNamesSchema.optional(),
     /** Source location of the target element (auto-anchor resolution) — the precise, granular match. */
     source: z
       .object({ file: z.string(), line: z.number(), column: z.number().optional() })

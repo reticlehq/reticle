@@ -48,7 +48,15 @@ Take the advice. `element` and `text` are convenient and weak; `signal`, `state`
 }
 ```
 
-`query` accepts `role`, `name`, `text`, `label`, `placeholder`, `testid`, `alt`, `scope`. `state` is one of `visible`, `hidden`, `enabled`, `disabled`, `checked`, `expanded`, `focused`, `present`.
+`query` accepts `role`, `name`, `text`, `label`, `placeholder`, `testid`, `alt`, `scope`, `attrs`. `state` is one of `visible`, `hidden`, `enabled`, `disabled`, `checked`, `expanded`, `focused`, `present`.
+
+`attrs` is a list of attribute **names**, such as `["href", "data-status"]`. It **projects** those attributes onto each match so you can read them back, and it does not filter. `["data-status=complete"]` is refused: it would otherwise look up an attribute literally named `data-status=complete`, find none, and leave the predicate resting on the locator alone, which is a green for any value the element happens to hold.
+
+To READ the values, call `reticle_query` with `attrs` and look at the `attrs` map on each match. To ASSERT one: a form field's value goes in the query as `value`, while a state expressed as a data attribute is better asserted as the consequence it stands for, such as a `signal`, a `net` call, or the text the user actually sees.
+
+```json
+{ "kind": "element", "query": { "role": "textbox", "name": "Amount", "value": "274.58" } }
+```
 
 Add `"absent": true` to assert something is **gone**. The predicate for a removal, a dismissed toast, or a regression check.
 

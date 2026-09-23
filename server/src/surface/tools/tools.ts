@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { NoSessionAction, QueryBy, ReticleCommand, SnapshotMode } from '@reticlehq/core';
+import {
+  AttrNamesSchema,
+  NoSessionAction,
+  QueryBy,
+  ReticleCommand,
+  SnapshotMode,
+} from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { withSizeCost } from '@/portal/session/output-budget.js';
 import { applySnapshotDelta, SnapshotCache } from './read/snapshot-delta.js';
@@ -357,12 +363,9 @@ export const RAW_TOOLS: ToolDef[] = [
         .describe(
           'Return the `scope` element ITSELF instead of searching inside it. Use when the target is a plain layout container with no role, name, testid or text of its own — which is routinely the element that carries the handler, and is otherwise unreachable because every query excludes its own scope root. Requires `scope`.',
         ),
-      attrs: z
-        .array(z.string())
-        .optional()
-        .describe(
-          "Attribute names to return per match, e.g. ['href'] to inventory links or ['src'] for images. Absent attributes are omitted; credential-bearing names are redacted.",
-        ),
+      attrs: AttrNamesSchema.optional().describe(
+        "Attribute NAMES to return per match, e.g. ['href'] for links, ['src'] for images. Projects, never filters: 'name=value' is refused. Absent omitted; credentials redacted.",
+      ),
       limit: countSchema
         .optional()
         .describe(
