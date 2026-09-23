@@ -1,9 +1,15 @@
 /**
  * Writing the harness switch back to the platform.
  *
- * The panel owns none of this state, so the only thing that makes the switch real is this PATCH
+ * The panel owns none of this state, so the only thing that makes the switch real is this write
  * landing. Every case below is one where getting it wrong would be invisible: a silent no-op, a
  * field the console never rendered being reset, or a privilege the daemon does not have.
+ *
+ * The method is asserted against what the PLATFORM registers, not against what this file happens to
+ * send. Pinned the other way round it asserted PATCH for a release, stayed green, and the platform
+ * — which serves only GET and PUT on this path — 404'd every write. A test that repeats the request
+ * shape back to itself cannot fail while the feature is broken, which is the whole failure this
+ * product exists to refuse.
  */
 import { describe, expect, it, vi } from 'vitest';
 import { ReticleEnv } from '@reticlehq/core';
@@ -13,12 +19,12 @@ const ENV = { [ReticleEnv.CLOUD_URL]: 'https://api.test/', RETICLE_API_KEY: 'rk_
 const ok: SwitchFetch = () => Promise.resolve({ ok: true, status: 200 });
 
 describe('writing the harness switch', () => {
-  it('PATCHes the config path with the desired state', async () => {
+  it('PUTs the config path with the desired state, the method the platform serves', async () => {
     const doFetch = vi.fn(ok);
     await writeHarnessSwitch(ENV, false, doFetch);
     expect(doFetch).toHaveBeenCalledWith(
       'https://api.test/v1/model/config',
-      expect.objectContaining({ method: 'PATCH' }),
+      expect.objectContaining({ method: 'PUT' }),
     );
     const body: unknown = JSON.parse(String(doFetch.mock.calls[0]?.[1].body));
     expect(body).toEqual({ harnessEnabled: false });

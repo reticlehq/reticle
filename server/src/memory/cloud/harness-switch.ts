@@ -2,9 +2,15 @@
  * Write the harness switch back to the platform.
  *
  * The panel does not keep this state — it emits an intent and this puts it where the dashboard can
- * see it, so the two surfaces cannot disagree. A PATCH rather than a PUT because only the switch is
- * being set: somebody who chose a provider in the console must not have it reset by a panel that
- * never rendered one.
+ * see it, so the two surfaces cannot disagree. Only the switch is sent: somebody who chose a
+ * provider in the console must not have it reset by a panel that never rendered one. The platform's
+ * PUT is what guarantees that, not the verb -- it merges the fields it is given and leaves the rest,
+ * which its own spec pins ("leaves the fields it was not sent alone").
+ *
+ * It says PUT because that is what the platform registers. It said PATCH for one release, against a
+ * route that has only ever served GET and PUT, so every write 404'd. Nothing reported it: the call
+ * is fire-and-forget and failure here is deliberately silent, so the switch simply sprang back on
+ * the next snapshot and looked like a UI that would not stick.
  *
  * Failure is SILENT by design, and that deserves saying plainly rather than being discovered. A
  * dev-only overlay that threw a dialog because a settings write timed out would be worse than one
@@ -48,7 +54,7 @@ export async function writeHarnessSwitch(
     // No projectId in the body: the key IS project-scoped, and the platform refuses to let a key
     // name somebody else's project. Sending one would be asking for a privilege we do not have.
     const res = await doFetch(`${host.replace(/\/+$/, '')}${CONFIG_PATH}`, {
-      method: 'PATCH',
+      method: 'PUT',
       headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
       body: JSON.stringify({ harnessEnabled: enabled }),
       signal: controller.signal,
