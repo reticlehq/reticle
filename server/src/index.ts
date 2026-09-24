@@ -89,11 +89,7 @@ import { reportOnboardingStep } from './telemetry/onboarding-funnel.js';
 import { AMBIENT_RECORDING } from './language/flows/recording/tape/recordings.js';
 import { AmbientStore } from './memory/journal/ambient-store.js';
 import { ensureWorkspaceGitignore } from './memory/journal/on-disk/workspace-gitignore.js';
-import {
-  pruneFeedback,
-  pruneSessions,
-  pruneVisualDiffs,
-} from './memory/journal/on-disk/retention.js';
+import { pruneOnStartup } from './memory/journal/on-disk/startup-maintenance.js';
 import type { RealInputProvider } from './portal/input/real-input.js';
 import { log } from './log.js';
 
@@ -316,15 +312,10 @@ function attachJournal(
     });
   }
   if (deps.enabled) {
-    // Empty in the ordinary case (nothing has connected yet), but this path also runs on a daemon
-    // that is already serving sessions.
-    void pruneSessions(deps.fs, deps.reticleRoot, {
-      live: new Set(bridge.sessions.all().map((s) => s.id)),
-    });
-    // The largest thing in the workspace, and until now the only one with no delete path at all.
-    void pruneVisualDiffs(deps.fs, deps.reticleRoot);
-    // Write-only local copies of reports the outbox already carries.
-    void pruneFeedback(deps.fs, deps.reticleRoot);
+    // One call, because "what maintenance runs at startup" needs one answer. Inlined here, the byte
+    // budget was simply missing — written, tested, and called by nothing, while the three count
+    // bounds beside it ran every time. See startup-maintenance.ts.
+    void pruneOnStartup(deps.fs, deps.reticleRoot, new Set(bridge.sessions.all().map((s) => s.id)));
   }
 }
 

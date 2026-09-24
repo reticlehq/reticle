@@ -225,11 +225,18 @@ function loopBody(text: string, headOpen: number): string | null {
  * which is the 40-record loop that broke Windows CI with a bigger number in front of it. It declares
  * `JOURNAL_CAP_TIMEOUT_MS`, so it satisfies the rule and only this count moved. Expected: adding a
  * genuinely new IO-in-a-loop test bumps this by one, deliberately.
+ *
+ * 17th: `memory/journal/on-disk/startup-maintenance.test.ts`. It seeds three session directories
+ * through the real filesystem port and sleeps 5 ms per iteration to stagger their mtimes, because
+ * the property under test is that the byte budget evicts OLDEST-FIRST and mtime order is what makes
+ * that observable. A fake clock cannot supply it: the eviction reads the real `stat`. It declares
+ * `MAINTENANCE_TIMEOUT_MS`, so it satisfies the rule and only this count moved.
  */
 // 16: the read-bound conformance loop and the write-cap loop are two different tests of two
 // different ceilings, and both drive real IO in a loop. They arrived in separate changes that each
 // called itself the fifteenth; landing them together is what makes it sixteen.
-const EXPECTED_IO_LOOP_FILES = 16;
+// 17: the startup byte-budget eviction, which is the first caller the budget has ever had.
+const EXPECTED_IO_LOOP_FILES = 17;
 
 function testFiles(dir: string): string[] {
   const out: string[] = [];
