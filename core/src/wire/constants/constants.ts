@@ -369,6 +369,14 @@ export const ReticleDir = {
   RUNS_SUBDIR: 'runs',
   /** fail-to-pass bug capsules —.reticle/capsules/<id>.json (a minimal failing flow + its evidence). */
   CAPSULES_SUBDIR: 'capsules',
+  /**
+   * Where a feedback report refused delivery is copied — .reticle/feedback/.
+   *
+   * Named here rather than at the writer because the partition over this object is what decides
+   * whether a name Reticle creates is committed, ignored, or swept. It was spelled as a free string
+   * in three separate files, so the guard could not see it and nobody was ever asked.
+   */
+  FEEDBACK_SUBDIR: 'feedback',
   /** durable causal journal —.reticle/sessions/<id>/{events,actions}.jsonl (the substrate). */
   SESSIONS_SUBDIR: 'sessions',
   /** append-only event ledger inside a session dir (one ReticleEvent per line). */

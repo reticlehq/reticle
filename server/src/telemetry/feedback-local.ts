@@ -16,7 +16,6 @@ import { ReticleDir } from '@reticlehq/core';
 import type { Feedback } from '@reticlehq/core/telemetry';
 
 /** Reports live beside the rest of the workspace, not in a temp dir somebody has to be told about. */
-const FEEDBACK_SUBDIR = 'feedback';
 
 interface SavedFeedback {
   path: string;
@@ -61,7 +60,7 @@ export function saveFeedbackLocally(
   now: number = Date.now(),
 ): SavedFeedback | undefined {
   try {
-    const dir = join(cwd, ReticleDir.ROOT, FEEDBACK_SUBDIR);
+    const dir = join(cwd, ReticleDir.ROOT, ReticleDir.FEEDBACK_SUBDIR);
     mkdirSync(dir, { recursive: true });
     const path = join(dir, `${stamp(now)}-${input.kind ?? 'note'}.md`);
     writeFileSync(path, asMarkdown(input, text, context), 'utf8');

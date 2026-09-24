@@ -1,66 +1,23 @@
 import { join } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
+import { LOCAL_DIRS, LOCAL_FILES } from './workspace-tiers.js';
 
 /**
  * The `.reticle/` entries that are LOCAL state, and must never be committed by accident.
  *
- * Split from the durable half deliberately, and the split is the whole design: `contract.json`,
- * `flows/`, `intent.json` and `capsules/` are meant to be checked in — a flow that cannot be shared
- * is not a regression check anybody else can run — while everything below is per-machine churn.
+ * Read from the tier table rather than restated here: which half a name belongs to is one decision,
+ * and a second copy of it is the list that silently disagrees. This file asks the table exactly one
+ * of its two questions — `sharing` — and has no opinion at all about what retention may delete.
  *
  * The reason this matters beyond tidiness: a session journal carries URLs, request and response
  * bodies, and DOM text from the app under test. `.reticle/` is created by the daemon rather than by
  * the user, so it arrives untracked and unexplained, and one `git add -A` puts an app's traffic into
  * a shared repository. Reticle created the directory; the ignore for it is Reticle's to write.
  */
-/**
- * The local feedback copies — `.reticle/feedback/`.
- *
- * Named here rather than imported: the directory is spelled inline where it is written, in files
- * another agent owns, and the ignore for a directory Reticle creates is Reticle's to write whether
- * or not that name has been hoisted yet.
- */
-const FEEDBACK_SUBDIR = 'feedback';
-
-/**
- * Local directories, without the trailing slash the ignore file wants.
- *
- * Exported because this is also the EVIDENCE tier: the per-session churn that retention is allowed
- * to delete. Read from here rather than restated next to the byte budget — the partition of what
- * `.reticle/` holds already exists, is guarded as exhaustive, and a second copy of it would be the
- * list that silently disagrees.
- */
-export const TRANSIENT_DIRS: readonly string[] = [
-  ReticleDir.SESSIONS_SUBDIR,
-  ReticleDir.RUNS_SUBDIR,
-  ReticleDir.VISUAL_SUBDIR,
-  // Write-only: a local copy of what was already sent. The outbox is the record.
-  FEEDBACK_SUBDIR,
-];
-
-/** Local files. Exported with the directories as `TRANSIENT_NAMES`, which the partition guard reads. */
-const TRANSIENT_FILES: readonly string[] = [
-  ReticleDir.PROJECT_FILE,
-  ReticleDir.AMBIENT_FILE,
-  ReticleDir.ENVELOPES_FILE,
-  ReticleDir.FLAKE_FILE,
-  ReticleDir.TIERS_FILE,
-  // The user's own record of what Reticle did for them, on THIS machine.
-  ReticleDir.IMPACT_FILE,
-  // This machine's conversation with the server. Its own doc comment says why committing it is
-  // harmful: one machine's pull cursor makes every other machine skip what it has not seen.
-  ReticleDir.CLOUD_STATE_FILE,
-  // Triage pulled back from the dashboard — a cache of somebody's decisions, re-pullable at will.
-  ReticleDir.ISSUES_FILE,
-];
-
-/** Every name Reticle treats as machine-local, however it is spelled in the ignore file. */
-export const TRANSIENT_NAMES: readonly string[] = [...TRANSIENT_DIRS, ...TRANSIENT_FILES];
-
 const TRANSIENT: readonly string[] = [
-  ...TRANSIENT_DIRS.map((dir) => `${dir}/`),
-  ...TRANSIENT_FILES,
+  ...LOCAL_DIRS.map((dir) => `${dir}/`),
+  ...LOCAL_FILES,
   '*.log',
   '*.tmp',
 ];

@@ -22,7 +22,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
-import { ensureWorkspaceGitignore, TRANSIENT_NAMES } from './workspace-gitignore.js';
+import { ensureWorkspaceGitignore } from './workspace-gitignore.js';
 
 let dir = '';
 let root = '';
@@ -103,71 +103,5 @@ describe('the workspace gitignore', () => {
     await expect(
       ensureWorkspaceGitignore(createNodeFileSystem(), readOnlyish),
     ).resolves.toBeUndefined();
-  });
-});
-
-/**
- * Every name `.reticle/` can hold is classified, so a new one cannot arrive unclassified.
- *
- * The existing tests check the two lists against each other; neither notices a file that is on
- * NEITHER. That is how four machine-local files ended up committable — `impact.json`,
- * `cloud-state.json`, `issues.json` and `feedback/` — and `cloud-state.json`'s own doc comment spells
- * out the cost: committing one machine's pull cursor makes every other machine skip what it has not
- * seen. Nothing was wrong with the ignore file; the entries were simply never added.
- *
- * So the partition is exhaustive by equality. A new `ReticleDir` entry fails here until somebody has
- * said which half it belongs to — which is a thirty-second decision at the moment it is made, and an
- * archaeology problem a year later.
- */
-describe('the partition of what .reticle holds', () => {
-  /** Meant to be committed: the shareable half. A flow nobody else can replay is not a regression check. */
-  const DURABLE: readonly string[] = [
-    ReticleDir.CONTRACT_FILE,
-    ReticleDir.FLOWS_SUBDIR,
-    ReticleDir.BASELINES_SUBDIR,
-    ReticleDir.CAPSULES_SUBDIR,
-    ReticleDir.INTENT_FILE,
-    // The sharded form of the same ledger, and durable for the same reason. It was written into
-    // users' repositories unclassified: its directory name was a free string at the store, so this
-    // partition could not see it and nobody was ever asked which half it belonged to.
-    ReticleDir.INTENT_SUBDIR,
-    ReticleDir.CLOUD_LINK_FILE,
-    // A hook is a decision the whole team shares, exactly like a package script: one that exists
-    // only on the machine that wrote it is a rule nobody else is following. It names COMMANDS and
-    // never a credential, so it is safe to commit — the same reasoning that puts `cloud.json` here
-    // while its API key stays in ~/.reticle.
-    ReticleDir.HOOKS_FILE,
-    // What a drive types into each labelled field. Committed for two reasons: a replay must send
-    // exactly what the recording sent or it is not a replay, and a value a model wrote once should
-    // be reviewable and editable by the team rather than regenerated differently on every machine.
-    ReticleDir.FILL_VALUES_FILE,
-  ];
-
-  /** Names that are not entries IN `.reticle/` — the root itself, and files inside a session dir. */
-  const NOT_WORKSPACE_ENTRIES: readonly string[] = [
-    ReticleDir.ROOT,
-    ReticleDir.JOURNAL_EVENTS_FILE,
-    ReticleDir.JOURNAL_ACTIONS_FILE,
-    // Beside the event ledger, inside the same session dir, and ignored by the same `sessions/`
-    // entry. It records that a ledger stopped writing, which is a fact about one machine's disk.
-    ReticleDir.JOURNAL_EVENTS_CLOSED_FILE,
-    // ~/.reticle, deliberately outside any repository: a pairing token must never reach one.
-    ReticleDir.PAIRING_TOKEN_FILE,
-  ];
-
-  it('leaves nothing unclassified', () => {
-    const classified = new Set([...TRANSIENT_NAMES, ...DURABLE, ...NOT_WORKSPACE_ENTRIES]);
-    const unclassified = Object.values(ReticleDir).filter((name) => !classified.has(name));
-    expect(
-      unclassified,
-      'a name .reticle/ can hold is neither ignored nor declared shareable. Decide which: ' +
-        'machine-local state goes in TRANSIENT, and anything a teammate or CI needs to replay a ' +
-        'flow goes in the durable half and stays committed.',
-    ).toEqual([]);
-  });
-
-  it('classifies each name once, so the two halves cannot both claim one', () => {
-    const both = DURABLE.filter((name) => TRANSIENT_NAMES.includes(name));
-    expect(both).toEqual([]);
   });
 });

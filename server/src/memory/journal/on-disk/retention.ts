@@ -2,7 +2,7 @@ import { basename, join } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { reticleDirPaths, visualDir } from '@/memory/project/dir/reticle-dir.js';
-import { TRANSIENT_DIRS } from './workspace-gitignore.js';
+import { EVIDENCE_DIRS } from './workspace-tiers.js';
 
 /** Keep at most this many session journals on disk; older ones are pruned by recency. */
 export const DEFAULT_SESSION_RETENTION = 20;
@@ -53,11 +53,11 @@ export const DEFAULT_EVIDENCE_BUDGET_BYTES = 512 * 1024 * 1024;
 /**
  * One candidate entry inside a `.reticle/`, classified by the top-level directory it lives under.
  *
- * `under` is what decides the tier, and it is compared against `TRANSIENT_DIRS` — the same list the
- * workspace gitignore writes, guarded there as an exhaustive partition of what `.reticle/` holds.
- * Anything else is MEMORY: flows, capsules, baselines, the contract, the intent ledger. Those are
- * small, durable and the reason the directory exists, so they are never evicted, never counted, and
- * must keep being written however full the disk is.
+ * `under` is what decides the tier, and it is looked up in the workspace tier table's `durability`
+ * axis — never in the gitignore's, which answers a different question. Anything not EVIDENCE is
+ * MEMORY: flows, capsules, baselines, the contract, the intent ledger. Those are small, durable
+ * and the reason the directory exists, so they are never evicted, never counted, and must keep
+ * being written however full the disk is.
  */
 export interface TierEntry {
   /** Absolute path, and what is removed. */
@@ -92,7 +92,7 @@ export function selectOverBudget(
   budgetBytes: number,
   live: ReadonlySet<string> = NO_LIVE_SESSIONS,
 ): string[] {
-  const evidence = entries.filter((entry) => TRANSIENT_DIRS.includes(entry.under));
+  const evidence = entries.filter((entry) => EVIDENCE_DIRS.includes(entry.under));
   // Live sessions still COUNT — their bytes are on disk and the budget is about the disk. They are
   // only excluded from the eviction list, so a session over budget on its own is left alone rather
   // than deleted under its own writer.
@@ -107,9 +107,6 @@ export function selectOverBudget(
   }
   return doomed;
 }
-
-/** Where refused feedback reports are copied. Named here because the writer lives in another area. */
-const FEEDBACK_SUBDIR = 'feedback';
 
 interface DatedDir {
   name: string;
@@ -290,7 +287,7 @@ async function sizeOf(fs: FileSystemPort, path: string): Promise<number> {
  */
 async function collectEvidence(fs: FileSystemPort, root: string): Promise<TierEntry[]> {
   const entries: TierEntry[] = [];
-  for (const under of TRANSIENT_DIRS) {
+  for (const under of EVIDENCE_DIRS) {
     const isVisual = ReticleDir.VISUAL_SUBDIR === under;
     const dirs = isVisual ? await visualDirs(fs, root) : [join(root, under)];
     for (const dir of dirs) {
@@ -359,5 +356,5 @@ export async function pruneFeedback(
   root: string,
   retention: number = DEFAULT_FEEDBACK_RETENTION,
 ): Promise<void> {
-  await pruneByRecency(fs, join(root, FEEDBACK_SUBDIR), retention);
+  await pruneByRecency(fs, join(root, ReticleDir.FEEDBACK_SUBDIR), retention);
 }
