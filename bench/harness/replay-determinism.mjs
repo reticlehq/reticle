@@ -95,12 +95,28 @@ const flakeRate = runs.length ? (runs.length - majority) / runs.length : null;
 // step's ok/anchor/drift). That must be identical across every run, or the suite is flaky. Token cost
 // is a SECONDARY metric: it is constant in steady state, but a slow run can add a few tokens of
 // settle/retry note, so it is reported (not gated) — verdict flake is the real failure mode.
-const verdictDeterministic = 1 === statuses.size && 1 === fingerprints.size;
+/*
+ * Determinism means the same GREEN verdict, not merely the same verdict.
+ *
+ * This read `1 === statuses.size && 1 === fingerprints.size`, which N runs that all ERRORED satisfy
+ * perfectly: one status, one fingerprint, flake rate 0, and a headline reading "flake rate 0% by
+ * construction". A benchmark that scores a suite which never worked is the same defect this release
+ * is about, one level in - a report that cannot be wrong.
+ *
+ * `ok` is the only status that means every anchor resolved and every step ran green. `drift` and
+ * `error` are stable answers too, and a stable WRONG answer is not the property being claimed.
+ */
+const statusRan = runs.length > 0 && runs.every((r) => 'ok' === r.status);
+const verdictDeterministic = statusRan && 1 === statuses.size && 1 === fingerprints.size;
 const tokenConstant = 1 === tokenSet.size;
 const summary = {
   dimension:
     'Replay determinism / flake rate (Layer C) — the regression-suite property that matters most',
   runs: runs.length,
+  // WHICH status, not only how many distinct ones — the number alone cannot tell a suite that
+  // passed N times from one that failed identically N times.
+  statuses: [...statuses].sort(),
+  every_run_ok: statusRan,
   distinct_statuses: statuses.size,
   distinct_verdicts: fingerprints.size,
   distinct_token_counts: tokenSet.size,

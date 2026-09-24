@@ -288,6 +288,41 @@ if (cost !== null) {
 }
 
 /*
+ * Replay determinism, gated on the property it claims rather than on its own headline.
+ *
+ * The harness reported `flake_rate: 0` and "verdict-deterministic" whenever every run agreed - which
+ * N runs that all ERRORED satisfy perfectly. A benchmark that scores a suite which never worked is a
+ * report that cannot be wrong, and nothing here was reading it (2.1).
+ *
+ * Both halves are gated because either alone passes vacuously: every run must have come back `ok`,
+ * and the verdicts must be identical. A stable wrong answer is not determinism.
+ */
+const determinism = readRaw('bench/raw/replay-determinism.json');
+if (determinism !== null) {
+  const runs = determinism.runs ?? 0;
+  if (0 === runs) {
+    failures.push('replay determinism: zero runs recorded, so the flake rate is about nothing');
+  } else if (true !== determinism.every_run_ok) {
+    failures.push(
+      `replay determinism: not every run was ok (${(determinism.statuses ?? []).join(', ')}) — ` +
+        'a flake rate over runs that failed identically is not determinism',
+    );
+  } else if (true !== determinism.verdict_deterministic) {
+    failures.push(
+      `replay determinism: ${String(determinism.distinct_verdicts)} distinct verdicts across ` +
+        `${String(runs)} runs (flake rate ${String(determinism.flake_rate)})`,
+    );
+  }
+  scorecard.push([
+    'Replay · determinism',
+    `${String(runs)} runs`,
+    true === determinism.every_run_ok
+      ? `all ok, flake ${String(determinism.flake_rate)}`
+      : 'NOT ok',
+  ]);
+}
+
+/*
  * The comparison against a compiled Playwright suite, gated on the one thing it got wrong.
  *
  * #1074: it asked replay for `suite-console`, a flow no harness has ever recorded. Replay can only
