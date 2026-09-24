@@ -46,6 +46,43 @@ describe('installStoreState', () => {
     unregisterStore('late');
   });
 
+  /*
+   * One failed emit must not turn into permanent duplicate reporting.
+   *
+   * The baseline the diff runs against was advanced AFTER the emit loop, inside the same
+   * `observeSafely` that swallows a throw. So a single emit that threw left `last` pointing at a
+   * state the store had long moved past, and every later notify diffed against that stale baseline
+   * and re-sent the whole changed value again. For a store holding a list, that is the entire list
+   * on every subsequent change, forever.
+   *
+   * Seen in a real app's journal: one store path accounted for 97% of every state event, and the
+   * same `old` hash appeared across long runs of events while the new value kept moving. This is
+   * the mechanism that produces exactly that signature. (Duplicate live subscriptions would produce
+   * it too; that one is not proven here, and this fix is correct either way.)
+   */
+  it('advances its baseline even when an emit throws', () => {
+    const events: Captured[] = [];
+    let explode = true;
+    const teardown = installStoreState((type, data) => {
+      if (explode && EventType.STATE_CHANGE === type) {
+        explode = false;
+        throw new Error('transport refused this one');
+      }
+      events.push({ type, data });
+    });
+
+    const store = fakeStore<{ items: number[] }>({ items: [1] });
+    registerStore('cart', store);
+    store.setState({ items: [1, 2] }); // this emit throws and is lost
+    store.setState({ items: [1, 2, 3] }); // only THIS change should be reported
+
+    const changes = events.filter((e) => EventType.STATE_CHANGE === e.type);
+    expect(changes).toHaveLength(1);
+    expect(changes[0]?.data['old']).toEqual([1, 2]);
+    expect(changes[0]?.data['value']).toEqual([1, 2, 3]);
+    teardown();
+  });
+
   it('observes a store registered AFTER install (the real app ordering)', () => {
     // Regression: the SDK installs observers during connect, but apps call registerStore after —
     // so enumerating once at install subscribed to nothing and STATE_CHANGE never fired in any real app.
