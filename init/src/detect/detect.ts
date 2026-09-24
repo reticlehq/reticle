@@ -149,6 +149,17 @@ export interface Detection {
    */
   webGlSubtree?: boolean | undefined;
   packageManager: PackageManager;
+  /**
+   * Every dependency this package DECLARES, by name, merged across the three blocks.
+   *
+   * So the planner can tell "not wired yet" from "wired already". Without it the install step could
+   * only ever say APPLY, and a re-run over an instrumented project therefore ran a package-manager
+   * install it did not need - which is the step that touches `node_modules`.
+   *
+   * Optional so every existing construction keeps working; absent reads as "nothing known", which
+   * installs, and installing twice is the harmless direction.
+   */
+  dependencies?: Readonly<Record<string, string>> | undefined;
 }
 
 const NEXT_CONFIGS = ['next.config.js', 'next.config.mjs', 'next.config.ts', 'next.config.cjs'];
@@ -327,15 +338,53 @@ export function namesAPackageManager(markers: ReadonlySet<string>): boolean {
   return packageManagerFromNodeModules(markers) !== undefined;
 }
 
+/**
+ * The manager a project DECLARES, via corepack's `packageManager` field.
+ *
+ * The strongest signal there is, and stronger than anything else here: a lockfile is evidence of
+ * what was run once, an installed tree is evidence of what was run last, and this is the project
+ * SAYING which one it uses. Corepack enforces it — it refuses to run a different manager on the
+ * project's behalf — so choosing against it produces a command that cannot work.
+ *
+ * Unrecognised values fall through rather than defaulting. A field naming something we do not know
+ * must not quietly become npm; that is how a pnpm repo gets an `npm i`.
+ */
+function packageManagerFromField(pkg: unknown): PackageManager | undefined {
+  if ('object' !== typeof pkg || null === pkg) return undefined;
+  const declared = (pkg as Record<string, unknown>)['packageManager'];
+  if ('string' !== typeof declared) return undefined;
+  // `name@version`, and the version is not ours to care about — only which binary runs.
+  const name = declared.split('@')[0]?.trim().toLowerCase();
+  const known: Record<string, PackageManager> = {
+    npm: PackageManager.NPM,
+    pnpm: PackageManager.PNPM,
+    yarn: PackageManager.YARN,
+    bun: PackageManager.BUN,
+  };
+  return name === undefined ? undefined : known[name];
+}
+
 export function detectPackageManager(
   lockfiles: ReadonlySet<string>,
   nodeModulesMarkers: ReadonlySet<string>,
+  pkg?: unknown,
 ): PackageManager {
+  // What the project SAYS beats every trace of what was once run in it. Reported from the field: an
+  // already-instrumented npm workspaces project had a pnpm dependency migration run over it, which
+  // moved its `node_modules` aside and broke the dev server. Moving an installed tree is not
+  // something a scaffolder may do to a working checkout.
+  const declared = packageManagerFromField(pkg);
+  if (declared !== undefined) return declared;
   if (lockfiles.has('pnpm-lock.yaml')) return PackageManager.PNPM;
   if (lockfiles.has('yarn.lock')) return PackageManager.YARN;
   if (lockfiles.has('bun.lockb') || lockfiles.has('bun.lock')) return PackageManager.BUN;
   // No lockfile is not the same as "npm". An already-installed tree says which manager built it.
   return packageManagerFromNodeModules(nodeModulesMarkers) ?? PackageManager.NPM;
+}
+
+/** Every declared dependency, by name. Later blocks do not override earlier ones by accident. */
+function declaredDependencies(pkg: PackageJsonLike): Readonly<Record<string, string>> {
+  return { ...pkg.peerDependencies, ...pkg.devDependencies, ...pkg.dependencies };
 }
 
 function detectFramework(input: DetectInput): Framework {
@@ -382,7 +431,12 @@ export function detect(input: DetectInput): Detection {
       (name) => depVersion(input.pkg, name) !== undefined,
     ),
     webGlSubtree: WEBGL_SUBTREE_DEPS.some((name) => depVersion(input.pkg, name) !== undefined),
-    packageManager: detectPackageManager(input.lockfiles, input.nodeModulesMarkers ?? new Set()),
+    packageManager: detectPackageManager(
+      input.lockfiles,
+      input.nodeModulesMarkers ?? new Set(),
+      input.pkg,
+    ),
+    dependencies: declaredDependencies(input.pkg),
   };
 }
 

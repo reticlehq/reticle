@@ -535,6 +535,23 @@ function agentRuleSteps(input: PlanInput): Step[] {
  * trade — but only if the message says what to do about it.
  */
 
+/**
+ * Is this package already declared at the version we would pin?
+ *
+ * The caret is the point. `npm i -D pkg@3.2.0` WRITES `^3.2.0`, so on every later run the pinned
+ * `3.2.0` failed a string comparison against the range npm had just created, and init re-installed
+ * for ever. Only the two forms a package manager writes by itself are read - an exact version, and
+ * `^`/`~` over that same version.
+ *
+ * Everything else installs. A false "already" leaves somebody with no SDK and an install that
+ * claims to have run; a redundant install only costs time, so the unreadable cases go the safe way.
+ */
+function alreadyDeclared(declared: string | undefined, pinned: string | undefined): boolean {
+  if (declared === undefined) return false;
+  if (pinned === undefined || 0 === pinned.length) return true;
+  return declared === pinned || `^${pinned}` === declared || `~${pinned}` === declared;
+}
+
 function installStep(input: PlanInput): Step {
   const pm = input.detection.packageManager;
   const packages = pinnedPackages(
@@ -542,6 +559,26 @@ function installStep(input: PlanInput): Step {
     input.options.sdkVersion,
   );
   const command = installCommand(pm, packages);
+  /*
+   * A re-run over an already-wired project does NO dependency work.
+   *
+   * Reported from the field: `init` on an instrumented npm-workspaces project ran a pnpm dependency
+   * migration, which moved the existing `node_modules` aside and broke the dev server. Whatever
+   * manager gets chosen, the redundant install is the step that touches the tree — so the fix that
+   * matters is not running one that nothing needs. `init` is documented as idempotent; this is the
+   * step that was not.
+   */
+  const declared = input.detection.dependencies ?? {};
+  const version = input.options.sdkVersion;
+  const names = frameworkPackages(input.detection.framework, input.detection.uiLibrary);
+  if (names.length > 0 && names.every((n) => alreadyDeclared(declared[n], version))) {
+    return {
+      title: 'Install dependencies',
+      target: 'package.json',
+      status: StepStatus.ALREADY,
+      detail: `${names.join(', ')} already declared${version === undefined || 0 === version.length ? '' : ` at ${version}`}`,
+    };
+  }
   if (!input.options.install) {
     return {
       title: 'Install dependencies',
