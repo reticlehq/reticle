@@ -323,3 +323,72 @@ describe('teardown sweeps the tiers at the SESSION root, not the daemon root', (
     SESSION_RETENTION_TIMEOUT_MS,
   );
 });
+
+/**
+ * A session nobody ever drove keeps no journal.
+ *
+ * Retention keeps the twenty most recent session directories. A tab that connects and is never
+ * driven still gets one, and still gets a journal: the DOM and network observers run from the
+ * moment the SDK attaches, so an idle tab on a busy page accumulates megabytes without a single
+ * tool call. Measured in this repo's own workspace, half the session directories had served no tool
+ * call at all and held roughly as many bytes as the ones that had.
+ *
+ * The cost is not the disk. Those directories occupy retention SLOTS, so a journal that could
+ * answer a verdict question is evicted by one that was never asked one.
+ *
+ * The test is deliberately about the RETENTION decision and not about capture. Capture must keep
+ * running the whole time: whether a tool call happens is not knowable while the events that would
+ * answer it are being recorded, and gating capture on it would mean the first assertion of a
+ * session has nothing to read. The directory is removed at the END, once the answer is known.
+ */
+describe('a session that served no tool call', () => {
+  let root: string;
+  const fs = createNodeFileSystem();
+
+  beforeEach(async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'reticle-idle-'));
+    root = join(dir, '.reticle');
+  });
+  afterEach(async () => {
+    await removeTempDir(join(root, '..'));
+  });
+
+  async function seed(id: string, actions: string | undefined): Promise<string> {
+    const dir = sessionDirPath(root, asSessionId(id));
+    await fs.mkdir(dir);
+    await fs.writeFile(join(dir, 'events.jsonl'), '{"t":1}\n');
+    if (actions !== undefined) await fs.writeFile(join(dir, 'actions.jsonl'), actions);
+    return dir;
+  }
+
+  it('is removed at teardown, so it cannot evict a journal somebody can use', async () => {
+    await seed('s-idle', undefined);
+    const end = makeSessionEnd({ fs, reticleRoot: root, enabled: true });
+    await end(fakeSession('s-idle', {}));
+    expect(await fs.exists(sessionDirPath(root, asSessionId('s-idle')))).toBe(false);
+  });
+
+  it('treats an empty actions ledger the same as a missing one', async () => {
+    await seed('s-empty', '');
+    const end = makeSessionEnd({ fs, reticleRoot: root, enabled: true });
+    await end(fakeSession('s-empty', {}));
+    expect(await fs.exists(sessionDirPath(root, asSessionId('s-empty')))).toBe(false);
+  });
+
+  /** The load-bearing control: one tool call is enough to keep the whole journal. */
+  it('KEEPS the journal of a session that served even one tool call', async () => {
+    await seed('s-driven', '{"tool":"reticle_act"}\n');
+    const end = makeSessionEnd({ fs, reticleRoot: root, enabled: true });
+    await end(fakeSession('s-driven', {}));
+    expect(await fs.exists(sessionDirPath(root, asSessionId('s-driven')))).toBe(true);
+  });
+
+  /** And it must not reach into anyone else's directory. */
+  it('removes only its own session, never a sibling', async () => {
+    await seed('s-idle', undefined);
+    await seed('s-other', undefined);
+    const end = makeSessionEnd({ fs, reticleRoot: root, enabled: true });
+    await end(fakeSession('s-idle', {}));
+    expect(await fs.exists(sessionDirPath(root, asSessionId('s-other')))).toBe(true);
+  });
+});

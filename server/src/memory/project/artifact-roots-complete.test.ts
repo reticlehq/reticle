@@ -67,8 +67,8 @@ const DELIBERATE: Readonly<Record<string, { uses: number; why: string }>> = {
     why: 'Fallback for a session whose project could not be resolved — `session.artifactRoot` wins when it exists.',
   },
   'memory/journal/session-end.ts': {
-    uses: 3,
-    why: 'The same fallback three times — ambient map, journal prune, run artifact — each written as `session.artifactRoot ?? deps.reticleRoot`.',
+    uses: 4,
+    why: 'The same fallback four times — ambient map, undriven-journal drop, workspace prune, run artifact — each written as `session.artifactRoot ?? deps.reticleRoot`. The fourth is the drop of a journal for a session that served no tool call, and it has to resolve the same root for the same reason the prune beside it does: teardown acts on the workspace the SESSION wrote into, never the daemon cwd.',
   },
   'surface/tools/invoke-tool.ts': {
     uses: 2,

@@ -1,4 +1,6 @@
 import { driveFlowsFrom, type DriveProgram, type TapeStep } from './drive-flow.js';
+import { journalActionsPath, sessionDirPath } from '@/memory/project/dir/reticle-dir.js';
+import { asSessionId, type SessionId } from '@reticlehq/core';
 import {
   OnboardingPhase,
   OnboardingStepStatus,
@@ -199,6 +201,23 @@ export function makeSessionEnd(deps: SessionEndDeps): (session: SessionEndTarget
       // The root this session actually journalled into. Pruning the daemon's tree instead meant a
       // per-project workspace was never swept at all, so the one place journals really accumulate
       // was the one place retention never ran.
+      /*
+       * A session nobody ever drove keeps no journal.
+       *
+       * The observers run from the moment the SDK attaches, so an idle tab on a busy page
+       * accumulates megabytes without a single tool call. The cost is not the disk: those
+       * directories occupy retention SLOTS, so a journal that could answer a verdict question is
+       * evicted by one that was never asked one.
+       *
+       * Decided at the END and never by gating CAPTURE. Whether a tool call will happen is not
+       * knowable while the events that would answer it are being recorded, and gating capture on it
+       * would leave the first assertion of a session with nothing to read.
+       */
+      await dropUndrivenJournal(
+        deps.fs,
+        session.artifactRoot ?? deps.reticleRoot,
+        asSessionId(session.id),
+      );
       // EVERY tier, not just sessions. Visual diffs and feedback copies were pruned only at daemon
       // start, against the DAEMON's root — which for a globally registered daemon is `$HOME` and not
       // the project at all, so the two tiers that only ever grow in a project workspace were the two
@@ -291,4 +310,25 @@ async function saveDrivenFlow(deps: SessionEndDeps, session: SessionEndTarget): 
     status: 0 === programs.length ? OnboardingStepStatus.SKIPPED : OnboardingStepStatus.COMPLETED,
     ...(outcome.unprovenSteps === undefined ? {} : { reason: 'no_declared_consequence' }),
   });
+}
+
+/**
+ * Remove this session's journal when it served no tool call.
+ *
+ * "Served no tool call" is read off the actions ledger, which is written one line per call: absent
+ * or empty means nothing was ever driven here. Best-effort like every other maintenance step —
+ * a session that cannot be tidied is not a session that failed.
+ */
+async function dropUndrivenJournal(
+  fs: SessionEndDeps['fs'],
+  root: string,
+  sessionId: SessionId,
+): Promise<void> {
+  try {
+    const actions = await fs.readFile(journalActionsPath(root, sessionId)).catch(() => '');
+    if (actions.trim().length > 0) return;
+    await fs.rm(sessionDirPath(root, sessionId));
+  } catch {
+    // tidying is never the reason a teardown fails
+  }
 }
