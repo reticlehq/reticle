@@ -32,8 +32,19 @@ import { surfaceVocabulary, listOf, type SurfaceVocabulary } from './surface-voc
  * measured reason. A briefing that names a tool the agent was not given does not merely confuse it;
  * it makes the agent stop using the product altogether.
  */
+/*
+ * `reticle gate` is FOLDED INTO the done sentence rather than given a paragraph, and that is the
+ * budget rule working rather than a stylistic choice.
+ *
+ * The instruction block has a hard byte cap whose own note says a raise must be paid for with a
+ * measurement, and that if one cannot be shown the right answer is to cut an older sentence. There
+ * is no measurement for `gate`: it is built, it has anti-reward-hacking, and it appeared in no
+ * surface an agent reads, which is an argument and not a number. Cutting a measured sentence to
+ * make room for an unmeasured one would be strictly worse. So it costs about a hundred characters
+ * inside the sentence that already names the exact moment it applies to, and the cap did not move.
+ */
 const verdictDiscipline = (v: SurfaceVocabulary): string =>
-  `Reticle verifies a running web app from the inside: go (${v.navigate}), look (${listOf(v.look, v.find)}), act and prove in one hop (${v.actAndWait}), observe (${listOf(v.observe, v.state, v.network, v.console)}), assert (${v.assert}). Verify a user-facing change against the real app before you call it done, and never weaken a check to make it pass.
+  `Reticle verifies a running web app from the inside: go (${v.navigate}), look (${listOf(v.look, v.find)}), act and prove in one hop (${v.actAndWait}), observe (${listOf(v.observe, v.state, v.network, v.console)}), assert (${v.assert}). Verify a user-facing change against the real app before you call it done — \`npx @reticlehq/server gate --since <ref>\` fails unless a passing artifact covers every flow your edits affect — and never weaken a check to make it pass.
 
 Only ${v.actAndWait} and ${v.assert} produce a verdict. ${v.act.length > 0 ? `${v.act} and e` : 'E'}verything else moves or reads the app and proves nothing, so a drive that ends without one of those two has no result however many tools it used. Prefer ${v.actAndWait}({ ref, action, until }) — it names the expected consequence BEFORE the action, which is the difference between a check and a rationalisation. Only verified:"yes" is a pass — "unknown" means Reticle could not tell what happened, "no-fault" means nothing was declared to prove. Report either as not proved.
 

@@ -162,6 +162,14 @@ You never write test syntax. You say what should be true, in plain English.
 
 Reticle answers with evidence: the request that fired, the state that changed, the console line, and the file to open.
 
+**Make it unavoidable in CI**
+
+```bash
+npx @reticlehq/server gate --since HEAD~1
+```
+
+`gate` works out which saved flows your edits affect and exits non-zero unless a **passing** artifact covers each one. An agent that edits a covered file cannot call itself finished without re-verifying, and it is the one check nobody can satisfy by reasoning about their own diff. See [`docs/cli/gate.mdx`](docs/cli/gate.mdx).
+
 ---
 
 ## Why not Playwright?
