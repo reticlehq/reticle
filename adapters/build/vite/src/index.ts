@@ -397,9 +397,33 @@ function stampableId(id: string): string | null {
   return id.split('?')[0] ?? id;
 }
 
+/**
+ * A test file, by the names every JS test runner agrees on.
+ *
+ * `.test.`/`.spec.` before the extension, or anywhere under a `__tests__` directory. Anchored to a
+ * path SEGMENT and a dot so `TestBanner.tsx`, `latest.tsx` and `contest.tsx` stay ordinary
+ * components — they are somebody's app, and skipping them would silently cost source mapping.
+ */
+const TEST_FILE = /(?:\.(?:test|spec)\.[^./]+$)|(?:^|\/)__tests__\//;
+
 function shouldStamp(id: string): boolean {
   const clean = stampableId(id);
-  return clean !== null && JSX_FILE.test(clean);
+  if (null === clean) return false;
+  /*
+   * A test file is not the app under test.
+   *
+   * Nothing reads `data-reticle-source` on one — an agent inspects the app's DOM, never a test's —
+   * so stamping them is pure cost, and it is charged per file on every run. Measured in the field on
+   * ~1250 jsdom tests: 218s without the plugin, 411s with it, and one test that passed without
+   * instrumentation failed with it. Inserting attributes into JSX is exactly what an assertion on
+   * rendered output notices.
+   *
+   * Cut on the NAME rather than on "are we under Vitest": `vitest-browser.ts` records what happened
+   * the last time that was cut on the `VITEST` env var, which also reads true when a Vitest suite
+   * boots an app in order to test it. A name check cannot make that mistake.
+   */
+  if (TEST_FILE.test(clean)) return false;
+  return JSX_FILE.test(clean);
 }
 
 /** A `.svelte` single-file component, which needs the Svelte stamper rather than Babel. */

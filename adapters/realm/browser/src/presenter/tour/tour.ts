@@ -445,6 +445,16 @@ export function mountTour(deps: TourDeps): TourHandle | undefined {
    */
   const onKey = (event: KeyboardEvent): void => {
     if (!open) return;
+    /*
+     * An app modal outranks our onboarding.
+     *
+     * Reported from the field as "Escape does not close a <dialog> opened with showModal()", with
+     * the tell in the repro: "after a click inside the dialog it works again" — a click dismisses
+     * the tour, and Escape reaches the app from then on. Cancelling the key is what stops the
+     * browser's own close request, so while the app has a modal open the tour does not take Escape.
+     * It is still dismissable by its own Skip control, and by the click that was closing it anyway.
+     */
+    if (doc.querySelector('dialog[open]') !== null) return;
     const step = 'ArrowRight' === event.key ? 1 : 'ArrowLeft' === event.key ? -1 : 0;
     if ('Escape' === event.key) {
       event.preventDefault();

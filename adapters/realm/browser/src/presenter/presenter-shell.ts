@@ -535,8 +535,23 @@ export class HudShell {
     if (this.#settings.contains(target)) return;
     this.#settings.close();
   };
+  /*
+   * Escape belongs to the app under test.
+   *
+   * This used to `preventDefault()` on every branch, which is what cancels the browser's own close
+   * request for a `<dialog>` opened with `showModal()` — so Escape stopped closing an app's modals
+   * the moment Reticle was installed, and the developer saw a bug in their own code that does not
+   * exist in production. The broadest branch did it for the broadest reason: with the HUD expanded,
+   * which is the default, EVERY Escape on the page was cancelled so our panel could collapse.
+   *
+   * An instrumentation layer observes; it does not participate, and taking an event away from the
+   * app is participating in the strongest way there is. So: never cancel it, and when the app has a
+   * modal open, do not act at all — Escape unambiguously belongs to that modal, and collapsing our
+   * panel in the same keystroke is a second surprise on top of the first.
+   */
   #onKeyDown = (e: KeyboardEvent): void => {
     if ('Escape' !== e.key || this.#root === undefined) return;
+    if (document.querySelector('dialog[open]') !== null) return;
     const target = e.target;
     if (
       target instanceof HTMLElement &&
@@ -547,17 +562,14 @@ export class HudShell {
       return;
     }
     if (this.isChatOpen()) {
-      e.preventDefault();
       this.closeChat();
       return;
     }
     if (this.#settings.isOpen()) {
-      e.preventDefault();
       this.#settings.close();
       return;
     }
     if (!this.isCollapsed()) {
-      e.preventDefault();
       this.collapse();
     }
   };
