@@ -76,7 +76,11 @@ describe('every ACT dispatch path opens an attribution window', () => {
       expect.arrayContaining([
         'surface/tools/act-tools.ts',
         'features/crawl/crawl.ts',
-        'language/flows/flow-replay.ts',
+        // `flow-replay.ts` used to dispatch inline and is no longer in this list: the testid runner
+        // now goes through `flow-step-runners.ts`, which is where its siblings already dispatched
+        // and where the attribution window is opened. The dispatch moved, it did not disappear, so
+        // the file that actually does it is what this asserts.
+        'language/flows/flow-step-runners.ts',
         'language/flows/replay.ts',
       ]),
     );

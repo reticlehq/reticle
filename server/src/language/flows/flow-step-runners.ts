@@ -162,7 +162,7 @@ export function replayDestructiveActionHint(rawError: string): string {
  * Dispatch one already-resolved step. Shared so every anchor kind runs the action the same way —
  * including the action window, whose open/close must not depend on which anchor found the element.
  */
-async function actOnResolvedRef(
+export async function actOnResolvedRef(
   session: FlowReplaySession,
   step: FlowStep,
   index: number,

@@ -29,6 +29,7 @@ import {
 } from '@reticlehq/core';
 import { runStepWithStaleRetry } from '@/surface/tools/act/act-sequence-retry.js';
 import { runRoleStep } from './flow-step-runners.js';
+import { runTestidStep } from './flow-replay.js';
 import type { FlowReplaySession } from './flow-replay.js';
 
 const STALE = "ref 'e91' no longer resolves to an element";
@@ -115,6 +116,72 @@ describe('a role-anchored step survives a re-render', () => {
       { tool: FlowStepTool.ACT, action: ActionType.CLICK, args: {} } as unknown as FlowStep,
       0,
       { kind: AnchorKind.ROLE, role: 'button', name: 'Search' },
+      false,
+      () => Promise.resolve(),
+    );
+
+    expect(result.ok, 'the step should survive the re-render').toBe(true);
+    expect(queries, 'the locator must run again — the DOM is what changed').toBe(2);
+    expect(acts).toBe(2);
+  });
+});
+
+/**
+ * And the anchor kind that did not have the cure (2.3).
+ *
+ * `runRoleStep` and `runComponentStep` both dispatch through `actOnResolvedRef`, which re-resolves
+ * once on a stale ref. `runTestidStep` had its own inline dispatch and no retry at all, so the same
+ * flow died on the same re-render purely because the step was anchored by testid rather than by
+ * role. That is a property of the LOCATOR deciding whether a replay survives a re-render, which is
+ * exactly backwards: the anchor kind says how to find the element, not how sturdy the replay is.
+ *
+ * testid is also the anchor `reticle init` steers people towards, so the kind most likely to be in
+ * a real flow was the kind without the fix.
+ */
+describe('a testid-anchored step survives a re-render', () => {
+  it('re-resolves and succeeds when the first dispatch hits a stale ref', async () => {
+    let acts = 0;
+    let queries = 0;
+    const session = {
+      command: (name: string) => {
+        if (ReticleCommand.QUERY === name) {
+          queries += 1;
+          return Promise.resolve({
+            kind: 'command_result',
+            id: 'q',
+            ok: true,
+            // A different ref after the re-render, the reported symptom.
+            result: { elements: [{ ref: `t${String(queries)}` }] },
+          } as unknown as CommandResult);
+        }
+        acts += 1;
+        return Promise.resolve(
+          1 === acts
+            ? {
+                kind: 'command_result',
+                id: 'a',
+                ok: false,
+                error: "ref 't1' no longer resolves to an element",
+              }
+            : { kind: 'command_result', id: 'a', ok: true },
+        );
+      },
+      eventsSince: () => [],
+      onEvent: () => () => undefined,
+      elapsed: () => 0,
+    } as unknown as FlowReplaySession;
+
+    const result = await runTestidStep(
+      session,
+      {
+        tool: FlowStepTool.ACT,
+        action: ActionType.CLICK,
+        args: {},
+        anchor: { kind: AnchorKind.TESTID, value: 'pay' },
+      },
+      0,
+      'pay',
+      new Set<string>(),
       false,
       () => Promise.resolve(),
     );

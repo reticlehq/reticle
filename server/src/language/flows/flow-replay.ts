@@ -28,7 +28,6 @@ import {
   DriftReason,
   EventType,
   FlowStepTool,
-  ReticleCommand,
   type Drift,
   type FlowFile,
   type FlowStep,
@@ -38,7 +37,6 @@ import {
   PredicateKind,
 } from '@reticlehq/core';
 import { asString, isConsequenceDrift } from '@reticlehq/core';
-import { replayActionArgs } from './replay.js';
 import { anchorFieldName } from './fields/flow-secret-field.js';
 import {
   degradedStepResult,
@@ -55,8 +53,8 @@ import { namedNetIsInFlight } from '@reticlehq/engine/evidence/unsettled.js';
 const IN_FLIGHT_AT_BUDGET_END =
   'the request this step declared had not come back when the budget ended — it is still in flight, ' +
   'so nothing here says the app failed. Raise the step timeout, or look at the endpoint';
-import { ReticleTool } from '@reticlehq/core';
 import { isDocumentGoneError } from '@/portal/session/facts/session-replaced.js';
+import { actOnResolvedRef } from './flow-step-runners.js';
 
 /**
  * The document this replay was driving went away mid-run.
@@ -144,7 +142,7 @@ function summarizeConsequence(events: ReticleEvent[]): string | undefined {
 }
 
 /** Run one testid-anchored step: re-resolve via QUERY, then ACT on the live ref, else drift. */
-async function runTestidStep(
+export async function runTestidStep(
   session: FlowReplaySession,
   step: FlowStep,
   index: number,
@@ -183,26 +181,33 @@ async function runTestidStep(
     };
   }
   const ref = refs[0] ?? '';
-  session.beginAction?.(ReticleTool.FLOW_REPLAY, { ref, action: step.action ?? '' });
-  let act;
-  try {
-    act = await session.command(ReticleCommand.ACT, {
-      ref,
-      action: step.action ?? '',
-      // The field this step types into — from the anchor, so a redacted fill can be supplied from
-      // RETICLE_SECRET_<FIELD> without the flow carrying the secret. The testid runner used to pass
-      // the testid string here and the other two runners passed nothing, so a role-anchored login
-      // typed the literal placeholder.
-      args: replayActionArgs(step.args, confirmDangerous, anchorFieldName(step.anchor)),
-    });
-  } finally {
-    session.finishAction?.();
-  }
-  const result: FlowStepResult = { step: index, tool: step.tool, anchor: value, ok: act.ok };
-  if (!act.ok) {
-    result.error = act.error ?? 'command failed';
-    return result;
-  }
+  /*
+   * The same dispatch its siblings use, including the one re-resolve on a stale ref (2.3).
+   *
+   * This runner had its own inline copy and no retry, so a flow died on a re-render purely because
+   * the step was anchored by testid rather than by role — the locator deciding how sturdy the replay
+   * is, which is exactly backwards. testid is also the anchor `reticle init` steers people towards,
+   * so the kind most likely to appear in a real flow was the kind without the cure.
+   *
+   * The re-resolve keeps the ambiguity rule above: more than one match is drift, never a guess, so
+   * it hands back a ref only when the locator still names exactly one element.
+   */
+  const result = await actOnResolvedRef(
+    session,
+    step,
+    index,
+    value,
+    ref,
+    confirmDangerous,
+    // The field this step types into — from the anchor, so a redacted fill can be supplied from
+    // RETICLE_SECRET_<FIELD> without the flow carrying the secret.
+    anchorFieldName(step.anchor),
+    async () => {
+      const again = await resolveTestid(session, value, sleep);
+      return 1 === again.refs.length ? again.refs[0] : undefined;
+    },
+  );
+  if (!result.ok) return result;
   // assert the step's expect.element testid is present AFTER the action —
   // unless that testid was marked DYNAMIC (the LLM-output case), in which case its presence/content
   // is NOT asserted (only the action ran). The skip is scoped strictly to the dynamic set.
