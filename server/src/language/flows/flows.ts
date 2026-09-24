@@ -454,7 +454,8 @@ export class FlowStore {
     projectId?: ProjectId,
   ): Promise<FlowResult<{ name: string; changed: HealChange[] }>> {
     return await this.#changeInPlace(name, projectId, (flow) => {
-      const { flow: next, applied } = applyHealChanges(flow, changes);
+      // The store's injected clock, so a written flow records when the rebind actually happened.
+      const { flow: next, applied } = applyHealChanges(flow, changes, () => this.#clock.now());
       return { next, value: { name, changed: applied } };
     });
   }

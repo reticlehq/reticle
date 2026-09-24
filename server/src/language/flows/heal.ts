@@ -50,6 +50,14 @@ export function confidenceFor(from: string, to: string): number {
 export function applyHealChanges(
   flow: FlowFile,
   changes: HealChange[],
+  /**
+   * When the rebind happened. Injected rather than read here, because this function is pure and a
+   * clock inside it would make the flow it returns depend on when a test ran.
+   *
+   * Optional so every existing caller keeps working; without it the step still records WHICH anchor
+   * was replaced, which is the half a reader actually acts on.
+   */
+  now?: () => number,
 ): { flow: FlowFile; applied: HealChange[] } {
   const byStep = new Map<number, HealChange>();
   for (const change of changes) byStep.set(change.step, change);
@@ -64,7 +72,21 @@ export function applyHealChanges(
       return step;
     }
     applied.push(change);
-    return { ...step, anchor: { kind: AnchorKind.TESTID, value: change.to } };
+    return {
+      ...step,
+      anchor: { kind: AnchorKind.TESTID, value: change.to },
+      /*
+       * `from` is the ORIGINAL recorded anchor, kept across later heals.
+       *
+       * A step healed twice has an intermediate name nobody ever chose, so overwriting with the
+       * newest would throw away the only anchor a reader wants — the one that was recorded by
+       * driving. The timestamp is the LATEST heal, because that is when this anchor arrived.
+       */
+      healed: {
+        from: step.healed?.from ?? change.from,
+        at: now?.() ?? step.healed?.at ?? 0,
+      },
+    };
   });
   return { flow: { ...flow, steps }, applied };
 }

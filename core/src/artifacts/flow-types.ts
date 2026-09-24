@@ -221,6 +221,23 @@ export interface FlowStep {
   /** true when the anchor is best-effort (no testid was resolvable at record time). NOT dropped. */
   degraded?: boolean;
   /**
+   * This anchor was rebound by `heal`, not chosen by whoever recorded the flow.
+   *
+   * Without it a machine-rebound locator is byte-indistinguishable from a recorded one, and three
+   * things go with that. A replay passing on a healed anchor is a weaker claim than one passing on
+   * a recorded anchor, because the rebind picked the element and the consequence only checked that
+   * SOMETHING still satisfied it. A step healed twice is a locator that is not stable, which was
+   * unknowable because the second heal overwrote the first. And a human reading the diff saw a
+   * changed testid with nothing saying who changed it.
+   *
+   * `from` is the ORIGINAL recorded anchor and survives later heals: the intermediate names were
+   * never chosen by anybody, so keeping the newest would throw away the only one a reader wants.
+   *
+   * Optional and additive — a flow without it reads exactly as before, which is every flow recorded
+   * until now, and no file version moves for it.
+   */
+  healed?: { from: string; at: number };
+  /**
    * How long THIS step's `expect` waits for its consequence, in ms. Overrides the flow's
    * `signalTimeoutMs` and the built-in FLOW_SIGNAL_TIMEOUT_MS default.
    *
@@ -274,6 +291,8 @@ const baseFlowStep = z.object({
   id: z.string().min(1).optional(),
   /** What this step does to the subject; absent means unknown. See StepEffect. */
   effect: z.nativeEnum(StepEffect).optional(),
+  /** Rebound by `heal` rather than recorded — see FlowStep.healed. */
+  healed: z.object({ from: z.string(), at: z.number() }).optional(),
   action: z.nativeEnum(ActionType).optional(),
   args: z.record(z.unknown()).optional(),
   expect: FlowExpectSchema.optional(),
