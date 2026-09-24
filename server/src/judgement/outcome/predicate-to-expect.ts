@@ -20,7 +20,26 @@ import type { FlowExpect } from '@reticlehq/core';
 import type { Predicate } from '@reticlehq/engine/question/predicate/predicate.js';
 
 /** Merge two partial expectations; later keys win only where the earlier one said nothing. */
-function merge(into: FlowExpect, from: FlowExpect): FlowExpect {
+/**
+ * Two arms into one flat struct, or nothing.
+ *
+ * `FlowExpect` has one slot per kind, so two arms of the SAME kind collide. This was
+ * `{ ...from, ...into }`, a spread where the earlier arm silently won: `allOf[netA, netB]` saved as
+ * `netA` and the second claim was gone with nothing said (0.1).
+ *
+ * That is a false green with a long fuse. The agent wrote two claims, the file holds one, and every
+ * later replay reports green for a flow checking less than the person who recorded it believed -
+ * and by then the second claim does not exist for anything to notice.
+ *
+ * This file's header already states the rule being broken: never write an assertion into a flow
+ * file that nothing evaluates. Its twin was missing - never write a SMALLER assertion than the one
+ * you were handed. `undefined` propagates to a refusal, which costs the step its expectation and
+ * says so, instead of costing the flow its meaning in silence.
+ */
+function merge(into: FlowExpect, from: FlowExpect): FlowExpect | undefined {
+  for (const key of Object.keys(from)) {
+    if (key in into) return undefined;
+  }
   return { ...from, ...into };
 }
 
@@ -82,7 +101,15 @@ export function predicateToExpect(predicate: Predicate): FlowExpect | undefined 
       for (const part of predicate.predicates) {
         const expect = predicateToExpect(part);
         if (expect === undefined) continue;
-        combined = combined === undefined ? expect : merge(combined, expect);
+        if (combined === undefined) {
+          combined = expect;
+          continue;
+        }
+        const merged = merge(combined, expect);
+        // A collision means the flat struct cannot hold both arms. Refuse the whole conversion
+        // rather than persist whichever one happened to be written first.
+        if (merged === undefined) return undefined;
+        combined = merged;
       }
       return combined;
     }
