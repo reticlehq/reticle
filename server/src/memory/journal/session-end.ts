@@ -125,8 +125,8 @@ export function makeSessionEnd(deps: SessionEndDeps): (session: SessionEndTarget
      * somebody switches journalling off BECAUSE `.reticle/` got too big, and switching it off was
      * what stopped anything ever deleting what was already there. It also stopped the sweep of
      * visual diffs, feedback copies and run artifacts, none of which need the journal to be written
-     * at all. Retention had been ungated when it ran at daemon start; moving it to teardown, which
-     * is the only place that knows the session's own root, put it behind this return by accident.
+     * at all. The daemon's own start-path sweep was gated on the same flag, so there was no second
+     * site still running — both are ungated now.
      */
     const sweep = async (): Promise<void> => {
       try {

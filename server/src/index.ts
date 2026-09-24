@@ -311,12 +311,15 @@ function attachJournal(
       write: (session) => recordDriveRun(deps, session),
     });
   }
-  if (deps.enabled) {
-    // One call, because "what maintenance runs at startup" needs one answer. Inlined here, the byte
-    // budget was simply missing — written, tested, and called by nothing, while the three count
-    // bounds beside it ran every time. See startup-maintenance.ts.
-    void pruneWorkspace(deps.fs, deps.reticleRoot, new Set(bridge.sessions.all().map((s) => s.id)));
-  }
+  // One call, because "what maintenance runs at startup" needs one answer. Inlined here, the byte
+  // budget was simply missing — written, tested, and called by nothing, while the three count
+  // bounds beside it ran every time. See startup-maintenance.ts.
+  //
+  // Deliberately NOT behind `deps.enabled`. Switching journalling off is what somebody does BECAUSE
+  // the directory got too big, and both sweep sites were gated on it, so that setting was the one
+  // under which nothing ever deleted what was already there. Visual diffs, feedback copies and run
+  // artifacts do not need the journal to be written at all and kept accumulating regardless.
+  void pruneWorkspace(deps.fs, deps.reticleRoot, new Set(bridge.sessions.all().map((s) => s.id)));
 }
 
 /**
