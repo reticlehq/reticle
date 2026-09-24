@@ -48,7 +48,7 @@
     "@babel/core": "^7"
   },
   "devDependencies": {
-    "@babel/core": "^7.26.0",
+    "@babel/core": "^8.0.6",
     "@types/babel__core": "^7.20.5"
   },
   "publishConfig": {
