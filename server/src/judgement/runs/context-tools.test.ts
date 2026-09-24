@@ -137,11 +137,23 @@ describe('reticle_context', () => {
 
   it('answers a fresh session honestly empty rather than inventing a run', async () => {
     const { fs } = createMemoryFs();
+    // The gap is present and ZERO rather than absent: "nothing was claimed" is a fact about the
+    // session, and an omitted field reads as "nobody counted", which is a different answer.
     expect(await call(fs, { connected: false })).toEqual({
       step: 0,
       established: [],
       proven: [],
       remaining: [],
+      gap: {
+        claims: 0,
+        held: 0,
+        failed: 0,
+        undecided: 0,
+        nothingToProve: 0,
+        undecidedBy: {},
+        falseGreensCaught: 0,
+        failures: [],
+      },
     });
   });
 });

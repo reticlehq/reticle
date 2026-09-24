@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { type JournalAction, type ReticleEvent } from '@reticlehq/core';
 import { runContextFor } from './artifact/run-context.js';
+import { gapSummary } from './artifact/gap-summary.js';
 import { openSessionIntents } from '@/memory/intent/open-intents.js';
 import { ReticleTool } from '@reticlehq/core';
 import { sessionIdShape } from '@/surface/tools/tool-kit.js';
@@ -35,6 +36,12 @@ const CONTEXT_OUTPUT_SCHEMA = {
     .array(z.unknown())
     .describe(
       'Claims a verdict already settled, each `{ claim, verified, source?, doc?, epoch? }`. Read this before re-driving something: re-proving it is slow, and assuming it is a false green.',
+    ),
+  gap: z
+    .object({})
+    .passthrough()
+    .describe(
+      'The distance between what was claimed and what held, over THIS session: `{ claims, held, failed, undecided, nothingToProve, undecidedBy, falseGreensCaught, failures }`. `undecidedBy` says WHO can act on each unknown — environment (wait), code (fix the app), harness (fix Reticle or the call), could-not-see (look again). Folded from the same journal as everything else here, so it cannot disagree with it.',
     ),
   remaining: z
     .array(z.string())
@@ -85,7 +92,20 @@ export const CONTEXT_TOOLS: ToolDef[] = [
     handler: async (deps: ToolDeps, args) => {
       const sessionId = asString(args['sessionId']);
       const evidence = await evidenceFor(deps, sessionId);
-      return runContextFor({ ...evidence, intents: await openSessionIntents(deps, sessionId) });
+      const context = runContextFor({
+        ...evidence,
+        intents: await openSessionIntents(deps, sessionId),
+      });
+      /*
+       * The gap rides on `reticle_context` rather than on a tool of its own.
+       *
+       * This is the one call an agent makes when it needs to know what the run has already settled,
+       * which is exactly the moment "and what did NOT settle, and whose problem each of those is"
+       * is worth reading. It is folded from the same journal the rest of this response is folded
+       * from, so it costs one more pass over an array already in hand and cannot disagree with the
+       * `proven` list beside it.
+       */
+      return { ...context, gap: gapSummary(evidence.actions) };
     },
   },
 ];
