@@ -15,6 +15,42 @@ describe('IntentStore', () => {
     expect(await store().store.read()).toEqual([]);
   });
 
+  /*
+   * A write that dies halfway must not erase the ledger.
+   *
+   * `#load` fails soft to EMPTY, deliberately and correctly: this is a git-checked file a human can
+   * hand-merge, so a conflict marker in it must not take down the verdict that was only asking what
+   * was still open. But every mutation is a read-modify-write over that same load. So a truncated
+   * file does not degrade - it reads as "no intents were ever declared", and the very next save
+   * writes that empty ledger back over the real one. One interrupted write, and a committed,
+   * durable record of what the work was supposed to make true is gone for good.
+   *
+   * Writing to a temp sibling and renaming is what makes the destination hold the old file or the
+   * new one and never a half of either.
+   */
+  it('leaves the previous ledger intact when a write dies halfway', async () => {
+    const { fs, written } = createMemoryFs();
+    const path = `${ROOT}/intent.json`;
+    const clock = { now: (): number => 1_000 };
+    await new IntentStore(fs, ROOT, clock).declare([{ id: 'a', statement: 'A' }]);
+    const intact = written.get(path);
+
+    // The disk fills, or the process dies, after the bytes are partly down.
+    const dying = {
+      ...fs,
+      writeFile: async (p: string, data: string): Promise<void> => {
+        await fs.writeFile(p, data.slice(0, 12));
+        throw new Error('ENOSPC: no space left on device');
+      },
+    };
+    await new IntentStore(dying, ROOT, clock)
+      .declare([{ id: 'b', statement: 'B' }])
+      .catch(() => undefined);
+
+    expect(written.get(path)).toBe(intact);
+    expect(await new IntentStore(fs, ROOT, clock).read()).toHaveLength(1);
+  });
+
   it('writes into the project it was given, not somewhere else', async () => {
     const { store: s, written } = store();
     await s.declare([{ id: 'a', statement: 'A' }]);

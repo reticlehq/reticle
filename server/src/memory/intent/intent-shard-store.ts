@@ -39,6 +39,7 @@ import {
   type IntentRecord,
   type IntentShard,
 } from './intent-shard.js';
+import { writeFileAtomic } from '@/memory/project/fs/write-atomic.js';
 
 const INDEX_FILE = 'index.json';
 const SHARD_SUFFIX = '.json';
@@ -227,7 +228,8 @@ export class IntentShardStore {
       const old = await this.#readShard(previousSubject);
       if (old.intents[record.id] !== undefined) {
         const { [record.id]: _moved, ...rest } = old.intents;
-        await this.#fs.writeFile(
+        await writeFileAtomic(
+          this.#fs,
           this.#shardPath(previousSubject),
           serialise({ ...old, intents: rest }),
         );
@@ -236,12 +238,12 @@ export class IntentShardStore {
 
     const shard = await this.#readShard(record.subject);
     shard.intents[record.id] = record;
-    await this.#fs.writeFile(this.#shardPath(record.subject), serialise(shard));
+    await writeFileAtomic(this.#fs, this.#shardPath(record.subject), serialise(shard));
 
     // The index is DERIVED, never edited in place: two sources of truth would disagree, and the one
     // that is cheap to read is the one people would trust.
     const all = await this.#all();
-    await this.#fs.writeFile(this.#indexPath(), serialise(indexFrom(shardsFrom(all))));
+    await writeFileAtomic(this.#fs, this.#indexPath(), serialise(indexFrom(shardsFrom(all))));
   }
 
   /**
@@ -262,9 +264,9 @@ export class IntentShardStore {
       const shards = shardsFrom([...stored, ...incoming]);
       await this.#fs.mkdir(this.#dir());
       for (const shard of shards) {
-        await this.#fs.writeFile(this.#shardPath(shard.subject), serialise(shard));
+        await writeFileAtomic(this.#fs, this.#shardPath(shard.subject), serialise(shard));
       }
-      await this.#fs.writeFile(this.#indexPath(), serialise(indexFrom(shards)));
+      await writeFileAtomic(this.#fs, this.#indexPath(), serialise(indexFrom(shards)));
       return {
         migrated: incoming.length,
         subjects: [...new Set(incoming.map((r) => r.subject))].sort(),

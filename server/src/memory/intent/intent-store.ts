@@ -14,6 +14,7 @@ import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { withFileLock } from '@/memory/project/file-lock.js';
 import type { Clock } from '@/machine/clock.js';
+import { writeFileAtomic } from '@/memory/project/fs/write-atomic.js';
 
 /**
  * The intent ledger on disk — `.reticle/intent.json`, git-checked and meant to be read in review.
@@ -61,10 +62,18 @@ export class IntentStore {
     }
   }
 
-  /** Byte-stable: 2-space indent, one trailing newline. An unchanged ledger produces no diff. */
+  /**
+   * Byte-stable: 2-space indent, one trailing newline. An unchanged ledger produces no diff.
+   *
+   * Written to a temp sibling and renamed, because `#load` fails soft to EMPTY and every mutation
+   * here is a read-modify-write over it. A half-written file therefore does not degrade — it reads
+   * as "nothing was ever declared", and the next save writes that emptiness back over the real
+   * ledger. One interrupted write would permanently erase a committed record of what the work was
+   * supposed to make true.
+   */
   async #save(file: IntentFile): Promise<void> {
     await this.#fs.mkdir(reticleDirPaths(this.#root).root);
-    await this.#fs.writeFile(this.#path(), `${JSON.stringify(file, null, JSON_INDENT)}\n`);
+    await writeFileAtomic(this.#fs, this.#path(), `${JSON.stringify(file, null, JSON_INDENT)}\n`);
   }
 
   /** Every intent, in declaration order. */
