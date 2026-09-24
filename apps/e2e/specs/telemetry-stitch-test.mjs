@@ -22,7 +22,7 @@
 import path from 'node:path';
 import { createServer } from 'node:http';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { McpStdioClient } from '../../../bench/harness/mcp-client.mjs';
@@ -246,12 +246,23 @@ chk(
   saved?.assertions?.grade === 'asserted',
   JSON.stringify(saved?.assertions ?? saved).slice(0, 300),
 );
-// Replay honours the FlowFile contract now: a tab that is not on the flow's startPath is
-// hard-navigated there before step 1. The recording above ended on /deployments, and a full-page
-// load resets bench-app's deliberately in-memory auth back to the Login screen — where step 1's
-// anchor cannot exist. This spec is about telemetry, not wrong-page recovery (the
-// flow-startpath-navigate unit tests own that), so return to the start route in-SPA before each
-// replay: arrival is then a no-op and the signed-in session survives.
+// Replay honours the FlowFile contract now: it puts the tab on the flow's startPath before step 1
+// and RELOADS it if it is already there, so every run starts from the same state. bench-app holds
+// its auth in memory on purpose, so that reload lands on the Login screen — where step 1's anchor
+// cannot exist. This flow genuinely continues from a signed-in session, which is precisely what
+// `requires` declares and the one thing that opts a flow out of the reset.
+//
+// Declared here by writing the file because the RECORDER does not write `requires` yet: a recording
+// cannot know what a page load would take away. That gap is the migration story for the reset, and
+// leaving this spec on the pre-reset contract would have hidden it. This spec is about telemetry,
+// not about wrong-page recovery (the flow-startpath-navigate unit tests own that), so it declares
+// the dependency and returns to the start route in-SPA before each replay.
+const FLOW_FILE = path.join(PROJECT, '.reticle', 'flows', `${FLOW}.json`);
+const recorded = JSON.parse(readFileSync(FLOW_FILE, 'utf8'));
+writeFileSync(
+  FLOW_FILE,
+  JSON.stringify({ ...recorded, requires: [{ element: { testid: 'nav-deployments' } }] }, null, 2),
+);
 const backToStart = async () =>
   call('reticle_act_and_wait', {
     ...S,
