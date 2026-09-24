@@ -408,7 +408,84 @@ function annotateThrottledMiss(
   }
   if (true !== session.throttled?.()) return result;
   if (failureRestsOnSeeing(predicate)) return result;
+  // A composite whose own arms saw an element has proof the tab renders, so the caveat does not
+  // apply to it either — the same fact `clearStarvedWhenSiblingsSaw` uses one level down. Without
+  // this the composite's failure is re-annotated here after its arms were cleared, and the verdict
+  // still contradicts the evidence it is carrying.
+  if (compositeSawRender(predicate, result)) return result;
   return { ...result, inconclusive: THROTTLED_STARVED_NOTE };
+}
+
+/**
+ * Does a composite's own recorded evidence contain an arm that saw an element?
+ *
+ * A failing `allOf` keeps every arm's result as its evidence, so the proof is already in hand and
+ * does not need re-evaluating. Defensive about the shape: `evidence` is whatever the branch chose
+ * to keep, and an entry that is not an EvalResult simply proves nothing either way.
+ */
+function compositeSawRender(predicate: Predicate, result: EvalResult): boolean {
+  if (PredicateKind.ALL_OF !== predicate.kind && PredicateKind.ANY_OF !== predicate.kind) {
+    return false;
+  }
+  const arms = result.evidence;
+  if (!Array.isArray(arms)) return false;
+  return arms.some((arm, i) => {
+    const p = predicate.predicates[i];
+    if (p === undefined || null === arm || 'object' !== typeof arm) return false;
+    if (!('pass' in arm)) return false;
+    return provesRender(p, arm as EvalResult);
+  });
+}
+
+/**
+ * Did this arm PROVE the tab rendered?
+ *
+ * An element predicate that passed did so by finding matches, and nothing about a starved tab
+ * conjures elements that were not there. `absent: true` is the exception and the reason this is not
+ * simply `result.pass`: that one passes by finding NOTHING, which is precisely the reading a starved
+ * tab makes untrustworthy, so it proves the opposite of a render.
+ *
+ * Composites recurse: a passing `allOf` proves a render if any of its own arms did.
+ */
+function provesRender(predicate: Predicate, result: EvalResult): boolean {
+  if (!result.pass) return false;
+  if (PredicateKind.ELEMENT === predicate.kind) return true !== predicate.absent;
+  if (PredicateKind.ALL_OF === predicate.kind || PredicateKind.ANY_OF === predicate.kind) {
+    return predicate.predicates.some((p) => provesRender(p, result));
+  }
+  return false;
+}
+
+/**
+ * Drop the starved-tab caveat from arms whose SIBLINGS demonstrated that the tab renders.
+ *
+ * Reported as the most frequent condition in the whole field export (#1004), in its sharpest form:
+ * "A negative arm inside `allOf` was graded 'unknown / this tab is throttled and has not rendered'
+ * in the SAME evaluation where three sibling arms returned rendered, visible, inViewport elements."
+ * A verdict that contradicts its own evidence is worse than either answer on its own.
+ *
+ * The caveat exists because a negative reading on a starved tab may mean "I could not look". A
+ * sibling that found an element is direct proof that looking worked, in this evaluation, on this
+ * tab. Keeping the caveat anyway turns a real product failure into `unknown` — which an agent
+ * re-drives or walks away from, so the defect it was holding proof of never reaches anybody.
+ *
+ * Only the throttle note is cleared. An arm that was unreadable for its own reason — an unparseable
+ * locator, a superseded window — is still unreadable however well its siblings did.
+ */
+function clearStarvedWhenSiblingsSaw(
+  predicates: readonly Predicate[],
+  results: readonly EvalResult[],
+): readonly EvalResult[] {
+  const rendered = results.some((r, i) => {
+    const p = predicates[i];
+    return p !== undefined && provesRender(p, r);
+  });
+  if (!rendered) return results;
+  return results.map((r) => {
+    if (THROTTLED_STARVED_NOTE !== r.inconclusive) return r;
+    const { inconclusive: _dropped, ...rest } = r;
+    return rest;
+  });
 }
 
 /**
@@ -533,8 +610,11 @@ async function evaluatePredicateRaw(
       return evalSettled(settleEvents, predicate, session.elapsed());
     }
     case PredicateKind.ALL_OF: {
-      const results = await Promise.all(
-        predicate.predicates.map((p) => evaluatePredicate(session, p, since, diagnose)),
+      const results = clearStarvedWhenSiblingsSaw(
+        predicate.predicates,
+        await Promise.all(
+          predicate.predicates.map((p) => evaluatePredicate(session, p, since, diagnose)),
+        ),
       );
       // A clause that genuinely failed OUTRANKS one nobody could read. Softening a real failure to
       // UNKNOWN would hide the defect the agent came for, which is the more expensive of the two
@@ -557,8 +637,11 @@ async function evaluatePredicateRaw(
       return { pass: true, evidence: results.map((r) => r.evidence) };
     }
     case PredicateKind.ANY_OF: {
-      const results = await Promise.all(
-        predicate.predicates.map((p) => evaluatePredicate(session, p, since, diagnose)),
+      const results = clearStarvedWhenSiblingsSaw(
+        predicate.predicates,
+        await Promise.all(
+          predicate.predicates.map((p) => evaluatePredicate(session, p, since, diagnose)),
+        ),
       );
       const passed = results.find((r) => r.pass);
       if (passed !== undefined) return { pass: true, evidence: passed.evidence };

@@ -726,6 +726,64 @@ describe('a throttled tab timeout is not a missing render', () => {
     expect(result.pass).toBe(true);
   });
 
+  /*
+   * The sharpest form of the throttle complaint, and the most-reported condition in the whole field
+   * export (#1004): a verdict that contradicts its own evidence inside ONE evaluation.
+   *
+   * Reported verbatim: "A negative arm inside `allOf` was graded 'unknown / this tab is throttled
+   * and has not rendered' in the SAME evaluation where three sibling arms returned rendered,
+   * visible, inViewport elements."
+   *
+   * If a sibling arm SAW an element, the tab rendered. The starved-tab caveat exists because a
+   * negative reading on a starved tab may mean "I could not look" - and the sibling is direct proof
+   * that looking worked. Applying it anyway turns a real product failure into `unknown`, which is
+   * what an agent re-drives or walks away from, so the defect it was holding proof of never gets
+   * reported.
+   *
+   * Composites used to fall through to "keep the caveat" on purpose, as the conservative half of a
+   * trade: an over-cautious `unknown` costs a re-drive, a missing one costs a wrong verdict. That
+   * reasoning is right where nothing is known about the render, and this is the case where
+   * something IS known.
+   */
+  it('does not call an arm starved when a sibling arm saw a rendered element', async () => {
+    const session = new ThrottledSession([], (query) => {
+      const text = (query as { text?: string }).text ?? '';
+      // Three arms find their element; the fourth genuinely does not.
+      const found = 'Missing' !== text;
+      return { matched: found, count: found ? 1 : 0, elements: [] };
+    });
+
+    const result = await evaluatePredicate(session, {
+      kind: 'allOf',
+      predicates: [
+        { kind: 'element', query: { text: 'Rendered' } },
+        { kind: 'element', query: { text: 'Visible' } },
+        { kind: 'element', query: { text: 'InViewport' } },
+        { kind: 'element', query: { text: 'Missing' } },
+      ],
+    });
+
+    expect(result.pass, 'one arm really did not match').toBe(false);
+    expect(
+      result.inconclusive,
+      'three siblings saw elements, so the tab rendered — this is a product failure, not a starved read',
+    ).toBeUndefined();
+  });
+
+  /* The trade is unchanged where nothing was seen: every arm missed, so the caveat still holds. */
+  it('still calls the composite starved when NO arm saw anything', async () => {
+    const session = new ThrottledSession([]);
+    const result = await evaluatePredicate(session, {
+      kind: 'allOf',
+      predicates: [
+        { kind: 'element', query: { text: 'One' } },
+        { kind: 'element', query: { text: 'Two' } },
+      ],
+    });
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toBe(THROTTLED_STARVED_NOTE);
+  });
+
   it('a PASSING wait on a throttled tab is not annotated', async () => {
     const session = new ThrottledSession([], () => ({
       matched: true,
