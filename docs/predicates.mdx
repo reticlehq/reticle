@@ -48,7 +48,9 @@ Take the advice. `element` and `text` are convenient and weak; `signal`, `state`
 }
 ```
 
-`query` accepts `role`, `name`, `text`, `label`, `placeholder`, `testid`, `alt`, `scope`, `attrs`. `state` is one of `visible`, `hidden`, `enabled`, `disabled`, `checked`, `expanded`, `focused`, `present`.
+`query` accepts `role`, `name`, `text`, `label`, `placeholder`, `testid`, `alt`, `value`, `by`, `component`, `source`, `scope`, `self`, `attrs`. `state` is one of `visible`, `hidden`, `enabled`, `disabled`, `checked`, `expanded`, `focused`, `inViewport`, `present`.
+
+`value` is the one worth knowing about. `{ "role": "textbox", "name": "Amount" }` collapses to "a textbox called Amount exists", which passes against an empty field; adding `value` is what makes it an assertion about what the user will actually send. `by` selects the locator strategy explicitly, `component` and `source` match React component identity and source location, and `self` restricts a scoped match to the scope element itself rather than its descendants.
 
 `attrs` is a list of attribute **names**, such as `["href", "data-status"]`. It **projects** those attributes onto each match so you can read them back, and it does not filter. `["data-status=complete"]` is refused: it would otherwise look up an attribute literally named `data-status=complete`, find none, and leave the predicate resting on the locator alone, which is a green for any value the element happens to hold.
 
@@ -182,6 +184,43 @@ Omit `equals` entirely to assert presence. A real `$length` check against this f
 
 Note `grade: state` in the `because` line, and that the evidence collapses each row to a size marker rather than returning forty objects.
 
+#### satisfies: asserting a property instead of exact bytes
+
+`equals` cannot express output that is right differently every run. A generated summary, a classification, a computed total: each is correct without being predictable, and an assertion that demands exact bytes either fails on correct output or gets weakened until it proves nothing. `satisfies` is the other half of `state`, and it stays decidable here with no model and no network.
+
+```json
+{ "kind": "state", "store": "app", "path": "summary.text", "satisfies": { "property": "nonEmpty" } }
+```
+
+| `property` | Extra fields | Holds when |
+| --- | --- | --- |
+| `nonEmpty` | none | it produced something at all, the honest floor for any output |
+| `oneOf` | `values` | it landed inside the allowed set, exact membership, no coercion |
+| `withinTolerance` | `of`, `tolerance` | a number near enough to the expected one, inclusive on the bound |
+| `matchesPattern` | `pattern` | its string form matches that regular expression |
+| `type` | `is` | it is that kind of thing; `array` and `object` are distinguished, which `typeof` cannot do |
+
+```json
+{
+  "kind": "allOf",
+  "predicates": [
+    {
+      "kind": "state",
+      "path": "invoice.total",
+      "satisfies": { "property": "withinTolerance", "of": 274.58, "tolerance": 0.01 }
+    },
+    {
+      "kind": "state",
+      "path": "invoice.status",
+      "satisfies": { "property": "oneOf", "values": ["draft", "sent"] }
+    },
+    { "kind": "state", "path": "invoice.lines", "satisfies": { "property": "type", "is": "array" } }
+  ]
+}
+```
+
+`equals` and `satisfies` may both be given, and then both must hold. A failing check always says what it saw, because an assertion that reports only `false` sends you back for another call to find out why, and that round trip is most of what a verdict costs.
+
 A miss quotes the real value back at you:
 
 ```json
@@ -261,7 +300,8 @@ One case is inferred for you: an `element` or `text` clause naming an access den
 ```
 
 <Warning>
-A combinator needs its own `kind`, and the children go in `predicates`. A bare
+A combinator needs its own `kind`, and the children go in `predicates`, or in `of`, which is
+accepted as an alias for it. `not` takes a single child in `predicate`, or in `of`. A bare
 `{ "allOf": [ … ] }` does not parse, and neither does `{ "kind": "allOf", "allOf": [ … ] }`.
 
 Reticle refuses the call rather than running half of it. The real refusal names the field, the fix and the consequence: _"predicates: Required; unknown field allOf. Nothing ran, the predicate was not evaluated, so no verdict was produced. allOf accepts: predicates."_ Better to be told than to get a green from an assertion that never executed.
@@ -300,9 +340,9 @@ On a failure each child reports separately too, so you can see which one broke:
 | Field | Where | What it does |
 | --- | --- | --- |
 | `timeout_ms` | `assert`, `wait_for`, `act_and_wait` | Wait up to N ms for it to become true |
-| `since` | `net` and `console` leaves, and the call itself | Only consider events after this cursor |
+| `since` | `net`, `route`, `console`, `animation` and `signal` leaves, and the call itself | Only consider events after this cursor |
 
-The `since` cursor comes from a prior `reticle_act` response. Use it whenever you are asserting something an action was supposed to cause. Without it, an assertion can pass on an event from two clicks ago.
+The `since` cursor comes from a prior `reticle_act` response. Use it whenever you are asserting something an action was supposed to cause. Without it, an assertion can pass on an event from two clicks ago. That applies to every one of the five kinds above, not only to network calls: an unscoped `signal` matches a fire from an earlier action just as readily.
 
 <Card title="Where predicates get used" icon="circle-check" href="/tools/act-and-wait">
   Naming the consequence before the action is the whole point.
