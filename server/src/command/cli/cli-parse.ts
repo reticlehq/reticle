@@ -75,7 +75,10 @@ export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticl
   reticle verify <url> [--port N] [--headed] [--timeout N] [--storage-state <file>] [--session-id <id>]  (one-shot: drive the URL, verify saved flows, exit 0=pass)
                        [--explore] [--persona <who>]   (no saved flows? let Reticle drive the app itself and record them)
                        [--select <label>]              (repeatable: verify only flows carrying these labels — no model, exit 0=pass)
-                [--expect '<json predicate>']            (one verdict, no saved flows needed — asks
+                [--expect '<json predicate>' | --expect-file <path>]   (one verdict, no saved
+                flows needed. --expect-file is the form no shell can mangle: cmd.exe keeps the
+                single quotes the docs show, and PowerShell strips the inner double quotes, and
+                a predicate that does not parse produces no verdict at all — asks
                 the daemon that is already running, so nothing is bound and nothing is stopped. This
                 is the path when your client never loaded the reticle_* tools. exit 0 ONLY on
                 verified:"yes" — "unknown" is not a pass)
@@ -358,6 +361,7 @@ export type CliResult =
       storageState?: string;
       sessionId?: string;
       expect?: unknown;
+      expectFile?: string;
       explore?: boolean;
       persona?: string;
       select?: string[];
@@ -890,6 +894,7 @@ export function parseCliArgs(
         ...(r.storageState !== undefined ? { storageState: r.storageState } : {}),
         ...(r.sessionId !== undefined ? { sessionId: r.sessionId } : {}),
         ...(r.expect !== undefined ? { expect: r.expect } : {}),
+        ...(r.expectFile !== undefined ? { expectFile: r.expectFile } : {}),
         ...(true === r.explore ? { explore: true } : {}),
         ...(r.persona !== undefined ? { persona: r.persona } : {}),
         ...(r.select !== undefined ? { select: r.select } : {}),

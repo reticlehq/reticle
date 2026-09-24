@@ -11,6 +11,7 @@
  */
 
 import { join, basename } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { runAdhocVerdict } from './adhoc-verdict.js';
 import {
   exploreApp,
@@ -488,6 +489,8 @@ export function handleVerify(parsed: {
   url: string;
   /** A parsed predicate for a flow-free, one-shot verdict against the running daemon. */
   expect?: unknown;
+  /** The same predicate in a file, which is the form no shell can mangle. Resolved below. */
+  expectFile?: string;
   headless: boolean;
   timeoutMs?: number;
   storageState?: string;
@@ -502,6 +505,34 @@ export function handleVerify(parsed: {
   port: number;
 }): void {
   const now = (): number => Date.now();
+  /*
+   * `--expect-file` is `--expect` with the shell taken out of the loop.
+   *
+   * Resolved here rather than in the parser because the parser is pure and reads no disk, and
+   * because the two failures a reader can hit — the file is not there, and what is in it is not
+   * JSON — are worth saying apart. Either one ends the run before anything binds: a predicate that
+   * could not be read produces NO verdict, and exiting 1 with the reason is the only honest answer.
+   */
+  let expectation = parsed.expect;
+  if (parsed.expectFile !== undefined) {
+    let text: string;
+    try {
+      text = readFileSync(parsed.expectFile, 'utf8');
+    } catch {
+      process.stderr.write(`--expect-file: cannot read ${parsed.expectFile}\n`);
+      process.exit(1);
+      return;
+    }
+    try {
+      expectation = JSON.parse(text) as unknown;
+    } catch {
+      process.stderr.write(
+        `--expect-file: ${parsed.expectFile} is not valid JSON, so no predicate was read\n`,
+      );
+      process.exit(1);
+      return;
+    }
+  }
   const reticleRoot = join(process.cwd(), ReticleDir.ROOT);
   const projectName = basename(process.cwd()) || DEFAULT_PROJECT_NAME;
   const ports: VerifyPorts = {
@@ -536,11 +567,11 @@ export function handleVerify(parsed: {
       //
       // With `--expect` there is now a way, and it does not need the port: ask the daemon that
       // already owns it. See runAdhocVerdict.
-      if (parsed.expect !== undefined) {
+      if (expectation !== undefined) {
         const verdict = await runAdhocVerdict({
           port,
           ...(parsed.url !== undefined && '' !== parsed.url ? { url: parsed.url } : {}),
-          predicate: parsed.expect,
+          predicate: expectation,
           ...(parsed.sessionId === undefined ? {} : { sessionId: parsed.sessionId }),
           ...((t: string | undefined) => (t === undefined || 0 === t.length ? {} : { token: t }))(
             readOrCreatePairingTokenSync(defaultPairingTokenDir()),

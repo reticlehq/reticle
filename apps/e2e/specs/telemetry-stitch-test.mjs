@@ -257,7 +257,17 @@ chk(
 // leaving this spec on the pre-reset contract would have hidden it. This spec is about telemetry,
 // not about wrong-page recovery (the flow-startpath-navigate unit tests own that), so it declares
 // the dependency and returns to the start route in-SPA before each replay.
-const FLOW_FILE = path.join(PROJECT, '.reticle', 'flows', `${FLOW}.json`);
+//
+// `reticle_flow list` is what knows where the file went, for the same reason `removeSavedFlow`
+// uses it: this session has no resolvable project, so the flow lands in the machine-wide
+// unmatched bucket and NOT under the temp project the daemon was started in.
+const flowFileOf = async (name) => {
+  const listed = await call('reticle_flow', { ...S, action: 'list' });
+  const found = (Array.isArray(listed?.flows) ? listed.flows : []).find((f) => f?.name === name);
+  if (typeof found?.path !== 'string') throw new Error(`no saved flow named ${name} to declare on`);
+  return found.path;
+};
+const FLOW_FILE = await flowFileOf(FLOW);
 const recorded = JSON.parse(readFileSync(FLOW_FILE, 'utf8'));
 writeFileSync(
   FLOW_FILE,
