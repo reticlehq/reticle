@@ -122,7 +122,10 @@ describe('diagnoseNoSession', () => {
     });
     expect(msg).toContain('reticle_lease');
     // Advertised only under `full`; everywhere else it is reached through the meta-tool.
-    expect(msg).toContain('reticle_run');
+    // #978: the default surface advertises neither `reticle_lease` nor the hatch that reached it, so
+    // the advice names what works instead. Asserting the tool is still NAMED keeps the reader told
+    // how to make it reachable rather than left to guess.
+    expect(msg).not.toContain('reticle_run');
   });
 
   it('offers it again when a tab was connected and went away', () => {

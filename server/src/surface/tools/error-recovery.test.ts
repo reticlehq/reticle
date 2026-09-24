@@ -32,23 +32,38 @@ describe('recoveryFor — every known error carries an actionable next move', ()
     ).toBe(RECOVERY.THROTTLED);
   });
 
-  it('THROTTLED names the in-protocol route first and leaves the CLI to the human (#521)', () => {
-    // Same defect COMMAND_TIMEOUT had: an MCP-only agent has no shell, so "run `reticle drive`"
-    // sent it nowhere. The agent's own route is `reticle_run { tool: "reticle_lease" }`; the CLI
-    // stays in the sentence as the human's equivalent.
-    expect(RECOVERY.THROTTLED).toContain('reticle_run { tool: "reticle_lease"');
-    expect(RECOVERY.THROTTLED.indexOf('reticle_run')).toBeLessThan(
-      RECOVERY.THROTTLED.indexOf('reticle drive'),
-    );
+  /*
+   * #521 asked for the opposite of this, and was right at the time.
+   *
+   * Its reasoning still holds: an MCP-only agent has no shell, so "run `reticle drive`" sends it
+   * nowhere, and the in-protocol route belongs first. What changed underneath it is which surface is
+   * DEFAULT. `reticle_run { tool: "reticle_lease" }` was the in-protocol route until MERGED became
+   * the default, and MERGED advertises neither `reticle_lease` nor the hatch that reached it — so
+   * the sentence #521 asked for now names two tools that are both absent, at the moment something
+   * has already failed (#978).
+   *
+   * There is no in-protocol route left to put first. The honest message says so and names what does
+   * work, which on this surface means asking the human. Restoring one is a surface decision with a
+   * token budget attached, not a wording fix.
+   */
+  it('does not offer an in-protocol route this surface cannot take (#978, supersedes #521)', () => {
+    expect(RECOVERY.THROTTLED).not.toContain('reticle_run');
+    expect(RECOVERY.THROTTLED).toContain('reticle drive');
+    // And it says WHY, rather than leaving the reader to discover the absence by calling it.
+    expect(RECOVERY.THROTTLED).toContain('not advertised');
   });
 
-  it('names reticle_lease through reticle_run, since it is unadvertised by default (#400)', () => {
-    // The throttled-tab timeout recovery told the agent to "drive your own browser with
-    // reticle_lease" — a tool the default profile does not advertise, so an agent that had not
-    // already called reticle_tools could not call it and had no way to learn it goes through
-    // reticle_run. The recovery now names the call that actually reaches it.
-    expect(RECOVERY.COMMAND_TIMEOUT).toContain('reticle_run { tool: "reticle_lease"');
+  /*
+   * #400 spotted that `reticle_lease` is unadvertised and that naming it bare strands the reader.
+   * That half is still true. Its remedy — route through `reticle_run` — stopped being available
+   * when MERGED became the default surface and dropped the hatch, so the fix it asked for became a
+   * second dead end in the same sentence (#978).
+   */
+  it('names neither the unadvertised tool bare nor a hatch that is gone (#978, supersedes #400)', () => {
+    expect(RECOVERY.COMMAND_TIMEOUT).not.toContain('reticle_run');
+    // Bare `reticle_lease` as the instruction is what #400 rejected, and it is still wrong.
     expect(RECOVERY.COMMAND_TIMEOUT).not.toMatch(/with reticle_lease\b/);
+    expect(RECOVERY.COMMAND_TIMEOUT).toContain('RETICLE_ADVERTISE_ALL_TOOLS=1');
   });
 
   it('maps a missing baseline / recording to the create-it-first hint', () => {
@@ -304,10 +319,10 @@ describe('browser-side action guards are recognized refusals, not unknown defect
         'cannot hover without a real pointer — CSS :hover only applies to a native mouse move, never to a synthetic mouseover',
       ),
     ).toBe(RECOVERY.HOVER_NEEDS_POINTER);
-    expect(RECOVERY.HOVER_NEEDS_POINTER).toContain('reticle_run { tool: "reticle_lease"');
-    expect(RECOVERY.HOVER_NEEDS_POINTER.indexOf('reticle_run')).toBeLessThan(
-      RECOVERY.HOVER_NEEDS_POINTER.indexOf('reticle drive'),
-    );
+    // Same supersession as THROTTLED above: the in-protocol route this used to put first is a tool
+    // the default surface does not advertise, reached through a hatch it does not carry (#978).
+    expect(RECOVERY.HOVER_NEEDS_POINTER).not.toContain('reticle_run');
+    expect(RECOVERY.HOVER_NEEDS_POINTER).toContain('reticle drive');
   });
 });
 
