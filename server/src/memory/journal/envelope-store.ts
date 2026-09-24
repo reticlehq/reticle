@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { writeFileAtomic } from '@/memory/project/fs/write-atomic.js';
 import { dirname } from 'node:path';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
@@ -57,8 +58,6 @@ export class EnvelopeStore {
     for (const [route, envelope] of envelopes) routes[route] = envelope;
     const body = `${JSON.stringify({ version: ENVELOPE_FILE_VERSION, routes }, null, 2)}\n`;
     // Atomic publish: write a temp sibling then rename, so a crash never leaves a half-written baseline.
-    const tmp = `${this.#path}.tmp`;
-    await this.#fs.writeFile(tmp, body);
-    await this.#fs.rename(tmp, this.#path);
+    await writeFileAtomic(this.#fs, this.#path, body);
   }
 }

@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { writeFileAtomic } from '@/memory/project/fs/write-atomic.js';
 import { z } from 'zod';
 import { FlowStepSchema, type FlowStep } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
@@ -60,9 +61,11 @@ export class CapsuleStore {
     if (!isValidCapsuleId(capsule.id)) return false;
     try {
       await this.#fs.mkdir(this.#dir);
-      const tmp = `${this.#pathFor(capsule.id)}.tmp`;
-      await this.#fs.writeFile(tmp, `${JSON.stringify(capsule, null, 2)}\n`);
-      await this.#fs.rename(tmp, this.#pathFor(capsule.id));
+      await writeFileAtomic(
+        this.#fs,
+        this.#pathFor(capsule.id),
+        `${JSON.stringify(capsule, null, 2)}\n`,
+      );
       return true;
     } catch {
       return false;

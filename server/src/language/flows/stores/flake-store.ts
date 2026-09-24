@@ -1,4 +1,5 @@
 import { dirname } from 'node:path';
+import { writeFileAtomic } from '@/memory/project/fs/write-atomic.js';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import {
@@ -47,9 +48,7 @@ export class FlakeStore {
   async save(ledger: FlakeLedger): Promise<void> {
     await this.#fs.mkdir(dirname(this.#path));
     const body = `${JSON.stringify({ version: FLAKE_FILE_VERSION, flows: ledger }, null, 2)}\n`;
-    const tmp = `${this.#path}.tmp`;
-    await this.#fs.writeFile(tmp, body);
-    await this.#fs.rename(tmp, this.#path);
+    await writeFileAtomic(this.#fs, this.#path, body);
   }
 
   /** Accrue one unchanged-code replay outcome for a flow and persist. */

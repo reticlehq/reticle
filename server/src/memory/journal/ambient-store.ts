@@ -1,4 +1,5 @@
 import { dirname } from 'node:path';
+import { writeFileAtomic } from '@/memory/project/fs/write-atomic.js';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { AmbientFileSchema } from './on-disk/ambient-file.js';
@@ -48,8 +49,6 @@ export class AmbientStore {
     // numbering, so persisting it teaches the next session to suppress an element it never saw.
     const regions = onlyStableAmbient(counts);
     const body = `${JSON.stringify({ version: AMBIENT_FILE_VERSION, regions }, null, 2)}\n`;
-    const tmp = `${this.#path}.tmp`;
-    await this.#fs.writeFile(tmp, body);
-    await this.#fs.rename(tmp, this.#path);
+    await writeFileAtomic(this.#fs, this.#path, body);
   }
 }
