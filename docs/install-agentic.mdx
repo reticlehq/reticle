@@ -150,6 +150,26 @@ Four files in your project, none of them mysterious.
     ```
     The `projectId` is how Reticle scopes sessions to this project, so two apps running at once
     don't get confused for each other.
+
+    **Keeping `.reticle/` small.** Reticle bounds the directory for you, by count and by total size.
+    Add a `retain` block to change what it keeps:
+
+    ```json
+    {
+      "retain": { "sessions": 20, "visual": 10, "feedback": 20, "budgetMb": 512 }
+    }
+    ```
+
+    Those are the defaults, and every field is optional. `sessions` is how many session journals
+    survive, `visual` how many overlay diffs (pixel baselines are never deleted, because the next
+    comparison needs them), `feedback` how many local copies of reports already sent, and `budgetMb`
+    the total the whole evidence tier may occupy. `0` means keep none, and `"sessions": 0` also stops
+    journals being written in the first place.
+
+    Saved flows, capsules, baselines, the contract and the intent ledger are not touched by any of
+    this. They are the part meant to be committed, and a bound that deleted them would be deleting
+    the regression checks your team shares.
+
   </Accordion>
 
   <Accordion title="vite.config.ts (the plugin)">

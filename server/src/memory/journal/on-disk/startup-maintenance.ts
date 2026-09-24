@@ -33,18 +33,19 @@ import {
   pruneFeedback,
   pruneSessions,
   pruneVisualDiffs,
-  DEFAULT_EVIDENCE_BUDGET_BYTES,
 } from './retention.js';
+import { DEFAULT_RETAIN, type RetainPolicy } from './retain-policy.js';
 
-export interface PruneWorkspaceOptions {
-  /**
-   * Injected so a test can state its own bound instead of writing half a gigabyte to disk.
-   *
-   * Same reason the clock is injected everywhere else here: a bound that can only be exercised by
-   * producing the real quantity is a bound nothing exercises.
-   */
-  budgetBytes?: number;
-}
+/**
+ * What this sweep is allowed to keep. Every field optional, defaulting to the built-in bound.
+ *
+ * Partial rather than a whole `RetainPolicy` for two reasons that happen to agree: a test states
+ * only the bound it is exercising instead of writing half a gigabyte to disk, and a project's
+ * `.reticle.json` states only the bounds it cares about. Same reason the clock is injected
+ * everywhere else here — a bound that can only be exercised by producing the real quantity is a
+ * bound nothing exercises.
+ */
+export type PruneWorkspaceOptions = Partial<RetainPolicy>;
 
 export async function pruneWorkspace(
   fs: FileSystemPort,
@@ -52,13 +53,14 @@ export async function pruneWorkspace(
   live: ReadonlySet<string>,
   options: PruneWorkspaceOptions = {},
 ): Promise<void> {
+  const retain: RetainPolicy = { ...DEFAULT_RETAIN, ...options };
   // Empty in the ordinary case (nothing has connected yet); this path also runs on a daemon that is
   // already serving sessions, which is why `live` is threaded rather than assumed empty.
-  await pruneSessions(fs, root, { live });
+  await pruneSessions(fs, root, { live, retention: retain.sessions });
   // The largest thing in the workspace, and for a long time the only one with no delete path.
-  await pruneVisualDiffs(fs, root);
+  await pruneVisualDiffs(fs, root, retain.visual);
   // Write-only local copies of reports the outbox already carries.
-  await pruneFeedback(fs, root);
+  await pruneFeedback(fs, root, retain.feedback);
   // LAST, and the one that was missing: the only bound that limits SIZE rather than count.
-  await pruneEvidenceBudget(fs, root, options.budgetBytes ?? DEFAULT_EVIDENCE_BUDGET_BYTES, live);
+  await pruneEvidenceBudget(fs, root, retain.budgetBytes, live);
 }

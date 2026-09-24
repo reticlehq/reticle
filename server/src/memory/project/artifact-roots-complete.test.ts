@@ -46,9 +46,9 @@ const SERVER_SRC = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 /** Every use of the daemon's own root that is DELIBERATE, with the count pinned and the reason. */
 const DELIBERATE: Readonly<Record<string, { uses: number; why: string }>> = {
-  'index.ts': {
+  'wire-journal.ts': {
     uses: 3,
-    why: 'The daemon wiring itself: it builds the resolver from its own root and prunes its own tree. Per-session routing happens inside the handlers it registers. Lowered from 5 when the three inline prune calls became one `pruneOnStartup` — the daemon now names its own root once for maintenance instead of three times, which is the direction this roster exists to push.',
+    why: 'The daemon wiring itself: it builds the resolver from its own root and prunes its own tree. Per-session routing happens inside the handlers it registers. Lowered from 5 when the three inline prune calls became one workspace sweep — the daemon now names its own root once for maintenance instead of three times, which is the direction this roster exists to push. Split out of `index.ts` when the composition root reached the 1000-line backstop; the uses moved with the code and none were added.',
   },
   'memory/project/session-root.ts': {
     uses: 1,

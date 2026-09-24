@@ -10,7 +10,7 @@ import { AmbientStore } from './ambient-store.js';
 import type { AmbientCounts } from '@reticlehq/engine/window/ambient.js';
 import { type ProjectId, subjectOf, type JournalAction } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
-import { pruneWorkspace } from './on-disk/startup-maintenance.js';
+import { pruneWorkspace, type PruneWorkspaceOptions } from './on-disk/startup-maintenance.js';
 import { buildVerificationRun } from '@/judgement/runs/artifact/build-verification-run.js';
 import { driveRunFrom, driveRunId } from '@/judgement/runs/drive-run.js';
 import { RunStore } from '@/judgement/runs/artifact/run-store.js';
@@ -58,8 +58,10 @@ export interface SessionEndTarget {
 interface SessionEndDeps {
   fs: FileSystemPort;
   reticleRoot: string;
-  /** Journaling/persistence off (opt-out) → teardown is a no-op. */
+  /** Journaling/persistence off (opt-out) → teardown is a no-op. Retention still runs. */
   enabled: boolean;
+  /** What this project is willing to keep — the `retain` block of its `.reticle.json`. */
+  retain?: PruneWorkspaceOptions;
   /**
    * The one clock in this file, injected — the run artifact stamps `createdAt` from it.
    *
@@ -134,6 +136,7 @@ export function makeSessionEnd(deps: SessionEndDeps): (session: SessionEndTarget
           deps.fs,
           session.artifactRoot ?? deps.reticleRoot,
           deps.liveSessionIds?.() ?? new Set(),
+          deps.retain ?? {},
         );
       } catch {
         // retention is best-effort maintenance; never surface at teardown
