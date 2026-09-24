@@ -139,6 +139,39 @@ describe('where a failed-assert capsule is filed', () => {
     expect(written.some((p) => p.startsWith(DAEMON_ROOT))).toBe(false);
   });
 
+  /*
+   * A capsule filename says what the file is ABOUT, never what a ref happened to be called.
+   *
+   * The label came from `args.ref` - a volatile element handle like `e44`, minted per session and
+   * meaningless an hour later or anywhere else. That went into the filename of an artifact that is
+   * durable, meant to be committed, and read by somebody who was not there. The testid on the anchor
+   * is the same element said in a name a human chose, and it is already computed for the capsule
+   * body a few lines above.
+   */
+  it('names a capsule after the element, not the ref that addressed it', async () => {
+    const { deps, written } = depsWritingTo();
+
+    await saveFailedAssertCapsule({ deps, ...failing });
+
+    const name = written[0]?.split('/').pop() ?? '';
+    expect(name).toContain('nav');
+    expect(name).not.toContain('e44');
+  });
+
+  /* No testid: the action is still stable and still says something. The ref never is. */
+  it('falls back to the action rather than the ref', async () => {
+    const { deps, written } = depsWritingTo();
+
+    await saveFailedAssertCapsule({
+      ...{ deps, ...failing },
+      actResult: { result: {} },
+    });
+
+    const name = written[0]?.split('/').pop() ?? '';
+    expect(name).toContain('click');
+    expect(name).not.toContain('e44');
+  });
+
   it('falls back to the daemon root when no project can be named', async () => {
     const { deps, written } = depsFailingToResolve();
 

@@ -64,6 +64,16 @@ export async function saveFailedAssertCapsule(
   if (root === undefined) return undefined;
   // Built BEFORE the id, because the id carries the fingerprint of this body — that is what lets a
   // retry of the same broken step fold into the capsule already on disk instead of adding a file.
+  /*
+   * What this capsule is ABOUT, for its filename and its anchor.
+   *
+   * The testid is the element said in a name a human chose; `args.ref` is a volatile handle minted
+   * per session, meaningless an hour later and anywhere else. The anchor may still fall back to the
+   * ref, because the anchor has to address the element and the ref is what addressed it. The NAME
+   * must not: a capsule is durable, meant to be committed, and read by somebody who was not there.
+   */
+  const testid = asString(asRecord(actResult.result)['testid']);
+  const action = asString(args['action']) ?? ActionType.CLICK;
   const body = {
     version: CAPSULE_VERSION as typeof CAPSULE_VERSION,
     origin: 'failed-assert',
@@ -74,16 +84,16 @@ export async function saveFailedAssertCapsule(
         tool: ReticleTool.ACT,
         anchor: {
           kind: AnchorKind.TESTID,
-          value: asString(asRecord(actResult.result)['testid']) ?? asString(args['ref']) ?? '',
+          value: testid ?? asString(args['ref']) ?? '',
           // Carried so the saved capsule — which outlives this turn and becomes a regression flow
           // when it goes green — still knows which file the failure came from.
           ...(actedSource === undefined ? {} : { source: actedSource }),
         },
-        action: (asString(args['action']) ?? ActionType.CLICK) as ActionType,
+        action: action as ActionType,
       },
     ],
   };
-  const id = capsuleId(deps.now(), asString(args['ref']) ?? 'assert', capsuleFingerprint(body));
+  const id = capsuleId(deps.now(), testid ?? action, capsuleFingerprint(body));
   const saved = await new CapsuleStore(deps.fs, root).save({
     ...body,
     id,
