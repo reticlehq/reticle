@@ -3,6 +3,8 @@ import { evaluatePredicate } from '@reticlehq/engine/question/predicate/predicat
 import { readsDomState } from '@reticlehq/engine/evidence/already-true.js';
 import { alreadyTrueHiddenMatch as alreadyTrueHiddenMatchOf } from '@reticlehq/engine/evidence/already-true.js';
 import type { PredicateSession } from '@reticlehq/engine/question/predicate/predicate-session.js';
+import { captureBaselines } from '@reticlehq/engine/evidence/baseline.js';
+import type { Baselines } from '@reticlehq/engine/question/predicate/predicate.js';
 
 /** Everything the pre-action check learned, which is three facts about one reading. */
 export interface AlreadyTrueReading {
@@ -20,6 +22,14 @@ export interface AlreadyTrueReading {
    * carries its own evidence and needs no baseline beside it.
    */
   alreadyTrueEvidence?: unknown;
+  /**
+   * What each comparing leaf was reading BEFORE the action — the predicate language's past tense.
+   *
+   * Taken here because this is already the one place that looks at the app before it is touched,
+   * and a second pre-action pass would be a second round trip for a reading we are standing next
+   * to. Empty unless the caller actually asked for a comparison, so nothing pays for it.
+   */
+  baselines: Baselines;
 }
 
 /**
@@ -38,16 +48,21 @@ export async function readAlreadyTrue(
   until: Predicate | undefined,
   since: number,
 ): Promise<AlreadyTrueReading> {
+  // Before the pre-check, because the pre-check EVALUATES the predicate and a relative leaf with no
+  // baseline yet would report `inconclusive` — reading the app twice to answer a question we had
+  // not taken the reading for.
+  const baselines = await captureBaselines(session, until);
   const precheck =
     until !== undefined && readsDomState(until)
-      ? await evaluatePredicate(session, until, since, false)
+      ? await evaluatePredicate(session, until, since, false, baselines)
       : undefined;
   const alreadyTrue = precheck?.pass ?? false;
   if (!alreadyTrue || until === undefined) {
-    return { alreadyTrue: false, alreadyTrueHiddenMatch: false };
+    return { alreadyTrue: false, alreadyTrueHiddenMatch: false, baselines };
   }
   return {
     alreadyTrue: true,
+    baselines,
     // The pre-check evidence is already in hand, so asking whether the match was against something
     // hidden costs nothing and lets the message name it (#889).
     alreadyTrueHiddenMatch: alreadyTrueHiddenMatchOf(until, precheck?.evidence),

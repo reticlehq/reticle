@@ -90,6 +90,12 @@ export function predicateToExpect(predicate: Predicate): FlowExpect | undefined 
       return 0 === Object.keys(element).length ? undefined : { element };
     }
     case PredicateKind.STATE: {
+      // `satisfies` has no representation in FlowExpect, and a `state` clause whose ONLY claim is a
+      // property would save as a bare path — "this path exists", which is a strictly weaker
+      // assertion than the one the agent made and passes on the empty value it was written to
+      // catch. Same rule as `console { contains }` above: record nothing rather than something
+      // different. `text { satisfies }` needs no case here; text is refused outright.
+      if (predicate.satisfies !== undefined) return undefined;
       const state: NonNullable<FlowExpect['state']> = { path: predicate.path };
       if (predicate.store !== undefined) state.store = predicate.store;
       if (predicate.equals !== undefined) state.equals = predicate.equals;

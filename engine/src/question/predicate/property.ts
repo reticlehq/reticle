@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MeasureOp } from 'open-verification';
 
 /**
  * Assert a PROPERTY of an observed value rather than its exact bytes.
@@ -31,12 +32,149 @@ export type PropertyAssertion =
   | {
       readonly property: 'type';
       readonly is: 'string' | 'number' | 'boolean' | 'array' | 'object';
-    };
+    }
+  /*
+   * RELATIVE properties — the past tense, decided by two readings and a subtraction.
+   *
+   * `changed`/`unchanged` are the weakest and the most useful: "unchanged" is the assertion that
+   * catches the field a re-render silently cleared, and it needs no number at all.
+   *
+   * `increased`/`decreased` take an optional delta in the protocol's own `MeasureOp` shape — three
+   * operators and a tolerance on all of them, so "exactly 11.87", "11.87 ± 0.01" and "at least 3"
+   * are one shape with no conditional requirement anywhere. A second spelling of a comparison the
+   * protocol already publishes is exactly the drift this release is ending, so there is no `$gt`.
+   */
+  | { readonly property: 'changed' }
+  | { readonly property: 'unchanged' }
+  | { readonly property: 'increased'; readonly by?: Delta }
+  | { readonly property: 'decreased'; readonly by?: Delta };
+
+/** How far a reading moved, in the protocol's comparison vocabulary. Tolerance defaults to exact. */
+export interface Delta {
+  readonly op: MeasureOp;
+  readonly value: number;
+  readonly tolerance?: number;
+}
+
+/**
+ * The reading taken BEFORE the action, when one was taken.
+ *
+ * A wrapper rather than a bare value because `undefined` is a legitimate reading — a store path
+ * that held nothing — and "the path was empty" and "nobody looked" must not collapse into the same
+ * answer. The first is a comparison; the second is a refusal to pretend one happened.
+ */
+export interface Baseline {
+  readonly taken: true;
+  readonly value: unknown;
+}
 
 export interface PropertyResult {
   readonly ok: boolean;
   /** Why, in the words a reader needs — always present, on pass and on fail. */
   readonly because: string;
+  /**
+   * Nothing was compared: a relative property was asked with no before-reading.
+   *
+   * `ok` is false because nothing was proven, but a false nobody could have made true is not a
+   * defect in the app, and reporting it as one puts our own gaps into somebody's bug count. The
+   * caller lifts this into `inconclusive`.
+   */
+  readonly unevaluated?: true;
+}
+
+/** The relative properties: the ones that mean nothing without a before-reading. */
+const RELATIVE: ReadonlySet<string> = new Set(['changed', 'unchanged', 'increased', 'decreased']);
+
+/**
+ * A number out of a reading, or undefined.
+ *
+ * A displayed total arrives as text — `"$1,234.50"` is a number to every reader of the page, and
+ * refusing it would make the one assertion this feature exists for unwritable against the DOM. The
+ * strip is deliberately narrow: currency symbols, thousands separators and surrounding space. A
+ * reading with no digits in it ("sold out", "—", an empty box) is NOT zero, and coercing it to zero
+ * is how "the balance went to nothing" reads as a pass.
+ */
+function numberIn(value: unknown): number | undefined {
+  if ('number' === typeof value) return Number.isFinite(value) ? value : undefined;
+  if ('string' !== typeof value) return undefined;
+  const stripped = value.replace(/[^0-9eE+.-]/g, '');
+  if (!/[0-9]/.test(stripped)) return undefined;
+  const parsed = Number(stripped);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/** Structural equality, so two readings of the same object are the same reading. */
+function sameReading(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if ('object' !== typeof a || 'object' !== typeof b || null === a || null === b) return false;
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
+
+/** Does a movement of `delta` satisfy the named bound? Tolerance widens, never narrows. */
+function withinDelta(moved: number, by: Delta): boolean {
+  const tolerance = by.tolerance ?? 0;
+  switch (by.op) {
+    case MeasureOp.EQUALS:
+      return Math.abs(moved - by.value) <= tolerance;
+    case MeasureOp.AT_LEAST:
+      return moved >= by.value - tolerance;
+    case MeasureOp.AT_MOST:
+      return moved <= by.value + tolerance;
+  }
+}
+
+function describeDelta(by: Delta): string {
+  const tolerance = by.tolerance ?? 0;
+  const band = 0 === tolerance ? '' : ` (± ${String(tolerance)})`;
+  return `${by.op} ${String(by.value)}${band}`;
+}
+
+/**
+ * `increased`/`decreased`, which are the same question with the sign flipped.
+ *
+ * Both readings must be numbers. A non-numeric one is reported as such rather than compared,
+ * because "not a number" is a fact about the reading and `false` would be a claim about the app.
+ */
+function movedBy(
+  value: unknown,
+  previous: unknown,
+  direction: 'increased' | 'decreased',
+  by: Delta | undefined,
+): PropertyResult {
+  const now = numberIn(value);
+  const then = numberIn(previous);
+  if (now === undefined || then === undefined) {
+    const which = now === undefined ? show(value) : show(previous);
+    return {
+      ok: false,
+      because: `${which} is not a number, so nothing was subtracted — assert the value that carries the total, not the label around it`,
+      unevaluated: true,
+    };
+  }
+  const moved = 'increased' === direction ? now - then : then - now;
+  const movement = `${show(previous)} → ${show(value)} (${'increased' === direction ? '+' : '-'}${String(Math.abs(moved))})`;
+  if (moved <= 0) {
+    return { ok: false, because: `expected it to have ${direction}: ${movement}` };
+  }
+  if (by === undefined) return { ok: true, because: movement };
+  const ok = withinDelta(moved, by);
+  if (ok) return { ok, because: `${movement}, which is ${describeDelta(by)}` };
+  return {
+    ok,
+    // The float trap, named where it is hit. `100 - 88.13` is 11.870000000000005, so an exact
+    // `decreased by 11.87` — the assertion this feature exists for — misses by 5e-15 and reads as a
+    // money bug. The tolerance is the fix and the protocol already carries it; a silent epsilon here
+    // would be this engine quietly disagreeing with the vocabulary it borrowed.
+    because:
+      `${movement}, and the change was required to be ${describeDelta(by)}` +
+      (MeasureOp.EQUALS === by.op && Math.abs(moved - by.value) < 1e-6
+        ? ' — off by less than a millionth, which is floating point, not the app. Give the assertion a `tolerance`'
+        : ''),
+  };
 }
 
 /**
@@ -77,8 +215,42 @@ function typeOf(value: unknown): string {
   return typeof value;
 }
 
-export function satisfiesProperty(value: unknown, assertion: PropertyAssertion): PropertyResult {
+export function satisfiesProperty(
+  value: unknown,
+  assertion: PropertyAssertion,
+  /** The reading taken before the action. Only the relative properties look at it. */
+  baseline?: Baseline,
+): PropertyResult {
+  if (RELATIVE.has(assertion.property) && baseline === undefined) {
+    return {
+      ok: false,
+      because: `'${assertion.property}' compares this reading with the one before the action, and no before-reading was taken — nothing was compared`,
+      unevaluated: true,
+    };
+  }
+  const previous = baseline?.value;
   switch (assertion.property) {
+    case 'unchanged': {
+      const ok = sameReading(previous, value);
+      return {
+        ok,
+        because: ok
+          ? `still ${show(value)}`
+          : `was ${show(previous)} and is now ${show(value)} — it was required to hold its value`,
+      };
+    }
+    case 'changed': {
+      const ok = !sameReading(previous, value);
+      return {
+        ok,
+        because: ok
+          ? `${show(previous)} → ${show(value)}`
+          : `still ${show(value)} — nothing changed it`,
+      };
+    }
+    case 'increased':
+    case 'decreased':
+      return movedBy(value, previous, assertion.property, assertion.by);
     case 'nonEmpty': {
       const ok = isNonEmpty(value);
       return {
@@ -148,6 +320,15 @@ export function satisfiesProperty(value: unknown, assertion: PropertyAssertion):
  * Lives here beside the evaluator on purpose: a schema in one file and the switch that consumes it
  * in another is how a new property comes to parse and then silently never match.
  */
+const deltaSchema = z
+  .object({
+    op: z.nativeEnum(MeasureOp),
+    value: z.number().finite(),
+    /** Never negative — a negative tolerance NARROWS the band, which is a different claim by accident. */
+    tolerance: z.number().finite().nonnegative().optional(),
+  })
+  .strict();
+
 export const propertyAssertionSchema = z.discriminatedUnion('property', [
   z.object({ property: z.literal('nonEmpty') }).strict(),
   z.object({ property: z.literal('oneOf'), values: z.array(z.unknown()).min(1) }).strict(),
@@ -165,4 +346,8 @@ export const propertyAssertionSchema = z.discriminatedUnion('property', [
       is: z.enum(['string', 'number', 'boolean', 'array', 'object']),
     })
     .strict(),
+  z.object({ property: z.literal('changed') }).strict(),
+  z.object({ property: z.literal('unchanged') }).strict(),
+  z.object({ property: z.literal('increased'), by: deltaSchema.optional() }).strict(),
+  z.object({ property: z.literal('decreased'), by: deltaSchema.optional() }).strict(),
 ]);

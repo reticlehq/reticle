@@ -18,6 +18,7 @@
  */
 import { PredicateKind, type ElementDescriptor } from '@reticlehq/core';
 import type { Predicate } from '@/question/predicate/predicate.js';
+import { asksForComparison } from './baseline.js';
 
 export function readsDomState(predicate: Predicate): boolean {
   switch (predicate.kind) {
@@ -40,10 +41,16 @@ export function readsDomState(predicate: Predicate): boolean {
     // rather than through the floored event buffer. If the store already holds the expected value
     // before dispatch, an inert click would immediately pass post-dispatch on the pre-existing state.
     // Evaluating before dispatch routes that pre-existing condition into already_true.
-    case PredicateKind.ELEMENT:
+    //
+    // A RELATIVE property is the one exception, and it is excluded by construction rather than by
+    // taste: `unchanged` compares this reading with the one taken a microsecond ago and is
+    // therefore always true before the action. Pre-checking it would report `already_true` — and
+    // so UNKNOWN — for the assertion whose whole purpose is that the value survives what follows.
     case PredicateKind.TEXT:
-    case PredicateKind.ROUTE:
     case PredicateKind.STATE:
+      return !asksForComparison(predicate);
+    case PredicateKind.ELEMENT:
+    case PredicateKind.ROUTE:
       return true;
     case PredicateKind.ALL_OF:
     case PredicateKind.ANY_OF:

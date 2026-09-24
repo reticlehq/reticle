@@ -72,6 +72,26 @@ Add `"absent": true` to assert something is **gone**. The predicate for a remova
 
 Use `scope` to restrict the search to a CSS selector or element ref. If Reticle reports that the text is split across the scope's children, retry its generated predicate with `"self": true`; that checks the scope root's combined subtree text while still enforcing `contains`.
 
+`satisfies` asserts a PROPERTY of the rendered text instead of its exact bytes: the same shape and the same properties [`state` accepts](#satisfies-asserting-a-property-instead-of-exact-bytes), applied where the user actually reads the value:
+
+```json
+{
+  "kind": "text",
+  "scope": "[data-testid=\"release-note\"]",
+  "self": true,
+  "satisfies": { "property": "nonEmpty" }
+}
+```
+
+That is the assertion a generated feature can pass twice. `contains` demands bytes a model's output does not repeat, so it either fails on correct output or gets weakened to a word so common it proves nothing; "the box rendered and there is something in it" is the failure the feature actually has.
+
+Two rules, both refusals rather than guesses:
+
+- **One of `contains` or `satisfies` is required.** With neither, the predicate matches any element with any text and cannot fail.
+- **`satisfies` on its own needs a `scope`** (the element whose text is read, with `self: true` for the root's own subtree). Without one the locator is every element on the page, and the property would run against whichever matched first.
+
+Both may be given, and then both must hold. `satisfies` narrows, it never excuses.
+
 ### net
 
 ```json
@@ -220,6 +240,35 @@ Note `grade: state` in the `because` line, and that the evidence collapses each 
 ```
 
 `equals` and `satisfies` may both be given, and then both must hold. A failing check always says what it saw, because an assertion that reports only `false` sends you back for another call to find out why, and that round trip is most of what a verdict costs.
+
+#### The relative properties: comparing with before
+
+The properties above read the present tense. Four read the past one. They compare this value with the reading taken **before the action**, which is the window a verdict is already scoped to:
+
+| property    | holds when                  |
+| ----------- | --------------------------- |
+| `unchanged` | the value is the one it was |
+| `changed`   | it is not                   |
+| `increased` | the number went up          |
+| `decreased` | the number went down        |
+
+```json
+{
+  "kind": "state",
+  "path": "cart.total",
+  "satisfies": { "property": "decreased", "by": { "op": "equals", "value": 12 } }
+}
+```
+
+`increased` and `decreased` take an optional `by`, in the protocol's own comparison vocabulary: `op` is `equals`, `at-least` or `at-most`, with an optional `tolerance` on all three. Without `by`, any movement in the right direction holds.
+
+**Give a money assertion a tolerance.** `100 - 88.13` is `11.870000000000005`, so `{ "op": "equals", "value": 11.87 }` misses by a rounding error and reads as the app charging the wrong amount. `"tolerance": 0.01` is the fix; the failure message says so when the miss is that small.
+
+A number is read out of displayed text, so `"$1,234.50"` compares as `1234.5`. A reading with no digits in it is **not** zero. `"sold out"` reports that nothing was subtracted rather than pretending the total fell to nothing.
+
+These only work where a before-reading was taken, which today is `reticle_act_and_wait`. Asked anywhere else they report `unknown` with "no before-reading was taken", never a failure, because nothing was compared and a `false` would blame the app for a reading nobody took. For the same reason a relative property is never `already_true`: `unchanged` is trivially true against a baseline taken a microsecond earlier, so the pre-action check skips it and lets the action decide.
+
+A saved flow cannot keep one yet: `FlowExpect` has no slot for `satisfies`, and rather than record a weaker assertion than the one you made, the converter records none.
 
 A miss quotes the real value back at you:
 

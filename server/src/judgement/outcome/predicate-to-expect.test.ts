@@ -212,3 +212,27 @@ describe('enforcedOnReplay', () => {
     });
   });
 });
+
+/**
+ * A property assertion has no slot in `FlowExpect`, and dropping it is not a smaller loss than
+ * dropping a whole arm — it is the same loss. `{ path: 'result', satisfies: nonEmpty }` saved as
+ * `{ path: 'result' }` asserts that the path EXISTS, which is true of the empty string the
+ * assertion was written to catch.
+ */
+describe('predicateToExpect — a property assertion is never silently dropped', () => {
+  it('refuses a state clause whose claim is a property', () => {
+    expect(
+      predicateToExpect({
+        kind: 'state',
+        path: 'compose.result',
+        satisfies: { property: 'nonEmpty' },
+      }),
+    ).toBeUndefined();
+  });
+
+  it('still carries a plain state clause', () => {
+    expect(predicateToExpect({ kind: 'state', path: 'view', equals: 'compose' })).toEqual({
+      state: { path: 'view', equals: 'compose' },
+    });
+  });
+});

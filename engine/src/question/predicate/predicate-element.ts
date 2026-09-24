@@ -26,6 +26,7 @@ import {
 import type { PredicateSession } from './predicate-session.js';
 import { describeTestidMiss } from './testid-near-miss.js';
 import { describeSplitTextMiss } from './split-text-miss.js';
+import { satisfiesProperty, type Baseline, type PropertyAssertion } from './property.js';
 
 export async function matchOnce(
   session: PredicateSession,
@@ -248,5 +249,50 @@ export async function evalElement(
     expected: `an element matching ${subject}${state === undefined ? '' : ` in state '${state}'`}`,
     assertion: 'element.present',
     ...(present.length > 0 ? { evidence: { presentTestids: present } } : {}),
+  };
+}
+
+/**
+ * Narrow a passing text match with a PROPERTY of the text it found.
+ *
+ * Sits here rather than in the evaluator because the descriptors it reads are this module's own
+ * output shape, and because it must run only over a match that already held: a property asserted
+ * against the text of an element that is not there is a statement about nothing.
+ *
+ * Several matches are JOINED before the property runs. `scope` + `self` reads one subtree and is
+ * the shape this is for; a locator broad enough to return several is asking about the text they
+ * make together, and testing only the first would pass on a page where the rest is the failure.
+ */
+/** The text an element descriptor reported, or ''. Never `String(unknown)` — see `show` in property.ts. */
+function textOf(element: unknown): string {
+  if ('object' !== typeof element || null === element) return '';
+  const value = (element as { text?: unknown }).text;
+  return 'string' === typeof value ? value : '';
+}
+
+export function withTextProperty(
+  base: EvalResult,
+  assertion: PropertyAssertion,
+  subject: string,
+  baseline?: Baseline,
+): EvalResult {
+  if (!base.pass) return base;
+  const described = Array.isArray(base.evidence) ? base.evidence : [];
+  const text = described.map(textOf).join(' ').trim();
+  const result = satisfiesProperty(text, assertion, baseline);
+  // Nothing was compared — a relative property with no before-reading. See the twin in `evalState`.
+  if (true === result.unevaluated) {
+    return { pass: false, failureReason: result.because, inconclusive: result.because };
+  }
+  if (result.ok) {
+    return { pass: true, evidence: { ...{ matched: described }, satisfied: result.because } };
+  }
+  return {
+    pass: false,
+    failureReason: `text of ${subject} ${result.because}`,
+    observed: `text of ${subject} = ${JSON.stringify(text)}`,
+    expected: `text of ${subject} to satisfy ${assertion.property}`,
+    assertion: `text.${assertion.property}`,
+    evidence: described,
   };
 }

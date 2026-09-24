@@ -555,11 +555,8 @@ export const ACT_TOOLS: ToolDef[] = [
       // exactly the copy a compaction destroys — see runs/run-context.ts.
       let verdictEffect: JournalVerdictEffect | undefined;
       // Was the consequence ALREADY TRUE, and what did that reading say? See act/already-true.ts.
-      const { alreadyTrue, alreadyTrueHiddenMatch, alreadyTrueEvidence } = await readAlreadyTrue(
-        session,
-        until,
-        since,
-      );
+      const { alreadyTrue, alreadyTrueHiddenMatch, alreadyTrueEvidence, baselines } =
+        await readAlreadyTrue(session, until, since);
       // Same as the ACT handler: the route this step RAN on, before the action can move the app.
       const routeBeforeWait = pathOf(session.url);
       try {
@@ -598,8 +595,8 @@ export const ACT_TOOLS: ToolDef[] = [
           null === actResult
             ? { pass: false, observationLost: true }
             : timeout > 0
-              ? await waitForPredicate(session, until, timeout, since)
-              : await evaluatePredicate(session, until, since);
+              ? await waitForPredicate(session, until, timeout, since, baselines)
+              : await evaluatePredicate(session, until, since, true, baselines);
 
         // The SDK may have gone away mid-act — see act-observation.ts.
         const followed = await followLostObservation({
@@ -608,7 +605,7 @@ export const ACT_TOOLS: ToolDef[] = [
           verdict,
           timeout,
           predicateStarted,
-          reevaluate: (next, budget) => waitForPredicate(next, until, budget, 0),
+          reevaluate: (next, budget) => waitForPredicate(next, until, budget, 0, baselines),
         });
         if (followed.followed) since = 0;
         session = followed.session;

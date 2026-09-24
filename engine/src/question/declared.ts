@@ -130,7 +130,9 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
       case PredicateKind.TEXT:
         if (true !== p.absent) {
           rendersContent = true;
-          if (isDenialPhrase(p.contains)) pushAuthDenialStatuses(netFailures);
+          if (p.contains !== undefined && isDenialPhrase(p.contains)) {
+            pushAuthDenialStatuses(netFailures);
+          }
         }
         return;
       default:

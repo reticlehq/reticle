@@ -111,7 +111,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * ceiling was raised with that reasoning written beside it.
    */
   'core/src/artifacts': 13,
-  'engine/src/evidence': 17,
+  'engine/src/evidence': 18,
   // 18 since the last two cycles in this package were removed: `predicate-eval-kit.ts` (the result
   // type and the four comparisons the oracles are written in) and `predicate-session.ts` (what the
   // engine needs from a session). Both were reached back out of the modules that call their readers.
@@ -120,7 +120,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // `predicate-eval.ts`: it is a pure rule with an incident behind it, and it is the kind of thing
   // that gets quietly re-broken when it lives inside the evaluator it constrains. This directory is
   // now the largest flat one in the package and is the next thing here worth grouping.
-  'engine/src/question/predicate': 19,
+  'engine/src/question/predicate': 20,
   /*
    * Crossed ten when the fast-drive budget and a portable byte counter landed. The guard asks for
    * grouping rather than recording at this moment, and grouping is the wrong move HERE specifically:

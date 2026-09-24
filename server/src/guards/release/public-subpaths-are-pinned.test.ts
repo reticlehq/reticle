@@ -64,6 +64,9 @@ const PINNED: readonly PublicSurface[] = [
       'disagreement/witness-disagreement.ts',
       'evidence/accepted-write.ts',
       'evidence/already-true.ts',
+      // New public entry point: the pre-action reading a relative property compares against. Public
+      // because the SERVER takes it, on the one path that looks at the app before it is touched.
+      'evidence/baseline.ts',
       'evidence/blind-spots.ts',
       'evidence/body-capture-remedy.ts',
       'evidence/gap-ledger.ts',
@@ -98,6 +101,9 @@ const PINNED: readonly PublicSurface[] = [
       'question/predicate/predicate-route.ts',
       'question/predicate/predicate-schema.ts',
       'question/predicate/predicate-session.ts',
+      // Not a new promise, a moved one: the state evaluator left `predicate.ts` when that file
+      // crossed the line cap, with the same symbols on the same code path.
+      'question/predicate/predicate-state.ts',
       'question/predicate/predicate-to-links.ts',
       'question/predicate/predicate.ts',
       'question/predicate/property.ts',

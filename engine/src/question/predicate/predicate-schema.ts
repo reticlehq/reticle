@@ -18,7 +18,7 @@ export type Predicate =
     }
   | {
       kind: typeof PredicateKind.TEXT;
-      contains: string;
+      contains?: string;
       visible?: boolean;
       absent?: boolean;
       /**
@@ -32,6 +32,15 @@ export type Predicate =
       scope?: string;
       /** Match the scope root itself and check its combined subtree text. Requires `scope`. */
       self?: boolean;
+      /**
+       * Assert a PROPERTY of the rendered text rather than its exact bytes.
+       *
+       * The same reasoning `state` carries, applied where the user actually reads the value: an
+       * app whose output IS a model's output is different on every run and correct on every one of
+       * them, so `contains` is the one assertion it cannot satisfy twice. Both may be supplied and
+       * then both must hold — `satisfies` narrows, it never excuses.
+       */
+      satisfies?: PropertyAssertion;
     }
   | {
       kind: typeof PredicateKind.NET;
@@ -335,11 +344,17 @@ function predicateUnion() {
     z
       .object({
         kind: z.literal(PredicateKind.TEXT),
-        contains: z.string(),
+        /**
+         * Optional ONLY because `satisfies` can carry the claim instead — see the refinement below,
+         * which refuses a text predicate that names neither. A `text` predicate with nothing to
+         * assert resolves to "some element, some text" and passes on every page that has one.
+         */
+        contains: z.string().optional(),
         visible: z.boolean().optional(),
         absent: z.boolean().optional(),
         scope: z.string().optional(),
         self: z.boolean().optional(),
+        satisfies: propertyAssertionSchema.optional(),
       })
       .strict(),
     z
@@ -515,8 +530,52 @@ function predicateUnion() {
   ]);
 }
 
+/*
+ * Cross-field rules, applied to every predicate INCLUDING the ones nested in a composite.
+ *
+ * They live on the union rather than on the member because `z.discriminatedUnion` takes plain
+ * objects only — wrapping one member in a refinement makes the whole union refuse to build, and
+ * `shapeForKind` walks those same options to derive the accepted-field list in a rejection message.
+ */
+function checkPredicateShape(
+  // Structural, not `Predicate`: the refinement runs on the union zod INFERRED, whose optional
+  // fields are spelled `| undefined`, and naming the hand-written type here makes the overload
+  // unresolvable. Only the three fields this reads are named.
+  predicate: {
+    kind: string;
+    contains?: string | undefined;
+    satisfies?: unknown;
+    scope?: string | undefined;
+  },
+  ctx: z.RefinementCtx,
+): void {
+  if (PredicateKind.TEXT !== predicate.kind) return;
+  if (undefined === predicate.contains && undefined === predicate.satisfies) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        'a text predicate must say WHAT about the text: `contains` for a substring, `satisfies` ' +
+        'for a property of it. With neither it matches any element with any text and cannot fail',
+    });
+  }
+  if (
+    undefined !== predicate.satisfies &&
+    undefined === predicate.contains &&
+    undefined === predicate.scope
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        '`satisfies` needs a subject: add `scope` (the element whose text is tested, with ' +
+        '`self: true` to read the scope root itself) or a `contains` that selects one. Without ' +
+        'either, the locator is every element on the page and the property would run against ' +
+        'whichever one happened to match first',
+    });
+  }
+}
+
 export const PredicateSchema = z.lazy(() =>
-  z.preprocess(applyPredicateAliases, predicateUnion()),
+  z.preprocess(applyPredicateAliases, predicateUnion()).superRefine(checkPredicateShape),
 ) as unknown as z.ZodType<Predicate>;
 
 /**
