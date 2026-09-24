@@ -287,9 +287,25 @@ function arrivedSuccessor(
   sessions: SessionManager,
   oldId: string,
   target: string,
+  /** The handle that issued the navigation, when only a genuinely new one counts as arrival. */
+  mustReplace: object | undefined,
 ): Session | undefined {
   try {
     const candidate = sessions.resolve(oldId);
+    /*
+     * A RELOAD lands on the path it left, so the path cannot tell the successor from the tab that
+     * is still tearing down — `resolve(oldId)` answers with the dying one while it is registered,
+     * which looks like instant arrival and hands replay a socket that will never answer again.
+     *
+     * The discriminator is the OBJECT, not the id. A leased tab carries its identity across a page
+     * load (that is what the identity params are for), so it reconnects under the SAME id — waiting
+     * for a new id there waits forever, and the first lease this was tried on timed out at step 1
+     * on a tab that was perfectly healthy. `SessionManager.add` replaces the instance on every
+     * reconnect, so a different instance is exactly "the socket came back".
+     *
+     * A navigation to a different route has the path as its discriminator and does not need this.
+     */
+    if (mustReplace !== undefined && candidate === mustReplace) return undefined;
     const path = currentPathOf(candidate);
     return path !== undefined && samePath(path, target) ? candidate : undefined;
   } catch {
@@ -328,16 +344,35 @@ async function firstStepResolvesHere(
   }
 }
 
+/** What replay learned on its way to step 0. Both fields absent = the tab was left exactly as it was. */
+export interface StartPathArrival {
+  /** The successor session replay must continue on. Absent when nothing was navigated, or arrival timed out. */
+  session?: Session;
+  /** Set when the RESET itself is why step 1 cannot start — the reason a step-1 red is not drift. */
+  resetCost?: string;
+}
+
 /**
- * Replay's half of the FlowFile contract: navigate to the flow's `startPath` before step 1.
+ * Replay's half of the FlowFile contract: put the tab on the flow's `startPath` before step 1, and
+ * RELOAD it if it is already there.
+ *
+ * The reload is the state contract. Replaying "add a task" twice against a tab nobody reset gives
+ * the second run a world the recording never saw, and its assertions then describe the first run
+ * rather than the app. Our own `replay-determinism.mjs` has always refreshed before every run — the
+ * determinism we measured was never the determinism a user got.
+ *
+ * `requires` is the declared opt-out, and its first caller. A flow that says it starts from state
+ * another flow established is the one flow a page load would destroy, so it is never reset — here
+ * or from the wrong page. Silence is not an opt-out: a flow that depends on leftovers without
+ * saying so is a flow whose green means nothing on a fresh machine, and CI is a fresh machine.
  *
  * A full-page load tears down the session socket, so the navigation must happen here — before any
  * step runs — and the replay continues on the session the SDK reconnects as (found via the same
  * tombstone rebind that lets `resolve(oldId)` answer after any navigation). Best-effort by design:
- * when the flow carries no startPath, the tab is already there, the current route is unobservable,
- * the navigation is refused, or the SDK never reconnects in the window, it returns undefined and
- * replay proceeds on the connected session as before — with startPathMismatchHint turning any
- * resulting drift into an actionable next move rather than a mystifying one.
+ * when the flow carries no startPath, the current route is unobservable, the navigation is refused,
+ * or the SDK never reconnects in the window, replay proceeds on the connected session as before —
+ * with startPathMismatchHint turning any resulting drift into an actionable next move rather than a
+ * mystifying one.
  */
 export async function arriveAtStartPath(
   sessions: SessionManager,
@@ -348,22 +383,45 @@ export async function arriveAtStartPath(
   flow: FlowFile,
   timeoutMs: number = START_PATH_ARRIVAL_TIMEOUT_MS,
   clock: ArrivalClock = REAL_ARRIVAL_CLOCK,
-): Promise<Session | undefined> {
+): Promise<StartPathArrival> {
   const target = flow.startPath;
-  if (target === undefined || 0 === target.length) return undefined;
+  if (target === undefined || 0 === target.length) return {};
   const current = currentPathOf(session);
-  if (current === undefined || samePath(current, target)) return undefined;
-  // The route differs — but that only matters if it stops the flow starting. See above.
-  if (await firstStepResolvesHere(session, flow)) return undefined;
+  if (current === undefined) return {};
+  // The declared opt-out, both directions. See above.
+  if (0 < (flow.requires?.length ?? 0)) return {};
+  const here = samePath(current, target);
+  // A route mismatch that step 1 can start from anyway is not worth a page load: navigating away
+  // from a persistent anchor could only hurt, and did. Arriving is the goal; resetting a tab that is
+  // ALREADY here is a different decision, taken above, and this must not override it.
+  if (!here && (await firstStepResolvesHere(session, flow))) return {};
   let destination: string;
   try {
     // startPath is a pathname (a host belongs to the machine, not the journey) — resolve it
     // against the tab's own URL to get something the browser can be sent to.
     destination = new URL(target, session.url).toString();
   } catch {
-    return undefined; // no usable base URL — nowhere to navigate from
+    return {}; // no usable base URL — nowhere to navigate from
   }
-  return navigateAndAwait(sessions, session, destination, target, timeoutMs, clock);
+  // Measured either side of the reset, and only when the reset is a reload: reachable before and
+  // gone after is the reload's doing, not the flow file's. Without this, an app holding its session
+  // in memory comes back signed out and step 1 blames a component that is completely fine.
+  const resolvedBefore = here && (await firstStepResolvesHere(session, flow));
+  const arrived = await navigateAndAwait(
+    sessions,
+    session,
+    destination,
+    target,
+    timeoutMs,
+    clock,
+    here,
+  );
+  if (arrived === undefined) return {};
+  if (!resolvedBefore || (await firstStepResolvesHere(arrived, flow))) return { session: arrived };
+  return {
+    session: arrived,
+    resetCost: `replay reloaded ${target} before step 1 and the first anchor did not come back — this flow starts from state a page load discards. Declare what it needs (\`requires\`) to opt out of the reset, or record it from a cold page`,
+  };
 }
 
 /**
@@ -390,6 +448,8 @@ export async function navigateAndAwait(
   expectedPath: string,
   timeoutMs: number = START_PATH_ARRIVAL_TIMEOUT_MS,
   clock: ArrivalClock = REAL_ARRIVAL_CLOCK,
+  /** True when the destination is the page we are already on — see `arrivedSuccessor`. */
+  isReload: boolean = false,
 ): Promise<Session | undefined> {
   // A leased tab is addressed by URL params, so navigating without them would strand the lease.
   const url = carryReticleIdentity(session.url, destination);
@@ -405,7 +465,12 @@ export async function navigateAndAwait(
   }
   const deadline = clock.now() + timeoutMs;
   for (;;) {
-    const arrived = arrivedSuccessor(sessions, session.id, expectedPath);
+    const arrived = arrivedSuccessor(
+      sessions,
+      session.id,
+      expectedPath,
+      isReload ? session : undefined,
+    );
     if (arrived !== undefined) return arrived;
     if (clock.now() >= deadline) return undefined;
     await clock.sleep(START_PATH_POLL_MS);
@@ -559,8 +624,11 @@ export async function replayNamedFlow(
   // The FlowFile contract: replay navigates to the flow's startPath before step 1, and the steps run
   // on the session the SDK reconnects as. When arrival can't be confirmed, replay proceeds on the
   // connected session — and the hint below turns the wrong-page drift into an actionable next move.
-  const session = (await arriveAtStartPath(deps.sessions, connected, loaded.value)) ?? connected;
-  const startPathHint = startPathMismatchHint(loaded.value, session);
+  const arrival = await arriveAtStartPath(deps.sessions, connected, loaded.value);
+  const session = arrival.session ?? connected;
+  // The reset's own cost outranks the wrong-page hint: if the reload is why step 1 cannot start,
+  // "navigate there and replay" is advice that would do the same thing again.
+  const startPathHint = arrival.resetCost ?? startPathMismatchHint(loaded.value, session);
   // Floor the success oracle at the start of THIS replay so a stale signal from a prior run
   // in the same session can't fake a pass.
   const replayFloor = session.elapsed();
