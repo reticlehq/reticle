@@ -112,3 +112,37 @@ describe('maintenance over one .reticle workspace', () => {
     ).resolves.toBeUndefined();
   });
 });
+
+/*
+ * The budget walk is the expensive half of maintenance — it stats every entry in every evidence
+ * directory — and it ran twice on every single session teardown.
+ *
+ * `pruneSessions` swept the tier total itself, from the days when it was the one sweep called on
+ * both the daemon start path and session end. `pruneWorkspace` then became that one place and calls
+ * the budget itself, LAST, with its own header explaining why last is right: "the counts are cheap
+ * and bounded; the budget walks and sizes what the counts leave behind, so running it second means
+ * it sizes less." The leftover call inside `pruneSessions` ran it FIRST as well, against everything
+ * the counts were about to delete anyway.
+ *
+ * Counted rather than timed. How long two walks take is a statement about the machine; how many
+ * times the tier is walked is the actual property.
+ */
+describe('maintenance does not repeat itself', () => {
+  it(
+    'walks the evidence tier exactly once',
+    async () => {
+      await seedSessions(3);
+      let walks = 0;
+      const counting: FileSystemPort = {
+        ...fs,
+        readdir: (path: string) => {
+          if (path === join(root, ReticleDir.RUNS_SUBDIR)) walks += 1;
+          return fs.readdir(path);
+        },
+      };
+      await pruneWorkspace(counting, root, new Set(), { budgetBytes: 1 });
+      expect(walks).toBe(1);
+    },
+    MAINTENANCE_TIMEOUT_MS,
+  );
+});

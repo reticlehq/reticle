@@ -171,8 +171,6 @@ async function pruneByRecency(
 export interface RetentionOptions {
   /** How many session directories survive the count bound. */
   retention?: number;
-  /** The TOTAL the evidence tier may occupy. */
-  budgetBytes?: number;
   /**
    * The ids of sessions that are STILL OPEN. Neither bound may evict one.
    *
@@ -193,6 +191,11 @@ export interface RetentionOptions {
  * so a stat/rm failure on one dir (or a missing sessions/ dir) is swallowed, never crashing a session.
  * Mirrors RunStore's amortized pruning; run on daemon start and at the end of every session.
  *
+ * The COUNT bound only. This used to sweep the tier total as well, from when it was the single
+ * sweep both call sites used; `pruneWorkspace` is that single place now and runs the budget last,
+ * on purpose, so the leftover call here was a second walk of every evidence entry on every teardown
+ * — and it ran FIRST, sizing everything the counts were about to delete anyway.
+ *
  * An open session is excluded from BOTH bounds — see `RetentionOptions.live`.
  *
  * ponytail: excluded via `keep`, so an open session is not COUNTED toward the retention cap either.
@@ -207,9 +210,6 @@ export async function pruneSessions(
   const live = options.live ?? NO_LIVE_SESSIONS;
   const retention = options.retention ?? DEFAULT_SESSION_RETENTION;
   await pruneByRecency(fs, reticleDirPaths(root).sessions, retention, (name) => !live.has(name));
-  // The tier total is swept from here because this is the one sweep that runs on BOTH the daemon's
-  // start path and the end of every session, and the end of a session is when the bytes arrive.
-  await pruneEvidenceBudget(fs, root, options.budgetBytes ?? DEFAULT_EVIDENCE_BUDGET_BYTES, live);
 }
 
 /**
