@@ -192,6 +192,14 @@ export const SETTINGS_PANEL_ATTR = 'data-reticle-settings-panel';
 export const SETTINGS_CLOSE_ATTR = 'data-reticle-settings-close';
 export const SETTING_KEY_ATTR = 'data-reticle-setting';
 export const SETTINGS_STORAGE_KEY = 'reticle-presenter-settings';
+/**
+ * Per-TAB memory that the HUD was minimised by hand — not a saved preference.
+ *
+ * `sessionStorage`, so it survives the reload it exists for and nothing longer. Minimising the panel
+ * to reach one control underneath it is not a decision about every future session, which is what
+ * `autoOpenChat` in the settings profile is for.
+ */
+export const MINIMISED_STORAGE_KEY = 'reticle-presenter-minimised';
 /** Accent swatch applied to the dock chrome. */
 /** Overlay flag: is the page-edge glow wanted at all (user setting). */
 export const AMBIENT_GLOW_ATTR = 'data-reticle-ambient-glow';

@@ -155,6 +155,13 @@ export interface TourDeps {
    */
   readonly search?: string;
   /**
+   * The navigator of the page being mounted into, for the one question `webdriver` answers.
+   *
+   * Optional: a caller that cannot supply one keeps its tour rather than losing it to a guard that
+   * could not read the thing it guards on.
+   */
+  readonly navigator?: { readonly webdriver?: boolean };
+  /**
    * Copying is a capability, not a guarantee — an insecure origin has no clipboard.
    *
    * It reports whether the text actually landed. A `void` call makes a page with a working clipboard
@@ -233,6 +240,20 @@ export function mountTour(deps: TourDeps): TourHandle | undefined {
    * itself. A tour is for the person who ran `npm run dev`, never for a page nobody is looking at.
    */
   if (openedByReticle(deps.search)) return undefined;
+  /*
+   * A browser under automation has nobody to onboard.
+   *
+   * The two guards above do not cover it. `isDriving()` reads false at page load by construction,
+   * and `openedByReticle` reads a stamp Reticle puts on pages IT opens - an agent that launches its
+   * own Playwright context and calls `page.goto` carries none. Reported from the field three times
+   * over, always the same way: the scrim takes `pointer-events: auto`, the driver's click lands on
+   * it instead of the app, and the run stalls until somebody attaches a debugger to find out why.
+   *
+   * `navigator.webdriver` is that question said directly, and the same discriminator
+   * `effectivePaceMs` already uses for the same reason: one of these browsers has a person in front
+   * of it and the other does not.
+   */
+  if (true === deps.navigator?.webdriver) return undefined;
   if (tourAlreadySeen(deps.storage, deps.projectId)) return undefined;
 
   const doc = deps.document;

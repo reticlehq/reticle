@@ -74,6 +74,7 @@ import {
   type PresenterSettings,
 } from './presenter-settings.js';
 import { Annotator, type AnnotatorChrome } from '@/review/annotator.js';
+import { shouldAutoOpenChat } from './presenter-shell.js';
 // Re-export the config surface so the public import path (`./presenter.js`) is unchanged.
 export { GlowPhase } from './presenter-config.js';
 export type { PresenterOptions } from './presenter-config.js';
@@ -344,7 +345,10 @@ export class Presenter {
     this.#showSession();
     this.#glowCtl.resetActivity(this.#now());
     this.#startHeartbeat();
-    if (getPresenterSettings().autoOpenChat) {
+    // `autoOpenChat` answers "should the chat appear at session start with no click". It does not
+    // answer "should it reappear after somebody minimised it and reloaded" — that was already
+    // answered, by hand, and a reload is not them changing their mind.
+    if (shouldAutoOpenChat(getPresenterSettings().autoOpenChat)) {
       this.#shell.openChat();
     }
   }
@@ -371,7 +375,7 @@ export class Presenter {
     this.#paintActStrip(this.#lastActionText, true);
     // The message IS the reason this state exists, and a collapsed capsule hides it. Same setting
     // a live session honours, so a user who wants the bare toolbar still gets one.
-    if (getPresenterSettings().autoOpenChat) this.#shell.openChat();
+    if (shouldAutoOpenChat(getPresenterSettings().autoOpenChat)) this.#shell.openChat();
   }
 
   /** Turn the base border (session mode) + the HUD/log on - the visible "session is live" state. */

@@ -18,6 +18,7 @@ import {
   MIN_ATTR,
   SETTINGS_ATTR,
   SETTINGS_BTN_ATTR,
+  MINIMISED_STORAGE_KEY,
 } from './presenter-config.js';
 import { OFFER_SLOT_ATTR, paintOffer, type OfferState } from './presenter-offer.js';
 import { BRAND_NAME, FAB_TOGGLE_HTML, MARK_SVG } from './chrome/presenter-brand.js';
@@ -440,6 +441,8 @@ export class HudShell {
     if (this.#transitionLock) return;
     this.#lockTransition();
     this.#root.setAttribute(MIN_ATTR, '0');
+    // Expanding is somebody changing their mind, so the reload memory goes with it.
+    rememberMinimised(false);
     if (this.#fab !== undefined) this.#fab.setAttribute('aria-expanded', 'true');
     this.#callbacks.onExpand?.();
     // The chat IS the HUD's content: expanding to a toolbar with nothing above it made the agent's
@@ -457,6 +460,9 @@ export class HudShell {
     this.closeChat();
     this.#settings.close();
     this.#root.setAttribute(MIN_ATTR, '1');
+    // Remembered for this TAB, so a reload does not put the panel back over the control somebody
+    // minimised it to reach. Field reports of exactly that, from drivers outside Reticle.
+    rememberMinimised(true);
     if (this.#fab !== undefined) this.#fab.setAttribute('aria-expanded', 'false');
     this.#callbacks.onCollapse?.();
   }
@@ -555,4 +561,48 @@ export class HudShell {
       this.collapse();
     }
   };
+}
+
+/**
+ * Did somebody minimise the HUD in this tab?
+ *
+ * Read on mount so a reload does not undo it. Field reports, all from drivers outside Reticle:
+ * minimise our panel to reach the app, reload, and it is back over the control — so the next click
+ * lands on Reticle instead of the product and times out.
+ *
+ * Every access is guarded. A private window, a blocked-cookies profile and a sandboxed iframe throw
+ * on the property itself rather than returning null, and a dev overlay that cannot remember a
+ * preference is a far smaller problem than one that throws into the app's own load path.
+ */
+export function wasMinimised(): boolean {
+  try {
+    return '1' === globalThis.sessionStorage.getItem(MINIMISED_STORAGE_KEY);
+  } catch {
+    return false;
+  }
+}
+
+/** Record that the HUD was minimised by hand, or expanded again. */
+export function rememberMinimised(minimised: boolean): void {
+  try {
+    if (minimised) globalThis.sessionStorage.setItem(MINIMISED_STORAGE_KEY, '1');
+    else globalThis.sessionStorage.removeItem(MINIMISED_STORAGE_KEY);
+  } catch {
+    /* a page that refuses storage still gets a HUD */
+  }
+}
+
+/**
+ * Should session start open the chat by itself?
+ *
+ * Two different questions, and collapsing them is what the field reported. `autoOpenChat` is a
+ * PREFERENCE: should the chat appear with no click at all, at session start. Whether somebody has
+ * already minimised the panel IN THIS TAB is not that question — they answered it by hand, to reach
+ * a control underneath, and a reload is not them changing their mind.
+ *
+ * Named rather than left as an `&&` at two call sites, because the two halves read as the same
+ * question until you say why they are not.
+ */
+export function shouldAutoOpenChat(autoOpenChat: boolean): boolean {
+  return autoOpenChat && !wasMinimised();
 }

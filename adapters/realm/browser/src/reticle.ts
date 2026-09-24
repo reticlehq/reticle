@@ -524,6 +524,9 @@ export class Reticle {
             // this yet at mount — the presenter is IDLE until the agent's first command — so without
             // the stamp the tour mounts over a leased page and its scrim swallows the drive.
             search: window.location.search,
+            // And the case no stamp can cover: a driver that launched its OWN browser and navigated
+            // to the app itself. There is no person on such a page and the scrim only eats its clicks.
+            navigator,
             // Reports whether it landed, so the button can say so. `clipboard` is absent outright
             // on an insecure origin, and `writeText` still rejects on a page without permission.
             copy: (text) =>
