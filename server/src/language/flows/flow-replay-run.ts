@@ -158,19 +158,45 @@ interface StartPathSession {
 function currentPathOf(session: StartPathSession): string | undefined {
   const routes = session.eventsSince(0).filter((e) => e.type === EventType.ROUTE_CHANGE);
   const last = routes.at(-1);
-  // pathname + hash, because `startPath` is compared against this and must stay NAVIGABLE. Reading
-  // the pathname alone made both sides `/` on a hash router — always "same path", so the hint never
-  // fired however far the tab had drifted, on the router desktop renderers use by default.
+  // pathname + search + hash, because `startPath` is compared against this and must stay NAVIGABLE.
+  //
+  // Reading the pathname alone made both sides `/` on a hash router — always "same path", so the
+  // hint never fired however far the tab had drifted, on the router desktop renderers use by
+  // default. Leaving the SEARCH out was the mirror defect: `startPath` keeps its query, so a flow
+  // starting at `/admin/events/7?tab=wrap` never matched a tab sitting on exactly that, re-navigated
+  // on every replay, and the re-navigation killed the session mid-flow.
+  //
+  // Comparing without the query instead would have been worse in the direction that matters. The
+  // query usually decides what the page renders, so a tab on `?tab=summary` would read as "already
+  // at `?tab=wrap`" and the replay would start on the wrong page with nothing saying so. Both sides
+  // carry it, which keeps a real difference visible and stops the false one.
   const observed = last === undefined ? undefined : routeOfEvent(last);
-  if (observed !== undefined) return `${observed.docPath}${observed.hash}`;
+  if (observed !== undefined) return `${observed.docPath}${observed.search}${observed.hash}`;
   if (session.url === undefined) return undefined;
   const fromUrl = routeOfUrl(session.url);
-  return fromUrl === undefined ? undefined : `${fromUrl.docPath}${fromUrl.hash}`;
+  return fromUrl === undefined ? undefined : `${fromUrl.docPath}${fromUrl.search}${fromUrl.hash}`;
 }
 
-/** Pathname equality up to a trailing slash — a router normalising one must not read as "elsewhere". */
-function samePath(a: string, b: string): boolean {
-  return a.replace(/\/$/, '') === b.replace(/\/$/, '');
+/**
+ * Is the tab where the flow asked to start? Up to a trailing slash, and up to the query the flow
+ * did not ask about.
+ *
+ * `startPath` is the SPECIFICATION, so it decides what counts. A query it recorded is compared:
+ * `?tab=wrap` and `?tab=summary` are different pages, and a replay that starts on the wrong one
+ * proves nothing about the right one. A query it did NOT record is ignored: the tab carrying
+ * `?next=%2F` on a login page, or the identity params Reticle puts on a leased tab, are not the flow
+ * being elsewhere, and navigating to strip them costs a session for nothing.
+ *
+ * The asymmetry is the whole point and the reason `observed` and `expected` are named rather than
+ * `a` and `b`. Comparing with the query on both sides always re-navigated a query-bearing
+ * `startPath` (#1059, which killed the session mid-flow); comparing with it on neither side reads a
+ * tab on `?tab=summary` as already at `?tab=wrap`.
+ */
+function samePath(observed: string, expected: string): boolean {
+  const trimmed = (path: string): string => path.replace(/\/$/, '');
+  const withoutQuery = (path: string): string => path.replace(/\?[^#]*/, '');
+  const comparable = expected.includes('?') ? observed : withoutQuery(observed);
+  return trimmed(comparable) === trimmed(expected);
 }
 
 /**
