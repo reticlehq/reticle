@@ -196,9 +196,24 @@ if (stormRef === undefined) {
   // decoration, and this repo has paid for that before. This measures the difference directly:
   // ~12,000 byte-identical writes land in this window (200 every 50ms for 3s), and the fix is that
   // a write which changes nothing emits nothing.
+  //
+  // Counted on the STORM'S KEY, not on every storage event in the window.
+  //
+  // This used to match any event whose type contained "storage", which swept in Reticle's own
+  // `__reticle_ref_base` bookkeeping: the ref allocator claims a block by writing a HIGHER number
+  // to sessionStorage, so that write genuinely changes the value and is correctly reported. Whether
+  // a block boundary falls inside this particular window depends on how many refs the spec happened
+  // to mint earlier, which is not a fact about the app, the storm, or the fix — and it flipped this
+  // assertion from 1 to 2 and turned it red with nothing in the observer changed.
+  //
+  // A guard that counts the observer's own footprint is measuring the wrong thing in the direction
+  // that produces false alarms. The claim is about the STORM's key, so that is what is counted.
   const observed = await T('reticle_observe', { window_ms: 3000, max_events: 500 });
-  const storageEvents = (observed.events ?? []).filter((e) =>
-    String(e.type ?? '').toLowerCase().includes('storage'),
+  const storageEvents = (observed.events ?? []).filter(
+    (e) =>
+      String(e.type ?? '')
+        .toLowerCase()
+        .includes('storage') && e.data?.key === 'atlas-ui',
   ).length;
 
   const verdict = await T('reticle_assert', { predicate: { kind: 'text', contains: 'Shipments' } });
@@ -224,7 +239,7 @@ if (stormRef === undefined) {
   chk(
     'a storm of byte-identical writes reports the first one and none of the rewrites',
     storageEvents <= 1,
-    `storage events in a 3s window of ~12,000 no-op writes = ${String(storageEvents)} (reverting the observer guard gives ~496)`,
+    `writes to the storm's key reported in a 3s window of ~12,000 no-op writes = ${String(storageEvents)} (reverting the observer guard gives ~496)`,
   );
 
   // Stop it, so the storm cannot outlive this spec and poison a later one sharing the bridge.
