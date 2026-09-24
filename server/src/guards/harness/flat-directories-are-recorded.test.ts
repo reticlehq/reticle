@@ -85,7 +85,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * bundler drop it. Two guards pulling opposite ways, and the one about a cost every developer pays
    * on every page load wins over the one about how many files sit in a directory.
    */
-  'core/src/verdict': 12,
+  'core/src/verdict': 14,
   'core/src/wire': 16,
   // 16 since `snapshot-tree.ts`. The snapshot tree is a format the BROWSER writes and several
   // things on the Node side read back, and its parser was living beside the MCP tool handlers — so

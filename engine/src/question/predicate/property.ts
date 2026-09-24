@@ -1,5 +1,16 @@
-import { z } from 'zod';
 import { MeasureOp } from 'open-verification';
+import { type Delta, type PropertyAssertion } from '@reticlehq/core';
+
+/*
+ * The CONTRACT moved to core and is re-exported from here.
+ *
+ * A saved flow carries a `satisfies` now, so core has to be able to parse one. What stays is the
+ * half that DECIDES: `satisfiesProperty`, the baseline it compares against, and the two helpers
+ * (`show`, `numberIn`) that exist so a failure can quote what it saw. Core is the contract, this is
+ * the reasoning, and the split is the same one `predicate-schema.ts` next door makes.
+ */
+export { propertyAssertionSchema } from '@reticlehq/core';
+export type { Delta, PropertyAssertion } from '@reticlehq/core';
 
 /**
  * Assert a PROPERTY of an observed value rather than its exact bytes.
@@ -18,43 +29,6 @@ import { MeasureOp } from 'open-verification';
  * A failing check always says why. An assertion that reports only `false` sends the reader back for
  * another call to find out what it saw, and that round trip is most of what a verdict costs.
  */
-
-export type PropertyAssertion =
-  /** Produced something at all — the honest floor for any generated output. */
-  | { readonly property: 'nonEmpty' }
-  /** A classification landed inside the allowed set. Exact membership, no coercion. */
-  | { readonly property: 'oneOf'; readonly values: readonly unknown[] }
-  /** A number near enough to an expected one — inclusive on the bound. */
-  | { readonly property: 'withinTolerance'; readonly of: number; readonly tolerance: number }
-  /** The shape of the output, as a regular expression over its string form. */
-  | { readonly property: 'matchesPattern'; readonly pattern: string }
-  /** The right KIND of thing: `array` and `object` are distinguished, which `typeof` cannot do. */
-  | {
-      readonly property: 'type';
-      readonly is: 'string' | 'number' | 'boolean' | 'array' | 'object';
-    }
-  /*
-   * RELATIVE properties — the past tense, decided by two readings and a subtraction.
-   *
-   * `changed`/`unchanged` are the weakest and the most useful: "unchanged" is the assertion that
-   * catches the field a re-render silently cleared, and it needs no number at all.
-   *
-   * `increased`/`decreased` take an optional delta in the protocol's own `MeasureOp` shape — three
-   * operators and a tolerance on all of them, so "exactly 11.87", "11.87 ± 0.01" and "at least 3"
-   * are one shape with no conditional requirement anywhere. A second spelling of a comparison the
-   * protocol already publishes is exactly the drift this release is ending, so there is no `$gt`.
-   */
-  | { readonly property: 'changed' }
-  | { readonly property: 'unchanged' }
-  | { readonly property: 'increased'; readonly by?: Delta }
-  | { readonly property: 'decreased'; readonly by?: Delta };
-
-/** How far a reading moved, in the protocol's comparison vocabulary. Tolerance defaults to exact. */
-export interface Delta {
-  readonly op: MeasureOp;
-  readonly value: number;
-  readonly tolerance?: number;
-}
 
 /**
  * The reading taken BEFORE the action, when one was taken.
@@ -320,34 +294,3 @@ export function satisfiesProperty(
  * Lives here beside the evaluator on purpose: a schema in one file and the switch that consumes it
  * in another is how a new property comes to parse and then silently never match.
  */
-const deltaSchema = z
-  .object({
-    op: z.nativeEnum(MeasureOp),
-    value: z.number().finite(),
-    /** Never negative — a negative tolerance NARROWS the band, which is a different claim by accident. */
-    tolerance: z.number().finite().nonnegative().optional(),
-  })
-  .strict();
-
-export const propertyAssertionSchema = z.discriminatedUnion('property', [
-  z.object({ property: z.literal('nonEmpty') }).strict(),
-  z.object({ property: z.literal('oneOf'), values: z.array(z.unknown()).min(1) }).strict(),
-  z
-    .object({
-      property: z.literal('withinTolerance'),
-      of: z.number().finite(),
-      tolerance: z.number().finite().nonnegative(),
-    })
-    .strict(),
-  z.object({ property: z.literal('matchesPattern'), pattern: z.string().min(1) }).strict(),
-  z
-    .object({
-      property: z.literal('type'),
-      is: z.enum(['string', 'number', 'boolean', 'array', 'object']),
-    })
-    .strict(),
-  z.object({ property: z.literal('changed') }).strict(),
-  z.object({ property: z.literal('unchanged') }).strict(),
-  z.object({ property: z.literal('increased'), by: deltaSchema.optional() }).strict(),
-  z.object({ property: z.literal('decreased'), by: deltaSchema.optional() }).strict(),
-]);

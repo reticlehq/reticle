@@ -50,6 +50,10 @@ export * from './wire/net.js'; // NetInitiator / ipc:// scheme — network + des
 export * from './verdict/findings.js'; // crawl anomalies + cross-channel contradictions
 export * from './wire/desktop-contract.js'; // the Electron preload/main/renderer/daemon string contract
 export * from './verdict/consequence.js';
+// The predicate CONTRACT: what a caller may declare, and what a saved flow may carry. The engine
+// owns the reasoning over it and re-exports both halves as one surface.
+export * from './verdict/property-assertion.js';
+export * from './verdict/predicate.js';
 export * from './identity/project-id.js';
 export * from './words/notices.js';
 export * from './artifacts/journal.js';
