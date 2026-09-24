@@ -74,7 +74,7 @@ export const RAW_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.SESSIONS,
     description:
-      'List connected browser sessions (tab url/title, sessionId, last-seen, health: hidden/focused/throttled, and `realInputAvailable` — true when native CDP/launched real input is driving this tab), plus a `recommendation` naming a scriptable way out (`reticle drive <url>`, which needs no tool advertised; `reticle_lease` does the same from here once the daemon is restarted with RETICLE_ADVERTISE_ALL_TOOLS=1) when a tab is hidden/throttled and may be un-scriptable from here.',
+      'List connected browser sessions (tab url/title, sessionId, last-seen, health: hidden/focused/throttled, and `realInputAvailable` — true when native CDP/launched real input is driving this tab), plus a `recommendation` naming the in-protocol escape hatch (`reticle_run { tool: "reticle_lease" }`, with `reticle drive` as the human-side equivalent) when a tab is hidden/throttled and may be un-scriptable from here.',
     inputSchema: {},
     outputSchema: {
       sessions: z

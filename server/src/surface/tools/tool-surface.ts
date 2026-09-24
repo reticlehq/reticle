@@ -408,11 +408,23 @@ export function describeToolSurface(active: ToolSurface, requested?: string): To
 export function defaultAdvertisedNames(): readonly string[] {
   const surface = resolveToolSurface();
   const names = [...filterToolNames(surface)];
-  // `reticle_run` is real only where the surface keeps a dispatch hatch. The merged surface ships
-  // the catalogue without one, and naming a hatch that is not there is the same defect one level in.
-  return TOOL_SURFACE.MERGED === surface
-    ? [...names, ReticleTool.TOOLS]
-    : [...names, ReticleTool.TOOLS, ReticleTool.RUN];
+  /*
+   * Both meta tools, on every surface, because that is what the MCP actually advertises.
+   *
+   * This used to withhold `reticle_run` from the merged surface, reasoning that "naming a hatch
+   * that is not there is the same defect one level in". The reasoning is sound and the premise was
+   * false: `buildDynamicTools` returns `[reticle_tools, reticle_run]` unconditionally and
+   * `advertisedTools` appends both to every surface, so the hatch has always been there. Measured
+   * against a live daemon on the default surface: `reticle_run` is advertised, and
+   * `reticle_run { tool: "reticle_lease" }` reaches `reticle_lease`.
+   *
+   * Two functions answering one question, and this was the one the MCP never called. It is read by
+   * `server-instructions`, which gates "Everything else is one hop: reticle_tools lists it,
+   * reticle_run calls it" on this list - so agents were told the hatch was absent from a surface
+   * carrying it, and six recovery messages were later rewritten to match the lie.
+   * `advertised-names-are-real.test.ts` now pins this to `advertisedTools` itself.
+   */
+  return [...names, ReticleTool.TOOLS, ReticleTool.RUN];
 }
 
 /** The advertised NAME set for a surface, without needing the tool table. */

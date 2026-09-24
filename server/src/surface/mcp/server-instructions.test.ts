@@ -78,6 +78,11 @@ describe('buildServerInstructions', () => {
      * Naming them was half a fix. Neither is advertised, so a bare name sent an agent at a tool
      * `tools/list` does not contain: it burns a call, gets "unknown tool", and learns that the
      * instructions cannot be trusted — which is more expensive than never having been told.
+     *
+     * The DEFAULT surface reaches them too, which this used to deny. `buildDynamicTools` appends
+     * `reticle_run` to every surface, so the hop works there; `defaultAdvertisedNames` claimed
+     * otherwise and the instructions believed it, suppressing guidance that was true all along.
+     * Measured against a live daemon: `reticle_run { tool: "reticle_lease" }` reaches the tool.
      */
     it('gives both of them the reticle_run call that actually reaches them', () => {
       const wider = buildServerInstructions({
@@ -86,8 +91,8 @@ describe('buildServerInstructions', () => {
       });
       expect(wider).toContain('reticle_run({ tool: "reticle_context"');
       expect(wider).toContain('reticle_run({ tool: "reticle_intent"');
-      // And the nine, which cannot reach them, names neither rather than both.
-      expect(text).not.toContain(ReticleTool.CONTEXT);
+      // And the default surface, which CAN reach them through the same hatch, names them the same way.
+      expect(text).toContain(`${ReticleTool.RUN}({ tool: "${ReticleTool.CONTEXT}"`);
     });
   });
 
@@ -142,7 +147,10 @@ describe('buildServerInstructions', () => {
     // The ratchet warning above still stands, and this raise accepts its terms: if the next one
     // cannot show a number like that, cut an older sentence instead.
     for (const previouslyConnected of [true, false]) {
-      expect(buildServerInstructions({ previouslyConnected }).length).toBeLessThan(4000);
+      // 4200, raised once from 4000: the default surface now carries the two-meta-tool sentence it
+      // always should have, because `reticle_run` is advertised there and the hop genuinely works.
+      // Guidance that is true and reachable earns its bytes; the budget exists to stop padding.
+      expect(buildServerInstructions({ previouslyConnected }).length).toBeLessThan(4200);
     }
   });
 });

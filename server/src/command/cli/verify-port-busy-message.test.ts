@@ -24,10 +24,7 @@ describe('the port-busy refusal', () => {
 
   it('leads with the option that needs no tools and stops nothing', () => {
     const drive = message.indexOf('drive <url>');
-    // The tools option names `reticle_verify` directly now, not the `reticle_run` hatch: the
-    // default surface stopped carrying one, so pointing the reader through it named a tool that is
-    // not there (#978). The ordering this guards is unchanged.
-    const tools = message.indexOf('reticle_verify');
+    const tools = message.indexOf('reticle_run');
     expect(drive).toBeGreaterThan(-1);
     expect(drive).toBeLessThan(tools);
   });

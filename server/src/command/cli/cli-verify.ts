@@ -475,7 +475,7 @@ export function portBusyMessage(port: number): string {
     `  • Drive the app through the daemon that is already there — this needs no tools and stops ` +
     `nothing: npx @reticlehq/server drive <url>\n` +
     '  • If your client HAS the Reticle tools, ask that daemon directly: ' +
-    'reticle_verify { action: "change", files: ["..."] }\n' +
+    'reticle_run { tool: "reticle_verify", args: { action: "change", files: ["..."] } }\n' +
     `  • Or run both on another port, if your app is configured for it: RETICLE_PORT=<port> ` +
     'npx @reticlehq/server verify <url>\n' +
     `  • Stopping the daemon (npx @reticlehq/server stop --port ${String(port)}) works, but it cuts ` +

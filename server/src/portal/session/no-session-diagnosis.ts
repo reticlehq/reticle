@@ -175,9 +175,9 @@ const RETRY = SELF_RECOVERING_MARKER;
  * the reader to do — and then the lease is the way to open it without a shell.
  */
 const URL_THEN_LEASE =
-  'Once you have that URL, ask the human to open it with `npx @reticlehq/server drive <url>`. reticle_lease ' +
-  '{action:"acquire", url} does it without a shell when the daemon runs with ' +
-  'RETICLE_ADVERTISE_ALL_TOOLS=1; this surface advertises neither it nor a hatch to reach it.';
+  'Once you have that URL, open it with reticle_lease {action:"acquire", url} rather than a shell ' +
+  'command — it needs no CLI on PATH (reach it with reticle_run {tool:"reticle_lease"} if it is ' +
+  'not advertised directly).';
 
 /**
  * The lease advice, with the reason it cannot be taken when that is the case.
@@ -198,10 +198,9 @@ function leaseAdvice(base: string, facts: NoSessionFacts): string {
  * browser and comes back `ready:false`.
  */
 const SELF_SERVE =
-  'A browser Reticle drives itself is one command away: `npx @reticlehq/server drive <url>`. reticle_lease ' +
-  '{action:"acquire", url} returns a sessionId without a shell when the daemon runs with ' +
-  'RETICLE_ADVERTISE_ALL_TOOLS=1 — this surface advertises neither it nor a hatch to reach it. ' +
-  'Release a lease when you finish.';
+  'You do not have to wait for the human: reticle_lease {action:"acquire", url} opens a browser ' +
+  'Reticle drives itself, and returns a sessionId you can use immediately (reach it with ' +
+  'reticle_run {tool:"reticle_lease"} if it is not advertised directly; release it when you finish).';
 
 /** The hedge that is true for every vanished tab we did not watch leave. */
 const TAB_GONE_WHAT = 'The tab was closed, navigated away, or hard-reloaded.';

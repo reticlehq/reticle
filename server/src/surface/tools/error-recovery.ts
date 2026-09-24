@@ -77,9 +77,9 @@ export const RECOVERY = {
     'That sessionId is not connected. Call reticle_sessions for the current ids and retry with a valid one.',
   THROTTLED:
     'The target tab is backgrounded/throttled, so actions may silently no-op. Ask the human to bring ' +
-    'the tab to the front, or to run `reticle drive <url>`. This surface has no in-protocol route: ' +
-    'reticle_lease is not advertised and there is no hatch to reach it — restart the daemon with ' +
-    'RETICLE_ADVERTISE_ALL_TOOLS=1 and it becomes callable by name.',
+    'the tab to the front, or acquire a guaranteed scriptable context yourself with ' +
+    '`reticle_run { tool: "reticle_lease", action: "acquire", url }` (a human can equivalently run ' +
+    '`reticle drive <url>`).',
   MISSING_BASELINE:
     'That baseline does not exist yet. Call reticle_baseline { action: "list" } to see saved names, or ' +
     'reticle_baseline { action: "save", name } to capture one before diffing against it.',
@@ -182,10 +182,11 @@ export const RECOVERY = {
     'assert on the result instead of typing it. Known gap, already reported: no need to file it.',
   HOVER_NEEDS_POINTER:
     'Hover needs a real pointer: a synthetic mouseover does not apply CSS :hover, and Reticle ' +
-    'refuses rather than reporting the styles as applied. Ask the human for a real tab: `reticle ' +
-    'drive <url>` or RETICLE_CDP_URL. reticle_lease does it from here, but only once the daemon is ' +
-    'restarted with RETICLE_ADVERTISE_ALL_TOOLS=1 — this surface advertises neither it nor a hatch ' +
-    'to reach it. This is a deliberate refusal, not a defect: there is nothing to report.',
+    'refuses rather than reporting the styles as applied. Acquire a tab with ' +
+    'reticle_run { tool: "reticle_lease", action: "acquire", url } — reticle_lease is not ' +
+    'advertised under the default profile, so it is reached through reticle_run, not called ' +
+    'directly — or ask the human to drive with `reticle drive` / RETICLE_CDP_URL. This is a ' +
+    'deliberate refusal, not a defect: there is nothing to report.',
   TOKEN_REQUIRED:
     'The bridge binds beyond localhost and requires a pairing token. Set the same token in the SDK ' +
     'init (@reticlehq/core) and the Reticle server config, then reconnect.',
@@ -208,10 +209,10 @@ export const RECOVERY = {
   COMMAND_TIMEOUT:
     'The page did not answer within the command window. That is a fact about the page, not a Reticle ' +
     'failure: check reticle_sessions for `throttled`/`stale` on this session — a backgrounded tab is ' +
-    'throttled and may never answer, so ask the human to bring it to the front or to run `reticle ' +
-    'drive <url>`. (reticle_lease does it from here once the daemon is restarted with ' +
-    'RETICLE_ADVERTISE_ALL_TOOLS=1; this surface carries neither it nor a hatch.) If the tab is in ' +
-    'front, the page is busy or blocked (a long ' +
+    'throttled and may never answer, so ask the human to bring it to the front or drive your own ' +
+    'browser with reticle_run { tool: "reticle_lease", action: "acquire", url } — reticle_lease is ' +
+    'not advertised under the default profile, so it is reached through reticle_run, not called ' +
+    'directly. If the tab is in front, the page is busy or blocked (a long ' +
     'synchronous task, an alert/confirm dialog); reticle_console usually shows what it hit. Retry ' +
     'once the cause is addressed.',
   FLOW_STEP_MISSING:
