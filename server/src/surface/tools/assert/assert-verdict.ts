@@ -36,6 +36,7 @@ import {
 } from '@/surface/tools/act/settle-in-flight.js';
 import { gradeOfPredicate } from './assert-grade.js';
 import { assertSource } from './assert-source.js';
+import { VerdictAttribution, verdictAttributionOf } from '@reticlehq/core';
 
 /**
  * The honesty verdict for a plain `reticle_assert`.
@@ -259,6 +260,8 @@ export async function assertVerdict(
     pass,
     lastActSource: session.lastAct.source(),
   });
+  // Who can act on this verdict, derived from the clause that decided it — see `attributedTo` below.
+  const attributedTo = verdictAttributionOf(decision.verifiedReason);
   return {
     decision: decision as unknown as Record<string, unknown>,
     contradictions,
@@ -285,6 +288,25 @@ export async function assertVerdict(
       // arrived from a capture that could not be read, and only the first is worth asking about
       // again -- which is what makes a later answer a CORRECTION rather than a second opinion.
       reason: decision.verifiedReason,
+      /*
+       * WHOSE problem it is, in four values, finishing the sentence above.
+       *
+       * The reason names the deciding clause; this names who can act on it, which for an `unknown`
+       * is the only question the reader has. `environment` resolves by waiting, `could-not-see` by
+       * looking again with better coverage, `harness` by fixing Reticle or the call, and `code` is
+       * the only one that means go and change the app. Omitted on a proof, which has no owner.
+       *
+       * Derived here rather than inside the verdict: it is a pure function of a reason the engine
+       * already returns, and `core-coupling-only-shrinks` caps what the engine may borrow from core.
+       *
+       * Named `attributedTo`, not `attribution`, because two other things already carry that word:
+       * `honesty.attribution` a few lines up ("what the grade is attributed to" — the window), and
+       * `BugAttribution` in telemetry ("we found a defect, whose defect is it?"). Three meanings on
+       * one noun is how a reader ends up acting on the wrong one.
+       */
+      ...(attributedTo === undefined || VerdictAttribution.NONE === attributedTo
+        ? {}
+        : { attributedTo }),
       grade: gradeOfPredicate(predicate),
       couldNotSee: spots.map((spot) => spot.kind),
     },

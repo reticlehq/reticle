@@ -77,7 +77,15 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // link running code inside the developer's own app. A security rule living in two files gets
   // fixed in one of them, so the duplicate was not an option.
   'adapters/realm/browser/src/presenter/chrome': 11,
-  'core/src/verdict': 11,
+  /*
+   * 12 because `verdict-attribution.ts` earns its own module, and the reason is measured rather than
+   * tidy: folded into `verified-constants.ts` it added 687 B to what EVERY page downloads just for
+   * loading the SDK, which `first-load-size` caught. The browser never needs to know whose problem
+   * an unproved verdict is — that is read where a verdict is emitted — so a separate module lets the
+   * bundler drop it. Two guards pulling opposite ways, and the one about a cost every developer pays
+   * on every page load wins over the one about how many files sit in a directory.
+   */
+  'core/src/verdict': 12,
   'core/src/wire': 16,
   // 16 since `snapshot-tree.ts`. The snapshot tree is a format the BROWSER writes and several
   // things on the Node side read back, and its parser was living beside the MCP tool handlers — so

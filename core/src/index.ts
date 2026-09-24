@@ -30,6 +30,8 @@ export * from './identity/source-constants.js'; // DATA_RETICLE_SOURCE_ATTR, RET
 export * from './wire/event-classification.js'; // CHURN_TYPES — shared eviction priority for buffer/queue
 export * from './wire/global-press.js'; // which press is a document key (Escape / Tab / a shortcut)
 export * from './verdict/verified-constants.js'; // Verified — the one field an agent gates on
+// Its own module so a page that never needs it does not download it — see first-load-size.
+export * from './verdict/verdict-attribution.js';
 export * from './verdict/verify-progress.js'; // VerifyPhase — what a run is doing while it is still doing it
 export * from './wire/constants/session-constants.js';
 export * from './identity/document-identity.js'; // which document an observation belongs to
