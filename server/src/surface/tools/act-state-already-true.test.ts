@@ -311,3 +311,62 @@ describe('#864 — pre-existing STATE bypasses alreadyTrue in act_and_wait', () 
     expect(res['verifiedReason']).toBe(VerifiedReason.INCONCLUSIVE);
   });
 });
+
+/**
+ * `already_true` says WHAT was already true (4.1).
+ *
+ * The verdict tells an agent its assertion held before the action, so the action proved nothing.
+ * The next question is always the same - true how? what was there? - and it was unanswerable: the
+ * pre-action reading was taken, used for the pass/fail bit, and thrown away. By the time the agent
+ * could ask, the action has run and the state may have moved, so the one moment that mattered is
+ * gone for good.
+ *
+ * It costs nothing to keep. The pre-check already evaluates the predicate and already holds its
+ * evidence - `alreadyTrueHiddenMatch` reaches into exactly that object for one bit. This keeps the
+ * reading beside it rather than one derived fact about it.
+ *
+ * Why it matters beyond curiosity: `already_true` is the verdict that tells somebody their check was
+ * vacuous, and the usual cause is a stale assertion that was true all along. Naming the value is the
+ * difference between "write a better assertion" and being able to see WHICH one to write.
+ */
+describe('what an already_true verdict tells the agent about the pre-action state', () => {
+  it('reports the reading the pre-check took, not only that it passed', async () => {
+    const { deps } = createStateSession({
+      initialStore: { app: { cart: { count: 3 } } },
+      settled: true,
+    });
+
+    const res = (await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
+      ref: 'btn-inert',
+      action: 'click',
+      timeout_ms: 0,
+      until: { kind: PredicateKind.STATE, path: 'cart.count', equals: 3 },
+    })) as Record<string, unknown>;
+
+    expect(res['verifiedReason']).toBe(VerifiedReason.ALREADY_TRUE);
+    expect(
+      res['alreadyTrueEvidence'],
+      'the pre-action reading was discarded, and after the action it cannot be recovered',
+    ).toBeDefined();
+    expect(JSON.stringify(res['alreadyTrueEvidence'])).toContain('cart.count');
+  });
+
+  /* Nothing is added when the assertion was NOT already true — that verdict has real evidence. */
+  it('says nothing about a pre-action reading when the action actually caused the change', async () => {
+    const { deps } = createStateSession({
+      initialStore: { app: { cart: { count: 0 } } },
+      onAct: (setStore) => setStore({ app: { cart: { count: 1 } } }),
+      settled: true,
+    });
+
+    const res = (await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
+      ref: 'btn-add',
+      action: 'click',
+      timeout_ms: 0,
+      until: { kind: PredicateKind.STATE, path: 'cart.count', equals: 1 },
+    })) as Record<string, unknown>;
+
+    expect(res['verifiedReason']).not.toBe(VerifiedReason.ALREADY_TRUE);
+    expect(res['alreadyTrueEvidence']).toBeUndefined();
+  });
+});

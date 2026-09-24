@@ -171,7 +171,14 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it
   // hit the line cap, and splitting them again would scatter one cohesive unit across two homes.
-  'server/src/surface/tools/act': 11,
+  /*
+   * 12 because `already-true.ts` had to leave `act-tools.ts`, which sits ON the 1000-line cap, and
+   * rule 6 says split before adding. The obvious home refused it: `act-preflight.ts` states its own
+   * cohesion as "decidable without touching the page", and reading whether a consequence is already
+   * true queries the page. Two guards in tension, and the line cap is the one whose rule is explicit
+   * about what to do.
+   */
+  'server/src/surface/tools/act': 12,
   // 19 since `setup-mcp-cli.ts`: the terminal half of `reticle setup mcp`, which the one-line
   // installer runs before any project exists. It sits HERE and not in `setup/` because the reach
   // guard refused `command -> setup` and CLI handlers already live in this directory.

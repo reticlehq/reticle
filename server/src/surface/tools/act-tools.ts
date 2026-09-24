@@ -73,10 +73,6 @@ import {
   declaredExpectations,
   declaresBodyIndependentChannel,
 } from '@reticlehq/engine/question/declared.js';
-import {
-  readsDomState,
-  alreadyTrueHiddenMatch as alreadyTrueHiddenMatchOf,
-} from '@reticlehq/engine/evidence/already-true.js';
 import { describeWaitTarget, namedNetIsInFlight } from '@reticlehq/engine/evidence/unsettled.js';
 import { saveFailedAssertCapsule } from './act-capsule.js';
 import { blastRadius, buildDivergenceCapsule, wireCapsule } from '@/judgement/capsule/capsule.js';
@@ -116,6 +112,7 @@ import { asActionType, gradeOf } from './act/act-helpers.js';
 import { resolveActTarget } from './act/act-target.js';
 import { tryRealInput, rewriteUploadArgs, HOVER_NEEDS_POINTER_MSG } from './real-input-attempt.js';
 import { gradeOfPredicate } from './assert/assert-grade.js';
+import { readAlreadyTrue } from './act/already-true.js';
 
 /**
  * Narrow the wire's `action` to a real ActionType, or undefined.
@@ -557,24 +554,14 @@ export const ACT_TOOLS: ToolDef[] = [
       // A verdict that lives only in the response lives only in the agent's context window, which is
       // exactly the copy a compaction destroys — see runs/run-context.ts.
       let verdictEffect: JournalVerdictEffect | undefined;
-      // Was the declared consequence ALREADY TRUE? Only asked for predicates that read live DOM
-      // state — event-based ones are floored at this act's cursor and cannot be satisfied by the
-      // past, so they need no pre-check and pay nothing. One extra query, on the path where a green
-      // is otherwise unfalsifiable. See engine/src/evidence/already-true.ts.
-      const alreadyTruePrecheck =
-        until !== undefined && readsDomState(until)
-          ? await evaluatePredicate(session, until, since, false)
-          : undefined;
-      const alreadyTrue = alreadyTruePrecheck?.pass ?? false;
+      // Was the consequence ALREADY TRUE, and what did that reading say? See act/already-true.ts.
+      const { alreadyTrue, alreadyTrueHiddenMatch, alreadyTrueEvidence } = await readAlreadyTrue(
+        session,
+        until,
+        since,
+      );
       // Same as the ACT handler: the route this step RAN on, before the action can move the app.
       const routeBeforeWait = pathOf(session.url);
-      // #889: the pre-check evidence is already in hand — cheap to also ask whether that match was
-      // against something hidden, so the already_true message can name it instead of leaving the
-      // agent to re-derive "was this actually showing?" from nothing.
-      const alreadyTrueHiddenMatch =
-        alreadyTrue && until !== undefined
-          ? alreadyTrueHiddenMatchOf(until, alreadyTruePrecheck?.evidence)
-          : false;
       try {
         // actCommand is the single interception point for upload+path rewrite.
         //
@@ -936,6 +923,8 @@ export const ACT_TOOLS: ToolDef[] = [
         noteSessionGaps(session, gaps);
         return withControl(session, {
           ...decision,
+          // WHAT was already true, not only that something was (4.1) — see act/already-true.ts.
+          ...(alreadyTrueEvidence === undefined ? {} : { alreadyTrueEvidence }),
           // An unobserved act has no effect to report, and inventing an empty one would read as
           // "the page did nothing" — a claim about the app, from a call that never saw it.
           ...(null === actResult ? {} : { effect: leanActResult(actResult.result) }),
