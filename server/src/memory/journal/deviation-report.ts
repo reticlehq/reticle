@@ -1,4 +1,5 @@
 import type { SegmentRollup } from './rollups.js';
+import { routeTemplate } from './route-template.js';
 import {
   compareSegment,
   type Deviation,
@@ -64,7 +65,9 @@ export function buildDeviationReport(
       truncated += 1;
       continue;
     }
-    const envelope = envelopes.get(segment.route);
+    // The SAME key the service accumulates under — a lookup on the observed path would miss every
+    // envelope on an app with ids in its URLs, which is the case this templating exists for.
+    const envelope = envelopes.get(routeTemplate(segment.route));
     if (envelope === undefined || envelope.samples < MIN_ENVELOPE_SAMPLES) continue;
     judged += 1;
     const segDeviations = compareSegment(envelope, segment, zThreshold);

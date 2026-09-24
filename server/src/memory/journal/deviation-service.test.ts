@@ -89,3 +89,63 @@ describe('reportAndAccumulate — the push-default loop', () => {
     ENVELOPE_IO_TIMEOUT_MS,
   );
 });
+
+/**
+ * The defect this templating exists for, end to end.
+ *
+ * Keyed on the raw pathname, an app with ids in its URLs mints one envelope per id. Every envelope
+ * holds a single sample, nothing ever reaches MIN_ENVELOPE_SAMPLES, and the report answers
+ * "envelope too new" for the life of the project — the deviation feature silently never turns on,
+ * and the file grows a key per order at the same time. One defect, two symptoms.
+ */
+describe('an app whose URLs carry ids', () => {
+  let root: string;
+  let fs: FileSystemPort;
+  let store: EnvelopeStore;
+
+  beforeEach(async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'reticle-dev-ids-'));
+    root = join(dir, '.reticle');
+    fs = createNodeFileSystem();
+    store = new EnvelopeStore(fs, root);
+  });
+  afterEach(async () => {
+    await removeTempDir(join(root, '..'));
+  });
+
+  it(
+    'accumulates visits to different ids into ONE envelope, so the baseline matures',
+    async () => {
+      for (const id of [1001, 1002, 1003]) {
+        await reportAndAccumulate(store, [seg(`/orders/${String(id)}`, 100)]);
+      }
+      const envelopes = await store.load();
+      expect(envelopes.size).toBe(1);
+      expect([...envelopes.values()][0]?.samples).toBe(3);
+    },
+    ENVELOPE_IO_TIMEOUT_MS,
+  );
+
+  it(
+    'stops reporting "too new" once enough DIFFERENT ids have been seen',
+    async () => {
+      for (const id of [1, 2, 3]) {
+        await reportAndAccumulate(store, [seg(`/orders/${String(id)}`, 100)]);
+      }
+      const report = await reportAndAccumulate(store, [seg('/orders/4', 100)]);
+      expect(report.insufficientSamples).toBe(false);
+    },
+    ENVELOPE_IO_TIMEOUT_MS,
+  );
+
+  /** And genuinely different routes still get their own baselines. */
+  it(
+    'keeps two different route templates apart',
+    async () => {
+      await reportAndAccumulate(store, [seg('/orders/1', 100)]);
+      await reportAndAccumulate(store, [seg('/invoices/1', 100)]);
+      expect((await store.load()).size).toBe(2);
+    },
+    ENVELOPE_IO_TIMEOUT_MS,
+  );
+});

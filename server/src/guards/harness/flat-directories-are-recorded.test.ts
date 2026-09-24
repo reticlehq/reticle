@@ -206,7 +206,12 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // of the URL and testable without a journal -- both halves of a request/response pair must get the
   // same answer, or filtering one half leaves the other unpaired and the engine reports a request
   // that completed as one that hung.
-  'server/src/memory/journal': 14,
+  // 15 since `route-template.ts`: the key an envelope's statistics accumulate under. Its own file
+  // rather than a helper inside `deviation-service`, because BOTH the service that writes the
+  // envelope and the report that reads it must key on the identical value — a private copy on one
+  // side is how the two would silently disagree, and a lookup that misses every envelope is exactly
+  // the defect it was written to fix.
+  'server/src/memory/journal': 15,
   // 11 when the artifact-address files landed: `project-for-root.ts`, `artifact-root-resolver.ts`
   // and the roster that pins them. Recorded rather than grouped, and the reason is the sibling
   // guard: the natural home for "which directory does this write to" is `project/dir`, whose whole

@@ -1,4 +1,5 @@
 import type { EnvelopeStore } from './envelope-store.js';
+import { routeTemplate } from './route-template.js';
 import { addSegmentToEnvelope, emptyEnvelope } from './envelope.js';
 import { buildDeviationReport, type DeviationReport } from './deviation-report.js';
 import type { SegmentRollup } from './rollups.js';
@@ -27,8 +28,15 @@ export async function reportAndAccumulate(
       if (segment.route === undefined) continue;
       // Never learn from a truncated sample — its understated counts would poison the baseline.
       if (true === segment.truncated) continue;
-      const current = envelopes.get(segment.route) ?? emptyEnvelope(segment.route);
-      envelopes.set(segment.route, addSegmentToEnvelope(current, segment));
+      /*
+       * Keyed on the route TEMPLATE, not the observed path. Keyed on the path, an app with ids in
+       * its URLs mints one envelope per id, every envelope holds a single sample, and nothing ever
+       * reaches MIN_ENVELOPE_SAMPLES — so the deviation report answers "envelope too new" forever
+       * and the feature never turns on. See route-template.ts.
+       */
+      const key = routeTemplate(segment.route);
+      const current = envelopes.get(key) ?? emptyEnvelope(key);
+      envelopes.set(key, addSegmentToEnvelope(current, segment));
     }
     await store.save(envelopes);
     return report;
