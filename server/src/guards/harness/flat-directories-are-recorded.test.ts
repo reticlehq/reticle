@@ -182,7 +182,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 19 since `setup-mcp-cli.ts`: the terminal half of `reticle setup mcp`, which the one-line
   // installer runs before any project exists. It sits HERE and not in `setup/` because the reach
   // guard refused `command -> setup` and CLI handlers already live in this directory.
-  'server/src/command/cli': 19, // + tutorial.ts: one sequence, two audiences, ending at a verdict
+  'server/src/command/cli': 20, // + tutorial.ts: one sequence, two audiences, ending at a verdict
   // 17 since the installer's Node half: `setup-mcp.ts` (which agents are here, and merging into the
   // configs they already keep) and `setup-install.ts` (the three steps only the shell could time).
   // Both are pure — their telemetry reporter is INJECTED, because this directory does not own a

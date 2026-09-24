@@ -13,6 +13,7 @@
 import { join, basename } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { runAdhocVerdict } from './adhoc-verdict.js';
+import { runAdhocSuite } from './adhoc-suite.js';
 import {
   exploreApp,
   harnessAvailable,
@@ -579,6 +580,33 @@ export function handleVerify(parsed: {
         });
         for (const line of verdict.lines) ports.out(line);
         ports.exit(verdict.code);
+        return;
+      }
+      /*
+       * No predicate, but there may be SAVED FLOWS, and running them is the other half of the same
+       * dead end. `--expect` served a project with nothing saved; a project WITH a suite was still
+       * stuck, and worse off, because the whole promise of a saved suite is that it runs again
+       * without an agent. See runAdhocSuite.
+       *
+       * Only when the caller asked for nothing that needs a browser of OUR OWN. `--explore` is a
+       * model driving a fresh page, and `--headed` and `--storage-state` are instructions about a
+       * browser this path never opens: honouring the request by silently ignoring three of its
+       * flags would be a different run wearing the same command. Those still get the message below,
+       * which now names this route.
+       */
+      const wantsOwnBrowser =
+        true === parsed.explore || !parsed.headless || parsed.storageState !== undefined;
+      if (!wantsOwnBrowser) {
+        const suite = await runAdhocSuite({
+          port,
+          ...(parsed.select === undefined ? {} : { select: parsed.select }),
+          ...(parsed.sessionId === undefined ? {} : { sessionId: parsed.sessionId }),
+          ...((t: string | undefined) => (t === undefined || 0 === t.length ? {} : { token: t }))(
+            readOrCreatePairingTokenSync(defaultPairingTokenDir()),
+          ),
+        });
+        for (const line of suite.lines) ports.out(line);
+        ports.exit(suite.code);
         return;
       }
       ports.fail(portBusyMessage(port));

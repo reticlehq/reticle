@@ -67,13 +67,13 @@ export interface ToolCaller {
 /** `verified` is the only field that decides the exit code. Everything else is for the reader. */
 const PROVED = 'yes';
 
-function endpointFor(port: number, token: string | undefined): URL {
+export function endpointFor(port: number, token: string | undefined): URL {
   const url = new URL(`http://${LOOPBACK_HOST}:${String(port)}${MCP_SSE_PATH}`);
   if (token !== undefined && token.length > 0) url.searchParams.set(TOKEN_QUERY_PARAM, token);
   return url;
 }
 
-async function connectOverSse(endpoint: URL): Promise<ToolCaller> {
+export async function connectOverSse(endpoint: URL): Promise<ToolCaller> {
   const client = new Client({ name: 'reticle-cli', version: '1' }, { capabilities: {} });
   await client.connect(new SSEClientTransport(endpoint));
   return {
@@ -85,7 +85,7 @@ async function connectOverSse(endpoint: URL): Promise<ToolCaller> {
 }
 
 /** The verdict object an MCP tool result carries, or undefined when the shape is not one. */
-function verdictOf(result: unknown): Record<string, unknown> | undefined {
+export function verdictOf(result: unknown): Record<string, unknown> | undefined {
   const structured = (result as { structuredContent?: unknown } | undefined)?.structuredContent;
   if ('object' === typeof structured && null !== structured) {
     return structured as Record<string, unknown>;
@@ -124,7 +124,7 @@ function verdictFromText(result: unknown): Record<string, unknown> | undefined {
  * action — and printing the MCP result object around it buries that in JSON escaping. The reader is
  * at a terminal; give them the sentence.
  */
-function refusalText(result: unknown): string | undefined {
+export function refusalText(result: unknown): string | undefined {
   const r = result as { isError?: unknown; content?: unknown } | undefined;
   if (true !== r?.isError || !Array.isArray(r.content)) return undefined;
   const text = r.content
