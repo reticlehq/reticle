@@ -19,13 +19,7 @@
  * code that runs them. This table holds facts you could write on an index card.
  */
 
-import {
-  ResumeStrategy,
-  resumeStrategy,
-  type DeterminismProfile,
-  Surface,
-  type SubjectRef,
-} from 'open-verification';
+import { type DeterminismProfile, Surface, type SubjectRef } from 'open-verification';
 import { AppRuntime } from '@/telemetry-feedback.js';
 import { PlatformProfile } from '@/wire/platform.js';
 
@@ -396,15 +390,4 @@ export const DETERMINISM_BY_SURFACE: Record<Surface, DeterminismProfile> = {
 /** The declared profile for a surface. */
 export function determinismFor(surface: Surface): DeterminismProfile {
   return DETERMINISM_BY_SURFACE[surface];
-}
-
-/**
- * May a resume re-drive the steps before the one asked for?
- *
- * The one question the resume path has to ask before it silently repeats somebody's actions. Derived
- * through the protocol's own `resumeStrategy` rather than by reading `replayPrefix` here, so this
- * cannot drift from the rule the specification publishes.
- */
-export function mayResumeByReplayingPrefix(surface: Surface): boolean {
-  return ResumeStrategy.REFUSE !== resumeStrategy(determinismFor(surface));
 }

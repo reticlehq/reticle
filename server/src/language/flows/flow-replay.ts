@@ -1,5 +1,4 @@
-import { mayResumeByReplayingPrefix, StepEffect } from '@reticlehq/core';
-import { Surface, formatStepAddress } from 'open-verification';
+import { formatStepAddress } from 'open-verification';
 import { span } from '@/trace.js';
 import {
   anchorLabel,
@@ -354,9 +353,16 @@ async function runSignalStep(
  * On the first anchor MISS the step carries legible drift and replay STOPS, returning the partial
  * results. This is the "whose fault is it" contract, not a blind "command failed".
  */
-/** Where a replay starts reporting. Steps before it are re-driven, silently, as setup. */
+/**
+ * How a replay is loaded and how far it goes — not WHERE it starts.
+ *
+ * It carried a `from` (and a `surface` that existed only to gate it): replay from step N, re-driving
+ * the prefix silently. The machinery was built, tested and reachable from nothing at all — no tool
+ * argument, no CLI flag, no caller anywhere. Deleted rather than wired: unreachable code is read as
+ * current by the next person and maintained forever, its passing tests make it look load-bearing,
+ * and nobody has asked for resume-from-step. The history keeps it if it is ever wanted.
+ */
 export interface ReplayFromOptions {
-  from?: number;
   /**
    * How to load a flow this one INVOKES. Absent means invocations cannot be followed.
    *
@@ -371,13 +377,6 @@ export interface ReplayFromOptions {
   /** The invocation chain that reached this flow, nearest caller first. Empty at the top. */
   via?: readonly { flow: string; step: number }[];
   /**
-   * Which kind of subject this is. Decides whether re-driving the prefix is allowed at all.
-   *
-   * Defaults to `web`, which is the permissive answer — correct for the only surface that resumes
-   * today, and the reason a caller on a committing surface must say so rather than rely on silence.
-   */
-  surface?: Surface;
-  /**
    * Keep going past a step whose ACTION ran and whose declared consequence merely did not hold.
    *
    * Off by default, because a regression flow wants the first break and nothing after it. A BUG
@@ -390,39 +389,6 @@ export interface ReplayFromOptions {
    * where the flow says it is and continuing would invent results. `isConsequenceDrift` is the line.
    */
   sweep?: boolean;
-}
-
-/**
- * Where to start REPORTING — and whether re-driving the steps before it is allowed at all.
- *
- * "Resume is nearly free, just re-run the prefix" is true of a browser and false on a subject that
- * COMMITS. Re-driving a prefix on a service re-sends every request before step N; on a device it
- * moves an arm again. Neither is a convenience, and a protocol that did it silently would be
- * defective rather than helpful.
- *
- * So the surface's declared profile decides, through the specification's own `resumeStrategy` rather
- * than a local reading of `replayPrefix`. A refusal resumes from 0 — the whole journey is reported,
- * nothing is skipped and nothing is silently repeated beyond what a plain replay already does.
- */
-function resumableFrom(options: ReplayFromOptions, steps: readonly FlowStep[]): number {
-  const asked = Math.max(0, options.from ?? 0);
-  if (0 === asked) return 0;
-  if (!mayResumeByReplayingPrefix(options.surface ?? Surface.WEB)) return 0;
-  /*
-   * The surface answers for the SUBJECT; a step answers for itself.
-   *
-   * `web` is the permissive profile and it is right about a browser in general and wrong about the
-   * one click that charges a card. The surface check cannot see that, because the distinction is
-   * not a property of the realm — it is a property of the step. A flow that declares a prefix step
-   * as `commits` is saying: re-running me is not free, whatever the surface thinks.
-   *
-   * Refusing means resuming from 0, which is the same fail-safe the surface refusal already uses:
-   * the whole journey is reported and nothing is silently repeated beyond what a plain replay does.
-   * Absent effect is UNKNOWN and stays permissive — every flow recorded before this shipped has no
-   * effect on any step, and assuming the worst there would refuse every resume in existence.
-   */
-  const commitsInPrefix = steps.slice(0, asked).some((step) => StepEffect.COMMITS === step.effect);
-  return commitsInPrefix ? 0 : asked;
 }
 
 /**
@@ -468,10 +434,7 @@ async function runInvokeStep(
       error: `cannot replay "${name}": it was not found, so this journey would report green having never run it`,
     };
   }
-  // `from` is deliberately dropped rather than forwarded: it is a REPORTING offset into the
-  // caller's own step list, and applying it inside a sub-journey would silently hide that
-  // journey's first steps for a reason that has nothing to do with it.
-  const { from: _ignored, ...carried } = options;
+  const carried = options;
   const nested = await replayFlow(
     session,
     sub,
@@ -506,16 +469,6 @@ export async function replayFlow(
   options: ReplayFromOptions = {},
 ): Promise<FlowStepResult[]> {
   const results: FlowStepResult[] = [];
-  /*
-   * Where to start REPORTING. Everything before it still runs.
-   *
-   * Resuming is re-driving the prefix, not restoring state: there is no way to put an app back
-   * where it was without driving it there, and at a measured ~27ms a step there is no reason to
-   * try. So the prefix executes silently and the caller sees the journey from the point it asked
-   * about -- which is what makes "fix the break, resume, find the next one" a loop rather than a
-   * full re-read each time.
-   */
-  const from = resumableFrom(options, flow.steps);
   // testids whose region is LLM-dynamic — their expect-presence is NOT asserted.
   const dynamic = new Set<string>(
     (flow.dynamic ?? [])
@@ -661,7 +614,7 @@ export async function replayFlow(
       // `tool` is dropped HERE rather than at the ten places that set it, so a new step runner cannot
       // forget the rule and quietly re-introduce the cost. Spelled out only when it is NOT the default.
       if (FlowStepTool.ACT === result.tool) delete result.tool;
-      if (index >= from || !result.ok || result.drift !== undefined) results.push(result);
+      results.push(result);
       // Under `sweep`, a failure whose action still RAN does not stop the run — the page is where the
       // step left it, so the next step is as meaningful as it was going to be. Anything else halts.
       const sweepPast =

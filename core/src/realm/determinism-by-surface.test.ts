@@ -1,18 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import { Surface } from 'open-verification';
-import { determinismFor, mayResumeByReplayingPrefix } from './registry.js';
+import { determinismFor } from './registry.js';
 
 /**
  * How a subject may be DRIVEN is a property of the surface, not of one realm object.
  *
- * "Resume is nearly free, just re-run the prefix at 27ms a step" is true of a browser and
- * FALSE AND DANGEROUS on hardware, where re-driving moves a physical arm and may not be idempotent.
- * The protocol already has `resumeStrategy` to decide that from a declared profile; what was missing
- * was anywhere for server code to GET the profile, because a realm object is built only by the
- * conformance client and `replay { from: N }` has no realm to ask.
+ * A realm object is built only by the conformance client, so server code that needs to know how a
+ * subject may be driven has no realm to ask. The profile belongs to the KIND of surface, so it
+ * lives beside the other facts about kinds, where anything can reach it.
  *
- * The profile belongs to the KIND of surface, so it lives beside the other facts about kinds. That
- * is what makes the rule enforceable today rather than after a realm instance exists on this path.
+ * `mayResumeByReplayingPrefix` used to live here too, and the two resume assertions with it. Its
+ * only caller was `replay { from: N }`, which nothing could reach from any surface, and that whole
+ * path has been deleted rather than wired. The PROFILES stay: `replayPrefix` is a published fact
+ * about each surface that the next caller will want, and the completeness check below is what stops
+ * a new surface arriving without one.
  */
 describe('determinismFor', () => {
   it('gives the web profile: a prefix re-drive is free', () => {
@@ -23,14 +24,10 @@ describe('determinismFor', () => {
     expect(determinismFor(Surface.DESKTOP).replayPrefix).toBe('free');
   });
 
-  it('refuses to auto-resume where re-driving a prefix is UNSAFE', () => {
-    // A service commits: a POST is not idempotent, so silently re-sending one to reach step N is a
-    // defect in the protocol, not a convenience.
-    expect(mayResumeByReplayingPrefix(Surface.SERVICE)).toBe(false);
-  });
-
-  it('allows it where the profile says it is free', () => {
-    expect(mayResumeByReplayingPrefix(Surface.WEB)).toBe(true);
+  // A service COMMITS: a POST is not idempotent, so a prefix re-drive there is a defect rather
+  // than a convenience. The profile says so, and says so whether or not anything reads it today.
+  it('does not call a prefix re-drive free where the subject commits', () => {
+    expect(determinismFor(Surface.SERVICE).replayPrefix).not.toBe('free');
   });
 
   it('every surface the registry knows has a complete declaration', () => {
