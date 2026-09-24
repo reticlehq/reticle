@@ -270,6 +270,81 @@ describe('it sends only the difference', () => {
     expect(report.runsSent).toBe(1);
   });
 
+  /*
+   * The server is allowed to answer "here are the ids I hold, and there are more than I listed".
+   * Until now the client read the short list as the whole truth, so every run past the server's page
+   * was absent from `knownRunIds`, was treated as unsent, and was uploaded again — on every cycle,
+   * for as long as the project kept enough runs to truncate the list. The field was declared on the
+   * status response and read nowhere.
+   *
+   * The machine's own record of what the server CONFIRMED accepting is what fills the gap, and it
+   * fills it only when the server says the gap is there. A complete list is a complete answer: a run
+   * missing from one is genuinely missing, and must be re-sent.
+   */
+  it('does not re-send a confirmed run when the server truncates its list', async () => {
+    const { calls } = await cycle(
+      { status: { knownRunIds: ['a'], truncated: true } },
+      source({
+        runs: () => [
+          { runId: 'a', payload: { runId: 'a' } },
+          { runId: 'b', payload: { runId: 'b' } },
+        ],
+      }),
+      { sentRunIds: ['b'] },
+    );
+    expect(calls.some((c) => 'POST' === c.method)).toBe(false);
+  });
+
+  it('still re-sends a run the server leaves out of a COMPLETE list', async () => {
+    const { calls } = await cycle(
+      { status: { knownRunIds: ['a'] }, sync: { runs: { accepted: 1, rejected: [] } } },
+      source({
+        runs: () => [
+          { runId: 'a', payload: { runId: 'a' } },
+          { runId: 'b', payload: { runId: 'b' } },
+        ],
+      }),
+      { sentRunIds: ['b'] },
+    );
+    const post = calls.find((c) => 'POST' === c.method);
+    expect((post?.body as { runs: Array<{ runId: string }> }).runs).toEqual([{ runId: 'b' }]);
+  });
+
+  it('remembers what the server accepted, and forgets runs that are gone', async () => {
+    const { written } = await cycle(
+      { status: { knownRunIds: ['a'] }, sync: { runs: { accepted: 1, rejected: [] } } },
+      source({
+        runs: () => [
+          { runId: 'a', payload: { runId: 'a' } },
+          { runId: 'b', payload: { runId: 'b' } },
+        ],
+      }),
+      { sentRunIds: ['evicted-long-ago'] },
+    );
+    expect(written.state?.sentRunIds).toEqual(['a', 'b']);
+  });
+
+  it('never trusts a rejected run as sent', async () => {
+    const { written } = await cycle(
+      {
+        status: { knownRunIds: [] },
+        sync: { runs: { accepted: 0, rejected: [{ index: 0, reason: 'missing runId' }] } },
+      },
+      source({ runs: () => [{ runId: 'bad', payload: {} }] }),
+    );
+    expect(written.state?.sentRunIds).toEqual([]);
+  });
+
+  /* A malformed record on disk must read as "it knows nothing", never as "it knows this". */
+  it('ignores a remembered list that is not a list of strings', async () => {
+    const { calls } = await cycle(
+      { status: { knownRunIds: [], truncated: true } },
+      source({ runs: () => [{ runId: 'b', payload: { runId: 'b' } }] }),
+      { sentRunIds: 'b' as unknown as string[] },
+    );
+    expect(calls.some((c) => 'POST' === c.method)).toBe(true);
+  });
+
   it('skips a derived record whose hash has not moved', async () => {
     const { report } = await cycle(
       { status: { stateHashes: { impact: hashPayload(IMPACT), flake: null } } },

@@ -99,6 +99,14 @@ export interface CloudSyncState {
   lastPullAt?: number;
   /** The last failure, kept so `reticle sync` can say why it is behind instead of just "0 sent". */
   lastError?: string;
+  /**
+   * Run ids this machine has watched the server accept, kept only for the runs still held locally.
+   *
+   * Read ONLY when the server says its own `knownRunIds` was truncated. A complete list is a
+   * complete answer — a run missing from one is genuinely missing and must be re-sent — so this
+   * fills the gap the server declared and never overrides the server on a question it answered.
+   */
+  sentRunIds?: string[];
 }
 
 export interface SyncReport {
@@ -219,11 +227,21 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
      * something the server does not have. Silent data loss is the one failure this protocol must
      * not have, and an unreadable answer has to mean "it knows nothing", never "it knows this".
      */
-    const known = new Set(
-      Array.isArray(held.knownRunIds)
-        ? held.knownRunIds.filter((id): id is string => 'string' === typeof id)
-        : [],
-    );
+    const onlyStrings = (value: unknown): string[] =>
+      Array.isArray(value) ? value.filter((id): id is string => 'string' === typeof id) : [];
+    /*
+     * The server may answer "here are the ids I hold, and there are more than I listed". Read as the
+     * whole truth, that short list made every run past the server's page look unsent, so a project
+     * with enough runs to truncate it re-uploaded its history on every single cycle, forever. The
+     * field was declared on this response and read nowhere.
+     *
+     * Only then is the machine's own record consulted, and it is subject to the same rule as the
+     * server's: anything that is not a list of strings reads as "nothing is known".
+     */
+    const known = new Set([
+      ...onlyStrings(held.knownRunIds),
+      ...(true === held.truncated ? onlyStrings(deps.state.sentRunIds) : []),
+    ]);
     // Same rule for the hashes: only a string can equal a hash we computed, so anything else reads
     // as "unknown" and the record is sent once. Re-sending costs a request; skipping costs the data.
     const hashes = isRecord(held.stateHashes) ? held.stateHashes : {};
@@ -277,7 +295,20 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
         ? (runs['rejected'] as Array<{ index: number; reason: string }>)
         : [];
       nextState.lastPushAt = deps.now();
+      // Accepted means the server has it. A rejected run was refused by index, so it is exactly as
+      // unsent as it was before and must never be remembered as delivered.
+      const refused = new Set(runsRejected.map((r) => r.index));
+      unsent.forEach((run, index) => {
+        if (!refused.has(index)) known.add(run.runId);
+      });
     }
+
+    /*
+     * Bounded by the runs still on disk rather than by a cap. Retention already decides how many
+     * runs a workspace keeps, and an id for a run nobody holds any more cannot stop an upload that
+     * will never be attempted — so the record follows the artifacts and needs no number of its own.
+     */
+    nextState.sentRunIds = allRuns.map((r) => r.runId).filter((id) => known.has(id));
 
     // 3. COLLECT — always, even when there was nothing to send.
     const query =
