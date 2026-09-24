@@ -72,6 +72,7 @@ Everything here is published to [docs.reticle.sh](https://docs.reticle.sh) by `d
 | [vs-playwright-mcp.mdx](vs-playwright-mcp.mdx) | outside-in vs inside-out, and when Playwright is right |
 | [vs-chrome-devtools-mcp.mdx](vs-chrome-devtools-mcp.mdx) | cheaper per look, catches less: the trade, measured |
 | [vs-screenshots.mdx](vs-screenshots.mdx) | why a better vision model does not fix a non-visual bug |
+| [what-is-recorded.md](what-is-recorded.md) | what Reticle keeps, what is redacted, and what it takes for any of it to leave your machine |
 | [telemetry.md](telemetry.md) | what is collected, and how to turn it off |
 | [local-registry.md](local-registry.md) | installing an unpublished build |
 | [license-activation.mdx](license-activation.mdx) | you have a key: where to set it, how to confirm it, what to do when it fails |

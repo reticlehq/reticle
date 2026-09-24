@@ -50,7 +50,13 @@
               },
               {
                 "group": "Install",
-                "pages": ["install-agentic", "install-manual", "skill-setup", "frameworks"]
+                "pages": [
+                  "install-agentic",
+                  "install-manual",
+                  "what-is-recorded",
+                  "skill-setup",
+                  "frameworks"
+                ]
               },
               {
                 "group": "Instrument",

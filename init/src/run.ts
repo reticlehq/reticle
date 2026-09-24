@@ -466,6 +466,22 @@ function report(
   continuesToRuntime = false,
 ): InitResult {
   io.print(dryRun ? 'reticle init (dry run, no files written)' : 'reticle init');
+  /*
+   * The escape hatches, named by the command that needs them, at the moment it needs them.
+   *
+   * `--dry-run`, `--app` and `--no-mcp` all exist and all work, and they were discoverable only
+   * from `--help`. A prospective user's agent refused to run this at all — correctly, since it was
+   * being asked to let a third-party package edit a build config and register itself with every
+   * agent on the machine, and nothing it could see offered a way to look first. It had already
+   * decided by the time `--help` would have told it.
+   *
+   * On the REAL run only. In a dry run the reader has already found the flag.
+   */
+  if (!dryRun) {
+    io.print(
+      '  --dry-run shows this plan and writes nothing · --app <dir> picks the app · --no-mcp skips agent registration',
+    );
+  }
   // Every path below is printed RELATIVE, and until now nothing said what to. Reported from the
   // field as "[✓] Reticle config → .reticle.json" followed by the file not being there: the app was
   // in `frontend/`, init redirected into it, and the report's `.reticle.json` was true about a
