@@ -12,7 +12,7 @@ import {
 } from '@/detect/detect.js';
 import { installFailureHint } from '@/diagnose/install-hint.js';
 import { installRetries } from '@/diagnose/install-retries.js';
-import { claudeAddCommand, mcpManual } from '@/register/mcp.js';
+import { claudeAddCommand, claudeProjectMcpJson, mcpManual } from '@/register/mcp.js';
 import {
   mergeClientConfig,
   ClientMergeStatus,
@@ -223,6 +223,32 @@ function mcpSteps(input: PlanInput): Step[] {
         detail: mcpManual(),
       },
     ];
+  }
+  /*
+   * Claude Code never leaves the plan without a word (#1071).
+   *
+   * It is the only client detected by CLI-on-PATH rather than by its config, so inside a Claude Code
+   * VS Code extension session — where `claude` is not on PATH — it reads as absent while the user is
+   * sitting in it. `claudeMcpStep` then returned null, and the manual fallback below only fires when
+   * NO agent at all was found. With Gemini and Codex present, Claude Code vanished from the plan
+   * entirely and nothing said so. A step that disappears is exactly what the install gate's baseline
+   * diff exists to catch, and the plan is the one artifact a person reads to learn what init did.
+   *
+   * Only when something else WAS found. With nothing found, the generic note below already says how
+   * to register, so nothing has silently vanished — and leaving that path untouched keeps every
+   * pristine scaffold in the install baseline reading exactly as it did.
+   */
+  if (!input.claudeCli && steps.length > 0) {
+    steps.push({
+      title: CLAUDE_MCP_TITLE,
+      target: MCP_TARGET,
+      // NOTICE, not MANUAL. Nothing here FAILED and the reader may not use Claude Code at all, so
+      // this is something to know rather than work owed — and the install gate asserts zero `⚠`,
+      // which would turn an informational line into a gate failure on any machine that happens to
+      // have another agent's config. A notice prints in full exactly like a manual step.
+      status: StepStatus.NOTICE,
+      detail: `no \`claude\` on PATH, so it could not be registered from here. Inside a Claude Code VS Code extension session the CLI is genuinely absent while the editor is not — add ${claudeProjectMcpJson()}`,
+    });
   }
   const windowsNote = windowsMcpNoteStep(input);
   if (windowsNote !== null) steps.push(windowsNote);

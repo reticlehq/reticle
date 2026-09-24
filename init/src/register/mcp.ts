@@ -18,6 +18,7 @@ import { RETICLE_NPM_PACKAGE } from '@/version.js';
 // below (and their tests) keep reading it from the module that USES it.
 export { MCP_SERVER_NAME } from '@reticlehq/core';
 import { MCP_SERVER_NAME } from '@reticlehq/core';
+import { CLAUDE_PROJECT_CONFIG } from './mcp-clients.js';
 
 /**
  * The registered command is STILL bare `npx` on every platform, deliberately.
@@ -131,11 +132,27 @@ does not gate:
 }
 
 /** Printed when the `claude` CLI isn't available — register Reticle globally once, by hand. */
+/**
+ * Claude Code's PROJECT-scope config, which needs no CLI on PATH.
+ *
+ * The remedy a reporter had to work out for themselves: inside a Claude Code VS Code extension
+ * session the `claude` binary is not on PATH, so every CLI-based route is shut and `.mcp.json` in
+ * the project root is the one that still works.
+ */
+export function claudeProjectMcpJson(): string {
+  const [command, ...args] = serverInvocation();
+  return `${CLAUDE_PROJECT_CONFIG} (project root):
+
+  { "mcpServers": { "${MCP_SERVER_NAME}": { "command": "${command ?? NPX}", "args": ${JSON.stringify(args)} } } }`;
+}
+
 export function mcpManual(): string {
   const tail = serverInvocation().join(' ');
   return `Register the Reticle MCP server ONCE, globally (so every project gets it):
 
   ${CLAUDE_CLI} ${MCP_SUBCOMMAND} add ${MCP_SERVER_NAME} -s user -- ${tail}
+
+Or, in Claude Code with no \`claude\` on PATH (a VS Code extension session), write ${claudeProjectMcpJson()}
 
 Or, for another agent, add this to its global MCP config (e.g. Cursor's ~/.cursor/mcp.json):
 

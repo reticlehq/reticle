@@ -77,6 +77,14 @@ function openCodeEntry(): Record<string, unknown> {
   return { type: 'local', command: [NPX, ...npxServerArgs()], enabled: true };
 }
 
+/**
+ * Claude Code's project-scope MCP config, which needs no CLI on PATH.
+ *
+ * Named here beside the client specs because it IS one of Claude Code's two config routes, and a
+ * free string for it is the reason nobody noticed the other route existed when the CLI one failed.
+ */
+export const CLAUDE_PROJECT_CONFIG = '.mcp.json';
+
 export const MCP_CLIENTS: readonly ClientSpec[] = [
   {
     id: McpClient.CLAUDE_CODE,
