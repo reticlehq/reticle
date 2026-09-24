@@ -209,10 +209,10 @@ describe('the feedback copies nothing reads back', () => {
 });
 
 /**
- * A count is not a size. Twenty session directories is twenty unbounded directories, and a user's
- * `.reticle/sessions` reached 8 GB while every count bound in this file was being honoured — one
- * chatty drive writes response bodies and DOM text until the drive stops, and nothing was ever
- * looking at the total.
+ * A count is not a size. Twenty session directories is twenty unbounded directories, and a
+ * workspace in the field grew to multiple gigabytes while every count bound in this file was being
+ * honoured — one chatty drive writes response bodies and DOM text until the drive stops, and
+ * nothing was ever looking at the total.
  *
  * So the evidence tier gets a second, independent bound in BYTES, and the memory tier gets none:
  * flows, capsules, baselines, the intent ledger and the contract are small, durable and the whole

@@ -27,9 +27,10 @@ const PNG_SUFFIX = '.png';
  * and feedback copies together.
  *
  * Every bound above this line counts things, and a count cannot see a size: twenty session
- * directories is twenty UNBOUNDED directories. A user's `.reticle/sessions` reached 8 GB with all
- * three counts being honoured the whole time, because one drive against a chatty app appends
- * response bodies and DOM text for as long as the drive lasts, and nothing was looking at the total.
+ * directories is twenty UNBOUNDED directories. A workspace in the field grew to multiple gigabytes
+ * with all three counts being honoured the whole time, because one drive against a chatty app
+ * appends response bodies and DOM text for as long as the drive lasts, and nothing was looking at
+ * the total.
  *
  * Why this number and not one an order of magnitude either side. An ordinary session journal is
  * hundreds of kilobytes to a few megabytes; a long drive against an app with large JSON responses
