@@ -279,3 +279,60 @@ describe('the duplicated wire constants match core', () => {
     }
   });
 });
+
+/**
+ * `next dev` is a dev server whatever the shell says NODE_ENV is (#1069).
+ *
+ * Reported on 3.2.0: `withReticle` silently no-ops when the shell exports `NODE_ENV=production`,
+ * even under `next dev`. People do that to reproduce production behaviour locally, and the result is
+ * an app that looks instrumented, starts cleanly, and never connects - indistinguishable from a
+ * dozen other install failures, with no reason to suspect an env var set for something else.
+ *
+ * Two rules. `next dev` IS the dev signal, because the user ran a dev server and that is not
+ * ambiguous. And when it does disable itself, it says so once, naming the variable responsible -
+ * the issue's own acceptance line is "must either connect or print why it did not".
+ *
+ * A production BUILD stays untouched, which is what the gate was for in the first place.
+ */
+describe('the dev signal under a production NODE_ENV', () => {
+  const previousEnv = process.env.NODE_ENV;
+  const previousArgv = process.argv;
+
+  afterEach(() => {
+    process.env.NODE_ENV = previousEnv;
+    process.argv = previousArgv;
+  });
+
+  it('instruments under a production NODE_ENV when told to explicitly', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.RETICLE_DEV = '1';
+    const input = { reactStrictMode: true };
+    const out = withReticle(input);
+    expect(out, 'the override did nothing, so the user still has no way out').not.toBe(input);
+    expect(typeof out.webpack).toBe('function');
+    delete process.env.RETICLE_DEV;
+  });
+
+  it('still leaves a production build completely alone by default', () => {
+    process.env.NODE_ENV = 'production';
+    const input = { reactStrictMode: true };
+    expect(withReticle(input)).toBe(input);
+  });
+
+  it('says why it disabled itself, naming the variable', () => {
+    process.env.NODE_ENV = 'production';
+    const said = [];
+    const realLog = console.log;
+    console.log = (...args) => said.push(args.join(' '));
+    try {
+      withReticle({});
+    } finally {
+      console.log = realLog;
+    }
+    const line = said.join('\n');
+    expect(line).toContain('NODE_ENV');
+    // And the way out, not just the diagnosis — the reader is stuck without it.
+    expect(line).toContain('RETICLE_DEV');
+    expect(line.toLowerCase()).toContain('reticle');
+  });
+});

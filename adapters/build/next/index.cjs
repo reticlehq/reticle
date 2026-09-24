@@ -12,6 +12,13 @@ const crypto = require('node:crypto');
 // Kept in sync with @reticlehq/core (ReticleDir / ReticleEnv). This package is plain CJS tooling and
 // deliberately has no ESM/TS dependency on core, so the two constants are mirrored here.
 const PAIRING_TOKEN_DIR_ENV = 'RETICLE_PAIRING_TOKEN_DIR';
+/**
+ * Instrument anyway, whatever NODE_ENV says — for `NODE_ENV=production next dev`.
+ *
+ * Named here rather than imported: this package is plain CJS tooling that deliberately depends on
+ * nothing, which is why `RETICLE_PAIRING_TOKEN_DIR` above is a local constant too.
+ */
+const DEV_OVERRIDE_ENV = 'RETICLE_DEV';
 const PAIRING_TOKEN_FILE = 'pairing-token';
 const RETICLE_CONFIG_FILE = '.reticle.json';
 const RETICLE_HOME_DIR = '.reticle';
@@ -275,8 +282,30 @@ function sdkPackageVersion() {
  * @returns {import('next').NextConfig}
  */
 function withReticle(nextConfig = {}, options = {}) {
-  // Production builds are untouched — this is a dev-time aid only.
-  if (process.env.NODE_ENV === 'production') return nextConfig;
+  /*
+   * Production builds are untouched — this is a dev-time aid only.
+   *
+   * NODE_ENV is the gate because it is the only signal available where this runs. `withReticle`
+   * receives no `phase`, and Next evaluates the config inside `start-server.js`, a child process
+   * whose argv carries no `dev` — MEASURED, after a first attempt read argv and was wrong on a real
+   * `next dev`. The webpack hook below does get Next's own `dev` flag, but the pairing token is
+   * injected at CONFIG level, and baking one into a production bundle is the thing this gate exists
+   * to prevent.
+   *
+   * What was actually broken is that it happened in SILENCE. `NODE_ENV=production next dev` is a
+   * real configuration — people use it to reproduce production behaviour locally — and the result
+   * was an app that looked instrumented, started cleanly and never connected, with no reason to
+   * suspect an env var set for something else. So it says why, once, and names both the variable
+   * responsible and the way out (#1069).
+   */
+  if (process.env.NODE_ENV === 'production' && process.env[DEV_OVERRIDE_ENV] !== '1') {
+    console.log(
+      `[reticle] instrumentation is OFF because NODE_ENV=production. That is correct for a build. ` +
+        `If this is a dev server you want instrumented, set ${DEV_OVERRIDE_ENV}=1 (or do not export ` +
+        `NODE_ENV=production for it) — nothing else about your config needs to change.`,
+    );
+    return nextConfig;
+  }
 
   const userWebpack = nextConfig.webpack;
   const token = readPairingToken();
