@@ -118,7 +118,31 @@ interface SessionEndDeps {
  */
 export function makeSessionEnd(deps: SessionEndDeps): (session: SessionEndTarget) => Promise<void> {
   return async (session) => {
-    if (!deps.enabled) return;
+    /*
+     * Retention is maintenance of a directory, not a part of journalling, so it runs either way.
+     *
+     * Teardown used to return here, and this is the one setting under which that mattered most:
+     * somebody switches journalling off BECAUSE `.reticle/` got too big, and switching it off was
+     * what stopped anything ever deleting what was already there. It also stopped the sweep of
+     * visual diffs, feedback copies and run artifacts, none of which need the journal to be written
+     * at all. Retention had been ungated when it ran at daemon start; moving it to teardown, which
+     * is the only place that knows the session's own root, put it behind this return by accident.
+     */
+    const sweep = async (): Promise<void> => {
+      try {
+        await pruneWorkspace(
+          deps.fs,
+          session.artifactRoot ?? deps.reticleRoot,
+          deps.liveSessionIds?.() ?? new Set(),
+        );
+      } catch {
+        // retention is best-effort maintenance; never surface at teardown
+      }
+    };
+    if (!deps.enabled) {
+      await sweep();
+      return;
+    }
     try {
       await session.flushJournal();
     } catch {
@@ -218,19 +242,17 @@ export function makeSessionEnd(deps: SessionEndDeps): (session: SessionEndTarget
         session.artifactRoot ?? deps.reticleRoot,
         asSessionId(session.id),
       );
-      // EVERY tier, not just sessions. Visual diffs and feedback copies were pruned only at daemon
-      // start, against the DAEMON's root — which for a globally registered daemon is `$HOME` and not
-      // the project at all, so the two tiers that only ever grow in a project workspace were the two
-      // never swept there. Same defect as the one this line already fixed for sessions, one move
-      // behind. The byte budget rides along for the same reason: it was wired at daemon start too.
-      await pruneWorkspace(
-        deps.fs,
-        session.artifactRoot ?? deps.reticleRoot,
-        deps.liveSessionIds?.() ?? new Set(),
-      );
     } catch {
-      // retention is best-effort maintenance; never surface at teardown
+      // teardown must never throw: the tab is already gone
     }
+    // EVERY tier, not just sessions. Visual diffs and feedback copies were pruned only at daemon
+    // start, against the DAEMON's root — which for a globally registered daemon is `$HOME` and not
+    // the project at all, so the two tiers that only ever grow in a project workspace were the two
+    // never swept there. Same defect as the one this line already fixed for sessions, one move
+    // behind. The byte budget rides along for the same reason: it was wired at daemon start too.
+    //
+    // Outside the try above, so a failure anywhere in teardown still leaves the directory swept.
+    await sweep();
   };
 }
 

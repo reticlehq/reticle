@@ -2,7 +2,8 @@ import { removeTempDir } from '@/machine/temp-dir.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { ReticleDir } from '@reticlehq/core';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import {
   asProjectId,
@@ -74,6 +75,32 @@ describe('makeSessionEnd (teardown: flush journal + persist ambient)', () => {
     await end(fakeSession('s1', { 'chat-log': 5 }, () => (flushed = true)));
     expect(flushed).toBe(false);
     expect(await new AmbientStore(fs, root).load()).toEqual({});
+  });
+
+  /*
+   * Turning journalling off is what somebody does BECAUSE `.reticle/` got too big. It was also the
+   * one setting under which nothing ever deleted what was already there.
+   *
+   * Teardown returned before reaching retention, and retention had moved into teardown from daemon
+   * start, where it had been ungated. So the opt-out quietly stopped sweeping visual diffs, feedback
+   * copies and run artifacts too - none of which need the journal to be written in the first place.
+   *
+   * Retention is maintenance of a directory, not a part of journalling. It runs either way.
+   */
+  it('still sweeps the workspace when journalling is switched off', async () => {
+    const stale = join(root, ReticleDir.VISUAL_SUBDIR, 'shot.diff.png');
+    await fs.mkdir(dirname(stale));
+    await fs.writeFile(stale, 'x');
+    const kept: string[] = [];
+    for (let i = 0; i < DEFAULT_DIFF_RETENTION + 2; i += 1) {
+      const p = join(root, ReticleDir.VISUAL_SUBDIR, `later-${String(i)}.diff.png`);
+      await fs.writeFile(p, 'x');
+      kept.push(p);
+    }
+    const end = makeSessionEnd({ fs, reticleRoot: root, enabled: false });
+    await end(fakeSession('s1', {}));
+    expect(await fs.exists(stale)).toBe(false);
+    expect(await fs.exists(kept[kept.length - 1] ?? '')).toBe(true);
   });
 
   it('never throws at teardown even when the flush fails (the tab is already gone)', async () => {
