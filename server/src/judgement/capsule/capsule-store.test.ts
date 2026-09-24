@@ -78,9 +78,13 @@ describe('CapsuleStore (fail-to-pass bug capsules)', () => {
 
 describe('capsuleId / minimalSteps', () => {
   it('produces a path-safe, time-ordered id', () => {
-    const id = capsuleId(1730000000000, 'checkout flow/step 2');
+    // The fingerprint joined the id so a duplicate capture can be found by listing the directory
+    // rather than reading every file in it. The timestamp stays in FRONT: `list()` sorts ids to get
+    // newest-first for free, and that property is load-bearing elsewhere.
+    const id = capsuleId(1730000000000, 'checkout flow/step 2', 'deadbeef');
     expect(isValidCapsuleId(id)).toBe(true);
     expect(id.startsWith('1730000000000-')).toBe(true);
+    expect(id.endsWith('-deadbeef')).toBe(true);
   });
 
   it('trims the reproduction to the failing step (everything after it is noise)', () => {

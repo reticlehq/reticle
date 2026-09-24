@@ -10,7 +10,12 @@
  * must never fail the run that found it.
  */
 import { ActionType, AnchorKind } from '@reticlehq/core';
-import { CapsuleStore, capsuleId, CAPSULE_VERSION } from '@/judgement/capsule/capsule-store.js';
+import {
+  CapsuleStore,
+  capsuleFingerprint,
+  capsuleId,
+  CAPSULE_VERSION,
+} from '@/judgement/capsule/capsule-store.js';
 import type { ExpectedLink } from '@/judgement/capsule/divergence.js';
 import type { DivergenceCapsule } from '@/judgement/capsule/capsule.js';
 import { ReticleTool } from '@reticlehq/core';
@@ -45,7 +50,6 @@ export async function saveFailedAssertCapsule(
   const { deps, verdict, capsule, links, args, actResult, actedSource, root: given } = inputs;
   if (verdict.pass || capsule === undefined) return undefined;
 
-  const id = capsuleId(deps.now(), asString(args['ref']) ?? 'assert');
   const expectedText = links
     .map((l) => ('name' in l ? `${l.kind} ${String(l.name)}` : l.kind))
     .join(' AND ');
@@ -58,10 +62,10 @@ export async function saveFailedAssertCapsule(
   // must not do are write it somewhere arbitrary and throw: the assertion has already failed, the
   // verdict is already built, and losing the capsule must never also lose the verdict.
   if (root === undefined) return undefined;
-  const saved = await new CapsuleStore(deps.fs, root).save({
-    version: CAPSULE_VERSION,
-    id,
-    createdAt: deps.now(),
+  // Built BEFORE the id, because the id carries the fingerprint of this body — that is what lets a
+  // retry of the same broken step fold into the capsule already on disk instead of adding a file.
+  const body = {
+    version: CAPSULE_VERSION as typeof CAPSULE_VERSION,
     origin: 'failed-assert',
     expected: expectedText.length > 0 ? expectedText : 'declared consequence',
     observed: capsule.firstDivergence?.observed ?? verdict.failureReason ?? 'not observed',
@@ -78,6 +82,12 @@ export async function saveFailedAssertCapsule(
         action: (asString(args['action']) ?? ActionType.CLICK) as ActionType,
       },
     ],
+  };
+  const id = capsuleId(deps.now(), asString(args['ref']) ?? 'assert', capsuleFingerprint(body));
+  const saved = await new CapsuleStore(deps.fs, root).save({
+    ...body,
+    id,
+    createdAt: deps.now(),
   });
   return saved ? id : undefined;
 }
