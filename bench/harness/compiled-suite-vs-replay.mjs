@@ -12,15 +12,12 @@
 import { chromium } from 'playwright';
 import { writeFileSync } from 'node:fs';
 import { ReticleAdapter } from './adapters.mjs';
+import { suiteSteps } from './suite-flows.mjs';
+import { pathToFileURL } from 'node:url';
 
 const URL = process.env.BENCH_URL ?? 'http://localhost:4312/';
 const sel = (t) => `[data-testid="${t}"]`;
-const FLOWS = [
-  { name: 'suite-500', view: 'diagnostics', tap: 'fault-500' },
-  { name: 'suite-console', view: 'diagnostics', tap: 'fault-buggy' },
-  { name: 'suite-route', view: 'compose', tap: null },
-  { name: 'suite-404', view: 'diagnostics', tap: 'fault-404' },
-];
+const FLOWS = suiteSteps();
 
 async function compiledPlaywright() {
   const t0 = Date.now();
@@ -87,20 +84,56 @@ async function reticleReplay() {
   };
 }
 
-const pw = await compiledPlaywright();
-const rt = await reticleReplay();
-const out = {
-  question: 'For a company that ALREADY has Playwright scripts, what does Reticle replay cost?',
-  flows: FLOWS.length,
-  playwright: pw,
-  reticle: rt,
-  finding:
-    'Both cost ZERO LLM tokens and both return a ~90-byte verdict. The token-efficiency argument ' +
-    'does not apply to a compiled suite — it applies to an agent re-driving the browser. On ' +
-    'wall-time the compiled script is faster end-to-end. The real difference is what the check can ' +
-    'see (replay expectations cover signal/state/net-cardinality/console, which a DOM assertion ' +
-    'cannot reach) and that the flow was recorded by driving rather than hand-written.',
-};
-writeFileSync('bench/raw/compiled-suite-vs-replay.json', JSON.stringify(out, null, 2));
-console.log(JSON.stringify(out, null, 2));
-process.exit(0);
+/**
+ * The finding, DERIVED — never a paragraph written in advance.
+ *
+ * It used to be fixed text asserting, among other things, that "on wall-time the compiled script is
+ * faster end-to-end". That sentence shipped in the artifact whatever the run measured, which makes
+ * the harness a place to publish a conclusion rather than a place to test one. A benchmark that
+ * states its answer before running is not evidence, and it is the same failure the false-green work
+ * in this release is about: a report that cannot be wrong.
+ */
+export function finding(pw, rt, flows = FLOWS.length) {
+  const tokensEqual = 0 === pw.llm_tokens && 0 === rt.llm_tokens;
+  const faster = pw.end_to_end_ms <= rt.end_to_end_ms ? 'the compiled script' : 'replay';
+  const ratio = (
+    Math.max(pw.end_to_end_ms, rt.end_to_end_ms) /
+    Math.max(1, Math.min(pw.end_to_end_ms, rt.end_to_end_ms))
+  ).toFixed(1);
+  const callFaster = rt.verify_call_ms <= pw.end_to_end_ms ? 'under' : 'over';
+  return [
+    tokensEqual
+      ? 'Both cost ZERO LLM tokens, so the token-efficiency argument does not apply to a compiled ' +
+        'suite at all — it applies to an agent re-driving the browser.'
+      : `LLM tokens were NOT zero on both sides (playwright ${pw.llm_tokens}, replay ` +
+        `${rt.llm_tokens}); this run is not the comparison this harness claims to make.`,
+    `Verdicts: playwright ${pw.passed}/${flows}, replay ${rt.passed}/${flows}.`,
+    `End to end, ${faster} was faster this run (${pw.end_to_end_ms}ms vs ${rt.end_to_end_ms}ms, ` +
+      `${ratio}x); replay's verify call alone was ${rt.verify_call_ms}ms, ${callFaster} the ` +
+      "compiled script's whole run, and the rest is browser+SDK handshake the adapter pads.",
+    'What is NOT derivable from these numbers, and is the actual difference: what each check can ' +
+      'see. Replay expectations cover signal, state, network cardinality and console, which a DOM ' +
+      'assertion cannot reach, and the flow was recorded by driving rather than hand-written.',
+  ].join(' ');
+}
+
+/*
+ * Only when RUN, so the module can also be imported.
+ *
+ * Top-level await made importing this file execute the whole benchmark, which is why the derived
+ * verdict below had no test: there was no way to reach it without launching two browsers.
+ */
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  const pw = await compiledPlaywright();
+  const rt = await reticleReplay();
+  const out = {
+    question: 'For a company that ALREADY has Playwright scripts, what does Reticle replay cost?',
+    flows: FLOWS.length,
+    playwright: pw,
+    reticle: rt,
+    finding: finding(pw, rt, FLOWS.length),
+  };
+  writeFileSync('bench/raw/compiled-suite-vs-replay.json', JSON.stringify(out, null, 2));
+  console.log(JSON.stringify(out, null, 2));
+  process.exit(0);
+}

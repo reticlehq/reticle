@@ -9,6 +9,7 @@
 import { writeFileSync } from 'node:fs';
 import { ReticleAdapter } from './adapters.mjs';
 import { measure } from './tokenizer.mjs';
+import { SUITE_FLOWS } from './suite-flows.mjs';
 
 const URL = process.env.BENCH_URL ?? 'http://localhost:4312/';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -28,24 +29,7 @@ const LLM_REDRIVE_PER_FLOW = 30249;
 // the product got more honest about false greens and the benchmark measuring it did not follow.
 // A suite-scale efficiency ratio over a suite that verified nothing is exactly the number this
 // harness already refuses to print.
-const FLOWS = [
-  {
-    name: 'suite-500',
-    steps: [{ view: 'diagnostics' }, { tap: 'fault-500' }],
-    oracle: { signal: 'fault:injected' },
-  },
-  {
-    name: 'suite-shape',
-    steps: [{ view: 'diagnostics' }, { tap: 'fault-wrong-data' }],
-    oracle: { signal: 'fault:injected' },
-  },
-  { name: 'suite-route', steps: [{ view: 'compose' }], oracle: { testid: 'compose-generate' } },
-  {
-    name: 'suite-404',
-    steps: [{ view: 'diagnostics' }, { tap: 'fault-404' }],
-    oracle: { signal: 'fault:injected' },
-  },
-];
+const FLOWS = SUITE_FLOWS;
 
 // Record flows POST-LOGIN (login is NOT part of the flow): reticle_flow_verify replays the suite
 // back-to-back in ONE session without re-login between flows, so a flow that embeds login steps

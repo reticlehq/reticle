@@ -287,6 +287,36 @@ if (cost !== null) {
   ]);
 }
 
+/*
+ * The comparison against a compiled Playwright suite, gated on the one thing it got wrong.
+ *
+ * #1074: it asked replay for `suite-console`, a flow no harness has ever recorded. Replay can only
+ * be handed flows that were SAVED, so it scored at most 3/4 by construction, while the Playwright
+ * arm runs its own inline steps and needs no saved flow — 4/4. The artifact then read as a defeat
+ * that was really a typo, and nothing re-ran the harness because it was in neither bench pass.
+ *
+ * The list is now shared, so that exact disagreement is unsayable. This gates the CONSEQUENCE
+ * instead, which also catches a real replay regression: the flows are recorded by `suite-rre.mjs`
+ * moments earlier in the same run, so anything less than all of them is a defect or another name
+ * that does not exist.
+ */
+const suiteVsReplay = readRaw('bench/raw/compiled-suite-vs-replay.json');
+if (suiteVsReplay !== null) {
+  const flows = suiteVsReplay.flows ?? 0;
+  const replayPassed = suiteVsReplay.reticle?.passed ?? 0;
+  if (replayPassed < flows) {
+    failures.push(
+      `compiled-suite-vs-replay: replay passed ${replayPassed}/${flows} — every flow was recorded ` +
+        'by suite-rre in this same run, so a shortfall is a regression or a name nothing saved',
+    );
+  }
+  scorecard.push([
+    'Replay · vs compiled suite',
+    `${suiteVsReplay.playwright?.passed ?? '—'}/${flows} pw`,
+    `${replayPassed}/${flows} replay`,
+  ]);
+}
+
 // ---- INTENT-EFFECT pass (real agent loop, intent + context on vs off) ----
 // Absent artifact = the pass was not run, which is an advisory skip like the observation pass: it is
 // a paid LLM loop and bench-all never runs it. A PRESENT artifact is gated, and gated hard — the one
