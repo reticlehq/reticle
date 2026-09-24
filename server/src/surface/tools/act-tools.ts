@@ -913,6 +913,13 @@ export const ACT_TOOLS: ToolDef[] = [
           // What the declared consequence READ. The run fold has only the journal, so a kind absent
           // here was being invented there as `element`. Same field, same reason, on the assert path.
           kind: until.kind,
+          // The deciding clause, kept — and it was NOT, on this path, the commonest one. `unknown`
+          // alone cannot tell an outcome that has not arrived from a capture that could not be
+          // read, so a fold over the journal saw a verdict it could not attribute, and the
+          // attribution is the only part of an `unknown` a reader can act on. The comment above
+          // says "same field, same reason, on the assert path" and was half true. Found by the
+          // session gap summary, whose `undecidedBy` was empty for every unknown this tool made.
+          reason: decision.verifiedReason,
         };
         // Recorded on the session, so a later "am I done?" can answer with what is STILL missing
         // rather than with everything that was ever missing. An empty list closes a gap, which is
