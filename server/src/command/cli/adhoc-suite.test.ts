@@ -78,6 +78,25 @@ describe('a saved-flow suite against the running daemon', () => {
     expect(calls[0]?.args).toEqual({ action: 'flows', sessionId: 's1' });
   });
 
+  /*
+   * The daemon answers with the report as TEXT, not as `structuredContent`, and a suite report has
+   * no `verified` key. Found by driving it: the headline printed "status: unverifiable" while the
+   * JSON underneath said `"status":"fail"` with 74 failing flows, which is the same one-response-
+   * two-answers defect the one-shot path already carries a comment about.
+   */
+  it('reads the status out of a TEXT result, not just structuredContent', async () => {
+    const tool: ToolCaller = {
+      call: () =>
+        Promise.resolve({
+          content: [{ text: JSON.stringify({ status: 'fail', total: 98, passed: 5 }) }],
+        }),
+      close: () => Promise.resolve(),
+    };
+    const result = await runAdhocSuite({ port: 4400, connect: () => Promise.resolve(tool) });
+    expect(result.lines[0]).toBe('status: fail');
+    expect(result.code).toBe(1);
+  });
+
   it('reports a refusal as the tool worded it, not as an envelope', async () => {
     const tool: ToolCaller = {
       call: () =>
@@ -87,6 +106,25 @@ describe('a saved-flow suite against the running daemon', () => {
     const result = await runAdhocSuite({ port: 4400, connect: () => Promise.resolve(tool) });
     expect(result.code).toBe(1);
     expect(result.lines.join('\n')).toContain('no session connected');
+  });
+
+  /*
+   * The SDK's per-request default is 60s. A suite replays every saved flow, each driving a real
+   * browser through a real journey, so a project with a few dozen takes minutes. Found by driving
+   * it: the call timed out mid-run and reported "the suite could not be run" while the flows were
+   * still running, which is a sentence about the transport wearing the shape of a verdict.
+   */
+  it('gives the call a suite-sized timeout, not a request-sized one', async () => {
+    const seen: (number | undefined)[] = [];
+    const tool: ToolCaller = {
+      call: (_name, _args, timeoutMs) => {
+        seen.push(timeoutMs);
+        return Promise.resolve({ structuredContent: { status: 'pass' } });
+      },
+      close: () => Promise.resolve(),
+    };
+    await runAdhocSuite({ port: 4400, connect: () => Promise.resolve(tool) });
+    expect(seen[0]).toBeGreaterThan(60_000);
   });
 
   it('says so when the daemon cannot be reached at all', async () => {

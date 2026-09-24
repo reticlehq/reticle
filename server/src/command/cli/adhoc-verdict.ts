@@ -60,7 +60,7 @@ export interface AdhocVerdictOptions {
 
 /** The narrow slice of an MCP client this needs — one call, then close. */
 export interface ToolCaller {
-  call(name: string, args: Record<string, unknown>): Promise<unknown>;
+  call(name: string, args: Record<string, unknown>, timeoutMs?: number): Promise<unknown>;
   close(): Promise<void>;
 }
 
@@ -77,15 +77,31 @@ export async function connectOverSse(endpoint: URL): Promise<ToolCaller> {
   const client = new Client({ name: 'reticle-cli', version: '1' }, { capabilities: {} });
   await client.connect(new SSEClientTransport(endpoint));
   return {
-    call: async (name, args) => await client.callTool({ name, arguments: args }),
+    call: async (name, args, timeoutMs) =>
+      await client.callTool(
+        { name, arguments: args },
+        undefined,
+        timeoutMs === undefined ? undefined : { timeout: timeoutMs },
+      ),
     close: async () => {
       await client.close();
     },
   };
 }
 
-/** The verdict object an MCP tool result carries, or undefined when the shape is not one. */
-export function verdictOf(result: unknown): Record<string, unknown> | undefined {
+/**
+ * The report object an MCP tool result carries, or undefined when the shape is not one.
+ *
+ * `field` is the key that makes a payload the report this caller wants: `verified` for a one-shot
+ * verdict, `status` for a suite. It is a parameter rather than a fixed name because the suite path
+ * reproduced this function's own incident the moment it reused it — the headline printed
+ * `unverifiable` while the JSON under it said `"status":"fail"` with 74 failing flows, because a
+ * suite report has no `verified` key and the text reader would only accept one that did.
+ */
+export function verdictOf(
+  result: unknown,
+  field: string = 'verified',
+): Record<string, unknown> | undefined {
   const structured = (result as { structuredContent?: unknown } | undefined)?.structuredContent;
   if ('object' === typeof structured && null !== structured) {
     return structured as Record<string, unknown>;
@@ -93,11 +109,11 @@ export function verdictOf(result: unknown): Record<string, unknown> | undefined 
   // A daemon that answers with the verdict as TEXT left this undefined, so the headline read
   // `verified: unknown` while the JSON printed underneath it said `"verified":"no"` — one response
   // giving two answers to the same question. The text is the same object, so read it.
-  return verdictFromText(result);
+  return verdictFromText(result, field);
 }
 
-/** The verdict object inside an MCP text part, when the result carried it there instead. */
-function verdictFromText(result: unknown): Record<string, unknown> | undefined {
+/** The report object inside an MCP text part, when the result carried it there instead. */
+function verdictFromText(result: unknown, field: string): Record<string, unknown> | undefined {
   const content = (result as { content?: unknown } | undefined)?.content;
   if (!Array.isArray(content)) return undefined;
   for (const part of content) {
@@ -107,8 +123,8 @@ function verdictFromText(result: unknown): Record<string, unknown> | undefined {
       const parsed: unknown = JSON.parse(text);
       // Only a shape that actually carries a verdict — anything else stays `unknown`, which is the
       // honest answer for a result this function could not read.
-      if ('object' === typeof parsed && null !== parsed && 'verified' in parsed) {
-        return parsed;
+      if ('object' === typeof parsed && null !== parsed && field in parsed) {
+        return parsed as Record<string, unknown>;
       }
     } catch {
       /* Not JSON; the next part may still be. */

@@ -39,6 +39,18 @@ export interface AdhocSuiteOptions {
 const PASSED = 'pass';
 
 /**
+ * How long a SUITE may take, against the SDK's 60s default for one request.
+ *
+ * A suite is not one request's worth of work: it replays every saved flow, each of which drives a
+ * real browser through a real journey, and a project with a few dozen of them takes minutes. The
+ * default timed the call out mid-run and reported "the suite could not be run", which is a sentence
+ * about the transport wearing the shape of a verdict — the flows were running the whole time.
+ *
+ * Found by driving it against a real daemon on a project with 45 saved flows.
+ */
+const SUITE_TIMEOUT_MS = 30 * 60 * 1000;
+
+/**
  * Run the saved suite through the daemon on this port.
  *
  * Exit code 0 ONLY for `status: "pass"`. `unverifiable` exits non-zero on purpose: it is what an
@@ -64,14 +76,18 @@ export async function runAdhocSuite(options: AdhocSuiteOptions): Promise<AdhocVe
   try {
     // Spread rather than set: an explicit `undefined` is a key the tools reject as an unknown
     // parameter, which would turn "no tab named" into a refusal. Same rule as the one-shot path.
-    const result = await caller.call(ReticleTool.VERIFY, {
-      action: 'flows',
-      ...(options.select === undefined ? {} : { select: options.select }),
-      ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
-    });
+    const result = await caller.call(
+      ReticleTool.VERIFY,
+      {
+        action: 'flows',
+        ...(options.select === undefined ? {} : { select: options.select }),
+        ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
+      },
+      SUITE_TIMEOUT_MS,
+    );
     const refusal = refusalText(result);
     if (refusal !== undefined) return { code: 1, lines: ['status: unverifiable', refusal] };
-    const report = verdictOf(result);
+    const report = verdictOf(result, 'status');
     const status = 'string' === typeof report?.['status'] ? report['status'] : 'unverifiable';
     const summary = 'string' === typeof report?.['summary'] ? report['summary'] : undefined;
     return {
