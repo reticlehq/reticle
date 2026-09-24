@@ -14,16 +14,18 @@ import {
 } from '@reticlehq/core';
 import { AmbientStore } from './ambient-store.js';
 import { makeSessionEnd, type SessionEndTarget } from './session-end.js';
-import { DEFAULT_SESSION_RETENTION } from './on-disk/retention.js';
+import { DEFAULT_DIFF_RETENTION, DEFAULT_SESSION_RETENTION } from './on-disk/retention.js';
 import { reticleDirPaths, sessionDirPath } from '@/memory/project/dir/reticle-dir.js';
 
 function fakeSession(
   id: string,
   ambient: Record<string, number>,
   onFlush?: () => void,
+  artifactRoot?: string,
 ): SessionEndTarget {
   return {
     id,
+    ...(artifactRoot === undefined ? {} : { artifactRoot }),
     flushJournal: () => {
       onFlush?.();
       return Promise.resolve();
@@ -251,4 +253,73 @@ describe('the run a drive leaves behind', () => {
     expect(flushed).toBe(true);
     expect((await runsWritten()).filter((f) => f.endsWith('.json'))).toHaveLength(0);
   });
+});
+
+/**
+ * Every tier the session wrote into is swept, at the root the SESSION used.
+ *
+ * `pruneSessions` was already scoped to `session.artifactRoot`, with the reason written beside it:
+ * "Pruning the daemon's tree instead meant a per-project workspace was never swept at all, so the
+ * one place journals really accumulate was the one place retention never ran." Visual diffs and
+ * feedback copies were left behind on that move — they are pruned only at daemon START, against the
+ * DAEMON's root, which for a globally-registered daemon is `$HOME` and not the project at all.
+ *
+ * So the two tiers that only ever grow in a project workspace were the two that never got swept
+ * there. Same defect as the one already fixed above, in the same file, one line apart.
+ *
+ * The byte budget rides along for the same reason: it was wired at daemon start in the same change
+ * that introduced it, which is the daemon's tree — not the per-project one where the bytes are.
+ */
+describe('teardown sweeps the tiers at the SESSION root, not the daemon root', () => {
+  let daemonRoot: string;
+  let projectRoot: string;
+  const fs = createNodeFileSystem();
+
+  beforeEach(async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'reticle-roots-'));
+    daemonRoot = join(dir, 'daemon', '.reticle');
+    projectRoot = join(dir, 'project', '.reticle');
+  });
+  afterEach(async () => {
+    await removeTempDir(join(daemonRoot, '..', '..'));
+  });
+
+  it(
+    'prunes visual diffs in the project workspace the session actually wrote to',
+    async () => {
+      const diffs = join(projectRoot, 'visual');
+      await fs.mkdir(diffs);
+      for (let i = 0; i < DEFAULT_DIFF_RETENTION + 4; i++) {
+        await fs.writeFile(join(diffs, `shot-${String(i)}.diff.png`), 'x');
+      }
+      const before = (await fs.readdir(diffs)).length;
+
+      const end = makeSessionEnd({ fs, reticleRoot: daemonRoot, enabled: true });
+      await end(fakeSession('s-last', {}, undefined, projectRoot));
+
+      const after = (await fs.readdir(diffs)).length;
+      expect(after).toBeLessThan(before);
+      expect(after).toBeLessThanOrEqual(DEFAULT_DIFF_RETENTION);
+    },
+    SESSION_RETENTION_TIMEOUT_MS,
+  );
+
+  it(
+    'leaves the daemon root alone when the session wrote elsewhere',
+    async () => {
+      const daemonDiffs = join(daemonRoot, 'visual');
+      await fs.mkdir(daemonDiffs);
+      for (let i = 0; i < DEFAULT_DIFF_RETENTION + 4; i++) {
+        await fs.writeFile(join(daemonDiffs, `shot-${String(i)}.diff.png`), 'x');
+      }
+      const before = (await fs.readdir(daemonDiffs)).length;
+
+      const end = makeSessionEnd({ fs, reticleRoot: daemonRoot, enabled: true });
+      await end(fakeSession('s-last', {}, undefined, projectRoot));
+
+      // Teardown is about the session's own workspace. The daemon's tree is swept at daemon start.
+      expect((await fs.readdir(daemonDiffs)).length).toBe(before);
+    },
+    SESSION_RETENTION_TIMEOUT_MS,
+  );
 });

@@ -1,5 +1,10 @@
 /**
- * Everything the daemon prunes when it attaches, in one place.
+ * Everything Reticle prunes in ONE `.reticle/` workspace, in one place.
+ *
+ * Called from two moments and both matter: daemon start (the daemon's own tree) and session end
+ * (the tree that SESSION wrote into). Those are usually different directories — a globally
+ * registered daemon stands in `$HOME` — and the per-project one is where the bytes actually
+ * accumulate, so sweeping only the first swept the wrong tree for the common case.
  *
  * The four bounds were inlined at the call site and one of them was simply missing:
  * `pruneEvidenceBudget` had been written, tested, and never called by anything. The three COUNT
@@ -31,7 +36,7 @@ import {
   DEFAULT_EVIDENCE_BUDGET_BYTES,
 } from './retention.js';
 
-export interface StartupMaintenanceOptions {
+export interface PruneWorkspaceOptions {
   /**
    * Injected so a test can state its own bound instead of writing half a gigabyte to disk.
    *
@@ -41,11 +46,11 @@ export interface StartupMaintenanceOptions {
   budgetBytes?: number;
 }
 
-export async function pruneOnStartup(
+export async function pruneWorkspace(
   fs: FileSystemPort,
   root: string,
   live: ReadonlySet<string>,
-  options: StartupMaintenanceOptions = {},
+  options: PruneWorkspaceOptions = {},
 ): Promise<void> {
   // Empty in the ordinary case (nothing has connected yet); this path also runs on a daemon that is
   // already serving sessions, which is why `live` is threaded rather than assumed empty.

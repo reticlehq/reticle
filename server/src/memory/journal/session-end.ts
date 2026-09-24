@@ -8,7 +8,7 @@ import { AmbientStore } from './ambient-store.js';
 import type { AmbientCounts } from '@reticlehq/engine/window/ambient.js';
 import { type ProjectId, subjectOf, type JournalAction } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
-import { pruneSessions } from './on-disk/retention.js';
+import { pruneWorkspace } from './on-disk/startup-maintenance.js';
 import { buildVerificationRun } from '@/judgement/runs/artifact/build-verification-run.js';
 import { driveRunFrom, driveRunId } from '@/judgement/runs/drive-run.js';
 import { RunStore } from '@/judgement/runs/artifact/run-store.js';
@@ -199,9 +199,16 @@ export function makeSessionEnd(deps: SessionEndDeps): (session: SessionEndTarget
       // The root this session actually journalled into. Pruning the daemon's tree instead meant a
       // per-project workspace was never swept at all, so the one place journals really accumulate
       // was the one place retention never ran.
-      await pruneSessions(deps.fs, session.artifactRoot ?? deps.reticleRoot, {
-        live: deps.liveSessionIds?.(),
-      });
+      // EVERY tier, not just sessions. Visual diffs and feedback copies were pruned only at daemon
+      // start, against the DAEMON's root — which for a globally registered daemon is `$HOME` and not
+      // the project at all, so the two tiers that only ever grow in a project workspace were the two
+      // never swept there. Same defect as the one this line already fixed for sessions, one move
+      // behind. The byte budget rides along for the same reason: it was wired at daemon start too.
+      await pruneWorkspace(
+        deps.fs,
+        session.artifactRoot ?? deps.reticleRoot,
+        deps.liveSessionIds?.() ?? new Set(),
+      );
     } catch {
       // retention is best-effort maintenance; never surface at teardown
     }

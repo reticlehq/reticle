@@ -89,7 +89,7 @@ import { reportOnboardingStep } from './telemetry/onboarding-funnel.js';
 import { AMBIENT_RECORDING } from './language/flows/recording/tape/recordings.js';
 import { AmbientStore } from './memory/journal/ambient-store.js';
 import { ensureWorkspaceGitignore } from './memory/journal/on-disk/workspace-gitignore.js';
-import { pruneOnStartup } from './memory/journal/on-disk/startup-maintenance.js';
+import { pruneWorkspace } from './memory/journal/on-disk/startup-maintenance.js';
 import type { RealInputProvider } from './portal/input/real-input.js';
 import { log } from './log.js';
 
@@ -315,7 +315,7 @@ function attachJournal(
     // One call, because "what maintenance runs at startup" needs one answer. Inlined here, the byte
     // budget was simply missing — written, tested, and called by nothing, while the three count
     // bounds beside it ran every time. See startup-maintenance.ts.
-    void pruneOnStartup(deps.fs, deps.reticleRoot, new Set(bridge.sessions.all().map((s) => s.id)));
+    void pruneWorkspace(deps.fs, deps.reticleRoot, new Set(bridge.sessions.all().map((s) => s.id)));
   }
 }
 

@@ -24,7 +24,7 @@ import { join } from 'node:path';
 import { removeTempDir } from '@/machine/temp-dir.js';
 import { createNodeFileSystem, type FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { ReticleDir } from '@reticlehq/core';
-import { pruneOnStartup } from './startup-maintenance.js';
+import { pruneWorkspace } from './startup-maintenance.js';
 
 /**
  * A BOUND, not a measurement. `seedSessions` writes three journals through the real filesystem in a
@@ -57,12 +57,12 @@ afterEach(async () => {
   await removeTempDir(root);
 });
 
-describe('maintenance the daemon runs at startup', () => {
+describe('maintenance over one .reticle workspace', () => {
   it(
     'evicts an over-budget evidence tier',
     async () => {
       await seedSessions(1_000);
-      await pruneOnStartup(fs, root, new Set(), { budgetBytes: 1_500 });
+      await pruneWorkspace(fs, root, new Set(), { budgetBytes: 1_500 });
       const left = await readdir(join(root, ReticleDir.SESSIONS_SUBDIR));
       expect(left.length).toBeLessThan(3);
     },
@@ -73,7 +73,7 @@ describe('maintenance the daemon runs at startup', () => {
     'evicts oldest-first, so the newest session survives',
     async () => {
       await seedSessions(1_000);
-      await pruneOnStartup(fs, root, new Set(), { budgetBytes: 1_500 });
+      await pruneWorkspace(fs, root, new Set(), { budgetBytes: 1_500 });
       const left = await readdir(join(root, ReticleDir.SESSIONS_SUBDIR));
       expect(left).toContain('s3');
     },
@@ -84,7 +84,7 @@ describe('maintenance the daemon runs at startup', () => {
     'never evicts a LIVE session, however far over budget',
     async () => {
       await seedSessions(1_000);
-      await pruneOnStartup(fs, root, new Set(['s1']), { budgetBytes: 1 });
+      await pruneWorkspace(fs, root, new Set(['s1']), { budgetBytes: 1 });
       const left = await readdir(join(root, ReticleDir.SESSIONS_SUBDIR));
       expect(left).toContain('s1');
     },
@@ -95,7 +95,7 @@ describe('maintenance the daemon runs at startup', () => {
     'leaves a tier that fits alone',
     async () => {
       await seedSessions(10);
-      await pruneOnStartup(fs, root, new Set(), { budgetBytes: 10_000 });
+      await pruneWorkspace(fs, root, new Set(), { budgetBytes: 10_000 });
       const left = await readdir(join(root, ReticleDir.SESSIONS_SUBDIR));
       expect(left).toHaveLength(3);
     },
@@ -108,7 +108,7 @@ describe('maintenance the daemon runs at startup', () => {
    */
   it('does not throw when the workspace does not exist', async () => {
     await expect(
-      pruneOnStartup(fs, join(root, 'nope'), new Set(), { budgetBytes: 1 }),
+      pruneWorkspace(fs, join(root, 'nope'), new Set(), { budgetBytes: 1 }),
     ).resolves.toBeUndefined();
   });
 });
