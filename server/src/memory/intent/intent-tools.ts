@@ -4,6 +4,7 @@ import { IntentShardStore } from './intent-shard-store.js';
 import { IntentStatus } from './intent-shard.js';
 import { ReticleTool } from '@reticlehq/core';
 import { sessionIdShape } from '@/surface/tools/tool-kit.js';
+import { PredicateSchema } from '@reticlehq/engine/question/predicate/predicate.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
 import { asString } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from '@/surface/tools/tool-kit.js';
@@ -76,10 +77,21 @@ export const INTENT_TOOLS: ToolDef[] = [
         .optional()
         .describe('declare only. Batchable — declare every intent for a feature in one call.'),
       id: z.string().optional().describe('bind only: which intent the predicate proves.'),
-      binding: z
-        .unknown()
-        .optional()
-        .describe("bind only: the predicate that would prove it, in reticle_assert's shape."),
+      /*
+       * The predicate schema, not `unknown`.
+       *
+       * The description has always said "in reticle_assert's shape" and the type said "anything",
+       * so a client reading the surface to build this call learned the field's name and nothing
+       * else — the same degradation the recursive `until` predicate suffered when it was converted
+       * without the SDK's own options. This one was not a converter bug: it was declared that way.
+       * Caught by `weakest-client-schemas.test.ts`, which is the first thing that ever looked.
+       *
+       * Accepting the real shape also means a malformed binding is refused at the boundary instead
+       * of being written into the ledger and failing later against a verdict it can never satisfy.
+       */
+      binding: PredicateSchema.optional().describe(
+        "bind only: the predicate that would prove it, in reticle_assert's shape.",
+      ),
       ...sessionIdShape,
     },
     outputSchema: {
