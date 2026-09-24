@@ -246,6 +246,22 @@ export const EVENT_PAYLOAD_SCHEMAS = {
     from: z.string().optional(),
     toBody: z.boolean(),
   }),
+  [EventType.FIELD_CHANGE]: z.object({
+    /** What an assertion would call this field: its testid, else its name, else its accessible name. */
+    field: z.string(),
+    /** `input` is a settled burst of keystrokes; `change` is the commit that ends one. */
+    kind: z.enum(['input', 'change']),
+    /**
+     * The length of the REAL value, never of the clipped one, and present even when redacted.
+     *
+     * "It was wiped" is the assertion this event exists for, and a length says it while carrying
+     * nobody's password. A cap that shortened this would read exactly like the wipe.
+     */
+    length: z.number().int().nonnegative(),
+    /** Omitted for a password, a sensitive field name, or a payment autocomplete hint. */
+    value: z.string().optional(),
+    redacted: z.literal(true).optional(),
+  }),
   [EventType.FLOW_RECORDED]: z.object({ name: z.string(), flow: z.unknown() }),
   [EventType.TRANSPORT_OVERFLOW]: z.object({ dropped: z.number() }),
   [EventType.TRUNCATED]: z.object({ channel: z.string(), dropped: z.number() }),

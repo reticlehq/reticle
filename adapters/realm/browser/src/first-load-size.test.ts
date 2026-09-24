@@ -178,7 +178,25 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  *
  * Raised by 1,000 rather than to the measurement, per the note above.
  */
-const MAX_FIRST_LOAD_BYTES = 241_100;
+/*
+ * 241_100 -> 242_300, for the form-field observer. 1,115 B measured, the largest single raise here.
+ *
+ * It buys the one channel the SDK did not have. `value` has been in the DOM observer's attribute
+ * allowlist all along and that observer runs with `attributeOldValue: true` — and it has never once
+ * fired for a React input, because React and every controlled component set the PROPERTY and
+ * `MutationObserver` watches attributes. So a field's value was readable on demand and there was NO
+ * EVENT to cite: "this field held its value across the re-render" could not be asserted, and a
+ * write the app silently dropped left no trace anywhere. Two named incidents sit on that gap.
+ *
+ * The bytes are mostly redaction, and that is the part that cannot be cut: a form is where somebody
+ * types their password, their card number and their address, so the observer has to decide per
+ * field whether the value may ride out at all, and it consults the same policy the rest of the wire
+ * does rather than carrying a second copy of the rule. A cheaper version that emitted values
+ * unconditionally would be smaller and must never ship.
+ *
+ * Raised by 1,200 rather than to the measurement, per the note above.
+ */
+const MAX_FIRST_LOAD_BYTES = 242_300;
 /*
  * Raised a fifth time, 233_300 -> 233_400, for a route to be assertable in a SAVED flow. 57 B.
  *

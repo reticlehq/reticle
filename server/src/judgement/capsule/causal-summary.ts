@@ -60,6 +60,18 @@ export interface CausalSummary {
   elided?: Partial<Record<CappedList, number>>;
   route?: string;
   signals: string[];
+  /**
+   * Form fields whose value moved in this window, by NAME.
+   *
+   * Names only, never values: a form is where somebody types their password, and the observer that
+   * reports this already refuses to carry one. The names are what an assertion is written against,
+   * and a field moving when nothing should have touched it (or not moving when something should)
+   * is the silently-cleared-field class — which until this channel existed left no trace at all,
+   * because React sets the input PROPERTY and MutationObserver watches attributes.
+   *
+   * Present only when a field moved, so a page with no form pays nothing.
+   */
+  fieldsChanged?: string[];
   layoutShift?: number;
   longTasks: number;
   /**
@@ -115,7 +127,12 @@ export const MAX_SUMMARY_ENTRIES = 20;
 
 /** The lists that are capped, named so `elided` can say which one lost entries. */
 type CappedList =
-  'statePathsChanged' | 'storageKeysChanged' | 'stateDiffs' | 'storageDiffs' | 'signals';
+  | 'statePathsChanged'
+  | 'storageKeysChanged'
+  | 'stateDiffs'
+  | 'storageDiffs'
+  | 'signals'
+  | 'fieldsChanged';
 
 /** Trim one list to the cap and report the loss. Order is arrival order, so the head is the earliest. */
 function cap<T>(list: T[], name: CappedList, elided: Partial<Record<CappedList, number>>): T[] {
@@ -174,6 +191,7 @@ export function causalSummary(
   const storageDiffs: StorageDiff[] = [];
   let route: string | undefined;
   const signals: string[] = [];
+  const fieldsChanged: string[] = [];
   let layoutShift: number | undefined;
   let longTasks = 0;
 
@@ -236,6 +254,9 @@ export function causalSummary(
       case EventType.SIGNAL:
         pushUnique(signals, data['name']);
         break;
+      case EventType.FIELD_CHANGE:
+        pushUnique(fieldsChanged, data['field']);
+        break;
       case EventType.PERF:
         if (data['metric'] === PerfMetric.CLS && 'number' === typeof data['value']) {
           layoutShift = Math.max(layoutShift ?? 0, data['value']);
@@ -268,6 +289,9 @@ export function causalSummary(
     storageDiffs: cap(storageDiffs, 'storageDiffs', elided),
     ...(route === undefined ? {} : { route }),
     signals: cap(signals, 'signals', elided),
+    ...(0 === fieldsChanged.length
+      ? {}
+      : { fieldsChanged: cap(fieldsChanged, 'fieldsChanged', elided) }),
     ...(0 === Object.keys(elided).length ? {} : { elided }),
     ...(layoutShift === undefined ? {} : { layoutShift }),
     longTasks,

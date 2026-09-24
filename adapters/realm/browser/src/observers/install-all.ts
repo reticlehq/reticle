@@ -10,6 +10,7 @@ import { installDom } from './dom.js';
 import { installStorage } from './storage.js';
 import { installStoreState } from './state.js';
 import { installFocus } from './focus.js';
+import { installField } from './field.js';
 import { installBlindSpots } from './blind-spots.js';
 import { installDownload } from './download.js';
 import { installContextOpen } from './context-open.js';
@@ -100,6 +101,10 @@ export function installAllObservers(emit: Emit, options: InstallOptions): Teardo
     guard(emit, SdkSite.STORE_ADAPTER, () => installStorage(emit)), // storage WRITES → STORAGE_CHANGE diffs (pull remains the fallback)
     guard(emit, SdkSite.STORE_ADAPTER, () => installStoreState(emit)), // subscribed-store mutations → STATE_CHANGE path diffs
     guard(emit, SdkSite.DOM_OBSERVER, () => installFocus(emit)), // element focus movement → FOCUS_CHANGE (focus-to-body = a regression)
+    // Form values → FIELD_CHANGE. The DOM observer cannot see these: React sets the PROPERTY and
+    // MutationObserver watches attributes, so `value` in its allowlist never fired. Redaction-aware
+    // by construction — see field.ts.
+    guard(emit, SdkSite.DOM_OBSERVER, () => installField(emit)),
     // Files the app PRODUCES — never cross the network, so no outside-the-page tool can see them.
     guard(emit, SdkSite.NETWORK_OBSERVER, () =>
       installDownload(emit, { capturePreview: options.captureBodies }),

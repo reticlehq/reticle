@@ -184,6 +184,11 @@ export const CHANNEL_OF_PREFIX: Readonly<Record<string, ProtocolChannel>> = {
   // channel at all.
   anim: ProtocolChannel.UI,
   dialog: ProtocolChannel.UI,
+  // A form field's value is on the subject's surface in exactly the sense `ui` means: it is what
+  // the person is looking at and typing into. The protocol has no `input` channel and does not
+  // want one — a field is a rendered thing, and the observation carries the field's NAME and
+  // length, never its contents for a password or a card.
+  field: ProtocolChannel.UI,
   focus: ProtocolChannel.UI,
   render: ProtocolChannel.UI,
   reveal: ProtocolChannel.UI,
