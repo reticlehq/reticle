@@ -96,3 +96,12 @@ describe('once the offer has been claimed', () => {
     expect(offerHtml({ claimed: true }, false)).toBe('');
   });
 });
+
+// Asked for directly: a card in the HUD is a headline and a line of text, never a command to run.
+describe('the offer card copy', () => {
+  it('is a short headline and a short line, with no code in it', () => {
+    expect(OFFER_TEXT.HEADLINE.length).toBeLessThanOrEqual(30);
+    expect(OFFER_TEXT.BODY.length).toBeLessThanOrEqual(60);
+    expect(OFFER_TEXT.BODY).not.toMatch(/`|npx|reticle /);
+  });
+});

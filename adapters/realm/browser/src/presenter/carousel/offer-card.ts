@@ -34,7 +34,7 @@ export const OFFER_DISMISSED_KEY = 'reticle.harnessOffer.dismissed';
 /** What the card says. Named because a string a user reads is a decision, not an implementation detail. */
 export const OFFER_TEXT = {
   HEADLINE: 'Get Harness free for 3 months',
-  BODY: 'The harness explores your app, proves what works, and saves every journey as a test that replays for free. Built on Jev — no model API key needed.',
+  BODY: 'Explores your app and saves every journey as a free replay.',
   CLAIM: 'Claim now',
   /** The old per-card "no". Kept only so the test can assert it is gone: the carousel closes now. */
   DISMISS: 'Not now',

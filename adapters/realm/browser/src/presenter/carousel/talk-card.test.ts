@@ -20,7 +20,12 @@ describe('talkCardHtml', () => {
     expect(book?.getAttribute('rel')).toBe('noopener noreferrer');
   });
 
-  it('names the email route for somebody who would rather not book', () => {
-    expect(talkCardHtml()).toContain(DISCOVERY_EMAIL_COMMAND);
+  // Asked for directly: a card in the HUD is a headline and a line of text, never a command to run.
+  it('shows no command or code, only a short headline and a short line', () => {
+    const html = talkCardHtml();
+    expect(html).not.toContain(DISCOVERY_EMAIL_COMMAND);
+    expect(html).not.toContain('<code');
+    expect(TALK_TEXT.HEADLINE.length).toBeLessThanOrEqual(30);
+    expect(TALK_TEXT.BODY.length).toBeLessThanOrEqual(60);
   });
 });
