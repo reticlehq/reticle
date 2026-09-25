@@ -41,8 +41,8 @@ export const MAX_TIMEOUT_MS = 120_000;
  *
  * This does not make long waits possible, and is not meant to — it makes the ADVERTISED bound one
  * that can actually be honoured. A caller that genuinely needs to outlast this polls: several short
- * waits, each of which returns a verdict. See #601 for the bounded-wait cursor that would let one
- * call do it properly.
+ * waits, each of which returns a verdict. `reticle_wait_for` does that for the caller: see
+ * `waitForTimeoutMsSchema` and `resumeAfter`.
  */
 const MCP_SDK_DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
 export const MAX_BLOCKING_WAIT_MS = MCP_SDK_DEFAULT_REQUEST_TIMEOUT_MS - 5_000;
@@ -82,6 +82,40 @@ export const cursorSchema = z.number().finite().int().nonnegative();
  * A wait budget in ms. 0 means evaluate now (documented on assert). Negative cannot be honoured.
  */
 export const timeoutMsSchema = z.number().finite().int().nonnegative().max(MAX_BLOCKING_WAIT_MS);
+
+/**
+ * The longest `reticle_wait_for` accepts, across as many calls as it takes. Ten minutes is a slow
+ * build or a queued job; an hour is a hang somebody forgot about.
+ */
+const MAX_RESUMABLE_WAIT_MS = 600_000;
+
+/**
+ * `reticle_wait_for`'s budget, which may exceed one call: it waits at most MAX_BLOCKING_WAIT_MS per
+ * call and hands back `resume_ms` for the rest (#601, from #635).
+ */
+export const waitForTimeoutMsSchema = z
+  .number()
+  .finite()
+  .int()
+  .nonnegative()
+  .max(MAX_RESUMABLE_WAIT_MS);
+
+/**
+ * What is left of a wait that stopped at the per-call limit, or undefined when there is nothing to
+ * resume: the predicate held, the whole budget fit in this call, or the wait ended for a reason
+ * waiting longer cannot change (the page went away, or the read could not be made).
+ */
+export function resumeAfter(
+  requestedMs: number,
+  perCallMs: number,
+  verdict: { pass: boolean; observationLost?: boolean; inconclusive?: string },
+): number | undefined {
+  if (verdict.pass || true === verdict.observationLost || verdict.inconclusive !== undefined) {
+    return undefined;
+  }
+  const left = requestedMs - perCallMs;
+  return left > 0 ? left : undefined;
+}
 
 /**
  * A count / cap. 0 means "return none", which is a real request. Negative is not.

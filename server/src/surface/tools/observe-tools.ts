@@ -19,6 +19,9 @@ import {
   cursorSchema,
   httpStatusSchema,
   timeoutMsSchema,
+  waitForTimeoutMsSchema,
+  resumeAfter,
+  MAX_BLOCKING_WAIT_MS,
   windowMsSchema,
 } from './args/numeric-bounds.js';
 import { buildReactionReport } from '@reticlehq/engine/question/reaction.js';
@@ -271,10 +274,10 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       ),
       // Same concept, the neighbouring tool's name. See alias-args.ts.
       until: PredicateSchema.optional().describe("Alias for `predicate` (act_and_wait's name)."),
-      timeout_ms: timeoutMsSchema
+      timeout_ms: waitForTimeoutMsSchema
         .optional()
         .describe(
-          'Maximum wait in milliseconds. Default: 4000. Capped at 55000: your MCP client aborts the request before a longer wait can return, so a bound above this would be advertised and not deliverable. To outlast it, poll — several short waits, each of which returns a verdict.',
+          `Maximum wait in milliseconds. Default: 4000, up to 600000. One call waits at most ${String(MAX_BLOCKING_WAIT_MS)} ms, because your MCP client aborts a longer request; past that it returns resume_ms, and you call again with timeout_ms: resume_ms and the same since to keep waiting.`,
         ),
       since: cursorSchema
         .optional()
@@ -282,6 +285,12 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       ...sessionIdShape,
     },
     outputSchema: {
+      resume_ms: z
+        .number()
+        .optional()
+        .describe(
+          'Present when this call stopped at the per-call limit before the predicate was seen. Call again with timeout_ms set to this, the same predicate and the same since, to keep waiting.',
+        ),
       pass: z.boolean(),
       evidence: z.unknown().optional(),
       failureReason: z.string().optional(),
@@ -333,7 +342,9 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         ),
     },
     handler: async (deps, args) => {
-      const waitBudget = asNumber(args['timeout_ms']) ?? DEFAULT_ASSERT_TIMEOUT_MS;
+      const requestedMs = asNumber(args['timeout_ms']) ?? DEFAULT_ASSERT_TIMEOUT_MS;
+      // One call never blocks past what the client allows; the rest comes back as resume_ms.
+      const waitBudget = Math.min(requestedMs, MAX_BLOCKING_WAIT_MS);
       // Spend the budget waiting for the APP as well as for the predicate. See resolve-within.
       let session = await resolveSessionWithin(
         deps.sessions,
@@ -372,6 +383,9 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         ...annotateStarvedFailure(session, verdict),
         ...assertionSource(session, predicate, verdict),
         ...(followed.followed ? { sessionId: session.id } : {}),
+        ...((resume: number | undefined) => (resume === undefined ? {} : { resume_ms: resume }))(
+          resumeAfter(requestedMs, waitBudget, verdict),
+        ),
         ...healthEnvelope(session),
         ...bufferEnvelope(session),
       });

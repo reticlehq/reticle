@@ -15,6 +15,9 @@ import {
   depthSchema,
   ratioSchema,
   timeoutMsSchema,
+  waitForTimeoutMsSchema,
+  resumeAfter,
+  MAX_BLOCKING_WAIT_MS,
 } from './numeric-bounds.js';
 
 function inputShape(name: string): z.ZodRawShape {
@@ -143,5 +146,37 @@ describe('every top-level numeric tool input has a bound', () => {
       }
     }
     expect(unbounded, unbounded.join(', ')).toEqual([]);
+  });
+});
+
+/*
+ * #601, from #635 (Christian-Sidak): a wait longer than one MCP call. wait_for waits at most the
+ * per-call limit and hands back the rest as resume_ms, so the caller can keep waiting without a
+ * transport that aborts the request.
+ */
+describe('a wait that outlasts one call', () => {
+  it('wait_for accepts a budget past the per-call limit, and assert still does not', () => {
+    expect(waitForTimeoutMsSchema.safeParse(MAX_BLOCKING_WAIT_MS + 60_000).success).toBe(true);
+    expect(timeoutMsSchema.safeParse(MAX_BLOCKING_WAIT_MS + 60_000).success).toBe(false);
+  });
+
+  it('hands back what is left when the predicate was not seen yet', () => {
+    expect(resumeAfter(120_000, MAX_BLOCKING_WAIT_MS, { pass: false })).toBe(
+      120_000 - MAX_BLOCKING_WAIT_MS,
+    );
+  });
+
+  it('has nothing to resume once it held, or when the whole budget fit', () => {
+    expect(resumeAfter(120_000, MAX_BLOCKING_WAIT_MS, { pass: true })).toBeUndefined();
+    expect(resumeAfter(4_000, 4_000, { pass: false })).toBeUndefined();
+  });
+
+  it('does not ask for more waiting when waiting cannot change the answer', () => {
+    expect(
+      resumeAfter(120_000, MAX_BLOCKING_WAIT_MS, { pass: false, observationLost: true }),
+    ).toBeUndefined();
+    expect(
+      resumeAfter(120_000, MAX_BLOCKING_WAIT_MS, { pass: false, inconclusive: 'no answer' }),
+    ).toBeUndefined();
   });
 });
