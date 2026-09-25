@@ -118,7 +118,10 @@ describe('selectPath — Map support', () => {
     ]);
     const r = selectPath({ m }, 'm.missing');
     expect(r.found).toBe(false);
-    expect(r.availableKeys).toEqual(['str']);
+    // `size` rides alongside because it is selectable on a Map (#944); the subject here is the
+    // number and symbol keys, which are not nameable in a path and stay out.
+    expect(r.availableKeys).toEqual(['str', 'size']);
+    expect(r.availableKeys).not.toContain('42');
   });
 });
 
@@ -266,5 +269,137 @@ describe('projectComponentState', () => {
   it('keeps a two-element state value that merely looks like a memo tuple', () => {
     const pair = { ok: true, hooks: [['lat', ['a', 'b']]] };
     expect(projectComponentState(pair)).toEqual(pair);
+  });
+});
+
+/**
+ * `Set` and `Map` count with `.size`, and a path that could not read it reported the wrong thing.
+ *
+ * From the field: an app holding `selectedIds: new Set(['item-1', 'item-2'])`, asserted with
+ * `{ kind: "state", path: "selectedIds.size", equals: 2 }`, came back
+ *
+ *     verified: "no", verifiedReason: "assertion_failed"
+ *     availableKeys: [], totalKeys: 0
+ *
+ * Two separate wrongs. `.size` is an accessor on `Set.prototype`, so it is neither an own property
+ * nor the one intrinsic `length` this grammar admitted, and the path missed. Then the diagnosis fell
+ * through to `Object.keys(new Set(…))`, which is `[]` for every Set however full -- so the miss did
+ * not say "I cannot read this", it said the collection was empty. That is a claim about the app, and
+ * a false one (#944).
+ *
+ * The fix stays a CLOSED NAME rather than a property read, for the reason `length` is one: `size`
+ * sits on the same prototype as `add`, `delete`, `clear` and `constructor`, and a general read would
+ * admit all of them at once. The guards below are most of this block.
+ */
+describe('selectPath over Set and Map', () => {
+  it('reads .size on a Set, which is the reported case', () => {
+    const state = { selectedIds: new Set(['item-1', 'item-2']) };
+
+    expect(selectPath(state, 'selectedIds.size')).toEqual({ found: true, value: 2 });
+  });
+
+  it('reads .size on a Map', () => {
+    const state = { cache: new Map([['a', 1]]) };
+
+    expect(selectPath(state, 'cache.size')).toEqual({ found: true, value: 1 });
+  });
+
+  it('lets an explicit Map key named size win over the count', () => {
+    // A Map that really holds `size` is answering about its own data. Reading the count instead
+    // would be a silent wrong answer on the one shape where both readings are plausible.
+    const state = { cfg: new Map([['size', 'large']]) };
+
+    expect(selectPath(state, 'cfg.size')).toEqual({ found: true, value: 'large' });
+  });
+
+  it('answers membership for a named Set element', () => {
+    const state = { selectedIds: new Set(['item-1']) };
+
+    expect(selectPath(state, 'selectedIds.item-1')).toEqual({ found: true, value: true });
+  });
+
+  it('misses on an element the Set does not hold, and says what it does hold', () => {
+    // A miss rather than `false`, which is how every other absent path behaves here -- and the miss
+    // then lists the members, which a bare `false` could not.
+    const result = selectPath({ ids: new Set(['a', 'b']) }, 'ids.c');
+
+    expect(result.found).toBe(false);
+    expect(result.availableKeys).toEqual(['a', 'b', 'size']);
+  });
+
+  it('reports a Set that is genuinely empty as empty, and a full one as full', () => {
+    // The bug made these two indistinguishable and answered the second with the first: every Set
+    // came back `availableKeys: []`, whatever it held.
+    expect(selectPath({ ids: new Set() }, 'ids.x').availableKeys).toEqual(['size']);
+    expect(selectPath({ ids: new Set(['a', 'b']) }, 'ids.x').availableKeys).toEqual([
+      'a',
+      'b',
+      'size',
+    ]);
+  });
+
+  it('offers size in availableKeys when a Map path misses', () => {
+    const result = selectPath({ cache: new Map([['a', 1]]) }, 'cache.b');
+
+    expect(result.availableKeys).toEqual(['a', 'size']);
+  });
+
+  it('reads a value through a Set member and a Map entry in one path', () => {
+    const state = { byId: new Map([['u1', { name: 'Ada' }]]) };
+
+    expect(selectPath(state, 'byId.u1.name')).toEqual({ found: true, value: 'Ada' });
+  });
+});
+
+describe('Set and Map admit `size` and nothing else', () => {
+  it('keeps every mutator and prototype key unreachable on a Set', () => {
+    const state = { ids: new Set(['a']) };
+
+    for (const seg of ['add', 'delete', 'clear', 'has', 'constructor', '__proto__', 'toString']) {
+      expect(selectPath(state, `ids.${seg}`).found, `ids.${seg} must not be found`).toBe(false);
+    }
+  });
+
+  it('keeps every mutator and prototype key unreachable on a Map', () => {
+    const state = { m: new Map([['a', 1]]) };
+
+    for (const seg of ['set', 'get', 'delete', 'clear', 'constructor', '__proto__', 'toString']) {
+      expect(selectPath(state, `m.${seg}`).found, `m.${seg} must not be found`).toBe(false);
+    }
+  });
+
+  it('does not admit `size` anywhere it is not a real count', () => {
+    // The array/string guard above already pins this; repeated here for the object case, where a
+    // path read that walked the prototype would also have answered.
+    expect(selectPath({ o: { a: 1 } }, 'o.size').found).toBe(false);
+    expect(selectPath({ n: 5 }, 'n.size').found).toBe(false);
+  });
+
+  it('still reads an own object key called size', () => {
+    expect(selectPath({ o: { size: 42 } }, 'o.size')).toEqual({ found: true, value: 42 });
+  });
+
+  it('does not let a non-string Set member become a path segment', () => {
+    // `availableKeys` is a string list; an object member has no name a caller could have typed.
+    const result = selectPath({ ids: new Set([{ a: 1 }, 'b']) }, 'ids.c');
+
+    expect(result.availableKeys).toEqual(['b', 'size']);
+    expect(result.totalKeys).toBe(3);
+  });
+});
+
+describe('a Map that really holds a key called size', () => {
+  it('lists size once, not twice', () => {
+    const miss = selectPath(
+      {
+        m: new Map([
+          ['size', 3],
+          ['a', 1],
+        ]),
+      },
+      'm.nope',
+    );
+    const keys = (miss as { availableKeys?: string[] }).availableKeys ?? [];
+    expect(keys.filter((k) => 'size' === k)).toHaveLength(1);
   });
 });

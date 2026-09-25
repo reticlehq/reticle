@@ -42,6 +42,20 @@ function hasIntrinsicLength(value: unknown): value is unknown[] | string {
   return Array.isArray(value) || 'string' === typeof value;
 }
 
+/**
+ * `size` is the second closed name, for the two collections that count with it instead of `length`.
+ *
+ * The same argument that admitted `length` admits this one: `selectedIds.size` is what an app with a
+ * `Set` actually holds, and refusing it reported `found: false` with `availableKeys: []` -- not "I
+ * cannot read this", but "the collection is empty", which is a claim about the app and a wrong one
+ * (#944).
+ *
+ * A closed NAME, not a property read, for exactly the reason `length` is. `size` is an accessor on
+ * `Set.prototype`/`Map.prototype`, so reaching it by prototype traversal would put `add`, `delete`,
+ * `clear`, `constructor` and `__proto__` back on the path grammar in the same move.
+ */
+const SIZE_SEGMENT = 'size';
+
 /** The keys at a level, as a bounded sample plus the true count when the sample is short. */
 function keysOf(value: unknown): { keys: string[]; total: number } {
   if (Array.isArray(value)) {
@@ -56,9 +70,24 @@ function keysOf(value: unknown): { keys: string[]; total: number } {
     let total = 0;
     for (const k of value.keys()) {
       total += 1;
-      if ('string' === typeof k && keys.length < MAX_AVAILABLE_KEYS) keys.push(k);
+      if ('string' === typeof k && keys.length < MAX_AVAILABLE_KEYS - 1) keys.push(k);
     }
-    return { keys, total };
+    // `size` is listed for the reason `length` is listed on an array: it IS selectable here, and a
+    // diagnosis that omits it sends someone who wanted the count looking for a key that does not
+    // exist. Counted too, so `totalKeys` matches what a caller can actually reach. A Map that
+    // really holds a `size` key already lists it, and the explicit entry is what a read returns.
+    if (value.has(SIZE_SEGMENT)) return { keys, total };
+    return { keys: [...keys, SIZE_SEGMENT], total: total + 1 };
+  }
+  if (value instanceof Set) {
+    // Was falling through to `Object.keys`, which is `[]` for every Set -- so a miss reported
+    // `availableKeys: [], totalKeys: 0` and stated as a fact that the collection was empty. Its
+    // members are what is reachable here, plus `size`.
+    const keys: string[] = [];
+    for (const item of value) {
+      if ('string' === typeof item && keys.length < MAX_AVAILABLE_KEYS - 1) keys.push(item);
+    }
+    return { keys: [...keys, SIZE_SEGMENT], total: value.size + 1 };
   }
   if ('object' === typeof value && value !== null) {
     const all = Object.keys(value);
@@ -80,7 +109,8 @@ function miss(value: unknown): PathSelection {
 
 /**
  * Walk `path` (e.g. "captionCache.v3.0.text") into `root`. Empty path returns root unchanged.
- * Segments are own keys, canonical array indices, Map keys, or `length` on an array/string.
+ * Segments are own keys, canonical array indices, Map keys, Set members, `length` on an
+ * array/string, or `size` on a Set/Map.
  */
 export function selectPath(root: unknown, path: string): PathSelection {
   const segments = path.split('.').filter((s) => s.length > 0);
@@ -107,8 +137,30 @@ export function selectPath(root: unknown, path: string): PathSelection {
       continue;
     }
     if (current instanceof Map) {
+      // An explicit entry wins over the intrinsic. A Map that really holds a key called `size` is
+      // answering about its own data, and reading its count instead would be a silent wrong answer
+      // on the one shape where both readings are plausible.
       if (current.has(segment)) {
         current = current.get(segment);
+        continue;
+      }
+      if (SIZE_SEGMENT === segment) {
+        current = current.size;
+        continue;
+      }
+      return miss(current);
+    }
+    if (current instanceof Set) {
+      if (SIZE_SEGMENT === segment) {
+        current = current.size;
+        continue;
+      }
+      // MEMBERSHIP, not indexing: a Set has no order to index by, so the only question a named
+      // segment can ask of one is whether it holds that item. A segment it does not hold is a MISS
+      // rather than `false`, which is how every other absent path behaves here -- and the miss then
+      // lists what the Set does hold, which a bare `false` could not.
+      if (current.has(segment)) {
+        current = true;
         continue;
       }
       return miss(current);
