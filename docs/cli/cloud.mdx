@@ -101,7 +101,9 @@ reticle: no .reticle/cloud.json here ... run `reticle link` first
 
 ### `reticle push`
 
-Sends local run artifacts from `.reticle` to the linked project, honoring the sync policy. With `sync.runs` off it does nothing and says so. Prints `{ pushed, failed, total, project }`.
+Sends local run artifacts from `.reticle` to the linked project, honoring the sync policy. With `sync.runs` off it does nothing and says so. Prints `{ ok, project, sent, pulled }`, where `sent` carries the accepted counts and, when the server refused anything, a `rejected` array naming each artifact's index and reason.
+
+**A rejection is a failed push.** If the server refuses any artifact, `ok` is `false` and the command exits `1`, even when other artifacts in the same bundle landed. A refused artifact never reaches the dashboard and is re-offered on every cycle, so partial loss is still loss. `ok: true` and exit `0` mean everything offered was accepted, which includes the common case of a repo that was already up to date. The accepted counts still report what did land, so a partial push is visible as one.
 
 ### `reticle runs`
 
@@ -133,12 +135,12 @@ reticle: cloud not attached here ... run `reticle link` (or set RETICLE_CLOUD_UR
 
 ## Exit codes
 
-| Code | Meaning                                                                             |
-| ---- | ----------------------------------------------------------------------------------- |
-| `0`  | Success                                                                             |
-| `1`  | The API call failed, or the repository is not attached where attachment is required |
-| `2`  | Usage error, or not signed in and no `RETICLE_API_KEY`                              |
-| `3`  | `regression` only: at least one flow broke                                          |
+| Code | Meaning |
+| --- | --- |
+| `0` | Success |
+| `1` | The API call failed, the repository is not attached where attachment is required, or `push` had an artifact refused |
+| `2` | Usage error, or not signed in and no `RETICLE_API_KEY` |
+| `3` | `regression` only: at least one flow broke |
 
 Output is pretty-printed JSON on stdout. Errors and next-step nudges go to stderr, so an agent parsing stdout is unaffected.
 

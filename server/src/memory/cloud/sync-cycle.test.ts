@@ -206,7 +206,9 @@ describe('an empty repo and an up-to-date repo do not say the same thing', () =>
 describe('when the server refuses what was pushed', () => {
   const refused = (rejected: Array<{ index: number; reason: string }>): string =>
     describeSync({
-      ok: true,
+      // A cycle whose artifacts were all refused is not an ok cycle; the fixture says so rather
+      // than pinning the wording against a report shape the protocol can no longer produce.
+      ok: false,
       runsSent: 0,
       runsRejected: rejected,
       flowsSent: 0,
@@ -240,7 +242,7 @@ describe('when the server refuses what was pushed', () => {
 
   it('still reports what DID land when only some were refused', () => {
     const line = describeSync({
-      ok: true,
+      ok: false,
       runsSent: 2,
       runsRejected: [{ index: 2, reason: 'missing runId' }],
       flowsSent: 0,
@@ -251,6 +253,133 @@ describe('when the server refuses what was pushed', () => {
     });
     expect(line).toContain('2 run(s)');
     expect(line).toContain('missing runId');
+  });
+});
+
+/**
+ * A push the server threw away is a FAILED push, and `ok` is the only field that says so.
+ *
+ * Reported from the field: `reticle push` answered `{"ok":true, "sent":{"runs":0, …,
+ * "rejected":[…]}}` and exited 0 while the dashboard had refused every artifact it was handed. The
+ * rejection list was right there in the payload and the summary line named the reason, but `ok` was
+ * built from "the cycle completed" rather than from what the cycle achieved — so a scripted sync or
+ * a CI step, which reads one boolean and an exit code, saw a healthy push with nothing to send.
+ *
+ * The rule is any rejection, not only a total one. A refused artifact never lands and is re-offered
+ * on every cycle forever, so a caller that cannot see it has no way to learn that its dashboard is
+ * missing evidence it believes it sent.
+ */
+describe('a refused artifact is a failed push, not a quiet one', () => {
+  const twoRuns = source({
+    runs: () => [
+      { runId: 'a', payload: { runId: 'a' } },
+      { runId: 'b', payload: { runId: 'b' } },
+    ],
+  });
+  const SCHEMA_REFUSAL = 'run artifact failed validation: schemaVersion: expected 1';
+
+  it('is not ok when the server accepted nothing and refused everything', async () => {
+    const { report } = await cycle(
+      {
+        status: {},
+        sync: {
+          runs: {
+            accepted: 0,
+            rejected: [
+              { index: 0, reason: SCHEMA_REFUSAL },
+              { index: 1, reason: SCHEMA_REFUSAL },
+            ],
+          },
+        },
+      },
+      twoRuns,
+    );
+    expect(report.ok, 'nothing landed, so the push did not succeed').toBe(false);
+    expect(report.runsSent).toBe(0);
+  });
+
+  it('keeps every rejection and its reason, so the caller learns WHAT to fix', async () => {
+    const { report } = await cycle(
+      {
+        status: {},
+        sync: {
+          runs: {
+            accepted: 0,
+            rejected: [
+              { index: 0, reason: SCHEMA_REFUSAL },
+              { index: 1, reason: SCHEMA_REFUSAL },
+            ],
+          },
+        },
+      },
+      twoRuns,
+    );
+    // Not ok is the signal; the list is what makes it actionable. Losing either one re-creates half
+    // of the defect — a caller that knows something failed but not what, or the reverse.
+    expect(report.runsRejected).toEqual([
+      { index: 0, reason: SCHEMA_REFUSAL },
+      { index: 1, reason: SCHEMA_REFUSAL },
+    ]);
+    expect(describeSync(report)).toContain(SCHEMA_REFUSAL);
+  });
+
+  it('is not ok on a PARTIAL refusal, and still reports what landed', async () => {
+    const { report } = await cycle(
+      {
+        status: {},
+        sync: { runs: { accepted: 1, rejected: [{ index: 1, reason: SCHEMA_REFUSAL }] } },
+      },
+      twoRuns,
+    );
+    expect(report.ok, 'one artifact was refused, so not everything was pushed').toBe(false);
+    // Partial success is preserved rather than flattened into a failure: the run that DID land is
+    // still counted, and the summary still says so.
+    expect(report.runsSent).toBe(1);
+    expect(describeSync(report)).toContain('1 run(s)');
+  });
+
+  it('a refused push does not abort the pull, and the decisions still arrive', async () => {
+    const { report, written } = await cycle(
+      {
+        status: {},
+        sync: { runs: { accepted: 0, rejected: [{ index: 0, reason: SCHEMA_REFUSAL }] } },
+        pull: {
+          triage: [{ fingerprint: 'fp1', status: 'resolved', title: 'x', at: 5 }],
+          cursor: '5:fp1',
+        },
+      },
+      twoRuns,
+    );
+    // The two halves are independent. A dashboard refusing this build's artifacts is exactly the
+    // dashboard somebody is triaging on, so dropping the collected decisions would cost twice.
+    expect(report.pulled).toBe(1);
+    expect(written.issues?.triage['fp1']?.status).toBe('resolved');
+    expect(written.state?.cursor).toBe('5:fp1');
+  });
+
+  it('stays ok when the server accepted everything it was handed', async () => {
+    const { report } = await cycle(
+      { status: {}, sync: { runs: { accepted: 2, rejected: [] } } },
+      twoRuns,
+    );
+    expect(report.ok).toBe(true);
+    expect(report.runsSent).toBe(2);
+  });
+
+  it('stays ok on a cycle that sent nothing at all', async () => {
+    // The steady state, and the one that must not be dragged red by this rule: nothing was offered,
+    // so nothing could be refused, and a quiet machine is healthy rather than broken.
+    const { report } = await cycle({ status: { knownRunIds: ['a', 'b'] } }, twoRuns);
+    expect(report.ok).toBe(true);
+    expect(report.runsRejected).toEqual([]);
+  });
+
+  it('reads a server that says nothing about rejections as none, never as a refusal', async () => {
+    // An older cloud answers with an accepted count and no `rejected` key at all. That must stay ok
+    // — the same compatibility rule the capsule field already obeys.
+    const { report } = await cycle({ status: {}, sync: { runs: { accepted: 2 } } }, twoRuns);
+    expect(report.ok).toBe(true);
+    expect(report.runsRejected).toEqual([]);
   });
 });
 
