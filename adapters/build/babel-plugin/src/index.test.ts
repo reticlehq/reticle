@@ -105,14 +105,14 @@ describe('non-DOM reconcilers', () => {
 });
 
 /**
- * Source mapping is JSX-syntactic, and therefore already works on Preact (#129).
+ * The source-mapping transform is JSX-syntactic, and therefore already stamps Preact code (#129).
  *
  * #129 lists source mapping as one of four things Preact is missing: "Preact under
- * `@preact/preset-vite` needs its own stamping path". It does not. Nothing in this plugin reads
- * React: it stamps a JSX host element by tag name, and Preact's host elements are the same HTML
- * tags. `docs/frameworks.mdx` separately records Preact's source pointer as "unproven", which is
- * the honest thing to say about something nothing tested -- so these tests are what changes the
- * answer from unproven to measured.
+ * `@preact/preset-vite` needs its own stamping path". The transform does not. Nothing in this
+ * plugin reads React: it stamps a JSX host element by tag name, and Preact's host elements are the
+ * same HTML tags. These tests prove the transform only. `docs/frameworks.mdx` records Preact's
+ * source pointer as "transform-tested; drive unproven" because no one has yet driven a Preact app
+ * through `@preact/preset-vite` and seen a verdict name a `file:line`.
  *
  * Pinned as its own block because the properties below are exactly the ones a React-shaped
  * assumption would break: Preact takes `class` rather than `className`, uses its own JSX import
