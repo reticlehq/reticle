@@ -45,6 +45,7 @@ export {
   PackageManager,
 } from './detect/detect.js';
 export { findWorkspaceApps } from './detect/workspace-apps.js';
+export { deriveProjectId, packageName } from './project/project-id.js';
 export { refreshAgentRules } from './project/refresh-rules.js';
 export { diagnoseDesktop, isDesktopProject } from './diagnose/desktop-doctor.js';
 export { diagnoseWebCsp } from './diagnose/csp-doctor.js';

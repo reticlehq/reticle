@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import {
   readJournalEnabled,
   readProjectId,
+  projectIdsAt,
   readProjectPort,
   resolvePort,
   isLikelyDevServerPort,
@@ -13,6 +14,7 @@ import {
   diagnosePortMismatch,
 } from './cli-port.js';
 import { RETICLE_DEFAULT_PORT } from '@reticlehq/core';
+import { deriveProjectId } from '@reticlehq/init';
 
 describe('readJournalEnabled', () => {
   let dir: string;
@@ -191,6 +193,62 @@ describe('readProjectId', () => {
   it('returns undefined for malformed JSON', async () => {
     await writeConfig('{ not json');
     expect(readProjectId(dir)).toBeUndefined();
+  });
+});
+
+/**
+ * The ids a directory can speak for, when the first-move instructions ask "has THIS project ever
+ * connected".
+ *
+ * `readProjectId` only knows the id `init` wrote to `.reticle.json`. The build plugins derive the SAME
+ * id from the package name and the app's root without writing that file, so a monorepo root (the app
+ * is in `apps/web`) and an app wired by the plugin alone both read `undefined` there. The handshake
+ * then told a working project that no app had ever connected, and told its agent to run `init`
+ * again. Reported from the field, and seen on this repository.
+ */
+describe('projectIdsAt', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'reticle-projids-'));
+  });
+  afterEach(async () => {
+    await removeTempDir(dir);
+  });
+
+  async function writeJson(path: string, value: unknown): Promise<void> {
+    await mkdir(join(dir, path, '..'), { recursive: true });
+    await writeFile(join(dir, path), JSON.stringify(value), 'utf8');
+  }
+
+  it('is exactly the recorded id when .reticle.json names one', async () => {
+    await writeJson('.reticle.json', { projectId: 'acme-web-1234abcd' });
+    await writeJson('package.json', { name: 'acme' });
+    expect(projectIdsAt(dir)).toEqual(['acme-web-1234abcd']);
+  });
+
+  it('includes the id the plugin derives for an app wired without init', async () => {
+    await writeJson('package.json', { name: 'shop' });
+    expect(projectIdsAt(dir)).toContain(deriveProjectId('shop', dir));
+  });
+
+  it('includes the ids of the workspace apps under a monorepo root', async () => {
+    await writeJson('package.json', { name: 'repo', workspaces: ['apps/*'] });
+    await writeJson('apps/web/package.json', { name: '@acme/web', scripts: { dev: 'vite' } });
+    await writeFile(join(dir, 'apps/web/vite.config.ts'), 'export default {}', 'utf8');
+    expect(projectIdsAt(dir)).toContain(deriveProjectId('@acme/web', join(dir, 'apps/web')));
+  });
+
+  it('prefers what init recorded for a workspace app over deriving one', async () => {
+    await writeJson('package.json', { name: 'repo', workspaces: ['apps/*'] });
+    await writeJson('apps/web/package.json', { name: '@acme/web', scripts: { dev: 'vite' } });
+    await writeFile(join(dir, 'apps/web/vite.config.ts'), 'export default {}', 'utf8');
+    await writeJson('apps/web/.reticle.json', { projectId: 'web-recorded-0000' });
+    expect(projectIdsAt(dir)).toContain('web-recorded-0000');
+  });
+
+  it('is empty in a directory that is not a project at all', () => {
+    expect(projectIdsAt(dir)).toEqual([]);
   });
 });
 

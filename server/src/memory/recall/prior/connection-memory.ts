@@ -126,3 +126,16 @@ export function hasProjectConnectedBefore(
   if (projectId === undefined) return false;
   return hasAnyAppConnectedBefore(stateDir, port, projectId);
 }
+
+/**
+ * Has any of these projects connected before: the first-move question for a directory that speaks
+ * for more than one app (a monorepo root), or for none by name (an app wired by the plugin alone).
+ * The ids come from `projectIdsAt`; each is still asked the narrow question.
+ */
+export function hasAnyProjectConnectedBefore(
+  stateDir: string,
+  port: number,
+  projectIds: readonly string[],
+): boolean {
+  return projectIds.some((id) => hasProjectConnectedBefore(stateDir, port, id));
+}

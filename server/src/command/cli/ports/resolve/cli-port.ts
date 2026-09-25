@@ -9,7 +9,14 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import {
+  SILENT_HOST,
+  buildNodeIo,
+  deriveProjectId,
+  findWorkspaceApps,
+  packageName,
+} from '@reticlehq/init';
 import { asProjectId, type ProjectId } from '@reticlehq/core';
 
 /** The project config `reticle init` writes. */
@@ -86,6 +93,49 @@ export function readProjectId(cwd: string): ProjectId | undefined {
   // because of what it looks like.
   if ('string' === typeof id && id.length > 0) return asProjectId(id);
   return undefined;
+}
+
+const PACKAGE_JSON = 'package.json';
+
+/** The package name in `dir/package.json`, or undefined when there is no readable one. */
+function packageNameAt(dir: string): string | undefined {
+  try {
+    return packageName(JSON.parse(readFileSync(join(dir, PACKAGE_JSON), 'utf8')));
+  } catch {
+    return undefined;
+  }
+}
+
+/** The id an app at `dir` carries: the one `init` recorded, else the one the build plugin derives. */
+function projectIdFor(dir: string): ProjectId {
+  return readProjectId(dir) ?? asProjectId(deriveProjectId(packageNameAt(dir), dir));
+}
+
+/**
+ * Every project id this directory can speak for, for "has THIS project ever connected".
+ *
+ * `readProjectId` knows only what `init` wrote. The build plugins derive the same id from the package
+ * name and the app root WITHOUT writing `.reticle.json`, so a monorepo root (the app lives in
+ * `apps/web`) and an app wired by the plugin alone both read `undefined`, and the handshake told a
+ * working project nothing had ever connected. Deriving the plugin's own id cannot reopen the opposite
+ * lie: an id only counts once an app with exactly that id has dialled in.
+ *
+ * Workspace discovery is init's `findWorkspaceApps`, reused so the two cannot disagree about which
+ * directories are apps. Best-effort: a directory it cannot read contributes nothing.
+ */
+export function projectIdsAt(cwd: string): ProjectId[] {
+  const recorded = readProjectId(cwd);
+  if (recorded !== undefined) return [recorded];
+  const ids: ProjectId[] = [];
+  if (packageNameAt(cwd) !== undefined) ids.push(projectIdFor(cwd));
+  try {
+    for (const app of findWorkspaceApps(buildNodeIo(cwd, SILENT_HOST))) {
+      ids.push(projectIdFor(join(cwd, app)));
+    }
+  } catch {
+    // Discovery touches the filesystem; an unreadable tree is simply no further evidence.
+  }
+  return [...new Set(ids)];
 }
 
 /**

@@ -79,10 +79,11 @@ import { playwrightLauncher, resolveMaxContexts } from './portal/pool/playwright
 import { LeaseReaper } from './portal/pool/lease-reaper.js';
 import {
   findProjectConfig,
+  projectIdsAt,
   readJournalEnabled,
   readProjectId,
 } from './command/cli/ports/resolve/cli-port.js';
-import { hasProjectConnectedBefore } from './memory/recall/prior/connection-memory.js';
+import { hasAnyProjectConnectedBefore } from './memory/recall/prior/connection-memory.js';
 import { reticleStateHome } from './command/daemon/daemon.js';
 import { probeChromium } from './command/cli/doctor/browser/chromium-hint.js';
 import { attachJournal } from './wire-journal.js';
@@ -469,7 +470,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     const server = createMcpServer(
       realInput !== undefined ? { ...deps, realInput } : deps,
       profile,
-      hasProjectConnectedBefore(reticleStateHome(), port, activeProjectId),
+      hasAnyProjectConnectedBefore(reticleStateHome(), port, projectIdsAt(process.cwd())),
     );
     // When the agent (the MCP client) disconnects cleanly, end every active session at once so the
     // HUD doesn't linger. (If the agent instead KILLS this process, the WS dies and the browser
@@ -677,7 +678,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     createMcpServer(
       effectiveDeps,
       profile,
-      hasProjectConnectedBefore(reticleStateHome(), port, readProjectId(process.cwd())),
+      hasAnyProjectConnectedBefore(reticleStateHome(), port, projectIdsAt(process.cwd())),
     ),
   );
   // `reticle drive <url>` when this daemon already owns the port: it asks HERE instead of trying to

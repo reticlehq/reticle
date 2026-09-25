@@ -22,9 +22,9 @@ export { probeDaemon, waitForDaemon } from './proxy/proxy-daemon-probe.js';
 import { probeDaemon } from './proxy/proxy-daemon-probe.js';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 import { buildServerInstructions } from './server-instructions.js';
-import { hasProjectConnectedBefore } from '@/memory/recall/prior/connection-memory.js';
+import { hasAnyProjectConnectedBefore } from '@/memory/recall/prior/connection-memory.js';
 import { reticleStateHome } from '@/command/daemon/daemon.js';
-import { readProjectId } from '@/command/cli/ports/resolve/cli-port.js';
+import { projectIdsAt } from '@/command/cli/ports/resolve/cli-port.js';
 import { PEER_VERSION_PARAM, PEER_CONTRACT_PARAM } from '@/command/version/peer-announce.js';
 import {
   onStreamDrop,
@@ -346,10 +346,10 @@ export function buildSessionUrl(rawData: string, port: number): string | null {
 function proxyInstructions(port: number): string {
   try {
     return buildServerInstructions({
-      previouslyConnected: hasProjectConnectedBefore(
+      previouslyConnected: hasAnyProjectConnectedBefore(
         reticleStateHome(),
         port,
-        readProjectId(process.cwd()),
+        projectIdsAt(process.cwd()),
       ),
     });
   } catch {

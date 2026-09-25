@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`: a connected project is no longer told at every handshake that no app has ever connected.** The first-move instructions answered "has this project connected before" from the id in `.reticle.json`, so a monorepo root (where the app lives in a subdirectory) and an app wired by the build plugin without `init` always read "never". Their agent was told to run `init` on a project that was already working. The handshake now also asks about the id the build plugin derives, for the working directory and for each workspace app `init` would find. An id still only counts once an app carrying it has actually connected, so an unwired project still gets the setup instructions.
