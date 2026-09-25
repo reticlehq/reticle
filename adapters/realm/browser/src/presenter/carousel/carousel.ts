@@ -180,7 +180,7 @@ function startRotation(log: HTMLElement, root: HTMLElement, count: number): void
  */
 export const CAROUSEL_CSS = `
 .reticle-carousel{position:relative;margin:8px 10px;padding:10px 12px 8px;border:1px solid var(--reticle-line,#2a2f3a);border-radius:10px;background:var(--reticle-surface-inset,rgba(255,255,255,.03));}
-.reticle-carousel-track{height:148px;overflow:hidden;}
+.reticle-carousel-track{height:100px;overflow:hidden;}
 .reticle-carousel-slide .reticle-offer,.reticle-carousel-slide .reticle-talk{margin:0;padding:0;border:0;background:none;}
 .reticle-carousel-close{position:absolute;top:4px;right:6px;width:20px;height:20px;padding:0;border:0;background:none;color:inherit;opacity:.55;cursor:pointer;font-size:14px;line-height:20px;}
 .reticle-carousel-close:hover{opacity:1;}
