@@ -96,34 +96,30 @@ function annotateThrottledMiss(
     return { ...result, inconclusive: preconditionFailure };
   }
   if (true !== session.throttled?.()) return result;
+  if (decidedByAnAlreadyAnnotatedClause(predicate)) return result;
   if (failureRestsOnSeeing(predicate)) return result;
-  // A composite whose own arms saw an element has proof the tab renders, so the caveat does not
-  // apply to it either — the same fact `clearStarvedWhenSiblingsSaw` uses one level down. Without
-  // this the composite's failure is re-annotated here after its arms were cleared, and the verdict
-  // still contradicts the evidence it is carrying.
-  if (compositeSawRender(predicate, result)) return result;
   return { ...result, inconclusive: THROTTLED_STARVED_NOTE };
 }
 
 /**
- * Does a composite's own recorded evidence contain an arm that saw an element?
+ * Has this predicate's failure ALREADY been adjudicated, one level down?
  *
- * A failing `allOf` keeps every arm's result as its evidence, so the proof is already in hand and
- * does not need re-evaluating. Defensive about the shape: `evidence` is whatever the branch chose
- * to keep, and an entry that is not an EvalResult simply proves nothing either way.
+ * `allOf`/`anyOf` evaluate their clauses through `evaluatePredicate`, so every clause arrives here
+ * first and carries its own verdict on the starved-tab question. Asking again at the composite
+ * re-decides it with strictly less information: the composite knows only that SOMETHING failed.
+ *
+ * A readable `allOf` failure is a clause that failed by having SEEN something, because a clause that
+ * failed by NOT seeing is stamped starved before the composite looks (or cleared by
+ * `clearStarvedWhenSiblingsSaw` when a sibling proved the tab renders). An `anyOf` reports "no
+ * sub-predicate matched" only when every clause failed readably. Without this, an `absent: true`
+ * clause that matched 13 elements was graded honestly as a clause and then re-graded `unknown` as an
+ * `allOf` of one (#897).
+ *
+ * `not` is deliberately absent: it fails when its child PASSED, and a passing child is never
+ * annotated, so there is nothing decided to defer to. `failureRestsOnSeeing` answers it by flipping.
  */
-function compositeSawRender(predicate: Predicate, result: EvalResult): boolean {
-  if (PredicateKind.ALL_OF !== predicate.kind && PredicateKind.ANY_OF !== predicate.kind) {
-    return false;
-  }
-  const arms = result.evidence;
-  if (!Array.isArray(arms)) return false;
-  return arms.some((arm, i) => {
-    const p = predicate.predicates[i];
-    if (p === undefined || null === arm || 'object' !== typeof arm) return false;
-    if (!('pass' in arm)) return false;
-    return provesRender(p, arm as EvalResult);
-  });
+function decidedByAnAlreadyAnnotatedClause(predicate: Predicate): boolean {
+  return PredicateKind.ALL_OF === predicate.kind || PredicateKind.ANY_OF === predicate.kind;
 }
 
 /**
@@ -190,12 +186,18 @@ function clearStarvedWhenSiblingsSaw(
  * agent re-drives or walks away from — so the proof it was holding never reached anybody.
  *
  * `not` flips the polarity again, and nests, so this recurses rather than checking one level.
- * Composites (`allOf` / `anyOf`) deliberately fall through to `false`: a composite fails for a
- * reason this cannot name, and keeping the caveat is the conservative half of the trade — an
- * over-cautious `unknown` costs a re-drive, a missing one costs a wrong verdict.
+ *
+ * A composite reaches here only under a `not` (a bare one is answered by
+ * `decidedByAnAlreadyAnnotatedClause`). There the question is whether it could have PASSED by not
+ * seeing something, and `some` is the conservative answer: one clause that passes by absence makes
+ * the whole pass untrustworthy on a starved tab. An over-cautious `unknown` costs a re-drive, a
+ * missing one costs a wrong verdict.
  */
 function failureRestsOnSeeing(predicate: Predicate): boolean {
   if (PredicateKind.NOT === predicate.kind) return !failureRestsOnSeeing(predicate.predicate);
+  if (PredicateKind.ALL_OF === predicate.kind || PredicateKind.ANY_OF === predicate.kind) {
+    return predicate.predicates.some(failureRestsOnSeeing);
+  }
   if ('absent' in predicate && true === predicate.absent) return true;
   // `count: 0` is absence written as arithmetic, and fails the same way: by matching something.
   return 'count' in predicate && 0 === predicate.count;
