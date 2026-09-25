@@ -23,6 +23,13 @@ updates:
       # than pinned in each grouped PR, because pinning inside the group makes Dependabot supersede
       # the whole PR and take any review work on it with them. Remove this once #347 is resolved.
       - dependency-name: astro
+      # Babel 8 is ESM-only and renames the plugin types (`PluginObj` became `PluginObject`), so the
+      # bump in #965 failed typecheck in the CommonJS babel plugin and the Next adapter. Moving to it
+      # is a port of both packages while users stay on Babel 7, not a version bump. Remove this
+      # when that port is planned.
+      - dependency-name: '@babel/core'
+        update-types:
+          - version-update:semver-major
 
   # Keep the GitHub Actions themselves current AND pinned — Dependabot updates the pinned SHAs for us.
   - package-ecosystem: github-actions
