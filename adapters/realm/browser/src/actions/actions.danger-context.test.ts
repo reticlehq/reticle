@@ -104,3 +104,47 @@ describe('Enter in a form is judged by what it submits', () => {
     await expect(executeAction(refTo('#n'), 'press', { text: 'Escape' })).resolves.toBeDefined();
   });
 });
+
+/**
+ * Picking a value is not performing the act it feeds.
+ *
+ * Another false positive from the same field session, still live after the submit-control fix
+ * above: choosing "Inlet" from two radio-like choices was blocked.
+ *
+ * The reporter's summary is the cost, and it is why narrowing is the safe direction: "I ended up
+ * passing confirmDangerous: true reflexively on every action, which is how a safety guard becomes
+ * decoration." A guard that fires on picking a value is not protecting the destructive action
+ * either. The negative controls below are what keep the narrowing honest -- a false block costs a
+ * round trip, a missed block cannot be undone (#894).
+ */
+describe('a value picker is judged by what the choice feeds, not by the choice', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('does not block a radio whose label reads like the action it will cause', async () => {
+    document.body.innerHTML =
+      '<form action="/api/refund"><input type="radio" id="r" name="reason" aria-label="Refund">' +
+      '<button type="submit">Continue</button></form>';
+    await expect(executeAction(refTo('#r'), 'check')).resolves.toBeDefined();
+  });
+
+  it('still blocks the submit that the choice feeds', async () => {
+    // The act is the submit, judged on its own terms. That is the whole argument for exempting the
+    // choice, so it has to hold.
+    document.body.innerHTML =
+      '<form action="/api/refund"><input type="radio" id="r" name="reason" aria-label="Refund">' +
+      '<button type="submit" id="go">Issue refund</button></form>';
+    await expect(executeAction(refTo('#go'), 'click')).rejects.toThrow(/confirmDangerous/);
+  });
+
+  it('still blocks a checkbox, which is also how a one-click confirmation is spelled', async () => {
+    document.body.innerHTML = '<input type="checkbox" id="w" aria-label="Delete this repository">';
+    await expect(executeAction(refTo('#w'), 'check')).rejects.toThrow(/confirmDangerous/);
+  });
+
+  it('still blocks a menuitem, because a menu item labelled Delete IS one', async () => {
+    document.body.innerHTML = '<button role="menuitem" id="d">Delete project</button>';
+    await expect(executeAction(refTo('#d'), 'click')).rejects.toThrow(/confirmDangerous/);
+  });
+});
