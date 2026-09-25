@@ -88,3 +88,24 @@ export function isIgnored(el: Element): boolean {
   const sel = [ours, DEV_OVERLAYS, extraIgnore].filter((part) => part.length > 0).join(',');
   return el.closest(sel) !== null;
 }
+
+/** What an app's modal looks like: a native `<dialog>` shown modally, or a library's `aria-modal`. */
+const APP_MODAL = 'dialog[open], [aria-modal="true"]';
+
+/**
+ * Whether the app under test has a modal open, which is when Escape belongs to it and to nothing of
+ * ours.
+ *
+ * A native `<dialog open>` alone missed every React modal library (#1019): Radix, MUI and
+ * headless-ui render a `role="dialog"` element with `aria-modal="true"`. Some keep that element
+ * mounted and hidden while closed, so only a VISIBLE one counts, and Reticle's own UI never does.
+ */
+export function appModalOpen(doc: Document): boolean {
+  for (const el of Array.from(doc.querySelectorAll(APP_MODAL))) {
+    if (el.closest(RETICLE_OVERLAY) !== null) continue;
+    if (el instanceof HTMLElement && (el.hidden || null !== el.closest('[hidden]'))) continue;
+    if (el instanceof HTMLElement && 'none' === getComputedStyle(el).display) continue;
+    return true;
+  }
+  return false;
+}

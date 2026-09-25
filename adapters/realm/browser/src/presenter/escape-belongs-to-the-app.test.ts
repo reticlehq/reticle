@@ -67,6 +67,57 @@ describe('Escape and the app under test', { timeout: HUD_TIMEOUT_MS }, () => {
     p.destroy();
   });
 
+  /*
+   * #1019 (DivyamTalwar): the native-dialog check missed every React modal library. Radix, MUI and
+   * headless-ui render a `role="dialog"` element with `aria-modal="true"`, not a `<dialog>`.
+   */
+  it('leaves Escape alone while an aria-modal dialog from a component library is open', () => {
+    const p = new Presenter({});
+    p.mount();
+    p.sessionStart();
+    document.querySelector<HTMLElement>('[data-reticle-fab]')?.click();
+    expect(overlay()?.getAttribute(CHAT_ATTR)).toBe('1');
+    const modal = document.createElement('div');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    document.body.appendChild(modal);
+
+    pressEscape();
+
+    expect(overlay()?.getAttribute(CHAT_ATTR), "our chat closed on the modal's Escape").toBe('1');
+    p.destroy();
+  });
+
+  it('leaves an Escape the app already handled to the app', () => {
+    const p = new Presenter({});
+    p.mount();
+    p.sessionStart();
+    document.querySelector<HTMLElement>('[data-reticle-fab]')?.click();
+    const handled = (e: KeyboardEvent): void => {
+      if ('Escape' === e.key) e.preventDefault();
+    };
+    document.body.addEventListener('keydown', handled);
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    document.body.dispatchEvent(event);
+    document.body.removeEventListener('keydown', handled);
+    expect(overlay()?.getAttribute(CHAT_ATTR)).toBe('1');
+    p.destroy();
+  });
+
+  it('does not count a hidden aria-modal element as an open modal', () => {
+    const p = new Presenter({});
+    p.mount();
+    p.sessionStart();
+    document.querySelector<HTMLElement>('[data-reticle-fab]')?.click();
+    const kept = document.createElement('div');
+    kept.setAttribute('aria-modal', 'true');
+    kept.hidden = true;
+    document.body.appendChild(kept);
+    pressEscape();
+    expect(overlay()?.getAttribute(CHAT_ATTR)).toBeNull();
+    p.destroy();
+  });
+
   /* The feature itself survives: with no modal in the way, Escape still closes our chat. */
   it('still closes the chat when nothing in the app wants the key', () => {
     const p = new Presenter({});

@@ -34,6 +34,7 @@ import {
 } from './tour-view.js';
 import { TourAnchor } from '@reticlehq/core/tour';
 import { RETICLE_URL_PARAM } from '@reticlehq/core';
+import { appModalOpen } from '@/dom/dom-ignore.js';
 
 /** Where "they have seen it" is remembered. Per project, so a second app still gets its tour. */
 export const TOUR_SEEN_KEY_PREFIX = 'reticle.tour.seen.';
@@ -454,7 +455,7 @@ export function mountTour(deps: TourDeps): TourHandle | undefined {
      * browser's own close request, so while the app has a modal open the tour does not take Escape.
      * It is still dismissable by its own Skip control, and by the click that was closing it anyway.
      */
-    if (doc.querySelector('dialog[open]') !== null) return;
+    if (appModalOpen(doc)) return;
     const step = 'ArrowRight' === event.key ? 1 : 'ArrowLeft' === event.key ? -1 : 0;
     if ('Escape' === event.key) {
       event.preventDefault();

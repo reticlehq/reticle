@@ -1,3 +1,4 @@
+import { appModalOpen } from '@/dom/dom-ignore.js';
 import type { HarnessConfig } from '@reticlehq/core';
 import { PresenterReport, reportPanelHtml } from './presenter-report.js';
 import type { AccountState } from '@reticlehq/core';
@@ -573,7 +574,9 @@ export class HudShell {
    */
   #onKeyDown = (e: KeyboardEvent): void => {
     if ('Escape' !== e.key || this.#root === undefined) return;
-    if (document.querySelector('dialog[open]') !== null) return;
+    // The app already acted on it: it is the app's Escape, whatever else is open.
+    if (e.defaultPrevented) return;
+    if (appModalOpen(document)) return;
     const target = e.target;
     if (
       target instanceof HTMLElement &&
