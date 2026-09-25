@@ -13,6 +13,7 @@ import { chromium } from 'playwright';
 import { writeFileSync } from 'node:fs';
 import { ReticleAdapter } from './adapters.mjs';
 import { suiteSteps } from './suite-flows.mjs';
+import { measure } from './tokenizer.mjs';
 import { pathToFileURL } from 'node:url';
 
 const URL = process.env.BENCH_URL ?? 'http://localhost:4312/';
@@ -51,6 +52,9 @@ async function compiledPlaywright() {
     end_to_end_ms: Date.now() - t0,
     llm_tokens: 0,
     report_bytes: Buffer.byteLength(report),
+    // What an agent pays to READ the result. Neither side calls a model, so this is the only token
+    // cost either one has, and a pass that recorded none was rejected as having measured nothing.
+    report_tokens: measure(report).tokens_o200k,
   };
 }
 
@@ -81,6 +85,7 @@ async function reticleReplay() {
     verify_call_ms: done - loggedIn,
     llm_tokens: 0,
     report_bytes: Buffer.byteLength(text),
+    report_tokens: measure(text).tokens_o200k,
   };
 }
 
