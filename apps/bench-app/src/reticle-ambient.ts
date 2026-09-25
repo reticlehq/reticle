@@ -30,6 +30,8 @@ export const Ambient = {
   POLL: 'poll',
   /** A mount effect React StrictMode invokes twice in dev — one write, two requests. */
   STRICT_DUP: 'strictdup',
+  /** FIRST-party telemetry that never comes back in time: a per-interaction ping the server holds. */
+  HANG: 'hang',
 } as const;
 export type Ambient = (typeof Ambient)[keyof typeof Ambient];
 
@@ -48,6 +50,8 @@ const AD_NETWORK_PIXEL_URL = 'https://ads.tracker-network.invalid/px.gif';
 
 /** The app's own endpoints. `/api/broken/500` answers 500 every time — a first-party failure. */
 const FIRST_PARTY_FAILING_URL = `${API_BASE}/api/broken/500`;
+/** The app's own analytics endpoint, which the demo API holds open (the field report in #984). */
+const FIRST_PARTY_HANGING_URL = `${API_BASE}/api/analytics/events`;
 
 /**
  * Cadences — and why an interval alone is not enough.
@@ -134,6 +138,9 @@ export function installAmbientTraffic(): void {
     ping();
     setInterval(ping, POLL_INTERVAL_MS);
     onEveryClick(ping);
+  }
+  if (ambientEnabled(Ambient.HANG)) {
+    onEveryClick(() => post(FIRST_PARTY_HANGING_URL, { event: 'interaction' }));
   }
   // STRICT_DUP is not installed here — a double-invoked effect only happens inside React, so it
   // lives in the component that mounts (views/SavedItems.tsx). Faking it from here would produce two
