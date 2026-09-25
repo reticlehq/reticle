@@ -250,6 +250,11 @@ describe('arriveAtStartPath — replay navigates to the flow start page before s
     );
     expect(arrived.session).toBe(fresh);
     expect(arrived.resetCost).toContain('requires');
+    // No tool writes `requires`, so the hint carries the exact line to add: the flow's own first
+    // anchor as its precondition, which is what "starts from state a reload discards" means here.
+    expect(arrived.resetCost).toContain(
+      '"requires":[{"kind":"element","query":{"testid":"submit"}}]',
+    );
   });
 
   it('is silent when the anchor survives the reload', async () => {

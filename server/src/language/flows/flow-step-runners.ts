@@ -11,11 +11,13 @@ import {
   AnchorKind,
   DEGRADED_ANCHOR_ROLE,
   DriftReason,
+  PredicateKind,
   QueryBy,
   ReticleCommand,
   type FlowAnchor,
   type FlowStep,
   type FlowStepResult,
+  type Predicate,
 } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { replayActionArgs } from './replay.js';
@@ -324,6 +326,22 @@ export function anchorQueryArgs(anchor: FlowAnchor): Record<string, unknown> | n
   if (anchor.kind === AnchorKind.COMPONENT) return componentQueryArgs(anchor);
   if (anchor.kind === AnchorKind.ROLE && !isDegradedAnchor(anchor)) return roleQueryArgs(anchor);
   return null;
+}
+
+/**
+ * The anchor as a PRECONDITION a flow file can store: "this element is on the page".
+ *
+ * What `requires` means for a flow that starts from state a page load discards, in the shape the
+ * flow's own `requires` holds. No tool writes `requires`, so the reset's hint hands over this line.
+ */
+export function anchorPrecondition(anchor: FlowAnchor): Predicate | undefined {
+  if (anchor.kind === AnchorKind.TESTID) {
+    return { kind: PredicateKind.ELEMENT, query: { testid: anchor.value } };
+  }
+  if (anchor.kind === AnchorKind.ROLE && !isDegradedAnchor(anchor)) {
+    return { kind: PredicateKind.ELEMENT, query: { role: anchor.role, name: anchor.name } };
+  }
+  return undefined;
 }
 
 /**

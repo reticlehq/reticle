@@ -25,7 +25,7 @@ import { carryReticleIdentity } from '@/surface/tools/lease-tools.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { Session } from '@/portal/session/session.js';
 import { replayFlow } from './flow-replay.js';
-import { anchorQueryArgs } from './flow-step-runners.js';
+import { anchorPrecondition, anchorQueryArgs } from './flow-step-runners.js';
 import { queryRefs } from './replay.js';
 import { assertSuccess, dynamicTestids, successLabel, SUCCESS_STEP_TOOL } from './flow-success.js';
 import { buildDecision, unverifiableReason } from './decision.js';
@@ -423,8 +423,27 @@ export async function arriveAtStartPath(
   if (!resolvedBefore || (await firstStepResolvesHere(arrived, flow))) return { session: arrived };
   return {
     session: arrived,
-    resetCost: `replay reloaded ${target} before step 1 and the first anchor did not come back — this flow starts from state a page load discards. Declare what it needs (\`requires\`) to opt out of the reset, or record it from a cold page`,
+    resetCost: resetCostHint(flow, target),
   };
+}
+
+/**
+ * Why step 1 failed after the reset, and the one line that opts the flow out.
+ *
+ * No tool writes `requires`, so naming the field was advice nobody could act on without guessing its
+ * shape. The first anchor IS the precondition: the element step 1 needs, present before it runs.
+ */
+function resetCostHint(flow: FlowFile, target: string): string {
+  const first = flow.steps?.[0];
+  const needs = first === undefined ? undefined : anchorPrecondition(first.anchor);
+  const optOut =
+    needs === undefined
+      ? 'Declare what it needs (`requires`) in the flow file to opt out of the reset'
+      : `Add \`"requires":${JSON.stringify([needs])}\` to the flow file to opt out of the reset`;
+  return (
+    `replay reloaded ${target} before step 1 and the first anchor did not come back — this flow ` +
+    `starts from state a page load discards. ${optOut}, or record it from a cold page`
+  );
 }
 
 /**
