@@ -123,7 +123,7 @@ Work down this list and stop at the first row that fits. Do not hand-drive a flo
 | "Did my edit break anything?" | `reticle_verify({ action: "change", files: ["src/App.tsx"] })` | 1 |
 | "Does every saved journey still work?" | `reticle_verify({ action: "flows" })` | 1 |
 | "Does this new behaviour work?" | ONE `reticle_act_and_wait` with `until` | 1 |
-| No MCP available at all | `npx @reticlehq/server verify <url>` in the shell | 1, no MCP |
+| No MCP available at all | `npx @reticlehq/server verify <url>`, then `gate --since HEAD~1` (below); `verify` has no `--since` | 2, no MCP |
 
 Replay before you drive. A covered journey re-verifies for a few hundred tokens; driving it costs tens of thousands, because driving spends turns and replay spends none.
 
@@ -153,7 +153,7 @@ Whether that flow is worth anything depends on how you drove it. A step keeps a 
 
 ## Before you say you are done
 
-`npx @reticlehq/server gate --since HEAD~1` exits non-zero unless a passing artifact covers every saved flow your edits affect, and names the uncovered ones. You cannot satisfy it by reasoning about your diff, and it is a shell command, so it works when the tools do not.
+`npx @reticlehq/server gate --since HEAD~1` exits non-zero unless a passing run covers every saved flow your edit affects, naming the uncovered ones. Reasoning about your diff cannot pass it; as a shell command it works when the tools do not.
 
 ## When you do have to drive by hand
 
