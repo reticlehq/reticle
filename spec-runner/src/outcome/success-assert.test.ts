@@ -78,7 +78,7 @@ describe('assertSuccess', () => {
 
   it('passes vacuously when every success field was dynamic-skipped', async () => {
     const { wait, calls } = recordingWait({ pass: false });
-    const success: FlowExpect = { element: { testid: 'ai-output' } };
+    const success: Predicate = { kind: 'element', query: { testid: 'ai-output' } };
     const r = await assertSuccess(fakeSession, success, new Set(['ai-output']), wait, 4000);
     expect(r.pass).toBe(true);
     expect(calls).toHaveLength(0);
@@ -86,7 +86,7 @@ describe('assertSuccess', () => {
 
   it('passes when the injected waiter reports the predicate held', async () => {
     const { wait, calls } = recordingWait({ pass: true, evidence: { name: 'flow:done' } });
-    const success: FlowExpect = { signal: 'flow:done' };
+    const success: Predicate = { kind: 'signal', name: 'flow:done' };
     const r = await assertSuccess(fakeSession, success, new Set(), wait, 4000);
     expect(r.pass).toBe(true);
     expect(calls[0]?.predicate).toEqual({ kind: 'signal', name: 'flow:done' });
@@ -98,7 +98,7 @@ describe('assertSuccess', () => {
       failureReason: "signal 'flow:done' fired 1x but data didn't match",
       evidence: { nearMiss: [{ stale: true }] },
     });
-    const success: FlowExpect = { signal: 'flow:done' };
+    const success: Predicate = { kind: 'signal', name: 'flow:done' };
     const r = await assertSuccess(fakeSession, success, new Set(), wait, 4000);
     expect(r.pass).toBe(false);
     expect(r.failureReason).toContain('flow:done');
@@ -107,7 +107,7 @@ describe('assertSuccess', () => {
 
   it('passes the injected timeout through to the waiter (never wall-clock)', async () => {
     const { wait, calls } = recordingWait({ pass: true });
-    const success: FlowExpect = { signal: 'flow:done' };
+    const success: Predicate = { kind: 'signal', name: 'flow:done' };
     await assertSuccess(fakeSession, success, new Set(), wait, 10);
     expect(calls[0]?.timeoutMs).toBe(10);
   });

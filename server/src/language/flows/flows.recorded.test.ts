@@ -97,7 +97,10 @@ describe('FlowStore.saveFlow — temp-dir fs', () => {
       createdAt: FROZEN,
       steps: [{ ...clickStep('pay'), expect: { signal: 'x', signl: 'typo' } }],
     };
-    const saved = await store.saveFlow(malformed as FlowFile);
+    // `as unknown as` and not `as FlowFile`: the fixture is deliberately NOT a FlowFile, and since
+    // `expect` became a `Predicate` the compiler can say so. The cast is the test's subject — a
+    // codemod once 'fixed' this literal into a valid one and left the refusal proving nothing.
+    const saved = await store.saveFlow(malformed as unknown as FlowFile);
     expect(saved.ok).toBe(false);
     if (saved.ok) return;
     expect(saved.code).toBe(FlowErrorCode.PARSE_FAILED);

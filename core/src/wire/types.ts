@@ -1,4 +1,5 @@
 import type { Ref } from '@/identity/brand.js';
+import type { Predicate } from '@/verdict/predicate.js';
 import { z } from 'zod';
 import { CONTRACT_FILE_VERSION, ElementState, QueryBy } from './constants/constants.js';
 // Imported from where they actually live: these are artifact constants, not wire constants.
@@ -11,7 +12,6 @@ import {
   RunStatus,
 } from '@/artifacts/flow-constants.js';
 import { RiskSurface } from '@/verdict/verification-run.js';
-import type { FlowExpect } from '@/artifacts/flow-types.js';
 
 /**
  * Attribute NAMES to project. `name=value` is refused, never quietly half-honoured.
@@ -454,11 +454,11 @@ export type AnnotateResult =
 export interface AnnotatePatch {
   /** index of the step whose.expect is set (assert-signal / assert-visible). */
   stepIndex?: number;
-  stepExpect?: FlowExpect;
+  stepExpect?: Predicate;
   /** the testid pushed into flow.dynamic[] (mark-dynamic). */
   dynamicAdd?: string;
   /** flow.success (success-state). */
-  success?: FlowExpect;
+  success?: Predicate;
   /** flow.intent (intent) — the business goal this flow exists to verify. */
   intent?: string;
 }

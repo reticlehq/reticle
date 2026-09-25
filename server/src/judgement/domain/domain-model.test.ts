@@ -3,7 +3,7 @@ import {
   FLOW_FILE_VERSION,
   AnchorKind,
   type CapabilitiesContract,
-  type FlowExpect,
+  type Predicate,
   type FlowFile,
   type FlowStep,
 } from '@reticlehq/core';
@@ -14,7 +14,7 @@ function testidStep(value: string): FlowStep {
   return { tool: ReticleTool.ACT, anchor: { kind: AnchorKind.TESTID, value } };
 }
 
-function flow(name: string, steps: FlowStep[], success?: FlowExpect): FlowFile {
+function flow(name: string, steps: FlowStep[], success?: Predicate): FlowFile {
   const f: FlowFile = { version: FLOW_FILE_VERSION, name, createdAt: 0, steps };
   if (success !== undefined) f.success = success;
   return f;
@@ -30,7 +30,7 @@ const contract = (over: Partial<CapabilitiesContract> = {}): CapabilitiesContrac
 describe('buildDomainModel', () => {
   it('summarizes each flow with its assertion grade + anchors used', () => {
     const m = buildDomainModel(
-      [flow('checkout', [testidStep('pay')], { signal: 'order:placed' })],
+      [flow('checkout', [testidStep('pay')], { kind: 'signal', name: 'order:placed' })],
       contract(),
     );
     expect(m.flowCount).toBe(1);
@@ -44,7 +44,7 @@ describe('buildDomainModel', () => {
   it('surfaces mustHold — what must hold for each flow — from its success consequence', () => {
     const m = buildDomainModel(
       [
-        flow('checkout', [testidStep('pay')], { signal: 'order:placed' }),
+        flow('checkout', [testidStep('pay')], { kind: 'signal', name: 'order:placed' }),
         flow('browse', [testidStep('nav')]), // no success declared
       ],
       contract(),
@@ -58,7 +58,7 @@ describe('buildDomainModel', () => {
 
   it('flags declared signals that NO flow asserts (untested intent — the differentiator)', () => {
     const m = buildDomainModel(
-      [flow('checkout', [testidStep('pay')], { signal: 'order:placed' })],
+      [flow('checkout', [testidStep('pay')], { kind: 'signal', name: 'order:placed' })],
       contract({ signals: ['order:placed', 'refund:issued'], testids: ['pay', 'refund-btn'] }),
     );
     expect(m.gaps.declaredUntestedSignals).toEqual(['refund:issued']);
@@ -68,7 +68,10 @@ describe('buildDomainModel', () => {
 
   it('lists unasserted flows as a gap', () => {
     const m = buildDomainModel(
-      [flow('browse', [testidStep('nav')]), flow('buy', [testidStep('pay')], { signal: 'done' })],
+      [
+        flow('browse', [testidStep('nav')]),
+        flow('buy', [testidStep('pay')], { kind: 'signal', name: 'done' }),
+      ],
       contract(),
     );
     expect(m.gaps.unassertedFlows).toEqual(['browse']);
@@ -77,7 +80,7 @@ describe('buildDomainModel', () => {
   });
 
   it('handles no contract (null) without crashing', () => {
-    const m = buildDomainModel([flow('f', [testidStep('a')], { signal: 's' })], null);
+    const m = buildDomainModel([flow('f', [testidStep('a')], { kind: 'signal', name: 's' })], null);
     expect(m.declared.signals).toEqual([]);
     expect(m.gaps.declaredUntestedSignals).toEqual([]);
   });
@@ -90,8 +93,8 @@ describe('buildDomainModel', () => {
 
   it('risk-ranks flows worst-first when run history is supplied', () => {
     const flows = [
-      flow('clean', [testidStep('a')], { signal: 's' }), // asserted + (will pass clean)
-      flow('broken', [testidStep('b')], { signal: 't' }), // asserted but last run errored
+      flow('clean', [testidStep('a')], { kind: 'signal', name: 's' }), // asserted + (will pass clean)
+      flow('broken', [testidStep('b')], { kind: 'signal', name: 't' }), // asserted but last run errored
     ];
     const runs = [
       { kind: 'flow_replay', name: 'clean', status: 'pass', at: 1 },
@@ -106,7 +109,7 @@ describe('buildDomainModel', () => {
   });
 
   it('omits the "test first" headline when the top flow is only low risk', () => {
-    const flows = [flow('clean', [testidStep('a')], { signal: 's' })];
+    const flows = [flow('clean', [testidStep('a')], { kind: 'signal', name: 's' })];
     const runs = [{ kind: 'flow_replay', name: 'clean', status: 'pass', at: 1 }] as Parameters<
       typeof buildDomainModel
     >[2];
@@ -124,7 +127,7 @@ describe('buildDomainModel', () => {
   });
 
   it('omits risk entirely when no run history is supplied', () => {
-    const m = buildDomainModel([flow('f', [testidStep('a')], { signal: 's' })], null);
+    const m = buildDomainModel([flow('f', [testidStep('a')], { kind: 'signal', name: 's' })], null);
     expect(m.flows[0]?.risk).toBeUndefined();
     expect(m.riskRanked).toEqual([]);
   });

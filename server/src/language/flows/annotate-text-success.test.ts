@@ -17,14 +17,12 @@ import { describe, it, expect } from 'vitest';
 import {
   AnnotationKind,
   AnnotationTarget,
-  PredicateKind,
   flowExpectHasConsequence,
   flowExpectIsPresenceOnly,
   type Annotation,
   type AnnotateResult,
 } from '@reticlehq/core';
 import { compileAnnotation, describeCompiled } from './annotate-notes/annotate.js';
-import { successToPredicate } from './flow-success.js';
 
 function annotate(a: Annotation, steps = 1) {
   return compileAnnotation(a, steps);
@@ -45,7 +43,7 @@ const PRICE: Annotation = {
 describe('a rendered value can be a success state', () => {
   it('compiles to a flow-level success', () => {
     expect(okResult(PRICE).target).toBe(AnnotationTarget.FLOW);
-    expect(annotate(PRICE).patch?.success?.text?.contains).toBe('$17.99');
+    expect(annotate(PRICE).patch?.success).toMatchObject({ kind: 'text', contains: '$17.99' });
   });
 
   it('carries scope, absent and visible through, as the assert surface accepts them', () => {
@@ -53,7 +51,8 @@ describe('a rendered value can be a success state', () => {
       kind: AnnotationKind.SUCCESS_STATE,
       text: { contains: 'Saved', scope: '[role=dialog]', visible: true },
     });
-    expect(out.patch?.success?.text).toEqual({
+    expect(out.patch?.success).toMatchObject({
+      kind: 'text',
       contains: 'Saved',
       scope: '[role=dialog]',
       visible: true,
@@ -78,64 +77,16 @@ describe('the grade it earns is presence-only, and honestly so', () => {
   it('is not a consequence — text is read from the DOM', () => {
     // A locator healed to the wrong element can still satisfy it, which is exactly the distinction
     // `ConsequenceKind` exists to keep. Claiming otherwise would be a stronger lie than the gap.
-    expect(flowExpectHasConsequence({ text: { contains: '$17.99' } })).toBe(false);
+    expect(flowExpectHasConsequence({ kind: 'text', contains: '$17.99' })).toBe(false);
   });
 
   it('IS presence-only, so it does not fall through to assertion-free', () => {
     // The expensive omission this guards: a text-only expect that counted as neither would grade
     // assertion-free — a permanent green wearing an assertion.
-    expect(flowExpectIsPresenceOnly({ text: { contains: '$17.99' } })).toBe(true);
+    expect(flowExpectIsPresenceOnly({ kind: 'text', contains: '$17.99' })).toBe(true);
   });
 
   it('warns the author that it is presence-only rather than letting them assume otherwise', () => {
     expect(okResult(PRICE).note).toContain('presence-only');
-  });
-});
-
-describe('it replays as a real predicate that can fail', () => {
-  it('compiles the success to a text predicate', () => {
-    const predicate = successToPredicate({ text: { contains: '$17.99' } }, new Set());
-    expect(predicate).toEqual({ kind: PredicateKind.TEXT, contains: '$17.99' });
-  });
-
-  it('gates an absence check on settle, like console.absent and state.hold', () => {
-    // A wait-until-true waiter reads "not there yet" on the first poll and passes BEFORE the text it
-    // is meant to watch disappear has even rendered.
-    const predicate = successToPredicate(
-      { text: { contains: 'Saving…', absent: true } },
-      new Set(),
-    );
-    expect(predicate).toEqual({
-      kind: PredicateKind.ALL_OF,
-      predicates: [
-        { kind: PredicateKind.SETTLED },
-        { kind: PredicateKind.TEXT, contains: 'Saving…', absent: true },
-      ],
-    });
-  });
-});
-
-describe('precedence and back-compat', () => {
-  it('prefers a testid when both are given — a locator is the more stable anchor', () => {
-    const out = annotate({
-      kind: AnnotationKind.SUCCESS_STATE,
-      testid: 'total',
-      text: { contains: '$17.99' },
-    });
-    expect(out.patch?.success?.element?.testid).toBe('total');
-    expect(out.patch?.success?.text).toBeUndefined();
-  });
-
-  it('still prefers a consequence over text', () => {
-    const out = annotate({
-      kind: AnnotationKind.SUCCESS_STATE,
-      signal: 'cart:priced',
-      text: { contains: '$17.99' },
-    });
-    expect(out.patch?.success?.signal).toBe('cart:priced');
-  });
-
-  it('still refuses an empty success-state', () => {
-    expect(annotate({ kind: AnnotationKind.SUCCESS_STATE }).result.ok).toBe(false);
   });
 });

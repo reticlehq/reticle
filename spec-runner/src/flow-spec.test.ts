@@ -4,6 +4,7 @@ import {
   DriftReason,
   FLOW_FILE_VERSION,
   FlowErrorCode,
+  PredicateKind,
   ReticleCommand,
   type CommandResult,
   type FlowFile,
@@ -190,7 +191,7 @@ function testidStepFlow(opts: {
         anchor: { kind: AnchorKind.TESTID, value: opts.stepTestid },
         action: 'click',
         ...(opts.expectTestid !== undefined
-          ? { expect: { element: { testid: opts.expectTestid } } }
+          ? { expect: { kind: PredicateKind.ELEMENT, query: { testid: opts.expectTestid } } }
           : {}),
       },
     ],
@@ -207,7 +208,7 @@ describe('flowToSpec — RUNNABLE', () => {
     const flow = testidStepFlow({
       name: 'save-draft',
       stepTestid: 'save-btn',
-      success: { signal: 'flow:done' },
+      success: { kind: PredicateKind.SIGNAL, name: 'flow:done' },
     });
     const events = [signalEvent('flow:done')];
     const spec = flowToSpec(flow, { waitForSignal: signalWait(events) });
@@ -234,7 +235,7 @@ describe('flowToSpec — RUNNABLE', () => {
     const flow = testidStepFlow({
       name: 'save-draft',
       stepTestid: 'save-btn',
-      success: { signal: 'flow:done' },
+      success: { kind: PredicateKind.SIGNAL, name: 'flow:done' },
     });
     const spec = flowToSpec(flow, { waitForSignal: signalWait([]) });
     const result = await spec.run(fakeSession({ testids: ['save-btn'], events: [] }));
@@ -285,7 +286,7 @@ describe('flowToSpec — RUNNABLE', () => {
     const flow = testidStepFlow({
       name: 'ai-flow',
       stepTestid: 'gen-btn',
-      success: { element: { testid: 'ai-output' } },
+      success: { kind: PredicateKind.ELEMENT, query: { testid: 'ai-output' } },
       dynamic: ['ai-output'],
     });
     const spec = flowToSpec(flow, { waitForSignal: signalWait([]) });
@@ -306,7 +307,7 @@ describe('flowToSpec — RUNNABLE', () => {
     const flow = testidStepFlow({
       name: 'save-draft',
       stepTestid: 'save-btn',
-      success: { signal: 'flow:done' },
+      success: { kind: PredicateKind.SIGNAL, name: 'flow:done' },
     });
     const seen: number[] = [];
     const recordingWait = (_s: unknown, _p: unknown, timeoutMs: number): Promise<EvalResult> => {

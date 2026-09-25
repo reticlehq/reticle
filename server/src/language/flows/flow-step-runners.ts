@@ -6,6 +6,7 @@
  * point: the action window must open and close identically no matter which anchor found the element,
  * or a step's events land in the wrong window depending on how it was addressed.
  */
+import { expectedElementTestid } from '@reticlehq/core';
 import {
   AnchorKind,
   DEGRADED_ANCHOR_ROLE,
@@ -401,7 +402,7 @@ export async function runSequenceStep(
 
   /** The sub-step's own expectation, unless its testid is deliberately unasserted. */
   const declaredBy = (sub: FlowStep): string | undefined => {
-    const testid = sub.expect?.element?.testid;
+    const testid = expectedElementTestid(sub.expect);
     return testid === undefined || dynamic.has(testid) ? undefined : testid;
   };
 

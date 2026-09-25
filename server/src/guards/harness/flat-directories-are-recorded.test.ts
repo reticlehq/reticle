@@ -84,8 +84,16 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * an unproved verdict is — that is read where a verdict is emitted — so a separate module lets the
    * bundler drop it. Two guards pulling opposite ways, and the one about a cost every developer pays
    * on every page load wins over the one about how many files sit in a directory.
+   *
+   * 15 since `predicate-tree.ts`, and it is the same trade a second time. A step's `expect` became a
+   * `Predicate`, so replay has to read INSIDE the tree — drop the element clause a healed locator
+   * would fake, ask whether a state is asserted — and the reader for that was living in
+   * `server/src/language/flows`. The `directory-reach` guard refused it there the moment `journal`
+   * needed it too, and its own advice ("most reaches were a file filed somewhere odd") was right:
+   * a shallow walk over the contract's own type belongs beside the contract. Moving it here took a
+   * cross-layer reach out of the server and left the file count as the only cost.
    */
-  'core/src/verdict': 14,
+  'core/src/verdict': 15,
   'core/src/wire': 16,
   // 16 since `snapshot-tree.ts`. The snapshot tree is a format the BROWSER writes and several
   // things on the Node side read back, and its parser was living beside the MCP tool handlers — so
@@ -110,7 +118,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * leaf the browser can import without the schemas is still the right shape, and the guard's
    * ceiling was raised with that reasoning written beside it.
    */
-  'core/src/artifacts': 13,
+  'core/src/artifacts': 14,
   'engine/src/evidence': 18,
   // 18 since the last two cycles in this package were removed: `predicate-eval-kit.ts` (the result
   // type and the four comparisons the oracles are written in) and `predicate-session.ts` (what the

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { consequencesFor } from '@/features/harness/jev-driver.js';
-import { enforcedOnReplay, predicateToExpect } from './predicate-to-expect.js';
 import { PredicateSchema } from '@reticlehq/engine/question/predicate/predicate.js';
 
 /**
@@ -26,10 +25,12 @@ import { PredicateSchema } from '@reticlehq/engine/question/predicate/predicate.
  * leave a regression test behind.
  */
 
-const recordable = (predicate: Record<string, unknown>): boolean => {
-  const parsed = PredicateSchema.safeParse(predicate);
-  return parsed.success && undefined !== enforcedOnReplay(predicateToExpect(parsed.data));
-};
+/**
+ * Can a saved flow carry this? Since `FlowStep.expect` became a `Predicate`, the answer is "any
+ * predicate the schema accepts" — there is no longer a second, narrower format to squeeze through.
+ */
+const savable = (predicate: Record<string, unknown>): boolean =>
+  PredicateSchema.safeParse(predicate).success;
 
 describe('what the harness declares and what a flow can keep', () => {
   const offers = consequencesFor('/settings', ['export:generated', 'order:placed']);
@@ -38,10 +39,19 @@ describe('what the harness declares and what a flow can keep', () => {
     expect(Object.keys(offers).length).toBeGreaterThan(0);
   });
 
-  /** The field is a claim about the recorder, so it is checked against the recorder itself. */
-  it('marks each consequence honestly, rather than hopefully', () => {
+  /*
+   * The field is a PROMISE, and this checks the promise is never broken: anything marked recordable
+   * really can be saved. It used to be a biconditional, because the flat format could not hold an
+   * `anyOf` or a `not` and the two had to agree exactly on what was impossible.
+   *
+   * Nothing is impossible any more. A predicate round-trips whole, negations included, so the two
+   * offers still marked `recordable: false` are a judgement that they are not WORTH saving rather
+   * than a statement that they cannot be — and that judgement is the harness's to make, not this
+   * migration's. Worth revisiting on its own terms now that the constraint behind it is gone.
+   */
+  it('never promises a consequence a flow could not keep', () => {
     const wrong = Object.entries(offers)
-      .filter(([, c]) => recordable(c.predicate) !== c.recordable)
+      .filter(([, c]) => c.recordable && !savable(c.predicate))
       .map(([name, c]) => `${name}: recordable=${String(c.recordable)} but the recorder disagrees`);
     expect(wrong, wrong.join('\n')).toEqual([]);
   });
@@ -78,9 +88,13 @@ describe('what the harness declares and what a flow can keep', () => {
   /**
    * Kept deliberately, and the reason is written where somebody deleting it will read it: without
    * this, every nav link on a client-routed app is handed a declaration it cannot satisfy.
+   *
+   * The second assertion INVERTED, and that is the migration showing through. A negation had no
+   * representation the flat format could hold, so "drive-only" was a fact about the file. A
+   * predicate keeps a `not` whole, so it is now a fact about what we choose to offer.
    */
-  it('keeps the drive-only route negation, and does not pretend it saves', () => {
+  it('keeps the route negation drive-only, though the format could now save it', () => {
     expect(offers['navigates']?.recordable).toBe(false);
-    expect(recordable(offers['navigates']?.predicate ?? {})).toBe(false);
+    expect(savable(offers['navigates']?.predicate ?? {})).toBe(true);
   });
 });

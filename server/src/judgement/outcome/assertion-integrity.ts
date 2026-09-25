@@ -1,7 +1,7 @@
 import {
   flowExpectHasConsequence,
   flowExpectIsPresenceOnly,
-  type FlowExpect,
+  type Predicate,
 } from '@reticlehq/core';
 
 /**
@@ -14,15 +14,15 @@ import {
 
 /** True when `after` weakened `before` — a real consequence became a fakeable presence-only check. */
 export function isAssertionDowngrade(
-  before: FlowExpect | undefined,
-  after: FlowExpect | undefined,
+  before: Predicate | undefined,
+  after: Predicate | undefined,
 ): boolean {
   return flowExpectHasConsequence(before) && flowExpectIsPresenceOnly(after);
 }
 
 export interface StepExpect {
   step: number;
-  expect?: FlowExpect;
+  expect?: Predicate;
 }
 
 interface DowngradeFinding {

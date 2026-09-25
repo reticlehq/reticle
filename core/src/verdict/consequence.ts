@@ -55,6 +55,20 @@ export type PredicateKind = (typeof PredicateKind)[keyof typeof PredicateKind];
 export const CONSEQUENCE_KINDS: ReadonlySet<string> = new Set(Object.values(ConsequenceKind));
 const PRESENCE_KINDS: ReadonlySet<string> = new Set(Object.values(PresenceKind));
 
+/**
+ * The kinds that grade a flow as PRESENCE-ONLY rather than assertion-free.
+ *
+ * `element` and `text` are the weak checks `PresenceKind` names. `route` joins them here and only
+ * here: a route change is observed on a channel rather than queried from the DOM, so it is not a
+ * presence check in the sense `isPresenceKind` means, but a route-only expect must still grade as
+ * presence rather than falling through to `assertion-free` — which would be a permanent green
+ * wearing an assertion.
+ */
+export const PRESENCE_GRADED: ReadonlySet<string> = new Set([
+  ...PRESENCE_KINDS,
+  PredicateKind.ROUTE,
+]);
+
 /** True when `kind` (a predicate/expect kind) asserts a consequence (signal/net/state). */
 export function isConsequenceKind(kind: string): boolean {
   return CONSEQUENCE_KINDS.has(kind);

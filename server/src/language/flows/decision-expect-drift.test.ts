@@ -34,7 +34,7 @@ const flow = {
         source: { file: 'src/components/Login.tsx', line: 81, column: 8 },
       },
       action: 'click',
-      expect: { element: { testid: 'nav-deployments' } },
+      expect: { kind: 'element', query: { testid: 'nav-deployments' } },
     },
   ],
 } as unknown as FlowFile;

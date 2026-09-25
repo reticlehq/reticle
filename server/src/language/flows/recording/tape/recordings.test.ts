@@ -159,8 +159,27 @@ describe('RecordingStore', () => {
       { testid: 'counter' },
     );
     expect(store.stop('trip')?.steps[0]?.expect).toEqual({
-      element: { role: 'button', name: '0 Clicks' },
+      kind: 'element',
+      query: { role: 'button', name: '0 Clicks' },
     });
+  });
+
+  // A ref is this session's address. Saved, it resolves to nothing on replay, and a missing scope
+  // SATISFIES an absence check — so the step would be green forever. Record nothing instead: the
+  // flow then grades assertion-free, which is visible, rather than asserted, which is a lie.
+  it('does not record an until scoped to a session ref', () => {
+    const store = new RecordingStore();
+    store.start('trip', 0);
+    captureAct(
+      store,
+      {
+        ref: 'e1',
+        action: ActionType.CLICK,
+        until: { kind: 'text', contains: 'Error', absent: true, scope: 'e12' },
+      },
+      { testid: 'counter' },
+    );
+    expect(store.stop('trip')?.steps[0]?.expect).toBeUndefined();
   });
 });
 

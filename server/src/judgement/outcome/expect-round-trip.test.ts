@@ -1,55 +1,97 @@
 /**
- * Saving a compound assertion must not quietly save a smaller one (0.1).
+ * A compound assertion survives being saved, whole.
  *
- * `FlowExpect` is a flat struct with one slot per kind, and `merge` is `{ ...from, ...into }` — a
- * shallow spread where the EARLIER arm wins a key collision. So `allOf[netA, netB]` saves as `netA`,
- * and `netB` is gone with nothing said.
+ * This file used to prove the opposite half of the same problem. `Predicate` was a flat struct with
+ * one slot per kind, so `allOf[netA, netB]` could not be represented: the converter merged the two
+ * arms and the earlier one won, which meant the agent wrote two claims, the file held one, and every
+ * later replay reported green for a flow checking less than the person who recorded it believed.
+ * The fix then was to REFUSE the conversion — a step lost its expectation and said so, which is bad
+ * but honest.
  *
- * That is a false green with a long fuse. The agent wrote two claims, the file holds one, and every
- * later replay reports green for a flow that checks less than the person who recorded it believed.
- * Nothing in the verdict can see the difference, because by then the second claim does not exist.
- *
- * The rule this file already states in its own header is the one being broken: "never write an
- * assertion into a flow file that nothing evaluates". Its twin is the half that was missing — never
- * write a SMALLER assertion than the one you were handed. Refusing costs a step its expectation and
- * says so; merging costs the flow its meaning and does not.
+ * There is nothing left to refuse. `FlowStep.expect` is a `Predicate`, so what the agent declared is
+ * what the file stores, and this now guards the property that replaces both: the assertion comes
+ * back exactly as it went in.
  */
 import { describe, expect, it } from 'vitest';
-import { PredicateKind } from '@reticlehq/core';
-// `Predicate` still lives in engine — core owns the KINDS and engine owns the shape. Finishing that
-// split is task 3.2, which is priced in the plan and not done.
-import type { Predicate } from '@reticlehq/engine/question/predicate/predicate-schema.js';
-import { predicateToExpect } from './predicate-to-expect.js';
+import { FlowFileSchema, PredicateKind, type Predicate } from '@reticlehq/core';
 
-const net = (urlContains: string): Predicate => ({ kind: PredicateKind.NET, urlContains });
-const signal = (name: string): Predicate => ({ kind: PredicateKind.SIGNAL, name });
-const allOf = (...predicates: Predicate[]): Predicate => ({
-  kind: PredicateKind.ALL_OF,
-  predicates,
-});
+const saved = (assertion: Predicate): Predicate | undefined => {
+  const onDisk = JSON.parse(
+    JSON.stringify({
+      version: 1,
+      name: 'checkout',
+      createdAt: 1,
+      steps: [
+        {
+          tool: 'reticle_act',
+          anchor: { kind: 'testid', value: 'pay' },
+          args: {},
+          expect: assertion,
+        },
+      ],
+    }),
+  ) as unknown;
+  const parsed = FlowFileSchema.safeParse(onDisk);
+  if (!parsed.success) throw new Error(parsed.error.issues.map((i) => i.message).join('; '));
+  return parsed.data.steps[0]?.expect;
+};
 
-describe('what a compound predicate saves as', () => {
-  it('keeps a compound of DIFFERENT kinds, which the flat struct can hold', () => {
-    const out = predicateToExpect(allOf(net('/api/pay'), signal('paid')));
-    expect(out?.signal, 'different slots, nothing collides, nothing is lost').toBe('paid');
-    expect(out?.net).toBeDefined();
+describe('a saved assertion is the assertion that was made', () => {
+  // The exact shape that used to lose an arm.
+  it('keeps BOTH arms of a two-request claim', () => {
+    const both: Predicate = {
+      kind: PredicateKind.ALL_OF,
+      predicates: [
+        { kind: PredicateKind.NET, urlContains: '/api/charge', status: 200 },
+        { kind: PredicateKind.NET, urlContains: '/api/receipt', status: 200 },
+      ],
+    };
+    expect(saved(both)).toEqual(both);
   });
 
-  /* The reported shape: two arms of one kind, one slot. */
-  it('refuses rather than silently dropping the second of two nets', () => {
-    const out = predicateToExpect(allOf(net('/api/pay'), net('/api/receipt')));
-    expect(
-      out,
-      'saved as the first arm alone — the flow now checks half of what was written, and replays green',
-    ).toBeUndefined();
+  it('keeps a claim nested two levels down', () => {
+    const nested: Predicate = {
+      kind: PredicateKind.ALL_OF,
+      predicates: [
+        { kind: PredicateKind.SETTLED },
+        {
+          kind: PredicateKind.ANY_OF,
+          predicates: [
+            { kind: PredicateKind.SIGNAL, name: 'order:placed' },
+            { kind: PredicateKind.TEXT, contains: 'Order confirmed' },
+          ],
+        },
+      ],
+    };
+    expect(saved(nested)).toEqual(nested);
   });
 
-  it('refuses two signals for the same reason', () => {
-    expect(predicateToExpect(allOf(signal('paid'), signal('emailed')))).toBeUndefined();
+  // `not` had no representation at all in the flat struct, so a negation could never be saved.
+  it('keeps a negation, which the old format could not express at all', () => {
+    const negated: Predicate = {
+      kind: PredicateKind.NOT,
+      predicate: { kind: PredicateKind.CONSOLE, level: 'error' },
+    };
+    expect(saved(negated)).toEqual(negated);
   });
 
-  /* One arm is not a collision, and must still save — refusing everything would be its own defect. */
-  it('still saves a single-armed compound', () => {
-    expect(predicateToExpect(allOf(signal('paid')))?.signal).toBe('paid');
+  // A property assertion is what makes a generated value checkable, and the flat struct had no slot
+  // for one — so the converter refused the whole step rather than save a weaker claim.
+  it('keeps a property assertion on state', () => {
+    const generated: Predicate = {
+      kind: PredicateKind.STATE,
+      path: 'compose.result',
+      satisfies: { property: 'nonEmpty' },
+    };
+    expect(saved(generated)).toEqual(generated);
+  });
+
+  it('keeps a relative property, baseline and all', () => {
+    const moved: Predicate = {
+      kind: PredicateKind.STATE,
+      path: 'cart.total',
+      satisfies: { property: 'decreased', by: { op: 'equals', value: 12, tolerance: 0.01 } },
+    };
+    expect(saved(moved)).toEqual(moved);
   });
 });

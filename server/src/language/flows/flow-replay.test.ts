@@ -482,7 +482,10 @@ describe('replayFlow — anchor re-resolution + legible drift', () => {
   it('11: a step expect.signal that never fires drifts, instead of passing', async () => {
     const script = (testid: string): QueryScript => ({ elements: [el(`e-${testid}`, testid)] });
     const session = new FakeSession(script, []); // no events at all → the signal never fires
-    const step: FlowStep = { ...testidStep('ship'), expect: { signal: 'deploy:shipped' } };
+    const step: FlowStep = {
+      ...testidStep('ship'),
+      expect: { kind: 'signal', name: 'deploy:shipped' },
+    };
     const steps = await replayFlow(session, flow([step]), waitForPredicate, FAST);
     expect(steps.at(-1)?.ok, 'the asserted signal never fired').toBe(false);
     expect(steps.at(-1)?.drift?.reason).toContain('deploy:shipped');
@@ -493,7 +496,7 @@ describe('replayFlow — anchor re-resolution + legible drift', () => {
     const session = new FakeSession(script, []);
     const step: FlowStep = {
       ...testidStep('ship'),
-      expect: { net: { urlContains: '/api/deploys', status: 201 } },
+      expect: { kind: 'net', urlContains: '/api/deploys', status: 201 },
     };
     const steps = await replayFlow(session, flow([step]), waitForPredicate, FAST);
     expect(steps.at(-1)?.ok, 'the asserted request was never made').toBe(false);
@@ -505,7 +508,7 @@ describe('replayFlow — anchor re-resolution + legible drift', () => {
     const session = new FakeSession(script, [], PASS, stores);
     const step: FlowStep = {
       ...testidStep('ship'),
-      expect: { state: { store: 'app', path: 'deployments.0.status', equals: 'live' } },
+      expect: { kind: 'state', store: 'app', path: 'deployments.0.status', equals: 'live' },
     };
     const steps = await replayFlow(session, flow([step]), waitForPredicate, FAST);
     expect(steps.at(-1)?.ok).toBe(true);
@@ -518,7 +521,7 @@ describe('replayFlow — anchor re-resolution + legible drift', () => {
     const session = new FakeSession(script, [], PASS, stores);
     const step: FlowStep = {
       ...testidStep('ship'),
-      expect: { state: { store: 'app', path: 'deployments.0.status', equals: 'live' } },
+      expect: { kind: 'state', store: 'app', path: 'deployments.0.status', equals: 'live' },
     };
     const steps = await replayFlow(session, flow([step]), waitForPredicate, FAST);
     const last = steps.at(-1);
@@ -535,7 +538,7 @@ describe('replayFlow — anchor re-resolution + legible drift', () => {
     const session = new FakeSession(script, []);
     const step: FlowStep = {
       ...testidStep('ship'),
-      expect: { element: { role: 'button', name: '0 Clicks' } },
+      expect: { kind: 'element', query: { role: 'button', name: '0 Clicks' } },
     };
     const steps = await replayFlow(session, flow([step]), waitForPredicate, FAST);
     expect(steps.at(-1)?.ok, 'the asserted control was not on the page').toBe(false);
@@ -546,7 +549,7 @@ describe('replayFlow — anchor re-resolution + legible drift', () => {
     const session = new FakeSession(script, []);
     const step: FlowStep = {
       ...testidStep('ship'),
-      expect: { element: { role: 'button', name: '0 Clicks' } },
+      expect: { kind: 'element', query: { role: 'button', name: '0 Clicks' } },
     };
     const steps = await replayFlow(session, flow([step]), waitForPredicate, FAST);
     expect(steps.at(-1)?.ok).toBe(true);

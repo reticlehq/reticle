@@ -265,7 +265,7 @@ describe('the consequence an agent declares on a sub-step', () => {
  * An `expect` the tool cannot parse must be REFUSED, never counted as nothing declared.
  *
  * The handler used `PredicateSchema.safeParse` and, on failure, pushed `{ declared: false }`. So an
- * agent that wrote `expect: { signal: "order:placed" }` — a plausible spelling, and wrong, the
+ * agent that wrote `expect: { kind: 'signal', name: "order:placed" }` — a plausible spelling, and wrong, the
  * shape is `{ kind: "signal", name: ... }` — got back *"all 3 steps declared nothing, so the app was
  * driven but not verified"*. It had declared. Nobody told it the declaration was thrown away, and
  * the sentence it did get invites it to add the very thing it just wrote.
@@ -280,6 +280,9 @@ describe('the consequence an agent declares on a sub-step', () => {
 describe('an expect this tool cannot parse', () => {
   it('refuses a plausible but wrong predicate spelling', () => {
     expect(() =>
+      // The flat v1 spelling, which this tool has never accepted: it takes a PREDICATE. A saved
+      // flow file may still contain one and is lifted on read; an argument to a live tool is not a
+      // file, so it is refused rather than guessed at.
       assertSequenceSteps([{ ref: 'e1', action: 'click', expect: { signal: 'order:placed' } }]),
     ).toThrow(/step 0[\s\S]*expect/);
   });

@@ -57,7 +57,7 @@ describe('the flow-mutation tool', () => {
                 version: 1,
                 name: 'f',
                 createdAt: 0,
-                steps: [{ tool: 'act', args: {}, expect: { net: { urlContains: '/api/o' } } }],
+                steps: [{ tool: 'act', args: {}, expect: { kind: 'net', urlContains: '/api/o' } }],
               },
             }),
         },

@@ -1,3 +1,4 @@
+import { PredicateKind } from '@reticlehq/core';
 import { removeTempDir } from '@/machine/temp-dir.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp, writeFile, mkdir, readFile } from 'node:fs/promises';
@@ -21,28 +22,43 @@ describe('AssertionTiersStore (anti-downgrade baseline)', () => {
 
   it('records a passing flow’s assertion shape and reads it back', async () => {
     const store = new AssertionTiersStore(fs, root);
-    await store.recordPassing('checkout', [{ step: 0, expect: { signal: 'order:placed' } }]);
+    await store.recordPassing('checkout', [
+      { step: 0, expect: { kind: PredicateKind.SIGNAL, name: 'order:placed' } },
+    ]);
     expect(await store.load()).toEqual({
-      checkout: { steps: [{ step: 0, expect: { signal: 'order:placed' } }], sources: [] },
+      checkout: {
+        steps: [{ step: 0, expect: { kind: PredicateKind.SIGNAL, name: 'order:placed' } }],
+        sources: [],
+      },
     });
   });
 
   it('feeds detectDowngrades: consequence → presence-only is caught across a save/load round-trip', async () => {
     const store = new AssertionTiersStore(fs, root);
     // Last PASSING run asserted a real consequence…
-    await store.recordPassing('checkout', [{ step: 0, expect: { signal: 'order:placed' } }]);
+    await store.recordPassing('checkout', [
+      { step: 0, expect: { kind: PredicateKind.SIGNAL, name: 'order:placed' } },
+    ]);
     const before = (await store.load())['checkout']?.steps ?? [];
     // …and the flow has since been weakened to a fakeable presence check.
-    const after = [{ step: 0, expect: { element: { testid: 'thanks' } } }];
+    const after = [
+      { step: 0, expect: { kind: PredicateKind.ELEMENT, query: { testid: 'thanks' } } },
+    ];
     expect(detectDowngrades(before, after)).toEqual([{ step: 0 }]);
   });
 
   it('reports no downgrade when the assertion is unchanged or strengthened', async () => {
     const store = new AssertionTiersStore(fs, root);
-    await store.recordPassing('checkout', [{ step: 0, expect: { element: { testid: 'thanks' } } }]);
+    await store.recordPassing('checkout', [
+      { step: 0, expect: { kind: PredicateKind.ELEMENT, query: { testid: 'thanks' } } },
+    ]);
     const before = (await store.load())['checkout']?.steps ?? [];
     expect(detectDowngrades(before, before)).toEqual([]);
-    expect(detectDowngrades(before, [{ step: 0, expect: { signal: 'order:placed' } }])).toEqual([]);
+    expect(
+      detectDowngrades(before, [
+        { step: 0, expect: { kind: PredicateKind.SIGNAL, name: 'order:placed' } },
+      ]),
+    ).toEqual([]);
   });
 
   it('a missing ledger means NO baseline — no downgrade can be claimed (fails open)', async () => {
@@ -90,7 +106,9 @@ describe('the stored format version is a tripwire, not a free knob', () => {
 
   it('a file written by a future version reads as "no baseline", which is why the pin matters', async () => {
     const store = new AssertionTiersStore(fs, root);
-    await store.recordPassing('checkout', [{ step: 0, expect: { signal: 'order:placed' } }]);
+    await store.recordPassing('checkout', [
+      { step: 0, expect: { kind: PredicateKind.SIGNAL, name: 'order:placed' } },
+    ]);
     expect(Object.keys(await store.load())).toEqual(['checkout']);
 
     // Simulate what a version bump does to every baseline already on disk.

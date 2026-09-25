@@ -1,4 +1,5 @@
 import { formatStepAddress } from 'open-verification';
+import { assertsState, expectLabel, expectedElementTestid, withoutClauses } from '@reticlehq/core';
 import { span } from '@/trace.js';
 import {
   anchorLabel,
@@ -31,7 +32,6 @@ import {
   type FlowFile,
   type FlowStep,
   type FlowStepResult,
-  type FlowExpect,
   type ReticleEvent,
   PredicateKind,
 } from '@reticlehq/core';
@@ -44,7 +44,6 @@ import {
   runRoleStep,
   runSequenceStep,
 } from './flow-step-runners.js';
-import { successToPredicate } from './flow-success.js';
 import { inFlightRequestLabels } from '@/surface/tools/act/settle-in-flight.js';
 import { namedNetIsInFlight } from '@reticlehq/engine/evidence/unsettled.js';
 
@@ -210,7 +209,7 @@ export async function runTestidStep(
   // assert the step's expect.element testid is present AFTER the action —
   // unless that testid was marked DYNAMIC (the LLM-output case), in which case its presence/content
   // is NOT asserted (only the action ran). The skip is scoped strictly to the dynamic set.
-  const expectTestid = step.expect?.element?.testid;
+  const expectTestid = expectedElementTestid(step.expect);
   if (expectTestid !== undefined && !dynamic.has(expectTestid)) {
     const expectRefs = await resolveTestid(session, expectTestid, sleep);
     if (0 === expectRefs.refs.length) {
@@ -253,7 +252,6 @@ export async function runTestidStep(
 export async function assertStepExpect(
   session: FlowReplaySession,
   expect: NonNullable<FlowStep['expect']>,
-  dynamic: ReadonlySet<string>,
   waitForSignal: WaitForSignal,
   timeoutMs: number,
   since: number,
@@ -261,11 +259,25 @@ export async function assertStepExpect(
   // A testid is already asserted against the live DOM by the step runner. A role/name locator is
   // not that path — stripping every element made a recorded `until` by button name a no-op, so a
   // flow that proved the control at capture time could not go red when it was gone.
-  const consequences: FlowExpect = { ...expect };
-  if (undefined !== consequences.element?.testid) {
-    delete consequences.element;
-  }
-  const predicate = successToPredicate(consequences, dynamic);
+  /*
+   * Two clauses replay must not wait on, both for reasons that predate the tree.
+   *
+   * A testid element was already asserted against the live DOM by the step runner, so waiting on it
+   * again is a second read of a question already answered. A DYNAMIC testid is one whose content a
+   * model writes, and its presence is deliberately never asserted.
+   *
+   * A role/name locator is NEITHER, and stripping every element made a recorded `until` by button
+   * name a no-op — a flow that proved the control at capture time could not go red when it was gone.
+   *
+   * The DYNAMIC set used to be a parameter here and was dead the whole time: the testid was deleted
+   * from the expectation on the line above, and the only thing that read the set asked for the
+   * testid that had just been removed. One production caller was already passing an empty set. The
+   * rule is real and still applies to the flow's SUCCESS oracle, which is where it lives.
+   */
+  const predicate = withoutClauses(
+    expect,
+    (clause) => PredicateKind.ELEMENT === clause.kind && clause.query.testid !== undefined,
+  );
   if (predicate === undefined) return undefined;
   const verdict = await waitForSignal(session, predicate, timeoutMs, since);
   if (verdict.pass) return undefined;
@@ -273,38 +285,24 @@ export async function assertStepExpect(
   // failed. The live verdict path already draws this line (namedNetIsInFlight); replay read the
   // same window and never asked, so a slow endpoint was reported as a consequence that never fired.
   // An unrelated open request does not pardon a named URL that never started — matching decides it.
-  const openRequests =
-    expect.state === undefined
-      ? inFlightRequestLabels(session.eventsSince(since), session.url)
-      : [];
+  const openRequests = assertsState(expect)
+    ? []
+    : inFlightRequestLabels(session.eventsSince(since), session.url);
   const namedInFlight = namedNetIsInFlight(predicate, openRequests);
   return {
     // The store case keeps its own kind because heal and the run report branch on it; everything
     // else is a consequence that did not hold, and the reason carries observed-vs-expected.
-    reasonKind:
-      expect.state !== undefined
-        ? DriftReason.STATE_MISMATCH
-        : namedInFlight
-          ? DriftReason.NET_STILL_IN_FLIGHT
-          : DriftReason.SIGNAL_NOT_OBSERVED,
+    reasonKind: assertsState(expect)
+      ? DriftReason.STATE_MISMATCH
+      : namedInFlight
+        ? DriftReason.NET_STILL_IN_FLIGHT
+        : DriftReason.SIGNAL_NOT_OBSERVED,
     reason: namedInFlight
       ? `${IN_FLIGHT_AT_BUDGET_END} (${openRequests.join(', ')})`
       : (verdict.failureReason ?? "the step's declared consequence did not hold"),
     anchor: expectLabel(expect),
     nearest: null,
   };
-}
-
-/** Name the thing that was asserted, for the drift's `anchor` column. */
-function expectLabel(expect: NonNullable<FlowStep['expect']>): string {
-  if (expect.signal !== undefined) return `signal:${expect.signal}`;
-  if (expect.net !== undefined) return `net:${expect.net.urlContains ?? expect.net.method ?? '*'}`;
-  if (expect.state !== undefined) return `state:${expect.state.path}`;
-  if (expect.console !== undefined) return `console:${expect.console.level ?? '*'}`;
-  if (undefined !== expect.element) {
-    return expect.element.testid ?? expect.element.name ?? expect.element.role ?? 'element';
-  }
-  return 'expect';
 }
 
 /** Run one signal-anchored step: wait for the signal predicate, else drift (no nearest for signals). */
@@ -583,7 +581,6 @@ export async function replayFlow(
         const expectDrift = await assertStepExpect(
           session,
           expectation,
-          dynamic,
           waitForSignal,
           waitFor(step),
           cursorBefore,

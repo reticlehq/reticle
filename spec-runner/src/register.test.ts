@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AnchorKind,
   FLOW_FILE_VERSION,
+  PredicateKind,
   ReticleCommand,
   type CommandResult,
   type FlowFile,
@@ -177,7 +178,7 @@ describe('registerFlowSpecs', () => {
 
   it('a runnable spec whose success fails throws SUCCESS_NOT_MET when run', async () => {
     const flow = flowFor('save-draft', 'save-btn');
-    flow.success = { signal: 'flow:done' };
+    flow.success = { kind: PredicateKind.SIGNAL, name: 'flow:done' };
     const fs = memoryFs({ [`${FLOWS_DIR}/save-draft.json`]: serialize(flow) });
     const c = collector();
     await registerFlowSpecs(ROOT, () => fakeSession(['save-btn']), {

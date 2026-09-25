@@ -37,13 +37,13 @@ describe('recording a sequence keeps each step`s declared consequence', () => {
     const subs = recorded.args['steps'] as Record<string, unknown>[];
     expect(subs).toHaveLength(2);
     expect(subs[0]?.['expect']).toBeUndefined();
-    expect(subs[1]?.['expect']).toEqual({ signal: 'auth:ok' });
+    expect(subs[1]?.['expect']).toEqual({ kind: 'signal', name: 'auth:ok' });
   });
 
   it('carries it through into the saved flow`s sub-steps', () => {
     const flowStep = recordedStepToFlowStep(compileSequenceStep(SEQUENCE_ARGS, RESULT));
     expect(flowStep?.tool).toBe(ReticleTool.ACT_SEQUENCE);
-    expect(flowStep?.steps?.[1]?.expect).toEqual({ signal: 'auth:ok' });
+    expect(flowStep?.steps?.[1]?.expect).toEqual({ kind: 'signal', name: 'auth:ok' });
   });
 
   it('drops a predicate replay could not enforce rather than recording a claim nothing checks', () => {

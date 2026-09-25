@@ -13,7 +13,6 @@ import { DriftReason, EventType, type ReticleEvent } from '@reticlehq/core';
 import { assertStepExpect } from './flow-replay.js';
 import type { FlowReplaySession, WaitForSignal } from './flow-replay-types.js';
 
-const NO_DYNAMIC = new Set<string>();
 const BUDGET_MS = 10;
 
 /** A step window holding exactly the events a test hands it — nothing else replay reads here. */
@@ -42,8 +41,7 @@ describe('a net expect whose request is still on the wire', () => {
   it('is reported as in flight, not as a signal that never fired', async () => {
     const drift = await assertStepExpect(
       sessionWith([netPending('POST', 'https://app.test/api/save', 'r-1')]),
-      { net: { urlContains: '/api/save', method: 'POST' } },
-      NO_DYNAMIC,
+      { kind: 'net', urlContains: '/api/save', method: 'POST' },
       missed,
       BUDGET_MS,
       0,
@@ -55,8 +53,7 @@ describe('a net expect whose request is still on the wire', () => {
   it('an unrelated open request does not pardon one that never started', async () => {
     const drift = await assertStepExpect(
       sessionWith([netPending('GET', 'https://app.test/api/poll', 'r-2')]),
-      { net: { urlContains: '/api/save', method: 'POST' } },
-      NO_DYNAMIC,
+      { kind: 'net', urlContains: '/api/save', method: 'POST' },
       missed,
       BUDGET_MS,
       0,
@@ -67,8 +64,7 @@ describe('a net expect whose request is still on the wire', () => {
   it('a signal expect is unaffected', async () => {
     const drift = await assertStepExpect(
       sessionWith([netPending('POST', 'https://app.test/api/save', 'r-3')]),
-      { signal: 'order:placed' },
-      NO_DYNAMIC,
+      { kind: 'signal', name: 'order:placed' },
       missed,
       BUDGET_MS,
       0,

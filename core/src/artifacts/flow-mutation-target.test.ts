@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { mutationTargetsFor } from '@/index.js';
 import type { FlowFile } from '@/index.js';
 
+import { PredicateKind } from '@/verdict/consequence.js';
+import type { Predicate } from '@/verdict/predicate.js';
+
+/** The commonest shape here, written once: a net predicate naming one endpoint. */
+const net = (urlContains: string): Predicate => ({ kind: PredicateKind.NET, urlContains });
+
 /**
  * What to break, chosen from what the flow itself claims to depend on.
  *
@@ -30,15 +36,13 @@ const flow = (over: Partial<FlowFile>): FlowFile => ({
 describe('what a flow says it depends on', () => {
   it('takes the endpoint a step declared', () => {
     const f = flow({
-      steps: [{ tool: 'act', args: {}, expect: { net: { urlContains: '/api/orders' } } }],
+      steps: [{ tool: 'act', args: {}, expect: net('/api/orders') }],
     } as Partial<FlowFile>);
     expect(mutationTargetsFor(f)).toEqual(['/api/orders']);
   });
 
   it('takes the endpoint the flow’s success consequence declared', () => {
-    expect(mutationTargetsFor(flow({ success: { net: { urlContains: '/api/pay' } } }))).toEqual([
-      '/api/pay',
-    ]);
+    expect(mutationTargetsFor(flow({ success: net('/api/pay') }))).toEqual(['/api/pay']);
   });
 
   it('walks sub-steps, because a sequence is where the real journeys live', () => {
@@ -47,7 +51,7 @@ describe('what a flow says it depends on', () => {
         {
           tool: 'act_sequence',
           args: {},
-          steps: [{ tool: 'act', args: {}, expect: { net: { urlContains: '/api/cart' } } }],
+          steps: [{ tool: 'act', args: {}, expect: net('/api/cart') }],
         },
       ],
     } as Partial<FlowFile>);
@@ -57,8 +61,8 @@ describe('what a flow says it depends on', () => {
   it('names each endpoint once, however many steps depend on it', () => {
     const f = flow({
       steps: [
-        { tool: 'act', args: {}, expect: { net: { urlContains: '/api/orders' } } },
-        { tool: 'act', args: {}, expect: { net: { urlContains: '/api/orders' } } },
+        { tool: 'act', args: {}, expect: net('/api/orders') },
+        { tool: 'act', args: {}, expect: net('/api/orders') },
       ],
     } as Partial<FlowFile>);
     expect(mutationTargetsFor(f)).toEqual(['/api/orders']);
@@ -68,7 +72,9 @@ describe('what a flow says it depends on', () => {
     // Not a failure of this function. A flow that never said it depended on a request has given
     // nothing to break, and inventing a target would manufacture the demotion rather than measure it.
     const f = flow({
-      steps: [{ tool: 'act', args: {}, expect: { signal: 'order:placed' } }],
+      steps: [
+        { tool: 'act', args: {}, expect: { kind: PredicateKind.SIGNAL, name: 'order:placed' } },
+      ],
     } as Partial<FlowFile>);
     expect(mutationTargetsFor(f)).toEqual([]);
   });
@@ -76,7 +82,7 @@ describe('what a flow says it depends on', () => {
   it('ignores a net consequence with no url to aim at', () => {
     // `{ net: { status: 200 } }` says "some request succeeded" and names nothing breakable.
     const f = flow({
-      steps: [{ tool: 'act', args: {}, expect: { net: { status: 200 } } }],
+      steps: [{ tool: 'act', args: {}, expect: { kind: PredicateKind.NET, status: 200 } }],
     } as Partial<FlowFile>);
     expect(mutationTargetsFor(f)).toEqual([]);
   });

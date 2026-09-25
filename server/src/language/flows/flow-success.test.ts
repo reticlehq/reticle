@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EventType, type CommandResult, type ReticleEvent } from '@reticlehq/core';
-import { assertSuccess, successToPredicate, dynamicTestids } from './flow-success.js';
+import { assertSuccess, dynamicTestids } from './flow-success.js';
 import { waitForPredicate } from '@reticlehq/engine/question/predicate/predicate.js';
 import type { FlowReplaySession } from './flow-replay.js';
 
@@ -29,111 +29,11 @@ const sig = (name: string): ReticleEvent => ({
   data: { name },
 });
 
-describe('successToPredicate', () => {
-  it('compiles a signal success', () => {
-    expect(successToPredicate({ signal: 'order:placed' }, NONE)).toEqual({
-      kind: 'signal',
-      name: 'order:placed',
-    });
-  });
-
-  it('skips a dynamic-marked element testid (presence-only → vacuously met)', () => {
-    expect(
-      successToPredicate({ element: { testid: 'caption' } }, new Set(['caption'])),
-    ).toBeUndefined();
-  });
-
-  it('combines multiple fields with allOf', () => {
-    const p = successToPredicate({ signal: 's', net: { urlContains: '/api' } }, NONE);
-    expect(p?.kind).toBe('allOf');
-  });
-
-  it('a net WITHOUT count stays a bare presence predicate (wait-until-true)', () => {
-    expect(successToPredicate({ net: { urlContains: '/api/deploy' } }, NONE)).toEqual({
-      kind: 'net',
-      urlContains: '/api/deploy',
-    });
-  });
-
-  it('net.count gates on `settled` so a double-submit cannot pass on the first transient match', () => {
-    // The cardinality read must happen AFTER the network quiets, else exact count:1 is satisfied the
-    // instant the first request lands (before a duplicate). settled + net is the post-settle gate.
-    expect(
-      successToPredicate({ net: { method: 'POST', urlContains: '/api/deploy', count: 1 } }, NONE),
-    ).toEqual({
-      kind: 'allOf',
-      predicates: [
-        { kind: 'settled' },
-        { kind: 'net', method: 'POST', urlContains: '/api/deploy', count: 1 },
-      ],
-    });
-  });
-
-  it('signalCount gates on `settled` so a double-fire cannot pass on the first transient match', () => {
-    // Identical reasoning to net.count: a wait-until-true waiter sees exactly one fire the instant
-    // the FIRST one lands, and resolves before the duplicate arrives. The count is only true after
-    // the app goes quiet, so the settle gate is what makes the assertion mean what it says.
-    expect(successToPredicate({ signal: 'order:placed', signalCount: 1 }, NONE)).toEqual({
-      kind: 'allOf',
-      predicates: [{ kind: 'settled' }, { kind: 'signal', name: 'order:placed', count: 1 }],
-    });
-  });
-
-  it('console.absent gates on `settled` (a clean-console assertion is post-settle)', () => {
-    // Same post-settle reasoning as net.count: an absent assertion is satisfied at the first poll
-    // (no error yet) before the action's error fires, so it must be read only after the page quiets.
-    expect(successToPredicate({ console: { level: 'error', absent: true } }, NONE)).toEqual({
-      kind: 'allOf',
-      predicates: [{ kind: 'settled' }, { kind: 'console', level: 'error', absent: true }],
-    });
-  });
-
-  it('a console PRESENCE assertion (no absent) stays a bare wait-until-true predicate', () => {
-    expect(successToPredicate({ console: { level: 'warn' } }, NONE)).toEqual({
-      kind: 'console',
-      level: 'warn',
-    });
-  });
-
-  it('a state INVARIANT (hold:true) gates on `settled` so a side-effect leak cannot pass early', () => {
-    // Without the gate, "deployments.0.status == live" is true the instant replay starts (before a
-    // blast-radius side-effect moves it), so a wait-until-true read passes. settled forces post-settle.
-    expect(
-      successToPredicate(
-        { state: { store: 'app', path: 'deployments.0.status', equals: 'live', hold: true } },
-        NONE,
-      ),
-    ).toEqual({
-      kind: 'allOf',
-      predicates: [
-        { kind: 'settled' },
-        { kind: 'state', store: 'app', path: 'deployments.0.status', equals: 'live' },
-      ],
-    });
-  });
-
-  it('compiles a state-truth success end-condition', () => {
-    expect(
-      successToPredicate(
-        { state: { store: 'app', path: 'deployments.0.status', equals: 'live' } },
-        NONE,
-      ),
-    ).toEqual({ kind: 'state', store: 'app', path: 'deployments.0.status', equals: 'live' });
-  });
-
-  it('compiles a presence-only state success (no equals → assert the path resolves)', () => {
-    expect(successToPredicate({ state: { path: 'cart.items' } }, NONE)).toEqual({
-      kind: 'state',
-      path: 'cart.items',
-    });
-  });
-});
-
 describe('assertSuccess — green only when the consequence holds', () => {
   it('passes when the success signal fires', async () => {
     const r = await assertSuccess(
       session([sig('checkout-done')]),
-      { signal: 'checkout-done' },
+      { kind: 'signal', name: 'checkout-done' },
       NONE,
       waitForPredicate,
       FAST,
@@ -144,7 +44,7 @@ describe('assertSuccess — green only when the consequence holds', () => {
   it('FAILS when the success signal never fires (broken Pay-now: steps green, consequence absent)', async () => {
     const r = await assertSuccess(
       session([]),
-      { signal: 'checkout-done' },
+      { kind: 'signal', name: 'checkout-done' },
       NONE,
       waitForPredicate,
       FAST,
@@ -160,7 +60,7 @@ describe('assertSuccess — green only when the consequence holds', () => {
   it('is vacuously met when the only success field is dynamic-skipped', async () => {
     const r = await assertSuccess(
       session([]),
-      { element: { testid: 'cap' } },
+      { kind: 'element', query: { testid: 'cap' } },
       new Set(['cap']),
       waitForPredicate,
       FAST,
@@ -181,11 +81,29 @@ describe('assertSuccess — green only when the consequence holds', () => {
     };
     // floor 0 (whole buffer) → the stale signal matches (legacy behavior).
     expect(
-      (await assertSuccess(filtering, { signal: 'done' }, NONE, waitForPredicate, 0, 0)).pass,
+      (
+        await assertSuccess(
+          filtering,
+          { kind: 'signal', name: 'done' },
+          NONE,
+          waitForPredicate,
+          0,
+          0,
+        )
+      ).pass,
     ).toBe(true);
     // floor 20 (this replay started after the stale signal) → excluded, so it FAILS.
     expect(
-      (await assertSuccess(filtering, { signal: 'done' }, NONE, waitForPredicate, 0, 20)).pass,
+      (
+        await assertSuccess(
+          filtering,
+          { kind: 'signal', name: 'done' },
+          NONE,
+          waitForPredicate,
+          0,
+          20,
+        )
+      ).pass,
     ).toBe(false);
   });
 });

@@ -13,8 +13,17 @@
  * Pure: no IO, no clock.
  */
 
-import { AnchorKind, PredicateKind, type FlowExpect, type FlowFile } from '@reticlehq/core';
-import type { EvalResult, Predicate } from '@reticlehq/engine/question/predicate/predicate.js';
+import {
+  AnchorKind,
+  PredicateKind,
+  clauseOfKind,
+  flowExpectToPredicate,
+  withoutClauses,
+  type FlowExpect,
+  type FlowFile,
+  type Predicate,
+} from '@reticlehq/core';
+import type { EvalResult } from '@reticlehq/engine/question/predicate/predicate.js';
 import type { FlowReplaySession, WaitForSignal } from './flow-replay-types.js';
 
 /** The dynamic (LLM-output) testids whose presence is never asserted — same rule replay uses. */
@@ -30,134 +39,62 @@ export function dynamicTestids(flow: FlowFile): Set<string> {
 export const SUCCESS_STEP_TOOL = 'success';
 
 /** A short human label for the success end-condition, for result rows. */
-export function successLabel(success: FlowExpect): string {
-  if (success.signal !== undefined) return success.signal;
-  if (success.net !== undefined) return success.net.urlContains ?? success.net.method ?? 'net';
-  if (success.console !== undefined) {
-    return `console:${true === success.console.absent ? 'clean' : (success.console.level ?? 'error')}`;
+export function successLabel(success: Predicate | undefined): string {
+  /*
+   * NOT `expectLabel`, and the difference is the reader.
+   *
+   * That one names a clause for a drift row, where `signal:` tells you which channel failed. This
+   * one is `mustHold` in the domain model an agent reads BEFORE testing — a list of what each flow
+   * guarantees — and there the prefix is noise on the commonest case. A signal's own name is the
+   * sentence: "order:placed" is what must hold.
+   */
+  const signal = clauseOfKind(success, PredicateKind.SIGNAL);
+  if (signal?.name !== undefined) return signal.name;
+  const net = clauseOfKind(success, PredicateKind.NET);
+  if (net !== undefined) return net.urlContains ?? net.method ?? 'net';
+  const console_ = clauseOfKind(success, PredicateKind.CONSOLE);
+  if (console_ !== undefined) {
+    return `console:${true === console_.absent ? 'clean' : (console_.level ?? 'error')}`;
   }
-  if (success.state !== undefined) return `state:${success.state.path}`;
-  if (success.text !== undefined) return `text:${success.text.contains}`;
-  return success.element?.testid ?? success.element?.name ?? success.element?.role ?? 'success';
+  const state = clauseOfKind(success, PredicateKind.STATE);
+  if (state !== undefined) return `state:${state.path}`;
+  const text = clauseOfKind(success, PredicateKind.TEXT);
+  if (text?.contains !== undefined) return `text:${text.contains}`;
+  const element = clauseOfKind(success, PredicateKind.ELEMENT);
+  const q = element?.query;
+  return q?.testid ?? q?.name ?? q?.role ?? 'success';
 }
 
-/** Compile a success FlowExpect into a predicate. undefined → nothing assertable (vacuously met). */
+/**
+ * What a flow's success oracle actually asserts, once the file has been read and the dynamic
+ * (LLM-output) testids have been taken out of it.
+ *
+ * Most of what this function used to do is gone, and that is the migration working as intended: it
+ * compiled a flat `FlowExpect` into a `Predicate`, and a step's `expect` IS a predicate now, lifted
+ * by the schema when the file is read. It keeps the name and the signature because it is on
+ * `@reticlehq/test`'s published surface, and it still accepts the flat shape for the same reason a
+ * v1 file still loads — a spec written against the old spelling is not wrong, it is old.
+ *
+ * What remains is the DYNAMIC SKIP, and it is not cosmetic. A testid whose content a model writes is
+ * asserted for PRESENCE by the step layer and never for content; a success oracle bound to one would
+ * assert exactly what the flow has already declared unassertable. Dropping every such clause can
+ * leave nothing at all, and `undefined` is the honest answer — vacuously met, the same as declaring
+ * no success, because nothing here was checkable.
+ */
 export function successToPredicate(
-  success: FlowExpect,
+  success: Predicate | FlowExpect | undefined,
   dynamic: ReadonlySet<string>,
 ): Predicate | undefined {
-  const parts: Predicate[] = [];
-
-  if (success.signal !== undefined) {
-    const signal: Extract<Predicate, { kind: typeof PredicateKind.SIGNAL }> = {
-      kind: PredicateKind.SIGNAL,
-      name: success.signal,
-    };
-    if (success.signalData !== undefined) signal.dataMatches = success.signalData;
-    if (success.signalCount !== undefined) {
-      signal.count = success.signalCount;
-      // Same post-settle reasoning as net.count: the success waiter is wait-until-true, so an exact
-      // count is transiently satisfied the instant the FIRST matching signal fires — before a
-      // double-fire's duplicate arrives. Gating on `settled` forces the count to be read only after
-      // the app goes quiet, by which point the duplicate IS counted and the over-count fails.
-      parts.push({ kind: PredicateKind.SETTLED });
-    }
-    parts.push(signal);
-  }
-
-  if (success.route !== undefined) {
-    // The mirror of `predicateToExpect`'s ROUTE case. Replay evaluates predicates, so carrying the
-    // route back here is the whole of what makes a recorded navigation able to fail.
-    const route: { kind: typeof PredicateKind.ROUTE; pathname?: string; contains?: string } = {
-      kind: PredicateKind.ROUTE,
-    };
-    if (success.route.pathname !== undefined) route.pathname = success.route.pathname;
-    if (success.route.contains !== undefined) route.contains = success.route.contains;
-    return route;
-  }
-  if (success.net !== undefined) {
-    const net: Extract<Predicate, { kind: typeof PredicateKind.NET }> = { kind: PredicateKind.NET };
-    if (success.net.method !== undefined) net.method = success.net.method;
-    if (success.net.urlContains !== undefined) net.urlContains = success.net.urlContains;
-    if (success.net.status !== undefined) net.status = success.net.status;
-    if (success.net.count !== undefined) {
-      net.count = success.net.count;
-      // A cardinality assertion is inherently POST-SETTLE. The success waiter is wait-until-true, so an
-      // exact count (e.g. 1) is transiently satisfied the instant the FIRST matching request lands —
-      // before a double-submit's duplicate arrives. Gating on `settled` forces the count to be read
-      // only after the network has gone quiet, so the duplicate IS counted and the over-count fails.
-      parts.push({ kind: PredicateKind.SETTLED });
-    }
-    parts.push(net);
-  }
-
-  if (success.console !== undefined) {
-    const con: Extract<Predicate, { kind: typeof PredicateKind.CONSOLE }> = {
-      kind: PredicateKind.CONSOLE,
-    };
-    if (success.console.level !== undefined) con.level = success.console.level;
-    if (success.console.absent !== undefined) {
-      con.absent = success.console.absent;
-      // An `absent` assertion is post-settle, same as net.count: a wait-until-true waiter sees "no
-      // error yet" at the first poll and passes BEFORE the action's error fires. Gate on `settled` so
-      // the console is read only after the page quiets, by which point any error is in the buffer.
-      if (success.console.absent) parts.push({ kind: PredicateKind.SETTLED });
-    }
-    parts.push(con);
-  }
-
-  const state = success.state;
-  if (state !== undefined) {
-    const part: Extract<Predicate, { kind: typeof PredicateKind.STATE }> = {
-      kind: PredicateKind.STATE,
-      path: state.path,
-    };
-    if (state.store !== undefined) part.store = state.store;
-    if (state.equals !== undefined) part.equals = state.equals;
-    // `hold` = an INVARIANT ("this state must still hold after the action settles"), vs the default
-    // wait-for-change. A wait-until-true waiter would pass the instant the path already equals the
-    // value — which, for "an unrelated path stayed put", is true BEFORE a side-effect leak fires. Gate
-    // on `settled` so the read happens after the page quiets, by which point the leak has landed.
-    if (true === state.hold) parts.push({ kind: PredicateKind.SETTLED });
-    parts.push(part);
-  }
-
-  const element = success.element;
-  if (element !== undefined) {
-    const testid = element.testid;
-    // A dynamic-marked testid is NOT asserted as a success condition (presence-only).
-    if (testid === undefined || !dynamic.has(testid)) {
-      const query: Record<string, string> = {};
-      if (testid !== undefined) query['testid'] = testid;
-      if (element.role !== undefined) query['role'] = element.role;
-      if (element.name !== undefined) query['name'] = element.name;
-      if (Object.keys(query).length > 0) parts.push({ kind: PredicateKind.ELEMENT, query });
-    }
-  }
-
-  const text = success.text;
-  if (text !== undefined) {
-    const part: Extract<Predicate, { kind: typeof PredicateKind.TEXT }> = {
-      kind: PredicateKind.TEXT,
-      contains: text.contains,
-    };
-    if (text.scope !== undefined) part.scope = text.scope;
-    if (text.visible !== undefined) part.visible = text.visible;
-    if (true === text.absent) {
-      part.absent = true;
-      // Same post-settle reasoning as `console.absent` and `state.hold`: a wait-until-true waiter
-      // reads "not there yet" on the first poll and passes BEFORE the text it is meant to see
-      // disappear has even been rendered. Gate on `settled` so the read happens after the page
-      // quiets, by which point a text that was going to appear has.
-      parts.push({ kind: PredicateKind.SETTLED });
-    }
-    parts.push(part);
-  }
-
-  const [first] = parts;
-  if (0 === parts.length) return undefined;
-  if (1 === parts.length && first !== undefined) return first;
-  return { kind: PredicateKind.ALL_OF, predicates: parts };
+  if (success === undefined) return undefined;
+  const predicate = 'kind' in success ? success : flowExpectToPredicate(success);
+  if (predicate === undefined) return undefined;
+  return withoutClauses(
+    predicate,
+    (clause) =>
+      PredicateKind.ELEMENT === clause.kind &&
+      clause.query.testid !== undefined &&
+      dynamic.has(clause.query.testid),
+  );
 }
 
 /**
@@ -168,13 +105,12 @@ export function successToPredicate(
  */
 export async function assertSuccess(
   session: FlowReplaySession,
-  success: FlowExpect | undefined,
+  success: Predicate | undefined,
   dynamic: ReadonlySet<string>,
   waitForSignal: WaitForSignal,
   timeoutMs: number,
   since = 0,
 ): Promise<EvalResult> {
-  if (success === undefined) return { pass: true };
   const predicate = successToPredicate(success, dynamic);
   if (predicate === undefined) return { pass: true };
   // `since` floors the window at the start of THIS replay so a success signal left in the buffer by

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { FlowExpect } from '@reticlehq/core';
+import type { Predicate } from '@reticlehq/core';
 import { detectDowngrades, isAssertionDowngrade } from './assertion-integrity.js';
 
-const signal = { signal: 'order:placed' } as unknown as FlowExpect; // consequence
-const net = { net: { urlContains: '/api/order' } } as unknown as FlowExpect; // consequence
-const presence = { element: { role: 'button', name: 'OK' } } as unknown as FlowExpect; // presence-only
+const signal = { kind: 'signal', name: 'order:placed' } as unknown as Predicate; // consequence
+const net = { kind: 'net', urlContains: '/api/order' } as unknown as Predicate; // consequence
+const presence = { kind: 'element', query: { role: 'button', name: 'OK' } } as unknown as Predicate; // presence-only
 
 describe('isAssertionDowngrade', () => {
   it('flags a consequence weakened to presence-only', () => {

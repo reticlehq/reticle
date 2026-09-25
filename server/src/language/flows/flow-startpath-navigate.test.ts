@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AnchorKind,
   FLOW_FILE_VERSION,
+  PredicateKind,
   RETICLE_URL_PARAM,
   QueryBy,
   ReticleCommand,
@@ -30,7 +31,7 @@ const flow = (startPath?: string): FlowFile => ({
 /** The declared opt-out: a flow that continues another flow's state is never reset under it. */
 const continues = (startPath: string): FlowFile => ({
   ...flow(startPath),
-  requires: [{ signal: 'auth:ready' }],
+  requires: [{ kind: PredicateKind.SIGNAL, name: 'auth:ready' }],
 });
 
 interface NavCall {

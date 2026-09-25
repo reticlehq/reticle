@@ -9,8 +9,7 @@ import type { FlowFile } from '@reticlehq/core';
  * ask on the agent's behalf.
  */
 
-const flow = (name: string): FlowFile =>
-  ({ version: 1, name, createdAt: 1, steps: [] }) as unknown as FlowFile;
+const flow = (name: string): FlowFile => ({ version: 1, name, createdAt: 1, steps: [] });
 
 describe('the subject a replay consults', () => {
   it('is the flow name — a flow is a feature, and that is the axis memory shards on', () => {

@@ -1,4 +1,4 @@
-import { FlowStepTool, type FlowExpect } from '@reticlehq/core';
+import { FlowStepTool, type Predicate } from '@reticlehq/core';
 
 /** One captured agent action, normalized for replay. */
 export interface RecordedStep {
@@ -9,7 +9,7 @@ export interface RecordedStep {
   /** false if any ref could not be normalized to a testid (replay only valid in-session). */
   stable: boolean;
   /** Optional post-condition annotation carried into the on-disk flow's expect. */
-  expect?: FlowExpect;
+  expect?: Predicate;
   /**
    * The route this step ran on. RECORDER-INTERNAL: it never reaches the on-disk flow.
    *

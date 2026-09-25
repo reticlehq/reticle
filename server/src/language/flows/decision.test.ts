@@ -22,7 +22,7 @@ describe('buildDecision — the autonomy envelope', () => {
       status: ReplayStatus.OK,
       steps: [{ step: 0, tool: ReticleTool.ACT, anchor: 'new-deploy', ok: true }],
     };
-    const d = buildDecision(result, flow({ success: { signal: 'deploy:shipped' } }));
+    const d = buildDecision(result, flow({ success: { kind: 'signal', name: 'deploy:shipped' } }));
     expect(d.verdict).toBe('pass');
     expect(d.nextAction).toContain('none');
   });
@@ -35,7 +35,7 @@ describe('buildDecision — the autonomy envelope', () => {
     };
     const d = buildDecision(
       result,
-      flow({ intent: 'ship a deploy', success: { signal: 'deploy:shipped' } }),
+      flow({ intent: 'ship a deploy', success: { kind: 'signal', name: 'deploy:shipped' } }),
     );
     expect(d.summary).toContain('ship a deploy');
     expect(d.summary).toContain('verified');
@@ -267,7 +267,9 @@ describe('buildSuiteVerdict — a flow that cannot fail is not a pass', () => {
     ({
       version: 1,
       name,
-      steps: [{ action: 'click', anchor: { testid: 'pay' }, expect: { signal: 'paid' } }],
+      steps: [
+        { action: 'click', anchor: { testid: 'pay' }, expect: { kind: 'signal', name: 'paid' } },
+      ],
     }) as unknown as FlowFile;
 
   it('does not count an empty flow as passed, and does not claim the suite passes', () => {
@@ -378,7 +380,7 @@ describe('buildDecision — the business outcome first, the mechanism underneath
       status: ReplayStatus.OK,
       steps: [{ step: 0, tool: ReticleTool.ACT, anchor: 'btn', ok: true }],
     };
-    const d = buildDecision(result, flow({ success: { signal: 'x:y' } }));
+    const d = buildDecision(result, flow({ success: { kind: 'signal', name: 'x:y' } }));
     expect(d.verdict).toBe('pass');
     expect(d.summary).toContain('no intent declared');
   });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { driveFlowsFrom, driveFlowName, carriesAnAssertion, type TapeStep } from './drive-flow.js';
-import type { FlowExpect } from '@reticlehq/core';
+import type { Predicate } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import type { RecordedStep } from '@/language/flows/recording/tape/recordings.js';
 
@@ -9,7 +9,7 @@ const step = (expectIt: boolean, route?: string): RecordedStep => ({
   args: { ref: 'e1', action: 'click' },
   stable: true,
   ...(route === undefined ? {} : { route }),
-  ...(expectIt ? { expect: { signal: 'saved' } } : {}),
+  ...(expectIt ? { expect: { kind: 'signal', name: 'saved' } } : {}),
 });
 
 describe('a drive becomes a flow without anybody asking', () => {
@@ -126,7 +126,7 @@ describe('a session that visited several routes becomes several flows', () => {
  * PROVED, keep a short session discriminator so two journeys cannot collide.
  */
 describe('a drive flow is named after what it proved', () => {
-  const proving = (expect_: FlowExpect, route?: string): TapeStep => ({
+  const proving = (expect_: Predicate, route?: string): TapeStep => ({
     tool: ReticleTool.ACT,
     args: { ref: 'e1', action: 'click' },
     stable: true,
@@ -136,7 +136,7 @@ describe('a drive flow is named after what it proved', () => {
 
   it('leads with the signal, which is the strongest thing a flow can claim', () => {
     const name = driveFlowName('sdc991872-6d66-4adf', undefined, [
-      proving({ signal: 'auth:granted' }),
+      proving({ kind: 'signal', name: 'auth:granted' }),
     ]);
     expect(name).toContain('auth-granted');
     expect(name.indexOf('auth-granted')).toBeLessThan(name.indexOf('sdc99187'));
@@ -145,17 +145,17 @@ describe('a drive flow is named after what it proved', () => {
   it('falls to the request, then the store path, when there is no signal', () => {
     expect(
       driveFlowName('s1', undefined, [
-        proving({ net: { method: 'POST', urlContains: '/api/login' } }),
+        proving({ kind: 'net', method: 'POST', urlContains: '/api/login' }),
       ]),
     ).toContain('post-api-login');
-    expect(driveFlowName('s1', undefined, [proving({ state: { path: 'auth.email' } })])).toContain(
-      'auth-email',
-    );
+    expect(
+      driveFlowName('s1', undefined, [proving({ kind: 'state', path: 'auth.email' })]),
+    ).toContain('auth-email');
   });
 
   it('still carries the route, so two journeys in one session stay apart', () => {
-    const a = driveFlowName('s1', '/deployments', [proving({ signal: 'x:done' })]);
-    const b = driveFlowName('s1', '/compose', [proving({ signal: 'x:done' })]);
+    const a = driveFlowName('s1', '/deployments', [proving({ kind: 'signal', name: 'x:done' })]);
+    const b = driveFlowName('s1', '/compose', [proving({ kind: 'signal', name: 'x:done' })]);
     expect(a).toContain('deployments');
     expect(b).toContain('compose');
     expect(a).not.toBe(b);
@@ -168,17 +168,19 @@ describe('a drive flow is named after what it proved', () => {
    * must land on the same name or one drive ends up scattered across several near-identical files.
    */
   it('is stable for the same session, route and claim', () => {
-    const args = ['s1', '/deployments', [proving({ signal: 'x:done' })]] as const;
+    const args = ['s1', '/deployments', [proving({ kind: 'signal', name: 'x:done' })]] as const;
     expect(driveFlowName(...args)).toBe(driveFlowName(...args));
   });
 
   it('keeps two sessions apart even when they prove the same thing', () => {
-    const steps = [proving({ signal: 'x:done' })];
+    const steps = [proving({ kind: 'signal', name: 'x:done' })];
     expect(driveFlowName('tab-one', '/a', steps)).not.toBe(driveFlowName('tab-two', '/a', steps));
   });
 
   it('is still a safe filename, whatever the claim contained', () => {
-    const name = driveFlowName('s1', undefined, [proving({ signal: 'weird/../sig with spaces' })]);
+    const name = driveFlowName('s1', undefined, [
+      proving({ kind: 'signal', name: 'weird/../sig with spaces' }),
+    ]);
     expect(name).toMatch(/^drive-[a-zA-Z0-9-]+$/);
   });
 

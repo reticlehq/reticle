@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { canFollow } from './flow-composition.js';
-import type { FlowExpect, FlowFile } from './flow-types.js';
+import type { FlowFile } from './flow-types.js';
+import { PredicateKind } from '@/verdict/consequence.js';
+import type { Predicate } from '@/verdict/predicate.js';
 
 /**
  * Composition is checkable before anything runs, or it is a hope.
@@ -18,8 +20,8 @@ const flow = (over: Partial<FlowFile>): FlowFile => ({
   ...over,
 });
 
-const SIGNED_IN: FlowExpect = { signal: 'auth:ready' };
-const CART_FULL: FlowExpect = { signal: 'cart:filled' };
+const SIGNED_IN: Predicate = { kind: PredicateKind.SIGNAL, name: 'auth:ready' };
+const CART_FULL: Predicate = { kind: PredicateKind.SIGNAL, name: 'cart:filled' };
 
 describe('whether one flow may replay straight after another', () => {
   it('allows it when everything the next flow requires is ensured by the previous one', () => {
@@ -59,8 +61,8 @@ describe('whether one flow may replay straight after another', () => {
 
   it('matches claims by value, so an equal claim written twice is the same claim', () => {
     const check = canFollow(
-      flow({ ensures: [{ signal: 'auth:ready' }] }),
-      flow({ requires: [{ signal: 'auth:ready' }] }),
+      flow({ ensures: [{ kind: PredicateKind.SIGNAL, name: 'auth:ready' }] }),
+      flow({ requires: [{ kind: PredicateKind.SIGNAL, name: 'auth:ready' }] }),
     );
     expect(check.ok).toBe(true);
   });

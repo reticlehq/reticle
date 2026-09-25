@@ -31,3 +31,6 @@ export const FlowStepTool = {
    */
   INVOKE: 'reticle_invoke',
 } as const;
+
+/** The companion type. It lives beside the const, so naming either one reaches only this leaf. */
+export type FlowStepTool = (typeof FlowStepTool)[keyof typeof FlowStepTool];

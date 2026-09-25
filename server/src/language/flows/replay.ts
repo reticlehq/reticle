@@ -1,4 +1,5 @@
 import { REDACTED_FILL, secretEnvKey } from './fields/flow-secret-field.js';
+import { FlowPredicateSchema, type Predicate } from '@reticlehq/core';
 import {
   DANGEROUS_ACTION_CONFIRM_ARG,
   ReticleCommand,
@@ -7,8 +8,6 @@ import {
 } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { formatStepAddress } from 'open-verification';
-import { predicateToExpect, enforcedOnReplay } from '@/judgement/outcome/predicate-to-expect.js';
-import { PredicateSchema } from '@reticlehq/engine/question/predicate/predicate.js';
 import type { RecordedStep, CompiledProgram } from './recording/tape/recordings.js';
 import type { Session } from '@/portal/session/session.js';
 import { asRecord, asString } from '@reticlehq/core';
@@ -119,15 +118,20 @@ export function captureAct(
 /**
  * A declared predicate, as a recorded expectation — or nothing.
  *
- * The ONE place this conversion happens, because it is the rule that decides whether a saved flow
- * proves anything, and two copies of it would drift. Only kinds a replay actually CHECKS survive:
- * recording an unenforced assertion grades the flow "asserted" while nothing verifies it, which is a
- * false green inside the feature built to prevent them. See enforcedOnReplay.
+ * It is now the SAME OBJECT. A step's `expect` is a `Predicate`, so what the agent declared in
+ * `until` is what the flow file stores, and there is no conversion left to lose anything in.
+ *
+ * What was here before was a lossy round trip through a flat struct with one slot per kind. An
+ * `allOf[netA, netB]` saved as one of the two with nothing said; anything the struct could not
+ * express was dropped, and a filter then removed the kinds replay would not have checked anyway.
+ * Every one of those was a claim the agent made and the file did not keep.
  */
-function enforceableExpect(raw: unknown): ReturnType<typeof predicateToExpect> | undefined {
+function enforceableExpect(raw: unknown): Predicate | undefined {
   if (raw === undefined) return undefined;
-  const parsed = PredicateSchema.safeParse(raw);
-  return parsed.success ? enforcedOnReplay(predicateToExpect(parsed.data)) : undefined;
+  // The flow file's own schema, so capture keeps exactly what a load would accept — a predicate
+  // holding a session ref is refused by both, rather than recorded here and rejected on read.
+  const parsed = FlowPredicateSchema.safeParse(raw);
+  return parsed.success ? parsed.data : undefined;
 }
 
 /**

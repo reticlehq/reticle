@@ -1,7 +1,7 @@
 import { dirname } from 'node:path';
 import { writeFileAtomic } from '@/memory/project/fs/write-atomic.js';
 import { z } from 'zod';
-import type { FlowExpect } from '@reticlehq/core';
+import type { Predicate } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { withFileLock } from '@/memory/project/file-lock.js';
@@ -81,7 +81,7 @@ export class AssertionTiersStore {
       out[name] = {
         steps: entry.steps.map((s) => ({
           step: s.step,
-          ...(s.expect === undefined ? {} : { expect: s.expect as FlowExpect }),
+          ...(s.expect === undefined ? {} : { expect: s.expect as Predicate }),
         })),
         sources: entry.sources,
       };

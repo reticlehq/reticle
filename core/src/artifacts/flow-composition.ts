@@ -1,4 +1,5 @@
-import type { FlowExpect, FlowFile } from './flow-types.js';
+import type { FlowFile } from './flow-types.js';
+import type { Predicate } from '@/verdict/predicate.js';
 
 /**
  * Whether one flow may be replayed straight after another.
@@ -23,7 +24,7 @@ export interface CompositionCheck {
   /** True when nothing B requires is left undischarged by A. Vacuously true when either is silent. */
   readonly ok: boolean;
   /** The claims B requires that A does not ensure. Empty when `ok`. */
-  readonly unmet: readonly FlowExpect[];
+  readonly unmet: readonly Predicate[];
   /** True when neither flow declared anything, so the answer is "unchecked" rather than "safe". */
   readonly unchecked: boolean;
 }
@@ -34,7 +35,7 @@ export interface CompositionCheck {
  * functions, no cycles, no class instances. A structural compare here would need a schema-aware
  * walk to be any better and would be wrong in ways that are hard to see.
  */
-function sameClaim(a: FlowExpect, b: FlowExpect): boolean {
+function sameClaim(a: Predicate, b: Predicate): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 

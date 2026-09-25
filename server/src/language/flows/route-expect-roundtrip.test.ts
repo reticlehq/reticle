@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { predicateToExpect, enforcedOnReplay } from '@/judgement/outcome/predicate-to-expect.js';
-import { successToPredicate } from './flow-success.js';
 import { classifyFlowAssertions, FlowAssertionGrade } from './flow-classify.js';
-import { FlowExpectSchema, PredicateKind } from '@reticlehq/core';
+import { FlowFileSchema, PredicateKind, flowExpectToPredicate } from '@reticlehq/core';
 
 /**
  * A route assertion SURVIVES being recorded.
@@ -11,7 +9,7 @@ import { FlowExpectSchema, PredicateKind } from '@reticlehq/core';
  * with `until: { kind: "route", contains: "layouts" }` returned `verified: "yes"` at route grade,
  * and the flow saved from that same drive graded `assertion-free`, warning that it "claims to
  * verify a goal it cannot actually check". Both statements were true, which is the problem:
- * `FlowExpect` had signal, net, console, element, text and state, and no route.
+ * `Predicate` had signal, net, console, element, text and state, and no route.
  *
  * Navigation is one of the commonest journeys there is, so this is not a corner: every
  * route-asserted drive persisted a flow that can never go red.
@@ -25,21 +23,38 @@ import { FlowExpectSchema, PredicateKind } from '@reticlehq/core';
 describe('a route assertion round-trips through a saved flow', () => {
   const predicate = { kind: PredicateKind.ROUTE, contains: 'layouts' } as const;
 
-  it('is carried into the recorded expectation', () => {
-    expect(predicateToExpect(predicate)).toEqual({ route: { contains: 'layouts' } });
-  });
-
-  it('survives the PUBLISHED schema, so it is really on disk', () => {
-    // A field the schema strips is a field that does not exist, however carefully the code sets it.
-    expect(FlowExpectSchema.parse({ route: { pathname: '/layouts' } }).route).toEqual({
-      pathname: '/layouts',
+  /*
+   * The two allowlists this file was written about are GONE, and so are the four tests that pinned
+   * them. `predicateToExpect` asked whether a route could be EXPRESSED in the flat format, and
+   * `enforcedOnReplay` whether replay would then CHECK it — two lists answering one question, which
+   * is how `route` came to land in one and not the other and reach disk as nothing.
+   *
+   * A step's expect is the predicate itself now. There is no second format to be expressible in and
+   * no filter to survive, so the drift those tests existed to catch cannot happen. What is left is
+   * the property they were protecting, asserted end to end.
+   */
+  it('reaches the file byte for byte, through the published schema', () => {
+    const parsed = FlowFileSchema.safeParse({
+      version: 1,
+      name: 'nav',
+      createdAt: 1,
+      steps: [
+        {
+          tool: 'reticle_act',
+          anchor: { kind: 'testid', value: 'nav-layouts' },
+          expect: predicate,
+        },
+      ],
     });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.steps[0]?.expect).toEqual(predicate);
   });
 
-  it('comes back as the same predicate on replay', () => {
-    const none = new Set<string>();
-    expect(successToPredicate({ route: { contains: 'layouts' } }, none)).toEqual(predicate);
-    expect(successToPredicate({ route: { pathname: '/layouts' } }, none)).toEqual({
+  it('is what replay waits on, unchanged', () => {
+    // No compilation step to lose it in: the thing graded and the thing waited on are one object.
+    expect(flowExpectToPredicate({ route: { contains: 'layouts' } })).toEqual(predicate);
+    expect(flowExpectToPredicate({ route: { pathname: '/layouts' } })).toEqual({
       kind: PredicateKind.ROUTE,
       pathname: '/layouts',
     });
@@ -61,40 +76,12 @@ describe('a route assertion round-trips through a saved flow', () => {
         {
           tool: 'reticle_act',
           anchor: { kind: 'testid', value: 'nav-layouts' },
-          expect: { route: { contains: 'layouts' } },
+          expect: { kind: 'route', contains: 'layouts' },
         },
       ],
     } as never;
     const graded = classifyFlowAssertions(flow);
     expect(graded.grade).toBe(FlowAssertionGrade.PRESENCE_ONLY);
     expect(graded.weakSteps).toBe(1);
-  });
-
-  it('still refuses the kinds that have no representation', () => {
-    // The guarantee that this did not become "carry anything": an animation assertion is still not
-    // invented into the file.
-    expect(predicateToExpect({ kind: PredicateKind.ANIMATION })).toBeUndefined();
-  });
-});
-
-/**
- * The SECOND allowlist, which is the one that actually decides what reaches disk.
- *
- * `predicateToExpect` says what CAN be expressed; `enforcedOnReplay` says what replay will check,
- * and only what survives both is recorded. They are two lists answering one question, and the file
- * that holds them already records them drifting apart once. They drifted again the day `route` was
- * added — the field landed, the mapping landed, and a route assertion still reached disk as nothing
- * because this list had not heard of it. Driving a real app is what showed it; every unit test at
- * the time was green.
- */
-describe('what replay will actually enforce', () => {
-  it('keeps a route, so the recorded assertion survives to the file', () => {
-    expect(enforcedOnReplay({ route: { contains: 'layouts' } })).toEqual({
-      route: { contains: 'layouts' },
-    });
-  });
-
-  it('still drops what replay cannot check, so nothing is recorded that will not be enforced', () => {
-    expect(enforcedOnReplay({ text: { contains: 'hello' } })).toBeUndefined();
   });
 });

@@ -40,7 +40,7 @@ describe('buildFlowReport — human confidence artifact', () => {
     const md = buildFlowReport({
       flow: flow({
         intent: 'inject a 500 fault and observe it',
-        success: { signal: 'fault:injected' },
+        success: { kind: 'signal', name: 'fault:injected' },
       }),
       replay: passReplay,
       replayTokens: 213,

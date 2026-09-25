@@ -5,6 +5,7 @@ import {
   AnnotationKind,
   DEGRADED_ANCHOR_ROLE,
   EventType,
+  FLOW_FILE_VERSION,
   RecordedFlowSchema,
   RecorderPhase,
   type FlowStep,
@@ -311,16 +312,16 @@ describe('recorder annotations → flow fields', () => {
       signal: 'diff:shown',
     };
     const flow = compileRecording('f', [clickStep('save')], [ann], NOW);
-    expect(flow.steps[0]?.expect?.signal).toBe('diff:shown');
+    expect(flow.steps[0]?.expect).toEqual({ kind: 'signal', name: 'diff:shown' });
   });
 
-  it('assert-visible compiles into expect.element', () => {
+  it('assert-visible compiles into an element predicate', () => {
     const ann: Annotation = {
       kind: AnnotationKind.ASSERT_VISIBLE,
       anchor: { kind: AnchorKind.TESTID, value: 'panel' },
     };
     const flow = compileRecording('f', [clickStep('save')], [ann], NOW);
-    expect(flow.steps[0]?.expect?.element?.testid).toBe('panel');
+    expect(flow.steps[0]?.expect).toEqual({ kind: 'element', query: { testid: 'panel' } });
   });
 
   it('mark-dynamic adds the anchor to flow.dynamic[] and leaves step.expect untouched', () => {
@@ -340,7 +341,7 @@ describe('recorder annotations → flow fields', () => {
       signal: 'order-placed',
     };
     const flow = compileRecording('f', [clickStep('save')], [ann], NOW);
-    expect(flow.success?.signal).toBe('order-placed');
+    expect(flow.success).toEqual({ kind: 'signal', name: 'order-placed' });
   });
 });
 
@@ -382,7 +383,7 @@ describe('recorder annotate flow (interactive)', () => {
 
     const recorded = emits.filter((e) => e.type === EventType.FLOW_RECORDED).at(-1);
     const flow = RecordedFlowSchema.parse(recorded?.data).flow;
-    expect(flow.steps[0]?.expect?.signal).toBe('diff:shown');
+    expect(flow.steps[0]?.expect).toEqual({ kind: 'signal', name: 'diff:shown' });
   });
 
   it('destroy after an annotate returns to a clean DOM (no leaked toolbar)', () => {
@@ -409,9 +410,11 @@ describe('compileRecording determinism', () => {
     expect(flow.startPath).toBe('/dashboard');
   });
 
-  it('omits startPath when none was captured (back-compat: file stays version 1)', () => {
+  // A missing startPath no longer holds the file at version 1: the writer emits the current version
+  // on every save, and a read of an older file never rewrites it.
+  it('omits startPath when none was captured, and writes the current version', () => {
     const flow = compileRecording('f', [], [], 1);
     expect(flow.startPath).toBeUndefined();
-    expect(flow.version).toBe(1);
+    expect(flow.version).toBe(FLOW_FILE_VERSION);
   });
 });

@@ -31,7 +31,7 @@ const green = (name: string) => ({
       {
         tool: 'reticle_act',
         anchor: { kind: 'testid', value: 'a' },
-        expect: { element: { testid: 'b' } },
+        expect: { kind: 'element', query: { testid: 'b' } },
       },
     ],
   },

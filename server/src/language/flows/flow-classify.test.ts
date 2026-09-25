@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { FLOW_FILE_VERSION, AnchorKind } from '@reticlehq/core';
-import type { FlowFile, FlowStep, FlowExpect } from '@reticlehq/core';
+import type { FlowFile, FlowStep, Predicate } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { classifyFlowAssertions, FlowAssertionGrade } from './flow-classify.js';
 
-function step(expect?: FlowExpect): FlowStep {
+function step(expect?: Predicate): FlowStep {
   const s: FlowStep = { tool: ReticleTool.ACT, anchor: { kind: AnchorKind.TESTID, value: 'x' } };
   if (expect !== undefined) s.expect = expect;
   return s;
 }
 
-function flow(steps: FlowStep[], success?: FlowExpect): FlowFile {
+function flow(steps: FlowStep[], success?: Predicate): FlowFile {
   const f: FlowFile = { version: FLOW_FILE_VERSION, name: 'f', createdAt: 0, steps };
   if (success !== undefined) f.success = success;
   return f;
@@ -26,7 +26,9 @@ describe('classifyFlowAssertions', () => {
   });
 
   it('flags element-only checks as presence-only (a healed wrong locator could pass)', () => {
-    const c = classifyFlowAssertions(flow([step(), step({ element: { testid: 'panel' } })]));
+    const c = classifyFlowAssertions(
+      flow([step(), step({ kind: 'element', query: { testid: 'panel' } })]),
+    );
     expect(c.grade).toBe(FlowAssertionGrade.PRESENCE_ONLY);
     expect(c.hasConsequenceAssertion).toBe(false);
     expect(c.weakSteps).toBe(1);
@@ -36,7 +38,7 @@ describe('classifyFlowAssertions', () => {
   // Replay evaluates these (assertStepExpect); the coupling itself is guarded in
   // step-consequence.test.ts, which is where the false green that made this necessary is written up.
   it('treats a step signal assertion as a real consequence', () => {
-    const c = classifyFlowAssertions(flow([step({ signal: 'order:placed' })]));
+    const c = classifyFlowAssertions(flow([step({ kind: 'signal', name: 'order:placed' })]));
     expect(c.grade).toBe(FlowAssertionGrade.ASSERTED);
     expect(c.hasConsequenceAssertion).toBe(true);
     expect(c.consequenceSteps).toBe(1);
@@ -44,27 +46,33 @@ describe('classifyFlowAssertions', () => {
 
   it('and a step network assertion', () => {
     const c = classifyFlowAssertions(
-      flow([step({ net: { urlContains: '/api/order', status: 200 } })]),
+      flow([step({ kind: 'net', urlContains: '/api/order', status: 200 })]),
     );
     expect(c.grade).toBe(FlowAssertionGrade.ASSERTED);
     expect(c.consequenceSteps).toBe(1);
   });
 
   it('a step STATE assertion is a consequence — assertStepState really does check it', () => {
-    const c = classifyFlowAssertions(flow([step({ state: { path: 'order.id', equals: 'x' } })]));
+    const c = classifyFlowAssertions(
+      flow([step({ kind: 'state', path: 'order.id', equals: 'x' })]),
+    );
     expect(c.grade).toBe(FlowAssertionGrade.ASSERTED);
     expect(c.consequenceSteps).toBe(1);
     expect(c.warning).toBeUndefined();
   });
 
   it('counts a consequence success end-condition even with no step expects', () => {
-    const c = classifyFlowAssertions(flow([step(), step()], { signal: 'checkout:done' }));
+    const c = classifyFlowAssertions(
+      flow([step(), step()], { kind: 'signal', name: 'checkout:done' }),
+    );
     expect(c.grade).toBe(FlowAssertionGrade.ASSERTED);
     expect(c.successIsConsequence).toBe(true);
   });
 
   it('an element-only success is still presence-only', () => {
-    const c = classifyFlowAssertions(flow([step()], { element: { testid: 'thanks' } }));
+    const c = classifyFlowAssertions(
+      flow([step()], { kind: 'element', query: { testid: 'thanks' } }),
+    );
     expect(c.grade).toBe(FlowAssertionGrade.PRESENCE_ONLY);
     expect(c.successIsConsequence).toBe(false);
   });
@@ -73,7 +81,7 @@ describe('classifyFlowAssertions', () => {
     const seq: FlowStep = {
       tool: ReticleTool.ACT_SEQUENCE,
       anchor: { kind: AnchorKind.TESTID, value: 'x' },
-      steps: [step(), step({ state: { path: 'saved', equals: true } })],
+      steps: [step(), step({ kind: 'state', path: 'saved', equals: true })],
     };
     const c = classifyFlowAssertions(flow([seq]));
     expect(c.hasConsequenceAssertion).toBe(true);
@@ -82,20 +90,23 @@ describe('classifyFlowAssertions', () => {
 });
 
 /** flow variant that also declares a business intent. */
-function intentFlow(steps: FlowStep[], intent: string, success?: FlowExpect): FlowFile {
+function intentFlow(steps: FlowStep[], intent: string, success?: Predicate): FlowFile {
   return { ...flow(steps, success), intent };
 }
 
 describe('classifyFlowAssertions — business intent + outcome oracle', () => {
   it('a flow with no intent is intentVerified=false and carries no intent', () => {
-    const c = classifyFlowAssertions(flow([step({ signal: 'deploy:shipped' })]));
+    const c = classifyFlowAssertions(flow([step({ kind: 'signal', name: 'deploy:shipped' })]));
     expect(c.intent).toBeUndefined();
     expect(c.intentVerified).toBe(false);
   });
 
   it('intent + a consequence success outcome → intentVerified (the goal can actually fail)', () => {
     const c = classifyFlowAssertions(
-      intentFlow([step()], 'ship a deploy to production', { signal: 'deploy:shipped' }),
+      intentFlow([step()], 'ship a deploy to production', {
+        kind: 'signal',
+        name: 'deploy:shipped',
+      }),
     );
     expect(c.intent).toBe('ship a deploy to production');
     expect(c.intentVerified).toBe(true);
@@ -111,7 +122,10 @@ describe('classifyFlowAssertions — business intent + outcome oracle', () => {
 
   it('intent with only a presence-only check is NOT verified (a healed locator could fake it)', () => {
     const c = classifyFlowAssertions(
-      intentFlow([step()], 'open the deploy modal', { element: { testid: 'deploy-modal' } }),
+      intentFlow([step()], 'open the deploy modal', {
+        kind: 'element',
+        query: { testid: 'deploy-modal' },
+      }),
     );
     expect(c.intentVerified).toBe(false);
     expect(c.warning).toContain('declares a business intent but asserts no observable outcome');

@@ -1,17 +1,24 @@
 import { z } from 'zod';
-import { CROSS_STEP_ADDRESS, FlowStepTool } from './flow-step-tool.js';
+import { CROSS_STEP_ADDRESS } from './flow-step-tool.js';
+import { READABLE_FLOW_VERSIONS } from './flow-constants.js';
 import { StepEffect } from './step-effect.js';
-export { CROSS_STEP_ADDRESS, FlowStepTool } from './flow-step-tool.js';
 import { ActionType } from '@/wire/constants/constants.js';
 import type { Contradiction } from '@/verdict/findings.js';
-import { CONSEQUENCE_KINDS } from '@/verdict/consequence.js';
+import { CONSEQUENCE_KINDS, PRESENCE_GRADED } from '@/verdict/consequence.js';
+import { PredicateKind } from '@/verdict/consequence.js';
+import { PredicateSchema, type Predicate } from '@/verdict/predicate.js';
+import { sessionBoundField, sessionRefRefusal } from '@/verdict/predicate-tree.js';
+import { FlowExpectSchema, flowExpectToPredicate } from './flow-expect-flat.js';
+
+// The older flat shape and its reader live together; both are re-exported so the one public name
+// for "a flow's types" still answers for them.
+export { FlowExpectSchema, type FlowExpect } from './flow-expect-flat.js';
 // Its own directory's constants, which this file had been reaching through `wire/constants/constants.js`
 // to get -- the clearest cost of that re-export: artifacts went out to wire to fetch a symbol
 // that had been sitting next door the whole time.
 import {
   AnchorKind,
   type DriftReason,
-  FLOW_FILE_VERSION,
   FlowStatus,
   type HealStatus,
   type ReplayStatus,
@@ -26,8 +33,6 @@ import {
  * there is one source of truth and a rename cannot silently desync the recorder from the replayer (a
  * tool rename once killed four e2e specs — this closes the browser/server half of that drift).
  */
-
-export type FlowStepTool = (typeof FlowStepTool)[keyof typeof FlowStepTool];
 
 /**
  * A semantic anchor: how a step re-finds its element/event at replay
@@ -64,132 +69,54 @@ export const FlowAnchorSchema = z.discriminatedUnion('kind', [
 ]);
 export type FlowAnchor = z.infer<typeof FlowAnchorSchema>;
 
+// A ref is one session's address. Kept, it resolves to nothing on replay — and a scope that
+// resolves to nothing SATISFIES an absence check — so the step could never go red. Refused here,
+// on the one schema both the save path and the load path go through.
+export const FlowPredicateSchema = PredicateSchema.superRefine((predicate, ctx) => {
+  const field = sessionBoundField(predicate);
+  if (field === undefined) return;
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: sessionRefRefusal(field),
+  });
+});
+
 /**
- * A post-condition a step asserts (compiled from a structured annotation; optional).
+ * Accept either shape and always yield a PREDICATE.
  *
- * Strict, at every nesting level: an unrecognized key (a typo, or a predicate kind this schema
- * doesn't model, e.g. `allOf`, or a typo'd `net`/`console`/`element`/`state` sub-field) must fail
- * to parse instead of being silently dropped. A loose z.object() here would quietly discard the
- * extra key and leave the step with a weaker (or empty) assertion than its author wrote — the
- * flow then replays green against nothing, having proved no real regression.
+ * A v2 file stores the predicate directly; a v1 file stores the flat struct, and is lifted on read
+ * by `flowExpectToPredicate`. The discriminator is `kind`, which every predicate has and no flat
+ * expect ever did, so the two can never be confused for one another.
+ *
+ * Nothing is written back. A v1 file read this way stays a v1 file on disk, which is what makes the
+ * migration safe for flows that are committed to a shared repository.
  */
-export const FlowExpectSchema = z
-  .object({
-    /**
-     * The route the step must have reached — the consequence of a NAVIGATION.
-     *
-     * Absent until now, and its absence was not a corner case: navigation is one of the commonest
-     * journeys there is, and every route-asserted drive saved a flow that could never go red. Found
-     * by driving a real app, where `act_and_wait { until: { kind: "route" } }` returned
-     * `verified: "yes"` and the flow saved from that same drive graded `assertion-free`.
-     *
-     * Additive and optional, so a flow file written before it still parses and FLOW_FILE_VERSION
-     * stays 1 — the same treatment `signalData` and `signalCount` had.
-     */
-    route: z
-      .object({ pathname: z.string().optional(), contains: z.string().optional() })
-      .optional(),
-    signal: z.string().optional(),
-    /**
-     * Optional payload shape an `assert-signal` annotation requires the signal
-     * to match (the predicate DSL's signal.dataMatches). Additive/optional — a flow file with a
-     * bare `signal` still parses, and the on-disk version stays FLOW_FILE_VERSION 1.
-     */
-    signalData: z.record(z.unknown()).optional(),
-    /**
-     * Exact number of times the signal must have fired — the signal-side twin of `net.count`, and the
-     * only way a saved flow can keep a cardinality the agent actually asserted. Without it a
-     * `count: 1` drive would be recorded as bare presence, which is a strictly WEAKER claim than the
-     * one made: the replayed flow then goes green on the double-fire it was recorded to catch.
-     * Additive/optional — a flow file with a bare `signal` still parses, and FLOW_FILE_VERSION stays 1.
-     */
-    signalCount: z.number().int().nonnegative().optional(),
-    net: z
-      .object({
-        method: z.string().optional(),
-        urlContains: z.string().optional(),
-        status: z.number().optional(),
-        /**
-         * Exact number of matching requests since the action — turns presence into a cardinality
-         * assertion. Catches the double-submit / useEffect-double-fire / retry-storm regression class:
-         * the request fired (presence passes) but fired the WRONG number of times. Omit = presence (≥1).
-         */
-        count: z.number().int().nonnegative().optional(),
-      })
-      .strict()
-      .optional(),
-    /**
-     * Console golden end-condition: assert the action logged (or, with absent:true, did NOT log) a
-     * console message at `level` (default 'error'). `absent:true` is the common case — "the action
-     * completed with a clean console" — catching the regression where an action throws a caught error
-     * / logs an uncaught rejection while the UI still renders fine (a presence check passes it).
-     */
-    console: z
-      .object({
-        level: z.string().optional(),
-        absent: z.boolean().optional(),
-      })
-      .strict()
-      .optional(),
-    element: z
-      .object({
-        testid: z.string().optional(),
-        role: z.string().optional(),
-        name: z.string().optional(),
-      })
-      .strict()
-      .optional(),
-    /**
-     * Rendered text as an end-condition, using the shapes the assert surface already accepts.
-     *
-     * The gap this closes: an app with no testids, no `reticle.signal`, no registrable store and no
-     * network call on the interaction under test -- a discount price computed and rendered, a
-     * formatted total, a derived label -- could not produce an asserted flow AT ALL. Everything the
-     * vocabulary offered needed a channel that app does not have, so the only honest outcome was
-     * `assertion-free`, which is a permanent green (#811).
-     *
-     * Derived-DOM rendering is a large share of what actually breaks in a UI, and it was the share
-     * that could not be pinned.
-     *
-     * Classified PRESENCE, not consequence, and that is not a technicality: text is read from the
-     * DOM, so a locator healed to the wrong element can still satisfy it. It earns `presence-only`,
-     * which is a real grade above `assertion-free` and honestly below `signal`/`net`/`state`.
-     */
-    text: z
-      .object({
-        contains: z.string().min(1),
-        /** Narrow the search to a container, exactly as the `text` predicate's `scope` does. */
-        scope: z.string().optional(),
-        /** Assert the text is GONE — the regression check for a cleared error or a dismissed toast. */
-        absent: z.boolean().optional(),
-        /** Require the match to be visible, not merely present in the DOM. */
-        visible: z.boolean().optional(),
-      })
-      .strict()
-      .optional(),
-    /**
-     * Assert a registered store's value — the source of truth no DOM/network read can reach. Compiles
-     * to the predicate engine's `state` predicate. Additive/optional — a flow without it still parses
-     * and the on-disk version stays FLOW_FILE_VERSION 1. `equals` accepts a literal, omitted = presence,
-     * or a `{ $gte | $contains | $length }` operator pattern.
-     */
-    state: z
-      .object({
-        store: z.string().optional(),
-        path: z.string(),
-        equals: z.unknown().optional(),
-        /**
-         * Treat this as an INVARIANT that must still hold AFTER the action settles, rather than a
-         * condition to wait for. Set it for a blast-radius check ("this unrelated path must NOT have
-         * moved") — without it a wait-until-true read passes before an over-reaching side-effect lands.
-         */
-        hold: z.boolean().optional(),
-      })
-      .strict()
-      .optional(),
-  })
-  .strict();
-export type FlowExpect = z.infer<typeof FlowExpectSchema>;
+/*
+ * A union rather than a preprocess, and the difference is STRICTNESS.
+ *
+ * A preprocess lifts the raw object before anything validates it, so a v1 expect carrying a
+ * misspelled key would have had that key quietly ignored by the lift and the rest accepted — a
+ * stripped field and a green, which is the precise shape this schema was made strict to prevent.
+ *
+ * Running `FlowExpectSchema` as a branch keeps it: a v2 predicate matches the first branch on its
+ * `kind`, a well-formed v1 expect matches the second and is lifted by the transform, and an expect
+ * that is neither is refused by both. Strictness at every level of the v1 shape survives unchanged.
+ */
+const ExpectSchema = z.union([
+  FlowPredicateSchema,
+  FlowExpectSchema.transform((expect) => flowExpectToPredicate(expect)),
+]);
+
+/**
+ * The same lift over a LIST, dropping the entries that assert nothing.
+ *
+ * `requires` and `ensures` are arrays, and an element that lifts to `undefined` is a claim with no
+ * content. Keeping a hole in the list would make `canFollow` compare against nothing and report a
+ * precondition as met by a claim that says nothing at all.
+ */
+const ExpectListSchema = z
+  .array(ExpectSchema)
+  .transform((list) => list.filter((one): one is Predicate => one !== undefined));
 
 /** One step of a flow: an anchored action (+ optional expectation). */
 export interface FlowStep {
@@ -217,7 +144,7 @@ export interface FlowStep {
   effect?: StepEffect;
   action?: ActionType;
   args?: Record<string, unknown>;
-  expect?: FlowExpect;
+  expect?: Predicate;
   /** true when the anchor is best-effort (no testid was resolvable at record time). NOT dropped. */
   degraded?: boolean;
   /**
@@ -295,7 +222,7 @@ const baseFlowStep = z.object({
   healed: z.object({ from: z.string(), at: z.number() }).optional(),
   action: z.nativeEnum(ActionType).optional(),
   args: z.record(z.unknown()).optional(),
-  expect: FlowExpectSchema.optional(),
+  expect: ExpectSchema.optional(),
   degraded: z.boolean().optional(),
   timeoutMs: z.number().int().positive().optional(),
   invoke: z.string().min(1).optional(),
@@ -678,7 +605,14 @@ export interface FlowReplayResult {
  * file with neither still parses — back-compat is locked by a test).
  */
 export const FlowFileSchema = z.object({
-  version: z.literal(FLOW_FILE_VERSION),
+  /**
+   * The format this file was WRITTEN in. Both readable versions are accepted, because a v1 file is
+   * lifted rather than refused — see READABLE_FLOW_VERSIONS.
+   */
+  version: z
+    .number()
+    .int()
+    .refine((v) => READABLE_FLOW_VERSIONS.has(v)),
   name: z.string(),
   /**
    * The business goal this flow exists to verify, one line (e.g. "ship a deploy to production").
@@ -736,8 +670,8 @@ export const FlowFileSchema = z.object({
    * Same predicate shape as a step's `expect`, deliberately — a precondition is just a consequence
    * somebody else's flow was responsible for.
    */
-  requires: z.array(FlowExpectSchema).optional(),
-  ensures: z.array(FlowExpectSchema).optional(),
+  requires: ExpectListSchema.optional(),
+  ensures: ExpectListSchema.optional(),
   /** From the injected clock (ms) — deterministic in tests, byte-stable on disk. */
   createdAt: z.number(),
   steps: z.array(FlowStepSchema),
@@ -750,7 +684,7 @@ export const FlowFileSchema = z.object({
    * replays exactly as before and the on-disk version stays FLOW_FILE_VERSION 1.
    */
   signalTimeoutMs: z.number().int().positive().optional(),
-  success: FlowExpectSchema.optional(),
+  success: ExpectSchema.optional(),
   /**
    * Anchors whose CONTENT must not be asserted (e.g. LLM output). Replay asserts
    * presence, not words. Compiled from a `mark-dynamic` annotation.
@@ -968,13 +902,8 @@ export function staleKnownBugs(
 }
 
 /** True when a FlowExpect asserts at least one consequence (any of the ConsequenceKind fields set). */
-export function flowExpectHasConsequence(expect: FlowExpect | undefined): boolean {
-  if (expect === undefined) return false;
-  const fields = expect as Record<string, unknown>;
-  for (const kind of CONSEQUENCE_KINDS) {
-    if (fields[kind] !== undefined) return true;
-  }
-  return false;
+export function flowExpectHasConsequence(expect: Predicate | undefined): boolean {
+  return expectClauses(expect).some((clause) => CONSEQUENCE_KINDS.has(clause.kind));
 }
 
 /**
@@ -993,7 +922,23 @@ export function flowExpectHasConsequence(expect: FlowExpect | undefined): boolea
  * a saved claim nobody made. Promoting both is a defensible change and a separate one, with the
  * false-green question — can the route commit while the view does not render? — answered first.
  */
-export function flowExpectIsPresenceOnly(expect: FlowExpect | undefined): boolean {
+export function flowExpectIsPresenceOnly(expect: Predicate | undefined): boolean {
   if (expect === undefined || flowExpectHasConsequence(expect)) return false;
-  return expect.element !== undefined || expect.text !== undefined || expect.route !== undefined;
+  return expectClauses(expect).some((clause) => PRESENCE_GRADED.has(clause.kind));
+}
+
+/**
+ * Every clause an expectation contains, composites flattened.
+ *
+ * The grade is about what a flow CAN prove, so a consequence buried in an `allOf` counts exactly as
+ * much as one at the top. It got simpler with the tree rather than harder: the old version had to
+ * probe a struct for one key per kind, and a predicate carries its kind on itself.
+ */
+function expectClauses(expect: Predicate | undefined): readonly Predicate[] {
+  if (expect === undefined) return [];
+  if (PredicateKind.ALL_OF === expect.kind || PredicateKind.ANY_OF === expect.kind) {
+    return expect.predicates.flatMap(expectClauses);
+  }
+  if (PredicateKind.NOT === expect.kind) return expectClauses(expect.predicate);
+  return [expect];
 }

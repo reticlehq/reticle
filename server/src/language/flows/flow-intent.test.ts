@@ -64,7 +64,7 @@ describe('a flow carries the business intent it discharges', () => {
     const { flows, intents } = harness();
     await flows.save(
       program('checkin'),
-      annotations({ intent: CHECKIN, success: { signal: 'trip:checked-in' } }),
+      annotations({ intent: CHECKIN, success: { kind: 'signal', name: 'trip:checked-in' } }),
     );
 
     const [intent] = await intents.read();
@@ -94,7 +94,7 @@ describe('a flow carries the business intent it discharges', () => {
     const { flows, intents } = harness();
     await flows.save(
       program('checkin'),
-      annotations({ intent: CHECKIN, success: { signal: 'trip:checked-in' } }),
+      annotations({ intent: CHECKIN, success: { kind: 'signal', name: 'trip:checked-in' } }),
     );
     const loaded = await flows.load('checkin');
     if (!loaded.ok) throw new Error('flow did not save');
@@ -159,7 +159,7 @@ describe('a flow carries the business intent it discharges', () => {
       createdAt: NOW,
       steps: [],
       intentId: 'checkout-works',
-      success: { signal: 'order:placed' },
+      success: { kind: 'signal', name: 'order:placed' },
     };
     await flows.saveFlow(flow);
 

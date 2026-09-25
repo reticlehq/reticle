@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FlowFileSchema } from './flow-types.js';
-import { FLOW_FILE_VERSION } from './flow-constants.js';
+import { READABLE_FLOW_VERSIONS } from './flow-constants.js';
 import { StepEffect } from './step-effect.js';
 
 /**
@@ -9,14 +9,15 @@ import { StepEffect } from './step-effect.js';
  * `id`, `effect`, `requires` and `ensures` all landed after flows were already committed to real
  * repositories. Flow files are not ours: they live in a user's project, under version control, and a
  * schema change that refuses one is not a migration, it is a broken install for anybody who recorded
- * before the release. So every addition is OPTIONAL, the on-disk version stays where it was, and the
- * absence of a field keeps meaning exactly what it meant.
+ * before the release. So every addition is OPTIONAL and the absence of a field keeps meaning exactly
+ * what it meant.
  *
- * The version assertion is the load-bearing one: bumping FLOW_FILE_VERSION for an additive change
- * would make every older file look like a different format to anything that reads the number.
+ * The load-bearing assertion is that a VERSION 1 file still parses. It is not additive any more:
+ * `expect` became a predicate and the written version moved to 2. What did not change, and is what
+ * this file exists to hold, is that the older format is still READ rather than refused.
  */
 const LEGACY = {
-  version: FLOW_FILE_VERSION,
+  version: 1,
   name: 'recorded-before-any-of-this',
   createdAt: 0,
   steps: [{ tool: 'reticle_act', anchor: { kind: 'testid', value: 'save' }, action: 'click' }],
@@ -41,8 +42,17 @@ describe('a flow recorded before these fields existed still loads', () => {
     expect(parsed.ensures).toBeUndefined();
   });
 
-  it('did not bump the on-disk version for an additive change', () => {
-    expect(FLOW_FILE_VERSION).toBe(1);
+  /*
+   * This asserted `FLOW_FILE_VERSION === 1`, which was a proxy for the property that mattered: an
+   * ADDITIVE field costs nobody a migration. The version has since moved to 2 for a change that was
+   * not additive at all — `expect` became a predicate — so the literal is no longer the right
+   * question. The property is, and it is the stronger statement: a v1 file that declares none of
+   * these fields is still READ, by this build, today.
+   */
+  it('still reads a version 1 file that declares none of them', () => {
+    expect(READABLE_FLOW_VERSIONS.has(1)).toBe(true);
+    expect(FlowFileSchema.safeParse(LEGACY).success).toBe(true);
+    expect(FlowFileSchema.parse(LEGACY).version).toBe(1);
   });
 
   it('accepts a flow that declares all of them', () => {

@@ -8,7 +8,8 @@ import {
   type Annotation,
   type AnnotateOutcome,
   type AnnotateResult,
-  type FlowExpect,
+  PredicateKind,
+  type Predicate,
 } from '@reticlehq/core';
 
 /**
@@ -26,28 +27,66 @@ import {
  * compilation is explicitly FUTURE — an NL string never reaches here (AnnotationSchema
  * rejects it upstream; the tool maps that to UNKNOWN_KIND). No NL parser exists or is faked.
  */
+/**
+ * A network annotation as a predicate, `count` included.
+ *
+ * Written once because it is compiled on two paths — a step gate and a flow's success oracle — and
+ * the first version of this migration wrote it twice and dropped `count` from both. The schema's own
+ * comment says why that matters: presence says the request fired, cardinality catches the
+ * double-submit that fired it twice, and `count` is the point of the annotation.
+ *
+ * A counted assertion also gates on `settled`. A wait-until-true evaluator satisfies `count: 1` the
+ * instant the FIRST request lands, which is before a duplicate arrives — so without the gate the
+ * guard passes on exactly the bug it exists to catch.
+ */
+function netPredicate(net: {
+  method?: string | undefined;
+  urlContains?: string | undefined;
+  status?: number | undefined;
+  count?: number | undefined;
+}): Predicate {
+  const clause: Extract<Predicate, { kind: typeof PredicateKind.NET }> = {
+    kind: PredicateKind.NET,
+  };
+  if (net.method !== undefined) clause.method = net.method;
+  if (net.urlContains !== undefined) clause.urlContains = net.urlContains;
+  if (net.status !== undefined) clause.status = net.status;
+  if (net.count === undefined) return clause;
+  clause.count = net.count;
+  return { kind: PredicateKind.ALL_OF, predicates: [{ kind: PredicateKind.SETTLED }, clause] };
+}
+
 export function compileAnnotation(a: Annotation, stepCount: number): AnnotateOutcome {
   switch (a.kind) {
     case AnnotationKind.ASSERT_SIGNAL: {
       if (0 === stepCount) return noStep();
-      const expect: FlowExpect = { signal: a.name };
-      if (a.dataMatches !== undefined) expect.signalData = a.dataMatches;
-      return stepPatch(a, stepCount, expect);
+      const signal: Extract<Predicate, { kind: typeof PredicateKind.SIGNAL }> = {
+        kind: PredicateKind.SIGNAL,
+        name: a.name,
+      };
+      if (a.dataMatches !== undefined) signal.dataMatches = a.dataMatches;
+      return stepPatch(a, stepCount, signal);
     }
     case AnnotationKind.ASSERT_VISIBLE: {
       if (0 === stepCount) return noStep();
-      return stepPatch(a, stepCount, { element: { testid: a.testid } });
+      return stepPatch(a, stepCount, {
+        kind: PredicateKind.ELEMENT,
+        query: { testid: a.testid },
+      });
     }
     case AnnotationKind.ASSERT_STATE: {
       if (0 === stepCount) return noStep();
-      const state: FlowExpect['state'] = { path: a.statePath };
+      const state: Extract<Predicate, { kind: typeof PredicateKind.STATE }> = {
+        kind: PredicateKind.STATE,
+        path: a.statePath,
+      };
       if (a.store !== undefined) state.store = a.store;
       if (a.equals !== undefined) state.equals = a.equals;
-      return stepPatch(a, stepCount, { state });
+      return stepPatch(a, stepCount, state);
     }
     case AnnotationKind.ASSERT_NET: {
       if (0 === stepCount) return noStep();
-      return stepPatch(a, stepCount, { net: a.net });
+      return stepPatch(a, stepCount, netPredicate(a.net));
     }
     case AnnotationKind.MARK_DYNAMIC:
       return {
@@ -58,33 +97,49 @@ export function compileAnnotation(a: Annotation, stepCount: number): AnnotateOut
       // Precedence: signal > state > net > console > testid (a consequence end-condition beats a
       // presence check). None of them → MISSING_FIELD.
       if (a.signal !== undefined) {
-        return flowSuccess(a, { signal: a.signal });
+        return flowSuccess(a, { kind: PredicateKind.SIGNAL, name: a.signal });
       }
       if (a.statePath !== undefined) {
-        const state: FlowExpect['state'] = { path: a.statePath };
+        const state: Extract<Predicate, { kind: typeof PredicateKind.STATE }> = {
+          kind: PredicateKind.STATE,
+          path: a.statePath,
+        };
         if (a.store !== undefined) state.store = a.store;
         if (a.equals !== undefined) state.equals = a.equals;
-        if (a.hold !== undefined) state.hold = a.hold;
-        return flowSuccess(a, { state });
+        // `hold` was a v1 flag meaning "this must STILL be true after the page settles". A predicate
+        // says that by composing: the settle gate is a clause, not a boolean on another clause.
+        return flowSuccess(
+          a,
+          true === a.hold
+            ? { kind: PredicateKind.ALL_OF, predicates: [{ kind: PredicateKind.SETTLED }, state] }
+            : state,
+        );
       }
       if (a.net !== undefined) {
-        return flowSuccess(a, { net: a.net });
+        return flowSuccess(a, netPredicate(a.net));
       }
       if (a.console !== undefined) {
-        return flowSuccess(a, { console: a.console });
+        return flowSuccess(a, {
+          kind: PredicateKind.CONSOLE,
+          ...(a.console.level === undefined ? {} : { level: a.console.level }),
+          ...(a.console.absent === undefined ? {} : { absent: a.console.absent }),
+        });
       }
       if (a.testid !== undefined) {
-        return flowSuccess(a, { element: { testid: a.testid } });
+        return flowSuccess(a, { kind: PredicateKind.ELEMENT, query: { testid: a.testid } });
       }
       // Last, and above only MISSING_FIELD. An element is a locator and text is content; where a
       // caller offered both, the locator is the more stable anchor. But text beats nothing at all,
       // which is what an app whose only observable is a rendered value used to get (#811).
       if (a.text !== undefined) {
-        const text: NonNullable<FlowExpect['text']> = { contains: a.text.contains };
+        const text: Extract<Predicate, { kind: typeof PredicateKind.TEXT }> = {
+          kind: PredicateKind.TEXT,
+          contains: a.text.contains,
+        };
         if (a.text.scope !== undefined) text.scope = a.text.scope;
         if (a.text.absent !== undefined) text.absent = a.text.absent;
         if (a.text.visible !== undefined) text.visible = a.text.visible;
-        return flowSuccess(a, { text });
+        return flowSuccess(a, text);
       }
       return { result: { ok: false, code: AnnotationErrorCode.MISSING_FIELD } };
     }
@@ -101,7 +156,7 @@ function noStep(): AnnotateOutcome {
   return { result: { ok: false, code: AnnotationErrorCode.NO_STEP_TO_ANNOTATE } };
 }
 
-function stepPatch(a: Annotation, stepCount: number, stepExpect: FlowExpect): AnnotateOutcome {
+function stepPatch(a: Annotation, stepCount: number, stepExpect: Predicate): AnnotateOutcome {
   return {
     result: {
       ok: true,
@@ -122,7 +177,7 @@ const SUCCESS_ASSERTION_FREE_NOTE =
 const SUCCESS_PRESENCE_ONLY_NOTE =
   'This success-state only checks element presence, so flow_save will grade the flow presence-only — a locator healed to the wrong element still passes it. Use a signal / net / state success-state to assert an observable consequence.';
 
-function flowSuccess(a: Annotation, success: FlowExpect): AnnotateOutcome {
+function flowSuccess(a: Annotation, success: Predicate): AnnotateOutcome {
   const result: AnnotateResult = {
     ok: true,
     target: AnnotationTarget.FLOW,

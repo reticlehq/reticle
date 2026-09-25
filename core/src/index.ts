@@ -40,7 +40,19 @@ export * from './wire/messages.js'; // ReticleEvent + the message schemas
 export * from './wire/event-payloads.js'; // per-event payload schemas + wire vocab
 export * from './wire/event-priority.js'; // which events survive the bridge rate cap
 export * from './artifacts/flow-constants.js'; // moved off wire/constants/constants, which had no use for them
-export * from './artifacts/flow-types.js'; // FlowStep, FlowExpect, FlowStepTool, replay result shapes
+/*
+ * The leaf FIRST, and separately from the file it describes. `flow-step-tool.ts` was extracted out
+ * of `flow-types.ts` precisely so the browser SDK — which imports `FlowStepTool` and nothing else
+ * from there — would stop downloading eleven zod schemas it can never use. `flow-types.ts` then
+ * re-exported the two names for convenience, which put the whole module straight back on the
+ * barrel's path to them and quietly undid the extraction: measured at 6,222 B of every page load,
+ * reached through one constant.
+ *
+ * That is the same shape as the z-index that dragged the panel's stylesheet in, and as `StepEffect`
+ * on the line below. A leaf is only a leaf if the barrel names it directly.
+ */
+export * from './artifacts/flow-step-tool.js'; // FlowStepTool / CROSS_STEP_ADDRESS: a leaf, named directly
+export * from './artifacts/flow-types.js'; // FlowStep, FlowExpect, replay result shapes
 export * from './artifacts/step-effect.js'; // StepEffect: a leaf, so the page never downloads it
 export * from './artifacts/flow-composition.js'; // canFollow: may B replay straight after A
 export * from './verdict/verification-run.js'; // run/verdict shapes for the CI surface
@@ -54,6 +66,9 @@ export * from './verdict/consequence.js';
 // owns the reasoning over it and re-exports both halves as one surface.
 export * from './verdict/property-assertion.js';
 export * from './verdict/predicate.js';
+export * from './verdict/predicate-tree.js';
+// The version 1 reader: a flat expect lifted to the predicate a v2 file stores directly.
+export * from './artifacts/flow-expect-flat.js';
 export * from './identity/project-id.js';
 export * from './words/notices.js';
 export * from './artifacts/journal.js';

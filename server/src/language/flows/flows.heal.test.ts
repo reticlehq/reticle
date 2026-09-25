@@ -170,7 +170,7 @@ function flowFile(
     name,
     createdAt: FROZEN,
     steps,
-    success: { signal: HEALABLE_SIGNAL },
+    success: { kind: 'signal', name: HEALABLE_SIGNAL },
     ...overrides,
   };
 }
@@ -240,7 +240,7 @@ describe('FlowStore.heal + reticle_flow_heal', () => {
   it('heal apply re-verifies the success consequence and writes when it still fires', async () => {
     await store.saveFlow({
       ...flowFile('chat', [clickStep('old-id')]),
-      success: { signal: 'done' },
+      success: { kind: 'signal', name: 'done' },
     });
     const session = renamedSessionWithSignal('old-id', ['new-id'], 'done');
 
@@ -257,7 +257,7 @@ describe('FlowStore.heal + reticle_flow_heal', () => {
   it('verify does not re-execute the prefix — the stable step acts once (non-idempotent-safe)', async () => {
     await store.saveFlow({
       ...flowFile('multi', [clickStep('stable'), clickStep('old-id')]),
-      success: { signal: 'done' },
+      success: { kind: 'signal', name: 'done' },
     });
     const session = renamedSessionWithSignal('old-id', ['new-id'], 'done');
 
@@ -272,7 +272,7 @@ describe('FlowStore.heal + reticle_flow_heal', () => {
   it('REFUSES to persist a heal when the rebind breaks the success consequence', async () => {
     await store.saveFlow({
       ...flowFile('chat', [clickStep('old-id')]),
-      success: { signal: 'done' },
+      success: { kind: 'signal', name: 'done' },
     });
     const before = await readFile(flowPath(root, asFlowName('chat')), 'utf8');
     // The locator heals (old-id → new-id resolves), but the page never emits the 'done' signal,
@@ -322,9 +322,13 @@ describe('FlowStore.heal + reticle_flow_heal', () => {
     // The sharpest case: "the element is there" is exactly what a wrong rebind makes true, so it
     // cannot be the thing that validates a rebind.
     await store.saveFlow(
-      flowFile('chat', [{ ...clickStep('old-id'), expect: { element: { testid: 'new-id' } } }], {
-        success: undefined,
-      }),
+      flowFile(
+        'chat',
+        [{ ...clickStep('old-id'), expect: { kind: 'element', query: { testid: 'new-id' } } }],
+        {
+          success: undefined,
+        },
+      ),
     );
     const session = renamedSession('old-id', ['new-id']);
 
@@ -443,7 +447,10 @@ describe('FlowStore.heal + reticle_flow_heal', () => {
     await store.saveFlow(
       flowFile(
         'multi',
-        [{ ...clickStep('old-id'), expect: { signal: HEALABLE_SIGNAL } }, clickStep('save')],
+        [
+          { ...clickStep('old-id'), expect: { kind: 'signal', name: HEALABLE_SIGNAL } },
+          clickStep('save'),
+        ],
         { success: undefined },
       ),
     );

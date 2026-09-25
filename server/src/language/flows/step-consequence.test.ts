@@ -13,7 +13,7 @@
  * disagreeing — and the difference was a green that could not go red, inside the feature whose whole
  * job is to catch exactly that.
  *
- * `assertStepExpect` now compiles every step expect through the same `successToPredicate` the
+ * `assertStepExpect` waits on the step's expect directly, which is the same predicate the
  * flow-level `success` has always used. The invariant guarded here is ONE-DIRECTIONAL:
  *
  *   everything the grade counts as a consequence must be something replay actually evaluates.
@@ -27,12 +27,9 @@
 
 import { describe, expect, it } from 'vitest';
 import { classifyFlowAssertions, FlowAssertionGrade } from './flow-classify.js';
-import { successToPredicate } from './flow-success.js';
-import type { FlowExpect, FlowFile } from '@reticlehq/core';
+import type { Predicate, FlowFile } from '@reticlehq/core';
 
-const NO_DYNAMIC = new Set<string>();
-
-const flow = (stepExpect: FlowExpect): FlowFile =>
+const flow = (stepExpect: Predicate): FlowFile =>
   ({
     version: 1,
     name: 'probe',
@@ -40,54 +37,59 @@ const flow = (stepExpect: FlowExpect): FlowFile =>
   }) as unknown as FlowFile;
 
 /** Every expect kind the recorder and reticle_annotate can produce. */
-const KINDS: readonly { label: string; expect: FlowExpect; consequence: boolean }[] = [
-  { label: 'signal', expect: { signal: 'order:placed' }, consequence: true },
-  { label: 'net', expect: { net: { urlContains: '/api/order', status: 200 } }, consequence: true },
-  { label: 'state', expect: { state: { path: 'cart.total', equals: 2 } }, consequence: true },
+const KINDS: readonly { label: string; expect: Predicate; consequence: boolean }[] = [
+  { label: 'signal', expect: { kind: 'signal', name: 'order:placed' }, consequence: true },
+  {
+    label: 'net',
+    expect: { kind: 'net', urlContains: '/api/order', status: 200 },
+    consequence: true,
+  },
+  { label: 'state', expect: { kind: 'state', path: 'cart.total', equals: 2 }, consequence: true },
   // Enforced by replay, deliberately NOT credited as a consequence — see the header.
-  { label: 'console', expect: { console: { level: 'error', absent: true } }, consequence: false },
-  { label: 'element', expect: { element: { testid: 'toast' } }, consequence: false },
+  {
+    label: 'console',
+    expect: { kind: 'console', level: 'error', absent: true },
+    consequence: false,
+  },
+  { label: 'element', expect: { kind: 'element', query: { testid: 'toast' } }, consequence: false },
 ];
 
 describe('what the grade counts is exactly what a replay enforces', () => {
-  it.each(KINDS)('$label: anything replay can check is compilable', ({ expect: e }) => {
-    // If this is undefined, replay has nothing to evaluate and the flow cannot fail on it.
-    expect(successToPredicate(e, NO_DYNAMIC)).toBeDefined();
-  });
-
+  /*
+   * The compilability half of this file is GONE, and its absence is the point.
+   *
+   * It asserted that every kind the grade credits could be compiled to a predicate replay could
+   * evaluate, because the two lived in different code and could disagree. A step's expect IS a
+   * predicate now: the thing graded and the thing waited on are one object, so the question cannot
+   * have two answers and a test of it would be a tautology with a green tick on it.
+   *
+   * The grading half below is still a real question and stays.
+   */
   it.each(KINDS.filter((k) => k.consequence))(
     '$label: a consequence in the grade is a consequence replay evaluates',
     ({ expect: e }) => {
       const c = classifyFlowAssertions(flow(e));
       expect(c.hasConsequenceAssertion, 'graded as a real consequence').toBe(true);
       expect(c.grade).toBe(FlowAssertionGrade.ASSERTED);
-      expect(
-        successToPredicate(e, NO_DYNAMIC),
-        'and replay compiles it to a predicate',
-      ).toBeDefined();
     },
   );
 
   it('console is enforced but not credited — the safe direction', () => {
-    const c = classifyFlowAssertions(flow({ console: { level: 'error', absent: true } }));
-    expect(
-      successToPredicate({ console: { level: 'error', absent: true } }, NO_DYNAMIC),
-    ).toBeDefined();
+    const c = classifyFlowAssertions(flow({ kind: 'console', level: 'error', absent: true }));
     expect(c.hasConsequenceAssertion, 'a clean console does not prove the feature worked').toBe(
       false,
     );
   });
 
   it('element presence stays presence-only — a wrong element can fake it', () => {
-    expect(classifyFlowAssertions(flow({ element: { testid: 'toast' } })).grade).toBe(
-      FlowAssertionGrade.PRESENCE_ONLY,
-    );
+    expect(
+      classifyFlowAssertions(flow({ kind: 'element', query: { testid: 'toast' } })).grade,
+    ).toBe(FlowAssertionGrade.PRESENCE_ONLY);
   });
 
-  it('a dynamic-marked element is not asserted, and is not graded as one either', () => {
-    // The one place the two rules are allowed to differ, and it differs in the safe direction.
-    expect(
-      successToPredicate({ element: { testid: 'clock' } }, new Set(['clock'])),
-    ).toBeUndefined();
-  });
+  /*
+   * The dynamic skip moved to where it applies. It was asserted here against the compiler, which no
+   * longer exists; the rule itself now lives in `assertSuccess`, which drops a dynamic element
+   * clause from the success oracle, and is tested there against the function that does it.
+   */
 });

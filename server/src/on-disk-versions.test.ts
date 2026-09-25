@@ -34,7 +34,20 @@ import { REPO_ROOT } from './machine/repo-root.js';
  * moving, and a rename is as much a change as a renumber.
  */
 const PINNED_VERSIONS: Record<string, string> = {
-  'core/src/artifacts/flow-types.ts': 'FLOW_FILE_VERSION',
+  /*
+   * Changed, and the decision behind it came FIRST, which is what this guard asks for.
+   *
+   * `FLOW_FILE_VERSION` is now 2, because `FlowStep.expect` became a `Predicate` and that is not an
+   * additive change. What happens to the files already on disk is the question this pin exists to
+   * force, and the answer is written into the schema it now records: a v1 file is LIFTED on read by
+   * `flowExpectToPredicate` and never rewritten, so a flow committed to somebody's repository keeps
+   * working and keeps saying version 1 until they save it again.
+   *
+   * That is why the declaration stopped being a literal. Two questions live here now — what this
+   * build WRITES and what it can READ — and conflating them is precisely what would have refused
+   * every existing flow on the day one person upgraded.
+   */
+  'core/src/artifacts/flow-types.ts': '.int().refine((v) => READABLE_FLOW_VERSIONS.has(v))',
   'core/src/verdict/intent.ts': 'INTENT_FILE_VERSION',
   'core/src/registry/project-registry.ts': '1',
   'core/src/verdict/verification-run.ts': 'z.literal(RUN_FILE_VERSION',
@@ -74,18 +87,29 @@ function declaredVersions(): Record<string, string> {
     }
     // Every shape a declared version takes: a single literal, a union of them, or a numeric range.
     //
-    // It has been widened twice, both times because something it should have been watching turned
-    // out to be invisible. It matched `version:` in lower case only, so a field named
+    // It has been widened THREE times, every one because something it should have been watching
+    // turned out to be invisible. It matched `version:` in lower case only, so a field named
     // `schemaVersion` -- the run artifact's -- was never seen. Then the protocol version became a
     // range rather than a fixed number, which is exactly the kind of change this exists to notice,
     // and the literal-only pattern would have dropped it silently.
+    //
+    // The third is the one worth reading, because nobody touched the version and nobody touched the
+    // guard. `FlowFile.version` grew a `.refine`, which pushed the declaration past the print width,
+    // so PRETTIER reflowed `version: z.number().int()...` onto four lines. The scan terminated its
+    // lazy span on `\n`, read the declaration as the empty string, and from then on ANY change to
+    // the flow file's accepted versions would have compared equal to a pin of `""`. A formatter
+    // blinded a guard, which is the exact failure mode the header above is about -- so the scan now
+    // runs against a whitespace-flattened copy and there is no newline left to stop at.
+    const flat = text.replace(/\s+/g, ' ');
     const matches = [
-      ...text.matchAll(
-        /version:\s*z\s*\.\s*(?:literal|union)\(([^;]+?)\)[,\n]|version:\s*z\s*\.\s*number\(\)([\s\S]{0,160}?)[,\n]\s*\/?\*?/gi,
+      ...flat.matchAll(
+        /version:\s*z\s*\.\s*(?:literal|union)\(([^;]+?)\),|version:\s*z\s*\.\s*number\(\)([\s\S]{0,160}?),/gi,
       ),
     ].map((m) =>
       (m[1] ?? m[2] ?? '')
-        .replace(/\s+/g, ' ')
+        // `) .int()` back to `).int()`: flattening put a space wherever the formatter broke a line,
+        // and the pin should read the same whether the declaration fits on one line or four.
+        .replace(/\s+\./g, '.')
         .replace(/^\[\s*/, '')
         .trim(),
     );

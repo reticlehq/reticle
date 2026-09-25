@@ -32,7 +32,7 @@ function step(value: string, withConsequence: boolean): FlowStep {
     action: ActionType.CLICK,
     args: {},
   };
-  if (withConsequence) s.expect = { signal: 'order:saved' };
+  if (withConsequence) s.expect = { kind: 'signal', name: 'order:saved' };
   return s;
 }
 
@@ -59,14 +59,16 @@ describe('a flow may only be healed if something could catch a wrong heal', () =
 
   it('allows a flow whose SUCCESS condition is the consequence', () => {
     // The end-condition is an assertion too — a flow can prove itself at the end rather than per step.
-    expect(healPrecondition(flow([step('pay', false)], { signal: 'order:saved' }))).toBeUndefined();
+    expect(
+      healPrecondition(flow([step('pay', false)], { kind: 'signal', name: 'order:saved' })),
+    ).toBeUndefined();
   });
 
   it('refuses a presence-only flow — a healed locator would still satisfy it', () => {
     // This is the case the whole rule exists for. "The element is there" is exactly what a wrong
     // rebind makes true, so it cannot be the thing that validates a rebind.
     const presenceOnly = flow([
-      { ...step('pay', false), expect: { element: { testid: 'receipt' } } },
+      { ...step('pay', false), expect: { kind: 'element', query: { testid: 'receipt' } } },
     ]);
     expect(healPrecondition(presenceOnly)?.status).toBe(HealStatus.UNFALSIFIABLE);
   });

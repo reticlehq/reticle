@@ -8,7 +8,7 @@
  * pass while broken. Our own documentation was manufacturing the false green the product exists to
  * catch, and it does it silently: nothing downstream says "your gate never got attached".
  *
- * Everything underneath already existed. `FlowExpect.net` carries method/urlContains/status and the
+ * Everything underneath already existed. `Predicate.net` carries method/urlContains/status and the
  * exact `count` cardinality check the replay engine evaluates (the double-submit oracle). Only the
  * annotation kind that reaches it was missing, so this closes the gap rather than inventing a
  * capability: the documented sentence becomes true.
@@ -31,7 +31,11 @@ describe('assert-net', () => {
     // union is what stops a test from asserting on a shape the code can never return.
     if (!out.result.ok) throw new Error('expected the annotation to compile');
     expect(out.result.target).toBe(AnnotationTarget.STEP);
-    expect(out.patch?.stepExpect?.net).toEqual({ method: 'POST', urlContains: '/refund' });
+    expect(out.patch?.stepExpect).toEqual({
+      kind: 'net',
+      method: 'POST',
+      urlContains: '/refund',
+    });
   });
 
   /**
@@ -47,7 +51,15 @@ describe('assert-net', () => {
       },
       ONE_STEP,
     );
-    expect(out.patch?.stepExpect?.net?.count).toBe(1);
+    // A counted assertion carries its settle gate: a wait-until-true evaluator satisfies `count: 1`
+    // on the FIRST request, before the duplicate a double-submit guard exists to catch.
+    expect(out.patch?.stepExpect).toEqual({
+      kind: 'allOf',
+      predicates: [
+        { kind: 'settled' },
+        { kind: 'net', method: 'POST', urlContains: '/refund', count: 1 },
+      ],
+    });
   });
 
   it('refuses to attach to a flow with no steps, like every other step-level kind', () => {

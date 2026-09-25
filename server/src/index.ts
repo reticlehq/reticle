@@ -122,9 +122,9 @@ export type { FlowResult } from './language/flows/flows.js';
 export type { Clock } from './machine/clock.js';
 export {
   assertSuccess,
-  successToPredicate,
   dynamicTestids,
   successLabel,
+  successToPredicate,
 } from './language/flows/flow-success.js';
 export { classifyFlowAssertions, FlowAssertionGrade } from './language/flows/flow-classify.js';
 export type { FlowAssertionClassification } from './language/flows/flow-classify.js';

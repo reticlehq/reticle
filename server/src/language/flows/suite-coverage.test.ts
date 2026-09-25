@@ -3,6 +3,7 @@ import {
   ActionType,
   AnchorKind,
   FLOW_FILE_VERSION,
+  PredicateKind,
   ReplayStatus,
   ReticleTool,
   type FlowFile,
@@ -30,7 +31,7 @@ const step = (declares: boolean): FlowStep => {
     action: ActionType.CLICK,
     args: {},
   };
-  if (declares) s.expect = { signal: 'saved' };
+  if (declares) s.expect = { kind: PredicateKind.SIGNAL, name: 'saved' };
   return s;
 };
 
@@ -39,7 +40,7 @@ const flow = (name: string, steps: FlowStep[]): FlowFile => ({
   name,
   createdAt: 0,
   steps,
-  success: { signal: 'done' },
+  success: { kind: 'signal', name: 'done' },
 });
 
 const ok = (name: string): FlowReplayResult => ({

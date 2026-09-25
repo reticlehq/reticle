@@ -1,4 +1,4 @@
-import type { FlowExpect } from '@reticlehq/core';
+import type { Predicate } from '@reticlehq/core';
 
 /**
  * Holds the flow-level + per-step annotations accumulating during a live
@@ -11,8 +11,8 @@ import type { FlowExpect } from '@reticlehq/core';
  */
 interface FlowAnnotationBucket {
   dynamic: string[];
-  success?: FlowExpect;
-  stepExpect: Map<number, FlowExpect>;
+  success?: Predicate;
+  stepExpect: Map<number, Predicate>;
   intent?: string;
 }
 
@@ -34,7 +34,7 @@ export class AnnotationStore {
   }
 
   /** The flow's golden end-condition (success-state), or undefined. */
-  success(name: string): FlowExpect | undefined {
+  success(name: string): Predicate | undefined {
     return this.#byName.get(name)?.success;
   }
 
@@ -44,9 +44,9 @@ export class AnnotationStore {
   }
 
   /** Per-step expect predicates compiled from assert-* annotations, keyed by step index. */
-  stepExpect(name: string): Map<number, FlowExpect> {
+  stepExpect(name: string): Map<number, Predicate> {
     const source = this.#byName.get(name)?.stepExpect;
-    return source === undefined ? new Map<number, FlowExpect>() : new Map(source);
+    return source === undefined ? new Map<number, Predicate>() : new Map(source);
   }
 
   /** Append a dynamic testid (mark-dynamic). De-duped so repeated marks stay idempotent. */
@@ -56,7 +56,7 @@ export class AnnotationStore {
   }
 
   /** Set the flow's success expectation (success-state); a later set overwrites. */
-  setSuccess(name: string, expect: FlowExpect): void {
+  setSuccess(name: string, expect: Predicate): void {
     this.#bucket(name).success = expect;
   }
 
@@ -66,7 +66,7 @@ export class AnnotationStore {
   }
 
   /** Set one step's expect (assert-signal / assert-visible); a later set on the same index wins. */
-  setStepExpect(name: string, index: number, expect: FlowExpect): void {
+  setStepExpect(name: string, index: number, expect: Predicate): void {
     this.#bucket(name).stepExpect.set(index, expect);
   }
 

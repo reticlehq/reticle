@@ -103,7 +103,10 @@ describe('reticle_annotate handler — temp dir, never touches the repo', () => 
     if (!res.ok) throw new Error('expected ok');
     expect(res.target).toBe(AnnotationTarget.STEP);
     expect(res.compiled).toBe('will assert signal diff:shown');
-    expect(annotations.stepExpect('default').get(1)?.signal).toBe('diff:shown');
+    expect(annotations.stepExpect('default').get(1)).toEqual({
+      kind: 'signal',
+      name: 'diff:shown',
+    });
   });
 
   it('annotate mark-dynamic adds to the flow dynamic list', async () => {
@@ -127,7 +130,7 @@ describe('reticle_annotate handler — temp dir, never touches the repo', () => 
       kind: AnnotationKind.SUCCESS_STATE,
       signal: 'diff:shown',
     });
-    expect(annotations.success('default')?.signal).toBe('diff:shown');
+    expect(annotations.success('default')).toEqual({ kind: 'signal', name: 'diff:shown' });
   });
 
   it('annotate with NO active recording returns NO_ACTIVE_RECORDING (no throw)', async () => {
@@ -209,9 +212,9 @@ describe('reticle_annotate handler — temp dir, never touches the repo', () => 
       dynamic?: { kind: string; value?: string }[];
       success?: { signal?: string };
     };
-    expect(loaded.steps[1]?.expect?.signal).toBe('diff:shown');
+    expect(loaded.steps[1]?.expect).toEqual({ kind: 'signal', name: 'diff:shown' });
     expect(loaded.dynamic?.some((d) => 'caption-text' === d.value)).toBe(true);
-    expect(loaded.success?.signal).toBe('diff:shown');
+    expect(loaded.success).toEqual({ kind: 'signal', name: 'diff:shown' });
   });
 
   it('assert-signal with dataMatches round-trips through save then load', async () => {
@@ -234,6 +237,6 @@ describe('reticle_annotate handler — temp dir, never touches the repo', () => 
     })) as {
       steps: { expect?: { signalData?: Record<string, unknown> } }[];
     };
-    expect(loaded.steps[0]?.expect?.signalData).toEqual({ count: 2 });
+    expect(loaded.steps[0]?.expect).toMatchObject({ kind: 'signal', dataMatches: { count: 2 } });
   });
 });

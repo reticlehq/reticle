@@ -15,6 +15,8 @@
 
 import {
   AnchorKind,
+  PredicateKind,
+  type Predicate,
   type CapabilitiesContract,
   type FlowFile,
   type FlowStep,
@@ -74,13 +76,43 @@ function flatten(steps: readonly FlowStep[]): FlowStep[] {
   return out;
 }
 
+/*
+ * The vocabulary a flow uses, read out of a predicate TREE.
+ *
+ * These were property reads when `expect` was a struct with one slot per kind. A predicate nests, and
+ * the domain model is about what a flow TALKS ABOUT, so the walk goes all the way down: a signal
+ * named inside an `allOf` two levels deep is still a signal this flow depends on, and missing it
+ * would quietly shrink the model that decides which flows a change affects.
+ */
+function walkClauses(predicate: Predicate | undefined): readonly Predicate[] {
+  if (predicate === undefined) return [];
+  if (PredicateKind.ALL_OF === predicate.kind || PredicateKind.ANY_OF === predicate.kind) {
+    return predicate.predicates.flatMap(walkClauses);
+  }
+  if (PredicateKind.NOT === predicate.kind) return walkClauses(predicate.predicate);
+  return [predicate];
+}
+
+function signalNamesIn(predicate: Predicate | undefined): string[] {
+  return walkClauses(predicate)
+    .filter((c) => PredicateKind.SIGNAL === c.kind)
+    .map((c) => (PredicateKind.SIGNAL === c.kind ? c.name : undefined))
+    .filter((name): name is string => name !== undefined);
+}
+
+function elementTestidsIn(predicate: Predicate | undefined): string[] {
+  return walkClauses(predicate)
+    .map((c) => (PredicateKind.ELEMENT === c.kind ? c.query.testid : undefined))
+    .filter((testid): testid is string => testid !== undefined);
+}
+
 function flowSignals(flow: FlowFile): string[] {
   const set = new Set<string>();
   for (const step of flatten(flow.steps)) {
     if (step.anchor.kind === AnchorKind.SIGNAL) set.add(step.anchor.name);
-    if (step.expect?.signal !== undefined) set.add(step.expect.signal);
+    for (const name of signalNamesIn(step.expect)) set.add(name);
   }
-  if (flow.success?.signal !== undefined) set.add(flow.success.signal);
+  for (const name of signalNamesIn(flow.success)) set.add(name);
   return [...set];
 }
 
@@ -88,9 +120,9 @@ function flowTestids(flow: FlowFile): string[] {
   const set = new Set<string>();
   for (const step of flatten(flow.steps)) {
     if (step.anchor.kind === AnchorKind.TESTID) set.add(step.anchor.value);
-    if (step.expect?.element?.testid !== undefined) set.add(step.expect.element.testid);
+    for (const testid of elementTestidsIn(step.expect)) set.add(testid);
   }
-  if (flow.success?.element?.testid !== undefined) set.add(flow.success.element.testid);
+  for (const testid of elementTestidsIn(flow.success)) set.add(testid);
   return [...set];
 }
 

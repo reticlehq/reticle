@@ -1,4 +1,10 @@
-import { asFlowName, asProjectId, type FlowName, type ProjectId } from '@reticlehq/core';
+import {
+  asFlowName,
+  asProjectId,
+  type FlowName,
+  type Predicate,
+  type ProjectId,
+} from '@reticlehq/core';
 import { REDACTED_FILL } from './fields/flow-secret-field.js';
 export { REDACTED_FILL } from './fields/flow-secret-field.js';
 import { safeProjectId, type FlowResult } from './flow-result.js';
@@ -17,7 +23,6 @@ import {
 import type {
   ActionType,
   FlowAnchor,
-  FlowExpect,
   FlowFile,
   FlowStep,
   HealChange,
@@ -254,9 +259,9 @@ interface SaveSummary {
  * the same bytes as before.
  */
 export interface FlowAnnotations {
-  stepExpect: Map<number, FlowExpect>;
+  stepExpect: Map<number, Predicate>;
   dynamic: string[];
-  success?: FlowExpect;
+  success?: Predicate;
   /** The flow's declared business goal (intent annotation). */
   intent?: string;
 }

@@ -20,8 +20,30 @@
  */
 
 import type { FlowFile, FlowStep } from './flow-types.js';
+import { PredicateKind } from '@/verdict/consequence.js';
+import type { Predicate } from '@/verdict/predicate.js';
 
 /** Every endpoint this flow's own declarations name, in order, once each. */
+/**
+ * Every `net` URL a predicate names, composites included.
+ *
+ * `expect` used to be a flat struct with one `net` slot, so this was a property read. It is a
+ * PREDICATE now, and a net clause can sit inside an `allOf` two levels down — which is exactly the
+ * shape an agent writes when it asserts a request AND what the request changed. Reading only the
+ * top level would silently stop finding the endpoint this whole module exists to perturb.
+ */
+function netUrlsIn(predicate: Predicate | undefined): string[] {
+  if (predicate === undefined) return [];
+  if (PredicateKind.NET === predicate.kind) {
+    return predicate.urlContains === undefined ? [] : [predicate.urlContains];
+  }
+  if (PredicateKind.ALL_OF === predicate.kind || PredicateKind.ANY_OF === predicate.kind) {
+    return predicate.predicates.flatMap(netUrlsIn);
+  }
+  if (PredicateKind.NOT === predicate.kind) return netUrlsIn(predicate.predicate);
+  return [];
+}
+
 export function mutationTargetsFor(flow: FlowFile): string[] {
   const targets: string[] = [];
   const add = (url: string | undefined): void => {
@@ -30,14 +52,14 @@ export function mutationTargetsFor(flow: FlowFile): string[] {
   };
   const walk = (steps: readonly FlowStep[]): void => {
     for (const step of steps) {
-      add(step.expect?.net?.urlContains);
+      for (const url of netUrlsIn(step.expect)) add(url);
       // A sequence is where the real journeys live, so its children are where the real dependencies
       // are declared. A walk that stopped at the top level would find nothing in the common case.
       if (step.steps !== undefined) walk(step.steps);
     }
   };
   walk(flow.steps);
-  add(flow.success?.net?.urlContains);
+  for (const url of netUrlsIn(flow.success)) add(url);
   return targets;
 }
 

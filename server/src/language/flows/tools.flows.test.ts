@@ -177,7 +177,7 @@ describe('reticle_flow_save / reticle_flow_load handlers', () => {
           tool: ReticleTool.ACT,
           stable: true,
           args: { by: QueryBy.TESTID, value: 'go', action: ActionType.CLICK, args: {} },
-          expect: { signal: 'diff:shown' },
+          expect: { kind: 'signal', name: 'diff:shown' },
         },
       ]),
     );
@@ -189,7 +189,7 @@ describe('reticle_flow_save / reticle_flow_load handlers', () => {
     })) as {
       steps: { expect?: { signal?: string } }[];
     };
-    expect(loaded.steps[0]?.expect?.signal).toBe('diff:shown');
+    expect(loaded.steps[0]?.expect).toEqual({ kind: 'signal', name: 'diff:shown' });
   });
   /**
    * `flowName` selects the RECORDING; it never named the file (#698).

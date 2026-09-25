@@ -25,7 +25,11 @@ const flow = (name: string, over: Partial<FlowFile> = {}): FlowFile =>
 const asserted = (name: string) =>
   flow(name, {
     steps: [
-      { tool: 'reticle_act', anchor: { kind: 'testid', value: 'go' }, expect: { signal: 'done' } },
+      {
+        tool: 'reticle_act',
+        anchor: { kind: 'testid', value: 'go' },
+        expect: { kind: 'signal', name: 'done' },
+      },
     ],
   });
 

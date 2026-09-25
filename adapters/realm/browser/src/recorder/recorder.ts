@@ -8,9 +8,10 @@ import {
   FlowStepTool,
   RecorderPhase,
   type FlowAnchor,
-  type FlowExpect,
   type FlowFile,
   type FlowStep,
+  PredicateKind,
+  type Predicate,
 } from '@reticlehq/core';
 import { REDACTED_VALUE } from '@reticlehq/core';
 import { sourceFromDom } from '@/dom/addressing/source.js';
@@ -167,7 +168,7 @@ export function compileRecording(
 ): FlowFile {
   const out: FlowStep[] = steps.map((s) => ({ ...s }));
   const dynamic: FlowAnchor[] = [];
-  let success: FlowExpect | undefined;
+  let success: Predicate | undefined;
 
   for (const ann of annotations) {
     if (ann.kind === AnnotationKind.MARK_DYNAMIC) {
@@ -175,15 +176,18 @@ export function compileRecording(
       continue;
     }
     if (ann.kind === AnnotationKind.SUCCESS_STATE) {
-      if (ann.signal !== undefined) success = { signal: ann.signal };
+      if (ann.signal !== undefined) success = { kind: PredicateKind.SIGNAL, name: ann.signal };
       continue;
     }
     const target = out.at(-1);
     if (target === undefined) continue;
     if (ann.kind === AnnotationKind.ASSERT_SIGNAL && ann.signal !== undefined) {
-      target.expect = { ...target.expect, signal: ann.signal };
+      target.expect = alsoAssert(target.expect, { kind: PredicateKind.SIGNAL, name: ann.signal });
     } else if (ann.kind === AnnotationKind.ASSERT_VISIBLE) {
-      target.expect = { ...target.expect, element: anchorToElement(ann.anchor) };
+      target.expect = alsoAssert(target.expect, {
+        kind: PredicateKind.ELEMENT,
+        query: anchorToElement(ann.anchor),
+      });
     }
   }
 
@@ -192,6 +196,22 @@ export function compileRecording(
   if (dynamic.length > 0) flow.dynamic = dynamic;
   if (success !== undefined) flow.success = success;
   return flow;
+}
+
+/**
+ * Add a clause to a step's expectation, keeping whatever was already there.
+ *
+ * This was a spread — `{ ...expect, signal }` — which worked only because the old flat shape had one
+ * slot per kind, and silently OVERWROTE the slot when two annotations claimed the same one. Two
+ * clauses now compose into an `allOf`, so annotating a step twice asserts both things rather than
+ * the last one.
+ */
+function alsoAssert(existing: Predicate | undefined, clause: Predicate): Predicate {
+  if (existing === undefined) return clause;
+  if (existing.kind === PredicateKind.ALL_OF) {
+    return { kind: PredicateKind.ALL_OF, predicates: [...existing.predicates, clause] };
+  }
+  return { kind: PredicateKind.ALL_OF, predicates: [existing, clause] };
 }
 
 function anchorToElement(anchor: FlowAnchor): { testid?: string; role?: string; name?: string } {

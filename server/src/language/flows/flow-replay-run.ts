@@ -534,7 +534,7 @@ async function firstUnmetPrecondition(
   for (const claim of flow.requires ?? []) {
     // Zero budget: a precondition is a claim about the state you are starting FROM. Waiting for one
     // turns "was it true" into "did it become true", which is a different and much weaker question.
-    const drift = await assertStepExpect(session, claim, new Set(), waitForPredicate, 0, since);
+    const drift = await assertStepExpect(session, claim, waitForPredicate, 0, since);
     if (drift !== undefined) {
       return `a precondition of this flow does not hold (${JSON.stringify(claim)}), so nothing ran and nothing was proved. Run the flow that establishes it first, or drive that state yourself.`;
     }

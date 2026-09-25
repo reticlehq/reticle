@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { AnnotationErrorCode, AnnotationKind, AnnotationTarget } from '@reticlehq/core';
+import {
+  AnnotationErrorCode,
+  AnnotationKind,
+  AnnotationTarget,
+  PredicateKind,
+  clauseOfKind,
+} from '@reticlehq/core';
 import type { Annotation } from '@reticlehq/core';
 import { compileAnnotation, describeCompiled } from './annotate-notes/annotate.js';
 
@@ -16,7 +22,7 @@ describe('compileAnnotation pure compiler', () => {
     if (!out.result.ok) throw new Error('expected ok');
     expect(out.result.target).toBe(AnnotationTarget.STEP);
     expect(out.patch?.stepIndex).toBe(2);
-    expect(out.patch?.stepExpect?.signal).toBe('diff:shown');
+    expect(out.patch?.stepExpect).toEqual({ kind: 'signal', name: 'diff:shown' });
   });
 
   it('assert-signal carries dataMatches into signalData', () => {
@@ -26,7 +32,7 @@ describe('compileAnnotation pure compiler', () => {
       dataMatches: { count: 2 },
     };
     const out = compileAnnotation(a, 1);
-    expect(out.patch?.stepExpect?.signalData).toEqual({ count: 2 });
+    expect(out.patch?.stepExpect).toMatchObject({ kind: 'signal', dataMatches: { count: 2 } });
   });
 
   it('assert-visible compiles to expect.element.testid on the last step', () => {
@@ -34,7 +40,7 @@ describe('compileAnnotation pure compiler', () => {
     const out = compileAnnotation(a, 2);
     expect(out.result.ok).toBe(true);
     expect(out.patch?.stepIndex).toBe(1);
-    expect(out.patch?.stepExpect?.element?.testid).toBe('diff-panel');
+    expect(out.patch?.stepExpect).toEqual({ kind: 'element', query: { testid: 'diff-panel' } });
   });
 
   it('mark-dynamic compiles to a flow-level dynamicAdd (no stepExpect)', () => {
@@ -53,14 +59,13 @@ describe('compileAnnotation pure compiler', () => {
     expect(out.result.ok).toBe(true);
     if (!out.result.ok) throw new Error('expected ok');
     expect(out.result.target).toBe(AnnotationTarget.FLOW);
-    expect(out.patch?.success?.signal).toBe('diff:shown');
+    expect(out.patch?.success).toEqual({ kind: 'signal', name: 'diff:shown' });
   });
 
   it('success-state with a testid sets flow.success.element.testid', () => {
     const a: Annotation = { kind: AnnotationKind.SUCCESS_STATE, testid: 'done' };
     const out = compileAnnotation(a, 4);
-    expect(out.patch?.success?.element?.testid).toBe('done');
-    expect(out.patch?.success?.signal).toBeUndefined();
+    expect(out.patch?.success).toEqual({ kind: 'element', query: { testid: 'done' } });
   });
 
   it('success-state with a net.count sets flow.success.net (double-submit guard)', () => {
@@ -69,12 +74,16 @@ describe('compileAnnotation pure compiler', () => {
       net: { method: 'POST', urlContains: '/api/generate-script', count: 1 },
     };
     const out = compileAnnotation(a, 4);
-    expect(out.patch?.success?.net).toEqual({
-      method: 'POST',
-      urlContains: '/api/generate-script',
-      count: 1,
+    // `count` is the whole point of the annotation, and a counted assertion is post-settle: a
+    // wait-until-true evaluator satisfies `count: 1` on the FIRST request, before the duplicate a
+    // double-submit guard exists to catch. Dropping either half was a regression this caught.
+    expect(out.patch?.success).toEqual({
+      kind: 'allOf',
+      predicates: [
+        { kind: 'settled' },
+        { kind: 'net', method: 'POST', urlContains: '/api/generate-script', count: 1 },
+      ],
     });
-    expect(out.patch?.success?.signal).toBeUndefined();
     expect(describeCompiled(a)).toContain('exactly 1 net /api/generate-script');
   });
 
@@ -84,7 +93,7 @@ describe('compileAnnotation pure compiler', () => {
       console: { level: 'error', absent: true },
     };
     const out = compileAnnotation(a, 4);
-    expect(out.patch?.success?.console).toEqual({ level: 'error', absent: true });
+    expect(out.patch?.success).toEqual({ kind: 'console', level: 'error', absent: true });
     expect(describeCompiled(a)).toContain('no console.error');
   });
 
@@ -133,7 +142,8 @@ describe('compileAnnotation pure compiler', () => {
     };
     const out = compileAnnotation(a, 3);
     expect(out.patch?.stepIndex).toBe(2);
-    expect(out.patch?.stepExpect?.state).toEqual({
+    expect(out.patch?.stepExpect).toEqual({
+      kind: 'state',
       store: 'app',
       path: 'deployments.0.status',
       equals: 'live',
@@ -171,7 +181,8 @@ describe('compileAnnotation pure compiler', () => {
       equals: 'live',
     };
     const out = compileAnnotation(a, 4);
-    expect(out.patch?.success?.state).toEqual({
+    expect(out.patch?.success).toEqual({
+      kind: 'state',
       store: 'app',
       path: 'deployments.0.status',
       equals: 'live',
@@ -186,10 +197,9 @@ describe('compileAnnotation pure compiler', () => {
       statePath: 'x',
       testid: 'd',
     };
-    expect(compileAnnotation(a, 4).patch?.success?.signal).toBe('diff:shown');
+    expect(compileAnnotation(a, 4).patch?.success).toEqual({ kind: 'signal', name: 'diff:shown' });
     const b: Annotation = { kind: AnnotationKind.SUCCESS_STATE, statePath: 'x', testid: 'd' };
-    expect(compileAnnotation(b, 4).patch?.success?.state?.path).toBe('x');
-    expect(compileAnnotation(b, 4).patch?.success?.element).toBeUndefined();
+    expect(compileAnnotation(b, 4).patch?.success).toEqual({ kind: 'state', path: 'x' });
   });
 
   it('success-state with neither signal nor statePath nor testid is MISSING_FIELD', () => {
@@ -204,8 +214,11 @@ describe('compileAnnotation pure compiler', () => {
     const a: Annotation = { kind: AnnotationKind.SUCCESS_STATE, signal: 'diff:shown', testid: 'd' };
     const out = compileAnnotation(a, 4);
     expect(out.result.ok).toBe(true);
-    expect(out.patch?.success?.signal).toBe('diff:shown');
-    expect(out.patch?.success?.element).toBeUndefined();
+    expect(out.patch?.success).toEqual({ kind: 'signal', name: 'diff:shown' });
+    // Read through the TREE rather than off a flat slot. `success` is a `Predicate` now, so a
+    // future compiler that emitted `allOf [signal, element]` would still satisfy a check that
+    // only looked at the top level — and 'prefers signal' means the testid is not carried AT ALL.
+    expect(clauseOfKind(out.patch?.success, PredicateKind.ELEMENT)).toBeUndefined();
   });
 
   it('intent compiles to a flow-level patch and is allowed with 0 captured steps', () => {

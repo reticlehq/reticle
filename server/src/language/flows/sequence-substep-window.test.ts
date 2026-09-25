@@ -66,7 +66,9 @@ function sub(testid: string, expectTestid?: string): FlowStep {
     anchor: { kind: AnchorKind.TESTID, value: testid },
     action: ActionType.CLICK,
     args: {},
-    ...(expectTestid === undefined ? {} : { expect: { element: { testid: expectTestid } } }),
+    ...(expectTestid === undefined
+      ? {}
+      : { expect: { kind: 'element', query: { testid: expectTestid } } }),
   };
 }
 

@@ -375,7 +375,7 @@ describe('reticle_flow_replay — a green that cannot go red (#341)', () => {
     await save('asserts-something', [actStep('login-submit')], {
       stepExpect: new Map(),
       dynamic: [],
-      success: { signal: 'auth:logged-in' },
+      success: { kind: 'signal', name: 'auth:logged-in' },
     });
 
     const res = await replay('asserts-something');
@@ -452,7 +452,12 @@ describe('reticle_flow_replay — the business intent a flow discharges', () => 
   }
 
   function withIntent(intent: string, signal: string): FlowAnnotations {
-    return { stepExpect: new Map(), dynamic: [], intent, success: { signal } };
+    return {
+      stepExpect: new Map(),
+      dynamic: [],
+      intent,
+      success: { kind: 'signal', name: signal },
+    };
   }
 
   it('a passing replay marks the intent proved with the verdict that did it', async () => {

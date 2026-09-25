@@ -196,7 +196,29 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  *
  * Raised by 1,200 rather than to the measurement, per the note above.
  */
-const MAX_FIRST_LOAD_BYTES = 242_300;
+/*
+ * 242_300 -> 240_300. LOWERED, for the first time, and by finding what the earlier notes kept
+ * promising somebody would find. Measured 239,247.
+ *
+ * A step's `expect` became a `Predicate`, which added `verdict/predicate.js` (3,739 B) and
+ * `artifacts/flow-expect-flat.js` (2,483 B) to every page load — 6,222 B over the ceiling, for a
+ * schema a browser never runs. The metafile said both were reached only through
+ * `artifacts/flow-types.js`, and flow-types was reached only because it re-exported two constants
+ * from `flow-step-tool.js`.
+ *
+ * `flow-step-tool.ts` was split out of `flow-types.ts` to end exactly this, and its own header says
+ * so. The convenience re-export put the module back on the barrel's path to those constants and
+ * undid the extraction silently. Naming the leaf directly on the barrel took back the 6,222 B AND
+ * the 3,243 B of flow schemas that had been riding in since before the split — 9,465 B total.
+ *
+ * So the debt the five raises above kept deferring is partly paid, and the ceiling comes down
+ * rather than keeping the winnings as slack: slack is what the next creep hides in. 1,000 B of
+ * headroom, per the rounding note above.
+ *
+ * Still unspent, and still the bigger number: `verdict/verification-run` (3,645 B) and the protocol
+ * barrel behind it. Same defect, same fix, a public-surface decision rather than a size-guard one.
+ */
+const MAX_FIRST_LOAD_BYTES = 240_300;
 /*
  * Raised a fifth time, 233_300 -> 233_400, for a route to be assertable in a SAVED flow. 57 B.
  *

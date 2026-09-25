@@ -149,7 +149,7 @@ function sweepStep(value: string, expectTestid?: string): FlowStep {
     action: ActionType.CLICK,
     args: {},
   };
-  if (expectTestid !== undefined) s.expect = { element: { testid: expectTestid } };
+  if (expectTestid !== undefined) s.expect = { kind: 'element', query: { testid: expectTestid } };
   return s;
 }
 

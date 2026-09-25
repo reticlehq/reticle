@@ -1,5 +1,6 @@
-import { REPLAY_PROGRAM_VERSION, asFlowName } from '@reticlehq/core';
-import type { FlowExpect, FlowName } from '@reticlehq/core';
+import { PredicateKind, REPLAY_PROGRAM_VERSION, asFlowName } from '@reticlehq/core';
+import { clauseOfKind } from '@reticlehq/core';
+import type { FlowName, Predicate } from '@reticlehq/core';
 
 /**
  * What this module needs a recorded step to BE, named structurally rather than imported.
@@ -14,7 +15,7 @@ export interface TapeStep {
   tool: string;
   args: Record<string, unknown>;
   stable: boolean;
-  expect?: FlowExpect;
+  expect?: Predicate;
   /** Recorder-internal, and the field journeys are cut on. Never written to the saved flow. */
   route?: string;
 }
@@ -67,16 +68,24 @@ function provedSlug(steps: readonly TapeStep[]): string {
   for (const step of steps) {
     const expect = step.expect;
     if (expect === undefined) continue;
-    if (expect.signal !== undefined) return segment(expect.signal, 32);
-    if (expect.net !== undefined) {
-      const method = segment(expect.net.method ?? '', 6);
-      const where = segment(expect.net.urlContains ?? '', 24);
+    // A predicate names its kind, so the slug reads the tree rather than probing a struct. The
+    // signal wins over the request for the same reason it always did: it is the app saying what it
+    // did, which is the strongest thing a name can carry.
+    const signal = clauseOfKind(expect, PredicateKind.SIGNAL);
+    if (signal?.name !== undefined) return segment(signal.name, 32);
+    const netClause = clauseOfKind(expect, PredicateKind.NET);
+    if (netClause !== undefined) {
+      const method = segment(netClause.method ?? '', 6);
+      const where = segment(netClause.urlContains ?? '', 24);
       const joined = [method, where].filter((part) => '' !== part).join('-');
       if ('' !== joined) return joined;
     }
-    if (expect.state !== undefined) return segment(expect.state.path, 32);
-    if (expect.route?.pathname !== undefined) return segment(expect.route.pathname, 24);
-    if (expect.text?.contains !== undefined) return segment(expect.text.contains, 24);
+    const state = clauseOfKind(expect, PredicateKind.STATE);
+    if (state !== undefined) return segment(state.path, 32);
+    const route = clauseOfKind(expect, PredicateKind.ROUTE);
+    if (route?.pathname !== undefined) return segment(route.pathname, 24);
+    const text = clauseOfKind(expect, PredicateKind.TEXT);
+    if (text?.contains !== undefined) return segment(text.contains, 24);
   }
   return '';
 }

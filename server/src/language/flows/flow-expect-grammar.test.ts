@@ -19,11 +19,24 @@ import {
   describeFlowZodFailure,
   parseFlowFileText,
 } from './flow-expect-grammar.js';
+import { flowExpectHasConsequence } from '@reticlehq/core';
 
 const REPORTER_EXPECT = {
   net: { method: 'POST', urlContains: '/decode', count: 1 },
   signal: { name: 'scan:complete', count: 1 },
   state: { store: 'app', path: 'scan.status', equals: 'done' },
+};
+
+/** What the v1 reporter expect above means once the schema has lifted it. */
+const LIFTED_REPORTER = {
+  kind: 'allOf',
+  predicates: [
+    { kind: 'settled' },
+    { kind: 'signal', name: 'scan:complete', count: 1 },
+    { kind: 'settled' },
+    { kind: 'net', method: 'POST', urlContains: '/decode', count: 1 },
+    { kind: 'state', store: 'app', path: 'scan.status', equals: 'done' },
+  ],
 };
 
 const ALLOF_EXPECT = {
@@ -59,38 +72,50 @@ function flowDoc(expect: unknown): Record<string, unknown> {
 }
 
 describe('coerceFlowExpect', () => {
-  it('flattens a sibling-channel expect whose signal is { name, count }', () => {
-    const coerced = coerceFlowExpect(REPORTER_EXPECT);
-    expect(coerced).toEqual({ ok: true, value: CANONICAL });
+  /*
+   * This block used to assert FLATTENING: an agent's `allOf` was squashed into the one-slot-per-kind
+   * struct a v1 file could hold, and a kind nobody could express was refused outright. A step's
+   * expect is a `Predicate` now, so the grammar's job shrank to telling the two shapes apart and
+   * letting each through unchanged.
+   *
+   * Every expectation below flipped for that reason, and the direction is the point: what an agent
+   * wrote is what the file holds.
+   */
+  it('lets a predicate through exactly as the agent wrote it', () => {
+    const coerced = coerceFlowExpect(ALLOF_EXPECT);
+    expect(coerced).toEqual({ ok: true, value: ALLOF_EXPECT });
     expect(FlowFileSchema.safeParse(flowDoc(coerced.ok ? coerced.value : {})).success).toBe(true);
   });
 
-  it('accepts the same allOf grammar act_and_wait already takes', () => {
-    const coerced = coerceFlowExpect(ALLOF_EXPECT);
-    expect(coerced).toEqual({ ok: true, value: CANONICAL });
+  it('lets a single kind-tagged predicate through unchanged', () => {
+    const one = { kind: 'net', method: 'POST', urlContains: '/decode', count: 1 };
+    expect(coerceFlowExpect(one)).toEqual({ ok: true, value: one });
   });
 
-  it('accepts a single kind-tagged predicate as expect', () => {
-    expect(
-      coerceFlowExpect({ kind: 'net', method: 'POST', urlContains: '/decode', count: 1 }),
-    ).toEqual({
-      ok: true,
-      value: { net: { method: 'POST', urlContains: '/decode', count: 1 } },
-    });
-  });
-
-  it('leaves a canonical FlowExpect untouched', () => {
+  it('still accepts a v1 flat expect, which the schema lifts on read', () => {
     expect(coerceFlowExpect({ signal: 'scan:complete', signalCount: 1 })).toEqual({
       ok: true,
       value: { signal: 'scan:complete', signalCount: 1 },
     });
   });
 
-  it('refuses a kind-tagged expect that a saved flow cannot enforce, rather than stripping it to empty', () => {
-    const coerced = coerceFlowExpect({ kind: 'settled' });
-    expect(coerced.ok).toBe(false);
-    if (coerced.ok) throw new Error('expected a refusal');
-    expect(coerced.detail).toBe(FlowParseNote.UNENFORCED);
+  it('flattens a v1 sibling-channel expect whose signal is { name, count }', () => {
+    expect(coerceFlowExpect(REPORTER_EXPECT)).toEqual({ ok: true, value: CANONICAL });
+  });
+
+  /*
+   * `{ kind: 'settled' }` used to be REFUSED, because a settle gate is a wait rather than a claim
+   * and the flat struct had no slot for one — so saving it would have graded the flow `asserted`
+   * while nothing could fail. A predicate holds it now, and `flowExpectHasConsequence` reads the
+   * kinds rather than the slots, so a settle-only expect saves and grades as asserting nothing.
+   * The refusal was protecting the grade; the grade protects itself.
+   */
+  it('accepts a settle gate, which now grades as asserting nothing rather than being refused', () => {
+    expect(coerceFlowExpect({ kind: 'settled' })).toEqual({
+      ok: true,
+      value: { kind: 'settled' },
+    });
+    expect(flowExpectHasConsequence({ kind: 'settled' })).toBe(false);
   });
 });
 
@@ -99,14 +124,26 @@ describe('parseFlowFileText', () => {
     const parsed = parseFlowFileText(JSON.stringify(flowDoc(REPORTER_EXPECT)));
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) throw new Error('expected ok');
-    expect(parsed.value.steps[0]?.expect).toEqual(CANONICAL);
+    // Lifted from v1 on read: the file said `{ net, signal, state }` and the value is the predicate
+    // tree that means the same thing.
+    expect(parsed.value.steps[0]?.expect).toEqual(LIFTED_REPORTER);
   });
 
-  it('loads an allOf expect into the same canonical shape', () => {
+  it('loads an allOf expect exactly as it was written', () => {
     const parsed = parseFlowFileText(JSON.stringify(flowDoc(ALLOF_EXPECT)));
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) throw new Error('expected ok');
-    expect(parsed.value.steps[0]?.expect).toEqual(CANONICAL);
+    expect(parsed.value.steps[0]?.expect).toEqual(ALLOF_EXPECT);
+  });
+
+  it('says WHY a ref-scoped expect is refused, not only that it is', () => {
+    const parsed = parseFlowFileText(
+      JSON.stringify(flowDoc({ kind: 'text', contains: 'Error', absent: true, scope: 'e12' })),
+    );
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) throw new Error('expected a refusal');
+    expect(parsed.detail).toContain('step 0');
+    expect(parsed.detail).toContain('text.scope "e12"');
   });
 
   it('names bad JSON as bad JSON, not as a schema failure', () => {
@@ -133,6 +170,8 @@ describe('parseFlowFileText', () => {
 
 describe('describeFlowZodFailure', () => {
   it('points at the step index and the key the schema could not accept', () => {
+    // A v1 expect whose `signal` is an object with no `name`. `flattenSignalObject` leaves it alone
+    // precisely so the schema failure can name the key, and the union has to not bury it.
     const result = FlowFileSchema.safeParse(
       flowDoc({ signal: { count: 1 }, net: { method: 'POST' } }),
     );
@@ -154,7 +193,9 @@ describe('coerceFlowFileExpects', () => {
     expect(coerced.ok).toBe(true);
     if (!coerced.ok) throw new Error('expected ok');
     const file = coerced.value as { steps: { expect: unknown }[]; success: unknown };
-    expect(file.steps[0]?.expect).toEqual(CANONICAL);
-    expect(file.success).toEqual({ signal: 'scan:complete' });
+    // Both pass through as written. The coercion's remaining job is the v1 flattening, not a
+    // conversion: a predicate is already the shape the file stores.
+    expect(file.steps[0]?.expect).toEqual(ALLOF_EXPECT);
+    expect(file.success).toEqual({ kind: 'signal', name: 'scan:complete' });
   });
 });
