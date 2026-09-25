@@ -383,7 +383,12 @@ export async function acquireLeasedSession(
     acquire: (
       url: string,
       opts: { sessionId: string; seedStorage?: SeedStorage },
-    ) => Promise<{ sessionId: string; release: () => Promise<void>; navStatus?: number }>;
+    ) => Promise<{
+      sessionId: string;
+      release: () => Promise<void>;
+      navStatus?: number;
+      injectReader?: () => Promise<boolean>;
+    }>;
     /**
      * The address this lease's page said it could not reach. Optional so a test double need not
      * implement it; the real pool always does.
@@ -413,7 +418,7 @@ export async function acquireLeasedSession(
   // id comes back, so handing it the lease id for an app that named its own session sent every flow
   // in the run at a session that does not exist.
   let registeredId: string | undefined;
-  await waitForLeasedSession(() => {
+  await connectOrInject(lease, () => {
     registeredId = resolveLeasedSessionId(sessions, lease.sessionId);
     return registeredId !== undefined;
   });
@@ -455,6 +460,26 @@ export async function waitForLeasedSession(
 }
 
 /**
+ * Wait for the leased tab to connect; if its app never does, hand it the zero-install reader.
+ *
+ * The decision is taken HERE, by the daemon, on the one fact that settles it: no HELLO arrived. A
+ * timer inside the page cannot know that — an app can connect from a dynamic import that resolves
+ * after `load` — and a reader injected into a page whose app was about to connect would take its
+ * place and drop the app's own options. So an app that connected itself is never touched, and a page
+ * that stayed silent through the whole readiness wait is the one that gets a reader.
+ */
+export async function connectOrInject(
+  lease: { injectReader?: () => Promise<boolean> },
+  isConnected: () => boolean,
+  wait: (isConnected: () => boolean) => Promise<boolean> = waitForLeasedSession,
+): Promise<{ ready: boolean; zeroInstall: boolean }> {
+  if (await wait(isConnected)) return { ready: true, zeroInstall: false };
+  if (true !== (await lease.injectReader?.())) return { ready: false, zeroInstall: false };
+  const ready = await wait(isConnected);
+  return { ready, zeroInstall: ready };
+}
+
+/**
  * Named on its own because `reticle drive <url>` runs it too.
  *
  * When a daemon already owns the bridge port, `drive` asks that daemon for a browser instead of
@@ -474,7 +499,7 @@ export function hasOriginLock(origin: string): boolean {
 export const LEASE_ACQUIRE_TOOL: ToolDef = {
   name: ReticleTool.LEASE_ACQUIRE,
   description:
-    'Lease a fresh isolated headless browser context from the shared pool and navigate it to the app URL (the app must already be running and embed @reticlehq/core). If this origin is already leased and still connected, this returns THAT session rather than minting a second tab — a second acquire on the same origin poisons default session resolution. Returns the sessionId the leased tab registers — pass it to other tools. The pool keeps all leases in ONE browser and caps concurrency; if at capacity this waits for a free slot. Release with reticle_lease{action:"release"} when the flow is done. PREFER AN ALREADY-OPEN TAB: if reticle_sessions lists a non-leased session for this app, drive THAT instead — a lease is invisible to the person watching the app, whose HUD lives in their own tab, and a tab flagged hidden/throttled is often still driveable. Lease for isolation you actually need (a second identity, a clean context, parallel flows) or when driving the open tab has failed — this call answers with `preferExisting` when a live tab was available.',
+    'Lease a fresh isolated headless browser context from the shared pool and navigate it to the app URL (the app must already be running; one with no Reticle SDK gets one supplied, reported as zeroInstall). If this origin is already leased and still connected, this returns THAT session rather than minting a second tab — a second acquire on the same origin poisons default session resolution. Returns the sessionId the leased tab registers — pass it to other tools. The pool keeps all leases in ONE browser and caps concurrency; if at capacity this waits for a free slot. Release with reticle_lease{action:"release"} when the flow is done. PREFER AN ALREADY-OPEN TAB: if reticle_sessions lists a non-leased session for this app, drive THAT instead — a lease is invisible to the person watching the app, whose HUD lives in their own tab, and a tab flagged hidden/throttled is often still driveable. Lease for isolation you actually need (a second identity, a clean context, parallel flows) or when driving the open tab has failed — this call answers with `preferExisting` when a live tab was available.',
   inputSchema: {
     url: z
       .string()
@@ -494,6 +519,12 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       .boolean()
       .describe(
         'Whether the leased tab is connected AND answering. On a reused lease this is probed, not assumed — a row in the session map is presence, not liveness. False ⇒ read notReadyReason.',
+      ),
+    zeroInstall: z
+      .boolean()
+      .optional()
+      .describe(
+        'Present when this app ships no Reticle SDK and the lease supplied one. Verdicts work on the DOM, network, console and routes; there is no framework adapter, so no component state and no source file:line. Install with `npx @reticlehq/server init` for those.',
       ),
     notReadyReason: z
       .enum([LeaseNotReadyReason.SDK_NEVER_DIALLED, LeaseNotReadyReason.SDK_STOPPED_ANSWERING])
@@ -647,7 +678,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       // Resolved rather than assumed: an app that names its own session registers under that name,
       // and the id we hand back has to be the one the agent can actually drive.
       let registeredId: string | undefined;
-      const ready = await waitForLeasedSession(() => {
+      const { ready, zeroInstall } = await connectOrInject(lease, () => {
         registeredId = resolveLeasedSessionId(deps.sessions, lease.sessionId);
         return registeredId !== undefined;
       });
@@ -683,6 +714,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
         // word: no SDK ever dialled in (look at the install) versus one dialled in and stopped
         // answering (recover the tab). They want different next actions, so they get names.
         ...(ready ? {} : { notReadyReason: LeaseNotReadyReason.SDK_NEVER_DIALLED }),
+        ...(zeroInstall ? { zeroInstall: true } : {}),
         expiresInMs: pool.leaseTtlMs(),
         leased: pool.activeCount(),
         queued: pool.queuedCount(),

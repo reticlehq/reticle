@@ -19,6 +19,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
   AGENT_STOPPED_NOTICE,
   RETICLE_DEFAULT_PORT,
+  bridgeWsUrl,
   ReticleCommand,
   ReticleDir,
   ReticleEnv,
@@ -90,6 +91,11 @@ import { AMBIENT_RECORDING } from './language/flows/recording/tape/recordings.js
 import { readRetainPolicy } from './memory/journal/on-disk/retain-policy.js';
 import type { RealInputProvider } from './portal/input/real-input.js';
 import { log } from './log.js';
+import {
+  readReaderBundle,
+  zeroInstallScript as zeroInstallScriptFor,
+  type InjectedConnect,
+} from './portal/pool/zero-install.js';
 
 /** A human-facing one-liner for a panel replay verdict — ✓ passed / ⚠ drifted / ✗ errored. */
 function replayVerdictLine(result: FlowReplayResult): string {
@@ -181,7 +187,12 @@ export { resolveBridgeSecurity } from './portal/bridge/bridge-security.js';
  * Build the shared browser pool (one headless Chromium, N capped isolated leased contexts). Lazy —
  * no Chromium launches until the first lease — so creating it is free even when never used.
  */
-function createBrowserPool(headless: boolean): BrowserPool {
+/** Where the zero-install reader connects: this daemon's own bridge, with its pairing token. */
+function readerConnect(port: number, token: string | undefined): InjectedConnect {
+  return { url: bridgeWsUrl(port), ...(token === undefined ? {} : { token }) };
+}
+
+function createBrowserPool(headless: boolean, reader: InjectedConnect): BrowserPool {
   const maxContexts = resolveMaxContexts(process.env[ReticleEnv.MAX_CONTEXTS], cpus().length);
   const genSessionId = (): string =>
     `lease-${
@@ -189,7 +200,20 @@ function createBrowserPool(headless: boolean): BrowserPool {
         ? globalThis.crypto.randomUUID()
         : String(Date.now())
     }`;
-  return new BrowserPool(playwrightLauncher({ headless }), { maxContexts, genSessionId });
+  // Built on first use and kept: the page that needs it is one whose app never connected.
+  let script: string | null | undefined;
+  const zeroInstallScript = (): string | undefined => {
+    if (script === undefined) {
+      const bundle = readReaderBundle();
+      script = bundle === undefined ? null : zeroInstallScriptFor(bundle, reader);
+    }
+    return script ?? undefined;
+  };
+  return new BrowserPool(playwrightLauncher({ headless }), {
+    maxContexts,
+    genSessionId,
+    zeroInstallScript,
+  });
 }
 
 /**
@@ -401,7 +425,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     const project = new ProjectStore(fs, reticleRoot, { now });
     attachRouteLearning(bridge, projectStoreResolver(fs, project, reticleRoot, now));
     const annotations = new AnnotationStore();
-    pool = createBrowserPool(options.headless ?? true);
+    pool = createBrowserPool(options.headless ?? true, readerConnect(port, security.token));
     leaseReaper = new LeaseReaper(pool);
     leaseReaper.start();
     /*
@@ -569,7 +593,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   const project = new ProjectStore(fs, reticleRoot, { now });
   attachRouteLearning(bridge, projectStoreResolver(fs, project, reticleRoot, now));
   const annotations = new AnnotationStore();
-  const pool = createBrowserPool(options.headless ?? true);
+  const pool = createBrowserPool(options.headless ?? true, readerConnect(port, security.token));
   const leaseReaper = new LeaseReaper(pool);
   leaseReaper.start();
   /*

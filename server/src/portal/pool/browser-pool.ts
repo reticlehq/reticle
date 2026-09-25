@@ -37,6 +37,11 @@ export interface Lease {
   readonly url: string;
   readonly navStatus?: number;
   release(): Promise<void>;
+  /**
+   * Hand the page the zero-install reader: evaluated in the live document, and added ahead of every
+   * document this lease loads next. False when there is no reader, or the page cannot run one.
+   */
+  injectReader?(): Promise<boolean>;
 }
 
 /** Default lease time-to-live: a lease untouched for this long is presumed orphaned and reclaimed. */
@@ -62,6 +67,11 @@ interface BrowserPoolOptions {
   leaseTtlMs?: number;
   /** Per-lease navigation timeout — a page that won't load fails its own lease, never blocks a slot. */
   navTimeoutMs?: number;
+  /**
+   * The zero-install reader, built where the daemon knows its own port and pairing token. A thunk so
+   * the ~450KB build is only read if some page ever needs it; undefined when there is none to give.
+   */
+  zeroInstallScript?: () => string | undefined;
 }
 
 interface ActiveLease {
@@ -97,6 +107,7 @@ export class BrowserPool {
   readonly #genId: () => string;
   readonly #now: () => number;
   readonly #ttl: number;
+  readonly #zeroInstall: (() => string | undefined) | undefined;
   readonly #navTimeout: number;
 
   #browser: PooledBrowser | undefined;
@@ -138,6 +149,7 @@ export class BrowserPool {
     this.#now = opts.now ?? ((): number => Date.now());
     this.#ttl = opts.leaseTtlMs ?? DEFAULT_LEASE_TTL_MS;
     this.#navTimeout = opts.navTimeoutMs ?? DEFAULT_NAV_TIMEOUT_MS;
+    this.#zeroInstall = opts.zeroInstallScript;
   }
 
   /** The TTL configured for leases — how long an untouched lease lives before the reaper reclaims it. */
@@ -473,6 +485,13 @@ export class BrowserPool {
         url,
         ...(navStatus !== undefined ? { navStatus } : {}),
         release: () => this.#release(sessionId),
+        injectReader: async (): Promise<boolean> => {
+          const script = this.#zeroInstall?.();
+          if (script === undefined || page.evaluate === undefined) return false;
+          await page.addInitScript?.(script);
+          await page.evaluate(script);
+          return true;
+        },
       };
     } catch (err) {
       // Setup failed after we claimed the slot — give it back so a queued acquire isn't stuck, and

@@ -53,6 +53,7 @@ function wrapBrowser(browser: Browser): PooledBrowser {
           return {
             goto: (url, opts) => page.goto(url, gotoOptions(opts?.timeoutMs)),
             close: () => page.close(),
+            evaluate: (script) => page.evaluate(script),
             // Playwright returns a Buffer; Uint8Array is what the visual store and differ take.
             screenshot: async (opts) =>
               new Uint8Array(await page.screenshot({ fullPage: true === opts?.fullPage })),

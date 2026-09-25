@@ -10,15 +10,16 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./inject": "./dist/reticle-inject.js"
   },
   "scripts": {
-    "build": "node scripts/embed-heroicons.mjs && tsc -b && node ../../../scripts/alias-dist.mjs",
+    "build": "node scripts/embed-heroicons.mjs && tsc -b && node ../../../scripts/alias-dist.mjs && node scripts/bundle-inject.mjs",
     "typecheck": "tsc -b",
     "lint": "eslint src",
     "test:unit": "vitest run src --passWithNoTests",
     "test:coverage": "vitest run src --passWithNoTests --coverage.enabled --coverage.provider=v8 --coverage.reporter=text-summary --coverage.include='src/**/*.ts' --coverage.exclude='src/**/*.test.ts'",
-    "prepack": "node ../../../scripts/prepare-dist.mjs --clean dist && tsc -b --force && node ../../../scripts/alias-dist.mjs && node ../../../scripts/prepare-dist.mjs dist"
+    "prepack": "node ../../../scripts/prepare-dist.mjs --clean dist && tsc -b --force && node ../../../scripts/alias-dist.mjs && node scripts/bundle-inject.mjs && node ../../../scripts/prepare-dist.mjs dist"
   },
   "dependencies": {
     "@reticlehq/core": "workspace:*"

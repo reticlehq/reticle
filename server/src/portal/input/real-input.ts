@@ -19,6 +19,7 @@ import { classifyConnectFailure } from '@/telemetry/connect-failure.js';
 import { ActionType, DriveErrorCode, DRIVE_PLAYWRIGHT_MISSING_MSG } from '@reticlehq/core';
 import { installNetworkMocks, type MockRule } from './network-mock.js';
 import { attachNetworkDetail, type NetworkDetail } from './network-detail.js';
+import { injectedConnectArgs } from '@/portal/pool/zero-install.js';
 
 /** Viewport CSS-px box as returned by the INSPECT command (getBoundingClientRect). */
 export interface ElementBox {
@@ -525,7 +526,7 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
       await page.waitForFunction('!!globalThis.__reticleInstance', {
         timeout: INJECT_CONNECT_WAIT_MS,
       });
-      const arg = JSON.stringify({ allowNonLocalhost: true, token: opts.token, url: opts.url });
+      const arg = JSON.stringify(injectedConnectArgs(opts));
       await page.evaluate(`globalThis.__reticleInstance.connect(${arg})`);
     } catch {
       // No SDK on the page (or it connected already) — the no-session guard in verify reports it.

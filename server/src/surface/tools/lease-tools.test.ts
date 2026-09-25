@@ -20,6 +20,7 @@ import {
   hasOriginLock,
   scrubSeedFromError,
   waitForLeasedSession,
+  connectOrInject,
 } from './lease-tools.js';
 import { assertVerdict } from './assert/assert-verdict.js';
 import {
@@ -1118,6 +1119,41 @@ describe('reticle_lease with seedStorage', () => {
       expect(verdict.decision['verified']).toBe(Verified.NO);
       expect(verdict.decision['verifiedReason']).toBe(VerifiedReason.ASSERTION_FAILED);
       expect(verdict.decision['because']).toBe('the declared consequence did not hold');
+    });
+  });
+});
+
+// A verdict with no `init`. A page whose app never connected is handed the zero-install reader
+// and waited on once more; an app that connected itself is never touched.
+describe('connectOrInject — the lease supplies an SDK only when the page never dialled in', () => {
+  const instant = (): Promise<void> => Promise.resolve();
+  const wait = (isConnected: () => boolean): Promise<boolean> =>
+    waitForLeasedSession(isConnected, instant, 2, 0);
+
+  it('leaves a page that connected on its own alone', async () => {
+    let injected = false;
+    const lease = { injectReader: () => ((injected = true), Promise.resolve(true)) };
+    expect(await connectOrInject(lease, () => true, wait)).toEqual({
+      ready: true,
+      zeroInstall: false,
+    });
+    expect(injected).toBe(false);
+  });
+
+  it('injects into a silent page, and reports the session it produced as zero-install', async () => {
+    let connected = false;
+    const lease = { injectReader: () => ((connected = true), Promise.resolve(true)) };
+    expect(await connectOrInject(lease, () => connected, wait)).toEqual({
+      ready: true,
+      zeroInstall: true,
+    });
+  });
+
+  it('stays not-ready when there was no reader to give', async () => {
+    const lease = { injectReader: () => Promise.resolve(false) };
+    expect(await connectOrInject(lease, () => false, wait)).toEqual({
+      ready: false,
+      zeroInstall: false,
     });
   });
 });

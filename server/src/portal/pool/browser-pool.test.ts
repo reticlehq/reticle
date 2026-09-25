@@ -40,6 +40,12 @@ class FakePage implements PooledPage {
     this.#onDialog = handler;
   }
   disposedScripts = 0;
+  evaluated: string[] = [];
+  evaluate(script: string): Promise<unknown> {
+    this.callOrder.push('evaluate');
+    this.evaluated.push(script);
+    return Promise.resolve(undefined);
+  }
   addInitScript<Arg>(
     script: ((arg: Arg) => void) | string,
     arg?: Arg,
@@ -154,6 +160,30 @@ describe('BrowserPool', () => {
     expect(browsers[0]?.contexts[0]?.pages[0]?.gotoUrls).toEqual([
       'http://localhost:3000/dashboard',
     ]);
+  });
+
+  // The zero-install reader, handed over only once the daemon knows the page never connected: into
+  // the live document now, and ahead of every document this lease loads next.
+  it('injects the reader into the live page and every later navigation', async () => {
+    const { launch, browsers } = fakeLauncher();
+    const pool = new BrowserPool(launch, {
+      maxContexts: 4,
+      genSessionId: counterIds(),
+      zeroInstallScript: () => '/* reader */',
+    });
+    const lease = await pool.acquire('http://localhost:3000/');
+    expect(await lease.injectReader?.()).toBe(true);
+    const page = browsers[0]?.contexts[0]?.pages[0];
+    expect(page?.evaluated).toEqual(['/* reader */']);
+    expect(page?.initScripts.map((s) => s.script)).toEqual(['/* reader */']);
+  });
+
+  it('injects nothing, and says so, when the daemon has no reader to give', async () => {
+    const { launch, browsers } = fakeLauncher();
+    const pool = new BrowserPool(launch, { maxContexts: 4, genSessionId: counterIds() });
+    const lease = await pool.acquire('http://localhost:3000/');
+    expect(await lease.injectReader?.()).toBe(false);
+    expect(browsers[0]?.contexts[0]?.pages[0]?.evaluated).toEqual([]);
   });
 
   it('reuses one browser across many leases; each context is isolated', async () => {

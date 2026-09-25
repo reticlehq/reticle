@@ -31,6 +31,8 @@ export interface PooledPage {
    * reports dispatched/settled while the styles never ran.
    */
   hover?(x: number, y: number): Promise<void>;
+  /** Evaluate a script in the page's current document. OPTIONAL: without it no reader is injected. */
+  evaluate?(script: string): Promise<unknown>;
   /** Add an init script to run after document creation but before any page scripts run. */
   addInitScript?<Arg>(
     script: ((arg: Arg) => void) | string,
