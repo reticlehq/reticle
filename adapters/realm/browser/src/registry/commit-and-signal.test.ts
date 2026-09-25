@@ -1,8 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { commitAndSignal } from './commit-and-signal.js';
 import type { ReticleEmitter } from './emitter.js';
 
-function spyEmitter(): ReticleEmitter & { signal: ReturnType<typeof vi.fn> } {
+function spyEmitter(): ReticleEmitter & {
+  signal: Mock<(name: string, data?: Record<string, unknown>) => void>;
+} {
   return { signal: vi.fn(), state: vi.fn() };
 }
 

@@ -95,7 +95,7 @@
     "@reticlehq/next": "workspace:*",
     "@reticlehq/server": "workspace:*",
     "@types/node": "^26.4.0",
-    "@vitest/coverage-v8": "3.2.6",
+    "@vitest/coverage-v8": "4.1.11",
     "eslint": "^9.18.0",
     "eslint-plugin-react-hooks": "^5.1.0",
     "jsdom": "^30.0.1",
@@ -107,7 +107,7 @@
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.67.0",
     "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "^3.2.6",
+    "vitest": "^4.1.11",
     "ws": "^8.21.3"
   }
 }

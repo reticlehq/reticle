@@ -19,16 +19,19 @@ function collect(): { emit: Emit; events: Emitted[] } {
 
 describe('nativeWarn — SDK-internal diagnostics bypass the observer', () => {
   let teardown: Teardown | undefined;
-  let warnSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
     teardown?.();
     teardown = undefined;
-    warnSpy.mockRestore();
+    // `vi.restoreAllMocks()` rather than a stored handle: the spy was only ever kept so that it could
+    // restore itself, and `ReturnType<typeof vi.spyOn>` resolves to `any` under vitest 4, which the
+    // no-unsafe-call rule rejects. There is one spy in this file, so restoring all of them is the same
+    // act with nothing to type.
+    vi.restoreAllMocks();
   });
 
   it('nativeWarn does NOT emit a CONSOLE_WARN event through the patched observer', () => {

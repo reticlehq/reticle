@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { EventType } from '@reticlehq/core';
 import { reportSdkFailure, SdkSite } from './sdk-failure.js';
+import type { Emit } from './types.js';
 
 /**
  * Half of Reticle runs inside the page, and that half was silent: every SDK catch block swallows by
@@ -9,7 +10,7 @@ import { reportSdkFailure, SdkSite } from './sdk-failure.js';
  */
 describe('reportSdkFailure', () => {
   it('emits over the bridge the SDK is ALREADY connected to — no outbound request of its own', () => {
-    const emit = vi.fn();
+    const emit = vi.fn<Emit>();
     reportSdkFailure(emit, SdkSite.NETWORK_OBSERVER, new TypeError('fetch is not extensible'));
     expect(emit).toHaveBeenCalledWith(
       EventType.SDK_FAILED,
@@ -22,7 +23,7 @@ describe('reportSdkFailure', () => {
   });
 
   it('handles a thrown non-Error without inventing a type', () => {
-    const emit = vi.fn();
+    const emit = vi.fn<Emit>();
     reportSdkFailure(emit, SdkSite.DOM_OBSERVER, 'just a string');
     const payload = emit.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(payload['message']).toBe('just a string');
@@ -30,7 +31,7 @@ describe('reportSdkFailure', () => {
   });
 
   it('caps the message rather than forwarding an unbounded string', () => {
-    const emit = vi.fn();
+    const emit = vi.fn<Emit>();
     reportSdkFailure(emit, SdkSite.ACTION, new Error('x'.repeat(5000)));
     expect((emit.mock.calls[0]?.[1] as { message: string }).message).toHaveLength(500);
   });
@@ -54,7 +55,9 @@ describe('reportSdkFailure', () => {
  */
 describe('a throwing observer degrades the SDK instead of collapsing it', () => {
   const guard = (
-    emit: ReturnType<typeof vi.fn>,
+    // `Emit`, not `ReturnType<typeof vi.fn>`: that resolves to `Mock<Procedure | Constructable>` under
+    // vitest 4 and is not assignable to the parameter `reportSdkFailure` actually takes.
+    emit: Emit,
     site: string,
     install: () => () => void,
   ): (() => void) => {
@@ -67,7 +70,7 @@ describe('a throwing observer degrades the SDK instead of collapsing it', () => 
   };
 
   it('installs every healthy observer even when one throws', () => {
-    const emit = vi.fn();
+    const emit = vi.fn<Emit>();
     const installed: string[] = [];
     const teardowns = [
       guard(emit, SdkSite.NETWORK_OBSERVER, () => {
@@ -91,7 +94,7 @@ describe('a throwing observer degrades the SDK instead of collapsing it', () => 
   });
 
   it('returns a safe no-op teardown for the observer that never installed', () => {
-    const emit = vi.fn();
+    const emit = vi.fn<Emit>();
     const teardown = guard(emit, SdkSite.DOM_OBSERVER, () => {
       throw new Error('nope');
     });

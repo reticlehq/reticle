@@ -24,7 +24,7 @@
     "@reticlehq/server": "workspace:*"
   },
   "peerDependencies": {
-    "vitest": "^3.2.6"
+    "vitest": "^3.2.6 || ^4.0.0"
   },
   "peerDependenciesMeta": {
     "vitest": {

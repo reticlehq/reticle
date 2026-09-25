@@ -1,10 +1,13 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { createReticleEmitter } from './emitter.js';
 
+// The mocks carry the target's real signatures. `ReturnType<typeof vi.fn>` used to stand in for them,
+// and under vitest 4 that resolves to `Mock<Procedure | Constructable>`, which is not assignable to
+// `EmitterTarget` — so the double stopped type-checking as the thing it doubles.
 interface FakeTarget {
   connected: boolean;
-  signal: ReturnType<typeof vi.fn>;
-  state: ReturnType<typeof vi.fn>;
+  signal: Mock<(name: string, data?: Record<string, unknown>) => void>;
+  state: Mock<(name: string, value: unknown) => void>;
 }
 
 function fakeTarget(connected: boolean): FakeTarget {
