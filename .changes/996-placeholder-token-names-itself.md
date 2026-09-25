@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — a build that never substituted the pairing token was reported as a wrong token.** `define` is what turns `__RETICLE_TOKEN__` into the real credential, and it does not always run: Vite 8 / rolldown left every Reticle global as a raw identifier while `import.meta.env` replacement worked, and `vite.define` never reaches an Astro inline script. The SDK then dialled with the literal placeholder and the bridge refused it with "wrong pairing token — run `reticle status`", sending the reader to check a token that was never produced. The daemon now recognises the placeholder and says the build did not substitute it. Part of [#996](https://github.com/reticlehq/reticle/issues/996).

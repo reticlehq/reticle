@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — a page whose build never substituted the pairing token was told only "no pairing token on the page".** `define` is what turns `__RETICLE_TOKEN__` into the real credential, and it does not always run: Vite 8 / rolldown left the Reticle globals as raw identifiers, and `vite.define` never reaches an Astro inline script. The connect snippet then sends an empty token. The refusal now says the build did not substitute `__RETICLE_TOKEN__` or ran before the daemon, which points at the build rather than the credential. Part of [#996](https://github.com/reticlehq/reticle/issues/996).

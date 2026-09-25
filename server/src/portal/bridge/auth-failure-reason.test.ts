@@ -77,32 +77,35 @@ describe('why the bridge refused', () => {
 });
 
 /**
- * A build that did not substitute the token is not a wrong token.
+ * An empty token names the build, not the credential.
  *
- * `define` is what turns `__RETICLE_TOKEN__` into the real credential, and it does not always run:
- * Vite 8 / rolldown left all three Reticle globals as raw identifiers while `import.meta.env`
- * replacement worked, and `vite.define` never reaches an Astro inline script. The SDK dials with the
- * literal placeholder, and reading that as a wrong token produced the worst available advice --
- * `reticle status`, to go and check a token that was never produced (#996).
+ * Every connect snippet reads the token as `typeof __RETICLE_TOKEN__ !== 'undefined' ? ... : ''`,
+ * so a build whose `define` did not run (Vite 8 / rolldown, an Astro inline script) sends `''`
+ * rather than the placeholder, and lands here. The old reason said only that no token was on the
+ * page, which leaves the reader to work out that the build is what is broken (#996).
  */
-describe('an unsubstituted placeholder token names itself', () => {
-  it('says the build did not substitute it, not that the token is wrong', () => {
-    const reason = authFailureReason(new Set(), 'proj-abc', RETICLE_TOKEN_GLOBAL);
+describe('a page with no token is told the build did not put one there', () => {
+  it('names the unsubstituted global', () => {
+    const reason = authFailureReason(new Set(), 'proj-abc', '');
 
-    expect(reason).toContain('__RETICLE_TOKEN__');
+    expect(reason).toContain('no pairing token');
+    expect(reason).toContain(RETICLE_TOKEN_GLOBAL);
     expect(reason).toMatch(/did not substitute/i);
     expect(reason).not.toMatch(/wrong pairing token/i);
-    expect(reason).not.toMatch(/reticle status/i);
+  });
+
+  it('says the same when the HELLO carried no token field at all', () => {
+    expect(authFailureReason(new Set(), 'proj-abc')).toBe(
+      authFailureReason(new Set(), 'proj-abc', ''),
+    );
   });
 
   it('still reads as a refusal, so the recovery paths that key on that still fire', () => {
-    const reason = authFailureReason(new Set(), 'proj-abc', RETICLE_TOKEN_GLOBAL);
-
-    expect(isAuthRefusalReason(reason)).toBe(true);
+    expect(isAuthRefusalReason(authFailureReason(new Set(), 'proj-abc', ''))).toBe(true);
   });
 
   it('fits a WebSocket close reason, which is capped at 123 bytes', () => {
-    const reason = authFailureReason(new Set(), 'proj-abc', RETICLE_TOKEN_GLOBAL);
+    const reason = authFailureReason(new Set(), 'proj-abc', '');
 
     expect(Buffer.byteLength(reason, 'utf8')).toBeLessThanOrEqual(123);
   });
@@ -111,19 +114,7 @@ describe('an unsubstituted placeholder token names itself', () => {
     const reason = authFailureReason(new Set(), 'proj-abc', 'a-real-but-stale-token');
 
     expect(reason).toMatch(/wrong pairing token/i);
-    expect(reason).not.toContain('__RETICLE_TOKEN__');
-  });
-
-  it('a different-project daemon still outranks it', () => {
-    // The daemon has EVIDENCE it belongs to someone else; that is a better answer than anything
-    // derived from the credential, whatever the credential happens to be.
-    const reason = authFailureReason(new Set(['proj-abc']), 'proj-xyz', RETICLE_TOKEN_GLOBAL);
-
-    expect(reason).toContain('different project');
-  });
-
-  it('an empty token is still a missing one, not a placeholder', () => {
-    expect(authFailureReason(new Set(), 'proj-abc', '')).toContain('no pairing token');
+    expect(reason).not.toContain(RETICLE_TOKEN_GLOBAL);
   });
 });
 

@@ -25,20 +25,6 @@ import { RETICLE_TOKEN_GLOBAL } from '@reticlehq/core';
 
 const PLAIN = 'authentication failed';
 /**
- * The page's credential is the build plugin's own placeholder, unsubstituted.
- *
- * `define` is what replaces `__RETICLE_TOKEN__` with the real token, and it does not always run:
- * Vite 8 / rolldown left all three Reticle globals as raw identifiers while `import.meta.env`
- * replacement worked, and `vite.define` never reaches an Astro inline script. The SDK then dials
- * with the literal placeholder as its credential.
- *
- * Read as a wrong token, that produces the worst available advice -- `reticle status`, to check a
- * token that was never produced. The build is what is broken, not the credential, and no reload or
- * daemon restart can fix it (#996).
- */
-const PLACEHOLDER_TOKEN =
-  'authentication failed: the page sent the literal __RETICLE_TOKEN__ — the build did not substitute it';
-/**
  * A token WAS presented and did not match. That is not "check your credentials" — the page holds a
  * real token from a state directory this daemon does not own, which in the field means a dev server
  * that does not share a filesystem with the daemon (container, devcontainer, WSL), or a page served
@@ -46,8 +32,18 @@ const PLACEHOLDER_TOKEN =
  */
 const WRONG_TOKEN =
   'authentication failed: wrong pairing token — run `reticle status` for the cause';
-/** A paste-in snippet or a Next config that never saw a token. Reload cannot mint one. */
-const NO_TOKEN = 'authentication failed: no pairing token on the page';
+/**
+ * The page sent an empty token, which in practice means the build never put one there.
+ *
+ * Every connect snippet reads the token as `typeof __RETICLE_TOKEN__ !== 'undefined' ? ... : ''`,
+ * so a build whose `define` did not run sends `''`, not the placeholder: Vite 8 / rolldown left the
+ * Reticle globals as raw identifiers, and `vite.define` never reaches an Astro inline script. The
+ * other way to get here is a build that ran before the daemon had written a token, which inlines
+ * `''` too, like a paste-in snippet or a Next config evaluated before any token existed. A reload
+ * cannot mint a token in either case, so the reason names the build rather than the credential
+ * (#996).
+ */
+const NO_TOKEN = `authentication failed: no pairing token — the build did not substitute ${RETICLE_TOKEN_GLOBAL}, or ran before the daemon`;
 /** WebSocket close reasons are capped at 123 bytes; a longer one throws and closes with nothing. */
 const MAX_REASON_BYTES = 123;
 
@@ -88,13 +84,8 @@ export function authFailureReason(
     const reason = `${DIFFERENT_PROJECT_PREFIX} — run \`reticle stop\` and retry`;
     return Buffer.byteLength(reason, 'utf8') <= MAX_REASON_BYTES ? reason : PLAIN;
   }
-  if (helloToken === undefined || 0 === helloToken.length) return NO_TOKEN;
-  // Ahead of WRONG_TOKEN: the placeholder IS a token by every test that clause applies, so left
-  // below it this case can never be reached.
-  if (RETICLE_TOKEN_GLOBAL === helloToken) {
-    return Buffer.byteLength(PLACEHOLDER_TOKEN, 'utf8') <= MAX_REASON_BYTES
-      ? PLACEHOLDER_TOKEN
-      : PLAIN;
+  if (helloToken === undefined || 0 === helloToken.length) {
+    return Buffer.byteLength(NO_TOKEN, 'utf8') <= MAX_REASON_BYTES ? NO_TOKEN : PLAIN;
   }
   return Buffer.byteLength(WRONG_TOKEN, 'utf8') <= MAX_REASON_BYTES ? WRONG_TOKEN : PLAIN;
 }
