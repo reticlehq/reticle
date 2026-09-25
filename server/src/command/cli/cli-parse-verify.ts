@@ -6,7 +6,10 @@
  * pin, a predicate to assert AND a persona to drive as — so it carries more grammar than the rest of
  * the CLI put together.
  */
+import { readFileSync } from 'node:fs';
+
 import {
+  EXPECT_FILE_FLAG,
   EXPECT_FLAG,
   HEADED_FLAG,
   PORT_FLAG,
@@ -38,6 +41,9 @@ const MSG_EXPECT_WITH_STORAGE_STATE =
   `  Use one of them: ${EXPECT_FLAG} on its own asserts against the session you have, and ` +
   `${STORAGE_STATE_FLAG} without ${EXPECT_FLAG} makes Reticle drive the url with that state and ` +
   'replay the saved flows.';
+
+const MSG_EXPECT_WITH_EXPECT_FILE =
+  `${EXPECT_FLAG} and ${EXPECT_FILE_FLAG} cannot both be set: pick one source for the predicate.`;
 /** Let Reticle drive the app itself and record what it drove, when nothing is saved yet. */
 const EXPLORE_FLAG = '--explore';
 /** Who to be while exploring — a persona, or the business outcome to reach. Implies --explore. */
@@ -128,6 +134,7 @@ export function parseVerifySuffix(args: string[], defaultPort: number): VerifySu
       i++;
       const v = args[i];
       if (v === undefined) return missingValue(EXPECT_FLAG);
+      if (expect !== undefined) return { kind: 'error', message: MSG_EXPECT_WITH_EXPECT_FILE };
       try {
         expect = JSON.parse(v);
       } catch {
@@ -136,6 +143,30 @@ export function parseVerifySuffix(args: string[], defaultPort: number): VerifySu
         return {
           kind: 'error',
           message: `${EXPECT_FLAG} needs a JSON predicate; could not parse: ${v}`,
+        };
+      }
+    } else if (arg === EXPECT_FILE_FLAG) {
+      i++;
+      const v = args[i];
+      if (v === undefined) return missingValue(EXPECT_FILE_FLAG);
+      if (expect !== undefined) return { kind: 'error', message: MSG_EXPECT_WITH_EXPECT_FILE };
+      // Prefer over --expect on Windows PowerShell: npx.cmd strips inline JSON quotes (#1082).
+      let raw: string;
+      try {
+        raw = readFileSync(v, 'utf8');
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        return {
+          kind: 'error',
+          message: `${EXPECT_FILE_FLAG} could not read ${v}: ${detail}`,
+        };
+      }
+      try {
+        expect = JSON.parse(raw);
+      } catch {
+        return {
+          kind: 'error',
+          message: `${EXPECT_FILE_FLAG} needs a JSON predicate in ${v}; could not parse the file`,
         };
       }
     } else if (arg.startsWith('--')) {

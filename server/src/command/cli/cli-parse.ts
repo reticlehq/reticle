@@ -81,6 +81,8 @@ export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticl
                 reporting on your saved flows instead. Cannot be combined with --storage-state,
                 which this path has nowhere to load. This is the path when your client never loaded
                 the reticle_* tools. exit 0 ONLY on verified:"yes" — "unknown" is not a pass)
+                [--expect-file <path>]                   (same as --expect, but read the JSON from a
+                file — prefer this on Windows PowerShell, where npx.cmd strips quotes from --expect)
   reticle affected [--since <ref>] [file...]           (which saved flows must re-verify for the changed files)
   reticle gate [--since <ref>] [file...]               (exit non-zero unless passing artifacts cover the affected flows)
   reticle watch [url]                                  (on save, report which saved flows must re-verify)
