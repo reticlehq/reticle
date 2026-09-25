@@ -467,13 +467,13 @@ function alreadyListeningClause(listening: readonly number[]): string {
   if (1 === listening.length) {
     const port = listening[0];
     return (
-      ` An app is already listening on ${String(port)}; just open http://localhost:${String(port)} ` +
-      '— do not start a second stack.'
+      ` Something is serving a page on :${String(port)}; it may not be this app — just open ` +
+      `http://localhost:${String(port)} rather than starting a second stack.`
     );
   }
   return (
-    ` An app is already listening on ${listening.join(', ')}; just open one of those URLs — do not ` +
-    'start a second stack.'
+    ` Something is serving a page on :${listening.join(', ')}; those listeners may not be this ` +
+    'app — open the URL that belongs to this project rather than starting a second stack.'
   );
 }
 
