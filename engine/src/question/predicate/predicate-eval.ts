@@ -278,6 +278,17 @@ const DOCUMENT_INITIATORS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Whether a request was a subresource the DOCUMENT fetched (script, stylesheet, image…), as the
+ * resource-timing observer stamps them, rather than one the app sent through fetch, XHR, a beacon or
+ * IPC. The capsule's blast radius uses it to keep a page load out of "what this action also did".
+ */
+export function isDocumentInitiated(event: ReticleEvent): boolean {
+  if (event.type !== EventType.NET_REQUEST) return false;
+  const initiator = str(event.data['initiator']);
+  return initiator !== undefined && DOCUMENT_INITIATORS.has(initiator);
+}
+
+/**
  * Did the observer actually report a document-initiated load?
  *
  * This is the gate on the unobserved-channel downgrade above. Once subresource observation landed,
@@ -289,11 +300,7 @@ const DOCUMENT_INITIATORS: ReadonlySet<string> = new Set([
  * document-initiated record anywhere in the window proves the channel works.
  */
 function observerSawSubresources(events: ReticleEvent[]): boolean {
-  return events.some((e) => {
-    if (e.type !== EventType.NET_REQUEST) return false;
-    const initiator = str(e.data['initiator']);
-    return initiator !== undefined && DOCUMENT_INITIATORS.has(initiator);
-  });
+  return events.some(isDocumentInitiated);
 }
 
 /** The sentence both zero-match branches hand to `inconclusive`. */

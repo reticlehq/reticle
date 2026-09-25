@@ -83,6 +83,26 @@ describe('requests nobody declared', () => {
     ]);
   });
 
+  /**
+   * A full navigation loads a document and every script, stylesheet and image it references. The
+   * SDK reports those from resource timing, marked with `initiator`. They are the page loading, not
+   * something the action fired, and listing them buried the one request that mattered under a couple
+   * of hundred module URLs (driven: a plain link click on the bench app returned ~200 entries).
+   */
+  it('leaves out the subresources a document load fetched, and keeps what the action sent', () => {
+    const expected: ExpectedLink[] = [];
+    const observed = [
+      e(EventType.NET_REQUEST, { method: 'GET', url: '/src/main.tsx', initiator: 'script' }),
+      e(EventType.NET_REQUEST, { method: 'GET', url: '/styles.css', initiator: 'link' }),
+      e(EventType.NET_REQUEST, { method: 'POST', url: '/api/analytics/track', status: 200 }),
+      e(EventType.NET_REQUEST, { method: 'POST', url: 'ipc://save_file', initiator: 'ipc' }),
+    ];
+    expect(buildDivergenceCapsule(expected, observed).blastRadius).toEqual([
+      'net POST /api/analytics/track',
+      'net POST ipc://save_file',
+    ]);
+  });
+
   it('does not repeat the same call twice', () => {
     const expected: ExpectedLink[] = [];
     const observed = [

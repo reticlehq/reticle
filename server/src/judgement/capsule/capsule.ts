@@ -1,4 +1,5 @@
 import { ConsequenceKind, EventType, type ReticleEvent } from '@reticlehq/core';
+import { isDocumentInitiated } from '@reticlehq/engine/question/predicate/predicate-eval.js';
 import { causalSummary, type CausalSummary } from './causal-summary.js';
 import { firstDivergence, type Divergence, type ExpectedLink } from './divergence.js';
 
@@ -63,6 +64,9 @@ export function blastRadius(
       const url = event.data['url'];
       if ('string' !== typeof url) continue;
       if (declaredUrls.some((fragment) => url.includes(fragment))) continue;
+      // A subresource the document fetched is the page loading, not a request the action sent: one
+      // navigation is a couple of hundred of them. IPC and beacons carry an initiator too, and stay.
+      if (isDocumentInitiated(event)) continue;
       const method = event.data['method'];
       add(`net ${'string' === typeof method ? method : 'request'} ${url}`);
       continue;
