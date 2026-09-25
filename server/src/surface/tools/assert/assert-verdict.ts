@@ -126,6 +126,7 @@ export async function assertVerdict(
     currentDocumentId: session.currentDocumentId,
     currentEditEpoch: session.currentEditEpoch,
     appOrigin: session.url,
+    background: session.background,
     expectedFailures: declared.netFailures,
     namedNetUrls: declared.netUrls,
     renderProved: pass && declared.rendersContent,
@@ -157,7 +158,7 @@ export async function assertVerdict(
   );
   const outcomePending = acceptedWriteLabels(windowEvents);
   const outcomeUnread = unreadWriteLabels(windowEvents);
-  const stillInFlight = inFlightRequestLabels(windowEvents, session.url);
+  const stillInFlight = inFlightRequestLabels(windowEvents, session.url, session.background);
   const effectiveInconclusive =
     inconclusive ?? (!pass ? session.preconditionFailure?.() : undefined);
   /**

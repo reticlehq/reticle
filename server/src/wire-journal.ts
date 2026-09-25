@@ -23,6 +23,9 @@ import {
   pruneWorkspace,
   type PruneWorkspaceOptions,
 } from './memory/journal/on-disk/startup-maintenance.js';
+import { dirname } from 'node:path';
+import { findProjectConfig } from '@/command/cli/ports/resolve/cli-port.js';
+import { readBackgroundTraffic } from '@/portal/session/facts/background-traffic.js';
 
 /**
  * Wire journal capture, ambient seeding and the journal-tail flush onto a bridge.
@@ -61,6 +64,9 @@ export function attachJournal(
     // The origin is passed for the case where the page never stamped a project id: it is the only
     // distinguishing fact left, and without it every such app shares one bucket.
     session.artifactRoot = resolveArtifactRoot(session.projectId, originOf(session.url)).root;
+    // The project's config sits beside its `.reticle/`, so the declaration is read from the tab's
+    // own project rather than from wherever the daemon was started.
+    session.background = readBackgroundTraffic(findProjectConfig(dirname(session.artifactRoot)));
     // Here rather than on the start path, which was neither the moment we were about to write into a
     // repository nor the root we were about to write into: it created `.reticle/` — holding nothing
     // but the ignore file — wherever the daemon was launched, coming back every boot after the user

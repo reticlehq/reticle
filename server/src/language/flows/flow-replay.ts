@@ -287,7 +287,7 @@ export async function assertStepExpect(
   // An unrelated open request does not pardon a named URL that never started — matching decides it.
   const openRequests = assertsState(expect)
     ? []
-    : inFlightRequestLabels(session.eventsSince(since), session.url);
+    : inFlightRequestLabels(session.eventsSince(since), session.url, session.background);
   const namedInFlight = namedNetIsInFlight(predicate, openRequests);
   return {
     // The store case keeps its own kind because heal and the run report branch on it; everything

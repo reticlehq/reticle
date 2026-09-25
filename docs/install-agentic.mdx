@@ -170,6 +170,22 @@ Four files in your project, none of them mysterious.
     this. They are the part meant to be committed, and a bound that deleted them would be deleting
     the regression checks your team shares.
 
+    **Your app's own background calls.** An analytics or heartbeat endpoint on your app's own host
+    looks exactly like the app's work, so Reticle never guesses. If one of them keeps a verdict
+    waiting, or fails and gets blamed on an unrelated action, name it:
+
+    ```json
+    {
+      "background": ["/api/analytics/events", "/api/heartbeat"]
+    }
+    ```
+
+    Each entry is matched the way `urlContains` is. A listed request stops holding the wait open and
+    stops contradicting a claim; when a contradiction is still reported, it lists what was set aside.
+    It is never hidden from an assertion that names it: `net { urlContains: "/api/heartbeat" }` still
+    sees it. Keep entries specific: `/api` would set aside your whole backend.
+    Third-party calls (another site's beacon or SDK) need no entry; they are already set aside.
+
   </Accordion>
 
   <Accordion title="vite.config.ts (the plugin)">

@@ -132,6 +132,38 @@ describe('waiting out the remaining budget', () => {
     expect(waited.stillInFlight).toEqual([]);
   });
 
+  /*
+   * The wait asks the verdict's question with the verdict's scope. It used to be asked with none, so
+   * a vendor beacon that never comes back held every passing act_and_wait for its whole remaining
+   * budget — the verdict afterwards ignored the beacon, and paid seconds of wall clock for it first.
+   */
+  it('does not wait on traffic the verdict would not count', async () => {
+    const beacon: Ev = {
+      type: EventType.NET_PENDING,
+      t: 0,
+      data: { id: 'w', url: 'https://pulse.walletconnect.org/e', method: 'POST' },
+    };
+    const ownTelemetry: Ev = {
+      type: EventType.NET_PENDING,
+      t: 0,
+      data: { id: 's', url: 'http://localhost:4312/api/analytics/events', method: 'POST' },
+    };
+    const f = fakeSession([[beacon, ownTelemetry]]);
+    const waited = await waitForInFlight(
+      { ...f.session, url: 'http://localhost:4312/', background: ['/api/analytics/events'] },
+      0,
+      5000,
+      {
+        sleep: (ms) => {
+          f.tick(ms);
+          return Promise.resolve();
+        },
+      },
+    );
+    expect(waited.settled).toBe(true);
+    expect(f.polls()).toBe(0);
+  });
+
   it('does not wait at all when nothing is in flight', async () => {
     const f = fakeSession([[pending('a'), settled('a')]]);
     const waited = await waitForInFlight(f.session, 0, 5000, {

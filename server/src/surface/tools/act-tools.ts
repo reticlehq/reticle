@@ -784,12 +784,13 @@ export const ACT_TOOLS: ToolDef[] = [
           currentDocumentId: session.currentDocumentId,
           currentEditEpoch: session.currentEditEpoch,
           appOrigin: session.url,
+          background: session.background,
         });
         // The single field an agent reads. Everything below it is the evidence it was derived from;
         // this is the only one that has to be interpreted, and now it interprets itself.
         const outcomePending = acceptedWriteLabels(windowEvents);
         const outcomeUnread = unreadWriteLabels(windowEvents);
-        const stillInFlight = inFlightRequestLabels(windowEvents, session.url);
+        const stillInFlight = inFlightRequestLabels(windowEvents, session.url, session.background);
         const decision = decideVerified({
           pass: verdict.pass,
           // Threaded rather than looked up: decideVerified is pure and has no session.

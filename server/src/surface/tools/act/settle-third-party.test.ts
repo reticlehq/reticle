@@ -16,10 +16,10 @@
  * A third-party host is not the app under test. It cannot answer the question the settle check asks
  * ("has the app finished?"), and waiting for it to is waiting forever.
  *
- * SAME-ORIGIN background traffic (`POST /api/analytics/events` on the app's own host) is NOT
- * covered here and deliberately so: nothing in a URL distinguishes the app's telemetry from the
- * app's work, and guessing would suppress the very requests a verdict rests on. That case needs a
- * declaration from the project, which is separate work.
+ * SAME-ORIGIN background traffic (`POST /api/analytics/events` on the app's own host) is never
+ * GUESSED: nothing in a URL distinguishes the app's telemetry from the app's work, and guessing would
+ * suppress the very requests a verdict rests on. A project declares it in `.reticle.json`
+ * `background`, and only what it names is excluded.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -69,6 +69,19 @@ describe('a third-party request does not keep the window unsettled', () => {
   it('does not guess that a same-origin analytics path is background', () => {
     const events = [pending('s1', 'http://localhost:4312/api/analytics/events')];
     expect(inFlightRequestIds(events, APP)).toEqual(['s1']);
+  });
+
+  /** DECLARED, it is the project saying so — and only what it named is excluded. */
+  it('drops a same-origin endpoint the project declared as background, and nothing else', () => {
+    const events = [
+      pending('s1', 'http://localhost:4312/api/analytics/events'),
+      pending('a1', 'http://localhost:4312/api/order'),
+    ];
+    const declared = ['/api/analytics/events'];
+    expect(inFlightRequestIds(events, APP, declared)).toEqual(['a1']);
+    expect(inFlightRequestLabels(events, APP, declared)).toEqual([
+      'POST http://localhost:4312/api/order',
+    ]);
   });
 
   /** With no app origin known, nothing can be called foreign — fail open, never suppress. */

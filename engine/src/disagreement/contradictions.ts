@@ -250,6 +250,7 @@ function findWindowContradictions(
   const { app: allApp, ignored: ignoredForeign } = splitForeignTraffic(
     allEvents,
     options.appOrigin,
+    options.background,
   );
 
   // ── Evidence belonging to a document that has since been replaced ───────────────────────────
@@ -756,7 +757,9 @@ function findWindowContradictions(
           inFlight.map((p) => describe(p.call)).join('; '),
           ...(0 === ignoredForeign.length
             ? []
-            : [`ignored as dev tooling or third-party: ${ignoredForeign.join(', ')}`]),
+            : [
+                `ignored as dev tooling, third-party or declared background: ${ignoredForeign.join(', ')}`,
+              ]),
         ].join(' — '),
       });
     }

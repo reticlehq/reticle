@@ -195,6 +195,38 @@ export function isThirdPartyUrl(url: string | undefined, appUrl: string | undefi
 }
 
 /**
+ * Is this the app's OWN background traffic — telemetry, a heartbeat — that the project declared?
+ *
+ * The same-origin half of the question `isThirdPartyUrl` answers by structure. `POST
+ * /api/analytics/events` on the app's own host looks exactly like the app's work, so nothing is
+ * inferred: a project names these in `.reticle.json` `background`, matched the way `urlContains`
+ * is. Nothing declared, nothing excluded. It never hides a request from a predicate that names it —
+ * it only stops the request holding a settle window open or contradicting an unrelated claim.
+ */
+export function isOwnBackgroundTraffic(
+  url: string | undefined,
+  declared: readonly string[],
+): boolean {
+  if (url === undefined) return false;
+  return declared.some((pattern) => url.includes(pattern));
+}
+
+/**
+ * Is this request somebody else's business — not the app's work under test?
+ *
+ * The ONE answer to "whose traffic counts", asked by the settle wait and by the contradiction rules
+ * alike. It used to be the same `||` written in two packages, and two copies of a rule are how one
+ * path starts judging traffic the other ignores.
+ */
+export function isForeignTraffic(
+  url: string | undefined,
+  appUrl: string | undefined,
+  background: readonly string[],
+): boolean {
+  return isThirdPartyUrl(url, appUrl) || isOwnBackgroundTraffic(url, background);
+}
+
+/**
  * The unredacted URL, kept so a grader can match `urlContains` against the path the app actually
  * requested. `url` is what is rendered to the agent and stored as the displayed value; this field
  * is the match haystack and must not be projected back into a transcript.

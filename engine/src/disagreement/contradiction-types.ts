@@ -155,6 +155,12 @@ export interface ContradictionOptions {
    */
   appOrigin?: string | undefined;
   /**
+   * Same-origin endpoints the project declared the app fires on its own (`.reticle.json`
+   * `background`). Dropped with the third-party traffic and disclosed the same way; empty or
+   * undefined excludes nothing, because same-origin traffic is never guessed at.
+   */
+  background?: readonly string[] | undefined;
+  /**
    * The traffic the assertion actually named — `urlContains` from each net clause, `''` for a clause
    * that named the whole channel.
    *

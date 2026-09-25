@@ -106,6 +106,11 @@ export class Session implements HandshakeFacts {
    * root, which is what every counter did unconditionally before this existed.
    */
   artifactRoot: string | undefined;
+  /**
+   * Same-origin endpoints this session's project declared as background (`.reticle.json`
+   * `background`). Stamped with `artifactRoot`, from the same project. Empty excludes nothing.
+   */
+  background: readonly string[] = [];
   url: string;
   title: string;
   adapters: string[];

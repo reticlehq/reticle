@@ -245,6 +245,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         currentDocumentId: session.currentDocumentId,
         currentEditEpoch: session.currentEditEpoch,
         appOrigin: session.url,
+        background: session.background,
         ...(judgingTheAct ? { ...session.lastAct.effect(), actionSince: actCursor } : {}),
       });
       // carry session health — a throttled tab means the observed timeline may be incomplete.

@@ -40,6 +40,8 @@ export interface CrawlSession {
   /** The page under test, so a third-party beacon cannot be reported against a control. Optional
    *  for the same reason `currentDocumentId` is. */
   readonly url?: string | undefined;
+  /** Same-origin endpoints the project declared as background. Optional like `url`. */
+  readonly background?: readonly string[] | undefined;
   /**
    * Is the page BACKGROUNDED? A hidden tab has its rAF clamped and the DOM observer flushes on rAF,
    * so real renders emit nothing and every absence-derived contradiction reads that silence as a
@@ -461,6 +463,7 @@ export async function crawl(
       currentDocumentId: session.currentDocumentId,
       currentEditEpoch: session.currentEditEpoch,
       appOrigin: session.url,
+      background: session.background,
       // A hidden tab cannot be observed, so its silence is not evidence. Stated from the session
       // rather than left to a heartbeat landing inside a 300ms window.
       pageHidden: session.throttled?.(),

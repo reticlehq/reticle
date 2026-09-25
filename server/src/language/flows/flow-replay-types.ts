@@ -35,6 +35,8 @@ export interface FlowReplaySession {
    * suppresses nothing rather than silently widening what a replay ignores.
    */
   url?: string;
+  /** Same-origin endpoints the project declared as background — see `Session.background`. */
+  background?: readonly string[];
 }
 
 /**

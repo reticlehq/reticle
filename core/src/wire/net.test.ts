@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { DevToolingChannel, isDevToolingUrl, isThirdPartyUrl, urlForMatch } from './net.js';
+import {
+  DevToolingChannel,
+  isDevToolingUrl,
+  isOwnBackgroundTraffic,
+  isThirdPartyUrl,
+  urlForMatch,
+} from './net.js';
 
 describe('isDevToolingUrl — traffic the framework makes about ITSELF', () => {
   it.each(Object.values(DevToolingChannel))('recognises %s', (pattern) => {
@@ -99,5 +105,29 @@ describe('urlForMatch — grader haystack, not the transcript', () => {
 
   it('falls back to the displayed URL when nothing was redacted', () => {
     expect(urlForMatch({ url: '/api/users' })).toBe('/api/users');
+  });
+});
+
+/*
+ * The same-origin half of "whose traffic is this": the app's OWN telemetry or heartbeat on its own
+ * host. Nothing in a URL separates it from the app's work, so it is exactly what a project declares
+ * and nothing is guessed. Undeclared, nothing is excluded — the rule fails open.
+ */
+describe('isOwnBackgroundTraffic — what the project declared the app fires on its own', () => {
+  const DECLARED = ['/api/analytics/events', '/api/heartbeat'];
+
+  it('matches a declared endpoint on the app host', () => {
+    expect(isOwnBackgroundTraffic('http://localhost:3000/api/analytics/events', DECLARED)).toBe(
+      true,
+    );
+  });
+
+  it('leaves every undeclared request alone', () => {
+    expect(isOwnBackgroundTraffic('http://localhost:3000/api/orders', DECLARED)).toBe(false);
+  });
+
+  it('excludes nothing when nothing was declared', () => {
+    expect(isOwnBackgroundTraffic('http://localhost:3000/api/analytics/events', [])).toBe(false);
+    expect(isOwnBackgroundTraffic(undefined, DECLARED)).toBe(false);
   });
 });

@@ -78,6 +78,19 @@ describe('contradictions — the first-party/third-party axis', () => {
     ).toEqual([ContradictionKind.UI_ADVANCED_REQUEST_FAILED]);
   });
 
+  // The same-origin half, and never guessed: only what the project DECLARED stops contradicting.
+  it('does not let a DECLARED same-origin background endpoint contradict, and still fires on the rest', () => {
+    const background = ['/api/analytics/events'];
+    expect(kinds([domChanged(), failedCall('/api/analytics/events')], { background })).toEqual([]);
+    expect(kinds([domChanged(), failedCall('/api/todos')], { background })).toEqual([
+      ContradictionKind.UI_ADVANCED_REQUEST_FAILED,
+    ]);
+    // Undeclared, the same analytics path is the app's own traffic and still counts.
+    expect(kinds([domChanged(), failedCall('/api/analytics/events')])).toEqual([
+      ContradictionKind.UI_ADVANCED_REQUEST_FAILED,
+    ]);
+  });
+
   it('judges nothing by origin when nobody could say what the app’s origin is', () => {
     // Same absence rule the document scoping follows: an unknown origin disables the axis rather
     // than guessing, so an older SDK behaves exactly as it did before this existed.

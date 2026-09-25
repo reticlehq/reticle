@@ -18,7 +18,7 @@ import {
   asNumber,
   asString,
   isDevToolingUrl,
-  isThirdPartyUrl,
+  isForeignTraffic,
   urlForMatch,
   type ReticleEvent,
 } from '@reticlehq/core';
@@ -157,6 +157,7 @@ export function isSameDocumentHashAnchor(event: ReticleEvent): boolean {
 export function splitForeignTraffic(
   events: readonly ReticleEvent[],
   appOrigin: string | undefined,
+  background: readonly string[] = [],
 ): {
   app: readonly ReticleEvent[];
   ignored: string[];
@@ -167,7 +168,7 @@ export function splitForeignTraffic(
     const url = asString(e.data['url']);
     // Somebody else's code, twice over: the toolchain's own channel, and any site that is not the
     // app under test. Neither can answer the question every rule below asks.
-    if (!isDevToolingUrl(url) && !isThirdPartyUrl(url, appOrigin)) return true;
+    if (!isDevToolingUrl(url) && !isForeignTraffic(url, appOrigin, background)) return true;
     if (url !== undefined && !ignored.includes(url)) ignored.push(url);
     return false;
   });
