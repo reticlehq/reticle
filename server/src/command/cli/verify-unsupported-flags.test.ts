@@ -23,6 +23,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { parseCliArgs } from './cli-parse.js';
+import { parseVerifySuffix } from './cli-parse-verify.js';
 import { portBusyMessage, routeVerify, VerifyRoute } from './cli-verify.js';
 import { PortPresence } from '@/command/daemon/binding/port-presence.js';
 
@@ -174,5 +175,67 @@ describe('the flag combinations verify does support', () => {
       kind: 'error',
       message: '--expect needs a JSON predicate; could not parse: {kind: text}',
     });
+  });
+});
+
+describe('--expect-file', () => {
+  const PREDICATE_OBJ = { kind: 'text', contains: 'Admin' };
+  const readOk = () => JSON.stringify(PREDICATE_OBJ);
+
+  it('carries the predicate read from a file, with no shell quoting', () => {
+    expect(parseVerifySuffix([URL_, '--expect-file', 'expect.json'], PORT, readOk)).toEqual({
+      kind: 'ok',
+      url: URL_,
+      headless: true,
+      port: PORT,
+      expect: PREDICATE_OBJ,
+    });
+  });
+
+  it('names a missing file rather than an unknown argument', () => {
+    const readMissing = (): string => {
+      throw new Error('ENOENT');
+    };
+    expect(parseVerifySuffix([URL_, '--expect-file', 'missing.json'], PORT, readMissing)).toEqual({
+      kind: 'error',
+      message: '--expect-file needs a readable file; could not read: missing.json',
+    });
+  });
+
+  it('names a non-JSON file as a predicate problem', () => {
+    expect(
+      parseVerifySuffix([URL_, '--expect-file', 'bad.json'], PORT, () => '{kind: text}'),
+    ).toEqual({
+      kind: 'error',
+      message: '--expect-file needs a JSON predicate; could not parse: bad.json',
+    });
+  });
+
+  it('refuses --expect and --expect-file together, in either order', () => {
+    const fileFirst = parseVerifySuffix(
+      [URL_, '--expect-file', 'expect.json', '--expect', PREDICATE],
+      PORT,
+      readOk,
+    );
+    const inlineFirst = parseVerifySuffix(
+      [URL_, '--expect', PREDICATE, '--expect-file', 'expect.json'],
+      PORT,
+      readOk,
+    );
+    expect(fileFirst.kind).toBe('error');
+    expect(inlineFirst.kind).toBe('error');
+    expect(fileFirst.kind === 'error' ? fileFirst.message : '').toContain('--expect-file');
+    expect(inlineFirst.kind === 'error' ? inlineFirst.message : '').toContain('--expect');
+  });
+
+  it('refuses --expect-file alongside --storage-state', () => {
+    const parsed = parseVerifySuffix(
+      [URL_, '--expect-file', 'expect.json', '--storage-state', 'restricted.json'],
+      PORT,
+      readOk,
+    );
+    expect(parsed.kind).toBe('error');
+    expect(parsed.kind === 'error' ? parsed.message : '').toContain('--expect-file');
+    expect(parsed.kind === 'error' ? parsed.message : '').toContain('--storage-state');
   });
 });

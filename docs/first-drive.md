@@ -76,6 +76,15 @@ node server/dist/command/cli.js verify "" --port 4400 \
   --expect '{"kind":"text","contains":"definitely not on this page"}'
 ```
 
+On Windows PowerShell, `npx.cmd` re-parses arguments and strips the inner quotes from an inline
+`--expect` value, which turns the predicate into invalid JSON. Prefer `--expect-file` — it needs no
+shell quoting at all:
+
+```powershell
+'{"kind":"text","contains":"Reticle"}' | Set-Content expect.json
+npx @reticlehq/server verify http://localhost:3000 --expect-file expect.json
+```
+
 ## 3. Drive it properly, with the tools
 
 If your editor has the Reticle MCP server, the same app is now drivable. The four calls worth knowing, in the order you actually use them:

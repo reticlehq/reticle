@@ -6,8 +6,10 @@
  * pin, a predicate to assert AND a persona to drive as — so it carries more grammar than the rest of
  * the CLI put together.
  */
+import { readFileSync } from 'node:fs';
 import {
   EXPECT_FLAG,
+  EXPECT_FILE_FLAG,
   HEADED_FLAG,
   PORT_FLAG,
   VERIFY_COMMAND,
@@ -22,22 +24,29 @@ const STORAGE_STATE_FLAG = '--storage-state';
 const SESSION_ID_FLAG = '--session-id';
 
 /**
- * `--expect` and `--storage-state` cannot both be honoured, so the pair is refused rather than
- * half-applied.
+ * `--expect` / `--expect-file` and `--storage-state` cannot both be honoured, so the pair is refused
+ * rather than half-applied.
  *
  * `--expect` takes its verdict from the tab a running daemon already owns — it binds nothing and
  * launches nothing, which is exactly what makes it work while the port is busy. There is nowhere in
  * that path to load a storage state, and the flag was not refused, it was dropped: a restricted-user
  * absence assertion was graded against a logged-in admin tab and PASSED. A false green is worse than
  * a missing answer, and the only honest reply to a question this command cannot ask is to say so.
+ *
+ * `--expect-file` is the same predicate, read from a file so the shell never quotes JSON. Prefer it
+ * on Windows PowerShell, where `npx.cmd` re-parses arguments and strips inner double quotes (#1082).
  */
 const MSG_EXPECT_WITH_STORAGE_STATE =
-  `${EXPECT_FLAG} cannot be combined with ${STORAGE_STATE_FLAG}: the predicate is graded against ` +
-  'the tab the running daemon already owns, so the storage state would never be loaded and the ' +
-  'verdict would be about whoever is signed in there.\n' +
-  `  Use one of them: ${EXPECT_FLAG} on its own asserts against the session you have, and ` +
-  `${STORAGE_STATE_FLAG} without ${EXPECT_FLAG} makes Reticle drive the url with that state and ` +
-  'replay the saved flows.';
+  `${EXPECT_FLAG}/${EXPECT_FILE_FLAG} cannot be combined with ${STORAGE_STATE_FLAG}: the predicate ` +
+  'is graded against the tab the running daemon already owns, so the storage state would never be ' +
+  'loaded and the verdict would be about whoever is signed in there.\n' +
+  `  Use one of them: ${EXPECT_FLAG} or ${EXPECT_FILE_FLAG} on its own asserts against the session ` +
+  `you have, and ${STORAGE_STATE_FLAG} without a predicate makes Reticle drive the url with that ` +
+  'state and replay the saved flows.';
+
+const MSG_EXPECT_BOTH =
+  `${EXPECT_FLAG} and ${EXPECT_FILE_FLAG} cannot both be set: they name the same predicate. Prefer ` +
+  `${EXPECT_FILE_FLAG} when the shell would have to quote JSON (especially Windows PowerShell).`;
 /** Let Reticle drive the app itself and record what it drove, when nothing is saved yet. */
 const EXPLORE_FLAG = '--explore';
 /** Who to be while exploring — a persona, or the business outcome to reach. Implies --explore. */
@@ -63,16 +72,24 @@ export type VerifySuffix =
 
 /**
  * Parse `verify <url> [--port N] [--headed] [--timeout N] [--storage-state <file>]
- * [--session-id <id>]`. The first non-flag token is the preview URL. `defaultPort` is already
- * env + `.reticle.json` + 4400.
+ * [--session-id <id>] [--expect <json>] [--expect-file <path>]`. The first non-flag token is the
+ * preview URL. `defaultPort` is already env + `.reticle.json` + 4400.
+ *
+ * `readExpectFile` is injected so the file path is unit-testable without a temp directory; the CLI
+ * uses the default disk reader.
  */
-export function parseVerifySuffix(args: string[], defaultPort: number): VerifySuffix {
+export function parseVerifySuffix(
+  args: string[],
+  defaultPort: number,
+  readExpectFile: (path: string) => string = (p) => readFileSync(p, 'utf8'),
+): VerifySuffix {
   let headless = true;
   let url: string | undefined;
   let timeoutMs: number | undefined;
   let storageState: string | undefined;
   let sessionId: string | undefined;
   let expect: unknown;
+  let expectFromFile = false;
   let explore = false;
   let persona: string | undefined;
   const select: string[] = [];
@@ -128,6 +145,9 @@ export function parseVerifySuffix(args: string[], defaultPort: number): VerifySu
       i++;
       const v = args[i];
       if (v === undefined) return missingValue(EXPECT_FLAG);
+      if (expect !== undefined || expectFromFile) {
+        return { kind: 'error', message: MSG_EXPECT_BOTH };
+      }
       try {
         expect = JSON.parse(v);
       } catch {
@@ -136,6 +156,31 @@ export function parseVerifySuffix(args: string[], defaultPort: number): VerifySu
         return {
           kind: 'error',
           message: `${EXPECT_FLAG} needs a JSON predicate; could not parse: ${v}`,
+        };
+      }
+    } else if (arg === EXPECT_FILE_FLAG) {
+      i++;
+      const v = args[i];
+      if (v === undefined) return missingValue(EXPECT_FILE_FLAG);
+      if (expect !== undefined || expectFromFile) {
+        return { kind: 'error', message: MSG_EXPECT_BOTH };
+      }
+      let raw: string;
+      try {
+        raw = readExpectFile(v);
+      } catch {
+        return {
+          kind: 'error',
+          message: `${EXPECT_FILE_FLAG} needs a readable file; could not read: ${v}`,
+        };
+      }
+      try {
+        expect = JSON.parse(raw);
+        expectFromFile = true;
+      } catch {
+        return {
+          kind: 'error',
+          message: `${EXPECT_FILE_FLAG} needs a JSON predicate; could not parse: ${v}`,
         };
       }
     } else if (arg.startsWith('--')) {

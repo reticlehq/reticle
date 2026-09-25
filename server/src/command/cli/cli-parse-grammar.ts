@@ -49,3 +49,9 @@ export const VERIFY_COMMAND = 'verify';
  * missed for a release.
  */
 export const EXPECT_FLAG = '--expect';
+/**
+ * Same predicate as `--expect`, read from a file so the shell never has to quote JSON.
+ * The reliable form on Windows PowerShell, where `npx.cmd` re-parses arguments and strips
+ * inner double quotes from an inline `--expect` value (#1082).
+ */
+export const EXPECT_FILE_FLAG = '--expect-file';
