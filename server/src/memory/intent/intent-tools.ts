@@ -67,8 +67,8 @@ export const INTENT_TOOLS: ToolDef[] = [
       intents: z
         .array(
           z.object({
-            id: z.string(),
-            statement: z.string(),
+            id: z.string().min(1),
+            statement: z.string().min(1),
             surface: z
               .object({
                 route: z.string().optional(),

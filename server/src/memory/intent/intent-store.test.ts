@@ -348,3 +348,17 @@ describe('a shard that does not parse', () => {
     expect((await s.read()).map((i) => i.id)).toContain('more');
   });
 });
+
+/*
+ * #1020 (DivyamTalwar): nothing checked a record before it was written, and the reader applies the
+ * schema. One record the schema refuses - an empty statement is the easy one to produce - made its
+ * whole shard unreadable on the next read, which is how every other intent in it went missing.
+ */
+describe('a record the ledger could not read back', () => {
+  it('is refused at write time, and the shard it would have joined stays readable', async () => {
+    const { store: s } = store();
+    await s.declare([{ id: 'kept', statement: 'a shopper sees their order total' }]);
+    await expect(s.declare([{ id: 'bad', statement: '' }])).rejects.toThrow();
+    expect((await s.read()).map((i) => i.id)).toEqual(['kept']);
+  });
+});

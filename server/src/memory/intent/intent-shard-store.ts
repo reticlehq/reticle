@@ -345,8 +345,12 @@ export class IntentShardStore {
       await this.#fs.rm(path).catch(() => undefined);
       return;
     }
+    // Checked against the schema the reader applies, BEFORE it reaches the disk: a record the
+    // reader would refuse makes the whole shard unreadable, and every other intent in it with it.
+    // Refused here, loudly, where the one bad write is still the caller's to fix (#1020).
+    const valid = IntentShardSchema.parse(shard);
     await this.#fs.mkdir(`${this.#dir()}/${shard.subject}`);
-    await writeFileAtomic(this.#fs, path, serialise(shard));
+    await writeFileAtomic(this.#fs, path, serialise(valid));
   }
 
   async #writeIndex(): Promise<void> {
