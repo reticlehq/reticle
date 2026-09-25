@@ -32,6 +32,69 @@ function session(id: string, url: string, projectId?: string): Session {
   return new Session(hello(id, url, projectId), fakeSocket, () => 0);
 }
 
+/**
+ * #983, driven: two tabs of one project, the agent clicks a full-navigation link in tab A with A's
+ * explicit id, and the verdict came back graded on tab B. B was the "unique" live session at the
+ * origin only because A's own document had not come back yet. A tab that was already open before the
+ * agent last drove A cannot be the document A's navigation produced.
+ */
+describe('a successor arrives after the departure, it is never a tab that was already open', () => {
+  const at = (start: { t: number }) => (): number => start.t;
+
+  it('does not rebind a departed tab to a sibling that was open before the agent drove it', () => {
+    const clock = { t: 0 };
+    const mgr = new SessionManager();
+    const a = new Session(
+      hello('a', 'http://localhost:3000/?tab=A', 'shop'),
+      fakeSocket,
+      at(clock),
+    );
+    clock.t = 500;
+    const b = new Session(
+      hello('b', 'http://localhost:3000/?tab=B', 'shop'),
+      fakeSocket,
+      at(clock),
+    );
+    mgr.add(a);
+    mgr.add(b);
+    clock.t = 60_000;
+    a.markAgentActivity(); // the click that navigates A
+    clock.t = 60_010;
+    mgr.remove(a); // A's document unloads
+    expect(() => mgr.resolve('a')).toThrow();
+  });
+
+  it('still rebinds to the new document that arrived after the click, beside that sibling', () => {
+    const clock = { t: 0 };
+    const mgr = new SessionManager();
+    const a = new Session(
+      hello('a', 'http://localhost:3000/?tab=A', 'shop'),
+      fakeSocket,
+      at(clock),
+    );
+    const b = new Session(
+      hello('b', 'http://localhost:3000/?tab=B', 'shop'),
+      fakeSocket,
+      at(clock),
+    );
+    mgr.add(a);
+    mgr.add(b);
+    clock.t = 60_000;
+    a.markAgentActivity();
+    clock.t = 60_010;
+    mgr.remove(a);
+    clock.t = 60_300;
+    mgr.add(
+      new Session(
+        hello('a2', 'http://localhost:3000/?tab=A&step=3', 'shop'),
+        fakeSocket,
+        at(clock),
+      ),
+    );
+    expect(mgr.resolve('a').id).toBe('a2');
+  });
+});
+
 describe('resolve follows a unique same-origin successor', () => {
   it('rebinds the departed id to the one live session at that origin', () => {
     const mgr = new SessionManager();

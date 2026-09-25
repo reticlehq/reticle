@@ -144,8 +144,13 @@ describe('pickDocumentSuccessor', () => {
   });
 });
 
-function stub(id: string, url: string): Session {
-  return { id, url } as Session;
+function stub(id: string, url: string, ages: { ageMs?: number; idleMs?: number } = {}): Session {
+  return {
+    id,
+    url,
+    staleMs: () => ages.ageMs ?? 0,
+    agentIdleMs: () => ages.idleMs ?? 0,
+  } as Session;
 }
 
 function fakeClock(step: number): SuccessorClock {
@@ -187,6 +192,40 @@ describe('awaitDocumentSuccessor', () => {
     };
     await expect(awaitDocumentSuccessor(sessions, departed, 1_000, fakeClock(25))).resolves.toBe(
       next,
+    );
+  });
+
+  /**
+   * #983, driven: tab B was open for a minute; the agent clicked in tab A a moment ago. On the first
+   * poll A's document has not come back, so B is the only session at the origin, and it was followed.
+   * B was there before the click, so it cannot be what the click produced.
+   */
+  it('never follows a sibling that was open before the agent last drove the departed tab', async () => {
+    const departed = stub('a', 'http://localhost:3000/?tab=A', { ageMs: 60_000, idleMs: 20 });
+    const sibling = stub('b', 'http://localhost:3000/?tab=B', { ageMs: 59_500 });
+    const sessions: SuccessorRegistry = {
+      get: (id) => (id === sibling.id ? sibling : undefined),
+      all: () => [sibling],
+    };
+    await expect(
+      awaitDocumentSuccessor(sessions, departed, 100, fakeClock(25)),
+    ).resolves.toBeNull();
+  });
+
+  it('waits past that sibling for the departed tab coming back under its own id', async () => {
+    const departed = stub('a', 'http://localhost:3000/?tab=A', { ageMs: 60_000, idleMs: 20 });
+    const sibling = stub('b', 'http://localhost:3000/?tab=B', { ageMs: 59_500 });
+    const back = stub('a', 'http://localhost:3000/?tab=A&step=3', { ageMs: 5 });
+    let look = 0;
+    const sessions: SuccessorRegistry = {
+      get: (id) => ('a' === id && look > 2 ? back : id === sibling.id ? sibling : undefined),
+      all: () => {
+        look += 1;
+        return look > 2 ? [sibling, back] : [sibling];
+      },
+    };
+    await expect(awaitDocumentSuccessor(sessions, departed, 5_000, fakeClock(25))).resolves.toBe(
+      back,
     );
   });
 

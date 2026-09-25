@@ -8,7 +8,11 @@ import {
 import { Session, type SessionInfo } from './session.js';
 import { AttachmentHistory } from './presence/attachment-history.js';
 import type { NoSessionNextAction } from './no-session-next-action.js';
-import { pickDocumentSuccessor, type SessionIdentity } from './session-successor.js';
+import {
+  openedBeforeDeparture,
+  pickDocumentSuccessor,
+  type SessionIdentity,
+} from './session-successor.js';
 import { SESSION_DISCONNECTED_REASON } from './facts/session-replaced.js';
 
 /**
@@ -108,6 +112,8 @@ export class SessionManager {
    * id forgets its tombstone — the live session is the answer then.
    */
   readonly #tombstones = new Map<string, SessionIdentity>();
+  /** The tabs already open when each tombstoned session departed: siblings, never its successor. */
+  readonly #siblingsAtDeparture = new Map<string, ReadonlySet<string>>();
   /**
    * The active project's scope, set once from the daemon's .reticle.json. When a tool resolves a session
    * without passing its own scope, this is applied — so auto-selection is project-scoped by default
@@ -153,6 +159,7 @@ export class SessionManager {
     declareDrivenRedactionKeys(session.id, session.redactKeys);
     this.#attachment.attached(session.id);
     this.#tombstones.delete(session.id);
+    this.#siblingsAtDeparture.delete(session.id);
     return previous;
   }
 
@@ -184,6 +191,14 @@ export class SessionManager {
     const origin = originOf(session.url);
     if (origin === undefined) return;
     if (this.#tombstones.has(session.id)) this.#tombstones.delete(session.id);
+    this.#siblingsAtDeparture.set(
+      session.id,
+      new Set(
+        [...this.#sessions.values()]
+          .filter((s) => s !== session && openedBeforeDeparture(s, session))
+          .map((s) => s.id),
+      ),
+    );
     this.#tombstones.set(session.id, {
       id: session.id,
       url: session.url,
@@ -193,18 +208,22 @@ export class SessionManager {
       const oldest = this.#tombstones.keys().next().value;
       if (oldest === undefined) break;
       this.#tombstones.delete(oldest);
+      this.#siblingsAtDeparture.delete(oldest);
     }
   }
 
   #successorOf(sessionId: string): Session | undefined {
     const departed = this.#tombstones.get(sessionId);
     if (departed === undefined) return undefined;
+    const siblings = this.#siblingsAtDeparture.get(sessionId);
     const picked = pickDocumentSuccessor(
-      this.all().map((s) => ({
-        id: s.id,
-        url: s.url,
-        ...(s.projectId === undefined ? {} : { projectId: s.projectId }),
-      })),
+      this.all()
+        .filter((s) => true !== siblings?.has(s.id))
+        .map((s) => ({
+          id: s.id,
+          url: s.url,
+          ...(s.projectId === undefined ? {} : { projectId: s.projectId }),
+        })),
       departed,
     );
     if (picked === undefined) return undefined;

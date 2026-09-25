@@ -121,6 +121,23 @@ export function pickDocumentSuccessor(
   return others[0];
 }
 
+/**
+ * Whether `candidate` was already connected before the agent last drove `departed`.
+ *
+ * Such a tab is a SIBLING, never the document the departed tab's navigation produced: that document
+ * can only have connected after the command that caused it. Without this, two tabs of one project
+ * were resolved as "unique at the origin" in the gap before the departed tab came back, and a verdict
+ * for tab A was graded on tab B (#983, reproduced by driving). Measured as ages rather than instants,
+ * so both sides read the same clock at the same moment and the comparison does not drift while a
+ * caller polls.
+ */
+export function openedBeforeDeparture(
+  candidate: Pick<Session, 'staleMs'>,
+  departed: Pick<Session, 'agentIdleMs'>,
+): boolean {
+  return candidate.staleMs() > departed.agentIdleMs();
+}
+
 export interface SuccessorRegistry {
   get(id: string): Session | undefined;
   all(): readonly Session[];
@@ -146,7 +163,7 @@ export async function awaitDocumentSuccessor(
     const picked = pickDocumentSuccessor(
       sessions
         .all()
-        .filter((s) => s !== departed)
+        .filter((s) => s !== departed && !openedBeforeDeparture(s, departed))
         .map(identityOf),
       departedIdentity,
     );

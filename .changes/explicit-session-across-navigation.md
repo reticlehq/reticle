@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`: an explicit `sessionId` is no longer graded against another tab after a full navigation (#983).** With two tabs of one project open, a click that loaded a new document in tab A could come back with a verdict read from tab B. In the moment before A's new document reconnected, B was the only live session at that origin, and it was taken as A's successor. A successor now has to have connected after the agent last drove the departed tab, so a tab that was already open is never mistaken for one. A reload, and a new document arriving under a new id, are still followed as before.

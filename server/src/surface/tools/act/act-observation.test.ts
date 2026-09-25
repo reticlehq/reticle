@@ -40,7 +40,13 @@ describe('dispatchAct', () => {
 });
 
 const sessionAt = (id: string, url: string, elapsed: number): Session =>
-  ({ id, url, elapsed: () => elapsed }) as unknown as Session;
+  ({
+    id,
+    url,
+    elapsed: () => elapsed,
+    staleMs: () => 0,
+    agentIdleMs: () => 0,
+  }) as unknown as Session;
 
 describe('followLostObservation', () => {
   const registry = (all: readonly Session[]) => ({
