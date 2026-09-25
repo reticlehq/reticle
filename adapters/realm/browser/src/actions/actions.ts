@@ -473,6 +473,20 @@ async function dispatchFor(
       0 === hold ? undefined : { ms: hold, sleep, now: () => Date.now() },
     );
   }
+  if (ActionType.DBLCLICK === action) {
+    // A real double-click is two full click sequences PLUS a trailing `dblclick`. Dispatching only
+    // `dblclick` never fires React `onClick` (or native click handlers), so double-submit and any
+    // other click-gated behaviour cannot be tested (#1063).
+    const first = await fireClickSequence(el);
+    const second = await fireClickSequence(el);
+    const dblNotPrevented = asSyntheticInput(() =>
+      el.dispatchEvent(mouseEventFor(el, 'dblclick', { bubbles: true, cancelable: true })),
+    );
+    return {
+      prevented: first.prevented || second.prevented || !dblNotPrevented,
+      heldMs: first.heldMs + second.heldMs,
+    };
+  }
   return { prevented: await dispatchOther(el, action, args), heldMs: 0 };
 }
 
@@ -495,10 +509,6 @@ async function dispatchOther(
   args: Record<string, unknown>,
 ): Promise<boolean> {
   switch (action) {
-    case ActionType.DBLCLICK:
-      return !asSyntheticInput(() =>
-        el.dispatchEvent(mouseEventFor(el, 'dblclick', { bubbles: true, cancelable: true })),
-      );
     case ActionType.HOVER: {
       const doc = el.ownerDocument;
       // Best-effort "previous" node for relatedTarget so React's enter/leave synthesis has a "from".

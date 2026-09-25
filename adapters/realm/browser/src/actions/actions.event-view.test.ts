@@ -122,3 +122,23 @@ it('preserves a null view for an element in a detached document', async () => {
   expect(events).toHaveLength(CLICK_EVENTS.length);
   for (const event of events) expect(event.view).toBeNull();
 });
+
+
+describe('dblclick synthesises two clicks before dblclick (#1063)', () => {
+  it('fires click twice so React onClick / native click handlers run', async () => {
+    const button = document.createElement('button');
+    document.body.append(button);
+    const types: string[] = [];
+    let clickCount = 0;
+    button.addEventListener('click', () => {
+      clickCount += 1;
+    });
+    for (const type of ['mousedown', 'mouseup', 'click', 'dblclick']) {
+      button.addEventListener(type, () => types.push(type));
+    }
+    await executeAction(refs.refFor(button), ActionType.DBLCLICK, {});
+    expect(clickCount).toBe(2);
+    expect(types.filter((t) => t === 'click')).toHaveLength(2);
+    expect(types.at(-1)).toBe('dblclick');
+  });
+});
