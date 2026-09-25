@@ -6,6 +6,11 @@ import { createRepeatLimiter, type ErrorIdentity } from './error-repeats.js';
 
 type ConsoleMethod = 'log' | 'warn' | 'error' | 'info' | 'debug';
 
+/** The DOM event a CSP violation arrives as, and the `kind` it is reported under. */
+const CSP_VIOLATION_EVENT = 'securitypolicyviolation';
+/** `disposition` of a report-only policy: the browser reported the resource and did not block it. */
+const REPORT_ONLY = 'report';
+
 const METHOD_EVENT: Record<ConsoleMethod, EventType> = {
   log: EventType.CONSOLE_LOG,
   warn: EventType.CONSOLE_WARN,
@@ -136,11 +141,40 @@ export function installConsole(emit: Emit): Teardown {
       emitError(payload);
     });
   };
+  /**
+   * A CSP violation is not a console call, and the browser never routes it through one.
+   *
+   * DevTools prints it, so a human reading the page sees dozens of them while
+   * `reticle_assert({ kind: "console", level: "error", absent: true })` returns a confident pass.
+   * That is a false green in the one place the product's claim rests, and
+   * `securitypolicyviolation` exists precisely so a page can observe what the browser refused.
+   *
+   * `blockedURI` is empty for inline content, which is the common case for a script-src violation;
+   * it is named rather than reported as a blocked empty string.
+   */
+  const onViolation = (event: SecurityPolicyViolationEvent): void => {
+    const what = 0 === event.blockedURI.length ? 'inline content' : event.blockedURI;
+    // A report-only policy blocked NOTHING: the browser ran the resource and only reported it, and
+    // DevTools shows it as a warning. Calling it an error that "blocked" something would be a false
+    // red against a page that works.
+    const reportOnly = REPORT_ONLY === event.disposition;
+    emit(reportOnly ? EventType.CONSOLE_WARN : EventType.CONSOLE_ERROR, {
+      message: reportOnly
+        ? `[Report Only] Content Security Policy directive: ${event.violatedDirective} would block ${what}`
+        : `Content Security Policy directive: ${event.violatedDirective} blocked ${what}`,
+      kind: CSP_VIOLATION_EVENT,
+      ...(0 === event.blockedURI.length ? {} : { source: event.blockedURI }),
+    });
+  };
   // Capture phase: element `error` events do not bubble, so this is the only registration that
   // sees a failed subresource. Uncaught script errors reach a capturing window listener too, so one
   // registration covers both.
   window.addEventListener('error', onError, true);
   window.addEventListener('unhandledrejection', onRejection);
+  // Dispatched on `document` and it bubbles, so a window listener sees it; registered in the
+  // capture phase alongside the others so a page that stops propagation on `document` cannot hide
+  // one from us.
+  window.addEventListener(CSP_VIOLATION_EVENT, onViolation, true);
 
   return () => {
     for (const [method, original] of originals) {
@@ -150,5 +184,6 @@ export function installConsole(emit: Emit): Teardown {
     }
     window.removeEventListener('error', onError, true);
     window.removeEventListener('unhandledrejection', onRejection);
+    window.removeEventListener(CSP_VIOLATION_EVENT, onViolation, true);
   };
 }
