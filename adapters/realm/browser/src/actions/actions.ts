@@ -422,7 +422,7 @@ function activeRef(el: Element): string | null {
  * is shaped around. 30s is far above any real hold-to-confirm (the reported case was 1.2s) and far
  * below a hang.
  */
-export const MAX_HOLD_MS = 30_000;
+const MAX_HOLD_MS = 30_000;
 
 /** A hold the caller asked for, bounded and sanitised. Non-numbers and negatives mean "no hold". */
 function clampHold(raw: unknown): number {

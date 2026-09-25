@@ -107,7 +107,7 @@ export const LOG_CSS = `
  * while it was minimised could not scroll it, so opening it showed the OLDEST row and the latest
  * activity - the reason to open it - was somewhere below the fold.
  */
-export function scrollLogToLatest(container: HTMLElement): void {
+function scrollLogToLatest(container: HTMLElement): void {
   container.scrollTop = container.scrollHeight;
 }
 
