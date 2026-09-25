@@ -225,7 +225,16 @@ export function installDom(emit: Emit): Teardown {
           dropped += 1;
           continue;
         }
-        if (isReticleOverlay(node)) continue;
+        // A removed node is DETACHED, so `closest()` cannot climb from it to the overlay it came out
+        // of; ask the parent it was removed from, which is still in the document. Without this every
+        // node Reticle's own HUD rebuilt read as the app's DOM changing - enough to hide a route that
+        // rendered nothing, which then came back verified:"yes".
+        if (
+          isReticleOverlay(node) ||
+          (isElement(record.target) && isReticleOverlay(record.target))
+        ) {
+          continue;
+        }
         // Same reasoning as the mount above, in reverse: a dismissed modal leaves as ONE record
         // carrying its wrapper, so filtering on the wrapper's own role makes the dismissal silent.
         const gone = describeMount(node);

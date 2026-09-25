@@ -106,3 +106,29 @@ describe('a mount inside an unlabelled wrapper is still a render', () => {
     }
   });
 });
+
+/*
+ * Driven on bench-app with route-transition-break injected: clicking Compose moved the URL to
+ * /compose and left the Overview view on screen, and `act_and_wait { until: route contains
+ * /compose }` came back verified:"yes". The rendered-nothing contradiction exists for exactly this
+ * and did not fire, because the window held 40 dom.removed events - every one of them a saved-flow
+ * button Reticle's own HUD had rebuilt. A removed node is detached, so `closest()` cannot climb from
+ * it to the overlay it came out of; the parent it was removed FROM is still attached and can.
+ */
+describe("Reticle's own panel is not the app's DOM, including what it removes", () => {
+  it('emits nothing when a node is removed from inside the overlay', async () => {
+    document.body.innerHTML =
+      '<div data-reticle-overlay><div class="flows"><button>▶ drive-view</button><button>▶ admin</button></div></div>';
+    const list = document.querySelector('.flows');
+    const events = await record(() => {
+      list?.querySelectorAll('button').forEach((b) => b.remove());
+    });
+    expect(events.filter((e) => e.type === EventType.DOM_REMOVED)).toHaveLength(0);
+  });
+
+  it('still reports a node the app removes', async () => {
+    document.body.innerHTML = '<main><button id="x">Save</button></main>';
+    const events = await record(() => document.getElementById('x')?.remove());
+    expect(events.filter((e) => e.type === EventType.DOM_REMOVED)).toHaveLength(1);
+  });
+});

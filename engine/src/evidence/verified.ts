@@ -417,6 +417,25 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
         'the store holds) before trusting it',
     };
   }
+  // `route-rendered-nothing` gets its own sentence for the same reason: the generic one blames churn
+  // and a slow app, and here nothing was busy - the URL moved and no view appeared for it. Driven on
+  // bench-app with a store that ignored the navigation: the route predicate held, this fired, and the
+  // generic sentence sent the reader to wait. UNKNOWN rather than NO because a view revealed from DOM
+  // that already existed (a CSS-toggled tab) emits this same window.
+  const routeOnly =
+    deciding.length > 0 &&
+    deciding.every((c) => c.kind === ContradictionKind.ROUTE_RENDERED_NOTHING);
+  if (routeOnly) {
+    return {
+      verified: Verified.UNKNOWN,
+      verifiedReason: VerifiedReason.EVIDENCE_INCOMPLETE,
+      because:
+        'the URL changed, but nothing rendered for it: no content added or removed and no request ' +
+        'made, so the new route may show the old view. A route change alone does not prove the ' +
+        'destination appeared. Assert what the destination shows (its heading or a testid) or the ' +
+        'store value that selects it, rather than the URL',
+    };
+  }
   if (deciding.length > 0 && !settlementOnly) {
     const kinds = deciding.map((c) => c.kind).join(', ');
     return {

@@ -101,3 +101,19 @@ describe('observed contradictions still assert failure — the catch must not re
     expect(out.because).not.toContain(ContradictionKind.REQUEST_NEVER_SETTLED);
   });
 });
+
+/*
+ * Driven on bench-app with route-transition-break injected: the right UNKNOWN arrived wearing the
+ * generic sentence - "this window closed before the app finished ... its own churn (a poll, a
+ * timer) ... waiting longer will not help" - about a click where nothing kept the page busy and
+ * nothing rendered. The fact to act on is that the URL moved and the destination did not appear.
+ */
+describe('a route that rendered nothing says so, not that the app was busy', () => {
+  it('names the route and the missing view instead of blaming churn or a slow app', () => {
+    const out = verdict([ContradictionKind.ROUTE_RENDERED_NOTHING]);
+    expect(out.verified).toBe(Verified.UNKNOWN);
+    expect(out.because).toMatch(/URL changed/i);
+    expect(out.because).toMatch(/nothing rendered/i);
+    expect(out.because).not.toMatch(/churn|closed before the app finished/i);
+  });
+});
