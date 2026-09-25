@@ -297,3 +297,15 @@ describe('the ledger holds intents, not step labels', () => {
     expect((await s.open()).map((i) => i.id).sort()).toEqual(['n', 'real']);
   });
 });
+
+// Found by the e2e battery: reticle_coverage asks for intents with no project root known, and the old
+// store failed soft to an empty ledger. The sharded rewrite computed a path outside its try and threw,
+// taking down the tool that only wanted to know what was still open.
+describe('a ledger with no known project root', () => {
+  it('reads as empty rather than throwing', async () => {
+    const { fs } = createMemoryFs();
+    const s = new IntentStore(fs, undefined as unknown as string, { now: () => 1 });
+    await expect(s.read()).resolves.toEqual([]);
+    await expect(s.open()).resolves.toEqual([]);
+  });
+});

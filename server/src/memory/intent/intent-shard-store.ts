@@ -105,9 +105,17 @@ export class IntentShardStore {
   }
 
   /** Parse one legacy file, remembering whether it parsed — only a parsed file may be deleted. */
-  async #readLegacy(path: string, toRecords: (raw: unknown) => IntentRecord[]): Promise<Legacy> {
+  async #readLegacy(
+    pathOf: () => string,
+    toRecords: (raw: unknown) => IntentRecord[],
+  ): Promise<Legacy> {
+    let path = '';
     let text: string;
     try {
+      // Resolved INSIDE the try: with no known project root there is no path, and that must read as
+      // "no legacy file" — the old store failed soft here, and a caller only asking what is still
+      // open must not be taken down by it.
+      path = pathOf();
       text = await this.#fs.readFile(path);
     } catch {
       return { path, records: [], parsed: true };
@@ -121,15 +129,17 @@ export class IntentShardStore {
 
   /** The old single file, and any interim `intent/<subject>.json` from before directories. */
   async #legacySources(): Promise<Legacy[]> {
-    const flat = await this.#readLegacy(reticleDirPaths(this.#root).intent, (raw) =>
-      Object.values(IntentFileSchema.parse(raw).intents).map(recordFromIntent),
+    const flat = await this.#readLegacy(
+      () => reticleDirPaths(this.#root).intent,
+      (raw) => Object.values(IntentFileSchema.parse(raw).intents).map(recordFromIntent),
     );
     const interim = await Promise.all(
       (await this.#entries())
         .filter((e) => e.endsWith(JSON_SUFFIX) && IntentDir.INDEX_FILE !== e)
         .map((e) =>
-          this.#readLegacy(`${this.#dir()}/${e}`, (raw) =>
-            Object.values(IntentShardSchema.parse(raw).intents),
+          this.#readLegacy(
+            () => `${this.#dir()}/${e}`,
+            (raw) => Object.values(IntentShardSchema.parse(raw).intents),
           ),
         ),
     );
