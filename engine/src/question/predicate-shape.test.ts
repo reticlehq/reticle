@@ -45,6 +45,14 @@ describe('predicate shapes agents actually write', () => {
     });
   });
 
+  it('accepts `query` as the text predicate body, not just `contains`', () => {
+    // Agents reach for `query` by analogy with `element` predicates and `reticle_query` (#1001).
+    expect(parsePredicate({ kind: PredicateKind.TEXT, query: 'Saved' })).toEqual({
+      kind: PredicateKind.TEXT,
+      contains: 'Saved',
+    });
+  });
+
   it('lifts a flat role/text pair into the element query', () => {
     expect(parsePredicate({ kind: PredicateKind.ELEMENT, role: 'button', text: 'Save' })).toEqual({
       kind: PredicateKind.ELEMENT,

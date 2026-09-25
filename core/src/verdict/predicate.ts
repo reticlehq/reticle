@@ -123,11 +123,12 @@ export type Predicate =
  * the only key supplied left a predicate that asserts nothing and passes on anything.
  */
 const PREDICATE_ALIASES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
-  // `text`/`value` on a `text` predicate: the kind is called "text", so `text:` is the first thing
-  // anyone writes for it, and `value` follows from the element query's own `value` field. Both were
-  // hard rejections, and a rejected predicate produces NO verdict at all — the drive ends with
-  // nothing rather than with a failure, which is the worst outcome of the three.
-  [PredicateKind.TEXT]: { text: 'contains', value: 'contains' },
+  // `text`/`value`/`query` on a `text` predicate: the kind is called "text", so `text:` is the first
+  // thing anyone writes for it, `value` follows from the element query's own `value` field, and
+  // `query` from `element`'s nested locator, the spelling agents reach for after `reticle_query`.
+  // All were hard rejections, and a rejected predicate produces NO verdict at all — the drive ends
+  // with nothing rather than with a failure, which is the worst outcome of the three.
+  [PredicateKind.TEXT]: { text: 'contains', value: 'contains', query: 'contains' },
   // `urlContains`/`url` reported from the field: an agent that had just written
   // `net { urlContains }` applied the same word to `route`, which spells it `contains`, and got
   // `unrecognized_keys` with no list of what would have worked. The parallel it assumed is a fair
