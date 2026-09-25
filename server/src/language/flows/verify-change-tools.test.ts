@@ -130,6 +130,41 @@ describe('reticle_verify_change — it delegates rather than reimplements', () =
     expect(String(result['because'])).toContain('cannot tell');
     spy.mockRestore();
   });
+
+  /**
+   * The mirror of the NO rule. A red from flows nobody can tie to the change is already refused as
+   * UNKNOWN; a green from the same flows said "all N flows covering these files passed" about files
+   * none of them was shown to cover. Reported from the field: a change to one component came back
+   * `yes` on the strength of replaying an unrelated flow.
+   */
+  it('says UNKNOWN, not YES, when every flow that passed was only run for unknown provenance', async () => {
+    const deps = withFlows({ status: 'pass', total: 2, passed: 2, failed: 0 });
+    const spy = vi
+      .spyOn(await import('./change/flow-sources.js'), 'affectedSavedFlows')
+      .mockReturnValue({ affected: ['content', 'leads'], unknownProvenance: ['content', 'leads'] });
+
+    const result = (await tool.handler(deps, { files: ['src/ActionRundown.tsx'] })) as Record<
+      string,
+      unknown
+    >;
+    expect(result['verified']).toBe(Verified.UNKNOWN);
+    expect(String(result['because'])).toContain('cannot tell');
+    spy.mockRestore();
+  });
+
+  it('still says YES when at least one passing flow is known to cover the change', async () => {
+    const deps = withFlows({ status: 'pass', total: 2, passed: 2, failed: 0 });
+    const spy = vi
+      .spyOn(await import('./change/flow-sources.js'), 'affectedSavedFlows')
+      .mockReturnValue({ affected: ['checkout', 'legacy'], unknownProvenance: ['legacy'] });
+
+    const result = (await tool.handler(deps, { files: ['src/Checkout.tsx'] })) as Record<
+      string,
+      unknown
+    >;
+    expect(result['verified']).toBe(Verified.YES);
+    spy.mockRestore();
+  });
 });
 
 /**
