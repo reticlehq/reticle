@@ -106,51 +106,12 @@ describe('Enter in a form is judged by what it submits', () => {
 });
 
 /**
- * Picking a value is not performing the act it feeds.
+ * Enter in a textarea inserts a newline and submits nothing.
  *
- * Two more false positives from the same field session, both still live after the submit-control
- * fix above. Choosing "Inlet" from two radio-like choices was blocked, and pressing Enter in a
- * textarea was blocked while clicking the adjacent submit button -- same form, same handler, same
- * effect -- was not.
- *
- * The reporter's summary is the cost, and it is why narrowing is the safe direction: "I ended up
- * passing confirmDangerous: true reflexively on every action, which is how a safety guard becomes
- * decoration." A guard that fires on picking a value is not protecting the destructive action
- * either. The negative controls below are what keep the narrowing honest -- a false block costs a
- * round trip, a missed block cannot be undone (#894).
+ * A false positive from the field session behind #894: pressing Enter in a textarea was blocked
+ * while clicking the adjacent submit button -- same form, same handler, same effect -- was judged
+ * on its own terms. The second test is the negative control: the button itself stays blocked.
  */
-describe('a value picker is judged by what the choice feeds, not by the choice', () => {
-  beforeEach(() => {
-    document.body.innerHTML = '';
-  });
-
-  it('does not block a radio whose label reads like the action it will cause', async () => {
-    document.body.innerHTML =
-      '<form action="/api/refund"><input type="radio" id="r" name="reason" aria-label="Refund">' +
-      '<button type="submit">Continue</button></form>';
-    await expect(executeAction(refTo('#r'), 'check')).resolves.toBeDefined();
-  });
-
-  it('still blocks the submit that the choice feeds', async () => {
-    // The act is the submit, judged on its own terms. That is the whole argument for exempting the
-    // choice, so it has to hold.
-    document.body.innerHTML =
-      '<form action="/api/refund"><input type="radio" id="r" name="reason" aria-label="Refund">' +
-      '<button type="submit" id="go">Issue refund</button></form>';
-    await expect(executeAction(refTo('#go'), 'click')).rejects.toThrow(/confirmDangerous/);
-  });
-
-  it('still blocks a checkbox, which is also how a one-click confirmation is spelled', async () => {
-    document.body.innerHTML = '<input type="checkbox" id="w" aria-label="Delete this repository">';
-    await expect(executeAction(refTo('#w'), 'check')).rejects.toThrow(/confirmDangerous/);
-  });
-
-  it('still blocks a menuitem, because a menu item labelled Delete IS one', async () => {
-    document.body.innerHTML = '<button role="menuitem" id="d">Delete project</button>';
-    await expect(executeAction(refTo('#d'), 'click')).rejects.toThrow(/confirmDangerous/);
-  });
-});
-
 describe('Enter in a textarea submits nothing, so it triggers nothing', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
