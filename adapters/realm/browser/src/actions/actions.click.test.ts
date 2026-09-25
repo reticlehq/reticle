@@ -135,3 +135,45 @@ describe('click: off-viewport auto scroll', () => {
     expect(r.effect.scrolledIntoView).toBe(false);
   });
 });
+
+describe('dblclick: the sequence a real double-click produces', () => {
+  it('fires two full clicks before the dblclick, with detail counting up', async () => {
+    document.body.innerHTML = '<button>Save</button>';
+    const btn = document.querySelector('button') as HTMLButtonElement;
+    const seen: string[] = [];
+    for (const t of ['mousedown', 'mouseup', 'click', 'dblclick']) {
+      btn.addEventListener(t, (e) => seen.push(`${t}:${(e as MouseEvent).detail}`));
+    }
+    await executeAction(refs.refFor(btn), 'dblclick');
+    expect(seen).toEqual([
+      'mousedown:1',
+      'mouseup:1',
+      'click:1',
+      'mousedown:2',
+      'mouseup:2',
+      'click:2',
+      'dblclick:2',
+    ]);
+  });
+
+  it('runs an onClick-style click handler twice', async () => {
+    document.body.innerHTML = '<button>Submit</button>';
+    const btn = document.querySelector('button') as HTMLButtonElement;
+    let clicks = 0;
+    btn.addEventListener('click', () => {
+      clicks += 1;
+    });
+    await executeAction(refs.refFor(btn), 'dblclick');
+    expect(clicks).toBe(2);
+  });
+
+  it('reports defaultPrevented from the dblclick event', async () => {
+    document.body.innerHTML = '<button>Save</button>';
+    const btn = document.querySelector('button') as HTMLButtonElement;
+    btn.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+    });
+    const r = await executeAction(refs.refFor(btn), 'dblclick');
+    expect(r.effect.defaultPrevented).toBe(true);
+  });
+});

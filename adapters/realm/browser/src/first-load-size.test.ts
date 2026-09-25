@@ -230,7 +230,14 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  *
  * Raised by 1,000 rather than to the measurement, per the note above.
  */
-const MAX_FIRST_LOAD_BYTES = 241_300;
+/*
+ * 241_300 -> 242_300. 606 B measured on this tree (240,731 -> 241,337) across four changes, each of
+ * which runs where the page is, not in the deferred panel: CSP violations reaching the console
+ * channel (a false green on absent-console assertions), the library-modal check that gives Escape
+ * back to Radix/MUI dialogs, a dblclick that dispatches the two clicks a browser does, and naming
+ * the editor when `type` cannot write into it. Raised by 1,000, per the note above.
+ */
+const MAX_FIRST_LOAD_BYTES = 242_300;
 /*
  * Raised a fifth time, 233_300 -> 233_400, for a route to be assertable in a SAVED flow. 57 B.
  *

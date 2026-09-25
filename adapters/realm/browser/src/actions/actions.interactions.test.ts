@@ -326,6 +326,29 @@ describe('a contenteditable target is refused legibly', () => {
     );
     expect(el.textContent, 'the existing content must not be touched').toBe('hello');
   });
+
+  /**
+   * Monaco and CodeMirror 6 do not set `contenteditable`. They expose a `role="textbox"` div and
+   * keep the document in the EditContext API, so `type` fell through to "cannot type into a <div>".
+   * That sentence sends the agent looking for a different element. There is not one.
+   */
+  it('names an editor text box rather than the tag', async () => {
+    document.body.innerHTML = '<div id="ed" role="textbox"></div>';
+    const el = document.getElementById('ed') as HTMLElement;
+    await expect(executeAction(refs.refFor(el), 'type', { text: 'x' })).rejects.toThrow(
+      /EditContext/i,
+    );
+    expect(el.textContent, 'the editor model must not be written through the DOM').toBe('');
+  });
+
+  it('still names a plain div by its tag', async () => {
+    document.body.innerHTML = '<div id="plain">keep</div>';
+    const el = document.getElementById('plain') as HTMLElement;
+    await expect(executeAction(refs.refFor(el), 'type', { text: 'x' })).rejects.toThrow(
+      /cannot type into a <div>/,
+    );
+    expect(el.textContent).toBe('keep');
+  });
 });
 
 /**

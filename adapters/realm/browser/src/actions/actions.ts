@@ -496,8 +496,12 @@ async function dispatchOther(
 ): Promise<boolean> {
   switch (action) {
     case ActionType.DBLCLICK:
+      await fireClickSequence(el, undefined, 1);
+      await fireClickSequence(el, undefined, 2);
       return !asSyntheticInput(() =>
-        el.dispatchEvent(mouseEventFor(el, 'dblclick', { bubbles: true, cancelable: true })),
+        el.dispatchEvent(
+          mouseEventFor(el, 'dblclick', { bubbles: true, cancelable: true, detail: 2 }),
+        ),
       );
     case ActionType.HOVER: {
       const doc = el.ownerDocument;

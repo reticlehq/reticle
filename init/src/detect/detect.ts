@@ -208,7 +208,7 @@ function hasAnyConfig(files: ReadonlySet<string>, candidates: readonly string[])
 }
 
 /** What identifies one framework in a project root: a dependency name, or a config file basename. */
-export interface FrameworkSignals {
+interface FrameworkSignals {
   /** `package.json` dependency names that name this framework outright. */
   readonly deps: readonly string[];
   /** Root config-file basenames that name it when the dependency is absent. */

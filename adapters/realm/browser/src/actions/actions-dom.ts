@@ -56,13 +56,13 @@ function pointerEventFor(el: Element, type: string, init: PointerEventInit): Mou
 export async function fireClickSequence(
   el: HTMLElement,
   hold?: { ms: number; sleep: (ms: number) => Promise<void>; now: () => number },
+  detail?: number,
 ): Promise<{ prevented: boolean; heldMs: number }> {
   const doc = el.ownerDocument;
   const from: EventTarget = doc.activeElement ?? doc.body;
+  const init: MouseEventInit = { bubbles: true, cancelable: true, detail: detail ?? 0 };
   firePointer(el, 'pointerdown', from);
-  asSyntheticInput(() =>
-    el.dispatchEvent(mouseEventFor(el, 'mousedown', { bubbles: true, cancelable: true })),
-  );
+  asSyntheticInput(() => el.dispatchEvent(mouseEventFor(el, 'mousedown', init)));
   if (el.tabIndex >= 0 && 'function' === typeof el.focus) el.focus();
   // The gap that makes hold-to-confirm driveable. With down and up synchronous, a control whose
   // contract is "the button is down for N ms" cannot be expressed at all — it cancels its own
@@ -78,14 +78,10 @@ export async function fireClickSequence(
     heldMs = hold.now() - startedAt;
   }
   firePointer(el, 'pointerup', from);
-  asSyntheticInput(() =>
-    el.dispatchEvent(mouseEventFor(el, 'mouseup', { bubbles: true, cancelable: true })),
-  );
+  asSyntheticInput(() => el.dispatchEvent(mouseEventFor(el, 'mouseup', init)));
   // Marked as Reticle's own so the annotator's capture-phase listener lets it through. Without it,
   // the click is swallowed whole in annotate mode while still reporting `dispatched: true`.
-  const notPrevented = asSyntheticInput(() =>
-    el.dispatchEvent(mouseEventFor(el, 'click', { bubbles: true, cancelable: true })),
-  );
+  const notPrevented = asSyntheticInput(() => el.dispatchEvent(mouseEventFor(el, 'click', init)));
   return { prevented: !notPrevented, heldMs };
 }
 

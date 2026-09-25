@@ -480,6 +480,11 @@ describe('docs/docs.json publishes every doc', () => {
     };
     walk(join(REPO, 'server', 'src'));
     walk(join(REPO, 'core', 'src'));
+    // `init` too. It EMITS `reticle_*` identifiers into the files it generates -- the Django
+    // middleware module is `reticle_dev.py` -- and a docs page quoting what `init` prints was
+    // reported here as naming a tool that does not exist. The name does exist; this walk did not
+    // reach the package that owns it, which made the guard fire on a page that was correct.
+    walk(join(REPO, 'init', 'src'));
 
     const unknown: string[] = [];
     for (const file of markdownPages()) {

@@ -35,6 +35,7 @@ Two columns say different things and it is worth keeping them apart. **CI gate**
 | **Plain HTML** | yes | no | no | no | Wired, unverified |
 | **Vue (non-Nuxt)** | as Vite | no | install only | no | Install gated, drive unverified |
 | **Preact** | as Vite | no | no | unproven | Sensor, React adapter via `preact/compat` |
+| **Server-rendered (Django, Flask, FastAPI, Streamlit, Rails)** | yes | no | no | no | Wired, unverified |
 
 <Warning>
   "Wired, unverified" means exactly that. The recipe exists and was written from a real integration,
@@ -238,6 +239,83 @@ The same shape works for webpack, Parcel, and the Vue and Svelte CLIs.
 ```
 
 Keep it out of your production template. Reticle self-disables when the build reports `NODE_ENV=production`, but a second lock on a door leading to your users is a reasonable number.
+
+## Server-rendered apps (Django, Flask, FastAPI, Rails)
+
+There is no JS build to import the SDK from, and no single template to paste a script tag into: an app has many templates and may not have a base one. The SDK loads from a URL instead, so a page with no build step is not a blocker.
+
+`reticle init` detects these and prints the right thing for the stack it found, writing `.reticle.json` as it goes. What follows is the same wiring, written down so you can read it before running anything, or wire it by hand.
+
+### Django
+
+Middleware is the Django-shaped answer: one place, runs for every page, no template to find.
+
+```python
+# reticle_dev.py: add to MIDDLEWARE while DEBUG is on:
+#   MIDDLEWARE = [..., "reticle_dev.ReticleDevMiddleware"]
+from django.conf import settings
+
+_SNIPPET = """<script type="module">
+  import { reticle } from 'https://cdn.jsdelivr.net/npm/@reticlehq/browser@<version>/+esm';
+  reticle.connect({ projectId: '<your-project-id>', token: '<pairing token>' });
+</script>"""
+
+
+class ReticleDevMiddleware:
+    """Inject the Reticle SDK into HTML responses during development only."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        if not settings.DEBUG:
+            return response
+        if "text/html" not in response.get("Content-Type", ""):
+            return response
+        # Streaming responses have no .content to rewrite; leave them alone.
+        if getattr(response, "streaming", False):
+            return response
+        body = response.content.decode(response.charset)
+        if "</body>" not in body:
+            return response
+        response.content = body.replace("</body>", _SNIPPET + "</body>", 1).encode(
+            response.charset
+        )
+        if response.has_header("Content-Length"):
+            response["Content-Length"] = str(len(response.content))
+        return response
+```
+
+`reticle init` emits this with your real version, project id and pairing token filled in. Copy it from there rather than from this page: the placeholders above are the three things that have to be right.
+
+Four details in that middleware are load-bearing, and each is there because the obvious version is wrong:
+
+- **`settings.DEBUG`** is the guard. Reticle is dev-only, and this is the lock that cannot be forgotten at deploy time.
+- **the `text/html` check** keeps it from corrupting a JSON API response or a file download.
+- **the `streaming` check** exists because a `StreamingHttpResponse` has no `.content` to rewrite, and touching it raises.
+- **`</body>`, not `<head>`** so the SDK sees a parsed document.
+
+Re-setting `Content-Length` matters for the same reason: the body grew, and a stale length truncates the page in the browser rather than failing loudly.
+
+### Flask and FastAPI with Jinja
+
+Same shape, one hook instead of a middleware class: an `@app.after_request` in Flask, or a middleware in FastAPI, with the same four guards: a debug flag, `text/html` only, not streaming, and injected before `</body>`.
+
+### Streamlit
+
+Different again: Streamlit owns the top-level document, so there is no served template, and scripts passed to `st.markdown` do not run. Use `st.html` on Streamlit 1.63 or newer. `reticle init` prints the helper, which also guards against connecting twice across reruns.
+
+### What you get, and what you do not
+
+Everything that comes from reading the live page works: queries, snapshots, actions, network and console channels, verdicts.
+
+What is missing is the **source pointer**. `file:line` on a verdict comes from the build plugin stamping `data-reticle-source`, and there is no build step here to stamp it. You get every other signal and no `source` field, the same way a Vue single-file component does.
+
+<Warning>
+  Wired, unverified. No app in CI drives one of these to a verdict, so nothing will tell us if it
+  breaks. If a page does not register a session, that is worth reporting.
+</Warning>
 
 ## Desktop is a different shape
 
