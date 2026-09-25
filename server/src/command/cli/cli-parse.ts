@@ -42,7 +42,7 @@ export {
 export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticle <command>\` once the bin is on your PATH)
 
   reticle init  [--dry-run] [--port N] [--no-mcp] [--no-install] [--app <dir>]
-                [--env KEY=VALUE]... [--files-only]  (wire Reticle into the project in this directory)
+                [--env KEY=VALUE]... [--files-only] [--hooks]  (wire Reticle into the project in this directory)
                 init is ONBOARDING: it wires the project, boots the app and proves a session
                 connected. It does not drive. The FIRST RUN is the stage that proves a flow:
                 reticle verify <url> --explore --persona "<who does what>", or the same thing
@@ -260,6 +260,8 @@ const FILES_ONLY_FLAG = '--files-only';
  * and `init` runs unattended. Whoever passes this has decided; nothing decides it for them.
  */
 const CAPTURE_BODIES_FLAG = '--capture-bodies';
+/** `--hooks`: also install the print-only Claude Code Stop hook (`reticle report --hook`). */
+const HOOKS_FLAG = '--hooks';
 /**
  * The rest of the runtime surface.
  *
@@ -315,6 +317,7 @@ export type CliResult =
       env: string[];
       filesOnly: boolean;
       captureBodies: boolean;
+      hooks: boolean;
       json: boolean;
       relaunch: boolean;
       open: boolean;
@@ -539,6 +542,7 @@ type InitFlags =
       env: string[];
       filesOnly: boolean;
       captureBodies: boolean;
+      hooks: boolean;
       json: boolean;
       relaunch: boolean;
       open: boolean;
@@ -559,6 +563,7 @@ function parseInitFlags(args: string[]): InitFlags {
   const env: string[] = [];
   let filesOnly = false;
   let captureBodies = false;
+  let hooks = false;
   let json = false;
   let open = true;
   let relaunch = false;
@@ -595,6 +600,8 @@ function parseInitFlags(args: string[]): InitFlags {
       filesOnly = true;
     } else if (arg === CAPTURE_BODIES_FLAG) {
       captureBodies = true;
+    } else if (arg === HOOKS_FLAG) {
+      hooks = true;
     } else if (arg === JSON_FLAG) {
       json = true;
     } else if (arg === NO_OPEN_FLAG) {
@@ -643,6 +650,7 @@ function parseInitFlags(args: string[]): InitFlags {
     env,
     filesOnly,
     captureBodies,
+    hooks,
     json,
     open,
     relaunch,
@@ -737,6 +745,7 @@ export function parseCliArgs(
         env: r.env,
         filesOnly: r.filesOnly,
         captureBodies: r.captureBodies,
+        hooks: r.hooks,
         json: r.json,
         open: r.open,
         relaunch: r.relaunch,

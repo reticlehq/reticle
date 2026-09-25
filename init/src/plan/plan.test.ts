@@ -38,6 +38,8 @@ function input(partial: Partial<PlanInput>): PlanInput {
     ...(partial.platform === undefined ? {} : { platform: partial.platform }),
     cursorProjectPresent: partial.cursorProjectPresent,
     detectedClients: partial.detectedClients,
+    hooks: partial.hooks,
+    claudeSettingsContent: partial.claudeSettingsContent,
     viteConfig: partial.viteConfig ?? null,
     electronViteConfig: partial.electronViteConfig,
     electronPreload: partial.electronPreload,
@@ -1122,5 +1124,19 @@ describe('buildPlan — electron-vite', () => {
     expect(written.slice(written.indexOf('main:'), written.indexOf('renderer:'))).not.toContain(
       'reticle(',
     );
+  });
+});
+
+describe('init --hooks', () => {
+  const HOOK_STEP = 'Claude Code Stop hook';
+
+  it('adds the Stop hook step only when asked', () => {
+    const asked = buildPlan(input({ hooks: true, claudeSettingsContent: null }));
+    expect(asked.steps.find((s) => s.title === HOOK_STEP)?.status).toBe(StepStatus.APPLY);
+  });
+
+  // The install gate diffs the plan against a recorded baseline, so the default must not move.
+  it('leaves the default plan exactly as it was', () => {
+    expect(buildPlan(input({})).steps.some((s) => s.title === HOOK_STEP)).toBe(false);
   });
 });

@@ -19,6 +19,7 @@ npx @reticlehq/server init [--dry-run] [--port N] [--no-mcp] [--no-install] [--a
 | `--no-mcp` | boolean | `false` (MCP is registered) | Skip the MCP registration **and** the agent rule files (`CLAUDE.md`, `AGENTS.md`, `.cursor`) and the `/reticle` command |
 | `--no-install` | boolean | `false` (deps are installed) | Do not run the install. The step becomes `[⚠]` and prints the `add -D` command for you to run by hand, rather than vanishing from the plan |
 | `--app <dir>` | string | unset | Pick which app to wire in a monorepo, without changing directory |
+| `--hooks` | boolean | `false` | Also add a print-only Stop hook to `.claude/settings.json`, merged into what is there. When the agent stops without a claim that held, it prints one line; it never blocks. See [`reticle report`](/cli/report) |
 | `--yes` | boolean | `false` | Accepted for scripting. `init` has no interactive prompts today, so it is a no-op |
 
 <Warning>

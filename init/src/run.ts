@@ -34,6 +34,7 @@ import {
 import { redirectToWorkspaceApp } from './detect/workspace-redirect.js';
 import { isConnectStep } from './plan/connect-steps.js';
 import { CURSOR_RULE_PATH, RETICLE_MD_PATH } from './project/agent-rules.js';
+import { CLAUDE_SETTINGS_PATH } from './plan/stop-hook-step.js';
 import { CRA_ENV_PATH } from './patch/cra.js';
 import { NEXT_LAYOUT_CANDIDATES, NEXT_PAGES_APP_CANDIDATES } from './patch/next-patch.js';
 import { formatGeneratedSource } from './patch/format-generated.js';
@@ -346,6 +347,7 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
   return {
     detection,
     captureBodies: options.captureBodies,
+    hooks: options.hooks,
     cspSources,
     claudeCli,
     mcpExists,
@@ -420,6 +422,9 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
     cursorRuleContent: io.readFile(agentFile(CURSOR_RULE_PATH)),
     claudeCommandContent: io.readFile(agentFile(CLAUDE_COMMAND_PATH)),
     cursorCommandContent: io.readFile(agentFile(CURSOR_COMMAND_PATH)),
+    // Read only to MERGE into: the settings file is the user's, and other tools write in it too.
+    claudeSettingsContent:
+      true === options.hooks ? io.readFile(agentFile(CLAUDE_SETTINGS_PATH)) : undefined,
     ...(agentRoot === undefined
       ? {}
       : {

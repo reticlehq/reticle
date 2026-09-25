@@ -249,6 +249,10 @@ export interface PlanInput {
   claudeCommandContent?: string | null | undefined;
   /** Current .cursor/commands/reticle.md content, or null when absent. */
   cursorCommandContent?: string | null | undefined;
+  /** `--hooks`: install the print-only Claude Code Stop hook. Off unless asked. */
+  hooks?: boolean | undefined;
+  /** Current .claude/settings.json content, or null when absent (the hook is MERGED into it). */
+  claudeSettingsContent?: string | null | undefined;
   /**
    * Absolute directory the AGENT runs in, when that is not the app's directory.
    *

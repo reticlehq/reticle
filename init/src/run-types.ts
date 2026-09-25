@@ -12,6 +12,8 @@ import type { InitOutcome } from '@reticlehq/core/telemetry';
 export interface InitOptions {
   /** `--capture-bodies`: write `captureNetworkBodies: true` into the app's config. Off by default (#705). */
   captureBodies?: boolean | undefined;
+  /** `--hooks`: also install the print-only Claude Code Stop hook. Off by default. */
+  hooks?: boolean | undefined;
   cwd: string;
   port: number | undefined;
   mcp: boolean;

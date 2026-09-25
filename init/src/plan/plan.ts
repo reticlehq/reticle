@@ -60,6 +60,7 @@ import { reticleConfigContent } from '@/patch/snippets.js';
 import { configWithInstallSource } from '@/project/install-source-config.js';
 import { containerisedStep, uiLibraryStep, webGlCanvasStep, windowsMcpNoteStep } from './notices.js';
 import { existingConfigProblem, projectIdOf, RETICLE_CONFIG_FILE } from '@/detect/existing-config.js';
+import { CLAUDE_SETTINGS_PATH, stopHookStep } from './stop-hook-step.js';
 
 // Re-exported: it moved to the module that reads it, and every existing importer says `plan.js`.
 export { RETICLE_CONFIG_FILE };
@@ -754,6 +755,9 @@ export function buildPlan(input: PlanInput): Plan {
     ...mcpSteps(input),
     ...agentRuleSteps(input),
     ...slashCommandSteps(input),
+    ...(true === input.hooks
+      ? [stopHookStep(agentFile(input, CLAUDE_SETTINGS_PATH), input.claudeSettingsContent)]
+      : []),
     ...uiLibraryStep(input),
     ...webGlCanvasStep(input),
     installStep(input),

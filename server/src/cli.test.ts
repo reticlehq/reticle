@@ -68,6 +68,7 @@ const INIT_DEFAULTS = {
   env: [] as string[],
   filesOnly: false,
   captureBodies: false,
+  hooks: false,
   json: false,
   open: true,
   relaunch: false,
@@ -396,6 +397,12 @@ describe('parseCliArgs', () => {
       filesOnly: true,
       captureBodies: false,
     });
+  });
+
+  // Opt-in: the Stop hook writes into a settings file the user and other tools own.
+  it('takes --hooks, and leaves it off by default', () => {
+    expect(parseCliArgs(['init', '--hooks'], PORT)).toEqual({ ...INIT_DEFAULTS, hooks: true });
+    expect(parseCliArgs(['init'], PORT)).toMatchObject({ hooks: false });
   });
 
   it('refuses a flag that names no value, rather than swallowing the next one', () => {

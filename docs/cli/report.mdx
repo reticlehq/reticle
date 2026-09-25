@@ -31,7 +31,7 @@ An `unknown` is never counted as held. It is Reticle saying it could not tell, a
 
 ## As a Claude Code Stop hook
 
-With `--hook` it prints nothing when a claim held or nothing in the tree changed, and otherwise one line, such as `Reticle: not verified. 3 claims: 1 failed, 2 unknown`. It prints Claude Code's `systemMessage` shape and always exits `0`: you see the line when the agent stops, and the agent is never blocked by it. Add it to `.claude/settings.json`:
+With `--hook` it prints nothing when a claim held or nothing in the tree changed, and otherwise one line, such as `Reticle: not verified. 3 claims: 1 failed, 2 unknown`. It prints Claude Code's `systemMessage` shape and always exits `0`: you see the line when the agent stops, and the agent is never blocked by it. `reticle init --hooks` adds it for you, merged into whatever `.claude/settings.json` already holds. By hand:
 
 ```json
 {

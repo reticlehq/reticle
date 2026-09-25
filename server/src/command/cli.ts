@@ -115,6 +115,7 @@ function handleInit(parsed: {
   env?: string[] | undefined;
   filesOnly?: boolean | undefined;
   captureBodies?: boolean | undefined;
+  hooks?: boolean | undefined;
   licenseKey?: string | undefined;
   json?: boolean | undefined;
   drive?: boolean | undefined;
@@ -138,6 +139,7 @@ function handleInit(parsed: {
       // past a missing package manager, and could not honour that while never being told about it.
       ...(parsed.url === undefined ? {} : { url: parsed.url }),
       captureBodies: true === parsed.captureBodies,
+      hooks: true === parsed.hooks,
       // The outcome is reported by confirmInstall instead, once it knows whether an app connected —
       // `init` writing files was never the same thing as `init` working (#269).
       deferOutcome: true,
