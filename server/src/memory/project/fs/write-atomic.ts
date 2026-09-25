@@ -42,6 +42,20 @@ export function tempNameFor(path: string, pid: number = process.pid, seq?: numbe
   return `${path}.${String(pid)}.${String(seq ?? writeSeq)}.tmp`;
 }
 
+/**
+ * What Windows answers, for a moment, when another writer is still replacing the destination.
+ * POSIX never refuses such a rename; Windows does, and the save has to wait it out rather than
+ * fail. Seen on Windows CI with two writers on one path.
+ */
+const TRANSIENT_RENAME = new Set(['EPERM', 'EBUSY', 'EACCES']);
+const RENAME_ATTEMPTS = 6;
+const RENAME_BACKOFF_MS = 15;
+
+function isTransientRename(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  return 'string' === typeof code && TRANSIENT_RENAME.has(code);
+}
+
 export async function writeFileAtomic(
   fs: FileSystemPort,
   path: string,
@@ -49,5 +63,18 @@ export async function writeFileAtomic(
 ): Promise<void> {
   const tmp = tempNameFor(path);
   await fs.writeFile(tmp, contents);
-  await fs.rename(tmp, path);
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await fs.rename(tmp, path);
+      return;
+    } catch (error: unknown) {
+      if (attempt < RENAME_ATTEMPTS && isTransientRename(error)) {
+        await new Promise((resolve) => setTimeout(resolve, RENAME_BACKOFF_MS * attempt));
+        continue;
+      }
+      // The write failed; its temp file must not outlive it.
+      await fs.rm(tmp).catch(() => undefined);
+      throw error;
+    }
+  }
 }

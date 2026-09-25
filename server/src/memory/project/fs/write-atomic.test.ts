@@ -92,4 +92,40 @@ describe('an atomic write', () => {
     await Promise.all([writeFileAtomic(fs, path, 'one\n'), writeFileAtomic(fs, path, 'two\n')]);
     expect((await readdir(dir)).filter((f) => f.includes('.tmp'))).toEqual([]);
   });
+
+  // Windows CI, 2026-09-26: two writers renaming onto one path, and the second rename failed
+  // EPERM because the first was still replacing the file. POSIX never refuses; Windows does,
+  // briefly, and the writer has to wait it out rather than fail the save.
+  it('waits out a rename Windows refuses while another writer holds the file', async () => {
+    const path = join(dir, 'ledger.json');
+    let refusals = 2;
+    const flaky: FileSystemPort = {
+      ...fs,
+      rename: async (from, to) => {
+        if (refusals > 0) {
+          refusals -= 1;
+          throw Object.assign(new Error('EPERM: operation not permitted, rename'), {
+            code: 'EPERM',
+          });
+        }
+        await fs.rename(from, to);
+      },
+    };
+    await writeFileAtomic(flaky, path, 'kept\n');
+    expect(await readFile(path, 'utf8')).toBe('kept\n');
+    expect((await readdir(dir)).filter((f) => f.includes('.tmp'))).toEqual([]);
+  });
+
+  it('leaves no temp file behind when the rename never succeeds', async () => {
+    const path = join(dir, 'ledger.json');
+    const stuck: FileSystemPort = {
+      ...fs,
+      rename: () =>
+        Promise.reject(
+          Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' }),
+        ),
+    };
+    await expect(writeFileAtomic(stuck, path, 'lost\n')).rejects.toThrow('EPERM');
+    expect((await readdir(dir)).filter((f) => f.includes('.tmp'))).toEqual([]);
+  });
 });
