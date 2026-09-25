@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/server`, `@reticlehq/browser` — a verdict with no `init`.** `reticle_lease` on an app that ships no Reticle SDK now supplies one: when the leased page never connects, the daemon hands it a single-file build of the SDK and the lease comes back `ready: true, zeroInstall: true`. Verdicts work on the DOM, network, console and routes; with no framework adapter there is no component state and no source file:line, and the verdict's coverage says so. An app that connects its own SDK is never touched, because the decision is taken on whether the page connected, not on a timer.
