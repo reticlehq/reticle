@@ -1,3 +1,0 @@
-### Changed
-
-- **`@reticlehq/core`, `@reticlehq/server` — the intent ledger holds rules, not step labels.** A statement shaped like a step description (`click button "Cancel"`, `fill textbox "Search"`) is no longer stored as an intent: `reticle_intent` answers `refused` with the reason and what to write instead, and an inline `intent` like that links to nothing. The autonomous drive stops filing intents altogether; it used to log "Autonomous coverage drive: N actions", re-amended every time the count changed. Labels already in a ledger are marked `stale` on the next write, kept as history but no longer counted as still owed.

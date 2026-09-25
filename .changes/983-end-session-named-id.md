@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — `reticle_session { action: "end" }` could end a session other than the one you named.** A departed session id resolves to its live successor, which is what keeps a reload working for everything that observes a tab. On a destructive call it meant "target missing" became "end something else": passing one id returned `ended: true` for another, in a case where the requested session's browser had just closed. A named session is now matched exactly. If it has already disconnected the call is still idempotently successful, echoing back the id you asked about and ending nothing else; an id the daemon has never seen still refuses. Part of [#983](https://github.com/reticlehq/reticle/issues/983).

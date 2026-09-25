@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — a snapshot of a crashed app said it was unmounted and sent you to another tool to find out why.** An empty tree over an almost-empty mount container already reported "the app is UNMOUNTED rather than slow", but it could not tell an app that had not started from one that started and threw, so it told you to go read `reticle_console`. Reported from the field at about fifteen tool calls between a white page and five `Uncaught Error` entries the server was already holding. The note now reads the session's own error buffer: when uncaught errors are there it says the app CRASHED, gives the count, quotes the first, and stops suggesting a reload that would only reproduce it. Closes [#899](https://github.com/reticlehq/reticle/issues/899).

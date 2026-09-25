@@ -1,7 +1,7 @@
 {
   "name": "@reticlehq/example-astro",
   "private": true,
-  "version": "3.2.0",
+  "version": "3.3.0",
   "type": "module",
   "description": "Minimal Astro app with a React island — verifies Reticle via a processed page script.",
   "scripts": {

@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/react",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "description": "Reticle React adapter \u2014 maps a DOM ref to its component stack and source file via the fiber tree.",
   "type": "module",
   "main": "./dist/index.js",
