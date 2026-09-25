@@ -8,6 +8,7 @@ interface ClickGeometry {
   occludedBy: string | null;
   scrolledIntoView: boolean;
 }
+
 export const NO_GEOMETRY: ClickGeometry = {
   occluded: false,
   occludedBy: null,
@@ -56,17 +57,27 @@ function pointerEventFor(el: Element, type: string, init: PointerEventInit): Mou
 export async function fireClickSequence(
   el: HTMLElement,
   hold?: { ms: number; sleep: (ms: number) => Promise<void>; now: () => number },
+  detail?: number,
 ): Promise<{ prevented: boolean; heldMs: number }> {
   const doc = el.ownerDocument;
   const from: EventTarget = doc.activeElement ?? doc.body;
+  const init: MouseEventInit = {
+    bubbles: true,
+    cancelable: true,
+    detail: detail ?? 0,
+  };
+
   firePointer(el, 'pointerdown', from);
+
   asSyntheticInput(() =>
-    el.dispatchEvent(mouseEventFor(el, 'mousedown', { bubbles: true, cancelable: true })),
+    el.dispatchEvent(mouseEventFor(el, 'mousedown', init)),
   );
+
   if (el.tabIndex >= 0 && 'function' === typeof el.focus) el.focus();
+
   // The gap that makes hold-to-confirm driveable. With down and up synchronous, a control whose
   // contract is "the button is down for N ms" cannot be expressed at all — it cancels its own
-  // confirm on a mouseup arriving milliseconds later. `drag` splits the pair the same way.
+  // confirm on a mouseup arriving milxliseconds later. `drag` splits the pair the same way.
   //
   // The ACHIEVED hold is measured and returned rather than echoed back: `holdMs: 1200` against a
   // 1200ms animation is a race by construction, and a caller needs to tell "held 1200" from
@@ -77,15 +88,19 @@ export async function fireClickSequence(
     await hold.sleep(hold.ms);
     heldMs = hold.now() - startedAt;
   }
+
   firePointer(el, 'pointerup', from);
+
   asSyntheticInput(() =>
-    el.dispatchEvent(mouseEventFor(el, 'mouseup', { bubbles: true, cancelable: true })),
+    el.dispatchEvent(mouseEventFor(el, 'mouseup', init)),
   );
+
   // Marked as Reticle's own so the annotator's capture-phase listener lets it through. Without it,
   // the click is swallowed whole in annotate mode while still reporting `dispatched: true`.
   const notPrevented = asSyntheticInput(() =>
-    el.dispatchEvent(mouseEventFor(el, 'click', { bubbles: true, cancelable: true })),
+    el.dispatchEvent(mouseEventFor(el, 'click', init)),
   );
+
   return { prevented: !notPrevented, heldMs };
 }
 
@@ -210,6 +225,7 @@ export async function dragElement(
   const dest = target ?? source;
   const from = centreOf(source);
   const to = centreOf(dest);
+
   /**
    * Dispatch ONE pointer/mouse pair with real coordinates and button state.
    *
@@ -245,6 +261,7 @@ export async function dragElement(
         : mouseEventFor(el, type, init),
     );
   };
+
   /** Is this path point inside an element's box? Rects are cached; jsdom reports zeros otherwise. */
   const sourceRect = source.getBoundingClientRect();
   const destRect = target !== null ? dest.getBoundingClientRect() : null;
@@ -254,6 +271,7 @@ export async function dragElement(
   fire(source, 'pointerdown', from, BUTTON_HELD);
   fire(source, 'mousedown', from, BUTTON_HELD);
   await nativeFrame();
+
   // A path, not a jump. `activationConstraint: { distance: N }` is the standard way to keep a
   // draggable card clickable, and a sensor only starts a drag once it has SEEN the pointer travel
   // that far — which a single move from A to B never shows it.
@@ -275,6 +293,7 @@ export async function dragElement(
       fire(source, 'pointerleave', at, BUTTON_HELD, dest);
       fire(source, 'mouseleave', at, BUTTON_HELD, dest);
     }
+
     if (leftSource && !enteredDest && destRect !== null && crosses(destRect, at)) {
       enteredDest = true;
       fire(dest, 'pointerover', at, BUTTON_HELD, source);
@@ -282,10 +301,12 @@ export async function dragElement(
       fire(dest, 'pointerenter', at, BUTTON_HELD, source);
       fire(dest, 'mouseenter', at, BUTTON_HELD, source);
     }
+
     fire(dest, 'pointermove', at, BUTTON_HELD);
     fire(dest, 'mousemove', at, BUTTON_HELD);
     await nativeFrame();
   }
+
   // A short hop whose sampled steps never land inside the destination box still crossed into it;
   // announce the arrival rather than silently skipping the pair.
   if (!enteredDest && destRect !== null) {
@@ -294,6 +315,7 @@ export async function dragElement(
     fire(dest, 'pointerenter', to, BUTTON_HELD, source);
     fire(dest, 'mouseenter', to, BUTTON_HELD, source);
   }
+
   fire(dest, 'pointerup', to, BUTTON_RELEASED);
   fire(dest, 'mouseup', to, BUTTON_RELEASED);
 

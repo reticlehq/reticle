@@ -495,10 +495,20 @@ async function dispatchOther(
   args: Record<string, unknown>,
 ): Promise<boolean> {
   switch (action) {
-    case ActionType.DBLCLICK:
-      return !asSyntheticInput(() =>
-        el.dispatchEvent(mouseEventFor(el, 'dblclick', { bubbles: true, cancelable: true })),
-      );
+    case ActionType.DBLCLICK: {
+  await fireClickSequence(el, undefined, 1);
+  await fireClickSequence(el, undefined, 2);
+
+  return !asSyntheticInput(() =>
+    el.dispatchEvent(
+      mouseEventFor(el, 'dblclick', {
+        bubbles: true,
+        cancelable: true,
+        detail: 2,
+      }),
+    ),
+  );
+}
     case ActionType.HOVER: {
       const doc = el.ownerDocument;
       // Best-effort "previous" node for relatedTarget so React's enter/leave synthesis has a "from".

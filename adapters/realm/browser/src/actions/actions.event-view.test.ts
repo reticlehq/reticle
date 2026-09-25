@@ -122,3 +122,27 @@ it('preserves a null view for an element in a detached document', async () => {
   expect(events).toHaveLength(CLICK_EVENTS.length);
   for (const event of events) expect(event.view).toBeNull();
 });
+
+it('dispatches a complete double-click sequence', async () => {
+  const button = document.createElement('button');
+  document.body.append(button);
+
+  const events = capture(button, ['mousedown', 'mouseup', 'click', 'dblclick']);
+  const clicks = vi.fn();
+
+  button.addEventListener('click', clicks);
+
+  await executeAction(refs.refFor(button), ActionType.DBLCLICK, {});
+
+  expect(events.map((event) => [event.type, event.detail])).toEqual([
+    ['mousedown', 1],
+    ['mouseup', 1],
+    ['click', 1],
+    ['mousedown', 2],
+    ['mouseup', 2],
+    ['click', 2],
+    ['dblclick', 2],
+  ]);
+
+  expect(clicks).toHaveBeenCalledTimes(2);
+});
