@@ -556,7 +556,13 @@ async function firstUnmetPrecondition(
   for (const claim of flow.requires ?? []) {
     // Zero budget: a precondition is a claim about the state you are starting FROM. Waiting for one
     // turns "was it true" into "did it become true", which is a different and much weaker question.
-    const drift = await assertStepExpect(session, claim, waitForPredicate, 0, since);
+    let drift: Awaited<ReturnType<typeof assertStepExpect>>;
+    try {
+      drift = await assertStepExpect(session, claim, waitForPredicate, 0, since);
+    } catch (error: unknown) {
+      if (!isDocumentGoneError(error)) throw error;
+      return `the page went away while this flow's preconditions were being checked, so nothing ran and nothing was proved. Replay again once the page is back.`;
+    }
     if (drift !== undefined) {
       return `a precondition of this flow does not hold (${JSON.stringify(claim)}), so nothing ran and nothing was proved. Run the flow that establishes it first, or drive that state yourself.`;
     }
@@ -587,7 +593,8 @@ export function lostDocumentResult(name: string, lost: DocumentLostDuringReplay)
     steps: lost.steps,
     unverifiable: {
       reason:
-        `the page loaded a new document while step ${String(lost.atStep)} was running, so the run ` +
+        `the page's connection to Reticle was replaced while step ${String(lost.atStep)} was running ` +
+        `(a new document loaded, or its socket reconnected), so the run ` +
         `could not be graded — the steps before it are reported and nothing after it was observed. ` +
         `Nothing here says the app failed. If that navigation is part of the journey, record the ` +
         `step's consequence with \`expect\` and replay again; if it was not, the flow started ` +

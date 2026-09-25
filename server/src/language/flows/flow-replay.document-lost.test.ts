@@ -114,6 +114,40 @@ describe('a replay whose step navigates the document', () => {
 });
 
 /**
+ * Reported from the field: a saved 2-step flow replayed as `drift / signal_not_observed`, reason
+ * "session disconnected", window ~40ms, three times in a row, while the same actions driven directly
+ * returned verified:yes and the session list showed the lease attached with several ~26ms outages.
+ * The step's WAIT ended because the socket blinked, and replay graded that as the consequence not
+ * holding. A wait that lost its observer is the same fact as a command the dying socket rejected.
+ */
+describe('a step whose wait lost the page', () => {
+  it('is a lost document, never a drift the app caused', async () => {
+    const session = new NavigatingSession(Number.POSITIVE_INFINITY);
+    const flow: FlowFile = {
+      ...twoStepFlow,
+      steps: [
+        {
+          tool: 'reticle_act',
+          anchor: { kind: AnchorKind.TESTID, value: 'save' },
+          action: 'click',
+          expect: { kind: 'signal', name: 'saved' },
+        },
+      ],
+    };
+    const lostWait = () =>
+      Promise.resolve({
+        pass: false,
+        failureReason: SESSION_DISCONNECTED_REASON,
+        observationLost: true,
+      });
+    const thrown: unknown = await replayFlow(session, flow, lostWait, FLOW_SIGNAL_TIMEOUT_MS).catch(
+      (error: unknown) => error,
+    );
+    expect(thrown).toBeInstanceOf(DocumentLostDuringReplay);
+  });
+});
+
+/**
  * The other half of the same defect: the navigation replay dispatches ITSELF. `startPath` sends the
  * tab to the flow's start page, which closes the socket the NAVIGATE was sent on — so the command
  * rejects, and the arrival poll that was written to wait for the successor never ran. Replay then

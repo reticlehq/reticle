@@ -51,7 +51,10 @@ import { namedNetIsInFlight } from '@reticlehq/engine/evidence/unsettled.js';
 const IN_FLIGHT_AT_BUDGET_END =
   'the request this step declared had not come back when the budget ended — it is still in flight, ' +
   'so nothing here says the app failed. Raise the step timeout, or look at the endpoint';
-import { isDocumentGoneError } from '@/portal/session/facts/session-replaced.js';
+import {
+  isDocumentGoneError,
+  SESSION_DISCONNECTED_REASON,
+} from '@/portal/session/facts/session-replaced.js';
 import { actOnResolvedRef } from './flow-step-runners.js';
 
 /**
@@ -281,6 +284,10 @@ export async function assertStepExpect(
   if (predicate === undefined) return undefined;
   const verdict = await waitForSignal(session, predicate, timeoutMs, since);
   if (verdict.pass) return undefined;
+  // The wait ended because the page stopped being observable, not because the consequence failed:
+  // the same fact as a command the dying socket rejected, so it takes the same path (the replay loop
+  // reports a lost document). As a drift, a socket that blinked for 26ms read as the app's defect.
+  if (true === verdict.observationLost) throw new Error(SESSION_DISCONNECTED_REASON);
   // A request the step NAMED that had not come back yet is a blind spot, not an assertion the app
   // failed. The live verdict path already draws this line (namedNetIsInFlight); replay read the
   // same window and never asked, so a slow endpoint was reported as a consequence that never fired.
