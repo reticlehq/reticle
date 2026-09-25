@@ -14,6 +14,8 @@ export interface PredicateSession {
   command(name: string, args?: Record<string, unknown>): Promise<CommandResult>;
   eventsSince(cursor: number): ReticleEvent[];
   onEvent(listener: (event: ReticleEvent) => void): () => void;
+  /** Hold this wait's window against eviction while it is graded; returns the release (#668). */
+  protectWindow?(cursor: number): () => void;
   /** Milliseconds since connect — the same clock that stamps event `t` (injected, testable). */
   elapsed(): number;
   /**

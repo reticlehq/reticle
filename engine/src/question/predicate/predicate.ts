@@ -649,6 +649,9 @@ export function waitForPredicate(
 ): Promise<EvalResult> {
   return new Promise<EvalResult>((resolve) => {
     let done = false;
+    // Released in `finish`, on every exit path. Without it a flood inside the window can evict the
+    // event the predicate is armed on, and the verdict blames the app (#668).
+    const releaseWindow = session.protectWindow?.(since);
     const failed = (error: unknown): EvalResult => ({
       pass: false,
       failureReason: error instanceof Error ? error.message : String(error),
@@ -676,6 +679,7 @@ export function waitForPredicate(
     const finish = (result: EvalResult): void => {
       if (done) return;
       done = true;
+      releaseWindow?.();
       unsub();
       unsubDisconnect?.();
       clearInterval(interval);
