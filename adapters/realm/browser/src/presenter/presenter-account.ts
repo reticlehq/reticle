@@ -183,7 +183,7 @@ function accountMenuHtml(account: AccountState, details: AccountDetails): string
 
   const linked = details.dashboardUrl !== undefined && isSafeDashboardUrl(details.dashboardUrl);
   const dashboard = linked
-    ? `<a class="reticle-account-action" href="${esc(details.dashboardUrl ?? '')}" target="_blank" rel="noreferrer noopener" title="${ACCOUNT_TEXT.DASHBOARD_TITLE}">${hiIconHtml(PresenterIcon.VIEW, PRESENTER_ICON_SIZE.HELP)}<span>${ACCOUNT_TEXT.DASHBOARD_ACTION}</span></a>`
+    ? `<a class="reticle-account-action" data-reticle-account-dashboard href="${esc(details.dashboardUrl ?? '')}" target="_blank" rel="noreferrer noopener" title="${ACCOUNT_TEXT.DASHBOARD_TITLE}">${hiIconHtml(PresenterIcon.VIEW, PRESENTER_ICON_SIZE.HELP)}<span>${ACCOUNT_TEXT.DASHBOARD_ACTION}</span></a>`
     : // Unlinked is a real and common state -- an account with a repo nobody has run `reticle link`
       // in -- and it gets the way forward rather than a link that 404s.
       `<button type="button" class="reticle-account-action reticle-account-action--hint" ${ACCOUNT_SIGNIN_ATTR} data-reticle-copy="${ACCOUNT_TEXT.LINK_COMMAND}" title="${ACCOUNT_TEXT.LINK_HINT}"><span>${ACCOUNT_TEXT.LINK_HINT}</span></button>`;

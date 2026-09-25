@@ -1,7 +1,7 @@
 {
   "name": "@reticlehq/core",
   "version": "3.3.0",
-  "description": "The Reticle foundation: the shared wire contract — types, zod schemas, constants, messages, and the isomorphic kernel that every Reticle package (browser SDK, server, kits, test harness) imports. Depends only on zod.",
+  "description": "The Reticle foundation: the shared wire contract \u2014 types, zod schemas, constants, messages, and the isomorphic kernel that every Reticle package (browser SDK, server, kits, test harness) imports. Depends only on zod.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -35,6 +35,10 @@
     "./tour": {
       "types": "./dist/tour-entry.d.ts",
       "default": "./dist/tour-entry.js"
+    },
+    "./hud": {
+      "types": "./dist/hud-entry.d.ts",
+      "default": "./dist/hud-entry.js"
     }
   },
   "scripts": {

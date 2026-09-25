@@ -13,6 +13,12 @@
 /** The booking link published on reticle.sh. */
 export const DISCOVERY_CALL_URL = 'https://calendar.app.google/h9NRDbBBQetyTzWM6';
 
+/** Where a person writes to the founder directly. */
+export const FOUNDER_EMAIL = 'hey@reticle.sh';
+
+/** A mailto for that address, subject filled so the note is findable in the inbox. A literal: see first-load-size. */
+export const FOUNDER_MAILTO = 'mailto:hey@reticle.sh?subject=Reticle%20feedback';
+
 /** How somebody leaves an email instead — opt-in, saved locally, undone with `--forget`. */
 export const DISCOVERY_EMAIL_COMMAND =
   'npx @reticlehq/server identify --context company --email you@company.com';

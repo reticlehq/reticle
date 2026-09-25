@@ -495,6 +495,9 @@ export class Reticle {
               ? { kind: intent.kind, text: intent.text }
               : { kind: intent.kind },
           );
+        // How the person uses the HUD, as control names. Taken off the wire by the daemon before the
+        // event buffer, so it is telemetry and never evidence.
+        panelOptions.onHudUse = (use) => this.#emit(EventType.HUD_USED, { ...use });
         const panel = new Presenter(panelOptions);
         this.#presenter = panel;
         panel.mount();

@@ -25,6 +25,7 @@ import { resetHudDockPosition } from './presenter-drag.js';
 import { findDock, scheduleSyncDockLayout } from './presenter-dock-layout.js';
 import { SETTINGS_CSS } from './presenter-settings-styles.js';
 import type { AccountState } from '@reticlehq/core';
+import { DISCOVERY_CALL_URL, FOUNDER_EMAIL, FOUNDER_MAILTO } from '@reticlehq/core';
 import { accountControlHtml, type AccountDetails } from '@/presenter/presenter-account.js';
 
 export { SETTINGS_CSS };
@@ -221,7 +222,7 @@ function settingsHelpIcon(): string {
 
 function settingsLabel(text: string, helpTitle: string): string {
   const help = settingsHelpIcon();
-  return `<span class="reticle-settings-label">${text}<button type="button" class="reticle-settings-help" title="${helpTitle}" aria-label="${helpTitle}">${help}</button></span>`;
+  return `<span class="reticle-settings-label">${text}<button type="button" class="reticle-settings-help" data-reticle-settings-help title="${helpTitle}" aria-label="${helpTitle}">${help}</button></span>`;
 }
 
 function settingsToggleRow(key: string, label: string, helpTitle: string, extra = ''): string {
@@ -310,6 +311,14 @@ export function paintSettingsAccount(
   slot.innerHTML = html;
 }
 
+/** The two ways to reach the founder from Settings: both go straight to a person. */
+const FEEDBACK_TEXT = {
+  EMAIL: 'Email the founder',
+  EMAIL_TITLE: `Write to ${FOUNDER_EMAIL}: a problem, a wish, anything`,
+  CALL: 'Book a call',
+  CALL_TITLE: 'Pick a time to talk it through',
+} as const;
+
 export function settingsPanelHtml(): string {
   const close = hiIconHtml(PresenterIcon.REMOVE, PRESENTER_ICON_SIZE.MIN);
   const caret = hiIconHtml(PresenterIcon.CARET_RIGHT, PRESENTER_ICON_SIZE.HELP);
@@ -359,6 +368,8 @@ export function settingsPanelHtml(): string {
       <div class="reticle-settings-foot">
         <button type="button" class="reticle-settings-reset" data-reticle-settings-reset>Reset HUD position</button>
         <button type="button" class="reticle-settings-link" data-reticle-settings-mcp>Manage MCP &amp; Webhooks<span class="reticle-settings-link-caret" aria-hidden="true">${caret}</span></button>
+        <a class="reticle-settings-link" data-reticle-feedback-email href="${FOUNDER_MAILTO}" target="_blank" rel="noopener noreferrer" title="${FEEDBACK_TEXT.EMAIL_TITLE}">${FEEDBACK_TEXT.EMAIL}<span class="reticle-settings-link-caret" aria-hidden="true">${caret}</span></a>
+        <a class="reticle-settings-link" data-reticle-feedback-call href="${DISCOVERY_CALL_URL}" target="_blank" rel="noopener noreferrer" title="${FEEDBACK_TEXT.CALL_TITLE}">${FEEDBACK_TEXT.CALL}<span class="reticle-settings-link-caret" aria-hidden="true">${caret}</span></a>
       </div>
     </div>
   </div>`;

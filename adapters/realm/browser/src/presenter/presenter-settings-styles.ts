@@ -132,7 +132,8 @@ export const SETTINGS_CSS = `
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-link{
   width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;
   border:none;background:transparent;color:rgba(255,255,255,.82);font:inherit;font-size:13px;
-  padding:11px 14px;cursor:pointer;text-align:left;transition:background .12s,color .12s;}
+  padding:11px 14px;cursor:pointer;text-align:left;transition:background .12s,color .12s;
+  text-decoration:none;box-sizing:border-box;}
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-link-caret{display:inline-flex;align-items:center;flex:none;opacity:.55;}
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-link:hover{background:rgba(255,255,255,.04);color:#fff;}
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-link:focus-visible{outline:2px solid rgba(59,130,246,.55);outline-offset:-2px;}

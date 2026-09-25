@@ -57,10 +57,10 @@ export function reportPanelHtml(): string {
         <button type="button" ${REFER_ATTR} class="reticle-report-share reticle-report-refer">${REPORT_TEXT.REFER}</button>
       </div>
       <div class="reticle-report-links">
-        <a href="${REPORT_LINKS.DOCS}" target="_blank" rel="noreferrer noopener">Docs</a>
-        <a href="${REPORT_LINKS.GITHUB}" target="_blank" rel="noreferrer noopener">GitHub</a>
-        <a href="${REPORT_LINKS.SITE}" target="_blank" rel="noreferrer noopener">reticle.sh</a>
-        <a href="${REPORT_LINKS.DISCORD}" target="_blank" rel="noreferrer noopener">Discord</a>
+        <a data-reticle-link="docs" href="${REPORT_LINKS.DOCS}" target="_blank" rel="noreferrer noopener">Docs</a>
+        <a data-reticle-link="github" href="${REPORT_LINKS.GITHUB}" target="_blank" rel="noreferrer noopener">GitHub</a>
+        <a data-reticle-link="site" href="${REPORT_LINKS.SITE}" target="_blank" rel="noreferrer noopener">reticle.sh</a>
+        <a data-reticle-link="discord" href="${REPORT_LINKS.DISCORD}" target="_blank" rel="noreferrer noopener">Discord</a>
       </div>
     </div>
   </div>`;
@@ -140,7 +140,7 @@ function defects(scope: ImpactScope, dashboardUrl: string | undefined): string {
    */
   const linked = dashboardUrl !== undefined && isSafeDashboardUrl(dashboardUrl);
   const rowLink = linked
-    ? `<a class="reticle-report-defect-link" href="${esc(dashboardUrl)}" target="_blank" rel="noreferrer noopener" title="${REPORT_TEXT.DEFECT_LINK_TITLE}" aria-label="${REPORT_TEXT.DEFECT_LINK_TITLE}">${hiIconHtml(PresenterIcon.VIEW, PRESENTER_ICON_SIZE.SEND)}</a>`
+    ? `<a class="reticle-report-defect-link" data-reticle-link="defect" href="${esc(dashboardUrl)}" target="_blank" rel="noreferrer noopener" title="${REPORT_TEXT.DEFECT_LINK_TITLE}" aria-label="${REPORT_TEXT.DEFECT_LINK_TITLE}">${hiIconHtml(PresenterIcon.VIEW, PRESENTER_ICON_SIZE.SEND)}</a>`
     : '';
   const rows = list
     .map((d) => {
@@ -159,7 +159,7 @@ function defects(scope: ImpactScope, dashboardUrl: string | undefined): string {
   // this list is the recent tail of it.
   const more = !linked
     ? ''
-    : `<a class="reticle-report-defects-more" href="${esc(dashboardUrl)}" target="_blank" rel="noreferrer noopener">${REPORT_TEXT.DEFECTS_MORE}${scope.counts.failed > list.length ? ` (${String(scope.counts.failed)})` : ''}</a>`;
+    : `<a class="reticle-report-defects-more" data-reticle-link="dashboard" href="${esc(dashboardUrl)}" target="_blank" rel="noreferrer noopener">${REPORT_TEXT.DEFECTS_MORE}${scope.counts.failed > list.length ? ` (${String(scope.counts.failed)})` : ''}</a>`;
   /*
    * The push control, beside the heading of the section it pushes.
    *

@@ -24,6 +24,7 @@ import {
   HumanControlDataSchema,
   HumanControlKind,
   HumanMarkDataSchema,
+  HudUseDataSchema,
   ReticleCommand,
   MessageKind,
   parseEventPayload,
@@ -49,7 +50,11 @@ import {
 } from '@/memory/journal/journal-query.js';
 import { type AmbientCounts } from '@reticlehq/engine/window/ambient.js';
 import { ObservedState } from './facts/observed-state.js';
-import { recordBrowserLatency, recordSdkFailure } from '@/telemetry/session-metrics.js';
+import {
+  recordBrowserLatency,
+  recordHudUse,
+  recordSdkFailure,
+} from '@/telemetry/session-metrics.js';
 import { LiveControl, type InboxMessage } from './human/live-control.js';
 export type { InboxMessage } from './human/live-control.js'; // moved; still part of Session's surface
 import { ReviewStore, type ReviewMark } from './human/review-store.js';
@@ -329,6 +334,13 @@ export class Session implements HandshakeFacts {
 
   /** Re-stamp an incoming event with server-relative time, buffer it, and fan out. */
   pushEvent(event: ReticleEvent, byteSize?: number): void {
+    // Telemetry about the HUD, not evidence about the app: taken off here, before the buffer, so no
+    // verdict, settle window or agent read can ever see a person's clicks on Reticle's own panel.
+    if (event.type === EventType.HUD_USED) {
+      const use = HudUseDataSchema.safeParse(event.data);
+      if (use.success) recordHudUse(use.data);
+      return;
+    }
     if (event.documentId !== undefined) this.#documentId = event.documentId;
     if (event.editEpoch !== undefined) this.#editEpoch = event.editEpoch;
     if (event.type === EventType.PAGE_HEALTH) {

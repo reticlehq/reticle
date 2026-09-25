@@ -74,7 +74,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // that keep it from nagging, and its stylesheet, in one file. Raised rather than grouped for the
   // same reason as the line above -- it is a presenter surface beside every other presenter surface,
   // and a `promo/` directory holding exactly one file would be a category invented for a single member.
-  'adapters/realm/browser/src/presenter': 19,
+  // 20 since `hud-telemetry.ts`: the one listener that names every HUD press. It reads the presenter's
+  // own root attributes and every surface's controls, so it sits with the surfaces it watches.
+  'adapters/realm/browser/src/presenter': 20,
   // Newly over the line at 11, with `presenter-safe-html.ts`. It crossed because two SECURITY
   // helpers left `presenter-report.ts` when the account capsule became their second caller: HTML
   // escaping, and the dashboard-url scheme check that exists because `javascript:` once produced a
@@ -123,6 +125,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * ceiling was raised with that reasoning written beside it.
    */
   'core/src/artifacts': 14,
+  // 11 since `hud-entry.ts`, the `@reticlehq/core/hud` subpath. Entry points live at the package root
+  // beside `tour-entry.ts` and `telemetry-entry.ts`, because package.json names them by path.
+  'core/src': 11,
   'engine/src/evidence': 18,
   // 18 since the last two cycles in this package were removed: `predicate-eval-kit.ts` (the result
   // type and the four comparisons the oracles are written in) and `predicate-session.ts` (what the
@@ -261,7 +266,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // are indistinguishable at the emit site otherwise, and every activation number built on verdicts
   // reads a drive we performed as adoption we did not earn. Raised rather than grouped: this
   // directory is already the largest flat one here and grouping it is its own piece of work.
-  'server/src/telemetry': 36,
+  // 37 since `hud-metrics.ts`, which rolls HUD use into the session summary beside the tool counts.
+  // Its own file so the 700-line session aggregator did not grow a second concern.
+  'server/src/telemetry': 37,
   'spec-runner/src': 11,
 };
 

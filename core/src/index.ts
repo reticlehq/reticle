@@ -34,6 +34,7 @@ export * from './verdict/verified-constants.js'; // Verified — the one field a
 export * from './verdict/verdict-attribution.js';
 export * from './verdict/verify-progress.js'; // VerifyPhase — what a run is doing while it is still doing it
 export * from './wire/constants/session-constants.js';
+export * from './wire/constants/hud-use.js'; // where the HUD sits, for HUD_USED events
 export * from './wire/constants/discovery.js'; // the call-the-founder invitation, one link for every surface
 export * from './identity/document-identity.js'; // which document an observation belongs to
 export * from './identity/edit-epoch.js'; // which round of source edits an observation belongs to

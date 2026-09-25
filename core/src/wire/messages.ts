@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { HudPanel, HudToggle, HudView } from './constants/hud-use.js';
 import {
   EventAttribution,
   EventType,
@@ -27,6 +28,24 @@ export const HumanControlDataSchema = z.object({
   text: z.string().optional(),
 });
 export type HumanControlData = z.infer<typeof HumanControlDataSchema>;
+
+/**
+ * The narrowed payload of a HUD_USED event: a control pressed, or where the HUD now sits.
+ *
+ * The shape of a control id only. Membership in HUD_CONTROLS is checked where it is counted, in the
+ * daemon, so the list stays out of the bytes every page downloads on load.
+ */
+export const HudUseDataSchema = z.object({
+  control: z
+    .string()
+    .max(48)
+    .regex(/^[a-z][a-zA-Z-]*(\.[a-zA-Z-]+)?$/)
+    .optional(),
+  toggle: z.nativeEnum(HudToggle).optional(),
+  view: z.nativeEnum(HudView).optional(),
+  panel: z.nativeEnum(HudPanel).optional(),
+});
+export type HudUseData = z.infer<typeof HudUseDataSchema>;
 
 /**
  * Human review: the narrowed payload of a HUMAN_MARK event. A human flagged a mistake pinned to an

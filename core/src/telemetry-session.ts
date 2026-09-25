@@ -364,6 +364,19 @@ export const SessionSummarySchema = z.object({
    * something was and the nudge did not fire — and only the second is a defect.
    */
   updateOffered: z.string().max(32).optional(),
+  /**
+   * How people used the in-page HUD this window. All windowed, all absent when nobody touched it.
+   *
+   * `hudControls` counts presses per control id (a toggle as `id:on` / `id:off`), `hudViewMs` and
+   * `hudPanelMs` time how the HUD sat (bubble / collapsed / expanded) and which panel was showing,
+   * and `hudJourney` is the window's presses and view changes in order, cut at 60 with
+   * `hudJourneyCut`. Every key is a control id from core's closed list: names, never values.
+   */
+  hudControls: z.record(z.number()).optional(),
+  hudViewMs: z.record(z.number()).optional(),
+  hudPanelMs: z.record(z.number()).optional(),
+  hudJourney: z.array(z.string().max(64)).max(60).optional(),
+  hudJourneyCut: z.literal(true).optional(),
   /** Was this a clean shutdown, or a periodic flush of a still-running session? */
   final: z.boolean(),
   /**

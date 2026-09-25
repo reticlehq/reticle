@@ -261,6 +261,10 @@ export const SHELL_CSS = `
   transition:opacity .2s var(--reticle-shell-ease),transform .18s var(--reticle-shell-ease);}
 [${OVERLAY}][${MIN_ATTR}="0"] [${HUD}] .reticle-toolbar{
   display:flex;opacity:1;transform:scale(1);pointer-events:auto;}
+/* The HUD block is transformed, which makes it a stacking context at level 0 inside the dock, so a
+   tooltip's z-index only ranked it within the block and it drew behind the chat and settings panels,
+   its siblings. Lift the block while a tooltip can show. */
+[${HUD}]:hover,[${HUD}]:focus-within{z-index:${String(Z_HUD_TOOLTIP)};}
 [${HUD}] .reticle-toolbar-drag{cursor:grab;touch-action:none;user-select:none;}
 [${HUD}] .reticle-toolbar-drag.reticle-drag-handle--dragging{cursor:grabbing;}
 [${HUD}] .reticle-toolbar-actions{

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { EventType, PerfMetric } from './constants/constants.js';
 import { BlindSpotKind } from '@/verdict/verified-constants.js';
 import { BrowserBrand } from '@/telemetry-feedback.js';
-import { HumanControlDataSchema, HumanMarkDataSchema } from './messages.js';
+import { HudUseDataSchema, HumanControlDataSchema, HumanMarkDataSchema } from './messages.js';
 import { REQUEST_SHAPE_FIELD } from './net.js';
 
 /**
@@ -284,6 +284,7 @@ export const EVENT_PAYLOAD_SCHEMAS = {
     .passthrough(),
   [EventType.HUMAN_CONTROL]: HumanControlDataSchema,
   [EventType.HUMAN_MARK]: HumanMarkDataSchema,
+  [EventType.HUD_USED]: HudUseDataSchema,
 } satisfies Record<EventType, z.ZodTypeAny>;
 
 /** Narrow an event's `data` against its type's payload schema. Unknown in, typed-or-error out. */

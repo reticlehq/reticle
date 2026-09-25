@@ -112,5 +112,11 @@ export const EventType = {
    * request to intercept. See `observers/download.ts` for the defect that motivated it.
    */
   DOWNLOAD: 'download',
+  /**
+   * Browser -> bridge: a person used the HUD — pressed a control, or the HUD changed how it sits.
+   * `data` narrows to HudUseDataSchema: names only. Telemetry, not evidence: the session takes it
+   * off the wire before the buffer, so no verdict, settle or agent read ever sees it.
+   */
+  HUD_USED: 'hud.used',
 } as const;
 export type EventType = (typeof EventType)[keyof typeof EventType];

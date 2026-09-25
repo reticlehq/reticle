@@ -52,4 +52,14 @@ describe('the toolbar tooltip stacks above every HUD panel', () => {
     // purpose; a tooltip that outranks the page would paint over the app the user is verifying.
     expect(Z_HUD_TOOLTIP).toBeLessThan(2_147_483_600);
   });
+
+  it('lifts the HUD block itself, because the block is a stacking context', () => {
+    // Driven on 2026-09-26: every toolbar tooltip still drew behind the chat panel with all of the
+    // numbers above in order. The HUD block is transformed, which makes it a stacking context at
+    // level 0 inside the dock, so the tooltip's z-index only ranked it inside the block, and the
+    // chat panel beside the block won. Comparing numbers cannot see a context boundary; the rule
+    // that raises the block while a tooltip can show is what fixes it.
+    const lift = SHELL_CSS.match(/\[data-reticle-hud\]:hover[^{]*\{[^}]*\}/)?.[0] ?? '';
+    expect(lift).toContain(`z-index:${String(Z_HUD_TOOLTIP)}`);
+  });
 });

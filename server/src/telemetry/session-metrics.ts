@@ -23,10 +23,12 @@ import {
   type SessionSummary,
   type ToolTiming,
 } from '@reticlehq/core/telemetry';
+import type { HudUseData } from '@reticlehq/core';
 import { errorSkeleton, fingerprintError } from './error-fingerprint.js';
 import { describeToolParams } from './argument-shape.js';
 import { machineSnapshot } from './machine-snapshot.js';
 import { classifyError } from './error-class.js';
+import { HudMetrics } from './hud-metrics.js';
 
 /** Cap the distinct error shapes held in memory — a pathological loop must not grow unbounded. */
 const MAX_ERROR_KINDS = 40;
@@ -176,11 +178,18 @@ export class SessionMetrics {
   #surface: string | undefined;
   readonly #startedAt: number;
   readonly #now: () => number;
+  readonly #hud: HudMetrics;
 
   /** Clock injected — this file must stay testable without a real one, per the repo's clock rule. */
   constructor(now: () => number) {
     this.#now = now;
     this.#startedAt = now();
+    this.#hud = new HudMetrics(now);
+  }
+
+  /** A person used the HUD. Names only; the wire schema has already narrowed it. */
+  recordHudUse(use: HudUseData): void {
+    this.#hud.record(use);
   }
 
   /**
@@ -580,6 +589,7 @@ export class SessionMetrics {
       ...(this.#firstAppAt === undefined
         ? {}
         : { msToFirstApp: Math.max(0, this.#firstAppAt - this.#startedAt) }),
+      ...this.#hud.summarize(),
       final,
       // Only on a real exit. A periodic flush carrying `exit: "unknown"` would read as a daemon that
       // died without a shutdown path, which is the one thing this field exists to make visible.
@@ -637,7 +647,8 @@ export class SessionMetrics {
       0 === this.#bugsFound &&
       0 === this.#sdkFailures &&
       0 === this.#postSocketFailures &&
-      0 === this.#postRetriesSaved
+      0 === this.#postRetriesSaved &&
+      this.#hud.empty
     );
   }
 
@@ -667,6 +678,7 @@ export class SessionMetrics {
     this.#unknownToolCalls = 0;
     this.#bugsFound = 0;
     this.#bugKinds.clear();
+    this.#hud.reset();
     // #seenBugKinds is deliberately NOT cleared. It is not a window counter — it is the
     // session-lifetime memory behind `repeat` on bug_found, and zeroing it made the same defect,
     // found again after a flush, report as a newly distinct one. Sessions run to 11.5 hours in the
@@ -696,6 +708,11 @@ export const recordBrowserLatency = (ms: number): void => {
 /** Narrow-and-record one in-page failure. Keeps the session hot path to a single call. */
 export const recordSdkFailure = (failure: { site: string; message: string }): void => {
   getSessionMetrics().recordSdkFailure(failure.site, failure.message);
+};
+
+/** Narrow-and-record one HUD use. Keeps the session hot path to a single call. */
+export const recordHudUse = (use: HudUseData): void => {
+  getSessionMetrics().recordHudUse(use);
 };
 
 /** Tests only — drop the singleton so each case starts from zero. */

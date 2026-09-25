@@ -51,6 +51,8 @@ import {
   LIVENESS_ATTR,
   MARKERS_BTN_ATTR,
   CLEAR_MARKS_ATTR,
+  COPY_MARKS_ATTR,
+  MARKS_ROW_ATTR,
   MARK_COUNT_ATTR,
   type PresenterOptions,
 } from './presenter-config.js';
@@ -62,6 +64,7 @@ import { renderTally } from './chrome/presenter-tally.js';
 import {
   CONTROLS_BANNER_HTML,
   CONTROLS_FLOWS_HTML,
+  CONTROLS_MARKS_HTML,
   CONTROLS_FOOT_HTML,
   ENDED_FADE_MS,
   ControlPanel,
@@ -77,6 +80,10 @@ import {
 } from './presenter-settings.js';
 import { Annotator, type AnnotatorChrome } from '@/review/annotator.js';
 import { shouldAutoOpenChat } from './presenter-shell.js';
+import { installHudTelemetry } from './hud-telemetry.js';
+
+/** How long the copy button shows it worked. */
+const COPIED_FLASH_MS = 1600;
 // Re-export the config surface so the public import path (`./presenter.js`) is unchanged.
 export { GlowPhase } from './presenter-config.js';
 export type { PresenterOptions } from './presenter-config.js';
@@ -131,6 +138,8 @@ export class Presenter {
   #logBaseMs: number | undefined;
   // Live-control panel: the two-way control surface (Pause/Resume + End + message Send).
   #onControl: ControlHandler | undefined;
+  readonly #onHudUse: PresenterOptions['onHudUse'];
+  #hudTelemetryTeardown: (() => void) | undefined;
   #panel: ControlPanel;
   #shell: HudShell;
   #annotator: Annotator | undefined;
@@ -151,6 +160,7 @@ export class Presenter {
     });
     this.#logMax = clampLogMax(options.logMax);
     this.#onControl = options.onControl;
+    this.#onHudUse = options.onHudUse;
     this.#panel = new ControlPanel({
       emit: (kind, text) => this.#onControl?.(text !== undefined ? { kind, text } : { kind }),
       logHuman: (text) => {
@@ -262,7 +272,7 @@ export class Presenter {
       <div data-reticle-glow></div>
       <div data-reticle-cursor></div>
       <div data-reticle-ring></div>
-      ${HudShell.dockHtml(actStrip, CONTROLS_BANNER_HTML, DATA_RETICLE_LOG, CONTROLS_FLOWS_HTML, CONTROLS_FOOT_HTML)}`;
+      ${HudShell.dockHtml(actStrip, CONTROLS_BANNER_HTML, DATA_RETICLE_LOG, CONTROLS_MARKS_HTML + CONTROLS_FLOWS_HTML, CONTROLS_FOOT_HTML)}`;
     document.body.appendChild(root);
     this.#root = root;
     this.#glow = root.querySelector<HTMLElement>('[data-reticle-glow]') ?? undefined;
@@ -283,6 +293,9 @@ export class Presenter {
     this.#glowCtl.setElements(this.#glow, this.#cursor);
     // The panel queries its refs, binds listeners, and paints the initial active state.
     this.#panel.mount(root, this.#glow);
+    if (this.#onHudUse !== undefined) {
+      this.#hudTelemetryTeardown = installHudTelemetry(document, root, this.#onHudUse);
+    }
     this.setMode(this.#mode);
     this.#renderTally();
   }
@@ -294,13 +307,37 @@ export class Presenter {
     const markers = root.querySelector(`[${MARKERS_BTN_ATTR}]`);
     const clear = root.querySelector(`[${CLEAR_MARKS_ATTR}]`);
     const count = root.querySelector(`[${MARK_COUNT_ATTR}]`);
+    const copy = root.querySelector(`[${COPY_MARKS_ATTR}]`);
+    const row = root.querySelector(`[${MARKS_ROW_ATTR}]`);
     const chrome: AnnotatorChrome = {};
+    if (row instanceof HTMLElement) chrome.copyRow = row;
+    // The first note opens the chat, where the row saying what notes are for and how to hand them
+    // to an agent lives. Only the first: somebody who closes it again while marking is not argued with.
+    let marks = annotator.markCount;
+    chrome.onCount = (n) => {
+      if (0 === marks && n > 0) this.#shell.openChat();
+      marks = n;
+    };
+    if (copy instanceof HTMLElement) {
+      copy.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.#copyMarks(annotator, copy);
+      });
+    }
     if (markers instanceof HTMLElement) chrome.markersBtn = markers;
     if (clear instanceof HTMLElement) chrome.clearBtn = clear;
     if (count instanceof HTMLElement) chrome.countEl = count;
     annotator.attachChrome(chrome);
     annotator.setAccent(statusTheme(getPresenterSettings().statusThemeId).active);
     this.#syncAnnotator();
+  }
+  /** Copy every mark as a prompt, flash the button, and honour "Clear on copy/send". */
+  #copyMarks(annotator: Annotator, btn: HTMLElement): void {
+    const text = annotator.agentPrompt(window.location.href);
+    void navigator.clipboard?.writeText(text).catch(() => undefined);
+    btn.setAttribute('data-copied', '1');
+    nativeSetTimeout(() => btn.removeAttribute('data-copied'), COPIED_FLASH_MS);
+    if (getPresenterSettings().clearOnCopy) annotator.clearAll();
   }
   /** Annotate whenever the HUD is open and the person asked for it - agent or no agent. */
   #syncAnnotator(): void {
@@ -318,6 +355,8 @@ export class Presenter {
     this.#glowCtl.teardown();
     if (this.#heartbeatTimer !== undefined) nativeClearTimeout(this.#heartbeatTimer);
     this.#heartbeatTimer = undefined;
+    this.#hudTelemetryTeardown?.();
+    this.#hudTelemetryTeardown = undefined;
     this.#shell.teardown();
     this.#panel.teardown();
     this.#sessionActive = false;

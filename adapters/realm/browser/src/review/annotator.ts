@@ -2,6 +2,7 @@ import { isSyntheticInput } from '@/actions/synthetic/synthetic-input.js';
 import { EventType } from '@reticlehq/core';
 import { isReticleUi, isReticleOverlay } from '@/dom/dom-ignore.js';
 import { resolveMarkAnchor, type MarkAnchor } from './mark-anchor.js';
+import { marksCountText, marksForAgent } from './marks-for-agent.js';
 import { nativeSetTimeout, nativeClearTimeout } from '@/timers/native/native-timers.js';
 import {
   ANNOTATOR_CSS,
@@ -51,7 +52,11 @@ export interface AnnotatorDeps {
 export interface AnnotatorChrome {
   markersBtn?: HTMLElement;
   clearBtn?: HTMLElement;
+  /** The row that offers copying every mark as a prompt; shown only while there is something to copy. */
+  copyRow?: HTMLElement;
   countEl?: HTMLElement;
+  /** Told the count whenever it changes, so the HUD can bring the copy row into view. */
+  onCount?: (count: number) => void;
 }
 
 interface StoredMark {
@@ -91,6 +96,8 @@ export class Annotator {
   #pendingTarget: Element | undefined;
   #markersBtn: HTMLElement | undefined;
   #clearBtn: HTMLElement | undefined;
+  #copyRow: HTMLElement | undefined;
+  #onChromeCount: ((count: number) => void) | undefined;
   #countEl: HTMLElement | undefined;
   #accent: string | undefined;
   #ac: AbortController | undefined;
@@ -164,6 +171,8 @@ export class Annotator {
   attachChrome(chrome: AnnotatorChrome): void {
     this.#markersBtn = chrome.markersBtn;
     this.#clearBtn = chrome.clearBtn;
+    this.#copyRow = chrome.copyRow;
+    this.#onChromeCount = chrome.onCount;
     this.#countEl = chrome.countEl;
     this.#markersBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -201,6 +210,11 @@ export class Annotator {
       this.#closePopover();
     }
     this.#syncChrome();
+  }
+
+  /** Every mark on the page as one prompt, for an agent that was not connected to drain them. */
+  agentPrompt(pageUrl: string): string {
+    return marksForAgent(this.#marks, pageUrl);
   }
 
   clearAll(): void {
@@ -243,6 +257,12 @@ export class Annotator {
       this.#countEl.hidden = 0 === n;
     }
     this.#clearBtn?.toggleAttribute('disabled', 0 === n);
+    this.#onChromeCount?.(n);
+    if (this.#copyRow !== undefined) {
+      this.#copyRow.hidden = 0 === n;
+      const text = this.#copyRow.querySelector('[data-reticle-marks-text]');
+      if (text !== null) text.textContent = marksCountText(n);
+    }
     this.#markersBtn?.toggleAttribute('disabled', 0 === n);
   }
 
@@ -414,8 +434,8 @@ export class Annotator {
     pop.innerHTML = `<div class="reticle-mark-where"></div>
       <textarea rows="2" placeholder="${MARK_PLACEHOLDER}"></textarea>
       <div class="reticle-mark-row">
-        <button type="button" data-cancel>${MARK_CANCEL}</button>
-        <button type="button" data-send disabled>${MARK_SUBMIT}</button>
+        <button type="button" data-cancel data-reticle-mark-cancel>${MARK_CANCEL}</button>
+        <button type="button" data-send data-reticle-mark-send disabled>${MARK_SUBMIT}</button>
       </div>`;
     const whereEl = pop.querySelector('.reticle-mark-where');
     if (whereEl !== null) whereEl.textContent = where;

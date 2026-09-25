@@ -1,6 +1,12 @@
 import { HumanControlKind, PresenterTone, SessionState, type FlowChip } from '@reticlehq/core';
 import { nativeSetTimeout, nativeClearTimeout } from '@/timers/native/native-timers.js';
-import { CHAT_TOGGLE_ATTR, CLEAR_MARKS_ATTR, MARKERS_BTN_ATTR } from './presenter-config.js';
+import {
+  CHAT_TOGGLE_ATTR,
+  CLEAR_MARKS_ATTR,
+  COPY_MARKS_ATTR,
+  MARKERS_BTN_ATTR,
+  MARKS_ROW_ATTR,
+} from './presenter-config.js';
 export type { ControlIntent, ControlHandler } from './presenter-config.js';
 import {
   PresenterIcon,
@@ -120,6 +126,15 @@ export const CONTROLS_CSS = `
 [data-reticle-chat-panel] .reticle-flow:active{transform:scale(.95);}
 [data-reticle-overlay][data-reticle-state="paused"] [data-reticle-hud] .reticle-tb-btn--primary{
   box-shadow:inset 0 0 0 1px rgba(255,255,255,.16),0 0 12px rgba(255,255,255,.04);}
+[data-reticle-chat-panel] .reticle-marks-row{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:7px 12px;border-top:1px solid var(--reticle-line2);pointer-events:auto;}
+[data-reticle-chat-panel] .reticle-marks-row[hidden]{display:none;}
+[data-reticle-chat-panel] .reticle-marks-text{color:var(--reticle-muted);font-size:11px;}
+[data-reticle-chat-panel] .reticle-marks-copy{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;
+  border-radius:7px;border:1px solid var(--reticle-line);background:rgba(255,255,255,.04);color:var(--reticle-fg);
+  font-family:var(--reticle-font);font-size:11px;font-weight:500;cursor:pointer;transition:background .15s,border-color .15s;}
+[data-reticle-chat-panel] .reticle-marks-copy:hover{background:var(--reticle-accent-soft);border-color:var(--reticle-accent);}
+[data-reticle-chat-panel] .reticle-marks-copy[data-copied="1"]{color:#22c55e;border-color:#22c55e;}
 [data-reticle-hud] .reticle-export-msg{position:absolute;width:1px;height:1px;margin:-1px;padding:0;
   overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0;}
 ` as string;
@@ -136,6 +151,8 @@ function paintPauseBtn(btn: HTMLButtonElement, paused: boolean): void {
 const CHAT_LABEL = 'Agent chat';
 const MARKERS_LABEL = 'Hide markers';
 const CLEAR_MARKS_LABEL = 'Clear all';
+/** Said for the case it exists for: no agent was running to receive the notes. */
+const COPY_MARKS_LABEL = 'Copy for your agent';
 const TB = PRESENTER_ICON_SIZE.TOOLBAR;
 function tbWrap(btn: string, tip: string, kbd?: string): string {
   const shortcut = kbd === undefined ? '' : `<span class="reticle-tb-kbd">${kbd}</span>`;
@@ -174,6 +191,14 @@ export const CONTROLS_TOOLBAR_HTML = [
 ].join('');
 /** Banner markup (between head and log, hidden unless ended). */
 export const CONTROLS_BANNER_HTML = `<div data-reticle-banner class="reticle-banner">${ENDED_BANNER_TEXT}</div>`;
+/**
+ * The page's annotations, once there are any, with the way to hand them to an agent.
+ *
+ * A row with words rather than a toolbar icon: a mark reaches the agent connected to this page, and
+ * somebody annotating with no agent running needs telling where their notes go. The toolbar was
+ * also full to the pixel.
+ */
+export const CONTROLS_MARKS_HTML = `<div ${MARKS_ROW_ATTR} class="reticle-marks-row" hidden><span data-reticle-marks-text class="reticle-marks-text"></span><button type="button" ${COPY_MARKS_ATTR} class="reticle-marks-copy" title="${COPY_MARKS_LABEL}">${hiIconHtml(PresenterIcon.COPY, PRESENTER_ICON_SIZE.HELP)}<span>${COPY_MARKS_LABEL}</span></button></div>`;
 /** Replay-a-flow row (between log and footer); buttons are filled in by setFlows once flows arrive. */
 export const CONTROLS_FLOWS_HTML = `<div data-reticle-flows class="reticle-flows"><span class="reticle-flows-cap">${FLOWS_LABEL}</span></div>`;
 /**

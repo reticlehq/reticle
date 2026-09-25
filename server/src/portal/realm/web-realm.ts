@@ -221,6 +221,7 @@ export const NOT_EVIDENCE: Readonly<Record<string, string>> = {
   context: "Reticle's own context tool opening, not something the application did",
   flow: 'a flow being recorded by the tool',
   human: 'a person driving the HUD: pause, resume, a mark. The operator, not the subject',
+  hud: "usage telemetry about Reticle's own panel, taken off before the buffer. The tool, not the subject",
   page: "the SDK's own health report about the page it is inside",
   sdk: 'the SDK itself failing, which is a fact about the observer',
   transport: "the tool's own buffer overflowing",
