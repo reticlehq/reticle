@@ -309,3 +309,42 @@ describe('a ledger with no known project root', () => {
     await expect(s.open()).resolves.toEqual([]);
   });
 });
+
+/*
+ * #994, still live on the per-subject store (found reviewing #1011/#1020 against this branch): a
+ * shard that exists but does not parse was read as EMPTY, and the next write to that subject then
+ * wrote "empty plus the new record" over it. Every other intent in that file was gone. An
+ * unreadable shard's bytes are kept beside it before anything is written there.
+ */
+describe('a shard that does not parse', () => {
+  const SHARD = `${ROOT}/intent/checkout/intent.json`;
+  const GARBAGE = '<<<<<<< HEAD\n{ "version": 1, "intents": { "kept": ';
+
+  it('is never overwritten into oblivion: its bytes survive the next write to that subject', async () => {
+    const { fs, written } = createMemoryFs();
+    written.set(SHARD, GARBAGE);
+    await new IntentStore(fs, ROOT, { now: () => 7 }).declare([
+      {
+        id: 'more',
+        statement: 'a signed-in shopper sees their order total',
+        surface: { flow: 'checkout' },
+      },
+    ]);
+    const preserved = [...written.entries()].filter(([, text]) => GARBAGE === text);
+    expect(preserved.length, 'the unreadable ledger was destroyed').toBeGreaterThan(0);
+  });
+
+  it('still takes the new record, so the agent is not blocked by a file it did not break', async () => {
+    const { fs, written } = createMemoryFs();
+    written.set(SHARD, GARBAGE);
+    const s = new IntentStore(fs, ROOT, { now: () => 7 });
+    await s.declare([
+      {
+        id: 'more',
+        statement: 'a signed-in shopper sees their order total',
+        surface: { flow: 'checkout' },
+      },
+    ]);
+    expect((await s.read()).map((i) => i.id)).toContain('more');
+  });
+});

@@ -50,6 +50,8 @@ import {
 import { writeFileAtomic } from '@/memory/project/fs/write-atomic.js';
 
 const JSON_SUFFIX = '.json';
+/** Beside an unparseable shard: its bytes, kept before it is rewritten. See `#shardForWrite`. */
+const UNREADABLE_SUFFIX = '.unreadable-';
 
 /** What a caller supplies to write an intent through `record`. Everything optional is optional. */
 interface IntentInput {
@@ -178,6 +180,35 @@ export class IntentShardStore {
     }
   }
 
+  /**
+   * A shard about to be rewritten, read so that nothing in it can be lost.
+   *
+   * `#readShard` answers "what is recorded here" and treats an unparseable shard as empty, which is
+   * right for reading and wrong for rewriting: the next write put "empty plus one record" over a file
+   * that held every other intent for that subject (#994). An unreadable shard's bytes are copied
+   * beside it, untouched, before it is replaced, the same rule migration keeps for a legacy file it
+   * cannot parse. A missing shard is simply empty.
+   */
+  async #shardForWrite(subject: string): Promise<IntentShard> {
+    const path = this.#shardPath(subject);
+    let text: string;
+    try {
+      text = await this.#fs.readFile(path);
+    } catch {
+      return emptyShard(subject);
+    }
+    try {
+      return IntentShardSchema.parse(JSON.parse(text));
+    } catch {
+      await writeFileAtomic(
+        this.#fs,
+        `${path}${UNREADABLE_SUFFIX}${String(this.#clock.now())}`,
+        text,
+      );
+      return emptyShard(subject);
+    }
+  }
+
   async #storedRecords(): Promise<IntentRecord[]> {
     const shards = await Promise.all((await this.#subjectsOnDisk()).map((s) => this.#readShard(s)));
     return shards.flatMap((s) => Object.values(s.intents));
@@ -297,11 +328,11 @@ export class IntentShardStore {
   /** Persist one record, rewriting its shard and the index, and removing it from its old shard. */
   async #write(record: IntentRecord, previousSubject?: string): Promise<void> {
     if (previousSubject !== undefined && record.subject !== previousSubject) {
-      const old = await this.#readShard(previousSubject);
+      const old = await this.#shardForWrite(previousSubject);
       const { [record.id]: _moved, ...rest } = old.intents;
       await this.#putShard({ ...old, intents: rest });
     }
-    const shard = await this.#readShard(record.subject);
+    const shard = await this.#shardForWrite(record.subject);
     shard.intents[record.id] = record;
     await this.#putShard(shard);
     await this.#writeIndex();
@@ -334,7 +365,7 @@ export class IntentShardStore {
     const known = new Set((await this.#storedRecords()).map((r) => r.id));
     const incoming = sources.flatMap((s) => s.records).filter((r) => !known.has(r.id));
     for (const shard of shardsFrom(incoming)) {
-      const current = await this.#readShard(shard.subject);
+      const current = await this.#shardForWrite(shard.subject);
       await this.#putShard({ ...current, intents: { ...shard.intents, ...current.intents } });
     }
     for (const source of sources) {
@@ -355,7 +386,7 @@ export class IntentShardStore {
     );
     if (0 === labels.length) return 0;
     for (const subject of new Set(labels.map((r) => r.subject))) {
-      const shard = await this.#readShard(subject);
+      const shard = await this.#shardForWrite(subject);
       for (const record of labels.filter((r) => subject === r.subject)) {
         shard.intents[record.id] = {
           ...record,
