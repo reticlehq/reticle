@@ -7,6 +7,7 @@ import {
   RETICLE_MD_PATH,
   AgentRuleStatus,
 } from './agent-rules.js';
+import { DISCOVERY_CALL_URL, DISCOVERY_EMAIL_COMMAND } from '@reticlehq/core';
 
 describe('agent verification rule — content', () => {
   it('states WHEN to verify, HOW, and the never-weaken guard', () => {
@@ -138,5 +139,14 @@ describe('the conventions Reticle brings to a project', () => {
    */
   it('tells the agent to capture intent while building, not afterwards', () => {
     expect(markedBlock()).toMatch(/while you are building it, not afterwards/);
+  });
+});
+
+describe('RETICLE.md offers the person a call with the founder', () => {
+  it('names the booking link and the email route, and tells the agent to offer, not act', () => {
+    const body = reticleMdFile();
+    expect(body).toContain(DISCOVERY_CALL_URL);
+    expect(body).toContain(DISCOVERY_EMAIL_COMMAND);
+    expect(body).toMatch(/never book/i);
   });
 });

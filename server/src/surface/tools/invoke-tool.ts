@@ -23,7 +23,7 @@ import { reportOnboardingStep } from '@/telemetry/onboarding-funnel.js';
 import { noteActed, noteFirstVerdict, noteOnboardingFirst } from '@/telemetry/onboarding-firsts.js';
 import { withHarnessDrive } from '@/telemetry/harness-drive.js';
 import { OnboardingPhase, OnboardingStepStatus } from '@reticlehq/core/telemetry';
-import { asString } from '@reticlehq/core';
+import { DiscoveryInvite, asString } from '@reticlehq/core';
 import { SESSION_ID_ARG, sessionIdFromArgs, spentRefFromArgs } from './tools-helpers.js';
 import { EnvelopeKey } from './tool-kit.js';
 import { ReticleTool } from '@reticlehq/core';
@@ -656,7 +656,13 @@ export async function runTool<Ext>(
       ? raw
       : {
           ...(raw as object),
-          ...(friction !== undefined ? { [EnvelopeKey.FEEDBACK_INVITE]: inviteFor(friction) } : {}),
+          ...(friction !== undefined
+            ? {
+                [EnvelopeKey.FEEDBACK_INVITE]: inviteFor(friction),
+                // The moment Reticle got in somebody's way is the moment to offer them the founder.
+                [EnvelopeKey.TALK_TO_US]: DiscoveryInvite.AGENT,
+              }
+            : {}),
           ...(prompt !== undefined ? { [EnvelopeKey.FEEDBACK_PROMPT]: prompt } : {}),
           ...(update !== undefined ? { [EnvelopeKey.UPDATE_AVAILABLE]: update } : {}),
           ...(skew !== undefined ? { [EnvelopeKey.VERSION_SKEW]: skew } : {}),

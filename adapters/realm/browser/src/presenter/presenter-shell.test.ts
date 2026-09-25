@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { Presenter } from './presenter.js';
+import { DISCOVERY_CALL_URL } from '@reticlehq/core';
 import { HudShell } from './presenter-shell.js';
 import { asSyntheticInput } from '@/actions/synthetic/synthetic-input.js';
 import { Annotator } from '@/review/annotator.js';
@@ -38,6 +39,17 @@ describe('presenter HUD shell', { timeout: HUD_MOUNT_TIMEOUT_MS }, () => {
     expect(overlay?.getAttribute('data-reticle-chat'), 'chat opens with the HUD').toBe('1');
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(overlay?.getAttribute('data-reticle-chat')).toBeNull();
+    p.destroy();
+  });
+  // The founder card is painted by the panel itself on mount: it needs no daemon push, so a HUD
+  // that mounted without it would be the only surface silently missing the invitation.
+  it('mounts the talk-to-the-founder card in the chat panel', () => {
+    document.body.innerHTML = '';
+    globalThis.sessionStorage.clear();
+    const p = new Presenter({});
+    p.mount();
+    const book = document.querySelector('[data-reticle-talk-book]');
+    expect(book?.getAttribute('href')).toBe(DISCOVERY_CALL_URL);
     p.destroy();
   });
   it('keeps the toolbar expanded while agent chat is open', () => {

@@ -6,7 +6,13 @@
  * `reticle report` serve, so the three cannot describe one session three ways.
  */
 import { describe, expect, it } from 'vitest';
-import { JOURNAL_FILE_VERSION, ReticleTool, Verified, type JournalAction } from '@reticlehq/core';
+import {
+  DiscoveryInvite,
+  JOURNAL_FILE_VERSION,
+  ReticleTool,
+  Verified,
+  type JournalAction,
+} from '@reticlehq/core';
 import { LIVE_CONTROL_TOOLS } from './live-control-tools.js';
 
 const endTool = LIVE_CONTROL_TOOLS.find((t) => t.name === ReticleTool.END_SESSION);
@@ -45,6 +51,8 @@ describe('reticle_session {action:"end"} reports the gap', () => {
     >;
     expect(result['gap']).toEqual(['1 of 2 claims held', '1 unknown']);
     expect(panel()).toBe('Checkout fixed\n1 of 2 claims held');
+    // For the agent to pass on: the end of a task is when somebody has an opinion about it.
+    expect(result['talk_to_us']).toBe(DiscoveryInvite.AGENT);
   });
 
   it('says plainly when the session claimed nothing', async () => {

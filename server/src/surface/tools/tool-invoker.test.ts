@@ -20,7 +20,8 @@ describe('createToolInvoker', () => {
   it('invoke dispatches to the named tool handler with deps and args', async () => {
     const invoke = createToolInvoker(fakeDeps());
     const result = await invoke(ReticleTool.SESSIONS, {});
-    expect(result).toEqual({ sessions: [] });
+    // Dispatch is the claim here; what an empty list carries besides is the list tool's own test.
+    expect(result).toMatchObject({ sessions: [] });
   });
 
   it('an unknown tool name rejects with a named error', async () => {

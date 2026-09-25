@@ -241,6 +241,11 @@ export const EnvelopeKey = {
   VERIFY_NEXT: 'verify_next',
   /** The contextual "tell us what just went wrong" invitation. Same story, same release. */
   FEEDBACK_INVITE: 'feedback_invite',
+  /**
+   * The same moment, for the HUMAN: a call with the founder, or an email through `identify`. The
+   * agent is told to offer it and never to book or submit anything itself.
+   */
+  TALK_TO_US: 'talk_to_us',
   /** SDK/daemon version skew — often the one fact that explains everything else in the session. */
   VERSION_SKEW: 'version_skew',
   /** A feedback report that was accepted and then failed to send. Only the reporter can act on it. */

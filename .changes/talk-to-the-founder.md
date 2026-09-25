@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/server`, `@reticlehq/browser`, `@reticlehq/init`, `@reticlehq/core` — talk to the founder, where it counts.** The people using Reticle can now book a call with the founder, or leave an email through `reticle identify`, from every place they meet Reticle: the moment it got in their way (an unknown verdict, a refusal, a stuck loop), a setup that never connected, `reticle report` and its Stop hook, the end of a session, and a card in the in-page panel that can be dismissed for the session. Agents are told to offer it and never to book a call or submit an email on anyone's behalf. One link, kept in one place.

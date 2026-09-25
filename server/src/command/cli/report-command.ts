@@ -8,7 +8,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { ReticleDir } from '@reticlehq/core';
+import { DiscoveryInvite, ReticleDir } from '@reticlehq/core';
 import { gapSummary } from '@/judgement/runs/artifact/gap-summary.js';
 import { SessionJournal } from '@/memory/journal/session-journal.js';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
@@ -66,10 +66,11 @@ export async function reportFor(input: ReportInput): Promise<{ lines: string[] }
   const gap = gapSummary(actions);
   if (true === input.hook) {
     const line = gapHookLine(gap);
-    return { lines: line === undefined ? [] : [line] };
+    // A finish with nothing proved is the moment Reticle let somebody down: say who to tell.
+    return { lines: line === undefined ? [] : [line, DiscoveryInvite.HUMAN] };
   }
   const header = current === undefined ? [] : [`session ${current.id}`];
-  return { lines: [...header, ...gapReportLines(gap)] };
+  return { lines: [...header, ...gapReportLines(gap), DiscoveryInvite.HUMAN] };
 }
 
 /** Uncommitted changes in `cwd`. Outside a git repository nothing can say, so it answers yes. */

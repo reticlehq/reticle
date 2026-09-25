@@ -21,6 +21,7 @@ import {
   MINIMISED_STORAGE_KEY,
 } from './presenter-config.js';
 import { OFFER_SLOT_ATTR, paintOffer, type OfferState } from './presenter-offer.js';
+import { TALK_SLOT_ATTR, paintTalk } from './presenter-talk.js';
 import { BRAND_NAME, FAB_TOGGLE_HTML, MARK_SVG } from './chrome/presenter-brand.js';
 import { settleLogAtLatest } from './chrome/presenter-log.js';
 import { installHudDragHandles, installHudPositionGuards } from './presenter-drag.js';
@@ -168,6 +169,15 @@ export class HudShell {
     paintOffer(this.#root, offer, this.#storage());
   }
 
+  /** Session storage: "not now" on the founder card lasts this tab, not forever. */
+  #sessionStorage(): Pick<Storage, 'getItem' | 'setItem'> | undefined {
+    try {
+      return globalThis.sessionStorage;
+    } catch {
+      return undefined;
+    }
+  }
+
   /** Local storage, or nothing when the page refuses it. Read through a getter so a test can't race it. */
   #storage(): Pick<Storage, 'getItem' | 'setItem'> | undefined {
     try {
@@ -213,6 +223,7 @@ export class HudShell {
         <span class="reticle-tally" data-reticle-tally hidden></span>
         ${bannerHtml}
         <div ${OFFER_SLOT_ATTR}></div>
+        <div ${TALK_SLOT_ATTR}></div>
         <div class="${HUD_LOG_WELL_CLASS}"><div ${logAttr}></div></div>
         ${flowsHtml}
         ${footHtml}
@@ -405,6 +416,8 @@ export class HudShell {
       this.paintAccount(pushed.account, pushed.dashboardUrl, pushed.details);
     }
     if (this.#pushedOffer !== undefined) this.paintOffer(this.#pushedOffer);
+    // Needs no daemon state: the invitation is the same for everybody, every session.
+    paintTalk(root, this.#sessionStorage());
   }
   teardown(): void {
     this.#accountTeardown?.();

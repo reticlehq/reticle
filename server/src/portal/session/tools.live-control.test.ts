@@ -13,6 +13,7 @@ import { AnnotationStore } from '@/language/flows/stores/annotation-store.js';
 import { PAUSE_HINT } from './control-envelope.js';
 import type { InboxMessage, Session } from './session.js';
 import type { SessionManager } from './session-manager.js';
+import { DiscoveryInvite } from '@reticlehq/core';
 
 const SESSION_URL = 'http://localhost:5173/app';
 
@@ -356,6 +357,7 @@ describe('live-control: agent tools', () => {
       ended: true,
       sessionId: 'demo',
       gap: ['no claims this session, so nothing was verified'],
+      talk_to_us: DiscoveryInvite.AGENT,
     });
     expect(session.getState()).toBe(SessionState.ENDED);
     // Single push carrying the summary and the gap headline — never two pushes for one transition.
@@ -374,6 +376,7 @@ describe('live-control: agent tools', () => {
       ended: true,
       sessionId: 'demo',
       gap: ['no claims this session, so nothing was verified'],
+      talk_to_us: DiscoveryInvite.AGENT,
     });
     expect(session.__pushed).toContainEqual({
       state: SessionState.ENDED,

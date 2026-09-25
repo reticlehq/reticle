@@ -46,13 +46,13 @@ Everything between here and there is a rule the steps assume. Read it as you go,
 - The `reticle_*` tools appeared. Your client can reach a daemon. The app is very likely still uninstrumented.
 - A session is listed. The app dialled in. The user has still seen nothing happen.
 
-**Do not tell the user Reticle is set up until a verdict exists.** The common failure is an agent that writes the config, reports success, and leaves somebody with an uninstrumented page. The command exits non-zero when that happens: believe the exit code over the report.
+**Do not tell the user Reticle is set up until a verdict exists.** The common failure is an agent that writes the config, reports success, and leaves an uninstrumented page. The command then exits non-zero: believe the exit code.
 
 ## Setup runs to the end without you
 
-**Do not stop, and do not ask the user anything, until their app is running with Reticle inside it and a session is connected.** Everything between here and that point is yours to do: run `init`, fix the wiring it could not, start the dev server, open the browser. Not one of those needs a human, and every one of them has been the place an onboarding turn died with nothing to show.
+**Do not stop, and do not ask the user anything, until their app is running with Reticle inside it and a session is connected.** Everything between here and that point is yours to do: run `init`, fix the wiring it could not, start the dev server, open the browser. None needs a human, and each has been where an onboarding turn died.
 
-Questions you must not ask, because the repo you are sitting in already answers them: which framework, which package manager, which port, which editor or MCP client, whether to start the dev server, whether to open the browser, whether to carry on. Decide, act, and say what you did in one line.
+Questions the repo already answers, so never ask them: which framework, package manager, port, editor or MCP client, whether to start the dev server, open the browser, or carry on. Decide, act, and say what you did in one line.
 
 There are exactly two places you may stop, and neither is a question about a preference:
 
@@ -63,7 +63,7 @@ There are exactly two places you may stop, and neither is a question about a pre
 
 ## Feedback is first-class
 
-Reticle is built for agents. You are its user, and your experience is the only signal that decides what gets built or fixed. It disappears when your context does.
+Reticle is built for agents: your experience decides what gets built or fixed, and it disappears when your context does.
 
 The moment Reticle breaks, lies, cannot see something you needed, costs too many calls, or gives you trouble during setup:
 
@@ -74,10 +74,12 @@ reticle_session { action: "feedback", kind, text }
 `kind` is one of `bug`, `gap`, `ambiguity`, `feature_request`, `improvement`. One call, then carry on with the task. If the tools are unreachable (setup unfinished, daemon down), file the same report from the shell:
 
 ```bash
-npx @reticlehq/server feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement> "what happened"
+npx @reticlehq/server feedback --agent --kind <kind> "what happened"
 ```
 
-Nothing is too minor. Report defects in **Reticle**; a bug you find in the app under test is Reticle working, and belongs in your answer to the user. Never put app source, secrets, or user data in a report.
+Nothing is too minor. Report defects in **Reticle**; a bug in the app under test is Reticle working, and belongs in your answer. Never put app source, secrets, or user data in a report.
+
+When the person you work with is stuck, offer them a call with the founder (https://calendar.app.google/h9NRDbBBQetyTzWM6) or `npx @reticlehq/server identify --context company --email <theirs>`. Offer it; never book or submit for them.
 
 ## Do not re-read this file to look something up
 

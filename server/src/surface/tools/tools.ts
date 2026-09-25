@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  DiscoveryInvite,
   AttrNamesSchema,
   NoSessionAction,
   QueryBy,
@@ -154,6 +155,12 @@ export const RAW_TOOLS: ToolDef[] = [
         .describe(
           "Present ONLY when `sessions` is empty: the same answer as `why`, executable. `command` is the LITERAL command to run, sourced from this project's own package.json scripts and lockfile — it is absent, never guessed, when the project declares no dev script. `action` is one of daemon_split | start_dev_server | run_init | open_app | reopen_app. `daemon_split` outranks the rest and means the app IS running and instrumented, on a DIFFERENT daemon than the one you are attached to — do not start or re-init anything, read `reason`.",
         ),
+      talk_to_us: z
+        .string()
+        .optional()
+        .describe(
+          'Present ONLY when `sessions` is empty: a call with the founder for the person you are working with. Offer it; never act on it.',
+        ),
       lastKnown: z
         .object({
           sessionId: z.string(),
@@ -191,6 +198,8 @@ export const RAW_TOOLS: ToolDef[] = [
           ...(why === undefined ? {} : { why }),
           ...(next === undefined ? {} : { next_action: next }),
           ...(undefined === lastKnown ? {} : { lastKnown }),
+          // Setup that never connects is where most people give up; it is the talk worth having.
+          talk_to_us: DiscoveryInvite.AGENT,
         };
       }
       return { sessions };
