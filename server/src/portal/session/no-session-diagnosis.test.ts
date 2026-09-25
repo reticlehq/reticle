@@ -48,9 +48,10 @@ describe('diagnoseNoSession', () => {
       port: 4400,
     });
     expect(msg).toContain('5173');
-    expect(msg).toMatch(/already listening/i);
+    expect(msg).toMatch(/serving a page/i);
+    expect(msg).toMatch(/may not be this app/i);
     expect(msg).toContain('http://localhost:5173');
-    expect(msg).toMatch(/do not start a second/i);
+    expect(msg).toMatch(/second stack/i);
   });
 
   it('a dev server is up but never dialled — name the port, and point at the wiring', () => {
