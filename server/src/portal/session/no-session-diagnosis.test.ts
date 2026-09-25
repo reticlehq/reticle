@@ -48,9 +48,24 @@ describe('diagnoseNoSession', () => {
       port: 4400,
     });
     expect(msg).toContain('5173');
-    expect(msg).toMatch(/already listening/i);
+    expect(msg).toMatch(/serving a page/i);
     expect(msg).toContain('http://localhost:5173');
     expect(msg).toMatch(/do not start a second/i);
+  });
+
+  it('an unattributed listener is not called this project\'s app (#1080)', () => {
+    // One port serves a plain document; nothing ties it to this project (no pinned dev-command
+    // port, no SDK marker evidence in the facts). The message must not present :8080 as the app.
+    const msg = diagnoseNoSession({
+      everConnected: true,
+      initialized: true,
+      listening: [8080],
+      port: 4400,
+    });
+    expect(msg).toContain('8080');
+    expect(msg).toMatch(/may not be this app/i);
+    expect(msg).not.toMatch(/an app is already listening/i);
+    expect(msg).not.toMatch(/this project'?s app/i);
   });
 
   it('a dev server is up but never dialled — name the port, and point at the wiring', () => {

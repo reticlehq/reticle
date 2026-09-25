@@ -464,16 +464,19 @@ function stallClause(facts: NoSessionFacts): string {
 
 function alreadyListeningClause(listening: readonly number[]): string {
   if (0 === listening.length) return '';
+  // A port that serves a document is a HINT, not an identity. An unrelated static server, another
+  // checkout, or a second app in a monorepo all pass the same probe — so this clause must not call
+  // the listener "this app". See #1080.
   if (1 === listening.length) {
     const port = listening[0];
     return (
-      ` An app is already listening on ${String(port)}; just open http://localhost:${String(port)} ` +
-      '— do not start a second stack.'
+      ` Something is serving a page on :${String(port)}; it may not be this app. If it is, open ` +
+      `http://localhost:${String(port)} — do not start a second stack.`
     );
   }
   return (
-    ` An app is already listening on ${listening.join(', ')}; just open one of those URLs — do not ` +
-    'start a second stack.'
+    ` Something is serving a page on :${listening.join(', ')}; those listeners may not be this app. ` +
+    'If one of them is, open that URL — do not start a second stack.'
   );
 }
 

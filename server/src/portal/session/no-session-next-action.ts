@@ -104,12 +104,13 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
   if (facts.everConnected && true !== facts.authRefused) {
     const listening = facts.listening;
     const only = 1 === listening.length ? listening[0] : undefined;
+    // Serving a document is not an identity (#1080): do not call the listener "this app".
     const bound =
       0 === listening.length
         ? ''
         : only === undefined
-          ? ` An app is already listening on ${listening.join(', ')}; just open the URL the human names — do not start a second stack.`
-          : ` An app is already listening on ${String(only)}; just open ${LOCALHOST}:${String(only)} — do not start a second stack.`;
+          ? ` Something is serving a page on :${listening.join(', ')}; those listeners may not be this app. If one of them is, open the URL the human names — do not start a second stack.`
+          : ` Something is serving a page on :${String(only)}; it may not be this app. If it is, open ${LOCALHOST}:${String(only)} — do not start a second stack.`;
     return {
       action: NoSessionAction.REOPEN_APP,
       ...(only === undefined
