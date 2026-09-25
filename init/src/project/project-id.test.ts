@@ -54,6 +54,18 @@ describe('snippets bake the projectId', () => {
     expect(code).toContain('reticle.connect(');
   });
 
+  /**
+   * Reported from the field: `withReticle` publishes NEXT_PUBLIC_RETICLE_SDK_VERSION and this file
+   * never read it, and the SDK learns its version only from `sdkVersion` or a build-time global Next
+   * does not define. So every version skew on Next read "a page on an unknown older wire contract"
+   * instead of naming the version, which is the one fact that says what to upgrade.
+   */
+  it('Next ReticleDev snippet hands the SDK version withReticle publishes to connect()', () => {
+    const code = nextReticleDevFile(undefined, 'acme-web-1234abcd');
+    expect(code).toContain('process.env.NEXT_PUBLIC_RETICLE_SDK_VERSION');
+    expect(code).toContain('...(sdkVersion ? { sdkVersion } : {})');
+  });
+
   it('HTML snippet passes projectId to connect()', () => {
     expect(htmlManual(undefined, 'acme-web-1234abcd')).toContain("projectId: 'acme-web-1234abcd'");
   });
