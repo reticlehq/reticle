@@ -76,6 +76,13 @@ node server/dist/command/cli.js verify "" --port 4400 \
   --expect '{"kind":"text","contains":"definitely not on this page"}'
 ```
 
+On Windows PowerShell, `npx.cmd` re-parses `--expect '{...}'` and strips the inner quotes. Prefer `--expect-file`:
+
+```powershell
+'{"kind":"text","value":"Saved"}' | Set-Content expect.json
+npx @reticlehq/server verify http://localhost:3000 --expect-file expect.json
+```
+
 ## 3. Drive it properly, with the tools
 
 If your editor has the Reticle MCP server, the same app is now drivable. The four calls worth knowing, in the order you actually use them:

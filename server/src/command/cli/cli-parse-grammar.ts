@@ -49,3 +49,6 @@ export const VERIFY_COMMAND = 'verify';
  * missed for a release.
  */
 export const EXPECT_FLAG = '--expect';
+
+/** Prefer on Windows PowerShell: npx.cmd strips quotes from inline --expect JSON. */
+export const EXPECT_FILE_FLAG = '--expect-file';

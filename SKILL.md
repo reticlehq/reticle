@@ -123,7 +123,7 @@ Work down this list and stop at the first row that fits. Do not hand-drive a flo
 | "Did my edit break anything?" | `reticle_verify({ action: "change", files: ["src/App.tsx"] })` | 1 |
 | "Does every saved journey still work?" | `reticle_verify({ action: "flows" })` | 1 |
 | "Does this new behaviour work?" | ONE `reticle_act_and_wait` with `until` | 1 |
-| No MCP available at all | `npx @reticlehq/server verify <url>` in the shell | 1, no MCP |
+| No MCP available at all | `npx @reticlehq/server verify <url>` (use `--expect-file` on Windows PowerShell) | 1, no MCP |
 
 Replay before you drive. A covered journey re-verifies for a few hundred tokens; driving it costs tens of thousands, because driving spends turns and replay spends none.
 
