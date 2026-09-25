@@ -1,8 +1,8 @@
 /**
  * A session's event ledger must be visible before it is a problem.
  *
- * A repeating uncaught error wrote one session's `events.jsonl` at 13 MB/s for 14 hours and filled
- * a 926 GB disk. Three things failed together; this covers the third, which the report calls the
+ * A repeating uncaught error wrote one session's `events.jsonl` until the disk
+ * was full. Three things failed together; this covers the third, which the report calls the
  * one that matters: *nothing noticed*. Neither the daemon, nor `doctor`, nor any session-health
  * counter said a word, and the user found out when the disk was full (#986).
  *

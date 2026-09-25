@@ -51,7 +51,7 @@ export interface SessionHealth {
    * the same rule `pendingNavigationMs` follows. A ledger below that is doing its job quietly.
    *
    * It is here because nothing reported it. A repeating uncaught error wrote one session's ledger
-   * at 13 MB/s for 14 hours and filled a 926 GB disk; neither the daemon nor `doctor` nor any
+   * until the disk was full; neither the daemon nor `doctor` nor any
    * health counter said a word, and the user found out when the disk was full (#986). A cap bounds
    * the damage but does not make the writing visible, and this block is the surface an agent
    * already reads on every act and assert.

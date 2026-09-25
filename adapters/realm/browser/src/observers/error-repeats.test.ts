@@ -2,7 +2,7 @@
  * One uncaught error repeating forever must cost a bounded number of events.
  *
  * The field report this exists for: a single repeating `TypeError` wrote a session's
- * `events.jsonl` to 685 GB at 13 MB/s over 14 hours and filled the disk. Recording an error can
+ * `events.jsonl` until the disk filled. Recording an error can
  * raise the same error, so the path feeds itself (#986).
  */
 
