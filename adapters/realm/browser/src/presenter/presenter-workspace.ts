@@ -137,6 +137,7 @@ export function paintWorkspace(root: HTMLElement): void {
 }
 
 export function mountWorkspaceSelector(root: HTMLElement): () => void {
+  const ac = new AbortController();
   paintWorkspace(root);
   const btn = root.querySelector(`[${WORKSPACE_BTN_ATTR}]`);
   const menu = root.querySelector(`[${WORKSPACE_MENU_ATTR}]`);
@@ -217,14 +218,16 @@ export function mountWorkspaceSelector(root: HTMLElement): () => void {
   btn.addEventListener('click', onBtnClick);
   menu.addEventListener('pointerdown', (e) => e.stopPropagation());
   copyBtn?.addEventListener('click', onCopy);
-  document.addEventListener('pointerdown', onDocPointer);
-  document.addEventListener('keydown', onKeyDown);
+  // These two, unlike the three above, are on `document` rather than a node this module owns — they
+  // are the ones that would outlive the presenter if teardown forgot them, so they get the
+  // AbortController; `btn`/`menu`/`copyBtn` are removed along with the node when the presenter unmounts.
+  document.addEventListener('pointerdown', onDocPointer, { signal: ac.signal });
+  document.addEventListener('keydown', onKeyDown, { signal: ac.signal });
 
   return (): void => {
     btn.removeEventListener('click', onBtnClick);
     copyBtn?.removeEventListener('click', onCopy);
-    document.removeEventListener('pointerdown', onDocPointer);
-    document.removeEventListener('keydown', onKeyDown);
+    ac.abort();
   };
 }
 

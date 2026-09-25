@@ -169,12 +169,15 @@ export function installConsole(emit: Emit): Teardown {
   // Capture phase: element `error` events do not bubble, so this is the only registration that
   // sees a failed subresource. Uncaught script errors reach a capturing window listener too, so one
   // registration covers both.
-  window.addEventListener('error', onError, true);
-  window.addEventListener('unhandledrejection', onRejection);
+  // One controller for every window listener, so teardown cannot forget one of them.
+  const listeners = new AbortController();
+  const { signal } = listeners;
+  window.addEventListener('error', onError, { capture: true, signal });
+  window.addEventListener('unhandledrejection', onRejection, { signal });
   // Dispatched on `document` and it bubbles, so a window listener sees it; registered in the
   // capture phase alongside the others so a page that stops propagation on `document` cannot hide
   // one from us.
-  window.addEventListener(CSP_VIOLATION_EVENT, onViolation, true);
+  window.addEventListener(CSP_VIOLATION_EVENT, onViolation, { capture: true, signal });
 
   return () => {
     for (const [method, original] of originals) {
@@ -182,8 +185,6 @@ export function installConsole(emit: Emit): Teardown {
       // that wrapped console AFTER connect() must keep its instrumentation on teardown.
       if (console[method] === patched.get(method)) console[method] = original as typeof console.log;
     }
-    window.removeEventListener('error', onError, true);
-    window.removeEventListener('unhandledrejection', onRejection);
-    window.removeEventListener(CSP_VIOLATION_EVENT, onViolation, true);
+    listeners.abort();
   };
 }

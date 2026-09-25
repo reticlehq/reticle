@@ -13,6 +13,7 @@ function snapshotLocation(): { pathname: string; search: string; hash: string; h
 
 /** Patch the History API + listen to popstate/hashchange to emit route.change. */
 export function installRoute(emit: Emit): Teardown {
+  const ac = new AbortController();
   // Keep the true originals for teardown identity; bound copies are used for invocation
   // (History methods throw "Illegal invocation" if called with the wrong `this`).
   const origPush = captureMethod(history, 'pushState');
@@ -58,8 +59,8 @@ export function installRoute(emit: Emit): Teardown {
   const onNav = (): void => {
     fire(lastHref);
   };
-  window.addEventListener('popstate', onNav);
-  window.addEventListener('hashchange', onNav);
+  window.addEventListener('popstate', onNav, { signal: ac.signal });
+  window.addEventListener('hashchange', onNav, { signal: ac.signal });
 
   return () => {
     // Restore ONLY if the slot still holds Reticle's wrapper. If a router/analytics SDK wrapped
@@ -67,7 +68,6 @@ export function installRoute(emit: Emit): Teardown {
     // uninstall THEIR instrumentation too — the SDK harming the app it only meant to observe.
     if (history.pushState === patchedPush) history.pushState = origPush;
     if (history.replaceState === patchedReplace) history.replaceState = origReplace;
-    window.removeEventListener('popstate', onNav);
-    window.removeEventListener('hashchange', onNav);
+    ac.abort();
   };
 }

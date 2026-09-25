@@ -53,6 +53,7 @@ export function sameOriginFrameBodies(root: ParentNode): HTMLElement[] {
  * de-duplicates), so no bookkeeping is kept.
  */
 export function observeSameOriginFrames(attach: (body: HTMLElement) => void): Teardown {
+  const ac = new AbortController();
   const attachAll = (): void => {
     for (const body of sameOriginFrameBodies(document)) attach(body);
   };
@@ -61,8 +62,6 @@ export function observeSameOriginFrames(attach: (body: HTMLElement) => void): Te
   const onLoad = (event: Event): void => {
     if (event.target instanceof HTMLIFrameElement) attachAll();
   };
-  document.addEventListener('load', onLoad, true);
-  return () => {
-    document.removeEventListener('load', onLoad, true);
-  };
+  document.addEventListener('load', onLoad, { capture: true, signal: ac.signal });
+  return () => ac.abort();
 }

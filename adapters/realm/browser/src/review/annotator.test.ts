@@ -324,6 +324,20 @@ describe('Annotator - human marks a mistake on the page', () => {
     expect(popover().classList.contains('reticle-mark-shake')).toBe(true);
     expect(emits).toHaveLength(0);
   });
+
+  it('destroy() tears down the click/keydown/mousemove/scroll/resize listeners it mounted', () => {
+    const { ann, emits } = setup();
+    ann.toggle(true);
+    ann.destroy();
+    const btn = pageButton();
+    clickAt(btn);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 10, clientY: 10 }));
+    window.dispatchEvent(new Event('scroll'));
+    window.dispatchEvent(new Event('resize'));
+    expect(emits).toHaveLength(0);
+    expect(document.querySelector('[data-reticle-mark="pop"]')).toBeNull();
+  });
 });
 
 /**
