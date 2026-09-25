@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { IntentState } from '@reticlehq/core/artifacts';
 import { createMemoryFs } from '@/memory/project/memory-fs.js';
 import { IntentStore } from './intent-store.js';
+import { IntentShardStore } from './intent-shard-store.js';
+import { IntentStatus } from './intent-shard.js';
 
 const ROOT = '/repo/apps/web/.reticle';
 
@@ -250,5 +252,48 @@ describe('the intent directory layout', () => {
     written.set(LEGACY, '<<<<<<< HEAD\n{ "intents": {} }');
     await new IntentStore(fs, ROOT, { now: () => 5 }).declare([{ id: 'n', statement: 'N' }]);
     expect(written.has(LEGACY)).toBe(true);
+  });
+});
+
+/*
+ * A step label is not an intent. It is refused at the one boundary every route goes through, and
+ * the ones already in a ledger are marked stale — kept, because deleting a record loses the fact it
+ * was ever written, but no longer counted as something still owed.
+ */
+describe('the ledger holds intents, not step labels', () => {
+  it('stores nothing for a statement that describes a step', async () => {
+    const { store: s } = store();
+    expect(await s.declare([{ id: 'x', statement: 'click button "Cancel"' }])).toEqual([]);
+    expect(await s.read()).toEqual([]);
+  });
+
+  it('marks labels already in the ledger stale on the next write, and stops owing them', async () => {
+    const { fs, written } = createMemoryFs();
+    written.set(
+      `${ROOT}/intent.json`,
+      JSON.stringify({
+        version: 1,
+        intents: {
+          lab: {
+            id: 'lab',
+            statement: 'click link "Settlements"',
+            state: 'declared',
+            declaredAt: 1,
+          },
+          real: {
+            id: 'real',
+            statement: 'a refund sends the captured amount',
+            state: 'declared',
+            declaredAt: 2,
+          },
+        },
+      }),
+    );
+    const s = new IntentStore(fs, ROOT, { now: () => 5 });
+    await s.declare([{ id: 'n', statement: 'N holds' }]);
+    const records = await new IntentShardStore(fs, ROOT, { now: () => 5 }).all();
+    expect(records.find((r) => 'lab' === r.id)?.status).toBe(IntentStatus.STALE);
+    expect(records.find((r) => 'real' === r.id)?.status).not.toBe(IntentStatus.STALE);
+    expect((await s.open()).map((i) => i.id).sort()).toEqual(['n', 'real']);
   });
 });

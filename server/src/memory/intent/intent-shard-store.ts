@@ -21,7 +21,13 @@
  * PARSE is never deleted: a hand-merge leaves conflict markers, it reads as empty, and removing it
  * would destroy the only copy of every intent inside.
  */
-import { IntentFileSchema, IntentState, amendIntent, type Intent } from '@reticlehq/core/artifacts';
+import {
+  IntentFileSchema,
+  IntentState,
+  amendIntent,
+  isActionLabel,
+  type Intent,
+} from '@reticlehq/core/artifacts';
 import { IntentDir, ReticleDir } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
@@ -208,6 +214,7 @@ export class IntentShardStore {
   ): Promise<IntentRecord | undefined> {
     return withFileLock(this.#indexPath(), async () => {
       await this.#migrateLegacy();
+      await this.#retireLabels();
       const existing = (await this.#storedRecords()).find((r) => id === r.id);
       const next = transform(existing);
       if (next === undefined) return existing;
@@ -327,10 +334,36 @@ export class IntentShardStore {
     return { migrated: incoming };
   }
 
+  /**
+   * Mark every stored step label stale: "click button \"Cancel\"" describes what was DONE, not a
+   * rule. Kept rather than deleted, because removing a record loses the fact it was ever written.
+   * Runs with every write, and writes nothing once there is nothing left to retire.
+   */
+  async #retireLabels(): Promise<number> {
+    const labels = (await this.#storedRecords()).filter(
+      (r) => IntentStatus.STALE !== r.status && isActionLabel(r.statement),
+    );
+    if (0 === labels.length) return 0;
+    for (const subject of new Set(labels.map((r) => r.subject))) {
+      const shard = await this.#readShard(subject);
+      for (const record of labels.filter((r) => subject === r.subject)) {
+        shard.intents[record.id] = {
+          ...record,
+          status: IntentStatus.STALE,
+          updatedAt: this.#clock.now(),
+        };
+      }
+      await this.#putShard(shard);
+    }
+    await this.#writeIndex();
+    return labels.length;
+  }
+
   /** `reticle_intent { action: "migrate" }`: do now what the next write would do anyway. */
   async migrate(): Promise<{ migrated: number; subjects: string[] }> {
     return withFileLock(this.#indexPath(), async () => {
       const { migrated } = await this.#migrateLegacy();
+      await this.#retireLabels();
       return {
         migrated: migrated.length,
         subjects: [...new Set(migrated.map((r) => r.subject))].sort(),

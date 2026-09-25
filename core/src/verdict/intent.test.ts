@@ -7,6 +7,7 @@ import {
   declareIntent,
   dischargeIntent,
   emptyIntentFile,
+  isActionLabel,
   openIntents,
   redeclareIntent,
   upsertIntent,
@@ -308,5 +309,35 @@ describe('bindIntent — binding the same check again changes nothing', () => {
     expect(rebound.state).toBe(IntentState.BOUND);
     expect(rebound.provenBy).toBeUndefined();
     expect(rebound.binding).toEqual({ flow: 'pay-v2' });
+  });
+});
+
+/*
+ * An intent says what must be TRUE. A step label says what was DONE, and a ledger full of them hides
+ * the rules that matter behind "click button \"Cancel\"". The rule is narrow on purpose: refusing a
+ * real intent is worse than letting one label through.
+ */
+describe('isActionLabel — a description of a step is not an intent', () => {
+  it.each([
+    'click button "Cancel"',
+    'click button',
+    'check switch "Test Mode" [value="on"]',
+    'fill textbox "Item label…"',
+    'click menuitem "Magic Checkout Fast, one-click checkout." [focused]',
+    'click link "Settlements"',
+    'Autonomous coverage drive of settings: 3 actions.',
+    'Autonomous coverage drive: 6 actions through the app.',
+  ])('refuses %s', (statement) => {
+    expect(isActionLabel(statement)).toBe(true);
+  });
+
+  it.each([
+    'clicking Send check-in makes the badge read "checked in"',
+    "a full refund sends the payment's own captured amount",
+    'Navigating to Invoices renders the invoices page with a heading and content',
+    'click the Save button and the order appears in the list',
+    'Switching Test Mode on causes the Transactions list to request test-mode data',
+  ])('keeps %s', (statement) => {
+    expect(isActionLabel(statement)).toBe(false);
   });
 });

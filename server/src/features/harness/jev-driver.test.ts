@@ -195,8 +195,10 @@ describe('the jev driver builds every call from the page', () => {
     const save = await turn(stopped, chose('e5'));
     expect(save.calls[0]?.name).toBe('reticle_flow_save');
     expect(save.calls[0]?.args['flowName']).toBe('harness-drive-home');
-    // A flow with no intent replays, but names only the broken step when it goes red.
-    expect(typeof save.calls[0]?.args['intent']).toBe('string');
+    // No intent: "Autonomous coverage drive: N actions" was a count of what the drive DID, filed as
+    // a business rule and re-amended every time the count changed. The ledger refuses it now, and a
+    // drive has no rule of its own to state.
+    expect(save.calls[0]?.args['intent']).toBeUndefined();
   });
 
   /**
@@ -403,9 +405,11 @@ describe('the jev driver builds every call from the page', () => {
     expect(result.calls[0]?.args['until']).toBeUndefined();
   });
 
-  it('carries the element description so the drive reads back as a journey, not as refs', async () => {
+  // A step label ("click button \"New deployment\"") is not an intent. The recorded step keeps the
+  // element's role and name, which is what makes the drive read back as a journey.
+  it('claims no intent for a step it takes', async () => {
     const result = await turn(READY, chose('e5'));
-    expect(result.calls[0]?.args['intent']).toContain('New deployment');
+    expect(result.calls[0]?.args['intent']).toBeUndefined();
   });
 
   it('tells the model which refs it has already driven', async () => {

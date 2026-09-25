@@ -4,12 +4,14 @@ import {
   declareIntent,
   redeclareIntent,
   dischargeIntent,
+  isActionLabel,
   type Intent,
   type IntentSurface,
 } from '@reticlehq/core/artifacts';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import type { Clock } from '@/machine/clock.js';
 import { IntentShardStore } from './intent-shard-store.js';
+import { IntentStatus } from './intent-shard.js';
 
 /**
  * The intent ledger's domain operations: declare, place, bind, discharge.
@@ -35,7 +37,10 @@ export class IntentStore {
 
   /** Everything not yet proved — what an agent asking "am I done?" still owes. */
   async open(): Promise<Intent[]> {
-    return (await this.read()).filter((intent) => IntentState.PROVED !== intent.state);
+    // Stale is not owed: it is kept as history, not as work.
+    return (await this.#ledger.all()).filter(
+      (record) => IntentState.PROVED !== record.state && IntentStatus.STALE !== record.status,
+    );
   }
 
   /**
@@ -51,6 +56,8 @@ export class IntentStore {
     const now = this.#clock.now();
     const declared: Intent[] = [];
     for (const entry of entries) {
+      // A step label is a log line, not a rule: every route that declares comes through here.
+      if (isActionLabel(entry.statement)) continue;
       const stored = await this.#ledger.upsert(entry.id, (existing) =>
         redeclareIntent(existing, declareIntent({ ...entry, now })),
       );

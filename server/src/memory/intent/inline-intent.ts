@@ -158,7 +158,12 @@ export async function linkInlineIntent(
     // Declared WITHOUT a surface on purpose: see dischargeInlineIntent for why the route that
     // describes this record only exists after the action it is about.
     const declaredHere = existing === undefined;
-    if (declaredHere) await store.declare([{ id, statement: intent }]);
+    if (declaredHere) {
+      // Nothing stored (a step label is refused) means nothing to link: no verdict may then claim
+      // to have proved an intent that was never written.
+      const stored = await store.declare([{ id, statement: intent }]);
+      if (0 === stored.length) return undefined;
+    }
     /*
      * A binding may be INVENTED only for a row this call also declared.
      *

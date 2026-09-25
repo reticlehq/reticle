@@ -169,6 +169,31 @@ export function amendIntent(previous: Intent | undefined, next: Intent): Intent 
   return { ...next, ...(amended === undefined ? {} : { amended }) };
 }
 
+/**
+ * A step verb directly followed by an element role: `click button "Save"`, `check switch "X"`.
+ *
+ * The shape an ACTION DESCRIPTION takes, which is what tools generate from a snapshot line. Narrow on
+ * purpose: "click the Save button and the order appears" names a consequence and is kept, as is any
+ * gerund ("clicking Send makes the badge read…"). Refusing a real intent costs more than admitting a
+ * label, so only the unmistakable shape is refused.
+ */
+const STEP_LABEL =
+  /^(click|dblclick|fill|type|clear|select|check|uncheck|press|hover|focus|tap|drag|scroll|submit|upload)\s+(button|link|textbox|searchbox|switch|checkbox|menuitem|menuitemcheckbox|tab|combobox|option|radio|slider|spinbutton|heading|img|row|cell|listitem|treeitem)\b/i;
+
+/** What an automated drive used to file as its "intent": a count of what it did. */
+const DRIVE_LOG = /^Autonomous coverage drive\b/i;
+
+/**
+ * Is this a description of what was DONE rather than a statement of what must be TRUE?
+ *
+ * An intent is the business rule a teammate reads in six months. A step label is a log line, and a
+ * ledger full of them buries the rules behind "click button \"Cancel\"" and inflates what is owed.
+ */
+export function isActionLabel(statement: string): boolean {
+  const text = statement.trim();
+  return STEP_LABEL.test(text) || DRIVE_LOG.test(text);
+}
+
 /** Everything not yet proved — what an agent asking "am I done?" still owes. */
 export function openIntents(file: IntentFile): Intent[] {
   return Object.values(file.intents).filter((intent) => intent.state !== IntentState.PROVED);

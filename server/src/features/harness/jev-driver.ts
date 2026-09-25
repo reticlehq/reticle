@@ -722,12 +722,10 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
       const unsaved = drive.unsaved[0];
       if (unsaved !== undefined)
         return only(
-          // `intent` is not decoration. A flow saved without one still replays, but when it goes
-          // red the report can only name the step that broke, not the thing that stopped being true.
-          request(Tool.FLOW_SAVE, {
-            flowName: unsaved,
-            intent: `Autonomous coverage drive of ${slugAfter(unsaved)}: ${String(drive.acted.length)} actions.`,
-          }),
+          // No intent. A drive has no business rule of its own to state, and what it used to send
+          // ("Autonomous coverage drive: N actions") was a count of what it did, filed in the ledger
+          // as a rule and re-amended every time the count changed.
+          request(Tool.FLOW_SAVE, { flowName: unsaved }),
           `save ${unsaved}`,
         );
 
@@ -931,9 +929,8 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
         ref: picked.ref,
         action,
         ...(wasRefused ? { args: { [DANGEROUS_ARG]: true } } : {}),
-        // The element's own description, so the drive reads back as a journey rather than as refs.
-        // A ref is a handle that expired when the page changed; this survives being read tomorrow.
-        intent: `${action} ${picked.desc}`,
+        // No `intent`: "click button \"Save\"" describes a step, not a rule, and the ledger refuses it.
+        // The recorded step keeps the element's role and name, which is what reads back as a journey.
         ...(consequence === undefined ? {} : { until: consequence.predicate }),
       };
       if ('fill' === action) {

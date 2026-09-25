@@ -7,6 +7,7 @@ import { sessionIdShape } from '@/surface/tools/tool-kit.js';
 import { PredicateSchema } from '@reticlehq/engine/question/predicate/predicate.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
 import { asString } from '@reticlehq/core';
+import { isActionLabel } from '@reticlehq/core/artifacts';
 import type { ToolDef, ToolDeps } from '@/surface/tools/tool-kit.js';
 
 /**
@@ -28,6 +29,9 @@ const INDEX = 'index';
 const SUBJECT = 'subject';
 const GET = 'get';
 const RECORD = 'record';
+/** Why a step label is not stored, in words that say what to write instead. */
+const STEP_LABEL_REFUSAL =
+  'describes a step that was done, not what must be true. State the rule, e.g. "saving the form shows the new row in the list"';
 const MIGRATE = 'migrate';
 
 export const INTENT_TOOLS: ToolDef[] = [
@@ -102,6 +106,10 @@ export const INTENT_TOOLS: ToolDef[] = [
           'The intents this call declared, or on `list` everything still open — each { id, statement, state, declaredAt, binding?, surface?, provenBy?, amended? }. `state` is declared (prose only), bound (a predicate exists), or proved (a verdict satisfied it).',
         ),
       bound: z.boolean().optional().describe('bind only: false when the id names no intent.'),
+      refused: z
+        .array(z.object({ id: z.string(), reason: z.string() }))
+        .optional()
+        .describe('declare only: statements not stored, and why.'),
       path: z.string().optional().describe('Where the ledger was written.'),
       entries: z
         .array(z.unknown())
@@ -162,7 +170,12 @@ export const INTENT_TOOLS: ToolDef[] = [
         ? (raw as { id: string; statement: string; surface?: never }[])
         : [];
       const declared = await store.declare(entries);
-      return { intents: declared, path: root };
+      // Said, not swallowed: an agent that declared something and finds nothing stored would
+      // otherwise conclude the ledger lost it.
+      const refused = entries
+        .filter((entry) => isActionLabel(entry.statement))
+        .map((entry) => ({ id: entry.id, reason: STEP_LABEL_REFUSAL }));
+      return { intents: declared, ...(0 === refused.length ? {} : { refused }), path: root };
     },
   },
 ];
