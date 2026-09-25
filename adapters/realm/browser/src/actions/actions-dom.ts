@@ -75,7 +75,7 @@ export async function fireClickSequence(
 
   // The gap that makes hold-to-confirm driveable. With down and up synchronous, a control whose
   // contract is "the button is down for N ms" cannot be expressed at all — it cancels its own
-  // confirm on a mouseup arriving milxliseconds later. `drag` splits the pair the same way.
+  // confirm on a mouseup arriving milliseconds later. `drag` splits the pair the same way.
   //
   // The ACHIEVED hold is measured and returned rather than echoed back: `holdMs: 1200` against a
   // 1200ms animation is a race by construction, and a caller needs to tell "held 1200" from
