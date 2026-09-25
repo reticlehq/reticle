@@ -51,7 +51,8 @@ const FLAT_FILE_LIMIT = 10;
  *                                   public-subpaths-are-pinned.test.ts.
  */
 const OVER_THE_LINE: Readonly<Record<string, number>> = {
-  'adapters/build/vite/src': 12,
+  // +1: connect-args.ts, split out of index.ts (988 lines, against the 1000 cap) with the body cap.
+  'adapters/build/vite/src': 13,
   'adapters/realm/browser/src/dom': 12,
   // +1: error-repeats.ts, the limiter every uncaught-error path in console.ts goes through (#986).
   'adapters/realm/browser/src/observers': 25,
