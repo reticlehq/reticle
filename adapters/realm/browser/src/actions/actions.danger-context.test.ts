@@ -104,3 +104,32 @@ describe('Enter in a form is judged by what it submits', () => {
     await expect(executeAction(refTo('#n'), 'press', { text: 'Escape' })).resolves.toBeDefined();
   });
 });
+
+/**
+ * Enter in a textarea inserts a newline and submits nothing.
+ *
+ * A false positive from the field session behind #894: pressing Enter in a textarea was blocked
+ * while clicking the adjacent submit button -- same form, same handler, same effect -- was judged
+ * on its own terms. The second test is the negative control: the button itself stays blocked.
+ */
+describe('Enter in a textarea submits nothing, so it triggers nothing', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it("is not judged by the form's submit button", async () => {
+    // Enter here inserts a newline. Blocking it refuses the one keystroke on the page that does the
+    // least, beside a button whose click would be judged the same way and allowed.
+    document.body.innerHTML =
+      '<form><label for="n">Notes</label><textarea id="n"></textarea>' +
+      '<button type="submit">Delete account</button></form>';
+    await expect(executeAction(refTo('#n'), 'press', { text: 'Enter' })).resolves.toBeDefined();
+  });
+
+  it('still blocks a click on that submit button from the same form', async () => {
+    document.body.innerHTML =
+      '<form><label for="n">Notes</label><textarea id="n"></textarea>' +
+      '<button type="submit" id="go">Delete account</button></form>';
+    await expect(executeAction(refTo('#go'), 'click')).rejects.toThrow(/confirmDangerous/);
+  });
+});
