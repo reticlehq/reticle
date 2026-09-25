@@ -40,7 +40,12 @@ import {
   type ReticleVerificationRun,
 } from '@reticlehq/core';
 import { start, type RunningServer } from '@/index.js';
-import { probePresence, PortPresence } from '@/command/daemon/binding/port-presence.js';
+import {
+  probePresence,
+  describePresence,
+  PortPresence,
+} from '@/command/daemon/binding/port-presence.js';
+import { EXPECT_FLAG } from './cli-parse-grammar.js';
 import { probeDaemon } from '@/surface/mcp/mcp-proxy.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import {
@@ -486,6 +491,84 @@ export function portBusyMessage(port: number): string {
   );
 }
 
+/**
+ * What `--expect` is answered with when the port is not serving a daemon.
+ *
+ * It used to be answered with nothing at all. The predicate was read only inside the daemon branch,
+ * so on a free or foreign port the flag was dropped without a word and the command carried on into
+ * the saved-flows path — where it reported, accurately and about something else entirely, that there
+ * were no saved flows to verify. Byte-identical output to the same command with no `--expect` on it.
+ *
+ * That is the documented recovery for a client that never loaded the `reticle_*` tools, so it failed
+ * for the people with no other route to a verdict, and it failed in the one way they could not
+ * diagnose: the refusal they got was true.
+ */
+export function expectNeedsDaemonMessage(port: number, presence: PortPresence): string {
+  return (
+    `${EXPECT_FLAG} asks the Reticle daemon that already owns port ${String(port)} for the ` +
+    'verdict — it binds nothing and launches nothing, which is what lets it answer while the port ' +
+    `is busy. Right now ${describePresence(presence, port)}.\n\n` +
+    '  The predicate did not run, and nothing was proved.\n\n' +
+    '  • Start a daemon on that port, pointed at the app, then re-run this command: ' +
+    `npx @reticlehq/server serve --port ${String(port)} --drive <url>\n` +
+    `  • Or drop ${EXPECT_FLAG}, and verify drives the url itself and replays your saved flows — ` +
+    'a different question, and it proves nothing about your predicate.'
+  );
+}
+
+/** What `verify` does next, once the options and the state of the port are both known. */
+export const VerifyRoute = {
+  /** Ask the daemon that already owns the port for a one-shot verdict on the predicate. */
+  ADHOC: 'adhoc',
+  /** Ask the daemon that already owns the port to replay the saved flows. See runAdhocSuite. */
+  ADHOC_SUITE: 'adhoc-suite',
+  /** Boot our own daemon, drive the url, replay the flows saved on disk. */
+  FLOWS: 'flows',
+  /** Answer the caller, and run nothing. */
+  REFUSE: 'refuse',
+} as const;
+export type VerifyRoute = (typeof VerifyRoute)[keyof typeof VerifyRoute];
+
+export type VerifyPlan =
+  | { route: typeof VerifyRoute.ADHOC }
+  | { route: typeof VerifyRoute.ADHOC_SUITE }
+  | { route: typeof VerifyRoute.FLOWS }
+  | { route: typeof VerifyRoute.REFUSE; message: string };
+
+/**
+ * All four routes this command has, in one pure function.
+ *
+ * They used to be a pair of nested `if`s that consulted `--expect` only after the port had already
+ * answered as a daemon, which is how one of the four went missing: a predicate on any other port
+ * state fell through to a path that cannot see it. Stating the cases together is what makes an
+ * unhandled one visible, and it lets every one of them be driven with no port, no daemon and no
+ * browser — which is where an argument-level decision belongs.
+ */
+export function routeVerify(args: {
+  /** True when the caller supplied a predicate, by `--expect` or `--expect-file`. */
+  hasPredicate: boolean;
+  /**
+   * True when the caller asked for something only a browser of OUR OWN can do: `--explore` (a model
+   * driving a fresh page), `--headed`, or `--storage-state`. The running daemon's tab can honour
+   * none of them, so replaying there would silently ignore the request.
+   */
+  wantsOwnBrowser?: boolean;
+  presence: PortPresence;
+  port: number;
+}): VerifyPlan {
+  if (args.hasPredicate) {
+    return args.presence === PortPresence.DAEMON
+      ? { route: VerifyRoute.ADHOC }
+      : { route: VerifyRoute.REFUSE, message: expectNeedsDaemonMessage(args.port, args.presence) };
+  }
+  if (args.presence !== PortPresence.DAEMON) return { route: VerifyRoute.FLOWS };
+  // No predicate, but there may be SAVED FLOWS, and a daemon already owns the port: replay them
+  // there rather than refusing, unless the request needs a browser that path never opens.
+  return true === args.wantsOwnBrowser
+    ? { route: VerifyRoute.REFUSE, message: portBusyMessage(args.port) }
+    : { route: VerifyRoute.ADHOC_SUITE };
+}
+
 export function handleVerify(parsed: {
   url: string;
   /** A parsed predicate for a flow-free, one-shot verdict against the running daemon. */
@@ -557,18 +640,29 @@ export function handleVerify(parsed: {
   // this used to reach the user as a raw node stack rather than as an answer.
   void (async () => {
     const port = parsed.port ?? RETICLE_DEFAULT_PORT;
-    if (
-      (await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus })) ===
-      PortPresence.DAEMON
-    ) {
+    const presence = await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus });
+    const plan = routeVerify({
+      hasPredicate: expectation !== undefined,
+      wantsOwnBrowser:
+        true === parsed.explore || !parsed.headless || parsed.storageState !== undefined,
+      presence,
+      port,
+    });
+    switch (plan.route) {
+      // Either the busy port, or a predicate this state cannot answer. Both are refusals that name
+      // what was asked for — never a report about a check nobody requested.
+      case VerifyRoute.REFUSE:
+        ports.fail(plan.message);
+        ports.exit(EXIT_FAIL);
+        return;
       // A daemon owning the port is the NORMAL state after a working install, and it used to be the
       // end of the road: `verify` refused, the other verdict paths need saved flows a first-install
       // project does not have, and stopping the daemon cuts the agent's own MCP link. An agent could
       // hold a live, correctly-wired app and have no way to reach a verdict at all.
       //
-      // With `--expect` there is now a way, and it does not need the port: ask the daemon that
-      // already owns it. See runAdhocVerdict.
-      if (expectation !== undefined) {
+      // With `--expect` there is a way, and it does not need the port: ask the daemon that already
+      // owns it. See runAdhocVerdict.
+      case VerifyRoute.ADHOC: {
         const verdict = await runAdhocVerdict({
           port,
           ...(parsed.url !== undefined && '' !== parsed.url ? { url: parsed.url } : {}),
@@ -582,21 +676,9 @@ export function handleVerify(parsed: {
         ports.exit(verdict.code);
         return;
       }
-      /*
-       * No predicate, but there may be SAVED FLOWS, and running them is the other half of the same
-       * dead end. `--expect` served a project with nothing saved; a project WITH a suite was still
-       * stuck, and worse off, because the whole promise of a saved suite is that it runs again
-       * without an agent. See runAdhocSuite.
-       *
-       * Only when the caller asked for nothing that needs a browser of OUR OWN. `--explore` is a
-       * model driving a fresh page, and `--headed` and `--storage-state` are instructions about a
-       * browser this path never opens: honouring the request by silently ignoring three of its
-       * flags would be a different run wearing the same command. Those still get the message below,
-       * which now names this route.
-       */
-      const wantsOwnBrowser =
-        true === parsed.explore || !parsed.headless || parsed.storageState !== undefined;
-      if (!wantsOwnBrowser) {
+      // No predicate, a daemon on the port, and saved flows to run: the other half of the same
+      // dead end. The whole promise of a saved suite is that it runs again without an agent.
+      case VerifyRoute.ADHOC_SUITE: {
         const suite = await runAdhocSuite({
           port,
           ...(parsed.select === undefined ? {} : { select: parsed.select }),
@@ -609,19 +691,18 @@ export function handleVerify(parsed: {
         ports.exit(suite.code);
         return;
       }
-      ports.fail(portBusyMessage(port));
-      ports.exit(1);
-      return;
+      case VerifyRoute.FLOWS:
+        await runVerify(
+          {
+            url: parsed.url,
+            timeoutMs: parsed.timeoutMs ?? DEFAULT_SESSION_TIMEOUT_MS,
+            ...(true === parsed.explore ? { explore: true } : {}),
+            ...(parsed.persona === undefined ? {} : { persona: parsed.persona }),
+            ...(parsed.select === undefined ? {} : { select: parsed.select }),
+          },
+          ports,
+        );
+        return;
     }
-    await runVerify(
-      {
-        url: parsed.url,
-        timeoutMs: parsed.timeoutMs ?? DEFAULT_SESSION_TIMEOUT_MS,
-        ...(true === parsed.explore ? { explore: true } : {}),
-        ...(parsed.persona === undefined ? {} : { persona: parsed.persona }),
-        ...(parsed.select === undefined ? {} : { select: parsed.select }),
-      },
-      ports,
-    );
   })();
 }

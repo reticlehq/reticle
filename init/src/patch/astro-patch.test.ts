@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { ReticleDir } from '@reticlehq/core';
 import {
   ASTRO_ENV_DTS_DECLARES,
+  astroReticleDevFile,
   patchAstroConfig,
   patchAstroEnvDts,
   patchAstroLayout,
@@ -36,13 +37,13 @@ const { title } = Astro.props;
 `;
 
 describe('patchAstroConfig', () => {
-  it('adds the token/root define and the raised build target to the common shape', () => {
+  it('adds the raised build target to the common shape, and does not put the token in define', () => {
     const patch = patchAstroConfig(PLAIN_CONFIG);
     expect(patch.kind).toBe(PatchKind.APPLY);
     if (patch.kind !== PatchKind.APPLY) return;
-    expect(patch.code).toContain('__RETICLE_TOKEN__');
-    // Without root, source pointers come back as absolute paths from the machine that ran init.
-    expect(patch.code).toContain('__RETICLE_ROOT__');
+    // #1008: vite.define no longer reaches the Astro client pipeline.
+    expect(patch.code).not.toContain('__RETICLE_TOKEN__');
+    expect(patch.code).toContain('reticle-vite-owning');
     // Astro's default target down-levels the modern SDK bundle and dies on a destructuring transform.
     expect(patch.code).toContain("target: 'es2022'");
     expect(patch.code).toContain('defineConfig');
@@ -73,7 +74,8 @@ export default defineConfig({
     const patch = patchAstroConfig(withVite);
     expect(patch.kind).toBe(PatchKind.APPLY);
     if (patch.kind !== PatchKind.APPLY) return;
-    expect(patch.code).toContain('__RETICLE_TOKEN__');
+    expect(patch.code).toContain('reticle-vite-owning');
+    expect(patch.code).not.toContain('__RETICLE_TOKEN__');
     // The app's own setting survives — we add, never replace.
     expect(patch.code).toContain("target: 'es2018'");
   });
@@ -85,32 +87,54 @@ export default defineConfig({
 });
 
 describe('patchAstroLayout', () => {
-  it('inserts the dev-only connect script before </body>', () => {
-    const patch = patchAstroLayout(PLAIN_LAYOUT, undefined, undefined);
+  it('inserts the pairing-token meta and a static ReticleDev import before </body>', () => {
+    const patch = patchAstroLayout(PLAIN_LAYOUT, 'src/layouts/Layout.astro');
     expect(patch.kind).toBe(PatchKind.APPLY);
     if (patch.kind !== PatchKind.APPLY) return;
-    expect(patch.code).toContain('reticle.connect');
+    expect(patch.code).toContain('connectReticle');
+    expect(patch.code).toContain("from '../components/ReticleDev'");
+    expect(patch.code).toContain('reticle-pairing-token');
+    // The frontmatter must DECLARE what the meta markup interpolates. Asserting only that
+    // `pairingToken` appears somewhere passes on the markup alone, which is how a page that threw
+    // `ReferenceError: pairingToken is not defined` once shipped past this test.
+    expect(patch.code).toContain('const pairingToken =');
+    expect(patch.code).toContain('const pairingRoot =');
+    expect(patch.code.indexOf('const pairingToken =')).toBeLessThan(
+      patch.code.indexOf('content={pairingToken}'),
+    );
     expect(patch.code).toContain('import.meta.env.DEV');
-    expect(patch.code.indexOf('reticle.connect')).toBeLessThan(patch.code.indexOf('</body>'));
+    expect(patch.code).not.toContain('await import(');
+    expect(patch.code.indexOf('connectReticle')).toBeLessThan(patch.code.indexOf('</body>'));
     expect(patch.code).toContain('<slot />'); // the user's own markup survives
+    expect(patch.code).toContain('const { title } = Astro.props;'); // existing frontmatter survives
   });
 
-  it('carries a non-default port and the projectId into the connect', () => {
-    const patch = patchAstroLayout(PLAIN_LAYOUT, 7331, 'shop-1a2b');
+  it('resolves the module from a page the same way as from a layout', () => {
+    const patch = patchAstroLayout(PLAIN_LAYOUT, 'src/pages/index.astro');
     if (patch.kind !== PatchKind.APPLY) throw new Error('expected a patch');
-    expect(patch.code).toContain('7331');
-    expect(patch.code).toContain('shop-1a2b');
+    expect(patch.code).toContain("from '../components/ReticleDev'");
   });
 
   it('is idempotent — a layout already carrying a connect reports ALREADY', () => {
-    const once = patchAstroLayout(PLAIN_LAYOUT, undefined, undefined);
+    const once = patchAstroLayout(PLAIN_LAYOUT);
     if (once.kind !== PatchKind.APPLY) throw new Error('expected a patch');
-    expect(patchAstroLayout(once.code, undefined, undefined).kind).toBe(PatchKind.ALREADY);
+    expect(patchAstroLayout(once.code).kind).toBe(PatchKind.ALREADY);
   });
 
   it('refuses a layout with no </body> rather than guessing where the script goes', () => {
-    const patch = patchAstroLayout('<slot />\n', undefined, undefined);
+    const patch = patchAstroLayout('<slot />\n');
     expect(patch.kind).toBe(PatchKind.MANUAL);
+  });
+});
+
+describe('astroReticleDevFile', () => {
+  it('carries a non-default port and the projectId into the connect', () => {
+    const file = astroReticleDevFile(7331, 'shop-1a2b');
+    expect(file).toContain('7331');
+    expect(file).toContain('shop-1a2b');
+    expect(file).toContain("from '@reticlehq/react'");
+    expect(file).toContain('reticle.connect');
+    expect(file).toContain('registerCapabilities');
   });
 });
 
@@ -136,7 +160,7 @@ describe('an Astro config that already configures vite', () => {
     const source = `import { defineConfig } from 'astro/config';\nexport default defineConfig({\n  vite: {},\n});\n`;
     const patch = patchAstroConfig(source);
     expect(patch.kind).toBe(PatchKind.APPLY);
-    expect(patch.kind === PatchKind.APPLY && patch.code).toContain('__RETICLE_TOKEN__');
+    expect(patch.kind === PatchKind.APPLY && patch.code).toContain('reticle-vite-owning');
   });
 
   it('merges without disturbing what is already in there', () => {
@@ -149,7 +173,8 @@ describe('an Astro config that already configures vite', () => {
     // merges into that same object.
     expect(out).toContain('port: 4321');
     expect(out).toContain('integrations: [mdx()]');
-    expect(out).toContain('__RETICLE_TOKEN__');
+    expect(out).toContain('reticle-vite-owning');
+    expect(out).not.toContain('__RETICLE_TOKEN__');
   });
 
   it('still refuses a vite value that is not an object literal', () => {
@@ -210,10 +235,11 @@ export default defineConfig({
     expect(out).toContain('plugins: [tailwindcss()]');
   });
 
-  it('still inlines the token, which is the point of the whole patch', () => {
+  it('marks the config as already wired without putting the token in define', () => {
     const patch = patchAstroConfig(REAL_SHAPE);
     const out = patch.kind === PatchKind.APPLY ? patch.code : '';
-    expect(out).toContain('__RETICLE_TOKEN__');
+    expect(out).toContain('reticle-vite-owning');
+    expect(out).not.toContain('__RETICLE_TOKEN__');
   });
 
   it('refuses when a colliding key is not an object literal we can merge into', () => {

@@ -147,7 +147,7 @@ export async function runRoleStep(
  */
 const DESTRUCTIVE_ACTION_PATTERN = /potentially destructive (?:\w+ )*(?:action|tool) blocked/i;
 
-export function replayDestructiveActionHint(rawError: string): string {
+function replayDestructiveActionHint(rawError: string): string {
   if (!DESTRUCTIVE_ACTION_PATTERN.test(rawError)) return rawError;
   return (
     `${rawError} — this is a flow REPLAY: a step's own args.confirmDangerous is stripped before ` +

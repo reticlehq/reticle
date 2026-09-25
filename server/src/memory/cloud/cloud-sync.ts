@@ -366,7 +366,7 @@ export async function syncProgressToCloud(
 }
 
 /** How long events accumulate before a flush. See the batching note above. */
-export const PROGRESS_FLUSH_MS = 2_000;
+const PROGRESS_FLUSH_MS = 2_000;
 
 /**
  * A listener that buffers progress and ships it on a timer.

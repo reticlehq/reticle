@@ -38,7 +38,7 @@ export interface AdhocVerdict {
   lines: string[];
 }
 
-export interface AdhocVerdictOptions {
+interface AdhocVerdictOptions {
   port: number;
   /** Navigated to first when given; omitted to assert against wherever the session already is. */
   url?: string;

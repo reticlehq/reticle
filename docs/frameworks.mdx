@@ -85,7 +85,41 @@ module.exports = withReticle({/* your config */});
 
 ## Remix and Astro
 
-Both run on Vite, so both use the Vite plugin exactly as React does. Astro needs the React integration if you want component identity in `.jsx` islands. Static `.astro` markup gets DOM, network and routing without it.
+Remix uses the Vite plugin with `inject: false`: Remix SSRs its own HTML, so the plugin's connect-injection does not fire, but the stamping half still puts `file:line` on a verdict.
+
+Astro is the same on the plugin (wire it with `inject: false` if you want source pointers on JSX islands) and uses a different channel for the pairing token. `vite.define` does not reach Astro's client pipeline on 7.2+, so the identifier stays literal and the bridge refuses the dial. `init` reads the token in frontmatter and puts it on a `<meta name="reticle-pairing-token">`. Reading it per request also means a token written after the dev server started is picked up on the next load, with no restart.
+
+Use a processed page `<script>` with a static SDK import. Vite owns that module graph from the first transform:
+
+```astro
+---
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+const pairingToken = (() => {
+  if (!import.meta.env.DEV) return '';
+  const dir = process.env['RETICLE_PAIRING_TOKEN_DIR'] || join(homedir(), '.reticle');
+  try { return readFileSync(join(dir, 'pairing-token'), 'utf8').trim(); } catch { return ''; }
+})();
+const pairingRoot = import.meta.env.DEV ? process.cwd() : '';
+---
+<meta name="reticle-pairing-token" content={pairingToken} />
+<meta name="reticle-pairing-root" content={pairingRoot} />
+<script>
+  import { reticle, install } from '@reticlehq/react';
+  if (import.meta.env.DEV) {
+    const token = document.querySelector('meta[name="reticle-pairing-token"]')?.getAttribute('content') ?? '';
+    const root = document.querySelector('meta[name="reticle-pairing-root"]')?.getAttribute('content') ?? '';
+    install();
+    reticle.connect({
+      ...(0 < token.length ? { token } : {}),
+      ...(0 < root.length ? { root } : {}),
+    });
+  }
+</script>
+```
+
+The `<script>` tag must not sit inside a conditional. Astro hoists them statically, so `{isDev && (<script />)}` is never hoisted. `init` writes the same `<meta>` tags and a local `src/components/ReticleDev.ts` that the script statically imports. It also raises `vite.build.target` to `es2022` (Astro's default down-levels the SDK), declares the SDK in `optimizeDeps.include`, and keeps `.reticle/` out of the watcher. Static `.astro` markup still gets DOM, network and routing without the React integration.
 
 ## SvelteKit
 

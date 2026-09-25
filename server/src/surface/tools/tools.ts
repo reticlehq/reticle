@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   DiscoveryInvite,
   AttrNamesSchema,
+  EventType,
   NoSessionAction,
   QueryBy,
   ReticleCommand,
@@ -335,6 +336,7 @@ export const RAW_TOOLS: ToolDef[] = [
               mode,
             ),
             mode,
+            resolved,
           ),
         ),
       );
@@ -746,20 +748,81 @@ const UNMOUNTED_ROOT_MAX_ELEMENTS = 3;
  * Like both of its neighbours it names a fact and hands over the next read, and does not diagnose:
  * "not mounted" is certain from the count, WHY is not, and the console is where the answer is.
  */
-function noteUnmountedRoot(result: unknown, mode: string): unknown {
+/**
+ * The uncaught errors already in the session buffer, if there are any.
+ *
+ * An unmounted root has two readings that call for opposite next moves: an app that has not started
+ * yet (load it), and an app that started and threw (read the error). The count above settles that it
+ * is unmounted and cannot settle which — but the buffer beside it usually can, and the note used to
+ * send the reader to `reticle_console` to fetch a fact the server was already holding. That round
+ * trip is the whole of #899: the reporter took a screenshot, then read the console, and found five
+ * `Uncaught Error` entries about fifteen tool calls after the crash.
+ *
+ * Read defensively off the resolved session rather than through a narrowed type: the snapshot
+ * handler's only contract with `resolve()` is `id` and `command`, and a session that cannot answer
+ * for its buffer must degrade to the old note rather than fail the snapshot.
+ */
+interface CrashEvidence {
+  readonly count: number;
+  readonly first: string;
+}
+
+function crashEvidence(session: unknown): CrashEvidence | undefined {
+  const since = asRecord(session)['eventsSince'];
+  if ('function' !== typeof since) return undefined;
+  let events: unknown;
+  try {
+    events = (since as (cursor: number) => unknown).call(session, 0);
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(events)) return undefined;
+  const errors = events.filter((e) => {
+    const type = asString(asRecord(e)['type']);
+    return EventType.CONSOLE_ERROR === type || EventType.ERROR_UNCAUGHT === type;
+  });
+  if (0 === errors.length) return undefined;
+  const first = errors
+    .map((e) => asString(asRecord(asRecord(e)['data'])['message']))
+    .find((m): m is string => undefined !== m && '' !== m);
+  return { count: errors.length, first: first ?? '' };
+}
+
+function noteUnmountedRoot(result: unknown, mode: string, session?: unknown): unknown {
   if (SnapshotMode.STATUS === mode) return result;
   const row = asRecord(result);
   if (0 !== asNumber(row['nodes'])) return result;
   if (row['note'] !== undefined) return result;
   const elements = asNumber(row['domElements']);
   if (elements === undefined || elements > UNMOUNTED_ROOT_MAX_ELEMENTS) return result;
+  const mount =
+    `the tree is empty because there is almost nothing in the DOM: ${String(elements)} ` +
+    `element(s) under this scope. That is a mount container with nothing rendered into it, not a ` +
+    `page whose contents were skipped — so the app is UNMOUNTED rather than slow, and waiting ` +
+    `will not change it. `;
+  // An uncaught error beside an empty mount container is the difference between "has not started"
+  // and "started and died", which are the two readings of this count and want opposite next moves.
+  // Nothing here is framework-specific, and deliberately so: the condition is a known mount
+  // container that holds nothing with an uncaught error beside it, which is as true of a Vue or
+  // Svelte root as a React one.
+  const crash = crashEvidence(session);
+  if (crash !== undefined) {
+    return {
+      ...row,
+      note:
+        mount +
+        `The app did not merely fail to start — it CRASHED: ${String(crash.count)} uncaught ` +
+        `error(s) were logged in this session` +
+        ('' === crash.first ? '' : `, the first: "${crash.first}"`) +
+        `. Read reticle_console for the rest, and check anything that runs inside a framework ` +
+        `commit phase. Loading the app again will reproduce it rather than fix it.`,
+    };
+  }
   return {
     ...row,
     note:
-      `the tree is empty because there is almost nothing in the DOM: ${String(elements)} ` +
-      `element(s) under this scope. That is a mount container with nothing rendered into it, not a ` +
-      `page whose contents were skipped — so the app is UNMOUNTED rather than slow, and waiting ` +
-      `will not change it. An app that was rendering and then stopped has usually thrown: read ` +
+      mount +
+      `An app that was rendering and then stopped has usually thrown: read ` +
       `reticle_console for an uncaught error, and check anything that runs inside a framework ` +
       `commit phase. If the app has genuinely not started yet, load it and snapshot again.`,
   };

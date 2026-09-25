@@ -49,6 +49,7 @@ describe('steps without which no session can ever appear', () => {
       'Connect snippet',
       'Connect snippet (CRA)',
       'Connect snippet (Astro)',
+      'Astro ReticleDev module',
       'Connect snippet (Nuxt)',
       'Connect snippet (React Router)',
       'Connect snippet (TanStack Start)',

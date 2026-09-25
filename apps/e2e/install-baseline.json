@@ -43,9 +43,10 @@
     "– MCP server (global) → global (claude user scope)",
     "✓ Install dependencies → package.json",
     "✓ Reticle config → .reticle.json",
-    "✓ Astro config (token + build target) → astro.config.mjs",
+    "✓ Astro config (build target) → astro.config.mjs",
     "✓ Connect snippet (Astro) → src/pages/index.astro",
-    "✓ Astro env types (Vite defines) → src/env.d.ts"
+    "✓ Astro ReticleDev module → src/components/ReticleDev.ts",
+    "✓ Astro env types (window token) → src/env.d.ts"
   ],
   "sveltekit": [
     "– MCP server (global) → global (claude user scope)",

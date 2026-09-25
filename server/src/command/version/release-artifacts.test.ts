@@ -56,4 +56,29 @@ describe('the Rust crate can actually be published', () => {
     // dirty, which makes `cargo publish` refuse. The crate silently never ships.
     expect(locked).toBe(declared);
   });
+
+  /**
+   * glib 0.18 is pinned by the gtk-rs generation webkit2gtk and tauri both sit on (#1009). It is
+   * not actionable from this repo today. This assertion is green until the lock leaves 0.18.x,
+   * which is the day the standing "watch for gtk-rs 0.20" becomes a real job rather than a note
+   * in an issue body.
+   */
+  it('glib is still the gtk-rs 0.18 generation (#1009)', () => {
+    const lock = readFileSync(join(REPO, 'adapters/realm/tauri/Cargo.lock'), 'utf8');
+    const versions = [...lock.matchAll(/^name = "glib"\nversion = "([^"]+)"/gm)].map((m) => m[1]);
+    expect(
+      versions.length,
+      'Cargo.lock has no glib crate — the tripwire cannot fire',
+    ).toBeGreaterThan(0);
+    const moved = versions.filter((v) => !/^0\.18\./.test(v ?? ''));
+    expect(
+      moved,
+      [
+        'glib left 0.18.x. #1009 is now actionable.',
+        'Re-check: (1) cairo-rs / webkit2gtk still hand back the same Surface type,',
+        '(2) `cargo update -p glib --precise` now succeeds.',
+        `lock versions: ${versions.join(', ')}`,
+      ].join(' '),
+    ).toEqual([]);
+  });
 });

@@ -202,3 +202,81 @@ describe('installStoreState declares an unwatched state channel', () => {
     expect(spots(events).map((e) => e.data['count'])).toEqual([1]);
   });
 });
+
+/**
+ * A cache re-emitting a value it already had is not a state change.
+ *
+ * `diffState` compares by reference, which is right for Zustand and Redux (they replace the changed
+ * key's reference) and wrong for a query cache: TanStack Query re-emits an unchanged entry under a
+ * NEW object on every refetch. Those accumulate until the daemon throws
+ * `Cannot create a string longer than 0x1fffffe8 characters` -- V8's 512 MB string ceiling -- and
+ * the only two tools that produce a verdict stop working for the rest of the session (#985).
+ */
+describe('identical re-emissions do not become events', () => {
+  afterEach(() => {
+    unregisterStore('queries');
+  });
+
+  it('drops a new object reference carrying the same value', () => {
+    const store = fakeStore<{ data: { rows: number[] } }>({ data: { rows: [1, 2, 3] } });
+    registerStore('queries', store.getState, store.subscribe);
+    const events: Captured[] = [];
+    const teardown = installStoreState((type, data) => events.push({ type, data }));
+
+    // What a refetch does: a fresh object, deep-equal to the one it replaces.
+    for (let i = 0; i < 50; i += 1) store.setState({ data: { rows: [1, 2, 3] } });
+    teardown();
+
+    expect(events.filter((e) => e.type === EventType.STATE_CHANGE)).toHaveLength(0);
+  });
+
+  it('still reports a change the reader can see', () => {
+    const store = fakeStore<{ data: { rows: number[] } }>({ data: { rows: [1, 2, 3] } });
+    registerStore('queries', store.getState, store.subscribe);
+    const events: Captured[] = [];
+    const teardown = installStoreState((type, data) => events.push({ type, data }));
+
+    store.setState({ data: { rows: [1, 2, 3] } }); // identical -> dropped
+    store.setState({ data: { rows: [1, 2, 4] } }); // different -> reported
+    teardown();
+
+    const changes = events.filter((e) => e.type === EventType.STATE_CHANGE);
+    expect(changes).toHaveLength(1);
+    expect(changes[0]?.data).toMatchObject({ name: 'queries', path: 'data' });
+  });
+
+  it('reports a change from a value to undefined', () => {
+    // `JSON.stringify(undefined)` is `undefined`, so a naive string compare would call this equal
+    // to any other unserialisable value. Removing a key is a real change and must survive.
+    const store = fakeStore<{ data?: number }>({ data: 1 });
+    registerStore('queries', store.getState, store.subscribe);
+    const events: Captured[] = [];
+    const teardown = installStoreState((type, data) => events.push({ type, data }));
+
+    store.setState({});
+    teardown();
+
+    expect(events.filter((e) => e.type === EventType.STATE_CHANGE)).toHaveLength(1);
+  });
+
+  it('never coalesces a redacted path, where both sides present as the same token', () => {
+    // `project` collapses every credential to `[REDACTED]`, so a rotated secret presents
+    // identically on both sides. Coalescing on the presented form would drop the one change nobody
+    // can afford to miss.
+    const store = fakeStore<{ token: string }>({ token: 'secret-one' });
+    registerStore('queries', store.getState, store.subscribe);
+    const events: Captured[] = [];
+    const teardown = installStoreState((type, data) => events.push({ type, data }));
+
+    store.setState({ token: 'secret-two' });
+    teardown();
+
+    const changes = events.filter((e) => e.type === EventType.STATE_CHANGE);
+    expect(changes).toHaveLength(1);
+    expect(changes[0]?.data).toMatchObject({
+      path: 'token',
+      old: '[REDACTED]',
+      value: '[REDACTED]',
+    });
+  });
+});

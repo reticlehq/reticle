@@ -10,7 +10,7 @@ import { htmlManual } from './patch/snippets.js';
  * produces "bridge refused the connection: authentication failed" and no session, every time.
  *
  * Every other stack already knew this. Next reads `NEXT_PUBLIC_RETICLE_TOKEN`, SvelteKit and Vite
- * take `__RETICLE_TOKEN__` from the plugin's `define`, Astro reads the token file in its config, and
+ * take `__RETICLE_TOKEN__` from the plugin's `define`, Astro reads the token file in frontmatter, and
  * CRA gets a `Pairing token` step writing `.env` — that step is built two branches above this one in
  * the same planner, from the same `input.pairingToken`.
  *

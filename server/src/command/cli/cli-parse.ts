@@ -78,10 +78,12 @@ export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticl
                 [--expect '<json predicate>' | --expect-file <path>]   (one verdict, no saved
                 flows needed. --expect-file is the form no shell can mangle: cmd.exe keeps the
                 single quotes the docs show, and PowerShell strips the inner double quotes, and
-                a predicate that does not parse produces no verdict at all — asks
-                the daemon that is already running, so nothing is bound and nothing is stopped. This
-                is the path when your client never loaded the reticle_* tools. exit 0 ONLY on
-                verified:"yes" — "unknown" is not a pass)
+                a predicate that does not parse produces no verdict at all — asks the daemon that
+                is already running, so nothing is bound and nothing is stopped. It NEEDS that
+                daemon: with none on the port it refuses and names the flag, rather than reporting
+                on your saved flows instead. Cannot be combined with --storage-state, which this
+                path has nowhere to load. This is the path when your client never loaded the
+                reticle_* tools. exit 0 ONLY on verified:"yes" — "unknown" is not a pass)
   reticle affected [--since <ref>] [file...]           (which saved flows must re-verify for the changed files)
   reticle gate [--since <ref>] [file...]               (exit non-zero unless passing artifacts cover the affected flows)
   reticle report [--session <id>] [--hook]             (what the latest session claimed, and what held)

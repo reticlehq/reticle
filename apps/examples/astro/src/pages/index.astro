@@ -1,26 +1,49 @@
 ---
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import Counter from '../components/Counter.tsx';
+
+const pairingToken = (() => {
+  if (!import.meta.env.DEV) return '';
+  const dir = process.env['RETICLE_PAIRING_TOKEN_DIR'] || join(homedir(), '.reticle');
+  try {
+    return readFileSync(join(dir, 'pairing-token'), 'utf8').trim();
+  } catch {
+    return '';
+  }
+})();
+const pairingRoot = import.meta.env.DEV ? process.cwd() : '';
 ---
 
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <title>Reticle × Astro</title>
+    <meta name="reticle-pairing-token" content={pairingToken} />
+    <meta name="reticle-pairing-root" content={pairingRoot} />
   </head>
   <body>
     <h1>Reticle × Astro</h1>
     <Counter client:load />
     <script>
-      // Dev-only: connect Reticle on the client. Astro bundles this <script>, so the bare import resolves.
-      // The bridge requires the pairing token even on localhost; astro.config inlines it as
-      // __RETICLE_TOKEN__ (empty until the daemon is up — the page reloads once it is).
+      import { reticle, install } from '@reticlehq/react';
       if (import.meta.env.DEV) {
-        const token = typeof __RETICLE_TOKEN__ !== 'undefined' ? __RETICLE_TOKEN__ : '';
-        const { reticle, install } = await import('@reticlehq/react');
+        const token =
+          document.querySelector('meta[name="reticle-pairing-token"]')?.getAttribute('content') ??
+          '';
+        const root =
+          document.querySelector('meta[name="reticle-pairing-root"]')?.getAttribute('content') ?? '';
+        if (0 === token.length) {
+          console.warn(
+            '[reticle] no pairing token was available when this page rendered, so the app will connect and be refused — you will see NO SESSION even though the SDK loads and the socket opens. The token is written by the Reticle daemon: start it (`reticle serve`, or let your agent start it) and reload this page.',
+          );
+        }
         install();
         reticle.connect({
           projectId: 'example-astro',
-          ...(token.length > 0 ? { token } : {}),
+          ...(0 < token.length ? { token } : {}),
+          ...(0 < root.length ? { root } : {}),
         });
       }
     </script>

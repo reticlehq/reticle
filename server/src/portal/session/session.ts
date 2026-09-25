@@ -7,7 +7,7 @@ import { LastAct } from './last-act.js';
 import { GapLedger } from '@reticlehq/engine/evidence/gap-ledger.js';
 import { CaptureLedger } from '@/surface/tools/feature-capture.js';
 import { commandTimeoutMessage, type PageRuntime } from './timing/command-timeout.js';
-import { readHealthEvent, pendingNavigationMs, type SessionHealth } from './session-health.js';
+import { readHealthEvent, healthNotices, type SessionHealth } from './session-health.js';
 import { MIRRORED_COMMANDS, mirroredNarration } from './presence/session-mirror.js';
 
 export type { SessionHealth };
@@ -249,17 +249,16 @@ export class Session implements HandshakeFacts {
 
   /** The attachable health block — single source of truth for the tools. */
   health(): SessionHealth {
-    // From event t=0, not a cursor: a wedge that began before the current action is exactly the
-    // case a per-window reading cannot see, and is the one both reporters hit.
-    const stuck = pendingNavigationMs(this.eventsSince(0), this.elapsed());
     const base: SessionHealth = {
       lastSeenMs: this.lastSeenMs(),
       throttled: this.throttled(),
       focused: this.#focused,
-      ...(stuck === undefined ? {} : { pendingNavigationMs: stuck }),
       // Carried onto every act/assert result, not just reticle_sessions: skew drops actions
       // SILENTLY, and the fields it contradicts are on the act verdict.
       ...(this.versionSkew === undefined ? {} : { versionSkew: this.versionSkew }),
+      // The absence-gated facts: a stuck navigation and an ledger worth naming. Both are absent on
+      // a healthy session, and `healthNotices` owns which is which.
+      ...healthNotices(this.eventsSince(0), this.elapsed(), this.#journalReader?.ledger?.()),
     };
     // attach the escape-hatch hint only when un-scriptable (keeps field absent otherwise).
     const recommendation = buildSessionRecommendation({

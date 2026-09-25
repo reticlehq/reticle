@@ -37,8 +37,9 @@ export const StepTitle = {
   SVELTEKIT_UNVERIFIED: 'SvelteKit is UNVERIFIED',
   CLIENT_HOOK: 'Reticle client hook',
   CONNECT_SNIPPET_ASTRO: 'Connect snippet (Astro)',
-  ASTRO_CONFIG: 'Astro config (token + build target)',
-  ASTRO_ENV_DTS: 'Astro env types (Vite defines)',
+  ASTRO_RETICLE_DEV: 'Astro ReticleDev module',
+  ASTRO_CONFIG: 'Astro config (build target)',
+  ASTRO_ENV_DTS: 'Astro env types (window token)',
   CSP: CSP_STEP_TITLE,
   CONNECT_SNIPPET: 'Connect snippet',
 } as const;
@@ -59,6 +60,7 @@ export const CONNECT_STEP_TITLES: ReadonlySet<StepTitle> = new Set<StepTitle>([
   StepTitle.CONNECT_SNIPPET,
   StepTitle.CONNECT_SNIPPET_CRA,
   StepTitle.CONNECT_SNIPPET_ASTRO,
+  StepTitle.ASTRO_RETICLE_DEV,
   StepTitle.CONNECT_SNIPPET_NUXT,
   // The config is the other half of the Nuxt connect, not a nicety: it is the only thing in a Nuxt
   // app that can inline the pairing token, and the bridge refuses a connect without one even on

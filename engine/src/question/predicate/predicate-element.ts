@@ -28,7 +28,7 @@ import { describeTestidMiss } from './testid-near-miss.js';
 import { describeSplitTextMiss } from './split-text-miss.js';
 import { satisfiesProperty, type Baseline, type PropertyAssertion } from './property.js';
 
-export async function matchOnce(
+async function matchOnce(
   session: PredicateSession,
   query: ElementQuery,
   state: ElementState | undefined,

@@ -25,10 +25,31 @@ export interface ViteOwningConfig {
   readonly defineCall: RegExp;
   /** The SDK package this framework's connect imports, declared so Vite pre-bundles it. */
   readonly sdkSpecifier: string;
+  /**
+   * When true (default), inline the pairing token and project root via `vite.define`.
+   *
+   * Nuxt still needs this: its client plugin reads `__RETICLE_TOKEN__` from the define. Astro 7.2+
+   * no longer substitutes `define` into the client pipeline (#1008), so Astro sets this false and
+   * puts the token on a frontmatter `<meta>` instead.
+   */
+  readonly defineToken?: boolean;
+  /**
+   * Present once this patch has applied. Defaults to `__RETICLE_TOKEN__`, which is what the define
+   * path writes. Astro's path never writes that name into the config, so it supplies its own.
+   */
+  readonly alreadyMarker?: string;
 }
 
 /** Present in a patched config AND in a hand-followed recipe — so both count as already wired. */
-const CONFIG_MARKER = '__RETICLE_TOKEN__';
+const DEFINE_TOKEN_MARKER = '__RETICLE_TOKEN__';
+
+function usesDefineToken(config: ViteOwningConfig): boolean {
+  return config.defineToken !== false;
+}
+
+function alreadyMarker(config: ViteOwningConfig): string {
+  return config.alreadyMarker ?? DEFINE_TOKEN_MARKER;
+}
 
 /**
  * The SDK, declared so Vite pre-bundles it BEFORE the first page load.
@@ -99,31 +120,37 @@ import { join } from 'node:path';
  * cosmetic: Astro's default down-levels the modern SDK bundle and dies on a destructuring transform.
  */
 function viteKeys(config: ViteOwningConfig): readonly { key: string; inner: string }[] {
-  return [
+  const keys: { key: string; inner: string }[] = [
     { key: 'build', inner: `\n      target: 'es2022',` },
     {
       key: 'optimizeDeps',
       inner: `\n      include: [${sdkInclude(config)}],\n      esbuildOptions: { target: 'es2022' },`,
-    },
-    {
-      key: 'define',
-      inner: `\n      __RETICLE_TOKEN__: JSON.stringify(reticleToken()),\n      __RETICLE_ROOT__: JSON.stringify(process.cwd()),`,
     },
     // Merged in first, so a `server: { port }` the app already set keeps its port. An app that
     // already sets `server.watch` itself is the one shape this loses to — the inner `watch` key would
     // be duplicated and the app's would win — which is the same nested-merge ceiling `build` has.
     { key: 'server', inner: `\n      watch: { ignored: [${WATCH_IGNORE_LITERAL}] },` },
   ];
+  if (usesDefineToken(config)) {
+    keys.splice(2, 0, {
+      key: 'define',
+      inner: `\n      __RETICLE_TOKEN__: JSON.stringify(reticleToken()),\n      __RETICLE_ROOT__: JSON.stringify(process.cwd()),`,
+    });
+  }
+  return keys;
 }
 
 /** Whole-key form, for a `vite:` block that does not have the key at all. */
 function wholeKeys(config: ViteOwningConfig): Readonly<Record<string, string>> {
-  return {
+  const keys: Record<string, string> = {
     build: `\n    build: { target: 'es2022' },`,
     optimizeDeps: `\n    optimizeDeps: { include: [${sdkInclude(config)}], esbuildOptions: { target: 'es2022' } },`,
-    define: `\n    define: {\n      __RETICLE_TOKEN__: JSON.stringify(reticleToken()),\n      __RETICLE_ROOT__: JSON.stringify(process.cwd()),\n    },`,
     server: `\n    server: { watch: { ignored: [${WATCH_IGNORE_LITERAL}] } },`,
   };
+  if (usesDefineToken(config)) {
+    keys.define = `\n    define: {\n      __RETICLE_TOKEN__: JSON.stringify(reticleToken()),\n      __RETICLE_ROOT__: JSON.stringify(process.cwd()),\n    },`;
+  }
+  return keys;
 }
 
 /**
@@ -185,20 +212,36 @@ function withoutInclude(inner: string, config: ViteOwningConfig): string {
  * that ran `init`.
  */
 function viteBlock(config: ViteOwningConfig): string {
-  return `  vite: {
-    build: { target: 'es2022' },
-    optimizeDeps: { include: [${sdkInclude(config)}], esbuildOptions: { target: 'es2022' } },
-    define: {
+  const marker = usesDefineToken(config) ? '' : `    /* ${alreadyMarker(config)} */\n`;
+  const define = usesDefineToken(config)
+    ? `    define: {
       __RETICLE_TOKEN__: JSON.stringify(reticleToken()),
       __RETICLE_ROOT__: JSON.stringify(process.cwd()),
     },
-    server: { watch: { ignored: [${WATCH_IGNORE_LITERAL}] } },
+`
+    : '';
+  return `  vite: {
+${marker}    build: { target: 'es2022' },
+    optimizeDeps: { include: [${sdkInclude(config)}], esbuildOptions: { target: 'es2022' } },
+${define}    server: { watch: { ignored: [${WATCH_IGNORE_LITERAL}] } },
   },
 `;
 }
 
+function withHelper(source: string, config: ViteOwningConfig): string {
+  if (!usesDefineToken(config)) {
+    return source.endsWith('\n') ? source : `${source}\n`;
+  }
+  return `${HELPER_IMPORTS}${source.trimStart()}\n${HELPER}`.trimEnd() + '\n';
+}
+
+function withOwningMarker(source: string, config: ViteOwningConfig, braceAt: number): string {
+  if (usesDefineToken(config) || source.includes(alreadyMarker(config))) return source;
+  return insertAt(source, braceAt, `\n    /* ${alreadyMarker(config)} */`);
+}
+
 export function patchViteOwningConfig(source: string, config: ViteOwningConfig): SourcePatch {
-  if (source.includes(CONFIG_MARKER)) return { kind: PatchKind.ALREADY };
+  if (source.includes(alreadyMarker(config))) return { kind: PatchKind.ALREADY };
   // A `vite: { ... }` block is an object literal, so our keys can go straight after the brace and
   // whatever is already in there is untouched. Refusing outright was the only genuine install defect
   // left in the gate: the config bailed while the LAYOUT patch applied anyway, leaving an app with a
@@ -211,7 +254,7 @@ export function patchViteOwningConfig(source: string, config: ViteOwningConfig):
     if (merged !== null) {
       return {
         kind: PatchKind.APPLY,
-        code: `${HELPER_IMPORTS}${merged.trimStart()}\n${HELPER}`.trimEnd() + '\n',
+        code: withHelper(withOwningMarker(merged, config, at), config),
       };
     }
     return {
@@ -241,6 +284,6 @@ export function patchViteOwningConfig(source: string, config: ViteOwningConfig):
   const withBlock = `${source.slice(0, at)}\n${viteBlock(config)}${source.slice(at)}`;
   return {
     kind: PatchKind.APPLY,
-    code: `${HELPER_IMPORTS}${withBlock.trimStart()}\n${HELPER}`.trimEnd() + '\n',
+    code: withHelper(withBlock, config),
   };
 }

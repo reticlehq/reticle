@@ -9,6 +9,8 @@ import { patchViteConfig, VitePatchKind, VITE_IMPORT } from '@/patch/vite-config
 import { patchNextConfig, patchRootLayout, patchPagesApp } from '@/patch/next-patch.js';
 import {
   ASTRO_ENV_DTS_PATH,
+  ASTRO_RETICLE_DEV_PATH,
+  astroReticleDevFile,
   patchAstroConfig,
   patchAstroEnvDts,
   patchAstroLayout,
@@ -759,7 +761,7 @@ export function svelteKitSteps(input: PlanInput): Step[] {
 }
 
 /**
- * Astro: the config define + build target, and the connect script in ONE layout.
+ * Astro: the config build target, and the connect script (with the pairing token) in ONE layout.
  *
  * Astro was the last gated stack left printing a recipe it did not apply. It still falls back to the
  * printed one whenever the choice is not obvious — no config, no single layout, or a shape the
@@ -783,20 +785,15 @@ export function astroSteps(input: PlanInput): Step[] {
       },
     ];
   }
-  // ATOMIC. The connect snippet is useless without the config: the token is inlined by the config,
-  // so a layout patched on its own gives an app that dials the bridge and is refused. Measured on a
-  // real fixture — config ⚠, layout ✓ — which reads as one step done and one caveat when it is
-  // actually a guaranteed non-connection. If either half cannot be applied, BOTH go manual with the
-  // single recipe that does the whole job.
+  // ATOMIC. The connect snippet is useless without the config: without `build.target: 'es2022'`
+  // Astro down-levels the SDK and the dynamic import dies, and without `optimizeDeps.include` the
+  // first load 404s the hashed module. The token itself now lives in the layout frontmatter (#1008),
+  // but a layout patched on its own still cannot connect. Measured on a real fixture — config ⚠,
+  // layout ✓ — which reads as one step done and one caveat when it is actually a guaranteed
+  // non-connection. If either half cannot be applied, BOTH go manual with the single recipe.
   const manualWithLayout = astroManual(input.options.port, input.options.projectId, layout.path);
   const configPatch = patchAstroConfig(config.source);
-  const layoutPatch = patchAstroLayout(
-    layout.source,
-    input.options.port,
-    input.options.projectId,
-    input.detection.uiLibrary,
-    input.testids ?? [],
-  );
+  const layoutPatch = patchAstroLayout(layout.source, layout.path);
   if (configPatch.kind === PatchKind.MANUAL || layoutPatch.kind === PatchKind.MANUAL) {
     return [
       {
@@ -808,21 +805,48 @@ export function astroSteps(input: PlanInput): Step[] {
     ];
   }
   const envPatch = patchAstroEnvDts(input.astroEnvDts ?? null);
+  const existingDev = input.astroReticleDev ?? null;
+  const devAlready =
+    'string' === typeof existingDev && existingDev.includes('reticle.connect');
+  const devStep: Step = devAlready
+    ? {
+        title: StepTitle.ASTRO_RETICLE_DEV,
+        target: ASTRO_RETICLE_DEV_PATH,
+        status: StepStatus.ALREADY,
+        detail: 'file exists, left alone',
+      }
+    : {
+        title: StepTitle.ASTRO_RETICLE_DEV,
+        target: ASTRO_RETICLE_DEV_PATH,
+        status: StepStatus.APPLY,
+        detail: 'write the local connect module (static SDK import, token from <meta>)',
+        write: {
+          path: ASTRO_RETICLE_DEV_PATH,
+          content: astroReticleDevFile(
+            input.options.port,
+            input.options.projectId,
+            input.detection.uiLibrary,
+            input.testids ?? [],
+          ),
+        },
+        dependsOnInstall: true,
+      };
   return [
     patchStep(
       StepTitle.ASTRO_CONFIG,
       config.path,
       configPatch,
-      'inline the pairing token and raise build.target to es2022',
+      'raise build.target to es2022 and keep .reticle/ out of the watcher',
       manualWithLayout,
     ),
     patchStep(
       StepTitle.CONNECT_SNIPPET_ASTRO,
       layout.path,
       layoutPatch,
-      'add the dev-only connect <script> before </body>',
+      'add the pairing-token <meta> and a script that statically imports ReticleDev',
       manualWithLayout,
     ),
+    devStep,
     // Declares the Vite define names so `astro check` (create-astro's default build) can see them
     // (#677). Independent of the two halves above: even an ALREADY config/layout still needs this
     // when the env file was never written.
@@ -830,7 +854,7 @@ export function astroSteps(input: PlanInput): Step[] {
       StepTitle.ASTRO_ENV_DTS,
       ASTRO_ENV_DTS_PATH,
       envPatch,
-      'declare __RETICLE_TOKEN__ / __RETICLE_ROOT__ for astro check',
+      'declare window.__RETICLE_TOKEN__ / __RETICLE_ROOT__ for astro check',
       manualWithLayout,
     ),
   ];

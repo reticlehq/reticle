@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process';
+import { join } from 'node:path';
 
 /**
  * Free the fixed ports the integration suite binds — BEFORE the run (clears a dev server / Reticle bridge
@@ -28,7 +29,29 @@ function freePorts(): void {
   }
 }
 
+/**
+ * Astro 7.2+ daemonises `astro dev`. Killing the process group we spawned does not stop the
+ * daemon, so a later `astro dev` prints "Dev server already running" and never binds. `astro
+ * dev stop` is the documented reap; it runs here (the MAIN process) because spawning from a
+ * vitest worker closes the worker IPC channel. Port kill above remains the backstop.
+ */
+function stopAstroDaemon(): void {
+  try {
+    execSync('npx astro dev stop', {
+      cwd: join(process.cwd(), 'apps/examples/astro'),
+      stdio: 'ignore',
+    });
+  } catch {
+    /* no daemon, or astro not installed — fine */
+  }
+}
+
+function reap(): void {
+  stopAstroDaemon();
+  freePorts();
+}
+
 export default function setup(): () => void {
-  freePorts(); // before the run: evict leftovers from a previously-interrupted run
-  return freePorts; // after the run: evict any grandchild dev server that escaped its process group
+  reap(); // before the run: evict leftovers from a previously-interrupted run
+  return reap; // after the run: evict any grandchild / astro daemon that escaped
 }

@@ -3,9 +3,12 @@
  * Rebase a pull request written against the old `packages/*` layout onto the current tree.
  *
  * The v3 restructure moved every package directory and deleted `packages/`, which put 40 of 55 open
- * pull requests into conflict against a path that no longer exists (#979). The move was a clean rename,
- * so recovering those branches is a table lookup rather than a merge: rewrite the paths in each
- * commit's patch headers, replay onto `main`, force-push the contributor's branch.
+ * pull requests into conflict against a path that no longer exists (#979). It also re-homed most
+ * files inside those packages, so a package-root prefix is the wrong destination for 1192 of the
+ * 1699 files git itself recorded as renames (#1033). Recovery is still a table lookup: the table is
+ * git's rename map (`v3-package-renames.tsv`, from `git diff -M` between v2.14.0 and this tree),
+ * not the twelve package roots. Rewrite the paths in each commit's patch headers, replay onto
+ * `main`, force-push the contributor's branch.
  *
  * It rewrites PATCH HEADERS ONLY — never a `+`/`-` content line. A relative import or a workspace
  * path inside a file is a source change that belongs to whoever reviews the PR; rewriting it here
@@ -19,9 +22,15 @@
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-/** Where each package directory went in the v3 restructure. Verified against `git ls-tree main`. */
+/**
+ * Where each package directory went. The last resort, used only when the rename map has never seen
+ * that directory: a file added in a folder the restructure did not move any file out of. A directory
+ * the map HAS seen, and split across more than one destination, is left untouched. Guessing
+ * `server/src/events/lineage.ts` for a file that git put in `engine/` is the miss #1033 measured.
+ */
 const MOVED = {
   'packages/core/': 'core/',
   'packages/server/': 'server/',
@@ -44,6 +53,129 @@ const MOVED = {
 const PATH_LINE =
   /^(diff --git |--- |\+\+\+ |rename from |rename to |copy from |copy to |Binary files )/;
 
+const RENAME_MAP = join(dirname(fileURLToPath(import.meta.url)), 'v3-package-renames.tsv');
+
+/**
+ * Exact old-to-new paths, plus the directories that moved as a unit.
+ *
+ * A directory is unambiguous when every renamed file under it kept the same relative suffix, so a
+ * file the pull request added beside them follows the same move. A directory whose children left
+ * for different places (`packages/server/src/events/` went to three directories under `engine/`)
+ * is ambiguous: a new file there is reported as a real conflict instead of written to a path that
+ * does not exist.
+ */
+function loadRenameIndex(text) {
+  const exact = new Map();
+  for (const line of text.split('\n')) {
+    if (0 === line.length) continue;
+    const tab = line.indexOf('\t');
+    if (0 > tab) continue;
+    exact.set(line.slice(0, tab), line.slice(tab + 1));
+  }
+  const byDir = new Map();
+  for (const [oldPath, newPath] of exact) {
+    const parts = oldPath.split('/');
+    for (let i = 1; i < parts.length; i += 1) {
+      const dir = `${parts.slice(0, i).join('/')}/`;
+      const bucket = byDir.get(dir) ?? [];
+      bucket.push([oldPath.slice(dir.length), newPath]);
+      byDir.set(dir, bucket);
+    }
+  }
+  const unambiguous = new Map();
+  const ambiguous = new Set();
+  for (const [dir, files] of byDir) {
+    let newDir = null;
+    let ok = true;
+    for (const [rest, newPath] of files) {
+      if (!newPath.endsWith(rest)) {
+        ok = false;
+        break;
+      }
+      const candidate = newPath.slice(0, newPath.length - rest.length);
+      if (null === newDir) newDir = candidate;
+      else if (newDir !== candidate) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok && null !== newDir && newDir !== dir) unambiguous.set(dir, newDir);
+    else if (!ok) ambiguous.add(dir);
+  }
+  return { exact, unambiguous, ambiguous };
+}
+
+const renameIndex = loadRenameIndex(readFileSync(RENAME_MAP, 'utf8'));
+
+/**
+ * The path this old `packages/` path has on the current tree, or null when the directory was split
+ * and this particular file was not in the rename map.
+ */
+function resolveMovedPath(oldPath, index = renameIndex) {
+  if (!oldPath.startsWith('packages/')) return oldPath;
+  const exact = index.exact.get(oldPath);
+  if (undefined !== exact) return exact;
+  const parts = oldPath.split('/');
+  for (let i = parts.length - 1; 1 <= i; i -= 1) {
+    const dir = `${parts.slice(0, i).join('/')}/`;
+    const moved = index.unambiguous.get(dir);
+    if (undefined !== moved) return moved + oldPath.slice(dir.length);
+    if (index.ambiguous.has(dir)) return null;
+  }
+  for (const [from, to] of Object.entries(MOVED)) {
+    if (oldPath.startsWith(from)) return to + oldPath.slice(from.length);
+  }
+  return null;
+}
+
+function rewriteOnePath(path, index) {
+  if (!path.startsWith('packages/')) return path;
+  return resolveMovedPath(path, index) ?? path;
+}
+
+/** Rewrite `a/` and `b/` paths in one header. Content lines never reach here. */
+function rewritePrefixedPaths(line, index) {
+  let out = '';
+  let cursor = 0;
+  while (cursor < line.length) {
+    const aAt = line.indexOf('a/', cursor);
+    const bAt = line.indexOf('b/', cursor);
+    let at = -1;
+    if (0 <= aAt && (0 > bAt || aAt <= bAt)) at = aAt;
+    else if (0 <= bAt) at = bAt;
+    if (0 > at) {
+      out += line.slice(cursor);
+      break;
+    }
+    const atBoundary = 0 === at || ' ' === line[at - 1];
+    if (!atBoundary) {
+      out += line.slice(cursor, at + 2);
+      cursor = at + 2;
+      continue;
+    }
+    const start = at + 2;
+    let end = start;
+    while (end < line.length && ' ' !== line[end] && '\t' !== line[end]) end += 1;
+    out += line.slice(cursor, start) + rewriteOnePath(line.slice(start, end), index);
+    cursor = end;
+  }
+  return out;
+}
+
+function remapLine(line, index) {
+  if (!PATH_LINE.test(line)) return line;
+  if (
+    line.startsWith('rename from ') ||
+    line.startsWith('rename to ') ||
+    line.startsWith('copy from ') ||
+    line.startsWith('copy to ')
+  ) {
+    const second = line.indexOf(' ', line.indexOf(' ') + 1);
+    return line.slice(0, second + 1) + rewriteOnePath(line.slice(second + 1), index);
+  }
+  return rewritePrefixedPaths(line, index);
+}
+
 const git = (args, opts = {}) =>
   // `?? ''`: a command whose stdout is not piped returns null, and `.trim()` on that used to throw
   // from inside the `am --abort` recovery path, replacing every real conflict message with a
@@ -63,22 +195,70 @@ const gitQuietly = (args, opts = {}) => {
 };
 
 /** Rewrite every moved path in one patch file's headers. Returns how many lines changed. */
-function remapPatch(file) {
+function remapPatch(file, index = renameIndex) {
   const lines = readFileSync(file, 'utf8').split('\n');
   let changed = 0;
   const out = lines.map((line) => {
-    if (!PATH_LINE.test(line)) return line;
-    let next = line;
-    for (const [from, to] of Object.entries(MOVED)) {
-      // Paths appear as `a/packages/x/…`, `b/packages/x/…` or bare in rename/copy lines.
-      next = next.split(`a/${from}`).join(`a/${to}`).split(`b/${from}`).join(`b/${to}`);
-      if (next.startsWith('rename ') || next.startsWith('copy ')) next = next.split(from).join(to);
-    }
+    const next = remapLine(line, index);
     if (next !== line) changed += 1;
     return next;
   });
   if (changed > 0) writeFileSync(file, out.join('\n'));
   return changed;
+}
+
+function failSelfTest(why) {
+  process.stderr.write(`remap self-test failed: ${why}\n`);
+  process.exit(1);
+}
+
+/**
+ * Proves the two failures #1033 measured: a renamed file follows git, and a patch body is not a
+ * header. Run before any `gh` call so the check does not need a network or a pull request.
+ */
+function selfTest() {
+  const lineage = resolveMovedPath('packages/server/src/events/lineage.ts');
+  if ('engine/src/question/lineage.ts' !== lineage) {
+    failSelfTest(`lineage resolved to ${String(lineage)}`);
+  }
+  const lineageTest = resolveMovedPath('packages/server/src/events/lineage.test.ts');
+  if ('engine/src/question/lineage.test.ts' !== lineageTest) {
+    failSelfTest(`lineage test resolved to ${String(lineageTest)}`);
+  }
+  const tool = resolveMovedPath('packages/server/src/tools/lineage-tools.ts');
+  if ('server/src/surface/tools/lineage-tools.ts' !== tool) {
+    failSelfTest(`lineage tool resolved to ${String(tool)}`);
+  }
+  const addedBeside = resolveMovedPath('packages/server/src/telemetry/not-a-real-file.ts');
+  if ('server/src/telemetry/not-a-real-file.ts' !== addedBeside) {
+    failSelfTest(`telemetry neighbour resolved to ${String(addedBeside)}`);
+  }
+  if (null !== resolveMovedPath('packages/server/src/events/not-a-real-file.ts')) {
+    failSelfTest('a new file in a split directory was guessed');
+  }
+  const patch = join(mkdtempSync(join(tmpdir(), 'remap-self-')), '0001.patch');
+  writeFileSync(
+    patch,
+    [
+      'diff --git a/packages/server/src/events/lineage.ts b/packages/server/src/events/lineage.ts',
+      '--- a/packages/server/src/events/lineage.ts',
+      '+++ b/packages/server/src/events/lineage.ts',
+      '@@ -1 +1 @@',
+      '-old',
+      "+import 'packages/server/src/events/lineage.ts'",
+      '',
+    ].join('\n'),
+  );
+  if (3 !== remapPatch(patch))
+    failSelfTest('expected the three headers to change and the body to stay');
+  const rewritten = readFileSync(patch, 'utf8');
+  if (!rewritten.includes('a/engine/src/question/lineage.ts')) {
+    failSelfTest('diff header was not rewritten to the git destination');
+  }
+  if (!rewritten.includes("import 'packages/server/src/events/lineage.ts'")) {
+    failSelfTest('a content line was rewritten');
+  }
+  process.stdout.write('remap self-test passed\n');
 }
 
 function rescue(pr, { apply, worktree }) {
@@ -131,6 +311,10 @@ function rescue(pr, { apply, worktree }) {
 }
 
 const args = process.argv.slice(2);
+if (args.includes('--self-test')) {
+  selfTest();
+  process.exit(0);
+}
 const apply = args.includes('--apply');
 const prs = args.filter((a) => /^\d+$/.test(a)).map(Number);
 if (0 === prs.length) {

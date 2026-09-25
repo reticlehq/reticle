@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/browser` — a query cache re-emitting an unchanged value no longer counts as a state change.** State diffs compare top-level values by reference, which is correct for Zustand and Redux but not for TanStack Query, which re-emits an unchanged entry under a new object on every refetch. Those accumulated until the daemon threw `Cannot create a string longer than 0x1fffffe8 characters` and `reticle_assert` and `reticle_act_and_wait` — the only two tools that produce a verdict — stopped working for the rest of the session. A change whose old and new values present identically is dropped; a redacted path is never coalesced, because two different secrets present the same. Part of [#985](https://github.com/reticlehq/reticle/issues/985).

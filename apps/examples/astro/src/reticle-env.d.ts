@@ -1,3 +1,4 @@
-// Injected by astro.config's vite `define` from the daemon's ~/.reticle/pairing-token (a JSON string
-// literal; declared here — not inline — so `define`'s textual replacement can't corrupt the declaration).
-declare const __RETICLE_TOKEN__: string;
+// The pairing token travels in <meta name="reticle-pairing-*">, not vite.define
+// (that channel does not reach Astro's client pipeline on 7.2+, so the identifier
+// stays literal in the served module). A processed page <script> imports the SDK
+// and reads the meta tags, so there is no injected global left to declare.

@@ -23,7 +23,7 @@ import {
 } from './auth/cloud-session.js';
 
 /** Where `reticle login` dials when nothing says otherwise: the hosted service. */
-export const DEFAULT_URL = 'https://app.reticle.sh';
+const DEFAULT_URL = 'https://app.reticle.sh';
 export const RETICLE_DIR = '.reticle';
 export const SESSION_FILE = 'session.json';
 export const CREDENTIALS_FILE = 'credentials.json';

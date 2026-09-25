@@ -3,6 +3,7 @@ import {
   EventType,
   BUFFER_EVICTION_WARNING,
   THROTTLED_STARVED_NOTE,
+  SESSION_HEALTH,
   THROTTLED_WARNING,
   type ReticleEvent,
 } from '@reticlehq/core';
@@ -43,6 +44,19 @@ export interface SessionHealth {
    * on `reticle_sessions` or `reticle_lease` is not on the surface it reads every call.
    */
   versionSkew?: string;
+  /**
+   * The session's event ledger, once it has grown enough to be worth a reader's attention.
+   *
+   * Present only past `LEDGER_NOTICE_FRACTION` of the cap, so a healthy session costs nothing --
+   * the same rule `pendingNavigationMs` follows. A ledger below that is doing its job quietly.
+   *
+   * It is here because nothing reported it. A repeating uncaught error wrote one session's ledger
+   * at 13 MB/s for 14 hours and filled a 926 GB disk; neither the daemon nor `doctor` nor any
+   * health counter said a word, and the user found out when the disk was full (#986). A cap bounds
+   * the damage but does not make the writing visible, and this block is the surface an agent
+   * already reads on every act and assert.
+   */
+  ledger?: { bytes: number; capBytes: number };
 }
 
 /**
@@ -242,5 +256,41 @@ export function readHealthEvent(data: Record<string, unknown>): HealthReport {
     runtime: 'string' === typeof data['runtime'] ? data['runtime'] : undefined,
     engine: 'string' === typeof data['engine'] ? data['engine'] : undefined,
     brand: Object.values(BrowserBrand).find((known) => known === data['brand']),
+  };
+}
+
+/**
+ * The ledger block for the health payload, or nothing when it is not worth saying.
+ *
+ * Absent below `LEDGER_NOTICE_FRACTION` of the cap, and absent when the size has not been measured
+ * yet -- a reader must be able to tell "not measured" from "empty", and a zero reported before the
+ * first append would be a claim rather than a reading.
+ */
+export function ledgerNotice(ledger: { bytes: number; capBytes: number } | undefined): {
+  ledger?: { bytes: number; capBytes: number };
+} {
+  if (ledger === undefined || 0 >= ledger.capBytes) return {};
+  const fraction = ledger.bytes / ledger.capBytes;
+  return fraction < SESSION_HEALTH.LEDGER_NOTICE_FRACTION ? {} : { ledger };
+}
+
+/**
+ * Every health field that is present only when it means something.
+ *
+ * One place answers "which optional facts belong on the health block", so a session does not have
+ * to know the rule for each. A healthy session gets an empty object back and its health block
+ * carries only the fields that are always true.
+ */
+export function healthNotices(
+  events: readonly ReticleEvent[],
+  elapsed: number,
+  ledger: { bytes: number; capBytes: number } | undefined,
+): { pendingNavigationMs?: number; ledger?: { bytes: number; capBytes: number } } {
+  // From event t=0, not a cursor: a wedge that began before the current action is exactly the case
+  // a per-window reading cannot see, and is the one both reporters hit.
+  const stuck = pendingNavigationMs(events, elapsed);
+  return {
+    ...(stuck === undefined ? {} : { pendingNavigationMs: stuck }),
+    ...ledgerNotice(ledger),
   };
 }

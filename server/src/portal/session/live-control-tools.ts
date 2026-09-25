@@ -75,6 +75,34 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
       if (endingTurnWithNothingAttached(deps, requested)) {
         return Promise.resolve({ ended: true, note: YIELD_WITHOUT_SESSION_NOTE });
       }
+      // A NAMED session that has DEPARTED is already ended, and nothing else may be ended in its
+      // place.
+      //
+      // `resolve` answers a departed id with its live SUCCESSOR. That is right for everything
+      // that observes -- a tab reloads, its id survives in sessionStorage, and an `assert` should
+      // keep working -- and wrong here, because ending a session is destructive and cannot be
+      // taken back. Reported from the field: `sessionId: "sac14d46c…"` returned `ended: true` for
+      // `"s08e37e5c…"`, once where the requested session's browser had just closed, so the
+      // behaviour was "target missing => end something else" rather than "target missing => say
+      // so" (#983).
+      //
+      // Not an error, either: this tool is documented as idempotent, and "the session you named is
+      // already gone" is precisely the idempotent answer. An id the daemon has never seen IS a
+      // mistake about which tab, and falls through to `resolve`, which refuses it with the live
+      // ids named.
+      if (
+        requested !== undefined &&
+        deps.sessions.get(requested) === undefined &&
+        deps.sessions.departed(requested) !== undefined
+      ) {
+        return Promise.resolve({
+          ended: true,
+          sessionId: requested,
+          note:
+            `session '${requested}' had already disconnected, so there was nothing to end. ` +
+            'Nothing else was ended: a named session is matched exactly, never substituted.',
+        });
+      }
       // Resolved synchronously, as before: a named session that does not exist still throws here
       // rather than becoming a rejected promise the caller did not expect.
       const session = deps.sessions.resolve(requested);

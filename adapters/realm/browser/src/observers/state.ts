@@ -40,6 +40,43 @@ function project(path: string, value: unknown): unknown {
   return isSensitiveKey(path) ? REDACTED_VALUE : sanitizeForTransport(value);
 }
 
+/**
+ * Did this "change" actually change anything a reader can see?
+ *
+ * `diffState` compares top-level values with `Object.is`, which is the right test for the
+ * immutable-update libraries it was written for: Zustand and Redux replace the changed key's
+ * reference. A cache does the opposite. TanStack Query re-emits an unchanged entry under a NEW
+ * object reference on every refetch, so `Object.is` says "changed" and the value on both sides is
+ * the same.
+ *
+ * Nothing downstream can tell those apart, and they accumulate. Reported from the field as
+ * `Cannot create a string longer than 0x1fffffe8 characters` -- V8's 512 MB string ceiling, thrown
+ * out of the daemon as a raw exception, on a session whose churn the reporter identified as
+ * "stateDiffs (TanStack Query caches re-emitting identical from/to snapshots)". A store re-emitting
+ * a value it already had is not an event (#985).
+ *
+ * Compared on the PROJECTED forms, which is both cheaper and more honest than a deep compare of the
+ * raw values: projection is what actually travels, it is already size-capped by
+ * `sanitizeForTransport`, and two values that project identically are indistinguishable to every
+ * reader of this event. The raw pair may still differ in some way nobody can observe, and reporting
+ * a difference nobody can observe is exactly what this drops.
+ *
+ * The caller excludes redacted paths before asking, and must: redaction collapses every credential
+ * to one token, so two DIFFERENT secrets present identically and coalescing there would drop a real
+ * rotation. This test is only meaningful where the projection is faithful.
+ */
+function samePresentedValue(oldValue: unknown, newValue: unknown): boolean {
+  if (Object.is(oldValue, newValue)) return true;
+  try {
+    return JSON.stringify(oldValue) === JSON.stringify(newValue);
+  } catch {
+    // A projected value that will not serialise cannot be compared this way, and a pair we cannot
+    // compare must be reported rather than dropped: silence about a real change is the one failure
+    // worse than the noise this is removing.
+    return false;
+  }
+}
+
 function safeRead(getter: StoreGetter): unknown {
   try {
     return getter();
@@ -90,15 +127,20 @@ export function installStoreState(emit: Emit): Teardown {
            */
           last = next;
           for (const change of changes) {
+            const value = project(change.path, change.new);
+            const old = project(change.path, change.old);
+            // A new reference carrying the value it already had is not a change. See
+            // `samePresentedValue` -- this is the accumulator behind #985.
+            //
+            // NOT on a redacted path. `project` collapses every credential to one token, so both
+            // sides present as `[REDACTED]` whether or not the secret changed, and coalescing on
+            // that would silently drop a real rotation. The comparison is only meaningful where the
+            // projection is faithful.
+            if (!isSensitiveKey(change.path) && samePresentedValue(old, value)) continue;
             // Each on its own, so a value the transport refuses costs its own event and not the
             // other paths that changed in the same notify.
             observeSafely(() =>
-              emit(EventType.STATE_CHANGE, {
-                name,
-                path: change.path,
-                value: project(change.path, change.new),
-                old: project(change.path, change.old),
-              }),
+              emit(EventType.STATE_CHANGE, { name, path: change.path, value, old }),
             );
           }
         });

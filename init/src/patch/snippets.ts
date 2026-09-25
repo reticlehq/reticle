@@ -308,10 +308,9 @@ export function astroManual(
       : '';
   const id =
     projectId !== undefined && projectId.length > 0 ? `\n          projectId: '${projectId}',` : '';
-  // Astro owns its Vite instance, so it has a build-time channel of its own: the same `define` that
-  // already inlines the token can inline the daemon URL, resolved every time the config is read —
-  // that is, on every `astro dev`. The port above is written once at install time and goes stale the
-  // moment the daemon moves; this does not.
+  // Astro owns its Vite instance, so the layout can resolve the daemon URL in frontmatter on every
+  // `astro dev` and put it on a <meta> the client script reads. The port above is written once at
+  // install time and goes stale the moment the daemon moves; this does not.
   //
   // Needs the projectId to know WHICH daemon is ours. Without one there is nothing to match on, and
   // adopting a daemon serving another project would report its state as this app's, so the whole
@@ -321,10 +320,8 @@ export function astroManual(
   // `bridgeWsUrl` builds, and a generator that spells it out by hand is exactly how the four call
   // sites that constant exists to unify drifted apart in the first place.
   const RETICLE_CLIENT_HOST_LITERAL = `ws://${RETICLE_CLIENT_HOST}:`;
-  const urlHelper = canDiscover
+  const urlFrontmatter = canDiscover
     ? `
-  // The live daemon serving THIS project, re-read on every \`astro dev\`. Same rule as the Vite and
-  // Next plugins: skip dead daemons, match on projectId, lowest port wins, '' when none matches.
   function reticleUrl() {
     const dir = process.env['RETICLE_PAIRING_TOKEN_DIR'] || join(homedir(), '.reticle');
     let best;
@@ -340,63 +337,77 @@ export function astroManual(
     } catch { return ''; }
     return best === undefined ? '' : '${RETICLE_CLIENT_HOST_LITERAL}' + best + '${RETICLE_WS_PATH}';
   }
+  const pairingUrl = import.meta.env.DEV ? reticleUrl() : '';
 `
     : '';
-  const urlDefine = canDiscover ? `\n        __RETICLE_URL__: JSON.stringify(reticleUrl()),` : '';
+  const urlMeta = canDiscover ? `\n  <meta name="reticle-pairing-url" content={pairingUrl} />` : '';
   const urlRead = canDiscover
-    ? `\n      const url = typeof __RETICLE_URL__ !== 'undefined' ? __RETICLE_URL__ : '';`
+    ? `\n  const url = document.querySelector('meta[name="reticle-pairing-url"]')?.getAttribute('content') ?? '';`
     : '';
-  // After the baked port, so the discovered one wins: later key in an object literal.
-  const urlSpread = canDiscover ? `\n          ...(url.length > 0 ? { url } : {}),` : '';
-  return `Astro renders its own HTML, so the connect goes in a page <script> and the pairing token is inlined by the config.
+  const urlSpread = canDiscover ? `\n    ...(url.length > 0 ? { url } : {}),` : '';
+  return `Astro renders its own HTML, so the connect goes in a local module the page statically imports. Do not put the pairing token through \`vite.define\`: on Astro 7.2+ that substitution never reaches the client, the identifier stays literal, and the bridge refuses the dial. Read the token in frontmatter and put it on a <meta> the module can query. Reading it per request also means a token written after the dev server started is picked up on the next load instead of needing a restart.
 
-1. In astro.config.mjs — inline the daemon's token and raise the build target:
+1. In astro.config.mjs, raise the build target. The token does NOT belong here:
 
-  import { readFileSync, readdirSync } from 'node:fs';
-  import { homedir } from 'node:os';
-  import { join } from 'node:path';
-
-  function reticleToken() {
-    const dir = process.env['RETICLE_PAIRING_TOKEN_DIR'] || join(homedir(), '.reticle');
-    try { return readFileSync(join(dir, 'pairing-token'), 'utf8').trim(); } catch { return ''; }
-  }
-${urlHelper}
   export default defineConfig({
     vite: {
       // Astro's default target down-levels the modern SDK bundle and fails on a destructuring transform.
       build: { target: 'es2022' },
-      optimizeDeps: { esbuildOptions: { target: 'es2022' } },
-      define: {
-        __RETICLE_TOKEN__: JSON.stringify(reticleToken()),${urlDefine}
-        // Without this, source pointers come back as absolute paths from YOUR machine — useless in a
-        // report. Every other framework gets it from its build plugin; Astro owns its Vite instance.
-        __RETICLE_ROOT__: JSON.stringify(process.cwd()),
-      },
+      optimizeDeps: { include: ['@reticlehq/react'] },
     },
   });
 
 ${layoutHost(layoutPath)}
 
+  ---
+  import { readFileSync${canDiscover ? ', readdirSync' : ''} } from 'node:fs';
+  import { homedir } from 'node:os';
+  import { join } from 'node:path';
+  const pairingToken = (() => {
+    if (!import.meta.env.DEV) return '';
+    const dir = process.env['RETICLE_PAIRING_TOKEN_DIR'] || join(homedir(), '.reticle');
+    try { return readFileSync(join(dir, 'pairing-token'), 'utf8').trim(); } catch { return ''; }
+  })();
+  const pairingRoot = import.meta.env.DEV ? process.cwd() : '';${urlFrontmatter}  ---
+  <meta name="reticle-pairing-token" content={pairingToken} />
+  <meta name="reticle-pairing-root" content={pairingRoot} />${urlMeta}
   <script>
+    import connectReticle from '../components/ReticleDev';
     if (import.meta.env.DEV) {
-      const token = typeof __RETICLE_TOKEN__ !== 'undefined' ? __RETICLE_TOKEN__ : '';
-      const root = typeof __RETICLE_ROOT__ !== 'undefined' ? __RETICLE_ROOT__ : '';${urlRead}
-      const { reticle, install } = await import('@reticlehq/react');
-      install();
-      reticle.connect({${id}${extra}${urlSpread}
-          ...(token.length > 0 ? { token } : {}),
-          ...(root.length > 0 ? { root } : {}),
-      });
+      connectReticle();
     }
   </script>
 
-3. In src/env.d.ts — declare the Vite define names so \`astro check\` can see them (create-astro's
-   default build runs check first, and without this it fails with Cannot find name '__RETICLE_TOKEN__'):
+  The <script> tag must not sit inside a conditional. Astro hoists them statically, so
+  \`{isDev && (<script />)}\` is never hoisted and the module 404s.
+  The dev gate belongs in the imported module.
 
-  declare const __RETICLE_TOKEN__: string | undefined;
-  declare const __RETICLE_ROOT__: string | undefined;
+3. Create src/components/ReticleDev.ts — Vite owns this file, so the SDK is a static import:
 
-Start the daemon BEFORE \`astro dev\`, so the token file exists when the config is read. Until it does the token is empty and the page reloads once the daemon is up.`;
+  import { reticle, install } from '@reticlehq/react';
+  export default function connectReticle() {
+    const token = document.querySelector('meta[name="reticle-pairing-token"]')?.getAttribute('content') ?? '';
+    const root = document.querySelector('meta[name="reticle-pairing-root"]')?.getAttribute('content') ?? '';${urlRead}
+    if (token.length === 0) {
+      console.warn('[reticle] no pairing token was available when this page rendered, so the app will connect and be refused — you will see NO SESSION even though the SDK loads and the socket opens. The token is written by the Reticle daemon: start it and reload this page.');
+    }
+    install();
+    reticle.connect({${id}${extra}${urlSpread}
+      ...(token.length > 0 ? { token } : {}),
+      ...(root.length > 0 ? { root } : {}),
+    });
+  }
+
+4. In src/env.d.ts — declare the window names so \`astro check\` can see them (create-astro's
+   default build runs check first):
+
+  interface Window {
+    __RETICLE_TOKEN__?: string;
+    __RETICLE_ROOT__?: string;
+  }
+
+Start the daemon, then load the page. The token is read when the page renders, so a reload is enough
+once the token file exists — you do not have to restart \`astro dev\`.`;
 }
 
 /**

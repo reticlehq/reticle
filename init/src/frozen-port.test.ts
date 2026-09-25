@@ -18,7 +18,7 @@ describe('Astro re-resolves the daemon on every dev-server start', () => {
 
   it('generates a discovery helper rather than trusting the install-time port', () => {
     expect(generated).toContain('function reticleUrl()');
-    expect(generated).toContain('__RETICLE_URL__: JSON.stringify(reticleUrl())');
+    expect(generated).toContain('reticle-pairing-url');
   });
 
   it('matches on projectId, so it cannot adopt another project’s daemon', () => {

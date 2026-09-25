@@ -76,6 +76,28 @@ export interface JournalReader {
    * only ever about writes that never happened.
    */
   readWriteLoss?(): Promise<JournalWriteLoss | undefined>;
+  /**
+   * How big the event ledger is right now, and the ceiling it is measured against.
+   *
+   * Synchronous and cached: the size is already tracked for the cap, so reporting it costs a field
+   * read. Optional on the same reasoning as `readActions` -- a partial double declares no size,
+   * and a caller reads that as "not measured" rather than "empty".
+   *
+   * It is reported at all because nothing reported it. A repeating uncaught error wrote one
+   * session's ledger at 13 MB/s for 14 hours and filled a 926 GB disk, and neither the daemon nor
+   * `doctor` nor any health counter said a word; the user found out when the disk was full (#986).
+   * The cap that now bounds this is only half an answer -- a ledger silently approaching it is
+   * still a dev tool writing hard to somebody's repo directory.
+   */
+  ledger?(): JournalLedgerSize | undefined;
+}
+
+/** The event ledger's size on disk against the ceiling that will refuse it. */
+export interface JournalLedgerSize {
+  /** Bytes of `events.jsonl` on disk. */
+  bytes: number;
+  /** The ceiling that refuses the next batch past it. */
+  capBytes: number;
 }
 
 interface JournalRecorderOptions {

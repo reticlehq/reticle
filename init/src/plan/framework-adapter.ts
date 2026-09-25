@@ -137,10 +137,11 @@ export const FRAMEWORK_ADAPTERS: Record<Framework, FrameworkAdapter> = {
   },
   [Framework.ASTRO]: {
     // Astro owns its own Vite instance and renders its own HTML, so there is no config for the
-    // plugin to attach to — the kit alone, connected from a page <script> (see astroManual).
+    // plugin to attach to — the kit alone, connected from a local module the page imports
+    // (see astroManual).
     packages: (kit) => [kit],
     steps: astroSteps,
-    connectStepTitles: [StepTitle.CONNECT_SNIPPET_ASTRO],
+    connectStepTitles: [StepTitle.CONNECT_SNIPPET_ASTRO, StepTitle.ASTRO_RETICLE_DEV],
     carriesOwnUnverifiedNote: false,
   },
   [Framework.ELECTRON_VITE]: {

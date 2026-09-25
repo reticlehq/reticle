@@ -376,6 +376,7 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
         ? { path: layoutRelPath, source: astroLayoutSource }
         : null,
     astroEnvDts: io.readFile('src/env.d.ts'),
+    astroReticleDev: io.readFile('src/components/ReticleDev.ts'),
     nextConfigFile,
     nextConfigSource: null === nextConfigFile ? null : io.readFile(nextConfigFile),
     nextLayout:

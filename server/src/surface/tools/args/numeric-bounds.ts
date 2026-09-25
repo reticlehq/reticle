@@ -60,7 +60,7 @@ export const MAX_STATE_DEPTH = 256;
 const MAX_CRAWL_STEPS = 500;
 
 /** Scroll-to-find steps. Default is 20; hundreds is searching, thousands is a hang. */
-export const MAX_SCROLLS = 200;
+const MAX_SCROLLS = 200;
 
 /** Fake-clock jump. One day of timers is a test; a billion ms is not. */
 const MAX_ADVANCE_MS = 86_400_000;
