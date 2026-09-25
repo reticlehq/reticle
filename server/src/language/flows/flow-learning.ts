@@ -3,6 +3,16 @@ import { asString } from '@reticlehq/core';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { flowsForSession } from './flow-store-for-session.js';
 import { replayNamedFlow } from './flow-replay-run.js';
+import { recordingSources, withLearnedSources } from './learned-sources.js';
+import { ReplayStatus } from '@reticlehq/core';
+
+function projectOf(deps: ToolDeps, args: Record<string, unknown>): ProjectId | undefined {
+  try {
+    return deps.sessions.resolve(asString(args['sessionId'])).projectId;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Write back what a replay taught the flow, once the replay has finished writing its own.
@@ -31,12 +41,7 @@ export async function persistLearning(
   const name = asString(args['flowName']) ?? '';
   if (0 === name.length) return result;
   try {
-    let projectId: ProjectId | undefined;
-    try {
-      projectId = deps.sessions.resolve(asString(args['sessionId'])).projectId;
-    } catch {
-      projectId = undefined;
-    }
+    const projectId = projectOf(deps, args);
     await flowsForSession(deps, projectId).flows.recordLearned(name, learned, projectId);
   } catch {
     // Bookkeeping only.
@@ -78,5 +83,34 @@ export async function replayAndLearn(
    */
   args: Record<string, unknown>,
 ): Promise<FlowReplayResult> {
-  return await persistLearning(deps, args, await replayNamedFlow(deps, args));
+  let recorded: ReturnType<typeof recordingSources> | undefined;
+  const result = await replayNamedFlow(deps, args, (session) => {
+    recorded = recordingSources(session);
+    return recorded.session;
+  });
+  // Only a clean run teaches a file: a drifted step may have resolved to the wrong element.
+  if (result.status === ReplayStatus.OK && recorded !== undefined && recorded.sources.size > 0) {
+    await persistSources(deps, args, recorded.sources);
+  }
+  return await persistLearning(deps, args, result);
+}
+
+/** Write back the files a clean replay's anchors resolved to. Best-effort, as `persistLearning` is. */
+export async function persistSources(
+  deps: ToolDeps,
+  args: Record<string, unknown>,
+  sources: Parameters<typeof withLearnedSources>[1],
+): Promise<void> {
+  const name = asString(args['flowName']) ?? '';
+  if (0 === name.length) return;
+  try {
+    const projectId = projectOf(deps, args);
+    const store = flowsForSession(deps, projectId).flows;
+    const current = await store.load(name, projectId);
+    // Read first so a flow that already names every file is never rewritten.
+    if (!current.ok || withLearnedSources(current.value, sources) === undefined) return;
+    await store.recordSources(name, sources, projectId);
+  } catch {
+    // Bookkeeping only.
+  }
 }

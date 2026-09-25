@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FlowReplayResult } from '@reticlehq/core';
 import type { ToolDeps } from '@/surface/tools/tools.js';
-import { persistLearning } from './flow-learning.js';
+import { persistLearning, persistSources } from './flow-learning.js';
 
 /**
  * What a replay learns reaches the flow file — asserted by CALLING it, not by reading its source.
@@ -105,5 +105,38 @@ describe('learning reaches the flow file', () => {
     } as unknown as ToolDeps;
     const r = result([{ kind: 'x', step: 0, state: 'open' }]);
     await expect(persistLearning(throwing, { flowName: 'checkout' }, r)).resolves.toBe(r);
+  });
+});
+
+describe('sources a clean replay resolved reach the flow file', () => {
+  const pay = { tool: 'reticle_act', anchor: { kind: 'testid', value: 'pay' }, action: 'click' };
+  const sources = new Map([['["testid","pay",null]', { file: 'src/Pay.tsx', line: 12 }]]);
+
+  function store(steps: unknown[]): { deps: ToolDeps; written: string[] } {
+    const written: string[] = [];
+    const deps = {
+      flows: {
+        load: () => Promise.resolve({ ok: true, value: { name: 'checkout', steps } }),
+        recordSources: (name: string) => {
+          written.push(name);
+          return Promise.resolve({ ok: true, value: { name } });
+        },
+      },
+      reticleRoot: '/tmp/none',
+      sessions: { resolve: () => ({ projectId: undefined }) },
+    } as unknown as ToolDeps;
+    return { deps, written };
+  }
+
+  it('writes a sourceless step the file its anchor resolved to', async () => {
+    const { deps, written } = store([pay]);
+    await persistSources(deps, { flowName: 'checkout' }, sources);
+    expect(written).toEqual(['checkout']);
+  });
+
+  it('never rewrites a flow whose steps already name their files', async () => {
+    const { deps, written } = store([{ ...pay, source: { file: 'src/Pay.tsx', line: 12 } }]);
+    await persistSources(deps, { flowName: 'checkout' }, sources);
+    expect(written).toEqual([]);
   });
 });

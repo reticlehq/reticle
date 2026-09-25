@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/server`: a flow recorded before the app was stamped learns which files it covers the first time it replays clean.** A step with no source file left `reticle_verify { action: "change" }` unable to say whether an edit touched that flow, so a suite recorded early answered UNKNOWN for every change. Each replay already asks the page for every anchor's element, and that element carries its source stamp now. After a clean run, each step without a source gets the file its anchor resolved to, and the flow file is updated. A drifted run teaches nothing, a source already recorded is never overwritten, and an anchor that matched more than one element is skipped.

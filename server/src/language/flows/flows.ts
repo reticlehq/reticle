@@ -31,6 +31,7 @@ import type {
 import { ReticleTool } from '@reticlehq/core';
 import { asRecord, asString } from '@reticlehq/core';
 import { applyHealChanges } from './heal.js';
+import { withLearnedSources } from './learned-sources.js';
 import { flowIntentGap, linkFlowIntent } from './flow-intent.js';
 import { IntentStore } from '@/memory/intent/intent-store.js';
 import type { CompiledProgram, RecordedStep } from './recording/tape/recordings.js';
@@ -440,6 +441,18 @@ export class FlowStore {
   ): Promise<FlowResult<{ name: string }>> {
     return await this.#changeInPlace(name, projectId, (flow) => ({
       next: { ...flow, learned },
+      value: { name },
+    }));
+  }
+
+  /** Give sourceless steps the files a clean replay resolved them to, merged onto the file as it is now. */
+  async recordSources(
+    name: string,
+    sources: ReadonlyMap<string, NonNullable<FlowStep['source']>>,
+    projectId?: ProjectId,
+  ): Promise<FlowResult<{ name: string }>> {
+    return await this.#changeInPlace(name, projectId, (flow) => ({
+      next: withLearnedSources(flow, sources) ?? flow,
       value: { name },
     }));
   }

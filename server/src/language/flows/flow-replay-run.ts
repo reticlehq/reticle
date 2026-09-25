@@ -606,6 +606,8 @@ export function lostDocumentResult(name: string, lost: DocumentLostDuringReplay)
 export async function replayNamedFlow(
   deps: ToolDeps,
   args: Record<string, unknown>,
+  /** Wraps the session the steps run on, so a caller can watch what they resolved. */
+  observe: (session: FlowReplaySession) => FlowReplaySession = (s) => s,
 ): Promise<FlowReplayResult> {
   const startedAt = deps.now();
   const name = asString(args['flowName']) ?? '';
@@ -726,7 +728,7 @@ export async function replayNamedFlow(
   let steps: FlowStepResult[];
   try {
     steps = await replayFlow(
-      session,
+      observe(session),
       replayable,
       waitForPredicate,
       FLOW_SIGNAL_TIMEOUT_MS,
