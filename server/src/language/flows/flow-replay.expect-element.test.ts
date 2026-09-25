@@ -48,6 +48,18 @@ class FakeSession implements FlowReplaySession {
         },
       });
     }
+    if (name === ReticleCommand.MATCH) {
+      // The predicate engine's element read: what matches the query right now.
+      const query = (args['query'] ?? {}) as { testid?: string };
+      const testid = query.testid ?? '';
+      const elements = this.present.has(testid) ? [el(`e-${testid}`, testid)] : [];
+      return Promise.resolve({
+        kind: 'command_result',
+        id: 'm',
+        ok: true,
+        result: { matched: elements.length > 0, count: elements.length, elements },
+      });
+    }
     if (name === ReticleCommand.ACT) {
       this.acts.push(asString(args['ref']) ?? '');
       return Promise.resolve({ kind: 'command_result', id: 'a', ok: true, result: {} });
@@ -155,5 +167,39 @@ describe('replayFlow expect.element drift is not anchor drift', () => {
 
     expect(drift).toBeDefined();
     if (drift !== undefined) expect(proposeRebind(drift, 0)).toBeUndefined();
+  });
+});
+
+/**
+ * Found reviewing a contributor's PR (#1016) against this branch: a saved step that expects an
+ * element to be GONE, `{ kind: 'element', query: { testid }, absent: true }`, replayed as "the
+ * element must be present". The runner asked `expectedElementTestid` which testid to require and got
+ * the testid back regardless of `absent`, so dismissing a toast failed on the correct outcome. The
+ * wait-side had the mirror image: it strips testid clauses as "already asserted by the runner", so
+ * fixing only the runner would have dropped the absence check entirely.
+ */
+describe('replayFlow an expect that an element is gone', () => {
+  const dismiss = (): FlowStep => ({
+    ...step('dismiss'),
+    expect: { kind: 'element', query: { testid: 'toast' }, absent: true },
+  });
+
+  it('does not require the element to be present', async () => {
+    const session = new FakeSession(new Set(['dismiss']));
+    const steps = await replayFlow(session, flow([dismiss()]), waitForPredicate, FAST);
+    expect(steps[0]?.ok).toBe(true);
+    expect(steps[0]?.drift).toBeUndefined();
+  });
+
+  it('still checks the absence, so an element that stayed is a drift', async () => {
+    const asked: unknown[] = [];
+    const recordingWait: typeof waitForPredicate = (s, predicate, ms, since) => {
+      asked.push(predicate);
+      return waitForPredicate(s, predicate, ms, since);
+    };
+    const session = new FakeSession(new Set(['dismiss', 'toast']));
+    const steps = await replayFlow(session, flow([dismiss()]), recordingWait, FAST);
+    expect(asked).toContainEqual({ kind: 'element', query: { testid: 'toast' }, absent: true });
+    expect(steps[0]?.ok).toBe(false);
   });
 });

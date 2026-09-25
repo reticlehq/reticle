@@ -47,10 +47,15 @@ export function assertsState(predicate: Predicate | undefined): boolean {
   return clauseOfKind(predicate, PredicateKind.STATE) !== undefined;
 }
 
-/** The testid an element clause names, when the expectation has one at the top level. */
+/**
+ * The testid an element clause says must be PRESENT, when the expectation has one at the top level.
+ *
+ * An `absent: true` clause names a testid that must be gone, and asking the replay runner to
+ * require it made a correct dismissal fail. That clause is left to the predicate wait instead.
+ */
 export function expectedElementTestid(predicate: Predicate | undefined): string | undefined {
   const element = clauseOfKind(predicate, PredicateKind.ELEMENT);
-  return element?.query.testid;
+  return true === element?.absent ? undefined : element?.query.testid;
 }
 
 /**

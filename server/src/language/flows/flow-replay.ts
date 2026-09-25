@@ -279,7 +279,11 @@ export async function assertStepExpect(
    */
   const predicate = withoutClauses(
     expect,
-    (clause) => PredicateKind.ELEMENT === clause.kind && clause.query.testid !== undefined,
+    // Only a PRESENT testid is the runner's to check; an absence stays here or nobody checks it.
+    (clause) =>
+      PredicateKind.ELEMENT === clause.kind &&
+      clause.query.testid !== undefined &&
+      true !== clause.absent,
   );
   if (predicate === undefined) return undefined;
   const verdict = await waitForSignal(session, predicate, timeoutMs, since);
