@@ -34,7 +34,7 @@ Two columns say different things and it is worth keeping them apart. **CI gate**
 | **Create React App** | yes | no | install only | unproven | Install gated, drive unverified |
 | **Plain HTML** | yes | no | no | no | Wired, unverified |
 | **Vue (non-Nuxt)** | as Vite | no | install only | no | Install gated, drive unverified |
-| **Preact** | as Vite | no | no | unproven | Sensor, React adapter via `preact/compat` |
+| **Preact** | as Vite | no | no | transform-tested; drive unproven | Sensor, React adapter via `preact/compat` |
 
 <Warning>
   "Wired, unverified" means exactly that. The recipe exists and was written from a real integration,
@@ -215,6 +215,10 @@ Pinia is a first-class store. See [State management](/state-management).
 Detected as its own UI library, because a Preact app using `preact/compat` aliases React and would otherwise be handed the React kit with nothing to attach to.
 
 The sensor works. If you use `preact/compat`, the React adapter can attach through the alias, but that path is not gated.
+
+**The source-pointer transform works on Preact code, and that is measured rather than assumed.** The stamper is JSX-syntactic: it tags a host element by its tag name and reads nothing about React, so a Preact `.jsx` or `.tsx` file is stamped exactly as a React one is. `class` instead of `className`, a `@jsxImportSource preact` pragma and a `@preact/signals` value in the tree all leave it unmoved. There are tests for each of those in `adapters/build/babel-plugin`. They prove the Babel transform, not the `@preact/preset-vite` pipeline end to end: nobody has yet driven a Preact app and seen a verdict name a `file:line`, so the drive stays unproven until someone does.
+
+What is still missing on Preact is the enrichment above the DOM: `reticle_inspect` returns no `component`/`componentStack`, `@preact/signals` has no `reticle_state` adapter, and the render meter counts React commits only. Tracked in [#129](https://github.com/reticlehq/reticle/issues/129).
 
 ## Create React App and plain bundlers
 
