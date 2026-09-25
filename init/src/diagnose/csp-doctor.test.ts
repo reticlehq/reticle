@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { diagnoseWebCsp } from './csp-doctor.js';
+import { diagnoseObservedWebCsp, diagnoseWebCsp, resolveWebCspFindings } from './csp-doctor.js';
 
 const PORT = 4400;
 
@@ -61,5 +61,66 @@ describe('diagnoseWebCsp', () => {
     );
     expect(findings).toHaveLength(2);
     expect(new Set(findings.map((f) => f.file)).size).toBe(2);
+  });
+
+  it('does not treat the Next image optimizer policy as a page policy', () => {
+    const source = `images: { contentSecurityPolicy: 'script-src none; sandbox' }`;
+    expect(diagnoseWebCsp(files({ 'next.config.mjs': source }), PORT)).toEqual([]);
+  });
+});
+
+describe('diagnoseObservedWebCsp', () => {
+  it('reads the policy actually delivered in the document response', () => {
+    const findings = diagnoseObservedWebCsp(
+      {
+        url: 'http://localhost:3000/',
+        headers: [`script-src 'self' 'unsafe-inline'; connect-src 'self'`],
+        html: '<main>app</main>',
+      },
+      PORT,
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.file).toContain('response header');
+    expect(findings[0]?.problem).toContain('connect-src');
+  });
+
+  it('finds a blocking meta policy in served HTML regardless of attribute order and quotes', () => {
+    const quote = String.fromCharCode(34);
+    const findings = diagnoseObservedWebCsp(
+      {
+        url: 'http://localhost:3000/',
+        headers: [],
+        html: `<meta content=${quote}default-src 'self'; connect-src 'self'${quote} http-equiv='Content-Security-Policy'>`,
+      },
+      PORT,
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.file).toContain('<meta>');
+    expect(findings[0]?.problem).toContain('connect-src');
+  });
+
+  it('ignores policies inside repeated or unclosed HTML comments', () => {
+    const hidden = `<meta http-equiv='Content-Security-Policy' content='connect-src none'>`;
+    const document = (html: string) => ({ url: 'http://localhost:3000/', headers: [], html });
+    expect(diagnoseObservedWebCsp(document(`<!-- <!-- ${hidden} -->`), PORT)).toEqual([]);
+    expect(diagnoseObservedWebCsp(document(`<!-- ${hidden}`), PORT)).toEqual([]);
+  });
+});
+
+describe('resolveWebCspFindings', () => {
+  const predicted = diagnoseWebCsp(files({ 'vercel.json': 'connect-src self' }), PORT);
+
+  it('prefers an observed clean development page over a config-file prediction', () => {
+    expect(resolveWebCspFindings({ predicted, observed: [], connected: false })).toEqual([]);
+  });
+
+  it('keeps a config finding when no running page could be observed, but labels it predicted', () => {
+    const findings = resolveWebCspFindings({ predicted, connected: false });
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.basis).toBe('predicted');
+  });
+
+  it('suppresses a blocking-CSP claim once this app has connected', () => {
+    expect(resolveWebCspFindings({ predicted, connected: true })).toEqual([]);
   });
 });

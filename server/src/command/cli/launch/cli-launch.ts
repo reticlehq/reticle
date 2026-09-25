@@ -13,69 +13,9 @@ import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
  * The decision logic is pure (unit-tested); the IO (fetch, OS browser launch) is injected/isolated.
  */
 
-/** One connected tab as `reticle status` reports it — the at-a-glance health line. */
-interface StatusSession {
-  sessionId: string;
-  url: string;
-  throttled: boolean;
-  /**
-   * The tab is backgrounded. Reported by the daemon on every session; `false` on one too old to say,
-   * which reads as visible — the conservative answer, since it keeps the reuse this command has
-   * always done rather than opening a tab on a guess.
-   */
-  hidden: boolean;
-  stale: boolean;
-  pendingMarks: number;
-  /** The tab is attached and answering nothing — see Session.unresponsive. Absent on an older daemon. */
-  unresponsive?: true;
-}
-
-/**
- * Reduce the daemon's /status JSON to the compact view `reticle status` prints. Pure: narrows the
- * untrusted wire payload (never `any`) and tolerates a missing/partial body so a malformed response
- * degrades to "running, 0 sessions" instead of throwing.
- */
-export function summarizeStatus(payload: unknown): {
-  sessionCount: number;
-  sessions: StatusSession[];
-  why?: string;
-  /** The same diagnosis without the differential, for a surface a person reads. */
-  whyLead?: string;
-} {
-  if (typeof payload !== 'object' || null === payload) return { sessionCount: 0, sessions: [] };
-  const obj = payload as Record<string, unknown>;
-  // Carried through to the printed line: with no sessions this is the whole answer, and dropping it
-  // here would silently undo the reason it is on the wire.
-  const why = 'string' === typeof obj['why'] ? obj['why'] : undefined;
-  // Absent on a daemon older than this field, which is why every reader falls back to `why`.
-  const whyLead = 'string' === typeof obj['whyLead'] ? obj['whyLead'] : undefined;
-  const raw = Array.isArray(obj['sessions']) ? obj['sessions'] : [];
-  const sessions = raw
-    .map((s): StatusSession | null => {
-      if (typeof s !== 'object' || null === s) return null;
-      const r = s as Record<string, unknown>;
-      const sessionId = 'string' === typeof r['sessionId'] ? r['sessionId'] : '';
-      if ('' === sessionId) return null;
-      return {
-        sessionId,
-        url: 'string' === typeof r['url'] ? r['url'] : '',
-        throttled: true === r['throttled'],
-        hidden: true === r['hidden'],
-        stale: true === r['stale'],
-        pendingMarks: 'number' === typeof r['pendingMarks'] ? r['pendingMarks'] : 0,
-        ...(true === r['unresponsive'] ? { unresponsive: true as const } : {}),
-      };
-    })
-    .filter((s): s is StatusSession => s !== null);
-  const sessionCount =
-    'number' === typeof obj['sessionCount'] ? obj['sessionCount'] : sessions.length;
-  return {
-    sessionCount,
-    sessions,
-    ...(why === undefined ? {} : { why }),
-    ...(whyLead === undefined ? {} : { whyLead }),
-  };
-}
+// Parsing the daemon's /status payload lives beside the probe that fetches it; re-exported here for
+// the callers that already import it from this module.
+export { summarizeStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 
 /** A string field off the /status body, or undefined on a daemon too old to report it. */
 function statusField(payload: unknown, key: string): string | undefined {

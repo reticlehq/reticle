@@ -1,11 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ReticleEnv } from '@reticlehq/core';
+import { devServersForProject, ReticleEnv } from '@reticlehq/core';
 import { readPid, reticleStateHome } from '@/command/daemon/daemon.js';
 import { PortPresence, probePresence } from '@/command/daemon/binding/port-presence.js';
 import { isLocalhostSplit, probeLoopbackReach } from '@/command/daemon/binding/loopback-reach.js';
 import { probeDaemon } from '@/surface/mcp/mcp-proxy.js';
-import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
+import { fetchStatus, summarizeStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { daemonLine, type DaemonIdentity } from './doctor/doctor-daemon-line.js';
 import { projectWiringLine } from './doctor/doctor-project-line.js';
 import { hasProjectConnectedBefore } from '@/memory/recall/prior/connection-memory.js';
@@ -14,7 +14,14 @@ import { captureLookup, describeForeignHolder, findPortHolder } from './ports/po
 import { chromiumHint, probeChromium } from './doctor/browser/chromium-hint.js';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 import { CONTRACT_FINGERPRINT } from '@reticlehq/core';
-import { diagnoseDesktop, isDesktopProject, diagnoseWebCsp } from '@reticlehq/init';
+import {
+  CspBasis,
+  diagnoseDesktop,
+  diagnoseObservedWebCsp,
+  diagnoseWebCsp,
+  isDesktopProject,
+  resolveWebCspFindings,
+} from '@reticlehq/init';
 import {
   RETICLE_CONFIG_BASENAME,
   diagnosePortMismatch,
@@ -31,6 +38,8 @@ import {
   wrongDaemonNote,
 } from '@/command/daemon/daemon-resolve.js';
 import { isAlive } from '@/command/daemon/daemon.js';
+import { readDevServers } from '@/command/daemon/dev-servers.js';
+import { hasConnectedDocument, observeWebDocument } from './doctor/web-csp-observation.js';
 
 /**
  * `reticle doctor` — collapse the ~6 independent first-run failure modes into one command. Checks the
@@ -83,6 +92,7 @@ export async function handleDoctor(port: number): Promise<void> {
   // Filled in only on the daemon branch — there is nothing to ask when no daemon is answering, and
   // the branches below already say so in their own terms.
   let sessions: SessionsLine | undefined;
+  let daemonStatus: unknown;
   line(doctorRow(DoctorRow.CHROMIUM, chromiumHint(await probeChromium())));
   // Ask the PORT, not just the pid file. "not running on :4400" has been printed about a port that
   // was demonstrably occupied, which sends the reader to start a daemon that cannot bind. The three
@@ -94,6 +104,7 @@ export async function handleDoctor(port: number): Promise<void> {
     // throwing both away — while skew is invisible everywhere else, reaching the agent as a bare
     // -32000 naming no version. This is the command a human runs at exactly that moment.
     const payload = await fetchStatus(port);
+    daemonStatus = payload;
     const status = asIdentity(payload);
     const built = daemonLine(port, pid, status, {
       version: SERVER_VERSION,
@@ -233,10 +244,35 @@ export async function handleDoctor(port: number): Promise<void> {
   // The web sibling of the desktop findings below: a `connect-src` that excludes the bridge makes
   // the browser refuse the WebSocket and report it in ITS console only, so every check above passes
   // at an app that can never connect. Named, with the exact text to paste.
-  const csp = diagnoseWebCsp(readProjectFile, port);
+  const devServers = devServersForProject(readDevServers(reticleStateHome()), {
+    projectId,
+    root: process.cwd(),
+  });
+  const observedDocuments = (
+    await Promise.all(devServers.map((server) => observeWebDocument(server.url)))
+  ).filter((document) => document !== undefined);
+  const observedCsp =
+    0 === observedDocuments.length
+      ? undefined
+      : observedDocuments.flatMap((document) => diagnoseObservedWebCsp(document, port));
+  const connected = hasConnectedDocument(
+    summarizeStatus(daemonStatus).sessions,
+    devServers.map((server) => server.url),
+    projectId,
+  );
+  const csp = resolveWebCspFindings({
+    predicted: diagnoseWebCsp(readProjectFile, port),
+    ...(observedCsp === undefined ? {} : { observed: observedCsp }),
+    connected,
+  });
   if (csp.length > 0) {
     line('');
-    line(`  csp          ✗ a Content-Security-Policy is blocking the Reticle bridge:`);
+    const observed = csp.some((finding) => finding.basis === CspBasis.OBSERVED);
+    line(
+      observed
+        ? `  csp          ✗ a Content-Security-Policy is blocking the Reticle bridge:`
+        : `  csp          ? a configuration may block the Reticle bridge (predicted, not observed):`,
+    );
     for (const finding of csp) {
       line(`                 ${finding.file}`);
       line(`                   ${finding.problem}`);

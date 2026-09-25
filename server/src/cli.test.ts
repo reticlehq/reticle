@@ -11,7 +11,13 @@ describe('summarizeStatus', () => {
       running: true,
       sessionCount: 2,
       sessions: [
-        { sessionId: 'a', url: 'http://localhost:5173/app', throttled: false, pendingMarks: 2 },
+        {
+          sessionId: 'a',
+          url: 'http://localhost:5173/app',
+          projectId: 'web-app',
+          throttled: false,
+          pendingMarks: 2,
+        },
         { sessionId: 'b', url: 'http://localhost:5173/x', throttled: true, stale: true },
       ],
     });
@@ -20,6 +26,7 @@ describe('summarizeStatus', () => {
       {
         sessionId: 'a',
         url: 'http://localhost:5173/app',
+        projectId: 'web-app',
         throttled: false,
         hidden: false,
         stale: false,
