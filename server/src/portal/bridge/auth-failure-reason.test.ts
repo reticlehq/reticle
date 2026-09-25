@@ -58,6 +58,19 @@ describe('why the bridge refused', () => {
     expect(reason).not.toMatch(/reload/i);
   });
 
+  /*
+   * From #1047's review: every generated connect snippet reads the token as
+   * `typeof __RETICLE_TOKEN__ !== 'undefined' ? __RETICLE_TOKEN__ : ''`, so a build that never
+   * substituted it sends an EMPTY token, not the placeholder. This is the reason that case reads, so
+   * it has to say what happened and the one move that fixes it, inside a WebSocket close reason.
+   */
+  it('says the build did not substitute the token, and to restart the dev server, in one close reason', () => {
+    const reason = authFailureReason(new Set(), undefined, undefined);
+    expect(reason).toMatch(/did not substitute/);
+    expect(reason).toMatch(/restart the dev server/);
+    expect(Buffer.byteLength(reason, 'utf8')).toBeLessThanOrEqual(123);
+  });
+
   it('treats an empty token the same as a missing one', () => {
     expect(authFailureReason(new Set(['proj-abc']), 'proj-abc', '')).toContain('no pairing token');
   });

@@ -30,8 +30,12 @@ const PLAIN = 'authentication failed';
  */
 const WRONG_TOKEN =
   'authentication failed: wrong pairing token — run `reticle status` for the cause';
-/** A paste-in snippet or a Next config that never saw a token. Reload cannot mint one. */
-const NO_TOKEN = 'authentication failed: no pairing token on the page';
+/**
+ * A paste-in snippet or a Next config that never saw a token. Reload cannot mint one; restarting the
+ * dev server re-runs the substitution that should have put it there (#1047).
+ */
+const NO_TOKEN =
+  'authentication failed: no pairing token on the page; the build did not substitute it, so restart the dev server';
 /** WebSocket close reasons are capped at 123 bytes; a longer one throws and closes with nothing. */
 const MAX_REASON_BYTES = 123;
 
