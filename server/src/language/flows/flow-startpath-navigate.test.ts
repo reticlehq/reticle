@@ -166,6 +166,30 @@ describe('arriveAtStartPath — replay navigates to the flow start page before s
   });
 
   /*
+   * A reset RELOADS the page the tab is on; it does not rewrite the URL.
+   *
+   * `samePath` ignores a query the flow did not record, on the stated ground that `?next=%2F` on a
+   * login page is not the flow being elsewhere. The reset then navigated to `startPath` itself and
+   * stripped that query anyway, so every replay silently changed the page it was about to test.
+   * Found by the benchmark: its regressions ride on a query param, and after the reset landed every
+   * replay-detection scenario reported 0 caught against an app that was still broken.
+   */
+  it('keeps a query the flow did not record when it reloads in place', async () => {
+    const { calls, session } = tab('http://localhost:3000/login?next=%2Fdash');
+    const fresh = successor('http://localhost:3000/login?next=%2Fdash');
+    await arriveAtStartPath(
+      manager([session, fresh]),
+      session,
+      flow('/login'),
+      5_000,
+      instantClock(100),
+    );
+    expect(calls.filter((c) => c.name === ReticleCommand.NAVIGATE)).toEqual([
+      { name: ReticleCommand.NAVIGATE, args: { url: 'http://localhost:3000/login?next=%2Fdash' } },
+    ]);
+  });
+
+  /*
    * The opt-out, and it is DECLARED rather than inferred.
    *
    * `requires` says this flow starts from state some other flow established. A page load is exactly

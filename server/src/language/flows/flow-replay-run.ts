@@ -398,8 +398,11 @@ export async function arriveAtStartPath(
   let destination: string;
   try {
     // startPath is a pathname (a host belongs to the machine, not the journey) — resolve it
-    // against the tab's own URL to get something the browser can be sent to.
-    destination = new URL(target, session.url).toString();
+    // against the tab's own URL to get something the browser can be sent to. Already HERE, the
+    // reset reloads the page the tab is on: `samePath` ignored a query the flow did not record, and
+    // navigating to `target` would strip it, so the replay would test a different page than the one
+    // it just agreed it was on.
+    destination = new URL(here ? current : target, session.url).toString();
   } catch {
     return {}; // no usable base URL — nowhere to navigate from
   }
