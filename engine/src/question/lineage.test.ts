@@ -16,7 +16,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { EventType, type ReticleEvent } from '@reticlehq/core';
+import { EventAttribution, EventType, type ReticleEvent } from '@reticlehq/core';
 import { traceLineage } from './lineage.js';
 
 const state = (t: number, path: string, value: unknown): ReticleEvent =>
@@ -25,6 +25,15 @@ const signal = (t: number, name: string): ReticleEvent =>
   ({ type: EventType.SIGNAL, t, data: { name } }) as unknown as ReticleEvent;
 const net = (t: number, method: string, url: string, status: number): ReticleEvent =>
   ({ type: EventType.NET_REQUEST, t, data: { method, url, status } }) as unknown as ReticleEvent;
+/**
+ * The event as the SDK stamps it while a driven action is active: `actionId` plus the tier that
+ * link is worth. Set together, exactly as `core/messages.ts` says they are.
+ */
+const stamped = (e: ReticleEvent, actionId: string): ReticleEvent => ({
+  ...e,
+  actionId,
+  attribution: EventAttribution.WINDOW,
+});
 
 describe('traceLineage — what was observed', () => {
   it('finds the state change that set the value, and marks it observed', () => {
@@ -122,5 +131,90 @@ describe('traceLineage renders a block a reader can scan', () => {
     const text = out.chain.map((l) => l.text).join('\n');
     expect(text.indexOf('user.name')).toBeLessThan(text.indexOf('USER_FETCH_SUCCESS'));
     expect(text.indexOf('USER_FETCH_SUCCESS')).toBeLessThan(text.indexOf('/api/user/1'));
+  });
+});
+
+describe('traceLineage reads the attribution the SDK already stamped', () => {
+  // Every event observed while a driven action is active carries that action's id, at `window`
+  // tier — the same tier, already computed, already labelled, and narrower than a fresh five-second
+  // look-back. The tool used to read only the look-back. These pin what changes when it reads both.
+
+  it('does not offer a candidate stamped with a DIFFERENT act as ambiguity for this one', () => {
+    // Five seconds spans several driven acts. Two signals in the window, but the change carries
+    // `a7` and one of the signals carries `a6`: the ambiguity was never real — "timing alone cannot
+    // choose" is true, and the stamp already had. Reporting two candidates here manufactures an
+    // ambiguity the tool is holding the resolution to.
+    const out = traceLineage(
+      [
+        stamped(signal(80, 'PREVIOUS_CLICK_DONE'), 'a6'),
+        stamped(signal(90, 'CART_UPDATED'), 'a7'),
+        stamped(state(100, 'cart.total', 1499), 'a7'),
+      ],
+      { path: 'cart.total' },
+    );
+    const link = out.chain[1];
+    expect(link?.text).toContain('CART_UPDATED');
+    expect(link?.text).not.toContain('PREVIOUS_CLICK_DONE');
+    expect(link?.candidates, 'one candidate is not an ambiguity').toBeUndefined();
+  });
+
+  it('keeps an UNSTAMPED candidate — the stamp rules out, it never rules in', () => {
+    // A request fired just before dispatch carries no stamp, and its response can land inside the
+    // act. The stamp proves an event belongs to ANOTHER act; it cannot prove an unstamped one is
+    // unrelated. So the look-back still applies to unstamped candidates, and this stays ambiguous.
+    const out = traceLineage(
+      [
+        signal(85, 'PREFETCH_DONE'),
+        stamped(signal(90, 'CART_UPDATED'), 'a7'),
+        stamped(state(100, 'cart.total', 1499), 'a7'),
+      ],
+      { path: 'cart.total' },
+    );
+    expect(out.chain[1]?.candidates).toEqual(['PREFETCH_DONE', 'CART_UPDATED']);
+  });
+
+  it('names the act a stamped change is attributed to when no signal fired, instead of "not in evidence"', () => {
+    // The common case, not the edge case: `reticle.signal()` is a call the APP must make, so on
+    // most apps no signal ever fires. The tool then said the cause was "not in evidence" — a
+    // factual claim, and false whenever the change carries the id of the act Reticle dispatched.
+    // The cause IS in evidence, at window tier, which is the only tier there is.
+    const out = traceLineage([stamped(state(100, 'cart.total', 1499), 'a7')], {
+      path: 'cart.total',
+    });
+    expect(out.chain).toHaveLength(2);
+    const link = out.chain[1];
+    expect(link?.kind).toBe('act');
+    expect(link?.observed, 'window tier is a heuristic, not an observation').toBe(false);
+    expect(link?.text).toContain('a7');
+    expect(link?.text).toMatch(/window/i);
+    expect(String(out.note)).not.toMatch(/not in evidence/i);
+  });
+
+  it('carries the request behind a driven change through the act, filtered by the same stamp', () => {
+    const out = traceLineage(
+      [
+        stamped(net(40, 'POST', '/api/previous', 200), 'a6'),
+        stamped(net(60, 'POST', '/api/cart/add', 200), 'a7'),
+        stamped(state(100, 'cart.total', 1499), 'a7'),
+      ],
+      { path: 'cart.total' },
+    );
+    expect(out.chain).toHaveLength(3);
+    expect(out.chain[1]?.kind).toBe('act');
+    expect(out.chain[2]?.kind).toBe('net');
+    expect(out.chain[2]?.text).toContain('/api/cart/add');
+    expect(out.chain[2]?.text).not.toContain('/api/previous');
+  });
+
+  it('leaves an ambient change exactly as it was — the look-back is the right tool for that', () => {
+    // No stamp on the change means nothing was driving, so there is nothing to filter by and
+    // nothing to attribute to. This is the case `CAUSE_WINDOW_MS` fits, and it is unchanged.
+    const out = traceLineage([stamped(signal(90, 'SOMEONE_ELSES'), 'a6'), state(100, 'x', 1)], {
+      path: 'x',
+    });
+    expect(out.chain[1]?.text).toContain('SOMEONE_ELSES');
+    const bare = traceLineage([state(100, 'x', 1)], { path: 'x' });
+    expect(bare.chain).toHaveLength(1);
+    expect(String(bare.note)).toMatch(/not seen to pass through/i);
   });
 });
