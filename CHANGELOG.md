@@ -4,7 +4,7 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
-## [3.3.0] — 2026-09-25
+## [3.3.0] — 2026-09-26
 
 ### Added
 
