@@ -207,8 +207,24 @@ function turbopackConfig(existing) {
       // type here makes Turbopack rewrite the module id (./x.tsx → ./x.tsx.tsx) and every import breaks.
       '*.tsx': rule,
       '*.jsx': rule,
+      // A JavaScript Next project's pages are .js (#1081). `.js` also names every file in
+      // node_modules, so the rule is limited to the project's own code; `condition` is Next 16+,
+      // and an older Turbopack that does not know the key is left without the rule rather than
+      // handed one it would reject.
+      ...(supportsRuleConditions() ? { '*.js': { ...rule, condition: { not: 'foreign' } } } : {}),
     },
   };
+}
+
+/** Whether this Next's Turbopack accepts a rule `condition` (added with Next 16). */
+function supportsRuleConditions() {
+  try {
+    const { version } = require(resolveFromApp('next/package.json'));
+    const major = parseInt(String(version).split('.')[0] ?? '', 10);
+    return !Number.isFinite(major) || major >= 16;
+  } catch {
+    return true;
+  }
 }
 
 /**
@@ -337,7 +353,8 @@ function withReticle(nextConfig = {}, options = {}) {
         config.module = config.module || { rules: [] };
         config.module.rules = config.module.rules || [];
         config.module.rules.push({
-          test: /\.(t|j)sx$/,
+          // .js as well: see the Turbopack rule above (#1081).
+          test: /\.(tsx|jsx|js)$/,
           exclude: /node_modules/,
           enforce: 'pre',
           use: [{ loader: require.resolve('./loader.cjs') }],

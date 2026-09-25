@@ -53,6 +53,26 @@ describe('reticle next loader', () => {
     expect(code).toBe(source);
   });
 
+  /*
+   * #1081: create-next-app's JavaScript template writes every page as `.js`, and the loader only
+   * matched .tsx/.jsx, so on those projects NO element was stamped and every verdict reported
+   * no-source-mapping. Driven on next-smoke: a `.js` page's <main> and <h1> carried no source.
+   */
+  it('stamps JSX in a plain .js file, the way a JavaScript Next project writes pages', async () => {
+    const { code } = await runLoader(
+      'export default function Page() { return <main><h1>Hi</h1></main>; }',
+      'app/page.js',
+    );
+    expect(code).toContain(SOURCE_ATTR);
+    expect(code).toMatch(/app\/page\.js:1:\d+/);
+  });
+
+  it('leaves a .js file with no JSX in it byte for byte, without parsing it', async () => {
+    const source = 'module.exports = { reactStrictMode: true };';
+    const { code } = await runLoader(source, 'next.config.js');
+    expect(code).toBe(source);
+  });
+
   it('skips node_modules, even when the file is TSX', async () => {
     const source = 'const x = <button>Hi</button>;';
     const { code } = await runLoader(source, '/app/node_modules/ui/Button.tsx');

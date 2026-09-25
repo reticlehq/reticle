@@ -10,7 +10,15 @@ module.exports = function reticleNextLoader(source, inputMap) {
   const callback = this.async();
   const filename = this.resourcePath;
 
-  if (!/\.(t|j)sx$/.test(filename) || filename.includes('node_modules')) {
+  // `.js` too: create-next-app's JavaScript template writes every page as .js, and matching only
+  // .tsx/.jsx left those projects with no stamp anywhere (#1081). A .js file with no JSX in it is
+  // handed back untouched without being parsed, which is every config and route handler.
+  const isJs = /\.js$/.test(filename);
+  if (
+    !(/\.(t|j)sx$/.test(filename) || isJs) ||
+    filename.includes('node_modules') ||
+    (isJs && !/<[A-Za-z]/.test(source))
+  ) {
     callback(null, source, inputMap);
     return;
   }

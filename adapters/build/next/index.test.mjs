@@ -74,7 +74,31 @@ describe('withReticle', () => {
     expect(rule).toBeDefined();
     expect(rule.test.test('src/Foo.tsx')).toBe(true);
     expect(rule.test.test('src/Foo.jsx')).toBe(true);
+    // #1081: a JavaScript Next project writes its pages as .js.
+    expect(rule.test.test('app/page.js')).toBe(true);
     expect(rule.test.test('src/util.ts')).toBe(false);
+  });
+
+  it('gives Turbopack a .js rule that skips foreign code, on the Next that accepts one', () => {
+    process.env.NODE_ENV = 'development';
+    const cwd = process.cwd();
+    try {
+      // The Next is read from the APP: next-smoke runs Next 16, where rules take a `condition`.
+      process.chdir(new URL('../../../apps/next-smoke/', import.meta.url).pathname);
+      const rules = withReticle({}).turbopack?.rules ?? {};
+      expect(rules['*.js']?.condition).toEqual({ not: 'foreign' });
+      expect(rules['*.js']?.loaders?.length).toBe(1);
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it('withholds that rule from an older Turbopack that would reject the key', () => {
+    process.env.NODE_ENV = 'development';
+    // This package's own directory resolves Next 15, whose Turbopack has no rule conditions.
+    const rules = withReticle({}).turbopack?.rules ?? {};
+    expect(rules['*.js']).toBeUndefined();
+    expect(rules['*.tsx']).toBeDefined();
   });
 
   /**
