@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server`: a click that changed the URL but not the view no longer verifies as a route change.** With a store that ignored the navigation, `act_and_wait { until: route contains "/compose" }` answered `verified: "yes"` while the old view stayed on screen. Reticle's rule for a route that rendered nothing exists for exactly this case, but it did not fire. The HUD rebuilding its own list of saved flows in the same window was being counted as the app's DOM changing: a removed node is detached, so it could not be traced back to Reticle's panel. Those removals are ignored now, so the rule fires and the answer is `unknown`. Its explanation says the URL moved and nothing rendered for it, instead of blaming a busy page.

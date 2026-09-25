@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/core`: choosing a radio option whose label read like an action was refused as destructive.** Picking "Refund" from a reason group, or "Inlet" from two choices, needed `confirmDangerous: true`, which trains an agent to pass it on every action. A radio now counts as a value picker, like a listbox option: the choice is allowed, and the submit it feeds is still judged on its own terms. Checkboxes and menu items are unchanged, because a "Delete this repository" checkbox or a Delete menu item is the act itself. Part of [#894](https://github.com/reticlehq/reticle/issues/894). Contributed by @vaibhav8a in #1093.
