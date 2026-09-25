@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { hasConnectedDocument, observeWebDocument } from './web-csp-observation.js';
+import { hasConnectedDocument, observeWebDocument } from './served-document.js';
 
 describe('observeWebDocument', () => {
   it('returns the effective response policy and served HTML from a loopback page', async () => {

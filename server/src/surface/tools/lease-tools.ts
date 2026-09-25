@@ -21,6 +21,8 @@ import type { Perturbation } from '@reticlehq/core';
 import { z } from 'zod';
 import { leaseNotConnectedHint, type LeaseEvidence } from './lease-hint.js';
 import { probeSdkMarker } from './gaps/sdk-marker-probe.js';
+import { observeWebDocument } from '@/portal/session/dev-server/served-document.js';
+import { diagnoseObservedWebCsp } from '@reticlehq/init';
 import { readProjectFramework, readProjectId } from '@/command/cli/ports/resolve/cli-port.js';
 import { hasAnyAppConnectedBefore } from '@/memory/recall/prior/connection-memory.js';
 import {
@@ -58,14 +60,43 @@ import { chromiumHint } from '@/command/cli/doctor/browser/chromium-hint.js';
  * to print a paragraph, and it can only ever add a sentence: the probe returns `undefined` on any
  * doubt and the hint then says nothing about markers.
  */
+/**
+ * Whether the served page's own CSP refuses the bridge's SOCKET, read by the same code `doctor` uses.
+ *
+ * Only `connect-src` counts here. A lease injects the SDK itself, so the inline-snippet problem a
+ * `script-src` finding describes does not apply; what stops a leased page is the socket. Said in the
+ * lease's own words, because doctor's advice is about wiring a project, not about a tab.
+ */
+async function observedCspBlock(
+  url: string,
+  port: number,
+): Promise<{ problem: string; fix: string } | undefined> {
+  const document = await observeWebDocument(url);
+  if (document === undefined) return undefined;
+  const refusesSocket = diagnoseObservedWebCsp(document, port).some((finding) =>
+    `${finding.problem} ${finding.fix}`.includes(CONNECT_SRC),
+  );
+  if (!refusesSocket) return undefined;
+  const allow = `ws://localhost:${String(port)} ws://127.0.0.1:${String(port)}`;
+  return {
+    problem: `its ${CONNECT_SRC} does not allow ws://localhost:${String(port)}`,
+    fix: `add ${allow} to ${CONNECT_SRC}, behind a development-only check`,
+  };
+}
+
+/** The CSP directive that governs the socket the SDK dials. */
+const CONNECT_SRC = 'connect-src';
+
 async function leaseEvidence(deps: ToolDeps, port: number, url: string): Promise<LeaseEvidence> {
   const cwd = process.cwd();
   const projectId = readProjectId(cwd);
   const refusal = deps.sessions.lastClosure()?.reason;
   const framework = readProjectFramework(cwd);
   const sdkMarker = await probeSdkMarker(url);
+  const cspBlock = await observedCspBlock(url, port);
   return {
     ...(refusal === undefined ? {} : { refusal }),
+    ...(cspBlock === undefined ? {} : { cspBlock }),
     ...(framework === undefined ? {} : { framework }),
     ...(sdkMarker === undefined ? {} : { sdkMarker }),
     previouslyConnected: hasAnyAppConnectedBefore(reticleStateHome(), port, projectId),

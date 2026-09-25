@@ -296,6 +296,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   capsule: ['dir', 'fs'],
   cli: [
+    // doctor reads the document the dev server serves (served-document.ts) to judge its CSP.
+    'dev-server',
     'answers',
     'binding',
     'suite',
@@ -670,6 +672,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    */
   'page-commands': [],
   tools: [
+    // A lease that never dialled reads the served page's CSP, the same reader doctor uses.
+    'dev-server',
     'hooks',
     'navigation',
     'lifetime',

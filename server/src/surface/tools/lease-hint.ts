@@ -38,6 +38,11 @@ export interface LeaseEvidence {
    */
   sdkMarker?: boolean;
   /**
+   * The page's own Content-Security-Policy, read off the served document, when it refuses the
+   * bridge. Proof rather than a guess: the connection cannot happen until the policy allows it.
+   */
+  cspBlock?: { problem: string; fix: string };
+  /**
    * The websocket URL the leased page actually tried, read from its own console.
    *
    * The only per-page proof there is about where the dial WENT. `refusal` proves a dial arrived
@@ -130,6 +135,19 @@ export function leaseNotConnectedHint(
       `${String(port)} — the app's port comes from its build config (\`.reticle.json\`, ` +
       `RETICLE_PORT, or the build plugin's \`port\`), and \`VITE_RETICLE_WS_URL\` overrides it ` +
       `outright.${marker} ${RELEASE}`
+    );
+  }
+
+  // 0b. The page's own policy forbids the connection. Read off the document it served, so it is
+  //     proof about the page in hand, and it holds whether or not the app ships an SDK: neither
+  //     `init` nor the zero-install reader can dial out of a page that forbids it. Every cause
+  //     below presupposes a page that is allowed to connect, which is why this comes first.
+  if (evidence.cspBlock !== undefined) {
+    return (
+      `${opening} This page's Content-Security-Policy blocks the connection: ` +
+      `${evidence.cspBlock.problem}. That is true whether or not the app has Reticle installed, ` +
+      `so installing it will not help until the policy allows the bridge. For development, ` +
+      `${evidence.cspBlock.fix}. ${RELEASE}`
     );
   }
 

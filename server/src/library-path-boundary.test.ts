@@ -59,6 +59,11 @@ const DECLARED_CROSSINGS: Record<string, string> = {
     'whose `port` is the app’s own dev-server port, so the set is defined there; the runtime ' +
     'readers (the dev-server probe, the no-session diagnosis) read it through here. Data, not a code ' +
     'path.',
+  'surface/tools/lease-tools.ts':
+    'Reads `diagnoseObservedWebCsp` to say, when a leased page never dialled, that the page\u2019s own ' +
+    'Content-Security-Policy forbids the connection. It is a pure parser of policy text that lives ' +
+    'with `doctor`, its first caller; the lease runs it only on a path that has already failed, and ' +
+    'a consumer embedding the engine never reaches the installer through it.',
   'telemetry/install-source.ts':
     'Re-exports `configWithInstallSource`. `init` is the only thing that writes `.reticle.json`, so ' +
     'the writer lives with it; this module stays the one place to read about install attribution.',

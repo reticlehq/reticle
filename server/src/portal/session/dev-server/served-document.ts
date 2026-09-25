@@ -1,4 +1,14 @@
-import type { ObservedWebDocument } from '@reticlehq/init';
+/**
+ * The document a local dev server actually serves: its CSP header and HTML, read once and failing
+ * soft. Shared by `doctor` (is a policy blocking the bridge?) and a lease that never dialled (was
+ * it the page's own policy?), which is why it lives beside the dev-server probe and not in either.
+ */
+/** What a served page said about its policy. The same shape `diagnoseObservedWebCsp` reads. */
+export interface ObservedWebDocument {
+  url: string;
+  headers: string[];
+  html: string;
+}
 
 const CSP_HEADER = 'content-security-policy';
 const DOCUMENT_TIMEOUT_MS = 1_000;

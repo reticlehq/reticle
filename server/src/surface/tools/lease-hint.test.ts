@@ -92,3 +92,34 @@ describe('a page that dialled somewhere else', () => {
     expect(hint).not.toMatch(/dialled a different|different port/i);
   });
 });
+
+/*
+ * Driven: an uninstrumented page served with `Content-Security-Policy: connect-src 'self'` was
+ * leased, zero-install supplied the SDK, and the policy stopped its socket. The same page without
+ * the header connected. The hint said "run `reticle init`" and listed four causes, none of them the
+ * policy it could have read off the page.
+ */
+describe('a page whose CSP blocks the bridge', () => {
+  const cspBlock = {
+    problem: "connect-src 'self' does not allow ws://localhost:4400",
+    fix: 'add ws://localhost:4400 to connect-src in development',
+  };
+
+  it('names the policy and the fix, and says init cannot help', () => {
+    const hint = leaseNotConnectedHint('http://localhost:4455/', 4400, {
+      cspBlock,
+      sdkMarker: false,
+    });
+    expect(hint).toContain('Content-Security-Policy');
+    expect(hint).toContain(cspBlock.fix);
+    expect(hint).not.toContain('run `reticle init`');
+  });
+
+  it('outranks the guessed causes, but not a page that dialled the wrong port', () => {
+    const wrongPort = leaseNotConnectedHint('http://localhost:4455/', 4400, {
+      cspBlock,
+      dialledUrl: 'ws://localhost:4999/reticle',
+    });
+    expect(wrongPort).toContain('4999');
+  });
+});

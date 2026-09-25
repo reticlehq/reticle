@@ -39,7 +39,10 @@ import {
 } from '@/command/daemon/daemon-resolve.js';
 import { isAlive } from '@/command/daemon/daemon.js';
 import { readDevServers } from '@/command/daemon/dev-servers.js';
-import { hasConnectedDocument, observeWebDocument } from './doctor/web-csp-observation.js';
+import {
+  hasConnectedDocument,
+  observeWebDocument,
+} from '@/portal/session/dev-server/served-document.js';
 
 /**
  * `reticle doctor` — collapse the ~6 independent first-run failure modes into one command. Checks the
