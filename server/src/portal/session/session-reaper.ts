@@ -63,7 +63,7 @@ export function reapIdleSessions(sessions: SessionManager): string[] {
 }
 
 /**
- * Drop sessions that have ENDED and gone quiet, so a listing stops offering them.
+ * Drop sessions that have ENDED, gone quiet and lost their socket, so a listing stops offering them.
  *
  * `reticle_session { action: "end" }` sets state and nothing else -- it never calls
  * `sessions.remove`. `SessionManager.list()` does not filter by state, and `reapIdleSessions`
@@ -83,6 +83,11 @@ export function reapIdleSessions(sessions: SessionManager): string[] {
  * immediately would make a second call fail to resolve. Waiting for the session to go quiet keeps
  * that, keeps a just-ended session inspectable, and still collects the case that actually hurts: a
  * row nobody can get rid of.
+ *
+ * Only once the socket is no longer open. An ended session whose tab is still connected but quiet
+ * belongs to a page that holds a live connection; dropping the record would orphan that socket,
+ * leaving a connection the daemon no longer tracks. Such a session is still removed the ordinary
+ * way, by the `close` handler, when the tab goes.
  */
 export function reapEndedSessions(
   sessions: SessionManager,
@@ -92,6 +97,7 @@ export function reapEndedSessions(
   // Snapshot first: `remove` mutates the map this iterates.
   for (const session of [...sessions.all()]) {
     if (!session.isEnded()) continue;
+    if (session.socketOpen()) continue;
     if (session.staleMs() < staleAfterMs) continue;
     if (sessions.remove(session)) dropped.push(session.id);
   }

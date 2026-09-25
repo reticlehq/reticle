@@ -19,7 +19,9 @@ import {
   SessionReaper,
 } from './session-reaper.js';
 
-const fakeSocket = { send: (): void => {} } as unknown as WebSocket;
+// ws readyState: 1 is OPEN, 3 is CLOSED.
+const fakeSocket = { send: (): void => {}, readyState: 1 } as unknown as WebSocket;
+const closedSocket = { send: (): void => {}, readyState: 3 } as unknown as WebSocket;
 
 function hello(id: string): HelloMessage {
   return {
@@ -35,15 +37,15 @@ function hello(id: string): HelloMessage {
 
 function makeManager(): {
   mgr: SessionManager;
-  add: (id: string) => Session;
+  add: (id: string, socket?: WebSocket) => Session;
   tick: (ms: number) => void;
 } {
   let now = 0;
   const mgr = new SessionManager();
   return {
     mgr,
-    add: (id) => {
-      const s = new Session(hello(id), fakeSocket, () => now);
+    add: (id, socket = fakeSocket) => {
+      const s = new Session(hello(id), socket, () => now);
       mgr.add(s);
       return s;
     },
@@ -187,9 +189,9 @@ describe('SessionReaper', () => {
  * session with a dead socket has no way left to reach.
  */
 describe('reapEndedSessions', () => {
-  it('drops an ended session that has gone quiet', () => {
+  it('drops an ended session that has gone quiet and lost its socket', () => {
     const { mgr, add, tick } = makeManager();
-    const done = add('done');
+    const done = add('done', closedSocket);
     done.setState(SessionState.ENDED);
     tick(SESSION_LEASE.STALE_AFTER_MS + 1);
 
@@ -201,7 +203,7 @@ describe('reapEndedSessions', () => {
     // `end` is documented idempotent and the human may still be reading the panel. Collecting
     // immediately would trade one surprise for another.
     const { mgr, add } = makeManager();
-    const done = add('done');
+    const done = add('done', closedSocket);
     done.setState(SessionState.ENDED);
 
     expect(reapEndedSessions(mgr)).toEqual([]);
@@ -212,7 +214,7 @@ describe('reapEndedSessions', () => {
     // Quiet is not ended. A backgrounded tab an agent is about to drive again must survive, which
     // is why this rule is `isEnded()` AND stale rather than staleness alone.
     const { mgr, add, tick } = makeManager();
-    add('live');
+    add('live', closedSocket);
     tick(SESSION_LEASE.STALE_AFTER_MS * 10);
 
     expect(reapEndedSessions(mgr)).toEqual([]);
@@ -224,7 +226,7 @@ describe('reapEndedSessions', () => {
     // before starting new work." Following that advice did not free anything, which is what the
     // reporter hit three times. Now it does, once the sweep runs.
     const { mgr, add, tick } = makeManager();
-    const zombie = add('zombie');
+    const zombie = add('zombie', closedSocket);
     tick(SESSION_LEASE.STALE_AFTER_MS + 1);
     expect(mgr.list().map((s) => s.sessionId)).toContain('zombie');
 
@@ -232,6 +234,18 @@ describe('reapEndedSessions', () => {
     reapEndedSessions(mgr);
 
     expect(mgr.list().map((s) => s.sessionId)).not.toContain('zombie');
+  });
+
+  it('keeps an ended session whose tab is still connected, however quiet', () => {
+    // The page still holds a live socket. Dropping the record would orphan it: a connection the
+    // daemon no longer tracks. The `close` handler removes this session when the tab goes.
+    const { mgr, add, tick } = makeManager();
+    const connected = add('connected');
+    connected.setState(SessionState.ENDED);
+    tick(SESSION_LEASE.STALE_AFTER_MS * 10);
+
+    expect(reapEndedSessions(mgr)).toEqual([]);
+    expect(mgr.list().map((s) => s.sessionId)).toContain('connected');
   });
 
   it('leaves the idle rule alone: a live idle session is ended, not dropped', () => {
