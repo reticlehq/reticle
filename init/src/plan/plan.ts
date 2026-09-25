@@ -18,7 +18,10 @@ import {
   ClientMergeStatus,
   clientSnippet,
   clientSpec,
+  CLAUDE_PROJECT_CONFIG,
+  CLAUDE_PROJECT_SPEC,
   McpClient,
+  type ClientSpec,
 } from '@/register/mcp-clients.js';
 import {
   CLAUDE_COMMAND_PATH,
@@ -158,40 +161,52 @@ function claudeMcpStep(input: PlanInput): Step | null {
  * parse is reported with a paste-able block rather than overwritten, and everything else is written.
  */
 function otherClientSteps(input: PlanInput): Step[] {
-  const steps: Step[] = [];
-  for (const detected of input.detectedClients ?? []) {
-    const spec = clientSpec(detected.id);
-    const merged = mergeClientConfig(spec, detected.existing);
-    const title = `MCP server (${spec.label})`;
-    if (merged.status === ClientMergeStatus.ALREADY) {
-      steps.push({
-        title,
-        target: detected.configPath,
-        status: StepStatus.ALREADY,
-        detail: `reticle already registered with ${spec.label}`,
-      });
-      continue;
-    }
-    if (merged.status === ClientMergeStatus.MANUAL) {
-      // Either the file did not parse, or the format is one we refuse to edit blind (TOML). Both
-      // end the same way: say so, and hand over the exact block.
-      steps.push({
-        title,
-        target: detected.configPath,
-        status: StepStatus.MANUAL,
-        detail: `add this to ${detected.configPath} by hand:\n${clientSnippet(spec)}`,
-      });
-      continue;
-    }
-    steps.push({
+  return (input.detectedClients ?? []).map((detected) =>
+    clientStep(clientSpec(detected.id), detected.configPath, detected.existing),
+  );
+}
+
+/** One client's step: already-correct is left alone, an unparseable file gets a paste-able block. */
+function clientStep(spec: ClientSpec, configPath: string, existing: string | null): Step {
+  const merged = mergeClientConfig(spec, existing);
+  const title = `MCP server (${spec.label})`;
+  if (merged.status === ClientMergeStatus.ALREADY) {
+    return {
       title,
-      target: detected.configPath,
-      status: StepStatus.APPLY,
-      detail: `register reticle with ${spec.label}`,
-      write: { path: detected.configPath, content: merged.content },
-    });
+      target: configPath,
+      status: StepStatus.ALREADY,
+      detail: `reticle already registered with ${spec.label}`,
+    };
   }
-  return steps;
+  if (merged.status === ClientMergeStatus.MANUAL) {
+    // Either the file did not parse, or the format is one we refuse to edit blind (TOML). Both
+    // end the same way: say so, and hand over the exact block.
+    return {
+      title,
+      target: configPath,
+      status: StepStatus.MANUAL,
+      detail: `add this to ${configPath} by hand:\n${clientSnippet(spec)}`,
+    };
+  }
+  return {
+    title,
+    target: configPath,
+    status: StepStatus.APPLY,
+    detail: `register reticle with ${spec.label}`,
+    write: { path: configPath, content: merged.content },
+  };
+}
+
+/**
+ * Claude Code's project `.mcp.json`, written only when `init` runs inside Claude Code with no CLI on
+ * PATH (a VS Code extension session). There the reporter had to write this file by hand (#1071,
+ * #1078); anywhere else a `.mcp.json` is a file in somebody's repo for a client they may not use, so
+ * they get the notice instead.
+ */
+function claudeProjectStep(input: PlanInput): Step | null {
+  if (input.claudeCli || true !== input.insideClaudeCode) return null;
+  const path = agentFile(input, CLAUDE_PROJECT_CONFIG);
+  return clientStep(CLAUDE_PROJECT_SPEC, path, input.claudeProjectConfig ?? null);
 }
 
 /** One global registration per detected agent (Claude + Cursor). Falls back to a manual note. */
@@ -213,7 +228,12 @@ function mcpSteps(input: PlanInput): Step[] {
   // Claude and Cursor first (they have their own registration paths), then every other detected
   // client. A machine with Cursor AND Windsurf gets both — registering only the first one found is
   // how a user ends up with Reticle in the editor they were not using.
-  const steps = [...stepsForAgents(input, (a) => a.mcpStep), ...otherClientSteps(input)];
+  const claudeProject = claudeProjectStep(input);
+  const steps = [
+    ...stepsForAgents(input, (a) => a.mcpStep),
+    ...(null === claudeProject ? [] : [claudeProject]),
+    ...otherClientSteps(input),
+  ];
   if (0 === steps.length) {
     // No agent detected. mcpManual already carries the Windows cmd fallback — do not append it again.
     return [
@@ -239,7 +259,7 @@ function mcpSteps(input: PlanInput): Step[] {
    * to register, so nothing has silently vanished — and leaving that path untouched keeps every
    * pristine scaffold in the install baseline reading exactly as it did.
    */
-  if (!input.claudeCli && steps.length > 0) {
+  if (!input.claudeCli && null === claudeProject && steps.length > 0) {
     steps.push({
       title: CLAUDE_MCP_TITLE,
       target: MCP_TARGET,

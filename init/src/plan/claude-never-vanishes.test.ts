@@ -78,3 +78,49 @@ describe('the Claude Code MCP step', () => {
     expect(detail).toContain('@reticlehq/server');
   });
 });
+
+/**
+ * From #1078 (Christian-Sidak): when `init` runs INSIDE Claude Code with no `claude` on PATH, write
+ * the project-scope `.mcp.json` the reporter had to write by hand, instead of only describing it.
+ *
+ * Only inside Claude Code. A `.mcp.json` written for somebody who does not use it is a file in
+ * their repo they did not ask for; the notice stays for everyone else.
+ */
+describe('inside Claude Code, with no CLI on PATH', () => {
+  const inside = (partial: Partial<PlanInput>): PlanInput =>
+    base({ claudeCli: false, insideClaudeCode: true, ...partial });
+  const claudeWrite = (plan: ReturnType<typeof buildPlan>) =>
+    plan.steps.find((s) => StepStatus.APPLY === s.status && true === s.write?.path.endsWith('.mcp.json'));
+
+  it('writes the project .mcp.json, merged into nothing', () => {
+    const step = claudeWrite(buildPlan(inside({ claudeProjectConfig: null })));
+    expect(step?.write?.content).toContain('"mcpServers"');
+    expect(step?.write?.content).toContain('@reticlehq/server');
+  });
+
+  it('merges into an existing .mcp.json without dropping the servers already there', () => {
+    const existing = JSON.stringify({ mcpServers: { other: { command: 'x', args: [] } } });
+    const content = claudeWrite(buildPlan(inside({ claudeProjectConfig: existing })))?.write?.content;
+    expect(content).toContain('"other"');
+    expect(content).toContain('@reticlehq/server');
+  });
+
+  it('is ALREADY on a re-run, and writes nothing', () => {
+    const first = claudeWrite(buildPlan(inside({ claudeProjectConfig: null })))?.write?.content;
+    const again = buildPlan(inside({ claudeProjectConfig: first ?? null }));
+    expect(claudeWrite(again)).toBeUndefined();
+    expect(mentioningClaude(again).some((s) => StepStatus.ALREADY === s.status)).toBe(true);
+  });
+
+  it('outside Claude Code it still only says so, and writes no file', () => {
+    const plan = buildPlan(
+      base({
+        claudeCli: false,
+        detectedClients: [
+          { id: McpClient.GEMINI, configPath: '/home/u/.gemini/settings.json', existing: '{}' },
+        ],
+      }),
+    );
+    expect(claudeWrite(plan)).toBeUndefined();
+  });
+});

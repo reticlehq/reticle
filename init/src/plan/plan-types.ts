@@ -110,6 +110,13 @@ export interface PlanInput {
   claudeCli: boolean;
   /** Whether an `reticle` MCP server is already registered with Claude (any scope) — idempotency. */
   mcpExists: boolean;
+  /**
+   * Whether `init` is running inside Claude Code itself, which is the one case where writing its
+   * project-scope `.mcp.json` is known to be wanted. See `CLAUDE_PROJECT_SPEC`.
+   */
+  insideClaudeCode?: boolean | undefined;
+  /** The project `.mcp.json` at the agent's root, read so the merge stays idempotent. */
+  claudeProjectConfig?: string | null | undefined;
   /** `process.platform`. Injected so this module stays pure. Windows is the only branch. */
   platform?: string;
   /**

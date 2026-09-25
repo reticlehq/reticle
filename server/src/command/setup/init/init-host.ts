@@ -18,6 +18,10 @@ import {
 } from '@/portal/bridge/pairing-token.js';
 import { declaredInstallSource } from '@/telemetry/install-source.js';
 
+/** The variable Claude Code sets on every process it spawns, and the value it sets it to. */
+const CLAUDE_CODE_MARKER_ENV = 'CLAUDECODE';
+const CLAUDE_CODE_MARKER_VALUE = '1';
+
 export function serverInitHost(): InitHost {
   return {
     span<T>(name: string, fields: Record<string, unknown>, fn: () => T): T {
@@ -47,6 +51,11 @@ export function serverInitHost(): InitHost {
     },
     installSource(): string | undefined {
       return declaredInstallSource();
+    },
+    // Claude Code marks every process it spawns. If the marker ever changes, init falls back to the
+    // notice it printed before, which is the safe direction.
+    insideClaudeCode(): boolean {
+      return CLAUDE_CODE_MARKER_VALUE === process.env[CLAUDE_CODE_MARKER_ENV];
     },
   };
 }

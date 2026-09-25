@@ -85,6 +85,22 @@ function openCodeEntry(): Record<string, unknown> {
  */
 export const CLAUDE_PROJECT_CONFIG = '.mcp.json';
 
+/**
+ * Claude Code's project-scope registration, as a client spec so it goes through the same merge
+ * (already / manual / apply) as every other client. Not in `MCP_CLIENTS`: that list is DETECTED by
+ * its config existing, and this one is only ever written from inside Claude Code (see plan.ts).
+ */
+export const CLAUDE_PROJECT_SPEC: ClientSpec = {
+  id: McpClient.CLAUDE_CODE,
+  label: 'Claude Code, project',
+  scope: ConfigScope.PROJECT,
+  relPath: CLAUDE_PROJECT_CONFIG,
+  format: ConfigFormat.JSON,
+  serversKey: 'mcpServers',
+  entry: commandArgsEntry,
+  docs: 'https://docs.claude.com/en/docs/claude-code/mcp: project scope, .mcp.json at the project root',
+};
+
 export const MCP_CLIENTS: readonly ClientSpec[] = [
   {
     id: McpClient.CLAUDE_CODE,

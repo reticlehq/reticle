@@ -63,7 +63,7 @@ import {
 import { claudeAvailableProbe, claudeExistsProbe } from './register/mcp.js';
 import { reticleDevLocation } from './patch/next-patch.js';
 import { scanTestids, storeHints, scanStores } from './detect/capabilities.js';
-import { CURSOR_PROJECT_MARKER } from './register/mcp-clients.js';
+import { CLAUDE_PROJECT_CONFIG, CURSOR_PROJECT_MARKER } from './register/mcp-clients.js';
 import { deriveProjectId, packageName } from './project/project-id.js';
 import {
   VITE_DEV_MODULE_PATH,
@@ -351,6 +351,8 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
     cspSources,
     claudeCli,
     mcpExists,
+    insideClaudeCode: io.host.insideClaudeCode(),
+    claudeProjectConfig: options.mcp ? io.readFile(agentFile(CLAUDE_PROJECT_CONFIG)) : undefined,
     platform: process.platform,
     detectedClients,
     cursorProjectPresent: io.exists(CURSOR_PROJECT_MARKER),

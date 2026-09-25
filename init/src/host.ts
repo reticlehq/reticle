@@ -44,6 +44,12 @@ export interface InitHost {
   pairingToken(): string;
   /** The install channel the environment declares, or undefined when nothing declared one. */
   installSource(): string | undefined;
+  /**
+   * Whether this run was started from inside Claude Code: the one case where writing its project
+   * `.mcp.json` is known to be wanted. A host question because it is read from the environment,
+   * which the scaffolder does not read for itself.
+   */
+  insideClaudeCode(): boolean;
 }
 
 /**
@@ -68,5 +74,8 @@ export const SILENT_HOST: InitHost = {
   },
   installSource() {
     return undefined;
+  },
+  insideClaudeCode() {
+    return false;
   },
 };
