@@ -11,7 +11,8 @@ import type { AmbientCounts } from '@/window/ambient.js';
  */
 /** The subset of Session the predicate engine needs — keeps it testable with a fake. */
 export interface PredicateSession {
-  command(name: string, args?: Record<string, unknown>): Promise<CommandResult>;
+  /** `timeoutMs` bounds the page's answer; omitted, the session's own default applies. */
+  command(name: string, args?: Record<string, unknown>, timeoutMs?: number): Promise<CommandResult>;
   eventsSince(cursor: number): ReticleEvent[];
   onEvent(listener: (event: ReticleEvent) => void): () => void;
   /** Milliseconds since connect — the same clock that stamps event `t` (injected, testable). */
@@ -70,4 +71,35 @@ export interface PredicateSession {
    * Optional: a fake that omits it gets its callback back unchanged.
    */
   keepCallerContext?: KeepCallerContextFn;
+}
+
+/**
+ * The least time a page read is given, even at the very end of a budget: the final read at the
+ * deadline must still be able to hear a live page answer.
+ */
+export const MIN_READ_MS = 1_500;
+
+/**
+ * `session`, with every page command bounded by what the caller's budget has left.
+ *
+ * Without it each read carried the session's fixed command timeout, so a `timeout_ms: 3000` assert on
+ * a page that never answered came back after eight seconds. A Proxy rather than a copy because the
+ * real Session keeps `#private` fields: every other member is forwarded bound to the original.
+ */
+export function withinBudget(
+  session: PredicateSession,
+  remainingMs: () => number,
+): PredicateSession {
+  return new Proxy(session, {
+    get(target, key) {
+      if ('command' === key) {
+        return (name: string, args?: Record<string, unknown>): Promise<CommandResult> =>
+          target.command(name, args, Math.max(MIN_READ_MS, remainingMs()));
+      }
+      const value: unknown = Reflect.get(target, key, target);
+      return 'function' === typeof value
+        ? (value as (...a: unknown[]) => unknown).bind(target)
+        : value;
+    },
+  });
 }

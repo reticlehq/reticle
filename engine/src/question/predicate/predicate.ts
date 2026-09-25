@@ -30,7 +30,7 @@ import {
 
 export { PredicateSchema, PredicateKind };
 export type { Predicate, EvalResult };
-import type { PredicateSession } from './predicate-session.js';
+import { withinBudget, type PredicateSession } from './predicate-session.js';
 export type { PredicateSession } from './predicate-session.js';
 
 /**
@@ -451,6 +451,9 @@ export function waitForPredicate(
   /** Pre-action readings, for the relative properties. See `evaluatePredicate`. */
   baselines?: Baselines,
 ): Promise<EvalResult> {
+  // Every read in this wait shares the caller's budget; see withinBudget.
+  const deadline = session.elapsed() + timeoutMs;
+  const reader = withinBudget(session, () => deadline - session.elapsed());
   return new Promise<EvalResult>((resolve) => {
     let done = false;
     // A read that threw never looked at the app: the page did not answer, or went away. That is
@@ -519,7 +522,7 @@ export function waitForPredicate(
       inFlight = true;
       // Interim poll: read only `pass`, so skip the extra near-miss round-trips (diagnose=false). The
       // final timeout eval below runs with full diagnostics.
-      void evaluatePredicate(session, predicate, since, false, baselines)
+      void evaluatePredicate(reader, predicate, since, false, baselines)
         .then((r) => {
           if (!r.pass) {
             // Final already: stop rather than spend a budget that cannot change the answer. Only
@@ -552,7 +555,7 @@ export function waitForPredicate(
           if (confirming) return;
           confirming = true;
           confirmTimer = setTimeout(() => {
-            void evaluatePredicate(session, predicate, since, true, baselines)
+            void evaluatePredicate(reader, predicate, since, true, baselines)
               .then(finish)
               .catch((error: unknown) => {
                 finish(failed(error));
@@ -625,7 +628,7 @@ export function waitForPredicate(
     });
     const interval = setInterval(boundCheck, POLL_INTERVAL_MS);
     const timer = setTimeout(() => {
-      void evaluatePredicate(session, predicate, since, true, baselines)
+      void evaluatePredicate(reader, predicate, since, true, baselines)
         .then((r) => {
           // Spread the near-miss, do NOT hand-copy two fields. The oracle computes observed / expected
           // / assertion — the structured cause the repair literature ranks above prose — and the old

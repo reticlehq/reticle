@@ -601,6 +601,26 @@ describe('predicate engine', () => {
    * was alive. The page did not ANSWER; nothing was read and found absent. A read that never came
    * back is "could not tell", which the verdict rule already turns into unknown.
    */
+  /**
+   * Driven: `reticle_assert { timeout_ms: 3000 }` against a frozen tab answered after 8s, because
+   * each page command carried its own fixed timeout. The caller's budget is the budget.
+   */
+  it('gives every page read no more time than the wait has left', async () => {
+    const asked: number[] = [];
+    const session: PredicateSession = {
+      command: (_name, _args, timeoutMs) => {
+        asked.push(timeoutMs ?? Number.POSITIVE_INFINITY);
+        return Promise.reject(new Error('command timed out'));
+      },
+      eventsSince: () => [],
+      onEvent: () => () => undefined,
+      elapsed: () => 0,
+    };
+    await waitForPredicate(session, { kind: 'text', contains: 'Saved' }, 3_000);
+    expect(asked.length).toBeGreaterThan(0);
+    expect(Math.max(...asked)).toBeLessThanOrEqual(3_000);
+  });
+
   it('a command the page never answered is inconclusive, never a failed consequence', async () => {
     const session: PredicateSession = {
       command: () => Promise.reject(new Error("command 'match' timed out after 8000ms")),
