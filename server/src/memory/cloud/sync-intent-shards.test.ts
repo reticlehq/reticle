@@ -59,6 +59,36 @@ const idsOf = (value: unknown): string[] =>
   Object.keys((value as { intents?: Record<string, unknown> })?.intents ?? {}).sort();
 
 describe('the intent a sync sends', () => {
+  // The layout the store writes: `intent/<subject>/intent.json`. Read alongside anything not yet
+  // migrated, or every intent written after the move would stay on the laptop.
+  it('reads the per-subject directories the store writes', () => {
+    const root = repo();
+    try {
+      mkdirSync(join(root, 'intent', 'pay-flow'), { recursive: true });
+      writeFileSync(
+        join(root, 'intent', 'pay-flow', 'intent.json'),
+        JSON.stringify({
+          version: 1,
+          subject: 'pay-flow',
+          intents: {
+            pay: {
+              id: 'pay',
+              statement: 'pay holds',
+              state: 'declared',
+              declaredAt: 1,
+              subject: 'pay-flow',
+              status: 'proposed',
+            },
+          },
+        }),
+      );
+      shard(root, 'legacy', ['old:one']);
+      expect(idsOf(diskSource(root).derived('intent'))).toEqual(['old:one', 'pay']);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('includes intents that live only in a shard', () => {
     const root = repo();
     try {

@@ -19,7 +19,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { ReticleDir } from '@reticlehq/core';
+import { IntentDir, ReticleDir } from '@reticlehq/core';
 import type { CloudSyncState, PulledIssues, SyncSink, SyncSource } from './sync-cycle.js';
 import { subjectFor } from '@/memory/intent/intent-subject.js';
 
@@ -82,8 +82,8 @@ const DERIVED_FILE = {
 } as const;
 
 /** The directory the sharded intent store writes into, beside the legacy flat file. */
-const INTENT_SUBDIR = 'intent';
-const INTENT_INDEX = 'index.json';
+const INTENT_SUBDIR = ReticleDir.INTENT_SUBDIR;
+const INTENT_INDEX = IntentDir.INDEX_FILE;
 
 /**
  * Every intent this project holds, flat file and shards merged.
@@ -108,10 +108,14 @@ function readIntent(reticleRoot: string): unknown {
     ...((legacy as { intents?: Record<string, unknown> } | undefined)?.intents ?? {}),
   };
   let shards = 0;
-  for (const file of safeReaddir(join(reticleRoot, INTENT_SUBDIR))) {
-    if (!file.endsWith(JSON_SUFFIX) || INTENT_INDEX === file) continue;
-    const shard = readJson(join(reticleRoot, INTENT_SUBDIR, file)) as
-      { intents?: Record<string, unknown> } | undefined;
+  for (const entry of safeReaddir(join(reticleRoot, INTENT_SUBDIR))) {
+    if (INTENT_INDEX === entry) continue;
+    // `<subject>/intent.json` is the layout; a bare `<subject>.json` is an interim shard the store
+    // has not migrated yet, and is still this project's memory until it has.
+    const path = entry.endsWith(JSON_SUFFIX)
+      ? join(reticleRoot, INTENT_SUBDIR, entry)
+      : join(reticleRoot, INTENT_SUBDIR, entry, IntentDir.SHARD_FILE);
+    const shard = readJson(path) as { intents?: Record<string, unknown> } | undefined;
     // A hand-edited or half-written shard costs one subject, never the whole sync.
     if (shard?.intents === undefined) continue;
     shards++;

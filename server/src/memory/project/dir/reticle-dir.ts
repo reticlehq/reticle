@@ -27,7 +27,7 @@ export interface ReticleDirPaths {
   project: string;
   /**.../.reticle/impact.json (what Reticle has done for this user, local only) */
   impact: string;
-  /**.../.reticle/intent.json (what changes were supposed to make true — git-checked) */
+  /**.../.reticle/intent.json — the LEGACY single ledger, read until the first write migrates it into .reticle/intent/ */
   intent: string;
   /**.../.reticle/fill-values.json (what a drive types into each labelled field — git-checked) */
   fillValues: string;

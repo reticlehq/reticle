@@ -65,15 +65,18 @@ describe('migrating', () => {
     const result = await store().migrate();
     expect(result.migrated).toBe(2);
     expect(result.subjects).toEqual(['auth', 'issues']);
-    expect(await fs.exists(join(dir, 'intent', 'auth.json'))).toBe(true);
+    expect(await fs.exists(join(dir, 'intent', 'auth', 'intent.json'))).toBe(true);
     expect(await fs.exists(join(dir, 'intent', 'index.json'))).toBe(true);
   });
 
-  it('does NOT delete the flat file', async () => {
-    // An older build still reads it, and a migration that removes its own source cannot be checked.
+  // Reversed deliberately: the move is meant to land as ONE reviewable diff, and a flat file left
+  // behind would be a second copy that drifts. A flat file that did not parse is still never
+  // removed — see intent-store.test.ts.
+  it('removes the flat file once everything in it has moved', async () => {
     await seedLegacy({ a: legacyIntent('a') });
     await store().migrate();
-    expect(await fs.exists(join(dir, 'intent.json'))).toBe(true);
+    expect(await fs.exists(join(dir, 'intent.json'))).toBe(false);
+    expect((await store().all()).map((r) => r.id)).toEqual(['a']);
   });
 
   it('is idempotent — running it twice migrates nothing the second time', async () => {
@@ -126,10 +129,10 @@ describe('writing', () => {
   it('touches only the subject it belongs to', async () => {
     await store().record({ id: 'a', statement: 'a', subject: 'auth' });
     await store().record({ id: 'b', statement: 'b', subject: 'checkout' });
-    const authBefore = await fs.readFile(join(dir, 'intent', 'auth.json'));
+    const authBefore = await fs.readFile(join(dir, 'intent', 'auth', 'intent.json'));
     await store().record({ id: 'b', statement: 'b changed', subject: 'checkout' });
     // Editing checkout left auth byte-identical: that is what makes two sessions on two subjects safe.
-    expect(await fs.readFile(join(dir, 'intent', 'auth.json'))).toBe(authBefore);
+    expect(await fs.readFile(join(dir, 'intent', 'auth', 'intent.json'))).toBe(authBefore);
   });
 
   it('moves a record cleanly when its subject changes, leaving no copy behind', async () => {

@@ -438,6 +438,17 @@ export const ReticleDir = {
 } as const;
 
 /**
+ * The names INSIDE `.reticle/intent/` — kept apart from `ReticleDir`, which lists what `.reticle/`
+ * itself holds and is what the retention tiers classify.
+ */
+export const IntentDir = {
+  /** One per subject: `.reticle/intent/<subject>/intent.json`. A flow's name is its subject. */
+  SHARD_FILE: 'intent.json',
+  /** Derived from the shards: `.reticle/intent/index.json`, one line per intent. */
+  INDEX_FILE: 'index.json',
+} as const;
+
+/**
  * Structured reasons a screenshot/visual-diff could not produce a verdict (never
  * thrown as free strings). The visual layer is OPT-IN and CDP/Playwright-driven — it is NEVER
  * bundled into the always-on browser SDK — so NO_PROVIDER is the common "you must `reticle drive`" case.

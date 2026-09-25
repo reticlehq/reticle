@@ -11,7 +11,7 @@ import type { ToolDeps } from '@/surface/tools/tool-kit.js';
  * and it does. `reticle_act_and_wait` and `reticle_assert` are in every agent's tool list already,
  * so one optional argument there makes the declaration free and discoverable by construction.
  *
- * This is a shortcut into the EXISTING ledger, never a second one. It writes `.reticle/intent.json`
+ * This is a shortcut into the EXISTING ledger, never a second one. It writes `.reticle/intent/`
  * through `IntentStore` exactly as `reticle_intent { action: "declare" }` does, so a reviewer reads
  * one file in one vocabulary and cannot tell from the row which door the intent came in by. The
  * pattern is `flows/flow-intent.ts`, which does the same job for a saved flow.

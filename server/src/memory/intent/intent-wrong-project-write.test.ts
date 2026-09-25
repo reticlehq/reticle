@@ -24,6 +24,22 @@ function ledgerKey(root: string): string {
   return reticleDirPaths(root).intent.split('\\').join('/');
 }
 
+/** Everything a project's ledger now writes lives under `.reticle/intent/`. */
+function intentDir(root: string): string {
+  return `${reticleDirPaths(root).root.split('\\').join('/')}/intent/`;
+}
+
+function ledgerWritten(written: Map<string, string>, root: string): boolean {
+  return [...written.keys()].some((k) => k.startsWith(intentDir(root)));
+}
+
+function ledgerText(written: Map<string, string>, root: string): string {
+  return [...written.entries()]
+    .filter(([k]) => k.startsWith(intentDir(root)))
+    .map(([, v]) => v)
+    .join('\n');
+}
+
 /** Existing valid intents in the other project's ledger. */
 const EXISTING_LEDGER = `${JSON.stringify(
   {
@@ -104,7 +120,7 @@ describe('reticle_intent still routes the cases that were never broken', () => {
 
     await tool?.handler(deps, { ...declare, sessionId: LIVE_ID });
 
-    expect(written.has(ledgerKey(APP_ROOT))).toBe(true);
+    expect(ledgerWritten(written, APP_ROOT)).toBe(true);
     expect(written.get(ledgerKey(DAEMON_ROOT))).toBe(EXISTING_LEDGER);
   });
 
@@ -113,7 +129,7 @@ describe('reticle_intent still routes the cases that were never broken', () => {
 
     await tool?.handler(deps, declare);
 
-    expect(written.has(ledgerKey(APP_ROOT))).toBe(true);
+    expect(ledgerWritten(written, APP_ROOT)).toBe(true);
     expect(written.get(ledgerKey(DAEMON_ROOT))).toBe(EXISTING_LEDGER);
   });
 
@@ -127,8 +143,9 @@ describe('reticle_intent still routes the cases that were never broken', () => {
 
     await tool?.handler(deps, declare);
 
-    const ledger = written.get(ledgerKey(DAEMON_ROOT)) ?? '';
-    expect(ledger).toContain('cfp-delete-submission');
-    expect(written.has(ledgerKey(APP_ROOT))).toBe(false);
+    expect(ledgerText(written, DAEMON_ROOT)).toContain('cfp-delete-submission');
+    // The write migrated that project's old flat ledger rather than losing it.
+    expect(ledgerText(written, DAEMON_ROOT)).toContain('other-a');
+    expect(ledgerWritten(written, APP_ROOT)).toBe(false);
   });
 });

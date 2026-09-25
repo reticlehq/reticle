@@ -34,7 +34,7 @@ export const INTENT_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.INTENT,
     description:
-      'Record what a change is SUPPOSED to make true, as a durable statement ABOUT THE PRODUCT that a teammate who was not here will understand in six months — name the behaviour, not this run or its step number, and never "renders cleanly", which nothing can check. It is SHARED memory: pooled per project and read back by later agents. Capture it while you still know — then verification does not have to re-derive it from the DOM later. { action:"declare", intents:[{ id, statement, surface? }] } takes prose and needs NO predicate: at declare time there is often no route, no ref and no code yet, and a predicate demanded there is just a mechanism. Declare EARLY (as you build) and batch them — one call per feature is the whole budget. { action:"bind", id, binding } attaches the predicate that would prove it once you know how; an intent with no binding is not a failure, it is the most interesting row in the ledger — something meant that nothing can currently prove. { action:"list" } returns what is still open. Stored in .reticle/intent.json, git-checked so a human sees in review if an intent was later narrowed to match what was easy to prove.',
+      'Record what a change is SUPPOSED to make true, as a durable statement ABOUT THE PRODUCT that a teammate who was not here will understand in six months — name the behaviour, not this run or its step number, and never "renders cleanly", which nothing can check. It is SHARED memory: pooled per project and read back by later agents. Capture it while you still know — then verification does not have to re-derive it from the DOM later. { action:"declare", intents:[{ id, statement, surface? }] } takes prose and needs NO predicate: at declare time there is often no route, no ref and no code yet, and a predicate demanded there is just a mechanism. Declare EARLY (as you build) and batch them — one call per feature is the whole budget. { action:"bind", id, binding } attaches the predicate that would prove it once you know how; an intent with no binding is not a failure, it is the most interesting row in the ledger — something meant that nothing can currently prove. { action:"list" } returns what is still open. Stored in .reticle/intent/<subject>/intent.json (a flow name is its subject), git-checked so a human sees in review if an intent was later narrowed to match what was easy to prove.',
     example: {
       action: DECLARE,
       intents: [
@@ -152,21 +152,10 @@ export const INTENT_TOOLS: ToolDef[] = [
         return { bound: await store.bind(id, args['binding']) };
       }
       if (LIST === action) {
-        /*
-         * Both files, one answer.
-         *
-         * `declare` writes the flat `.reticle/intent.json`; `record` writes the sharded
-         * `.reticle/intent/`. Listing only the flat one meant a recorded intent could not be found
-         * again by the agent that had just written it — and the lesson an agent draws from that is
-         * "the intent does not exist", not "there are two stores".
-         *
-         * Merged HERE rather than inside either store: this tool is the one seam that knows both
-         * exist, and neither store should have to learn the other's layout to stay honest.
-         */
-        const flat = await store.open();
-        const seen = new Set(flat.map((intent) => intent.id));
-        const fromShards = (await shards.all()).filter((record) => !seen.has(record.id));
-        return { intents: [...flat, ...fromShards] };
+        // One ledger, so one read. This merged two stores while `declare` and `record` wrote two
+        // different files; kept past that, it would add back every PROVED intent to a list that
+        // promises only what is still open.
+        return { intents: await store.open() };
       }
       const raw = args['intents'];
       const entries = Array.isArray(raw)

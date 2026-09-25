@@ -149,18 +149,24 @@ export function redeclareIntent(existing: Intent | undefined, fresh: Intent): In
  * amendment somebody needs to see.
  */
 export function upsertIntent(file: IntentFile, intent: Intent): IntentFile {
-  const previous = file.intents[intent.id];
-  const changed = previous !== undefined && previous.statement !== intent.statement;
+  return {
+    version: INTENT_FILE_VERSION,
+    intents: { ...file.intents, [intent.id]: amendIntent(file.intents[intent.id], intent) },
+  };
+}
+
+/**
+ * The next version of an intent, carrying the previous wording into its history when it changed.
+ *
+ * One rule for every store that keeps intents, so a flat ledger and a sharded one cannot keep two
+ * different histories of the same promise.
+ */
+export function amendIntent(previous: Intent | undefined, next: Intent): Intent {
+  const changed = previous !== undefined && previous.statement !== next.statement;
   const amended = changed
     ? [...(previous.amended ?? []), { statement: previous.statement, at: previous.declaredAt }]
     : previous?.amended;
-  return {
-    version: INTENT_FILE_VERSION,
-    intents: {
-      ...file.intents,
-      [intent.id]: { ...intent, ...(amended === undefined ? {} : { amended }) },
-    },
-  };
+  return { ...next, ...(amended === undefined ? {} : { amended }) };
 }
 
 /** Everything not yet proved — what an agent asking "am I done?" still owes. */

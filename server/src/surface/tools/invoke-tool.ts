@@ -157,7 +157,7 @@ export const SESSION_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
   // FLOW_HEAL is no longer a name runTool ever sees: it became `reticle_verify {action:"heal"}`,
   // and VERIFY is already listed here, so the exemption is inherited from the parent. Left as a
   // dangling name it would be a lie this file's own test 6 is written to catch.
-  ReticleTool.INTENT, // reads/writes .reticle/intent.json; sessionId only picks the project
+  ReticleTool.INTENT, // reads/writes .reticle/intent/; sessionId only picks the project
   ReticleTool.CONTEXT, // folds the journal + intent ledger; must still answer when nothing is connected
   ReticleTool.PROJECT, // reads .reticle/project.json
   // Reads the team's shared memory over HTTP; sessionId only resolves WHICH project's link file to

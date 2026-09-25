@@ -189,7 +189,7 @@ export const intentArg = z
       'BAD: "P1 step 5", "drive 2 of 2", "same as before the fix", "the board renders cleanly" — these name a session, ' +
       'a step number or nothing checkable, and the person reading them later has none of that context. ' +
       'This is shared memory: it is pooled per project and later agents read it back to avoid re-deriving what you just established. ' +
-      'Recorded in .reticle/intent.json, the same ledger reticle_intent writes, and marked proved by this verdict if it passes.',
+      'Recorded in .reticle/intent/, the same ledger reticle_intent writes, and marked proved by this verdict if it passes.',
   );
 
 export const sessionIdShape = {

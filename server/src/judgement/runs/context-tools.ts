@@ -46,7 +46,7 @@ const CONTEXT_OUTPUT_SCHEMA = {
   remaining: z
     .array(z.string())
     .describe(
-      'The intents from .reticle/intent.json that no verdict has discharged. Derived from the ledger, never a guess at what you meant to do next.',
+      'The intents from .reticle/intent/ that no verdict has discharged. Derived from the ledger, never a guess at what you meant to do next.',
     ),
 };
 
@@ -85,7 +85,7 @@ export const CONTEXT_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.CONTEXT,
     description:
-      'What THIS run has already established, so you do not rediscover it. Call it when your own copy is gone: right after a compaction, at the top of a fresh sub-agent, or at the start of a turn you did not begin. Returns `established` (what Reticle OBSERVED, with the source file:line where one was reported), `proven` (claims a verdict already settled, so you neither re-prove them nor assume them) and `remaining` (the intents from .reticle/intent.json that nothing has discharged). It is a FOLD over the journal, never a second store, so it cannot disagree with the ledger. Bounded and superseding rather than accumulating, and anything observed under a replaced document or before your last source edit is already dropped rather than presented as current. Only what Reticle observed goes in: it never reports what you intended or believed.',
+      'What THIS run has already established, so you do not rediscover it. Call it when your own copy is gone: right after a compaction, at the top of a fresh sub-agent, or at the start of a turn you did not begin. Returns `established` (what Reticle OBSERVED, with the source file:line where one was reported), `proven` (claims a verdict already settled, so you neither re-prove them nor assume them) and `remaining` (the intents from .reticle/intent/ that nothing has discharged). It is a FOLD over the journal, never a second store, so it cannot disagree with the ledger. Bounded and superseding rather than accumulating, and anything observed under a replaced document or before your last source edit is already dropped rather than presented as current. Only what Reticle observed goes in: it never reports what you intended or believed.',
     example: {},
     inputSchema: { ...sessionIdShape },
     outputSchema: CONTEXT_OUTPUT_SCHEMA,

@@ -12,7 +12,7 @@ import { classifyFlowAssertions } from './flow-classify.js';
  *
  * A replay used to report only in the language of the DOM: step 3 drifted, this assertion failed.
  * True, actionable, and illegible — the reader still had to reconstruct what stopped working. The
- * ledger in `.reticle/intent.json` already holds the other half (prose statements, declared → bound
+ * ledger in `.reticle/intent/` already holds the other half (prose statements, declared → bound
  * → proved, and the verdict that discharged each one), so a flow does not need its own notion of
  * intent. It needs an id.
  *

@@ -1,26 +1,28 @@
 /**
- * Reading and writing the sharded intent store, and migrating the flat one into it.
+ * The intent ledger on disk: one directory per subject, and a flow's name IS its subject.
  *
- * The operations an agent actually performs, and what each is allowed to cost:
+ *   .reticle/intent/index.json               every id, its subject and one line — derived
+ *   .reticle/intent/<subject>/intent.json    the full records for that subject
  *
- *   index()            every id + one line, always affordable — the session-start read
- *   subject(name)      the full records for one subject, when it is about to work on that
- *   get(id)            one record, via the index rather than by scanning shards
- *   record()/update()  a write that touches ONE shard file plus the index
+ * The ONE place intents are stored. `IntentStore` is the domain API over it (declare, bind,
+ * discharge) and never writes a file of its own; `reticle_intent`'s record/get/index/subject read
+ * this directly. Two stores kept in two files is how an intent written through one action became
+ * invisible to the other, and an agent told its own intent does not exist concludes it does not.
  *
- * The last one is the reason for the whole design. Under the flat file, changing one intent rewrote
- * all 141, so two sessions touching unrelated subjects raced each other and the loser's write
- * vanished. Sharded, they only collide when they genuinely edit the same subject.
+ * Git-checked on purpose: a human sees in review when an intent is narrowed to match what was easy
+ * to prove. Writes are byte-stable, and a write that changes nothing writes nothing, because a ledger
+ * that churns on every run is one whose diffs nobody reads.
  *
- * ## Migration is automatic, and it does not delete
+ * ## Migration happens on the first write, and it removes what it moved
  *
- * `.reticle/intent.json` is read on every load and folded in when the sharded copy has nothing for
- * an id. That makes the move invisible: an agent on the new store sees old intents immediately, and
- * an older build still reading the flat file keeps working, because nothing removes it. Deleting it
- * is a separate decision somebody can take once they believe the migration.
+ * The old single `.reticle/intent.json` (and any interim `intent/<subject>.json`) is read until then,
+ * so nothing is invisible before the move. The first write folds every record into its directory and
+ * deletes the old files, so the change shows up in one reviewable diff. A legacy file that does not
+ * PARSE is never deleted: a hand-merge leaves conflict markers, it reads as empty, and removing it
+ * would destroy the only copy of every intent inside.
  */
-import { parseIntentFile, type Intent } from '@reticlehq/core/artifacts';
-import { ReticleDir } from '@reticlehq/core';
+import { IntentFileSchema, IntentState, amendIntent, type Intent } from '@reticlehq/core/artifacts';
+import { IntentDir, ReticleDir } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { withFileLock } from '@/memory/project/file-lock.js';
@@ -34,17 +36,16 @@ import {
   recordFromIntent,
   serialise,
   shardsFrom,
-  readJsonFile,
+  statusFromState,
   type IntentIndex,
   type IntentRecord,
   type IntentShard,
 } from './intent-shard.js';
 import { writeFileAtomic } from '@/memory/project/fs/write-atomic.js';
 
-const INDEX_FILE = 'index.json';
-const SHARD_SUFFIX = '.json';
+const JSON_SUFFIX = '.json';
 
-/** What a caller supplies to write an intent. Everything optional is genuinely optional. */
+/** What a caller supplies to write an intent through `record`. Everything optional is optional. */
 interface IntentInput {
   id: string;
   statement: string;
@@ -55,6 +56,24 @@ interface IntentInput {
   surface?: Intent['surface'];
   binding?: unknown;
 }
+
+/** The ledger-level facts a write may set beside the intent itself. */
+export interface RecordFacts {
+  subject?: string | undefined;
+  status?: IntentStatus | undefined;
+  why?: string | undefined;
+  source?: string | undefined;
+}
+
+/** A legacy file: what it held, and whether it may be deleted once moved. */
+interface Legacy {
+  path: string;
+  records: IntentRecord[];
+  parsed: boolean;
+}
+
+/** The intent fields a record is compared on — `updatedAt` alone changing is not a change. */
+const comparable = (record: IntentRecord): string => serialise({ ...record, updatedAt: 0 });
 
 export class IntentShardStore {
   readonly #fs: FileSystemPort;
@@ -72,204 +91,249 @@ export class IntentShardStore {
   }
 
   #indexPath(): string {
-    return `${this.#dir()}/${INDEX_FILE}`;
+    return `${this.#dir()}/${IntentDir.INDEX_FILE}`;
   }
 
   #shardPath(subject: string): string {
-    return `${this.#dir()}/${subject}${SHARD_SUFFIX}`;
+    return `${this.#dir()}/${subject}/${IntentDir.SHARD_FILE}`;
   }
 
-  /** Legacy records, keyed by id. Empty when there is no flat file, which is the eventual case. */
-  async #legacy(): Promise<Map<string, IntentRecord>> {
-    const file = await readJsonFile(
-      this.#fs,
-      reticleDirPaths(this.#root).intent,
-      (raw) => parseIntentFile(raw),
-      { version: 1 as const, intents: {} },
-    );
-    return new Map(Object.values(file.intents).map((i) => [i.id, recordFromIntent(i)] as const));
-  }
-
-  async #readShard(subject: string): Promise<IntentShard> {
-    return readJsonFile(
-      this.#fs,
-      this.#shardPath(subject),
-      (raw) => IntentShardSchema.parse(raw),
-      emptyShard(subject),
-    );
-  }
-
-  /**
-   * Which subjects exist, read from the DIRECTORY rather than the index.
-   *
-   * The index cannot be the source here. It is derived from the shards, so discovering shards
-   * through it is circular — and the circle is not theoretical: a brand-new subject was invisible to
-   * the very write that created it, because its shard existed on disk while the index did not
-   * mention it yet. Listing the directory also makes the index self-healing: delete it and the next
-   * read rebuilds it from what is actually there.
-   */
-  async #subjectsOnDisk(): Promise<string[]> {
+  /** Parse one legacy file, remembering whether it parsed — only a parsed file may be deleted. */
+  async #readLegacy(path: string, toRecords: (raw: unknown) => IntentRecord[]): Promise<Legacy> {
+    let text: string;
     try {
-      const entries = await this.#fs.readdir(this.#dir());
-      return entries
-        .filter((e) => e.endsWith(SHARD_SUFFIX) && INDEX_FILE !== e)
-        .map((e) => e.slice(0, -SHARD_SUFFIX.length));
+      text = await this.#fs.readFile(path);
     } catch {
-      // No directory yet — an unmigrated project, which the legacy fold below still answers for.
+      return { path, records: [], parsed: true };
+    }
+    try {
+      return { path, records: toRecords(JSON.parse(text) as unknown), parsed: true };
+    } catch {
+      return { path, records: [], parsed: false };
+    }
+  }
+
+  /** The old single file, and any interim `intent/<subject>.json` from before directories. */
+  async #legacySources(): Promise<Legacy[]> {
+    const flat = await this.#readLegacy(reticleDirPaths(this.#root).intent, (raw) =>
+      Object.values(IntentFileSchema.parse(raw).intents).map(recordFromIntent),
+    );
+    const interim = await Promise.all(
+      (await this.#entries())
+        .filter((e) => e.endsWith(JSON_SUFFIX) && IntentDir.INDEX_FILE !== e)
+        .map((e) =>
+          this.#readLegacy(`${this.#dir()}/${e}`, (raw) =>
+            Object.values(IntentShardSchema.parse(raw).intents),
+          ),
+        ),
+    );
+    return [flat, ...interim].filter((l) => l.records.length > 0 || !l.parsed);
+  }
+
+  async #entries(): Promise<string[]> {
+    try {
+      return await this.#fs.readdir(this.#dir());
+    } catch {
       return [];
     }
   }
 
   /**
-   * Every record: the shards, plus any legacy intent the shards have not absorbed.
+   * Which subjects exist, read from the DIRECTORY rather than the index.
    *
-   * Sharded wins on a collision. An id present in both has been migrated and possibly edited since,
-   * and letting the flat copy overwrite that would silently revert the edit.
+   * The index is derived from the shards, so discovering shards through it would be circular: a new
+   * subject was once invisible to the very write that created it. Listing the directory also makes
+   * the index self-healing — delete it and the next write rebuilds it from what is actually there.
    */
-  /**
-   * Every record this ledger holds, from BOTH files, deduped by id.
-   *
-   * Public because the ledger is one logical thing kept in two places, and the tool that offers
-   * `list` has to be able to see all of it. It was private while `record` wrote to shards and `list`
-   * read the flat file, which meant an intent written through one action was invisible to the other
-   * — and an agent told its own recorded intent does not exist concludes the intent does not exist,
-   * not that there are two stores.
-   */
-  async all(): Promise<IntentRecord[]> {
-    return this.#all();
-  }
-
-  async #all(): Promise<IntentRecord[]> {
-    const shards = await Promise.all((await this.#subjectsOnDisk()).map((s) => this.#readShard(s)));
-    const merged = new Map<string, IntentRecord>();
-    for (const [id, record] of await this.#legacy()) merged.set(id, record);
-    for (const shard of shards) {
-      for (const record of Object.values(shard.intents)) merged.set(record.id, record);
+  async #subjectsOnDisk(): Promise<string[]> {
+    const subjects: string[] = [];
+    for (const entry of await this.#entries()) {
+      if (entry.endsWith(JSON_SUFFIX)) continue;
+      if (await this.#fs.exists(this.#shardPath(entry))) subjects.push(entry);
     }
-    return [...merged.values()];
+    return subjects;
   }
 
-  /**
-   * The cheap read: one line per intent, and the call an agent makes at the start of a session.
-   *
-   * Includes anything still only in the legacy flat file, so the very first call on an unmigrated
-   * project already answers completely — which is what makes the migration invisible rather than a
-   * step somebody has to remember to run.
-   */
-  async index(): Promise<IntentIndex> {
-    // Derived from what is on disk, never from the stored copy. The stored index is a cache for
-    // readers outside this process; inside it, trusting it would let a stale one hide a real record.
-    return indexFrom(shardsFrom(await this.#all()));
+  async #readShard(subject: string): Promise<IntentShard> {
+    try {
+      return IntentShardSchema.parse(JSON.parse(await this.#fs.readFile(this.#shardPath(subject))));
+    } catch {
+      return emptyShard(subject);
+    }
   }
 
-  /** Records already in shards, ignoring the legacy file — what migration diffs against. */
   async #storedRecords(): Promise<IntentRecord[]> {
     const shards = await Promise.all((await this.#subjectsOnDisk()).map((s) => this.#readShard(s)));
     return shards.flatMap((s) => Object.values(s.intents));
   }
 
+  /** Every record: the directories, plus any legacy intent not yet moved. Directories win. */
+  async all(): Promise<IntentRecord[]> {
+    const merged = new Map<string, IntentRecord>();
+    for (const legacy of await this.#legacySources()) {
+      for (const record of legacy.records) merged.set(record.id, record);
+    }
+    for (const record of await this.#storedRecords()) merged.set(record.id, record);
+    return [...merged.values()].sort(
+      (a, b) => a.declaredAt - b.declaredAt || a.id.localeCompare(b.id),
+    );
+  }
+
+  /** The cheap read: one line per intent. Derived from disk, never from the stored copy. */
+  async index(): Promise<IntentIndex> {
+    return indexFrom(shardsFrom(await this.all()));
+  }
+
   /** Every record for one subject — the working read, once an agent knows what it is touching. */
   async subject(name: string): Promise<IntentRecord[]> {
-    const all = await this.#all();
-    return all.filter((r) => name === r.subject);
+    return (await this.all()).filter((r) => name === r.subject);
   }
 
   /** One record by id, or null. */
   async get(id: string): Promise<IntentRecord | null> {
-    const all = await this.#all();
-    return all.find((r) => id === r.id) ?? null;
+    return (await this.all()).find((r) => id === r.id) ?? null;
   }
 
   /**
-   * Write one intent, creating or updating it.
+   * Create or change ONE intent atomically: read, transform, write, under the ledger's lock.
    *
-   * Merges onto whatever is already stored, so a caller adding a `why` to a migrated record does not
-   * have to restate its binding — and cannot silently drop it by omission, which is the failure mode
-   * that makes agents afraid to touch a store.
+   * `transform` returns the next intent, or undefined for "leave it as it is". A result equal to
+   * what is stored writes nothing. Returns the stored record, or undefined when nothing was there
+   * and nothing was created.
    */
-  async record(input: IntentInput): Promise<IntentRecord> {
+  async upsert(
+    id: string,
+    transform: (existing: IntentRecord | undefined) => Intent | undefined,
+    facts: RecordFacts = {},
+  ): Promise<IntentRecord | undefined> {
     return withFileLock(this.#indexPath(), async () => {
-      const existing = await this.get(input.id);
-      const now = this.#clock.now();
-      const subject =
-        input.subject ??
-        existing?.subject ??
-        subjectFor({ surface: input.surface, binding: input.binding });
-
-      const next: IntentRecord = {
-        ...(existing ?? {
-          id: input.id,
-          statement: input.statement,
-          state: 'declared',
-          declaredAt: now,
-          subject,
-          status: IntentStatus.PROPOSED,
-        }),
-        statement: input.statement,
-        subject,
-        status: input.status ?? existing?.status ?? IntentStatus.PROPOSED,
-        updatedAt: now,
-        ...(input.why === undefined ? {} : { why: input.why }),
-        ...(input.source === undefined ? {} : { source: input.source }),
-        ...(input.surface === undefined ? {} : { surface: input.surface }),
-        ...(input.binding === undefined ? {} : { binding: input.binding }),
-      };
-
-      await this.#write(next, existing?.subject);
-      return next;
+      await this.#migrateLegacy();
+      const existing = (await this.#storedRecords()).find((r) => id === r.id);
+      const next = transform(existing);
+      if (next === undefined) return existing;
+      const record = this.#recordFrom(amendIntent(existing, next), existing, facts);
+      if (existing !== undefined && comparable(existing) === comparable(record)) return existing;
+      await this.#write(record, existing?.subject);
+      return record;
     });
   }
 
-  /** Persist one record, rewriting its shard and the index — and the OLD shard if it moved. */
-  async #write(record: IntentRecord, previousSubject?: string): Promise<void> {
-    await this.#fs.mkdir(this.#dir());
-
-    if (previousSubject !== undefined && record.subject !== previousSubject) {
-      const old = await this.#readShard(previousSubject);
-      if (old.intents[record.id] !== undefined) {
-        const { [record.id]: _moved, ...rest } = old.intents;
-        await writeFileAtomic(
-          this.#fs,
-          this.#shardPath(previousSubject),
-          serialise({ ...old, intents: rest }),
-        );
-      }
-    }
-
-    const shard = await this.#readShard(record.subject);
-    shard.intents[record.id] = record;
-    await writeFileAtomic(this.#fs, this.#shardPath(record.subject), serialise(shard));
-
-    // The index is DERIVED, never edited in place: two sources of truth would disagree, and the one
-    // that is cheap to read is the one people would trust.
-    const all = await this.#all();
-    await writeFileAtomic(this.#fs, this.#indexPath(), serialise(indexFrom(shardsFrom(all))));
+  /**
+   * The ledger-level fields of a record: where it lives and how settled it is.
+   *
+   * A flow's name IS its subject, so an intent a flow claims moves into that flow's directory.
+   * Otherwise an explicit subject wins, then the one it already had, then inference.
+   */
+  #recordFrom(next: Intent, existing: IntentRecord | undefined, facts: RecordFacts): IntentRecord {
+    const flow = next.surface?.flow;
+    const subject =
+      flow !== undefined
+        ? subjectFor({ surface: { flow } })
+        : (facts.subject ??
+          existing?.subject ??
+          subjectFor({ surface: next.surface, binding: next.binding }));
+    const why = facts.why ?? existing?.why;
+    const source = facts.source ?? existing?.source;
+    return {
+      ...existing,
+      ...next,
+      subject,
+      status: this.#statusOf(next, existing, facts.status),
+      updatedAt: this.#clock.now(),
+      ...(why === undefined ? {} : { why }),
+      ...(source === undefined ? {} : { source }),
+    };
   }
 
   /**
-   * Fold the flat file into shards on disk, so the move is visible in a diff rather than implicit.
-   *
-   * Idempotent, and it does not delete `.reticle/intent.json`: an older build still reads it, and a
-   * migration that removes its own source cannot be checked afterwards.
+   * How settled the record is. A verdict proving it makes it proved; losing that proof (the words
+   * changed, a different check was bound) steps it back rather than leaving a stale "proved".
    */
+  #statusOf(
+    next: Intent,
+    existing: IntentRecord | undefined,
+    asked: IntentStatus | undefined,
+  ): IntentStatus {
+    if (asked !== undefined) return asked;
+    if (IntentState.PROVED === next.state) return IntentStatus.PROVED;
+    if (IntentStatus.PROVED === existing?.status) return statusFromState(next.state);
+    return existing?.status ?? IntentStatus.PROPOSED;
+  }
+
+  /** Write one intent through `reticle_intent { action: "record" }`, merging onto what is stored. */
+  async record(input: IntentInput): Promise<IntentRecord> {
+    const now = this.#clock.now();
+    const stored = await this.upsert(
+      input.id,
+      (existing) => ({
+        ...(existing ?? { id: input.id, state: IntentState.DECLARED, declaredAt: now }),
+        statement: input.statement,
+        ...(input.surface === undefined ? {} : { surface: input.surface }),
+        ...(input.binding === undefined ? {} : { binding: input.binding }),
+      }),
+      { subject: input.subject, status: input.status, why: input.why, source: input.source },
+    );
+    // upsert only returns undefined when the transform declines, and this one never does.
+    return stored as IntentRecord;
+  }
+
+  /** Persist one record, rewriting its shard and the index, and removing it from its old shard. */
+  async #write(record: IntentRecord, previousSubject?: string): Promise<void> {
+    if (previousSubject !== undefined && record.subject !== previousSubject) {
+      const old = await this.#readShard(previousSubject);
+      const { [record.id]: _moved, ...rest } = old.intents;
+      await this.#putShard({ ...old, intents: rest });
+    }
+    const shard = await this.#readShard(record.subject);
+    shard.intents[record.id] = record;
+    await this.#putShard(shard);
+    await this.#writeIndex();
+  }
+
+  /** Write a shard, or remove it when it no longer holds anything. */
+  async #putShard(shard: IntentShard): Promise<void> {
+    const path = this.#shardPath(shard.subject);
+    if (0 === Object.keys(shard.intents).length) {
+      await this.#fs.rm(path).catch(() => undefined);
+      return;
+    }
+    await this.#fs.mkdir(`${this.#dir()}/${shard.subject}`);
+    await writeFileAtomic(this.#fs, path, serialise(shard));
+  }
+
+  async #writeIndex(): Promise<void> {
+    await this.#fs.mkdir(this.#dir());
+    const index = indexFrom(shardsFrom(await this.#storedRecords()));
+    await writeFileAtomic(this.#fs, this.#indexPath(), serialise(index));
+  }
+
+  /**
+   * Move every legacy record into its directory, then remove the legacy files that parsed.
+   * Called under the lock by every write, so the first write after an upgrade is the migration.
+   */
+  async #migrateLegacy(): Promise<{ migrated: IntentRecord[] }> {
+    const sources = await this.#legacySources();
+    if (0 === sources.length) return { migrated: [] };
+    const known = new Set((await this.#storedRecords()).map((r) => r.id));
+    const incoming = sources.flatMap((s) => s.records).filter((r) => !known.has(r.id));
+    for (const shard of shardsFrom(incoming)) {
+      const current = await this.#readShard(shard.subject);
+      await this.#putShard({ ...current, intents: { ...shard.intents, ...current.intents } });
+    }
+    for (const source of sources) {
+      if (source.parsed) await this.#fs.rm(source.path).catch(() => undefined);
+    }
+    await this.#writeIndex();
+    return { migrated: incoming };
+  }
+
+  /** `reticle_intent { action: "migrate" }`: do now what the next write would do anyway. */
   async migrate(): Promise<{ migrated: number; subjects: string[] }> {
     return withFileLock(this.#indexPath(), async () => {
-      const legacy = await this.#legacy();
-      if (0 === legacy.size) return { migrated: 0, subjects: [] };
-      const stored = await this.#storedRecords();
-      const known = new Set(stored.map((r) => r.id));
-      const incoming = [...legacy.values()].filter((r) => !known.has(r.id));
-      if (0 === incoming.length) return { migrated: 0, subjects: [] };
-
-      const shards = shardsFrom([...stored, ...incoming]);
-      await this.#fs.mkdir(this.#dir());
-      for (const shard of shards) {
-        await writeFileAtomic(this.#fs, this.#shardPath(shard.subject), serialise(shard));
-      }
-      await writeFileAtomic(this.#fs, this.#indexPath(), serialise(indexFrom(shards)));
+      const { migrated } = await this.#migrateLegacy();
       return {
-        migrated: incoming.length,
-        subjects: [...new Set(incoming.map((r) => r.subject))].sort(),
+        migrated: migrated.length,
+        subjects: [...new Set(migrated.map((r) => r.subject))].sort(),
       };
     });
   }

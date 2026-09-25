@@ -1,0 +1,5 @@
+### Changed
+
+- **`@reticlehq/server` — the intent ledger lives in `.reticle/intent/`, one directory per subject, and a flow's name is its subject.** Each subject keeps its intents in `.reticle/intent/<subject>/intent.json`, with a derived `index.json` beside them, so reading or changing the rules about checkout no longer means loading and rewriting every rule in the project. An intent a flow claims moves into that flow's directory. There is now one store: `declare`, `bind`, `record` and `list` all read and write the same files, and `list` returns only what is still open.
+
+  Your existing `.reticle/intent.json` is read until the first write, which moves every intent into its directory, proofs and amendment history intact, and removes the old file, so the change lands as one diff you can review. A `.reticle/intent.json` that does not parse (a merge conflict left in it) is never removed. Commit `.reticle/intent/` as you committed `intent.json`; an older Reticle still looks for the single file.

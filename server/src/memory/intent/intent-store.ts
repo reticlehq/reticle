@@ -1,148 +1,87 @@
 import {
+  IntentState,
   bindIntent,
   declareIntent,
   redeclareIntent,
   dischargeIntent,
-  emptyIntentFile,
-  openIntents,
-  parseIntentFile,
-  upsertIntent,
   type Intent,
-  type IntentFile,
   type IntentSurface,
 } from '@reticlehq/core/artifacts';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
-import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
-import { withFileLock } from '@/memory/project/file-lock.js';
 import type { Clock } from '@/machine/clock.js';
-import { writeFileAtomic } from '@/memory/project/fs/write-atomic.js';
+import { IntentShardStore } from './intent-shard-store.js';
 
 /**
- * The intent ledger on disk — `.reticle/intent.json`, git-checked and meant to be read in review.
+ * The intent ledger's domain operations: declare, place, bind, discharge.
  *
- * Git-checked deliberately. The one real defence against an agent quietly narrowing what it meant to
- * match what it can already prove is that a human sees the narrowing in a diff, and that only works
- * if the file lives with the code and travels with the PR. It is also why the writes are byte-stable:
- * a ledger that churns on every run is one whose diffs nobody reads.
- *
- * Every operation goes through the same file lock the other stores use, because two sessions driving
- * one project is ordinary and a lost declaration would be silent.
+ * Every operation is a PURE transition from core (`redeclareIntent`, `bindIntent`,
+ * `dischargeIntent`) handed to the ledger's atomic upsert. Storage is `IntentShardStore` —
+ * `.reticle/intent/<subject>/intent.json`, a flow's name being its subject — and this class writes no
+ * file of its own, so there is exactly one place an intent can be.
  */
-
-const JSON_INDENT = 2;
-
 export class IntentStore {
-  readonly #fs: FileSystemPort;
-  readonly #root: string;
+  readonly #ledger: IntentShardStore;
   readonly #clock: Clock;
 
   constructor(fs: FileSystemPort, root: string, clock: Clock) {
-    this.#fs = fs;
-    this.#root = root;
+    this.#ledger = new IntentShardStore(fs, root, clock);
     this.#clock = clock;
-  }
-
-  #path(): string {
-    return reticleDirPaths(this.#root).intent;
-  }
-
-  /**
-   * Load the ledger, failing soft to empty.
-   *
-   * This is a git-checked file an agent can write and a human can hand-merge, so a malformed one is
-   * genuinely reachable — a conflict marker left in place is the obvious case. Throwing here would
-   * take down the verdict that was only asking what was still open, which trades a small problem for
-   * a large one.
-   */
-  async #load(): Promise<IntentFile> {
-    try {
-      const raw = await this.#fs.readFile(this.#path());
-      return parseIntentFile(JSON.parse(raw) as unknown);
-    } catch {
-      return emptyIntentFile();
-    }
-  }
-
-  /**
-   * Byte-stable: 2-space indent, one trailing newline. An unchanged ledger produces no diff.
-   *
-   * Written to a temp sibling and renamed, because `#load` fails soft to EMPTY and every mutation
-   * here is a read-modify-write over it. A half-written file therefore does not degrade — it reads
-   * as "nothing was ever declared", and the next save writes that emptiness back over the real
-   * ledger. One interrupted write would permanently erase a committed record of what the work was
-   * supposed to make true.
-   */
-  async #save(file: IntentFile): Promise<void> {
-    await this.#fs.mkdir(reticleDirPaths(this.#root).root);
-    await writeFileAtomic(this.#fs, this.#path(), `${JSON.stringify(file, null, JSON_INDENT)}\n`);
   }
 
   /** Every intent, in declaration order. */
   async read(): Promise<Intent[]> {
-    return Object.values((await this.#load()).intents);
+    return this.#ledger.all();
   }
 
   /** Everything not yet proved — what an agent asking "am I done?" still owes. */
   async open(): Promise<Intent[]> {
-    return openIntents(await this.#load());
+    return (await this.read()).filter((intent) => IntentState.PROVED !== intent.state);
   }
 
   /**
    * Declare one or more intents.
    *
    * Batched because the marginal cost of the whole mechanism has to stay at one call per feature; an
-   * agent that must make five calls to declare five things will make none.
+   * agent that must make five calls to declare five things will make none. Saying an intent again
+   * does not unsay it: see `redeclareIntent` for what survives.
    */
   async declare(
     entries: readonly { id: string; statement: string; surface?: IntentSurface }[],
   ): Promise<Intent[]> {
-    if (0 === entries.length) return [];
-    return withFileLock(this.#path(), async () => {
-      let file = await this.#load();
-      const now = this.#clock.now();
-      const declared: Intent[] = [];
-      for (const entry of entries) {
-        // Saying it again must not unsay it: see redeclareIntent for what survives.
-        const intent = redeclareIntent(file.intents[entry.id], declareIntent({ ...entry, now }));
-        file = upsertIntent(file, intent);
-        const stored = file.intents[intent.id];
-        if (stored !== undefined) declared.push(stored);
-      }
-      await this.#save(file);
-      return declared;
-    });
+    const now = this.#clock.now();
+    const declared: Intent[] = [];
+    for (const entry of entries) {
+      const stored = await this.#ledger.upsert(entry.id, (existing) =>
+        redeclareIntent(existing, declareIntent({ ...entry, now })),
+      );
+      if (stored !== undefined) declared.push(stored);
+    }
+    return declared;
   }
 
   /**
    * File a record under where it turned out to be about.
    *
-   * Separate from `declare` because the two happen at different MOMENTS and know different things.
-   * An inline intent is declared BEFORE the action — deliberately, so a verdict can see it open —
-   * and at that instant the agent is still on the page it is leaving. The route that describes what
-   * the intent is ABOUT only exists after the consequence lands.
-   *
-   * Write-once: an existing surface is never overwritten. A record placed by an agent that named its
-   * own subject must not be re-filed by a later run that happened to be somewhere else.
+   * Separate from `declare` because an inline intent is declared BEFORE the action, and the route
+   * that describes it only exists after the consequence lands. Write-once: an existing surface is
+   * never overwritten. A flow named here moves the record into that flow's directory.
    */
   async place(id: string, surface: IntentSurface): Promise<boolean> {
-    return withFileLock(this.#path(), async () => {
-      const file = await this.#load();
-      const existing = file.intents[id];
-      if (existing === undefined || existing.surface !== undefined) return false;
-      await this.#save(upsertIntent(file, { ...existing, surface }));
-      return true;
+    let placed = false;
+    await this.#ledger.upsert(id, (existing) => {
+      if (existing === undefined || existing.surface !== undefined) return undefined;
+      placed = true;
+      return { ...existing, surface };
     });
+    return placed;
   }
 
   /** Attach the predicate that would prove an intent. False when the id names nothing. */
   async bind(id: string, binding: unknown): Promise<boolean> {
-    return withFileLock(this.#path(), async () => {
-      const file = await this.#load();
-      const existing = file.intents[id];
-      if (existing === undefined) return false;
-      await this.#save(upsertIntent(file, bindIntent(existing, binding)));
-      return true;
-    });
+    const stored = await this.#ledger.upsert(id, (existing) =>
+      existing === undefined ? undefined : bindIntent(existing, binding),
+    );
+    return stored !== undefined;
   }
 
   /**
@@ -155,14 +94,14 @@ export class IntentStore {
     id: string,
     proof: { verdictId: string; grade: string; at: number },
   ): Promise<boolean> {
-    return withFileLock(this.#path(), async () => {
-      const file = await this.#load();
-      const existing = file.intents[id];
-      if (existing === undefined) return false;
-      const proved = dischargeIntent(existing, proof);
-      if (proved === existing) return false;
-      await this.#save(upsertIntent(file, proved));
-      return true;
+    let proved = false;
+    await this.#ledger.upsert(id, (existing) => {
+      if (existing === undefined) return undefined;
+      const next = dischargeIntent(existing, proof);
+      if (next === existing) return undefined;
+      proved = true;
+      return next;
     });
+    return proved;
   }
 }

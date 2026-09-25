@@ -30,7 +30,7 @@ describe('IntentStore', () => {
    */
   it('leaves the previous ledger intact when a write dies halfway', async () => {
     const { fs, written } = createMemoryFs();
-    const path = `${ROOT}/intent.json`;
+    const path = `${ROOT}/intent/unsorted/intent.json`;
     const clock = { now: (): number => 1_000 };
     await new IntentStore(fs, ROOT, clock).declare([{ id: 'a', statement: 'A' }]);
     const intact = written.get(path);
@@ -143,9 +143,9 @@ describe('IntentStore', () => {
   it('writes byte-identical content for an unchanged ledger', async () => {
     const { store: s, written } = store();
     await s.declare([{ id: 'a', statement: 'A' }]);
-    const first = written.get(`${ROOT}/intent.json`);
+    const first = written.get(`${ROOT}/intent/unsorted/intent.json`);
     await s.declare([{ id: 'a', statement: 'A' }]);
-    expect(written.get(`${ROOT}/intent.json`)).toBe(first);
+    expect(written.get(`${ROOT}/intent/unsorted/intent.json`)).toBe(first);
   });
 });
 
@@ -167,5 +167,88 @@ describe('re-saving a flow does not erase what it proved', () => {
     expect(pay?.state).toBe(IntentState.PROVED);
     expect(pay?.provenBy).toEqual({ verdictId: 'v1', grade: 'flow', at: 5 });
     expect(pay?.surface).toEqual({ flow: 'pay' });
+  });
+});
+
+/*
+ * The layout: `.reticle/intent/<subject>/intent.json`, one directory per subject, and a flow's name IS
+ * its subject. `index.json` beside them is derived. The old single `.reticle/intent.json` is migrated
+ * on the first write and removed, so the move shows up in review as one diff.
+ */
+describe('the intent directory layout', () => {
+  const LEGACY = `${ROOT}/intent.json`;
+  const shard = (subject: string): string => `${ROOT}/intent/${subject}/intent.json`;
+  const idsIn = (written: Map<string, string>, subject: string): string[] =>
+    Object.keys(
+      (JSON.parse(written.get(shard(subject)) ?? '{"intents":{}}') as { intents: object }).intents,
+    );
+
+  it('writes one directory per subject, an index beside them, and no flat file', async () => {
+    const { store: s, written } = store();
+    await s.declare([{ id: 'a', statement: 'A' }]);
+    expect(idsIn(written, 'unsorted')).toEqual(['a']);
+    expect(written.has(`${ROOT}/intent/index.json`)).toBe(true);
+    expect(written.has(LEGACY)).toBe(false);
+  });
+
+  it('files an intent under its flow', async () => {
+    const { store: s, written } = store();
+    await s.declare([
+      { id: 'pay', statement: 'paying charges once', surface: { flow: 'Pay Flow' } },
+    ]);
+    expect(idsIn(written, 'pay-flow')).toEqual(['pay']);
+  });
+
+  it('moves an intent into its flow directory once a flow claims it', async () => {
+    const { store: s, written } = store();
+    await s.declare([{ id: 'pay', statement: 'paying charges once' }]);
+    await s.place('pay', { flow: 'pay-flow' });
+    expect(idsIn(written, 'pay-flow')).toEqual(['pay']);
+    expect(idsIn(written, 'unsorted')).toEqual([]);
+  });
+
+  it('reads the old flat ledger before anything has been written', async () => {
+    const { fs, written } = createMemoryFs();
+    written.set(
+      LEGACY,
+      JSON.stringify({
+        version: 1,
+        intents: { old: { id: 'old', statement: 'O', state: 'declared', declaredAt: 1 } },
+      }),
+    );
+    expect((await new IntentStore(fs, ROOT, { now: () => 2 }).read()).map((i) => i.id)).toEqual([
+      'old',
+    ]);
+  });
+
+  it('migrates the flat ledger on the first write, proof intact, and removes it', async () => {
+    const { fs, written } = createMemoryFs();
+    const proved = {
+      id: 'checkout',
+      statement: 'checkout charges once',
+      state: 'proved',
+      declaredAt: 1,
+      surface: { flow: 'checkout' },
+      binding: { flow: 'checkout' },
+      provenBy: { verdictId: 'v1', grade: 'flow', at: 3 },
+    };
+    written.set(LEGACY, JSON.stringify({ version: 1, intents: { checkout: proved } }));
+    const s = new IntentStore(fs, ROOT, { now: () => 5 });
+    await s.declare([{ id: 'new', statement: 'N' }]);
+    expect(written.has(LEGACY)).toBe(false);
+    expect(idsIn(written, 'checkout')).toEqual(['checkout']);
+    const [kept] = (await s.read()).filter((i) => 'checkout' === i.id);
+    expect(kept?.state).toBe(IntentState.PROVED);
+    expect(kept?.provenBy).toEqual(proved.provenBy);
+    expect((await s.read()).map((i) => i.id).sort()).toEqual(['checkout', 'new']);
+  });
+
+  // A hand-merged ledger with a conflict marker reads as empty. Deleting it would destroy the only
+  // copy of every intent in it, so a flat file that does not parse is never removed.
+  it('never removes a flat ledger it could not parse', async () => {
+    const { fs, written } = createMemoryFs();
+    written.set(LEGACY, '<<<<<<< HEAD\n{ "intents": {} }');
+    await new IntentStore(fs, ROOT, { now: () => 5 }).declare([{ id: 'n', statement: 'N' }]);
+    expect(written.has(LEGACY)).toBe(true);
   });
 });
