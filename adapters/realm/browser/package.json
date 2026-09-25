@@ -11,7 +11,10 @@
       "default": "./dist/index.js"
     },
     "./package.json": "./package.json",
-    "./inject": "./dist/reticle-inject.js"
+    "./inject": {
+      "types": "./dist/reticle-inject.d.ts",
+      "default": "./dist/reticle-inject.js"
+    }
   },
   "scripts": {
     "build": "node scripts/embed-heroicons.mjs && tsc -b && node ../../../scripts/alias-dist.mjs && node scripts/bundle-inject.mjs",

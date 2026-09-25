@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const { withReticle, readPairingToken, discoverDaemonUrl } = require('./index.cjs');
@@ -84,7 +85,7 @@ describe('withReticle', () => {
     const cwd = process.cwd();
     try {
       // The Next is read from the APP: next-smoke runs Next 16, where rules take a `condition`.
-      process.chdir(new URL('../../../apps/next-smoke/', import.meta.url).pathname);
+      process.chdir(fileURLToPath(new URL('../../../apps/next-smoke/', import.meta.url)));
       const rules = withReticle({}).turbopack?.rules ?? {};
       expect(rules['*.js']?.condition).toEqual({ not: 'foreign' });
       expect(rules['*.js']?.loaders?.length).toBe(1);
