@@ -11,6 +11,8 @@ import { ReticleTool } from '@reticlehq/core';
 import { sessionIdShape } from '@/surface/tools/tool-kit.js';
 import { asString } from '@reticlehq/core';
 import type { ToolDef } from '@/surface/tools/tool-kit.js';
+import { gapReportLines } from '@/judgement/runs/artifact/gap-report.js';
+import { gapSummary } from '@/judgement/runs/artifact/gap-summary.js';
 
 /**
  * Is this a turn ending with nothing attached, rather than a call about a specific tab?
@@ -54,16 +56,31 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
       ended: z.boolean(),
       sessionId: z.string().optional(),
       note: z.string().optional(),
+      gap: z
+        .array(z.string())
+        .optional()
+        .describe(
+          'What this session claimed and what held — an `unknown` is never counted as held.',
+        ),
     },
     handler: (deps, args) => {
       const requested = asString(args['sessionId']);
       if (endingTurnWithNothingAttached(deps, requested)) {
         return Promise.resolve({ ended: true, note: YIELD_WITHOUT_SESSION_NOTE });
       }
+      // Resolved synchronously, as before: a named session that does not exist still throws here
+      // rather than becoming a rejected promise the caller did not expect.
       const session = deps.sessions.resolve(requested);
-      // One PRESENTER push for the transition; the optional summary rides the same push.
-      session.setState(SessionState.ENDED, asString(args['summary']));
-      return Promise.resolve({ ended: true, sessionId: session.id });
+      const summary = asString(args['summary']);
+      return session.readJournalActions().then((actions) => {
+        // The moment the agent calls the task complete is when "and what did not hold" is worth a
+        // line: the same fold `reticle_context` and `reticle report` serve, so they cannot disagree.
+        const gap = gapReportLines(gapSummary(actions));
+        const panel = [summary, gap[0]].filter((line): line is string => line !== undefined);
+        // One PRESENTER push for the transition; the summary and the gap headline ride together.
+        session.setState(SessionState.ENDED, 0 === panel.length ? undefined : panel.join('\n'));
+        return { ended: true, sessionId: session.id, gap };
+      });
     },
   },
   {

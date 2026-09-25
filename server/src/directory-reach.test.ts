@@ -482,6 +482,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   proxy: ['binding', 'daemon', 'identity', 'telemetry'],
   runs: ['artifact', 'cloud', 'dir', 'flows', 'intent', 'peer', 'project', 'telemetry', 'tools'],
   session: [
+    // Ending a session reports what it claimed and what held, folded from its own journal by the
+    // one gap fold the context tool and `reticle report` also use.
+    'artifact',
     'page-commands',
     'dev-server',
     'args',

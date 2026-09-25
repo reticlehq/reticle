@@ -47,6 +47,7 @@ function fakeSession(opts: { state?: SessionState; inbox?: string[] }): FakeSess
   const stub: Partial<Session> = {
     id: 'demo',
     url: SESSION_URL,
+    readJournalActions: () => Promise.resolve([]),
     elapsed: () => 0,
     recordAction: () => 'a1',
     lastAct: new LastAct(),
@@ -351,10 +352,16 @@ describe('live-control: agent tools', () => {
       action: 'end',
       summary: 'done',
     })) as { ended: boolean; sessionId: string };
-    expect(res).toEqual({ ended: true, sessionId: 'demo' });
+    expect(res).toEqual({
+      ended: true,
+      sessionId: 'demo',
+      gap: ['no claims this session, so nothing was verified'],
+    });
     expect(session.getState()).toBe(SessionState.ENDED);
-    // Single push carrying the summary — never a textless push followed by the summary push.
-    expect(session.__pushed).toEqual([{ state: SessionState.ENDED, text: 'done' }]);
+    // Single push carrying the summary and the gap headline — never two pushes for one transition.
+    expect(session.__pushed).toEqual([
+      { state: SessionState.ENDED, text: 'done\nno claims this session, so nothing was verified' },
+    ]);
   });
 
   it('reticle_end_session works with no summary', async () => {
@@ -363,17 +370,24 @@ describe('live-control: agent tools', () => {
       ended: boolean;
       sessionId: string;
     };
-    expect(res).toEqual({ ended: true, sessionId: 'demo' });
-    expect(session.__pushed).toContainEqual({ state: SessionState.ENDED });
+    expect(res).toEqual({
+      ended: true,
+      sessionId: 'demo',
+      gap: ['no claims this session, so nothing was verified'],
+    });
+    expect(session.__pushed).toContainEqual({
+      state: SessionState.ENDED,
+      text: 'no claims this session, so nothing was verified',
+    });
   });
 
   it('reticle_end_session is idempotent', async () => {
     const session = fakeSession({ state: SessionState.ENDED });
-    const res = (await tool(ReticleTool.SESSION).handler(fakeDeps(session), { action: 'end' })) as {
-      ended: boolean;
-      sessionId: string;
-    };
-    expect(res).toEqual({ ended: true, sessionId: 'demo' });
+    const end = (): Promise<unknown> =>
+      Promise.resolve(tool(ReticleTool.SESSION).handler(fakeDeps(session), { action: 'end' }));
+    const first = await end();
+    expect(first).toMatchObject({ ended: true, sessionId: 'demo' });
+    expect(await end()).toEqual(first);
   });
 
   it('reticle_yield mode:waiting hands back with a waiting tone (revivable)', async () => {
