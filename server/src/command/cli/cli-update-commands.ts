@@ -15,6 +15,9 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { reticleDepsOf, sdkSyncCommand } from '@/command/update/sdk-sync.js';
 
+const WINDOWS_MANUAL_UPDATE =
+  'irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex';
+
 /**
  * Bring the SDK in the CURRENT project to the version being installed.
  *
@@ -94,7 +97,13 @@ export async function handleUpdate(): Promise<void> {
     syncProjectSdk(target);
     await applyUpdate(target); // calls process.exit; Claude Code restarts
   } catch (error) {
-    log('reticle_update_failed', { error: error instanceof Error ? error.message : String(error) });
+    const message = error instanceof Error ? error.message : String(error);
+    log('reticle_update_failed', {
+      error: message,
+      ...('win32' === process.platform && message.includes('spawn EINVAL')
+        ? { hint: `run \`${WINDOWS_MANUAL_UPDATE}\` in PowerShell to update manually` }
+        : {}),
+    });
     process.exitCode = 1;
   }
 }
