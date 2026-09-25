@@ -69,9 +69,7 @@ export async function fireClickSequence(
 
   firePointer(el, 'pointerdown', from);
 
-  asSyntheticInput(() =>
-    el.dispatchEvent(mouseEventFor(el, 'mousedown', init)),
-  );
+  asSyntheticInput(() => el.dispatchEvent(mouseEventFor(el, 'mousedown', init)));
 
   if (el.tabIndex >= 0 && 'function' === typeof el.focus) el.focus();
 
@@ -91,15 +89,11 @@ export async function fireClickSequence(
 
   firePointer(el, 'pointerup', from);
 
-  asSyntheticInput(() =>
-    el.dispatchEvent(mouseEventFor(el, 'mouseup', init)),
-  );
+  asSyntheticInput(() => el.dispatchEvent(mouseEventFor(el, 'mouseup', init)));
 
   // Marked as Reticle's own so the annotator's capture-phase listener lets it through. Without it,
   // the click is swallowed whole in annotate mode while still reporting `dispatched: true`.
-  const notPrevented = asSyntheticInput(() =>
-    el.dispatchEvent(mouseEventFor(el, 'click', init)),
-  );
+  const notPrevented = asSyntheticInput(() => el.dispatchEvent(mouseEventFor(el, 'click', init)));
 
   return { prevented: !notPrevented, heldMs };
 }
