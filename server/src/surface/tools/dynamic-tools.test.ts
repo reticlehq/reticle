@@ -47,6 +47,15 @@ describe('buildDynamicTools — the dynamic profile meta-tools', () => {
     expect(out.tools[0]?.summary).not.toContain('second sentence');
   });
 
+  it('reticle_tools { action: "list" } answers with the same surface as no arguments', async () => {
+    const tools = buildDynamicTools(fakeTools);
+    const discover = tools.find((t) => t.name === ReticleTool.TOOLS);
+    const bare = await discover?.handler(NO_DEPS, {});
+    const listed = await discover?.handler(NO_DEPS, { action: 'list' });
+    expect(listed).toEqual(bare);
+    expect((listed as { error?: string }).error).toBeUndefined();
+  });
+
   it('reticle_tools with names loads full params for known tools and flags unknown ones', async () => {
     const tools = buildDynamicTools(fakeTools);
     const discover = tools.find((t) => t.name === ReticleTool.TOOLS);

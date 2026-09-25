@@ -122,7 +122,7 @@ const bytesOf = (json: string): number => Buffer.byteLength(json, 'utf8');
  * the agent being able to find it — a predicate nothing advertises is a predicate nobody calls,
  * which is how the substring became the only reach in the first place.
  */
-const DEFAULT_SURFACE_BYTE_BUDGET = 24_800;
+const DEFAULT_SURFACE_BYTE_BUDGET = 24_900;
 // Raised, each time deliberately, each time with the measurement that bought it.
 //
 // LATEST RAISE, 24_600 -> 24_700. `reticle_verify { action: "explore" }` gained a `driver`
@@ -183,6 +183,21 @@ const DEFAULT_SURFACE_BYTE_BUDGET = 24_800;
 // two clicks a superseded-response bug needs to overlap, so the defect cannot fire at all — that
 // class was established by Playwright MCP and missed by Reticle until this parameter existed. A
 // whole defect class against 28 tokens a turn is not a close trade.
+//
+// FOURTH RAISE, 24_800 -> 24_900. `reticle_tools` gained `action: "list"`, a synonym for the
+// no-argument catalogue: +54 B measured where it was written, and 24,843 B for the whole default
+// surface once ported onto the release branch (~13 tokens/turn for the parameter).
+//
+// The number is RE-MEASURED rather than carried forward. This change was written against a surface
+// that was 105 B cheaper and raised the ratchet to 24_750; by the time it rebased, `net.bodyMatches`
+// had moved the base to 24_800, which made both the old cost and the old budget wrong. A ratchet
+// carried across a rebase is a ratchet that stopped measuring anything.
+//
+// What it buys: `action` is the organising verb of the whole surface -- every other advertised tool
+// dispatches on it -- and `reticle_tools` was the one tool refusing it. It is also the tool an agent
+// reaches for when it is already lost, so the refusal landed on the caller least able to recover
+// from it (#982). Hit in practice while proving a release: the first tool call of that session was
+// `reticle_tools { action: "list" }`, and it was refused.
 //
 // The ratchet stays a ratchet: every raise names its evidence, and the next one has to do the same.
 
