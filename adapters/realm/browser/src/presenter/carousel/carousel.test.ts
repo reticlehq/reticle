@@ -5,13 +5,14 @@
  * and new log rows push it up and out of view. Its slides share one fixed height, so switching never
  * shifts the log. One close control removes it for the tab session.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CAROUSEL_ATTR,
   CAROUSEL_CLOSE_ATTR,
   CAROUSEL_DISMISSED_KEY,
   CAROUSEL_DOT_ATTR,
   CAROUSEL_SLIDE_ATTR,
+  ROTATE_MS,
   carouselHtml,
   paintCarousel,
 } from './carousel.js';
@@ -83,5 +84,84 @@ describe('paintCarousel', () => {
     paintCarousel(log, SLIDES, storage);
     expect(log.querySelector(`[${CAROUSEL_ATTR}]`)).toBeNull();
     expect(log.textContent).toContain('older');
+  });
+});
+
+/*
+ * Auto-rotation: every ROTATE_MS, onward and round. It pauses while a pointer is over it or focus is
+ * inside it (somebody reading, or tabbing to "Book a call", must not have the slide change under
+ * them), and it does not run at all for somebody who asked for reduced motion.
+ */
+describe('auto-rotation', () => {
+  let log: HTMLElement;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '<div data-log></div>';
+    log = document.querySelector('[data-log]') as HTMLElement;
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('moves to the next slide on its own, and wraps round', () => {
+    paintCarousel(log, SLIDES, memoryStorage());
+    vi.advanceTimersByTime(ROTATE_MS);
+    expect(visible(log)).toEqual(['founders']);
+    vi.advanceTimersByTime(ROTATE_MS);
+    expect(visible(log)).toEqual(['harness']);
+  });
+
+  it('holds still while hovered or focused, and carries on after', () => {
+    paintCarousel(log, SLIDES, memoryStorage());
+    const root = log.querySelector(`[${CAROUSEL_ATTR}]`) as HTMLElement;
+    root.dispatchEvent(new MouseEvent('mouseenter'));
+    vi.advanceTimersByTime(ROTATE_MS * 3);
+    expect(visible(log)).toEqual(['harness']);
+    root.dispatchEvent(new MouseEvent('mouseleave'));
+    root.dispatchEvent(new FocusEvent('focusin'));
+    vi.advanceTimersByTime(ROTATE_MS * 3);
+    expect(visible(log)).toEqual(['harness']);
+    root.dispatchEvent(new FocusEvent('focusout'));
+    vi.advanceTimersByTime(ROTATE_MS);
+    expect(visible(log)).toEqual(['founders']);
+  });
+
+  it('keeps one timer across repaints, so a repaint never makes it skip', () => {
+    const storage = memoryStorage();
+    paintCarousel(log, SLIDES, storage);
+    paintCarousel(log, SLIDES, storage);
+    paintCarousel(log, SLIDES, storage);
+    vi.advanceTimersByTime(ROTATE_MS);
+    expect(visible(log)).toEqual(['founders']);
+  });
+
+  it('stops when closed, and does nothing with a single slide', () => {
+    const storage = memoryStorage();
+    paintCarousel(log, SLIDES, storage);
+    (log.querySelector(`[${CAROUSEL_CLOSE_ATTR}]`) as HTMLElement).click();
+    expect(vi.getTimerCount()).toBe(0);
+    paintCarousel(log, [SLIDES[0] as (typeof SLIDES)[number]], memoryStorage());
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  // The panel can be torn down without anybody pressing close; the timer must not outlive it.
+  it('stops its own timer once the carousel has left the page', () => {
+    paintCarousel(log, SLIDES, memoryStorage());
+    log.remove();
+    vi.advanceTimersByTime(ROTATE_MS);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('does not rotate for somebody who asked for reduced motion', () => {
+    const original = globalThis.matchMedia;
+    globalThis.matchMedia = ((query: string) => ({ matches: query.includes('reduce') })) as never;
+    try {
+      paintCarousel(log, SLIDES, memoryStorage());
+      vi.advanceTimersByTime(ROTATE_MS * 2);
+      expect(visible(log)).toEqual(['harness']);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      globalThis.matchMedia = original;
+    }
   });
 });

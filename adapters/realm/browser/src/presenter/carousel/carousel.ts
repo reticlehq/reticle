@@ -23,6 +23,38 @@ export const CAROUSEL_DISMISSED_KEY = 'reticle.carousel.dismissed';
 
 const CLOSE_LABEL = 'Close';
 
+/** How long a slide stays before the next one. Long enough to read two lines and decide. */
+export const ROTATE_MS = 6000;
+
+/** One rotation timer per log, so a repaint replaces the timer instead of adding a second one. */
+const rotations = new WeakMap<HTMLElement, ReturnType<typeof setInterval>>();
+
+function stopRotation(log: HTMLElement): void {
+  const timer = rotations.get(log);
+  if (timer !== undefined) clearInterval(timer);
+  rotations.delete(log);
+}
+
+/** Whether the person asked for less motion. A browser that cannot say reads as no preference. */
+function prefersReducedMotion(): boolean {
+  try {
+    return true === globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
+  }
+}
+
+/** Show slide `index`, and mark its dot. The one path dots and rotation both take. */
+function show(root: HTMLElement, index: number): void {
+  root.setAttribute('data-active', String(index));
+  root.querySelectorAll(`[${CAROUSEL_SLIDE_ATTR}]`).forEach((slide, i) => {
+    (slide as HTMLElement).hidden = i !== index;
+  });
+  root.querySelectorAll(`[${CAROUSEL_DOT_ATTR}]`).forEach((dot, i) => {
+    dot.setAttribute('aria-current', String(i === index));
+  });
+}
+
 /** One card: an id for the dot's label, and markup the caller has already escaped. */
 export interface Slide {
   id: string;
@@ -79,6 +111,7 @@ export function paintCarousel(
   const existing = log.querySelector(`:scope > [${CAROUSEL_ATTR}]`);
   const active = Number(existing?.getAttribute('data-active') ?? '0');
   existing?.remove();
+  stopRotation(log);
   if (dismissed(storage)) return;
   const html = carouselHtml(slides, active);
   if ('' === html) return;
@@ -94,22 +127,51 @@ export function paintCarousel(
     } catch {
       /* it closes either way; it simply returns on the next paint */
     }
+    stopRotation(log);
     root.remove();
   });
   for (const dot of root.querySelectorAll(`[${CAROUSEL_DOT_ATTR}]`)) {
     dot.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
-      const index = Number(dot.getAttribute(CAROUSEL_DOT_ATTR));
-      root.setAttribute('data-active', String(index));
-      root.querySelectorAll(`[${CAROUSEL_SLIDE_ATTR}]`).forEach((slide, i) => {
-        (slide as HTMLElement).hidden = i !== index;
-      });
-      root.querySelectorAll(`[${CAROUSEL_DOT_ATTR}]`).forEach((d, i) => {
-        d.setAttribute('aria-current', String(i === index));
-      });
+      show(root, Number(dot.getAttribute(CAROUSEL_DOT_ATTR)));
     });
   }
+  startRotation(log, root, slides.length);
+}
+
+/**
+ * Advance a slide every ROTATE_MS while nobody is looking at it.
+ *
+ * Paused while a pointer is over it or focus is inside it: somebody reading a card, or tabbing to its
+ * link, must not have it change under them. Off entirely for one slide, and for anybody who asked the
+ * browser for reduced motion.
+ */
+function startRotation(log: HTMLElement, root: HTMLElement, count: number): void {
+  if (count < 2 || prefersReducedMotion()) return;
+  let paused = false;
+  const pause = (): void => {
+    paused = true;
+  };
+  const resume = (): void => {
+    paused = false;
+  };
+  root.addEventListener('mouseenter', pause);
+  root.addEventListener('mouseleave', resume);
+  root.addEventListener('focusin', pause);
+  root.addEventListener('focusout', resume);
+  rotations.set(
+    log,
+    setInterval(() => {
+      // Torn down without a close (the panel unmounted): stop, rather than tick forever.
+      if (!root.isConnected) {
+        stopRotation(log);
+        return;
+      }
+      if (paused) return;
+      show(root, (Number(root.getAttribute('data-active')) + 1) % count);
+    }, ROTATE_MS),
+  );
 }
 
 /**
