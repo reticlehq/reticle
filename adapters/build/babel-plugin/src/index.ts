@@ -2,8 +2,11 @@ import { relative } from 'node:path';
 import type { PluginObj, PluginPass, types as BabelTypes } from '@babel/core';
 import { DATA_RETICLE_SOURCE_ATTR } from '@reticlehq/core/source-constants';
 import { isDomTag } from './dom-tags.js';
+import { isSourceStampingIgnored } from './ignore.js';
 
 const SOURCE_ATTR = DATA_RETICLE_SOURCE_ATTR;
+/** Per-file plugin state key: this file carries `@reticle-ignore` on its first non-empty line. */
+const IGNORED = 'reticleIgnored';
 
 interface PluginApi {
   types: typeof BabelTypes;
@@ -24,7 +27,14 @@ function reticleSourcePlugin({ types: t }: PluginApi): PluginObj<PluginPass> {
   return {
     name: 'reticle-source',
     visitor: {
+      // Decided once per FILE, on the file's own text, and kept on the per-file `state` — never on
+      // the plugin instance, which Babel reuses across every file in a build. A plugin-level flag
+      // set by one opted-out file would switch stamping off for everything after it.
+      Program(_path, state: PluginPass) {
+        state.set(IGNORED, isSourceStampingIgnored(state.file.code));
+      },
       JSXOpeningElement(path, state: PluginPass) {
+        if (true === state.get(IGNORED)) return;
         const node = path.node;
         // Host elements only (e.g. <div>, <button>) — skip components (<App />).
         if (node.name.type !== 'JSXIdentifier') return;

@@ -27,6 +27,11 @@
       "types": "./dist/index.d.ts",
       "require": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./ignore": {
+      "types": "./dist/ignore.d.ts",
+      "require": "./dist/ignore.js",
+      "default": "./dist/ignore.js"
     }
   },
   "files": [

@@ -52,7 +52,9 @@ const FLAT_FILE_LIMIT = 10;
  */
 const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // +1: connect-args.ts, split out of index.ts (988 lines, against the 1000 cap) with the body cap.
-  'adapters/build/vite/src': 13,
+  // +1: stamping.ts, which module ids get a source stamp and the per-file @reticle-ignore opt-out.
+  // The grouping this directory still wants is a `stamping/` subdirectory beside svelte-source.ts.
+  'adapters/build/vite/src': 14,
   'adapters/realm/browser/src/dom': 12,
   // +1: error-repeats.ts, the limiter every uncaught-error path in console.ts goes through (#986).
   'adapters/realm/browser/src/observers': 25,

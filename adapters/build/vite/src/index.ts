@@ -3,8 +3,6 @@ import { missingTokenWarning } from './token/missing-token.js';
 import { ensurePairingToken } from './token/ensure-token.js';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { transformSync } from '@babel/core';
-import reticleSource from '@reticlehq/babel-plugin';
 import {
   RETICLE_RENDER_PREHOOK,
   ReticleDir,
@@ -15,7 +13,14 @@ import {
 import { resolveProjectId } from './project-id.js';
 import { discoverDaemonPort } from './discover-port.js';
 import { announceDevServer } from './announce.js';
-import { SVELTE_FILE, stampSvelte } from './svelte-source.js';
+import { stampSvelte } from './svelte-source.js';
+import {
+  ignoredFileNotice,
+  optsOutOfStamping,
+  shouldStamp,
+  shouldStampSvelte,
+  stamp,
+} from './stamping.js';
 import {
   resolvableChain,
   sdkPackageVersion,
@@ -52,12 +57,6 @@ const RETICLE_SENSOR = '@reticlehq/browser';
  * file it lives in.
  */
 export const RETICLE_TOKEN_GLOBAL = '__RETICLE_TOKEN__';
-
-/** Files we stamp with source info — JSX/TSX only. */
-const JSX_FILE = /\.[jt]sx$/;
-/** Rollup virtual-module ids start with a NUL byte; never transform those. */
-const VIRTUAL_PREFIX = '\0';
-const NODE_MODULES = 'node_modules';
 
 /**
  * The connect code is served as a real module (not an inline <script>) so that Vite's import
@@ -404,65 +403,6 @@ function isHtmlEntry(id: string, specifier: string | undefined, root: string | u
   return candidate.endsWith(target.startsWith('/') ? target : `/${target}`);
 }
 
-/** A module id we may stamp at all: not virtual, not a dependency. Extension decides which stamper. */
-function stampableId(id: string): string | null {
-  if (id.startsWith(VIRTUAL_PREFIX)) return null;
-  if (id.includes(NODE_MODULES)) return null;
-  // Strip any query suffix (?worker, ?raw,...) before matching the extension.
-  return id.split('?')[0] ?? id;
-}
-
-/**
- * A test file, by the names every JS test runner agrees on.
- *
- * `.test.`/`.spec.` before the extension, or anywhere under a `__tests__` directory. Anchored to a
- * path SEGMENT and a dot so `TestBanner.tsx`, `latest.tsx` and `contest.tsx` stay ordinary
- * components — they are somebody's app, and skipping them would silently cost source mapping.
- */
-const TEST_FILE = /(?:\.(?:test|spec)\.[^./]+$)|(?:^|\/)__tests__\//;
-
-function shouldStamp(id: string): boolean {
-  const clean = stampableId(id);
-  if (null === clean) return false;
-  /*
-   * A test file is not the app under test.
-   *
-   * Nothing reads `data-reticle-source` on one — an agent inspects the app's DOM, never a test's —
-   * so stamping them is pure cost, and it is charged per file on every run. Measured in the field on
-   * ~1250 jsdom tests: 218s without the plugin, 411s with it, and one test that passed without
-   * instrumentation failed with it. Inserting attributes into JSX is exactly what an assertion on
-   * rendered output notices.
-   *
-   * Cut on the NAME rather than on "are we under Vitest": `vitest-browser.ts` records what happened
-   * the last time that was cut on the `VITEST` env var, which also reads true when a Vitest suite
-   * boots an app in order to test it. A name check cannot make that mistake.
-   */
-  if (TEST_FILE.test(clean)) return false;
-  return JSX_FILE.test(clean);
-}
-
-/** A `.svelte` single-file component, which needs the Svelte stamper rather than Babel. */
-function shouldStampSvelte(id: string): boolean {
-  const clean = stampableId(id);
-  return clean !== null && SVELTE_FILE.test(clean);
-}
-
-function stamp(code: string, id: string): { code: string; map: string | null } | null {
-  const out = transformSync(code, {
-    filename: id,
-    plugins: [reticleSource],
-    parserOpts: { plugins: ['jsx', 'typescript'] },
-    sourceMaps: true,
-    configFile: false,
-    babelrc: false,
-  });
-  if (out?.code === undefined || null === out.code) return null;
-  return {
-    code: out.code,
-    map: out.map === undefined || null === out.map ? null : JSON.stringify(out.map),
-  };
-}
-
 /**
  * Read the daemon's auto-provisioned pairing token (~/.reticle/pairing-token, or the
  * RETICLE_PAIRING_TOKEN_DIR override) so the served app can present it. Node-side only — a browser
@@ -637,6 +577,8 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
   const warn = options.onWarn ?? ((message: string) => globalThis.console.warn(message));
   /** Whether connect() actually reached a module — asserted at buildEnd, never assumed. */
   let injected = false;
+  /** Files already announced as opted out of stamping: one line each, for the life of the server. */
+  const announcedIgnored = new Set<string>();
   /**
    * Whether Vite ever asked us to transform the app's HTML.
    *
@@ -784,6 +726,16 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
         return stamped ?? { code: withConnect, map: null };
       }
       if (!sourceMapping) return null;
+      // Decided HERE, ahead of both stampers, so the Svelte path honours the marker too and so the
+      // opt-out is announced once regardless of which stamper would have run. The Babel plugin reads
+      // the same marker on its own for the callers that reach it without Vite (#853).
+      if (optsOutOfStamping(code, id)) {
+        if (!announcedIgnored.has(id)) {
+          announcedIgnored.add(id);
+          warn(ignoredFileNotice(id));
+        }
+        return null;
+      }
       // `.svelte` runs on the RAW component source, which is only still markup because this plugin
       // declares `enforce: 'pre'` and therefore transforms before @sveltejs/vite-plugin-svelte. No
       // map: the insertions are within a line and never move one, and a wrong map is worse than none.
