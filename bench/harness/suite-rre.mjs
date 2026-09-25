@@ -39,8 +39,11 @@ async function recordFlow(flow) {
   const a = new ReticleAdapter(URL);
   await a.start();
   try {
-    await a.login();
+    // Recorded from a COLD page, login included. Replay reloads the start page before step 1, and
+    // this app keeps its sign-in in memory, so a flow recorded after logging in starts from state
+    // the reload discards — the product says exactly that and refuses to call it green.
     await a.c.callTool('reticle_record', { action: 'start', recordingName: flow.name });
+    await a.login();
     for (const s of flow.steps) {
       if (s.view) await a.gotoView(s.view);
       else if (s.tap) await a.clickTestid(s.tap);
@@ -68,13 +71,11 @@ async function recordFlow(flow) {
 }
 
 // Verify a named subset in ONE consolidated call; return the tokens the agent reads + the verdict.
-// Log in once and stay logged in (no hard refresh) — the flows are post-login.
+// From a COLD tab: every flow carries its own login, so the suite depends on nothing it did not do.
 async function verifySuite(names) {
   const a = new ReticleAdapter(URL);
   await a.start();
   try {
-    await a.login();
-    await sleep(600);
     const res = await a.c.callTool('reticle_verify', { action: 'flows', names });
     const text = res.text || '';
     let obj = {};
@@ -131,7 +132,8 @@ for (const k of [2, names.length]) {
     throw new Error(
       `suite verify did not pass at K=${k} (status=${v.status}, passed=${v.passed}/${k}, ` +
         `cannot-fail=${cannotFail.length}). ` +
-        'Refusing to report a regression-efficiency ratio for a suite that did not verify.',
+        'Refusing to report a regression-efficiency ratio for a suite that did not verify.\n' +
+        `verdict: ${JSON.stringify(v.verdict).slice(0, 2000)}`,
     );
   }
   if (disagreements.length > 0) {
@@ -146,6 +148,8 @@ for (const k of [2, names.length]) {
     flows: k,
     reticle_verify_tokens: v.tokens,
     status: v.status,
+    // The verdict itself, so a token change between two builds can be traced to the field that grew.
+    verdict: v.verdict,
     passed: v.verdict?.passed ?? null,
     competitor_redrive_tokens: competitor,
     suite_rre_ratio: v.tokens ? Math.round(competitor / v.tokens) : null,
