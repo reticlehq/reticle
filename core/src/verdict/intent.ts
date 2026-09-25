@@ -94,7 +94,12 @@ export function declareIntent(input: {
 
 /** Attach the predicate that would prove it. Pure — returns a new intent. */
 export function bindIntent(intent: Intent, binding: unknown): Intent {
-  return { ...intent, state: IntentState.BOUND, binding };
+  // The same check again — what re-saving a flow does — leaves a proved intent proved.
+  // ponytail: JSON equality, so key order matters; both bindings come from the same writers.
+  if (JSON.stringify(intent.binding) === JSON.stringify(binding)) return intent;
+  // A different check has proved nothing yet, whatever the old one did.
+  const { provenBy: _proof, ...unproved } = intent;
+  return { ...unproved, state: IntentState.BOUND, binding };
 }
 
 /**
@@ -111,6 +116,29 @@ export function dischargeIntent(
 ): Intent {
   if (intent.binding === undefined) return intent;
   return { ...intent, state: IntentState.PROVED, provenBy: proof };
+}
+
+/**
+ * What declaring an intent that may already exist should leave stored.
+ *
+ * Declaring is what a re-run does — a flow re-saved, a feature's intents declared again in a later
+ * session — and it replaced the record outright, so a proved rule lost its check and its proof every
+ * time somebody said it again. Same words: nothing about the promise changed, so nothing is
+ * discarded. Different words: the check usually survives a rewording, the proof cannot, because it
+ * was evidence for words that are gone. The amendment itself is recorded by `upsertIntent`.
+ */
+export function redeclareIntent(existing: Intent | undefined, fresh: Intent): Intent {
+  if (existing === undefined) return fresh;
+  const surface = existing.surface ?? fresh.surface;
+  const withSurface = surface === undefined ? {} : { surface };
+  if (existing.statement === fresh.statement) return { ...existing, ...withSurface };
+  const { provenBy: _proof, ...unproved } = existing;
+  return {
+    ...unproved,
+    statement: fresh.statement,
+    state: existing.binding === undefined ? IntentState.DECLARED : IntentState.BOUND,
+    ...withSurface,
+  };
 }
 
 /**

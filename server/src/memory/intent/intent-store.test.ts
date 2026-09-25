@@ -148,3 +148,24 @@ describe('IntentStore', () => {
     expect(written.get(`${ROOT}/intent.json`)).toBe(first);
   });
 });
+
+// The whole story a saved flow lives through: declared, bound, proved by a replay, then the flow is
+// re-saved — which re-declares its intent and re-binds it. The proof must still be there after.
+describe('re-saving a flow does not erase what it proved', () => {
+  it('keeps a proved intent proved through a re-declare and a re-bind', async () => {
+    const { store: s } = store();
+    await s.declare([{ id: 'pay', statement: 'paying charges the card once' }]);
+    await s.bind('pay', { flow: 'pay' });
+    await s.discharge('pay', { verdictId: 'v1', grade: 'flow', at: 5 });
+
+    await s.declare([
+      { id: 'pay', statement: 'paying charges the card once', surface: { flow: 'pay' } },
+    ]);
+    await s.bind('pay', { flow: 'pay' });
+
+    const [pay] = (await s.read()).filter((i) => 'pay' === i.id);
+    expect(pay?.state).toBe(IntentState.PROVED);
+    expect(pay?.provenBy).toEqual({ verdictId: 'v1', grade: 'flow', at: 5 });
+    expect(pay?.surface).toEqual({ flow: 'pay' });
+  });
+});

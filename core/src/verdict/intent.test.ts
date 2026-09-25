@@ -8,6 +8,7 @@ import {
   dischargeIntent,
   emptyIntentFile,
   openIntents,
+  redeclareIntent,
   upsertIntent,
 } from './intent.js';
 
@@ -212,5 +213,100 @@ describe('the on-disk file', () => {
     expect(IntentFileSchema.safeParse({ version: 1, intents: { a: {} } }).success).toBe(false);
     expect(IntentFileSchema.safeParse({ intents: {} }).success).toBe(false);
     expect(IntentFileSchema.safeParse('nonsense').success).toBe(false);
+  });
+});
+
+/*
+ * Declaring an intent that already exists.
+ *
+ * Re-declaring is what a re-run does: a flow re-saved, a feature's intents declared again in a later
+ * session. It used to REPLACE the stored record with a fresh `declared` one, so a business rule that
+ * had been proved lost its check and its proof every time somebody said it again — and a flow that
+ * re-proved itself on every replay kept erasing the record that it had.
+ */
+describe('redeclareIntent — saying it again does not unsay what was proved', () => {
+  const proof = { verdictId: 'v1', grade: 'net', at: 5 };
+  const proved = dischargeIntent(
+    bindIntent(declareIntent({ id: 'i1', statement: 'checkout charges once', now: 1 }), {
+      kind: 'net',
+    }),
+    proof,
+  );
+
+  it('is the fresh record when nothing was stored', () => {
+    const fresh = declareIntent({ id: 'i1', statement: 'x', now: 9 });
+    expect(redeclareIntent(undefined, fresh)).toBe(fresh);
+  });
+
+  it('keeps the check, the proof and the first declaration when the wording is unchanged', () => {
+    const again = redeclareIntent(
+      proved,
+      declareIntent({ id: 'i1', statement: 'checkout charges once', now: 9 }),
+    );
+    expect(again).toEqual(proved);
+  });
+
+  it('fills a surface the stored record lacked, and never overwrites one it had', () => {
+    const withFlow = redeclareIntent(
+      proved,
+      declareIntent({
+        id: 'i1',
+        statement: 'checkout charges once',
+        now: 9,
+        surface: { flow: 'pay' },
+      }),
+    );
+    expect(withFlow.surface).toEqual({ flow: 'pay' });
+    const kept = redeclareIntent(
+      withFlow,
+      declareIntent({
+        id: 'i1',
+        statement: 'checkout charges once',
+        now: 9,
+        surface: { flow: 'other' },
+      }),
+    );
+    expect(kept.surface).toEqual({ flow: 'pay' });
+  });
+
+  // A different promise has not been proved yet. The check usually survives a rewording; the proof
+  // cannot, because it was evidence for the words that are gone.
+  it('keeps the check but clears the proof when the wording changed', () => {
+    const changed = redeclareIntent(
+      proved,
+      declareIntent({ id: 'i1', statement: 'checkout charges once, in cents', now: 9 }),
+    );
+    expect(changed.statement).toBe('checkout charges once, in cents');
+    expect(changed.binding).toEqual({ kind: 'net' });
+    expect(changed.state).toBe(IntentState.BOUND);
+    expect(changed.provenBy).toBeUndefined();
+  });
+
+  it('goes back to declared when the changed intent never had a check', () => {
+    const bare = declareIntent({ id: 'i2', statement: 'a', now: 1 });
+    const changed = redeclareIntent(bare, declareIntent({ id: 'i2', statement: 'b', now: 2 }));
+    expect(changed.state).toBe(IntentState.DECLARED);
+  });
+});
+
+describe('bindIntent — binding the same check again changes nothing', () => {
+  const proof = { verdictId: 'v1', grade: 'flow', at: 5 };
+  const proved = dischargeIntent(
+    bindIntent(declareIntent({ id: 'f', statement: 'the pay flow works', now: 1 }), {
+      flow: 'pay',
+    }),
+    proof,
+  );
+
+  // Re-saving a flow re-binds its intent to the flow. That must not demote what the flow proved.
+  it('keeps a proved intent proved when the identical check is bound again', () => {
+    expect(bindIntent(proved, { flow: 'pay' })).toEqual(proved);
+  });
+
+  it('clears the proof when a DIFFERENT check is bound: it has not proved anything yet', () => {
+    const rebound = bindIntent(proved, { flow: 'pay-v2' });
+    expect(rebound.state).toBe(IntentState.BOUND);
+    expect(rebound.provenBy).toBeUndefined();
+    expect(rebound.binding).toEqual({ flow: 'pay-v2' });
   });
 });

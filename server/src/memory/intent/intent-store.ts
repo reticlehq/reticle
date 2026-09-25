@@ -1,6 +1,7 @@
 import {
   bindIntent,
   declareIntent,
+  redeclareIntent,
   dischargeIntent,
   emptyIntentFile,
   openIntents,
@@ -101,7 +102,8 @@ export class IntentStore {
       const now = this.#clock.now();
       const declared: Intent[] = [];
       for (const entry of entries) {
-        const intent = declareIntent({ ...entry, now });
+        // Saying it again must not unsay it: see redeclareIntent for what survives.
+        const intent = redeclareIntent(file.intents[entry.id], declareIntent({ ...entry, now }));
         file = upsertIntent(file, intent);
         const stored = file.intents[intent.id];
         if (stored !== undefined) declared.push(stored);
