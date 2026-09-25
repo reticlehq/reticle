@@ -84,6 +84,7 @@ export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticl
                 verified:"yes" — "unknown" is not a pass)
   reticle affected [--since <ref>] [file...]           (which saved flows must re-verify for the changed files)
   reticle gate [--since <ref>] [file...]               (exit non-zero unless passing artifacts cover the affected flows)
+  reticle report [--session <id>] [--hook]             (what the latest session claimed, and what held)
   reticle watch [url]                                  (on save, report which saved flows must re-verify)
   reticle drive <url> [--headless]                     (foreground mode, for debugging)
   reticle mcp   [--port N] [--drive <url>] [--headless] (MCP stdio proxy; auto-starts daemon if needed)
@@ -125,6 +126,9 @@ const CAPSULES_COMMAND = 'capsules';
 const GATE_COMMAND = 'gate';
 /** Hook mode: prose a human can read, and silence when there was simply nothing to check. */
 const HOOK_FLAG = '--hook';
+/** `reticle report [--session <id>] [--hook]` — what the latest session claimed, and what held. */
+const REPORT_COMMAND = 'report';
+const SESSION_FLAG = '--session';
 const WATCH_COMMAND = 'watch';
 const UPDATE_COMMAND = 'update';
 const ROLLBACK_COMMAND = 'rollback';
@@ -171,6 +175,7 @@ const KNOWN_COMMANDS: ReadonlySet<string> = new Set([
   HUNT_COMMAND,
   CAPSULES_COMMAND,
   GATE_COMMAND,
+  REPORT_COMMAND,
   WATCH_COMMAND,
   UPDATE_COMMAND,
   ROLLBACK_COMMAND,
@@ -370,6 +375,7 @@ export type CliResult =
   | { kind: 'hunt'; dir: string }
   | { kind: 'capsules' }
   | { kind: 'gate'; files: string[]; since?: string; hook?: boolean }
+  | { kind: 'report'; session?: string; hook: boolean }
   | { kind: 'watch'; url?: string }
   | { kind: 'update' }
   | { kind: 'rollback' }
@@ -923,6 +929,15 @@ export function parseCliArgs(
         files: t.files,
         ...(since === undefined ? {} : { since }),
         ...(hook ? { hook: true } : {}),
+      };
+    }
+    case REPORT_COMMAND: {
+      const at = rest.indexOf(SESSION_FLAG);
+      const session = -1 === at ? undefined : rest[at + 1];
+      return {
+        kind: 'report',
+        hook: rest.includes(HOOK_FLAG),
+        ...(session === undefined ? {} : { session }),
       };
     }
     case WATCH_COMMAND: {

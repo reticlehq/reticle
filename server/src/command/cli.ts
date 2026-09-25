@@ -18,6 +18,7 @@ import { attachStatusFields } from '@/surface/mcp/attach-memory.js';
 import { splitBrainFields, withNextAction } from './cli/status-fields.js';
 import { reticleStateHome } from './daemon/daemon.js';
 import { handleMcp } from './cli/mcp-command.js';
+import { handleReport } from './cli/report-command.js';
 import { resolveDaemonForProject } from './daemon/daemon-resolve.js';
 import { daemonStartOptions } from './cli/daemon-start-options.js';
 import {
@@ -779,6 +780,9 @@ export function main(): void {
       break;
     case 'gate':
       void handleGate(parsed.files, parsed.since, parsed.hook);
+      break;
+    case 'report':
+      void handleReport(parsed.session, parsed.hook);
       break;
     case 'watch':
       handleWatch();

@@ -312,6 +312,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'flows',
     'fs',
     'identity',
+    // `reticle report` folds a session's action ledger from disk, with no daemon to ask. The ledger
+    // reader lives in `journal`; a second copy of it here would be a second opinion on its format.
+    'journal',
     'mcp',
     'outcome',
     'ports',

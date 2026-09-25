@@ -127,6 +127,7 @@
                   "cli/verify",
                   "cli/affected",
                   "cli/gate",
+                  "cli/report",
                   "cli/watch",
                   "cli/capsules",
                   "cli/hunt",

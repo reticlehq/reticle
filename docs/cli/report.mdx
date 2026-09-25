@@ -1,0 +1,44 @@
+---
+title: reticle report
+description: What the latest session claimed, and what held. Also a print-only Stop hook for Claude Code.
+icon: clipboard-check
+---
+
+`reticle report` reads this project's most recent session from `.reticle/` and says how many of its claims held, how many failed, how many came back `unknown` and who can act on each, and how many proved nothing. It reads the journal on disk, so no daemon has to be running.
+
+```bash
+npx @reticlehq/server report [--session <id>] [--hook]
+```
+
+## Arguments and flags
+
+| Flag | Default | What it does |
+| --- | --- | --- |
+| `--session <id>` | the newest session | Report a specific session |
+| `--hook` | off | Print one line, and only when the working tree changed and no claim held |
+
+## What it prints
+
+```text
+session lease-85f8191b-3874-457b-973b-8ee365e5acfb
+2 of 4 claims held
+1 failed, 1 of them a green a channel contradicted
+1 unknown (environment: 1)
+  ✗ signal order:placed
+```
+
+An `unknown` is never counted as held. It is Reticle saying it could not tell, and the owner beside it says what to do next.
+
+## As a Claude Code Stop hook
+
+With `--hook` it prints nothing when a claim held or nothing in the tree changed, and otherwise one line, such as `Reticle: not verified. 3 claims: 1 failed, 2 unknown`. It prints Claude Code's `systemMessage` shape and always exits `0`: you see the line when the agent stops, and the agent is never blocked by it. Add it to `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "Stop": [{ "hooks": [{ "type": "command", "command": "npx @reticlehq/server report --hook" }] }]
+  }
+}
+```
+
+A session last written more than an hour ago does not count as this turn, so a morning drive cannot answer for an afternoon edit. If you want the stop blocked until the change is verified, use [`reticle gate --hook`](/cli/gate) instead.
