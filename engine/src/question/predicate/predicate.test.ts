@@ -591,7 +591,26 @@ describe('predicate engine', () => {
       { kind: 'element', query: { text: 'Ready' } },
       100,
     );
-    expect(result).toEqual({ pass: false, failureReason: 'session disconnected' });
+    expect(result).toMatchObject({ pass: false, failureReason: 'session disconnected' });
+    expect(result.inconclusive).toContain('session disconnected');
+  });
+
+  /**
+   * Reported from the field: `reticle_assert` returned `verified: no / assertion_failed` because the
+   * `match` command timed out after 8000ms on a live, throttled tab. The same response said the page
+   * was alive. The page did not ANSWER; nothing was read and found absent. A read that never came
+   * back is "could not tell", which the verdict rule already turns into unknown.
+   */
+  it('a command the page never answered is inconclusive, never a failed consequence', async () => {
+    const session: PredicateSession = {
+      command: () => Promise.reject(new Error("command 'match' timed out after 8000ms")),
+      eventsSince: () => [],
+      onEvent: () => () => undefined,
+      elapsed: () => 0,
+    };
+    const result = await waitForPredicate(session, { kind: 'text', contains: 'Saved' }, 100);
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toContain('timed out');
   });
 
   it('propagates the STRUCTURED cause (observed/expected/assertion) on a timed-out wait', async () => {

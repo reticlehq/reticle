@@ -453,10 +453,18 @@ export function waitForPredicate(
 ): Promise<EvalResult> {
   return new Promise<EvalResult>((resolve) => {
     let done = false;
-    const failed = (error: unknown): EvalResult => ({
-      pass: false,
-      failureReason: error instanceof Error ? error.message : String(error),
-    });
+    // A read that threw never looked at the app: the page did not answer, or went away. That is
+    // "could not tell", not "looked and it was false", so it is inconclusive, which the verdict rule
+    // turns into unknown. As a plain false it was graded assertion_failed: a command timeout on a
+    // live, throttled tab came back verified:no against a page that was never read.
+    const failed = (error: unknown): EvalResult => {
+      const reason = error instanceof Error ? error.message : String(error);
+      return {
+        pass: false,
+        failureReason: reason,
+        inconclusive: `the page did not answer: ${reason}`,
+      };
+    };
     let cooldownTimer: ReturnType<typeof setTimeout> | undefined;
     /** One-shot re-check timed to when a time-based predicate could first pass. See retryAfterMs. */
     let hintTimer: ReturnType<typeof setTimeout> | undefined;
