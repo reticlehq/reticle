@@ -151,3 +151,34 @@ describe('browser-emitted resource failures reach the console channel', () => {
     expect(events.filter((e) => e.type === EventType.ERROR_UNCAUGHT)).toHaveLength(0);
   });
 });
+
+/*
+ * The limiter is only worth its bytes if the observer actually routes through it. The unit test of
+ * the limiter cannot see that wiring; this drives a real window `error` a thousand times (#986).
+ */
+describe('a repeating uncaught error', () => {
+  let teardown: Teardown | undefined;
+  afterEach(() => {
+    teardown?.();
+    teardown = undefined;
+  });
+
+  it('is a handful of events, not one per occurrence, and says how often it repeated', () => {
+    const { emit, events } = collect();
+    teardown = installConsole(emit);
+    for (let i = 0; i < 1000; i += 1) {
+      window.dispatchEvent(
+        new ErrorEvent('error', {
+          message: 'TypeError: x is undefined',
+          filename: 'http://localhost/app.js',
+          lineno: 7,
+          error: new TypeError('x is undefined'),
+        }),
+      );
+    }
+    const uncaught = events.filter((e) => EventType.ERROR_UNCAUGHT === e.type);
+    expect(uncaught.length).toBeGreaterThan(0);
+    expect(uncaught.length).toBeLessThan(20);
+    expect(uncaught.some((e) => 'number' === typeof e.data['repeats'])).toBe(true);
+  }, 30_000);
+});

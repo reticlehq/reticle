@@ -218,7 +218,19 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * Still unspent, and still the bigger number: `verdict/verification-run` (3,645 B) and the protocol
  * barrel behind it. Same defect, same fix, a public-surface decision rather than a size-guard one.
  */
-const MAX_FIRST_LOAD_BYTES = 240_300;
+/*
+ * 240_300 -> 241_300, for bounding a repeating uncaught error. 531 B measured on this tree
+ * (239,903 -> 240,434), not the 91 B it measured where it was written: the base had moved.
+ *
+ * An uncaught error is recorded as an event, and recording it can raise the same error, so the path
+ * feeds itself: one repeating `TypeError` wrote a session's event log until it filled the disk
+ * (#986). The limiter lets the first few occurrences through, then only order-of-magnitude
+ * checkpoints, so a runaway costs O(log n) events instead of O(n). It has to be spent in the page:
+ * the daemon cannot decline what the SDK has already sent, and the send is the cost.
+ *
+ * Raised by 1,000 rather than to the measurement, per the note above.
+ */
+const MAX_FIRST_LOAD_BYTES = 241_300;
 /*
  * Raised a fifth time, 233_300 -> 233_400, for a route to be assertable in a SAVED flow. 57 B.
  *

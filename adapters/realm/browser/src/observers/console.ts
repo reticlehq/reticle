@@ -2,6 +2,7 @@ import { EventType, TRANSPORT_LIMITS } from '@reticlehq/core';
 import { observeSafely, type Emit, type Teardown } from './types.js';
 import { safeStringify } from '@/security/serialization.js';
 import { requireCapturedMethod } from '@/util/captured-method.js';
+import { createRepeatLimiter, type ErrorIdentity } from './error-repeats.js';
 
 type ConsoleMethod = 'log' | 'warn' | 'error' | 'info' | 'debug';
 
@@ -72,6 +73,25 @@ export function installConsole(emit: Emit): Teardown {
     console[method] = wrapper;
   }
 
+  // One uncaught error repeating is one fact. Recording an error can raise the same error, so this
+  // path can feed itself until a disk fills (#986). Per-installation, so a
+  // teardown and re-connect starts clean.
+  const repeats = createRepeatLimiter();
+  /**
+   * Emit an uncaught error unless it is a repeat already reported enough times.
+   *
+   * The payload IS the identity: every field that distinguishes two occurrences is a field the
+   * event already carries, so there is nothing to keep in step between them.
+   */
+  const emitError = (payload: ErrorIdentity): void => {
+    const decision = repeats.admit(payload);
+    if (!decision.emit) return;
+    emit(EventType.ERROR_UNCAUGHT, {
+      ...payload,
+      ...(undefined === decision.repeats ? {} : { repeats: decision.repeats }),
+    });
+  };
+
   const onError = (event: Event): void => {
     // A SUBRESOURCE that failed to load — `<img>`, `<script>`, `<link>`, media. The browser writes
     // these to the console and none of them passes through a console method, so patching console
@@ -88,33 +108,32 @@ export function installConsole(emit: Emit): Teardown {
       const tag = target.tagName.toLowerCase();
       const url = target.getAttribute('src') ?? target.getAttribute('href') ?? '';
       observeSafely(() => {
-        emit(EventType.ERROR_UNCAUGHT, {
-          message: `<${tag}> failed to load${0 === url.length ? '' : `: ${url}`}`,
-          kind: 'resource',
-          ...(0 === url.length ? {} : { source: url }),
-        });
+        const message = `<${tag}> failed to load${0 === url.length ? '' : `: ${url}`}`;
+        emitError({ message, kind: 'resource', ...(0 === url.length ? {} : { source: url }) });
       });
       return;
     }
     observeSafely(() => {
       const stack = capStack(event.error instanceof Error ? event.error.stack : undefined);
-      emit(EventType.ERROR_UNCAUGHT, {
+      const payload = {
         message: event.message,
         source: event.filename,
         line: event.lineno,
         ...(stack === undefined ? {} : { stack }),
-      });
+      };
+      emitError(payload);
     });
   };
   const onRejection = (event: PromiseRejectionEvent): void => {
     observeSafely(() => {
       const reason: unknown = event.reason;
       const stack = capStack(reason instanceof Error ? reason.stack : undefined);
-      emit(EventType.ERROR_UNCAUGHT, {
+      const payload = {
         message: reason instanceof Error ? reason.message : String(reason),
         kind: 'unhandledrejection',
         ...(stack === undefined ? {} : { stack }),
-      });
+      };
+      emitError(payload);
     });
   };
   // Capture phase: element `error` events do not bubble, so this is the only registration that
