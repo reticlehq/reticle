@@ -122,9 +122,17 @@ if (input === undefined || save === undefined) {
   await T('reticle_act', { ref: input, action: 'fill', args: { value: 'slow one' } });
 
   // The declared consequence: the POST this click causes, which the server holds for SERVER_DELAY_MS.
-  const expectNet = { net: { urlContains: '/api/saved-items', method: 'POST', status: 200 } };
+  // A predicate, as a v2 flow stores it. This spec hands the flow straight to `replayFlow`, skipping
+  // the schema that lifts a v1 flat expect — so the flat shape reached the evaluator unread and BOTH
+  // checks below failed on "unknown predicate", the first one passing for that wrong reason.
+  const expectNet = {
+    kind: 'net',
+    urlContains: '/api/saved-items',
+    method: 'POST',
+    status: 200,
+  };
   const flowOf = (step) => ({
-    version: 1,
+    version: 2,
     name: 'slow-save',
     createdAt: 0,
     steps: [step],
@@ -144,7 +152,7 @@ if (input === undefined || save === undefined) {
     const fast = await replayFlow(live, flowOf({ ...stepBase }), waitForPredicate, 4000);
     chk(
       'without a declared timeout the slow consequence DRIFTS — the reported failure',
-      fast[0]?.ok === false,
+      fast[0]?.ok === false && !String(fast[0]?.drift?.reason ?? '').includes('unknown predicate'),
       `ok=${String(fast[0]?.ok)} drift=${JSON.stringify(fast[0]?.drift ?? {}).slice(0, 90)}`,
     );
 
