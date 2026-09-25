@@ -41,15 +41,21 @@ describe('presenter HUD shell', { timeout: HUD_MOUNT_TIMEOUT_MS }, () => {
     expect(overlay?.getAttribute('data-reticle-chat')).toBeNull();
     p.destroy();
   });
-  // The founder card is painted by the panel itself on mount: it needs no daemon push, so a HUD
-  // that mounted without it would be the only surface silently missing the invitation.
-  it('mounts the talk-to-the-founder card in the chat panel', () => {
+  // The top carousel lives INSIDE the log's scroll container, first, so it takes no height from the
+  // panel and rows push it up. The log trims by row, so a full log must not delete it.
+  it('mounts the carousel first in the log, and keeps it there as rows arrive and are trimmed', () => {
     document.body.innerHTML = '';
     globalThis.sessionStorage.clear();
-    const p = new Presenter({});
+    const p = new Presenter({ logMax: 3 });
     p.mount();
-    const book = document.querySelector('[data-reticle-talk-book]');
-    expect(book?.getAttribute('href')).toBe(DISCOVERY_CALL_URL);
+    const log = document.querySelector('[data-reticle-log]');
+    expect(log?.firstElementChild?.hasAttribute('data-reticle-carousel')).toBe(true);
+    expect(log?.querySelector('[data-reticle-talk-book]')?.getAttribute('href')).toBe(
+      DISCOVERY_CALL_URL,
+    );
+    for (let i = 0; i < 6; i += 1) p.log(LOG_KIND.ACT, `row ${String(i)}`);
+    expect(log?.firstElementChild?.hasAttribute('data-reticle-carousel')).toBe(true);
+    expect(log?.querySelectorAll('[data-reticle-log-row]')).toHaveLength(3);
     p.destroy();
   });
   it('keeps the toolbar expanded while agent chat is open', () => {

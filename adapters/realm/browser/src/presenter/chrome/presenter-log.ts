@@ -133,6 +133,27 @@ export interface LogHandle {
   result(r: LogResult): void;
 }
 
+/**
+ * The log's own rows, by what they ARE rather than where they sit.
+ *
+ * Something can be pinned above them inside the same scroll container — the chat panel's top
+ * carousel — and trimming by `firstElementChild` would delete it the moment the log filled.
+ */
+function logRows(container: HTMLElement): Element[] {
+  return [...container.children].filter((el) => el.hasAttribute(DATA_RETICLE_LOG_ROW));
+}
+
+/** Keep the newest `max` rows. Anything that is not a row stays where it is. */
+export function trimLogRows(container: HTMLElement, max: number): void {
+  const rows = logRows(container);
+  for (const row of rows.slice(0, Math.max(0, rows.length - max))) row.remove();
+}
+
+/** Remove every row, leaving whatever is pinned above them. */
+export function clearLogRows(container: HTMLElement): void {
+  for (const row of logRows(container)) row.remove();
+}
+
 /** Clamp a logMax option to a sane positive integer, falling back to the default. */
 export function clampLogMax(n: number | undefined): number {
   if (n === undefined || !Number.isFinite(n) || n <= 0) return DEFAULT_LOG_MAX;
@@ -209,7 +230,7 @@ export function appendLogRow(
   if (kind !== LOG_KIND.HUMAN) rowNodes.push(resEl);
   row.append(...rowNodes);
   container.appendChild(row);
-  while (container.childElementCount > logMax) container.firstElementChild?.remove();
+  trimLogRows(container, logMax);
   requestAnimationFrame(() => {
     scrollLogToLatest(container);
   });

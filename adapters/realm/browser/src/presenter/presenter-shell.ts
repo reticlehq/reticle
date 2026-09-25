@@ -20,10 +20,11 @@ import {
   SETTINGS_BTN_ATTR,
   MINIMISED_STORAGE_KEY,
 } from './presenter-config.js';
-import { OFFER_SLOT_ATTR, paintOffer, type OfferState } from './presenter-offer.js';
-import { TALK_SLOT_ATTR, paintTalk } from './presenter-talk.js';
+import { offerDismissed, type OfferState } from './carousel/offer-card.js';
+import { paintCarousel } from './carousel/carousel.js';
+import { panelSlides } from './carousel/panel-slides.js';
 import { BRAND_NAME, FAB_TOGGLE_HTML, MARK_SVG } from './chrome/presenter-brand.js';
-import { settleLogAtLatest } from './chrome/presenter-log.js';
+import { DATA_RETICLE_LOG, settleLogAtLatest } from './chrome/presenter-log.js';
 import { installHudDragHandles, installHudPositionGuards } from './presenter-drag.js';
 import { scheduleSyncDockLayout } from './presenter-dock-layout.js';
 import {
@@ -162,11 +163,22 @@ export class HudShell {
    */
   #pushedOffer: OfferState | undefined;
 
-  /** Paint the harness offer into the chat panel. Nothing to say is the common answer. */
+  /** Take the harness offer from a push, and repaint the carousel it is one slide of. */
   paintOffer(offer: OfferState | undefined): void {
     this.#pushedOffer = offer;
-    if (this.#root === undefined) return;
-    paintOffer(this.#root, offer, this.#storage());
+    this.#paintCarousel();
+  }
+
+  /**
+   * The chat panel's top carousel, as the log's first child: it takes no height from the panel, and
+   * new rows push it up. The harness offer when it applies, then the founder invitation.
+   */
+  #paintCarousel(): void {
+    const log = this.#root?.querySelector(`[${DATA_RETICLE_LOG}]`);
+    if (!(log instanceof HTMLElement)) return;
+    // A "not now" given to the harness offer before the carousel existed still answers it.
+    const declined = offerDismissed(this.#storage());
+    paintCarousel(log, panelSlides(this.#pushedOffer, declined), this.#sessionStorage());
   }
 
   /** Session storage: "not now" on the founder card lasts this tab, not forever. */
@@ -222,8 +234,6 @@ export class HudShell {
         ${actStripHtml}
         <span class="reticle-tally" data-reticle-tally hidden></span>
         ${bannerHtml}
-        <div ${OFFER_SLOT_ATTR}></div>
-        <div ${TALK_SLOT_ATTR}></div>
         <div class="${HUD_LOG_WELL_CLASS}"><div ${logAttr}></div></div>
         ${flowsHtml}
         ${footHtml}
@@ -415,9 +425,8 @@ export class HudShell {
       const pushed = this.#pushedAccount;
       this.paintAccount(pushed.account, pushed.dashboardUrl, pushed.details);
     }
-    if (this.#pushedOffer !== undefined) this.paintOffer(this.#pushedOffer);
-    // Needs no daemon state: the invitation is the same for everybody, every session.
-    paintTalk(root, this.#sessionStorage());
+    // Painted on mount whether or not an offer has arrived: the founder slide needs no daemon state.
+    this.#paintCarousel();
   }
   teardown(): void {
     this.#accountTeardown?.();

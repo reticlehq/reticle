@@ -20,6 +20,8 @@ import {
   formatElapsed,
   humanDuration,
   appendLogRow,
+  clearLogRows,
+  trimLogRows,
   type LogKind,
   type LogResult,
   type LogHandle,
@@ -585,7 +587,7 @@ export class Presenter {
   #clearRunLog(): void {
     this.#runLog = [];
     this.#tallied = { passes: 0, fails: 0 };
-    if (this.#log !== undefined) this.#log.replaceChildren();
+    if (this.#log !== undefined) clearLogRows(this.#log);
     this.#renderTally();
   }
   #applyHideUntilRestart(): void {
@@ -652,9 +654,7 @@ export class Presenter {
   }
   #pruneLog(): void {
     if (this.#log === undefined) return;
-    while (this.#log.childElementCount > this.#logMax) {
-      this.#log.firstElementChild?.remove();
-    }
+    trimLogRows(this.#log, this.#logMax);
   }
   /**
    * Mirror the server's session.throttled state onto the HUD border. When throttled (tab

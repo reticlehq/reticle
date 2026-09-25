@@ -53,7 +53,7 @@ describe('the browser SDK knows only what it is allowed to know', () => {
     expect(reaches(BROWSER).size).toBeGreaterThan(5);
   });
 
-  it('has 22 directories, and each one was a decision', () => {
+  it('has 23 directories, and each one was a decision', () => {
     // the SDK. Twenty-one directories and one mutual pair, dom <-> registry, which is the best ratio in the repository.
     //
     // Recorded by EQUALITY, not as a floor. The check above only proves the scan read
@@ -66,7 +66,11 @@ describe('the browser SDK knows only what it is allowed to know', () => {
     // the slides, their prose and their CSS sit behind a dynamic import so a page that never shows
     // a tour never downloads one, and a boundary a bundler honours is easier to keep when it is
     // also a boundary on disk.
-    expect(directories(BROWSER).length).toBe(22);
+    //
+    // 22 -> 23 for `presenter/carousel`, the chat panel's top carousel and the two cards it shows
+    // (the harness offer and the founder invitation). The offer card moved in with it: it is a slide
+    // now, and leaving it in `presenter/` made the two directories need each other.
+    expect(directories(BROWSER).length).toBe(23);
   });
 
   it('has no two directories sharing a basename', () => {

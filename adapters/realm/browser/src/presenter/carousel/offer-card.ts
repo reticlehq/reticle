@@ -20,12 +20,8 @@
 
 /** Root of the offer card, so the shell can find and replace it. */
 export const OFFER_ATTR = 'data-reticle-offer';
-/** The empty slot the shell renders once and this file paints into. */
-export const OFFER_SLOT_ATTR = 'data-reticle-offer-slot';
 /** The claim button — a link, because the answer lives on the platform. */
 export const OFFER_CLAIM_ATTR = 'data-reticle-offer-claim';
-/** The dismissal control. */
-export const OFFER_DISMISS_ATTR = 'data-reticle-offer-dismiss';
 
 /**
  * Where a dismissal is remembered.
@@ -37,10 +33,10 @@ export const OFFER_DISMISSED_KEY = 'reticle.harnessOffer.dismissed';
 
 /** What the card says. Named because a string a user reads is a decision, not an implementation detail. */
 export const OFFER_TEXT = {
-  HEADLINE: 'Reticle drives your app for you',
+  HEADLINE: 'Get Harness free for 3 months',
   BODY: 'The harness explores your app, proves what works, and saves every journey as a test that replays for free. Built on Jev — no model API key needed.',
-  FREE: 'Free for 3 months',
   CLAIM: 'Claim now',
+  /** The old per-card "no". Kept only so the test can assert it is gone: the carousel closes now. */
   DISMISS: 'Not now',
   /** Shown once claimed, while the period is comfortably live. */
   claimed: (days: number): string => `Harness active — ${String(days)} days left`,
@@ -62,15 +58,6 @@ export function offerDismissed(storage: Pick<Storage, 'getItem'> | undefined): b
     // A private window, blocked site data, or a thumbnail capture. Failing closed here would hide
     // the offer from everybody in those modes; failing open shows it, which is the ordinary case.
     return false;
-  }
-}
-
-/** Remember that somebody said no. A store that refuses is not worth failing a click over. */
-export function dismissOffer(storage: Pick<Storage, 'setItem'> | undefined): void {
-  try {
-    storage?.setItem(OFFER_DISMISSED_KEY, '1');
-  } catch {
-    /* the card closes either way; it simply returns next reload */
   }
 }
 
@@ -135,51 +122,17 @@ export function offerHtml(offer: OfferState | undefined, dismissed: boolean): st
   if (url === undefined || 0 === url.length) return '';
 
   return `<div ${OFFER_ATTR} class="reticle-offer" role="note">
-      <div class="reticle-offer-head">
-        <span class="reticle-offer-title">${escape(OFFER_TEXT.HEADLINE)}</span>
-        <span class="reticle-offer-free">${escape(OFFER_TEXT.FREE)}</span>
-      </div>
+      <span class="reticle-offer-title">${escape(OFFER_TEXT.HEADLINE)}</span>
       <p class="reticle-offer-body">${escape(OFFER_TEXT.BODY)}</p>
-      <div class="reticle-offer-actions">
-        <a ${OFFER_CLAIM_ATTR} class="reticle-offer-claim" href="${escape(url)}" target="_blank" rel="noopener noreferrer">${escape(OFFER_TEXT.CLAIM)}</a>
-        <button type="button" ${OFFER_DISMISS_ATTR} class="reticle-offer-dismiss">${escape(OFFER_TEXT.DISMISS)}</button>
-      </div>
+      <a ${OFFER_CLAIM_ATTR} class="reticle-offer-claim" href="${escape(url)}" target="_blank" rel="noopener noreferrer">${escape(OFFER_TEXT.CLAIM)}</a>
     </div>`;
-}
-
-/**
- * Paint the card into the shell's slot, and wire the one control it owns.
- *
- * The markup is replaced wholesale on every push, so the dismiss listener is attached per paint
- * rather than once at mount — there is exactly one button, and it removes itself when used.
- */
-export function paintOffer(
-  root: ParentNode,
-  offer: OfferState | undefined,
-  storage: Pick<Storage, 'getItem' | 'setItem'> | undefined,
-): void {
-  const slot = root.querySelector(`[${OFFER_SLOT_ATTR}]`);
-  if (!(slot instanceof HTMLElement)) return;
-  slot.innerHTML = offerHtml(offer, offerDismissed(storage));
-  const dismiss = slot.querySelector(`[${OFFER_DISMISS_ATTR}]`);
-  dismiss?.addEventListener('click', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    dismissOffer(storage);
-    slot.innerHTML = '';
-  });
 }
 
 /** Styles, kept beside the markup they dress so a change to one is a change to both. */
 export const OFFER_CSS = `
 .reticle-offer{margin:8px 10px;padding:10px 12px;border:1px solid var(--reticle-line,#2a2f3a);border-radius:10px;background:var(--reticle-surface-inset,rgba(255,255,255,.03));}
-.reticle-offer-head{display:flex;align-items:center;justify-content:space-between;gap:8px;}
-.reticle-offer-title{font-weight:600;font-size:12px;}
-.reticle-offer-free{font-size:10px;padding:2px 6px;border-radius:999px;background:var(--reticle-accent,#4f7cff);color:#fff;white-space:nowrap;}
+.reticle-offer-title{display:block;font-weight:600;font-size:12px;padding-right:18px;}
 .reticle-offer-body{margin:6px 0 8px;font-size:11px;line-height:1.45;opacity:.8;}
-.reticle-offer-actions{display:flex;align-items:center;gap:8px;}
-.reticle-offer-claim{font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;background:var(--reticle-accent,#4f7cff);color:#fff;text-decoration:none;}
-.reticle-offer-dismiss{font-size:11px;padding:4px 8px;border-radius:6px;background:none;border:0;color:inherit;opacity:.6;cursor:pointer;}
-.reticle-offer-dismiss:hover{opacity:1;}
+.reticle-offer-claim{display:inline-block;font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;background:var(--reticle-accent,#4f7cff);color:#fff;text-decoration:none;}
 .reticle-offer-claimed{margin:6px 10px;font-size:10px;opacity:.6;}
 `;

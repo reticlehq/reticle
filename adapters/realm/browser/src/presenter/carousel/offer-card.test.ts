@@ -1,14 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import {
-  OFFER_ATTR,
-  OFFER_CLAIM_ATTR,
-  OFFER_DISMISSED_KEY,
-  OFFER_DISMISS_ATTR,
-  OFFER_SLOT_ATTR,
-  OFFER_TEXT,
-  offerHtml,
-  paintOffer,
-} from './presenter-offer.js';
+import { describe, expect, it } from 'vitest';
+import { OFFER_TEXT, offerHtml } from './offer-card.js';
 
 /**
  * A dev-only overlay that nags gets switched off once and never comes back, so most of these tests
@@ -63,9 +54,11 @@ describe('when the harness offer is shown at all', () => {
 
   it('pitches the harness, with a claim link, to a user who has not claimed it', () => {
     const html = offerHtml({ claimed: false, claimUrl: CLAIM_URL }, false);
+    expect(OFFER_TEXT.HEADLINE).toBe('Get Harness free for 3 months');
     expect(html).toContain(OFFER_TEXT.HEADLINE);
-    expect(html).toContain(OFFER_TEXT.FREE);
     expect(html).toContain(OFFER_TEXT.CLAIM);
+    // The carousel closes it; a card with its own close inside a closable carousel is two answers.
+    expect(html).not.toContain(OFFER_TEXT.DISMISS);
     expect(html).toContain(CLAIM_URL);
   });
 
@@ -101,62 +94,5 @@ describe('once the offer has been claimed', () => {
 
   it('says nothing when the platform did not say how long is left', () => {
     expect(offerHtml({ claimed: true }, false)).toBe('');
-  });
-});
-
-describe('painting it into the HUD', () => {
-  let slot: HTMLElement;
-  let store: Map<string, string>;
-  const storage = {
-    getItem: (k: string) => store.get(k) ?? null,
-    setItem: (k: string, v: string) => void store.set(k, v),
-  };
-
-  beforeEach(() => {
-    store = new Map();
-    document.body.innerHTML = `<div ${OFFER_SLOT_ATTR}></div>`;
-    const found = document.querySelector<HTMLElement>(`[${OFFER_SLOT_ATTR}]`);
-    if (null === found) throw new Error('no slot');
-    slot = found;
-  });
-
-  it('puts the card in the slot the shell rendered', () => {
-    paintOffer(document, { claimed: false, claimUrl: CLAIM_URL }, storage);
-    expect(slot.querySelector(`[${OFFER_ATTR}]`)).not.toBeNull();
-    expect(slot.querySelector(`[${OFFER_CLAIM_ATTR}]`)?.getAttribute('href')).toBe(CLAIM_URL);
-  });
-
-  /** Somebody who said no has answered the question — including after a reload, which is why it persists. */
-  it('remembers a dismissal and does not come back on the next push', () => {
-    paintOffer(document, { claimed: false, claimUrl: CLAIM_URL }, storage);
-    slot.querySelector<HTMLElement>(`[${OFFER_DISMISS_ATTR}]`)?.click();
-    expect(slot.innerHTML).toBe('');
-    expect(store.get(OFFER_DISMISSED_KEY)).toBe('1');
-
-    paintOffer(document, { claimed: false, claimUrl: CLAIM_URL }, storage);
-    expect(slot.innerHTML).toBe('');
-  });
-
-  /** A private window throws on both accessors; the HUD is not allowed to care. */
-  it('still paints when the browser refuses local storage', () => {
-    const hostile = {
-      getItem: () => {
-        throw new Error('denied');
-      },
-      setItem: () => {
-        throw new Error('denied');
-      },
-    };
-    paintOffer(document, { claimed: false, claimUrl: CLAIM_URL }, hostile);
-    expect(slot.querySelector(`[${OFFER_ATTR}]`)).not.toBeNull();
-    expect(() => {
-      slot.querySelector<HTMLElement>(`[${OFFER_DISMISS_ATTR}]`)?.click();
-    }).not.toThrow();
-  });
-
-  it('clears an earlier card when the daemon stops reporting an offer', () => {
-    paintOffer(document, { claimed: false, claimUrl: CLAIM_URL }, storage);
-    paintOffer(document, undefined, storage);
-    expect(slot.innerHTML).toBe('');
   });
 });
