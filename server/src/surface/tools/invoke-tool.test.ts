@@ -89,6 +89,27 @@ describe('runTool — universal session-health invariant', () => {
     expect(r.session.throttled).toBe(false); // not overwritten
   });
 
+  /**
+   * Driven: after a full navigation every response said `throttled: true`, "tab hidden", on a focused
+   * tab that `reticle_session list` called healthy a moment later. The block was read from the
+   * Session object resolved BEFORE the call, and a document that unloads reports itself hidden on the
+   * way out. The page the agent is now driving is the one registered under that id.
+   */
+  it('describes the session registered now, not the document that unloaded during the call', async () => {
+    const departed = throttledSession({ id: 'tab' });
+    const arrived = throttledSession({
+      id: 'tab',
+      health: () => ({ lastSeenMs: 40, throttled: false, focused: true }),
+    });
+    const deps = fakeDeps(departed);
+    (deps.sessions as Partial<SessionManager>).get = (id: string) =>
+      'tab' === id ? arrived : undefined;
+    const r = (await runTool(stubTool(ReticleTool.NAVIGATE, { ok: true }), deps, {})) as {
+      session?: unknown;
+    };
+    expect('session' in r).toBe(false);
+  });
+
   it('4: never corrupts a non-object result (array / primitive pass through)', async () => {
     const name = ReticleTool.ACT;
     expect(await runTool(stubTool(name, [1, 2, 3]), fakeDeps(), {})).toEqual([1, 2, 3]);

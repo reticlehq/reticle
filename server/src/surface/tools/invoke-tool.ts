@@ -675,7 +675,14 @@ export async function runTool<Ext>(
   if (!bound || !isPlainObject(result)) return result;
   // Reuse the session resolved above so the health envelope describes the SAME session the handler
   // drove; only re-resolve if the up-front attempt failed but the handler somehow succeeded.
-  const resolved = session ?? deps.sessions.resolve(rawSessionId);
+  const driven = session ?? deps.sessions.resolve(rawSessionId);
+  // ...unless the call replaced that document. A full navigation or reload registers a NEW Session
+  // under the same id (or under the id the result reports it arrived at), and the object resolved
+  // before the call is the page that unloaded: it reported itself hidden on the way out, so every
+  // response after a navigation said "throttled" about a tab that was fine. Describe what is there
+  // now. Optional-called because a test double is a partial SessionManager.
+  const arrivedId = 'string' === typeof result['sessionId'] ? result['sessionId'] : driven.id;
+  const resolved = deps.sessions.get?.(arrivedId) ?? driven;
   const envelope: Record<string, unknown> = {};
   // The health block is idempotent: add it only when the handler didn't already include a `session`.
   if (!('session' in result)) Object.assign(envelope, healthEnvelope(resolved));

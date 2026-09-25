@@ -52,6 +52,7 @@ import {
 } from '@/portal/session/output-budget.js';
 import {
   annotateStarvedFailure,
+  currentOf,
   healthEnvelope,
   bufferEnvelope,
 } from '@/portal/session/session-health.js';
@@ -599,7 +600,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         ...coverage,
         // The SAME pointer the journal keeps, not a second lookup — one verdict, one file:line.
         ...(verdictEffect.source === undefined ? {} : { source: verdictEffect.source }),
-        ...healthEnvelope(session),
+        ...healthEnvelope(currentOf(deps.sessions, session)),
         ...bufferEnvelope(session),
       });
     },

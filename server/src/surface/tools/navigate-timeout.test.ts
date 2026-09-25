@@ -89,3 +89,17 @@ describe('reticle_navigate spends the caller’s timeout_ms on arrival', () => {
     expect(out).toMatchObject({ ok: true, confirmed: false, waitedMs: 0 });
   });
 });
+
+/**
+ * Driven on the bench app: `reticle_navigate { url: "/?tab=A&step=6" }` answered `confirmed:false`
+ * after its whole budget while the tab was back at that address on the second look. The arrival scan
+ * compared against the RELATIVE url the agent passed; parsing it threw, and a throw read as "not the
+ * same page". Every navigation given a path instead of a full URL could never confirm.
+ */
+describe('reticle_navigate confirms a relative url', () => {
+  it('resolves the path against the tab it navigated before looking for arrival', async () => {
+    const { deps } = fakeDeps(2);
+    const out = await nav?.handler(deps, { url: '/dashboard', timeout_ms: 1_000 });
+    expect(out).toMatchObject({ ok: true, confirmed: true, sessionId: 's-new' });
+  });
+});

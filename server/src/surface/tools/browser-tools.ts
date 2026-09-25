@@ -2,6 +2,7 @@ import { carryReticleIdentity } from './lease-tools.js';
 import { z } from 'zod';
 import { navigateResult } from './act/navigation/navigate-result.js';
 import {
+  absoluteTarget,
   awaitArrival,
   idsAtTarget,
   ARRIVAL_TIMEOUT_MS,
@@ -103,7 +104,8 @@ export const BROWSER_TOOLS: ToolDef[] = [
       // Sampled BEFORE dispatch, because that is the only moment it can be known. A session already
       // sitting on the target is not evidence that THIS navigation arrived — and the arrival scan,
       // which reads whatever is at the target afterwards, cannot tell the two apart on its own.
-      const priorIds = idsAtTarget(deps.sessions, url);
+      const target = absoluteTarget(url, session.url);
+      const priorIds = idsAtTarget(deps.sessions, target);
       session.beginAction(ReticleTool.NAVIGATE, { url });
       // Same floor as the reload path above, for the same reason: going to a new URL replaces the
       // document just as thoroughly. `beginAction` attributes events to this action; it does not move
@@ -125,7 +127,7 @@ export const BROWSER_TOOLS: ToolDef[] = [
           true === result.ok
             ? await awaitArrival(
                 deps.sessions,
-                url,
+                target,
                 { navigatedId: session.id, priorIds },
                 timeoutMs,
               )

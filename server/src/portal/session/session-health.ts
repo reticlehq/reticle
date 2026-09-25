@@ -121,6 +121,20 @@ export function bufferEnvelope(session: HealthSubject): BufferEnvelope {
   return { buffer: { held: total, dropped, note: BUFFER_EVICTION_WARNING } };
 }
 
+/**
+ * The session registered under `session.id` NOW, for describing a tab after a call that may have
+ * replaced its document. A reload or full navigation registers a new Session under the same id, and
+ * the object a handler resolved first is the page that unloaded; it reported itself hidden on the way
+ * out, so its health said "throttled" about a tab that was fine. Optional-called because test doubles
+ * are partial registries.
+ */
+export function currentOf<S extends { id: string }>(
+  registry: { get?: (id: string) => S | undefined },
+  session: S,
+): S {
+  return registry.get?.(session.id) ?? session;
+}
+
 /** The `session` (and optional throttled `warning`) block spliced onto act/assert results. */
 interface HealthEnvelope {
   session?: SessionHealth;

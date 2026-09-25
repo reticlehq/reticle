@@ -95,7 +95,7 @@ import {
   PredicateSchema,
 } from '@reticlehq/engine/question/predicate/predicate.js';
 import { sessionVerdictFacts } from '@/portal/session/session-verdict-facts.js';
-import { healthEnvelope, refuseIfThrottled } from '@/portal/session/session-health.js';
+import { currentOf, healthEnvelope, refuseIfThrottled } from '@/portal/session/session-health.js';
 import {
   pausedShortCircuit,
   pausedOutputShape,
@@ -979,7 +979,7 @@ export const ACT_TOOLS: ToolDef[] = [
           ...(0 === greenRadius.length ? {} : { blastRadius: greenRadius }),
           since,
           ...(session.id === actedSessionId ? {} : { sessionId: session.id }),
-          ...healthEnvelope(session),
+          ...healthEnvelope(currentOf(deps.sessions, session)),
         });
       } finally {
         acted.finishAction(

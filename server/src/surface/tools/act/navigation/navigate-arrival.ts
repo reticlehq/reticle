@@ -47,6 +47,19 @@ function samePage(a: string, b: string): boolean {
 }
 
 /**
+ * The navigation target as an absolute URL, resolved against the tab being navigated — the same
+ * resolution the browser applies. An agent passes a path (`/orders?id=4`) as often as a full URL,
+ * and `samePage` cannot parse a path, so without this a relative navigation could never confirm.
+ */
+export function absoluteTarget(target: string, base: string): string {
+  try {
+    return new URL(target, base).href;
+  } catch {
+    return target;
+  }
+}
+
+/**
  * Which session an arrival may be attributed to.
  *
  * Arrival means a session is at the target BECAUSE OF THIS NAVIGATION. The scan had no notion of
