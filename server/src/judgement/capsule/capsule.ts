@@ -1,4 +1,4 @@
-import { ConsequenceKind, EventType, type ReticleEvent } from '@reticlehq/core';
+import { ConsequenceKind, EventType, redactUrl, type ReticleEvent } from '@reticlehq/core';
 import { isDocumentInitiated } from '@reticlehq/engine/question/predicate/predicate-eval.js';
 import { causalSummary, type CausalSummary } from './causal-summary.js';
 import { firstDivergence, type Divergence, type ExpectedLink } from './divergence.js';
@@ -68,7 +68,7 @@ export function blastRadius(
       // navigation is a couple of hundred of them. IPC and beacons carry an initiator too, and stay.
       if (isDocumentInitiated(event)) continue;
       const method = event.data['method'];
-      add(`net ${'string' === typeof method ? method : 'request'} ${url}`);
+      add(`net ${'string' === typeof method ? method : 'request'} ${redactUrl(url)}`);
       continue;
     }
     const name = event.data['name'];

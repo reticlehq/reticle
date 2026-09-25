@@ -104,6 +104,19 @@ describe('what a passing action also did', () => {
     expect(result.blastRadius).toEqual(['net DELETE /api/cart']);
   });
 
+  it('does not serialize an embedded image into the tool response', async () => {
+    const result = await act([
+      event(EventType.SIGNAL, { name: SIGNAL }),
+      event(EventType.NET_REQUEST, {
+        method: 'POST',
+        url: `data:image/png;base64,${'A'.repeat(48_219)}`,
+        status: 200,
+      }),
+    ]);
+    expect(result.blastRadius).toEqual(['net POST data:image/png;base64,<…48219 bytes…>']);
+    expect(JSON.stringify(result).length).toBeLessThan(1_000);
+  });
+
   it('stays silent when nothing outside the declaration moved', async () => {
     // A field that is always present teaches a reader to skim it; the presence IS the signal.
     const result = await act([event(EventType.SIGNAL, { name: SIGNAL })]);

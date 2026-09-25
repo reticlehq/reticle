@@ -161,6 +161,23 @@ const SENSITIVE_PATH_SEGMENT =
 /** Only mask a following segment that looks token-like — short ids/words (`reset/form`) are left alone. */
 const PATH_TOKEN_MIN_LENGTH = 12;
 
+function utf8Length(value: string): number {
+  return new TextEncoder().encode(value).byteLength;
+}
+
+function summarizeEmbeddedUrl(raw: string): string | undefined {
+  if (/^blob:/i.test(raw)) return `blob:<…${String(utf8Length(raw))} bytes…>`;
+  if (!/^data:/i.test(raw)) return undefined;
+
+  const comma = raw.indexOf(',');
+  const header = -1 === comma ? raw.slice(5) : raw.slice(5, comma);
+  const [candidateType = '', ...parameters] = header.split(';');
+  const mediaType = /^[\w.+-]+\/[\w.+-]+$/.test(candidateType) ? candidateType : 'text/plain';
+  const encoding = parameters.some((value) => 'base64' === value.toLowerCase()) ? ';base64' : '';
+  const payload = -1 === comma ? '' : raw.slice(comma + 1);
+  return `data:${mediaType}${encoding},<…${String(utf8Length(payload))} bytes…>`;
+}
+
 /**
  * Redact credential-bearing values in a URL so they don't leak into the agent transcript / flow / run
  * artifacts: query params (`?access_token=…`, signed-URL keys), the authority's userinfo, path-embedded
@@ -180,6 +197,9 @@ export function redactUrl(
   raw: string,
   isSensitive: (key: string) => boolean = isSensitiveKey,
 ): string {
+  const embeddedSummary = summarizeEmbeddedUrl(raw);
+  if (embeddedSummary !== undefined) return embeddedSummary;
+
   const hashStart = raw.indexOf('#');
   const hash = -1 === hashStart ? '' : raw.slice(hashStart);
   const beforeHash = -1 === hashStart ? raw : raw.slice(0, hashStart);
@@ -268,6 +288,7 @@ export function netUrlFields(
   isSensitive: (key: string) => boolean = isSensitiveKey,
 ): { url: string } | { url: string; urlRaw: string } {
   const url = redactUrl(raw, isSensitive);
+  if (/^(?:data|blob):/i.test(raw)) return { url };
   return url === raw ? { url } : { url, [URL_RAW]: raw };
 }
 
