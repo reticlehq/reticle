@@ -21,7 +21,6 @@
  */
 import { z } from 'zod';
 import { IntentSchema, type Intent } from '@reticlehq/core/artifacts';
-import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { subjectFor, UNSORTED_SUBJECT } from './intent-subject.js';
 
 const INTENT_SHARD_VERSION = 1;
@@ -100,7 +99,6 @@ const IntentIndexEntrySchema = z.object({
     IntentStatus.STALE,
   ]),
 });
-export type IntentIndexEntry = z.infer<typeof IntentIndexEntrySchema>;
 
 export const IntentIndexSchema = z.object({
   version: z.literal(INTENT_SHARD_VERSION),
@@ -113,8 +111,6 @@ export const emptyShard = (subject: string): IntentShard => ({
   subject,
   intents: {},
 });
-
-export const emptyIndex = (): IntentIndex => ({ version: INTENT_SHARD_VERSION, entries: [] });
 
 /** The verification lifecycle a legacy record carried, mapped onto the settledness axis. */
 export const statusFromState = (state: Intent['state']): IntentStatus =>
@@ -168,18 +164,4 @@ const sortKeys = (value: unknown): unknown => {
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)),
   );
-};
-
-/** Read + validate one JSON file, failing soft: a hand-merged file with a conflict marker is real. */
-export const readJsonFile = async <T>(
-  fs: FileSystemPort,
-  path: string,
-  parse: (raw: unknown) => T,
-  fallback: T,
-): Promise<T> => {
-  try {
-    return parse(JSON.parse(await fs.readFile(path)) as unknown);
-  } catch {
-    return fallback;
-  }
 };

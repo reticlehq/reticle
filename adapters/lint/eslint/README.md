@@ -53,7 +53,7 @@ Report message: `store mutation without a mapped Reticle signal`.
 | Option | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `mutators` | `string[]` | `[]` | Callee names that mutate user-visible state. |
-| `signalCallee` | `string \| string[]` | `['reticleSignal', 'signal']` | Callee name(s) that count as firing an Reticle signal. |
+| `signalCallee` | `string \| string[]` | `['reticleSignal', 'signal']` | Callee name(s) that count as firing a Reticle signal. |
 
 With no options, `mutators` is empty, so the rule is a safe **no-op** (it never fires and never crashes). Configure `mutators` to switch it on.
 

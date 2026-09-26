@@ -75,10 +75,9 @@ const BURST_MAX_GAP_MS = 500;
 
 export const ACT_SEQUENCE_TOOL: ToolDef = {
   name: ReticleTool.ACT_SEQUENCE,
-  // The example is required for a core tool, and this one carries weight: the measured loop it
-  // replaces is literally a login form driven as three separate reticle_act calls (98 clicks and
-  // 21 fills inside looping sessions, 2026-08-10/11). Showing fill -> fill -> click is showing the
-  // exact shape an agent otherwise spends three round trips on.
+  // The example is required for a core tool, and this one carries weight: the loop it replaces is
+  // a login form driven as three separate reticle_act calls. Showing fill -> fill -> click is showing
+  // the exact shape an agent otherwise spends three round trips on.
   example: {
     steps: [
       { ref: 'e12', action: 'fill', args: { value: 'a@b.com' } },

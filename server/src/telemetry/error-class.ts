@@ -2,9 +2,8 @@
  * Whose defect was that tool error?
  *
  * `toolErrors` was one number covering three failures with three different fixes, so the top-line
- * count could be acted on only by unpacking `errors[]` by hand and reading the prose. Measured over
- * 2026-08-10/11: 60 `state`, 22 `refusal`, 20 `schema` (serialized zod arrays) and 20 stale refs.
- * Read as "126 tool errors" that hides the sixth of them where OUR schema failed to explain itself —
+ * count could be acted on only by unpacking `errors[]` by hand and reading the prose. Read as one
+ * number, it hides the share where OUR schema failed to explain itself (serialized zod arrays),
  * which is the only bucket we can fix by writing better descriptions.
  *
  * Classified from the message SHAPE, never stored raw: this returns a bucket, and the caller keeps

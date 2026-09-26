@@ -45,7 +45,7 @@ export const requireSignalOnMutation = createRule<Options, MessageIds>({
     type: 'problem',
     docs: {
       description:
-        'Require an Reticle signal alongside any user-visible store mutation so the signal layer cannot drift.',
+        'Require a Reticle signal alongside any user-visible store mutation so the signal layer cannot drift.',
     },
     schema: OPTIONS_SCHEMA as [],
     messages: {

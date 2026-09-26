@@ -177,8 +177,8 @@ export function flowExpectToPredicate(success: FlowExpect): Predicate | undefine
   }
 
   if (success.route !== undefined) {
-    // The mirror of `predicateToExpect`'s ROUTE case. Replay evaluates predicates, so carrying the
-    // route back here is the whole of what makes a recorded navigation able to fail.
+    // Replay evaluates predicates, so carrying the route back here is the whole of what makes a
+    // recorded navigation able to fail.
     const route: { kind: typeof PredicateKind.ROUTE; pathname?: string; contains?: string } = {
       kind: PredicateKind.ROUTE,
     };
