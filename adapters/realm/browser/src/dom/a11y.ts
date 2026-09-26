@@ -346,9 +346,23 @@ function selfHidden(el: Element): boolean {
   return false;
 }
 
+/** A closed details element renders only its first direct summary child. */
+function hiddenByClosedDetails(el: Element): boolean {
+  const parent = el.parentElement;
+  if (null === parent || 'details' !== parent.localName || parent.hasAttribute('open'))
+    return false;
+  if ('summary' !== el.localName) return true;
+  let sibling = el.previousElementSibling;
+  while (sibling !== null) {
+    if ('summary' === sibling.localName) return true;
+    sibling = sibling.previousElementSibling;
+  }
+  return false;
+}
+
 /**
- * Whether the element is actually visible (not display:none/hidden/aria-hidden/opacity:0), walking to
- * root. This is an O(depth) forced-style walk PER node; `memo` (optional, scoped to ONE synchronous
+ * Whether the element is actually visible (not display:none/hidden/aria-hidden/opacity:0 or native
+ * collapsed-details content), walking to root. This is an O(depth) forced-style walk PER node; `memo` (optional, scoped to ONE synchronous
  * query pass) caches the full inherited result per element so a broad state-filtered query stops
  * re-resolving getComputedStyle up the same ancestor chain for every sibling. Sound because the DOM is
  * static for the pass's duration — the cache MUST be a per-call Map, never module-level (that would go
@@ -376,10 +390,11 @@ export function isVisible(el: Element, memo?: Map<Element, boolean>): boolean {
   const cached = memo?.get(el);
   if (cached !== undefined) return cached;
   const parent = el.parentElement;
-  // Each cached boolean already folds in that node's own aria-hidden/[hidden]/display/visibility/opacity,
+  // Each result includes this node's own hidden styles and whether closed-details content hides it,
   // so inherited visibility composes by AND up the chain and a sibling short-circuits at the first
   // cached ancestor.
-  const result = !selfHidden(el) && (null === parent || isVisible(parent, memo));
+  const result =
+    !selfHidden(el) && !hiddenByClosedDetails(el) && (null === parent || isVisible(parent, memo));
   if (memo !== undefined) memo.set(el, result);
   return result;
 }
