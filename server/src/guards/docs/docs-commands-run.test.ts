@@ -52,7 +52,14 @@ function textFiles(dir: string, out: string[] = []): string[] {
  * at the file. Rule 13's "fix the ONE shared function" case: widen the input, do not write a
  * second guard.
  */
-const ROOT_DOCS = ['README.md', 'SKILL.md', 'MIGRATION.md', 'CONTRIBUTING.md', 'RELEASING.md'];
+const ROOT_DOCS = [
+  'README.md',
+  'SKILL.md',
+  'plugin/SKILL.md',
+  'MIGRATION.md',
+  'CONTRIBUTING.md',
+  'RELEASING.md',
+];
 
 function sources(): string[] {
   const out = ROOT_DOCS.map((name) => join(REPO, name));
@@ -184,6 +191,92 @@ describe('every command the docs tell a reader to run is one the CLI still accep
     expect(
       rejected,
       `these documented commands no longer parse. A reader pasting them gets an error:\n${rejected.join('\n')}`,
+    ).toEqual([]);
+  });
+});
+
+/**
+ * Flag *names*, including on template lines that `isTemplate` skips.
+ *
+ * #991 shipped because the skill told agents `init --flow "<the journey worth proving>"` and this
+ * file dropped the line for containing `<`. Placeholder values are irrelevant; the flag name is
+ * what gets renamed or retired. Every `--flag` token in a documented invocation, template or not,
+ * has to be a flag the parser still accepts for that command.
+ *
+ * A fence marked as the old form is history, the same way `documentedCommands` treats it. `MIGRATION.md`
+ * shows `init --flow` under **Before:** because that is the command that stopped working. Counting it
+ * here fails the guard on a line the migration guide is required to keep.
+ */
+const FLAG_NAME = /--[a-z0-9-]+/g;
+
+interface DocFlag {
+  file: string;
+  line: number;
+  raw: string;
+  command: string;
+  flag: string;
+}
+
+function documentedFlags(): DocFlag[] {
+  const found: DocFlag[] = [];
+  for (const file of sources()) {
+    let fence: string | null = null;
+    let historical = false;
+    const lines = readFileSync(file, 'utf8').split('\n');
+    lines.forEach((line, i) => {
+      const open = /^\s*```(\w*)/.exec(line);
+      if (open) {
+        if (null === fence) {
+          const above = lines
+            .slice(0, i)
+            .reverse()
+            .find((prev) => 0 < prev.trim().length);
+          historical = above !== undefined && HISTORICAL.test(above);
+        }
+        fence = null === fence ? (open[1] ?? '') : null;
+        return;
+      }
+      if (null === fence || !RUNNABLE_FENCES.has(fence) || historical) return;
+      const m = INVOCATION.exec(line.replace(/\s+#.*$/, ''));
+      const rest = m?.[1];
+      if (rest === undefined) return;
+      const command = tokenize(rest)[0] ?? '';
+      if (command.includes('<') || command.includes('[')) return;
+      for (const flag of rest.match(FLAG_NAME) ?? []) {
+        found.push({
+          file: file.replace(REPO, ''),
+          line: i + 1,
+          raw: line.trim(),
+          command,
+          flag,
+        });
+      }
+    });
+  }
+  return found;
+}
+
+describe('every --flag the docs name is one the CLI still accepts', () => {
+  const flags = documentedFlags();
+
+  it('finds documented flags to check', () => {
+    expect(flags.length).toBeGreaterThan(5);
+  });
+
+  it('rejects unknown or retired flag names, including on template lines', () => {
+    const rejected: string[] = [];
+    for (const f of flags) {
+      const result = parseCliArgs([f.command, f.flag], 4400);
+      if ('error' !== result.kind) continue;
+      const first = result.message.split('\n')[0] ?? '';
+      const namesTheFlag =
+        first === `unknown argument '${f.flag}'` || first.startsWith(`${f.flag} is no longer`);
+      if (!namesTheFlag) continue;
+      rejected.push(`${f.file}:${f.line}: ${f.raw}\n    → ${first}`);
+    }
+    expect(
+      rejected,
+      `these documented flags are unknown or retired. A reader pasting them gets an error:\n${rejected.join('\n')}`,
     ).toEqual([]);
   });
 });
