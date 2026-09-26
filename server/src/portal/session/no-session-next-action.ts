@@ -108,8 +108,8 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
       0 === listening.length
         ? ''
         : only === undefined
-          ? ` An app is already listening on ${listening.join(', ')}; just open the URL the human names — do not start a second stack.`
-          : ` An app is already listening on ${String(only)}; just open ${LOCALHOST}:${String(only)} — do not start a second stack.`;
+          ? ` Something is serving a page on :${listening.join(', ')}; it may not be this app — open the URL the human names rather than starting a second stack.`
+          : ` Something is serving a page on :${String(only)}; it may not be this app — just open ${LOCALHOST}:${String(only)} rather than starting a second stack.`;
     return {
       action: NoSessionAction.REOPEN_APP,
       ...(only === undefined
@@ -274,12 +274,12 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
     command: `${OPEN_COMMAND} ${LOCALHOST}:${String(only)}`,
     port: only,
     reason: neverConnected
-      ? 'this project is wired and a dev server is listening, but no app has ever connected to ' +
+      ? 'this project is wired and something is listening on that port (it may not be this app), but no app has ever connected to ' +
         'this daemon — Reticle only ever sees a page a browser has LOADED, and nothing has loaded ' +
         'one. If opening it does not produce a session, the dev server is older than the Reticle ' +
         'plugin and its bundle carries no SDK: restart the dev server (do not rely on HMR) and ' +
         'load the page again.'
-      : 'this project is wired and a dev server is listening — Reticle only ever sees a page a ' +
+      : 'this project is wired and something is listening on that port (it may not be this app) — Reticle only ever sees a page a ' +
         'browser has LOADED, and nothing has loaded one.',
   };
 }

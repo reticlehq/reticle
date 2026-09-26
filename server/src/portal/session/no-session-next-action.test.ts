@@ -161,8 +161,9 @@ describe('nextActionFor', () => {
     });
     expect(next.action).toBe(NoSessionAction.REOPEN_APP);
     expect(next.reason).toContain('5173');
-    expect(next.reason).toMatch(/already listening/i);
-    expect(next.reason).toMatch(/do not start a second/i);
+    expect(next.reason).toMatch(/serving a page/i);
+    expect(next.reason).toMatch(/may not be this app/i);
+    expect(next.reason).toMatch(/second stack/i);
     expect(next.command).toBe('reticle open http://localhost:5173');
     expect(next.port).toBe(5173);
   });
