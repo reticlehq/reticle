@@ -33,6 +33,14 @@ describe('refusing what could never be evaluated', () => {
     expect(reason).toContain('{"role":"button","name":"Save"}');
   });
 
+  it('preserves an additional text check in both supported role spellings', () => {
+    const reason = unevaluablePredicateReason(
+      el({ by: 'role', role: 'button', name: 'Save', text: 'Confirm' }),
+    );
+    expect(reason).toContain('{"by":"role","value":"button","name":"Save","text":"Confirm"}');
+    expect(reason).toContain('{"role":"button","name":"Save","text":"Confirm"}');
+  });
+
   it('allows a field the resolver drops but this side CAN still check', () => {
     // role/name/value/text are recoverable from the element descriptor, so they narrow the match
     // after the fact rather than making the predicate unevaluable. Refusing those would reject

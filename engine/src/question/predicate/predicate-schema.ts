@@ -132,9 +132,10 @@ export function describeUnusableElementQuery(
   query: ElementQuery,
   unusable: readonly string[],
 ): string {
+  const preservedChecks = Object.fromEntries(residualQueryChecks(query).checks);
   const roleAlternatives =
     QueryBy.ROLE === query.by && query.value === undefined && query.role !== undefined
-      ? ` For this role locator, use ${JSON.stringify({ by: QueryBy.ROLE, value: query.role, ...(query.name === undefined ? {} : { name: query.name }) })} or ${JSON.stringify({ role: query.role, ...(query.name === undefined ? {} : { name: query.name }) })}.`
+      ? ` For this role locator, use ${JSON.stringify({ by: QueryBy.ROLE, value: query.role, ...(query.name === undefined ? {} : { name: query.name }), ...preservedChecks })} or ${JSON.stringify({ role: query.role, ...(query.name === undefined ? {} : { name: query.name }), ...preservedChecks })}.`
       : '';
   return (
     `the element locator ignores ${unusable.map((field) => `\`${field}\``).join(', ')} ` +
