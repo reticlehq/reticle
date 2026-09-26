@@ -16,7 +16,7 @@
  * nothing to report." This is that, applied one step earlier.
  */
 import { PredicateKind, type ElementQuery } from '@reticlehq/core';
-import { residualQueryChecks } from './predicate-schema.js';
+import { describeUnusableElementQuery, residualQueryChecks } from './predicate-schema.js';
 
 /** Composite predicates nest; the unusable one can be at any depth. */
 const NESTED_KEYS = ['predicates', 'predicate'] as const;
@@ -47,10 +47,8 @@ export function unevaluablePredicateReason(predicate: unknown): string | undefin
     const residual = residualQueryChecks(query);
     if (0 === residual.unusable.length) continue;
     return (
-      `the element locator ignores ${residual.unusable.map((f) => `\`${f}\``).join(', ')} ` +
-      `in ${JSON.stringify(query)} — it resolves by the first of by+value, component/source, role, ` +
-      'text, label, placeholder, testid, alt that is present, and nothing here can check the rest. ' +
-      'Assert them one locator at a time, or move the extra field into the locator. ' +
+      describeUnusableElementQuery(query, residual.unusable) +
+      ' ' +
       'Nothing was acted on: this predicate could never have been evaluated, so refusing it costs ' +
       'you nothing and spending the action on it would have cost you the verdict.'
     );

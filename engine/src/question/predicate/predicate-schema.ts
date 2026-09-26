@@ -127,6 +127,24 @@ export function residualQueryChecks(query: ElementQuery): ResidualQueryChecks {
   return { checks, unusable };
 }
 
+/** Explain an element query whose locator drops fields it cannot verify. */
+export function describeUnusableElementQuery(
+  query: ElementQuery,
+  unusable: readonly string[],
+): string {
+  const roleAlternatives =
+    QueryBy.ROLE === query.by && query.value === undefined && query.role !== undefined
+      ? ` For this role locator, use ${JSON.stringify({ by: QueryBy.ROLE, value: query.role, ...(query.name === undefined ? {} : { name: query.name }) })} or ${JSON.stringify({ role: query.role, ...(query.name === undefined ? {} : { name: query.name }) })}.`
+      : '';
+  return (
+    `the element locator ignores ${unusable.map((field) => `\`${field}\``).join(', ')} ` +
+    `in ${JSON.stringify(query)} — it resolves by the first of by+value, component/source, role, ` +
+    'text, label, placeholder, testid, alt that is present, and nothing here can check the rest.' +
+    roleAlternatives +
+    ' Assert them one locator at a time, or move the extra field into the locator.'
+  );
+}
+
 /** Does this element satisfy every field the locator dropped? */
 export function satisfiesResiduals(
   element: ElementDescriptor,

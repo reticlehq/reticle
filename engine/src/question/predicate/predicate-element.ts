@@ -15,6 +15,7 @@ import {
   type MatchResult,
 } from '@reticlehq/core';
 import {
+  describeUnusableElementQuery,
   residualQueryChecks,
   satisfiesResiduals,
   describeResidual,
@@ -103,11 +104,7 @@ export async function evalElement(
   // must say so rather than resolve to whatever the surviving half of it happened to match.
   const residual = residualQueryChecks(query);
   if (residual.unusable.length > 0) {
-    const reason =
-      `the element locator ignores ${residual.unusable.map((f) => `\`${f}\``).join(', ')} ` +
-      `in ${JSON.stringify(query)} — it resolves by the first of by+value, component/source, role, ` +
-      'text, label, placeholder, testid, alt that is present, and nothing here can check the rest. ' +
-      'Assert them one locator at a time, or move the extra field into the locator';
+    const reason = describeUnusableElementQuery(query, residual.unusable);
     return { pass: false, failureReason: reason, inconclusive: reason };
   }
   let match = await matchOnce(session, query, state);
