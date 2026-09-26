@@ -1,0 +1,7 @@
+### Fixed
+
+- **`@reticlehq/engine`: no longer imports a package it does not declare.** 3.3.0's predicate code imported `open-verification` directly while listing it only for development, so it resolved in an ordinary npm install only by hoisting, and a pnpm-strict or Yarn PnP install failed on the first predicate. It is declared now; it depends on `zod` alone. A release check now fails when a published package imports anything it does not declare.
+- **`@reticlehq/browser`: a framework adapter that throws costs one component name, not the page.** The adapter docs promised a throw was contained and the registry did not contain it; one that answered `undefined` instead of `null` was also treated as a component. Both are skipped now.
+- **Enterprise licence: the subscription contact is `hey@reticle.sh`.** The licence named an address on a domain that receives no mail.
+- **Skills: every call names a tool the default surface actually has.** Several skills still called retired names (`reticle_snapshot`, `reticle_inspect`, `reticle_network`, `reticle_state`, `reticle_sessions`, `reticle_feedback`, `reticle_act_sequence`) or a bare `reticle_lease`, and two said `reticle_verify` was not advertised when it is. The unattended skill, which has no human to recover it, was one of them.
+- **`@reticlehq/server`: `reticle help` lists `setup mcp`, `capsules` and `hunt`**, which the docs already pointed people to. A drive whose flow or run record fails to save now says so in the daemon log instead of leaving no trace.
