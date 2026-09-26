@@ -1,4 +1,14 @@
 import { driveFlowsFrom, type DriveProgram, type TapeStep } from './drive-flow.js';
+import { log } from '@/log.js';
+
+/** What a session's teardown writes to the daemon log when a by-product fails to save. */
+const SESSION_END_LOG = {
+  FLOW_SAVE_FAILED: 'reticle_drive_flow_save_failed',
+  RUN_RECORD_FAILED: 'reticle_drive_run_record_failed',
+} as const;
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 import { journalActionsPath, sessionDirPath } from '@/memory/project/dir/reticle-dir.js';
 import { asSessionId, type SessionId } from '@reticlehq/core';
 import {
@@ -185,22 +195,25 @@ export function makeSessionEnd(deps: SessionEndDeps): (session: SessionEndTarget
     // would buy under a minute of latency for a mutable handle held across two wiring sites.
     // A DRIVE IS A REGRESSION TEST, and it used to need somebody to remember to say so.
     //
-    // `record{start}` + `flow_save` is the agent-facing route and agents do not take it: the corpus
-    // measures 3 of 33 flows mutation-testable and 6 of 112 steps declaring a consequence, while the
-    // engine catches 84 of the 86 bugs it structurally can. The ceiling is how many flows EXIST that
-    // could go red, so a drive that is never saved is a regression test paid for and thrown away.
+    // `record{start}` + `flow_save` is the agent-facing route and agents do not take it: few saved
+    // flows are mutation-testable and few steps declare a consequence, while the engine catches
+    // nearly every bug it structurally can. The ceiling is how many flows EXIST that could go red,
+    // so a drive that is never saved is a regression test paid for and thrown away.
     //
     // Saved only when the tape declared a consequence — see drive-flow.ts for why the alternative is
     // a false-green factory running once per session.
     try {
       await saveDrivenFlow(deps, session);
-    } catch {
-      // a flow is a by-product of the session; failing to write one never fails the teardown
+    } catch (error: unknown) {
+      // A flow is a by-product of the session; failing to write one never fails the teardown. It is
+      // logged, because a drive that leaves no flow and no reason is otherwise undiagnosable.
+      log(SESSION_END_LOG.FLOW_SAVE_FAILED, { error: errorMessage(error) });
     }
     try {
       await recordDriveRun(deps, session);
-    } catch {
-      // an artifact is a report ABOUT the session; failing to write one never fails the teardown
+    } catch (error: unknown) {
+      // An artifact is a report ABOUT the session; failing to write one never fails the teardown.
+      log(SESSION_END_LOG.RUN_RECORD_FAILED, { error: errorMessage(error) });
     }
     try {
       // Bound the journal on disk HERE, not only at daemon start.
