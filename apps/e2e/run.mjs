@@ -169,9 +169,11 @@ if (specs.length === 0) {
 // reviewer can see. Growing it costs the same edit, which is the point: both directions are a
 // decision. Measured 2026-09-11.
 const EXPECTED_SPECS = desktop ? 3 : 39;
-if (specs.length !== EXPECTED_SPECS) {
+// The WHOLE battery is counted, not this shard's slice of it: a shard is a third of the list by
+// design, and the question here is whether the list itself shrank.
+if (listed.length !== EXPECTED_SPECS) {
   console.error(
-    `\ne2e: the ${desktop ? 'desktop' : 'web'} battery resolved to ${String(specs.length)} ` +
+    `\ne2e: the ${desktop ? 'desktop' : 'web'} battery resolved to ${String(listed.length)} ` +
       `specs and ${String(EXPECTED_SPECS)} are recorded.\n` +
       'Added one? Raise the number here in the same commit. Removed one? Lower it, and say in\n' +
       'the commit what stopped being covered — that is the sentence this check exists to force.\n',
