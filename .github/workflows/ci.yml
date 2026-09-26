@@ -647,7 +647,6 @@ jobs:
       - id: install_matrix
         run: |
           ALL='vite-react vite-vue next-app-router next-pages-router monorepo-subdir astro sveltekit cra nuxt react-router'
-          WINDOWS_BEFORE_MERGE='cra next-app-router vite-react'
           # A MERGE QUEUE entry gets the same short Windows list as the pull request, and for a
           # stronger version of the same reason.
           #
@@ -670,16 +669,23 @@ jobs:
           # on Windows, and one flaky cell (next-app-router, "SDK is in the page and never dialled
           # the bridge") ejected 13 of 17 failed queue entries, rebuilding every entry behind it.
           # Every scaffold still runs on Windows nightly and on workflow_dispatch.
+          #
+          # A PULL REQUEST runs three Linux scaffolds, one per distinct init path (Vite, Next app
+          # router, the monorepo walk-up), and one Windows scaffold that is not the flaky one. The
+          # full ten were the largest share of runner minutes and caught nothing the other jobs
+          # did not in the measured window, while starving the 20-job pool the queue also needs.
+          # The QUEUE still runs all ten on Linux before anything lands; nightly runs all ten on both.
+          PR_LINUX='vite-react next-app-router monorepo-subdir'
           case "${{ github.event_name }}" in
-            pull_request) WINDOWS="$WINDOWS_BEFORE_MERGE" ;;
-            merge_group) WINDOWS="" ;;
-            *) WINDOWS="$ALL" ;;
+            pull_request) LINUX="$PR_LINUX"; WINDOWS='vite-react' ;;
+            merge_group) LINUX="$ALL"; WINDOWS="" ;;
+            *) LINUX="$ALL"; WINDOWS="$ALL" ;;
           esac
           entries=''
-          for s in $ALL; do entries="$entries{\"os\":\"ubuntu-latest\",\"scaffold\":\"$s\"},"; done
+          for s in $LINUX; do entries="$entries{\"os\":\"ubuntu-latest\",\"scaffold\":\"$s\"},"; done
           for s in $WINDOWS; do entries="$entries{\"os\":\"windows-latest\",\"scaffold\":\"$s\"},"; done
           echo "value={\"include\":[${entries%,}]}" >> "$GITHUB_OUTPUT"
-          echo "install matrix: ubuntu=$(echo $ALL | wc -w) windows=$(echo $WINDOWS | wc -w)"
+          echo "install matrix: ubuntu=$(echo $LINUX | wc -w) windows=$(echo $WINDOWS | wc -w)"
 
   # The bot half of the client-matrix flow. A submitted record is EVIDENCE, and evidence that
   # cannot be placed — no version, no host, no error text on a failure — is decoration. Validating
