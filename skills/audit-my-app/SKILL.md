@@ -68,7 +68,7 @@ A suite of forty flows where thirty-one assert nothing is a suite that will stay
 
 ## 5. Report
 
-Lead with the counts, then one line per real finding with its `file:line` from `reticle_inspect`. Separate:
+Lead with the counts, then one line per real finding with its `file:line` from `reticle_look { action: "element" }`. Separate:
 
 - **Broken**: dead controls, contradictions, failed requests, errors thrown during the sweep.
 - **Unverified**: `untouched` controls and `assertionFree` flows. Not known to be broken; known to be unchecked.

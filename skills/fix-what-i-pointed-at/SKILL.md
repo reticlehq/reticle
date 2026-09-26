@@ -42,7 +42,7 @@ reticle_session({ action: "review", sessionId })
 1. **Read** the marks. Group them if several point at the same file: one edit often answers three.
 2. **Open** `source.file` at `source.line`. This is the whole point: no hunting for which component rendered that button.
 3. **Fix** what the `note` asks for. If the note is ambiguous, the element label and its source usually disambiguate it. Ask the human only when they genuinely do not.
-4. **Verify in the app**, do not eyeball it. Re-drive the affected control with `reticle_act_and_wait` and name the consequence, or `reticle_inspect` the element for a layout or theme complaint. A visual fix confirmed by looking at it is how the mark gets reopened.
+4. **Verify in the app**, do not eyeball it. Re-drive the affected control with `reticle_act_and_wait` and name the consequence, or `reticle_look { action: "element" }` on the element for a layout or theme complaint. A visual fix confirmed by looking at it is how the mark gets reopened.
 5. **Resolve** it:
 
 ```

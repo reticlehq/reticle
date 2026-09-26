@@ -62,7 +62,7 @@ If a server is **already** listening on that port, use it. Starting a second one
 With the MCP tools:
 
 ```
-reticle_sessions
+reticle_session { action: "list" }
 ```
 
 A listed session is the proof. Nothing else in this skill can tell you anything about the app until one appears.
@@ -70,7 +70,7 @@ A listed session is the proof. Nothing else in this skill can tell you anything 
 No session, and no human to open a tab? Take one yourself:
 
 ```
-reticle_lease { action: "acquire", url: "http://localhost:<port>/" }
+reticle_run { tool: "reticle_lease", args: { action: "acquire", url: "http://localhost:<port>/" } }
 ```
 
 The lease opens a browser Reticle owns and drives. It is the whole answer to "there is nobody here to open the page".
@@ -117,7 +117,7 @@ Stop and say which of these it is. A precise dead end beats a green report.
 | What you see | What it means |
 | --- | --- |
 | tools absent, `verify` says no saved flows | nothing to verify yet: record a flow, or report that |
-| `reticle_sessions` empty, port listening | the bundle has no SDK: restart the dev server after `init` |
+| `reticle_session { action: "list" }` empty, port listening | the bundle has no SDK: restart the dev server after `init` |
 | `verified: "unknown"`, `outcome_unread` | the response body was not recorded: check the plugin options `init` wrote |
 | lease loads the page but never connects | the app refused to dial; on a non-localhost host it needs a pairing token as well as `allowNonLocalhost` |
 
@@ -135,7 +135,7 @@ If your client offers an autonomous or goal mode, this skill is written for it. 
 Reticle is built for agents, so your experience is the signal that decides what gets fixed, and it disappears when your context does. One call, then carry on:
 
 ```
-reticle_feedback { kind: "bug" | "gap" | "ambiguity" | "feature_request" | "improvement", text: "…" }
+reticle_session { action: "feedback", kind: "bug" | "gap" | "ambiguity" | "feature_request" | "improvement" | "experience", text: "…" }
 ```
 
 Unreachable? `npx @reticlehq/server feedback --agent --kind <kind> "what happened"`. Report defects in **Reticle**; a bug you find in the app under test is Reticle working, and belongs in your answer.
