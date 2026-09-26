@@ -33,10 +33,11 @@ describe('settle is bounded — never hangs on a throttled rAF', () => {
     expect(r.settled).toBe(false);
     // `settleReason: 'timeout'` IS the bound, stated by the code rather than measured off the
     // machine. The wall-clock assertion that used to sit here added no coverage these four lines
-    // did not already have, and one load-dependent way to fail. The 5000 below catches a genuine
-    // hang and is immune to how loaded the runner is.
+    // did not already have, and one load-dependent way to fail. The timeout below catches a genuine
+    // hang. It was 5000, which the action's own settle bound plus a module re-import could exceed on
+    // a loaded Windows runner (five timeouts there, code correct); 20s still fails a real hang.
     expect(r.settleReason).toBe('timeout');
-  }, 5000);
+  }, 20_000);
 
   it('still rejects on a stale ref even when rAF never fires', async () => {
     vi.stubGlobal('requestAnimationFrame', (): number => 1);
@@ -48,7 +49,7 @@ describe('settle is bounded — never hangs on a throttled rAF', () => {
     const ref = refs.refFor(el);
     document.body.innerHTML = ''; // detach → requireElement throws
     await expect(executeAction(ref, 'click')).rejects.toThrow();
-  }, 5000);
+  }, 20_000);
 
   it('surfaces per-step settled:false in executeSequence when rAF never fires', async () => {
     vi.stubGlobal('requestAnimationFrame', (_cb: FrameRequestCallback): number => 1);
@@ -73,5 +74,5 @@ describe('settle is bounded — never hangs on a throttled rAF', () => {
     expect(res.steps.every((s) => true === s.dispatched)).toBe(true);
     expect(res.steps.every((s) => false === s.settled)).toBe(true);
     expect(res.steps.every((s) => 'timeout' === s.settleReason)).toBe(true);
-  }, 5000);
+  }, 20_000);
 });

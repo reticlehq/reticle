@@ -1,6 +1,6 @@
 import { removeTempDir } from '@/machine/temp-dir.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
@@ -91,10 +91,17 @@ describe('makeSessionEnd (teardown: flush journal + persist ambient)', () => {
     const stale = join(root, ReticleDir.VISUAL_SUBDIR, 'shot.diff.png');
     await fs.mkdir(dirname(stale));
     await fs.writeFile(stale, 'x');
+    // Explicit, distinct mtimes. Retention keeps the newest by mtime, and files written in the same
+    // millisecond tie, so on a fast CI disk the "stale" file was not reliably the oldest and this
+    // failed intermittently (including on a push to main) with the code correct.
+    const base = new Date('2026-01-01T00:00:00Z').getTime();
+    await utimes(stale, new Date(base), new Date(base));
     const kept: string[] = [];
     for (let i = 0; i < DEFAULT_DIFF_RETENTION + 2; i += 1) {
       const p = join(root, ReticleDir.VISUAL_SUBDIR, `later-${String(i)}.diff.png`);
       await fs.writeFile(p, 'x');
+      const at = new Date(base + (i + 1) * 60_000);
+      await utimes(p, at, at);
       kept.push(p);
     }
     const end = makeSessionEnd({ fs, reticleRoot: root, enabled: false });
