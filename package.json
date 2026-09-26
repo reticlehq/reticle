@@ -2,7 +2,7 @@
   "name": "reticle-monorepo",
   "version": "3.3.0",
   "private": true,
-  "description": "Reticle — the proof layer for AI agents. Observe and verify a running web app over MCP, no screenshots.",
+  "description": "Reticle \u2014 the proof layer for AI agents. Observe and verify a running web app over MCP, no screenshots.",
   "packageManager": "pnpm@10.33.2",
   "engines": {
     "node": ">=22.12"
@@ -81,7 +81,8 @@
       "electron@<43.3.0": "43.3.0",
       "brace-expansion@<1.1.18": "1.1.18",
       "brace-expansion@>=2.0.0 <2.1.4": "2.1.4",
-      "brace-expansion@>=4.0.0 <5.0.9": "5.0.9"
+      "brace-expansion@>=4.0.0 <5.0.9": "5.0.9",
+      "devalue@<5.9.2": "5.9.2"
     },
     "onlyBuiltDependencies": [
       "esbuild",

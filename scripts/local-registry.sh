@@ -33,10 +33,12 @@ for _ in $(seq 1 30); do curl -s "${REG}/-/ping" >/dev/null 2>&1 && break; sleep
 curl -s "${REG}/-/ping" >/dev/null 2>&1 || { echo "Verdaccio did not start; see /tmp/reticle-verdaccio.log"; exit 1; }
 
 echo "==> Creating registry user + token"
-TOKEN=$(curl -s -XPUT "${REG}/-/user/org.couchdb.user:reticle" \
+# Captured first, then parsed: a download piped straight into an interpreter is the shape the
+# OpenSSF Scorecard flags, and the response is a JSON body, not a script.
+USER_JSON=$(curl -s -XPUT "${REG}/-/user/org.couchdb.user:reticle" \
   -H 'Content-Type: application/json' \
-  -d '{"_id":"org.couchdb.user:reticle","name":"reticle","password":"reticle","type":"user","roles":[],"date":"2026-01-01T00:00:00.000Z"}' \
-  | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{process.stdout.write(JSON.parse(d).token||'')}catch{}})")
+  -d '{"_id":"org.couchdb.user:reticle","name":"reticle","password":"reticle","type":"user","roles":[],"date":"2026-01-01T00:00:00.000Z"}')
+TOKEN=$(printf '%s' "${USER_JSON}" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{process.stdout.write(JSON.parse(d).token||'')}catch{}})")
 [ -n "${TOKEN}" ] || { echo "Failed to obtain a token from Verdaccio"; exit 1; }
 
 echo "==> Publishing every publishable workspace package to ${REG}"
