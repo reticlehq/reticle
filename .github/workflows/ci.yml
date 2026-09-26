@@ -166,6 +166,9 @@ jobs:
   # only machine honest enough to lose the race.
   windows:
     runs-on: windows-latest
+    # Queue, main, nightly and on demand; not on every PR push. It was the slowest job left on the
+    # PR critical path, and the queue still runs it before anything reaches main.
+    if: github.event_name != 'pull_request'
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -479,6 +482,7 @@ jobs:
       desktop: ${{ steps.filter.outputs.desktop }}
       conformance: ${{ steps.filter.outputs.conformance }}
       rust: ${{ steps.filter.outputs.rust }}
+      e2e: ${{ steps.filter.outputs.e2e }}
       # WHICH scaffolds run on WHICH os, decided per event rather than hard-coded in the matrix.
       install_matrix: ${{ steps.install_matrix.outputs.value }}
     steps:
@@ -508,7 +512,8 @@ jobs:
             echo "desktop=true" >> "$GITHUB_OUTPUT"
             echo "bench=true" >> "$GITHUB_OUTPUT"
             echo "conformance=true" >> "$GITHUB_OUTPUT"
-            echo "rust=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "rust=true" >> "$GITHUB_OUTPUT"
+            echo "e2e=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           CHANGED="$(git diff --name-only "$BASE"...HEAD || true)"
           # Still fails OPEN. A base that resolves but produces nothing — a force-push, an empty
@@ -521,9 +526,17 @@ jobs:
             echo "desktop=true" >> "$GITHUB_OUTPUT"
             echo "bench=true" >> "$GITHUB_OUTPUT"
             echo "conformance=true" >> "$GITHUB_OUTPUT"
-            echo "rust=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "rust=true" >> "$GITHUB_OUTPUT"
+            echo "e2e=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           echo "changed files:"; echo "$CHANGED" | sed 's/^/  /'
+          # What the e2e battery can see: every package it boots or drives, and the apps it starts.
+          # Docs, skills, the Rust crate and fixtures it never boots cannot change its answer.
+          if echo "$CHANGED" | grep -qE '^(core|engine|server|init|open-verification|spec-runner|adapters|apps/(e2e|api|bench-app|next-smoke|atlas|examples))/|^(package\.json|pnpm-lock\.yaml|turbo\.json|\.github/workflows/ci\.yml)$'; then
+            echo "e2e=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "e2e=false" >> "$GITHUB_OUTPUT"
+          fi
           # Anything a user runs BEFORE their first session, plus the gate itself and the dependency
           # graph it installs through. Deliberately broad — the cost of a false positive is CI time,
           # the cost of a false negative is the 0%-connect class shipping again.
@@ -630,8 +643,13 @@ jobs:
           # Coverage is not reduced, it is rescheduled, exactly as it is for a pull request: the
           # nightly schedule runs every scaffold on Windows, `workflow_dispatch` runs the full matrix
           # on demand, and a queue entry is the same commit the PR run already graded.
+          # The QUEUE runs no Windows install cell. The pull request already graded the same diff
+          # on Windows, and one flaky cell (next-app-router, "SDK is in the page and never dialled
+          # the bridge") ejected 13 of 17 failed queue entries, rebuilding every entry behind it.
+          # Every scaffold still runs on Windows nightly and on workflow_dispatch.
           case "${{ github.event_name }}" in
-            pull_request|merge_group) WINDOWS="$WINDOWS_BEFORE_MERGE" ;;
+            pull_request) WINDOWS="$WINDOWS_BEFORE_MERGE" ;;
+            merge_group) WINDOWS="" ;;
             *) WINDOWS="$ALL" ;;
           esac
           entries=''
@@ -810,7 +828,10 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
-    needs: format-check
+    needs: [format-check, changes]
+    # Every non-PR event runs it. A pull request that touches none of the code the battery drives
+    # (docs, skills, a fixture it does not boot) skips it; the queue runs it again regardless.
+    if: github.event_name != 'pull_request' || needs.changes.outputs.e2e == 'true'
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -1015,7 +1036,10 @@ jobs:
   bench:
     runs-on: ubuntu-latest
     needs: [format-check, changes]
-    if: needs.changes.outputs.bench == 'true'
+    # Not on pull requests: at ~19 min it set the wall clock of nearly every code PR, and a token
+    # regression is not something a contributor can act on. The merge queue and main still run it
+    # before anything lands; `workflow_dispatch` runs it on demand.
+    if: needs.changes.outputs.bench == 'true' && github.event_name != 'pull_request'
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -1039,7 +1063,7 @@ jobs:
       # having compared nothing. That is the honest failure it is designed to produce, and it fails
       # for a missing dependency rather than a regression, which is a slow way to learn this.
       - name: Install the token proxy the observation layer measures with
-        run: python3 -m pip install --user --quiet tiktoken
+        run: python3 -m pip install --user --quiet --require-hashes -r bench/requirements.txt
       - name: Measure (observation-cost + replay), so the gate has something real to grade
         run: pnpm bench:full
       - name: Benchmark gate (catch-rate floor, no false positives, efficiency and token bounds)

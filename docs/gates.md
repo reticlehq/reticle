@@ -71,13 +71,15 @@ Which means a gate skipped locally can also be skipped in CI, if what you change
 | CI gate | runs when |
 | --- | --- |
 | `verify` (format, lint, types, unit tests) | always |
-| `windows`, `macos` | always, but only a narrow platform-sensitive slice of the tests |
+| `macos` | always, but only a narrow platform-sensitive slice of the tests |
+| `windows` | the merge queue, main, nightly and on demand; not on each pull-request push. Same narrow slice as `macos` |
+| `e2e` | a pull request that touches a package or app the battery boots; always in the merge queue and on main |
 | `rust` (Linux) | always. It is the only job in CI that compiles `adapters/realm/tauri` at all, so a skip would be a real hole |
 | `rust-macos` | only when the Rust crate changed. A second opinion on the same crate, on a runner that bills at ten times the rate |
-| `install-gate` | only when something a user runs before their first session changed |
+| `install-gate` | only when something a user runs before their first session changed. A pull request runs three Windows scaffolds; the merge queue runs none (the PR already graded them, and one flaky cell kept ejecting queue entries); nightly runs all ten |
 | the install gate's self-test | only when the gate's own machinery changed, or on a push to main. It proves the gate can still fail, and that only changes when the gate changes |
 | `desktop-e2e` | only when desktop code changed |
-| `bench` | only when something that could move the numbers changed |
+| `bench` | only when something that could move the numbers changed, and only in the merge queue and on main: it is ~19 minutes and a contributor cannot act on a token regression |
 
 ---
 

@@ -11,6 +11,12 @@ on:
     branches: [main]
   pull_request:
 
+# A superseded pull-request run holds runners the next one needs; cancel it. Pushes to main and
+# scheduled runs always finish, same rule as ci.yml.
+concurrency:
+  group: '${{ github.workflow }}-${{ github.ref }}'
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
