@@ -79,7 +79,7 @@ Which means a gate skipped locally can also be skipped in CI, if what you change
 | `install-gate` | only when something a user runs before their first session changed. A pull request runs three Windows scaffolds; the merge queue runs none (the PR already graded them, and one flaky cell kept ejecting queue entries); nightly runs all ten |
 | the install gate's self-test | only when the gate's own machinery changed, or on a push to main. It proves the gate can still fail, and that only changes when the gate changes |
 | `desktop-e2e` | only when desktop code changed |
-| `bench` | only when something that could move the numbers changed, and only in the merge queue and on main: it is ~19 minutes and a contributor cannot act on a token regression |
+| `bench` | after merge: on a push to main when something that could move the numbers changed, nightly, and on demand. It is ~19 minutes, a contributor cannot act on a token regression, and a red main run names the commit before any release |
 
 ---
 

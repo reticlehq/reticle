@@ -1089,10 +1089,12 @@ jobs:
   bench:
     runs-on: ubuntu-latest
     needs: [format-check, changes]
-    # Not on pull requests: at ~19 min it set the wall clock of nearly every code PR, and a token
-    # regression is not something a contributor can act on. The merge queue and main still run it
-    # before anything lands; `workflow_dispatch` runs it on demand.
-    if: needs.changes.outputs.bench == 'true' && github.event_name != 'pull_request'
+    # After merge, not before: on every push to main (path-routed), nightly and on demand. At ~19 min
+    # it set the wall clock of every code PR and then of the merge queue, and a token regression is
+    # not something a contributor can act on. A regression is still caught minutes after it lands and
+    # always before a release; a red main run names the commit.
+    if: >-
+      (github.event_name == 'push' && needs.changes.outputs.bench == 'true') || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
