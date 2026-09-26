@@ -143,9 +143,15 @@ BATTERY_STATUS=$?
 # the question the battery cannot: not "does a tool work" but "how often does it fail", which needs
 # repetition and idle time rather than one call. Modest numbers — this is the merge-gate sample, and
 # `pnpm gate:soak:record` is the longer run that re-records the baseline before a release.
-echo "==> soak + tool profile"
-node apps/e2e/soak.mjs --rounds "${SOAK_ROUNDS:-10}" --idle-ms "${SOAK_IDLE_MS:-1000}"
-SOAK_STATUS=$?
+# Once per battery, not once per shard: only the first shard (or an unsharded run) soaks.
+SOAK_STATUS=0
+case "${E2E_SHARD:-}" in
+  ''|1/*)
+    echo "==> soak + tool profile"
+    node apps/e2e/soak.mjs --rounds "${SOAK_ROUNDS:-10}" --idle-ms "${SOAK_IDLE_MS:-1000}"
+    SOAK_STATUS=$?
+    ;;
+esac
 
 # Report the battery's verdict first when both fail: it covers far more ground, so it is the more
 # useful thing to read. Neither is allowed to mask the other.

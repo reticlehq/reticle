@@ -132,6 +132,36 @@ jobs:
       # failure in a package nobody was editing.
       - run: pnpm lint:docs
       - run: pnpm typecheck
+      # Non-blocking: a newly-published advisory on an untouched transitive dep must not red an
+      # unrelated PR. It still runs and surfaces (warning) so the advisory is visible; act on it via
+      # a dependency bump / pnpm override, not by blocking the build.
+      - name: Security audit (advisory drift — non-blocking)
+        run: pnpm audit --audit-level high
+        continue-on-error: true
+      # format:check is its own job (format-check); running it here as well cost ~30s for nothing.
+
+  # The unit suite, in parallel with verify's static checks rather than after them. It was ~4.5 of
+  # verify's ~8 minutes, and nothing in it depends on lint or typecheck having run first.
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: .turbo
+          key: turbo-linux-unit-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            turbo-linux-unit-${{ hashFiles('pnpm-lock.yaml') }}-
+            turbo-linux-unit-
+            turbo-linux-
+      - run: pnpm build
       - run: pnpm test:unit
         # Turbo buffers each task's output and prints it only when the task finishes, so a task that
         # HANGS prints nothing at all — the v2.5.0 hang was invisible until the orphan-process list
@@ -139,13 +169,6 @@ jobs:
         # uglier and worth it: whatever hangs next says so while it is hanging.
         env:
           TURBO_LOG_ORDER: stream
-      # Non-blocking: a newly-published advisory on an untouched transitive dep must not red an
-      # unrelated PR. It still runs and surfaces (warning) so the advisory is visible; act on it via
-      # a dependency bump / pnpm override, not by blocking the build.
-      - name: Security audit (advisory drift — non-blocking)
-        run: pnpm audit --audit-level high
-        continue-on-error: true
-      - run: pnpm format:check
 
   # Windows is the MAJORITY platform and has never been tested.
   #
@@ -756,14 +779,18 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # No `pnpm build` here. The gate's first act is `pnpm -r publish`, whose prepack wipes each
+      # package's dist and rebuilds it with `tsc --force` in dependency order, so a separate build
+      # was done twice every cell (~1 min on Linux, ~1.5 on Windows). Verified by deleting every dist
+      # and running a scaffold end to end: all ten checks pass.
+      # The browser download was never cached: ~20s on Linux and over five minutes on a Windows
+      # install cell, every run. `install` is still run after a hit, so a newer Playwright fetches
+      # its own revision and `--with-deps` still provisions the Linux system libraries.
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
         with:
-          path: .turbo
-          key: turbo-linux-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
-          restore-keys: |
-            turbo-linux-${{ hashFiles('pnpm-lock.yaml') }}-
-            turbo-linux-
-      - run: pnpm build
+          path: ${{ runner.os == 'Windows' && '~\AppData\Local\ms-playwright' || '~/.cache/ms-playwright' }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: playwright-${{ runner.os }}-
       - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       # The negative control FIRST. It mis-wires each scaffold's port so no session can appear and
       # requires the gate to go red; if it passes, the gate proves nothing and the run below would be
@@ -833,6 +860,15 @@ jobs:
     # (docs, skills, a fixture it does not boot) skips it; the queue runs it again regardless.
     if: github.event_name != 'pull_request' || needs.changes.outputs.e2e == 'true'
     timeout-minutes: 30
+    # Three parallel shards of the battery (run.mjs reads E2E_SHARD). One spec, mcp-stress, is about
+    # 120s of the ~380s total; round-robin puts it with lighter specs, so the slowest shard is ~180s.
+    # The integration suite and the soak run once, in shard 1, the lightest.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ['1/3', '2/3', '3/3']
+    env:
+      E2E_SHARD: ${{ matrix.shard }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -849,11 +885,20 @@ jobs:
             turbo-linux-${{ hashFiles('pnpm-lock.yaml') }}-
             turbo-linux-
       - run: pnpm build
+      # The browser download was never cached: ~20s on Linux and over five minutes on a Windows
+      # install cell, every run. `install` is still run after a hit, so a newer Playwright fetches
+      # its own revision and `--with-deps` still provisions the Linux system libraries.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~\AppData\Local\ms-playwright' || '~/.cache/ms-playwright' }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: playwright-${{ runner.os }}-
       - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       # Headless Chromium + a multi-service boot flakes on shared runners (timing, resource
       # contention). Retry with a clean slate between attempts so a transient flake doesn't red CI;
       # a real regression still fails (it fails every attempt).
       - name: Integration suite (real-Chromium BrowserPool tests)
+        if: matrix.shard == '1/3'
         run: |
           for attempt in 1 2 3; do
             echo "::group::integration attempt $attempt"
@@ -907,7 +952,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: e2e-server-logs
+          name: e2e-server-logs-${{ strategy.job-index }}
           path: /tmp/e2e-*.log
           if-no-files-found: ignore
           retention-days: 7
@@ -1008,6 +1053,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends xvfb libgbm1 libnss3 libasound2t64
       - run: pnpm install --frozen-lockfile
+      # The browser download was never cached: ~20s on Linux and over five minutes on a Windows
+      # install cell, every run. `install` is still run after a hit, so a newer Playwright fetches
+      # its own revision and `--with-deps` still provisions the Linux system libraries.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~\AppData\Local\ms-playwright' || '~/.cache/ms-playwright' }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: playwright-${{ runner.os }}-
       - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       - run: pnpm build
       # FIRST, as the install gate's self-test is. It makes the subject answer "yes" to every
@@ -1057,6 +1110,14 @@ jobs:
             turbo-linux-${{ hashFiles('pnpm-lock.yaml') }}-
             turbo-linux-
       - run: pnpm build
+      # The browser download was never cached: ~20s on Linux and over five minutes on a Windows
+      # install cell, every run. `install` is still run after a hit, so a newer Playwright fetches
+      # its own revision and `--with-deps` still provisions the Linux system libraries.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~\AppData\Local\ms-playwright' || '~/.cache/ms-playwright' }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: playwright-${{ runner.os }}-
       - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       # The token proxy is a python package, and without it `countTokensProxy` returns null for every
       # payload — so every token dimension reads "this pass measured nothing" and the gate fails
@@ -1150,6 +1211,7 @@ jobs:
         changelog-policy,
         format-check,
         verify,
+        unit-tests,
         e2e,
         install-gate,
         matrix-records,

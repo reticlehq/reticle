@@ -70,10 +70,10 @@ Which means a gate skipped locally can also be skipped in CI, if what you change
 
 | CI gate | runs when |
 | --- | --- |
-| `verify` (format, lint, types, unit tests) | always |
+| `verify` (lint, docs lint, types) and `unit-tests` (the unit suite), in parallel; `format-check` is its own job | always |
 | `macos` | always, but only a narrow platform-sensitive slice of the tests |
 | `windows` | the merge queue, main, nightly and on demand; not on each pull-request push. Same narrow slice as `macos` |
-| `e2e` | a pull request that touches a package or app the battery boots; always in the merge queue and on main |
+| `e2e` | a pull request that touches a package or app the battery boots; always in the merge queue and on main. Split into three parallel shards (`E2E_SHARD=k/3`); the integration suite and the soak run in shard 1 |
 | `rust` (Linux) | always. It is the only job in CI that compiles `adapters/realm/tauri` at all, so a skip would be a real hole |
 | `rust-macos` | only when the Rust crate changed. A second opinion on the same crate, on a runner that bills at ten times the rate |
 | `install-gate` | only when something a user runs before their first session changed. A pull request runs three Windows scaffolds; the merge queue runs none (the PR already graded them, and one flaky cell kept ejecting queue entries); nightly runs all ten |
