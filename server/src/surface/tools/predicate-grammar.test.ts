@@ -17,6 +17,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { QueryBy } from '@reticlehq/core';
 import { PredicateSchema } from '@reticlehq/engine/question/predicate/predicate-eval.js';
 import { buildDynamicTools } from './dynamic-tools.js';
 import { ReticleTool } from '@reticlehq/core';
@@ -67,6 +68,10 @@ describe('reticle_tools carries the predicate grammar for a tool that takes one'
     // `element` is the one kind whose shape a flat field list cannot convey.
     expect(grammar['element']).toContain('query');
     expect(grammar['element']).toContain('role');
+    // #1001.2: value domains beside field names, not another round trip to learn them.
+    expect(grammar['element']).toContain('attrs: string[]');
+    expect(grammar['element']).toContain(`by: ${Object.values(QueryBy).join('|')}`);
+    expect(grammar['element']).not.toContain('css');
   });
 
   it('says nothing about predicates for a tool that does not take one', async () => {

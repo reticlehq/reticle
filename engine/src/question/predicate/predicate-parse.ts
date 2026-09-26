@@ -13,7 +13,11 @@
 
 import { z } from 'zod';
 import { PredicateKind } from '@reticlehq/core';
-import { PredicateSchema, predicateFieldsFor, predicateNestedFieldsFor } from './predicate-eval.js';
+import {
+  PredicateSchema,
+  predicateFieldsFor,
+  predicateNestedFieldHintsFor,
+} from './predicate-eval.js';
 
 /**
  * One valid call PER KIND, because an example of another kind answers a question nobody asked.
@@ -176,7 +180,7 @@ function accepted(kind: string, issues: readonly z.ZodIssue[]): string {
     // example per kind instead of a generic one. `element` is the only kind with an object-valued
     // field today, so the two agree except when the mistake is somewhere else entirely, which is
     // the case pinned in the tests.
-    const all = predicateNestedFieldsFor(kind);
+    const all = predicateNestedFieldHintsFor(kind);
     const blamed = new Set(
       issues
         .map((issue) => issue.path[0])
@@ -184,7 +188,12 @@ function accepted(kind: string, issues: readonly z.ZodIssue[]): string {
     );
     const nested = Object.entries(all)
       .filter(([field]) => blamed.has(field))
-      .map(([field, keys]) => ` ${field} accepts: ${keys.join(', ')}.`)
+      .map(([field, hints]) => {
+        const listed = Object.entries(hints)
+          .map(([key, hint]) => `${key}: ${hint}`)
+          .join(', ');
+        return ` ${field} accepts: ${listed}.`;
+      })
       .join('');
     return `${kind} accepts: ${fields.join(', ')}.${nested}`;
   }

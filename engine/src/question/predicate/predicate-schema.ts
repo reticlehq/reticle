@@ -221,14 +221,20 @@ export function isPredicateParam(schema: z.ZodTypeAny): boolean {
  * Derived from the schema, like `predicateFieldsFor` and for the same reason: a hand-written grammar
  * that drifts is worse than none, because the agent trusts it and retries into the same wall.
  */
+function formatNestedFieldHints(hints: Readonly<Record<string, string>>): string {
+  return Object.entries(hints)
+    .map(([key, hint]) => `${key}: ${hint}`)
+    .join(', ');
+}
+
 export function predicateGrammar(): Readonly<Record<string, string>> {
   const grammar: Record<string, string> = {};
   for (const kind of Object.values(PredicateKind)) {
-    const nested = predicateNestedFieldsFor(kind);
+    const nested = predicateNestedFieldHintsFor(kind);
     grammar[kind] = predicateFieldsFor(kind)
       .map((field) => {
-        const keys = nested[field];
-        return undefined === keys ? field : `${field} { ${keys.join(', ')} }`;
+        const hints = nested[field];
+        return undefined === hints ? field : `${field} { ${formatNestedFieldHints(hints)} }`;
       })
       .join(', ');
   }
@@ -246,13 +252,56 @@ export function predicateGrammar(): Readonly<Record<string, string>> {
  * none of these paths; that is exactly why they are worth a case each.
  */
 export function nestedKeysOf(schema: z.ZodTypeAny | undefined): readonly string[] {
-  if (undefined === schema) return [];
+  const hints = nestedFieldHintsOf(schema);
+  return Object.keys(hints);
+}
+
+/**
+ * A one-line type hint for a zod field, derived from the schema rather than hand-written.
+ *
+ * #1001.2: `predicateGrammar` already named `element.query` fields; without their value domains
+ * agents burned round trips learning that `by` has no `css` and `attrs` is an array.
+ */
+export function fieldHintOf(schema: z.ZodTypeAny | undefined): string {
+  if (undefined === schema) return 'unknown';
   const inner = unwrapSchema(schema);
-  // `instanceof z.ZodObject` narrows to ZodObject<any>, whose `.shape` is `any`. Name the shape
-  // type so the keys are read off something typed rather than laundering an `any` through
-  // Object.keys.
-  if (!(inner instanceof z.ZodObject)) return [];
-  return Object.keys((inner as z.ZodObject<z.ZodRawShape>).shape);
+  if (inner instanceof z.ZodString) return 'string';
+  if (inner instanceof z.ZodNumber) return 'number';
+  if (inner instanceof z.ZodBoolean) return 'boolean';
+  if (inner instanceof z.ZodArray) {
+    const item = inner._def.type as z.ZodTypeAny;
+    return `${fieldHintOf(item)}[]`;
+  }
+  if (inner instanceof z.ZodNativeEnum) {
+    return Object.values(inner.enum).join('|');
+  }
+  if (inner instanceof z.ZodEnum) {
+    return inner.options.join('|');
+  }
+  if (inner instanceof z.ZodRecord) return 'record';
+  if (inner instanceof z.ZodObject) {
+    const shape = (inner as z.ZodObject<z.ZodRawShape>).shape;
+    const parts = Object.entries(shape).map(
+      ([key, keySchema]) => `${key}: ${fieldHintOf(keySchema as z.ZodTypeAny)}`,
+    );
+    return `{ ${parts.join(', ')} }`;
+  }
+  return 'unknown';
+}
+
+/** The value-domain hint for each key of a one-level nested object field. */
+export function nestedFieldHintsOf(
+  schema: z.ZodTypeAny | undefined,
+): Readonly<Record<string, string>> {
+  if (undefined === schema) return {};
+  const inner = unwrapSchema(schema);
+  if (!(inner instanceof z.ZodObject)) return {};
+  const shape = (inner as z.ZodObject<z.ZodRawShape>).shape;
+  const hints: Record<string, string> = {};
+  for (const [key, keySchema] of Object.entries(shape)) {
+    hints[key] = fieldHintOf(keySchema as z.ZodTypeAny);
+  }
+  return hints;
 }
 
 /** Peel optional/nullable/default/effects wrappers off a field to reach the schema underneath. */
@@ -289,13 +338,25 @@ function unwrapSchema(schema: z.ZodTypeAny): z.ZodTypeAny {
 export function predicateNestedFieldsFor(
   kind: string,
 ): Readonly<Record<string, readonly string[]>> {
+  const hints = predicateNestedFieldHintsFor(kind);
+  const nested: Record<string, readonly string[]> = {};
+  for (const [field, fieldHints] of Object.entries(hints)) {
+    nested[field] = Object.keys(fieldHints);
+  }
+  return nested;
+}
+
+/** Nested object fields with a value-domain hint beside each key — what `predicateGrammar` prints. */
+export function predicateNestedFieldHintsFor(
+  kind: string,
+): Readonly<Record<string, Readonly<Record<string, string>>>> {
   const shape = shapeForKind(kind);
   if (null === shape) return {};
-  const nested: Record<string, readonly string[]> = {};
+  const nested: Record<string, Readonly<Record<string, string>>> = {};
   for (const [field, schema] of Object.entries(shape)) {
     if ('kind' === field) continue;
-    const keys = nestedKeysOf(schema);
-    if (0 < keys.length) nested[field] = keys;
+    const hints = nestedFieldHintsOf(schema as z.ZodTypeAny);
+    if (0 < Object.keys(hints).length) nested[field] = hints;
   }
   return nested;
 }
