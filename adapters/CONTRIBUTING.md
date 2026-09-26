@@ -28,10 +28,12 @@ registerAdapter({
 });
 ```
 
+Registration is all it takes at runtime, but `reticle init` only installs `@reticlehq/react`: a user of your adapter imports it themselves, next to their `connect()` call.
+
 The rules, each of which exists because breaking it produced a real bad verdict:
 
 - **Return `null` rather than a guess**, and `null` specifically: the registry takes the first adapter whose `identify` returns non-null, so returning `undefined` both stops the chain and reaches the snapshot as a value it will dereference. A source pointer is acted on, and that only holds while a pointer means something.
-- **Never throw.** An adapter that throws takes the snapshot with it, and the agent loses the page rather than one component name.
+- **Never throw.** A throw is contained, but the element then goes unidentified and every verdict about it loses its source pointer. Return `null` when you do not know.
 - **Be pure and synchronous.** This runs inside a snapshot, per element.
 
 ## lint — no registration needed

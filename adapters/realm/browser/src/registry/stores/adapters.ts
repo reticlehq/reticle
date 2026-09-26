@@ -30,11 +30,21 @@ export function registerAdapter(adapter: ReticleAdapter): void {
   if (!adapters.some((a) => a.name === adapter.name)) adapters.push(adapter);
 }
 
-/** First adapter that can identify the element wins. */
+/**
+ * First adapter that can identify the element wins.
+ *
+ * Adapters are third-party code, so each call is contained: one that throws, or answers
+ * `undefined` instead of `null`, costs that element its component name and nothing else.
+ */
 export function identifyComponent(el: Element): ComponentInfo | null {
   for (const adapter of adapters) {
-    const info = adapter.identify(el);
-    if (info !== null) return info;
+    let info: ComponentInfo | null | undefined;
+    try {
+      info = adapter.identify(el);
+    } catch {
+      continue;
+    }
+    if (info !== null && info !== undefined) return info;
   }
   return null;
 }

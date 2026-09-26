@@ -1,6 +1,11 @@
 import { registerCapabilities, setCapabilitiesListener } from '@/registry/capabilities.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { registerAdapter, elementHasHoverHandlers, type ReticleAdapter } from './adapters.js';
+import {
+  registerAdapter,
+  elementHasHoverHandlers,
+  identifyComponent,
+  type ReticleAdapter,
+} from './adapters.js';
 
 const adapters = ((
   globalThis as unknown as { __reticleAdapters?: ReticleAdapter[] }
@@ -63,5 +68,28 @@ describe('registerCapabilities notifies, so the bridge learns about a late regis
   it('is safe with no listener set', () => {
     setCapabilitiesListener(undefined);
     expect(() => registerCapabilities({ testids: ['x'] })).not.toThrow();
+  });
+});
+
+// docs/adapters.md promises a throw is contained; the registry did not contain it, so a third-party
+// adapter that threw took the whole snapshot down, and one returning undefined was passed through
+// as a component and crashed the reader of `componentStack`.
+describe('a misbehaving adapter costs one component name, never the page', () => {
+  const identified = { name: 'Pay', componentStack: ['Pay'] };
+
+  it('skips an adapter that throws and asks the next one', () => {
+    registerAdapter({
+      name: 'thrower',
+      identify: () => {
+        throw new Error('boom');
+      },
+    });
+    registerAdapter({ name: 'good', identify: () => identified });
+    expect(identifyComponent(document.createElement('button'))).toEqual(identified);
+  });
+
+  it('treats undefined as not identified', () => {
+    registerAdapter({ name: 'vague', identify: () => undefined } as unknown as ReticleAdapter);
+    expect(identifyComponent(document.createElement('button'))).toBeNull();
   });
 });
