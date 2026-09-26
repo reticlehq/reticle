@@ -1,0 +1,30 @@
+name: Dependabot auto-merge
+
+# Patch and minor bumps from Dependabot join the merge queue on their own once every required check
+# is green; the queue re-runs the full suite before anything lands. Majors wait for a human, because
+# a major is where an API or a runtime floor changes.
+#
+# `pull_request`, not `pull_request_target`: no untrusted code is checked out, and GitHub grants the
+# write permissions below only to Dependabot's own PRs.
+
+on: pull_request
+
+permissions:
+  contents: read
+
+jobs:
+  auto-merge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # enable auto-merge
+      pull-requests: write
+    steps:
+      - id: meta
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+      - if: steps.meta.outputs.update-type == 'version-update:semver-patch' || steps.meta.outputs.update-type == 'version-update:semver-minor'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto "$PR_URL"

@@ -1,0 +1,29 @@
+name: Welcome
+
+# A first issue or first pull request gets a reply straight away, with the two links a newcomer needs.
+# Nothing is checked out and no code runs from the PR, so pull_request_target is safe here.
+
+on:
+  issues:
+    types: [opened]
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  contents: read
+
+jobs:
+  welcome:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/first-interaction@1c4688942c71f71d4f5502a26ea67c331730fa4d # v3.1.0
+        with:
+          repo_token: ${{ github.token }}
+          issue_message: |
+            Thanks for opening your first issue here. A maintainer usually replies within a day. If it is a bug, the Reticle version (`npx @reticlehq/server --version`) and what you saw versus what you expected make it much faster to fix.
+          pr_message: |
+            Thanks for your first pull request to Reticle! A maintainer aims to review within two days. Before then, `pnpm verify` locally catches most of what CI will, and [CONTRIBUTING.md](https://github.com/reticlehq/reticle/blob/main/CONTRIBUTING.md) explains the rest. If CI does not start, a maintainer needs to approve it for first-time contributors; that is normal.

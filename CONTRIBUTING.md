@@ -4,7 +4,7 @@ Thanks for your interest in Reticle! Reticle is the **proof layer for AI agents*
 
 This guide covers how to set up the repo, the rules we hold the line on, and how to land a change. We aim to make contributing pleasant — if anything here is unclear, ask in [Discord](https://discord.gg/BwAbzv9ZRz) or open an issue.
 
-**Looking for something to work on?** [`good first issue`](https://github.com/reticlehq/reticle/labels/good%20first%20issue) is scoped, reviewed, and has a pointer to the file to start in. [`help wanted`](https://github.com/reticlehq/reticle/labels/help%20wanted) is bigger and unclaimed. Comment on the issue to claim it — we'll answer within a day or two, and nobody else will start on it once you have.
+**Looking for something to work on?** [`good first issue`](https://github.com/reticlehq/reticle/labels/good%20first%20issue) is scoped, reviewed, and has a pointer to the file to start in. [`help wanted`](https://github.com/reticlehq/reticle/labels/help%20wanted) is bigger and unclaimed. Comment on the issue to claim it — we'll answer within a day, and nobody else will start on it once you have. For a first contribution with no code, [`good-first-skill`](https://github.com/reticlehq/reticle/labels/good-first-skill) issues ask for one `SKILL.md` that teaches an agent a verification recipe.
 
 By participating you agree to our [Code of Conduct](CODE_OF_CONDUCT.md).
 
@@ -219,6 +219,16 @@ From there, point your MCP-capable agent at Reticle and ask it to verify the app
    This is not a style preference. `main` merges through a **merge queue**, and the queue has to replay your branch onto whatever is at the head of `main` when your turn comes. A branch carrying merge commits is not rebaseable, so the queue cannot take it, and the pull request reports itself as blocked with **every check green and no reason given** — there is nothing to fix, no failing job to read, and no message saying what is wrong. One PR sat in exactly that state for sixteen days: approved, fully green, and unmergeable, with three `Merge branch 'main'` commits on it and nobody able to say why.
 
 For anything non-trivial, **open an issue first** so we can agree on the approach before you invest time in a PR.
+
+### What you can expect from us
+
+- **A reply to a claim or a question within a day, and a first review within two days.** If a PR has waited longer, say so on it; that is on us, not you.
+- **CI on a pull request takes about ten minutes.** The slowest suites (the benchmark, Windows unit tests, the full Windows install matrix) run in the merge queue and nightly instead, so a PR you can act on is not held up by a job you cannot.
+- **Once it is approved, the merge queue lands it.** You do not need to keep rebasing while it waits.
+
+### AI-assisted contributions
+
+Welcome, on one condition: **the tests must fail without your change.** Revert your fix locally and run the test you added; if it still passes, it is not testing the fix, and a green test that proves nothing is the one defect this project exists to catch. Say in the PR description that you checked. PRs that only reformat, rename or reword without an issue behind them will be closed.
 
 ---
 

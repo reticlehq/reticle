@@ -1,0 +1,83 @@
+name: Release provenance
+
+# Attaches what npm published to the GitHub Release, with SLSA provenance for each tarball.
+#
+# The tarballs are fetched back from npm rather than rebuilt, so the attestation is about the exact
+# bytes people install. It runs after `Publish to npm` finishes (npm needs to have the version), and
+# on demand for a tag that already shipped. The OpenSSF Scorecard's Signed-Releases check reads the
+# `.intoto.jsonl` asset this writes.
+
+on:
+  workflow_run:
+    workflows: ['Publish to npm']
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to attach tarballs and provenance to (e.g. v3.3.0)'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  tarballs:
+    # Only a publish that a RELEASE triggered has a release to attach to; a hand-run publish from
+    # main does not.
+    if: >-
+      github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'release')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # upload the tarballs to the release
+    outputs:
+      hashes: ${{ steps.hash.outputs.hashes }}
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - id: tag
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: echo "tag=${INPUT_TAG:-$RUN_BRANCH}" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - name: Fetch every published tarball of this release from npm
+        run: |
+          mkdir -p release-assets
+          for manifest in $(git ls-files '*package.json' | grep -v -E '^(apps|bench|break|conformance)/|node_modules'); do
+            private=$(node -p "require('./$manifest').private === true")
+            [ "$private" = "true" ] && continue
+            name=$(node -p "require('./$manifest').name")
+            version=$(node -p "require('./$manifest').version")
+            [ "$name" = "undefined" ] && continue
+            (cd release-assets && npm pack --silent "$name@$version")
+          done
+          ls -l release-assets
+      - id: hash
+        run: |
+          cd release-assets
+          echo "hashes=$(sha256sum ./*.tgz | base64 -w0)" >> "$GITHUB_OUTPUT"
+      - name: Attach the tarballs to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: gh release upload "$TAG" release-assets/*.tgz --clobber --repo "$GITHUB_REPOSITORY"
+
+  provenance:
+    needs: tarballs
+    permissions:
+      actions: read # read the workflow run the provenance describes
+      id-token: write # sign it
+      contents: write # attach it to the release
+    # Referenced by tag, not SHA, on purpose: the SLSA generator verifies its own ref, and the
+    # Scorecard pinning check allows exactly this reusable workflow by tag.
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    with:
+      base64-subjects: ${{ needs.tarballs.outputs.hashes }}
+      upload-assets: true
+      upload-tag-name: ${{ needs.tarballs.outputs.tag }}
+      provenance-name: reticle-${{ needs.tarballs.outputs.tag }}.intoto.jsonl

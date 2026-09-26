@@ -39,6 +39,9 @@ const PR_JOBS_OUTSIDE_THE_AGGREGATE: Record<string, string> = {
   'labeler.yml': 'adds labels; nothing depends on it passing',
   'package-quality.yml': 'publint / are-the-types-wrong / SDK size budget',
   'break-gates.yml': 'the install-path gates',
+  'dependabot-auto-merge.yml':
+    'not a gate: enables auto-merge on Dependabot patch/minor PRs, which the queue still gates',
+  'welcome.yml': 'not a gate: greets a first issue or PR',
 };
 
 /**
