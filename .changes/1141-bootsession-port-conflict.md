@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/test` — `bootSession()` died with a raw `EADDRINUSE` stack when a daemon already held the port.** `reticle serve` and `bootSession` both default to port 4400, so on any set-up machine the spec run failed with node's `listen EADDRINUSE` from `node:net` and nothing saying a daemon owned the port or what to do. `bootSession` now probes the port the way the CLI does before binding: a daemon-owned port refuses with a sentence naming the port and offering the two ways out (pass `port` to `bootSession`, or run `reticle stop`), and an `EADDRINUSE` from the bind race is caught and reworded the same way. Closes [#1141](https://github.com/reticlehq/reticle/issues/1141).

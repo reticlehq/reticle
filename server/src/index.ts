@@ -936,3 +936,19 @@ export type {
 export { onHook as onReticleEvent, emitHook, hookListenerCount } from './hooks/hook-bus.js';
 export type { HookListener } from './hooks/hook-bus.js';
 export { readHookConfig } from './hooks/hook-commands.js';
+
+/**
+ * Port-presence probing, the same pair the CLI uses before binding.
+ *
+ * Exported for `@reticlehq/test`'s `bootSession`, which binds the same default port as
+ * `reticle serve`: probing first lets it refuse with a sentence that names the port and the
+ * way out, instead of dying on node's raw `listen EADDRINUSE`.
+ */
+export {
+  PortPresence,
+  probePresence,
+  presenceIsUsable,
+  describePresence,
+} from './command/daemon/binding/port-presence.js';
+export { probeDaemon } from './surface/mcp/proxy/proxy-daemon-probe.js';
+export { fetchStatus } from './command/daemon/binding/daemon-status-probe.js';
