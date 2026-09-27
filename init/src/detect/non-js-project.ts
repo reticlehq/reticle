@@ -119,9 +119,16 @@ export function detectNonJsEcosystem(exists: (file: string) => boolean): string 
  * directory, and a developer whose project is not JavaScript at all. The first needs a path; the
  * second needs to know that no path exists and why.
  */
-export function noPackageJsonMessage(exists: (file: string) => boolean): string {
+export function noPackageJsonMessage(exists: (file: string) => boolean, rootFiles: readonly string[] = []): string {
   const ecosystem = detectNonJsEcosystem(exists);
   if (ecosystem === undefined) {
+    if (rootFiles.some(file => file.endsWith('.html'))) {
+      return (
+        'This looks like a static page with no build step. ' +
+        'Add the script-tag snippet below to the page while developing, ' +
+        'and remove it before publishing (there is no dev-only guard for a static file).'
+      );
+    }
     return (
       'No package.json found here, and no app directory beneath it either. Run `reticle init` from ' +
       "your app's directory, or from a repo root that contains it."

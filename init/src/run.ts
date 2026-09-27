@@ -797,7 +797,7 @@ function runInitSteps(options: InitOptions, io: InitIo): InitResult {
         ? streamlitSetupMessage()
         : django
           ? djangoSetupMessage()
-          : noPackageJsonMessage((file) => io.exists(join(options.cwd, file))),
+          : noPackageJsonMessage((file) => io.exists(join(options.cwd, file)), io.rootFiles()),
     );
     // The message says "add the snippet below". Print the snippet, or the message is the same
     // broken promise in the other direction. `connectArg` carries the port; there is no projectId
