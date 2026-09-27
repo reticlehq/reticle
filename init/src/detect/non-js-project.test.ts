@@ -89,6 +89,28 @@ describe('the message', () => {
     expect(message).toMatch(/not a blocker/i);
   });
 
+  it('treats a lone index.html as a static page, not a wrong directory', () => {
+    const message = noPackageJsonMessage(withFiles('index.html'));
+    expect(message).not.toContain('No package.json found here');
+    expect(message).toMatch(/static page/i);
+    expect(message).toMatch(/snippet below/);
+    expect(message).toMatch(/before publishing/);
+  });
+
+  it('treats any top-level HTML file as a static page', () => {
+    const message = noPackageJsonMessage(withFiles(), ['about.html']);
+    expect(message).not.toContain('No package.json found here');
+    expect(message).toMatch(/static page/i);
+  });
+
+  it('keeps the directory advice for an empty directory', () => {
+    const message = noPackageJsonMessage(withFiles(), []);
+    expect(message).toBe(
+      'No package.json found here, and no app directory beneath it either. Run `reticle init` from ' +
+        "your app's directory, or from a repo root that contains it.",
+    );
+  });
+
   it('still points at a JS front end, because plenty of Python apps have one', () => {
     const message = noPackageJsonMessage(withFiles('manage.py'));
     expect(message).toContain('--app');
