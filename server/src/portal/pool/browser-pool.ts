@@ -277,7 +277,7 @@ export class BrowserPool {
    */
   async screenshotLease(
     sessionId: string,
-    opts: { fullPage?: boolean } = {},
+    opts: { fullPage?: boolean; clip?: { x: number; y: number; width: number; height: number } } = {},
   ): Promise<Uint8Array | undefined> {
     const lease = this.#active.get(this.#leaseIdOf(sessionId));
     if (lease === undefined || lease.page.screenshot === undefined) return undefined;

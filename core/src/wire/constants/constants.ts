@@ -468,6 +468,7 @@ export const VisualReason = {
   // an empty image rather than an error in that state, so without a name of its own it arrived as
   // an unexplained no-image and read identically to a dead window and to a thrown error.
   NOT_COMPOSITED: 'window-not-composited',
+  UNSCOPED_CLIP: 'unscoped-clip',
 } as const;
 export type VisualReason = (typeof VisualReason)[keyof typeof VisualReason];
 

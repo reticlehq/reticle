@@ -70,6 +70,13 @@ describe('the message', () => {
     expect(message).toContain("Run `reticle init` from your app's directory");
   });
 
+  it('identifies a static page when index.html is present and gives the script tag advice directly', () => {
+    const message = noPackageJsonMessage(withFiles('index.html'), ['index.html']);
+    expect(message).not.toContain('No package.json found here');
+    expect(message).toMatch(/static page/i);
+    expect(message).toMatch(/script-tag/i);
+  });
+
   it('names the ecosystem and gives it a way in, rather than a reason it cannot come', () => {
     // This used to explain, correctly and uselessly, that a server-rendered app has no JavaScript
     // build to import the SDK from. Every reader acted on it as a refusal. The SDK loads from a URL

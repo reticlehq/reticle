@@ -76,7 +76,7 @@ describe('re-running init on an existing Next install', () => {
   });
 
   it('leaves an already-current component alone', () => {
-    const step = devStep('const url = process.env.NEXT_PUBLIC_RETICLE_URL;');
+    const step = devStep('const url = process.env.NEXT_PUBLIC_RETICLE_URL; const sdkVersion = process.env.NEXT_PUBLIC_RETICLE_SDK_VERSION;');
     expect(step?.status).toBe(StepStatus.ALREADY);
   });
 

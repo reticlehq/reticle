@@ -341,6 +341,7 @@ export function patchStep(
  */
 /** The env var withReticle sets from the discovered daemon, and the component must read. */
 const NEXT_DAEMON_URL_ENV = 'NEXT_PUBLIC_RETICLE_URL';
+const NEXT_SDK_VERSION_ENV = 'NEXT_PUBLIC_RETICLE_SDK_VERSION';
 
 /**
  * The two-line edit that unfreezes an existing install's port.
@@ -352,6 +353,10 @@ const NEXT_DEV_FILE_STALE_DETAIL =
   'predates daemon discovery, so it dials the port init saw when it ran. In this file add ' +
   '`const url = process.env.NEXT_PUBLIC_RETICLE_URL;` and spread `...(url ? { url } : {})` into ' +
   'reticle.connect(), after any url already there. Nothing else needs to change.';
+
+const NEXT_SDK_VERSION_DETAIL =
+  'lacks the SDK version. In this file add `const sdkVersion = process.env.NEXT_PUBLIC_RETICLE_SDK_VERSION;` ' +
+  'and spread `...(sdkVersion ? { sdkVersion } : {})` into the reticle.connect() options.';
 
 export function nextSteps(input: PlanInput): Step[] {
   const configFile = input.nextConfigFile ?? 'next.config.mjs';
@@ -367,6 +372,10 @@ export function nextSteps(input: PlanInput): Step[] {
     true === input.nextReticleDevExists &&
     'string' === typeof input.nextReticleDevSource &&
     !input.nextReticleDevSource.includes(NEXT_DAEMON_URL_ENV);
+  const sdkVersionMissing =
+    true === input.nextReticleDevExists &&
+    'string' === typeof input.nextReticleDevSource &&
+    !input.nextReticleDevSource.includes(NEXT_SDK_VERSION_ENV);
   const devFile: Step = input.nextReticleDevExists
     ? devStale
       ? {
@@ -375,12 +384,19 @@ export function nextSteps(input: PlanInput): Step[] {
           status: StepStatus.MANUAL,
           detail: NEXT_DEV_FILE_STALE_DETAIL,
         }
-      : {
-          title: StepTitle.RETICLE_DEV_COMPONENT,
-          target: devPath,
-          status: StepStatus.ALREADY,
-          detail: 'file exists',
-        }
+      : sdkVersionMissing
+        ? {
+            title: StepTitle.RETICLE_DEV_COMPONENT,
+            target: devPath,
+            status: StepStatus.NOTICE,
+            detail: NEXT_SDK_VERSION_DETAIL,
+          }
+        : {
+            title: StepTitle.RETICLE_DEV_COMPONENT,
+            target: devPath,
+            status: StepStatus.ALREADY,
+            detail: 'file exists',
+          }
     : {
         title: StepTitle.RETICLE_DEV_COMPONENT,
         target: devPath,
