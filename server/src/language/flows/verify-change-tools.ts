@@ -227,9 +227,12 @@ export const VERIFY_CHANGE_TOOLS: ToolDef[] = [
       const extra = await inspectAfterReplay(deps, args, cursor);
       if (extra.contradictions.length > 0) {
         const kinds = extra.contradictions.map((c) => c.kind).join(', ');
+        const earned = attributedFailures(affected, unknownProvenance).length > 0;
         return {
-          verified: Verified.NO,
-          because: `every covering flow passed, but channels disagreed during the replay (${kinds}) — a green suite over a failed write is the false green worth looking at${provenanceNote}`,
+          verified: earned ? Verified.NO : Verified.UNKNOWN,
+          because: earned
+            ? `every covering flow passed, but channels disagreed during the replay (${kinds}) — a green suite over a failed write is the false green worth looking at${provenanceNote}`
+            : `channels disagreed during the replay (${kinds}), but Reticle cannot tell which sources any of the flows that ran cover (${affected.join(', ')}), so this says nothing about the files you changed. Drive the change directly; the drive is saved as a flow with its sources stamped`,
           changedFiles,
           flowsRun: affected,
           suite,
