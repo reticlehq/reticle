@@ -5,6 +5,10 @@ import { inspectChart } from './chart.js';
 import { isSensitiveKey } from '@/security/serialization.js';
 import { formatSource, sourceFromDom } from './addressing/source.js';
 
+const HTML_DETAILS_TAG = 'details';
+const HTML_SUMMARY_TAG = 'summary';
+const HTML_DETAILS_OPEN_ATTRIBUTE = 'open';
+
 /**
  * Roles whose accessible name comes from their text content (ARIA's `nameFrom: author content`).
  *
@@ -346,15 +350,25 @@ function selfHidden(el: Element): boolean {
   return false;
 }
 
+function composedParentElement(el: Element): Element | null {
+  return el.assignedSlot ?? el.parentElement;
+}
+
 /** A closed details element renders only its first direct summary child. */
 function hiddenByClosedDetails(el: Element): boolean {
-  const parent = el.parentElement;
-  if (null === parent || 'details' !== parent.localName || parent.hasAttribute('open'))
+  const parent = composedParentElement(el);
+  if (
+    null === parent ||
+    !isHtmlElement(parent) ||
+    HTML_DETAILS_TAG !== parent.localName ||
+    parent.hasAttribute(HTML_DETAILS_OPEN_ATTRIBUTE)
+  ) {
     return false;
-  if ('summary' !== el.localName) return true;
+  }
+  if (!isHtmlElement(el) || HTML_SUMMARY_TAG !== el.localName) return true;
   let sibling = el.previousElementSibling;
   while (sibling !== null) {
-    if ('summary' === sibling.localName) return true;
+    if (isHtmlElement(sibling) && HTML_SUMMARY_TAG === sibling.localName) return true;
     sibling = sibling.previousElementSibling;
   }
   return false;
@@ -389,7 +403,7 @@ export function isVisible(el: Element, memo?: Map<Element, boolean>): boolean {
   if (!el.isConnected) return false;
   const cached = memo?.get(el);
   if (cached !== undefined) return cached;
-  const parent = el.parentElement;
+  const parent = composedParentElement(el);
   // Each result includes this node's own hidden styles and whether closed-details content hides it,
   // so inherited visibility composes by AND up the chain and a sibling short-circuits at the first
   // cached ancestor.
