@@ -22,12 +22,9 @@ Trigger the rejection
 
 Name the consequence before you act, same as any Reticle drive:
 
-reticle_look({ action: "page", sessionId, mode: "interactive" })   // get refs for the field and submit control
+reticle_look({ action: "page", sessionId, mode: "interactive" }) // get refs for the field and submit control
 
-reticle_act_and_wait({ sessionId, ref, action: "fill", args: { value: "<invalid>" }, until: { kind: "allOf", predicates: [
-  { kind: "element", query: { testid: "field-error" } },
-  { kind: "element", query: { role: "button", name: "Submit" }, state: "disabled" },
-]}})
+reticle_act_and_wait({ sessionId, ref, action: "fill", args: { value: "<invalid>" }, until: { kind: "allOf", predicates: [ { kind: "element", query: { testid: "field-error" } }, { kind: "element", query: { role: "button", name: "Submit" }, state: "disabled" }, ]}})
 
 If the check is debounced or runs on blur rather than on keystroke, don't sleep for it. First use a separate reticle_act call to move focus away from the field, then use reticle_act_and_wait to wait for the validation error and disabled submit state. For debounced validation, use reticle_clock through reticle_run to advance the debounce window exactly as in test-error-states. A fixed sleep passes on your machine and flakes in CI.
 
@@ -39,9 +36,7 @@ reticle_act({ sessionId, ref, action: "click" })
 
 Use the since value returned by that reticle_act call in the network assertion:
 
-reticle_assert({ sessionId, since, predicate: {
-  kind: "net", method: "POST", urlContains: "/api/...", count: 0,
-}})
+reticle_assert({ sessionId, since, predicate: { kind: "net", method: "POST", urlContains: "/api/...", count: 0, }})
 
 Use since from the submit reticle_act result so you're not reading a request that fired before you started. A count: 0 check that runs before the app has had a chance to fire the request proves nothing; give it the same window you gave the error to appear.
 
@@ -51,10 +46,7 @@ Clear the error
 
 Correct the value and confirm the rejection was conditional, not permanent:
 
-reticle_act_and_wait({ sessionId, ref, action: "fill", args: { value: "<valid>" }, until: { kind: "allOf", predicates: [
-  { kind: "element", query: { testid: "field-error" }, absent: true },
-  { kind: "element", query: { role: "button", name: "Submit" }, state: "enabled" },
-]}})
+reticle_act_and_wait({ sessionId, ref, action: "fill", args: { value: "<valid>" }, until: { kind: "allOf", predicates: [ { kind: "element", query: { testid: "field-error" }, absent: true }, { kind: "element", query: { role: "button", name: "Submit" }, state: "enabled" }, ]}})
 
 A form that never re-enables once it has rejected something once is a second bug wearing the first one's clothes.
 
