@@ -41,7 +41,7 @@ The button looking disabled is not the same claim as the request never leaving. 
 reticle_act({ sessionId, ref: submitRef, action: "click" })
 ```
 
-Then assert the negative. Checking `count: 0` the instant after the click proves nothing on its own: the request may simply not have been sent *yet*. Give the app a real window to have tried before you trust the absence, settling first and then checking the count, in one call:
+Then assert the negative. Checking `count: 0` the instant after the click proves nothing on its own: the request may simply not have been sent _yet_. Give the app a real window to have tried before you trust the absence, settling first and then checking the count, in one call:
 
 ```
 reticle_assert({ sessionId, since, predicate: { kind: "allOf", predicates: [
