@@ -11,8 +11,8 @@
     "@astrojs/react": "^7.0.0",
     "@reticlehq/react": "workspace:*",
     "@reticlehq/vite-plugin": "workspace:*",
-    "astro": "7.3.3",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "astro": "7.3.5",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   }
 }
