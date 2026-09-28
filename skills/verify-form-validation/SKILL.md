@@ -10,13 +10,13 @@ metadata:
 
 # A rejected form still looks fine on screen
 
-Validation code is written once, glanced at in the browser with one obviously-bad value, and never driven again. The bug that ships is never the value you tried — it's the one you didn't: a field that's required but not marked `disabled` until blur, a submit button whose `disabled` is CSS-only, or a handler that fires the request before the check finishes.
+Validation code is written once, glanced at in the browser with one obviously-bad value, and never driven again. The bug that ships is never the value you tried. It's the one you didn't: a field that's required but not marked `disabled` until blur, a submit button whose `disabled` is CSS-only, or a handler that fires the request before the check finishes.
 
 **Reticle** can drive the real form and check all three failure points at once. Not installed? `RETICLE_INSTALL_SOURCE=npx_skill npx @reticlehq/server@latest init`, then the [`install-and-verify`](https://github.com/reticlehq/reticle/blob/main/skills/install-and-verify/SKILL.md) skill.
 
 ## Read this before you start: the browser's own validation can mask the app's
 
-`required`, `pattern`, `type="email"` and friends stop the browser at the constraint-validation bubble before your app's JS ever runs. If you assert on that native tooltip, you've verified the browser, not the code you're supposed to be testing. Confirm the error you're checking is the app's own element (a `testid`, a role, a rendered string) — not a `:invalid` pseudo-state — before you trust the verdict. If the form relies on native validation alone with no app-level check behind it, that's the finding: say so, don't paper over it with a predicate that happens to pass.
+`required`, `pattern`, `type="email"` and friends stop the browser at the constraint-validation bubble before your app's JS ever runs. If you assert on that native tooltip, you've verified the browser, not the code you're supposed to be testing. Confirm the error you're checking is the app's own element (a `testid`, a role, a rendered string), not a `:invalid` pseudo-state, before you trust the verdict. If the form relies on native validation alone with no app-level check behind it, that's the finding: say so, don't paper over it with a predicate that happens to pass.
 
 ## Trigger the rejection
 
@@ -31,17 +31,17 @@ reticle_act_and_wait({ sessionId, ref, action: "fill", args: { value: "<invalid>
 ]}})
 ```
 
-If the check runs on blur rather than on keystroke, move focus to a different control as its own step before asserting — `reticle_act({ sessionId, ref: otherRef, action: "focus" })` on the submit button or the next field, since focusing anything else is what fires the blur you need. If it's debounced instead, don't sleep for it — use `reticle_clock` to advance past the debounce window exactly as in [`test-error-states`](https://github.com/reticlehq/reticle/blob/main/skills/test-error-states/SKILL.md#skip-time-instead-of-sleeping). A fixed sleep passes on your machine and flakes in CI.
+If the check runs on blur rather than on keystroke, move focus to a different control as its own step before asserting: `reticle_act({ sessionId, ref: otherRef, action: "focus" })` on the submit button or the next field, since focusing anything else is what fires the blur you need. If it's debounced instead, don't sleep for it. Use `reticle_clock` to advance past the debounce window exactly as in [`test-error-states`](https://github.com/reticlehq/reticle/blob/main/skills/test-error-states/SKILL.md#skip-time-instead-of-sleeping). A fixed sleep passes on your machine and flakes in CI.
 
 ## Prove nothing fired
 
-The button looking disabled is not the same claim as the request never leaving. Don't just trust the `disabled` state you already asserted — try the submit anyway, so a fake-disabled control (CSS-only, still clickable) gets caught instead of waved through:
+The button looking disabled is not the same claim as the request never leaving. Don't just trust the `disabled` state you already asserted. Try the submit anyway, so a fake-disabled control (CSS-only, still clickable) gets caught instead of waved through:
 
 ```
 reticle_act({ sessionId, ref: submitRef, action: "click" })
 ```
 
-Then assert the negative. Checking `count: 0` the instant after the click proves nothing on its own — the request may simply not have been sent *yet* — so give the app a real window to have tried before you trust the absence: settle first, then check the count, in one call:
+Then assert the negative. Checking `count: 0` the instant after the click proves nothing on its own: the request may simply not have been sent *yet*. Give the app a real window to have tried before you trust the absence, settling first and then checking the count, in one call:
 
 ```
 reticle_assert({ sessionId, since, predicate: { kind: "allOf", predicates: [
@@ -50,7 +50,7 @@ reticle_assert({ sessionId, since, predicate: { kind: "allOf", predicates: [
 ]}})
 ```
 
-`settled` waits for network + DOM idle instead of a fixed sleep, so the assertion only resolves once the app has genuinely stopped trying to do anything — and only then does the `count: 0` mean something. Use `since` from the click's own result, not from the earlier fill, so you're scoped to requests after the submit attempt specifically.
+`settled` waits for network + DOM idle instead of a fixed sleep, so the assertion only resolves once the app has genuinely stopped trying to do anything, and only then does the `count: 0` mean something. Use `since` from the click's own result, not from the earlier fill, so you're scoped to requests after the submit attempt specifically.
 
 ## Clear the error
 
@@ -67,10 +67,10 @@ A form that never re-enables once it has rejected something once is a second bug
 
 ## What to assert
 
-Only `verified: "yes"` is a pass. `"no"` is a real finding, `"unknown"` means Reticle couldn't tell and needs a better capture, and `"no-fault"` means nothing was disproven but nothing was declared either — none of the three are evidence the form rejects bad input.
+Only `verified: "yes"` is a pass. `"no"` is a real finding, `"unknown"` means Reticle couldn't tell and needs a better capture, and `"no-fault"` means nothing was disproven but nothing was declared either. None of the three are evidence the form rejects bad input.
 
 1. **The error is the app's own**, not the browser's native bubble.
-2. **The submit control's `disabled` state is real**, not `opacity`/`cursor` styling that only looks inert — the same distinction [`design-system-compliance`](https://github.com/reticlehq/reticle/blob/main/skills/design-system-compliance/SKILL.md) draws between disabled-looking and disabled.
+2. **The submit control's `disabled` state is real**, not `opacity`/`cursor` styling that only looks inert. This is the same distinction [`design-system-compliance`](https://github.com/reticlehq/reticle/blob/main/skills/design-system-compliance/SKILL.md) draws between disabled-looking and disabled.
 3. **Zero matching requests fired**, counted, not inferred from "no error was thrown."
 4. **The rejection is conditional**: a valid value clears the error and re-enables submit.
 
