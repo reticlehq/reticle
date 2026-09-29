@@ -121,6 +121,20 @@ export type { ToolDeps, ToolDef } from './surface/tools/tools.js';
 export { createToolInvoker, UNKNOWN_TOOL_ERROR } from './surface/tools/tool-invoker.js';
 export { runTool, SESSION_BOUND_TOOLS, SESSION_EXEMPT_TOOLS } from './surface/tools/invoke-tool.js';
 export type { ToolInvoker } from './surface/tools/tool-invoker.js';
+
+/**
+ * The port-presence check the CLI commands (`drive`, `verify`, `status`, `doctor`, `kill`) all share,
+ * re-exported so a consumer embedding `start()` in its own process can refuse a taken port the same
+ * honest way instead of letting a raw `EADDRINUSE` stack out — the gap `@reticlehq/test`'s
+ * `bootSession()` had (reticlehq/reticle#1141): it called `start()` directly with no pre-flight probe.
+ */
+export {
+  probePresence,
+  describePresence,
+  PortPresence,
+} from './command/daemon/binding/port-presence.js';
+export { probeDaemon } from './surface/mcp/proxy/proxy-daemon-probe.js';
+export { fetchStatus } from './command/daemon/binding/daemon-status-probe.js';
 export { BaselineStore, normalizeLines, diffLines } from './memory/project/baselines.js';
 export { RecordingStore } from './language/flows/recording/tape/recordings.js';
 export type { RecordedStep, CompiledProgram } from './language/flows/recording/tape/recordings.js';

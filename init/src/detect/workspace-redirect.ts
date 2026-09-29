@@ -11,6 +11,7 @@
 
 import { join } from 'node:path';
 import { detect, Framework } from './detect.js';
+import { detectNonJsEcosystem, noPackageJsonMessage } from './non-js-project.js';
 import { findWorkspaceApps, PACKAGE_JSON } from './workspace-apps.js';
 import { chooseWorkspaceApp, withoutTrailingSlashes } from './declared/app-choice.js';
 import type { InitIo, InitOptions, InitResult } from '@/run-types.js';
@@ -56,7 +57,12 @@ export function redirectToWorkspaceApp(
     const wanted = withoutTrailingSlashes(named);
     if (io.exists(`${wanted}/${PACKAGE_JSON}`))
       return enterApp(options, io, wanted, 'Wiring', runInit);
-    io.print(`--app ${named} does not name a directory with a package.json in it.`);
+    const inWanted = (file: string): boolean => io.exists(`${wanted}/${file}`);
+    io.print(
+      detectNonJsEcosystem(inWanted) === undefined
+        ? `--app ${named} does not name a directory with a package.json in it.`
+        : noPackageJsonMessage(inWanted),
+    );
     return { ok: false, applied: 0, manual: 1 };
   }
   if (here.framework !== Framework.HTML) return null; // this directory IS the app

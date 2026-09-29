@@ -1462,6 +1462,35 @@ describe('net count is exact, not "at least" — the double-submit must not pass
     expect(r.pass).toBe(false);
     expect(r.decided).toBe(true);
   }, 5_000);
+
+  /**
+   * The decided clause is not always the first to fail. When a non-decided clause precedes the
+   * overshot count in the predicate list, `.find()` picks it first and the conjunction's `decided`
+   * was lost — the polling loop kept retrying a conjunction that can never be true.
+   *
+   * Same invariant as above, but the permanently-false clause is SECOND.
+   */
+  it('decides the whole allOf even when the overshot clause is not first', async () => {
+    const session = new LiveSession();
+    const verdict = waitForPredicate(
+      session,
+      {
+        kind: 'allOf',
+        predicates: [
+          // First: a clause that fails but is NOT decided (could still become true).
+          { kind: 'net', method: 'GET', urlContains: '/a-call-that-never-comes' },
+          // Second: the exact-count clause that has overshot — decided, permanently false.
+          { kind: 'net', method: 'POST', urlContains: '/refund', count: 1 },
+        ],
+      },
+      45_000,
+    );
+    session.push(post(10));
+    session.push(post(69));
+    const r = await verdict;
+    expect(r.pass).toBe(false);
+    expect(r.decided).toBe(true);
+  }, 5_000);
 });
 
 /**

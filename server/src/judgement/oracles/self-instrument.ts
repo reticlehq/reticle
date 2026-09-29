@@ -34,7 +34,7 @@ interface InstrumentationProposal {
   rationale: string;
 }
 
-/** PascalCase a store name for a `useX.getState` hint (cart → Cart). */
+/** PascalCase a store name for a `useX` hint (cart → Cart). */
 function pascal(name: string): string {
   return 0 === name.length ? name : name[0]?.toUpperCase() + name.slice(1);
 }
@@ -44,7 +44,9 @@ function insertFor(gap: LocatedGap): string {
     case InstrumentationGapKind.NO_SIGNAL_ON_MUTATION:
       return `reticle.signal('${gap.name}');`;
     case InstrumentationGapKind.NO_STORE_REGISTERED:
-      return `registerStore('${gap.name}', () => use${pascal(gap.name)}.getState());`;
+      // The store itself, so its subscribe is wired too. A `() => useX.getState()` getter is
+      // readable but never reports a change, which is the state this gap is about (#1146).
+      return `registerStore('${gap.name}', use${pascal(gap.name)});`;
     case InstrumentationGapKind.MISSING_TESTID:
       return `data-testid="${gap.name}"`;
   }

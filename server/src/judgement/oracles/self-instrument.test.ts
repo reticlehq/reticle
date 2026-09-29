@@ -30,7 +30,9 @@ describe('proposeInstrumentation', () => {
         name: 'cart',
       },
     ]);
-    expect(proposal?.insert).toBe("registerStore('cart', () => useCart.getState());");
+    // The store itself, not `() => useCart.getState()`: a bare getter has no subscribe, so the
+    // proposal would leave the store unwatched — the state #1146 was reported from.
+    expect(proposal?.insert).toBe("registerStore('cart', useCart);");
   });
 
   it('proposes a testid attribute for a missing-testid gap', () => {

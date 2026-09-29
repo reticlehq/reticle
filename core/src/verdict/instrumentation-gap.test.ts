@@ -41,6 +41,16 @@ describe('instrumentation gaps', () => {
   });
 
   /**
+   * #1146: the remedy said `registerStore(name, getState)`, which is the call that leaves a store
+   * readable but unwatched — an app that had already made it was told to make it again.
+   */
+  it('asks for a subscribable store, never a bare getter', () => {
+    const fix = fixForGap(InstrumentationGapKind.NO_STORE_REGISTERED);
+    expect(fix).not.toMatch(/registerStore\(name, getState\)(?!, subscribe)/);
+    expect(fix).toContain('registerStore(name, store)');
+  });
+
+  /**
    * The remedy for an undeclared change has to name the tool AND what to put in it. "Declare your
    * intent" is an instruction an agent cannot follow; the tool name plus the shape of the statement
    * is one it can.

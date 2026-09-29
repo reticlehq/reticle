@@ -18,7 +18,10 @@
  * `timeout_ms` (resolve-within.ts); this is the same budget applied to the same wait.
  */
 
+import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
+import { awaitDocumentSuccessor } from '../../../../portal/session/session-successor.js';
+
 import type { NavigateArrival } from './navigate-result.js';
 
 /**
@@ -74,14 +77,22 @@ export function absoluteTarget(target: string, base: string): string {
  */
 export interface ArrivalScope {
   /**
-   * The session the navigation was dispatched to.
+   * The actual Session object that received the navigation command.
    *
-   * Exempt from the exclusion below, because it is legitimately at the target both before and after
-   * a navigation that keeps the document — a reload, or a same-page route change. Excluding it would
-   * report `confirmed: false` for the navigations most likely to have worked.
+   * A full-document navigation can destroy this session and reconnect the new document
+   * with the same id or a different id, so successor detection needs the original object.
    */
-  navigatedId: string;
-  /** Sessions already on the target BEFORE dispatch. They cannot be evidence of this arrival. */
+  navigatedSession: Session;
+
+  /**
+   * The URL the session was on before navigation started.
+   *
+   * This lets us distinguish "the navigation is still in progress" from
+   * "the app redirected the newly arrived document somewhere else."
+   */
+  navigatedFrom: string;
+
+  /** Sessions already on the target before dispatch cannot prove this navigation arrived. */
   priorIds: ReadonlySet<string>;
 }
 
@@ -104,16 +115,32 @@ function findArrival(
   sessions: SessionManager,
   target: string,
   scope: ArrivalScope,
+  currentSession: Session,
 ): NavigateArrival | null {
   let arrived: NavigateArrival | null = null;
+
   for (const s of sessions.all()) {
-    if (!samePage(s.url, target)) continue;
-    // The tab we drove is the answer whenever it is there, not a tie broken by scan order.
-    if (s.id === scope.navigatedId) return { sessionId: s.id };
+    // The currently tracked document gets priority because it is the strongest
+    // evidence of where this navigation went.
+    if (s.id === currentSession.id) {
+      if (samePage(s.url, target)) {
+        return { sessionId: s.id };
+      }
+
+      // Intermediate routes are not necessarily redirects. Keep polling so
+      // the document has a chance to reach the requested target.
+      continue;
+    }
+
+    // A different session that was already at the target cannot prove this
+    // navigation arrived.
     if (scope.priorIds.has(s.id)) continue;
-    // Keep looking rather than returning: the driven session may still be ahead of us.
-    if (null === arrived) arrived = { sessionId: s.id };
+
+    if (samePage(s.url, target)) {
+      if (null === arrived) arrived = { sessionId: s.id };
+    }
   }
+
   return arrived;
 }
 
@@ -139,10 +166,50 @@ export async function awaitArrival(
   clock: ArrivalClock = REAL_CLOCK,
 ): Promise<NavigateArrival | null> {
   const deadline = clock.now() + timeoutMs;
+
   for (;;) {
-    const found = findArrival(sessions, target, scope);
+    // Keep checking the live session registry for the entire caller-provided
+    // budget. This is important because a document can disconnect and reconnect
+    // under another id, and the new session may be at the requested target,
+    // including on a different origin.
+    const found = findArrival(sessions, target, scope, scope.navigatedSession);
+
     if (found !== null) return found;
-    if (clock.now() >= deadline) return null;
+
+    if (clock.now() >= deadline) break;
+
     await clock.sleep(POLL_MS);
   }
+
+  // Only after the navigation wait has expired do we use successor detection.
+  // At this point it is no longer being used to decide whether the requested
+  // navigation arrived. It only helps explain where the replaced document
+  // landed when the target was never observed.
+  const current = sessions.get(scope.navigatedSession.id);
+
+  if (current !== undefined) {
+    if (!samePage(current.url, scope.navigatedFrom) && !samePage(current.url, target)) {
+      return {
+        sessionId: current.id,
+        landedOn: current.url,
+      };
+    }
+
+    return null;
+  }
+
+  const successor = await awaitDocumentSuccessor(sessions, scope.navigatedSession, 0, clock);
+
+  if (
+    successor !== null &&
+    !samePage(successor.url, target) &&
+    !samePage(successor.url, scope.navigatedFrom)
+  ) {
+    return {
+      sessionId: successor.id,
+      landedOn: successor.url,
+    };
+  }
+
+  return null;
 }

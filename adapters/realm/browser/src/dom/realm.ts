@@ -80,6 +80,27 @@ export const isButton = (n: unknown): n is HTMLButtonElement =>
     'undefined' === typeof HTMLButtonElement ? undefined : HTMLButtonElement,
   );
 
+export const isMeter = (n: unknown): n is HTMLMeterElement =>
+  isIn<HTMLMeterElement>(
+    n,
+    'HTMLMeterElement',
+    'undefined' === typeof HTMLMeterElement ? undefined : HTMLMeterElement,
+  );
+
+export const isOutput = (n: unknown): n is HTMLOutputElement =>
+  isIn<HTMLOutputElement>(
+    n,
+    'HTMLOutputElement',
+    'undefined' === typeof HTMLOutputElement ? undefined : HTMLOutputElement,
+  );
+
+export const isProgress = (n: unknown): n is HTMLProgressElement =>
+  isIn<HTMLProgressElement>(
+    n,
+    'HTMLProgressElement',
+    'undefined' === typeof HTMLProgressElement ? undefined : HTMLProgressElement,
+  );
+
 export const isForm = (n: unknown): n is HTMLFormElement =>
   isIn<HTMLFormElement>(
     n,

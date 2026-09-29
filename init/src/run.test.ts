@@ -588,6 +588,18 @@ describe('runInit — workspace roots', () => {
     expect(io.lines.join('\n')).toContain('--app apps/nope');
   });
 
+  it('names the ecosystem when --app points at a non-JS project', () => {
+    const io = memoryIo({
+      'package.json': JSON.stringify({ name: 'mono', private: true }),
+      'apps/mobile/pubspec.yaml': 'name: mobile\n',
+    });
+    const r = runInit({ ...OPTS, app: 'apps/mobile' }, io);
+    expect(r.ok).toBe(false);
+    const out = io.lines.join('\n');
+    expect(out).toContain('This is a Flutter project.');
+    expect(out).not.toContain('does not name a directory with a package.json');
+  });
+
   it('asks for feedback exactly once, even though the redirect re-enters init', () => {
     const io = memoryIo({ 'package.json': WORKSPACE_ROOT, ...VITE_APP });
     runInit(OPTS, io);

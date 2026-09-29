@@ -335,13 +335,16 @@ async function evaluatePredicateRaw(
       // that was happening.
       const failed = results.find((r) => !r.pass && r.inconclusive === undefined);
       if (failed !== undefined) {
+        // A conjunction is decided as soon as ANY clause is permanently false: nothing the
+        // others do later can rescue it. Scan all failed clauses, not just the first —
+        // `.find()` picks by array order, and the decided clause is not always first.
+        const anyDecided = results.some(
+          (r) => !r.pass && r.inconclusive === undefined && true === r.decided,
+        );
         return {
           pass: false,
           failureReason: failed.failureReason ?? 'a sub-predicate of allOf failed',
-          // A conjunction is decided as soon as ONE clause is: nothing the others do later can
-          // rescue it. This is what makes the early exit reach real calls, since an exact count is
-          // usually asserted alongside the UI change it is meant to accompany.
-          ...(true === failed.decided ? { decided: true } : {}),
+          ...(anyDecided ? { decided: true } : {}),
           evidence: results,
         };
       }

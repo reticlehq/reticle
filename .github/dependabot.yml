@@ -25,6 +25,18 @@ updates:
       - dependency-name: '@babel/core'
         update-types:
           - version-update:semver-major
+      # jsdom 30.1.x made appendChild into a large parent quadratic: the mint-storm test in
+      # adapters/realm/browser/src/dom/addressing/refs.test.ts went from ~2s to a 60s timeout, which
+      # failed the whole group in #1095. Scoped to 30.1.x so a later release is tried again.
+      - dependency-name: jsdom
+        versions:
+          - 30.1.x
+      # apps/electron-vue-pinia is the only vite 7 consumer left and exists to reproduce the
+      # electron-vite path; electron-vite 5 peers on vite <=7, so #962 moved it onto an unsupported
+      # pair. Revisit when electron-vite supports vite 8.
+      - dependency-name: vite
+        update-types:
+          - version-update:semver-major
 
   # Keep the GitHub Actions themselves current AND pinned — Dependabot updates the pinned SHAs for us.
   - package-ecosystem: github-actions
