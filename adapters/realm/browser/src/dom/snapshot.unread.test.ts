@@ -53,3 +53,25 @@ describe('a truncated snapshot names the branches it did not read', () => {
     expect(snap.unreadOverflow).toBe(true);
   });
 });
+
+/*
+ * The depth cut was the silent one. Past `maxDepth` the walk simply returned: no `truncated`, no
+ * `unread`, so a deeply nested form read as a page without it.
+ */
+describe('a snapshot cut by depth says so, and names where', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('marks the read truncated and names the branch it stopped above', () => {
+    document.body.innerHTML =
+      '<nav aria-label="outer"><nav aria-label="inner"><button>Deep</button></nav></nav>';
+    const snap = buildSnapshot({ maxDepth: 1 });
+    expect(snap.tree).not.toContain('Deep');
+    expect(snap.truncated).toBe(true);
+    const rest = (snap.unread ?? [])
+      .map((ref) => buildSnapshot({ scope: ref, includeRoot: true }).tree)
+      .join('\n');
+    expect(rest).toContain('Deep');
+  });
+});
