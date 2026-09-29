@@ -10,7 +10,7 @@ metadata:
 
 # A rejected form still looks fine on screen
 
-Validation code is written once, glanced at in the browser with one obviously-bad value, and never driven again. The bug that ships is never the value you tried. It's the one you didn't: a field that's required but not marked `disabled` until blur, a submit button whose `disabled` is CSS-only, or a handler that fires the request before the check finishes.
+Validation code is written once, glanced at in the browser with one obviously-bad value, and never driven again. The bug that ships is never the value you tried. It's the one you didn't: a submit button that isn't disabled until the field blurs, a button that's disabled only by CSS and still clickable, or a handler that fires the request before the check finishes.
 
 **Reticle** can drive the real form and check all three failure points at once. Not installed? `RETICLE_INSTALL_SOURCE=npx_skill npx @reticlehq/server@latest init`, then the [`install-and-verify`](https://github.com/reticlehq/reticle/blob/main/skills/install-and-verify/SKILL.md) skill.
 
@@ -44,13 +44,13 @@ reticle_act({ sessionId, ref: submitRef, action: "click" })
 Then assert the negative. Checking `count: 0` the instant after the click proves nothing on its own: the request may simply not have been sent _yet_. Give the app a real window to have tried before you trust the absence, settling first and then checking the count, in one call:
 
 ```
-reticle_assert({ sessionId, since, predicate: { kind: "allOf", predicates: [
+reticle_assert({ sessionId, since, timeout_ms: 3000, predicate: { kind: "allOf", predicates: [
   { kind: "settled" },
   { kind: "net", method: "POST", urlContains: "/api/...", count: 0 },
 ]}})
 ```
 
-`settled` waits for network + DOM idle instead of a fixed sleep, so the assertion only resolves once the app has genuinely stopped trying to do anything, and only then does the `count: 0` mean something. Use `since` from the click's own result, not from the earlier fill, so you're scoped to requests after the submit attempt specifically.
+The `timeout_ms` is what makes this a wait instead of a snapshot: `reticle_assert` defaults to `timeout_ms: 0`, one evaluation at the instant you call it, so without it `settled` is just checked once right after the click and proves nothing about whether the app was actually idle. With `timeout_ms: 3000`, the call keeps polling for up to three seconds until the page genuinely goes quiet, and Only once the page settles does the count: 0 reading become meaningful.”. Use `since` from the click's own result, not from the earlier fill, so you're scoped to requests after the submit attempt specifically.
 
 ## Clear the error
 
