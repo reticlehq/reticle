@@ -13,22 +13,8 @@ import { aliasParam } from './args/alias-args.js';
 import { resolveSessionWithin } from '@/portal/session/timing/resolve-within.js';
 import { WALL_CLOCK } from '@/portal/session/timing/wall-clock.js';
 import { timeoutMsSchema } from './args/numeric-bounds.js';
-import { captureAct } from '@/language/flows/replay.js';
+import { captureAct, pathOf } from '@/language/flows/replay.js';
 
-/**
- * The pathname of a session's live url, or undefined when it has none yet.
- *
- * Pathname rather than the whole url, because that is what `startPath` is compared against and what
- * a hash-routed app makes meaningless in the document location — see routeOfEvent.
- */
-function pathOf(url: string | undefined): string | undefined {
-  if (url === undefined) return undefined;
-  try {
-    return new URL(url).pathname;
-  } catch {
-    return undefined;
-  }
-}
 import {
   ActionType,
   ActionWarning,
@@ -324,6 +310,7 @@ export const ACT_TOOLS: ToolDef[] = [
           ...healthEnvelope(session),
         });
       } finally {
+        deps.recordings.markEnded(pathOf(session.url));
         // Close the window on every exit (settle or throw), recording the action + settle outcome.
         session.finishAction(
           undefined,
@@ -982,6 +969,7 @@ export const ACT_TOOLS: ToolDef[] = [
           ...healthEnvelope(currentOf(deps.sessions, session)),
         });
       } finally {
+        deps.recordings.markEnded(pathOf(currentOf(deps.sessions, session).url));
         acted.finishAction(
           verdictEffect,
           settledOutcome,

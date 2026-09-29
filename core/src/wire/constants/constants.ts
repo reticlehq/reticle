@@ -224,7 +224,10 @@ export const ReticleEnv = {
   API_KEY: 'RETICLE_API_KEY',
   /** The name this key had until 2026-09. Still honoured; see `apiKeyFrom()`. */
   CLOUD_KEY: 'RETICLE_CLOUD_KEY',
+  /** The platform host. Read through `cloudUrlFrom()`, which also accepts `URL`. */
   CLOUD_URL: 'RETICLE_CLOUD_URL',
+  /** The short name for `CLOUD_URL`, which people type first. `CLOUD_URL` wins when both are set. */
+  URL: 'RETICLE_URL',
 } as const;
 
 /**
@@ -248,6 +251,14 @@ export function apiKeyFrom(env: Record<string, string | undefined>): string | un
   if (current !== undefined && 0 < current.length) return current;
   const legacy = env[ReticleEnv.CLOUD_KEY];
   return legacy !== undefined && 0 < legacy.length ? legacy : undefined;
+}
+
+/** The platform URL, under either name — one function so no caller forgets the second. */
+export function cloudUrlFrom(env: Record<string, string | undefined>): string | undefined {
+  const canonical = env[ReticleEnv.CLOUD_URL];
+  if (canonical !== undefined && 0 < canonical.length) return canonical;
+  const short = env[ReticleEnv.URL];
+  return short !== undefined && 0 < short.length ? short : undefined;
 }
 
 /** Hard transport bounds shared by the browser and bridge. */
@@ -792,14 +803,15 @@ export const ElementState = {
   DISABLED: 'disabled',
   CHECKED: 'checked',
   EXPANDED: 'expanded',
+  PRESSED: 'pressed',
   FOCUSED: 'focused',
   PRESENT: 'present',
   /**
    * Inside the viewport right now (getBoundingClientRect intersects the window). Distinct from
-   * `visible`, which folds only aria-hidden/[hidden]/display/visibility/opacity and so is already
-   * true for content below the fold of a scrolling container. Without this, `scrollIntoView` is
-   * ungradeable: the target satisfied `visible`/`present` before the scroll, so act_and_wait
-   * returns already_true. (#398)
+   * `visible`, which folds only aria-hidden/[hidden]/display/visibility/opacity and a closed
+   * `<details>` ancestor, and so is already true for content below the fold of a scrolling
+   * container. Without this, `scrollIntoView` is ungradeable: the target satisfied
+   * `visible`/`present` before the scroll, so act_and_wait returns already_true. (#398)
    */
   IN_VIEWPORT: 'inViewport',
 } as const;

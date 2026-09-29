@@ -82,6 +82,21 @@ function sourceFromResult(res: Record<string, unknown>): Record<string, unknown>
 }
 
 /**
+ * The pathname of a session's live url, or undefined when it has none yet.
+ *
+ * Pathname rather than the whole url, because that is what `startPath` is compared against and what
+ * a hash-routed app makes meaningless in the document location — see routeOfEvent.
+ */
+export function pathOf(url: string | undefined): string | undefined {
+  if (url === undefined) return undefined;
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Capture an act into every in-flight recording, or do nothing when none is running.
  *
  * Every tool that drives the page must call this. reticle_act_and_wait did not, which is the tool
@@ -101,17 +116,19 @@ export function captureAct(
   // — "recording is a property of the system rather than a rule an agent has to remember" — was true
   // about the intent and false about the code, and every drive nobody wrapped by hand was discarded.
   //
-  // That is the whole supply of regression tests this product could have had for free: the corpus
-  // measures 3 of 33 flows mutation-testable and 6 of 112 steps declaring a consequence, and a drive
-  // that is never recorded cannot contribute to either.
+  // That is the whole supply of regression tests this product could have had for free: few saved
+  // flows are mutation-testable and few steps declare a consequence, and a drive that is never
+  // recorded cannot contribute to either.
   const step = compileActStep(args, res);
   // Keep the assertion the agent actually made. `act_and_wait { until }` IS the agent saying what
   // success means — the large majority of calls carry one — and dropping it produced a flow graded
   // "assertion-free: it will pass even if the feature is broken", which is the regression-suite
-  // story failing at its last step. Only kinds FlowExpect can express survive; see
-  // predicate-to-expect.ts.
+  // story failing at its last step. See enforceableExpect below.
   const expect = enforceableExpect(args['until'] ?? args['predicate']);
   if (expect !== undefined) step.expect = expect;
+  if (route !== undefined) step.page = route;
+  const intent = asString(args['intent'])?.trim();
+  if (intent !== undefined && intent.length > 0) step.intent = intent;
   recordings.capture(step, route);
 }
 

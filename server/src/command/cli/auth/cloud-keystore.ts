@@ -14,7 +14,6 @@
  * two are kept readable (a repo linked by an older CLI must not lose its key) and written only when
  * doing so cannot mislead somebody else.
  */
-import { join } from 'node:path';
 import { credentialSlot } from '@/memory/cloud/cloud-config.js';
 
 /** Trailing slashes are not identity: `https://x/` and `https://x` are one cloud. */
@@ -103,6 +102,3 @@ export const applyCredential = (
   if (!priorIsForeign && mayOverwrite(projectId)) store[projectId] = { key, url };
   return store;
 };
-
-/** Where the store lives, given the reticle home directory. */
-export const credentialsPath = (homeDir: string, file: string): string => join(homeDir, file);

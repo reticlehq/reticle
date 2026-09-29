@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { ChannelId, Verified, VerifiedReason } from '@reticlehq/core';
+import {
+  ChannelId,
+  PredicateKind,
+  Verified,
+  VerifiedReason,
+  channelsReadBy,
+} from '@reticlehq/core';
 import { HonestyGrade } from './honesty.js';
 import { decideVerified } from './verified.js';
 
@@ -91,5 +97,51 @@ describe('a claim that reads an undeclared channel', () => {
       channelsObservable: [ChannelId.UI],
     });
     expect(verdict.verifiedReason).toBe(VerifiedReason.CAPABILITY_ABSENT);
+  });
+});
+
+/**
+ * A composite reads what its members read (#1116). It used to read every channel, so on a page with
+ * no registered store every `allOf` needed `state` and came back `capability-absent` — even when
+ * every member held and none of them asked about state.
+ */
+describe('a composite claim on a page that did not declare state', () => {
+  const noStore = [ChannelId.UI, ChannelId.NET, ChannelId.SIGNAL, ChannelId.LOG, ChannelId.ROUTE];
+  const verdictFor = (predicates: Parameters<typeof channelsReadBy>[0]) =>
+    decideVerified({
+      pass: true,
+      declaredConsequence: true,
+      honesty: CLEAN,
+      channelsRead: channelsReadBy(predicates),
+      channelsObservable: noStore,
+    });
+
+  it('is answered when every part held and no part reads state', () => {
+    const verdict = verdictFor({
+      kind: PredicateKind.ALL_OF,
+      predicates: [
+        { kind: PredicateKind.NET, urlContains: '/api/save' },
+        { kind: PredicateKind.TEXT, contains: 'Saved' },
+      ],
+    });
+    expect(verdict.verified).toBe(Verified.YES);
+  });
+
+  it('still refuses a composite that wraps a state clause', () => {
+    const verdict = verdictFor({
+      kind: PredicateKind.ALL_OF,
+      predicates: [
+        { kind: PredicateKind.TEXT, contains: 'Saved' },
+        { kind: PredicateKind.NOT, predicate: { kind: PredicateKind.STATE, path: 'cart.count' } },
+      ],
+    });
+    expect(verdict.verified).toBe(Verified.UNKNOWN);
+    expect(verdict.verifiedReason).toBe(VerifiedReason.CAPABILITY_ABSENT);
+  });
+
+  it('treats an empty composite as reading everything, so it can never slip past', () => {
+    expect(channelsReadBy({ kind: PredicateKind.ALL_OF, predicates: [] })).toContain(
+      ChannelId.STATE,
+    );
   });
 });

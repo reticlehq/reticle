@@ -42,6 +42,11 @@ function ruleSources(): string[] {
 const ALLOWED_DEPENDENCIES: Record<string, string> = {
   '@reticlehq/core': 'the shared vocabulary: the names for events, verdicts and consequences',
   zod: 'checking that a predicate handed in from outside is really shaped like a predicate',
+  // Already imported at runtime (`MeasureOp` in predicate/property.ts) while declared only for
+  // development, which is how a release shipped an engine a strict install could not load. It is the
+  // protocol these rules are written in, and it depends on zod alone, so adopting it costs nothing
+  // the line above does not already cost.
+  'open-verification': 'the protocol vocabulary the rules are expressed in',
 };
 
 /**

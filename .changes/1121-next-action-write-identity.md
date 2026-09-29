@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/browser` + `@reticlehq/engine` — distinct Next.js Server Actions on one page are no longer reported as one duplicate write.** Every Server Action POSTs to the page's own URL, and its usual `FormData` body has no shape fingerprint, so calls to different actions read as one write fired twice and dropped the verdict to `unknown`. The observer records the `Next-Action` header, and `duplicate-request` folds it into the write identity: different action ids are different writes, and the same action fired twice with one body is still a duplicate. Closes [#1121](https://github.com/reticlehq/reticle/issues/1121).

@@ -96,6 +96,23 @@ function isIdentityKey(key: string): boolean {
 }
 
 /**
+ * Keys that name an optimistic-concurrency token, not a persisted attribute. A compare-and-set
+ * write sends the version it read and expects the server to bump it — the changed value in the
+ * response is the proof the write applied, not evidence the write was ignored, the same way a
+ * create's assigned `id` is not a dropped field.
+ */
+function isVersionKey(key: string): boolean {
+  const lower = key.toLowerCase();
+  return (
+    'version' === lower ||
+    '_version' === lower ||
+    'etag' === lower ||
+    'rev' === lower ||
+    'revision' === lower
+  );
+}
+
+/**
  * Every scalar value the response carries for each key, at any depth.
  *
  * Depth matters because the echo is usually nested — `{ok:true, saved:{...}}`, `{data:{...}}`,
@@ -281,6 +298,7 @@ export function findEchoMismatches(
       // for crying wolf.
       if (wanted.size !== 1) continue;
       if (isIdentityKey(key)) continue;
+      if (isVersionKey(key)) continue;
       const values = echoed.get(key);
       // Not echoed at all = no evidence either way. Only a key the server chose to report back can
       // contradict the request, and silence is not a contradiction.

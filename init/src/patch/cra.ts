@@ -30,8 +30,6 @@ export function craDevModulePath(typescript: boolean): string {
   return typescript ? 'src/reticle-dev.ts' : 'src/reticle-dev.js';
 }
 
-/** TypeScript default path — prefer `craDevModulePath` when the project's language is known. */
-export const CRA_DEV_MODULE_PATH = craDevModulePath(true);
 export const CRA_ENV_PATH = '.env.development.local';
 export const TOKEN_VAR = 'REACT_APP_RETICLE_TOKEN';
 /**

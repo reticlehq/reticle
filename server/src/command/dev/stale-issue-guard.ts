@@ -8,10 +8,9 @@
  *
  * ## Why `fixed-pending-release` is an accepted answer
  *
- * Work fixed on an unreleased branch is legitimately still open; the issue closes when the version
- * ships. The label is what tells a contributor not to start, so the label — not the closure — is
- * what this guard is actually asking for. That is also why the fix is cheap: nobody has to change
- * when they close things, only to say so.
+ * Work that is already ON the release branch is legitimately still open; the issue closes when the
+ * version ships. The label is that fact. It is not a fact about an open pull request. Applying it
+ * there is what told contributors a fix had shipped when the pull request was still unmerged.
  *
  * Pure. The git log and the GitHub lookup belong to the caller, which is what makes every branch
  * below testable without a network or a repo.
@@ -68,11 +67,12 @@ export function staleIssues(claimed: readonly number[], issues: readonly IssueSt
 /** The message the guard prints. Held here so the check and its tests cannot describe it differently. */
 export function staleIssueReport(stale: readonly number[]): string {
   const list = stale.map((n) => `#${String(n)}`).join(', ');
+  const pronoun = 1 === stale.length ? 'it' : 'them';
   return (
     `${list} ${1 === stale.length ? 'is' : 'are'} still OPEN, and a commit on this branch says it ` +
-    `closes ${1 === stale.length ? 'it' : 'them'}. Anyone browsing the tracker reads that as work ` +
-    `nobody has started. Close ${1 === stale.length ? 'it' : 'them'}, or label ` +
-    `${1 === stale.length ? 'it' : 'them'} \`${PENDING_RELEASE_LABEL}\` if the fix is waiting on a ` +
-    `release. This has cost three contributors an evening each; it is not bookkeeping.`
+    `closes ${pronoun}. Anyone browsing the tracker reads that as work nobody has started. Close ` +
+    `${pronoun} when this merges. Do not apply \`${PENDING_RELEASE_LABEL}\` from an open pull ` +
+    `request: that label means the fix is already on the release branch and waiting for the version ` +
+    `to ship. Applying it earlier is what sent contributors away from work that was not merged.`
   );
 }

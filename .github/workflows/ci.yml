@@ -65,11 +65,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -94,9 +94,9 @@ jobs:
     # sat behind it for the same 6 hours.
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -132,6 +132,36 @@ jobs:
       # failure in a package nobody was editing.
       - run: pnpm lint:docs
       - run: pnpm typecheck
+      # Non-blocking: a newly-published advisory on an untouched transitive dep must not red an
+      # unrelated PR. It still runs and surfaces (warning) so the advisory is visible; act on it via
+      # a dependency bump / pnpm override, not by blocking the build.
+      - name: Security audit (advisory drift — non-blocking)
+        run: pnpm audit --audit-level high
+        continue-on-error: true
+      # format:check is its own job (format-check); running it here as well cost ~30s for nothing.
+
+  # The unit suite, in parallel with verify's static checks rather than after them. It was ~4.5 of
+  # verify's ~8 minutes, and nothing in it depends on lint or typecheck having run first.
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: .turbo
+          key: turbo-linux-unit-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            turbo-linux-unit-${{ hashFiles('pnpm-lock.yaml') }}-
+            turbo-linux-unit-
+            turbo-linux-
+      - run: pnpm build
       - run: pnpm test:unit
         # Turbo buffers each task's output and prints it only when the task finishes, so a task that
         # HANGS prints nothing at all — the v2.5.0 hang was invisible until the orphan-process list
@@ -139,13 +169,6 @@ jobs:
         # uglier and worth it: whatever hangs next says so while it is hanging.
         env:
           TURBO_LOG_ORDER: stream
-      # Non-blocking: a newly-published advisory on an untouched transitive dep must not red an
-      # unrelated PR. It still runs and surfaces (warning) so the advisory is visible; act on it via
-      # a dependency bump / pnpm override, not by blocking the build.
-      - name: Security audit (advisory drift — non-blocking)
-        run: pnpm audit --audit-level high
-        continue-on-error: true
-      - run: pnpm format:check
 
   # Windows is the MAJORITY platform and has never been tested.
   #
@@ -166,11 +189,14 @@ jobs:
   # only machine honest enough to lose the race.
   windows:
     runs-on: windows-latest
+    # Queue, main, nightly and on demand; not on every PR push. It was the slowest job left on the
+    # PR critical path, and the queue still runs it before anything reaches main.
+    if: github.event_name != 'pull_request'
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -233,9 +259,9 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -283,7 +309,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Set up Rust
         run: |
           rustup update stable --no-self-update
@@ -335,7 +361,7 @@ jobs:
     if: needs.changes.outputs.rust == 'true'
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Set up Rust
         run: |
           rustup update stable --no-self-update
@@ -366,7 +392,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Set up Rust
         run: |
           rustup update stable --no-self-update
@@ -479,10 +505,11 @@ jobs:
       desktop: ${{ steps.filter.outputs.desktop }}
       conformance: ${{ steps.filter.outputs.conformance }}
       rust: ${{ steps.filter.outputs.rust }}
+      e2e: ${{ steps.filter.outputs.e2e }}
       # WHICH scaffolds run on WHICH os, decided per event rather than hard-coded in the matrix.
       install_matrix: ${{ steps.install_matrix.outputs.value }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - id: filter
@@ -508,7 +535,8 @@ jobs:
             echo "desktop=true" >> "$GITHUB_OUTPUT"
             echo "bench=true" >> "$GITHUB_OUTPUT"
             echo "conformance=true" >> "$GITHUB_OUTPUT"
-            echo "rust=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "rust=true" >> "$GITHUB_OUTPUT"
+            echo "e2e=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           CHANGED="$(git diff --name-only "$BASE"...HEAD || true)"
           # Still fails OPEN. A base that resolves but produces nothing — a force-push, an empty
@@ -521,9 +549,17 @@ jobs:
             echo "desktop=true" >> "$GITHUB_OUTPUT"
             echo "bench=true" >> "$GITHUB_OUTPUT"
             echo "conformance=true" >> "$GITHUB_OUTPUT"
-            echo "rust=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "rust=true" >> "$GITHUB_OUTPUT"
+            echo "e2e=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           echo "changed files:"; echo "$CHANGED" | sed 's/^/  /'
+          # What the e2e battery can see: every package it boots or drives, and the apps it starts.
+          # Docs, skills, the Rust crate and fixtures it never boots cannot change its answer.
+          if echo "$CHANGED" | grep -qE '^(core|engine|server|init|open-verification|spec-runner|adapters|apps/(e2e|api|bench-app|next-smoke|atlas|examples))/|^(package\.json|pnpm-lock\.yaml|turbo\.json|\.github/workflows/ci\.yml)$'; then
+            echo "e2e=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "e2e=false" >> "$GITHUB_OUTPUT"
+          fi
           # Anything a user runs BEFORE their first session, plus the gate itself and the dependency
           # graph it installs through. Deliberately broad — the cost of a false positive is CI time,
           # the cost of a false negative is the 0%-connect class shipping again.
@@ -611,7 +647,6 @@ jobs:
       - id: install_matrix
         run: |
           ALL='vite-react vite-vue next-app-router next-pages-router monorepo-subdir astro sveltekit cra nuxt react-router'
-          WINDOWS_BEFORE_MERGE='cra next-app-router vite-react'
           # A MERGE QUEUE entry gets the same short Windows list as the pull request, and for a
           # stronger version of the same reason.
           #
@@ -630,15 +665,27 @@ jobs:
           # Coverage is not reduced, it is rescheduled, exactly as it is for a pull request: the
           # nightly schedule runs every scaffold on Windows, `workflow_dispatch` runs the full matrix
           # on demand, and a queue entry is the same commit the PR run already graded.
+          # The QUEUE runs no Windows install cell. The pull request already graded the same diff
+          # on Windows, and one flaky cell (next-app-router, "SDK is in the page and never dialled
+          # the bridge") ejected 13 of 17 failed queue entries, rebuilding every entry behind it.
+          # Every scaffold still runs on Windows nightly and on workflow_dispatch.
+          #
+          # A PULL REQUEST runs three Linux scaffolds, one per distinct init path (Vite, Next app
+          # router, the monorepo walk-up), and one Windows scaffold that is not the flaky one. The
+          # full ten were the largest share of runner minutes and caught nothing the other jobs
+          # did not in the measured window, while starving the 20-job pool the queue also needs.
+          # The QUEUE still runs all ten on Linux before anything lands; nightly runs all ten on both.
+          PR_LINUX='vite-react next-app-router monorepo-subdir'
           case "${{ github.event_name }}" in
-            pull_request|merge_group) WINDOWS="$WINDOWS_BEFORE_MERGE" ;;
-            *) WINDOWS="$ALL" ;;
+            pull_request) LINUX="$PR_LINUX"; WINDOWS='vite-react' ;;
+            merge_group) LINUX="$ALL"; WINDOWS="" ;;
+            *) LINUX="$ALL"; WINDOWS="$ALL" ;;
           esac
           entries=''
-          for s in $ALL; do entries="$entries{\"os\":\"ubuntu-latest\",\"scaffold\":\"$s\"},"; done
+          for s in $LINUX; do entries="$entries{\"os\":\"ubuntu-latest\",\"scaffold\":\"$s\"},"; done
           for s in $WINDOWS; do entries="$entries{\"os\":\"windows-latest\",\"scaffold\":\"$s\"},"; done
           echo "value={\"include\":[${entries%,}]}" >> "$GITHUB_OUTPUT"
-          echo "install matrix: ubuntu=$(echo $ALL | wc -w) windows=$(echo $WINDOWS | wc -w)"
+          echo "install matrix: ubuntu=$(echo $LINUX | wc -w) windows=$(echo $WINDOWS | wc -w)"
 
   # The bot half of the client-matrix flow. A submitted record is EVIDENCE, and evidence that
   # cannot be placed — no version, no host, no error text on a failure — is decoration. Validating
@@ -651,8 +698,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
       - name: Validate every submitted matrix record
@@ -731,21 +778,25 @@ jobs:
     # exists to stop a HANG, not to punish a slow runner, so it now sits clear of the real number.
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # No `pnpm build` here. The gate's first act is `pnpm -r publish`, whose prepack wipes each
+      # package's dist and rebuilds it with `tsc --force` in dependency order, so a separate build
+      # was done twice every cell (~1 min on Linux, ~1.5 on Windows). Verified by deleting every dist
+      # and running a scaffold end to end: all ten checks pass.
+      # The browser download was never cached: ~20s on Linux and over five minutes on a Windows
+      # install cell, every run. `install` is still run after a hit, so a newer Playwright fetches
+      # its own revision and `--with-deps` still provisions the Linux system libraries.
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
         with:
-          path: .turbo
-          key: turbo-linux-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
-          restore-keys: |
-            turbo-linux-${{ hashFiles('pnpm-lock.yaml') }}-
-            turbo-linux-
-      - run: pnpm build
+          path: ${{ runner.os == 'Windows' && '~\AppData\Local\ms-playwright' || '~/.cache/ms-playwright' }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: playwright-${{ runner.os }}-
       - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       # The negative control FIRST. It mis-wires each scaffold's port so no session can appear and
       # requires the gate to go red; if it passes, the gate proves nothing and the run below would be
@@ -785,9 +836,9 @@ jobs:
     needs: [format-check]
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -810,12 +861,24 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
-    needs: format-check
+    needs: [format-check, changes]
+    # Every non-PR event runs it. A pull request that touches none of the code the battery drives
+    # (docs, skills, a fixture it does not boot) skips it; the queue runs it again regardless.
+    if: github.event_name != 'pull_request' || needs.changes.outputs.e2e == 'true'
     timeout-minutes: 30
+    # Three parallel shards of the battery (run.mjs reads E2E_SHARD). One spec, mcp-stress, is about
+    # 120s of the ~380s total; round-robin puts it with lighter specs, so the slowest shard is ~180s.
+    # The integration suite and the soak run once, in shard 1, the lightest.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ['1/3', '2/3', '3/3']
+    env:
+      E2E_SHARD: ${{ matrix.shard }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -828,11 +891,20 @@ jobs:
             turbo-linux-${{ hashFiles('pnpm-lock.yaml') }}-
             turbo-linux-
       - run: pnpm build
+      # The browser download was never cached: ~20s on Linux and over five minutes on a Windows
+      # install cell, every run. `install` is still run after a hit, so a newer Playwright fetches
+      # its own revision and `--with-deps` still provisions the Linux system libraries.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~\AppData\Local\ms-playwright' || '~/.cache/ms-playwright' }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: playwright-${{ runner.os }}-
       - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       # Headless Chromium + a multi-service boot flakes on shared runners (timing, resource
       # contention). Retry with a clean slate between attempts so a transient flake doesn't red CI;
       # a real regression still fails (it fails every attempt).
       - name: Integration suite (real-Chromium BrowserPool tests)
+        if: matrix.shard == '1/3'
         run: |
           for attempt in 1 2 3; do
             echo "::group::integration attempt $attempt"
@@ -886,7 +958,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: e2e-server-logs
+          name: e2e-server-logs-${{ strategy.job-index }}
           path: /tmp/e2e-*.log
           if-no-files-found: ignore
           retention-days: 7
@@ -910,9 +982,9 @@ jobs:
     if: needs.changes.outputs.desktop == 'true'
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -975,9 +1047,9 @@ jobs:
     if: needs.changes.outputs.conformance == 'true'
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -987,6 +1059,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends xvfb libgbm1 libnss3 libasound2t64
       - run: pnpm install --frozen-lockfile
+      # The browser download was never cached: ~20s on Linux and over five minutes on a Windows
+      # install cell, every run. `install` is still run after a hit, so a newer Playwright fetches
+      # its own revision and `--with-deps` still provisions the Linux system libraries.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~\AppData\Local\ms-playwright' || '~/.cache/ms-playwright' }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: playwright-${{ runner.os }}-
       - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       - run: pnpm build
       # FIRST, as the install gate's self-test is. It makes the subject answer "yes" to every
@@ -1015,12 +1095,17 @@ jobs:
   bench:
     runs-on: ubuntu-latest
     needs: [format-check, changes]
-    if: needs.changes.outputs.bench == 'true'
+    # After merge, not before: on every push to main (path-routed), nightly and on demand. At ~19 min
+    # it set the wall clock of every code PR and then of the merge queue, and a token regression is
+    # not something a contributor can act on. A regression is still caught minutes after it lands and
+    # always before a release; a red main run names the commit.
+    if: >-
+      (github.event_name == 'push' && needs.changes.outputs.bench == 'true') || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -1033,13 +1118,21 @@ jobs:
             turbo-linux-${{ hashFiles('pnpm-lock.yaml') }}-
             turbo-linux-
       - run: pnpm build
+      # The browser download was never cached: ~20s on Linux and over five minutes on a Windows
+      # install cell, every run. `install` is still run after a hit, so a newer Playwright fetches
+      # its own revision and `--with-deps` still provisions the Linux system libraries.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~\AppData\Local\ms-playwright' || '~/.cache/ms-playwright' }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: playwright-${{ runner.os }}-
       - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       # The token proxy is a python package, and without it `countTokensProxy` returns null for every
       # payload — so every token dimension reads "this pass measured nothing" and the gate fails
       # having compared nothing. That is the honest failure it is designed to produce, and it fails
       # for a missing dependency rather than a regression, which is a slow way to learn this.
       - name: Install the token proxy the observation layer measures with
-        run: python3 -m pip install --user --quiet tiktoken
+        run: python3 -m pip install --user --quiet --require-hashes -r bench/requirements.txt
       - name: Measure (observation-cost + replay), so the gate has something real to grade
         run: pnpm bench:full
       - name: Benchmark gate (catch-rate floor, no false positives, efficiency and token bounds)
@@ -1086,7 +1179,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: A changelog entry is a file in .changes/, not an edit to CHANGELOG.md
@@ -1126,6 +1219,7 @@ jobs:
         changelog-policy,
         format-check,
         verify,
+        unit-tests,
         e2e,
         install-gate,
         matrix-records,

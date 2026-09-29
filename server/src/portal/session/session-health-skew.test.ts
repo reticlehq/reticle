@@ -45,6 +45,13 @@ describe('a skewed session says so on every verdict it touches', () => {
     ).toBeTypeOf('string');
   });
 
+  it('carries the version pair exactly once, not twice (#1137)', () => {
+    const envelope = healthEnvelope(sessionWith({ versionSkew: 'daemon 2.13.1, page 2.11.0' }));
+    const text = JSON.stringify(envelope);
+    const matches = text.match(/2\.11\.0/g);
+    expect(matches, 'version pair must appear exactly once').toHaveLength(1);
+  });
+
   it('stays silent on a matched session', () => {
     // The envelope is omitted entirely when nothing is wrong, and skew must not change that.
     expect(healthEnvelope(sessionWith({}))).toEqual({});

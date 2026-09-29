@@ -1,0 +1,32 @@
+name: Stale
+
+# Only issues a maintainer marked `needs-info`: a question sent to the reporter that has had no answer.
+# Nothing else is ever marked stale or closed automatically, and a reply removes the label's clock.
+
+on:
+  schedule:
+    - cron: '30 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
+        with:
+          repo-token: ${{ github.token }}
+          only-labels: needs-info
+          days-before-stale: 14
+          days-before-close: 7
+          days-before-pr-stale: -1
+          stale-issue-label: stale
+          remove-stale-when-updated: true
+          stale-issue-message: This is waiting on the information asked for above. It will close in a week without a reply; replying keeps it open.
+          close-issue-message: Closing for now since we could not reproduce it without more detail. Reopen with the details any time and we will pick it up.

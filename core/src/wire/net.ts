@@ -273,3 +273,22 @@ export const REQUEST_SHAPE_FIELD = 'requestShape';
  * makes by not sending it: a body may have existed and nothing about it is on the record.
  */
 export const REQUEST_SHAPE_NONE = 'none';
+
+/**
+ * The request header a Next.js Server Action carries.
+ *
+ * An app's Server Actions all POST to the page's own URL, so method plus URL cannot tell the calls
+ * apart, and the usual `FormData` body has no shape fingerprint either. This header names the action
+ * that ran — an opaque id for the code, not a projection of the data — and it is present on every
+ * Server Action request. Recorded as `NEXT_ACTION_FIELD`; the engine folds it into the write
+ * discriminator in `identityOf`.
+ */
+export const NEXT_ACTION_HEADER = 'Next-Action';
+
+/**
+ * Where the header above lands in a `NET_REQUEST`'s data.
+ *
+ * Alone it is a KNOWN identity: two POSTs that named different actions are different writes, and two
+ * that named the same action are the same write even when the body could not be read as text.
+ */
+export const NEXT_ACTION_FIELD = 'nextAction';

@@ -63,6 +63,9 @@ describe('record -> compile -> replay', () => {
       tool: 'reticle_act',
       stable: true,
       args: { by: 'testid', value: 'pay-btn', action: 'click', args: {} },
+      // Where the step ran and where it settled — both written to the saved flow.
+      page: '/checkout',
+      endPage: '/checkout',
     });
     expect(rec.warning).toBeUndefined();
     expect(rec.summary.network).toBeGreaterThanOrEqual(1);

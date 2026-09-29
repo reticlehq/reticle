@@ -43,6 +43,38 @@ suite(
       const result = matchQuery({ by: 'testid', value: 'row' }, 'visible');
       expect(result.count).toBe(1); // only the shown one — inherited visibility via the memo is correct
     });
+
+    it('hides the content of a closed details and keeps its summary matchable', () => {
+      // The field report behind this: a control inside a closed native <details> matched
+      // `visible`, so expanding the summary came back already_true/no-fault. The summary must
+      // stay matchable — it is the control the agent clicks — while its content does not.
+      document.body.innerHTML =
+        '<details><summary data-testid="row">closed</summary>' +
+        '<h2 data-testid="row">hidden</h2></details>' +
+        '<details open><summary data-testid="row">open</summary>' +
+        '<h2 data-testid="row">shown</h2></details>';
+      const result = matchQuery({ by: 'testid', value: 'row' }, 'visible');
+      expect(result.count).toBe(3); // both summaries and the open content — never the closed content
+    });
+
+    it('hides a shadow control whose host sits inside a closed details', () => {
+      // Queries collect shadow content, and the visibility walk has to cross the boundary to
+      // the host — otherwise the fix above is evaded by any web component.
+      const details = document.createElement('details');
+      const summary = document.createElement('summary');
+      summary.setAttribute('data-testid', 'row');
+      summary.textContent = 'closed';
+      const host = document.createElement('div');
+      const shadow = host.attachShadow({ mode: 'open' });
+      const button = document.createElement('button');
+      button.setAttribute('data-testid', 'row');
+      button.textContent = 'Retry';
+      shadow.append(button);
+      details.append(summary, host);
+      document.body.append(details);
+      const result = matchQuery({ by: 'testid', value: 'row' }, 'visible');
+      expect(result.count).toBe(1); // the summary — the host is closed away, shadow control included
+    });
   },
 );
 

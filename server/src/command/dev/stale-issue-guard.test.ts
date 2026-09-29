@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { closedRefsIn, staleIssues, type IssueState } from './stale-issue-guard.js';
+import {
+  closedRefsIn,
+  staleIssueReport,
+  staleIssues,
+  type IssueState,
+} from './stale-issue-guard.js';
 
 /**
  * An issue we have already fixed must not still read as available work.
@@ -88,5 +93,14 @@ describe('staleIssues', () => {
 
   it('says nothing when no commit claimed to close anything', () => {
     expect(staleIssues([], [OPEN(443)])).toEqual([]);
+  });
+});
+
+describe('what the guard tells the person who has to act', () => {
+  it('does not ask for the release label on an open pull request', () => {
+    const report = staleIssueReport([875]);
+    expect(report).toContain('#875');
+    expect(report).toMatch(/when this merges/i);
+    expect(report).not.toMatch(/label .* if the fix is waiting/i);
   });
 });

@@ -10,11 +10,12 @@
   "homepage": "https://www.reticle.sh",
   "repository": "https://github.com/reticlehq/reticle",
   "license": "Apache-2.0",
+  "icon": "./icon.svg",
   "keywords": ["mcp", "ai-agents", "testing", "verification", "instrumentation"],
   "mcpServers": {
     "reticle": {
       "command": "npx",
-      "args": ["-y", "@reticlehq/server", "mcp"],
+      "args": ["-y", "@reticlehq/server@3.3.0", "mcp"],
       "env": { "RETICLE_INSTALL_SOURCE": "plugin" }
     }
   }

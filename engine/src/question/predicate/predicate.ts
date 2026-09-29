@@ -335,13 +335,16 @@ async function evaluatePredicateRaw(
       // that was happening.
       const failed = results.find((r) => !r.pass && r.inconclusive === undefined);
       if (failed !== undefined) {
+        // A conjunction is decided as soon as ANY clause is permanently false: nothing the
+        // others do later can rescue it. Scan all failed clauses, not just the first —
+        // `.find()` picks by array order, and the decided clause is not always first.
+        const anyDecided = results.some(
+          (r) => !r.pass && r.inconclusive === undefined && true === r.decided,
+        );
         return {
           pass: false,
           failureReason: failed.failureReason ?? 'a sub-predicate of allOf failed',
-          // A conjunction is decided as soon as ONE clause is: nothing the others do later can
-          // rescue it. This is what makes the early exit reach real calls, since an exact count is
-          // usually asserted alongside the UI change it is meant to accompany.
-          ...(true === failed.decided ? { decided: true } : {}),
+          ...(anyDecided ? { decided: true } : {}),
           evidence: results,
         };
       }
@@ -364,7 +367,16 @@ async function evaluatePredicateRaw(
       // never read: the unreadable clause might have been the one that would have matched.
       const unreadable = results.find((r) => r.inconclusive !== undefined);
       if (unreadable !== undefined) return unreadableComposite(unreadable, results);
-      return { pass: false, failureReason: 'no sub-predicate of anyOf matched', evidence: results };
+      // A disjunction is decided when EVERY clause is permanently false: no branch can
+      // ever become true, so waiting out the budget buys nothing. By this point every
+      // result is a non-inconclusive failure (passing and inconclusive returned above).
+      const allDecided = results.every((r) => true === r.decided);
+      return {
+        pass: false,
+        failureReason: 'no sub-predicate of anyOf matched',
+        ...(allDecided ? { decided: true } : {}),
+        evidence: results,
+      };
     }
     case PredicateKind.NOT: {
       const inner = await evaluatePredicate(

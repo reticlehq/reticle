@@ -95,7 +95,18 @@ const MAX_FILES_IMPORTING_CORE = 44;
  * `EventType` and `ReticleEvent` are still the real debt, still most of the import sites, and still
  * the thing `Realm` exists to fix. Unchanged by this.
  */
-const MAX_DISTINCT_SYMBOLS = 58;
+/*
+ * 58 -> 59 for the Server Action write identity, and it is the same case as the fingerprint above.
+ *
+ * Every Server Action POSTs to the page's own URL, and the header that names the action is the only
+ * thing that separates two of them — so `duplicate-request` pooled the calls as an unknown identity
+ * and accused a page of a double submit it never made. `NEXT_ACTION_FIELD` is a name that crosses
+ * the wire, so it lives in core and the engine borrows it; inlining the string in `identityOf`
+ * would keep this number flat by breaking the rule the number exists to protect. It joins
+ * `REQUEST_SHAPE_FIELD` in the same `identityOf` and the same import, so the file count is unmoved.
+ * A realm-shaped engine takes the request's identity from the realm, and this goes with the rest.
+ */
+const MAX_DISTINCT_SYMBOLS = 59;
 
 /*
  * `node:path`'s dirname, not a hand-rolled one.

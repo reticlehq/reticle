@@ -153,15 +153,21 @@ export function gapsForAction(facts: ActionInstrumentationFacts): Instrumentatio
     // assertion about state to an agent that made no such assertion is a false explanation, and a
     // gap nobody can act on is worse than no gap: it costs the trip and teaches the wrong lesson.
     const declaredNothing = false === facts.hasCapabilities;
+    // `stateUnwatched` means no SUBSCRIBABLE store, not no store (#1146). A bare getter —
+    // `registerStore('app', () => state)` — is registered and readable, and a `state` assertion is
+    // answered by reading it on demand, so "no store is registered" contradicted a passing verdict
+    // in the same response. Nothing here can tell that app from one that registered nothing, or from
+    // a React app whose only store is Reticle's own `__reticle_renders` getter, so the sentence says
+    // only what is true of all three.
     gaps.push(
       instrumentationGap(
         InstrumentationGapKind.NO_STORE_REGISTERED,
         declaredNothing
           ? 'this app declared no capabilities at all, so no state can be read from it'
-          : 'no store is registered, and this assertion was about state',
+          : 'no subscribable store is registered, and this assertion was about state',
         declaredNothing
           ? 'every verdict here rests on what the DOM happens to show, and reticle_state will stay empty however many flows are driven'
-          : 'the assertion could not be answered from the deterministic channel and had to fall back to what the DOM happens to show',
+          : 'no state change is observed, so state, when it can be read at all, is read only as it stands and never seen changing',
       ),
     );
   }

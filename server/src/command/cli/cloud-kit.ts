@@ -8,7 +8,7 @@
  * `cloud-login` is the first to move — and it is a real seam rather than a file-size dodge: nothing
  * here knows what a project, a credential or a link is.
  */
-import { apiKeyFrom } from '@reticlehq/core';
+import { apiKeyFrom, cloudUrlFrom } from '@reticlehq/core';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -91,7 +91,7 @@ export const baseUrl = (session: { url: string } | null, explicit?: string): str
   // `--url` wins over the environment: it is typed for THIS command, it is visible in shell history,
   // and it cannot leak into a sibling process the way an exported variable does.
   if (explicit !== undefined && explicit.length > 0) return normalizeUrl(explicit);
-  const env = process.env['RETICLE_CLOUD_URL'];
+  const env = cloudUrlFrom(process.env);
   if (env !== undefined && env.length > 0) return env.replace(/\/+$/, '');
   if (null !== session && session.url.length > 0) return session.url;
   // No hint here any more. This used to warn that it was falling back to localhost, which was worth

@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — the `initialize` handshake led with the first-install steps even while a browser session was already connected.** The instructions asked only the durable "connected before" memory, which can be empty or stale for a project the plugin wired without writing `.reticle.json`. An agent attaching to that project was told "no app has ever connected" and pointed at `init` and a restart, although a session was live right now — the strongest evidence there is. `initialize` now also checks the live session count, so a connected browser outweighs empty or stale durable memory. Closes [#1138](https://github.com/reticlehq/reticle/issues/1138).

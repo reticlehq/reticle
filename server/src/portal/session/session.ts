@@ -305,6 +305,11 @@ export class Session implements HandshakeFacts {
     return this.#unansweredCommands >= UNRESPONSIVE_AFTER_TIMEOUTS;
   }
 
+  /** False once the socket is closing or closed: dropping this record then orphans nothing. */
+  socketOpen(): boolean {
+    return this.#socket.readyState === WS_OPEN;
+  }
+
   /** Wall-clock age of the session in milliseconds. */
   staleMs(): number {
     return this.#clock() - this.#startedAt;

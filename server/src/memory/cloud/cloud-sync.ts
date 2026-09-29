@@ -16,6 +16,7 @@ import {
   type RunRecord,
   type VerifyProgressEvent,
   apiKeyFrom,
+  cloudUrlFrom,
 } from '@reticlehq/core';
 
 /**
@@ -44,7 +45,7 @@ export interface CloudConfig {
 
 /** Resolve cloud credentials from the environment, or null when not logged in (sync disabled). */
 export function resolveCloudConfig(env: NodeJS.ProcessEnv): CloudConfig | null {
-  const url = env[CloudEnv.URL];
+  const url = cloudUrlFrom(env);
   const apiKey = apiKeyFrom(env);
   if (typeof url !== 'string' || 0 === url.length) return null;
   if (apiKey === undefined) return null;

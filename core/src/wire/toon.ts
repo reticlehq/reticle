@@ -100,6 +100,7 @@ const STATE_FLAG: Partial<Record<ElementState, string>> = {
   [ElementState.DISABLED]: 'dis',
   [ElementState.CHECKED]: 'chk',
   [ElementState.EXPANDED]: 'exp',
+  [ElementState.PRESSED]: 'prs',
   [ElementState.FOCUSED]: 'focus',
 };
 

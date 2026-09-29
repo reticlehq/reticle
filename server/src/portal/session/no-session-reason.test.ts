@@ -33,6 +33,63 @@ describe('every no-session branch names itself', () => {
     expect(explainNoSession(facts({ everConnected: true })).reason).toBe(NoSessionReason.TAB_GONE);
   });
 
+  it('the route the tab died on answers 5xx right now — a server error, not a closed tab', () => {
+    // The route that 500s tears the page down and the SDK never reconnects, so the list is empty
+    // and the diagnosis said "the tab went away". It had the URL (#862) and nothing else; a plain
+    // GET of that URL, done out of band by the watch, is the one fact that separates a server error
+    // from a closed tab and from an install problem. It outranks TAB_GONE because it is not an
+    // absence — it is an answer from the route itself.
+    const got = explainNoSession(
+      facts({
+        everConnected: true,
+        lastKnownUrl: 'http://localhost:3000/orders/explode',
+        lastKnownStatus: 500,
+      }),
+    );
+    expect(got.reason).toBe(NoSessionReason.ROUTE_SERVER_ERROR);
+    expect(got.message).toContain('http://localhost:3000/orders/explode');
+    expect(got.message).toMatch(/HTTP 500/);
+    expect(got.message).toMatch(/server error/i);
+    expect(got.message).not.toMatch(/reticle init/);
+  });
+
+  it('claims the present tense only — the status is what the route answers NOW', () => {
+    // A 500 now does not prove the teardown was a 500 then; a dev server recompiles. The sentence
+    // must not say the page "was torn down BY" the error as though that were observed.
+    const got = explainNoSession(
+      facts({ everConnected: true, lastKnownUrl: 'http://localhost:3000/x', lastKnownStatus: 503 }),
+    );
+    expect(got.message).toMatch(/right now|answers HTTP 503/i);
+  });
+
+  it('a non-5xx status is not a server error, and the closed-tab wording stands', () => {
+    // A 404 after a route rename, a 401 from an auth guard, a 200 because the route recovered — all
+    // real information, none of them the claim this branch makes. Only 5xx becomes the new reason.
+    for (const status of [200, 302, 401, 404]) {
+      const got = explainNoSession(
+        facts({
+          everConnected: true,
+          lastKnownUrl: 'http://localhost:3000/x',
+          lastKnownStatus: status,
+        }),
+      );
+      expect(got.reason, `status ${String(status)}`).toBe(NoSessionReason.TAB_GONE);
+      expect(got.message).not.toMatch(/server error/i);
+    }
+  });
+
+  it('a reaped lease still wins over a 5xx — the thing that vanished was ours, not the app', () => {
+    const got = explainNoSession(
+      facts({
+        everConnected: true,
+        leaseExpired: true,
+        lastKnownUrl: 'http://localhost:3000/x',
+        lastKnownStatus: 500,
+      }),
+    );
+    expect(got.reason).toBe(NoSessionReason.LEASE_EXPIRED);
+  });
+
   it('this project has connected before, but not on this daemon run', () => {
     expect(explainNoSession(facts({ previouslyConnected: true })).reason).toBe(
       NoSessionReason.APP_NOT_REOPENED,

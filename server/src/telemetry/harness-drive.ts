@@ -34,8 +34,3 @@ export async function withHarnessDrive<T>(drive: () => Promise<T>): Promise<T> {
 export function harnessDriving(): boolean {
   return depth > 0;
 }
-
-/** Tests only — a leaked span would mis-attribute every verdict after it. */
-export function resetHarnessDrive(): void {
-  depth = 0;
-}

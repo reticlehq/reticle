@@ -166,21 +166,3 @@ export function devCspAddition(port: number): string {
 
 /** The step title, named here so `doctor` and the plan cannot drift apart on what this check is called. */
 export const CSP_STEP_TITLE = 'Content-Security-Policy';
-
-/**
- * The first blocking policy among the sources `init` already has in hand, or undefined.
- *
- * At most one finding: a second copy of the same policy in a second file is the same problem, and
- * two identical notices read as two problems.
- */
-export function cspPlanProblem(
-  sources: readonly (string | null | undefined)[],
-  port: number,
-): string | undefined {
-  for (const source of sources) {
-    if ('string' !== typeof source) continue;
-    const problem = cspConnectSrcProblem(source, port);
-    if (problem !== undefined) return problem;
-  }
-  return undefined;
-}

@@ -64,9 +64,7 @@
   },
   "dependencies": {
     "@reticlehq/core": "workspace:*",
+    "open-verification": "workspace:*",
     "zod": "^3.24.1"
-  },
-  "devDependencies": {
-    "open-verification": "workspace:*"
   }
 }

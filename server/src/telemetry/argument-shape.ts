@@ -45,11 +45,6 @@ const SAFE_ENUM_PARAMS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
 
 export const OTHER_VALUE = 'other';
 
-/** True for anything we are willing to report a value for. */
-export function isSafeEnumParam(name: string): boolean {
-  return SAFE_ENUM_PARAMS.has(name);
-}
-
 /**
  * The reportable form of one parameter: `name` on its own, or `name:value` when the parameter is a
  * known enum. Never the raw value of anything else.

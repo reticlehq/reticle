@@ -228,7 +228,10 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // a `replay/` subdirectory for the nine files that cluster there, which is its own commit.
   // 33 since `learned-sources.ts`: it wraps the replay session and reads anchors the step runners
   // own, so filing it under `change/` made that directory and this one need each other.
-  'server/src/language/flows': 33,
+  // 35 since `flow-journey.ts` (what makes two saved drives one journey: fingerprint, merge, route
+  // claims) and `flow-author.ts` (who made a flow). Both are read by the store and by replay here,
+  // and a subdirectory of their own would be a new reach for each of those.
+  'server/src/language/flows': 35,
   // 12 since `drive-flow.ts`: the rule that turns a session's ambient tape into a flow per journey,
   // and the gate that refuses to save one asserting nothing. It sits beside `session-end.ts` because
   // teardown is the only caller and the tape is data by then — the reach guard already refused the

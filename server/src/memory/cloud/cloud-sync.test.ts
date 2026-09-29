@@ -61,6 +61,14 @@ describe('resolveCloudConfig', () => {
     });
     expect(cfg).toEqual({ url: 'https://cloud.test', apiKey: 'rk_live_x' });
   });
+
+  it('accepts RETICLE_URL as the host', () => {
+    const cfg = resolveCloudConfig({
+      RETICLE_URL: 'https://short.test',
+      [CloudEnv.KEY]: 'rk_live_x',
+    });
+    expect(cfg).toEqual({ url: 'https://short.test', apiKey: 'rk_live_x' });
+  });
 });
 
 describe('syncFlowToCloud', () => {

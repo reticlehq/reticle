@@ -20,7 +20,7 @@ Every action Reticle can perform takes the same shape: a `ref` from [`reticle_sn
 | `type` | `{ text }` | **Appends** to the current value |
 | `clear` | none | Empties an input |
 | `select` | `{ value }` | For `<select>` |
-| `check` / `uncheck` | none | Checkbox and radio |
+| `check` / `uncheck` | none | Checkbox and radio, or a `role="checkbox"`/`role="switch"` element (fails if `aria-checked` does not change) |
 | `submit` | none | Submits the element's `<form>` |
 | `press` | `{ text }` | The key **name**: `Escape`, `Tab`, `Enter` |
 | `scrollIntoView` | none |  |

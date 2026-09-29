@@ -24,7 +24,7 @@ export const BROWSER_TOOLS: ToolDef[] = [
     name: ReticleTool.NAVIGATE,
     example: { url: '/settings' },
     description:
-      'Navigate the connected browser tab to a URL, or reload it in place with { reload: true } (add { hard: true } to bypass the cache). `ok` means the navigation was DISPATCHED — the SDK is torn down by the navigation, so the page itself cannot report on it. The daemon then waits up to `timeout_ms` (default 5000) for the SDK to reconnect: `confirmed:true` with a new `sessionId` means the page arrived and you can act immediately. `confirmed:false` means it did not arrive within that window (reported as `waitedMs`) — the page may be slow, uninstrumented, or not there. A slow SPA can take 30-60s to reattach: raise `timeout_ms` rather than polling reticle_sessions.',
+      'Navigate the connected browser tab to a URL, or reload it in place with { reload: true } (add { hard: true } to bypass the cache). `ok` means the navigation was DISPATCHED — the SDK is torn down by the navigation, so the old page cannot report on it. The daemon then waits up to `timeout_ms` (default 5000) for the SDK to reconnect. `confirmed:true` with a `sessionId` means the requested page arrived and you can act immediately. `confirmed:false` with `landedOn` means the navigation arrived but the app landed at another URL, such as an authentication or route-guard redirect; use `landedOn` to understand where the browser actually ended up. `confirmed:false` without `landedOn` means the target was not observed within the wait window; a slow app may still be on its way, so increase `timeout_ms` when appropriate.',
     inputSchema: {
       url: z.string().optional().describe('The URL to navigate to. Omit when using reload.'),
       reload: z
@@ -53,6 +53,10 @@ export const BROWSER_TOOLS: ToolDef[] = [
       confirmed: z.boolean().optional(),
       /** The session the SDK reconnected as, when arrival was confirmed — it is a NEW id. */
       sessionId: z.string().optional(),
+      /**
+       * The URL where the navigated document landed when it differs from the requested target.
+       */
+      landedOn: z.string().optional(),
       /**
        * On confirmed:false — the budget (ms) that expired without the page coming back. Says which
        * of "Reticle stopped waiting" and "the page never came back" you are looking at.
@@ -128,7 +132,13 @@ export const BROWSER_TOOLS: ToolDef[] = [
             ? await awaitArrival(
                 deps.sessions,
                 target,
-                { navigatedId: session.id, priorIds },
+                {
+                  // Keep the original Session object and URL so arrival detection can distinguish
+                  // an in-progress navigation from a document that arrived somewhere else.
+                  navigatedSession: session,
+                  navigatedFrom: session.url,
+                  priorIds,
+                },
                 timeoutMs,
               )
             : null;

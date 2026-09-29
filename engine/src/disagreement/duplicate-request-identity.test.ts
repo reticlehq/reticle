@@ -16,6 +16,7 @@ import { describe, it, expect } from 'vitest';
 import {
   ContradictionKind,
   EventType,
+  NEXT_ACTION_FIELD,
   REQUEST_SHAPE_FIELD,
   REQUEST_SHAPE_NONE,
   type ReticleEvent,
@@ -25,7 +26,7 @@ import { findContradictions } from './contradictions.js';
 const URL_UNDER_TEST = '/api/setup';
 
 let seq = 0;
-function write(shape?: string): ReticleEvent {
+function write(shape?: string, nextAction?: string): ReticleEvent {
   seq += 1;
   return {
     t: seq * 37,
@@ -39,6 +40,7 @@ function write(shape?: string): ReticleEvent {
       status: 200,
       ok: true,
       ...(shape === undefined ? {} : { [REQUEST_SHAPE_FIELD]: shape }),
+      ...(nextAction === undefined ? {} : { [NEXT_ACTION_FIELD]: nextAction }),
     },
   };
 }
@@ -108,5 +110,55 @@ describe('a window where the body discriminator is missing', () => {
     const events = [write(), write(), domChanged()];
     const found = findContradictions(events, { actionSince: 0, namedNetUrls: ['/api/other'] });
     expect(found.map((c) => c.kind)).toContain(ContradictionKind.DUPLICATE_REQUEST_UNRELATED);
+  });
+});
+
+/**
+ * Several Server Actions post to the page's own URL, so method + URL cannot tell them apart, and
+ * their usual `FormData` body has no shape fingerprint. What separates them is the `Next-Action`
+ * header — an opaque id for the code that ran, not a projection of the data. Two different actions
+ * are two different writes; the same action run twice still is one write fired twice.
+ */
+const SAVE_ACTION = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6a7b8c9d0';
+const ADVANCE_ACTION = '0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c';
+
+describe('two different Server Actions posted to one endpoint', () => {
+  it('are not a duplicate when their action ids differ, even with no body fingerprint', () => {
+    const events = [write(undefined, SAVE_ACTION), write(undefined, ADVANCE_ACTION), domChanged()];
+    expect(duplicates(events)).toEqual([]);
+  });
+
+  it('are not a duplicate when their bodies share a shape but the action ids differ', () => {
+    const events = [
+      write(SAVE_PLAYER, SAVE_ACTION),
+      write(SAVE_PLAYER, ADVANCE_ACTION),
+      domChanged(),
+    ];
+    expect(duplicates(events)).toEqual([]);
+  });
+
+  it('are a duplicate with no hedge when the same action ran twice with the same body', () => {
+    const events = [write(SAVE_PLAYER, SAVE_ACTION), write(SAVE_PLAYER, SAVE_ACTION), domChanged()];
+    const [found] = duplicates(events);
+    expect(found?.kind).toBe(ContradictionKind.DUPLICATE_REQUEST);
+    expect(found?.detail).not.toContain('could not');
+  });
+
+  it('keep the unestablished-identity hedge when the same action ran twice with unreadable bodies', () => {
+    // The action id says which code ran, not what the two submissions carried — two runs of one
+    // action can send different form data, and the record cannot tell them apart.
+    const events = [write(undefined, SAVE_ACTION), write(undefined, SAVE_ACTION), domChanged()];
+    const [found] = duplicates(events);
+    expect(found?.kind).toBe(ContradictionKind.DUPLICATE_REQUEST);
+    expect(found?.detail).toContain('could not be established');
+  });
+
+  it('are not a duplicate when the same action carried different bodies', () => {
+    const events = [
+      write(SAVE_PLAYER, SAVE_ACTION),
+      write(ADVANCE_SETUP, SAVE_ACTION),
+      domChanged(),
+    ];
+    expect(duplicates(events)).toEqual([]);
   });
 });

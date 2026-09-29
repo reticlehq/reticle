@@ -185,6 +185,7 @@ function stateSuffix(el: Element): string {
       s === ElementState.DISABLED ||
       s === ElementState.CHECKED ||
       s === ElementState.EXPANDED ||
+      s === ElementState.PRESSED ||
       s === ElementState.FOCUSED,
   );
   return states.length > 0 ? ` [${states.join(',')}]` : '';

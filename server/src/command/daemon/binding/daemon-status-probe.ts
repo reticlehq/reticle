@@ -18,12 +18,18 @@ import { loopbackAgent } from '@/surface/loopback-agent.js';
 /** How long the daemon /status probe waits before giving up — a local loopback call is near-instant. */
 const STATUS_PROBE_TIMEOUT_MS = 1000;
 
-/** GET the daemon's /status JSON. Resolves to the parsed body, or undefined on any failure. */
-export function fetchStatus(port: number): Promise<unknown> {
+/**
+ * GET the daemon's /status JSON. Resolves to the parsed body, or undefined on any failure.
+ *
+ * `host` defaults to loopback, which is every caller's actual target — except `bootSession`
+ * (reticlehq/reticle#1165 review), whose Bridge can bind a non-default host via `RETICLE_HOST`.
+ * Hardcoding loopback here made that preflight check the wrong address.
+ */
+export function fetchStatus(port: number, host: string = LOOPBACK_HOST): Promise<unknown> {
   return new Promise((resolve) => {
     const req = http.get(
       {
-        host: LOOPBACK_HOST,
+        host,
         port,
         path: STATUS_PATH,
         timeout: STATUS_PROBE_TIMEOUT_MS,

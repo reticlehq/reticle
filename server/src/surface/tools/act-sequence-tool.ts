@@ -12,7 +12,7 @@
 
 import { z } from 'zod';
 import { timeoutMsSchema } from './args/numeric-bounds.js';
-import { compileSequenceStep } from '@/language/flows/replay.js';
+import { compileSequenceStep, pathOf } from '@/language/flows/replay.js';
 import { sequenceStepArgs } from './act/act-preflight.js';
 import { ReticleTool } from '@reticlehq/core';
 import { healthEnvelope } from '@/portal/session/session-health.js';
@@ -75,10 +75,9 @@ const BURST_MAX_GAP_MS = 500;
 
 export const ACT_SEQUENCE_TOOL: ToolDef = {
   name: ReticleTool.ACT_SEQUENCE,
-  // The example is required for a core tool, and this one carries weight: the measured loop it
-  // replaces is literally a login form driven as three separate reticle_act calls (98 clicks and
-  // 21 fills inside looping sessions, 2026-08-10/11). Showing fill -> fill -> click is showing the
-  // exact shape an agent otherwise spends three round trips on.
+  // The example is required for a core tool, and this one carries weight: the loop it replaces is
+  // a login form driven as three separate reticle_act calls. Showing fill -> fill -> click is showing
+  // the exact shape an agent otherwise spends three round trips on.
   example: {
     steps: [
       { ref: 'e12', action: 'fill', args: { value: 'a@b.com' } },
@@ -155,6 +154,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
     const paused = pausedShortCircuit(session);
     if (paused !== undefined) return paused;
     const since = session.elapsed();
+    const pageBefore = pathOf(session.url);
     session.beginAction(ReticleTool.ACT_SEQUENCE, asRecord(args));
     try {
       const inputSteps = Array.isArray(args['steps']) ? args['steps'] : [];
@@ -318,9 +318,14 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
       // Same as captureAct: no `active()` gate, so a sequence driven with nothing open still lands
       // in the ambient tape. A stalled plan is still excluded — those steps never ran.
       if (stalledAt === undefined) {
+        const recorded = compileSequenceStep(args, {
+          count: inputSteps.length,
+          steps: stepResults,
+        });
         deps.recordings.capture(
-          compileSequenceStep(args, { count: inputSteps.length, steps: stepResults }),
+          pageBefore === undefined ? recorded : { ...recorded, page: pageBefore },
         );
+        deps.recordings.markEnded(pathOf(session.url));
       }
       /*
        * The grade, and the coverage it is never allowed to hide.

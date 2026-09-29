@@ -17,8 +17,8 @@ Reading the source tells you what the component _asks_ for. It cannot tell you w
 ## The check
 
 ```
-reticle_snapshot({ sessionId, mode: "interactive" })
-reticle_inspect({ sessionId, ref })
+reticle_look({ action: "page", sessionId, mode: "interactive" })
+reticle_look({ action: "element", sessionId, ref })
 ```
 
 `inspect` returns a `theme` report per element:

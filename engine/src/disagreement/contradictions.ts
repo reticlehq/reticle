@@ -1,6 +1,7 @@
 import {
   ContradictionKind,
   EventType,
+  NEXT_ACTION_FIELD,
   REQUEST_SHAPE_FIELD,
   isAbsenceDerived,
   isSameDocument,
@@ -57,20 +58,46 @@ export type {
  * say what this request carried — a body the page could not read as text, or an SDK too old to
  * compute a fingerprint — and that is an ABSENCE of identity, not an identity shared with every
  * other silent request.
+ *
+ * A Server Action's action id joins both halves, and it is the half that survives a `FormData`
+ * body: several actions POST to the page's own URL, so without it every call is an unknown identity
+ * pooled with all the others, and no fingerprint can separate two that share a shape. The id alone
+ * SPLITS two different actions; it cannot say that two runs of one action carried the same thing,
+ * and `carried` keeps that limit on the record for the finding to say.
  */
-function identityOf(event: ReticleEvent): string | undefined {
+interface WriteIdentity {
+  /** The value the grouping compares. */
+  readonly key: string;
+  /** Whether the key also describes WHAT the request carried, not only which action ran. */
+  readonly carried: boolean;
+}
+
+function identityOf(event: ReticleEvent): WriteIdentity | undefined {
+  const action = asString(event.data[NEXT_ACTION_FIELD]);
   const shape = asString(event.data[REQUEST_SHAPE_FIELD]);
-  if (shape !== undefined && 0 !== shape.length) return shape;
   const body = asString(event.data['requestBody']);
-  return body === undefined || 0 === body.length ? undefined : body;
+  const carried =
+    shape !== undefined && 0 !== shape.length
+      ? shape
+      : body === undefined || 0 === body.length
+        ? undefined
+        : body;
+  if (action === undefined || 0 === action.length) {
+    return carried === undefined ? undefined : { key: carried, carried: true };
+  }
+  return carried === undefined
+    ? { key: action, carried: false }
+    : { key: `${action}:${carried}`, carried: true };
 }
 
 /** Split calls to one endpoint into the sets that sent the same thing. Callers check first that
  * every identity is known; an unknown one would otherwise pool with every other unknown. */
-function groupByIdentity<T extends { identity: string | undefined }>(calls: readonly T[]): T[][] {
+function groupByIdentity<T extends { identity: WriteIdentity | undefined }>(
+  calls: readonly T[],
+): T[][] {
   const byIdentity = new Map<string, T[]>();
   for (const call of calls) {
-    const key = call.identity ?? '';
+    const key = call.identity?.key ?? '';
     byIdentity.set(key, [...(byIdentity.get(key) ?? []), call]);
   }
   return [...byIdentity.values()];
@@ -659,7 +686,7 @@ function findWindowContradictions(
     )?.t;
     const writes = new Map<
       string,
-      { t: number; landed: boolean; identity: string | undefined }[]
+      { t: number; landed: boolean; identity: WriteIdentity | undefined }[]
     >();
     for (const event of events) {
       if (event.type !== EventType.NET_REQUEST || event.t < actionSince) continue;
@@ -694,6 +721,10 @@ function findWindowContradictions(
         const times = group.map((c) => c.t);
         const landed = group.filter((c) => c.landed).length;
         if (times.length < 2) continue;
+        // The identity also has to say WHICH PAYLOAD, not only which action ran. A group held
+        // together by an action id over bodies the record could not read keeps the uncertainty in
+        // its wording: two runs of one action can carry different form data.
+        const carriedKnown = group.every((c) => true === c.identity?.carried);
         // A DOUBLE SUBMIT is a write that landed twice. Two attempts of which one failed is a RETRY,
         // and the field case is the commonest retry there is: a 401 that refreshed a token and went
         // again, one row created, reported here as `duplicate-request ×2`. Two attempts that both
@@ -719,10 +750,10 @@ function findWindowContradictions(
           claim: related
             ? 'one user action was performed'
             : 'the assertion did not name this endpoint',
-          counter: identified
+          counter: carriedKnown
             ? `the same write fired ${count} times`
             : `this endpoint was written to ${count} times`,
-          detail: identified
+          detail: carriedKnown
             ? `${label} ×${count}`
             : `${label} ×${count} — nothing on the record says what these requests carried, ` +
               'so whether they were one write repeated or different writes could not be established',

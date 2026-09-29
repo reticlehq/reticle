@@ -18,6 +18,12 @@ export default defineConfig({
   // Every package shares one bound; see vitest.shared.ts for the gate this kept red.
   test: {
     environment: 'jsdom',
+    environmentOptions: {
+      jsdom: {
+        url: 'http://localhost/',
+      },
+    },
+    setupFiles: ['./vitest.setup.ts'],
     /**
      * The jsdom window has to be the REAL one, because this package now constructs events with it.
      *

@@ -765,6 +765,47 @@ describe('reticle_lease with seedStorage', () => {
     ).rejects.toThrow(/seedStorage is invalid: local: Expected object, received number/);
   });
 
+  it('rejects an unrecognised seedStorage key instead of silently stripping it (#1142)', async () => {
+    const { pool, acquired } = fakePool();
+    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
+
+    try {
+      await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+        url: 'http://localhost:3000/',
+        seedStorage: { localStorage: { a: '1' } },
+      });
+      expect.unreachable('should have thrown');
+    } catch (err: unknown) {
+      const msg = (err as Error).message;
+      // Names the offending key, not just the accepted shape.
+      expect(msg).toContain('localStorage');
+      expect(msg).toMatch(/seedStorage is invalid:.*\blocal\b/);
+    }
+    // Never silently reaches pool.acquire seeding nothing.
+    expect(acquired).toHaveLength(0);
+  });
+
+  it('rejects a Playwright storageState shape passed as seedStorage (#1142)', async () => {
+    const { pool, acquired } = fakePool();
+    const deps = { ...baseDeps, pool } as unknown as ToolDeps;
+
+    try {
+      await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+        url: 'http://localhost:3000/',
+        seedStorage: { origins: [] },
+      });
+      expect.unreachable('should have thrown');
+    } catch (err: unknown) {
+      const msg = (err as Error).message;
+      // Names the offending key and points at the Playwright hint...
+      expect(msg).toContain('origins');
+      expect(msg).toMatch(/storageState\(\)/);
+      // ...worded as a statement, never as "Expected a Playwright...".
+      expect(msg).not.toMatch(/Expected a Playwright/);
+    }
+    expect(acquired).toHaveLength(0);
+  });
+
   it('releases an existing lease on the origin and mints fresh when seedStorage is provided', async () => {
     const { pool, released } = fakePool();
     const deps = { ...baseDeps, pool } as unknown as ToolDeps;

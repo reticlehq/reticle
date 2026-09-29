@@ -44,6 +44,7 @@ import { SERVER_VERSION } from './command/version/identity/server-version.js';
 import { BaselineStore } from './memory/project/baselines.js';
 import { RecordingStore } from './language/flows/recording/tape/recordings.js';
 import { initImpact } from './memory/impact/impact-recorder.js';
+import { flowAuthor } from './language/flows/flow-author.js';
 import { FlowStore } from './language/flows/flows.js';
 import { buildFlowChips } from './language/flows/flow-scope.js';
 import { ProjectStore } from './memory/project/project-store.js';
@@ -121,6 +122,20 @@ export type { ToolDeps, ToolDef } from './surface/tools/tools.js';
 export { createToolInvoker, UNKNOWN_TOOL_ERROR } from './surface/tools/tool-invoker.js';
 export { runTool, SESSION_BOUND_TOOLS, SESSION_EXEMPT_TOOLS } from './surface/tools/invoke-tool.js';
 export type { ToolInvoker } from './surface/tools/tool-invoker.js';
+
+/**
+ * The port-presence check the CLI commands (`drive`, `verify`, `status`, `doctor`, `kill`) all share,
+ * re-exported so a consumer embedding `start()` in its own process can refuse a taken port the same
+ * honest way instead of letting a raw `EADDRINUSE` stack out — the gap `@reticlehq/test`'s
+ * `bootSession()` had (reticlehq/reticle#1141): it called `start()` directly with no pre-flight probe.
+ */
+export {
+  probePresence,
+  describePresence,
+  PortPresence,
+} from './command/daemon/binding/port-presence.js';
+export { probeDaemon } from './surface/mcp/proxy/proxy-daemon-probe.js';
+export { fetchStatus } from './command/daemon/binding/daemon-status-probe.js';
 export { BaselineStore, normalizeLines, diffLines } from './memory/project/baselines.js';
 export { RecordingStore } from './language/flows/recording/tape/recordings.js';
 export type { RecordedStep, CompiledProgram } from './language/flows/recording/tape/recordings.js';
@@ -422,6 +437,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       takeAmbientTape: () => recordings.stop(AMBIENT_RECORDING),
       reportStep: reportOnboardingStep,
       flows,
+      author: flowAuthor,
     });
     const project = new ProjectStore(fs, reticleRoot, { now });
     attachRouteLearning(bridge, projectStoreResolver(fs, project, reticleRoot, now));
@@ -470,7 +486,12 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     const server = createMcpServer(
       realInput !== undefined ? { ...deps, realInput } : deps,
       profile,
-      hasAnyProjectConnectedBefore(reticleStateHome(), port, projectIdsAt(process.cwd())),
+      // A session live RIGHT NOW is stronger evidence than the durable memory, which can be empty or
+      // stale for a project the plugin wired without writing `.reticle.json` (see connection-memory.ts's
+      // KNOWN LIMIT). Without this OR, that project's `initialize` led with the first-install steps
+      // while a real session was already connected — see #1138.
+      bridge.sessions.count() > 0 ||
+        hasAnyProjectConnectedBefore(reticleStateHome(), port, projectIdsAt(process.cwd())),
     );
     // When the agent (the MCP client) disconnects cleanly, end every active session at once so the
     // HUD doesn't linger. (If the agent instead KILLS this process, the WS dies and the browser
@@ -589,6 +610,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     takeAmbientTape: () => recordings.stop(AMBIENT_RECORDING),
     reportStep: reportOnboardingStep,
     flows,
+    author: flowAuthor,
     onRunPersisted: () => syncNudge.run?.(),
   });
   const project = new ProjectStore(fs, reticleRoot, { now });
@@ -678,7 +700,9 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     createMcpServer(
       effectiveDeps,
       profile,
-      hasAnyProjectConnectedBefore(reticleStateHome(), port, projectIdsAt(process.cwd())),
+      // See the sibling call in `start`: a live session outweighs empty/stale durable memory (#1138).
+      bridge.sessions.count() > 0 ||
+        hasAnyProjectConnectedBefore(reticleStateHome(), port, projectIdsAt(process.cwd())),
     ),
   );
   // `reticle drive <url>` when this daemon already owns the port: it asks HERE instead of trying to

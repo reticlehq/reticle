@@ -209,6 +209,27 @@ describe('reticle_verify_change — a green suite is not the end of the check', 
     contradictionSpy.mockRestore();
   });
 
+  it('reports UNKNOWN when a contradiction appeared only in flows it cannot tie to the change', async () => {
+    const verify = FLOW_TOOLS.find((t) => t.name === ReticleTool.FLOW_VERIFY);
+    if (verify === undefined) throw new Error('flow_verify missing');
+    vi.spyOn(verify, 'handler').mockResolvedValue(passingSuite);
+    const affectedSpy = vi
+      .spyOn(await import('./change/flow-sources.js'), 'affectedSavedFlows')
+      .mockReturnValue({ affected: ['checkout'], unknownProvenance: ['checkout'] });
+    const contradictionSpy = vi
+      .spyOn(await import('@reticlehq/engine/disagreement/contradictions.js'), 'findContradictions')
+      .mockReturnValue([{ kind: 'ui-advanced-request-failed' }] as never);
+
+    const result = (await tool.handler(sessionWith([], '', []), {
+      files: ['src/Checkout.tsx'],
+    })) as Record<string, unknown>;
+
+    expect(result['verified']).toBe(Verified.UNKNOWN);
+    expect(String(result['because'])).toContain('ui-advanced-request-failed');
+    affectedSpy.mockRestore();
+    contradictionSpy.mockRestore();
+  });
+
   it('reports which controls the covering flows never drove', async () => {
     const verify = FLOW_TOOLS.find((t) => t.name === ReticleTool.FLOW_VERIFY);
     if (verify === undefined) throw new Error('flow_verify missing');

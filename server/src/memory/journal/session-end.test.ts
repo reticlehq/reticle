@@ -1,9 +1,10 @@
 import { removeTempDir } from '@/machine/temp-dir.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { ReticleDir } from '@reticlehq/core';
+import { PredicateKind, QueryBy, ReticleDir, ReticleTool } from '@reticlehq/core';
+import { FlowStore } from '@/language/flows/flows.js';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import {
   asProjectId,
@@ -91,10 +92,17 @@ describe('makeSessionEnd (teardown: flush journal + persist ambient)', () => {
     const stale = join(root, ReticleDir.VISUAL_SUBDIR, 'shot.diff.png');
     await fs.mkdir(dirname(stale));
     await fs.writeFile(stale, 'x');
+    // Explicit, distinct mtimes. Retention keeps the newest by mtime, and files written in the same
+    // millisecond tie, so on a fast CI disk the "stale" file was not reliably the oldest and this
+    // failed intermittently (including on a push to main) with the code correct.
+    const base = new Date('2026-01-01T00:00:00Z').getTime();
+    await utimes(stale, new Date(base), new Date(base));
     const kept: string[] = [];
     for (let i = 0; i < DEFAULT_DIFF_RETENTION + 2; i += 1) {
       const p = join(root, ReticleDir.VISUAL_SUBDIR, `later-${String(i)}.diff.png`);
       await fs.writeFile(p, 'x');
+      const at = new Date(base + (i + 1) * 60_000);
+      await utimes(p, at, at);
       kept.push(p);
     }
     const end = makeSessionEnd({ fs, reticleRoot: root, enabled: false });
@@ -417,5 +425,71 @@ describe('a session that served no tool call', () => {
     const end = makeSessionEnd({ fs, reticleRoot: root, enabled: true });
     await end(fakeSession('s-idle', {}));
     expect(await fs.exists(sessionDirPath(root, asSessionId('s-other')))).toBe(true);
+  });
+});
+
+describe('teardown saves what a session drove as ONE flow per journey', () => {
+  let root: string;
+  const fs = createNodeFileSystem();
+
+  beforeEach(async () => {
+    root = join(await mkdtemp(join(tmpdir(), 'reticle-drive-')), '.reticle');
+  });
+  afterEach(async () => {
+    await removeTempDir(join(root, '..'));
+  });
+
+  it('merges two sessions of the same journey and stamps who drove it', async () => {
+    const flows = new FlowStore(fs, root, { now: () => 1 });
+    const tape = () => ({
+      startPath: '/issues',
+      steps: [
+        {
+          tool: ReticleTool.ACT,
+          args: { by: QueryBy.TESTID, value: 'close', action: 'click', args: {} },
+          stable: true,
+          page: '/issues',
+          intent: 'Close an issue',
+          expect: { kind: PredicateKind.SIGNAL, name: 'issue:closed' },
+        },
+      ],
+    });
+    const end = makeSessionEnd({
+      fs,
+      reticleRoot: root,
+      enabled: true,
+      flows,
+      takeAmbientTape: tape,
+      author: () => ({ agent: 'claude-code' }),
+    });
+    await end(fakeSession('tab-1', {}));
+    await end(fakeSession('tab-2', {}));
+    expect(await flows.list()).toEqual(['drive-close-an-issue']);
+    const saved = await flows.load('drive-close-an-issue');
+    expect(saved.ok && saved.value.author).toEqual({ agent: 'claude-code' });
+  });
+
+  it("saves in the session's own project, where replay looks, not where the daemon started", async () => {
+    const projectRoot = join(root, '..', 'app', '.reticle');
+    const end = makeSessionEnd({
+      fs,
+      reticleRoot: root,
+      enabled: true,
+      flows: new FlowStore(fs, root, { now: () => 1 }),
+      flowsAt: (at) => new FlowStore(fs, at, { now: () => 1 }),
+      takeAmbientTape: () => ({
+        steps: [
+          {
+            tool: ReticleTool.ACT,
+            args: { by: QueryBy.TESTID, value: 'go', action: 'click', args: {} },
+            stable: true,
+            expect: { kind: PredicateKind.SIGNAL, name: 'went' },
+          },
+        ],
+      }),
+    });
+    await end(fakeSession('tab-1', {}, undefined, projectRoot));
+    expect(await new FlowStore(fs, projectRoot, { now: () => 1 }).list()).toHaveLength(1);
+    expect(await new FlowStore(fs, root, { now: () => 1 }).list()).toEqual([]);
   });
 });

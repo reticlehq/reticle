@@ -33,4 +33,9 @@ describe('an unsupported query strategy throws instead of reporting zero matches
     document.body.innerHTML = '<button data-testid="b">Go</button>';
     expect(runQuery({ by: 'testid', value: 'b' }).count).toBe(1);
   });
+
+  it('finds a fieldset by role and its legend-derived name', () => {
+    document.body.innerHTML = '<fieldset><legend>Shipping address</legend><input /></fieldset>';
+    expect(runQuery({ by: 'role', value: 'group', name: 'Shipping address' }).count).toBe(1);
+  });
 });

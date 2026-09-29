@@ -1,5 +1,7 @@
 import Link from 'next/link';
-import { revalidatePath } from 'next/cache';
+import { addNote } from './actions';
+import { SaveBoth } from './save-both';
+import { notes, tags } from './store';
 
 /**
  * A SERVER ACTION — a mutation with no fetch and no JSON.
@@ -9,20 +11,13 @@ import { revalidatePath } from 'next/cache';
  * response is an RSC payload, not JSON. The question is whether a write that reaches the server this
  * way appears in `reticle_network` at all — because if it does not, every server-action app has its
  * entire mutation surface invisible, which is the desktop-IPC blind spot in a different costume.
+ *
+ * TWO actions live here and one button fires both, so the page also proves that distinct action ids
+ * stay distinct writes when the bodies are the multipart bodies Reticle cannot fingerprint.
  */
 export const dynamic = 'force-dynamic';
 
-const notes: string[] = [];
-
 export default function ActionsPage() {
-  async function addNote(formData: FormData) {
-    'use server';
-    const text = String(formData.get('note') ?? '').trim();
-    // Deliberately server-side, deliberately silent on failure: the form still says it worked.
-    if (text.length > 0) notes.push(text);
-    revalidatePath('/actions');
-  }
-
   return (
     <main style={{ padding: 24 }}>
       <h1 data-testid="actions-heading">Server actions</h1>
@@ -38,6 +33,15 @@ export default function ActionsPage() {
         ))}
       </ul>
       <p data-testid="note-count">{notes.length} notes</p>
+      <div style={{ marginTop: 12 }}>
+        <SaveBoth />
+      </div>
+      <ul data-testid="tag-list">
+        {tags.map((t, i) => (
+          <li key={`${t}-${String(i)}`}>{t}</li>
+        ))}
+      </ul>
+      <p data-testid="tag-count">{tags.length} tags</p>
       <nav style={{ marginTop: 24, display: 'flex', gap: 12 }}>
         <Link href="/" data-testid="link-home">
           Home

@@ -18,7 +18,7 @@
  */
 
 import { z } from 'zod';
-import { ReticleEnv, apiKeyFrom } from '@reticlehq/core';
+import { ReticleEnv, apiKeyFrom, cloudUrlFrom } from '@reticlehq/core';
 import type { HarnessTool, HistoryEntry, ModelDriver, ModelTurn, ToolRequest } from './harness.js';
 import type { HarnessFetch } from './driver.js';
 
@@ -95,7 +95,7 @@ export function openAiOptionsFromEnv(
   if (direct !== undefined && 0 < direct.length) return withModel({ apiKey: direct });
 
   const cloudKey = apiKeyFrom(env);
-  const cloudUrl = env[ReticleEnv.CLOUD_URL];
+  const cloudUrl = cloudUrlFrom(env);
   if (cloudKey === undefined || 0 === cloudKey.length) return undefined;
   if (cloudUrl === undefined || 0 === cloudUrl.length) return undefined;
   return withModel({ apiKey: cloudKey, baseUrl: cloudUrl });

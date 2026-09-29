@@ -10,22 +10,67 @@
 
 import { describe, expect, it } from 'vitest';
 import { awaitArrival, idsAtTarget, type ArrivalScope } from './navigate-arrival.js';
+import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 
-/** Just enough SessionManager for `awaitArrival`, which only ever calls `all()`. */
+/** A minimal Session-shaped object for the successor logic used by `awaitArrival`. */
+function fakeSession(id: string, url: string, openedBefore = false): Session {
+  return {
+    id,
+    url,
+    projectId: undefined,
+    staleMs: () => (openedBefore ? 1_000 : 0),
+    agentIdleMs: () => 100,
+  } as unknown as Session;
+}
+
+/**
+ * A deterministic SessionManager fake whose snapshots change on each `all()` call.
+ *
+ * `awaitArrival` normally only needs `all()`, while successor detection additionally needs `get()`.
+ * Keeping both here lets these tests exercise the same successor path used by the real manager.
+ */
 function fakeSessions(urlsOverTime: { id: string; url: string }[][]): {
   sessions: SessionManager;
   looks: () => number;
 } {
+  const sessionsById = new Map<string, Session>();
   let look = 0;
+  let currentSnapshot: Session[] = [];
+
+  const buildSnapshot = (index: number): Session[] => {
+    const snapshot = urlsOverTime[Math.min(index, urlsOverTime.length - 1)] ?? [];
+
+    return snapshot.map(({ id, url }) => {
+      const existing = sessionsById.get(id);
+
+      if (existing !== undefined) {
+        existing.url = url;
+        return existing;
+      }
+
+      const session = fakeSession(id, url);
+      sessionsById.set(id, session);
+      return session;
+    });
+  };
+
   const sessions = {
     all: () => {
-      const snapshot = urlsOverTime[Math.min(look, urlsOverTime.length - 1)] ?? [];
+      currentSnapshot = buildSnapshot(look);
       look++;
-      return snapshot;
+      return currentSnapshot;
+    },
+
+    get: (id: string) => {
+      return currentSnapshot.find((session) => session.id === id);
     },
   } as unknown as SessionManager;
-  return { sessions, looks: () => look };
+
+  return {
+    sessions,
+    looks: () => look,
+  };
 }
 
 /** A clock that advances only when slept on, so the test is deterministic and instant. */
@@ -44,7 +89,11 @@ const TARGET = 'http://localhost:3000/dashboard';
 
 /** The navigation drove `id`, and nothing was sitting on the target beforehand. */
 function drove(id: string): ArrivalScope {
-  return { navigatedId: id, priorIds: new Set() };
+  return {
+    navigatedSession: fakeSession(id, 'http://localhost:3000/orders'),
+    navigatedFrom: 'http://localhost:3000/orders',
+    priorIds: new Set(),
+  };
 }
 
 describe('awaitArrival', () => {
@@ -78,7 +127,13 @@ describe('awaitArrival', () => {
   });
 
   it('ignores a session sitting on a different page', async () => {
-    const { sessions } = fakeSessions([[{ id: 'other', url: 'http://localhost:3000/settings' }]]);
+    const { sessions } = fakeSessions([
+      [
+        { id: 'driven', url: 'http://localhost:3000/orders' },
+        { id: 'other', url: 'http://localhost:3000/settings' },
+      ],
+    ]);
+
     await expect(
       awaitArrival(sessions, TARGET, drove('driven'), 300, fakeClock(100)),
     ).resolves.toBeNull();
@@ -114,8 +169,17 @@ describe('awaitArrival', () => {
     // different app that had previously held the same port — matched the scan and was reported as
     // the session you had arrived at. It was there before the navigation, so it is evidence of
     // nothing about it.
-    const { sessions } = fakeSessions([[{ id: 'zombie', url: TARGET }]]);
-    const scope: ArrivalScope = { navigatedId: 'driven', priorIds: new Set(['zombie']) };
+    const { sessions } = fakeSessions([
+      [
+        { id: 'driven', url: 'http://localhost:3000/orders' },
+        { id: 'zombie', url: TARGET },
+      ],
+    ]);
+    const scope: ArrivalScope = {
+      navigatedSession: fakeSession('driven', 'http://localhost:3000/orders'),
+      navigatedFrom: 'http://localhost:3000/orders',
+      priorIds: new Set(['zombie']),
+    };
     await expect(awaitArrival(sessions, TARGET, scope, 300, fakeClock(100))).resolves.toBeNull();
   });
 
@@ -124,7 +188,11 @@ describe('awaitArrival', () => {
     // the target both before and after, under the same id. Excluding it would report confirmed:false
     // for the navigation most likely to have worked.
     const { sessions } = fakeSessions([[{ id: 'driven', url: TARGET }]]);
-    const scope: ArrivalScope = { navigatedId: 'driven', priorIds: new Set(['driven']) };
+    const scope: ArrivalScope = {
+      navigatedSession: fakeSession('driven', 'http://localhost:3000/orders'),
+      navigatedFrom: 'http://localhost:3000/orders',
+      priorIds: new Set(['driven']),
+    };
     await expect(awaitArrival(sessions, TARGET, scope, 500, fakeClock(100))).resolves.toEqual({
       sessionId: 'driven',
     });
@@ -139,7 +207,11 @@ describe('awaitArrival', () => {
         { id: 'fresh', url: TARGET },
       ],
     ]);
-    const scope: ArrivalScope = { navigatedId: 'driven', priorIds: new Set(['zombie']) };
+    const scope: ArrivalScope = {
+      navigatedSession: fakeSession('driven', 'http://localhost:3000/orders'),
+      navigatedFrom: 'http://localhost:3000/orders',
+      priorIds: new Set(['zombie']),
+    };
     await expect(awaitArrival(sessions, TARGET, scope, 500, fakeClock(100))).resolves.toEqual({
       sessionId: 'fresh',
     });
@@ -164,6 +236,299 @@ describe('awaitArrival', () => {
     await expect(
       awaitArrival(sessions, TARGET, drove('driven'), 300, fakeClock(100)),
     ).resolves.toBeNull();
+  });
+
+  it('reports where the navigated session landed when the app redirected it', async () => {
+    const { sessions } = fakeSessions([[{ id: 'driven', url: 'http://localhost:3000/login' }]]);
+
+    await expect(
+      awaitArrival(sessions, TARGET, drove('driven'), 500, fakeClock(100)),
+    ).resolves.toEqual({
+      sessionId: 'driven',
+      landedOn: 'http://localhost:3000/login',
+    });
+  });
+
+  it('reports where a successor session landed when the app redirected it', async () => {
+    const { sessions } = fakeSessions([
+      [{ id: 'driven', url: 'http://localhost:3000/orders' }],
+      [{ id: 'successor', url: 'http://localhost:3000/login' }],
+    ]);
+
+    await expect(
+      awaitArrival(sessions, TARGET, drove('driven'), 500, fakeClock(100)),
+    ).resolves.toEqual({
+      sessionId: 'successor',
+      landedOn: 'http://localhost:3000/login',
+    });
+  });
+
+  it('keeps waiting when the navigated session passes through an intermediate route', async () => {
+    const { sessions } = fakeSessions([
+      [
+        {
+          id: 'driven',
+          url: 'http://localhost:3000/orders',
+        },
+      ],
+      [
+        {
+          id: 'driven',
+          url: 'http://localhost:3000/auth/check',
+        },
+      ],
+      [
+        {
+          id: 'driven',
+          url: TARGET,
+        },
+      ],
+    ]);
+
+    const result = await awaitArrival(
+      sessions,
+      TARGET,
+      {
+        navigatedSession: fakeSession('driven', 'http://localhost:3000/orders'),
+        navigatedFrom: 'http://localhost:3000/orders',
+        priorIds: new Set(),
+      },
+      500,
+      fakeClock(100),
+    );
+
+    expect(result).toEqual({
+      sessionId: 'driven',
+    });
+  });
+
+  it('reports the final redirect after passing through an intermediate route', async () => {
+    const { sessions } = fakeSessions([
+      [
+        {
+          id: 'driven',
+          url: 'http://localhost:3000/orders',
+        },
+      ],
+      [
+        {
+          id: 'driven',
+          url: 'http://localhost:3000/auth/check',
+        },
+      ],
+      [
+        {
+          id: 'driven',
+          url: 'http://localhost:3000/login',
+        },
+      ],
+    ]);
+
+    const result = await awaitArrival(
+      sessions,
+      TARGET,
+      {
+        navigatedSession: fakeSession('driven', 'http://localhost:3000/orders'),
+        navigatedFrom: 'http://localhost:3000/orders',
+        priorIds: new Set(),
+      },
+      200,
+      fakeClock(100),
+    );
+
+    expect(result).toEqual({
+      sessionId: 'driven',
+      landedOn: 'http://localhost:3000/login',
+    });
+  });
+
+  it('confirms a cross-origin arrival after the original session disconnects', async () => {
+    const driven = fakeSession('driven', 'http://localhost:3000/orders');
+
+    const arriving = fakeSession('arriving', 'http://localhost:5173/dashboard');
+
+    let live: Session[] = [driven];
+    let now = 0;
+
+    const sessions = {
+      all: () => live,
+      get: (id: string) => live.find((session) => session.id === id),
+    } as unknown as SessionManager;
+
+    const clock = {
+      now: () => now,
+      sleep: (ms: number) => {
+        now += ms;
+
+        // The original document disappears and the destination document
+        // reconnects on a different origin. Arrival detection must keep
+        // polling instead of delegating the remaining budget to successor
+        // detection, which intentionally only matches the original origin.
+        if (now >= 100) {
+          live = [arriving];
+        }
+        return Promise.resolve();
+      },
+    };
+
+    const result = await awaitArrival(
+      sessions,
+      'http://localhost:5173/dashboard',
+      {
+        navigatedSession: driven,
+        navigatedFrom: 'http://localhost:3000/orders',
+        priorIds: new Set(),
+      },
+      500,
+      clock,
+    );
+
+    expect(result).toEqual({
+      sessionId: 'arriving',
+    });
+  });
+
+  it('confirms arrival when another tab is already open on the same origin', async () => {
+    const driven = fakeSession('driven', 'http://localhost:3000/orders');
+
+    const otherTab = fakeSession('other-tab', 'http://localhost:3000/settings');
+
+    const arriving = fakeSession('arriving', TARGET);
+
+    let live: Session[] = [driven, otherTab];
+    let now = 0;
+
+    const sessions = {
+      all: () => live,
+      get: (id: string) => live.find((session) => session.id === id),
+    } as unknown as SessionManager;
+
+    const clock = {
+      now: () => now,
+      sleep: (ms: number) => {
+        now += ms;
+
+        // The unrelated tab remains alive while the navigated document
+        // reconnects under a new id. The arrival poll must see the target
+        // instead of treating multiple same-origin sessions as ambiguity.
+        if (now >= 100) {
+          live = [otherTab, arriving];
+        }
+        return Promise.resolve();
+      },
+    };
+
+    const result = await awaitArrival(
+      sessions,
+      TARGET,
+      {
+        navigatedSession: driven,
+        navigatedFrom: 'http://localhost:3000/orders',
+        priorIds: new Set(),
+      },
+      500,
+      clock,
+    );
+
+    expect(result).toEqual({
+      sessionId: 'arriving',
+    });
+  });
+
+  it('does not report a successor intermediate route as the final landing URL', async () => {
+    const driven = fakeSession('driven', 'http://localhost:3000/orders');
+
+    const loading = fakeSession('loading', 'http://localhost:3000/loading');
+
+    const arriving = fakeSession('arriving', TARGET);
+
+    let live: Session[] = [driven];
+    let now = 0;
+
+    const sessions = {
+      all: () => live,
+      get: (id: string) => live.find((session) => session.id === id),
+    } as unknown as SessionManager;
+
+    const clock = {
+      now: () => now,
+      sleep: (ms: number) => {
+        now += ms;
+
+        if (now >= 100 && now < 200) {
+          live = [loading];
+        } else if (now >= 200) {
+          live = [arriving];
+        }
+        return Promise.resolve();
+      },
+    };
+
+    const result = await awaitArrival(
+      sessions,
+      TARGET,
+      {
+        navigatedSession: driven,
+        navigatedFrom: 'http://localhost:3000/orders',
+        priorIds: new Set(),
+      },
+      500,
+      clock,
+    );
+
+    expect(result).toEqual({
+      sessionId: 'arriving',
+    });
+  });
+
+  it('follows a successor through another document replacement before reporting its final redirect', async () => {
+    const driven = fakeSession('driven', 'http://localhost:3000/orders');
+    const successorA = fakeSession('successor-a', 'http://localhost:3000/auth/check');
+    const successorB = fakeSession('successor-b', 'http://localhost:3000/login');
+
+    let live: Session[] = [driven];
+    let now = 0;
+
+    const sessions = {
+      all: () => live,
+      get: (id: string) => live.find((session) => session.id === id),
+    } as unknown as SessionManager;
+
+    const clock = {
+      now: () => now,
+      sleep: (ms: number) => {
+        now += ms;
+
+        // The first document replacement reconnects as successor-a.
+        // A second replacement then removes it and reconnects as successor-b.
+        // Keeping the transitions inside the clock models the real polling
+        // sequence instead of advancing state every time `all()` is called.
+        if (now >= 200) {
+          live = [successorB];
+        } else if (now >= 100) {
+          live = [successorA];
+        }
+
+        return Promise.resolve();
+      },
+    };
+
+    const result = await awaitArrival(
+      sessions,
+      TARGET,
+      {
+        navigatedSession: driven,
+        navigatedFrom: 'http://localhost:3000/orders',
+        priorIds: new Set(),
+      },
+      300,
+      clock,
+    );
+
+    expect(result).toEqual({
+      sessionId: 'successor-b',
+      landedOn: 'http://localhost:3000/login',
+    });
   });
 });
 

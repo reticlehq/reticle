@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — `reticle_lease{action:"acquire"}` silently dropped an unrecognised `seedStorage` key instead of rejecting it.** `seedStorage: { localStorage: {...} }` (the wrong key name) or a Playwright `storageState()` export (`{ origins: [...] }`) passed successfully and seeded nothing, so the caller believed storage was seeded when it was not. `seedStorage` now rejects unknown keys, and the error names the accepted shape (`{ local?, session?, cookies? }`) and calls out a Playwright `storageState()` export specifically. Closes [#1142](https://github.com/reticlehq/reticle/issues/1142).

@@ -19,11 +19,6 @@ It drives your real running app, reads what actually happened, and hands back **
 
 <br/>
 
-<a href="https://reticle.sh"><img src="assets/readme/demo-montage.webp" width="820"
-     alt="Reticle in action: an agent verifying a real running app from the inside, returning pass/fail verdicts with evidence and the file:line to fix" /></a>
-
-<br/>
-
 <a href="https://www.youtube.com/watch?v=XCC0wST0rJA&loop=1&playlist=XCC0wST0rJA">
   <img src="https://img.youtube.com/vi/XCC0wST0rJA/maxresdefault.jpg" width="800"
        alt="Watch: an agent drives a real app, reads the network and the store, and returns a verdict with the file:line to fix" />
@@ -243,6 +238,10 @@ flowchart LR
 
 One call checks many things at once. Say _"save that as a flow"_ and it replays on every later edit with no model in the loop, so today's fix can't quietly break last week's feature.
 
+<p align="center">
+  <img src="assets/readme/regression-replay.png" alt="Re-driving a suite with an LLM burns tokens on every step, every run. Reticle records the flow once and replays it deterministically: no model, no flake, just a verdict." width="560" />
+</p>
+
 <details>
 <summary><b>What one call looks like underneath</b></summary>
 
@@ -282,6 +281,11 @@ reticle_assert({
 </p>
 
 Re-verification has no model in the loop, so a recorded suite is a fixed, tiny read. Reticle is ahead from the second run even when charged a full LLM drive to author the suite.
+
+<p align="center">
+  <img src="assets/readme/bench-rerun.png" width="840"
+       alt="Re-running a four-flow suite: Reticle replays it in 47 tokens with no model and no flake, against about 120,000 tokens to re-drive it with an LLM." />
+</p>
 
 <p align="center">
   <img src="assets/readme/chart-speed.svg" width="880"

@@ -24,6 +24,12 @@ describe('toToon', () => {
     expect(out).toContain('en');
   });
 
+  it('abbreviates pressed to prs', () => {
+    const out = toToon([el({ states: [ElementState.PRESSED] })]);
+    expect(out).toContain('prs');
+    expect(out).not.toContain('pressed');
+  });
+
   /** An unknown state — a newer SDK than this daemon — still reaches the agent verbatim. */
   it('passes through a state it does not know', () => {
     expect(toToon([el({ states: ['teleporting'] })])).toContain('teleporting');

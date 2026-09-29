@@ -34,8 +34,12 @@ export function daemonPollDelayMs(attempt: number): number {
  * Returns true if something is already listening on the reticle port.
  * Uses a plain TCP probe so we don't create a side-effectful SSE session
  * inside the daemon just to check reachability.
+ *
+ * `host` defaults to loopback, which is every caller's actual target — except `bootSession`
+ * (reticlehq/reticle#1165 review), whose Bridge can bind a non-default host via `RETICLE_HOST`.
+ * Hardcoding loopback here made that preflight check the wrong address.
  */
-export function probeDaemon(port: number): Promise<boolean> {
+export function probeDaemon(port: number, host: string = LOOPBACK_HOST): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = new net.Socket();
     socket.setTimeout(500);
@@ -48,7 +52,7 @@ export function probeDaemon(port: number): Promise<boolean> {
       socket.destroy();
       resolve(false);
     });
-    socket.connect(port, LOOPBACK_HOST);
+    socket.connect(port, host);
   });
 }
 

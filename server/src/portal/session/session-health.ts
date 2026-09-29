@@ -91,7 +91,8 @@ export const PENDING_NAVIGATION_NOTICE_MS = 10_000;
 const SKEW_VERDICT_WARNING =
   'version skew: `dispatched` and `settled` on this session mean the event was sent, NOT that the ' +
   'app acted on it — a skewed pair drops actions silently. Re-read the control (aria-checked, ' +
-  'data-state, its text) before trusting any verdict from this session, and converge the versions:';
+  'data-state, its text) before trusting any verdict from this session, and converge the versions ' +
+  '(see session.versionSkew).';
 
 /**
  * The age of the oldest request that STARTED and never completed, or undefined when there is none
@@ -177,7 +178,7 @@ export function healthEnvelope(session: HealthSubject): HealthEnvelope {
   // a skewed link makes the ACTION unreliable, and there is no point warning about the quality of an
   // observation of something that may never have happened.
   if (health.versionSkew !== undefined) {
-    return { session: health, warning: `${SKEW_VERDICT_WARNING} ${health.versionSkew}` };
+    return { session: health, warning: SKEW_VERDICT_WARNING };
   }
   return health.throttled ? { session: health, warning: THROTTLED_WARNING } : { session: health };
 }

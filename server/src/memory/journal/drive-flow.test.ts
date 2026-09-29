@@ -14,10 +14,10 @@ const step = (expectIt: boolean, route?: string): RecordedStep => ({
 
 describe('a drive becomes a flow without anybody asking', () => {
   it('saves a tape that declared a consequence', () => {
-    const { programs, outcome } = driveFlowsFrom('tab-1', { steps: [step(false), step(true)] });
+    const { programs, outcome } = driveFlowsFrom({ steps: [step(false), step(true)] });
     expect(programs[0]?.steps).toHaveLength(2);
     // The name now carries the claim, so it is derived from the same steps the tape held.
-    expect(outcome.saved).toEqual([driveFlowName('tab-1', undefined, [step(false), step(true)])]);
+    expect(outcome.saved).toEqual([driveFlowName(undefined, [step(false), step(true)])]);
     expect(outcome.saved?.[0]).toContain('saved');
     expect(outcome.unprovenSteps).toBeUndefined();
   });
@@ -30,29 +30,19 @@ describe('a drive becomes a flow without anybody asking', () => {
    * purpose is to prevent them, running unattended. So it is counted and not written.
    */
   it('REFUSES to save a tape that asserts nothing, and says how much was driven', () => {
-    const { programs, outcome } = driveFlowsFrom('tab-1', { steps: [step(false), step(false)] });
+    const { programs, outcome } = driveFlowsFrom({ steps: [step(false), step(false)] });
     expect(programs, 'a flow that cannot go red is not a regression test').toEqual([]);
     expect(outcome.saved).toBeUndefined();
     expect(outcome.unprovenSteps, 'drove and proved nothing must stay visible').toBe(2);
   });
 
   it('writes nothing for a session that drove nothing', () => {
-    expect(driveFlowsFrom('tab-1', { steps: [] })).toEqual({ programs: [], outcome: {} });
-    expect(driveFlowsFrom('tab-1', undefined)).toEqual({ programs: [], outcome: {} });
-  });
-
-  /**
-   * Teardown fires on every socket close and a reconnecting tab keeps its session id, so a random
-   * name would scatter one journey across several files, each a partial copy of the others. Same
-   * reasoning as `driveRunId`, which was fixed for exactly this.
-   */
-  it('names the flow from the session, so a reconnect rewrites rather than duplicates', () => {
-    expect(driveFlowName('tab-1')).toBe(driveFlowName('tab-1'));
-    expect(driveFlowName('tab-1')).not.toBe(driveFlowName('tab-2'));
+    expect(driveFlowsFrom({ steps: [] })).toEqual({ programs: [], outcome: {} });
+    expect(driveFlowsFrom(undefined)).toEqual({ programs: [], outcome: {} });
   });
 
   it('keeps a name usable as a filename under .reticle/flows/', () => {
-    expect(driveFlowName('weird/../id with spaces')).toMatch(/^drive-[a-zA-Z0-9-]+$/);
+    expect(driveFlowName('/weird/../route with spaces')).toMatch(/^drive-[a-z0-9-]+$/);
   });
 
   it('carriesAnAssertion is the whole gate, and is exported so the caller cannot re-derive it', () => {
@@ -78,7 +68,7 @@ describe('a session that visited several routes becomes several flows', () => {
   const overview = step(true, '/overview');
 
   it('cuts the tape at route boundaries instead of saving one flow that starts at login', () => {
-    const { programs } = driveFlowsFrom('tab-1', {
+    const { programs } = driveFlowsFrom({
       steps: [login, compose, compose, overview],
     });
     expect(programs).toHaveLength(3);
@@ -91,24 +81,24 @@ describe('a session that visited several routes becomes several flows', () => {
   it('declares startPath, which is what makes a flow independent of the previous one', () => {
     // Replay navigates to `startPath` before step 1 (the FlowFile contract, flow-replay-run.ts), so
     // a segment that names its route does not care where the last flow left the tab.
-    const { programs } = driveFlowsFrom('tab-1', { steps: [compose, overview] });
+    const { programs } = driveFlowsFrom({ steps: [compose, overview] });
     for (const program of programs) expect(program.startPath).toBeDefined();
   });
 
   it('never writes the recorder-internal route onto the saved steps', () => {
-    const { programs } = driveFlowsFrom('tab-1', { steps: [compose] });
+    const { programs } = driveFlowsFrom({ steps: [compose] });
     for (const s of programs[0]?.steps ?? []) {
       expect(s, 'route is how the tape was cut, not part of the flow').not.toHaveProperty('route');
     }
   });
 
   it('names each journey so two in one session do not overwrite each other', () => {
-    const { programs } = driveFlowsFrom('tab-1', { steps: [compose, overview] });
+    const { programs } = driveFlowsFrom({ steps: [compose, overview] });
     expect(new Set(programs.map((p) => p.name)).size).toBe(2);
   });
 
   it('still drops a journey that proved nothing, and counts it', () => {
-    const { programs, outcome } = driveFlowsFrom('tab-1', {
+    const { programs, outcome } = driveFlowsFrom({
       steps: [step(false, '/idle'), compose],
     });
     expect(programs.map((p) => p.startPath)).toEqual(['/compose']);
@@ -135,57 +125,71 @@ describe('a drive flow is named after what it proved', () => {
   });
 
   it('leads with the signal, which is the strongest thing a flow can claim', () => {
-    const name = driveFlowName('sdc991872-6d66-4adf', undefined, [
-      proving({ kind: 'signal', name: 'auth:granted' }),
-    ]);
-    expect(name).toContain('auth-granted');
-    expect(name.indexOf('auth-granted')).toBeLessThan(name.indexOf('sdc99187'));
+    const name = driveFlowName(undefined, [proving({ kind: 'signal', name: 'auth:granted' })]);
+    expect(name).toBe('drive-auth-granted');
   });
 
   it('falls to the request, then the store path, when there is no signal', () => {
     expect(
-      driveFlowName('s1', undefined, [
+      driveFlowName(undefined, [
         proving({ kind: 'net', method: 'POST', urlContains: '/api/login' }),
       ]),
     ).toContain('post-api-login');
-    expect(
-      driveFlowName('s1', undefined, [proving({ kind: 'state', path: 'auth.email' })]),
-    ).toContain('auth-email');
+    expect(driveFlowName(undefined, [proving({ kind: 'state', path: 'auth.email' })])).toContain(
+      'auth-email',
+    );
   });
 
   it('still carries the route, so two journeys in one session stay apart', () => {
-    const a = driveFlowName('s1', '/deployments', [proving({ kind: 'signal', name: 'x:done' })]);
-    const b = driveFlowName('s1', '/compose', [proving({ kind: 'signal', name: 'x:done' })]);
+    const a = driveFlowName('/deployments', [proving({ kind: 'signal', name: 'x:done' })]);
+    const b = driveFlowName('/compose', [proving({ kind: 'signal', name: 'x:done' })]);
     expect(a).toContain('deployments');
     expect(b).toContain('compose');
     expect(a).not.toBe(b);
   });
 
   /*
-   * The property the session id was there for in the first place.
-   *
-   * Teardown fires on every socket close and a reconnecting tab keeps its id, so the same journey
-   * must land on the same name or one drive ends up scattered across several near-identical files.
+   * One journey, one name, whichever session drove it. Two sessions used to get two files for the
+   * same journey; the save now merges them (FlowStore.saveJourney), and a different journey that
+   * lands on the same name is told apart there by its shape.
    */
-  it('is stable for the same session, route and claim', () => {
-    const args = ['s1', '/deployments', [proving({ kind: 'signal', name: 'x:done' })]] as const;
+  it('gives the same journey the same name from any session', () => {
+    const args = ['/deployments', [proving({ kind: 'signal', name: 'x:done' })]] as const;
     expect(driveFlowName(...args)).toBe(driveFlowName(...args));
-  });
-
-  it('keeps two sessions apart even when they prove the same thing', () => {
-    const steps = [proving({ kind: 'signal', name: 'x:done' })];
-    expect(driveFlowName('tab-one', '/a', steps)).not.toBe(driveFlowName('tab-two', '/a', steps));
+    expect(driveFlowName(...args)).not.toMatch(/tab|s1/);
   });
 
   it('is still a safe filename, whatever the claim contained', () => {
-    const name = driveFlowName('s1', undefined, [
+    const name = driveFlowName(undefined, [
       proving({ kind: 'signal', name: 'weird/../sig with spaces' }),
     ]);
     expect(name).toMatch(/^drive-[a-zA-Z0-9-]+$/);
   });
 
-  // No steps, or steps that declare nothing nameable, must not lose the old behaviour.
-  it('falls back to the session name when nothing nameable was proved', () => {
-    expect(driveFlowName('tab-1', undefined, [])).toBe(driveFlowName('tab-1'));
+  it('falls back to the route, then to a plain name, when nothing nameable was proved', () => {
+    expect(driveFlowName('/settings', [])).toBe('drive-settings');
+    expect(driveFlowName(undefined, [])).toBe('drive-journey');
+  });
+});
+
+describe('a drive flow is named after why it was driven', () => {
+  const intended = (intent: string): TapeStep => ({
+    tool: ReticleTool.ACT,
+    args: { ref: 'e1', action: 'click' },
+    stable: true,
+    expect: { kind: 'net', method: 'GET', urlContains: '/v1/issues' },
+    intent,
+  });
+
+  it('leads with the intent the agent declared on the action, over what it proved', () => {
+    expect(driveFlowName('/issues', [intended('Open an issue and close it')])).toBe(
+      'drive-open-an-issue-and-close-it',
+    );
+  });
+
+  it('carries the intent into the saved program, where the flow file picks it up', () => {
+    const { programs } = driveFlowsFrom({ steps: [intended('Close an issue')] });
+    expect(programs[0]?.steps[0]?.intent).toBe('Close an issue');
+    expect(programs[0]?.name).toBe('drive-close-an-issue');
   });
 });

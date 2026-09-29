@@ -18,6 +18,7 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import { haltedFrom } from './recording/replay-halt.js';
+import { establishedState, samePath } from './flow-journey.js';
 import { asRecord, asString } from '@reticlehq/core';
 import { routeOfEvent, routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route.js';
 import type { ArrivalClock } from '@/surface/tools/act/navigation/navigate-arrival.js';
@@ -33,6 +34,8 @@ import { unsuppliedSecrets } from './fields/flow-secret-field.js';
 import {
   assertStepExpect,
   DocumentLostDuringReplay,
+  resumeArg,
+  unresolvedResume,
   type FlowReplaySession,
 } from './flow-replay.js';
 import { isDocumentGoneError } from '@/portal/session/facts/session-replaced.js';
@@ -56,7 +59,6 @@ import { log } from '@/log.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { flowsForSession } from './flow-store-for-session.js';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
-import { FlowParseNote } from './flow-expect-grammar.js';
 
 export function latestRecordedFlow(
   events: ReticleEvent[],
@@ -70,26 +72,8 @@ export function latestRecordedFlow(
   return undefined;
 }
 
-/** Map a structured FlowErrorCode to a legible one-line message for the agent. */
-export function flowErrorMessage(code: FlowErrorCode, detail?: string): string {
-  if (FlowErrorCode.PARSE_FAILED === code && undefined !== detail) return detail;
-  // The detail names both versions and the remedy, so it beats anything generic this could say.
-  if (FlowErrorCode.WRONG_VERSION === code && undefined !== detail) return detail;
-  switch (code) {
-    case FlowErrorCode.INVALID_NAME:
-      return 'invalid flow name — use a single safe segment (letters/digits/-/_), no path separators';
-    case FlowErrorCode.NOT_FOUND:
-      return 'no such flow on disk — run reticle_flow{action:"list"} to see saved flows';
-    case FlowErrorCode.PARSE_FAILED:
-      return FlowParseNote.MALFORMED;
-    case FlowErrorCode.NO_RECORDING:
-      return 'no compiled recording by that name — record one (reticle_record{action:"start"|"stop"}) first';
-    // Never "regenerate it": the file is intact and the reader is the wrong one. Telling somebody
-    // to rewrite an undamaged flow is the failure this code was split out of PARSE_FAILED to stop.
-    case FlowErrorCode.WRONG_VERSION:
-      return 'this flow file was written in a different flow-file format — the file is not damaged, this Reticle cannot read that version. Upgrade or downgrade Reticle rather than editing the flow';
-  }
-}
+export { flowErrorMessage } from './flow-result.js';
+import { flowErrorMessage } from './flow-result.js';
 
 /** Map the wire ReplayStatus onto the persisted RunStatus (ok→pass). */
 function replayToRunStatus(status: ReplayStatus): RunStatus {
@@ -175,28 +159,6 @@ function currentPathOf(session: StartPathSession): string | undefined {
   if (session.url === undefined) return undefined;
   const fromUrl = routeOfUrl(session.url);
   return fromUrl === undefined ? undefined : `${fromUrl.docPath}${fromUrl.search}${fromUrl.hash}`;
-}
-
-/**
- * Is the tab where the flow asked to start? Up to a trailing slash, and up to the query the flow
- * did not ask about.
- *
- * `startPath` is the SPECIFICATION, so it decides what counts. A query it recorded is compared:
- * `?tab=wrap` and `?tab=summary` are different pages, and a replay that starts on the wrong one
- * proves nothing about the right one. A query it did NOT record is ignored: the tab carrying
- * `?next=%2F` on a login page, or the identity params Reticle puts on a leased tab, are not the flow
- * being elsewhere, and navigating to strip them costs a session for nothing.
- *
- * The asymmetry is the whole point and the reason `observed` and `expected` are named rather than
- * `a` and `b`. Comparing with the query on both sides always re-navigated a query-bearing
- * `startPath` (#1059, which killed the session mid-flow); comparing with it on neither side reads a
- * tab on `?tab=summary` as already at `?tab=wrap`.
- */
-function samePath(observed: string, expected: string): boolean {
-  const trimmed = (path: string): string => path.replace(/\/$/, '');
-  const withoutQuery = (path: string): string => path.replace(/\?[^#]*/, '');
-  const comparable = expected.includes('?') ? observed : withoutQuery(observed);
-  return trimmed(comparable) === trimmed(expected);
 }
 
 /**
@@ -389,7 +351,7 @@ export async function arriveAtStartPath(
   const current = currentPathOf(session);
   if (current === undefined) return {};
   // The declared opt-out, both directions. See above.
-  if (0 < (flow.requires?.length ?? 0)) return {};
+  if (0 < establishedState(flow).length) return {};
   const here = samePath(current, target);
   // A route mismatch that step 1 can start from anyway is not worth a page load: navigating away
   // from a persistent anchor could only hurt, and did. Arriving is the goal; resetting a tab that is
@@ -553,7 +515,7 @@ async function firstUnmetPrecondition(
   flow: FlowFile,
   since: number,
 ): Promise<string | undefined> {
-  for (const claim of flow.requires ?? []) {
+  for (const claim of establishedState(flow)) {
     // Zero budget: a precondition is a claim about the state you are starting FROM. Waiting for one
     // turns "was it true" into "did it become true", which is a different and much weaker question.
     let drift: Awaited<ReturnType<typeof assertStepExpect>>;
@@ -716,6 +678,12 @@ export async function replayNamedFlow(
       },
     };
   }
+  const from = resumeArg(args['from']);
+  const badResume = unresolvedResume(from, replayable.steps);
+  if (badResume !== undefined) {
+    const error = { code: FlowErrorCode.STEP_NOT_FOUND, message: badResume };
+    return { name: replayable.name, status: ReplayStatus.ERROR, steps: [], error };
+  }
   const unmet = await firstUnmetPrecondition(session, replayable, replayFloor);
   if (unmet !== undefined) {
     return {
@@ -744,6 +712,7 @@ export async function replayNamedFlow(
         // Bug-sweep mode: keep going past a step whose action ran and whose consequence merely did
         // not hold, so one flow reports one verdict per step instead of stopping at the first defect.
         sweep: true === args['sweep'],
+        ...(from === undefined ? {} : { from }),
       },
     );
   } catch (error: unknown) {

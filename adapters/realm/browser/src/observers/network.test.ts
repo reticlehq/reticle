@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   EventType,
+  NEXT_ACTION_FIELD,
   REQUEST_SHAPE_FIELD,
   REQUEST_SHAPE_NONE,
   RETICLE_WS_PATH,
@@ -305,6 +306,19 @@ describe('installNetwork (fetch)', () => {
       teardown();
       teardown = undefined;
     }
+  });
+
+  it('bounds data URLs on emitted events and keeps the raw value for predicates', async () => {
+    const raw = `data:image/png;base64,${'A'.repeat(48_219)}`;
+    const { emit, events } = collect();
+    teardown = installNetwork(emit);
+
+    await window.fetch(raw);
+
+    expect(eventOf(events, EventType.NET_REQUEST)).toMatchObject({
+      url: 'data:image/png;base64,<…48219 bytes…>',
+      [URL_RAW]: raw,
+    });
   });
 
   it('captures + redacts request and response bodies only when opted in (Network 1b)', async () => {
@@ -973,5 +987,99 @@ describe('installNetwork (request-body shape fingerprint)', () => {
     });
     await flushBody();
     expect(eventOf(events, EventType.NET_REQUEST)[REQUEST_SHAPE_FIELD]).toMatch(/^[0-9a-f]{8}$/);
+  });
+});
+
+/**
+ * The other half of the write discriminator: a Next.js Server Action.
+ *
+ * Several actions post to the page's own URL, and their usual `FormData` body has no shape
+ * fingerprint, so without this the calls land in the rule's unknown-identity bucket together. The
+ * `Next-Action` header names the action that ran and identifies code, not data, so it is recorded
+ * verbatim — see engine/src/disagreement/contradictions.ts, which folds it into the identity.
+ */
+describe('installNetwork (Next-Action header)', () => {
+  let teardown: Teardown | undefined;
+  const origFetch = requireCapturedMethod<typeof window.fetch>(window, 'fetch');
+
+  beforeEach(() => {
+    window.fetch = vi.fn(() => Promise.resolve(fakeResponse(200)));
+  });
+  afterEach(() => {
+    teardown?.();
+    teardown = undefined;
+    window.fetch = origFetch;
+  });
+
+  const ACTION_ID = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6a7b8c9d0';
+
+  it('records the action id from the request init, beside an unreadable body', async () => {
+    const { emit, events } = collect();
+    teardown = installNetwork(emit);
+    const form = new FormData();
+    form.append('name', 'ada');
+    await window.fetch('http://localhost:8787/page', {
+      method: 'POST',
+      headers: { 'Next-Action': ACTION_ID },
+      body: form,
+    });
+    const request = eventOf(events, EventType.NET_REQUEST);
+    expect(request[NEXT_ACTION_FIELD]).toBe(ACTION_ID);
+    // The header is a discriminator, not a payload: the body still carries no fingerprint and no text.
+    expect(request[REQUEST_SHAPE_FIELD]).toBeUndefined();
+  });
+
+  it('reads it case-insensitively from a Headers init', async () => {
+    const { emit, events } = collect();
+    teardown = installNetwork(emit);
+    await window.fetch('http://localhost:8787/page', {
+      method: 'POST',
+      headers: new Headers({ 'next-action': ACTION_ID }),
+    });
+    expect(eventOf(events, EventType.NET_REQUEST)[NEXT_ACTION_FIELD]).toBe(ACTION_ID);
+  });
+
+  it('reads it when the caller passed a Request object', async () => {
+    const { emit, events } = collect();
+    teardown = installNetwork(emit);
+    const request = new Request('http://localhost:8787/page', {
+      method: 'POST',
+      headers: { 'Next-Action': ACTION_ID },
+    });
+    await window.fetch(request);
+    expect(eventOf(events, EventType.NET_REQUEST)[NEXT_ACTION_FIELD]).toBe(ACTION_ID);
+  });
+
+  it('keeps the action id on a rejected fetch, so it cannot pool the endpoint', async () => {
+    const { emit, events } = collect();
+    window.fetch = vi.fn(() => Promise.reject(new Error('offline')));
+    teardown = installNetwork(emit);
+    await expect(
+      window.fetch('http://localhost:8787/page', {
+        method: 'POST',
+        headers: { 'Next-Action': ACTION_ID },
+      }),
+    ).rejects.toThrow('offline');
+    expect(eventOf(events, EventType.NET_REQUEST)[NEXT_ACTION_FIELD]).toBe(ACTION_ID);
+  });
+
+  it('does not read the action from a Request whose headers an init replaced', async () => {
+    // `init.headers` REPLACES the Request's own rather than merging into them, so the outgoing
+    // request does not carry the action the Request named.
+    const { emit, events } = collect();
+    teardown = installNetwork(emit);
+    const request = new Request('http://localhost:8787/page', {
+      method: 'POST',
+      headers: { 'Next-Action': ACTION_ID },
+    });
+    await window.fetch(request, { headers: { 'X-Other': '1' } });
+    expect(eventOf(events, EventType.NET_REQUEST)).not.toHaveProperty(NEXT_ACTION_FIELD);
+  });
+
+  it('omits the field for a request that carries no action header', async () => {
+    const { emit, events } = collect();
+    teardown = installNetwork(emit);
+    await window.fetch('http://localhost:8787/api/x', { method: 'POST' });
+    expect(eventOf(events, EventType.NET_REQUEST)).not.toHaveProperty(NEXT_ACTION_FIELD);
   });
 });

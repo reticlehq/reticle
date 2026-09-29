@@ -107,6 +107,38 @@ const countAfter =
   })) ?? (await T('reticle_query', { by: 'testid', value: 'note-count' })).elements?.[0]?.text;
 check('and the write really landed on the server', countBefore !== countAfter, `${String(countBefore)} -> ${String(countAfter)}`);
 
+console.log('\nTASK E — TWO distinct Server Actions fired by ONE user action');
+// #1121: both actions POST to /actions, their bodies are multipart and carry no fingerprint, so
+// method plus URL cannot tell them apart — the `Next-Action` header is the discriminator. Without
+// it, this window came back `unknown` behind a duplicate write that never happened.
+const both = await T('reticle_act', { ref: await refOf('testid', 'save-both'), action: 'click' });
+const bothCalls =
+  (await waitUntil(async () => {
+    const calls = (await T('reticle_network', { since: both.since })).calls ?? [];
+    return calls.filter((c) => c.method === 'POST' && String(c.url).includes('/actions')).length >= 2
+      ? calls
+      : undefined;
+  })) ?? (await T('reticle_network', { since: both.since })).calls ?? [];
+const bothPosts = bothCalls.filter((c) => c.method === 'POST' && String(c.url).includes('/actions'));
+check(
+  'both Server Actions are observed as writes to the same URL',
+  bothPosts.length >= 2,
+  bothPosts
+    .map((c) => `${c.method} ${String(c.url).replace(/^https?:\/\/[^/]+/, '')} -> ${c.status}`)
+    .join(', ') || 'no calls seen',
+);
+// The consequence, not the observation: the second action's tag must render, and the verdict for
+// the window must not be dragged to `unknown` by a duplicate the two actions never made.
+const tagged = await T('reticle_assert', {
+  timeout_ms: 10000,
+  predicate: { kind: 'text', contains: 'tag from one click', visible: true },
+});
+check(
+  'two distinct actions in one click are not reported as a duplicate write',
+  tagged.pass === true && tagged.verified !== 'unknown',
+  `pass=${String(tagged.pass)} verified=${String(tagged.verified)} ${tagged.failureReason ?? ''}`,
+);
+
 console.log(`\n${fail === 0 ? '✅ NEXT.JS SMOKE TEST PASSED' : `❌ ${fail} FAILED`}  (${pass} passed, ${fail} failed)`);
 await browser.close();
 await server.close();

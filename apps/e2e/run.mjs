@@ -144,7 +144,16 @@ if (unclassified.length > 0) {
 // A named list that resolves to nothing means the battery quietly passed having run zero specs —
 // the same rot in a new shape. Only reachable by deleting a file without updating the list.
 const desktop = process.argv.includes('--desktop');
-const specs = (desktop ? DESKTOP : ORDER).filter((n) => present.has(n));
+const listed = (desktop ? DESKTOP : ORDER).filter((n) => present.has(n));
+// `E2E_SHARD=k/n` runs every n-th spec starting at the k-th, so CI can split the battery across
+// parallel jobs. Each job boots its own servers, so shards share nothing. Round-robin over ORDER
+// rather than by name, and the split is re-checked by eye whenever a slow spec is added.
+const shard = /^(\d+)\/(\d+)$/.exec(process.env['E2E_SHARD'] ?? '');
+const specs =
+  shard === null
+    ? listed
+    : listed.filter((_, i) => i % Number(shard[2]) === Number(shard[1]) - 1);
+if (shard !== null) process.stdout.write(`e2e shard ${shard[0]}: ${specs.length} of ${listed.length} specs\n`);
 if (specs.length === 0) {
   console.error(`\ne2e: the ${desktop ? 'desktop' : 'web'} battery resolved to zero specs`);
   process.exit(1);
@@ -160,9 +169,11 @@ if (specs.length === 0) {
 // reviewer can see. Growing it costs the same edit, which is the point: both directions are a
 // decision. Measured 2026-09-11.
 const EXPECTED_SPECS = desktop ? 3 : 39;
-if (specs.length !== EXPECTED_SPECS) {
+// The WHOLE battery is counted, not this shard's slice of it: a shard is a third of the list by
+// design, and the question here is whether the list itself shrank.
+if (listed.length !== EXPECTED_SPECS) {
   console.error(
-    `\ne2e: the ${desktop ? 'desktop' : 'web'} battery resolved to ${String(specs.length)} ` +
+    `\ne2e: the ${desktop ? 'desktop' : 'web'} battery resolved to ${String(listed.length)} ` +
       `specs and ${String(EXPECTED_SPECS)} are recorded.\n` +
       'Added one? Raise the number here in the same commit. Removed one? Lower it, and say in\n' +
       'the commit what stopped being covered — that is the sentence this check exists to force.\n',

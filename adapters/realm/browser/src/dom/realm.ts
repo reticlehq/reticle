@@ -52,6 +52,15 @@ export const isImage = (n: unknown): n is HTMLImageElement =>
 export const isHtmlElement = (n: unknown): n is HTMLElement =>
   isIn<HTMLElement>(n, 'HTMLElement', 'undefined' === typeof HTMLElement ? undefined : HTMLElement);
 
+export const isSvgElement = (n: unknown): n is SVGElement =>
+  isIn<SVGElement>(n, 'SVGElement', 'undefined' === typeof SVGElement ? undefined : SVGElement);
+
+/** What an action can drive: any HTML element, or an SVG shape (a chart slice, a map region, an icon). */
+export type ActionTarget = HTMLElement | SVGElement;
+
+export const isActionTarget = (n: unknown): n is ActionTarget =>
+  isHtmlElement(n) || isSvgElement(n);
+
 export const isInput = (n: unknown): n is HTMLInputElement =>
   isIn<HTMLInputElement>(
     n,
@@ -78,6 +87,27 @@ export const isButton = (n: unknown): n is HTMLButtonElement =>
     n,
     'HTMLButtonElement',
     'undefined' === typeof HTMLButtonElement ? undefined : HTMLButtonElement,
+  );
+
+export const isMeter = (n: unknown): n is HTMLMeterElement =>
+  isIn<HTMLMeterElement>(
+    n,
+    'HTMLMeterElement',
+    'undefined' === typeof HTMLMeterElement ? undefined : HTMLMeterElement,
+  );
+
+export const isOutput = (n: unknown): n is HTMLOutputElement =>
+  isIn<HTMLOutputElement>(
+    n,
+    'HTMLOutputElement',
+    'undefined' === typeof HTMLOutputElement ? undefined : HTMLOutputElement,
+  );
+
+export const isProgress = (n: unknown): n is HTMLProgressElement =>
+  isIn<HTMLProgressElement>(
+    n,
+    'HTMLProgressElement',
+    'undefined' === typeof HTMLProgressElement ? undefined : HTMLProgressElement,
   );
 
 export const isForm = (n: unknown): n is HTMLFormElement =>
