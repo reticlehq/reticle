@@ -170,3 +170,61 @@ describe('check/uncheck drive the control instead of assigning it', () => {
     );
   });
 });
+
+describe('check/uncheck on an ARIA checkbox', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  /** A custom toggle the way component libraries build one: the app flips aria-checked on click. */
+  function ariaToggle(tag: string, role: string, checked: boolean, toggles = true): HTMLElement {
+    const el = document.createElement(tag);
+    el.setAttribute('role', role);
+    el.setAttribute('aria-checked', String(checked));
+    if (toggles) {
+      el.addEventListener('click', () => {
+        el.setAttribute('aria-checked', String('true' !== el.getAttribute('aria-checked')));
+      });
+    }
+    document.body.appendChild(el);
+    return el;
+  }
+
+  it('checks a <button role="checkbox"> by clicking it', async () => {
+    const el = ariaToggle('button', 'checkbox', false);
+    const out = await executeAction(refs.refFor(el), ActionType.CHECK, {});
+    expect(out.ok).toBe(true);
+    expect(el.getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('unchecks a <div role="switch">', async () => {
+    const el = ariaToggle('div', 'switch', true);
+    await executeAction(refs.refFor(el), ActionType.UNCHECK, {});
+    expect(el.getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('does nothing when it is already in the requested state, and says so', async () => {
+    const el = ariaToggle('button', 'checkbox', true);
+    const clicks: number[] = [];
+    el.addEventListener('click', () => clicks.push(1));
+    const out = await executeAction(refs.refFor(el), ActionType.CHECK, {});
+    expect(clicks).toHaveLength(0);
+    expect(el.getAttribute('aria-checked')).toBe('true');
+    expect(out.effect.alreadyAtValue).toBe(true);
+  });
+
+  it('refuses to report success when the click did not change aria-checked', async () => {
+    const el = ariaToggle('button', 'checkbox', false, false);
+    await expect(executeAction(refs.refFor(el), ActionType.CHECK, {})).rejects.toThrow(
+      /aria-checked/,
+    );
+  });
+
+  it('still refuses an element that is not a checkbox at all', async () => {
+    const el = document.createElement('button');
+    document.body.appendChild(el);
+    await expect(executeAction(refs.refFor(el), ActionType.CHECK, {})).rejects.toThrow(
+      /cannot \(un\)check/,
+    );
+  });
+});

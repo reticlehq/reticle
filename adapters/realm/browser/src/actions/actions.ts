@@ -26,6 +26,7 @@ import {
 } from '@/dom/realm.js';
 import { nativeSetTimeout, settle } from '@/timers/native/native-timers.js';
 import { AppearedText } from './appeared-text.js';
+import { alreadyAtCheckedState, assertAriaToggleLanded, isAriaToggle } from './check-state.js';
 import {
   focusedOrDocument,
   isReflessDocumentPress,
@@ -250,18 +251,6 @@ const CLICK_LIKE = new Set<string>([
   ActionType.CHECK,
   ActionType.UNCHECK,
 ]);
-
-/**
- * A check/uncheck whose requested state the element already reads as, so nothing will be dispatched.
- *
- * ONE predicate, read twice — the dispatch branch decides not to click, the effect reports that it
- * did not. Two copies of this rule could disagree, and a disagreement here is precisely the false
- * green: an act that reports it drove a control it never touched.
- */
-function alreadyAtCheckedState(el: ActionTarget, action: string): boolean {
-  if (action !== ActionType.CHECK && action !== ActionType.UNCHECK) return false;
-  return isInput(el) && el.checked === (action === ActionType.CHECK);
-}
 
 /**
  * What the destructive-action guard classifies: the ELEMENT, and nothing rendered around it.
@@ -639,7 +628,10 @@ async function dispatchOther(
       throw new Error(`cannot select on a <${el.tagName.toLowerCase()}>`);
     case ActionType.CHECK:
     case ActionType.UNCHECK: {
-      if (!isInput(el)) throw new Error(`cannot (un)check a <${el.tagName.toLowerCase()}>`);
+      const aria = isAriaToggle(el);
+      if (!isInput(el) && !aria) {
+        throw new Error(`cannot (un)check a <${el.tagName.toLowerCase()}>`);
+      }
       // Same rule as the readonly/disabled refusal on fill: if a real user could not do it, forcing
       // it is not a test, it is damage — and a green over it is a false one.
       if (!enabledOf(el)) {
@@ -649,6 +641,10 @@ async function dispatchOther(
       }
       // A radio is deselected by selecting another radio, never on its own. Refusing is the same
       // rule as the disabled control above: a state no user could reach must not be forced.
+      // An ARIA toggle has no native toggle: the full click sequence, then the app flips it.
+      if (!isInput(el)) {
+        return alreadyAtCheckedState(el, action) ? false : (await fireClickSequence(el)).prevented;
+      }
       if ('radio' === el.type && action === ActionType.UNCHECK) {
         throw new Error(
           'cannot uncheck a radio button — a real user could not; select another radio in the group',
@@ -882,6 +878,7 @@ export async function executeAction(
     obs.disconnect();
   }
 
+  assertAriaToggleLanded(el, action, alreadyAtValue);
   const valueAfter = valueOf(el);
   const nextFocus = activeRef(el);
   const effect: ActionEffect = {
