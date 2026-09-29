@@ -633,10 +633,10 @@ jobs:
           fi
       # WHICH install-gate cells to run, as an explicit os/scaffold list.
       #
-      # Ubuntu always runs all ten: it is the cheap platform, a cell takes 6-7 minutes, and ten of
+      # Ubuntu always runs all eleven: it is the cheap platform, a cell takes 6-7 minutes, and ten of
       # them start at once without queuing. Windows is the opposite on every count -- 8 to 28
       # minutes for the same work -- so a PULL REQUEST runs three of them and everything else runs
-      # all ten. The three are chosen to cover the distinct install shapes rather than to be
+      # all eleven. The three are chosen to cover the distinct install shapes rather than to be
       # representative: `cra` owns its own HTML and is the heaviest tree (the 28-minute cell),
       # `next-app-router` is the framework whose Windows install shipped broken in 2.3.0, and
       # `vite-react` is the plain plugin path most projects take.
@@ -646,7 +646,7 @@ jobs:
       # deserves it -- an edit under `init/` or `install/`, say.
       - id: install_matrix
         run: |
-          ALL='vite-react vite-vue next-app-router next-pages-router monorepo-subdir astro sveltekit cra nuxt react-router'
+          ALL='vite-react vite-vue vite-vanilla next-app-router next-pages-router monorepo-subdir astro sveltekit cra nuxt react-router'
           # A MERGE QUEUE entry gets the same short Windows list as the pull request, and for a
           # stronger version of the same reason.
           #
@@ -674,7 +674,7 @@ jobs:
           # router, the monorepo walk-up), and one Windows scaffold that is not the flaky one. The
           # full ten were the largest share of runner minutes and caught nothing the other jobs
           # did not in the measured window, while starving the 20-job pool the queue also needs.
-          # The QUEUE still runs all ten on Linux before anything lands; nightly runs all ten on both.
+          # The QUEUE still runs all eleven on Linux before anything lands; nightly runs all eleven on both.
           PR_LINUX='vite-react next-app-router monorepo-subdir'
           case "${{ github.event_name }}" in
             pull_request) LINUX="$PR_LINUX"; WINDOWS='vite-react' ;;

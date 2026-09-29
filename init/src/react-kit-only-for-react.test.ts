@@ -59,10 +59,15 @@ describe('the React kit is only installed into a React codebase', () => {
   });
 
   it('keeps the React kit when the UI library cannot be determined', () => {
-    // Unknown is not evidence of Vue. The kit is harmless in a React-ish app and the build plugin
-    // needs a peer; guessing "sensor" on no evidence would silently drop component identity from
-    // apps that should have it.
-    expect(frameworkPackages(Framework.VITE, UiLibrary.UNKNOWN)).toContain(REACT_KIT);
+    // Unknown is not evidence of Vue. Guessing "sensor" on no evidence would silently drop
+    // component identity from apps that should have it.
+    expect(frameworkPackages(Framework.REACT_ROUTER, UiLibrary.UNKNOWN)).toContain(REACT_KIT);
+  });
+
+  it('gives plain Vite with no renderer the sensor, since React there is always a dependency', () => {
+    // `npm create vite --template vanilla-ts` was handed `@reticlehq/react`, and the generated
+    // `reticle-dev.ts` imported it, into an app with no React at all.
+    expect(frameworkPackages(Framework.VITE, UiLibrary.UNKNOWN)).not.toContain(REACT_KIT);
   });
 
   it('still gives Nuxt the sensor, which is where this rule was already right', () => {

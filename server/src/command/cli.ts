@@ -19,7 +19,9 @@ import { splitBrainFields, withNextAction } from './cli/status-fields.js';
 import { reticleStateHome } from './daemon/daemon.js';
 import { handleMcp } from './cli/mcp-command.js';
 import { handleReport } from './cli/report-command.js';
-import { resolveDaemonForProject } from './daemon/daemon-resolve.js';
+import { daemonProjectAt, resolveDaemonForProject } from './daemon/daemon-resolve.js';
+import { pickDaemonPortToBind } from './daemon/binding/free-port.js';
+import { portForInit } from './setup/init/init-port.js';
 import { daemonStartOptions } from './cli/daemon-start-options.js';
 import {
   handleWatch,
@@ -105,7 +107,7 @@ import { reportCliRun } from '@/telemetry/cli-telemetry.js';
 export { parseCliArgs, CLI_USAGE };
 export type { CliResult } from './cli/cli-parse.js';
 
-function handleInit(parsed: {
+async function handleInit(parsed: {
   port: number | undefined;
   mcp: boolean;
   dryRun: boolean;
@@ -124,13 +126,28 @@ function handleInit(parsed: {
   url?: string | undefined;
   timeoutSeconds?: number | undefined;
   driveModel?: string | undefined;
-}): void {
+}): Promise<void> {
   const cwd = process.cwd();
+  const port = await portForInit(parsed.port, readProjectPort(cwd), readProjectId(cwd), {
+    // The registry names a daemon's owner; an older daemon that never registered is known by the
+    // projects its connected pages announced.
+    daemonProjects: async (p) => {
+      const claimed = daemonProjectAt(p, reticleStateHome());
+      if (claimed !== undefined && claimed.length > 0) return [claimed];
+      const { sessions } = summarizeStatus(await fetchStatus(p));
+      return [
+        ...new Set(sessions.flatMap((s) => (s.projectId === undefined ? [] : [s.projectId]))),
+      ];
+    },
+    daemonPresent: async (p) =>
+      presenceIsUsable(await probePresence(p, { tcpOpen: probeDaemon, status: fetchStatus })),
+    pickPort: (p) => pickDaemonPortToBind(p),
+  });
   const io = buildNodeIo(cwd, serverInitHost());
   const result = runInit(
     {
       cwd,
-      port: parsed.port,
+      port,
       mcp: parsed.mcp,
       dryRun: parsed.dryRun,
       install: parsed.install,
@@ -147,7 +164,7 @@ function handleInit(parsed: {
     },
     io,
   );
-  void continueAfterInit(parsed, result, io, cwd);
+  await continueAfterInit({ ...parsed, port }, result, io, cwd);
 }
 
 // `serve`, `stop` and `restart` live in `cli/lifecycle/daemon-lifecycle.ts`: one idea, and the
@@ -687,7 +704,7 @@ export function main(): void {
       process.exit(1);
       break;
     case 'init':
-      handleInit(parsed);
+      void handleInit(parsed);
       break;
     case 'serve':
       handleServe(parsed);

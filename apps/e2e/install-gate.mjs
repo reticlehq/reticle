@@ -516,6 +516,17 @@ const SCAFFOLDS = [
     dev: (port) => ['npm', ['run', 'dev', '--', '--port', String(port), '--strictPort']],
   },
   {
+    // The app with NO vite.config at all, which is what `npm create vite`'s vanilla template ships.
+    // A fresh-install walk found init answering it with a manual paste-this step, a non-zero exit, and
+    // `@reticlehq/react` installed into an app with no React. Init now writes the config and gives
+    // it the sensor; only a real browser proves the created file actually connects.
+    id: 'vite-vanilla',
+    what: 'Vite, vanilla — no vite.config to patch, so init must create one',
+    initDevPorts: INIT_DEV_PORTS.vite,
+    create: ['npm', ['create', 'vite@latest', 'app', '--yes', '--', '--template', 'vanilla-ts']],
+    dev: (port) => ['npm', ['run', 'dev', '--', '--port', String(port), '--strictPort']],
+  },
+  {
     id: 'next-app-router',
     what: 'Next App Router — withReticle plus the app/ root layout',
     initDevPorts: INIT_DEV_PORTS.next,

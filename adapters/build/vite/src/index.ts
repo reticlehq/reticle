@@ -10,7 +10,7 @@ import {
   RETICLE_ROOT_GLOBAL,
   RETICLE_SDK_VERSION_GLOBAL,
 } from '@reticlehq/core';
-import { resolveProjectId } from './project-id.js';
+import { readConfiguredPort, resolveProjectId } from './project-id.js';
 import { discoverDaemonPort } from './discover-port.js';
 import { announceDevServer } from './announce.js';
 import { stampSvelte } from './svelte-source.js';
@@ -593,7 +593,9 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
    * would bake in `undefined` and the app would fail auth on every connect.
    */
   const resolveLazy = (): ReticleVitePluginOptions => {
-    const port = resolved.port ?? discoverDaemonPort(resolved.projectId);
+    // An explicit option, then the port init recorded, then whichever daemon serves this project.
+    const port =
+      resolved.port ?? readConfiguredPort(process.cwd()) ?? discoverDaemonPort(resolved.projectId);
     const withPort = port !== undefined ? { ...resolved, port } : resolved;
     const token = withPort.token ?? readPairingToken();
     const withToken = token !== undefined ? { ...withPort, token } : withPort;

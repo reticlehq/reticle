@@ -25,8 +25,10 @@ describe('why the bridge refused', () => {
   it('says so when this daemon has only ever served another project', () => {
     const reason = authFailureReason(new Set(['proj-abc']), 'proj-xyz');
     expect(reason).toContain('different project');
-    // Actionable: the fix is to stop the daemon, not to hunt for a token.
-    expect(reason).toContain('reticle stop');
+    // Actionable, and not at the other project's expense: stopping a daemon that serves somebody
+    // else's app is not this project's fix. Its own port is.
+    expect(reason).not.toContain('reticle stop');
+    expect(reason).toContain('"port" in .reticle.json');
   });
 
   it('stays plain when this daemon HAS served the same project', () => {

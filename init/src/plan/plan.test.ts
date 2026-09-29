@@ -1,3 +1,4 @@
+import { VITE_IMPORT } from '../patch/vite-config.js';
 import { describe, expect, it } from 'vitest';
 import { buildPlan, frameworkPackages, StepStatus, type PlanInput } from './plan.js';
 import { Framework, PackageManager, UiLibrary, type Detection } from '@/detect/detect.js';
@@ -355,8 +356,46 @@ describe('buildPlan — Vite', () => {
     expect(plan.steps.some((s) => s.title.includes('entry'))).toBe(false);
   });
 
-  it('bails to manual when there is no vite config file', () => {
+  // A plain Vite app needs no config file, and `npm create vite` ships the vanilla template
+  // without one. Init answered that with a paste-this-yourself step and a non-zero exit, on the
+  // simplest app there is.
+  it('creates the vite config when a plain Vite app has none', () => {
     const plan = buildPlan(input({ viteConfig: null }));
+    const s = step(plan, 'Vite plugin');
+    expect(s.status).toBe(StepStatus.APPLY);
+    expect(s.write?.path).toBe('vite.config.ts');
+    expect(s.write?.content).toContain("from 'vite'");
+    expect(s.write?.content).toContain(VITE_IMPORT);
+    expect(s.write?.content).toContain('plugins: [reticle()]');
+  });
+
+  it('imports the sensor, the package it installed, in a plain Vite app with no renderer', () => {
+    const plan = buildPlan(
+      input({ viteConfig: null, detection: detection(Framework.VITE, 19, UiLibrary.UNKNOWN) }),
+    );
+    const module = step(plan, 'Capabilities + store').write?.content ?? '';
+    expect(module).toContain("from '@reticlehq/browser'");
+    expect(module).not.toContain('@reticlehq/react');
+  });
+
+  it('creates a JavaScript config, with the port, in a JavaScript app', () => {
+    const plan = buildPlan(
+      input({
+        viteConfig: null,
+        detection: { ...detection(Framework.VITE), typescript: false },
+        options: { port: 4471, mcp: true, install: false },
+      }),
+    );
+    const s = step(plan, 'Vite plugin');
+    expect(s.write?.path).toBe('vite.config.mjs');
+    expect(s.write?.content).toContain('reticle({ port: 4471 })');
+  });
+
+  it('still bails to manual for a Vite-based framework whose config is missing', () => {
+    // Those frameworks ship their own plugin in that file; a config without it would not boot.
+    const plan = buildPlan(
+      input({ viteConfig: null, detection: detection(Framework.REACT_ROUTER) }),
+    );
     expect(step(plan, 'Vite plugin').status).toBe(StepStatus.MANUAL);
   });
 
@@ -1111,6 +1150,17 @@ describe('buildPlan — electron-vite', () => {
       'electron.vite.config.ts',
     );
     expect(maybeStep(plan, 'Vite plugin')).toBeUndefined();
+  });
+
+  // `npm create vite --template vanilla-ts` was handed `@reticlehq/react`: a package that peers on
+  // React, into an app with none.
+  it('installs the sensor, not the React kit, into plain Vite with no known renderer', () => {
+    const packages = frameworkPackages(Framework.VITE, UiLibrary.UNKNOWN);
+    expect(packages).toEqual(['@reticlehq/browser', '@reticlehq/vite-plugin']);
+  });
+
+  it('keeps the kit for an unknown renderer where the framework implies React', () => {
+    expect(frameworkPackages(Framework.NEXT, UiLibrary.UNKNOWN)).toContain('@reticlehq/react');
   });
 
   it('installs the sensor and the Electron helper, not the React kit, for Vue', () => {

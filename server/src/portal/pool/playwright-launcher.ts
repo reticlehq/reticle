@@ -132,20 +132,27 @@ export function playwrightLauncher(opts: { headless?: boolean } = {}): Launcher 
       return browser;
     } catch (err) {
       settle(classifyConnectFailure(err));
-      // Turn Playwright's raw "Executable doesn't exist" into the one command that fixes it.
       const msg = err instanceof Error ? err.message : String(err);
-      // Checked FIRST: Playwright's host-requirement validation error also contains
-      // "browserType.launch", so the generic check below would otherwise misdiagnose it as a
-      // missing binary and send the user through a fix that changes nothing.
-      if (/host system is missing dependencies/i.test(msg)) {
-        throw new Error(CHROMIUM_MISSING_DEPS_HINT);
-      }
-      if (/executable doesn.?t exist|playwright install|browsertype\.launch/i.test(msg)) {
-        throw new Error(CHROMIUM_MISSING_HINT);
-      }
-      throw err;
+      const hint = chromiumLaunchHint(msg);
+      throw hint !== undefined ? new Error(hint) : err;
     }
   };
+}
+
+/**
+ * Turn Playwright's raw launch error into the one command that fixes it, or undefined when it is
+ * not a missing-browser failure. Shared by the pooled and the drive launch, so `reticle verify` on
+ * a fresh machine gets the same advice as a lease.
+ */
+export function chromiumLaunchHint(msg: string): string | undefined {
+  // Checked FIRST: Playwright's host-requirement validation error also contains
+  // "browserType.launch", so the generic check below would otherwise misdiagnose it as a
+  // missing binary and send the user through a fix that changes nothing.
+  if (/host system is missing dependencies/i.test(msg)) return CHROMIUM_MISSING_DEPS_HINT;
+  if (/executable doesn.?t exist|playwright install|browsertype\.launch/i.test(msg)) {
+    return CHROMIUM_MISSING_HINT;
+  }
+  return undefined;
 }
 
 const MAX_CONTEXTS_CEILING = 8;

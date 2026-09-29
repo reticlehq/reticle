@@ -12,7 +12,7 @@
 import type { Browser, Page } from 'playwright';
 import { stampedDriveUrl } from './drive-url-stamp.js';
 import { chromiumLaunchOptions } from '@/chromium-launch-options.js';
-import { gotoOptions } from '@/portal/pool/playwright-launcher.js';
+import { chromiumLaunchHint, gotoOptions } from '@/portal/pool/playwright-launcher.js';
 import { BrowserLaunchKind } from '@reticlehq/core/telemetry';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import { classifyConnectFailure } from '@/telemetry/connect-failure.js';
@@ -460,7 +460,8 @@ export const launchedChromium: LaunchFn = async (headless) => {
     return browser;
   } catch (e) {
     settle(classifyConnectFailure(e));
-    throw new DriveError(DriveErrorCode.LAUNCH_FAILED, e instanceof Error ? e.message : String(e));
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new DriveError(DriveErrorCode.LAUNCH_FAILED, chromiumLaunchHint(msg) ?? msg);
   }
 };
 

@@ -5,7 +5,7 @@
  */
 
 import { bridgeWsUrl } from '@reticlehq/core';
-import { patchViteConfig, VitePatchKind, VITE_IMPORT } from '@/patch/vite-config.js';
+import { newViteConfig, patchViteConfig, VitePatchKind, VITE_IMPORT } from '@/patch/vite-config.js';
 import { patchNextConfig, patchRootLayout, patchPagesApp } from '@/patch/next-patch.js';
 import {
   ASTRO_ENV_DTS_PATH,
@@ -52,6 +52,7 @@ import {
   htmlManual,
 } from '@/patch/snippets.js';
 import { hasOptOut, OPT_OUT_MARKER } from '@/detect/declared/init-opt-out.js';
+import { Framework } from '@/detect/detect.js';
 import { StepStatus, type PlanInput, type Step } from './plan-types.js';
 import { RETICLE_DEFAULT_PORT } from '@reticlehq/core';
 import { CSP_STEP_TITLE } from '@/diagnose/csp-check.js';
@@ -196,7 +197,13 @@ export function capabilitiesStep(input: PlanInput, path: string = VITE_DEV_MODUL
       }`,
       write: {
         path,
-        content: viteDevModuleFile(testids, stores, wired, input.detection.uiLibrary),
+        content: viteDevModuleFile(
+          testids,
+          stores,
+          wired,
+          input.detection.uiLibrary,
+          input.detection.framework,
+        ),
       },
       dependsOnInstall: true,
     },
@@ -251,13 +258,34 @@ function viteConfigSteps(input: PlanInput, detail: string, inject = true): Step[
       },
     ];
   }
+  // Plain Vite runs happily with no config file (`npm create vite`'s vanilla template has none), so
+  // make one. Only there: a Vite-based framework's missing config also lost the framework's own
+  // plugin, and a file carrying ours alone would not boot the app.
+  const plainVite = Framework.VITE === input.detection.framework;
   if (null === cfg) {
+    if (!plainVite) {
+      return [
+        {
+          title: StepTitle.VITE_PLUGIN,
+          target: 'vite.config',
+          status: StepStatus.MANUAL,
+          detail: viteManual(port, input.detection.uiLibrary, inject, stampSource),
+        },
+      ];
+    }
+    const path = input.detection.typescript ? 'vite.config.ts' : 'vite.config.mjs';
     return [
       {
         title: StepTitle.VITE_PLUGIN,
-        target: 'vite.config',
-        status: StepStatus.MANUAL,
-        detail: viteManual(port, input.detection.uiLibrary, inject, stampSource),
+        target: path,
+        status: StepStatus.APPLY,
+        detail,
+        write: {
+          path,
+          content: newViteConfig(port, true === input.captureBodies, inject, stampSource),
+          expect: [VITE_IMPORT, 'reticle('],
+        },
+        dependsOnInstall: true,
       },
     ];
   }
@@ -806,8 +834,7 @@ export function astroSteps(input: PlanInput): Step[] {
   }
   const envPatch = patchAstroEnvDts(input.astroEnvDts ?? null);
   const existingDev = input.astroReticleDev ?? null;
-  const devAlready =
-    'string' === typeof existingDev && existingDev.includes('reticle.connect');
+  const devAlready = 'string' === typeof existingDev && existingDev.includes('reticle.connect');
   const devStep: Step = devAlready
     ? {
         title: StepTitle.ASTRO_RETICLE_DEV,

@@ -9,7 +9,7 @@ import {
   RETICLE_CLIENT_HOST,
   RETICLE_WS_PATH,
 } from '@reticlehq/core';
-import { UiLibrary } from '@/detect/detect.js';
+import { Framework, UiLibrary } from '@/detect/detect.js';
 import type { FoundStore } from '@/detect/capabilities.js';
 import { RETICLE_VERSION } from '@/version.js';
 import { VITE_ENV_DEV_DECLARATION } from './vite-env-types.js';
@@ -72,6 +72,26 @@ export function connectArgWithToken(
 }
 
 /**
+ * Does this codebase want the React kit, or the framework-neutral sensor? The ONE answer, read by
+ * both `frameworkPackages` (what is installed) and `sdkImport` (what generated code imports).
+ *
+ * The kit is what adds component identity — component names and stacks — and it is worth having
+ * wherever React or Preact is rendering (the adapter reaches Preact through `preact/compat`).
+ * Everywhere else it is a package named `@reticlehq/react`, carrying `react` in its peer
+ * dependencies, being installed into a codebase that has no React in it.
+ *
+ * UNKNOWN keeps the kit deliberately. Absence of evidence is not evidence of Vue, and guessing
+ * "sensor" on no information silently drops component identity from apps that should have it.
+ *
+ * Except on plain Vite, where the absence IS the evidence: nothing there renders React but a
+ * `react` the app depends on itself, so no renderer found is a vanilla, Lit, Solid or Angular app.
+ */
+export function usesReactKit(uiLibrary: UiLibrary, framework?: Framework): boolean {
+  if (UiLibrary.UNKNOWN === uiLibrary) return framework !== Framework.VITE;
+  return uiLibrary !== UiLibrary.VUE && uiLibrary !== UiLibrary.SVELTE;
+}
+
+/**
  * Which SDK package the GENERATED code should import, and whether `install()` applies.
  *
  * This has to agree with `frameworkPackages`, and it did not. That function was changed so a Vue or
@@ -82,9 +102,11 @@ export function connectArgWithToken(
  * `install()` is the React adapter's, not the sensor's: `@reticlehq/browser` exports `reticle` and no
  * `install`, so swapping the specifier alone would trade a missing module for a missing export.
  */
-export function sdkImport(uiLibrary: UiLibrary): { specifier: string; usesInstall: boolean } {
-  const react = uiLibrary !== UiLibrary.VUE && uiLibrary !== UiLibrary.SVELTE;
-  return react
+export function sdkImport(
+  uiLibrary: UiLibrary,
+  framework?: Framework,
+): { specifier: string; usesInstall: boolean } {
+  return usesReactKit(uiLibrary, framework)
     ? { specifier: '@reticlehq/react', usesInstall: true }
     : { specifier: '@reticlehq/browser', usesInstall: false };
 }
@@ -446,6 +468,7 @@ export function viteDevModuleFile(
   stores: readonly string[],
   found: readonly FoundStore[] = [],
   uiLibrary: UiLibrary = UiLibrary.REACT,
+  framework?: Framework,
 ): string {
   // The specifier has to be the package `frameworkPackages` installed. This file is the Vite path —
   // the commonest install there is — and it was hardcoded to `@reticlehq/react` while a Vue or
@@ -454,7 +477,7 @@ export function viteDevModuleFile(
   //
   // The sensor exports `registerCapabilities` and `registerStore` (and the store adapters) just as
   // the React kit does; the only thing it lacks is `install()`, which this file never called.
-  const sdk = sdkImport(uiLibrary);
+  const sdk = sdkImport(uiLibrary, framework);
   const ids = testids.map((t) => `'${t}'`).join(', ');
   // A store we FOUND is imported and registered outright — the whole point of the file. The hints
   // stay only for the libraries we can name but not wire (they need an argument we cannot infer).
