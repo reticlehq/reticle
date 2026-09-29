@@ -13,7 +13,7 @@ import { TOOLS, type ToolDeps } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '@/memory/project/baselines.js';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
-import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
+import { AMBIENT_RECORDING, RecordingStore } from '@/language/flows/recording/tape/recordings.js';
 import { FlowStore } from '@/language/flows/flows.js';
 import { ProjectStore } from '@/memory/project/project-store.js';
 import { AnnotationStore } from '@/language/flows/stores/annotation-store.js';
@@ -117,6 +117,7 @@ function createStateSession(options: StateSessionOptions = {}) {
     lastAct: new LastAct(),
     beginAction: () => 'a1',
     finishAction: () => undefined,
+    recordAction: () => 'a2',
     command,
     queryEvents: () => Promise.resolve(noEvents),
     eventsSince: () => noEvents,
@@ -368,5 +369,59 @@ describe('what an already_true verdict tells the agent about the pre-action stat
 
     expect(res['verifiedReason']).not.toBe(VerifiedReason.ALREADY_TRUE);
     expect(res['alreadyTrueEvidence']).toBeUndefined();
+  });
+});
+
+/*
+ * The recorder captured the step BEFORE the verdict, so an `until` that came back `no` or
+ * `no-fault` was saved as the flow's expectation — a regression test asserting something that was
+ * never once observed to hold because of the action.
+ */
+describe('the recorded step keeps its consequence only when the verdict proved it', () => {
+  const until = { kind: PredicateKind.STATE, path: 'cart.count', equals: 3 };
+  const recorded = (deps: ToolDeps) => deps.recordings.stop(AMBIENT_RECORDING)?.steps ?? [];
+
+  it('a no-fault (already true) verdict records the action without the expectation', async () => {
+    const { deps } = createStateSession({ initialStore: { app: { cart: { count: 3 } } } });
+    await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
+      ref: 'btn',
+      action: 'click',
+      timeout_ms: 0,
+      until,
+    });
+    const steps = recorded(deps);
+    expect(steps).toHaveLength(1);
+    expect(steps[0]?.expect).toBeUndefined();
+  });
+
+  it('a proved verdict records the expectation', async () => {
+    const { deps } = createStateSession({
+      initialStore: { app: { cart: { count: 0 } }, cart: { count: 0 } },
+      onAct: (set) => set({ app: { cart: { count: 3 } }, cart: { count: 3 } }),
+    });
+    await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
+      ref: 'btn',
+      action: 'click',
+      timeout_ms: 0,
+      until,
+    });
+    expect(recorded(deps)[0]?.expect).toEqual(until);
+  });
+});
+
+describe('act, then assert: the assertion is kept on the step it proved', () => {
+  it('a passing reticle_assert after the act joins the recorded expectation', async () => {
+    const { deps } = createStateSession({
+      initialStore: { app: { cart: { count: 0 } }, cart: { count: 0 } },
+      onAct: (set) => set({ app: { cart: { count: 3 } }, cart: { count: 3 } }),
+    });
+    await tool(ReticleTool.ACT).handler(deps, { ref: 'btn', action: 'click' });
+    const check = { kind: PredicateKind.STATE, path: 'cart.count', equals: 3 };
+    const res = (await tool(ReticleTool.ASSERT).handler(deps, { predicate: check })) as Record<
+      string,
+      unknown
+    >;
+    expect(res['verified']).toBe(Verified.YES);
+    expect(deps.recordings.stop(AMBIENT_RECORDING)?.steps[0]?.expect).toEqual(check);
   });
 });

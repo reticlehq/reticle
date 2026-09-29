@@ -132,6 +132,15 @@ export function captureAct(
   recordings.capture(step, route);
 }
 
+/** Fold a PASSING standalone assertion into the step it proved. See RecordingStore.attachExpect. */
+export function captureAssertion(
+  recordings: { attachExpect: (expect: Predicate) => void },
+  raw: unknown,
+): void {
+  const expect = enforceableExpect(raw);
+  if (expect !== undefined) recordings.attachExpect(expect);
+}
+
 /**
  * A declared predicate, as a recorded expectation — or nothing.
  *

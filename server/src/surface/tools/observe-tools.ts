@@ -84,6 +84,7 @@ import { withControl } from '@/portal/session/control-envelope.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { type ToolDef, intentArg, sessionIdShape, commandOrThrow } from './tool-kit.js';
 import { gradeOfPredicate } from './assert/assert-grade.js';
+import { captureAssertion } from '@/language/flows/replay.js';
 
 /**
  * Evidence-completeness block: present on observe/network/console only when the ring buffer has
@@ -598,6 +599,12 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       // destroys — see runs/run-context.ts. Recorded WITHOUT an attribution window: this tool drives
       // nothing, so no event it observed was caused by it.
       session.recordAction(ReticleTool.ASSERT, asRecord(args), verdictEffect);
+      // A passing check over the default window (since the last act) is proof of that act, so it
+      // joins that step in the recording — otherwise "act, then assert" saves a bare click. An
+      // explicit `since` may reach back past the last step, where replay would not find it.
+      if (Verified.YES === decision['verified'] && args['since'] === undefined) {
+        captureAssertion(deps.recordings, predicate);
+      }
       return withControl(session, {
         ...decision,
         ...annotateStarvedFailure(session, verdict),

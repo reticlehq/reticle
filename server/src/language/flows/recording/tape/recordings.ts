@@ -1,4 +1,4 @@
-import { FlowStepTool, type FlowFile, type Predicate } from '@reticlehq/core';
+import { FlowStepTool, PredicateKind, type FlowFile, type Predicate } from '@reticlehq/core';
 
 /** One captured agent action, normalized for replay. */
 export interface RecordedStep {
@@ -180,6 +180,27 @@ export class RecordingStore {
       // already one journey by construction, and stamping a route on its steps would change what a
       // deliberate recording contains.
       rec.steps.push(AMBIENT_RECORDING === name && route !== undefined ? { ...step, route } : step);
+    }
+  }
+
+  /**
+   * Add a consequence to the last captured step of every active recording.
+   *
+   * A separate `reticle_assert` after an act is how an agent proves what the act did, and it never
+   * reached the recorder — only the act tools called `capture` — so the flow kept the click and lost
+   * the proof. What the step already declared is kept; the new check joins it under `allOf`.
+   */
+  attachExpect(expect: Predicate): void {
+    for (const rec of this.#active.values()) {
+      const last = rec.steps.at(-1);
+      if (last === undefined) continue;
+      const held = last.expect;
+      last.expect =
+        held === undefined
+          ? expect
+          : PredicateKind.ALL_OF === held.kind
+            ? { ...held, predicates: [...held.predicates, expect] }
+            : { kind: PredicateKind.ALL_OF, predicates: [held, expect] };
     }
   }
 

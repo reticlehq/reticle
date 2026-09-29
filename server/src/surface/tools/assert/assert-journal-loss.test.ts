@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
 import { LastAct } from '@/portal/session/last-act.js';
 import {
   EventType,
@@ -62,7 +63,10 @@ function depsWithJournal(
     drainInbox: () => [],
   };
   const sessions: Partial<SessionManager> = { resolve: () => session as Session };
-  return { sessions: sessions as SessionManager } as unknown as ToolDeps;
+  return {
+    sessions: sessions as SessionManager,
+    recordings: new RecordingStore(),
+  } as unknown as ToolDeps;
 }
 
 const tool = (name: string): ToolDef => {

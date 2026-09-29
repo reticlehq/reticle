@@ -546,6 +546,12 @@ export const ACT_TOOLS: ToolDef[] = [
         await readAlreadyTrue(session, until, since);
       // Same as the ACT handler: the route this step RAN on, before the action can move the app.
       const routeBeforeWait = pathOf(session.url);
+      // Captured in `finally`, once the verdict is known. Recorded before it, a step kept an `until`
+      // that came back `no` or `no-fault` as the flow's expectation — a regression test asserting
+      // something never once observed to hold because of the action. The action is still recorded
+      // (it happened, and replay needs it to reach the next step); only a proved consequence is kept.
+      let dispatched: { result: unknown } | undefined;
+      let recordedVerdict: string | undefined;
       try {
         // actCommand is the single interception point for upload+path rewrite.
         //
@@ -564,7 +570,7 @@ export const ACT_TOOLS: ToolDef[] = [
         );
         if (actResult !== null) {
           if (!actResult.ok) throw new Error(actResult.error ?? 'act failed');
-          captureAct(deps.recordings, args, actResult.result, routeBeforeWait);
+          dispatched = { result: actResult.result };
           // Dispatched — now this act owns the cursor and the effect. Marking its OWN measurement
           // also stops the spread below from inheriting an earlier reticle_act's action and
           // mutation count.
@@ -819,6 +825,7 @@ export const ACT_TOOLS: ToolDef[] = [
           },
           ...(namedNetIsInFlight(until, stillInFlight) ? { namedRequestInFlight: true } : {}),
         });
+        recordedVerdict = String(decision.verified);
         // Computed once: the verdict block reports it, and the instrumentation gaps are a second
         // reading of the same evidence rather than a new observation.
         const actionSummary = causalSummary(windowEvents, {
@@ -969,6 +976,15 @@ export const ACT_TOOLS: ToolDef[] = [
           ...healthEnvelope(currentOf(deps.sessions, session)),
         });
       } finally {
+        if (dispatched !== undefined) {
+          const { until: _until, predicate: _predicate, ...unproved } = args;
+          captureAct(
+            deps.recordings,
+            Verified.YES === recordedVerdict ? args : unproved,
+            dispatched.result,
+            routeBeforeWait,
+          );
+        }
         deps.recordings.markEnded(pathOf(currentOf(deps.sessions, session).url));
         acted.finishAction(
           verdictEffect,

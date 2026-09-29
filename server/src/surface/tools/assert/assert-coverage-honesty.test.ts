@@ -52,7 +52,10 @@ function depsWithBlindSpots(
     ...(runtime === undefined ? {} : { runtime }),
   });
   const sessions: Partial<SessionManager> = { resolve: () => session };
-  return { sessions: sessions as SessionManager } as unknown as ToolDeps;
+  return {
+    sessions: sessions as SessionManager,
+    recordings: new RecordingStore(),
+  } as unknown as ToolDeps;
 }
 
 const tool = (name: string): ToolDef => {
@@ -243,7 +246,10 @@ describe('reticle_assert carries the verdict, not just pass', () => {
       health: () => ({ lastSeenMs: 5, throttled: false, focused: true, hidden: false }),
     });
     const sessions: Partial<SessionManager> = { resolve: () => session };
-    const deps = { sessions: sessions as SessionManager } as unknown as ToolDeps;
+    const deps = {
+      sessions: sessions as SessionManager,
+      recordings: new RecordingStore(),
+    } as unknown as ToolDeps;
     return tool(ReticleTool.ASSERT).handler(deps, absentConsole);
   };
 
