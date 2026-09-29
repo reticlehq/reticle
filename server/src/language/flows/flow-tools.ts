@@ -754,10 +754,7 @@ export const FLOW_TOOLS: ToolDef[] = [
           }),
         );
         const timed: TimedReplay[] = outcomes.map((o, i) => ({
-          replay:
-            o.ok && o.value !== undefined
-              ? o.value.replay
-              : leaseFailureReplay(requested[i] ?? '', o.error),
+          ...(parallelRuns[i] ?? { replay: leaseFailureReplay(requested[i] ?? '', o.error) }),
           durationMs: o.ok && o.value !== undefined ? o.value.durationMs : 0,
         }));
         const flaky = await recordSuiteFlakes(
@@ -798,7 +795,11 @@ export const FLOW_TOOLS: ToolDef[] = [
           .catch(() => null);
         const flow = loaded !== null && loaded.ok ? loaded.value : undefined;
         runs.push(flow === undefined ? { replay } : { replay, flow });
-        timed.push({ replay, durationMs: deps.now() - start });
+        timed.push({
+          replay,
+          durationMs: deps.now() - start,
+          ...(flow === undefined ? {} : { flow }),
+        });
       }
       // The flake ledger the CLI gate already keeps — see FlakeStore. It was only ever written by
       // `reticle flow` on the command line, so an AGENT running this tool a hundred times learned

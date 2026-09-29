@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { ReplayStatus, RunFlowStatus, type FlowReplayResult } from '@reticlehq/core';
+import {
+  AnchorKind,
+  DriftReason,
+  FLOW_FILE_VERSION,
+  ReplayStatus,
+  RUN_TEXT_MAX,
+  RunFlowResultSchema,
+  RunFlowStatus,
+  type FlowFile,
+  type FlowReplayResult,
+} from '@reticlehq/core';
 import { mapReplayToFlowResult, runFlowStatusOf } from './replay-mapping.js';
 
 const replay = (status: ReplayStatus, extra?: Partial<FlowReplayResult>): FlowReplayResult => ({
@@ -72,5 +82,64 @@ describe('mapReplayToFlowResult', () => {
       4,
     );
     expect(r.oracle).toBeUndefined();
+  });
+});
+
+describe('what a synced run carries so a teammate can replay it', () => {
+  const flow: FlowFile = {
+    version: FLOW_FILE_VERSION,
+    name: 'checkout',
+    createdAt: 0,
+    startPath: '/cart',
+    steps: [{ tool: 'act', anchor: { kind: AnchorKind.TESTID, value: 'pay' }, page: '/cart' }],
+  };
+
+  it("carries each step's result and the pages it ran on and led to", () => {
+    const r = mapReplayToFlowResult(
+      replay(ReplayStatus.DRIFT, {
+        steps: [
+          { step: 0, anchor: 'pay', ok: true, page: '/cart', endPage: '/done' },
+          {
+            step: 1,
+            anchor: 'receipt',
+            ok: false,
+            drift: {
+              reasonKind: DriftReason.TESTID_NOT_FOUND,
+              reason: 'gone',
+              anchor: 'receipt',
+              nearest: null,
+            },
+          },
+        ],
+      }),
+      5,
+      flow,
+    );
+    expect(r.stepResults).toEqual([
+      { step: 0, anchor: 'pay', ok: true, page: '/cart', endPage: '/done' },
+      { step: 1, anchor: 'receipt', ok: false, drift: DriftReason.TESTID_NOT_FOUND },
+    ]);
+    expect(r.recording).toEqual({ startPath: '/cart', steps: flow.steps });
+  });
+
+  it('stays bounded: long text is clipped, a huge recording is omitted and says so', () => {
+    const huge: FlowFile = {
+      ...flow,
+      steps: Array.from({ length: 2000 }, (_, i) => ({
+        tool: 'act',
+        anchor: { kind: AnchorKind.TESTID, value: `row-${String(i)}-${'x'.repeat(40)}` },
+      })),
+    };
+    const r = mapReplayToFlowResult(
+      replay(ReplayStatus.ERROR, {
+        steps: [{ step: 0, anchor: 'a', ok: false, error: 'e'.repeat(5000) }],
+      }),
+      5,
+      huge,
+    );
+    expect(r.stepResults?.[0]?.error?.length).toBe(RUN_TEXT_MAX);
+    expect(r.recording).toBeUndefined();
+    expect(r.recordingOmitted).toBe(true);
+    expect(RunFlowResultSchema.safeParse(r).success).toBe(true);
   });
 });

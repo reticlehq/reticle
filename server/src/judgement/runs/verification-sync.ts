@@ -15,6 +15,7 @@ import {
   RunFramework,
   RunProfile,
   RunTrigger,
+  type FlowFile,
   type FlowReplayResult,
   type ReticleVerificationRun,
 } from '@reticlehq/core';
@@ -39,6 +40,8 @@ const RETICLE_MCP_AGENT_ID = 'reticle-mcp';
 export interface TimedReplay {
   replay: FlowReplayResult;
   durationMs: number;
+  /** The flow file that was replayed, so the synced run can carry its recording. */
+  flow?: FlowFile;
 }
 
 /** Assemble the ReticleVerificationRun artifact for a verify suite (pure — no IO). */
@@ -47,7 +50,7 @@ function assembleRun(
   timed: TimedReplay[],
   projectId: ProjectId | undefined,
 ): ReticleVerificationRun {
-  const flows = timed.map((t) => mapReplayToFlowResult(t.replay, t.durationMs));
+  const flows = timed.map((t) => mapReplayToFlowResult(t.replay, t.durationMs, t.flow));
   const input: VerificationRunInput = {
     runId: defaultRunId(),
     durationMs: flows.reduce((sum, f) => sum + f.durationMs, 0),

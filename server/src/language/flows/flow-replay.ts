@@ -647,6 +647,8 @@ export async function replayFlow(
         }
       }
       if (page !== undefined) result.page = page;
+      const endPage = currentRoute(session);
+      if (endPage !== undefined && endPage !== page) result.endPage = endPage;
       const windowEvents = session.eventsSince(cursorBefore).filter((e) => e.t >= cursorBefore);
       const consequence = summarizeConsequence(windowEvents);
       if (consequence !== undefined) result.consequence = consequence;

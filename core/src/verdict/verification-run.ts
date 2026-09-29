@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { SubjectRefSchema } from 'open-verification';
 import { PredicateKind } from './consequence.js';
 import { Verified } from './verified-constants.js';
+import { FlowStepSchema } from '@/artifacts/flow-types.js';
 
 /** Schema version stamped into every run file so a reader can reject/upgrade old artifacts. */
 export const RUN_FILE_VERSION = 3;
@@ -227,6 +228,35 @@ export const RunChangedFileSchema = z.object({
 });
 export type RunChangedFile = z.infer<typeof RunChangedFileSchema>;
 
+/**
+ * How much of a replay a synced run carries, so a teammate can replay it from the cloud without the
+ * artifact growing with the flow: past these, the per-step list stops and the recording is omitted
+ * (said so by `recordingOmitted`), never cut mid-flow into a journey nobody drove.
+ */
+export const RUN_STEP_RESULTS_MAX = 200;
+export const RUN_TEXT_MAX = 300;
+export const RUN_RECORDING_MAX_BYTES = 64 * 1024;
+
+/** One step of a replayed flow, as synced: its outcome and the pages it ran on and led to. */
+export const RunStepResultSchema = z.object({
+  step: z.number(),
+  anchor: z.string(),
+  ok: z.boolean(),
+  page: z.string().optional(),
+  endPage: z.string().optional(),
+  consequence: z.string().optional(),
+  error: z.string().optional(),
+  /** The drift's reason kind, when the step drifted. */
+  drift: z.string().optional(),
+});
+export type RunStepResult = z.infer<typeof RunStepResultSchema>;
+
+/** The flow a run replayed, as recorded: enough to replay it again somewhere else. */
+export const RunFlowRecordingSchema = z.object({
+  startPath: z.string().optional(),
+  steps: z.array(FlowStepSchema),
+});
+
 /** A flow that was replayed as part of the run. */
 export const RunFlowResultSchema = z.object({
   name: z.string(),
@@ -239,6 +269,12 @@ export const RunFlowResultSchema = z.object({
     .optional(),
   evidenceRef: z.string().optional(),
   failureReason: z.string().optional(),
+  /** Each step's result and page — see RUN_STEP_RESULTS_MAX. */
+  stepResults: z.array(RunStepResultSchema).optional(),
+  /** The flow as recorded, when it fits in RUN_RECORDING_MAX_BYTES. */
+  recording: RunFlowRecordingSchema.optional(),
+  /** True when the recording was too large to carry. */
+  recordingOmitted: z.boolean().optional(),
 });
 export type RunFlowResult = z.infer<typeof RunFlowResultSchema>;
 
