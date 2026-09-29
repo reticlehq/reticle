@@ -83,7 +83,11 @@ function bareSpecifiersIn(dir: string): Set<string> {
         continue;
       }
       if (!name.endsWith('.js') || name.endsWith('.test.js')) continue;
-      for (const match of readFileSync(path, 'utf8').matchAll(/from\s*'([^.'][^']*)'/g)) {
+      // `from` as a keyword, not the tail of a string: core's `z.discriminatedUnion('from', [...])`
+      // read as an import of everything up to the next quote. A specifier never holds whitespace.
+      for (const match of readFileSync(path, 'utf8').matchAll(
+        /(?<![\w$.'"])from\s*'([^.'\s][^'\s]*)'/g,
+      )) {
         const spec = match[1];
         if (spec !== undefined && !NOT_SERVABLE.test(spec)) found.add(spec);
       }

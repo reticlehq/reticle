@@ -99,7 +99,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * a shallow walk over the contract's own type belongs beside the contract. Moving it here took a
    * cross-layer reach out of the server and left the file count as the only cost.
    */
-  'core/src/verdict': 15,
+  'core/src/verdict': 16,
   'core/src/wire': 16,
   // 16 since `snapshot-tree.ts`. The snapshot tree is a format the BROWSER writes and several
   // things on the Node side read back, and its parser was living beside the MCP tool handlers — so
@@ -137,7 +137,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // `predicate-eval.ts`: it is a pure rule with an incident behind it, and it is the kind of thing
   // that gets quietly re-broken when it lives inside the evaluator it constrains. This directory is
   // now the largest flat one in the package and is the next thing here worth grouping.
-  'engine/src/question/predicate': 20,
+  'engine/src/question/predicate': 21,
   /*
    * Crossed ten when the fast-drive budget and a portable byte counter landed. The guard asks for
    * grouping rather than recording at this moment, and grouping is the wrong move HERE specifically:

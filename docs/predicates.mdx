@@ -35,6 +35,7 @@ Take the advice. `element` and `text` are convenient and weak; `signal`, `state`
 | `element` / `text` | weak      | Something rendered. A mock renders too                 |
 | `animation`        | weak      | An animation ran or finished                           |
 | `settled`          | timing    | The page went quiet. A precondition, not a proof       |
+| `compare`          | its sides | Two readings agree: the stronger side's grade          |
 
 ## The leaves
 
@@ -118,7 +119,7 @@ Two fields read the RESPONSE BODY, so a request that succeeded with the wrong nu
 { "kind": "net", "urlContains": "/api/job", "bodyMatches": { "status": "completed" } }
 ```
 
-`bodyMatches` is a shallow field match, keyed like `signal.dataMatches` and taking the same operators (`*`, `$gte`, `$contains`). Reach for it whenever the value is an enum, because that is the case a substring cannot decide: `bodyContains: "completed"` passes on a body carrying `"completedAt": null`, where the needle matched the KEY and the job was still queued. `completed`/`completedAt`, `success`/`successRate`, `sent`/`unsent` all have that shape.
+`bodyMatches` is a field match, keyed like `signal.dataMatches` and taking the same operators (`*`, `$gte`, `$contains`). A key can be a dotted path into a wrapped answer: `{ "data.status": "completed" }`, `{ "items.0.id": "a1" }`, `{ "items.length": 3 }`. A nested object written out as a value is compared whole, so use the path to match one field inside it. Reach for it whenever the value is an enum, because that is the case a substring cannot decide: `bodyContains: "completed"` passes on a body carrying `"completedAt": null`, where the needle matched the KEY and the job was still queued. `completed`/`completedAt`, `success`/`successRate`, `sent`/`unsent` all have that shape.
 
 Both require body capture, `reticle({ captureNetworkBodies: true })`, and say so when the body was never recorded rather than reporting an ordinary mismatch.
 
@@ -161,7 +162,7 @@ A passing route verdict quotes the transition itself:
 { "kind": "signal", "name": "webhook:received", "dataMatches": { "provider": "stripe", "id": "*" } }
 ```
 
-The app emitted a named signal via `reticle.signal()`. `dataMatches` is shallow JSON matching, and `*` means "present, any value".
+The app emitted a named signal via `reticle.signal()`. `dataMatches` matches field by field, a key can be a dotted path (`"order.total"`), and `*` means "present, any value".
 
 `count` works here exactly as it does on `net`:
 
@@ -302,6 +303,50 @@ This is the predicate that catches a UI-versus-store desync. A deploy that only 
 ```
 
 Network and DOM idle. This is the deterministic replacement for a fixed sleep, not a proof of anything: combine it with a real consequence rather than asserting it alone. Omitting `until` on [`reticle_act_and_wait`](/tools/act-and-wait) waits for exactly this.
+
+### compare
+
+```json
+{
+  "kind": "compare",
+  "left": { "from": "text", "scope": "#refunded" },
+  "right": { "from": "net", "urlContains": "/api/refund", "path": "refunded" },
+  "as": "number"
+}
+```
+
+Two observed values must agree, and you do not have to know either one. Every other predicate checks one reading against a value you write down. That cannot catch a page that echoes the user's input instead of the server's answer unless you already know the right answer: a refund of `1187.01` that the server read as paise answered `{"refunded":11.87}`, the page showed `₹1,187.01`, and every other channel was green.
+
+Each side reads one value from a source:
+
+| `from` | Fields | Reads |
+| --- | --- | --- |
+| `net` | `urlContains`, `path`, `method?`, `body?` | A field of the LAST matching call's body. `body` is `response` (default) or `request` |
+| `signal` | `name`, `path` | A field of the last `name` signal's payload |
+| `state` | `path`, `store?` | A store value, as `state` reads it |
+| `text` | `scope` | The whole text of the element `scope` names (a CSS selector) |
+
+A `path` is a field name or a dotted path into nested data (`data.total`, `items.0.price`), and it must end on a single value, not an object.
+
+`as` is `value` (the default) or `number`:
+
+- `value` is strict equality. The text `"11.87"` and the number `11.87` are different, and the failure says so and suggests `as: "number"`.
+- `number` reads one number from each side. A JSON number is used as it is; a string contributes its only number, so `"Refunded ₹1,187.01"` reads as `1187.01`. A string holding two numbers is unknown rather than guessed at, so scope the text to the one value. Add `tolerance` for a band.
+
+A side nobody could read is never a pass. A call that never happened, a missing element or a missing field fails. A body that was not recorded, was truncated before the field, or had the field redacted is unknown. Comparing a source with itself is refused before it runs, because it would agree on every page.
+
+Two live sides (`text`, `state`) are also read before the action. If they already agreed, the result is `already_true`, because their agreement says nothing about what the action did. Put a `net` or `signal` side in the comparison to tie it to the action.
+
+Comparing request with response on the same call is legitimate, and it is the direct check for a unit mismatch:
+
+```json
+{
+  "kind": "compare",
+  "left": { "from": "net", "urlContains": "/api/refund", "body": "request", "path": "amount" },
+  "right": { "from": "net", "urlContains": "/api/refund", "path": "refunded" },
+  "as": "number"
+}
+```
 
 ## Asserting a failure on purpose
 

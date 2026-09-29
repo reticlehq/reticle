@@ -4,6 +4,11 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Added
+
+- **`@reticlehq/core` + `@reticlehq/engine` — `bodyMatches`, `requestBodyMatches` and `signal.dataMatches` take a dotted path as a key.** They matched the top level only, and a nested object without an operator is compared whole, so on an API that wraps its answer (`{ "data": { "status": ... } }`) there was no way to say "this field holds this value". The fallback was `bodyContains`, the substring a key name has already fooled once. `{ "data.status": "completed" }`, `{ "items.0.id": "a1" }` and `{ "items.length": 3 }` now work, with the operators at any depth. The grammar is the one `state.path` already speaks; a key that literally contains a dot still matches as written first, and a nested literal object keeps meaning a whole-object comparison, so no existing assertion gets looser. A redacted field anywhere on the path is unknown rather than different, and a miss names the path and what it held, or the keys that were there instead.
+- **`@reticlehq/core` + `@reticlehq/engine` + `@reticlehq/server` — a `compare` predicate: two observed values must agree.** Every other predicate checks one reading against a value the caller writes down, which cannot catch a page echoing the user's input instead of the server's answer unless the caller already knows the right answer. `compare` reads both sides from the app (a request or response field, a signal payload field, a store path, an element's text) and relates them: strictly, or as numbers with `as: "number"`, which reads `"₹1,187.01"` as `1187.01` and refuses to guess between two numbers in one text. A side nobody could read is never a pass: a missing call, element or field fails, and an unrecorded, truncated or redacted body is unknown. Comparing a source with itself is refused at parse time, and two live sides that already agreed before the action are `already_true`. It grades as its stronger side, so text against a response grades `net`. `@reticlehq/engine` gains one public file, `question/predicate/predicate-compare.js`.
+
 ## [3.3.0] — 2026-09-26
 
 ### Added

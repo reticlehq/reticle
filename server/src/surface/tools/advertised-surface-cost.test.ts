@@ -122,7 +122,19 @@ const bytesOf = (json: string): number => Buffer.byteLength(json, 'utf8');
  * the agent being able to find it — a predicate nothing advertises is a predicate nobody calls,
  * which is how the substring became the only reach in the first place.
  */
-const DEFAULT_SURFACE_BYTE_BUDGET = 24_900;
+/*
+ * Moved 24_900 -> 25_100 for the `compare` predicate and dotted paths in `bodyMatches`.
+ *
+ * The decision, since going over is one: this is EVIDENCE, the same case `bodyMatches` made above. It
+ * is the only way to state "the page shows what the server answered" without already knowing the
+ * answer, and that is the refund false green, where every channel was green on a hundred-fold wrong
+ * amount. Measured at 25,081 B, so about 45 tokens a turn.
+ *
+ * Paid for as far as it could be: the kind list gains one word, the hint carries one example instead
+ * of an explanation, and the `reticle_assert` parameter names the kind without its fields. A kind
+ * the agent cannot see in the list is a kind nobody writes, so the word itself is not negotiable.
+ */
+const DEFAULT_SURFACE_BYTE_BUDGET = 25_100;
 // Raised, each time deliberately, each time with the measurement that bought it.
 //
 // LATEST RAISE, 24_600 -> 24_700. `reticle_verify { action: "explore" }` gained a `driver`
@@ -234,7 +246,12 @@ describe('advertised surface cost', () => {
  * The budget is deliberately loose. This one is not shipped to users, so the number is here to catch
  * a surprise rather than to squeeze; the DEFAULT budget above is the ratchet that matters.
  */
-const ALL_SURFACE_BYTE_BUDGET = 140_000;
+/*
+ * Moved 140_000 -> 146_000 for the `compare` predicate. Every tool that takes a predicate carries
+ * the full union in its schema, so one new member with four source shapes is paid once per such
+ * tool: measured at 145,213 B. Nothing in it is prose to trim; it is the shape of the claim.
+ */
+const ALL_SURFACE_BYTE_BUDGET = 146_000;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {

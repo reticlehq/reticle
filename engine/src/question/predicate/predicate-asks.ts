@@ -1,4 +1,4 @@
-import { PredicateKind } from '@reticlehq/core';
+import { PredicateKind, compareSourceClauses } from '@reticlehq/core';
 import type { Predicate } from './predicate-schema.js';
 
 /**
@@ -20,6 +20,9 @@ export function declaresState(predicate: Predicate): boolean {
     return predicate.predicates.some(declaresState);
   }
   if (predicate.kind === PredicateKind.NOT) return declaresState(predicate.predicate);
+  if (predicate.kind === PredicateKind.COMPARE) {
+    return compareSourceClauses(predicate).some(declaresState);
+  }
   return false;
 }
 
@@ -42,5 +45,8 @@ export function declaresDom(predicate: Predicate): boolean {
     return predicate.predicates.some(declaresDom);
   }
   if (predicate.kind === PredicateKind.NOT) return declaresDom(predicate.predicate);
+  if (predicate.kind === PredicateKind.COMPARE) {
+    return compareSourceClauses(predicate).some(declaresDom);
+  }
   return false;
 }

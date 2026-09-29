@@ -19,6 +19,8 @@ import type { Predicate } from './predicate-schema.js';
 import {
   clipBody,
   dataMatches,
+  describeBodyFieldMiss,
+  describeFieldMiss,
   describeNetFilter,
   matchJsonBody,
   num,
@@ -524,11 +526,15 @@ export function evalNet(
   }
   if (bodyMismatch !== undefined && 0 === matches.length) {
     // The call is there and its body is there; only the VALUE differs. Counting it as zero matches
-    // points at the wiring, which is the one place the defect is not.
+    // points at the wiring, which is the one place the defect is not. A field clause also names the
+    // field that differed, because a 200-character clip may not reach it.
+    const field =
+      p.bodyMatches === undefined ? undefined : describeBodyFieldMiss(bodyMismatch, p.bodyMatches);
+    const because = field === undefined ? '' : `: ${field}`;
     return {
       pass: false,
-      failureReason: `a call matching ${describeNetFilter(p)} was made and answered ${JSON.stringify(clipBody(bodyMismatch))}, which does not carry ${wantedBody(p)} — the request fired, the response value is what differed`,
-      observed: `response body ${JSON.stringify(clipBody(bodyMismatch))}`,
+      failureReason: `a call matching ${describeNetFilter(p)} was made and answered ${JSON.stringify(clipBody(bodyMismatch))}, which does not carry ${wantedBody(p)}${because} — the request fired, the response value is what differed`,
+      observed: `response body ${JSON.stringify(clipBody(bodyMismatch))}${because}`,
       expected: `a response body carrying ${wantedBody(p)}`,
       assertion: 'net.bodyContains',
     };
@@ -659,6 +665,11 @@ export function evalSignal(
         e.type === EventType.SIGNAL && (p.name === undefined || str(e.data['name']) === p.name),
     )
     .map((e) => e.data['data'] ?? e.data);
+  const first = sameName[0];
+  const fieldMiss =
+    p.dataMatches !== undefined && 'object' === typeof first && first !== null
+      ? describeFieldMiss(first as Record<string, unknown>, p.dataMatches)
+      : undefined;
   return {
     pass: false,
     failureReason:
@@ -667,7 +678,7 @@ export function evalSignal(
         : `no signal matched ${JSON.stringify(p)}`,
     observed:
       sameName.length > 0
-        ? `signal '${p.name ?? '(any)'}' fired ${String(sameName.length)}x, payload: ${JSON.stringify(sameName[0])}`
+        ? `signal '${p.name ?? '(any)'}' fired ${String(sameName.length)}x, payload: ${JSON.stringify(first)}${fieldMiss === undefined ? '' : `; ${fieldMiss}`}`
         : // Name what DID fire: a typo'd signal name and a genuinely dead action produce the same
           // sentence otherwise, and the agent cannot tell them apart. See observed-in-window.ts.
           `signal '${p.name ?? '(any)'}' never fired; ${describeObserved(

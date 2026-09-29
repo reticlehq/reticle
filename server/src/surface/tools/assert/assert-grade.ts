@@ -11,7 +11,12 @@
  * Pure: no IO, no clock.
  */
 
-import { isConsequenceKind, isPresenceKind, PredicateKind } from '@reticlehq/core';
+import {
+  compareSourceClauses,
+  isConsequenceKind,
+  isPresenceKind,
+  PredicateKind,
+} from '@reticlehq/core';
 import { HonestyGrade, strongerGrade, weakerGrade } from '@reticlehq/engine/evidence/honesty.js';
 import type { Predicate } from '@reticlehq/engine/question/predicate/predicate.js';
 
@@ -38,6 +43,14 @@ function walk(predicate: Predicate, negated = false): PredicateKinds {
   // wrong locator satisfies it trivially: "the error message is gone" is true of a selector that
   // never matched anything in the first place. Negation makes a presence check weaker, not stronger.
   if (PredicateKind.NOT === predicate.kind) return walk(predicate.predicate, true);
+  // A comparison grades as what its sides read: with a net/signal/state side it relates the page to
+  // the app's own record, which a wrong locator cannot fake; text against text is two readings of
+  // the same DOM. Its text side is always a content check, so it never counts as bare presence
+  // unless negated.
+  if (PredicateKind.COMPARE === predicate.kind) {
+    const consequence = compareSourceClauses(predicate).some((c) => isConsequenceKind(c.kind));
+    return { consequence, presence: !consequence && negated };
+  }
   // Leaf: classify against the single source of truth in core. Kinds that are neither consequence
   // nor presence (route/console/settled/animation) correctly return false for both.
   return {
@@ -125,6 +138,9 @@ export function gradeOfPredicate(predicate: Predicate): HonestyGrade {
     // verdict that proved only presence report `signal`, and a `minGrade: net` gate would trust it.
     case PredicateKind.ANY_OF:
       return combine(predicate.predicates, weakerGrade);
+    // Both sides had to be read and agree, so it proves as much as its stronger side.
+    case PredicateKind.COMPARE:
+      return combine(compareSourceClauses(predicate), strongerGrade);
     // Everything else, `not` included: an absence claim is satisfied trivially by a locator that
     // never matched anything, which is the argument `walk` already makes about negation.
     default:

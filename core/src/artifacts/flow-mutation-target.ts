@@ -22,6 +22,7 @@
 import type { FlowFile, FlowStep } from './flow-types.js';
 import { PredicateKind } from '@/verdict/consequence.js';
 import type { Predicate } from '@/verdict/predicate.js';
+import { compareSourceClauses } from '@/verdict/predicate-tree.js';
 
 /** Every endpoint this flow's own declarations name, in order, once each. */
 /**
@@ -41,6 +42,9 @@ function netUrlsIn(predicate: Predicate | undefined): string[] {
     return predicate.predicates.flatMap(netUrlsIn);
   }
   if (PredicateKind.NOT === predicate.kind) return netUrlsIn(predicate.predicate);
+  if (PredicateKind.COMPARE === predicate.kind) {
+    return compareSourceClauses(predicate).flatMap(netUrlsIn);
+  }
   return [];
 }
 

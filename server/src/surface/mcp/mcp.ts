@@ -119,7 +119,7 @@ import { firstSentence } from '@/surface/tools/first-sentence.js';
  */
 const PREDICATE_KINDS =
   'Predicate object: { kind, ...fields }. kind is one of element | text | net | route | console | ' +
-  'animation | signal | state | settled | allOf | anyOf | not.';
+  'animation | signal | state | settled | compare | allOf | anyOf | not.';
 
 /**
  * Said once per turn: the bug-catching options, and where to get the rest of the field grammar.
@@ -136,9 +136,11 @@ const PREDICATE_KINDS =
  */
 const PREDICATE_FIELD_GRAMMAR_HINT =
   ' Bug-catching options: net.count (exact request count — catches double-submit), ' +
-  'net.bodyMatches (a shallow JSON match on what the SERVER answered — say the FIELD and its value, ' +
+  'net.bodyMatches (a JSON field match on what the SERVER answered — say the FIELD (a dotted path reaches nested ones) and its value, ' +
   'because a substring of the body matches key names too), net.requestBodyMatches (the same on what ' +
   'the UI SENT — the verdict for "applying this filter actually puts it in the payload"), ' +
+  'compare (page text vs server answer, no expected value: { left:{from:"text",scope}, ' +
+  'right:{from:"net",urlContains,path}, as:"number" }), ' +
   'console.absent:true (action completed with a CLEAN ' +
   'console), absent:true on element/text (it should be gone). Call reticle_tools for the full field ' +
   'grammar of a kind.';

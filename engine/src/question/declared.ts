@@ -18,7 +18,7 @@
  * something that never happened. Pure: a predicate in, a description out.
  */
 
-import { PredicateKind, QueryBy, type ElementQuery } from '@reticlehq/core';
+import { PredicateKind, QueryBy, compareSourceClauses, type ElementQuery } from '@reticlehq/core';
 import type { Predicate } from './predicate/predicate-eval.js';
 
 /** A failing call the caller named in advance — matched against the window's real calls. */
@@ -109,6 +109,9 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
       case PredicateKind.ALL_OF:
         for (const child of p.predicates) walk(child);
         return;
+      case PredicateKind.COMPARE:
+        for (const child of compareSourceClauses(p)) walk(child);
+        return;
       case PredicateKind.NET: {
         netUrls.push(p.urlContains ?? '');
         const declaredFailure =
@@ -171,6 +174,9 @@ export function declaresBodyIndependentChannel(predicate: Predicate | undefined)
       case PredicateKind.SIGNAL:
       case PredicateKind.STATE:
       case PredicateKind.ROUTE:
+        return true;
+      // A comparison either READ the body it names, or reads a channel the body does not own.
+      case PredicateKind.COMPARE:
         return true;
       case PredicateKind.ELEMENT:
         return (

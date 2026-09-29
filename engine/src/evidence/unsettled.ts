@@ -16,7 +16,7 @@
  * one sentence an agent is known to read, and a caveat parked anywhere else is a caveat nobody reads.
  */
 
-import { PredicateKind } from '@reticlehq/core';
+import { PredicateKind, compareSourceClauses } from '@reticlehq/core';
 import type { Predicate } from '@/question/predicate/predicate.js';
 
 /** Enough to recognise the one that is stuck; not so many that a chatty window eats the verdict. */
@@ -68,6 +68,8 @@ export function describeWaitTarget(predicate: Predicate): string {
       return 'a console message';
     case PredicateKind.ANIMATION:
       return predicate.name === undefined ? 'an animation' : `animation '${predicate.name}'`;
+    case PredicateKind.COMPARE:
+      return `${predicate.left.from} and ${predicate.right.from} readings to agree`;
     case PredicateKind.ALL_OF:
       return `all of (${predicate.predicates.map(describeWaitTarget).join('; ')})`;
     case PredicateKind.ANY_OF:
@@ -96,6 +98,9 @@ export function namedNetIsInFlight(
       case PredicateKind.ALL_OF:
       case PredicateKind.ANY_OF:
         for (const child of p.predicates) walk(child);
+        return;
+      case PredicateKind.COMPARE:
+        for (const child of compareSourceClauses(p)) walk(child);
         return;
       case PredicateKind.NET: {
         if (undefined === p.urlContains || 0 === p.urlContains.length) return;
