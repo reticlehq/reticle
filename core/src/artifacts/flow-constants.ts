@@ -116,6 +116,7 @@ export const FlowErrorCode = {
    */
   WRONG_VERSION: 'flow_wrong_version',
   NO_RECORDING: 'flow_no_recording', // save with no compiled program by that name
+  STEP_NOT_FOUND: 'flow_step_not_found', // resume `from` names no step of the flow
 } as const;
 export type FlowErrorCode = (typeof FlowErrorCode)[keyof typeof FlowErrorCode];
 

@@ -435,6 +435,12 @@ export const FLOW_TOOLS: ToolDef[] = [
         .boolean()
         .optional()
         .describe('Set true to allow destructive controls during this replay only.'),
+      from: z
+        .union([z.number().int().nonnegative(), z.string().min(1)])
+        .optional()
+        .describe(
+          'RESUME at this step (0-based index, or a step `id`). The steps before it are re-driven quickly as setup — actions only, consequences not checked, results not reported unless one fails — then replay is checked and reported from here. A prefix step declared `effect: "commits"` refuses the resume and the whole flow replays.',
+        ),
       sweep: z
         .boolean()
         .optional()

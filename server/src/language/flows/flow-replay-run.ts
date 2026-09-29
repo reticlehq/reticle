@@ -33,6 +33,8 @@ import { unsuppliedSecrets } from './fields/flow-secret-field.js';
 import {
   assertStepExpect,
   DocumentLostDuringReplay,
+  resumeArg,
+  unresolvedResume,
   type FlowReplaySession,
 } from './flow-replay.js';
 import { isDocumentGoneError } from '@/portal/session/facts/session-replaced.js';
@@ -56,7 +58,6 @@ import { log } from '@/log.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { flowsForSession } from './flow-store-for-session.js';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
-import { FlowParseNote } from './flow-expect-grammar.js';
 
 export function latestRecordedFlow(
   events: ReticleEvent[],
@@ -70,26 +71,8 @@ export function latestRecordedFlow(
   return undefined;
 }
 
-/** Map a structured FlowErrorCode to a legible one-line message for the agent. */
-export function flowErrorMessage(code: FlowErrorCode, detail?: string): string {
-  if (FlowErrorCode.PARSE_FAILED === code && undefined !== detail) return detail;
-  // The detail names both versions and the remedy, so it beats anything generic this could say.
-  if (FlowErrorCode.WRONG_VERSION === code && undefined !== detail) return detail;
-  switch (code) {
-    case FlowErrorCode.INVALID_NAME:
-      return 'invalid flow name — use a single safe segment (letters/digits/-/_), no path separators';
-    case FlowErrorCode.NOT_FOUND:
-      return 'no such flow on disk — run reticle_flow{action:"list"} to see saved flows';
-    case FlowErrorCode.PARSE_FAILED:
-      return FlowParseNote.MALFORMED;
-    case FlowErrorCode.NO_RECORDING:
-      return 'no compiled recording by that name — record one (reticle_record{action:"start"|"stop"}) first';
-    // Never "regenerate it": the file is intact and the reader is the wrong one. Telling somebody
-    // to rewrite an undamaged flow is the failure this code was split out of PARSE_FAILED to stop.
-    case FlowErrorCode.WRONG_VERSION:
-      return 'this flow file was written in a different flow-file format — the file is not damaged, this Reticle cannot read that version. Upgrade or downgrade Reticle rather than editing the flow';
-  }
-}
+export { flowErrorMessage } from './flow-result.js';
+import { flowErrorMessage } from './flow-result.js';
 
 /** Map the wire ReplayStatus onto the persisted RunStatus (ok→pass). */
 function replayToRunStatus(status: ReplayStatus): RunStatus {
@@ -716,6 +699,12 @@ export async function replayNamedFlow(
       },
     };
   }
+  const from = resumeArg(args['from']);
+  const badResume = unresolvedResume(from, replayable.steps);
+  if (badResume !== undefined) {
+    const error = { code: FlowErrorCode.STEP_NOT_FOUND, message: badResume };
+    return { name: replayable.name, status: ReplayStatus.ERROR, steps: [], error };
+  }
   const unmet = await firstUnmetPrecondition(session, replayable, replayFloor);
   if (unmet !== undefined) {
     return {
@@ -744,6 +733,7 @@ export async function replayNamedFlow(
         // Bug-sweep mode: keep going past a step whose action ran and whose consequence merely did
         // not hold, so one flow reports one verdict per step instead of stopping at the first defect.
         sweep: true === args['sweep'],
+        ...(from === undefined ? {} : { from }),
       },
     );
   } catch (error: unknown) {

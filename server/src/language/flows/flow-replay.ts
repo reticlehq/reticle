@@ -28,6 +28,7 @@ import {
   DriftReason,
   EventType,
   FlowStepTool,
+  StepEffect,
   type Drift,
   type FlowFile,
   type FlowStep,
@@ -363,15 +364,18 @@ async function runSignalStep(
  * results. This is the "whose fault is it" contract, not a blind "command failed".
  */
 /**
- * How a replay is loaded and how far it goes — not WHERE it starts.
- *
- * It carried a `from` (and a `surface` that existed only to gate it): replay from step N, re-driving
- * the prefix silently. The machinery was built, tested and reachable from nothing at all — no tool
- * argument, no CLI flag, no caller anywhere. Deleted rather than wired: unreachable code is read as
- * current by the next person and maintained forever, its passing tests make it look load-bearing,
- * and nobody has asked for resume-from-step. The history keeps it if it is ever wanted.
+ * How a replay is loaded, where it starts reporting, and how far it goes.
  */
 export interface ReplayFromOptions {
+  /**
+   * Resume at this step: an index, or a step's `id` (which survives edits that shift indices).
+   *
+   * There is no state to restore, so the steps before it are re-driven — quickly, as setup: their
+   * actions run, their declared consequences are not checked and their results are not reported.
+   * The one exception is a setup step that FAILS: the resume never reached the step it was asked
+   * for, and swallowing that would report the run as starting where it did not.
+   */
+  from?: number | string;
   /**
    * How to load a flow this one INVOKES. Absent means invocations cannot be followed.
    *
@@ -401,6 +405,36 @@ export interface ReplayFromOptions {
 }
 
 /**
+ * The index a replay resumes at, or `undefined` when `from` names no step of this flow.
+ *
+ * A step declared `commits` in the prefix refuses the resume (0 = replay everything): re-driving it
+ * is not setup, it is a second charge, a second email, a second record.
+ */
+export function resumeIndex(
+  from: number | string | undefined,
+  steps: readonly FlowStep[],
+): number | undefined {
+  if (from === undefined) return 0;
+  const at = 'number' === typeof from ? from : steps.findIndex((step) => step.id === from);
+  if (at < 0 || at >= steps.length || !Number.isInteger(at)) return undefined;
+  return steps.slice(0, at).some((step) => StepEffect.COMMITS === step.effect) ? 0 : at;
+}
+
+/** The `from` argument, narrowed: a step index or a step id. */
+export function resumeArg(raw: unknown): number | string | undefined {
+  return 'number' === typeof raw || ('string' === typeof raw && raw.length > 0) ? raw : undefined;
+}
+
+/** Why `from` cannot be resumed at, or undefined when it can (or was not given). */
+export function unresolvedResume(
+  from: number | string | undefined,
+  steps: readonly FlowStep[],
+): string | undefined {
+  if (resumeIndex(from, steps) !== undefined) return undefined;
+  return `cannot resume at ${JSON.stringify(from)}: this flow has ${String(steps.length)} step(s) and no step by that id`;
+}
+
+/**
  * Run an `invoke` step: load the named flow and replay it, or fail saying why.
  *
  * Never silently skipped. An invocation that cannot be followed and is reported as OK would mean a
@@ -421,6 +455,7 @@ async function runInvokeStep(
   confirmDangerous: boolean,
   sleep: Sleep,
   options: ReplayFromOptions,
+  setup = false,
 ): Promise<FlowStepResult> {
   const name = step.invoke ?? '';
   const via = options.via ?? [];
@@ -443,7 +478,10 @@ async function runInvokeStep(
       error: `cannot replay "${name}": it was not found, so this journey would report green having never run it`,
     };
   }
-  const carried = options;
+  // `from` is an offset into the CALLER's steps. A sub-journey invoked from the setup prefix runs
+  // whole and unchecked (from = its length); one invoked at or after the resume point runs normally.
+  const { from: _outer, ...rest } = options;
+  const carried = setup ? { ...rest, from: sub.steps.length } : rest;
   const nested = await replayFlow(
     session,
     sub,
@@ -478,6 +516,9 @@ export async function replayFlow(
   options: ReplayFromOptions = {},
 ): Promise<FlowStepResult[]> {
   const results: FlowStepResult[] = [];
+  // Steps before this index are setup. `from` was validated by the caller; an unresolvable one
+  // resumes nowhere rather than everywhere, so it cannot silently widen into a full replay.
+  const from = resumeIndex(options.from, flow.steps) ?? flow.steps.length;
   // testids whose region is LLM-dynamic — their expect-presence is NOT asserted.
   const dynamic = new Set<string>(
     (flow.dynamic ?? [])
@@ -508,9 +549,11 @@ export async function replayFlow(
             confirmDangerous,
             sleep,
             options,
+            index < from,
           ),
         );
         const last = results[results.length - 1];
+        if (last !== undefined && index < from && last.ok) results.pop();
         if (last !== undefined && false === last.ok) break;
         index += 1;
         continue;
@@ -587,7 +630,9 @@ export async function replayFlow(
       const declared = [step.expect, ...(step.steps ?? []).map((sub) => sub.expect)].filter(
         (expectation): expectation is NonNullable<FlowStep['expect']> => expectation !== undefined,
       );
-      for (const expectation of declared) {
+      // A setup step's consequence is not checked: it is re-driven to get somewhere, not to prove it.
+      const checked = index < from ? [] : declared;
+      for (const expectation of checked) {
         if (!result.ok || result.drift !== undefined) break;
         const expectDrift = await assertStepExpect(
           session,
@@ -622,6 +667,11 @@ export async function replayFlow(
       // `tool` is dropped HERE rather than at the ten places that set it, so a new step runner cannot
       // forget the rule and quietly re-introduce the cost. Spelled out only when it is NOT the default.
       if (FlowStepTool.ACT === result.tool) delete result.tool;
+      if (index < from && result.ok && result.drift === undefined) {
+        index += 1;
+        continue;
+      }
+      if (index < from) result.note = `setup step for resuming at step ${String(from)} failed`;
       results.push(result);
       // Under `sweep`, a failure whose action still RAN does not stop the run — the page is where the
       // step left it, so the next step is as meaningful as it was going to be. Anything else halts.
