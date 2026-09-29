@@ -1,4 +1,4 @@
-import { CaptureLoss, channelsRead, PredicateKind } from '@reticlehq/core';
+import { CaptureLoss, channelsReadBy, PredicateKind } from '@reticlehq/core';
 import { sessionVerdictFacts } from '@/portal/session/session-verdict-facts.js';
 import { gapsForAction } from '@reticlehq/engine/evidence/instrumentation-gaps.js';
 import { noteSessionGaps } from '@reticlehq/engine/evidence/gap-ledger.js';
@@ -190,7 +190,7 @@ export async function assertVerdict(
     // first clause, and one this implementation could not run until the page started declaring.
     // Both halves are conditional on purpose: an SDK too old to declare sends nothing, and
     // treating that silence as an empty set would refuse every claim from every older page.
-    channelsRead: channelsRead(predicate.kind),
+    channelsRead: channelsReadBy(predicate),
     ...(session.channels === undefined ? {} : { channelsObservable: session.channels }),
     // Threaded rather than looked up: decideVerified is pure and has no session.
     ...sessionVerdictFacts(session),

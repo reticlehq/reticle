@@ -5,6 +5,7 @@ import {
   disagreementCanConvict as protocolRule,
 } from 'open-verification';
 import { PredicateKind } from '@/verdict/consequence.js';
+import type { Predicate } from '@/verdict/predicate.js';
 
 /**
  * The sources of truth a verdict can be built from.
@@ -76,6 +77,23 @@ function ANY_CHANNEL_A_CLAIM_CAN_READ(): readonly ChannelId[] {
 /** The channels a claim of this kind needs to look at. */
 export function channelsRead(kind: PredicateKind): readonly ChannelId[] {
   return CHANNELS_OF[kind];
+}
+
+/**
+ * The channels this claim needs, reading a composite's members rather than its kind (#1116).
+ *
+ * The union of the members is exactly as strict as the table: a wrapped `state` clause still needs
+ * `state`. What the table cannot do is tell `allOf[net, text]` from one that holds a state clause, so
+ * it refused every composite on a page without a store. A composite with no members keeps the
+ * table's answer, the whole set, so it can never read as needing nothing.
+ */
+export function channelsReadBy(predicate: Predicate): readonly ChannelId[] {
+  if (PredicateKind.NOT === predicate.kind) return channelsReadBy(predicate.predicate);
+  if (PredicateKind.ALL_OF !== predicate.kind && PredicateKind.ANY_OF !== predicate.kind) {
+    return CHANNELS_OF[predicate.kind];
+  }
+  if (0 === predicate.predicates.length) return CHANNELS_OF[predicate.kind];
+  return [...new Set(predicate.predicates.flatMap(channelsReadBy))];
 }
 
 /**
