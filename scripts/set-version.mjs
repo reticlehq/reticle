@@ -83,7 +83,11 @@ const RULES = [
   {
     what: 'plugin + marketplace manifests',
     files: () => ['plugin/.claude-plugin/plugin.json', '.claude-plugin/marketplace.json'],
-    edit: (text, from, to) => text.replace(`"version": "${from}"`, `"version": "${to}"`),
+    // The directory refuses an unpinned npx, so the MCP command carries the release version too.
+    edit: (text, from, to) =>
+      text
+        .replace(`"version": "${from}"`, `"version": "${to}"`)
+        .replace(`@reticlehq/server@${from}`, `@reticlehq/server@${to}`),
   },
   {
     what: 'docs.json site version',
