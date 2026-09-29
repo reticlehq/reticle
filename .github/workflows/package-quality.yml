@@ -171,9 +171,19 @@ jobs:
           #
           # ~235KB of room over the measurement, matching the shape of the previous raise rather
           # than clearing today's number by a hair. The docs remain the first place to look.
+          #
+          # RAISED to 5,950,000 on 2026-09-29. main measured 5,728,640 -- 21KB under the old
+          # ceiling -- and the flow-fidelity branch 5,754,246, packed both ways:
+          #
+          #     code  3,578K -> 3,595K   (+17K)
+          #     types 1,277K -> 1,284K   (+7K)
+          #     docs    861K ->   862K   (+2K)
+          #
+          # That is resume-from-step, merging duplicate drives, step pages, flow authors and the
+          # replayable run fields. ~196KB of room, the same shape as the two raises above.
           server_bytes=$(cd server && npm pack --dry-run --json 2>/dev/null | sed -n '/^\[/,$p' | node -e "process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d)[0].unpackedSize))")
           echo "server unpacked: $server_bytes bytes"
-          if [ "$server_bytes" -gt 5750000 ]; then
-            echo "::error::@reticlehq/server unpacked size $server_bytes exceeds the 5750KB budget"
+          if [ "$server_bytes" -gt 5950000 ]; then
+            echo "::error::@reticlehq/server unpacked size $server_bytes exceeds the 5950KB budget"
             exit 1
           fi

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getAccessibleName } from './a11y.js';
+import { getAccessibleName, isVisible } from './a11y.js';
 
 describe('name from content for roles that allow it', () => {
   // A segmented filter written as `<button role="radio">held</button>` is an extremely ordinary
@@ -94,6 +94,142 @@ describe('aria-hidden decoration inside a label', () => {
     icon.textContent = ' ✓';
     el.append(icon);
     expect(getAccessibleName(el)).toBe('Save');
+  });
+});
+
+describe('a closed native <details> hides what the summary does not contain', () => {
+  /**
+   * Reported from the field on more than one stack: a control inside a CLOSED `<details>` was
+   * reported `visible`, so the click that expands the `<summary>` returned `already_true` /
+   * no-fault, and the verdict was lost rather than the reading merely being wrong. A closed
+   * `<details>` unrenders its content without setting `display:none` on it, and in some engines
+   * the content keeps a layout box, so a check built from aria-hidden/[hidden]/display/
+   * visibility/opacity alone cannot see it. Only the first `<summary>` child stays on screen.
+   */
+  it('reports the summary visible and the content hidden while closed', () => {
+    const details = document.createElement('details');
+    const summary = document.createElement('summary');
+    summary.textContent = 'Connection status and setup';
+    const heading = document.createElement('h2');
+    heading.textContent = 'Connected';
+    details.append(summary, heading);
+    document.body.append(details);
+    try {
+      expect(isVisible(summary)).toBe(true); // the disclosure control itself still renders
+      expect(isVisible(heading)).toBe(false);
+      expect(isVisible(details)).toBe(true);
+    } finally {
+      details.remove();
+    }
+  });
+
+  it('keeps content without a summary child hidden while closed', () => {
+    const details = document.createElement('details');
+    const heading = document.createElement('h2');
+    heading.textContent = 'Connected';
+    details.append(heading);
+    document.body.append(details);
+    try {
+      expect(isVisible(heading)).toBe(false);
+    } finally {
+      details.remove();
+    }
+  });
+
+  it('reports the content visible once the details is open', () => {
+    const details = document.createElement('details');
+    details.setAttribute('open', '');
+    const summary = document.createElement('summary');
+    summary.textContent = 'Connection status and setup';
+    const heading = document.createElement('h2');
+    heading.textContent = 'Connected';
+    details.append(summary, heading);
+    document.body.append(details);
+    try {
+      expect(isVisible(heading)).toBe(true);
+    } finally {
+      details.remove();
+    }
+  });
+
+  it('keeps content hidden when a nesting ancestor is the closed details', () => {
+    // An inner details that is itself OPEN still renders nothing when its outer details is
+    // closed and the inner one sits in the outer's content rather than its summary.
+    const outer = document.createElement('details');
+    const outerSummary = document.createElement('summary');
+    outerSummary.textContent = 'outer';
+    const inner = document.createElement('details');
+    inner.setAttribute('open', '');
+    const innerSummary = document.createElement('summary');
+    innerSummary.textContent = 'inner';
+    const heading = document.createElement('h2');
+    heading.textContent = 'Connected';
+    inner.append(innerSummary, heading);
+    outer.append(outerSummary, inner);
+    document.body.append(outer);
+    try {
+      expect(isVisible(innerSummary)).toBe(false);
+      expect(isVisible(heading)).toBe(false);
+    } finally {
+      outer.remove();
+    }
+  });
+});
+
+describe('visibility composes across a shadow boundary', () => {
+  /**
+   * Query candidates include shadow content — open roots always, captured closed roots too
+   * (`embeddedRootsUnder` in query.ts). `parentElement` is null at the top of a shadow tree
+   * (a ShadowRoot is a DocumentFragment), so a walk that stops there never sees the host, and
+   * whatever hides the host — a closed `<details>`, `display:none`, `aria-hidden` — hides
+   * nothing. A web component inside a collapsed disclosure would read `visible` again.
+   */
+  function mountHostedControl(): { details: HTMLDetailsElement; button: HTMLElement } {
+    const details = document.createElement('details');
+    const summary = document.createElement('summary');
+    summary.textContent = 'Connection status and setup';
+    const host = document.createElement('div');
+    const shadow = host.attachShadow({ mode: 'open' });
+    const button = document.createElement('button');
+    button.textContent = 'Retry';
+    shadow.append(button);
+    details.append(summary, host);
+    document.body.append(details);
+    return { details, button };
+  }
+
+  it('hides a shadow control whose host sits inside a closed details', () => {
+    const { details, button } = mountHostedControl();
+    try {
+      expect(isVisible(button)).toBe(false);
+    } finally {
+      details.remove();
+    }
+  });
+
+  it('hides a shadow control whose host is not rendered', () => {
+    const host = document.createElement('div');
+    host.style.display = 'none'; // the own-box signals never reach into the host's shadow tree
+    const shadow = host.attachShadow({ mode: 'open' });
+    const button = document.createElement('button');
+    button.textContent = 'Retry';
+    shadow.append(button);
+    document.body.append(host);
+    try {
+      expect(isVisible(button)).toBe(false);
+    } finally {
+      host.remove();
+    }
+  });
+
+  it('still reports a shadow control visible when its host chain is', () => {
+    const { details, button } = mountHostedControl();
+    details.setAttribute('open', '');
+    try {
+      expect(isVisible(button)).toBe(true);
+    } finally {
+      details.remove();
+    }
   });
 });
 

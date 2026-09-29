@@ -15,6 +15,10 @@ import { inspectChart } from './chart.js';
 import { isSensitiveKey } from '@/security/serialization.js';
 import { formatSource, sourceFromDom } from './addressing/source.js';
 
+const HTML_DETAILS_TAG = 'details';
+const HTML_DETAILS_OPEN_ATTRIBUTE = 'open';
+const HTML_DIRECT_SUMMARY_SELECTOR = ':scope > summary';
+
 /**
  * Roles whose accessible name comes from their text content (ARIA's `nameFrom: author content`).
  *
@@ -318,6 +322,7 @@ export function getStates(el: Element, visible: boolean = isVisible(el)): Elemen
   const checkedProp = isInput(el) && ('checkbox' === el.type || 'radio' === el.type) && el.checked;
   if (checkedProp || true === ariaBool(el, 'aria-checked')) states.push(ElementState.CHECKED);
   if (true === ariaBool(el, 'aria-expanded')) states.push(ElementState.EXPANDED);
+  if (true === ariaBool(el, 'aria-pressed')) states.push(ElementState.PRESSED);
   if (el.ownerDocument.activeElement === el) states.push(ElementState.FOCUSED);
 
   return states;
@@ -358,10 +363,34 @@ export function getValue(el: Element): string | undefined {
   return valueNow ?? undefined;
 }
 
-/** Whether the element's OWN box hides it — one forced-style resolution, no ancestor walk. */
+/**
+ * Whether the nearest `<details>` ancestor is closed and does not keep this element on screen.
+ *
+ * A closed native `<details>` unrenders its content — everything except its first `<summary>`
+ * child — without setting `display:none` on it, and in some engines the content keeps a layout
+ * box, so the own-box signals cannot see it. Reported from the field: a control inside a closed
+ * `<details>` read as `visible`, and the expanding click returned `already_true`/no-fault. Only
+ * the first summary child stays on screen; an element inside it stays visible, and a nested open
+ * `<details>` inside a closed one is still hidden — the ancestor walk in isVisible composes it.
+ */
+function hiddenInsideClosedDetails(el: Element): boolean {
+  const parent = el.parentElement;
+  if (null === parent) return false;
+  const details = parent.closest(HTML_DETAILS_TAG);
+  if (null === details || details.hasAttribute(HTML_DETAILS_OPEN_ATTRIBUTE)) return false;
+  const summary = details.querySelector(HTML_DIRECT_SUMMARY_SELECTOR);
+  return null === summary || !summary.contains(el);
+}
+
+/**
+ * Whether the element's OWN box hides it — one forced-style resolution, no composed ancestor
+ * walk. The one ancestor reading is `hiddenInsideClosedDetails`, which consults only the nearest
+ * `<details>` boundary; composing the chain is still isVisible's job.
+ */
 function selfHidden(el: Element): boolean {
   if ('true' === el.getAttribute('aria-hidden')) return true;
   if (isHtmlElement(el) && el.hidden) return true;
+  if (hiddenInsideClosedDetails(el)) return true;
   const view = el.ownerDocument.defaultView;
   if (view !== null) {
     const style = view.getComputedStyle(el);
@@ -378,12 +407,28 @@ function selfHidden(el: Element): boolean {
 }
 
 /**
- * Whether the element is actually visible (not display:none/hidden/aria-hidden/opacity:0), walking to
- * root. This is an O(depth) forced-style walk PER node; `memo` (optional, scoped to ONE synchronous
- * query pass) caches the full inherited result per element so a broad state-filtered query stops
- * re-resolving getComputedStyle up the same ancestor chain for every sibling. Sound because the DOM is
- * static for the pass's duration — the cache MUST be a per-call Map, never module-level (that would go
- * stale the instant the app mutates, the same trap the shadow-root note in query.ts documents).
+ * The next node up the COMPOSED tree: `parentElement`, or the shadow host when the walk reaches
+ * the top of a shadow tree. A ShadowRoot is a DocumentFragment, so `parentElement` is null there,
+ * and query candidates include shadow content (open roots always, captured closed roots too — see
+ * `embeddedRootsUnder`). Without the hop, nothing that hides the host — a closed `<details>`,
+ * display:none, aria-hidden — is ever seen by the walk inside the host's shadow tree.
+ */
+function parentAcrossShadowBoundary(el: Element): Element | null {
+  if (null !== el.parentElement) return el.parentElement;
+  // `host` exists on a ShadowRoot and not on a Document, the other thing getRootNode() returns
+  // for a connected element.
+  const host: Element | undefined = (el.getRootNode() as Partial<ShadowRoot>).host;
+  return host ?? null;
+}
+
+/**
+ * Whether the element is actually visible (not display:none/hidden/aria-hidden/opacity:0/inside a
+ * closed `<details>`), walking to root across shadow boundaries. This is an O(depth) forced-style
+ * walk PER node; `memo` (optional, scoped to ONE synchronous query pass) caches the full inherited
+ * result per element so a broad state-filtered query stops re-resolving getComputedStyle up the
+ * same ancestor chain for every sibling. Sound because the DOM is static for the pass's duration —
+ * the cache MUST be a per-call Map, never module-level (that would go stale the instant the app
+ * mutates, the same trap the shadow-root note in query.ts documents).
  */
 /**
  * True when the element is inside the viewport right now: visible AND its bounding box intersects
@@ -406,7 +451,7 @@ export function isVisible(el: Element, memo?: Map<Element, boolean>): boolean {
   if (!el.isConnected) return false;
   const cached = memo?.get(el);
   if (cached !== undefined) return cached;
-  const parent = el.parentElement;
+  const parent = parentAcrossShadowBoundary(el);
   // Each cached boolean already folds in that node's own aria-hidden/[hidden]/display/visibility/opacity,
   // so inherited visibility composes by AND up the chain and a sibling short-circuits at the first
   // cached ancestor.

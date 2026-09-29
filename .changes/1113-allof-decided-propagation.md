@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/engine` — an `allOf` conjunction whose permanently-false clause was not the first to fail kept polling until the budget expired.** `waitForPredicate` uses `decided: true` to stop early when no later event can change the answer. The `allOf` evaluator found the first failing clause with `.find()` and propagated only that clause's `decided` flag — but `.find()` picks by array order, not by decidedness, so when a non-decided clause preceded the overshot exact-count clause the conjunction's `decided` was lost and polling continued for the full budget. The fix scans all failed clauses with `.some()` and sets `decided` when any of them is permanently false. Closes [#1113](https://github.com/reticlehq/reticle/issues/1113).

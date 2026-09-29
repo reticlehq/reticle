@@ -803,14 +803,15 @@ export const ElementState = {
   DISABLED: 'disabled',
   CHECKED: 'checked',
   EXPANDED: 'expanded',
+  PRESSED: 'pressed',
   FOCUSED: 'focused',
   PRESENT: 'present',
   /**
    * Inside the viewport right now (getBoundingClientRect intersects the window). Distinct from
-   * `visible`, which folds only aria-hidden/[hidden]/display/visibility/opacity and so is already
-   * true for content below the fold of a scrolling container. Without this, `scrollIntoView` is
-   * ungradeable: the target satisfied `visible`/`present` before the scroll, so act_and_wait
-   * returns already_true. (#398)
+   * `visible`, which folds only aria-hidden/[hidden]/display/visibility/opacity and a closed
+   * `<details>` ancestor, and so is already true for content below the fold of a scrolling
+   * container. Without this, `scrollIntoView` is ungradeable: the target satisfied
+   * `visible`/`present` before the scroll, so act_and_wait returns already_true. (#398)
    */
   IN_VIEWPORT: 'inViewport',
 } as const;

@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/test` — `bootSession()` died with a raw `node:net` EADDRINUSE stack on any machine that already had a Reticle daemon running.** Both `reticle serve` and `bootSession()` default to port 4400, so this was the normal state, not an edge case — a spec run had no way to tell "a daemon owns this port" from any other crash. `bootSession()` now probes the port first, the same way `drive`/`verify`/`status` already do, and refuses with one message that names the port and both ways out: pass a different `port` to `bootSession`, or run `reticle stop`. Closes [#1141](https://github.com/reticlehq/reticle/issues/1141).

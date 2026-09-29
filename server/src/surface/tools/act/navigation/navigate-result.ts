@@ -10,9 +10,12 @@
  * `reticle_act` already draws this line — `dispatched` (sent) versus `settled` (a frame flushed).
  * This gives navigate the same honesty without changing what it does.
  */
+import { NAVIGATION_REDIRECT_NOTE } from '@reticlehq/core';
+
 /** The session the SDK reconnected as after the page moved, when one was observed in the window. */
 export interface NavigateArrival {
   sessionId: string;
+  landedOn?: string;
 }
 
 export function navigateResult(
@@ -48,12 +51,18 @@ export function navigateResult(
   // A refusal is conclusive: the page never moved, so there is nothing unconfirmed to report.
   if (!ok) return base;
   if (arrival !== null) {
+    const redirected = 'string' === typeof arrival.landedOn;
+
     return {
       ...base,
-      confirmed: true,
-      // The SDK that reconnects after a navigation is a NEW session with a new id. Returning it here
-      // is the difference between a confirmation and a confirmation the agent can act on.
+      confirmed: !redirected,
       sessionId: arrival.sessionId,
+      ...(redirected
+        ? {
+            landedOn: arrival.landedOn,
+            note: `${NAVIGATION_REDIRECT_NOTE} Landed on: ${arrival.landedOn}`,
+          }
+        : {}),
     };
   }
   return {

@@ -117,6 +117,38 @@ describe('confirmed reports arrival when arrival is observable', () => {
     expect(out['sessionId'], 'the SDK reconnects as a NEW session — name it').toBe('s-new');
   });
 
+  it('reports when the navigation arrived somewhere other than the requested URL', () => {
+    const out = navigateResult(
+      { ok: true, url: 'http://localhost:3000/dashboard' },
+      {
+        sessionId: 's-new',
+        landedOn: 'http://localhost:3000/login',
+      },
+      WAITED,
+    );
+
+    expect(out).toMatchObject({
+      ok: true,
+      confirmed: false,
+      sessionId: 's-new',
+      landedOn: 'http://localhost:3000/login',
+    });
+
+    expect(String(out['note'])).toMatch(/redirected|landed/i);
+  });
+
+  it('does not report landedOn for a confirmed arrival', () => {
+    const out = navigateResult(
+      { ok: true, url: 'http://localhost:3000/dashboard' },
+      { sessionId: 's-new' },
+      WAITED,
+    );
+
+    expect(out['confirmed']).toBe(true);
+    expect(out['sessionId']).toBe('s-new');
+    expect(out['landedOn']).toBeUndefined();
+  });
+
   it('stays false, with the note, when nothing arrives in the window', () => {
     const out = navigateResult({ ok: true, url: 'http://localhost:3000/dashboard' }, null, WAITED);
     expect(out['confirmed']).toBe(false);
@@ -140,6 +172,20 @@ describe('the navigate description matches what navigate now returns', () => {
 
   it('tells the agent that confirmed:true means it can act', () => {
     expect(nav?.description).toContain('confirmed');
+  });
+
+  it('explains landedOn when navigation ends at another URL', () => {
+    const text = nav?.description ?? '';
+
+    expect(text).toContain('landedOn');
+    expect(text).toMatch(/redirect/i);
+  });
+
+  it('distinguishes an unconfirmed redirect from a navigation that never arrived', () => {
+    const text = nav?.description ?? '';
+
+    expect(text).toContain('confirmed:false');
+    expect(text).toContain('without `landedOn`');
   });
 
   it('does not send the agent to reticle_sessions unconditionally', () => {

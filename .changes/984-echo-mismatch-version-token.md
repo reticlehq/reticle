@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/engine` — `write-field-ignored` no longer fires on a bumped optimistic-concurrency token.** A compare-and-set write sends the `version` it read and expects the server to bump it; the response's incremented `version` was read as a dropped field the same way a genuinely ignored write is, because nothing distinguished a version token from an ordinary persisted field. `version`, `_version`, `etag`, `rev` and `revision` are now excluded from the comparison the same way identity keys already are — the changed value is the proof the write applied, not a field the caller asked the server to preserve. Closes [#984](https://github.com/reticlehq/reticle/issues/984).
