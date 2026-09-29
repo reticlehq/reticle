@@ -1,5 +1,5 @@
 import { captureValueSetter } from '@/patching/capture-method.js';
-import { valuePrototypeOf } from '@/dom/realm.js';
+import { type ActionTarget, isHtmlElement, valuePrototypeOf } from '@/dom/realm.js';
 
 /**
  * Writing a value into a field, and the two preconditions that make it honest.
@@ -47,16 +47,17 @@ export function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value
  * The attribute, not only `isContentEditable`: jsdom does not implement the property, so a test
  * would pass against a guard that never fires in the environment the unit suite runs in.
  */
-function isRichText(el: HTMLElement): boolean {
+function isRichText(el: ActionTarget): boolean {
   const flag = el.getAttribute('contenteditable');
-  if (el.isContentEditable || (null !== flag && 'false' !== flag)) return true;
+  if ((isHtmlElement(el) && el.isContentEditable) || (null !== flag && 'false' !== flag))
+    return true;
   if ('textbox' === el.getAttribute('role')) return true;
   if (!('editContext' in el)) return false;
   const surface = el as HTMLElement & { editContext?: object | null };
   return null !== surface.editContext && undefined !== surface.editContext;
 }
 
-export function assertNotRichText(el: HTMLElement, action: string): void {
+export function assertNotRichText(el: ActionTarget, action: string): void {
   if (!isRichText(el)) return;
   throw new Error(
     `cannot ${action} a contenteditable or EditContext editor; use press or an input`,

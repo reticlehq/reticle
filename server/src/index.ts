@@ -44,6 +44,7 @@ import { SERVER_VERSION } from './command/version/identity/server-version.js';
 import { BaselineStore } from './memory/project/baselines.js';
 import { RecordingStore } from './language/flows/recording/tape/recordings.js';
 import { initImpact } from './memory/impact/impact-recorder.js';
+import { flowAuthor } from './language/flows/flow-author.js';
 import { FlowStore } from './language/flows/flows.js';
 import { buildFlowChips } from './language/flows/flow-scope.js';
 import { ProjectStore } from './memory/project/project-store.js';
@@ -436,6 +437,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       takeAmbientTape: () => recordings.stop(AMBIENT_RECORDING),
       reportStep: reportOnboardingStep,
       flows,
+      author: flowAuthor,
     });
     const project = new ProjectStore(fs, reticleRoot, { now });
     attachRouteLearning(bridge, projectStoreResolver(fs, project, reticleRoot, now));
@@ -603,6 +605,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     takeAmbientTape: () => recordings.stop(AMBIENT_RECORDING),
     reportStep: reportOnboardingStep,
     flows,
+    author: flowAuthor,
     onRunPersisted: () => syncNudge.run?.(),
   });
   const project = new ProjectStore(fs, reticleRoot, { now });

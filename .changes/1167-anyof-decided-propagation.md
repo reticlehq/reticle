@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/engine` — an `anyOf` disjunction whose every clause was permanently false kept polling until the budget expired.** `waitForPredicate` uses `decided: true` to stop early when no later event can change the answer. The `anyOf` evaluator never set `decided` on its failure result, so when every branch had overshot (e.g. two exact-count clauses that both exceeded their target), the disjunction returned `pass: false` without `decided` and polling continued for the full budget. The fix checks whether all non-inconclusive failures are decided and propagates `decided: true` to the disjunction. Closes [#1167](https://github.com/reticlehq/reticle/issues/1167).

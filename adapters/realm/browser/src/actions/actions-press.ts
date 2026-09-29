@@ -4,7 +4,7 @@ import { nativeSetTimeout } from '@/timers/native/native-timers.js';
 
 /** Native, so a page that patched setTimeout cannot stretch or stall a hold. */
 const sleep = (ms: number): Promise<void> => new Promise((r) => nativeSetTimeout(r, ms));
-import { isHtmlElement } from '@/dom/realm.js';
+import { type ActionTarget, isHtmlElement } from '@/dom/realm.js';
 
 function asString(value: unknown, fallback = ''): string {
   return 'string' === typeof value ? value : fallback;
@@ -155,7 +155,7 @@ const KEY_REPEAT_DELAY_MS = 500;
  * reports a gesture that visibly did not happen.
  */
 export async function holdKey(
-  el: HTMLElement,
+  el: ActionTarget,
   key: string,
   code: string,
   mods: Record<string, boolean>,
@@ -182,7 +182,7 @@ export async function holdKey(
 
 /** Press several keys together and release them in reverse, optionally holding at full depth. */
 export async function pressCombo(
-  el: HTMLElement,
+  el: ActionTarget,
   keys: readonly string[],
   mods: Record<string, boolean>,
   holdMs: number,

@@ -246,7 +246,13 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * with the lazy panel; it moved to the `@reticlehq/core/hud` subpath and left. Raised by 1,000 over
  * the measurement, per the note above.
  */
-const MAX_FIRST_LOAD_BYTES = 243_400;
+/*
+ * 243_400 -> 244_500, for driving SVG targets and ARIA checkboxes. 602 B measured on this tree
+ * (242,895 -> 243,497): actions accept an SVGElement, and check/uncheck click a `role="checkbox"`
+ * or `role="switch"` and refuse to report success when `aria-checked` did not move. Both run where
+ * the page is. Raised by 1,000 over the measurement, per the note above.
+ */
+const MAX_FIRST_LOAD_BYTES = 244_500;
 /*
  * Raised a fifth time, 233_300 -> 233_400, for a route to be assertable in a SAVED flow. 57 B.
  *

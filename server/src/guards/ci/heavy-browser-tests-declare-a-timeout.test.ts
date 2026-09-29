@@ -231,12 +231,17 @@ function loopBody(text: string, headOpen: number): string | null {
  * the property under test is that the byte budget evicts OLDEST-FIRST and mtime order is what makes
  * that observable. A fake clock cannot supply it: the eviction reads the real `stat`. It declares
  * `MAINTENANCE_TIMEOUT_MS`, so it satisfies the rule and only this count moved.
+ *
+ * 18th: `language/flows/flows.journey.test.ts`. Merging duplicate drives is a question about files
+ * that already exist, so it seeds several flows through the real store before the save under test.
+ * It declares `JOURNEY_SAVE_TIMEOUT_MS`.
  */
 // 16: the read-bound conformance loop and the write-cap loop are two different tests of two
 // different ceilings, and both drive real IO in a loop. They arrived in separate changes that each
 // called itself the fifteenth; landing them together is what makes it sixteen.
 // 17: the startup byte-budget eviction, which is the first caller the budget has ever had.
-const EXPECTED_IO_LOOP_FILES = 17;
+// 18: merging duplicate drives, which has to seed the copies it merges.
+const EXPECTED_IO_LOOP_FILES = 18;
 
 function testFiles(dir: string): string[] {
   const out: string[] = [];

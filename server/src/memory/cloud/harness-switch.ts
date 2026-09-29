@@ -17,7 +17,7 @@
  * that quietly did not save; the next snapshot re-reads the platform, so a lost write shows up as
  * the switch springing back, which is a truthful thing for it to do.
  */
-import { ReticleEnv, apiKeyFrom } from '@reticlehq/core';
+import { apiKeyFrom, cloudUrlFrom } from '@reticlehq/core';
 
 const CONFIG_PATH = '/v1/model/config';
 
@@ -42,7 +42,7 @@ export async function writeHarnessSwitch(
   timeoutMs: number = TIMEOUT_MS,
 ): Promise<boolean> {
   const key = apiKeyFrom(env);
-  const host = env[ReticleEnv.CLOUD_URL];
+  const host = cloudUrlFrom(env);
   if (key === undefined || 0 === key.length) return false;
   if (host === undefined || 0 === host.length) return false;
 

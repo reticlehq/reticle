@@ -54,6 +54,17 @@ const LoginSchema = z.object({
  */
 const RequestCodeSchema = z.object({ devCode: z.string().optional() });
 
+const MeSchema = z.object({ email: z.string().min(1).nullable().optional() });
+
+/** The signed-in address, asked of the cloud. Best-effort: a login never fails for want of it. */
+const signedInEmail = async (url: string, token: string): Promise<string | undefined> => {
+  try {
+    return MeSchema.parse(await api('GET', `${url}/v1/me`, token)).email ?? undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 /** Persist a session token under ~/.reticle and print the next step. Shared by both login paths. */
 const writeSession = async (
   url: string,
@@ -62,10 +73,19 @@ const writeSession = async (
   orgId: string | undefined,
   project: string | undefined,
   link: Linker,
+  email?: string,
 ): Promise<void> => {
   await mkdir(join(home(), SESSIONS_DIR), { recursive: true });
+  // Who signed in, so a flow saved on this machine can say which person made it (FlowFile.author).
+  const who = email ?? (await signedInEmail(url, token));
   const body = `${JSON.stringify(
-    { url: normalizeUrl(url), token, orgName, ...(orgId === undefined ? {} : { orgId }) },
+    {
+      url: normalizeUrl(url),
+      token,
+      orgName,
+      ...(orgId === undefined ? {} : { orgId }),
+      ...(who === undefined ? {} : { email: who }),
+    },
     null,
     2,
   )}\n`;
@@ -214,7 +234,7 @@ export const cmdLogin = async (argv: readonly string[], link: Linker): Promise<n
   const parsed = LoginSchema.parse(
     await api('POST', `${url}/v1/auth/login`, null, { email, code }),
   );
-  await writeSession(url, parsed.token, parsed.org.name, parsed.org.id, f['project'], link);
+  await writeSession(url, parsed.token, parsed.org.name, parsed.org.id, f['project'], link, email);
   return 0;
 };
 

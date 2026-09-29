@@ -367,7 +367,16 @@ async function evaluatePredicateRaw(
       // never read: the unreadable clause might have been the one that would have matched.
       const unreadable = results.find((r) => r.inconclusive !== undefined);
       if (unreadable !== undefined) return unreadableComposite(unreadable, results);
-      return { pass: false, failureReason: 'no sub-predicate of anyOf matched', evidence: results };
+      // A disjunction is decided when EVERY clause is permanently false: no branch can
+      // ever become true, so waiting out the budget buys nothing. By this point every
+      // result is a non-inconclusive failure (passing and inconclusive returned above).
+      const allDecided = results.every((r) => true === r.decided);
+      return {
+        pass: false,
+        failureReason: 'no sub-predicate of anyOf matched',
+        ...(allDecided ? { decided: true } : {}),
+        evidence: results,
+      };
     }
     case PredicateKind.NOT: {
       const inner = await evaluatePredicate(

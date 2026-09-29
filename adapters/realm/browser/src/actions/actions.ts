@@ -16,9 +16,17 @@ import {
 import { assertEditable, assertNotRichText, setNativeValue } from './value-input.js';
 import { getAccessibleName, getRole, isVisible, getStates } from '@/dom/a11y.js';
 import { elementHasHoverHandlers, identifyComponent } from '@/registry/stores/adapters.js';
-import { isForm, isHtmlElement, isInput, isSelect, isTextArea } from '@/dom/realm.js';
+import {
+  type ActionTarget,
+  isActionTarget,
+  isForm,
+  isInput,
+  isSelect,
+  isTextArea,
+} from '@/dom/realm.js';
 import { nativeSetTimeout, settle } from '@/timers/native/native-timers.js';
 import { AppearedText } from './appeared-text.js';
+import { alreadyAtCheckedState, assertAriaToggleLanded, isAriaToggle } from './check-state.js';
 import {
   focusedOrDocument,
   isReflessDocumentPress,
@@ -131,10 +139,10 @@ function asString(value: unknown, fallback = ''): string {
   return 'string' === typeof value ? value : fallback;
 }
 
-function requireElement(ref: string): HTMLElement {
+function requireElement(ref: string): ActionTarget {
   const el = refs.resolve(ref);
   if (null === el) throw new Error(`ref '${echoRef(ref)}' no longer resolves to an element`);
-  if (!isHtmlElement(el)) throw new Error(`ref '${echoRef(ref)}' is not an HTMLElement`);
+  if (!isActionTarget(el)) throw new Error(`ref '${echoRef(ref)}' is not an HTML or SVG element`);
   return el;
 }
 
@@ -245,18 +253,6 @@ const CLICK_LIKE = new Set<string>([
 ]);
 
 /**
- * A check/uncheck whose requested state the element already reads as, so nothing will be dispatched.
- *
- * ONE predicate, read twice — the dispatch branch decides not to click, the effect reports that it
- * did not. Two copies of this rule could disagree, and a disagreement here is precisely the false
- * green: an act that reports it drove a control it never touched.
- */
-function alreadyAtCheckedState(el: HTMLElement, action: string): boolean {
-  if (action !== ActionType.CHECK && action !== ActionType.UNCHECK) return false;
-  return isInput(el) && el.checked === (action === ActionType.CHECK);
-}
-
-/**
  * What the destructive-action guard classifies: the ELEMENT, and nothing rendered around it.
  *
  * NOT `form?.textContent`: the whole enclosing form's rendered text would decide the verdict for
@@ -341,7 +337,11 @@ function assertUploadArgs(args: Record<string, unknown>): void {
   );
 }
 
-function assertActionAllowed(el: HTMLElement, action: string, args: Record<string, unknown>): void {
+function assertActionAllowed(
+  el: ActionTarget,
+  action: string,
+  args: Record<string, unknown>,
+): void {
   const canTrigger =
     action === ActionType.CLICK ||
     action === ActionType.DBLCLICK ||
@@ -364,7 +364,7 @@ function assertActionAllowed(el: HTMLElement, action: string, args: Record<strin
     (submitter !== null &&
       requiresDangerousConfirmation(dangerousActionContext(submitter), getRole(submitter)));
   const targetDangerous =
-    isHtmlElement(dragTarget) &&
+    isActionTarget(dragTarget) &&
     requiresDangerousConfirmation(dangerousActionContext(dragTarget), getRole(dragTarget));
   if (
     canTrigger &&
@@ -448,7 +448,7 @@ interface DispatchOutcome {
  * duration. Everything else routes through the switch below unchanged and holds for zero.
  */
 async function dispatchFor(
-  el: HTMLElement,
+  el: ActionTarget,
   action: string,
   args: Record<string, unknown>,
 ): Promise<DispatchOutcome> {
@@ -490,7 +490,7 @@ function asFiniteNumber(raw: unknown): number | undefined {
 }
 
 async function dispatchOther(
-  el: HTMLElement,
+  el: ActionTarget,
   action: string,
   args: Record<string, unknown>,
 ): Promise<boolean> {
@@ -628,7 +628,10 @@ async function dispatchOther(
       throw new Error(`cannot select on a <${el.tagName.toLowerCase()}>`);
     case ActionType.CHECK:
     case ActionType.UNCHECK: {
-      if (!isInput(el)) throw new Error(`cannot (un)check a <${el.tagName.toLowerCase()}>`);
+      const aria = isAriaToggle(el);
+      if (!isInput(el) && !aria) {
+        throw new Error(`cannot (un)check a <${el.tagName.toLowerCase()}>`);
+      }
       // Same rule as the readonly/disabled refusal on fill: if a real user could not do it, forcing
       // it is not a test, it is damage — and a green over it is a false one.
       if (!enabledOf(el)) {
@@ -638,6 +641,10 @@ async function dispatchOther(
       }
       // A radio is deselected by selecting another radio, never on its own. Refusing is the same
       // rule as the disabled control above: a state no user could reach must not be forced.
+      // An ARIA toggle has no native toggle: the full click sequence, then the app flips it.
+      if (!isInput(el)) {
+        return alreadyAtCheckedState(el, action) ? false : (await fireClickSequence(el)).prevented;
+      }
       if ('radio' === el.type && action === ActionType.UNCHECK) {
         throw new Error(
           'cannot uncheck a radio button — a real user could not; select another radio in the group',
@@ -770,7 +777,7 @@ async function dispatchOther(
       // nowhere and reporting `ok: true` is a false green, and a guessed target name reads as "no
       // target" while every effect field looks healthy.
       const resolved = refs.resolve(toRef);
-      if (!isHtmlElement(resolved)) {
+      if (!isActionTarget(resolved)) {
         throw new Error(
           `drag target '${echoRef(toRef)}' did not resolve to an element — pass a ref from ` +
             'reticle_snapshot or reticle_query as args.toRef (alias: args.target)',
@@ -871,6 +878,7 @@ export async function executeAction(
     obs.disconnect();
   }
 
+  assertAriaToggleLanded(el, action, alreadyAtValue);
   const valueAfter = valueOf(el);
   const nextFocus = activeRef(el);
   const effect: ActionEffect = {

@@ -8,7 +8,7 @@
  * deterministically with no model in the loop at all.
  */
 
-import { ReticleEnv, ReticleTool, apiKeyFrom, asRecord } from '@reticlehq/core';
+import { ReticleEnv, ReticleTool, apiKeyFrom, cloudUrlFrom, asRecord } from '@reticlehq/core';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
 import type { ToolDeps } from './tool-kit.js';
 import {
@@ -163,7 +163,7 @@ export async function withLinkedCredential(
     return {
       ...env,
       [ReticleEnv.API_KEY]: linked.apiKey,
-      [ReticleEnv.CLOUD_URL]: env[ReticleEnv.CLOUD_URL] ?? linked.url,
+      [ReticleEnv.CLOUD_URL]: cloudUrlFrom(env) ?? linked.url,
     };
   } catch {
     // A credential store that cannot be read is "not linked", not an error. The harness is optional

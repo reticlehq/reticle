@@ -1491,6 +1491,39 @@ describe('net count is exact, not "at least" — the double-submit must not pass
     expect(r.pass).toBe(false);
     expect(r.decided).toBe(true);
   }, 5_000);
+
+  /**
+   * And through a disjunction: when EVERY branch has overshot, no branch can ever become true,
+   * so the whole `anyOf` is decided. Without this the polling loop burns the full budget on an
+   * answer that is provably final — the mirror of the conjunction case above.
+   */
+  it('decides the whole anyOf when every clause has overshot', async () => {
+    const session = new LiveSession();
+    const get = (t: number): ReticleEvent =>
+      ev(
+        EventType.NET_REQUEST,
+        { method: 'GET', url: '/api/v1/payments/pay_1/status', status: 200 },
+        t,
+      );
+    const verdict = waitForPredicate(
+      session,
+      {
+        kind: 'anyOf',
+        predicates: [
+          { kind: 'net', method: 'POST', urlContains: '/refund', count: 1 },
+          { kind: 'net', method: 'GET', urlContains: '/status', count: 1 },
+        ],
+      },
+      45_000,
+    );
+    session.push(post(10));
+    session.push(post(20));
+    session.push(get(30));
+    session.push(get(40));
+    const r = await verdict;
+    expect(r.pass).toBe(false);
+    expect(r.decided).toBe(true);
+  }, 5_000);
 });
 
 /**

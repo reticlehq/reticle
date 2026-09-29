@@ -1,3 +1,4 @@
+import { flowAuthor } from './flow-author.js';
 import { FLOW_MUTATE_TOOL } from './flow-mutate-tools.js';
 import { seedSchema } from '@/surface/tools/args/numeric-bounds.js';
 import { z } from 'zod';
@@ -263,7 +264,12 @@ export const FLOW_TOOLS: ToolDef[] = [
       const emptyRefusal = emptyFlowRefusal(program.steps.length, name);
       if (emptyRefusal !== undefined) return Promise.resolve(emptyRefusal);
       const { flows, root } = flowsForSession(deps, projectId);
-      const toSave = saveAs === undefined ? program : { ...program, name: saveAs };
+      const author = flowAuthor();
+      const toSave = {
+        ...program,
+        ...(saveAs === undefined ? {} : { name: saveAs }),
+        ...(author === undefined ? {} : { author }),
+      };
       return flows.save(toSave, annotations, projectId).then(async (res) => {
         if (!res.ok) return { error: flowErrorMessage(res.code, res.detail), code: res.code };
         deps.annotations.clear(name);
@@ -435,6 +441,12 @@ export const FLOW_TOOLS: ToolDef[] = [
         .boolean()
         .optional()
         .describe('Set true to allow destructive controls during this replay only.'),
+      from: z
+        .union([z.number().int().nonnegative(), z.string().min(1)])
+        .optional()
+        .describe(
+          'Resume at this step (index or step id). Earlier steps re-run as unchecked, unreported setup; a setup step marked effect:"commits" refuses the resume.',
+        ),
       sweep: z
         .boolean()
         .optional()
@@ -742,10 +754,7 @@ export const FLOW_TOOLS: ToolDef[] = [
           }),
         );
         const timed: TimedReplay[] = outcomes.map((o, i) => ({
-          replay:
-            o.ok && o.value !== undefined
-              ? o.value.replay
-              : leaseFailureReplay(requested[i] ?? '', o.error),
+          ...(parallelRuns[i] ?? { replay: leaseFailureReplay(requested[i] ?? '', o.error) }),
           durationMs: o.ok && o.value !== undefined ? o.value.durationMs : 0,
         }));
         const flaky = await recordSuiteFlakes(
@@ -786,7 +795,11 @@ export const FLOW_TOOLS: ToolDef[] = [
           .catch(() => null);
         const flow = loaded !== null && loaded.ok ? loaded.value : undefined;
         runs.push(flow === undefined ? { replay } : { replay, flow });
-        timed.push({ replay, durationMs: deps.now() - start });
+        timed.push({
+          replay,
+          durationMs: deps.now() - start,
+          ...(flow === undefined ? {} : { flow }),
+        });
       }
       // The flake ledger the CLI gate already keeps — see FlakeStore. It was only ever written by
       // `reticle flow` on the command line, so an AGENT running this tool a hundred times learned
