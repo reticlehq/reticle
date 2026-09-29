@@ -65,7 +65,7 @@ export function gateHookMessage(exit: number, input: GateHookInput): string | un
     );
   if (input.coverageRegressed !== undefined && input.coverageRegressed.length > 0)
     lines.push(
-      `  coverage fell: ${name(input.coverageRegressed)} — something new is uncovered; reticle_crawl { exhaustive: true } names it`,
+      `  coverage fell: ${name(input.coverageRegressed)} — something new is uncovered; reticle_verify { action: "crawl", exhaustive: true } names it`,
     );
   if (input.unexecuted !== undefined && input.unexecuted.length > 0)
     lines.push(`  changed, and no drive ever ran it: ${name(input.unexecuted)}`);
