@@ -197,7 +197,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * true queries the page. Two guards in tension, and the line cap is the one whose rule is explicit
    * about what to do.
    */
-  'server/src/surface/tools/act': 12,
+  // +2: durable.ts and after-match.ts, both what act_and_wait does once its predicate holds.
+  'server/src/surface/tools/act': 14,
   // 19 since `setup-mcp-cli.ts`: the terminal half of `reticle setup mcp`, which the one-line
   // installer runs before any project exists. It sits HERE and not in `setup/` because the reach
   // guard refused `command -> setup` and CLI handlers already live in this directory.

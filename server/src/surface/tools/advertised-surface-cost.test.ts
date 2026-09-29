@@ -122,7 +122,7 @@ const bytesOf = (json: string): number => Buffer.byteLength(json, 'utf8');
  * the agent being able to find it — a predicate nothing advertises is a predicate nobody calls,
  * which is how the substring became the only reach in the first place.
  */
-const DEFAULT_SURFACE_BYTE_BUDGET = 24_900;
+const DEFAULT_SURFACE_BYTE_BUDGET = 25_000;
 // Raised, each time deliberately, each time with the measurement that bought it.
 //
 // LATEST RAISE, 24_600 -> 24_700. `reticle_verify { action: "explore" }` gained a `driver`
@@ -199,6 +199,14 @@ const DEFAULT_SURFACE_BYTE_BUDGET = 24_900;
 // from it (#982). Hit in practice while proving a release: the first tool call of that session was
 // `reticle_tools { action: "list" }`, and it was refused.
 //
+// FIFTH RAISE, 24_900 -> 25_000. `reticle_act_and_wait` gained `durable`: 24,975 B measured for
+// the whole default surface with it, the description already cut to one clause.
+//
+// What it buys: every verdict before it was scoped to one action's window, so "it saved" was proved
+// by the toast that said so. `durable` reloads and requires the consequence to hold on the fresh
+// document — the one question about persistence no other parameter can ask, and the difference
+// between a UI that advanced and a change that stuck. That is evidence, not prose.
+//
 // The ratchet stays a ratchet: every raise names its evidence, and the next one has to do the same.
 
 describe('advertised surface cost', () => {
@@ -234,7 +242,9 @@ describe('advertised surface cost', () => {
  * The budget is deliberately loose. This one is not shipped to users, so the number is here to catch
  * a surprise rather than to squeeze; the DEFAULT budget above is the ratchet that matters.
  */
-const ALL_SURFACE_BYTE_BUDGET = 140_000;
+// 140_000 -> 140_200 for `durable` on reticle_act_and_wait (140,106 B measured), declared as a loose
+// record so the output side costs as little as it can while a validating client still keeps it.
+const ALL_SURFACE_BYTE_BUDGET = 140_200;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {

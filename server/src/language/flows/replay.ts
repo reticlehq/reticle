@@ -1,5 +1,5 @@
 import { REDACTED_FILL, secretEnvKey } from './fields/flow-secret-field.js';
-import { FlowPredicateSchema, type Predicate } from '@reticlehq/core';
+import { FlowPredicateSchema, Verified, type Predicate } from '@reticlehq/core';
 import {
   DANGEROUS_ACTION_CONFIRM_ARG,
   ReticleCommand,
@@ -130,6 +130,23 @@ export function captureAct(
   const intent = asString(args['intent'])?.trim();
   if (intent !== undefined && intent.length > 0) step.intent = intent;
   recordings.capture(step, route);
+}
+
+/**
+ * Capture an act_and_wait once its verdict is known, keeping `until` as the step's expectation only
+ * on a yes. Recorded before the verdict, a step kept an `until` that came back `no` or `no-fault` —
+ * a regression test asserting something never once observed to hold because of the action. The
+ * action itself is always recorded: it happened, and replay needs it to reach the next step.
+ */
+export function captureVerdictedAct(
+  recordings: Parameters<typeof captureAct>[0],
+  args: Record<string, unknown>,
+  res: unknown,
+  route: string | undefined,
+  verified: string | undefined,
+): void {
+  const { until: _until, predicate: _predicate, ...unproved } = args;
+  captureAct(recordings, Verified.YES === verified ? args : unproved, res, route);
 }
 
 /** Fold a PASSING standalone assertion into the step it proved. See RecordingStore.attachExpect. */
