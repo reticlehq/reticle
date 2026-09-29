@@ -27,6 +27,7 @@ import {
   ReticleEnv,
   ReticleTool,
   apiKeyFrom,
+  cloudUrlFrom,
   asRecord,
   parseInteractive,
 } from '@reticlehq/core';
@@ -413,7 +414,7 @@ export function jevOptionsFromEnv(
   // The ordinary path: the key the user minted on the platform, against the platform's own proxy.
   // Reticle never ships a Jev key, so without a base URL to send it to this is not a usable driver.
   const cloudKey = apiKeyFrom(env);
-  const cloudUrl = env[ReticleEnv.CLOUD_URL];
+  const cloudUrl = cloudUrlFrom(env);
   if (cloudKey === undefined || 0 === cloudKey.length) return undefined;
   if (cloudUrl === undefined || 0 === cloudUrl.length) return undefined;
   return { apiKey: cloudKey, baseUrl: cloudUrl };

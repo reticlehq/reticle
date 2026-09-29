@@ -17,7 +17,7 @@
  *     environment, wins over the stored preference. Precedence lives in the caller.
  */
 
-import { ReticleEnv, apiKeyFrom } from '@reticlehq/core';
+import { apiKeyFrom, cloudUrlFrom } from '@reticlehq/core';
 
 const CONFIG_PATH = '/v1/model/config';
 
@@ -108,7 +108,7 @@ export async function fetchPlatformConfig(
   timeoutMs: number = TIMEOUT_MS,
 ): Promise<PlatformModelConfig | undefined> {
   const key = apiKeyFrom(env);
-  const host = env[ReticleEnv.CLOUD_URL];
+  const host = cloudUrlFrom(env);
   if (key === undefined || 0 === key.length) return undefined;
   if (host === undefined || 0 === host.length) return undefined;
 
