@@ -1,4 +1,11 @@
-import { PredicateKind, REPLAY_PROGRAM_VERSION, asFlowName } from '@reticlehq/core';
+import {
+  ActionType,
+  PredicateKind,
+  QueryBy,
+  REPLAY_PROGRAM_VERSION,
+  asFlowName,
+  defaultIsSensitiveKey,
+} from '@reticlehq/core';
 import { clauseOfKind } from '@reticlehq/core';
 import type { FlowFile, FlowName, Predicate } from '@reticlehq/core';
 
@@ -160,15 +167,37 @@ export interface DriveFlowOutcome {
  */
 function segmentsByRoute(steps: readonly TapeStep[]): { route?: string; steps: TapeStep[] }[] {
   const out: { route?: string; steps: TapeStep[] }[] = [];
+  let signedIn = false;
   for (const step of steps) {
     const last = out.at(-1);
-    if (last !== undefined && last.route === step.route) {
+    const previous = last?.steps.at(-1);
+    // The same journey when the route is unchanged, or when the previous ACTION moved the app here
+    // — cart → shipping → payment is one flow, and cutting it left three fragments that each
+    // proved a page and none proved the journey. Not after a sign-in: that is the cut this exists
+    // for, and a login that navigates onward must still not open the next flow.
+    const caused =
+      previous !== undefined && step.route !== undefined && previous.endPage === step.route;
+    if (last !== undefined && (last.route === step.route || (caused && !signedIn))) {
       last.steps.push(step);
+      signedIn ||= typesASecret(step);
       continue;
     }
+    signedIn = typesASecret(step);
     out.push({ ...(step.route === undefined ? {} : { route: step.route }), steps: [step] });
   }
   return out;
+}
+
+/**
+ * A fill into a field the network channel would redact — the sign-in a journey must not carry.
+ * Read off the recorder's anchor args: a testid names the field by `value`, a role by `name`.
+ */
+function typesASecret(step: TapeStep): boolean {
+  const action = step.args['action'];
+  if (ActionType.FILL !== action && ActionType.TYPE !== action) return false;
+  const by = step.args['by'];
+  const field = QueryBy.TESTID === by ? step.args['value'] : step.args['name'];
+  return 'string' === typeof field && defaultIsSensitiveKey(field);
 }
 
 /** A flow per journey, so two journeys in one session are two regression tests rather than one. */
