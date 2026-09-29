@@ -61,14 +61,19 @@ export function mapReplayToFlowResult(
   durationMs: number,
   flow?: FlowFile,
 ): RunFlowResult {
-  const status = runFlowStatusOf(replay.status);
+  // A replay that could not start returns OK with no steps. Nothing ran, so it is SKIPPED — which
+  // every reader of a run (the verdict, the gate) already refuses to count as a pass.
+  const status =
+    replay.unverifiable === undefined ? runFlowStatusOf(replay.status) : RunFlowStatus.SKIPPED;
   const failureReason =
-    status === RunFlowStatus.FAIL
-      ? (replay.decision?.whatChanged ??
-        replay.decision?.summary ??
-        replay.error?.message ??
-        'flow failed')
-      : undefined;
+    replay.unverifiable !== undefined
+      ? replay.unverifiable.reason
+      : status === RunFlowStatus.FAIL
+        ? (replay.decision?.whatChanged ??
+          replay.decision?.summary ??
+          replay.error?.message ??
+          'flow failed')
+        : undefined;
   // A flow with a success oracle gets a synthetic 'success' step appended by replay; surface its label
   // as the run's `oracle` so the verdict counts this flow as consequence-backed (→ HIGH confidence),
   // not a bare smoke click. Without this, an oracle-backed pass reads as MEDIUM and undersells itself.

@@ -35,6 +35,17 @@ describe('mapReplayToFlowResult', () => {
     expect(r.failureReason).toBeUndefined();
   });
 
+  // A replay that could not run (unsupplied secret, unmet precondition) comes back status OK with no
+  // steps. Mapped to PASS, `reticle gate` counted a flow that exercised nothing as covering its files.
+  it('a replay that ran nothing is SKIPPED with its reason, never PASS', () => {
+    const r = mapReplayToFlowResult(
+      replay(ReplayStatus.OK, { unverifiable: { reason: 'set RETICLE_SECRET_PASSWORD' } }),
+      3,
+    );
+    expect(r.status).toBe(RunFlowStatus.SKIPPED);
+    expect(r.failureReason).toBe('set RETICLE_SECRET_PASSWORD');
+  });
+
   it('a drift lifts whatChanged into failureReason', () => {
     const r = mapReplayToFlowResult(
       replay(ReplayStatus.DRIFT, {
