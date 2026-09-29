@@ -14,7 +14,6 @@ import { z } from 'zod';
 import { SubjectRefSchema } from 'open-verification';
 import { PredicateKind } from './consequence.js';
 import { Verified } from './verified-constants.js';
-import { FlowStepSchema } from '@/artifacts/flow-types.js';
 
 /** Schema version stamped into every run file so a reader can reject/upgrade old artifacts. */
 export const RUN_FILE_VERSION = 3;
@@ -251,10 +250,15 @@ export const RunStepResultSchema = z.object({
 });
 export type RunStepResult = z.infer<typeof RunStepResultSchema>;
 
-/** The flow a run replayed, as recorded: enough to replay it again somewhere else. */
+/**
+ * The flow a run replayed, as recorded: enough to replay it again somewhere else.
+ *
+ * `steps` are FlowSteps, left opaque here: this module loads before the flow schema, and importing
+ * it made a cycle that crashed the built CLI at startup while every source-level test passed.
+ */
 export const RunFlowRecordingSchema = z.object({
   startPath: z.string().optional(),
-  steps: z.array(FlowStepSchema),
+  steps: z.array(z.unknown()),
 });
 
 /** A flow that was replayed as part of the run. */
