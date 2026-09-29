@@ -50,6 +50,7 @@ import { declaresState } from '@reticlehq/engine/question/predicate/predicate-as
 import { isStateUnwatched } from '@reticlehq/engine/evidence/blind-spots.js';
 import { inFlightRequestLabels, repeatedRequestLabels } from './act/settle-in-flight.js';
 import { finishAfterMatch } from './act/after-match.js';
+import { noteProved } from './act/proved-controls.js';
 import { decideVerified } from '@reticlehq/engine/evidence/verified.js';
 import { honestyForVerdict } from '@reticlehq/engine/evidence/honesty.js';
 import {
@@ -803,6 +804,7 @@ export const ACT_TOOLS: ToolDef[] = [
           (part) => reloadAndRecheck(deps, session, part, timeout),
         );
         recordedVerdict = String(decision.verified);
+        noteProved(session, recordedVerdict, actResult?.result);
         // Computed once: the verdict block reports it, and the instrumentation gaps are a second
         // reading of the same evidence rather than a new observation.
         const actionSummary = causalSummary(windowEvents, {

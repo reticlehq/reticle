@@ -63,6 +63,8 @@ export const WORKSPACE_TIERS: Readonly<Record<string, WorkspaceTier>> = {
   [ReticleDir.AMBIENT_FILE]: localFile,
   [ReticleDir.ENVELOPES_FILE]: localFile,
   [ReticleDir.FLAKE_FILE]: localFile,
+  // What THIS machine's drives covered, and the best each level reached — the gate's ratchet.
+  [ReticleDir.COVERAGE_FILE]: localFile,
   [ReticleDir.TIERS_FILE]: localFile,
   // The user's own record of what Reticle did for them, on THIS machine.
   [ReticleDir.IMPACT_FILE]: localFile,

@@ -402,6 +402,11 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    */
   demo: ['tools', 'bridge', 'cli'],
   crawl: ['args', 'project', 'tools', 'facts'],
+  /**
+   * The app-wide coverage ledger. It persists to `.reticle/coverage.json` through the same three
+   * project-memory directories every other store uses, and reads routes the way crawl does.
+   */
+  exhaust: ['dir', 'fs', 'project'],
   daemon: ['lifetime', 'binding', 'telemetry'],
   domain: ['args', 'dir', 'flows', 'oracles', 'project', 'tools'],
   ee: ['license'],
@@ -677,6 +682,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   tools: [
     // A lease that never dialled reads the served page's CSP, the same reader doctor uses.
     'dev-server',
+    // `reticle_coverage { app: true }` folds a session into the app-wide ledger.
+    'exhaust',
     'hooks',
     'navigation',
     'lifetime',

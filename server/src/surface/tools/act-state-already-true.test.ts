@@ -425,3 +425,37 @@ describe('act, then assert: the assertion is kept on the step it proved', () => 
     expect(deps.recordings.stop(AMBIENT_RECORDING)?.steps[0]?.expect).toEqual(check);
   });
 });
+
+// The coverage ledger's PROVED level: a control counts only when its act came back `yes`.
+describe('a proved act is remembered as a proved control', () => {
+  const until = { kind: PredicateKind.STATE, path: 'cart.count', equals: 3 };
+
+  it('records the control on a yes, and not on a no-fault', async () => {
+    const proved: unknown[] = [];
+    const yes = createStateSession({
+      initialStore: { app: { cart: { count: 0 } }, cart: { count: 0 } },
+      onAct: (set) => set({ app: { cart: { count: 3 } }, cart: { count: 3 } }),
+    });
+    (yes.session as unknown as { recordProvedFrom: (p: unknown) => void }).recordProvedFrom = (p) =>
+      proved.push(p);
+    await tool(ReticleTool.ACT_AND_WAIT).handler(yes.deps, {
+      ref: 'b',
+      action: 'click',
+      timeout_ms: 0,
+      until,
+    });
+    expect(proved).toHaveLength(1);
+
+    const already = createStateSession({ initialStore: { app: { cart: { count: 3 } } } });
+    (already.session as unknown as { recordProvedFrom: (p: unknown) => void }).recordProvedFrom = (
+      p,
+    ) => proved.push(p);
+    await tool(ReticleTool.ACT_AND_WAIT).handler(already.deps, {
+      ref: 'b',
+      action: 'click',
+      timeout_ms: 0,
+      until,
+    });
+    expect(proved).toHaveLength(1);
+  });
+});

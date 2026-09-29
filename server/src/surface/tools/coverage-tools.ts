@@ -11,6 +11,7 @@ import type { ToolDef, ToolDeps } from './tool-kit.js';
 import { asString } from '@reticlehq/core';
 import { exercisedCount } from './gaps/coverage-identity.js';
 import { commandOrThrow, sessionIdShape } from './tool-kit.js';
+import { foldAppCoverage } from '@/features/exhaust/app-coverage.js';
 
 /**
  * `reticle_coverage` — which interactive controls this session has driven, and which it has not.
@@ -79,8 +80,17 @@ export function buildCoverageTools(toolNames: () => readonly string[]): ToolDef[
       description:
         'Which interactive controls you have driven this session, and which you have NOT. Returns { total, exercised, untouched:[{ref,label}], alsoDroveGone? } over the controls currently on the page. Use it to decide whether verification is finished: an untouched list that still holds the controls your change affects means you are not done. This is about what you did not TOUCH — distinct from the `coverage` field on an action result, which reports what the layer could not SEE.',
       example: {},
-      inputSchema: { ...sessionIdShape },
+      inputSchema: {
+        app: z
+          .boolean()
+          .optional()
+          .describe('Also fold into the app-wide ledger; returns `app.levels`.'),
+        ...sessionIdShape,
+      },
       outputSchema: {
+        // The app-wide ledger — see features/exhaust/ledger.ts. Loose: run-only, and the levels
+        // carry their own shape.
+        app: z.record(z.unknown()).optional(),
         total: z.number(),
         exercised: z.number(),
         untouched: z.array(z.object({ ref: z.string(), label: z.string() })),
@@ -200,6 +210,22 @@ export function buildCoverageTools(toolNames: () => readonly string[]): ToolDef[
           ...(regressed === undefined ? {} : { observabilityRegressed: regressed }),
           featureUse,
           toolHitRate,
+          ...(true === args['app']
+            ? {
+                app: await foldAppCoverage({
+                  fs: deps.fs,
+                  reticleRoot: sessionRoot(deps, sessionId),
+                  seen: parseControls(tree).map((c) => c.label),
+                  session,
+                  ...(deps.realInput?.takeCodeCoverage === undefined
+                    ? {}
+                    : {
+                        takeCode: (url: string) =>
+                          deps.realInput?.takeCodeCoverage?.(url) ?? Promise.resolve(undefined),
+                      }),
+                }),
+              }
+            : {}),
         };
       },
     },

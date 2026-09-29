@@ -9,6 +9,7 @@
  * Node-only. Playwright is loaded via DYNAMIC `import('playwright')` so non-CDP users never
  * pay for it; the type-only import is elided by `tsc`, so the build stays green without it.
  */
+import { startJsCoverage, takeJsCoverage, type ScriptCoverage } from './js-coverage.js';
 import type { Browser, Page } from 'playwright';
 import { stampedDriveUrl } from './drive-url-stamp.js';
 import { chromiumLaunchOptions } from '@/chromium-launch-options.js';
@@ -91,6 +92,12 @@ export interface RealInputProvider {
    * Optional: a provider with no owned browser simply omits it.
    */
   setMocks?(sessionUrl: string, rules: MockRule[]): Promise<boolean>;
+  /**
+   * What of the app's own code ran since the last take (V8 coverage, Chromium only), or undefined
+   * when no driven page matches or coverage is not being collected. Collection starts when the page
+   * is first seen. Optional: a provider with no owned browser cannot see the engine's counters.
+   */
+  takeCodeCoverage?(sessionUrl: string): Promise<ScriptCoverage[] | undefined>;
   /**
    * Pin the correlated page's viewport to fixed pixel dimensions so a screenshot baseline is
    * reproducible across machines (the missing piece of CI-stable visual regression, alongside masks
@@ -272,6 +279,8 @@ export class CdpRealInputProvider implements RealInputProvider {
   /** Pages already listening. #pageFor resolves on EVERY call, so without this each action would add
    *  another listener and every response would be emitted once per action taken so far. */
   readonly #listening = new WeakSet<object>();
+  /** Pages collecting V8 coverage — see js-coverage.ts. */
+  readonly #covering = new WeakSet<Page>();
   #browser: Browser | undefined;
 
   constructor(options: CdpProviderOptions) {
@@ -316,8 +325,18 @@ export class CdpRealInputProvider implements RealInputProvider {
       browser.contexts().flatMap((c) => c.pages()),
       sessionUrl,
     );
-    if (page !== undefined) this.#listen(page);
+    if (page !== undefined) {
+      this.#listen(page);
+      // ponytail: an attached page has already loaded, so its load-time functions read as never
+      // run. A `reticle drive` page starts collecting before navigation and has no such gap.
+      await startJsCoverage(page, this.#covering);
+    }
     return page;
+  }
+
+  async takeCodeCoverage(sessionUrl: string): Promise<ScriptCoverage[] | undefined> {
+    const page = await this.#pageFor(sessionUrl);
+    return page === undefined ? undefined : takeJsCoverage(page, this.#covering);
   }
 
   async isAvailableFor(sessionUrl: string): Promise<boolean> {
@@ -478,6 +497,8 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
   readonly #onNetworkDetail: ((detail: NetworkDetail) => void) | undefined;
   #browser: Browser | undefined;
   #page: Page | undefined;
+  /** Pages collecting V8 coverage — see js-coverage.ts. */
+  readonly #covering = new WeakSet<Page>();
 
   constructor(options: LaunchedProviderOptions) {
     this.#driveUrl = options.driveUrl;
@@ -497,6 +518,8 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
     this.#page = page;
     // Capture CDP-authoritative response detail into the driven session's journal (best-effort).
     if (this.#onNetworkDetail !== undefined) attachNetworkDetail(page, this.#onNetworkDetail);
+    // Before the first navigation, so functions that run only while the app boots are counted.
+    await startJsCoverage(page, this.#covering);
     try {
       // Same navigation rule as the pool, and for the same measured reason: Playwright's default
       // waits for `load`, which an app with one never-finishing subresource never fires — 30s of
@@ -635,6 +658,11 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
     if (page === undefined) return false;
     await page.setViewportSize({ width: size.width, height: size.height });
     return true;
+  }
+
+  takeCodeCoverage(_sessionUrl: string): Promise<ScriptCoverage[] | undefined> {
+    const page = this.#livePage();
+    return page === undefined ? Promise.resolve(undefined) : takeJsCoverage(page, this.#covering);
   }
 
   /** Apply network-mock rules to the owned page; false before navigate / after dispose. */

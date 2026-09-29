@@ -409,6 +409,8 @@ export const ReticleDir = {
   AMBIENT_FILE: 'ambient.json',
   /** per-flow flake ledger — replay outcomes that decide intermittent-failure quarantine. */
   FLAKE_FILE: 'flake.json',
+  /** The app-wide coverage ledger — see server features/exhaust/ledger.ts. */
+  COVERAGE_FILE: 'coverage.json',
   /**
    * the project's cloud binding — .reticle/cloud.json, written by `reticle link`. Git-checked and
    * non-secret: the project id, the API origin, and where its dashboard lives. The KEY lives in

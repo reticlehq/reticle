@@ -45,6 +45,8 @@ export interface ReticleDirPaths {
   capsules: string;
   /**.../.reticle/flake.json (per-flow flake ledger) */
   flake: string;
+  /**.../.reticle/coverage.json (app-wide coverage ledger, all six levels) */
+  coverage: string;
   /**.../.reticle/assertion-tiers.json (last-passing assertion tiers; anti-reward-hacking baseline) */
   tiers: string;
 }
@@ -66,6 +68,7 @@ export function reticleDirPaths(root: string): ReticleDirPaths {
     ambient: join(root, ReticleDir.AMBIENT_FILE),
     capsules: join(root, ReticleDir.CAPSULES_SUBDIR),
     flake: join(root, ReticleDir.FLAKE_FILE),
+    coverage: join(root, ReticleDir.COVERAGE_FILE),
     tiers: join(root, ReticleDir.TIERS_FILE),
   };
 }

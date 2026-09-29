@@ -122,7 +122,7 @@ const bytesOf = (json: string): number => Buffer.byteLength(json, 'utf8');
  * the agent being able to find it — a predicate nothing advertises is a predicate nobody calls,
  * which is how the substring became the only reach in the first place.
  */
-const DEFAULT_SURFACE_BYTE_BUDGET = 25_000;
+const DEFAULT_SURFACE_BYTE_BUDGET = 25_100;
 // Raised, each time deliberately, each time with the measurement that bought it.
 //
 // LATEST RAISE, 24_600 -> 24_700. `reticle_verify { action: "explore" }` gained a `driver`
@@ -207,6 +207,12 @@ const DEFAULT_SURFACE_BYTE_BUDGET = 25_000;
 // document — the one question about persistence no other parameter can ask, and the difference
 // between a UI that advanced and a change that stuck. That is evidence, not prose.
 //
+// SIXTH RAISE, 25_000 -> 25_100. `reticle_verify { action: "coverage" }` gained `app`: 25,074 B
+// measured, the description cut to one clause. It is the one switch that turns "which controls did
+// I touch on this page" into the app-wide ledger — reached, touched, proved, completed, branched and
+// executed, each with what is missing — which is how "covered everything" becomes checkable rather
+// than claimed. Evidence, not prose.
+//
 // The ratchet stays a ratchet: every raise names its evidence, and the next one has to do the same.
 
 describe('advertised surface cost', () => {
@@ -244,7 +250,9 @@ describe('advertised surface cost', () => {
  */
 // 140_000 -> 140_200 for `durable` on reticle_act_and_wait (140,106 B measured), declared as a loose
 // record so the output side costs as little as it can while a validating client still keeps it.
-const ALL_SURFACE_BYTE_BUDGET = 140_200;
+// 140_200 -> 140_400 for `app` on reticle_coverage (140,293 B measured), a loose record for the
+// same reason `durable` is one.
+const ALL_SURFACE_BYTE_BUDGET = 140_400;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {

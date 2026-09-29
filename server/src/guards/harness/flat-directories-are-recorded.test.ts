@@ -197,8 +197,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * true queries the page. Two guards in tension, and the line cap is the one whose rule is explicit
    * about what to do.
    */
-  // +2: durable.ts and after-match.ts, both what act_and_wait does once its predicate holds.
-  'server/src/surface/tools/act': 14,
+  // +3: durable.ts, after-match.ts and proved-controls.ts, what act_and_wait does once its
+  // predicate holds.
+  'server/src/surface/tools/act': 15,
   // 19 since `setup-mcp-cli.ts`: the terminal half of `reticle setup mcp`, which the one-line
   // installer runs before any project exists. It sits HERE and not in `setup/` because the reach
   // guard refused `command -> setup` and CLI handlers already live in this directory.
@@ -215,7 +216,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // itself. Its own leaf because the SDK reads the same constant to decide not to show a human a
   // first-run tour over a page nobody is looking at -- a rule split across two packages is worth
   // one file that names it.
-  'server/src/portal/input': 11,
+  // +1: js-coverage.ts, V8 coverage beside the other driven-page capabilities.
+  'server/src/portal/input': 12,
   // 22 since `session-verdict-facts.ts` was extracted (the count is source files, not tests): both
   // verdict-producing tools were threading the same session facts into `decideVerified` with the
   // same conditional-spread idiom, and a third fact would have been a third copy. Raised on
