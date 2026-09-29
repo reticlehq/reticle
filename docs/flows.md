@@ -87,6 +87,25 @@ reticle_flow {action:"load"}({ flowName: "create-task" })   // → the flow JSON
 reticle_flow_replay({ flowName: "create-task" }) // re-resolve each anchor against the LIVE DOM, run it
 ```
 
+### Resume from a step
+
+```jsonc
+reticle_flow_replay({ flowName: "create-task", from: 3 })          // by 0-based index
+reticle_flow_replay({ flowName: "create-task", from: "submit" })   // or by a step's `id`
+```
+
+There is no state to restore, so the steps before `from` run again quickly as setup: their actions run, their `expect`s are not checked, and they are not reported. Replay is then checked and reported from `from` on. If a setup step fails, it is reported, because the resume never reached the step you asked for. A setup step declared `"effect": "commits"` refuses the resume and the whole flow replays, so resuming never re-sends a payment or a message silently. A `from` that names no step is an error, not a full replay.
+
+## Flows saved from a drive
+
+Every session's driving is saved as a flow at teardown when it declared a consequence. These flows:
+
+- are named from the `intent` you pass to `reticle_act_and_wait` (`drive-close-an-issue`), and carry it as the flow's `intent`;
+- merge: another drive that starts on the same page and takes the same steps updates the existing file instead of adding a copy. The existing flow keeps its name and everything it already says; the new drive only fills gaps. Flows you named yourself are never merged;
+- record, on every step, the `page` it ran on and the `endPage` it led to;
+- declare `requires` (the start page) and `ensures` (the end page) as route claims, so `canFollow` can tell which flows chain. Replay treats a required start page as met by navigating there;
+- carry `author: { agent, person }`: the MCP client that drove it and the email of whoever ran `reticle login` on that machine. Either is left out when it is not known.
+
 ## Delete a flow
 
 ```jsonc
@@ -175,7 +194,7 @@ With `apply: false` the flow file is **never modified**; you get the proposed di
 | `reticle_flow {action:"list"}` | `{}` | flows on disk |
 | `reticle_flow {action:"load"}` | `{ flowName }` | the flow JSON |
 | `reticle_flow {action:"delete"}` | `{ flowName }` | `{ deleted: true }`, or `{ error, code }` (`not_found` when no such flow) |
-| `reticle_flow_replay` | `{ flowName }` | `{ status, steps, decision? }` (decision on drift/fail) |
+| `reticle_flow_replay` | `{ flowName, from?, sweep? }` | `{ status, steps, decision? }` (decision on drift/fail); `from` resumes at a step |
 | `reticle_verify {action:"flows"}` | `{ names?, sessionId? }` | suite verdict `{ status, passed, failed, failures[] }` |
 | `reticle_verify { action: "heal" }` | `{ flowName, apply? }` | propose / apply nearest-match rebind |
 | `reticle_annotate` | `{ kind, … }` | compile a structured annotation into the flow |

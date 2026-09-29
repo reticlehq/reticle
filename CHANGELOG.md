@@ -4,6 +4,13 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Added
+
+- **`@reticlehq/server`: `reticle_flow_replay` resumes from a step.** Pass `from` (a 0-based index or a step `id`). The steps before it run again as setup, without checking their consequences or reporting them, and the replay is checked from `from` on. A failing setup step is still reported, a `commits` step in the setup refuses the resume, and an unknown step is an error.
+- **`@reticlehq/server` + `@reticlehq/core`: a driven journey is saved once, named by its intent.** The `intent` given to `reticle_act_and_wait` becomes the saved flow's `intent` and its name. Auto-saved flows that start on the same page and take the same steps merge into one file instead of one per session; the existing flow keeps its name and fields, the new drive only fills gaps, and hand-named flows are never touched.
+- **`@reticlehq/server` + `@reticlehq/core`: saved steps record their pages, and flows record who made them.** Each step carries `page` (where it ran) and `endPage` (where it led). Flows carry `author: { agent, person }`, from the MCP client and the account `reticle login` signed in (the login now remembers its email), and declare `requires`/`ensures` from their start and end pages. Replay treats a required start page as met by navigating there.
+- **`@reticlehq/server` + `@reticlehq/core`: a synced run carries what is needed to replay it.** Each flow in a verification run now includes every step's result and pages (up to 200 steps) and the flow recording itself when it fits in 64 KB.
+
 ## [3.3.0] — 2026-09-26
 
 ### Added
