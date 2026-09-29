@@ -298,6 +298,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   cli: [
     // doctor reads the document the dev server serves (served-document.ts) to judge its CSP.
     'dev-server',
+    // `reticle gate` ratchets on the coverage ledger and blocks changed code that never ran.
+    'exhaust',
     'answers',
     'binding',
     'suite',

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { emptyLedger, levelsOf, mergeLedger, raiseBest, regressions } from './ledger.js';
+import {
+  emptyLedger,
+  levelsOf,
+  mergeLedger,
+  raiseBest,
+  regressions,
+  unexecutedChanged,
+} from './ledger.js';
 
 /*
  * "Done" was the agent's opinion. The ledger makes it a number per level with the missing items
@@ -74,5 +81,17 @@ describe('the ratchet', () => {
       writes: { seen: [], branched: ['POST /b'], unhandled: [] },
     });
     expect(regressions(fixed)).toEqual([]);
+  });
+});
+
+describe('unexecutedChanged', () => {
+  const code = {
+    'src/Cart.tsx': { 'a@1': { name: 'a', executed: true } },
+    'src/Refund.tsx': { 'r@1': { name: 'r', executed: false } },
+  };
+  it('names changed files the browser loaded and never ran a function of', () => {
+    expect(
+      unexecutedChanged(code, ['apps/web/src/Refund.tsx', 'src/Cart.tsx', 'src/Other.tsx']),
+    ).toEqual(['apps/web/src/Refund.tsx']);
   });
 });

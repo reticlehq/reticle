@@ -189,6 +189,25 @@ export function regressions(
   return out;
 }
 
+/**
+ * Changed files the browser loaded and never ran a single function of. Matched by path suffix, the
+ * same way the flow index matches, so a repo-relative change finds a served `src/...` path.
+ *
+ * ponytail: a file edited since the last coverage take still carries its old counts, so this catches
+ * code that never ran, not code that has not run SINCE the edit. The ratchet covers the second: new
+ * functions appear unexecuted on the next take and pull `executed` below its best.
+ */
+export function unexecutedChanged(code: CodeCoverage, changed: readonly string[]): string[] {
+  return changed.filter((file) => {
+    const loaded = Object.entries(code).find(
+      ([served]) => file === served || file.endsWith(`/${served}`) || served.endsWith(`/${file}`),
+    );
+    if (loaded === undefined) return false;
+    const fns = Object.values(loaded[1]);
+    return fns.length > 0 && fns.every((fn) => !fn.executed);
+  });
+}
+
 /** `.reticle/coverage.json`. Loads never throw: a bad file degrades to an empty ledger. */
 export class LedgerStore {
   readonly #fs: FileSystemPort;

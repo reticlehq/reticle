@@ -123,6 +123,17 @@ This is the tool for an app you did not write and do not understand yet.
   25.
 </Warning>
 
+### Covering everything: `exhaustive`
+
+`{ "action": "crawl", "exhaustive": true }` goes past one page. It walks every state reachable from where you start, reaching each one by replaying the path that found it from a fresh load, so it never depends on "back" working. It fills text fields before it tries a form's buttons (from `RETICLE_SECRET_<FIELD>` when set, so it gets past a login), and treats controls that differ only by a number, like table rows, as one. Every write it finds is then driven again with the request failing. With the write failing, the app must not end up where it goes when the write succeeds; if it does, you get `failure-unhandled`. That part needs a browser Reticle drives (`reticle drive`).
+
+The run folds into the app-wide coverage ledger, which `reticle_coverage { app: true }` also reports. It has six levels, each with what is missing: routes **reached**, controls **touched**, controls **proved** (an `act_and_wait` came back `yes`), journeys **completed**, writes **branched** (failure path driven), and app functions **executed** (V8 coverage, driven browser only). `frontier` is the number of states found and not yet explored: zero means the reachable app was covered. `reticle gate` blocks when a level falls below the best it has reached, and when a changed file never ran.
+
+<Warning>
+  Exhaustive really does click everything, repeatedly, and submits forms. `maxSteps` bounds it,
+  defaulting to 400 actions.
+</Warning>
+
 ### Reconcile: what the API said versus what rendered
 
 ```json

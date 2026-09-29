@@ -21,6 +21,7 @@ import {
   type NamedFlow,
 } from '@/language/flows/change/flow-sources.js';
 import { isInteractiveSource, unflowedFiles } from '@/language/flows/change/affected.js';
+import { LedgerStore, regressions, unexecutedChanged } from '@/features/exhaust/ledger.js';
 import { gateDecision } from '@/language/flows/change/gate.js';
 import { FlakeStore } from '@/language/flows/stores/flake-store.js';
 import { formatBuddyStatus } from '@/language/flows/buddy-status.js';
@@ -256,7 +257,20 @@ export async function handleGate(
         : unflowedFiles(toFlowSources(allFlows), changed, (file) =>
             isInteractiveSource(readChangedFile(process.cwd(), file)),
           );
-    const result = gateDecision({ affected, passing, flaky, downgraded, deleted, unflowed });
+    // The coverage ledger, when one exists: a level that fell below its best, and changed code the
+    // browser loaded and never ran. A project that never folded coverage has an empty ledger and
+    // neither can fire.
+    const ledger = await new LedgerStore(fs, reticleRoot).load();
+    const result = gateDecision({
+      affected,
+      passing,
+      flaky,
+      downgraded,
+      deleted,
+      unflowed,
+      coverageRegressed: regressions(ledger),
+      unexecuted: unexecutedChanged(ledger.code, changed),
+    });
     // Verified-surface coverage over flows: how much of the saved suite this run actually exercised.
     const coverage = computeCoverage(
       { testids: [], signals: [], flows: allFlows.map((f) => f.name) },
@@ -273,6 +287,10 @@ export async function handleGate(
       ...(result.downgraded.length > 0 ? { downgraded: result.downgraded } : {}),
       ...(result.deleted.length > 0 ? { deletedCoverage: result.deleted } : {}),
       ...(result.unflowed.length > 0 ? { unflowed: result.unflowed } : {}),
+      ...(result.coverageRegressed.length > 0
+        ? { coverageRegressed: result.coverageRegressed }
+        : {}),
+      ...(result.unexecuted.length > 0 ? { unexecuted: result.unexecuted } : {}),
       coverage: flowCoverage,
     });
     // Two non-zero codes, because two callers want opposite things from the same run. CI wants any
@@ -302,6 +320,10 @@ export async function handleGate(
           downgraded: result.downgraded.map((d) => d.flow),
           deleted: result.deleted,
           unflowed: result.unflowed,
+          coverageRegressed: result.coverageRegressed.map(
+            (r) => `${r.level} ${String(r.was)}% -> ${String(r.now)}%`,
+          ),
+          unexecuted: result.unexecuted,
         });
         if (message !== undefined) process.stderr.write(`${message}\n`);
       }

@@ -82,3 +82,21 @@ describe('gate — a changed interactive component no flow covers BLOCKS', () =>
     expect(r.unflowed).toEqual(['src/NewWizard.tsx']);
   });
 });
+
+describe('gate — coverage that fell, or changed code that never ran, BLOCKS', () => {
+  it('blocks on a coverage level below its best', () => {
+    const r = gateDecision({
+      affected: [],
+      passing: [],
+      coverageRegressed: [{ level: 'branched', was: 100, now: 50 }],
+    });
+    expect(r.pass).toBe(false);
+    expect(r.coverageRegressed).toHaveLength(1);
+  });
+
+  it('blocks on a changed file none of whose functions ever ran', () => {
+    const r = gateDecision({ affected: [], passing: [], unexecuted: ['src/Refund.tsx'] });
+    expect(r.pass).toBe(false);
+    expect(r.unexecuted).toEqual(['src/Refund.tsx']);
+  });
+});

@@ -26,6 +26,10 @@ interface GateInput {
   deleted?: readonly string[];
   /** Changed interactive components no saved flow touches — a change nothing has driven. */
   unflowed?: readonly string[];
+  /** Coverage levels below the best they ever reached — something new appeared, nothing covered it. */
+  coverageRegressed?: readonly { level: string; was: number; now: number }[];
+  /** Changed files the browser loaded and never ran a function of. */
+  unexecuted?: readonly string[];
 }
 
 interface GateResult {
@@ -41,6 +45,10 @@ interface GateResult {
   deleted: string[];
   /** Changed interactive components no flow covers — BLOCKING: the change was never driven. */
   unflowed: string[];
+  /** BLOCKING: the app grew something nothing has covered. */
+  coverageRegressed: { level: string; was: number; now: number }[];
+  /** BLOCKING: changed code that never ran in any drive. */
+  unexecuted: string[];
 }
 
 export function gateDecision(input: GateInput): GateResult {
@@ -59,16 +67,22 @@ export function gateDecision(input: GateInput): GateResult {
   const downgraded = [...(input.downgraded ?? [])];
   const deleted = [...(input.deleted ?? [])];
   const unflowed = [...(input.unflowed ?? [])];
+  const coverageRegressed = [...(input.coverageRegressed ?? [])];
+  const unexecuted = [...(input.unexecuted ?? [])];
   return {
     pass:
       0 === uncovered.length &&
       0 === downgraded.length &&
       0 === deleted.length &&
-      0 === unflowed.length,
+      0 === unflowed.length &&
+      0 === coverageRegressed.length &&
+      0 === unexecuted.length,
     uncovered,
     quarantined,
     downgraded,
     deleted,
     unflowed,
+    coverageRegressed,
+    unexecuted,
   };
 }
