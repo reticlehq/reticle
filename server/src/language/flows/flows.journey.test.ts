@@ -15,6 +15,8 @@ import { establishedState, journeyFingerprint } from './flow-journey.js';
  * driven in many sessions is one file.
  */
 const PREFIX = 'drive-';
+/** A bound, not a measurement: these round-trip several flows through a real temp directory. */
+const JOURNEY_SAVE_TIMEOUT_MS = 30_000;
 
 const click = (testid: string, extra: Partial<RecordedStep> = {}): RecordedStep => ({
   tool: ReticleTool.ACT,
@@ -103,16 +105,20 @@ describe('a saved drive', () => {
     expect((await load('drive-issue-closed')).intent).toBe('Close an issue');
   });
 
-  it('collapses copies saved before merging existed', async () => {
-    const other = [click('settings-save', { expect: { kind: PredicateKind.SIGNAL, name: 's' } })];
-    // Written with plain save, as teardown used to: one near-copy per session.
-    for (const name of ['drive-a-s1', 'drive-a-s2', 'drive-a-s3']) {
-      now += 1;
-      await store.save({ name, version: 1, steps: opened, startPath: '/issues' });
-    }
-    await drive('drive-settings', other, '/settings');
-    expect(await store.list()).toEqual(['drive-a-s1', 'drive-settings']);
-  });
+  it(
+    'collapses copies saved before merging existed',
+    async () => {
+      const other = [click('settings-save', { expect: { kind: PredicateKind.SIGNAL, name: 's' } })];
+      // Written with plain save, as teardown used to: one near-copy per session.
+      for (const name of ['drive-a-s1', 'drive-a-s2', 'drive-a-s3']) {
+        now += 1;
+        await store.save({ name, version: 1, steps: opened, startPath: '/issues' });
+      }
+      await drive('drive-settings', other, '/settings');
+      expect(await store.list()).toEqual(['drive-a-s1', 'drive-settings']);
+    },
+    JOURNEY_SAVE_TIMEOUT_MS,
+  );
 
   it('keeps two different journeys that share a name apart', async () => {
     await drive('drive-close-an-issue', opened);

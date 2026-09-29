@@ -426,6 +426,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'intent',
     'journal',
     'outcome',
+    // WHICH agent made a saved flow, for the same reason `runs` reaches it: a flow's author is the
+    // MCP client's own claim, and that claim is only read in one place.
+    'peer',
     'project',
     'recording',
     'runs',
