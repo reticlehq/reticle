@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { homedir } from 'node:os';
-import { probeCli } from '@reticlehq/init';
+import { probeCli, terminalWidth, wrapForTerminal } from '@reticlehq/init';
 import { installClosing, tutorialShownSteps } from './tutorial.js';
 import { setupMcp, knownClientLabels, type SetupMcpIo } from '@/command/setup/setup-mcp.js';
 import { reportInstallSteps } from '@/command/setup/setup-install.js';
@@ -39,7 +39,7 @@ export function handleSetupMcp(reportStep: StepReporter, standalone = true): voi
       writeFileSync(p, contents);
     },
     homeDir: () => homedir(),
-    print: (line) => process.stdout.write(`${line}\n`),
+    print: (line) => process.stdout.write(`${wrapForTerminal(line, terminalWidth())}\n`),
     reportStep,
     // `probeCli`, not a bare `execFileSync`: on Windows `claude` is a `.cmd` shim that cannot be
     // spawned without a shell, so the plain call threw ENOENT for every Windows user and the
@@ -118,7 +118,7 @@ export function handleSetupInstall(
   }
   // Installation and onboarding are one script, so the tour prints here and is not gated on
   // anything — see installClosing for the heuristic this replaced and why it reached nobody.
-  process.stdout.write(`${installClosing()}\n`);
+  process.stdout.write(`${wrapForTerminal(installClosing(), terminalWidth())}\n`);
   // Shown, so the ONBOARD steps are a fact rather than a guess.
   for (const step of tutorialShownSteps()) reportStep(step);
 }

@@ -104,6 +104,10 @@ describe('the installer shows the tour, every time', () => {
     expect(shown).toContain('Reticle is installed');
   });
 
+  it('keeps the reasons for `reticle tutorial`, one line a step here', () => {
+    expect(installClosing()).not.toContain('why:');
+  });
+
   it('does not then tell them to go and run the thing they just read', () => {
     expect(installClosing()).not.toContain('reticle tutorial');
   });

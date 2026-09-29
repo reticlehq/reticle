@@ -62,7 +62,9 @@ export function nodeEnsureDaemonDeps(): EnsureDaemonDeps {
         daemonSpawnArgs({ port, headless: true, http: false }),
         port,
       );
-      log('reticle_setup_daemon_started', { port, started });
+      // For a log or a pipe. On a terminal it was a JSON line in the middle of `init`'s output, read
+      // by a person, about a step the next lines already report in words.
+      if (true !== process.stderr.isTTY) log('reticle_setup_daemon_started', { port, started });
       return started;
     },
     waitReady: (port: number): Promise<unknown> => waitForDaemon(port),

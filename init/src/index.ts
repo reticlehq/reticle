@@ -27,6 +27,8 @@ export {
 export { windowsShellArg } from './register/windows-quote.js';
 
 export { buildNodeIo, probeCli } from './node-io.js';
+export { terminalWidth, wrapForTerminal } from './diagnose/terminal-wrap.js';
+export { FEEDBACK_HINT } from './diagnose/closing-hint.js';
 export { type InitHost, SILENT_HOST } from './host.js';
 export { RETICLE_VERSION, RETICLE_NPM_PACKAGE } from './version.js';
 export { InitFailure } from './diagnose/init-failure.js';

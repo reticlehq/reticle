@@ -4,6 +4,7 @@
  * command, not the MCP stdio transport.
  */
 
+import { terminalWidth, wrapForTerminal } from './diagnose/terminal-wrap.js';
 import {
   readFileSync,
   writeFileSync,
@@ -198,7 +199,7 @@ export function buildNodeIo(cwd: string, host: InitHost): InitIo {
       return 0 === result.status;
     },
     print(line) {
-      process.stdout.write(`${line}\n`);
+      process.stdout.write(`${wrapForTerminal(line, terminalWidth())}\n`);
     },
     host,
   };

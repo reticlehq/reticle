@@ -439,6 +439,14 @@ describe('runInit', () => {
     expect(noPkg.lines.join('\n')).toContain(FEEDBACK_HINT);
   });
 
+  // When the runtime follows (dev server, browser, connect), asking here put the request for
+  // feedback in the middle of the output, before anything had happened. The runtime asks last.
+  it('leaves the ask to the runtime when one follows', () => {
+    const io = memoryIo(VITE_FILES);
+    runInit({ ...OPTS, continuesToRuntime: true }, io);
+    expect(io.lines.join('\n')).not.toContain(FEEDBACK_HINT);
+  });
+
   it('runs the install when enabled, pinned to the CLI version', () => {
     const io = memoryIo({ ...VITE_FILES, 'pnpm-lock.yaml': '' }, { mcpExists: true });
     runInit({ ...OPTS, install: true }, io);

@@ -487,7 +487,7 @@ function report(
    */
   if (!dryRun) {
     io.print(
-      '  --dry-run shows this plan and writes nothing · --app <dir> picks the app · --no-mcp skips agent registration',
+      '  --dry-run previews · --app <dir> picks the app · --no-mcp skips agent registration',
     );
   }
   // Every path below is printed RELATIVE, and until now nothing said what to. Reported from the
@@ -723,7 +723,10 @@ export function runInit(options: InitOptions, io: InitIo): InitResult {
   //
   // `redirected` is what keeps it to ONE print: wiring an app in a monorepo re-enters runInit for the
   // chosen directory, and the inner call must not ask again.
-  if (true !== options.redirected) {
+  //
+  // And not when the runtime follows: it asks once it has finished, as the last thing printed,
+  // rather than here in the middle, before the dev server has even started.
+  if (true !== options.redirected && true !== options.continuesToRuntime) {
     io.print('');
     io.print(FEEDBACK_HINT);
   }
