@@ -69,6 +69,7 @@ const Tool = {
   RECORD: ReticleTool.RECORD,
   FLOW_SAVE: ReticleTool.FLOW_SAVE,
   FLOW_REPLAY: ReticleTool.FLOW_REPLAY,
+  NAVIGATE: ReticleTool.NAVIGATE,
   FINISH: FINISH_TOOL.name,
 } as const;
 
@@ -76,6 +77,8 @@ const Tool = {
 const FINISH_OPTION = 'finish';
 /** The synthetic option meaning "I cannot tell from this page; look again". */
 const RELOOK_OPTION = 'look_again';
+/** Back to the page before this one — a dead end used to end the whole drive where it stood. */
+const BACK_OPTION = 'go_back';
 
 /**
  * Tools the model may route to, beyond acting on a control.
@@ -461,6 +464,10 @@ interface DriveState {
   tree: string | undefined;
   /** Where the app is, as the last snapshot reported it. A declaration is built from this. */
   route: string | undefined;
+  /** Every distinct page reached, raw and in order, so the drive can go back to the previous one. */
+  pages: string[];
+  /** Signals an act_and_wait PROVED, so the plan step aimed at one is done and the next begins. */
+  proved: string[];
   /** Flows this drive has already replayed, so the plan advances instead of looping. */
   replayed: string[];
   /** Every action already driven, so the choice set can prefer something new. */
@@ -496,6 +503,8 @@ function readState(history: readonly HistoryEntry[]): DriveState {
     saved: [],
     tree: undefined,
     route: undefined,
+    pages: [],
+    proved: [],
     replayed: [],
     acted: [],
     blocked: [],
@@ -538,13 +547,21 @@ function readState(history: readonly HistoryEntry[]): DriveState {
         const tree = result['tree'];
         if ('string' === typeof tree) state.tree = tree;
         const route = asRecord(result['status'])['route'];
-        if ('string' === typeof route) state.route = appRoute(route);
+        if ('string' === typeof route) {
+          state.route = appRoute(route);
+          if (state.pages.at(-1) !== route) state.pages.push(route);
+        }
       }
+      if (Tool.NAVIGATE === outcome.name) state.tree = undefined;
       if (Tool.ACT_AND_WAIT === outcome.name) {
         const ref = asRecord(outcome.args)['ref'];
         const failure = asRecord(outcome.result)['error'];
         const refused =
           outcome.isError && 'string' === typeof failure && failure.includes(DANGEROUS_ARG);
+        const until = asRecord(asRecord(outcome.args)['until']);
+        const signal = until['name'];
+        if ('yes' === asRecord(outcome.result)['verified'] && 'string' === typeof signal)
+          state.proved.push(signal);
         if ('string' === typeof ref) {
           // A refused act never happened, so it is not something this drive has driven. Recording
           // it as driven would retire the control after an attempt that never reached the app.
@@ -805,7 +822,9 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
       // ── the one real decision ────────────────────────────────────────────────────────────────
       // What the drive is currently for: the first plan step that is not a replay. Replays are all
       // done by the time we reach here, so whatever is left is the intent nobody has proved.
-      const objective = plan.find((step) => PLAN_REPLAY !== step.kind);
+      const objective = plan.find(
+        (step) => PLAN_REPLAY !== step.kind && !drive.proved.includes(step.target),
+      );
       const candidates = candidatesFrom(drive.tree);
       /**
        * A page with nothing to act on ends the DRIVE, not just the journey.
@@ -827,7 +846,7 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
 
       const criteria: Record<string, string> = {
         [FINISH_OPTION]:
-          'Stop driving: the app has been covered, or nothing here leads anywhere new.',
+          'Stop driving: every journey started here reached its end state, or nothing leads anywhere new.',
         [RELOOK_OPTION]:
           'Look at the page again without acting, because this reading looks incomplete.',
         [OBSERVE_OPTION]:
@@ -835,6 +854,10 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
         [STATE_OPTION]:
           "Read the application's own state, which is the strongest evidence there is and the one thing a screen cannot fake.",
       };
+      const previous = drive.pages.at(-2);
+      if (previous !== undefined)
+        criteria[BACK_OPTION] =
+          `Go back to ${previous}: this page is a dead end, or a journey started there is not finished.`;
       for (const candidate of candidates) {
         const verb = actionFor(candidate.role);
         const already = drive.acted.includes(candidate.ref) ? ' (already driven once)' : '';
@@ -848,13 +871,13 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
           next_action: {
             type: 'choice',
             instructions:
-              'Which single action best advances coverage of this application right now? Prefer a control that completes a real user journey, and prefer something not already driven.',
+              'Which single action carries the current user journey forward toward its END state — a submitted form, a saved record, a confirmation? Finish the journey this page started before opening a new one; prefer something not already driven only once it is finished.',
             criteria,
           },
           journey_complete: {
             type: 'noul',
             instructions:
-              'The application has been meaningfully covered by the actions driven so far, and further clicking would add nothing.',
+              'Every journey started so far has been carried to its end state and checked there, and further driving would add nothing.',
           },
         },
       );
@@ -879,6 +902,8 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
 
       if (RELOOK_OPTION === chosen)
         return only(request(Tool.SNAPSHOT, { mode: 'interactive' }), 'look again', usage);
+      if (BACK_OPTION === chosen && previous !== undefined)
+        return only(request(Tool.NAVIGATE, { url: previous }), `back to ${previous}`, usage);
 
       // Routing to a READ rather than an action. Neither changes the app, so neither is recorded as
       // something driven — they are how the drive finds out whether what it drove worked.

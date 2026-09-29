@@ -117,3 +117,30 @@ describe('which labels are worth a model call', () => {
     expect(needsGeneration(label)).toBe(expected);
   });
 });
+
+/*
+ * A login filled with `harness@reticle.dev` / `password` stops every autonomous drive at the front
+ * door, so nothing behind authentication was ever explored. The values replay already reads for a
+ * redacted field (`RETICLE_SECRET_<FIELD>`) now reach the drive too.
+ */
+describe('a supplied secret gets the drive past the login', () => {
+  it('uses the supplied value for its field, ahead of every other layer', async () => {
+    const set: Record<string, string> = {};
+    const fill = fillValues({
+      secret: (label) => ('password' === label ? 'hunter2' : undefined),
+      cache: { get: () => undefined, set: (k, v) => (set[k] = v) },
+    });
+    expect(await fill('password')).toBe('hunter2');
+    expect(await fill('email')).toBe('harness@reticle.dev');
+  });
+
+  it('never writes a secret into the fill cache, which lives on disk', async () => {
+    const set: Record<string, string> = {};
+    const fill = fillValues({
+      secret: () => 'hunter2',
+      cache: { get: () => undefined, set: (k, v) => (set[k] = v) },
+    });
+    await fill('password');
+    expect(set).toEqual({});
+  });
+});

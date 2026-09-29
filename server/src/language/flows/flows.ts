@@ -6,7 +6,7 @@ import {
   type ProjectId,
 } from '@reticlehq/core';
 import { REDACTED_FILL } from './fields/flow-secret-field.js';
-export { REDACTED_FILL } from './fields/flow-secret-field.js';
+export { REDACTED_FILL, secretEnvKey } from './fields/flow-secret-field.js';
 import { safeProjectId, type FlowResult } from './flow-result.js';
 import { changeInPlace } from './narrow-write.js';
 export type { FlowResult } from './flow-result.js';

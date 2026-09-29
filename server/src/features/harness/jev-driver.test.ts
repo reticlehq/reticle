@@ -815,3 +815,87 @@ describe('the route a consequence is declared against', () => {
     expect(appRoute('/x?__reticle_session=s1&__reticle_project=p1&keep=1')).toBe('/x?keep=1');
   });
 });
+
+/*
+ * The drive went wide, not deep. Jev was asked to "advance coverage … prefer something not already
+ * driven", it had no way back from a dead end, and the plan step it was proving never advanced — so
+ * it clicked one thing per page and called the app covered.
+ */
+describe('the drive carries a journey to its end', () => {
+  it('asks for the step that carries the current journey forward, not for coverage', async () => {
+    const seen = { bodies: [] as string[] };
+    await turn(READY, chose('e5'), seen);
+    const q = JSON.parse(seen.bodies[0] ?? '{}') as {
+      questions: Record<string, { instructions: string }>;
+    };
+    expect(q.questions['next_action']?.instructions).toMatch(/journey/i);
+    expect(q.questions['next_action']?.instructions).not.toMatch(/coverage/i);
+    expect(q.questions['journey_complete']?.instructions).toMatch(/end/i);
+  });
+
+  const deeper: HistoryEntry[] = [
+    ...READY,
+    {
+      role: 'tool',
+      outcomes: [outcome('reticle_act_and_wait', { ref: 'e2', action: 'click' }, { ok: true })],
+    },
+    { role: 'tool', outcomes: [snapshotOf('/#/deployments')] },
+    { role: 'tool', outcomes: [recordStop('harness-drive-home')] },
+    {
+      role: 'tool',
+      outcomes: [outcome('reticle_flow_save', { flowName: 'harness-drive-home' }, {})],
+    },
+    { role: 'tool', outcomes: [recordStart('harness-drive-deployments')] },
+  ];
+
+  it('offers a way back to the page it came from', async () => {
+    const seen = { bodies: [] as string[] };
+    await turn(deeper, chose('e5'), seen);
+    const criteria = sent(seen.bodies[0]).questions.next_action.criteria;
+    expect(Object.keys(criteria)).toContain('go_back');
+    expect(criteria['go_back']).toContain('/#/home');
+  });
+
+  it('navigates back when that is the choice, and looks before choosing again', async () => {
+    const result = await turn(deeper, chose('go_back'));
+    expect(result.calls[0]?.name).toBe('reticle_navigate');
+    expect(result.calls[0]?.args).toMatchObject({ url: '/#/home' });
+  });
+
+  it('does not offer a way back from the first page', async () => {
+    const seen = { bodies: [] as string[] };
+    await turn(READY, chose('e5'), seen);
+    expect(Object.keys(sent(seen.bodies[0]).questions.next_action.criteria)).not.toContain(
+      'go_back',
+    );
+  });
+
+  it('moves to the next plan step once the current one is proved', async () => {
+    const plan = [
+      { kind: 'drive' as const, target: 'deploy:created', why: 'untested' },
+      { kind: 'drive' as const, target: 'deploy:cancelled', why: 'untested' },
+    ];
+    const proved: HistoryEntry[] = [
+      ...READY,
+      {
+        role: 'tool',
+        outcomes: [
+          outcome(
+            'reticle_act_and_wait',
+            { ref: 'e5', action: 'click', until: { kind: 'signal', name: 'deploy:created' } },
+            { verified: 'yes' },
+          ),
+        ],
+      },
+      { role: 'tool', outcomes: [snapshotOf('/#/home')] },
+    ];
+    const seen = { bodies: [] as string[] };
+    const fake = fakeJev(chose('e5'), seen);
+    await jevDriver({ apiKey: 'k', fetch: fake.doFetch, plan }).turn({
+      system: 'drive it',
+      tools: [],
+      history: proved,
+    });
+    expect(sent(seen.bodies[0]).state).toContain('CURRENTLY TRYING TO PROVE: deploy:cancelled');
+  });
+});
