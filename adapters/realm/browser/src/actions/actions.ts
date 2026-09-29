@@ -16,7 +16,14 @@ import {
 import { assertEditable, assertNotRichText, setNativeValue } from './value-input.js';
 import { getAccessibleName, getRole, isVisible, getStates } from '@/dom/a11y.js';
 import { elementHasHoverHandlers, identifyComponent } from '@/registry/stores/adapters.js';
-import { isForm, isHtmlElement, isInput, isSelect, isTextArea } from '@/dom/realm.js';
+import {
+  type ActionTarget,
+  isActionTarget,
+  isForm,
+  isInput,
+  isSelect,
+  isTextArea,
+} from '@/dom/realm.js';
 import { nativeSetTimeout, settle } from '@/timers/native/native-timers.js';
 import { AppearedText } from './appeared-text.js';
 import {
@@ -131,10 +138,10 @@ function asString(value: unknown, fallback = ''): string {
   return 'string' === typeof value ? value : fallback;
 }
 
-function requireElement(ref: string): HTMLElement {
+function requireElement(ref: string): ActionTarget {
   const el = refs.resolve(ref);
   if (null === el) throw new Error(`ref '${echoRef(ref)}' no longer resolves to an element`);
-  if (!isHtmlElement(el)) throw new Error(`ref '${echoRef(ref)}' is not an HTMLElement`);
+  if (!isActionTarget(el)) throw new Error(`ref '${echoRef(ref)}' is not an HTML or SVG element`);
   return el;
 }
 
@@ -251,7 +258,7 @@ const CLICK_LIKE = new Set<string>([
  * did not. Two copies of this rule could disagree, and a disagreement here is precisely the false
  * green: an act that reports it drove a control it never touched.
  */
-function alreadyAtCheckedState(el: HTMLElement, action: string): boolean {
+function alreadyAtCheckedState(el: ActionTarget, action: string): boolean {
   if (action !== ActionType.CHECK && action !== ActionType.UNCHECK) return false;
   return isInput(el) && el.checked === (action === ActionType.CHECK);
 }
@@ -341,7 +348,11 @@ function assertUploadArgs(args: Record<string, unknown>): void {
   );
 }
 
-function assertActionAllowed(el: HTMLElement, action: string, args: Record<string, unknown>): void {
+function assertActionAllowed(
+  el: ActionTarget,
+  action: string,
+  args: Record<string, unknown>,
+): void {
   const canTrigger =
     action === ActionType.CLICK ||
     action === ActionType.DBLCLICK ||
@@ -364,7 +375,7 @@ function assertActionAllowed(el: HTMLElement, action: string, args: Record<strin
     (submitter !== null &&
       requiresDangerousConfirmation(dangerousActionContext(submitter), getRole(submitter)));
   const targetDangerous =
-    isHtmlElement(dragTarget) &&
+    isActionTarget(dragTarget) &&
     requiresDangerousConfirmation(dangerousActionContext(dragTarget), getRole(dragTarget));
   if (
     canTrigger &&
@@ -448,7 +459,7 @@ interface DispatchOutcome {
  * duration. Everything else routes through the switch below unchanged and holds for zero.
  */
 async function dispatchFor(
-  el: HTMLElement,
+  el: ActionTarget,
   action: string,
   args: Record<string, unknown>,
 ): Promise<DispatchOutcome> {
@@ -490,7 +501,7 @@ function asFiniteNumber(raw: unknown): number | undefined {
 }
 
 async function dispatchOther(
-  el: HTMLElement,
+  el: ActionTarget,
   action: string,
   args: Record<string, unknown>,
 ): Promise<boolean> {
@@ -770,7 +781,7 @@ async function dispatchOther(
       // nowhere and reporting `ok: true` is a false green, and a guessed target name reads as "no
       // target" while every effect field looks healthy.
       const resolved = refs.resolve(toRef);
-      if (!isHtmlElement(resolved)) {
+      if (!isActionTarget(resolved)) {
         throw new Error(
           `drag target '${echoRef(toRef)}' did not resolve to an element — pass a ref from ` +
             'reticle_snapshot or reticle_query as args.toRef (alias: args.target)',

@@ -12,6 +12,7 @@
 
 import { isDangerousActionText } from '@reticlehq/core';
 import { getAccessibleName } from '@/dom/a11y.js';
+import { type ActionTarget, isHtmlElement } from '@/dom/realm.js';
 
 /**
  * Input types whose `value` IS the visible label rather than data the user put there.
@@ -34,14 +35,14 @@ const LABEL_VALUED_INPUT_TYPES: ReadonlySet<string> = new Set([
  * destructive-label pattern and matches the sentence just filled in, not any label on the page. The
  * way past such a block is `confirmDangerous: true`, which is how a safety guard becomes decorative.
  */
-function holdsUserText(el: HTMLElement): boolean {
-  if (el.isContentEditable) return true;
+function holdsUserText(el: ActionTarget): boolean {
+  if (isHtmlElement(el) && el.isContentEditable) return true;
   if (el instanceof HTMLTextAreaElement) return true;
   if (el instanceof HTMLInputElement) return !LABEL_VALUED_INPUT_TYPES.has(el.type.toLowerCase());
   return false;
 }
 
-export function dangerousActionContext(el: HTMLElement): string {
+export function dangerousActionContext(el: ActionTarget): string {
   const form = el.closest('form');
   // The label surfaces only, when the content is the user's own. The accessible NAME still counts:
   // that is the prompt beside the field, and "Type DELETE to remove this account" is exactly the
@@ -70,7 +71,7 @@ export function dangerousActionContext(el: HTMLElement): string {
 const SUBMIT_CONTROL_SELECTOR =
   'button[type="submit"], input[type="submit"], button:not([type]):not([type=""])';
 
-export function submitControlFor(el: HTMLElement): HTMLElement | null {
+export function submitControlFor(el: ActionTarget): HTMLElement | null {
   const found = el.closest('form')?.querySelector(SUBMIT_CONTROL_SELECTOR);
   return found instanceof HTMLElement ? found : null;
 }

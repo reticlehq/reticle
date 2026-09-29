@@ -177,3 +177,27 @@ describe('dblclick: the sequence a real double-click produces', () => {
     expect(r.effect.defaultPrevented).toBe(true);
   });
 });
+
+describe('click: SVG targets', () => {
+  // Charts, maps and icon buttons put the clickable shape in SVG. A `<path>` is an SVGElement, not an
+  // HTMLElement, and was refused outright.
+  it('clicks a <path> inside an <svg> and reports ok', async () => {
+    document.body.innerHTML =
+      '<svg viewBox="0 0 10 10"><path id="slice" d="M0 0 L10 0 L10 10 Z"></path></svg>';
+    const seen: string[] = [];
+    const path = document.querySelector('#slice');
+    path?.addEventListener('click', () => seen.push('click'));
+    const r = await executeAction(refOf('#slice'), 'click');
+    expect(r.ok).toBe(true);
+    expect(seen).toEqual(['click']);
+  });
+
+  it('hovers an SVG element', async () => {
+    document.body.innerHTML = '<svg><circle id="dot" r="4"></circle></svg>';
+    const seen: string[] = [];
+    document.querySelector('#dot')?.addEventListener('mouseenter', () => seen.push('enter'));
+    const r = await executeAction(refOf('#dot'), 'hover');
+    expect(r.ok).toBe(true);
+    expect(seen).toEqual(['enter']);
+  });
+});

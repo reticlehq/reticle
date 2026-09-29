@@ -2,6 +2,7 @@ import { refs } from '@/dom/addressing/refs.js';
 import { hitTestOccluder } from '@/dom/occlusion.js';
 import { nativeFrame } from '@/timers/native/native-timers.js';
 import { asSyntheticInput } from './synthetic/synthetic-input.js';
+import type { ActionTarget } from '@/dom/realm.js';
 
 interface ClickGeometry {
   occluded: boolean;
@@ -54,7 +55,7 @@ function pointerEventFor(el: Element, type: string, init: PointerEventInit): Mou
  * so a plain <div> click still reports focusMoved=null.
  */
 export async function fireClickSequence(
-  el: HTMLElement,
+  el: ActionTarget,
   hold?: { ms: number; sleep: (ms: number) => Promise<void>; now: () => number },
   detail?: number,
 ): Promise<{ prevented: boolean; heldMs: number }> {
@@ -91,7 +92,7 @@ function isMeasurable(rect: DOMRect): boolean {
 }
 
 /** The center of `rect` falls outside the visible viewport. */
-function isOffViewport(el: HTMLElement, rect: DOMRect): boolean {
+function isOffViewport(el: ActionTarget, rect: DOMRect): boolean {
   const win = el.ownerDocument.defaultView;
   if (null === win) return false;
   const cx = rect.left + rect.width / 2;
@@ -100,7 +101,10 @@ function isOffViewport(el: HTMLElement, rect: DOMRect): boolean {
 }
 
 /** Hit-test the center: occluded iff the top NON-Reticle element is a foreign subtree (not target/ancestor/descendant). */
-function hitTest(el: HTMLElement, rect: DOMRect): { occluded: boolean; occludedBy: string | null } {
+function hitTest(
+  el: ActionTarget,
+  rect: DOMRect,
+): { occluded: boolean; occludedBy: string | null } {
   const top = hitTestOccluder(el, rect);
   return null === top
     ? { occluded: false, occludedBy: null }
@@ -112,7 +116,7 @@ function hitTest(el: HTMLElement, rect: DOMRect): { occluded: boolean; occludedB
  * point. Synthetic dispatch always reaches the target regardless — this is purely so the agent
  * learns when the target is off-screen or visually blocked instead of getting a false "it worked".
  */
-export function clickGeometry(el: HTMLElement): ClickGeometry {
+export function clickGeometry(el: ActionTarget): ClickGeometry {
   if (typeof el.getBoundingClientRect !== 'function') return NO_GEOMETRY;
   let rect = el.getBoundingClientRect();
   if (!isMeasurable(rect)) return NO_GEOMETRY;
@@ -180,7 +184,7 @@ const BUTTON_RELEASED = 0;
 const DRAG_STEPS = 5;
 
 /** The centre of an element in client coordinates — what a real pointer would be over. */
-function centreOf(el: HTMLElement): Point {
+function centreOf(el: ActionTarget): Point {
   const box = el.getBoundingClientRect();
   return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
 }
@@ -199,8 +203,8 @@ function lerp(a: Point, b: Point, t: number): Point {
  * an app that did not change — a false green produced by the tool rather than caught by it.
  */
 export async function dragElement(
-  source: HTMLElement,
-  target: HTMLElement | null,
+  source: ActionTarget,
+  target: ActionTarget | null,
   data: unknown,
 ): Promise<boolean> {
   const dest = target ?? source;
@@ -326,7 +330,7 @@ export async function dragElement(
  * needs to tell "held 1200" from "held 1204" when the app's own threshold is 1200.
  */
 export async function fireTapSequence(
-  el: HTMLElement,
+  el: ActionTarget,
   hold: { ms: number; sleep: (ms: number) => Promise<void>; now: () => number } | undefined,
 ): Promise<{ prevented: boolean; heldMs: number }> {
   const touches = touchListFor(el);
@@ -371,7 +375,7 @@ function firePointerTouch(el: Element, type: string): void {
  * documented as possibly empty (it IS empty on `touchend`), so a handler that reads it defensively
  * behaves the same, and one that does not would have thrown on a real touchend too.
  */
-function touchListFor(el: HTMLElement): Touch[] {
+function touchListFor(el: ActionTarget): Touch[] {
   if ('function' !== typeof Touch || 'function' !== typeof el.getBoundingClientRect) return [];
   const rect = el.getBoundingClientRect();
   try {
