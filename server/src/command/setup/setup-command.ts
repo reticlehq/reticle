@@ -105,6 +105,9 @@ function hasElectronDependency(dir: string): boolean {
  * scope unwritten — it exists on machines today, and init only ever writes the project-scope file,
  * so a VS Code user has no tools outside the directory they ran init in.
  */
+/** `agent`, `agents`. */
+const agentWord = (n: number): string => (1 === n ? 'agent' : 'agents');
+
 export function registerOtherAgents(print: (line: string) => void): void {
   const platform = process.platform as keyof PlatformPaths;
   const home = homedir();
@@ -115,7 +118,7 @@ export function registerOtherAgents(print: (line: string) => void): void {
   const wrote = results.filter((r) => 'created' === r.action || 'merged' === r.action);
   if (0 < wrote.length) {
     print(
-      `registered the MCP server with ${wrote.length} more agent(s): ${wrote.map((r) => r.name).join(', ')}`,
+      `  ✓ ${String(wrote.length)} more ${agentWord(wrote.length)}: ${wrote.map((r) => r.name).join(', ')}`,
     );
   }
   // A format we will not rewrite is somebody's to edit, so it has to be said rather than skipped --
@@ -129,14 +132,15 @@ export function registerOtherAgents(print: (line: string) => void): void {
     .map((r) => ({ name: r.name, file: r.file, why: r.why }));
   const fresh = unsaidNotices(readSaid(stateHome), manual);
   for (const notice of fresh) {
-    print(`${notice.name}: ${notice.why} — add the reticle entry to ${notice.file} by hand.`);
+    print(`  ⚠ ${notice.name}: ${notice.why} — add the reticle entry to ${notice.file} by hand.`);
   }
   rememberSaid(
     stateHome,
     fresh.map((n) => noticeKey(n)),
   );
   const skills = applyAgentSkills(agentIo, { home, platform });
-  if (0 < skills.length) print(`wrote the /reticle skill for ${skills.length} agent(s)`);
+  if (0 < skills.length)
+    print(`  ✓ the /reticle skill, for ${String(skills.length)} ${agentWord(skills.length)}`);
 
   // Registration alone still leaves an Accept dialog in front of every call, and a verification run
   // makes dozens of them: the loop is only autonomous once the tools are pre-approved.
@@ -144,11 +148,11 @@ export function registerOtherAgents(print: (line: string) => void): void {
   const granted = approvals.filter((a) => ApprovalOutcome.GRANTED === a.outcome);
   if (0 < granted.length) {
     print(
-      `pre-approved the reticle tools in ${granted.map((a) => a.name).join(', ')} — no Accept prompt per call`,
+      `  ✓ tools pre-approved in ${granted.map((a) => a.name).join(', ')}, so no Accept prompt per call`,
     );
   }
   for (const noted of approvals.filter((a) => undefined !== a.warn)) {
-    print(`${noted.name}: ${String(noted.warn)}`);
+    print(`  ⚠ ${noted.name}: ${String(noted.warn)}`);
   }
 }
 

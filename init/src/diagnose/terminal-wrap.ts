@@ -16,8 +16,8 @@ const MIN_WIDTH = 40;
 
 /** A line a reader runs rather than reads. */
 const COMMAND = /^\s*(?:\$ |npx |npm |pnpm |yarn |bun |reticle |curl |cd |export |import )/;
-/** What a continuation line hangs under: `1. `, `- `, `• `, `why: `, `[✓] `. */
-const MARKER = /^(\s*)(\d+\.\s+|[-•]\s+|why:\s+|\[.\]\s+)?/u;
+/** What a continuation line hangs under: `1. `, `- `, `• `, `✓ `, `⚠ `, `why: `, `[✓] `. */
+const MARKER = /^(\s*)(\d+\.\s+|[-•✓⚠]\s+|why:\s+|\[.\]\s+)?/u;
 
 /** The width to wrap at, or undefined when stdout is not a terminal. */
 export function terminalWidth(

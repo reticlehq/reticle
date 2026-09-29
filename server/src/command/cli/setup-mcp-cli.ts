@@ -64,14 +64,14 @@ export function handleSetupMcp(reportStep: StepReporter, standalone = true): voi
     io.print('Install one, then run `reticle setup mcp` again.');
     return;
   }
-  for (const id of result.registered) io.print(`  registered  ${id}`);
-  for (const id of result.alreadyThere) io.print(`  already     ${id}`);
+  for (const id of result.registered) io.print(`  ✓ ${id}`);
+  for (const id of result.alreadyThere) io.print(`  ✓ ${id} (already set up)`);
   // Said, not skipped. These are the clients whose format we will not rewrite, and they used to be
   // counted as registered: the line below is the difference between a user who adds four lines to
   // one file and a user who believes they are set up and has no tools.
   for (const client of result.manual) {
-    io.print(`  BY HAND     ${client.id}: add the reticle entry to ${client.configPath}`);
-    if (client.docs !== undefined) io.print(`              see ${client.docs}`);
+    io.print(`  ⚠ ${client.id}: add the reticle entry to ${client.configPath} by hand`);
+    if (client.docs !== undefined) io.print(`    see ${client.docs}`);
   }
   /*
    * The OTHER agents, which `init` already reaches and this did not.
@@ -91,12 +91,13 @@ export function handleSetupMcp(reportStep: StepReporter, standalone = true): voi
   });
   // Said on every run, attended or not: a registration only takes effect when the agent re-reads
   // its config, and an agent that was already open is the commonest reason "it did not work".
-  io.print('');
-  io.print('Restart your agent for it to pick up the new server.');
-  // Only when this IS the whole command. Inside the installer the tour follows, and its own closing
-  // already names `reticle init` — printing it here too put the same instruction twice, ten lines
-  // apart, with the tour sandwiched between them.
-  if (standalone) io.print('Then: cd <your project> && reticle init');
+  // Only when this IS the whole command. Inside the installer the restart is the first line of the
+  // closing's Next list, where it belongs with the other things to do, not between the stages.
+  if (standalone) {
+    io.print('');
+    io.print('Restart your agent for it to pick up the new server.');
+    io.print('Then: cd <your project> && reticle init');
+  }
 }
 
 /**
@@ -118,7 +119,7 @@ export function handleSetupInstall(
   }
   // Installation and onboarding are one script, so the tour prints here and is not gated on
   // anything — see installClosing for the heuristic this replaced and why it reached nobody.
-  process.stdout.write(`${wrapForTerminal(installClosing(), terminalWidth())}\n`);
+  process.stdout.write(`${wrapForTerminal(installClosing(opts.mcp), terminalWidth())}\n`);
   // Shown, so the ONBOARD steps are a fact rather than a guess.
   for (const step of tutorialShownSteps()) reportStep(step);
 }

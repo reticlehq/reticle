@@ -31,6 +31,11 @@ describe('wrapForTerminal', () => {
     for (const l of out.slice(1)) expect(l.startsWith('        ')).toBe(true);
   });
 
+  it('hangs under a ✓ item', () => {
+    const out = lines(wrapForTerminal('  ✓ 10 more agents: VS Code, Zed, Warp, Kiro, Amp', 24));
+    for (const l of out.slice(1)) expect(l.startsWith('    ') && !l.startsWith('     ')).toBe(true);
+  });
+
   // A wrapped command is one nobody can paste.
   it('never wraps a command line', () => {
     const cmd =

@@ -98,7 +98,7 @@ install_cli() {
   secs=0
   # A counter redrawn in place, because silence reads as a hang.
   while kill -0 "$pid" 2>/dev/null; do
-    [ -t 2 ] && printf '\r      installing... %ss' "$secs" >&2
+    [ -t 2 ] && printf '\r  installing... %ss' "$secs" >&2
     sleep 1
     secs=$((secs + 1))
   done
@@ -108,7 +108,7 @@ install_cli() {
     note_failure cli_installed npm_install
     die "npm could not install $RETICLE_PKG. Its output above says why."
   }
-  say "      done: $(grep -E '^(added|changed|up to date)' "$log" | tail -n 1)"
+  say "  done: $(grep -E '^(added|changed|up to date)' "$log" | tail -n 1)"
   rm -f "$log"
   command -v reticle >/dev/null 2>&1 || {
     # Installed, but the global bin is not on PATH. Common, and reporting it as success would put
@@ -129,7 +129,7 @@ main() {
   started="$(date +%s)"
   say "[1/3] Checking for Node $NODE_MIN_MAJOR.$NODE_MIN_MINOR+"
   check_node
-  say "      found Node $(node -p 'process.versions.node')"
+  say "  found Node $(node -p 'process.versions.node')"
   runtime_done="$(date +%s)"
   install_cli
   installed="$(date +%s)"
