@@ -184,6 +184,19 @@ export function pressKeys(args: Record<string, unknown>): string[] {
   return pressKeysFromArgs(args);
 }
 
+/**
+ * Whether this press holds any modifier, however the caller spelled it.
+ *
+ * Two spellings reach the same keystroke: `modifiers: ["Meta"]` with `key: "Enter"`, and a chord
+ * `keys: ["Meta", "Enter"]`. The destructive-action guard has to read both, or Cmd+Enter written
+ * as a chord would pass as a plain Enter.
+ */
+export function pressHoldsModifier(args: Record<string, unknown>): boolean {
+  const flags = pressModifiers(args);
+  if (flags.metaKey || flags.ctrlKey || flags.shiftKey || flags.altKey) return true;
+  return pressKeys(args).some((k) => modifierFlagFor(k) !== undefined);
+}
+
 /** How often a held key repeats. Browsers land near 30-35ms after the initial delay; this is that. */
 const KEY_REPEAT_MS = 33;
 /** The pause before auto-repeat starts, as a real keyboard has. */

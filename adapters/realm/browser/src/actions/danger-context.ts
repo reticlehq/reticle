@@ -12,7 +12,7 @@
 
 import { isDangerousActionText } from '@reticlehq/core';
 import { getAccessibleName } from '@/dom/a11y.js';
-import { type ActionTarget, isHtmlElement } from '@/dom/realm.js';
+import { type ActionTarget, isHtmlElement, isTextArea } from '@/dom/realm.js';
 
 /**
  * Input types whose `value` IS the visible label rather than data the user put there.
@@ -71,7 +71,20 @@ export function dangerousActionContext(el: ActionTarget): string {
 const SUBMIT_CONTROL_SELECTOR =
   'button[type="submit"], input[type="submit"], button:not([type]):not([type=""])';
 
-export function submitControlFor(el: ActionTarget): HTMLElement | null {
+/**
+ * The form control an Enter press on `el` would submit, or null when it submits nothing.
+ *
+ * A textarea is the exception, but only for a PLAIN Enter, which inserts a newline and submits
+ * nothing. Judging that keystroke by the form's submit button blocked the one key on the page that
+ * does the least (#894). With a modifier held it is the opposite case: Ctrl/Cmd+Enter is the
+ * standard "submit from a textarea" shortcut, and chat-style fields submit on it from script. This
+ * guard errs towards blocking, so any held modifier keeps the textarea judged by its form.
+ */
+export function submitControlFor(
+  el: ActionTarget,
+  { modified = false }: { modified?: boolean } = {},
+): HTMLElement | null {
+  if (isTextArea(el) && !modified) return null;
   const found = el.closest('form')?.querySelector(SUBMIT_CONTROL_SELECTOR);
   return found instanceof HTMLElement ? found : null;
 }
