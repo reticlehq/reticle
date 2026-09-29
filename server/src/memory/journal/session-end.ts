@@ -110,6 +110,12 @@ interface SessionEndDeps {
       prefix: string,
     ) => Promise<unknown>;
   };
+  /**
+   * The flow store for a session's own `.reticle`. Drive flows used to go to `flows` above — the
+   * daemon's launch directory — while replay reads the session's project, so a daemon started
+   * anywhere else saved flows nothing could replay. Absent, `flows` is used.
+   */
+  flowsAt?: (root: string) => NonNullable<SessionEndDeps['flows']>;
   /** Who is driving — stamped on each saved flow. Injected: teardown does not reach into MCP. */
   author?: () => DriveProgram['author'];
   /**
@@ -336,7 +342,7 @@ export async function recordDriveRun(
 /** Persist what this session drove as a replayable flow, when it declared anything provable. */
 async function saveDrivenFlow(deps: SessionEndDeps, session: SessionEndTarget): Promise<void> {
   const takeTape = deps.takeAmbientTape;
-  const flows = deps.flows;
+  const flows = deps.flowsAt?.(session.artifactRoot ?? deps.reticleRoot) ?? deps.flows;
   if (takeTape === undefined || flows === undefined) return;
   // One flow per journey the session contained, not one flow per session — see drive-flow.ts.
   const { programs, outcome } = driveFlowsFrom(takeTape());

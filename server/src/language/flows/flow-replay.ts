@@ -21,7 +21,7 @@ export {
 } from './flow-anchor.js';
 import type { FlowReplaySession, WaitForSignal, Sleep } from './flow-replay-types.js';
 export type { FlowReplaySession, WaitForSignal, Sleep } from './flow-replay-types.js';
-import { routeOfEvent } from '@reticlehq/engine/question/predicate/predicate-route.js';
+import { routeOfEvent, routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route.js';
 import { stepEffect } from '@reticlehq/engine/evidence/step-effect.js';
 import {
   AnchorKind,
@@ -92,7 +92,11 @@ const realSleep: Sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms
 function currentRoute(session: FlowReplaySession): string | undefined {
   const routes = session.eventsSince(0).filter((e) => e.type === EventType.ROUTE_CHANGE);
   const last = routes.at(-1);
-  if (last === undefined) return undefined;
+  // A page that loaded and never navigated has no route event; its URL is still where it is.
+  if (last === undefined) {
+    const loaded = session.url === undefined ? undefined : routeOfUrl(session.url);
+    return loaded !== undefined && loaded.routePath.length > 0 ? loaded.routePath : undefined;
+  }
   // The ROUTER's path. This field answers "which page did this step run on", and the document
   // pathname is `/` on every page of a hash-routed app — so a whole desktop replay reported `/` for
   // every step. Sixth place the same reading was wrong; see routeOfEvent.

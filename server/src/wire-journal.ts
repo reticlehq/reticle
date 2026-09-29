@@ -86,9 +86,17 @@ export function attachJournal(
     }
   });
   // Teardown: flush the journal tail to disk + persist what this session learned.
+  const own = deps.flows;
   bridge.attachSessionEnd(
     makeSessionEnd({
       ...deps,
+      // A drive is saved in the session's own project, where replay will look for it.
+      ...(own === undefined
+        ? {}
+        : {
+            flowsAt: (root: string) =>
+              root === deps.reticleRoot ? own : new FlowStore(deps.fs, root, { now: Date.now }),
+          }),
       ...(deps.retain === undefined ? {} : { retain: deps.retain }),
       // Retention runs from teardown, and it must not delete the journal of a session that is still
       // being written. The registry is the only thing that knows which those are.

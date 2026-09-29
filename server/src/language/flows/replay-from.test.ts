@@ -257,3 +257,11 @@ describe('where a resume starts', () => {
     expect(haltedFrom(results, f.steps.length)).toEqual({ atStep: 2, notAttempted: 1 });
   });
 });
+
+describe('the page a replayed step ran on', () => {
+  it('is the loaded URL when the page has not navigated yet', async () => {
+    const session = Object.assign(new FakeSession(ALL), { url: 'http://localhost:4501/issues/7' });
+    const results = await replayFlow(session, flow(['one']), waitForPredicate, FAST);
+    expect(results[0]?.page).toBe('/issues/7');
+  });
+});
