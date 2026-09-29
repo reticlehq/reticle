@@ -6,7 +6,13 @@
  * session saw.
  */
 
-import { EventType, MUTATING_METHODS, asString, type ReticleEvent } from '@reticlehq/core';
+import {
+  EventType,
+  MUTATING_METHODS,
+  asNumber,
+  asString,
+  type ReticleEvent,
+} from '@reticlehq/core';
 import { routeFromUrl, routesFromEvents } from '@/memory/project/learned-routes.js';
 import type { LedgerDelta } from './ledger.js';
 
@@ -37,6 +43,19 @@ export function writeKeyOf(event: ReticleEvent): string | undefined {
   return `${method} ${named}`;
 }
 
+/**
+ * The ledger's identity for a control: the snapshot label, with numbers collapsed. The rows of a
+ * table — `button "Delete row 12"` — are one control to cover, not five hundred, which is what keeps
+ * `touched` meaningful on any page with a list.
+ */
+export function controlKey(label: string): string {
+  return label
+    .replace(/^\s*-\s*/, '')
+    .replace(/\s*\(ref=e\d+\).*$/, '')
+    .replace(/\d+/g, '#')
+    .trim();
+}
+
 export function sessionDelta(input: {
   seen: readonly string[];
   acted: Iterable<string>;
@@ -53,7 +72,25 @@ export function sessionDelta(input: {
   ];
   return {
     routes: { reached },
-    controls: { seen: [...input.seen], touched: [...input.acted], proved: [...input.proved] },
+    controls: {
+      seen: [...new Set([...input.seen].map(controlKey))],
+      touched: [...new Set([...input.acted].map(controlKey))],
+      proved: [...new Set([...input.proved].map(controlKey))],
+    },
     writes: { seen: writes },
   };
+}
+
+/** An error the page threw or logged — a fault whatever the screen shows. */
+export function isConsoleError(e: ReticleEvent): boolean {
+  return e.type === EventType.CONSOLE_ERROR || e.type === EventType.ERROR_UNCAUGHT;
+}
+
+/** Requests that answered at or above `floor`. */
+export function failedRequests(events: ReticleEvent[], floor: number): ReticleEvent[] {
+  return events.filter((e) => {
+    if (e.type !== EventType.NET_REQUEST) return false;
+    const status = asNumber(e.data['status']);
+    return status !== undefined && status >= floor;
+  });
 }

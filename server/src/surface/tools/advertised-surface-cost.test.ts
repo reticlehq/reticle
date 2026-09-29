@@ -122,7 +122,7 @@ const bytesOf = (json: string): number => Buffer.byteLength(json, 'utf8');
  * the agent being able to find it — a predicate nothing advertises is a predicate nobody calls,
  * which is how the substring became the only reach in the first place.
  */
-const DEFAULT_SURFACE_BYTE_BUDGET = 25_100;
+const DEFAULT_SURFACE_BYTE_BUDGET = 25_250;
 // Raised, each time deliberately, each time with the measurement that bought it.
 //
 // LATEST RAISE, 24_600 -> 24_700. `reticle_verify { action: "explore" }` gained a `driver`
@@ -213,6 +213,11 @@ const DEFAULT_SURFACE_BYTE_BUDGET = 25_100;
 // executed, each with what is missing — which is how "covered everything" becomes checkable rather
 // than claimed. Evidence, not prose.
 //
+// SEVENTH RAISE, 25_100 -> 25_250. `reticle_verify { action: "crawl" }` gained `exhaustive`: 25,214 B
+// measured. It is the only switch that asks for EVERYTHING — every reachable state walked, every
+// write's failure path driven, all of it folded into the ledger — where every other parameter asks
+// about one page or one action. Without it "don't skip anything" has no call to make.
+//
 // The ratchet stays a ratchet: every raise names its evidence, and the next one has to do the same.
 
 describe('advertised surface cost', () => {
@@ -252,7 +257,8 @@ describe('advertised surface cost', () => {
 // record so the output side costs as little as it can while a validating client still keeps it.
 // 140_200 -> 140_400 for `app` on reticle_coverage (140,293 B measured), a loose record for the
 // same reason `durable` is one.
-const ALL_SURFACE_BYTE_BUDGET = 140_400;
+// 140_400 -> 140_500 for crawl's `exhaustive` output block (140,433 B measured).
+const ALL_SURFACE_BYTE_BUDGET = 140_500;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {

@@ -401,12 +401,16 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * exists removed five edges and the second place to forget a field when that type grows one.
    */
   demo: ['tools', 'bridge', 'cli'],
-  crawl: ['args', 'project', 'tools', 'facts'],
+  // `exhaustive` is crawl's mode: the explorer and ledger it runs, the fill values the harness
+  // already chooses (and the RETICLE_SECRET_* names replay reads), and the mocks that break a write.
+  crawl: ['args', 'project', 'tools', 'facts', 'exhaust', 'flows', 'harness', 'input'],
   /**
    * The app-wide coverage ledger. It persists to `.reticle/coverage.json` through the same three
    * project-memory directories every other store uses, and reads routes the way crawl does.
    */
-  exhaust: ['dir', 'fs', 'project'],
+  // `facts` and `session`: a full page load replaces the session, and the explorer must follow it
+  // (session-port.ts) with the same reconnect wait `navigate { reload }` uses.
+  exhaust: ['dir', 'fs', 'project', 'facts', 'session'],
   daemon: ['lifetime', 'binding', 'telemetry'],
   domain: ['args', 'dir', 'flows', 'oracles', 'project', 'tools'],
   ee: ['license'],

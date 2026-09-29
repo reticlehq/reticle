@@ -16,6 +16,7 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import { crawlEmptyNote } from './crawl-empty.js';
+import { failedRequests, isConsoleError } from '@/features/exhaust/session-fold.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { parseInteractive } from '@reticlehq/core';
 import { sourceOf } from '@/surface/tools/tools-helpers.js';
@@ -154,10 +155,6 @@ function isActivity(e: ReticleEvent): boolean {
   );
 }
 
-function isConsoleError(e: ReticleEvent): boolean {
-  return e.type === EventType.CONSOLE_ERROR || e.type === EventType.ERROR_UNCAUGHT;
-}
-
 const SOURCE_FRAME = /^(.*):(\d+):(\d+)$/;
 const COMPONENT_STACK_FIELDS = ['componentStack', 'message'] as const;
 const URL_SOURCE_PROTOCOLS: ReadonlySet<string> = new Set([
@@ -257,14 +254,6 @@ function sourceFromConsoleError(event: ReticleEvent): string | undefined {
   return file === undefined || isFrameworkSource(file)
     ? undefined
     : `${file}:${String(directLine)}`;
-}
-
-function failedRequests(events: ReticleEvent[], floor: number): ReticleEvent[] {
-  return events.filter((e) => {
-    if (e.type !== EventType.NET_REQUEST) return false;
-    const status = asNumber(e.data['status']);
-    return status !== undefined && status >= floor;
-  });
 }
 
 /**
