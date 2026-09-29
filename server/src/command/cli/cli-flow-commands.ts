@@ -15,7 +15,12 @@ import { type ProjectId, ReticleDir, RunFlowStatus } from '@reticlehq/core';
 import { FlowStore } from '@/language/flows/flows.js';
 import { RunStore } from '@/judgement/runs/artifact/run-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '@/memory/project/fs/fs-port.js';
-import { affectedSavedFlows, type NamedFlow } from '@/language/flows/change/flow-sources.js';
+import {
+  affectedSavedFlows,
+  toFlowSources,
+  type NamedFlow,
+} from '@/language/flows/change/flow-sources.js';
+import { isInteractiveSource, unflowedFiles } from '@/language/flows/change/affected.js';
 import { gateDecision } from '@/language/flows/change/gate.js';
 import { FlakeStore } from '@/language/flows/stores/flake-store.js';
 import { formatBuddyStatus } from '@/language/flows/buddy-status.js';
@@ -24,7 +29,7 @@ import { AssertionTiersStore } from '@/language/flows/stores/assertion-tiers-sto
 import { detectDowngrades } from '@/judgement/outcome/assertion-integrity.js';
 import { computeCoverage, flowCoverageReport } from '@/language/flows/suite/coverage.js';
 import { createWatchBatcher } from '@/language/flows/change/watch-batcher.js';
-import { watch } from 'node:fs';
+import { readFileSync, watch } from 'node:fs';
 import { log } from '@/log.js';
 /** Load the {name, steps} of every saved flow for the active project. */
 /** Explicit files plus, when --since is given, the git-changed files since that ref. */
@@ -182,6 +187,23 @@ export async function handleCapsules(): Promise<void> {
  * changed files. Flaky flows are quarantined (surfaced, not blocking). The environment-side enforcement
  * that makes verification unavoidable. Never throws; a fault fails closed (exit 1).
  */
+/**
+ * A changed file's text, or '' when it is gone. `git diff --name-only` answers from the repository
+ * root while the gate may run in a package below it, so leading segments are dropped until the path
+ * resolves from `cwd`.
+ */
+function readChangedFile(cwd: string, file: string): string {
+  const parts = file.split('/');
+  for (let i = 0; i < parts.length; i += 1) {
+    try {
+      return readFileSync(join(cwd, ...parts.slice(i)), 'utf8');
+    } catch {
+      // not at this depth; try the path one segment shorter
+    }
+  }
+  return '';
+}
+
 export async function handleGate(
   files: string[],
   since: string | undefined,
@@ -226,7 +248,15 @@ export async function handleGate(
     const deleted = Object.entries(baseline)
       .filter(([name, entry]) => !byName.has(name) && entry.sources.some((f) => changedSet.has(f)))
       .map(([name]) => name);
-    const result = gateDecision({ affected, passing, flaky, downgraded, deleted });
+    // Only against a suite that exists: a project with no flows yet is NOTHING_TO_CHECK, and
+    // demanding a flow per edited component on its first day would block every stop.
+    const unflowed =
+      0 === allFlows.length
+        ? []
+        : unflowedFiles(toFlowSources(allFlows), changed, (file) =>
+            isInteractiveSource(readChangedFile(process.cwd(), file)),
+          );
+    const result = gateDecision({ affected, passing, flaky, downgraded, deleted, unflowed });
     // Verified-surface coverage over flows: how much of the saved suite this run actually exercised.
     const coverage = computeCoverage(
       { testids: [], signals: [], flows: allFlows.map((f) => f.name) },
@@ -242,6 +272,7 @@ export async function handleGate(
       quarantined: result.quarantined,
       ...(result.downgraded.length > 0 ? { downgraded: result.downgraded } : {}),
       ...(result.deleted.length > 0 ? { deletedCoverage: result.deleted } : {}),
+      ...(result.unflowed.length > 0 ? { unflowed: result.unflowed } : {}),
       coverage: flowCoverage,
     });
     // Two non-zero codes, because two callers want opposite things from the same run. CI wants any
@@ -270,6 +301,7 @@ export async function handleGate(
           // A downgrade is reported per flow with its step indices; the hook names the flow.
           downgraded: result.downgraded.map((d) => d.flow),
           deleted: result.deleted,
+          unflowed: result.unflowed,
         });
         if (message !== undefined) process.stderr.write(`${message}\n`);
       }

@@ -24,6 +24,8 @@ interface GateInput {
   downgraded?: readonly DowngradedFlow[];
   /** Flows that covered a changed file but no longer exist — coverage deleted rather than satisfied. */
   deleted?: readonly string[];
+  /** Changed interactive components no saved flow touches — a change nothing has driven. */
+  unflowed?: readonly string[];
 }
 
 interface GateResult {
@@ -37,6 +39,8 @@ interface GateResult {
   downgraded: DowngradedFlow[];
   /** Deleted flows that covered changed files — BLOCKING for the same reason. */
   deleted: string[];
+  /** Changed interactive components no flow covers — BLOCKING: the change was never driven. */
+  unflowed: string[];
 }
 
 export function gateDecision(input: GateInput): GateResult {
@@ -54,11 +58,17 @@ export function gateDecision(input: GateInput): GateResult {
   // trivially gameable, which is the exact failure this gate exists to prevent.
   const downgraded = [...(input.downgraded ?? [])];
   const deleted = [...(input.deleted ?? [])];
+  const unflowed = [...(input.unflowed ?? [])];
   return {
-    pass: 0 === uncovered.length && 0 === downgraded.length && 0 === deleted.length,
+    pass:
+      0 === uncovered.length &&
+      0 === downgraded.length &&
+      0 === deleted.length &&
+      0 === unflowed.length,
     uncovered,
     quarantined,
     downgraded,
     deleted,
+    unflowed,
   };
 }

@@ -77,3 +77,11 @@ describe('it distinguishes the kinds of not-verified', () => {
     expect(out).toMatch(/proving nothing/);
   });
 });
+
+describe('a changed component nothing has driven', () => {
+  it('is named, with the call that fixes it', () => {
+    const out = gateHookMessage(GateExit.FAIL, { ...none, unflowed: ['src/NewWizard.tsx'] }) ?? '';
+    expect(out).toContain('src/NewWizard.tsx');
+    expect(out).toContain('reticle_act_and_wait');
+  });
+});

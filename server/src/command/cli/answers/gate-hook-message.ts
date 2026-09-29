@@ -27,6 +27,8 @@ interface GateHookInput {
   downgraded: readonly string[];
   /** Flows whose coverage was deleted while their files changed. */
   deleted: readonly string[];
+  /** Changed interactive components no saved flow has ever driven. */
+  unflowed?: readonly string[];
 }
 
 /** A short list, then a count — a hook that prints forty names is a hook people turn off. */
@@ -53,6 +55,10 @@ export function gateHookMessage(exit: number, input: GateHookInput): string | un
     );
   if (input.deleted.length > 0)
     lines.push(`  coverage deleted while its files changed: ${name(input.deleted)}`);
+  if (input.unflowed !== undefined && input.unflowed.length > 0)
+    lines.push(
+      `  changed, and no saved flow drives it: ${name(input.unflowed)} — drive it with reticle_act_and_wait and a declared \`until\``,
+    );
   if (input.quarantined.length > 0)
     lines.push(`  held back as flaky, so proving nothing: ${name(input.quarantined)}`);
   lines.push('');

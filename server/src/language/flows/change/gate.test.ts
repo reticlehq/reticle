@@ -74,3 +74,11 @@ describe('gate — anti-reward-hacking: weakened or deleted coverage BLOCKS', ()
     expect(r.deleted).toEqual([]);
   });
 });
+
+describe('gate — a changed interactive component no flow covers BLOCKS', () => {
+  it('blocks and names the file, even when every affected flow passed', () => {
+    const r = gateDecision({ affected: ['a'], passing: ['a'], unflowed: ['src/NewWizard.tsx'] });
+    expect(r.pass).toBe(false);
+    expect(r.unflowed).toEqual(['src/NewWizard.tsx']);
+  });
+});
