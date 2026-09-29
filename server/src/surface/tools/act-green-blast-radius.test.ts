@@ -109,7 +109,7 @@ describe('what a passing action also did', () => {
       event(EventType.SIGNAL, { name: SIGNAL }),
       event(EventType.NET_REQUEST, {
         method: 'POST',
-        url: `data:image/png;base64,${'A'.repeat(48_219)}`,
+        url: 'data:image/png;base64,<…48219 bytes…>',
         status: 200,
       }),
     ]);

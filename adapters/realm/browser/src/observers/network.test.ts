@@ -307,6 +307,19 @@ describe('installNetwork (fetch)', () => {
     }
   });
 
+  it('bounds data URLs on emitted events and keeps the raw value for predicates', async () => {
+    const raw = `data:image/png;base64,${'A'.repeat(48_219)}`;
+    const { emit, events } = collect();
+    teardown = installNetwork(emit);
+
+    await window.fetch(raw);
+
+    expect(eventOf(events, EventType.NET_REQUEST)).toMatchObject({
+      url: 'data:image/png;base64,<…48219 bytes…>',
+      [URL_RAW]: raw,
+    });
+  });
+
   it('captures + redacts request and response bodies only when opted in (Network 1b)', async () => {
     // Fake credential values held in variables so the object literals do not read as hardcoded
     // secrets to the repo's secret scanner — the point is that the observer redacts them.

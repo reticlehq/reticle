@@ -20,17 +20,18 @@ describe('embedded URL diagnostics', () => {
     expect(redactUrl(raw)).toBe('data:text/plain,<…7 bytes…>');
   });
 
-  it('summarizes blob URLs without exposing their identifier', () => {
+  it('leaves blob URLs unchanged because they do not contain the blob payload', () => {
     const raw = 'blob:https://example.test/550e8400-e29b-41d4-a716-446655440000';
-    const summarized = redactUrl(raw);
-    expect(summarized).toMatch(/^blob:<…\d+ bytes…>$/);
-    expect(summarized).not.toContain('550e8400');
+    expect(redactUrl(raw)).toBe(raw);
+    expect(netUrlFields(raw)).toEqual({ url: raw });
   });
 
-  it('does not put the full embedded URL back into urlRaw', () => {
+  it('keeps the raw data URL for predicates while bounding the displayed URL', () => {
     const raw = `data:image/webp;base64,${'B'.repeat(50_000)}`;
     const fields = netUrlFields(raw);
-    expect(fields).toEqual({ url: 'data:image/webp;base64,<…50000 bytes…>' });
-    expect(JSON.stringify(fields).length).toBeLessThan(100);
+    expect(fields).toEqual({
+      url: 'data:image/webp;base64,<…50000 bytes…>',
+      urlRaw: raw,
+    });
   });
 });

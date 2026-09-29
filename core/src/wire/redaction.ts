@@ -166,7 +166,6 @@ function utf8Length(value: string): number {
 }
 
 function summarizeEmbeddedUrl(raw: string): string | undefined {
-  if (/^blob:/i.test(raw)) return `blob:<…${String(utf8Length(raw))} bytes…>`;
   if (!/^data:/i.test(raw)) return undefined;
 
   const comma = raw.indexOf(',');
@@ -288,7 +287,6 @@ export function netUrlFields(
   isSensitive: (key: string) => boolean = isSensitiveKey,
 ): { url: string } | { url: string; urlRaw: string } {
   const url = redactUrl(raw, isSensitive);
-  if (/^(?:data|blob):/i.test(raw)) return { url };
   return url === raw ? { url } : { url, [URL_RAW]: raw };
 }
 
