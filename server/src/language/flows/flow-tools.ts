@@ -445,7 +445,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         .union([z.number().int().nonnegative(), z.string().min(1)])
         .optional()
         .describe(
-          'RESUME at this step (0-based index, or a step `id`). The steps before it are re-driven quickly as setup — actions only, consequences not checked, results not reported unless one fails — then replay is checked and reported from here. A prefix step declared `effect: "commits"` refuses the resume and the whole flow replays.',
+          'Resume at this step (index or step id). Earlier steps re-run as unchecked, unreported setup; a setup step marked effect:"commits" refuses the resume.',
         ),
       sweep: z
         .boolean()
