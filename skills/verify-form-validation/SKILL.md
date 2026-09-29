@@ -31,7 +31,7 @@ reticle_act_and_wait({ sessionId, ref, action: "fill", args: { value: "<invalid>
 ]}})
 ```
 
-If the check runs on blur rather than on keystroke, move focus to a different control as its own step before asserting: `reticle_act({ sessionId, ref: otherRef, action: "focus" })` on the submit button or the next field, since focusing anything else is what fires the blur you need. If it's debounced instead, don't sleep for it. Use `reticle_clock` to advance past the debounce window exactly as in [`test-error-states`](https://github.com/reticlehq/reticle/blob/main/skills/test-error-states/SKILL.md#skip-time-instead-of-sleeping). A fixed sleep passes on your machine and flakes in CI.
+If the check runs on blur rather than on keystroke, move focus to a different control as its own step before asserting: `reticle_act({ sessionId, ref: otherRef, action: "focus" })` on the submit button or the next field, since focusing anything else is what fires the blur you need. If it's debounced instead, don't sleep for it. Use `reticle_run({ tool: "reticle_clock", args: { sessionId, advanceMs } })` to advance past the debounce window exactly as in [`test-error-states`](https://github.com/reticlehq/reticle/blob/main/skills/test-error-states/SKILL.md#skip-time-instead-of-sleeping). A fixed sleep passes on your machine and flakes in CI.
 
 ## Prove nothing fired
 
@@ -50,7 +50,7 @@ reticle_assert({ sessionId, since, timeout_ms: 3000, predicate: { kind: "allOf",
 ]}})
 ```
 
-The `timeout_ms` is what makes this a wait instead of a snapshot: `reticle_assert` defaults to `timeout_ms: 0`, one evaluation at the instant you call it, so without it `settled` is just checked once right after the click and proves nothing about whether the app was actually idle. With `timeout_ms: 3000`, the call keeps polling for up to three seconds until the page genuinely goes quiet, and Only once the page settles does the count: 0 reading become meaningful.”. Use `since` from the click's own result, not from the earlier fill, so you're scoped to requests after the submit attempt specifically.
+The `timeout_ms` is what makes this a wait instead of a snapshot: `reticle_assert` defaults to `timeout_ms: 0`, one evaluation at the instant you call it, so without it `settled` is just checked once right after the click and proves nothing about whether the app was actually idle. With `timeout_ms: 3000`, the call keeps polling for up to three seconds until the page genuinely goes quiet. Only once it has settled does a `count: 0` reading mean anything. Use `since` from the click's own result, not from the earlier fill, so you're scoped to requests after the submit attempt specifically.
 
 ## Clear the error
 
