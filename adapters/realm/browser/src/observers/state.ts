@@ -132,11 +132,18 @@ export function installStoreState(emit: Emit): Teardown {
             // A new reference carrying the value it already had is not a change. See
             // `samePresentedValue` -- this is the accumulator behind #985.
             //
-            // NOT on a redacted path. `project` collapses every credential to one token, so both
-            // sides present as `[REDACTED]` whether or not the secret changed, and coalescing on
-            // that would silently drop a real rotation. The comparison is only meaningful where the
-            // projection is faithful.
-            if (!isSensitiveKey(change.path) && samePresentedValue(old, value)) continue;
+            // On a redacted path both sides present as `[REDACTED]` whether or not the secret
+            // changed, so the presented forms cannot decide it: coalescing on them would drop a
+            // real rotation, and not coalescing reported every re-emission of an unchanged entry
+            // as a change. Decided on the raw values instead, which never leave this page; only
+            // the redacted form is emitted.
+            const same = isSensitiveKey(change.path)
+              ? samePresentedValue(
+                  sanitizeForTransport(change.old),
+                  sanitizeForTransport(change.new),
+                )
+              : samePresentedValue(old, value);
+            if (same) continue;
             // Each on its own, so a value the transport refuses costs its own event and not the
             // other paths that changed in the same notify.
             observeSafely(() =>

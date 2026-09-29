@@ -259,6 +259,21 @@ describe('identical re-emissions do not become events', () => {
     expect(events.filter((e) => e.type === EventType.STATE_CHANGE)).toHaveLength(1);
   });
 
+  // A TanStack Query cache keyed "verify-signing-secret" re-emitted its unchanged, never-fetched
+  // entry on every render, and each one reported a "change" from [REDACTED] to [REDACTED]: about
+  // twenty phantom diffs per action, on every screen after the key's page was opened.
+  it('drops a redacted path whose raw value did not change', () => {
+    const store = fakeStore<{ secret: { status: string } }>({ secret: { status: 'pending' } });
+    registerStore('queries', store.getState, store.subscribe);
+    const events: Captured[] = [];
+    const teardown = installStoreState((type, data) => events.push({ type, data }));
+
+    for (let i = 0; i < 20; i += 1) store.setState({ secret: { status: 'pending' } });
+    teardown();
+
+    expect(events.filter((e) => e.type === EventType.STATE_CHANGE)).toHaveLength(0);
+  });
+
   it('never coalesces a redacted path, where both sides present as the same token', () => {
     // `project` collapses every credential to `[REDACTED]`, so a rotated secret presents
     // identically on both sides. Coalescing on the presented form would drop the one change nobody
