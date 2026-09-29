@@ -58,6 +58,8 @@ export interface ExploredWrite {
   urlPath: string;
   /** How to trigger it from a fresh start page: the last step is the action that fired it. */
   path: Step[];
+  /** The state the write was fired from. */
+  beforeState: string;
   /** The state the app reached when this write SUCCEEDED — what a failure must not look like. */
   successState: string;
 }
@@ -86,16 +88,25 @@ const FAILED_STATUS = 400;
 interface Control {
   ref: string;
   key: string;
+  /** The field already holds a value — pre-filled credentials, a default. Typing over it breaks it. */
+  holdsValue: boolean;
 }
+
+/** A route without its query: `?__reticle_opened=1` and friends are not a different page. */
+const pathOf = (route: string | undefined): string | undefined => route?.split('?')[0];
 
 export function controlsOf(tree: string): Control[] {
   return parseInteractive(tree)
     .filter((item) => item.ref.length > 0)
-    .map((item) => ({ ref: item.ref, key: controlKey(item.desc) }));
+    .map((item) => ({
+      ref: item.ref,
+      key: controlKey(item.desc),
+      holdsValue: /\[value="[^"]+"/.test(item.desc),
+    }));
 }
 
 export function stateKey(route: string | undefined, controls: readonly Control[]): string {
-  return `${route ?? ''}|${[...new Set(controls.map((c) => c.key))].sort().join('\n')}`;
+  return `${pathOf(route) ?? ''}|${[...new Set(controls.map((c) => c.key))].sort().join('\n')}`;
 }
 
 export async function explore(
@@ -137,10 +148,13 @@ export async function explore(
     const key = stateKey(here.route, controls);
     if (explored.has(key)) continue;
     explored.add(key);
-    if (here.route !== undefined) routes.add(here.route);
+    const where = pathOf(here.route);
+    if (where !== undefined) routes.add(where);
     for (const c of controls) seen.add(c.key);
 
-    const typed = controls.filter((c) => TYPED.test(c.key));
+    // Only EMPTY fields. The first drive of the fixture typed placeholders over the login form's
+    // correct pre-filled credentials, got a 401, and never left the first page.
+    const typed = controls.filter((c) => TYPED.test(c.key) && !c.holdsValue);
     const fills: Step[] = typed.map((c) => ({
       key: c.key,
       action: 'fill',
@@ -162,7 +176,10 @@ export async function explore(
       let current = controlsOf((await port.look()).tree);
       for (const fill of fills) {
         const field = current.find((c) => c.key === fill.key);
-        if (field !== undefined && !spent()) await act(field.ref, 'fill', fill.value);
+        if (field !== undefined && !spent()) {
+          await act(field.ref, 'fill', fill.value);
+          touched.add(fill.key);
+        }
       }
       if (0 < fills.length) current = controlsOf((await port.look()).tree);
       const control = current.find((c) => c.key === target);
@@ -172,7 +189,7 @@ export async function explore(
       const path: Step[] = [...node.path, ...fills, { key: target, action: 'click' }];
       const after = await port.look();
       const next = stateKey(after.route, controlsOf(after.tree));
-      noteWrites(result.events, path, next, writes);
+      noteWrites(result.events, path, key, next, writes);
       noteAnomalies(result.events, target, anomalies);
       if (!explored.has(next) && !queued.has(next)) {
         queued.add(next);
@@ -218,6 +235,7 @@ export async function replayPath(
 function noteWrites(
   events: readonly ReticleEvent[],
   path: Step[],
+  beforeState: string,
   successState: string,
   writes: Map<string, ExploredWrite>,
 ): void {
@@ -227,7 +245,7 @@ function noteWrites(
     const [method = '', urlPath = ''] = key.split(' ');
     const url = event.data['url'];
     const concrete = 'string' === typeof url ? new URL(url, 'http://localhost').pathname : urlPath;
-    writes.set(key, { key, method, urlPath: concrete, path, successState });
+    writes.set(key, { key, method, urlPath: concrete, path, beforeState, successState });
   }
 }
 

@@ -29,7 +29,8 @@ export interface CodeSummary {
 }
 
 /** Path segments that are never the app under test. */
-const NOT_APP = /(?:^|\/)(?:node_modules|@vite|@id|@react-refresh|@reticlehq|\.vite)(?:\/|$)/;
+// `dist`: built output is not source, and a monorepo serves Reticle's own SDK from it.
+const NOT_APP = /(?:^|\/)(?:node_modules|@vite|@id|@react-refresh|@reticlehq|\.vite|dist)(?:\/|$)/;
 const SOURCE_FILE = /\.(?:[cm]?[jt]sx?|vue|svelte|astro)$/;
 
 /** The repo-relative-looking path of an app script, or undefined for anything that is not the app. */

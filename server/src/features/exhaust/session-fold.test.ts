@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ReticleEvent } from '@reticlehq/core';
-import { sessionDelta, writeKeyOf } from './session-fold.js';
+import { controlKey, sessionDelta, writeKeyOf } from './session-fold.js';
 
 const req = (method: string, url: string): ReticleEvent =>
   ({ type: 'net.request', t: 1, data: { method, url } }) as unknown as ReticleEvent;
@@ -33,5 +33,14 @@ describe('sessionDelta', () => {
     });
     expect(delta.routes?.reached).toEqual(['/cart']);
     expect(delta.writes?.seen).toEqual(['POST /api/cart']);
+  });
+});
+
+// Found by driving the fixture: attributes made one control several, and typing made new "states".
+describe('controlKey is the control, not its momentary state', () => {
+  it('drops attributes like the value typed or focus', () => {
+    expect(controlKey('- textbox "Email" [value="a@b.dev"]')).toBe('textbox "Email"');
+    expect(controlKey('button "Sign in" [focused]')).toBe('button "Sign in"');
+    expect(controlKey('button "Delete row 12"')).toBe('button "Delete row #"');
   });
 });

@@ -26,6 +26,12 @@ import {
 export interface FailureBranches {
   branched: string[];
   unhandled: { key: string; detail: string }[];
+  /**
+   * Writes whose success changed nothing the explorer can see, so success and failure look the same
+   * and nothing can be concluded from where the app landed. Not a finding — a blind spot to check
+   * by hand, or to give the app a visible outcome.
+   */
+  indistinguishable: string[];
   /** Why nothing was driven, when nothing could be. */
   skipped?: string;
 }
@@ -38,7 +44,7 @@ export async function driveFailureBranches(
   writes: readonly ExploredWrite[],
   opts: { maxActions: number },
 ): Promise<FailureBranches> {
-  const out: FailureBranches = { branched: [], unhandled: [] };
+  const out: FailureBranches = { branched: [], unhandled: [], indistinguishable: [] };
   const mock = port.mock;
   if (mock === undefined) return { ...out, ...(0 < writes.length ? { skipped: NO_MOCKS } : {}) };
   let actions = 0;
@@ -62,18 +68,27 @@ export async function driveFailureBranches(
       out.branched.push(write.key);
       const after = await port.look();
       const reached = stateKey(after.route, controlsOf(after.tree));
-      const contradiction = findContradictions([...result.events], { actionSince: 0 }).find(
-        (c) => !isAdvisory(c.kind) && !isAbsenceDerived(c.kind),
-      );
-      if (reached === write.successState)
-        out.unhandled.push({
-          key: write.key,
-          detail: `with ${write.key} failing, the app arrived exactly where it goes when the write succeeds (${after.route ?? 'same page'}) — it claimed success over a failure`,
-        });
-      else if (contradiction !== undefined)
+      // The failure is OURS, so it is declared. Without that, the engine's "UI moved beside a failed
+      // request" rule cannot tell an app that swallowed the error from one that correctly RENDERED
+      // it, and every well-behaved error message read as a finding. A success signal fired over the
+      // failure still contradicts. Found by driving the fixture.
+      const contradiction = findContradictions([...result.events], {
+        actionSince: 0,
+        expectedFailures: [{ method: write.method, urlContains: write.urlPath }],
+      }).find((c) => !isAdvisory(c.kind) && !isAbsenceDerived(c.kind));
+      if (contradiction !== undefined)
         out.unhandled.push({
           key: write.key,
           detail: `${contradiction.claim}, but ${contradiction.counter}`,
+        });
+      // Landing where success lands only ACCUSES when success visibly moved the app. A write whose
+      // success shows nothing looks identical failing, and the first version of this called that
+      // "claimed success" — found by driving the fixture, whose add-item panel claims nothing at all.
+      else if (write.successState === write.beforeState) out.indistinguishable.push(write.key);
+      else if (reached === write.successState)
+        out.unhandled.push({
+          key: write.key,
+          detail: `with ${write.key} failing, the app arrived exactly where it goes when the write succeeds (${after.route ?? 'same page'}) — it claimed success over a failure`,
         });
     } finally {
       await mock([]);

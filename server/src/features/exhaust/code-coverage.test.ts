@@ -21,6 +21,10 @@ describe('appFileOf — which scripts are the app', () => {
       appFileOf('http://localhost:5173/@fs/Users/x/node_modules/@reticlehq/browser/dist/i.js'),
     ).toBeUndefined();
     expect(appFileOf('http://localhost:5173/assets/index-abc.css')).toBeUndefined();
+    // Found by driving the fixture: a monorepo serves Reticle's own SDK from its built output.
+    expect(
+      appFileOf('http://h/@fs/Users/x/adapters/realm/browser/dist/reticle.js'),
+    ).toBeUndefined();
   });
 });
 

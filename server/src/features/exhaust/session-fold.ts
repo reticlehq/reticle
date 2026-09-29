@@ -49,11 +49,12 @@ export function writeKeyOf(event: ReticleEvent): string | undefined {
  * `touched` meaningful on any page with a list.
  */
 export function controlKey(label: string): string {
-  return label
-    .replace(/^\s*-\s*/, '')
-    .replace(/\s*\(ref=e\d+\).*$/, '')
-    .replace(/\d+/g, '#')
-    .trim();
+  const bare = label.replace(/^\s*-\s*/, '').replace(/\s*\(ref=e\d+\)/, '');
+  // Role and accessible name only. Attributes are the control's momentary STATE — the value typed
+  // into it, whether it has focus — and keying on them made one control several, and every
+  // keystroke a new page state. Found by driving the fixture.
+  const identity = /^(\S+(?:\s+"(?:[^"\\]|\\.)*")?)/.exec(bare)?.[1] ?? bare;
+  return identity.replace(/\d+/g, '#').trim();
 }
 
 export function sessionDelta(input: {

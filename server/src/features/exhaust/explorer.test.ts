@@ -95,6 +95,35 @@ function fakeApp(opts: { failPay?: boolean } = {}) {
   return { port, acted };
 }
 
+describe('explore — a field that already holds a value is left alone', () => {
+  it('does not type over pre-filled credentials', async () => {
+    const typed: string[] = [];
+    let page = 'login';
+    const port: ExplorePort = {
+      reset: () => {
+        page = 'login';
+        return Promise.resolve(true);
+      },
+      look: () =>
+        Promise.resolve({
+          route: `/${page}`,
+          tree:
+            'login' === page
+              ? '- textbox "Email" (ref=e1) [value="admin@x.dev"]\n- button "Sign in" (ref=e2)'
+              : '- button "Home" (ref=e3)',
+        }),
+      act: (ref, action, value) => {
+        if ('fill' === action) typed.push(value ?? '');
+        if ('e2' === ref) page = 'home';
+        return Promise.resolve({ ok: true, events: [] });
+      },
+    };
+    const report = await explore(port, { maxActions: 20, fillValue: () => 'placeholder' });
+    expect(typed).toEqual([]);
+    expect(report.routes).toContain('/home');
+  });
+});
+
 describe('explore — the whole reachable app, not the first page', () => {
   it('gets past the login, fills the form, and reaches the page only paying reveals', async () => {
     const { port } = fakeApp();
@@ -142,6 +171,34 @@ describe('driveFailureBranches', () => {
     const branches = await driveFailureBranches(port, report.writes, { maxActions: 50 });
     expect(branches.branched).toEqual(['POST /api/pay']);
     expect(branches.unhandled).toEqual([]);
+  });
+
+  /*
+   * Found by driving the fixture: a panel whose add shows NOTHING on success looks the same when the
+   * add fails, and the first oracle called that "claimed success". It claimed nothing. Equality with
+   * the success state only accuses when success visibly moved the app.
+   */
+  it('does not accuse an app whose success is invisible too; it says the two cannot be told apart', async () => {
+    const write = {
+      key: 'POST /api/items',
+      method: 'POST',
+      urlPath: '/api/items',
+      path: [{ key: 'button "Add item"', action: 'click' as const }],
+      beforeState: 'S',
+      successState: 'S',
+    };
+    const port: ExplorePort = {
+      reset: () => Promise.resolve(true),
+      look: () => Promise.resolve({ tree: '- button "Add item" (ref=e1)', route: '/d' }),
+      act: () => Promise.resolve({ ok: true, events: [] }),
+      mock: () => Promise.resolve(true),
+    };
+    const stateOfPage = 'S';
+    const branches = await driveFailureBranches(port, [{ ...write, beforeState: stateOfPage }], {
+      maxActions: 10,
+    });
+    expect(branches.unhandled).toEqual([]);
+    expect(branches.indistinguishable).toEqual(['POST /api/items']);
   });
 
   it('says it could not, rather than passing, when nothing can break a request', async () => {
