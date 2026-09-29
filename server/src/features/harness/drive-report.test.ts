@@ -247,3 +247,31 @@ describe('a failed action says what it expected', () => {
     expect(describeDrive(passed, [])).not.toContain('claimed');
   });
 });
+
+/*
+ * Nothing said how DEEP a drive got. "Drove 11 actions: 3 proved" reads the same whether the drive
+ * walked a checkout to its receipt or clicked eleven things on the home page.
+ */
+describe('the report says how far into the app the drive got', () => {
+  const looked = (route: string) =>
+    call('reticle_snapshot', { mode: 'interactive' }, { tree: '', status: { route } });
+
+  it('names the pages reached, in order, without repeats', () => {
+    const report = describeDrive(
+      [
+        looked('/cart'),
+        acted('Checkout', 'yes'),
+        looked('/shipping'),
+        looked('/shipping'),
+        looked('/payment'),
+      ],
+      [],
+    );
+    expect(report).toContain('Reached 3 page(s): /cart → /shipping → /payment');
+  });
+
+  it('says so plainly when the drive never left its first page', () => {
+    const report = describeDrive([looked('/home'), acted('Save', 'yes')], []);
+    expect(report).toContain('Reached 1 page(s): /home');
+  });
+});
