@@ -21,6 +21,8 @@ const SessionSchema = z.object({
    * is ours" and mints, which is the safe direction.
    */
   orgId: z.string().optional(),
+  /** Who signed in. Absent in sessions written before it was recorded. */
+  email: z.string().optional(),
 });
 export type Session = z.infer<typeof SessionSchema>;
 

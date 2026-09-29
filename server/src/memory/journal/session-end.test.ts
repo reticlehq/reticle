@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { ReticleDir } from '@reticlehq/core';
+import { PredicateKind, QueryBy, ReticleDir, ReticleTool } from '@reticlehq/core';
+import { FlowStore } from '@/language/flows/flows.js';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import {
   asProjectId,
@@ -424,5 +425,47 @@ describe('a session that served no tool call', () => {
     const end = makeSessionEnd({ fs, reticleRoot: root, enabled: true });
     await end(fakeSession('s-idle', {}));
     expect(await fs.exists(sessionDirPath(root, asSessionId('s-other')))).toBe(true);
+  });
+});
+
+describe('teardown saves what a session drove as ONE flow per journey', () => {
+  let root: string;
+  const fs = createNodeFileSystem();
+
+  beforeEach(async () => {
+    root = join(await mkdtemp(join(tmpdir(), 'reticle-drive-')), '.reticle');
+  });
+  afterEach(async () => {
+    await removeTempDir(join(root, '..'));
+  });
+
+  it('merges two sessions of the same journey and stamps who drove it', async () => {
+    const flows = new FlowStore(fs, root, { now: () => 1 });
+    const tape = () => ({
+      startPath: '/issues',
+      steps: [
+        {
+          tool: ReticleTool.ACT,
+          args: { by: QueryBy.TESTID, value: 'close', action: 'click', args: {} },
+          stable: true,
+          page: '/issues',
+          intent: 'Close an issue',
+          expect: { kind: PredicateKind.SIGNAL, name: 'issue:closed' },
+        },
+      ],
+    });
+    const end = makeSessionEnd({
+      fs,
+      reticleRoot: root,
+      enabled: true,
+      flows,
+      takeAmbientTape: tape,
+      author: () => ({ agent: 'claude-code' }),
+    });
+    await end(fakeSession('tab-1', {}));
+    await end(fakeSession('tab-2', {}));
+    expect(await flows.list()).toEqual(['drive-close-an-issue']);
+    const saved = await flows.load('drive-close-an-issue');
+    expect(saved.ok && saved.value.author).toEqual({ agent: 'claude-code' });
   });
 });

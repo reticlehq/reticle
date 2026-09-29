@@ -11,6 +11,7 @@ import { artifactRootResolver } from './memory/project/artifact-root-resolver.js
 import { originOf } from './portal/session/session-manager.js';
 import { Bridge } from './portal/bridge/bridge.js';
 import { FlowStore } from './language/flows/flows.js';
+import type { FlowFile } from '@reticlehq/core';
 import type { FileSystemPort } from './memory/project/fs/fs-port.js';
 import { makeJournalAttach } from './memory/journal/attach-journal.js';
 import { makeSessionEnd, recordDriveRun } from './memory/journal/session-end.js';
@@ -48,6 +49,8 @@ export function attachJournal(
     /** Tell cloud sync a run landed, so it cycles instead of waiting for its timer. */
     onRunPersisted?: () => void;
     flows?: FlowStore;
+    /** Who is driving, stamped on each flow teardown saves. */
+    author?: () => FlowFile['author'];
     /** What this project is willing to keep — the `retain` block of its `.reticle.json`. */
     retain?: PruneWorkspaceOptions;
   },

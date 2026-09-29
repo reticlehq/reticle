@@ -1,4 +1,9 @@
-import { driveFlowsFrom, type DriveProgram, type TapeStep } from './drive-flow.js';
+import {
+  DRIVE_FLOW_PREFIX,
+  driveFlowsFrom,
+  type DriveProgram,
+  type TapeStep,
+} from './drive-flow.js';
 import { log } from '@/log.js';
 
 /** What a session's teardown writes to the daemon log when a by-product fails to save. */
@@ -99,12 +104,14 @@ interface SessionEndDeps {
    * this handler follows.
    */
   flows?: {
-    save: (
+    saveJourney: (
       program: DriveProgram,
-      annotations?: undefined,
-      projectId?: ProjectId,
+      projectId: ProjectId | undefined,
+      prefix: string,
     ) => Promise<unknown>;
   };
+  /** Who is driving — stamped on each saved flow. Injected: teardown does not reach into MCP. */
+  author?: () => DriveProgram['author'];
   /**
    * Called when a run artifact is written, so cloud sync can cycle instead of waiting for its timer.
    *
@@ -332,9 +339,15 @@ async function saveDrivenFlow(deps: SessionEndDeps, session: SessionEndTarget): 
   const flows = deps.flows;
   if (takeTape === undefined || flows === undefined) return;
   // One flow per journey the session contained, not one flow per session — see drive-flow.ts.
-  const { programs, outcome } = driveFlowsFrom(session.id, takeTape());
+  const { programs, outcome } = driveFlowsFrom(takeTape());
+  const author = deps.author?.();
   for (const program of programs) {
-    await flows.save(program, undefined, session.projectId);
+    // Folded into any saved copy of the same journey, so each session does not add a near-copy.
+    await flows.saveJourney(
+      author === undefined ? program : { ...program, author },
+      session.projectId,
+      DRIVE_FLOW_PREFIX,
+    );
   }
   // The funnel step that makes the SECOND run cheap.
   //

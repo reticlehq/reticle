@@ -1,3 +1,4 @@
+import { flowAuthor } from './flow-author.js';
 import { FLOW_MUTATE_TOOL } from './flow-mutate-tools.js';
 import { seedSchema } from '@/surface/tools/args/numeric-bounds.js';
 import { z } from 'zod';
@@ -263,7 +264,12 @@ export const FLOW_TOOLS: ToolDef[] = [
       const emptyRefusal = emptyFlowRefusal(program.steps.length, name);
       if (emptyRefusal !== undefined) return Promise.resolve(emptyRefusal);
       const { flows, root } = flowsForSession(deps, projectId);
-      const toSave = saveAs === undefined ? program : { ...program, name: saveAs };
+      const author = flowAuthor();
+      const toSave = {
+        ...program,
+        ...(saveAs === undefined ? {} : { name: saveAs }),
+        ...(author === undefined ? {} : { author }),
+      };
       return flows.save(toSave, annotations, projectId).then(async (res) => {
         if (!res.ok) return { error: flowErrorMessage(res.code, res.detail), code: res.code };
         deps.annotations.clear(name);

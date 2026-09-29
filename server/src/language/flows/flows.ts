@@ -33,6 +33,7 @@ import { asRecord, asString } from '@reticlehq/core';
 import { applyHealChanges } from './heal.js';
 import { withLearnedSources } from './learned-sources.js';
 import { flowIntentGap, linkFlowIntent } from './flow-intent.js';
+import { journeyFingerprint, journeyName, mergeJourney, routeClaims } from './flow-journey.js';
 import { IntentStore } from '@/memory/intent/intent-store.js';
 import type { CompiledProgram, RecordedStep } from './recording/tape/recordings.js';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
@@ -205,6 +206,13 @@ function buildStep(
  * NEVER silently dropped. ACT_SEQUENCE recurses over its sub-steps.
  */
 export function recordedStepToFlowStep(step: RecordedStep): FlowStep {
+  const out = anchoredStep(step);
+  if (step.page !== undefined) out.page = step.page;
+  if (step.endPage !== undefined && step.endPage !== step.page) out.endPage = step.endPage;
+  return out;
+}
+
+function anchoredStep(step: RecordedStep): FlowStep {
   if (step.invoke !== undefined) {
     // An invocation drives nothing: no action, no args, and an anchor only because every step
     // carries one. Falling through to the action path below would give it an `action` and a
@@ -337,20 +345,12 @@ export class FlowStore {
     };
   }
 
-  /**
-   * Convert a CompiledProgram (testid-normalized) into an anchored, on-disk flow + write it.
-   * Optionally fold structured annotations (per-step expect, dynamic[], success) onto
-   * the flow before writing. Omitting `annotations` reproduces the same bytes.
-   */
-  async save(
+  /** The on-disk flow a compiled recording becomes, before anything is written. */
+  #build(
     program: CompiledProgram,
-    annotations?: FlowAnnotations,
-    projectId?: ProjectId,
-  ): Promise<FlowResult<SaveSummary>> {
-    if (!isValidFlowName(program.name)) {
-      return { ok: false, code: FlowErrorCode.INVALID_NAME };
-    }
-    const pid = safeProjectId(projectId);
+    annotations: FlowAnnotations | undefined,
+    pid: ProjectId | undefined,
+  ): FlowFile {
     const steps = program.steps.map(recordedStepToFlowStep);
     const base: FlowFile = {
       version: FLOW_FILE_VERSION,
@@ -369,10 +369,89 @@ export class FlowStore {
        */
       ...(program.startPath === undefined ? {} : { startPath: program.startPath }),
     };
-    const flow = await this.#linkIntent(withAnnotations(base, annotations));
+    const intent = program.steps.find((step) => step.intent !== undefined)?.intent;
+    const annotated = withAnnotations(base, annotations);
+    return {
+      ...annotated,
+      // The action's own intent, when nobody annotated the flow — see RecordedStep.intent.
+      ...(annotated.intent === undefined && intent !== undefined ? { intent } : {}),
+      ...routeClaims(annotated.startPath, annotated.steps),
+      ...(program.author === undefined ? {} : { author: program.author }),
+    };
+  }
+
+  /**
+   * Convert a CompiledProgram (testid-normalized) into an anchored, on-disk flow + write it.
+   * Optionally fold structured annotations (per-step expect, dynamic[], success) onto
+   * the flow before writing. Omitting `annotations` reproduces the same bytes.
+   */
+  async save(
+    program: CompiledProgram,
+    annotations?: FlowAnnotations,
+    projectId?: ProjectId,
+  ): Promise<FlowResult<SaveSummary>> {
+    if (!isValidFlowName(program.name)) {
+      return { ok: false, code: FlowErrorCode.INVALID_NAME };
+    }
+    const pid = safeProjectId(projectId);
+    const base = this.#build(program, annotations, pid);
+    const flow = await this.#linkIntent(base);
     await this.#fs.mkdir(flowParentDir(this.#root, program.name, pid));
     await this.#fs.writeFile(flowPath(this.#root, program.name, pid), this.#serialize(flow));
     return { ok: true, value: this.#summary(flow) };
+  }
+
+  /**
+   * Save a flow the session drove, folded into any saved copy of the same journey.
+   *
+   * Every session saves its own drive, so one journey arrived as a near-copy per session. Flows
+   * under `prefix` (the auto-saved ones — a hand-named flow is never merged or removed) that start
+   * on the same page and take the same steps become ONE file: the oldest keeps its name, the others
+   * fill its gaps and are removed. The same scan collapses copies saved before this existed.
+   */
+  async saveJourney(
+    program: CompiledProgram,
+    projectId: ProjectId | undefined,
+    prefix: string,
+  ): Promise<FlowResult<SaveSummary>> {
+    if (!isValidFlowName(program.name)) return { ok: false, code: FlowErrorCode.INVALID_NAME };
+    const pid = safeProjectId(projectId);
+    const fresh = this.#build(program, undefined, pid);
+    const saved: FlowFile[] = [];
+    for (const name of (await this.list(pid)).filter((n) => n.startsWith(prefix))) {
+      const loaded = await this.load(name, pid);
+      if (loaded.ok) saved.push(loaded.value);
+    }
+    const byPrint = new Map<string, FlowFile[]>();
+    for (const flow of saved) {
+      const print = journeyFingerprint(flow);
+      byPrint.set(print, [...(byPrint.get(print) ?? []), flow]);
+    }
+    const print = journeyFingerprint(fresh);
+    const taken = new Map(saved.map((flow) => [flow.name, journeyFingerprint(flow)]));
+    const named = { ...fresh, name: journeyName(fresh.name, print, taken) };
+    byPrint.set(print, [...(byPrint.get(print) ?? []), named]);
+    let result: FlowFile = named;
+    for (const [groupPrint, group] of byPrint) {
+      if (group.length < 2 && groupPrint !== print) continue;
+      const [kept, ...rest] = [...group].sort((a, b) => a.createdAt - b.createdAt);
+      if (kept === undefined) continue;
+      const merged = await this.#linkIntent(rest.reduce(mergeJourney, kept));
+      await this.#writeInPlace(merged, pid);
+      for (const dropped of rest) {
+        if (dropped.name !== merged.name && dropped !== named) await this.remove(dropped.name, pid);
+      }
+      if (groupPrint === print) result = merged;
+    }
+    return { ok: true, value: this.#summary(result) };
+  }
+
+  /** Write a flow where it already lives, or into its project's directory when it is new. */
+  async #writeInPlace(flow: FlowFile, pid: ProjectId | undefined): Promise<void> {
+    const name = asFlowName(flow.name);
+    const path = (await this.#resolveReadPath(name, pid)) ?? flowPath(this.#root, name, pid);
+    await this.#fs.mkdir(flowParentDir(this.#root, name, pid));
+    await this.#fs.writeFile(path, this.#serialize(flow));
   }
 
   /**

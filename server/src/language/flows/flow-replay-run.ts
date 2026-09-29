@@ -18,6 +18,7 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import { haltedFrom } from './recording/replay-halt.js';
+import { establishedState, samePath } from './flow-journey.js';
 import { asRecord, asString } from '@reticlehq/core';
 import { routeOfEvent, routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route.js';
 import type { ArrivalClock } from '@/surface/tools/act/navigation/navigate-arrival.js';
@@ -158,28 +159,6 @@ function currentPathOf(session: StartPathSession): string | undefined {
   if (session.url === undefined) return undefined;
   const fromUrl = routeOfUrl(session.url);
   return fromUrl === undefined ? undefined : `${fromUrl.docPath}${fromUrl.search}${fromUrl.hash}`;
-}
-
-/**
- * Is the tab where the flow asked to start? Up to a trailing slash, and up to the query the flow
- * did not ask about.
- *
- * `startPath` is the SPECIFICATION, so it decides what counts. A query it recorded is compared:
- * `?tab=wrap` and `?tab=summary` are different pages, and a replay that starts on the wrong one
- * proves nothing about the right one. A query it did NOT record is ignored: the tab carrying
- * `?next=%2F` on a login page, or the identity params Reticle puts on a leased tab, are not the flow
- * being elsewhere, and navigating to strip them costs a session for nothing.
- *
- * The asymmetry is the whole point and the reason `observed` and `expected` are named rather than
- * `a` and `b`. Comparing with the query on both sides always re-navigated a query-bearing
- * `startPath` (#1059, which killed the session mid-flow); comparing with it on neither side reads a
- * tab on `?tab=summary` as already at `?tab=wrap`.
- */
-function samePath(observed: string, expected: string): boolean {
-  const trimmed = (path: string): string => path.replace(/\/$/, '');
-  const withoutQuery = (path: string): string => path.replace(/\?[^#]*/, '');
-  const comparable = expected.includes('?') ? observed : withoutQuery(observed);
-  return trimmed(comparable) === trimmed(expected);
 }
 
 /**
@@ -372,7 +351,7 @@ export async function arriveAtStartPath(
   const current = currentPathOf(session);
   if (current === undefined) return {};
   // The declared opt-out, both directions. See above.
-  if (0 < (flow.requires?.length ?? 0)) return {};
+  if (0 < establishedState(flow).length) return {};
   const here = samePath(current, target);
   // A route mismatch that step 1 can start from anyway is not worth a page load: navigating away
   // from a persistent anchor could only hurt, and did. Arriving is the goal; resetting a tab that is
@@ -536,7 +515,7 @@ async function firstUnmetPrecondition(
   flow: FlowFile,
   since: number,
 ): Promise<string | undefined> {
-  for (const claim of flow.requires ?? []) {
+  for (const claim of establishedState(flow)) {
     // Zero budget: a precondition is a claim about the state you are starting FROM. Waiting for one
     // turns "was it true" into "did it become true", which is a different and much weaker question.
     let drift: Awaited<ReturnType<typeof assertStepExpect>>;
