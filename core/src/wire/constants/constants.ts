@@ -261,6 +261,28 @@ export function cloudUrlFrom(env: Record<string, string | undefined>): string | 
   return short !== undefined && 0 < short.length ? short : undefined;
 }
 
+/** The hosted platform: where every client dials when nothing names another host. */
+export const DEFAULT_PLATFORM_URL = 'https://app.reticle.sh';
+
+/** The platform URL from the environment, else the hosted service. No trailing slash. */
+export function platformUrlFrom(env: Record<string, string | undefined>): string {
+  return (cloudUrlFrom(env) ?? DEFAULT_PLATFORM_URL).replace(/\/+$/, '');
+}
+
+/**
+ * The platform credential the environment carries, or undefined when it carries no key.
+ *
+ * The key alone is enough: the URL falls back to the hosted service. Every reader of the env key
+ * goes through here, because each of them used to demand a URL as well, and a CI job that set only
+ * the key — which is what the platform tells it to do — silently reached nothing.
+ */
+export function platformCredentialFrom(
+  env: Record<string, string | undefined>,
+): { url: string; apiKey: string } | undefined {
+  const apiKey = apiKeyFrom(env);
+  return apiKey === undefined ? undefined : { url: platformUrlFrom(env), apiKey };
+}
+
 /** Hard transport bounds shared by the browser and bridge. */
 export const TRANSPORT_LIMITS = {
   MAX_MESSAGE_BYTES: 1024 * 1024,

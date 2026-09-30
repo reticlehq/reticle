@@ -37,6 +37,16 @@ describe('reading the driver preference from the platform', () => {
     );
   });
 
+  it('asks the hosted service when the key is set and no URL is', async () => {
+    // What CI is told to set: the key, and nothing else.
+    const doFetch = answering({ provider: 'jev' });
+    await fetchPlatformConfig({ RETICLE_API_KEY: 'rk_live_x' }, doFetch);
+    expect(doFetch).toHaveBeenCalledWith(
+      'https://app.reticle.sh/v1/model/config',
+      expect.objectContaining({ headers: { authorization: 'Bearer rk_live_x' } }),
+    );
+  });
+
   it('does not ask when the machine is not linked', async () => {
     const doFetch = answering({ provider: 'jev' });
     expect(await fetchPlatformConfig({}, doFetch)).toBeUndefined();

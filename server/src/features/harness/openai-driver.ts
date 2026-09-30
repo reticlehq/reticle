@@ -18,7 +18,7 @@
  */
 
 import { z } from 'zod';
-import { ReticleEnv, apiKeyFrom, cloudUrlFrom } from '@reticlehq/core';
+import { ReticleEnv, platformCredentialFrom } from '@reticlehq/core';
 import type { HarnessTool, HistoryEntry, ModelDriver, ModelTurn, ToolRequest } from './harness.js';
 import type { HarnessFetch } from './driver.js';
 
@@ -94,11 +94,9 @@ export function openAiOptionsFromEnv(
   const direct = env[ReticleEnv.HARNESS_OPENAI_KEY];
   if (direct !== undefined && 0 < direct.length) return withModel({ apiKey: direct });
 
-  const cloudKey = apiKeyFrom(env);
-  const cloudUrl = cloudUrlFrom(env);
-  if (cloudKey === undefined || 0 === cloudKey.length) return undefined;
-  if (cloudUrl === undefined || 0 === cloudUrl.length) return undefined;
-  return withModel({ apiKey: cloudKey, baseUrl: cloudUrl });
+  const cloud = platformCredentialFrom(env);
+  if (cloud === undefined) return undefined;
+  return withModel({ apiKey: cloud.apiKey, baseUrl: cloud.url });
 }
 
 /** A message as it goes out. `unknown` values are the model's own arguments, echoed back. */

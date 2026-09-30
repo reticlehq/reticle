@@ -15,8 +15,7 @@ import {
   type ReticleVerificationRun,
   type RunRecord,
   type VerifyProgressEvent,
-  apiKeyFrom,
-  cloudUrlFrom,
+  platformCredentialFrom,
 } from '@reticlehq/core';
 
 /**
@@ -43,13 +42,12 @@ export interface CloudConfig {
   apiKey: string;
 }
 
-/** Resolve cloud credentials from the environment, or null when not logged in (sync disabled). */
+/**
+ * Resolve cloud credentials from the environment, or null without a key (sync disabled). The key
+ * alone is enough: the URL defaults to the hosted service, which is what the platform tells CI.
+ */
 export function resolveCloudConfig(env: NodeJS.ProcessEnv): CloudConfig | null {
-  const url = cloudUrlFrom(env);
-  const apiKey = apiKeyFrom(env);
-  if (typeof url !== 'string' || 0 === url.length) return null;
-  if (apiKey === undefined) return null;
-  return { url: url.replace(/\/+$/, ''), apiKey };
+  return platformCredentialFrom(env) ?? null;
 }
 
 /**

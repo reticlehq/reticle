@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   AnchorKind,
+  DEFAULT_PLATFORM_URL,
   FLOW_FILE_VERSION,
   RUN_FILE_VERSION,
   RunAgentKind,
@@ -48,10 +49,16 @@ const run = {
 } as ReticleVerificationRun;
 
 describe('resolveCloudConfig', () => {
-  it('returns null (sync disabled) unless BOTH env vars are set', () => {
+  it('returns null (sync disabled) without a key', () => {
     expect(resolveCloudConfig({})).toBeNull();
     expect(resolveCloudConfig({ [CloudEnv.URL]: 'https://cloud.test' })).toBeNull();
-    expect(resolveCloudConfig({ [CloudEnv.KEY]: 'rk_live_x' })).toBeNull();
+  });
+
+  it('sends a lone key to the hosted service, which is what CI is told to set', () => {
+    expect(resolveCloudConfig({ [CloudEnv.KEY]: 'rk_live_x' })).toEqual({
+      url: DEFAULT_PLATFORM_URL,
+      apiKey: 'rk_live_x',
+    });
   });
 
   it('resolves + trims a trailing slash when both are set (logged in)', () => {

@@ -16,7 +16,7 @@
  * ever stale in the safe direction — the card the person is looking at is the one they can act on.
  */
 
-import { apiKeyFrom, cloudUrlFrom, type HarnessOffer } from '@reticlehq/core';
+import { platformCredentialFrom, type HarnessOffer } from '@reticlehq/core';
 
 const OFFER_PATH = '/v1/harness/offer';
 
@@ -75,10 +75,10 @@ export async function fetchHarnessOffer(
   doFetch: OfferFetch = (url, init) => fetch(url, init),
   timeoutMs: number = TIMEOUT_MS,
 ): Promise<HarnessOffer | undefined> {
-  const key = apiKeyFrom(env);
-  const host = cloudUrlFrom(env);
-  if (key === undefined || 0 === key.length) return undefined;
-  if (host === undefined || 0 === host.length) return undefined;
+  const cloud = platformCredentialFrom(env);
+  if (cloud === undefined) return undefined;
+  const key = cloud.apiKey;
+  const host = cloud.url;
 
   const controller = new AbortController();
   const timer = setTimeout(() => {

@@ -12,7 +12,7 @@
  */
 
 import { z } from 'zod';
-import { ReticleEnv, apiKeyFrom, cloudUrlFrom } from '@reticlehq/core';
+import { ReticleEnv, platformCredentialFrom } from '@reticlehq/core';
 import type { HarnessTool, HistoryEntry, ModelDriver, ModelTurn, ToolRequest } from './harness.js';
 
 /**
@@ -128,11 +128,9 @@ export function harnessOptionsFromEnv(
    *
    * An explicit `ANTHROPIC_API_KEY` still wins: someone who exported one meant it.
    */
-  const cloudKey = apiKeyFrom(env);
-  const cloudUrl = cloudUrlFrom(env);
-  if (cloudKey === undefined || 0 === cloudKey.length) return undefined;
-  if (cloudUrl === undefined || 0 === cloudUrl.length) return undefined;
-  return withOptions(cloudKey, cloudUrl);
+  const cloud = platformCredentialFrom(env);
+  if (cloud === undefined) return undefined;
+  return withOptions(cloud.apiKey, cloud.url);
 }
 
 /** Build a driver backed by the Messages API. */

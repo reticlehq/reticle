@@ -71,10 +71,7 @@ describe('reading where a workspace stands', () => {
     );
   });
 
-  it.each([
-    ['there is no key', {}],
-    ['there is no platform', { [ReticleEnv.API_KEY]: 'rk_live_x' }],
-  ])('says nothing when %s', async (_why, env) => {
+  it.each([['there is no key', {}]])('says nothing when %s', async (_why, env) => {
     const doFetch = answering(200, JSON.stringify({ claimed: false }));
     expect(await fetchHarnessOffer(env, CLAIM, doFetch)).toBeUndefined();
     expect(doFetch).not.toHaveBeenCalled();

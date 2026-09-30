@@ -17,7 +17,7 @@
  *     environment, wins over the stored preference. Precedence lives in the caller.
  */
 
-import { apiKeyFrom, cloudUrlFrom } from '@reticlehq/core';
+import { platformCredentialFrom } from '@reticlehq/core';
 
 const CONFIG_PATH = '/v1/model/config';
 
@@ -107,10 +107,10 @@ export async function fetchPlatformConfig(
   doFetch: ConfigFetch = (url, init) => fetch(url, init),
   timeoutMs: number = TIMEOUT_MS,
 ): Promise<PlatformModelConfig | undefined> {
-  const key = apiKeyFrom(env);
-  const host = cloudUrlFrom(env);
-  if (key === undefined || 0 === key.length) return undefined;
-  if (host === undefined || 0 === host.length) return undefined;
+  const cloud = platformCredentialFrom(env);
+  if (cloud === undefined) return undefined;
+  const key = cloud.apiKey;
+  const host = cloud.url;
 
   const controller = new AbortController();
   const timer = setTimeout(() => {

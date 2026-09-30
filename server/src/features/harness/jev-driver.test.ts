@@ -462,9 +462,12 @@ describe('where the driver gets its key', () => {
     });
   });
 
-  /** Reticle ships no Jev key, so a platform key with nowhere to send it is not a usable driver. */
-  it('is unavailable with a platform key and no host', () => {
-    expect(jevOptionsFromEnv({ RETICLE_API_KEY: 'rk_live_x' })).toBeUndefined();
+  /** A platform key with no host names the hosted service, which is the documented default. */
+  it('sends a lone platform key to the hosted proxy', () => {
+    expect(jevOptionsFromEnv({ RETICLE_API_KEY: 'rk_live_x' })).toEqual({
+      apiKey: 'rk_live_x',
+      baseUrl: 'https://app.reticle.sh',
+    });
   });
 
   it('prefers a direct key, so debugging the upstream never lands on the proxy', () => {

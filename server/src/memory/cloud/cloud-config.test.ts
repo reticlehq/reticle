@@ -3,7 +3,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { resolveProjectCloud, CLOUD_LINK_FILE, CREDENTIALS_FILE } from './cloud-config.js';
+import {
+  resolveProjectCloud,
+  platformEnvPort,
+  CLOUD_LINK_FILE,
+  CREDENTIALS_FILE,
+} from './cloud-config.js';
 import { createNodeFileSystem, type FileSystemPort } from '@/memory/project/fs/fs-port.js';
 
 describe('resolveProjectCloud — per-project cloud binding + sync policy', () => {
@@ -204,6 +209,89 @@ describe('resolveProjectCloud — per-project cloud binding + sync policy', () =
       const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, env);
 
       expect(cloud.config?.apiKey).toBe('rk_live_legacy');
+    });
+  });
+
+  /**
+   * CI. `cloud.json` is committed, so a CI clone is LINKED — and it has no `~/.reticle`. The platform
+   * tells that job to set RETICLE_API_KEY and nothing else, and the resolver read only the keystore,
+   * so every CI run was "not attached" and synced nothing.
+   */
+  describe('the environment key, for a machine with no keystore', () => {
+    const HOSTED = 'https://app.reticle.sh';
+
+    it('attaches a linked repo with only RETICLE_API_KEY set', async () => {
+      await writeLink({ projectId: 'shop', url: HOSTED });
+      const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, {
+        RETICLE_API_KEY: 'rk_live_ci',
+      });
+      expect(cloud.config).toEqual({ url: HOSTED, apiKey: 'rk_live_ci' });
+      expect(cloud.projectId).toBe('shop');
+    });
+
+    it('attaches an unlinked repo to the hosted service with only the key set', async () => {
+      const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, {
+        RETICLE_API_KEY: 'rk_live_ci',
+      });
+      expect(cloud.config).toEqual({ url: HOSTED, apiKey: 'rk_live_ci' });
+    });
+
+    it('lets an explicit URL win over the hosted default', async () => {
+      const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, {
+        RETICLE_API_KEY: 'rk_live_ci',
+        RETICLE_URL: 'https://self.test/',
+      });
+      expect(cloud.config).toEqual({ url: 'https://self.test', apiKey: 'rk_live_ci' });
+    });
+
+    it('prefers the stored credential over the environment key', async () => {
+      await writeLink({ projectId: 'shop', url: HOSTED });
+      await writeCreds({ shop: 'rk_live_stored' });
+      const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, {
+        RETICLE_API_KEY: 'rk_live_env',
+      });
+      expect(cloud.config?.apiKey).toBe('rk_live_stored');
+    });
+
+    it('never sends the environment key to a linked host it was not given for', async () => {
+      // A key exported for the hosted service, in a repo linked to a local install.
+      await writeLink({ projectId: 'shop', url: 'http://localhost:8890' });
+      const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, {
+        RETICLE_API_KEY: 'rk_live_hosted',
+      });
+      expect(cloud.config).toBeNull();
+    });
+
+    it('uses the environment key for a self-hosted link when the URL names that host', async () => {
+      await writeLink({ projectId: 'shop', url: 'http://localhost:8890/' });
+      const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, {
+        RETICLE_API_KEY: 'rk_live_local',
+        RETICLE_CLOUD_URL: 'http://localhost:8890',
+      });
+      expect(cloud.config).toEqual({ url: 'http://localhost:8890', apiKey: 'rk_live_local' });
+    });
+  });
+
+  /**
+   * The platform-preference readers (the panel's harness switch and model config) take an env.
+   * Handed `process.env` alone they never saw the key `reticle link` stored, so a linked machine's
+   * panel asked the platform nothing.
+   */
+  describe('the environment the platform readers are handed', () => {
+    it("fills in the linked repo's stored credential", async () => {
+      await writeLink({ projectId: 'shop', url: 'https://cloud.test' });
+      await writeCreds({ shop: 'rk_live_stored' });
+      const got = await platformEnvPort(fs, reticleRoot, homeDir, { OTHER: 'kept' })();
+      expect(got).toMatchObject({
+        OTHER: 'kept',
+        RETICLE_API_KEY: 'rk_live_stored',
+        RETICLE_CLOUD_URL: 'https://cloud.test',
+      });
+    });
+
+    it('is the environment unchanged when nothing resolves', async () => {
+      const env = { OTHER: 'kept' };
+      expect(await platformEnvPort(fs, reticleRoot, homeDir, env)()).toEqual(env);
     });
   });
 });

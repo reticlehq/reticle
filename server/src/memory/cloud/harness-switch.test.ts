@@ -53,14 +53,20 @@ describe('writing the harness switch', () => {
     expect(doFetch.mock.calls[0]?.[1].headers['authorization']).toBe('Bearer rk_live_x');
   });
 
-  it.each([
-    ['there is no key', { [ReticleEnv.CLOUD_URL]: 'https://api.test' }],
-    ['there is no platform', { RETICLE_API_KEY: 'rk_live_x' }],
-  ])('does not call out when %s', async (_why, env) => {
+  it('writes to the hosted service when only the key is set', async () => {
     const doFetch = vi.fn(ok);
-    expect(await writeHarnessSwitch(env, true, doFetch)).toBe(false);
-    expect(doFetch).not.toHaveBeenCalled();
+    await writeHarnessSwitch({ RETICLE_API_KEY: 'rk_live_x' }, true, doFetch);
+    expect(String(doFetch.mock.calls[0]?.[0])).toMatch(/^https:\/\/app\.reticle\.sh\//);
   });
+
+  it.each([['there is no key', { [ReticleEnv.CLOUD_URL]: 'https://api.test' }]])(
+    'does not call out when %s',
+    async (_why, env) => {
+      const doFetch = vi.fn(ok);
+      expect(await writeHarnessSwitch(env, true, doFetch)).toBe(false);
+      expect(doFetch).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     ['the platform refuses', () => Promise.resolve({ ok: false, status: 403 })],

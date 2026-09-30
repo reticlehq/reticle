@@ -8,7 +8,7 @@
  * `cloud-login` is the first to move — and it is a real seam rather than a file-size dodge: nothing
  * here knows what a project, a credential or a link is.
  */
-import { apiKeyFrom, cloudUrlFrom } from '@reticlehq/core';
+import { DEFAULT_PLATFORM_URL, apiKeyFrom, cloudUrlFrom } from '@reticlehq/core';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -22,8 +22,6 @@ import {
   type Session,
 } from './auth/cloud-session.js';
 
-/** Where `reticle login` dials when nothing says otherwise: the hosted service. */
-const DEFAULT_URL = 'https://app.reticle.sh';
 export const RETICLE_DIR = '.reticle';
 export const SESSION_FILE = 'session.json';
 export const CREDENTIALS_FILE = 'credentials.json';
@@ -98,7 +96,7 @@ export const baseUrl = (session: { url: string } | null, explicit?: string): str
   // saying because that default was wrong for everyone except us. The default is now the hosted
   // service, so the fallback IS the intended path — and a warning printed on the correct path is
   // how people learn to ignore stderr, which is where the real problems are written.
-  return DEFAULT_URL;
+  return DEFAULT_PLATFORM_URL;
 };
 
 /** Bearer for a command: an explicit api key (agent) wins, else the human login token. */

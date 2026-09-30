@@ -26,8 +26,7 @@ import {
   RETICLE_URL_PARAM,
   ReticleEnv,
   ReticleTool,
-  apiKeyFrom,
-  cloudUrlFrom,
+  platformCredentialFrom,
   asRecord,
   parseInteractive,
 } from '@reticlehq/core';
@@ -412,12 +411,10 @@ export function jevOptionsFromEnv(
     };
   }
   // The ordinary path: the key the user minted on the platform, against the platform's own proxy.
-  // Reticle never ships a Jev key, so without a base URL to send it to this is not a usable driver.
-  const cloudKey = apiKeyFrom(env);
-  const cloudUrl = cloudUrlFrom(env);
-  if (cloudKey === undefined || 0 === cloudKey.length) return undefined;
-  if (cloudUrl === undefined || 0 === cloudUrl.length) return undefined;
-  return { apiKey: cloudKey, baseUrl: cloudUrl };
+  // Reticle never ships a Jev key; the URL is the configured platform, else the hosted service.
+  const cloud = platformCredentialFrom(env);
+  if (cloud === undefined) return undefined;
+  return { apiKey: cloud.apiKey, baseUrl: cloud.url };
 }
 
 /** Strip the snapshot's list marker, so a description reads as a phrase rather than a bullet. */

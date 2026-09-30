@@ -210,9 +210,9 @@ describe('where the anthropic driver gets its key', () => {
     });
   });
 
-  /** A platform key with no host to send it to is not a usable driver; Reticle ships no key. */
-  it('is unavailable with a platform key and no host', () => {
-    expect(harnessOptionsFromEnv({ RETICLE_API_KEY: 'rk_live_x' })).toBeUndefined();
+  /** A platform key with no host names the hosted service, which is the documented default. */
+  it('sends a lone platform key to the hosted service', () => {
+    expect(harnessOptionsFromEnv({ RETICLE_API_KEY: 'rk_live_x' })?.apiKey).toBe('rk_live_x');
   });
 
   it('prefers an explicit Anthropic key, because exporting one is a decision', () => {
