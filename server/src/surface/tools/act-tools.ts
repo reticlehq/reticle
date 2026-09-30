@@ -726,9 +726,6 @@ export const ACT_TOOLS: ToolDef[] = [
           ...(0 === impeachingNotes.length ? {} : { blindSpots: impeachingNotes }),
           losses,
         });
-        // A refuted expectation must not ride into a regression flow cut from the ambient tape; it is
-        // kept as the capsule below instead. See RecordingStore.unassertLast.
-        if (!verdict.pass && actResult !== null) deps.recordings.unassertLast();
         const capsuleSaved = await saveFailedAssertCapsule({
           deps,
           verdict,

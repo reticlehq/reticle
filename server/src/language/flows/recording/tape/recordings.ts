@@ -184,24 +184,6 @@ export class RecordingStore {
   }
 
   /**
-   * Take the expectation off the ambient tape's last step, because the verdict on it came back no.
-   *
-   * A step is captured at dispatch, before anything is judged, so a claim that turned out false is
-   * already on the tape as that step's `expect`. Cut into a journey it becomes a flow that is red for
-   * ever, on an expectation nobody but the agent's wrong guess made. The failure is not lost: it is
-   * filed as a capsule, the artifact built for "this should hold and does not". The ACTION stays,
-   * since the steps after it ran on the page it produced. A recording somebody opened deliberately
-   * is left as they drove it.
-   */
-  unassertLast(): void {
-    const tape = this.#active.get(AMBIENT_RECORDING);
-    const last = tape?.steps.at(-1);
-    if (tape === undefined || last === undefined || last.expect === undefined) return;
-    const { expect: _dropped, ...kept } = last;
-    tape.steps[tape.steps.length - 1] = kept;
-  }
-
-  /**
    * The page the step just captured ended on, once its action settled.
    *
    * Fills only a step that has none, so calling it after an action that captured nothing leaves the
