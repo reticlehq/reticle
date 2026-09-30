@@ -232,3 +232,21 @@ describe('gradeOfPredicate descends into combinators', () => {
     expect(gradeOfPredicate({ kind: 'anyOf', predicates: [] })).toBe(HonestyGrade.NONE);
   });
 });
+
+describe('a compare grades as what its sides read', () => {
+  const text = { from: 'text', scope: '#total' } as const;
+  const net = { from: 'net', urlContains: '/api/cart', path: 'total' } as const;
+  const compare = (left: unknown, right: unknown): Predicate =>
+    ({ kind: 'compare', left, right }) as Predicate;
+
+  it('claims the stronger side, and is not a presence-only check', () => {
+    expect(gradeOfPredicate(compare(text, net))).toBe(HonestyGrade.NET);
+    expect(isPresenceOnlyAssertion(compare(text, net))).toBe(false);
+  });
+
+  it('claims only presence for text against text', () => {
+    expect(gradeOfPredicate(compare(text, { from: 'text', scope: '#other' }))).toBe(
+      HonestyGrade.PRESENCE,
+    );
+  });
+});

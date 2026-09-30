@@ -251,6 +251,12 @@ export function nestedKeysOf(schema: z.ZodTypeAny | undefined): readonly string[
   // `instanceof z.ZodObject` narrows to ZodObject<any>, whose `.shape` is `any`. Name the shape
   // type so the keys are read off something typed rather than laundering an `any` through
   // Object.keys.
+  // A union of objects (`compare`'s `left`/`right`) lists every option's keys: which ones apply is
+  // decided by the discriminator, and the rejection already names that.
+  if (inner instanceof z.ZodDiscriminatedUnion) {
+    const options = inner.options as readonly z.ZodTypeAny[];
+    return [...new Set(options.flatMap((option) => nestedKeysOf(option)))];
+  }
   if (!(inner instanceof z.ZodObject)) return [];
   return Object.keys((inner as z.ZodObject<z.ZodRawShape>).shape);
 }

@@ -70,14 +70,30 @@ export function installRetries(
   pinned: readonly string[],
   unpinned: readonly string[],
   sdkVersion: string | undefined,
+  /**
+   * The prefix that actually invokes `pm` on this machine — `pm` itself, or `corepack ${pm}` on a
+   * corepack-only machine (see `preflight.ts`, #1149). A retry that spawned the bare binary here,
+   * after the first attempt already went through the resolved prefix, would fail with the same
+   * ENOENT the resolution exists to avoid — on the one machine shape that needs a retry to reach a
+   * working install at all. Defaults to `pm` for callers that never went through preflight.
+   */
+  pmCommand: string = pm,
 ): InstallRetry[] {
   return [
     // Peers first: concedes only peer resolution and KEEPS the version pin.
     ...(pm === PackageManager.NPM
-      ? [{ ...installCommandParts(pm, pinned, [LEGACY_PEER_DEPS]), note: LEGACY_PEER_NOTE }]
+      ? [
+          {
+            ...installCommandParts(pm, pinned, [LEGACY_PEER_DEPS], pmCommand),
+            note: LEGACY_PEER_NOTE,
+          },
+        ]
       : []),
     // Unpinned, last. pnpm resolves the newest MATURE version there, which is how a project with a
     // release-age hold gets a working install instead of no install.
-    { ...installCommandParts(pm, unpinned), note: unpinnedRetryNote(sdkVersion, pm) },
+    {
+      ...installCommandParts(pm, unpinned, [], pmCommand),
+      note: unpinnedRetryNote(sdkVersion, pm),
+    },
   ];
 }

@@ -4,7 +4,7 @@
  * A daemon left running by one project answers the next project's app and rejects it on token, and
  * the SDK printed `bridge refused the connection: authentication failed`. That sends someone to
  * check a token which is perfectly correct — it is simply a DIFFERENT project's token. The two cases
- * need opposite fixes: "your token is wrong" versus "that daemon is not yours, stop it".
+ * need opposite fixes: "your token is wrong" versus "that daemon is not yours, use your own port".
  *
  * The discriminator is EVIDENCE, not derivation. The daemon and the SDK derive project ids by
  * different schemes (the SDK from its Vite root, the daemon from its own cwd), so comparing those
@@ -73,7 +73,9 @@ export function authFailureReason(
     1 === servedProjects.size &&
     !servedProjects.has(helloProject)
   ) {
-    const reason = `${DIFFERENT_PROJECT_PREFIX} — run \`reticle stop\` and retry`;
+    // Not "stop it": that daemon is serving somebody else's app. This project needs its own port,
+    // which the CLI and the build plugins both read from `.reticle.json`.
+    const reason = `${DIFFERENT_PROJECT_PREFIX} — set a free "port" in .reticle.json, then restart the dev server`;
     return Buffer.byteLength(reason, 'utf8') <= MAX_REASON_BYTES ? reason : PLAIN;
   }
   if (helloToken === undefined || 0 === helloToken.length) return NO_TOKEN;

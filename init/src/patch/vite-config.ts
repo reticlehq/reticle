@@ -131,6 +131,20 @@ function insertPluginsKey(source: string, call: string): string {
   });
 }
 
+/**
+ * A whole config for a plain Vite app that has none: Vite's defaults plus the plugin. Written out
+ * rather than patched from an empty one, because it is a file the person will open and read.
+ */
+export function newViteConfig(
+  port?: number,
+  captureBodies = false,
+  inject = true,
+  sourceMapping = true,
+): string {
+  const call = reticlePluginCall({ port, captureBodies, inject, sourceMapping });
+  return `import { defineConfig } from 'vite';\n${VITE_IMPORT}\n\nexport default defineConfig({\n  plugins: [${call}],\n});\n`;
+}
+
 export function patchViteConfig(
   source: string,
   port?: number,

@@ -14,6 +14,7 @@ import {
   AnchorKind,
   DEGRADED_ANCHOR_ROLE,
   FLOW_FILE_VERSION,
+  flowFileVersionFor,
   FlowErrorCode,
   FlowFileSchema,
   FlowStepTool,
@@ -312,7 +313,8 @@ export class FlowStore {
    * of them produces byte-identical on-disk content (locked by the byte-stability tests).
    */
   #serialize(flow: FlowFile): string {
-    return `${JSON.stringify(flow, null, JSON_INDENT)}\n`;
+    const stamped = { ...flow, version: flowFileVersionFor(flow) };
+    return `${JSON.stringify(stamped, null, JSON_INDENT)}\n`;
   }
 
   /**

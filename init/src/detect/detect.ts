@@ -150,6 +150,14 @@ export interface Detection {
   webGlSubtree?: boolean | undefined;
   packageManager: PackageManager;
   /**
+   * The prefix this run can actually invoke `packageManager` through — see `preflight.ts` (#1149) for
+   * why that can be `corepack <packageManager>` rather than the bare name. Undefined here: `detect` is
+   * pure and never probes a binary, so this is filled in by `run.ts` from `preflight`'s result, before
+   * the plan is built. Every later spawn or printed command for the package manager reads this rather
+   * than `packageManager` alone.
+   */
+  packageManagerCommand?: string;
+  /**
    * Every dependency this package DECLARES, by name, merged across the three blocks.
    *
    * So the planner can tell "not wired yet" from "wired already". Without it the install step could
@@ -492,11 +500,27 @@ export function installCommandParts(
    * `--legacy-peer-deps` on a manager that does not recognise the flag.
    */
   extraFlags: readonly string[] = [],
+  /**
+   * The prefix that actually invokes `pm` on this machine — `pm` itself, or `corepack ${pm}` on a
+   * corepack-only machine (see `Detection.packageManagerCommand`). Defaults to `pm` so every existing
+   * caller keeps spawning the bare binary without naming this.
+   */
+  prefix: string = pm,
 ): InstallCommand {
   const list = 'string' === typeof pkgs ? [pkgs] : pkgs;
+  // A bare `pm` is one word and stays the whole command; `corepack ${pm}` splits so `corepack` is the
+  // program `spawnAllowed` runs and `pm` is its first argument — the shape `RUNNABLE_COMMANDS` and the
+  // corepack probe both expect.
+  const [command, ...leadingArgs] = prefix.split(' ');
   return {
-    command: pm,
-    args: [...INSTALL_ARGS[pm], ...list, ...(QUIET_INSTALL_ARGS[pm] ?? []), ...extraFlags],
+    command: command ?? pm,
+    args: [
+      ...leadingArgs,
+      ...INSTALL_ARGS[pm],
+      ...list,
+      ...(QUIET_INSTALL_ARGS[pm] ?? []),
+      ...extraFlags,
+    ],
   };
 }
 
@@ -508,7 +532,12 @@ export function installCommandParts(
  * directly for that reason; routing it through the parts would put `--no-audit --no-fund` in front of
  * every reader and teach them our noise-suppression as if it were part of installing Reticle.
  */
-export function installCommand(pm: PackageManager, pkgs: string | readonly string[]): string {
+export function installCommand(
+  pm: PackageManager,
+  pkgs: string | readonly string[],
+  /** As in `installCommandParts` — what a corepack-only machine has to type instead of bare `pm`. */
+  prefix: string = pm,
+): string {
   const list = 'string' === typeof pkgs ? [pkgs] : pkgs;
-  return `${pm} ${[...INSTALL_ARGS[pm], ...list].join(' ')}`;
+  return `${prefix} ${[...INSTALL_ARGS[pm], ...list].join(' ')}`;
 }

@@ -47,6 +47,9 @@ const CHANNELS_OF: Record<PredicateKind, readonly ChannelId[]> = {
   [PredicateKind.ANIMATION]: [ChannelId.UI, ChannelId.TIME],
   // "Has everything gone quiet" is a question about time, and about the traffic being waited on.
   [PredicateKind.SETTLED]: [ChannelId.TIME, ChannelId.NET],
+  // Every channel a value can be read off. The table cannot see which two a given comparison names;
+  // `channelsReadBy` can, and answers with exactly those.
+  [PredicateKind.COMPARE]: [ChannelId.UI, ChannelId.NET, ChannelId.STATE, ChannelId.SIGNAL],
   // A claim made of other claims can contain any of them. Reporting only its own channels would
   // make `allOf` a way to wrap a claim and escape the rule entirely.
   [PredicateKind.ALL_OF]: ANY_CHANNEL_A_CLAIM_CAN_READ(),
@@ -89,6 +92,10 @@ export function channelsRead(kind: PredicateKind): readonly ChannelId[] {
  */
 export function channelsReadBy(predicate: Predicate): readonly ChannelId[] {
   if (PredicateKind.NOT === predicate.kind) return channelsReadBy(predicate.predicate);
+  // A source's `from` IS the kind whose channel it reads, so the table already knows the answer.
+  if (PredicateKind.COMPARE === predicate.kind) {
+    return [...new Set([predicate.left, predicate.right].flatMap((s) => CHANNELS_OF[s.from]))];
+  }
   if (PredicateKind.ALL_OF !== predicate.kind && PredicateKind.ANY_OF !== predicate.kind) {
     return CHANNELS_OF[predicate.kind];
   }

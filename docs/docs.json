@@ -428,6 +428,16 @@
       "source": "/tools-wait-for",
       "destination": "/tools/wait-for",
       "permanent": true
+    },
+    {
+      "source": "/tools/predicates",
+      "destination": "/predicates",
+      "permanent": true
+    },
+    {
+      "source": "/tools/predicates.md",
+      "destination": "/predicates.md",
+      "permanent": true
     }
   ],
   "contextual": {

@@ -11,7 +11,7 @@ export type { InitOptions, InitIo, InitResult } from './run-types.js';
 import { dirname, join } from 'node:path';
 import { CONTAINER_MARKERS } from './diagnose/containerised-dev-server.js';
 import { CSP_FILES } from './diagnose/csp-doctor.js';
-import { preflightRefusal } from './plan/preflight.js';
+import { preflight } from './plan/preflight.js';
 import {
   detectDjangoProject,
   detectStreamlitProject,
@@ -487,7 +487,7 @@ function report(
    */
   if (!dryRun) {
     io.print(
-      '  --dry-run shows this plan and writes nothing · --app <dir> picks the app · --no-mcp skips agent registration',
+      '  --dry-run previews · --app <dir> picks the app · --no-mcp skips agent registration',
     );
   }
   // Every path below is printed RELATIVE, and until now nothing said what to. Reported from the
@@ -723,7 +723,10 @@ export function runInit(options: InitOptions, io: InitIo): InitResult {
   //
   // `redirected` is what keeps it to ONE print: wiring an app in a monorepo re-enters runInit for the
   // chosen directory, and the inner call must not ask again.
-  if (true !== options.redirected) {
+  //
+  // And not when the runtime follows: it asks once it has finished, as the last thing printed,
+  // rather than here in the middle, before the dev server has even started.
+  if (true !== options.redirected && true !== options.continuesToRuntime) {
     io.print('');
     io.print(FEEDBACK_HINT);
   }
@@ -845,26 +848,31 @@ function runInitSteps(options: InitOptions, io: InitIo): InitResult {
   // the app in frontend/ uses pnpm, and checking the file refused a scaffold the install gate proves
   // must succeed. Both conditions make every later phase fail, and each arrives far from its cause
   // when it is not checked here. See preflight.ts.
-  const refusal = preflightRefusal(
-    {
-      cwd: () => io.cwd(),
-      canWrite: () => io.canWrite(),
-      probe: (command, args) => io.probe(command, args),
-    },
-    planInput.detection.packageManager,
-    { alreadyServed: options.url !== undefined && '' !== options.url },
-  );
-  if (refusal !== undefined) {
-    io.print(refusal);
+  const preflightIo = {
+    cwd: () => io.cwd(),
+    canWrite: () => io.canWrite(),
+    probe: (command: string, args: readonly string[]) => io.probe(command, args),
+  };
+  const resolved = preflight(preflightIo, planInput.detection.packageManager, {
+    alreadyServed: options.url !== undefined && '' !== options.url,
+  });
+  if (resolved.refusal !== undefined) {
+    io.print(resolved.refusal);
     return { ok: false, applied: 0, manual: 1 };
   }
+  // The prefix that can actually run it on THIS machine — `pnpm`, or `corepack pnpm` where preflight
+  // just proved only corepack can. Threaded onto detection (never recomputed by `detect`, which is
+  // pure and never probes) so the install step, its retries and the dev command all spawn and print
+  // the same thing preflight just confirmed works, instead of a bare binary it already ruled out.
+  const packageManagerCommand = resolved.command;
+  planInput.detection = { ...planInput.detection, packageManagerCommand };
   const plan = io.host.span('init.plan', {}, () => buildPlan(planInput));
   const effects = options.dryRun
     ? { failed: new Set<string>(), skipped: new Set<string>(), degraded: new Map<string, string>() }
     : io.host.span('init.apply', { steps: plan.steps.length }, () => applyEffects(plan, io));
   const { failed, skipped, degraded } = effects;
   // The project's own dev command, so the closing line names what a human would actually type.
-  const devCommand = devCommandFrom(pkgRaw, planInput.detection.packageManager);
+  const devCommand = devCommandFrom(pkgRaw, packageManagerCommand);
   const result = report(
     plan,
     options.dryRun,

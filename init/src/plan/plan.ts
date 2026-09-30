@@ -4,12 +4,7 @@
  * runner performs the `write` side-effects; this module decides *what* should happen.
  */
 
-import {
-  Framework,
-  UiLibrary,
-  installCommand,
-  installCommandParts,
-} from '@/detect/detect.js';
+import { Framework, UiLibrary, installCommand, installCommandParts } from '@/detect/detect.js';
 import { installFailureHint } from '@/diagnose/install-hint.js';
 import { installRetries } from '@/diagnose/install-retries.js';
 import { claudeAddCommand, claudeProjectMcpJson, mcpManual } from '@/register/mcp.js';
@@ -43,13 +38,7 @@ import {
 import { cspStep } from './plan-framework.js';
 import { frameworkSteps } from './framework-adapter.js';
 import { FRAMEWORK_ADAPTERS, RETICLE_BROWSER_SDK, RETICLE_REACT_KIT } from './framework-adapter.js';
-import {
-  MCP_TARGET,
-  StepStatus,
-  type Step,
-  type Plan,
-  type PlanInput,
-} from './plan-types.js';
+import { MCP_TARGET, StepStatus, type Step, type Plan, type PlanInput } from './plan-types.js';
 export {
   DEPS_TARGET,
   MCP_TARGET,
@@ -59,10 +48,19 @@ export {
   type PlanInput,
 } from './plan-types.js';
 import { join } from 'node:path';
-import { reticleConfigContent } from '@/patch/snippets.js';
+import { reticleConfigContent, usesReactKit } from '@/patch/snippets.js';
 import { configWithInstallSource } from '@/project/install-source-config.js';
-import { containerisedStep, uiLibraryStep, webGlCanvasStep, windowsMcpNoteStep } from './notices.js';
-import { existingConfigProblem, projectIdOf, RETICLE_CONFIG_FILE } from '@/detect/existing-config.js';
+import {
+  containerisedStep,
+  uiLibraryStep,
+  webGlCanvasStep,
+  windowsMcpNoteStep,
+} from './notices.js';
+import {
+  existingConfigProblem,
+  projectIdOf,
+  RETICLE_CONFIG_FILE,
+} from '@/detect/existing-config.js';
 import { CLAUDE_SETTINGS_PATH, stopHookStep } from './stop-hook-step.js';
 
 // Re-exported: it moved to the module that reads it, and every existing importer says `plan.js`.
@@ -86,21 +84,6 @@ function pinnedPackages(
 }
 
 /**
- * Does this codebase want the React kit, or the framework-neutral sensor?
- *
- * The kit is what adds component identity — component names and stacks — and it is worth having
- * wherever React or Preact is rendering (the adapter reaches Preact through `preact/compat`).
- * Everywhere else it is a package named `@reticlehq/react`, carrying `react` in its peer
- * dependencies, being installed into a codebase that has no React in it.
- *
- * UNKNOWN keeps the kit deliberately. Absence of evidence is not evidence of Vue, and guessing
- * "sensor" on no information silently drops component identity from apps that should have it.
- */
-function wantsReactKit(ui: UiLibrary): boolean {
-  return ui !== UiLibrary.VUE && ui !== UiLibrary.SVELTE;
-}
-
-/**
  * The dev-dependencies `reticle init` installs — kit (or sensor) first, build plugin next.
  *
  * `uiLibrary` matters because the framework does not always name the renderer. The rule below was
@@ -112,10 +95,9 @@ export function frameworkPackages(
   framework: Framework,
   uiLibrary: UiLibrary = UiLibrary.UNKNOWN,
 ): readonly string[] {
-  const kit = wantsReactKit(uiLibrary) ? RETICLE_REACT_KIT : RETICLE_BROWSER_SDK;
+  const kit = usesReactKit(uiLibrary, framework) ? RETICLE_REACT_KIT : RETICLE_BROWSER_SDK;
   return FRAMEWORK_ADAPTERS[framework].packages(kit);
 }
-
 
 /**
  * Where the agent-facing files go, which is not always where the app is.
@@ -275,8 +257,6 @@ function mcpSteps(input: PlanInput): Step[] {
   if (windowsNote !== null) steps.push(windowsNote);
   return steps;
 }
-
-
 
 const SLASH_COMMAND_TITLE = 'The /reticle command';
 
@@ -575,11 +555,14 @@ function alreadyDeclared(declared: string | undefined, pinned: string | undefine
 
 function installStep(input: PlanInput): Step {
   const pm = input.detection.packageManager;
+  // `Detection.packageManagerCommand` (see `preflight.ts`, #1149). Falling back to `pm` covers every
+  // caller that never went through preflight (tests, and any future one).
+  const pmCommand = input.detection.packageManagerCommand ?? pm;
   const packages = pinnedPackages(
     frameworkPackages(input.detection.framework, input.detection.uiLibrary),
     input.options.sdkVersion,
   );
-  const command = installCommand(pm, packages);
+  const command = installCommand(pm, packages, pmCommand);
   /*
    * A re-run over an already-wired project does NO dependency work.
    *
@@ -608,7 +591,7 @@ function installStep(input: PlanInput): Step {
       detail: command,
     };
   }
-  const parts = installCommandParts(pm, packages);
+  const parts = installCommandParts(pm, packages, [], pmCommand);
   return {
     title: 'Install dependencies',
     target: 'package.json',
@@ -617,13 +600,14 @@ function installStep(input: PlanInput): Step {
     exec: {
       command: parts.command,
       args: parts.args,
-      fallback: `${command}\n\n${installFailureHint(pm)}`,
+      fallback: `${command}\n\n${installFailureHint(pm, pmCommand)}`,
     },
     retries: installRetries(
       pm,
       packages,
       frameworkPackages(input.detection.framework, input.detection.uiLibrary),
       input.options.sdkVersion,
+      pmCommand,
     ),
   };
 }
@@ -767,7 +751,6 @@ function reticleConfigSteps(input: PlanInput): Step[] {
         );
   return [reticleConfigStep(input, content), ...agentRootConfigStep(input, content)];
 }
-
 
 export function buildPlan(input: PlanInput): Plan {
   const steps: Step[] = [

@@ -122,7 +122,23 @@ const bytesOf = (json: string): number => Buffer.byteLength(json, 'utf8');
  * the agent being able to find it — a predicate nothing advertises is a predicate nobody calls,
  * which is how the substring became the only reach in the first place.
  */
-const DEFAULT_SURFACE_BYTE_BUDGET = 25_250;
+/*
+ * Moved 24_900 -> 25_100 for the `compare` predicate and dotted paths in `bodyMatches`.
+ *
+ * The decision, since going over is one: this is EVIDENCE, the same case `bodyMatches` made above. It
+ * is the only way to state "the page shows what the server answered" without already knowing the
+ * answer, and that is the refund false green, where every channel was green on a hundred-fold wrong
+ * amount. Measured at 25,081 B, so about 45 tokens a turn.
+ *
+ * Paid for as far as it could be: the kind list gains one word, the hint carries one example instead
+ * of an explanation, and the `reticle_assert` parameter names the kind without its fields. A kind
+ * the agent cannot see in the list is a kind nobody writes, so the word itself is not negotiable.
+ */
+/*
+ * With the coverage and crawl additions beside it (25_250 on their own), the two together measure
+ * 25,451 to 25,459 B: 25_500.
+ */
+const DEFAULT_SURFACE_BYTE_BUDGET = 25_500;
 // Raised, each time deliberately, each time with the measurement that bought it.
 //
 // LATEST RAISE, 24_600 -> 24_700. `reticle_verify { action: "explore" }` gained a `driver`
@@ -258,7 +274,14 @@ describe('advertised surface cost', () => {
 // 140_200 -> 140_400 for `app` on reticle_coverage (140,293 B measured), a loose record for the
 // same reason `durable` is one.
 // 140_400 -> 140_500 for crawl's `exhaustive` output block (140,433 B measured).
-const ALL_SURFACE_BYTE_BUDGET = 140_500;
+/*
+ * Moved 140_000 -> 146_000 for the `compare` predicate. Every tool that takes a predicate carries
+ * the full union in its schema, so one new member with four source shapes is paid once per such
+ * tool: measured at 145,213 B. Nothing in it is prose to trim; it is the shape of the claim.
+ */
+// With `durable`, `app` and `exhaustive` beside `compare`, the two together measure 145,676 to
+// 145,684 B, inside 146_000.
+const ALL_SURFACE_BYTE_BUDGET = 146_000;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {

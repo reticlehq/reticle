@@ -25,4 +25,16 @@ describe('installFailureHint', () => {
     const hint = installFailureHint(PackageManager.NPM);
     expect(hint).not.toContain('ERR_PNPM');
   });
+
+  /**
+   * Reported from the field (#1149): a corepack-only machine has no bare `pnpm` on PATH. The hint
+   * used to print `pnpm config set …` and `pnpm install` regardless, handing that reader a remedy
+   * that fails exactly the way the original install did.
+   */
+  it('prints the resolved invocation, not a bare pnpm, on a corepack-only machine', () => {
+    const hint = installFailureHint(PackageManager.PNPM, 'corepack pnpm');
+    expect(hint).toContain('corepack pnpm config set minimumReleaseAgeExclude');
+    expect(hint).toContain('corepack pnpm install');
+    expect(hint).toContain('corepack pnpm add -D --config.virtual-store-dir');
+  });
 });

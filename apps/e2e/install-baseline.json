@@ -84,5 +84,12 @@
     "✓ Vite plugin → vite.config.ts",
     "✓ Capabilities + store → src/reticle-dev.ts",
     "ℹ Containerised dev server → Dockerfile"
+  ],
+  "vite-vanilla": [
+    "– MCP server (global) → global (claude user scope)",
+    "✓ Install dependencies → package.json",
+    "✓ Reticle config → .reticle.json",
+    "✓ Vite plugin → vite.config.ts",
+    "✓ Capabilities + store → src/reticle-dev.ts"
   ]
 }

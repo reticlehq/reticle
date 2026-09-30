@@ -203,6 +203,15 @@ describe('query', () => {
     expect(disabled.matched).toBe(true);
   });
 
+  it('filters by pressed state (#1144)', () => {
+    render('<button aria-pressed="true">Bold</button><button aria-pressed="false">Italic</button>');
+    const pressed = matchQuery({ role: 'button', name: 'Bold' }, ElementState.PRESSED);
+    expect(pressed.matched).toBe(true);
+    expect(pressed.count).toBe(1);
+    const notPressed = matchQuery({ role: 'button', name: 'Italic' }, ElementState.PRESSED);
+    expect(notPressed.matched).toBe(false);
+  });
+
   it('matches a dialog by role', () => {
     expect(matchQuery({ role: 'dialog' }).matched).toBe(true);
   });

@@ -8,7 +8,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { RETICLE_DEFAULT_PORT } from '@reticlehq/core';
-import type { InitResult } from '@reticlehq/init';
+import { FEEDBACK_HINT, type InitResult } from '@reticlehq/init';
 import { confirmInstall, nodeConfirmDeps } from '@/command/setup/terminal/confirm.js';
 import { writeLicenseKey } from '@/command/setup/license-key.js';
 import { registerOtherAgents, runSetupCommand } from '@/command/setup/setup-command.js';
@@ -123,9 +123,15 @@ export async function continueAfterInit(
     });
   }
 
+  // From here on init left the ask to us, so it is the last thing on every exit below.
+  const ask = (spaced = true): void => {
+    if (spaced) io.print('');
+    io.print(FEEDBACK_HINT);
+  };
   const context = result.context;
   if (context === undefined) {
     // Nothing was established, so there is nothing to run against. init has already said why.
+    ask();
     process.exit(1);
   }
   // A PENDING connect step is not a reason to skip the runtime phase, and treating it as one made
@@ -150,6 +156,7 @@ export async function continueAfterInit(
   );
   if (refusal !== undefined) {
     io.print(refusal);
+    ask();
     process.exit(1);
   }
 
@@ -201,8 +208,11 @@ export async function continueAfterInit(
       // Success, and no flow. Saying "a flow was driven" here would replace a wrong exit code with
       // a wrong sentence, which is the worse of the two: the exit code is read by CI and the
       // sentence is read by a person deciding whether their app is verified. It is not.
-      io.print(`✓ ${outcome.url ?? 'the app'} is instrumented and connected — but NOT verified.`);
+      // The connect already said "connected, nothing verified yet" and listed what to do next;
+      // repeating it here was the same sentence twice, three lines apart.
       for (const [i, step] of outcome.fallback.entries()) io.print(`   ${String(i + 1)}. ${step}`);
+      // Already spaced by the blank line above when nothing was listed.
+      ask(0 < outcome.fallback.length);
       return;
     }
     if (outcome.ok) {
@@ -215,12 +225,14 @@ export async function continueAfterInit(
         '  Read the FINDINGS above before moving on: a flow can pass with a failed request or a ' +
           'console error behind it, and that is the app, not the check.',
       );
+      ask();
       return;
     }
     // A run that produced no verdict did not succeed, and the exit code is the one place a caller
     // reads that without parsing anything.
     io.print('⚠ setup did not finish. To carry on from here:');
     for (const [i, step] of outcome.fallback.entries()) io.print(`   ${i + 1}. ${step}`);
+    ask();
     process.exit(1);
   });
 }

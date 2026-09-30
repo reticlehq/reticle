@@ -216,6 +216,9 @@ async function daemonWhy(fx: SetupEffects): Promise<DaemonReason | undefined> {
 export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promise<SetupOutcome> {
   const notes: string[] = [];
   const note = (line: string): void => {
+    // The page is probed before the browser opens and again after the wait, and an unchanged page
+    // gave the reader the same paragraph twice in a row.
+    if (notes.at(-1) === line) return;
     notes.push(line);
     fx.note(line);
   };
@@ -432,19 +435,21 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
   // Both routes, because `explore` needs a model: without ANTHROPIC_API_KEY it answers "No model
   // configured to drive the app". Naming only that one hands the reader a dead end on any machine
   // without a key, which is the same defect this release spent its time removing everywhere else.
-  // Three short lines rather than one paragraph, and each says who it is for.
+  // A heading and a numbered list rather than one paragraph: a reader scans for what to do next.
   //
   // This was a single 524-character note, measured on a real first run: eighty-three words, no
   // break, naming `reticle_*` tools at a reader who had just typed `reticle init` in a terminal and
   // has no such tools to call. The facts were right and the shape made them unreadable, which on
   // the last line of onboarding is the same as not saying them.
-  note(`Connected. ${url} is instrumented. Onboarding is done; nothing is verified yet.`);
+  note(`✓ Connected. ${url} is instrumented. Onboarding is done; nothing is verified yet.`);
+  note('');
+  note('Next, prove one flow. Your agent does this:');
   note(
-    'Agent: drive one flow and end it with `reticle_act_and_wait` or `reticle_assert`. Those two ' +
+    '  1. Drive one flow and end it with `reticle_act_and_wait` or `reticle_assert`. Those two ' +
       'produce a verdict; nothing else does.',
   );
   note(
-    'Or hand over the whole drive: `reticle_verify { action: "explore", persona: "<who does ' +
+    '  2. Or hand over the whole drive: `reticle_verify { action: "explore", persona: "<who does ' +
       'what>" }` records what it drove, so later runs replay with no model in the loop. Needs ' +
       'ANTHROPIC_API_KEY.',
   );

@@ -18,6 +18,12 @@
 import { z } from 'zod';
 import { ElementQuerySchema, type ElementQuery } from '@/wire/types.js';
 import { ElementState } from '@/wire/constants/constants.js';
+import {
+  CompareAs,
+  CompareSourceSchema,
+  sameCompareSource,
+  type CompareSource,
+} from './compare-source.js';
 import { PredicateKind } from '@/verdict/consequence.js';
 import { propertyAssertionSchema, type PropertyAssertion } from './property-assertion.js';
 
@@ -65,11 +71,11 @@ export type Predicate =
       count?: number;
       /** A substring the RESPONSE body must contain — what the server answered, not what was sent. */
       bodyContains?: string;
-      /** Shallow JSON match over the RESPONSE body: this FIELD holds this value (#987). */
+      /** JSON field match over the RESPONSE body: this FIELD holds this value (#987). A key may be a dotted path. */
       bodyMatches?: Record<string, unknown>;
       /** A substring the REQUEST body must contain — what the UI sent, not what came back. */
       requestBodyContains?: string;
-      /** Shallow JSON match over the REQUEST body, in the style of `signal.dataMatches`. */
+      /** JSON field match over the REQUEST body, in the style of `signal.dataMatches`. */
       requestBodyMatches?: Record<string, unknown>;
     }
   | { kind: typeof PredicateKind.ROUTE; pathname?: string; contains?: string; since?: number }
@@ -111,6 +117,15 @@ export type Predicate =
       satisfies?: PropertyAssertion;
     }
   | { kind: typeof PredicateKind.SETTLED; quietMs?: number }
+  | {
+      kind: typeof PredicateKind.COMPARE;
+      left: CompareSource;
+      right: CompareSource;
+      /** `value` (default): strict equality. `number`: one number read from each side. */
+      as?: CompareAs;
+      /** How far apart two numbers may be and still agree. Only with `as: "number"`. */
+      tolerance?: number;
+    }
   | { kind: typeof PredicateKind.ALL_OF; predicates: Predicate[] }
   | { kind: typeof PredicateKind.ANY_OF; predicates: Predicate[] }
   | { kind: typeof PredicateKind.NOT; predicate: Predicate };
@@ -292,7 +307,7 @@ function predicateUnion() {
          */
         bodyContains: z.string().min(1).optional(),
         /**
-         * Shallow JSON match over the RESPONSE body, keyed like `signal.dataMatches` and sharing its
+         * JSON field match over the RESPONSE body, keyed like `signal.dataMatches` and sharing its
          * `matchValue` operators (`*`, `$gte`, `$contains`, …) — the field-level half of
          * `bodyContains` (#987).
          *
@@ -330,7 +345,7 @@ function predicateUnion() {
          */
         requestBodyContains: z.string().min(1).optional(),
         /**
-         * Shallow JSON match over the REQUEST body, keyed like `signal.dataMatches` and sharing its
+         * JSON field match over the REQUEST body, keyed like `signal.dataMatches` and sharing its
          * `matchValue` operators (`*`, `$gte`, `$contains`, …).
          *
          * `{ requestBodyMatches: { filter: "manual_review" } }` is the one-call verdict for "the UI
@@ -409,6 +424,15 @@ function predicateUnion() {
         quietMs: z.number().positive().optional(),
       })
       .strict(),
+    z
+      .object({
+        kind: z.literal(PredicateKind.COMPARE),
+        left: CompareSourceSchema,
+        right: CompareSourceSchema,
+        as: z.enum([CompareAs.VALUE, CompareAs.NUMBER]).optional(),
+        tolerance: z.number().finite().nonnegative().optional(),
+      })
+      .strict(),
     /*
      * `.min(1)` on both combinators, because an EMPTY one is a false green and not an edge case.
      *
@@ -455,6 +479,10 @@ function checkPredicateShape(predicate: unknown, ctx: z.RefinementCtx): void {
     satisfies?: unknown;
     scope?: unknown;
   };
+  if (PredicateKind.COMPARE === p.kind) {
+    checkCompareShape(predicate as Extract<Predicate, { kind: typeof PredicateKind.COMPARE }>, ctx);
+    return;
+  }
   if (PredicateKind.TEXT !== p.kind) return;
   if (undefined === p.contains && undefined === p.satisfies) {
     ctx.addIssue({
@@ -472,6 +500,33 @@ function checkPredicateShape(predicate: unknown, ctx: z.RefinementCtx): void {
         '`self: true` to read the scope root itself) or a `contains` that selects one. Without ' +
         'either, the locator is every element on the page and the property would run against ' +
         'whichever one happened to match first',
+    });
+  }
+}
+
+/**
+ * The two ways a `compare` can be written so that it cannot fail, refused before it can report `yes`.
+ *
+ * A side compared with itself agrees with itself on every page, broken or not. And `tolerance` means
+ * nothing to a strict equality, so accepting it there would let a caller believe a band was applied.
+ */
+function checkCompareShape(
+  p: Extract<Predicate, { kind: typeof PredicateKind.COMPARE }>,
+  ctx: z.RefinementCtx,
+): void {
+  if (sameCompareSource(p.left, p.right)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        '`left` and `right` read the same value, so this comparison agrees with itself on every ' +
+        'page and cannot fail. Compare two different readings: what the page shows against what ' +
+        'the server answered, or what was sent against what came back',
+    });
+  }
+  if (p.tolerance !== undefined && CompareAs.NUMBER !== p.as) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: '`tolerance` applies to a numeric comparison only: add `as: "number"`',
     });
   }
 }

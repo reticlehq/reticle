@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { preflightRefusal, type PreflightIo } from './preflight.js';
+import { preflight, type PreflightIo } from './preflight.js';
 
 /**
  * Two conditions that make every later phase fail, checked before anything is written.
@@ -16,39 +16,38 @@ const io = (over: Partial<PreflightIo> = {}): PreflightIo => ({
   ...over,
 });
 
-describe('preflight refuses what cannot possibly work', () => {
+describe('preflight resolves the invocation, or refuses what cannot possibly work', () => {
   it('passes a writable project with the tools it names', () => {
-    expect(preflightRefusal(io(), 'npm')).toBeUndefined();
+    expect(preflight(io(), 'npm')).toEqual({ command: 'npm' });
   });
 
   it('names an unwritable checkout, and what setup needs to write', () => {
-    const refusal = preflightRefusal(io({ canWrite: () => false }), 'npm');
-    expect(refusal).toContain('not writable');
-    expect(refusal).toContain('/app');
+    const result = preflight(io({ canWrite: () => false }), 'npm');
+    expect(result.refusal).toContain('not writable');
+    expect(result.refusal).toContain('/app');
   });
 
   // The lockfile says which package manager the PROJECT uses. It says nothing about whether the
   // machine has it, and a pnpm-lock.yaml on an npm-only box is an ordinary Monday.
   it('names the RESOLVED package manager when the machine lacks it', () => {
-    const refusal = preflightRefusal(io({ probe: (cmd) => 'pnpm' !== cmd }), 'pnpm');
-    expect(refusal).toContain('pnpm is not installed');
+    const result = preflight(io({ probe: (cmd) => 'pnpm' !== cmd && 'corepack' !== cmd }), 'pnpm');
+    expect(result.refusal).toContain('pnpm is not installed');
   });
 
-  it('says nothing when the machine has it', () => {
-    expect(preflightRefusal(io(), 'pnpm')).toBeUndefined();
+  it('says nothing when the machine has it, and hands back the bare command', () => {
+    expect(preflight(io(), 'pnpm')).toEqual({ command: 'pnpm' });
   });
 
   it('recognises yarn and bun too', () => {
     for (const pm of ['yarn', 'bun'] as const) {
-      expect(preflightRefusal(io({ probe: (cmd) => pm !== cmd }), pm)).toContain(
-        `${pm} is not installed`,
-      );
+      const result = preflight(io({ probe: (cmd) => pm !== cmd && 'corepack' !== cmd }), pm);
+      expect(result.refusal).toContain(`${pm} is not installed`);
     }
   });
 
   // npm ships with node. Refusing for its absence would refuse on a machine that is fine.
   it('does not check for npm, which comes with node', () => {
-    expect(preflightRefusal(io({ probe: () => false }), 'npm')).toBeUndefined();
+    expect(preflight(io({ probe: () => false }), 'npm')).toEqual({ command: 'npm' });
   });
 
   /**
@@ -60,22 +59,54 @@ describe('preflight refuses what cannot possibly work', () => {
    * must succeed — an npm app under a pnpm monorepo, on a machine with no pnpm.
    */
   it('does not refuse an npm app that merely sits under a pnpm monorepo', () => {
-    expect(preflightRefusal(io({ probe: (cmd) => 'pnpm' !== cmd }), 'npm')).toBeUndefined();
+    expect(preflight(io({ probe: (cmd) => 'pnpm' !== cmd }), 'npm')).toEqual({ command: 'npm' });
   });
 
   // Writability first: on a read-only checkout nothing else matters, and running a subprocess to
   // find that out is slower and noisier than one access check.
   it('reports unwritable before anything else', () => {
-    expect(preflightRefusal(io({ canWrite: () => false, probe: () => false }), 'pnpm')).toContain(
-      'not writable',
-    );
+    const result = preflight(io({ canWrite: () => false, probe: () => false }), 'pnpm');
+    expect(result.refusal).toContain('not writable');
   });
 
   // The recovery has to name a flag init actually has: it takes --url, never --dev-cmd.
   it('points at a flag that exists', () => {
-    const refusal = preflightRefusal(io({ probe: (cmd) => 'pnpm' !== cmd }), 'pnpm');
-    expect(refusal).toContain('--url');
-    expect(refusal).not.toContain('--dev-cmd');
+    const result = preflight(io({ probe: (cmd) => 'pnpm' !== cmd && 'corepack' !== cmd }), 'pnpm');
+    expect(result.refusal).toContain('--url');
+    expect(result.refusal).not.toContain('--dev-cmd');
+  });
+});
+
+/**
+ * A corepack-managed pnpm is not ENOENT — the probe just asked the wrong binary.
+ *
+ * Reported from the field (#1149): `init` on Windows, in a project whose `packageManager` field
+ * pins pnpm, refuses with "pnpm is not installed on this machine" even though
+ * `corepack pnpm --version` succeeds. The suggested remedy, `corepack enable`, fails with `EPERM`
+ * on Windows because its shims go into `C:\Program Files\nodejs`, which needs an elevated shell —
+ * so the refusal sends a corepack-managed user in a circle just as surely as the `--url` one did.
+ */
+describe('a corepack-managed package manager is not a missing one', () => {
+  // The bare binary is gone; corepack can still run it.
+  const corepackOnly = io({
+    probe: (command, args) => 'corepack' === command && 'pnpm' === args[0] && '--version' === args[1],
+  });
+
+  it('resolves to the corepack-prefixed command when corepack can run it and the bare binary cannot', () => {
+    expect(preflight(corepackOnly, 'pnpm')).toEqual({ command: 'corepack pnpm' });
+  });
+
+  it('still refuses when neither the bare binary nor corepack can run it', () => {
+    const result = preflight(io({ probe: () => false }), 'pnpm');
+    expect(result.refusal).toContain('pnpm is not installed');
+  });
+
+  // The refusal used to suggest corepack as an escape hatch right after saying corepack had already
+  // failed — sending a corepack-only user in the same circle as the original bug. Both probes failed
+  // to get here, so "run it through corepack" cannot be offered as a way out.
+  it('does not suggest running it through corepack after corepack has already failed', () => {
+    const result = preflight(io({ probe: () => false }), 'pnpm');
+    expect(result.refusal).not.toMatch(/run it through corepack/);
   });
 });
 
@@ -97,21 +128,20 @@ describe('preflight refuses what cannot possibly work', () => {
  * outcome than refusing to write anything at all.
  */
 describe('--url gets past the check that advertises it', () => {
-  const noPnpm = io({ probe: (command) => 'pnpm' !== command });
+  const noPnpm = io({ probe: (command) => 'pnpm' !== command && 'corepack' !== command });
 
   it('does not refuse for a missing package manager when the app is already served', () => {
-    expect(preflightRefusal(noPnpm, 'pnpm', { alreadyServed: true })).toBeUndefined();
+    expect(preflight(noPnpm, 'pnpm', { alreadyServed: true })).toEqual({ command: 'pnpm' });
   });
 
   it('still refuses without --url, which is the case the check was written for', () => {
-    expect(preflightRefusal(noPnpm, 'pnpm')).toContain('is not installed');
+    const result = preflight(noPnpm, 'pnpm');
+    expect(result.refusal).toContain('is not installed');
   });
 
   it('still refuses an unwritable checkout even with --url', () => {
     // Orthogonal: nothing can be written wherever the app is served from, so this one still stands.
-    const refusal = preflightRefusal(io({ canWrite: () => false }), 'pnpm', {
-      alreadyServed: true,
-    });
-    expect(refusal).toContain('not writable');
+    const result = preflight(io({ canWrite: () => false }), 'pnpm', { alreadyServed: true });
+    expect(result.refusal).toContain('not writable');
   });
 });

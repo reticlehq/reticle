@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   deriveProjectId,
+  readConfiguredPort,
   readConfiguredProjectId,
   resolveProjectId,
   shortHash,
@@ -151,5 +152,37 @@ describe('readConfiguredProjectId', () => {
   it('survives an unparseable config — a dev server must still start', () => {
     const read = tree({ '/app/.reticle.json': '{not json' });
     expect(readConfiguredProjectId('/app', read)).toBeUndefined();
+  });
+});
+
+describe('readConfiguredPort', () => {
+  // Same separator-agnostic fake tree as above.
+  const tree = (files: Record<string, string>) => (path: string) => {
+    const found = files[path.replaceAll('\\', '/')];
+    if (found === undefined) throw new Error(`ENOENT: ${path}`);
+    return found;
+  };
+
+  // `reticle init --port` records the port here and the CLI obeys it; a plugin that ignored it
+  // connected the page to the DEFAULT daemon — another project's, on a machine running two.
+  it('reads the port init recorded in .reticle.json', () => {
+    const read = tree({ '/app/.reticle.json': '{"projectId":"acme-1234abcd","port":4471}' });
+    expect(readConfiguredPort('/app', read)).toBe(4471);
+  });
+
+  it('walks up to the config', () => {
+    const read = tree({ '/repo/.reticle.json': '{"port":4471}' });
+    expect(readConfiguredPort('/repo/frontend', read)).toBe(4471);
+  });
+
+  it('ignores a port that is not a valid TCP port', () => {
+    for (const bad of ['"4471"', '0', '70000', '44.5', 'null']) {
+      const read = tree({ '/app/.reticle.json': `{"port":${bad}}` });
+      expect(readConfiguredPort('/app', read)).toBeUndefined();
+    }
+  });
+
+  it('is undefined with no config', () => {
+    expect(readConfiguredPort('/nowhere', tree({}))).toBeUndefined();
   });
 });

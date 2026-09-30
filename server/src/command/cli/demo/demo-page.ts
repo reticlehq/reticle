@@ -76,14 +76,19 @@ const HTML_CONTENT_TYPE = 'text/html; charset=utf-8';
 function bareSpecifiersIn(dir: string): Set<string> {
   const found = new Set<string>();
   const walk = (at: string): void => {
-    for (const name of readdirSync(at)) {
+    for (const entry of readdirSync(at, { withFileTypes: true })) {
+      const name = entry.name;
       const path = join(at, name);
-      if (statSync(path).isDirectory()) {
+      if (entry.isDirectory()) {
         if ('node_modules' !== name) walk(path);
         continue;
       }
       if (!name.endsWith('.js') || name.endsWith('.test.js')) continue;
-      for (const match of readFileSync(path, 'utf8').matchAll(/from\s*'([^.'][^']*)'/g)) {
+      // `from` as a keyword, not the tail of a string: core's `z.discriminatedUnion('from', [...])`
+      // read as an import of everything up to the next quote. A specifier never holds whitespace.
+      for (const match of readFileSync(path, 'utf8').matchAll(
+        /(?<![\w$.'"])from\s*'([^.'\s][^'\s]*)'/g,
+      )) {
         const spec = match[1];
         if (spec !== undefined && !NOT_SERVABLE.test(spec)) found.add(spec);
       }

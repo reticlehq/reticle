@@ -67,6 +67,7 @@ export * from './verdict/consequence.js';
 // The predicate CONTRACT: what a caller may declare, and what a saved flow may carry. The engine
 // owns the reasoning over it and re-exports both halves as one surface.
 export * from './verdict/property-assertion.js';
+export * from './verdict/compare-source.js';
 export * from './verdict/predicate.js';
 export * from './verdict/predicate-tree.js';
 // The version 1 reader: a flat expect lifted to the predicate a v2 file stores directly.

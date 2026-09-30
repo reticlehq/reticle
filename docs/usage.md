@@ -350,7 +350,7 @@ A **predicate** declares what should be true. `reticle_assert` / `reticle_assert
 // An element exists / is in a state
 { "kind": "element", "query": { "role": "dialog", "name": "Confirm" }, "state": "visible" }
 // query supports: role, name, text, label, placeholder, testid, alt, scope
-// state: visible | hidden | enabled | disabled | checked | expanded | focused | present | inViewport
+// state: visible | hidden | enabled | disabled | checked | expanded | pressed | focused | present | inViewport
 // inViewport asserts the element is in the viewport NOW (not just in the DOM), so a scrollIntoView is gradeable
 // add "absent": true to assert it is NOT there (regression / removal)
 
@@ -396,7 +396,7 @@ A `state` assertion is graded as a **consequence** (a wrong element or stale ren
 - `timeout_ms` (on `assert`/`wait_for`): wait up to N ms for it to become true.
 - `since` (on `net`/`console` leaves): only consider events after this cursor (from `act`).
 
-`dataMatches` uses shallow JSON matching; `*` means "present, any value".
+`dataMatches` matches field by field; a key can be a dotted path (`"order.total"`, `"items.0.id"`), and `*` means "present, any value".
 
 ---
 
@@ -858,6 +858,7 @@ It does **not** freeze `requestAnimationFrame`/microtasks (React's scheduler kee
   "dataMatches": { "count": { "$gte": 1 }, "sections": { "$contains": "hook" } },
 }
 // operators: $gte $lte $gt $lt $contains (array/substring) $length ; "*" = present
+// keys: a field name, or a dotted path into nested data ("order.total", "items.0.id")
 ```
 
 On a failed signal assert, the result includes a **near-miss**: the signals that _did_ fire with that name + their data. And `reticle_observe`'s summary now includes `domChanged` (in-place text/attribute re-renders, not just added/removed nodes).

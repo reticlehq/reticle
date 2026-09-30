@@ -16,6 +16,7 @@
 import { REDACTED_VALUE } from '@reticlehq/core';
 import {
   clipBody,
+  describeBodyFieldMiss,
   describeNetFilter,
   matchJsonBody,
   str,
@@ -147,10 +148,15 @@ export function requestBodyVerdict(
     // Named separately from "no call matched", for the reason the response side already learned: the
     // request DID fire, and reporting zero matches sends the caller to check the url and the method,
     // which are both fine, instead of to the value the UI actually sent.
+    const field =
+      predicate.requestBodyMatches === undefined
+        ? undefined
+        : describeBodyFieldMiss(state.mismatch, predicate.requestBodyMatches);
+    const because = field === undefined ? '' : `: ${field}`;
     return {
       pass: false,
-      failureReason: `a call matching ${describeNetFilter(predicate)} was sent with ${JSON.stringify(clipBody(state.mismatch))}, which does not match the request-body clause — the request fired, the payload is what differed`,
-      observed: `request body ${JSON.stringify(clipBody(state.mismatch))}`,
+      failureReason: `a call matching ${describeNetFilter(predicate)} was sent with ${JSON.stringify(clipBody(state.mismatch))}, which does not match the request-body clause${because} — the request fired, the payload is what differed`,
+      observed: `request body ${JSON.stringify(clipBody(state.mismatch))}${because}`,
       expected: `a request body matching ${wanted}`,
       assertion: 'net.requestBody',
     };

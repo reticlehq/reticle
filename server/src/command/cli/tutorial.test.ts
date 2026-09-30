@@ -104,6 +104,22 @@ describe('the installer shows the tour, every time', () => {
     expect(shown).toContain('Reticle is installed');
   });
 
+  // The restart is something to do, so it is the first Next line, not a line between the stages.
+  it('puts restarting the agent first under Next, when agents were registered', () => {
+    const next = installClosing(true).split('Next:')[1] ?? '';
+    expect(next.trimStart().startsWith('restart your agent')).toBe(true);
+    expect(installClosing(false)).not.toContain('restart your agent');
+  });
+
+  it('does not point at a panel nobody can see yet', () => {
+    expect(installClosing()).not.toContain('That panel is Reticle');
+    expect(installClosing()).toContain('Once `reticle init` wires your app');
+  });
+
+  it('keeps the reasons for `reticle tutorial`, one line a step here', () => {
+    expect(installClosing()).not.toContain('why:');
+  });
+
   it('does not then tell them to go and run the thing they just read', () => {
     expect(installClosing()).not.toContain('reticle tutorial');
   });

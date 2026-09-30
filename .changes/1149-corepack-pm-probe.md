@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/init` — a corepack-managed package manager no longer looks missing.** `init`, in a project whose `packageManager` field pins pnpm, refused with "pnpm is not installed on this machine" on any machine where only `corepack pnpm` can run it — no bare `pnpm` on PATH. The suggested remedy, `corepack enable`, needs an elevated shell on Windows, so the refusal sent a corepack-managed user in a circle. `init` now also probes `corepack <pm>` before refusing, and once corepack is the way in, prints and runs the dependency install and the dev-server command through `corepack <pm>` instead of a bare binary it already knows cannot run. Closes [#1149](https://github.com/reticlehq/reticle/issues/1149).

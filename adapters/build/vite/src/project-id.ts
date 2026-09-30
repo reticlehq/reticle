@@ -57,24 +57,35 @@ const MAX_CONFIG_SEARCH_DEPTH = 6;
  */
 const MAX_PACKAGE_SEARCH_DEPTH = 50;
 
+const nonEmptyString = (value: unknown): string | undefined =>
+  'string' === typeof value && value.length > 0 ? value : undefined;
+
+const MAX_TCP_PORT = 65_535;
+const tcpPort = (value: unknown): number | undefined =>
+  Number.isInteger(value) && (value as number) > 0 && (value as number) <= MAX_TCP_PORT
+    ? (value as number)
+    : undefined;
+
 /**
- * Walk up from `startDir` looking for `basename`, and return the first non-empty string `field`
- * yields. Unreadable and unparseable files are skipped rather than fatal: a dev server must start.
+ * Walk up from `startDir` looking for `basename`, and return the first value of `field` that
+ * `accept` takes. Unreadable and unparseable files are skipped rather than fatal: a dev server must
+ * start.
  */
-function readNearestField(
+function readNearestField<T>(
   startDir: string,
   basename: string,
   field: string,
   readFile: ReadFile,
   maxDepth: number,
-): string | undefined {
+  accept: (value: unknown) => T | undefined,
+): T | undefined {
   let dir = startDir;
   for (let depth = 0; depth <= maxDepth; depth++) {
     try {
       const parsed: unknown = JSON.parse(readFile(join(dir, basename)));
       if ('object' === typeof parsed && parsed !== null) {
-        const value = (parsed as Record<string, unknown>)[field];
-        if ('string' === typeof value && value.length > 0) return value;
+        const value = accept((parsed as Record<string, unknown>)[field]);
+        if (value !== undefined) return value;
       }
     } catch {
       // missing, unreadable or unparseable → keep walking up
@@ -91,7 +102,14 @@ function readNearestPackageName(
   startDir: string,
   readFile: ReadFile = readFileOrThrow,
 ): string | undefined {
-  return readNearestField(startDir, 'package.json', 'name', readFile, MAX_PACKAGE_SEARCH_DEPTH);
+  return readNearestField(
+    startDir,
+    'package.json',
+    'name',
+    readFile,
+    MAX_PACKAGE_SEARCH_DEPTH,
+    nonEmptyString,
+  );
 }
 
 /**
@@ -110,6 +128,28 @@ export function readConfiguredProjectId(
     'projectId',
     readFile,
     MAX_CONFIG_SEARCH_DEPTH,
+    nonEmptyString,
+  );
+}
+
+/**
+ * Read the daemon port `reticle init --port` recorded in the nearest `.reticle.json`, or undefined.
+ *
+ * The CLI already obeys this field, so a plugin that ignored it put the two halves on different
+ * daemons: the page connected to the default port — on a machine running two projects, the other
+ * project's daemon — and the bridge refused it.
+ */
+export function readConfiguredPort(
+  startDir: string,
+  readFile: ReadFile = readFileOrThrow,
+): number | undefined {
+  return readNearestField(
+    startDir,
+    RETICLE_CONFIG_BASENAME,
+    'port',
+    readFile,
+    MAX_CONFIG_SEARCH_DEPTH,
+    tcpPort,
   );
 }
 

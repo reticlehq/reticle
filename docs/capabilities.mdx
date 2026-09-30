@@ -87,6 +87,24 @@ Toasts that auto-dismiss, debounced search, polling, session timeouts, retry bac
 
 Freeze the clock, advance it by exactly the interval, assert the consequence. No sleeping, no guessing, and the same result on a fast laptop and a loaded CI runner.
 
+<Warning>
+Freeze the clock **before** the action that schedules the timer. Reticle replaces the page's
+`setTimeout` and `setInterval` when the clock is frozen, so timers that already exist keep running
+on the browser's real clock and are not fired by `advanceMs`.
+
+If a timer is created during page mount, freeze the clock first and then reload the page so the mount-time timer is created under the fake clock.
+
+</Warning>
+
+The clock virtualizes `Date.now()`, but not every time API. `new Date()` and `performance.now()` continue to use real time. `performance.now()` is intentionally left real because React's scheduler depends on it.
+
+The reliable pattern is:
+
+1. Freeze the clock.
+2. Perform the action that schedules the timer, or reload the page if the timer is created during mount.
+3. Advance by the required interval.
+4. Assert the consequence.
+
 ### Crawl: click everything, report anomalies
 
 ```json

@@ -17,7 +17,7 @@
  *
  * State flags (inside []):
  * vis visible hid hidden en enabled dis disabled
- * chk checked exp expanded focus focused
+ * chk checked exp expanded prs pressed focus focused
  * (`present` is on every element, so it is never encoded — see STATE_FLAG.)
  *
  * Attributes (key=value, space-separated):

@@ -43,18 +43,24 @@ interface DevScriptPlan {
  * `serving` is the probe result, passed in rather than measured here so the decision stays pure.
  * When something is already answering we do not care which script exists: the rule is never to
  * start a second server, because the one that is running may be the user's, with their state in it.
+ *
+ * `packageManagerCommand` is `Detection.packageManagerCommand` (see `preflight.ts`, #1149) — the
+ * prefix that actually invokes the package manager on this machine, which is what gets printed AND,
+ * later, spawned by `startDevServer`.
  */
 export function planDevScript(
   scripts: Readonly<Record<string, string>>,
-  packageManager: string,
+  packageManagerCommand: string,
   serving: boolean,
 ): DevScriptPlan {
   if (serving) return { choice: DevScriptChoice.ALREADY_SERVING };
   const name = CANDIDATES.find((c) => 'string' === typeof scripts[c] && scripts[c] !== '');
   if (name === undefined) return { choice: DevScriptChoice.NO_SCRIPT };
   // `npm` needs `run`; the others take the script name directly. Getting this wrong prints a
-  // command that fails, which is worse than printing nothing.
-  const command = 'npm' === packageManager ? `npm run ${name}` : `${packageManager} ${name}`;
+  // command that fails, which is worse than printing nothing. `npm` is never corepack-prefixed (it
+  // ships with node), so this comparison still identifies it correctly.
+  const command =
+    'npm' === packageManagerCommand ? `npm run ${name}` : `${packageManagerCommand} ${name}`;
   return { choice: DevScriptChoice.START, script: name, command };
 }
 
@@ -65,7 +71,7 @@ export function planDevScript(
  * parsing attached, and `run.ts` is at its cohesion limit. Returns undefined for anything it cannot
  * read: this phrasing decides nothing, so it must never be able to break an install.
  */
-export function devCommandFrom(pkg: unknown, packageManager: string): string | undefined {
+export function devCommandFrom(pkg: unknown, packageManagerCommand: string): string | undefined {
   try {
     // Takes the PARSED manifest. It used to take the raw string and parse it a fourth time — the
     // caller now reads the file once, through a guard, so there is one place a malformed manifest
@@ -74,7 +80,7 @@ export function devCommandFrom(pkg: unknown, packageManager: string): string | u
       'object' === typeof pkg && null !== pkg
         ? ((pkg as { scripts?: Record<string, string> }).scripts ?? {})
         : {};
-    return planDevScript(scripts, packageManager, false).command;
+    return planDevScript(scripts, packageManagerCommand, false).command;
   } catch {
     return undefined;
   }

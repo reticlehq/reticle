@@ -4,6 +4,7 @@
  * command, not the MCP stdio transport.
  */
 
+import { terminalWidth, wrapForTerminal } from './diagnose/terminal-wrap.js';
 import {
   readFileSync,
   writeFileSync,
@@ -36,17 +37,29 @@ function shellSafe(args: readonly string[]): string[] {
 /**
  * Every program `init` is ever allowed to run.
  *
- * The set is closed and tiny — the four package managers, `npx`, and the Claude CLI — because those
- * are the only things the plan can ask for. It is a named constant for the same reason every other
- * wire string here is one, and it is CHECKED because of the shell: on Windows these spawn through
- * a shell, and a shell turns the command name into something the shell parses rather than a file it
- * executes. Arguments are quoted by `shellSafe`; the command name was the half nothing covered.
+ * The set is closed and tiny — the four package managers, `npx`, `corepack`, and the Claude CLI —
+ * because those are the only things the plan can ask for. It is a named constant for the same reason
+ * every other wire string here is one, and it is CHECKED because of the shell: on Windows these spawn
+ * through a shell, and a shell turns the command name into something the shell parses rather than a
+ * file it executes. Arguments are quoted by `shellSafe`; the command name was the half nothing
+ * covered.
+ *
+ * `corepack` runs the package manager, never IS it (see `preflight.ts`, #1149) — the allowlist has to
+ * name the actual program being spawned.
  *
  * A command outside this set is a programming error — the plan built something no branch of this
  * package can produce — so it throws rather than returning `false`, which would read to the caller
  * as "the command ran and failed" and hide the bug in a retry.
  */
-export const RUNNABLE_COMMANDS: readonly string[] = ['pnpm', 'yarn', 'bun', 'npm', 'npx', 'claude'];
+export const RUNNABLE_COMMANDS: readonly string[] = [
+  'pnpm',
+  'yarn',
+  'bun',
+  'npm',
+  'npx',
+  'corepack',
+  'claude',
+];
 
 /** The command, proven to be one of `RUNNABLE_COMMANDS` — never the caller's string. */
 function runnable(command: string): string {
@@ -186,7 +199,7 @@ export function buildNodeIo(cwd: string, host: InitHost): InitIo {
       return 0 === result.status;
     },
     print(line) {
-      process.stdout.write(`${line}\n`);
+      process.stdout.write(`${wrapForTerminal(line, terminalWidth())}\n`);
     },
     host,
   };

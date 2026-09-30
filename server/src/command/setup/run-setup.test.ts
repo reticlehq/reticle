@@ -204,6 +204,21 @@ describe('when it cannot continue, it says what is left', () => {
     expect(r.fallback.join(' ')).toContain('reticle_session { action: "list" }');
   });
 
+  // The page is probed before the browser opens and again after the wait; an unchanged page printed
+  // the same paragraph twice in a row.
+  it('says what the page looked like once, not once per probe', async () => {
+    const printed: string[] = [];
+    const fx = world({
+      listSessions: () => Promise.resolve([]),
+      probePage: () => Promise.resolve({ served: true, sdkInPage: false }),
+      note: (line: string) => {
+        printed.push(line);
+      },
+    });
+    await runSetupPhases(INPUT, fx);
+    expect(printed.filter((l) => l.includes('the SDK is NOT in the page'))).toHaveLength(1);
+  });
+
   // The false green this guards: another tab on the same daemon is not this install.
   it("never accepts somebody else's session", async () => {
     const fx = world({
