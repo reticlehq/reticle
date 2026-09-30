@@ -135,9 +135,9 @@ export interface CrawlReport {
   notJudged?: { ref: string; desc: string; reason: string }[];
 }
 
-/** Why a silent control on a hidden tab is not reported as dead. */
+/** Why a silent control on a throttled page is not reported as dead. */
 const BACKGROUND_TAB_NOT_JUDGED =
-  'not judged: the tab is in the background, where the page cannot show a reaction inside the sample window; bring it to the front and crawl again';
+  'not judged: the page is throttled (its tab is in the background, or it has not been heard from recently), so a reaction may not show inside the sample window; bring the tab to the front and crawl again';
 
 export interface CrawlOptions {
   maxSteps?: number;
@@ -526,7 +526,7 @@ export async function crawl(
         //
         // A second click costs one round trip on the rare control that looked dead, and nothing at all
         // on every control that did not. A genuinely dead control is silent twice; the flake is not.
-        // A hidden tab may defer DOM observer flushes, so a silent sample cannot prove a dead control.
+        // A throttled page may defer DOM observer flushes, so silence cannot prove a dead control.
         if (true === session.throttled?.()) {
           notJudged.push({ ref: item.ref, desc: item.desc, reason: BACKGROUND_TAB_NOT_JUDGED });
         } else if (await stillSilent(session, item, settleMs, confirm, sleep)) {
