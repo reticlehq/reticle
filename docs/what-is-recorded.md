@@ -31,7 +31,7 @@ Network bodies are **not** captured by default. Page content that reaches a verd
 
 ## What leaves, only if you ask
 
-`reticle login` signs this machine in. `reticle link` binds one repo to one cloud project. Until both have happened, `reticle push` has nothing to talk to and the sync path is a no-op. The code calls this the no-phone-home default.
+`reticle login` signs this machine in. `reticle link` binds one repo to one cloud project. Until both have happened, or `RETICLE_API_KEY` is set in the environment, `reticle push` has nothing to talk to and the sync path is a no-op. The code calls this the no-phone-home default. A key in the environment is how CI syncs with no login and no link, and it goes to the hosted service unless `RETICLE_CLOUD_URL` names another host.
 
 Once linked, you choose what syncs:
 

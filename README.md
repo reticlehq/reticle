@@ -36,7 +36,7 @@ Three steps. The first one is the whole install.
 
 **Before you run any of it.** Reticle is a dev tool that edits your build config and registers an MCP server, so here is what it does, up front, rather than after you have run it:
 
-- **You do not need an account, and a verdict is entirely local.** Nothing is sent anywhere unless you explicitly run `reticle login` and `reticle link`. Without them there is nowhere for anything to go.
+- **You do not need an account, and a verdict is entirely local.** Nothing is sent anywhere unless you explicitly run `reticle login` and `reticle link`, or set `RETICLE_API_KEY`. Without them there is nowhere for anything to go.
 - **See the plan before anything is written to your project:** `npx @reticlehq/server init --dry-run` prints every file it would touch and writes nothing. `--app <dir>` picks which app in a monorepo; `--no-mcp` skips registering with your agents; `--files-only` writes the files and stops. (The machine-level installer in step 1 has no dry run — it is a shell script, so read it first if you want to know what it does.)
 - **If you do link a project,** what syncs is yours to choose with `reticle config --runs/--memory/--flows on|off`, and [what each of those contains is written down](docs/what-is-recorded.md). A flow records the journey you drove, so drive staging rather than production until you have read it.
 - **The CLI sends anonymous usage events** (event names and a random id — no code, no page content). `RETICLE_TELEMETRY=0`, `DO_NOT_TRACK=1` or `reticle telemetry disable` turns them off.
