@@ -68,7 +68,6 @@ import {
 import { assertVerdict } from './assert/assert-verdict.js';
 import { followLostObservation } from './act/act-observation.js';
 import { withGapNovelty } from './gap-novelty.js';
-import { assertionSource } from './assert/assert-source.js';
 import { isChangeUndeclared } from '@reticlehq/engine/evidence/undeclared-change.js';
 import { openSessionIntents } from '@/memory/intent/open-intents.js';
 import {
@@ -82,7 +81,13 @@ import { foldAssetNoise } from '@reticlehq/engine/window/asset-noise.js';
 import { bodyClauseRefusal } from '@reticlehq/engine/evidence/body-capture-remedy.js';
 import { withControl } from '@/portal/session/control-envelope.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
-import { type ToolDef, intentArg, sessionIdShape, commandOrThrow } from './tool-kit.js';
+import {
+  type ToolDef,
+  type ToolDeps,
+  intentArg,
+  sessionIdShape,
+  commandOrThrow,
+} from './tool-kit.js';
 import { gradeOfPredicate } from './assert/assert-grade.js';
 
 /**
@@ -122,6 +127,144 @@ function withoutConstantSessionId(event: unknown): unknown {
  * all-clear. Refusing the value outright is the only reading with no ambiguity.
  */
 const consoleLevelEnum = z.enum(CONSOLE_LEVELS as [string, ...string[]]);
+
+/**
+ * The one grading `reticle_assert` gives a predicate: `now` and `wait` are two budgets on it, not two
+ * verdicts. `wait` built its own result from the raw evaluation and skipped this, so the same
+ * predicate answered `{ pass, evidence }` under `wait` and `{ verified, verifiedReason, … }` under
+ * `now`, and a `wait` pass over a truncated buffer or a contradicting request read as a clean one.
+ * The tool's own description says only `verified: "yes"` is a pass, so an agent following it had to
+ * call `now` again after every `wait` (#1119). `wait` always waits; `now` waits only for a budget.
+ */
+async function gradeAssertion(
+  deps: ToolDeps,
+  args: Record<string, unknown>,
+  grading: { tool: string; timeout: number; wait: boolean },
+) {
+  const { timeout } = grading;
+  // Spend the budget waiting for the APP as well as for the predicate. See resolve-within.
+  let session = await resolveSessionWithin(
+    deps.sessions,
+    asString(args['sessionId']),
+    timeout,
+    WALL_CLOCK,
+  );
+  // `until` is act_and_wait's name for this — see alias-args.ts.
+  const predicate = parsePredicate(aliasParam(args, 'predicate', ['until'])['predicate']);
+  // Refused up front rather than waited out: a body clause this session cannot answer would
+  // burn the whole timeout to report something knowable now. See #801(C).
+  const bodyRefusal = bodyClauseRefusal(predicate, session);
+  if (bodyRefusal !== undefined) throw new Error(bodyRefusal);
+  // Honesty: explicit since wins; else default to the last act's cursor; else the whole buffer.
+  let since = asNumber(args['since']) ?? session.lastAct.cursor() ?? 0;
+  // Declared BEFORE the verdict, so the undeclared-change read below finds it open and stays
+  // quiet on THIS verdict rather than on the next one. Discharged after that read.
+  const intentId = await linkInlineIntent(
+    deps,
+    asString(args['sessionId']),
+    asString(args['intent']),
+    PredicateKind.SETTLED === predicate.kind ? undefined : predicate,
+  );
+  // A full-document navigation tears the in-page SDK down mid-wait, and the predicate finishes
+  // `observationLost` against a channel that no longer exists. `act_and_wait` has followed the
+  // document that took over since the MPA drive was fixed; this path did not, so an assertion
+  // straddling a navigation came back "Reticle could not tell" while the answer was sitting on
+  // the successor — reported four times from the field, every one of them proving `yes` on the
+  // UNCHANGED predicate after a manual reconnect. Re-asking is not fabricating: the consequence
+  // is evaluated on a live document, and where there is no unique successor to follow,
+  // `followLostObservation` refuses to guess and the honest lost verdict stands.
+  const predicateStarted = session.elapsed();
+  const followed = await followLostObservation({
+    sessions: deps.sessions,
+    session,
+    verdict:
+      grading.wait || timeout > 0
+        ? await waitForPredicate(session, predicate, timeout, since)
+        : await evaluatePredicate(session, predicate, since),
+    timeout,
+    predicateStarted,
+    reevaluate: (next, budget) => waitForPredicate(next, predicate, budget, 0),
+  });
+  // The successor's buffer is its own: the departed session's cursor means nothing there.
+  if (followed.followed) since = 0;
+  session = followed.session;
+  const verdict = followed.verdict;
+  // A GREEN presence-only assertion is the dangerous case (a wrong element can fake it) — nudge
+  // toward a consequence. Never on a failing verdict (moot) or when a signal/net is asserted.
+  // Two nudges, both only on a GREEN verdict (a failing one is moot): a presence-only assertion
+  // a wrong element can fake, and an assertion pinned to a status Reticle derived rather than one
+  // a server sent. Neither blocks — the assertion still passes; they steer the next one.
+  const advice = !verdict.pass
+    ? {}
+    : isPresenceOnlyAssertion(predicate)
+      ? { advice: PRESENCE_ONLY_ADVICE }
+      : assertsDerivedIpcStatus(predicate)
+        ? { advice: DERIVED_IPC_STATUS_ADVICE }
+        : {};
+  // Asked of every verdict drawn after an observed edit, not once per edit — see
+  // isChangeUndeclared for why repeating it is disclosure rather than nagging.
+  const changeUndeclared = await isChangeUndeclared(session.currentEditEpoch, () =>
+    openSessionIntents(deps, asString(args['sessionId'])),
+  );
+  const { decision, contradictions, coverage, gaps, verdictEffect } = await assertVerdict(
+    session,
+    predicate,
+    verdict.pass,
+    verdict.evidence,
+    since,
+    verdict.inconclusive,
+    verdict.observationLost,
+    changeUndeclared,
+  );
+  // The assertion IS the proof attempt, so a green one discharges the intent it was drawn for. A
+  // red proved nothing, and an unbound intent refuses discharge anyway — see inline-intent.ts.
+  // The id is checked HERE rather than only inside the helper so a caller that declared no intent
+  // touches nothing at all, not even the clock.
+  if (intentId !== undefined && Verified.YES === decision['verified']) {
+    await dischargeInlineIntent(
+      deps,
+      asString(args['sessionId']),
+      intentId,
+      {
+        verdictId: inlineVerdictId(grading.tool, deps.now()),
+        grade: gradeOfPredicate(predicate),
+        at: deps.now(),
+      },
+      /*
+       * An assertion has no element of its own — it observes, it does not act. The file it names
+       * is the one the LAST action touched, which is the code path that produced the state being
+       * asserted about. Already remembered on the session for exactly this reason: an assertion
+       * whose failure has nothing to point at still needs to name a file.
+       */
+      session.lastAct.source(),
+    );
+  }
+  // Journal the verdict so a LATER turn can read what this one proved. A verdict that lives only
+  // in the response lives only in the agent's context window, which is the copy a compaction
+  // destroys — see runs/run-context.ts. Recorded WITHOUT an attribution window: this tool drives
+  // nothing, so no event it observed was caused by it.
+  session.recordAction(grading.tool, asRecord(args), verdictEffect);
+  const graded = withControl(session, {
+    ...decision,
+    ...annotateStarvedFailure(session, verdict),
+    ...(followed.followed ? { sessionId: session.id } : {}),
+    ...(contradictions.length > 0 ? { contradictions } : {}),
+    // What the app did not tell Reticle, on the same rule the act path uses.
+    // Remedy once per session, facts every time. Applied HERE rather than inside
+    // assert-verdict: that file lives in `assert/`, and importing this from there added a new
+    // directory reach (and a 22nd mutual pair) that `directory-reach.test.ts` rightly refused.
+    // The filter belongs where the response is assembled anyway — telemetry above keeps the
+    // full text. See gap-novelty.ts.
+    ...(gaps.length > 0 ? { instrumentationGaps: withGapNovelty(session.id, gaps) } : {}),
+    ...advice,
+    ...coverage,
+    // The SAME pointer the journal keeps, not a second lookup — one verdict, one file:line.
+    ...(verdictEffect.source === undefined ? {} : { source: verdictEffect.source }),
+    ...healthEnvelope(currentOf(deps.sessions, session)),
+    ...bufferEnvelope(session),
+  });
+  return { graded, verdict };
+}
 
 export const OBSERVE_TOOLS: ToolDef[] = [
   {
@@ -292,6 +435,8 @@ export const OBSERVE_TOOLS: ToolDef[] = [
           'Present when this call stopped at the per-call limit before the predicate was seen. Call again with timeout_ms set to this, the same predicate and the same since, to keep waiting.',
         ),
       pass: z.boolean(),
+      verified: z.string().optional().describe('Gate on this: only "yes" is a pass.'),
+      verifiedReason: z.string().optional(),
       evidence: z.unknown().optional(),
       failureReason: z.string().optional(),
       observationLost: z
@@ -345,50 +490,13 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       const requestedMs = asNumber(args['timeout_ms']) ?? DEFAULT_ASSERT_TIMEOUT_MS;
       // One call never blocks past what the client allows; the rest comes back as resume_ms.
       const waitBudget = Math.min(requestedMs, MAX_BLOCKING_WAIT_MS);
-      // Spend the budget waiting for the APP as well as for the predicate. See resolve-within.
-      let session = await resolveSessionWithin(
-        deps.sessions,
-        asString(args['sessionId']),
-        waitBudget,
-        WALL_CLOCK,
-      );
-      // `until` is act_and_wait's name for this — see alias-args.ts.
-      const predicate = parsePredicate(aliasParam(args, 'predicate', ['until'])['predicate']);
-      // Refused up front rather than waited out: a body clause this session cannot answer would
-      // burn the whole timeout to report something knowable now. See #801(C).
-      const bodyRefusal = bodyClauseRefusal(predicate, session);
-      if (bodyRefusal !== undefined) throw new Error(bodyRefusal);
-      // Honesty: explicit since wins; else default to the last act's cursor; else the whole buffer.
-      let since = asNumber(args['since']) ?? session.lastAct.cursor() ?? 0;
-      // See the note on the assert handler below: a wait cut off by a full-document navigation is
-      // followed to the document that took over, rather than graded as a lost observation there.
-      const predicateStarted = session.elapsed();
-      const followed = await followLostObservation({
-        sessions: deps.sessions,
-        session,
-        verdict: await waitForPredicate(session, predicate, waitBudget, since),
+      const { graded, verdict } = await gradeAssertion(deps, args, {
+        tool: ReticleTool.WAIT_FOR,
         timeout: waitBudget,
-        predicateStarted,
-        reevaluate: (next, budget) => waitForPredicate(next, predicate, budget, 0),
+        wait: true,
       });
-      if (followed.followed) since = 0;
-      session = followed.session;
-      const verdict = followed.verdict;
-      // match reticle_assert — wrap with control + session health (throttle matters most while blocking)
-      // and the buffer envelope, so a verdict reached over an evicted window says so.
-      return withControl(session, {
-        // #537's starved-wait note wraps the verdict (it RETURNS the verdict), so it stands where
-        // `...verdict` did. The source line is #533's `assertionSource`, which superseded
-        // `lastActSourceOnFailure` — an assert used to be blamed on the previous act's file:line.
-        ...annotateStarvedFailure(session, verdict),
-        ...assertionSource(session, predicate, verdict),
-        ...(followed.followed ? { sessionId: session.id } : {}),
-        ...((resume: number | undefined) => (resume === undefined ? {} : { resume_ms: resume }))(
-          resumeAfter(requestedMs, waitBudget, verdict),
-        ),
-        ...healthEnvelope(session),
-        ...bufferEnvelope(session),
-      });
+      const resume = resumeAfter(requestedMs, waitBudget, verdict);
+      return resume === undefined ? graded : { ...graded, resume_ms: resume };
     },
   },
   {
@@ -425,6 +533,8 @@ export const OBSERVE_TOOLS: ToolDef[] = [
     },
     outputSchema: {
       pass: z.boolean(),
+      verified: z.string().optional().describe('Gate on this: only "yes" is a pass.'),
+      verifiedReason: z.string().optional(),
       evidence: z.unknown().optional(),
       failureReason: z.string().optional(),
       observationLost: z
@@ -496,127 +606,8 @@ export const OBSERVE_TOOLS: ToolDef[] = [
     },
     handler: async (deps, args) => {
       const timeout = asNumber(args['timeout_ms']) ?? 0;
-      // Spend the budget waiting for the APP as well as for the predicate. See resolve-within.
-      let session = await resolveSessionWithin(
-        deps.sessions,
-        asString(args['sessionId']),
-        timeout,
-        WALL_CLOCK,
-      );
-      // `until` is act_and_wait's name for this — see alias-args.ts.
-      const predicate = parsePredicate(aliasParam(args, 'predicate', ['until'])['predicate']);
-      // Refused up front rather than waited out: a body clause this session cannot answer would
-      // burn the whole timeout to report something knowable now. See #801(C).
-      const bodyRefusal = bodyClauseRefusal(predicate, session);
-      if (bodyRefusal !== undefined) throw new Error(bodyRefusal);
-      // Honesty: explicit since wins; else default to the last act's cursor; else the whole buffer.
-      let since = asNumber(args['since']) ?? session.lastAct.cursor() ?? 0;
-      // Declared BEFORE the verdict, so the undeclared-change read below finds it open and stays
-      // quiet on THIS verdict rather than on the next one. Discharged after that read.
-      const intentId = await linkInlineIntent(
-        deps,
-        asString(args['sessionId']),
-        asString(args['intent']),
-        PredicateKind.SETTLED === predicate.kind ? undefined : predicate,
-      );
-      // A full-document navigation tears the in-page SDK down mid-wait, and the predicate finishes
-      // `observationLost` against a channel that no longer exists. `act_and_wait` has followed the
-      // document that took over since the MPA drive was fixed; this path did not, so an assertion
-      // straddling a navigation came back "Reticle could not tell" while the answer was sitting on
-      // the successor — reported four times from the field, every one of them proving `yes` on the
-      // UNCHANGED predicate after a manual reconnect. Re-asking is not fabricating: the consequence
-      // is evaluated on a live document, and where there is no unique successor to follow,
-      // `followLostObservation` refuses to guess and the honest lost verdict stands.
-      const predicateStarted = session.elapsed();
-      const followed = await followLostObservation({
-        sessions: deps.sessions,
-        session,
-        verdict:
-          timeout > 0
-            ? await waitForPredicate(session, predicate, timeout, since)
-            : await evaluatePredicate(session, predicate, since),
-        timeout,
-        predicateStarted,
-        reevaluate: (next, budget) => waitForPredicate(next, predicate, budget, 0),
-      });
-      // The successor's buffer is its own: the departed session's cursor means nothing there.
-      if (followed.followed) since = 0;
-      session = followed.session;
-      const verdict = followed.verdict;
-      // A GREEN presence-only assertion is the dangerous case (a wrong element can fake it) — nudge
-      // toward a consequence. Never on a failing verdict (moot) or when a signal/net is asserted.
-      // Two nudges, both only on a GREEN verdict (a failing one is moot): a presence-only assertion
-      // a wrong element can fake, and an assertion pinned to a status Reticle derived rather than one
-      // a server sent. Neither blocks — the assertion still passes; they steer the next one.
-      const advice = !verdict.pass
-        ? {}
-        : isPresenceOnlyAssertion(predicate)
-          ? { advice: PRESENCE_ONLY_ADVICE }
-          : assertsDerivedIpcStatus(predicate)
-            ? { advice: DERIVED_IPC_STATUS_ADVICE }
-            : {};
-      // Asked of every verdict drawn after an observed edit, not once per edit — see
-      // isChangeUndeclared for why repeating it is disclosure rather than nagging.
-      const changeUndeclared = await isChangeUndeclared(session.currentEditEpoch, () =>
-        openSessionIntents(deps, asString(args['sessionId'])),
-      );
-      const { decision, contradictions, coverage, gaps, verdictEffect } = await assertVerdict(
-        session,
-        predicate,
-        verdict.pass,
-        verdict.evidence,
-        since,
-        verdict.inconclusive,
-        verdict.observationLost,
-        changeUndeclared,
-      );
-      // The assertion IS the proof attempt, so a green one discharges the intent it was drawn for. A
-      // red proved nothing, and an unbound intent refuses discharge anyway — see inline-intent.ts.
-      // The id is checked HERE rather than only inside the helper so a caller that declared no intent
-      // touches nothing at all, not even the clock.
-      if (intentId !== undefined && Verified.YES === decision['verified']) {
-        await dischargeInlineIntent(
-          deps,
-          asString(args['sessionId']),
-          intentId,
-          {
-            verdictId: inlineVerdictId(ReticleTool.ASSERT, deps.now()),
-            grade: gradeOfPredicate(predicate),
-            at: deps.now(),
-          },
-          /*
-           * An assertion has no element of its own — it observes, it does not act. The file it names
-           * is the one the LAST action touched, which is the code path that produced the state being
-           * asserted about. Already remembered on the session for exactly this reason: an assertion
-           * whose failure has nothing to point at still needs to name a file.
-           */
-          session.lastAct.source(),
-        );
-      }
-      // Journal the verdict so a LATER turn can read what this one proved. A verdict that lives only
-      // in the response lives only in the agent's context window, which is the copy a compaction
-      // destroys — see runs/run-context.ts. Recorded WITHOUT an attribution window: this tool drives
-      // nothing, so no event it observed was caused by it.
-      session.recordAction(ReticleTool.ASSERT, asRecord(args), verdictEffect);
-      return withControl(session, {
-        ...decision,
-        ...annotateStarvedFailure(session, verdict),
-        ...(followed.followed ? { sessionId: session.id } : {}),
-        ...(contradictions.length > 0 ? { contradictions } : {}),
-        // What the app did not tell Reticle, on the same rule the act path uses.
-        // Remedy once per session, facts every time. Applied HERE rather than inside
-        // assert-verdict: that file lives in `assert/`, and importing this from there added a new
-        // directory reach (and a 22nd mutual pair) that `directory-reach.test.ts` rightly refused.
-        // The filter belongs where the response is assembled anyway — telemetry above keeps the
-        // full text. See gap-novelty.ts.
-        ...(gaps.length > 0 ? { instrumentationGaps: withGapNovelty(session.id, gaps) } : {}),
-        ...advice,
-        ...coverage,
-        // The SAME pointer the journal keeps, not a second lookup — one verdict, one file:line.
-        ...(verdictEffect.source === undefined ? {} : { source: verdictEffect.source }),
-        ...healthEnvelope(currentOf(deps.sessions, session)),
-        ...bufferEnvelope(session),
-      });
+      return (await gradeAssertion(deps, args, { tool: ReticleTool.ASSERT, timeout, wait: false }))
+        .graded;
     },
   },
   {

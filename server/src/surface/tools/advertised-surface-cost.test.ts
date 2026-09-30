@@ -233,8 +233,12 @@ describe('advertised surface cost', () => {
  *
  * The budget is deliberately loose. This one is not shipped to users, so the number is here to catch
  * a surprise rather than to squeeze; the DEFAULT budget above is the ratchet that matters.
+ *
+ * Raised from 140 000 by 500 on purpose (#1119): `reticle_assert` and `reticle_wait_for` now declare
+ * `verified` and `verifiedReason`, the fields their own description says to gate on, so a
+ * schema-validating client keeps them. Both descriptions were trimmed to the minimum first.
  */
-const ALL_SURFACE_BYTE_BUDGET = 140_000;
+const ALL_SURFACE_BYTE_BUDGET = 140_500;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {
