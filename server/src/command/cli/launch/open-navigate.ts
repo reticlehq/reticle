@@ -19,6 +19,15 @@ export interface OpenNavigateOptions {
   connect?: (endpoint: URL) => Promise<ToolCaller>;
 }
 
+/** Named, as the repository asks of every user-facing string. */
+const DAEMON_UNREACHABLE = 'could not reach the daemon to navigate';
+const NAVIGATE_FAILED = 'navigate failed';
+const NO_ARRIVAL_REPORTED = 'reticle_navigate did not report arrival';
+/** Accepted by the browser, but no page on the url was observed: not `navigated`, and not an error. */
+export const NAVIGATE_UNCONFIRMED_NOTE =
+  'the browser accepted the navigation, but no page on that url reconnected in the wait window, so ' +
+  'arrival was not observed. Re-run `reticle status` before relying on the tab being there.';
+
 /** The fields `reticle_navigate` answers with that a CLI reader acts on. */
 function navigateReport(result: unknown): Record<string, unknown> | undefined {
   if (typeof result !== 'object' || null === result) return undefined;
@@ -55,7 +64,7 @@ export async function navigateLeftTab(
     caller = await connect(endpointFor(options.port, options.token));
   } catch (error) {
     return {
-      error: `could not reach the daemon to navigate: ${error instanceof Error ? error.message : String(error)}`,
+      error: `${DAEMON_UNREACHABLE}: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
   try {
@@ -65,12 +74,17 @@ export async function navigateLeftTab(
     });
     const report = navigateReport(result) ?? {};
     const landedOn = 'string' === typeof report['landedOn'] ? report['landedOn'] : undefined;
+    // A navigation reconnects as a NEW session; the id to act on next is the arrival's, not ours.
+    const arrivedAs =
+      'string' === typeof report['sessionId'] ? report['sessionId'] : options.sessionId;
+    if (true === report['ok'] && false === report['confirmed'] && landedOn === undefined) {
+      return { requested: options.url, sessionId: arrivedAs, note: NAVIGATE_UNCONFIRMED_NOTE };
+    }
     if (true === report['ok']) {
       return {
         navigated: options.url,
-        sessionId: options.sessionId,
+        sessionId: arrivedAs,
         ...(landedOn === undefined ? {} : { landedOn }),
-        ...(false === report['confirmed'] ? { confirmed: false } : {}),
       };
     }
     const reason =
@@ -78,11 +92,14 @@ export async function navigateLeftTab(
         ? report['reason']
         : 'string' === typeof report['error']
           ? report['error']
-          : 'reticle_navigate did not report arrival';
-    return { error: `navigate to ${options.url} failed: ${reason}`, sessionId: options.sessionId };
+          : NO_ARRIVAL_REPORTED;
+    return {
+      error: `${NAVIGATE_FAILED} (${options.url}): ${reason}`,
+      sessionId: options.sessionId,
+    };
   } catch (error) {
     return {
-      error: `navigate to ${options.url} failed: ${error instanceof Error ? error.message : String(error)}`,
+      error: `${NAVIGATE_FAILED} (${options.url}): ${error instanceof Error ? error.message : String(error)}`,
     };
   } finally {
     await caller.close().catch(() => undefined);

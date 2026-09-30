@@ -10,7 +10,7 @@ import { ReticleTool } from '@reticlehq/core';
 import type { ToolCaller } from '@/command/cli/adhoc-verdict.js';
 import { parseCliArgs } from '@/command/cli/cli-parse.js';
 import { decideOpen } from './cli-launch.js';
-import { navigateLeftTab } from './open-navigate.js';
+import { NAVIGATE_UNCONFIRMED_NOTE, navigateLeftTab } from './open-navigate.js';
 
 function fakeDaemon(answer: Record<string, unknown>): {
   connect: (endpoint: URL) => Promise<ToolCaller>;
@@ -68,6 +68,37 @@ describe('reticle open --navigate', () => {
       { name: ReticleTool.NAVIGATE, args: { url: 'http://localhost:3000/b', sessionId: 's-a' } },
     ]);
     expect(out).toEqual({ navigated: 'http://localhost:3000/b', sessionId: 's-a' });
+  });
+
+  it('does not call an unobserved arrival navigated', async () => {
+    const daemon = fakeDaemon({ ok: true, confirmed: false });
+
+    const out = await navigateLeftTab({
+      port: 4400,
+      sessionId: 's-a',
+      url: 'http://localhost:3000/b',
+      connect: daemon.connect,
+    });
+
+    expect(out['navigated']).toBeUndefined();
+    expect(out['error']).toBeUndefined();
+    expect(out).toMatchObject({
+      requested: 'http://localhost:3000/b',
+      note: NAVIGATE_UNCONFIRMED_NOTE,
+    });
+  });
+
+  it('reports the session the page reconnected as, which is the one to act on next', async () => {
+    const daemon = fakeDaemon({ ok: true, confirmed: true, sessionId: 's-b' });
+
+    const out = await navigateLeftTab({
+      port: 4400,
+      sessionId: 's-a',
+      url: 'http://localhost:3000/b',
+      connect: daemon.connect,
+    });
+
+    expect(out).toEqual({ navigated: 'http://localhost:3000/b', sessionId: 's-b' });
   });
 
   it('passes on where a redirect landed', async () => {
