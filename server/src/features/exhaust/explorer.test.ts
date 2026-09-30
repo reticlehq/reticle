@@ -190,7 +190,18 @@ describe('driveFailureBranches', () => {
     const port: ExplorePort = {
       reset: () => Promise.resolve(true),
       look: () => Promise.resolve({ tree: '- button "Add item" (ref=e1)', route: '/d' }),
-      act: () => Promise.resolve({ ok: true, events: [] }),
+      // The add is sent and broken by the rule — status 0 — and the panel shows nothing either way.
+      act: () =>
+        Promise.resolve({
+          ok: true,
+          events: [
+            {
+              type: 'net.request',
+              t: 1,
+              data: { method: 'POST', url: 'http://h/api/items', status: 0 },
+            } as unknown as ReticleEvent,
+          ],
+        }),
       mock: () => Promise.resolve(true),
     };
     const stateOfPage = 'S';
@@ -208,5 +219,148 @@ describe('driveFailureBranches', () => {
     const branches = await driveFailureBranches(noMocks, report.writes, { maxActions: 50 });
     expect(branches.branched).toEqual([]);
     expect(branches.skipped).toMatch(/driven browser/);
+  });
+});
+
+/*
+ * A tiny scripted app for the review's cases: each control says where it goes and what it sends.
+ * `aborts` decides, per request, whether an installed abort rule actually breaks it.
+ */
+interface Scripted {
+  role: 'button' | 'link' | 'textbox';
+  label: string;
+  /** Present only after the page's fields are filled. */
+  afterFill?: boolean;
+  to?: string;
+  send?: string;
+}
+function scriptedApp(
+  pages: Record<string, Scripted[]>,
+  opts: { start: string; aborts?: (url: string) => boolean },
+) {
+  let page = opts.start;
+  let filled = false;
+  let seq = 0;
+  let refs = new Map<string, Scripted>();
+  let rules: { urlContains: string; method?: string }[] = [];
+  const acted: string[] = [];
+  const port: ExplorePort = {
+    reset: () => {
+      page = opts.start;
+      filled = false;
+      return Promise.resolve(true);
+    },
+    look: () => {
+      refs = new Map();
+      const tree = (pages[page] ?? [])
+        .filter((c) => true !== c.afterFill || filled)
+        .map((c) => {
+          seq += 1;
+          const ref = `e${String(seq)}`;
+          refs.set(ref, c);
+          return `- ${c.role} "${c.label}" (ref=${ref})`;
+        })
+        .join('\n');
+      return Promise.resolve({ tree, route: `/${page}` });
+    },
+    act: (ref, action) => {
+      const c = refs.get(ref);
+      if (c === undefined) return Promise.resolve({ ok: false, events: [] });
+      acted.push(`${action} ${c.label}`);
+      if ('fill' === action) {
+        filled = true;
+        return Promise.resolve({ ok: true, events: [] });
+      }
+      const events: ReticleEvent[] = [];
+      let broken = false;
+      if (c.send !== undefined) {
+        const url = `http://h${c.send}`;
+        const matched = rules.some((r) => url.includes(r.urlContains));
+        broken = matched && (opts.aborts?.(url) ?? true);
+        events.push({
+          type: 'net.request',
+          t: 1,
+          data: { method: 'POST', url, status: broken ? 0 : 200 },
+        } as unknown as ReticleEvent);
+      }
+      if (c.to !== undefined && !broken) page = c.to;
+      return Promise.resolve({ ok: true, events });
+    },
+    mock: (next) => {
+      rules = next;
+      return Promise.resolve(true);
+    },
+  };
+  return { port, acted };
+}
+
+describe('explore — the review of the exhaustive crawl', () => {
+  // A same-named control on another screen is another control, not one already covered.
+  it('tries a "Save" on a second screen after a "Save" on the first', async () => {
+    const { port } = scriptedApp(
+      {
+        one: [
+          { role: 'button', label: 'Save', send: '/api/one' },
+          { role: 'link', label: 'Go', to: 'two' },
+        ],
+        two: [{ role: 'button', label: 'Save', send: '/api/two' }],
+      },
+      { start: 'one' },
+    );
+    const report = await explore(port, { maxActions: 100, fillValue: () => 'x' });
+    expect(report.writes.map((w) => w.key).sort()).toEqual(['POST /api/one', 'POST /api/two']);
+  });
+
+  // Valid input reveals the button that moves on; it has to be found after the fill, not before.
+  it('clicks a control that appears only once the form is filled', async () => {
+    const { port } = scriptedApp(
+      {
+        form: [
+          { role: 'textbox', label: 'Name' },
+          { role: 'button', label: 'Continue', afterFill: true, to: 'done' },
+        ],
+        done: [{ role: 'button', label: 'Finish' }],
+      },
+      { start: 'form' },
+    );
+    const report = await explore(port, { maxActions: 100, fillValue: () => 'x' });
+    expect(report.routes).toContain('/done');
+    expect(report.touched).toContain('button "Continue"');
+  });
+});
+
+describe('driveFailureBranches — only a failure that happened counts as driven', () => {
+  const app = {
+    start: [
+      { role: 'button' as const, label: 'Seed', send: '/api/pay', to: 'cart' },
+      { role: 'button' as const, label: 'Other', to: 'start' },
+    ],
+    cart: [{ role: 'button' as const, label: 'Pay', send: '/api/pay', to: 'receipt' }],
+    receipt: [{ role: 'button' as const, label: 'Done' }],
+  };
+  const payWrite = {
+    key: 'POST /api/pay',
+    method: 'POST',
+    urlPath: '/api/pay',
+    path: [
+      { key: 'button "Seed"', action: 'click' as const },
+      { key: 'button "Pay"', action: 'click' as const },
+    ],
+    beforeState: 'cart',
+    successState: 'receipt',
+  };
+
+  it('does not credit a branch when the abort never reached the request', async () => {
+    const { port } = scriptedApp(app, { start: 'start', aborts: () => false });
+    const branches = await driveFailureBranches(port, [payWrite], { maxActions: 20 });
+    expect(branches.branched).toEqual([]);
+    // Nothing failed, so nothing can be accused of claiming success over a failure.
+    expect(branches.unhandled).toEqual([]);
+  });
+
+  it('breaks only the target write, not the same request fired while setting up', async () => {
+    const { port } = scriptedApp(app, { start: 'start' });
+    const branches = await driveFailureBranches(port, [payWrite], { maxActions: 20 });
+    expect(branches.branched).toEqual(['POST /api/pay']);
   });
 });

@@ -32,6 +32,7 @@ export async function foldAppCoverage(input: {
     eventsSince(cursor: number): ReticleEvent[];
   };
   takeCode?: (sessionUrl: string) => Promise<readonly RawScriptCoverage[] | undefined>;
+  now: () => number;
 }): Promise<AppCoverageReport> {
   const { session } = input;
   const take = await input.takeCode?.(session.url);
@@ -44,7 +45,9 @@ export async function foldAppCoverage(input: {
   });
   const ledger = await new LedgerStore(input.fs, input.reticleRoot).merge({
     ...delta,
-    ...(take === undefined ? {} : { code: foldCodeCoverage(emptyCodeCoverage(), take) }),
+    ...(take === undefined
+      ? {}
+      : { code: foldCodeCoverage(emptyCodeCoverage(), take), codeTakenAt: input.now() }),
   });
   return {
     levels: levelsOf(ledger),

@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { TOOLS, type ToolDef, type ToolDeps } from '@/surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { CAPPED_SNAPSHOT_NOTE, type CrawlReport } from './crawl.js';
-import { CRAWL_TOOLS } from './crawl-tools.js';
+import { CRAWL_TOOLS, crawlSecret } from './crawl-tools.js';
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 
@@ -176,5 +176,25 @@ describe('the crawl output schema declares everything crawl returns', () => {
     for (const key of Object.keys(report.anomalies[0] ?? {})) {
       expect(Object.keys(roundTripped[0] ?? {})).toContain(key);
     }
+  });
+});
+
+/*
+ * An exhaustive crawl fills `RETICLE_SECRET_<FIELD>` into a field named for it, which is how it gets
+ * past a login. The field name comes from whatever page is on screen, so a page on another origin
+ * could name an empty textbox to collect a secret. Secrets go only to the origin the crawl began on.
+ */
+describe('crawlSecret — a secret is filled only on the origin the crawl started on', () => {
+  const env = { RETICLE_SECRET_PASSWORD: 'hunter2' };
+  const secret = crawlSecret('http://localhost:3000/login', env);
+
+  it('fills it on the starting origin', () => {
+    expect(secret('Password', 'http://localhost:3000/account')).toBe('hunter2');
+  });
+
+  it('withholds it from any other origin, or a page it cannot place', () => {
+    expect(secret('Password', 'http://evil.test/login')).toBeUndefined();
+    expect(secret('Password', 'http://localhost:4000/login')).toBeUndefined();
+    expect(secret('Password', 'not a url')).toBeUndefined();
   });
 });

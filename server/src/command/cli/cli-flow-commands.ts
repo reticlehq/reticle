@@ -21,7 +21,12 @@ import {
   type NamedFlow,
 } from '@/language/flows/change/flow-sources.js';
 import { isInteractiveSource, unflowedFiles } from '@/language/flows/change/affected.js';
-import { LedgerStore, regressions, unexecutedChanged } from '@/features/exhaust/ledger.js';
+import {
+  LedgerStore,
+  regressions,
+  staleChanged,
+  unexecutedChanged,
+} from '@/features/exhaust/ledger.js';
 import { gateDecision } from '@/language/flows/change/gate.js';
 import { FlakeStore } from '@/language/flows/stores/flake-store.js';
 import { formatBuddyStatus } from '@/language/flows/buddy-status.js';
@@ -30,7 +35,7 @@ import { AssertionTiersStore } from '@/language/flows/stores/assertion-tiers-sto
 import { detectDowngrades } from '@/judgement/outcome/assertion-integrity.js';
 import { computeCoverage, flowCoverageReport } from '@/language/flows/suite/coverage.js';
 import { createWatchBatcher } from '@/language/flows/change/watch-batcher.js';
-import { readFileSync, watch } from 'node:fs';
+import { readFileSync, statSync, watch } from 'node:fs';
 import { log } from '@/log.js';
 /** Load the {name, steps} of every saved flow for the active project. */
 /** Explicit files plus, when --since is given, the git-changed files since that ref. */
@@ -193,16 +198,25 @@ export async function handleCapsules(): Promise<void> {
  * root while the gate may run in a package below it, so leading segments are dropped until the path
  * resolves from `cwd`.
  */
-function readChangedFile(cwd: string, file: string): string {
+function atChangedPath<T>(cwd: string, file: string, read: (path: string) => T): T | undefined {
   const parts = file.split('/');
   for (let i = 0; i < parts.length; i += 1) {
     try {
-      return readFileSync(join(cwd, ...parts.slice(i)), 'utf8');
+      return read(join(cwd, ...parts.slice(i)));
     } catch {
       // not at this depth; try the path one segment shorter
     }
   }
-  return '';
+  return undefined;
+}
+
+function readChangedFile(cwd: string, file: string): string {
+  return atChangedPath(cwd, file, (path) => readFileSync(path, 'utf8')) ?? '';
+}
+
+/** When a changed file was last modified, or undefined when it is gone. Same lookup as its text. */
+function changedFileModifiedAt(cwd: string, file: string): number | undefined {
+  return atChangedPath(cwd, file, (path) => statSync(path).mtimeMs);
 }
 
 export async function handleGate(
@@ -265,6 +279,13 @@ export async function handleGate(
     const ledgerStore = new LedgerStore(fs, reticleRoot);
     const coverageAccepted = acceptCoverage ? await ledgerStore.acceptCurrent() : [];
     const ledger = await ledgerStore.load();
+    const unexecuted = unexecutedChanged(ledger.code, changed);
+    // Changed files whose coverage predates the edit: their counts describe the old code, so
+    // `unexecuted` cannot judge them either way. Named rather than silently read as covered; not
+    // blocking, because a destructive exhaustive crawl after every edit is not a price a gate may set.
+    const coverageStale = staleChanged(ledger, changed, (file) =>
+      changedFileModifiedAt(process.cwd(), file),
+    ).filter((file) => !unexecuted.includes(file));
     const result = gateDecision({
       affected,
       passing,
@@ -273,7 +294,7 @@ export async function handleGate(
       deleted,
       unflowed,
       coverageRegressed: regressions(ledger),
-      unexecuted: unexecutedChanged(ledger.code, changed),
+      unexecuted,
     });
     // Verified-surface coverage over flows: how much of the saved suite this run actually exercised.
     const coverage = computeCoverage(
@@ -295,6 +316,7 @@ export async function handleGate(
         ? { coverageRegressed: result.coverageRegressed }
         : {}),
       ...(result.unexecuted.length > 0 ? { unexecuted: result.unexecuted } : {}),
+      ...(coverageStale.length > 0 ? { coverageStale } : {}),
       ...(coverageAccepted.length > 0 ? { coverageAccepted } : {}),
       coverage: flowCoverage,
     });

@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import {
+  LedgerStore,
   acceptCurrent,
   emptyLedger,
   levelsOf,
   mergeLedger,
   raiseBest,
   regressions,
+  staleChanged,
   unexecutedChanged,
 } from './ledger.js';
 
@@ -126,5 +132,55 @@ describe('unexecutedChanged', () => {
     expect(
       unexecutedChanged(code, ['apps/web/src/Refund.tsx', 'src/Cart.tsx', 'src/Other.tsx']),
     ).toEqual(['apps/web/src/Refund.tsx']);
+  });
+});
+
+/*
+ * Two sessions fold into the same ledger at once. Each loaded the same copy and wrote its own
+ * update, so the later write threw the other's coverage away.
+ */
+describe('LedgerStore — concurrent folds', () => {
+  it('keeps both sessions’ coverage', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'reticle-ledger-'));
+    const store = (): LedgerStore => new LedgerStore(createNodeFileSystem(), root);
+    await Promise.all([
+      store().merge({ routes: { reached: ['/a'] } }),
+      store().merge({ routes: { reached: ['/b'] } }),
+      store().merge({ routes: { reached: ['/c'] } }),
+    ]);
+    expect((await store().load()).routes.reached.sort()).toEqual(['/a', '/b', '/c']);
+    await rm(root, { recursive: true, force: true });
+  });
+});
+
+/*
+ * Function counts are kept per file across takes, so an edited file keeps the counts of the version
+ * before the edit. The gate read those as current and could judge a change that never ran. A file
+ * modified after its last take is named as not measured since the change.
+ */
+describe('staleChanged — coverage taken before the file last changed', () => {
+  const ledger = mergeLedger(emptyLedger(), {
+    code: { 'src/Cart.tsx': { 'pay@10': { name: 'pay', executed: true } } },
+    codeTakenAt: 1_000,
+  });
+
+  it('names a changed file whose last take predates the edit', () => {
+    expect(staleChanged(ledger, ['web/src/Cart.tsx'], () => 2_000)).toEqual(['web/src/Cart.tsx']);
+  });
+
+  it('trusts a take made after the edit', () => {
+    expect(staleChanged(ledger, ['web/src/Cart.tsx'], () => 500)).toEqual([]);
+  });
+
+  it('says nothing of a file coverage never saw, or one that no longer exists', () => {
+    expect(staleChanged(ledger, ['src/Other.tsx'], () => 2_000)).toEqual([]);
+    expect(staleChanged(ledger, ['src/Cart.tsx'], () => undefined)).toEqual([]);
+  });
+
+  it('treats a take with no recorded time as stale', () => {
+    const old = mergeLedger(emptyLedger(), {
+      code: { 'src/Cart.tsx': { 'pay@10': { name: 'pay', executed: true } } },
+    });
+    expect(staleChanged(old, ['src/Cart.tsx'], () => 1)).toEqual(['src/Cart.tsx']);
   });
 });

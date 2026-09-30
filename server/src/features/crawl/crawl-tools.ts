@@ -16,6 +16,27 @@ import { routeFromUrl, routesFromEvents } from '@/memory/project/learned-routes.
 const nodeSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * The configured secret for a field, only on the origin the crawl started on. The field name comes
+ * from whatever page is on screen, so without the check a page on another origin could name an
+ * empty textbox after a secret and have the crawl type it in.
+ */
+export function crawlSecret(
+  startUrl: string,
+  env: Readonly<Record<string, string | undefined>>,
+): (name: string, pageUrl: string) => string | undefined {
+  const originOf = (url: string): string | undefined => {
+    try {
+      return new URL(url).origin;
+    } catch {
+      return undefined;
+    }
+  };
+  const home = originOf(startUrl);
+  return (name, pageUrl) =>
+    home !== undefined && home === originOf(pageUrl) ? env[secretEnvKey(name)] : undefined;
+}
+
+/**
  * The autonomous "smart monkey" tool. Builds on reticle_explore (which only LISTS) by
  * actually clicking each reachable control and classifying the reaction. DESTRUCTIVE by nature —
  * it drives the app — so it's an explicit, bounded tool, never part of a passive read.
@@ -40,7 +61,7 @@ export const CRAWL_TOOLS: ToolDef[] = [
         .boolean()
         .optional()
         .describe(
-          "Walk every reachable state, drive each write's failure path, fold into the coverage ledger.",
+          "Walk every state it can tell apart, drive each write's failure path, fold into the coverage ledger.",
         ),
       confirmDangerous: z
         .boolean()
@@ -106,15 +127,16 @@ export const CRAWL_TOOLS: ToolDef[] = [
       if (true === args['exhaustive']) {
         // Starts code-coverage collection, so the drive below is measured. See takeCodeCoverage.
         await deps.realInput?.takeCodeCoverage?.(session.url);
+        const secret = crawlSecret(session.url, process.env);
         return runExhaustive({
           sessions: deps.sessions,
           session,
           startUrl: session.url,
           maxActions: maxSteps ?? EXHAUST_DEFAULT_ACTIONS,
           settleMs: settleMs ?? CRAWL_DEFAULTS.SETTLE_MS,
-          fillValue: (label) => {
+          fillValue: (label, pageUrl) => {
             const name = /"([^"]*)"/.exec(label)?.[1] ?? label;
-            return process.env[secretEnvKey(name)] ?? heuristicFillValue(name);
+            return secret(name, pageUrl) ?? heuristicFillValue(name);
           },
           now: deps.now,
           sleep: nodeSleep,

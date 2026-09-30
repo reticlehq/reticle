@@ -24,7 +24,8 @@ export async function runExhaustive(input: {
   startUrl: string;
   maxActions: number;
   settleMs: number;
-  fillValue: (label: string) => string;
+  /** What to type into a field, given the page it is on — a secret is only for its own origin. */
+  fillValue: (label: string, pageUrl: string) => string;
   now: () => number;
   sleep: (ms: number) => Promise<void>;
   setMocks?: (
@@ -47,7 +48,7 @@ export async function runExhaustive(input: {
   const failureBudget = Math.floor(input.maxActions * FAILURE_SHARE);
   const report = await explore(port, {
     maxActions: input.maxActions - failureBudget,
-    fillValue: input.fillValue,
+    fillValue: (label) => input.fillValue(label, port.current().url),
   });
   const branches = await driveFailureBranches(port, report.writes, { maxActions: failureBudget });
   const take = await input.takeCode?.(port.current().url);
@@ -59,7 +60,9 @@ export async function runExhaustive(input: {
       branched: branches.branched,
       unhandled: branches.unhandled.map((u) => u.key),
     },
-    ...(take === undefined ? {} : { code: foldCodeCoverage(emptyCodeCoverage(), take) }),
+    ...(take === undefined
+      ? {}
+      : { code: foldCodeCoverage(emptyCodeCoverage(), take), codeTakenAt: input.now() }),
   });
   const anomalies = [
     ...report.anomalies.map((a) => ({ kind: a.kind, ref: '', desc: a.control, detail: a.detail })),

@@ -217,6 +217,7 @@ export function buildCoverageTools(toolNames: () => readonly string[]): ToolDef[
                   reticleRoot: sessionRoot(deps, sessionId),
                   seen: parseControls(tree).map((c) => c.label),
                   session,
+                  now: deps.now,
                   ...(deps.realInput?.takeCodeCoverage === undefined
                     ? {}
                     : {

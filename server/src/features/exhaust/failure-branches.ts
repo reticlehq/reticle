@@ -13,7 +13,13 @@
  * contradiction the engine observes in the window counts too.
  */
 
-import { isAbsenceDerived, isAdvisory } from '@reticlehq/core';
+import {
+  EventType,
+  asNumber,
+  isAbsenceDerived,
+  isAdvisory,
+  type ReticleEvent,
+} from '@reticlehq/core';
 import { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';
 import {
   controlsOf,
@@ -22,6 +28,7 @@ import {
   type ExplorePort,
   type ExploredWrite,
 } from './explorer.js';
+import { writeKeyOf } from './session-fold.js';
 
 export interface FailureBranches {
   branched: string[];
@@ -38,6 +45,15 @@ export interface FailureBranches {
 
 const NO_MOCKS =
   'failure paths need a driven browser to break a request in (`reticle drive`, or RETICLE_CDP_URL); none were driven, so none were proved';
+
+/** The target write, sent and never answered: an aborted request reports status 0. */
+function aborted(e: ReticleEvent, key: string): boolean {
+  return (
+    EventType.NET_REQUEST === e.type &&
+    writeKeyOf(e) === key &&
+    (0 === asNumber(e.data['status']) || e.data['error'] !== undefined)
+  );
+}
 
 export async function driveFailureBranches(
   port: ExplorePort,
@@ -57,14 +73,20 @@ export async function driveFailureBranches(
     if (spent()) break;
     const last = write.path.at(-1);
     if (last === undefined) continue;
-    if (!(await mock([{ urlContains: write.urlPath, method: write.method, abort: true }])))
-      return { ...out, skipped: NO_MOCKS };
     try {
-      // Everything up to the step that fires the write, then that step with the write failing.
+      // Everything up to the step that fires the write, THEN the break. Installed before the replay,
+      // the abort also broke any setup step sending the same request, and the replay died short of
+      // the action it existed to reach.
       if (!(await replayPath(port, write.path.slice(0, -1), act, spent))) continue;
+      if (!(await mock([{ urlContains: write.urlPath, method: write.method, abort: true }])))
+        return { ...out, skipped: NO_MOCKS };
       const control = controlsOf((await port.look()).tree).find((c) => c.key === last.key);
       if (control === undefined) continue;
       const result = await act(control.ref, last.action, last.value);
+      // Driven means the write was SENT and did not complete. An action that never dispatched, or a
+      // request the rule did not match, drove nothing — and judging where the app landed after a
+      // write that succeeded would accuse it of claiming success over a failure that never happened.
+      if (!result.ok || !result.events.some((e) => aborted(e, write.key))) continue;
       out.branched.push(write.key);
       const after = await port.look();
       const reached = stateKey(after.route, controlsOf(after.tree));

@@ -14,12 +14,14 @@ describe('foldAppCoverage', () => {
   it('accumulates across sessions in .reticle/coverage.json', async () => {
     const { fs } = createMemoryFs();
     await foldAppCoverage({
+      now: () => 0,
       fs,
       reticleRoot: '/p/.reticle',
       seen: ['a', 'b'],
       session: session(['a'], []),
     });
     const second = await foldAppCoverage({
+      now: () => 0,
       fs,
       reticleRoot: '/p/.reticle',
       seen: ['b'],
@@ -36,6 +38,7 @@ describe('foldAppCoverage', () => {
   it('says the executed level is unmeasured when no driven browser can report code', async () => {
     const { fs } = createMemoryFs();
     const report = await foldAppCoverage({
+      now: () => 0,
       fs,
       reticleRoot: '/p/.reticle',
       seen: [],
@@ -47,6 +50,7 @@ describe('foldAppCoverage', () => {
   it('folds code coverage when the driven browser reports it', async () => {
     const { fs } = createMemoryFs();
     const report = await foldAppCoverage({
+      now: () => 0,
       fs,
       reticleRoot: '/p/.reticle',
       seen: [],

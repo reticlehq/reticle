@@ -327,7 +327,7 @@ async function stillSilent(
   session: CrawlSession,
   item: { ref: string; desc: string },
   settleMs: number,
-  opts: { confirmDangerous?: boolean },
+  confirm: boolean,
   sleep: CrawlSleep,
 ): Promise<boolean> {
   const since = session.elapsed();
@@ -336,7 +336,7 @@ async function stillSilent(
     const again = await session.command(ReticleCommand.ACT, {
       ref: item.ref,
       action: ActionType.CLICK,
-      args: true === opts.confirmDangerous ? { [DANGEROUS_ACTION_CONFIRM_ARG]: true } : {},
+      args: confirm ? { [DANGEROUS_ACTION_CONFIRM_ARG]: true } : {},
     });
     await sleep(settleMs);
     // A control that has GONE (the first click removed it) is not a dead control — it did something.
@@ -379,6 +379,10 @@ export async function crawl(
   const found = [...items];
   let frontier: readonly { ref: string; desc: string }[] = items;
   for (let round = 0; ; round += 1) {
+    // `confirmDangerous` covers the controls on the page the caller pointed the crawl at. What a
+    // click REVEALED is new: the "Yes, delete" behind a "Delete" was confirmed with the same flag,
+    // so one call finished a deletion nobody authorized the second half of.
+    const confirm = 0 === round && true === opts.confirmDangerous;
     for (const item of frontier) {
       if (stepsRun >= maxSteps) break;
       // Dedupe by ref (the unique element), not by label — two "Delete"/"Edit" controls share a desc
@@ -412,7 +416,7 @@ export async function crawl(
           const clicked = await session.command(ReticleCommand.ACT, {
             ref: item.ref,
             action: ActionType.CLICK,
-            args: true === opts.confirmDangerous ? { [DANGEROUS_ACTION_CONFIRM_ARG]: true } : {},
+            args: confirm ? { [DANGEROUS_ACTION_CONFIRM_ARG]: true } : {},
           });
           await sleep(settleMs);
           return clicked;
@@ -515,7 +519,7 @@ export async function crawl(
         //
         // A second click costs one round trip on the rare control that looked dead, and nothing at all
         // on every control that did not. A genuinely dead control is silent twice; the flake is not.
-        if (await stillSilent(session, item, settleMs, opts, sleep)) {
+        if (await stillSilent(session, item, settleMs, confirm, sleep)) {
           counts.deadControls += 1;
           anomalies.push({
             kind: CrawlAnomalyKind.DEAD_CONTROL,

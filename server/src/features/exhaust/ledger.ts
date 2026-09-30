@@ -22,6 +22,7 @@
 import { dirname } from 'node:path';
 import { z } from 'zod';
 import { writeFileAtomic } from '@/memory/project/fs/write-atomic.js';
+import { withFileLock } from '@/memory/project/file-lock.js';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import type { CodeCoverage } from './code-coverage.js';
@@ -47,6 +48,8 @@ const LedgerSchema = z.object({
   journeys: z.object({ completed: names }),
   writes: z.object({ seen: names, branched: names, unhandled: names }),
   code: z.record(z.record(z.object({ name: z.string(), executed: z.boolean() }))),
+  /** Per file, when its code coverage was last taken. Absent in a ledger from before it existed. */
+  codeTaken: z.record(z.number()).default({}),
   best: z.record(z.number()),
 });
 export type AppLedger = z.infer<typeof LedgerSchema>;
@@ -58,6 +61,8 @@ export interface LedgerDelta {
   journeys?: Partial<AppLedger['journeys']>;
   writes?: Partial<AppLedger['writes']>;
   code?: CodeCoverage;
+  /** When `code` was taken, so a file edited since reads as not measured rather than as covered. */
+  codeTakenAt?: number;
 }
 
 export interface LevelReport {
@@ -79,6 +84,7 @@ export function emptyLedger(): AppLedger {
     journeys: { completed: [] },
     writes: { seen: [], branched: [], unhandled: [] },
     code: {},
+    codeTaken: {},
     best: {},
   };
 }
@@ -88,12 +94,14 @@ const union = (a: readonly string[], b: readonly string[] | undefined): string[]
 
 export function mergeLedger(into: AppLedger, delta: LedgerDelta): AppLedger {
   const code: CodeCoverage = { ...into.code };
+  const codeTaken = { ...into.codeTaken };
   for (const [file, fns] of Object.entries(delta.code ?? {})) {
     const merged = { ...(code[file] ?? {}) };
     for (const [key, fn] of Object.entries(fns)) {
       merged[key] = { name: fn.name, executed: fn.executed || true === merged[key]?.executed };
     }
     code[file] = merged;
+    if (delta.codeTakenAt !== undefined) codeTaken[file] = delta.codeTakenAt;
   }
   // Reaching a route discovers it; touching or proving a control means it was seen.
   const reached = union(into.routes.reached, delta.routes?.reached);
@@ -117,6 +125,7 @@ export function mergeLedger(into: AppLedger, delta: LedgerDelta): AppLedger {
       unhandled: union(into.writes.unhandled, delta.writes?.unhandled),
     },
     code,
+    codeTaken,
     best: { ...into.best },
   };
 }
@@ -200,21 +209,42 @@ export function regressions(
 }
 
 /**
- * Changed files the browser loaded and never ran a single function of. Matched by path suffix, the
- * same way the flow index matches, so a repo-relative change finds a served `src/...` path.
- *
- * ponytail: a file edited since the last coverage take still carries its old counts, so this catches
- * code that never ran, not code that has not run SINCE the edit. The ratchet covers the second: new
- * functions appear unexecuted on the next take and pull `executed` below its best.
+ * The ledger's name for a changed file. Matched by path suffix, the same way the flow index matches,
+ * so a repo-relative change finds a served `src/...` path.
  */
+function servedAs(code: CodeCoverage, file: string): string | undefined {
+  return Object.keys(code).find(
+    (served) => file === served || file.endsWith(`/${served}`) || served.endsWith(`/${file}`),
+  );
+}
+
+/** Changed files the browser loaded and never ran a single function of. */
 export function unexecutedChanged(code: CodeCoverage, changed: readonly string[]): string[] {
   return changed.filter((file) => {
-    const loaded = Object.entries(code).find(
-      ([served]) => file === served || file.endsWith(`/${served}`) || served.endsWith(`/${file}`),
-    );
-    if (loaded === undefined) return false;
-    const fns = Object.values(loaded[1]);
+    const served = servedAs(code, file);
+    if (served === undefined) return false;
+    const fns = Object.values(code[served] ?? {});
     return fns.length > 0 && fns.every((fn) => !fn.executed);
+  });
+}
+
+/**
+ * Changed files whose coverage was last taken BEFORE they changed. Counts are kept per file across
+ * takes, so an edited file still carries the counts of the version before the edit, and "it ran"
+ * read from them is about code that no longer exists. A take with no recorded time is as old as
+ * any edit. A file with no modification time (deleted) has nothing left to run.
+ */
+export function staleChanged(
+  ledger: AppLedger,
+  changed: readonly string[],
+  modifiedAt: (file: string) => number | undefined,
+): string[] {
+  return changed.filter((file) => {
+    const served = servedAs(ledger.code, file);
+    const modified = modifiedAt(file);
+    if (served === undefined || modified === undefined) return false;
+    const taken = ledger.codeTaken[served];
+    return taken === undefined || modified > taken;
   });
 }
 
@@ -246,17 +276,27 @@ export class LedgerStore {
     }
   }
 
-  /** Fold a delta in, raise the best, persist, and hand back the result. */
-  async merge(delta: LedgerDelta): Promise<AppLedger> {
-    return this.#save(raiseBest(mergeLedger(await this.load(), delta)));
+  /**
+   * Fold a delta in, raise the best, persist, and hand back the result. Under the file's lock: two
+   * sessions folding at once each loaded the same copy, and the later write discarded the other.
+   *
+   * ponytail: the lock is per daemon process. The CLI's `gate --accept-coverage` in another process
+   * can still race a fold; add a lock file if that ever shows up.
+   */
+  merge(delta: LedgerDelta): Promise<AppLedger> {
+    return withFileLock(this.#path, async () =>
+      this.#save(raiseBest(mergeLedger(await this.load(), delta))),
+    );
   }
 
   /** Accept today's levels as the best. Returns the drops that were accepted. */
-  async acceptCurrent(): Promise<ReturnType<typeof regressions>> {
-    const ledger = await this.load();
-    const accepted = regressions(ledger);
-    if (accepted.length > 0) await this.#save(acceptCurrent(ledger));
-    return accepted;
+  acceptCurrent(): Promise<ReturnType<typeof regressions>> {
+    return withFileLock(this.#path, async () => {
+      const ledger = await this.load();
+      const accepted = regressions(ledger);
+      if (accepted.length > 0) await this.#save(acceptCurrent(ledger));
+      return accepted;
+    });
   }
 
   async #save(next: AppLedger): Promise<AppLedger> {

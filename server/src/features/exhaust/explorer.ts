@@ -5,7 +5,9 @@
  * interesting. Neither can promise it did not skip something, and "don't skip anything" is the
  * requirement. This walks the app's STATE GRAPH instead:
  *
- * - A state is a route plus the set of controls on it. An edge is one action.
+ * - A state is a route plus the set of control names on it. An edge is one action. Values and
+ *   counts are left out on purpose (every keystroke, every added row would be a new state), so
+ *   states that differ only there are one state — see `frontier` for what that costs the report.
  * - Every state is reached by a recorded PATH from a fresh start page, so returning to an
  *   unexplored state is a replay, never a hope that "back" works.
  * - Controls that differ only by a number — the rows of a table — are one control. It is covered
@@ -72,7 +74,12 @@ export interface ExploreReport {
   touched: string[];
   writes: ExploredWrite[];
   anomalies: { kind: string; control: string; detail: string }[];
-  /** States found and never explored. Zero means the reachable app was covered. */
+  /**
+   * States found and never explored. Zero means every state the explorer could TELL APART was
+   * explored, not that every reachable state was: identity is the route plus the set of control
+   * names, so two states that differ only in field values, in how many of a control there are, or
+   * in behaviour behind the same controls are one state here and the second is never visited.
+   */
   frontier: number;
   /** States whose recorded path no longer replays — the app is not deterministic from its start. */
   unreachable: number;
@@ -160,28 +167,33 @@ export async function explore(
       action: 'fill',
       value: opts.fillValue(c.key),
     }));
-    const untried = [
-      ...new Set(
-        controls
-          .filter((c) => !TYPED.test(c.key) && !CHOOSER.test(c.key) && !touched.has(c.key))
-          .map((c) => c.key),
-      ),
-    ];
-
-    for (const [index, target] of untried.entries()) {
-      if (spent()) break;
-      // The first control is tried on the page already loaded; every other one starts over from
-      // the recorded path, because the one before it may have changed or left this state.
-      if (index > 0 && !(await goTo(node.path))) break;
-      let current = controlsOf((await port.look()).tree);
+    // Fills first, then the targets: valid input can reveal the button that moves on (a Continue,
+    // a Submit), and a list drawn before the fill would never contain it.
+    const fillHere = async (): Promise<Control[]> => {
+      const before = controlsOf((await port.look()).tree);
       for (const fill of fills) {
-        const field = current.find((c) => c.key === fill.key);
+        const field = before.find((c) => c.key === fill.key);
         if (field !== undefined && !spent()) {
           await act(field.ref, 'fill', fill.value);
           touched.add(fill.key);
         }
       }
-      if (0 < fills.length) current = controlsOf((await port.look()).tree);
+      return 0 < fills.length ? controlsOf((await port.look()).tree) : before;
+    };
+    const ready = await fillHere();
+    for (const c of ready) seen.add(c.key);
+    // Every control of THIS state, once. Not filtered by what other states touched: a "Save" on
+    // another screen is another control, and skipping it left reachable writes undriven.
+    const untried = [
+      ...new Set(ready.filter((c) => !TYPED.test(c.key) && !CHOOSER.test(c.key)).map((c) => c.key)),
+    ];
+
+    for (const [index, target] of untried.entries()) {
+      if (spent()) break;
+      // The first control is tried on the page already loaded and filled; every other one starts
+      // over from the recorded path, because the one before it may have changed or left this state.
+      if (index > 0 && !(await goTo(node.path))) break;
+      const current = 0 === index ? ready : await fillHere();
       const control = current.find((c) => c.key === target);
       if (control === undefined || spent()) continue;
       const result = await act(control.ref, 'click');
