@@ -260,6 +260,9 @@ export async function assertVerdict(
     evidence,
     pass,
     lastActSource: session.lastAct.source(),
+    // Nothing was proven, so there is no code to send anyone to: `assertSource` withholds the
+    // borrowed pointer for an inconclusive verdict, and it can only do that if it is told.
+    ...(inconclusive === undefined ? {} : { inconclusive }),
   });
   // Who can act on this verdict, derived from the clause that decided it — see `attributedTo` below.
   const attributedTo = verdictAttributionOf(decision.verifiedReason);

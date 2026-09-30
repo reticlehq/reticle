@@ -435,6 +435,8 @@ export const OBSERVE_TOOLS: ToolDef[] = [
           'Present when this call stopped at the per-call limit before the predicate was seen. Call again with timeout_ms set to this, the same predicate and the same since, to keep waiting.',
         ),
       pass: z.boolean(),
+      verified: z.string().optional().describe('Gate on this: only "yes" is a pass.'),
+      verifiedReason: z.string().optional(),
       evidence: z.unknown().optional(),
       failureReason: z.string().optional(),
       observationLost: z
@@ -531,6 +533,8 @@ export const OBSERVE_TOOLS: ToolDef[] = [
     },
     outputSchema: {
       pass: z.boolean(),
+      verified: z.string().optional().describe('Gate on this: only "yes" is a pass.'),
+      verifiedReason: z.string().optional(),
       evidence: z.unknown().optional(),
       failureReason: z.string().optional(),
       observationLost: z

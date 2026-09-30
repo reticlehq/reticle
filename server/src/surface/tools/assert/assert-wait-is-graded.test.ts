@@ -5,6 +5,7 @@ import { TOOLS, type ToolDef, type ToolDeps } from '@/surface/tools/tools.js';
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import { VERDICT_TOOLS } from '@/surface/tools/feedback-tools.js';
+import { createFakeSession } from '@/portal/session/fake-session.js';
 
 /**
  * `reticle_assert { action: "wait" }` is graded like `now` (#1119).
@@ -83,5 +84,35 @@ describe('wait and now are one verdict under two budgets', () => {
 
   it('counts as a verification, like every other tool that returns a verdict', () => {
     expect(VERDICT_TOOLS.has(ReticleTool.WAIT_FOR)).toBe(true);
+  });
+});
+
+describe('what the graded wait declares and points at', () => {
+  it('declares verified and verifiedReason, so a validating client keeps them', () => {
+    for (const name of [ReticleTool.ASSERT, ReticleTool.WAIT_FOR]) {
+      const declared = Object.keys(tool(name).outputSchema ?? {});
+      expect(declared, name).toContain('verified');
+      expect(declared, name).toContain('verifiedReason');
+    }
+  });
+
+  it('an inconclusive wait borrows no file:line from an earlier act', async () => {
+    const lastAct = new LastAct();
+    lastAct.markSource('src/components/Toolbar.tsx:44');
+    const session = createFakeSession({
+      lastAct,
+      elapsed: () => 1000,
+      // The page never answers the store read, so the wait could not look at the app at all.
+      command: () => Promise.reject(new Error('command timed out')),
+    });
+    const sessions: Partial<SessionManager> = { resolve: () => session };
+    const out = (await tool(ReticleTool.WAIT_FOR).handler(
+      { sessions: sessions as SessionManager, now: () => 1 } as unknown as ToolDeps,
+      { predicate: { kind: 'state', path: 'cart.count', equals: 1 }, timeout_ms: 50 },
+    )) as { pass: boolean; inconclusive?: string; source?: string };
+
+    expect(out.pass).toBe(false);
+    expect(out.inconclusive).toBeDefined();
+    expect(out.source, 'nothing was proven, so there is nothing to point at').toBeUndefined();
   });
 });
