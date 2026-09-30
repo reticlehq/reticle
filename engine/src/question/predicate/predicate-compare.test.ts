@@ -265,3 +265,79 @@ describe('the schema refuses a comparison that cannot fail', () => {
     ).toBe(false);
   });
 });
+
+describe('a redacted signal side is unknown, never equal', () => {
+  const SESSION_TOKEN = { from: 'signal', name: 'login', path: 'session.token' } as const;
+  const OTHER_TOKEN = { from: 'signal', name: 'refresh', path: 'session.token' } as const;
+
+  it('does not pass two different secrets that were both redacted', async () => {
+    const session = new PageSession([
+      signal('login', { session: { token: REDACTED_VALUE } }),
+      signal('refresh', { session: { token: REDACTED_VALUE } }),
+    ]);
+    const r = await evaluatePredicate(
+      session,
+      PredicateSchema.parse({ kind: 'compare', left: SESSION_TOKEN, right: OTHER_TOKEN }),
+    );
+    expect(r.pass).toBe(false);
+    expect(r.inconclusive).toContain('REDACTED');
+  });
+
+  it('is unknown, not missing, when a parent on the path was redacted', async () => {
+    const session = new PageSession([
+      signal('login', { session: REDACTED_VALUE }),
+      signal('refresh', { session: { token: 'abc' } }),
+    ]);
+    const r = await evaluatePredicate(
+      session,
+      PredicateSchema.parse({ kind: 'compare', left: SESSION_TOKEN, right: OTHER_TOKEN }),
+    );
+    expect(r.pass).toBe(false);
+    expect(r.inconclusive).toContain('REDACTED');
+  });
+
+  it('does not pass two redacted store values either', async () => {
+    const session = new PageSession(
+      [signal('login', { token: REDACTED_VALUE })],
+      {},
+      {
+        app: { token: REDACTED_VALUE },
+      },
+    );
+    const r = await evaluatePredicate(
+      session,
+      PredicateSchema.parse({
+        kind: 'compare',
+        left: { from: 'state', path: 'token' },
+        right: { from: 'signal', name: 'login', path: 'token' },
+      }),
+    );
+    expect(r.pass).toBe(false);
+    expect(r.inconclusive).toContain('REDACTED');
+  });
+});
+
+describe('number equality does not swallow a real difference', () => {
+  it('fails 1,000,000,000 against 1,000,000,001', async () => {
+    const session = new PageSession([refundCall('{"refunded":1000000001}')], {
+      '#refunded': '1,000,000,000',
+    });
+    const r = await evaluatePredicate(session, compare({ as: 'number' }));
+    expect(r.pass).toBe(false);
+    expect(r.assertion).toBe('compare.number');
+  });
+
+  it('fails a one-cent difference on a large amount', async () => {
+    const session = new PageSession([refundCall('{"refunded":123456789012.35}')], {
+      '#refunded': '123,456,789,012.34',
+    });
+    expect((await evaluatePredicate(session, compare({ as: 'number' }))).pass).toBe(false);
+  });
+
+  it('still passes a number that differs from its text only in the last binary bit', async () => {
+    const session = new PageSession([refundCall(`{"refunded":${String(0.1 + 0.2)}}`)], {
+      '#refunded': '0.3',
+    });
+    expect((await evaluatePredicate(session, compare({ as: 'number' }))).pass).toBe(true);
+  });
+});

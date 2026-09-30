@@ -64,8 +64,19 @@ function isScalar(value: unknown): value is Scalar {
   );
 }
 
-/** A reading that is an object or an array cannot be compared as one value. */
+function redacted(label: string): { result: EvalResult } {
+  return unknown(
+    `${label} was ${REDACTED_VALUE} before it was recorded — a redacted field is unknown, not different`,
+  );
+}
+
+/**
+ * A reading that is an object or an array cannot be compared as one value, and neither can the
+ * redaction marker: the transport writes it for every sensitive key whatever it held, so two
+ * different secrets arrive as the same string and would compare equal.
+ */
 function asScalar(value: unknown, label: string): Reading {
+  if (REDACTED_VALUE === value) return redacted(label);
   if (isScalar(value)) return { value, label };
   return unknown(
     `${label} is ${Array.isArray(value) ? 'an array' : 'an object'}, not a single value — point the path at one field inside it`,
@@ -116,11 +127,7 @@ function readNet(
           `the body is not a JSON object, so ${label} names no field — compare reads JSON fields`,
         );
   }
-  if (redactedOnPath(payload, source.path)) {
-    return unknown(
-      `${label} was ${REDACTED_VALUE} before it was recorded — a redacted field is unknown, not different`,
-    );
-  }
+  if (redactedOnPath(payload, source.path)) return redacted(label);
   const field = readField(payload, source.path);
   if (!field.found) {
     if (truncated) {
@@ -150,10 +157,14 @@ function readSignal(
     return missing(`signal '${source.name}' never fired in this window`, `signal '${source.name}'`);
   }
   const payload = last.data['data'];
-  const field =
+  const record =
     'object' === typeof payload && payload !== null && !Array.isArray(payload)
-      ? readField(payload as Record<string, unknown>, source.path)
-      : { found: false, value: undefined };
+      ? (payload as Record<string, unknown>)
+      : undefined;
+  // Signal payloads cross the same transport sanitizer as state, so a parent can be redacted too.
+  if (record !== undefined && redactedOnPath(record, source.path)) return redacted(label);
+  const field =
+    record === undefined ? { found: false, value: undefined } : readField(record, source.path);
   if (!field.found) {
     return missing(`${label} is missing; the payload was ${JSON.stringify(payload)}`, label);
   }
@@ -231,9 +242,17 @@ function numberOf(value: Scalar): { n: number } | { why: string } {
   return { n: Number(only.replace(/,/g, '')) };
 }
 
-/** Two decimals that print the same may differ in the last bit once computed; that is not a difference. */
+/**
+ * A few units in the last place: the noise of arithmetic done in binary (`0.1 + 0.2` against the
+ * `0.3` a page prints). Relative to the operands, so it stays below one part in 10^15 — two distinct
+ * decimals of 15 significant digits never fall inside it, which is every amount a double can hold
+ * to the cent. A fixed relative allowance like 1e-9 made 1,000,000,000 equal 1,000,000,001.
+ */
+const LAST_PLACE_NOISE = 2 * Number.EPSILON;
+
 function closeEnough(a: number, b: number, tolerance: number): boolean {
-  return Math.abs(a - b) <= tolerance + 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
+  if (a === b) return true;
+  return Math.abs(a - b) <= tolerance + LAST_PLACE_NOISE * Math.max(Math.abs(a), Math.abs(b));
 }
 
 function describe(reading: { value: Scalar; label: string }): string {

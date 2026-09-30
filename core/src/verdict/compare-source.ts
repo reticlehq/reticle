@@ -105,7 +105,12 @@ export function sameCompareSource(a: CompareSource, b: CompareSource): boolean {
 }
 
 function withDefaults(source: CompareSource): Record<string, unknown> {
+  // The network reader matches methods case-blind, so `GET` and `get` pick the same call.
   if (PredicateKind.NET === source.from)
-    return { ...source, body: source.body ?? NetBodySide.RESPONSE };
+    return {
+      ...source,
+      body: source.body ?? NetBodySide.RESPONSE,
+      method: source.method?.toUpperCase(),
+    };
   return { ...source };
 }

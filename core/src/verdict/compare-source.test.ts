@@ -11,6 +11,13 @@ import { ChannelId, channelsReadBy } from '@/wire/channel.js';
 import { PredicateKind } from './consequence.js';
 import type { Predicate } from './predicate.js';
 import { compareSourceClauses, sessionBoundField } from './predicate-tree.js';
+import { sameCompareSource } from './compare-source.js';
+import {
+  FLOW_FILE_VERSION,
+  READABLE_FLOW_VERSIONS,
+  flowFileVersionFor,
+} from '@/artifacts/flow-constants.js';
+import { FlowFileSchema } from '@/artifacts/flow-types.js';
 
 const TEXT = { from: PredicateKind.TEXT, scope: '#total' } as const;
 const NET = { from: PredicateKind.NET, urlContains: '/api/cart', path: 'total' } as const;
@@ -55,5 +62,58 @@ describe('a compare cannot be saved holding a session ref', () => {
       'compare.right.scope "e12"',
     );
     expect(sessionBoundField(compare(TEXT, NET))).toBeUndefined();
+  });
+});
+
+describe('a comparison with itself is refused whatever the method casing', () => {
+  it('reads GET and get as the same source, as the network reader does', () => {
+    expect(sameCompareSource({ ...NET, method: 'GET' }, { ...NET, method: 'get' })).toBe(true);
+    expect(sameCompareSource({ ...NET, method: 'GET' }, { ...NET, method: 'POST' })).toBe(false);
+  });
+});
+
+describe('a flow that uses compare is stamped so an older reader names the version', () => {
+  // A reader from before `compare` knew versions 1 and 2 and answered PARSE_FAILED on the unknown
+  // kind. A version it does not know gets "the reader is the wrong one" instead.
+  const flow = (expect: unknown): { version: number } & Record<string, unknown> => ({
+    version: FLOW_FILE_VERSION,
+    name: 'refund',
+    createdAt: 0,
+    steps: [{ tool: 'reticle_act', anchor: { kind: 'testid', value: 'go' }, expect }],
+  });
+
+  it('stays at the base version without a compare', () => {
+    expect(flowFileVersionFor(flow({ kind: PredicateKind.TEXT, contains: 'ok' }))).toBe(
+      FLOW_FILE_VERSION,
+    );
+  });
+
+  it('moves past every version an older reader knew when any clause compares, nested included', () => {
+    const nested = flow({
+      kind: PredicateKind.ALL_OF,
+      predicates: [{ kind: PredicateKind.NOT, predicate: compare(TEXT, NET) }],
+    });
+    const version = flowFileVersionFor(nested);
+    expect(version).toBeGreaterThan(FLOW_FILE_VERSION);
+    expect(READABLE_FLOW_VERSIONS.has(version)).toBe(true);
+    expect(FlowFileSchema.safeParse({ ...nested, version }).success).toBe(true);
+  });
+
+  it('keeps a v1 file at v1, and drops a file whose compare was removed back to the base', () => {
+    expect(flowFileVersionFor({ ...flow(undefined), version: 1 })).toBe(1);
+    expect(
+      flowFileVersionFor({
+        ...flow(undefined),
+        version: flowFileVersionFor(flow(compare(TEXT, NET))),
+      }),
+    ).toBe(FLOW_FILE_VERSION);
+  });
+
+  it('finds a compare in success, requires and ensures too', () => {
+    const base = flow(undefined);
+    for (const where of ['success', 'requires', 'ensures']) {
+      const at = 'success' === where ? compare(TEXT, NET) : [compare(TEXT, NET)];
+      expect(flowFileVersionFor({ ...base, [where]: at })).toBeGreaterThan(FLOW_FILE_VERSION);
+    }
   });
 });

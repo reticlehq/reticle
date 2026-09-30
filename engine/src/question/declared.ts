@@ -175,9 +175,10 @@ export function declaresBodyIndependentChannel(predicate: Predicate | undefined)
       case PredicateKind.STATE:
       case PredicateKind.ROUTE:
         return true;
-      // A comparison either READ the body it names, or reads a channel the body does not own.
+      // Only through a side the body does not own. Two body fields compared with each other are
+      // still body evidence, and another write's unread answer stays unread beside them.
       case PredicateKind.COMPARE:
-        return true;
+        return [p.left, p.right].some((side) => PredicateKind.NET !== side.from);
       case PredicateKind.ELEMENT:
         return (
           true !== p.absent &&

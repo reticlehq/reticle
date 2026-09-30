@@ -1,3 +1,5 @@
+import { PredicateKind } from '@/verdict/consequence.js';
+
 /**
  * On-disk artifact constants: the project history, flow files, replay/drift status, the recorder
  * lifecycle, heal outcomes, and the structured-annotation vocabulary.
@@ -68,6 +70,9 @@ export const PROJECT_ROUTE_CAP = 200;
  */
 export const FLOW_FILE_VERSION = 2;
 
+/** Stamped instead of FLOW_FILE_VERSION on a flow that holds a `compare` — see flowFileVersionFor. */
+export const COMPARE_FLOW_FILE_VERSION = 3;
+
 /**
  * Every version this Reticle can READ, which is not the same question as what it writes.
  *
@@ -78,7 +83,37 @@ export const FLOW_FILE_VERSION = 2;
  *
  * A number outside this set is the wrong READER, not a damaged file, and says so.
  */
-export const READABLE_FLOW_VERSIONS: ReadonlySet<number> = new Set([1, FLOW_FILE_VERSION]);
+export const READABLE_FLOW_VERSIONS: ReadonlySet<number> = new Set([
+  1,
+  FLOW_FILE_VERSION,
+  COMPARE_FLOW_FILE_VERSION,
+]);
+
+/**
+ * The version a flow file must carry for a reader to be able to replay it.
+ *
+ * A reader from before `compare` knew versions 1 and 2, so a v2 file holding one failed there as a
+ * generic PARSE_FAILED on the unknown kind. Stamping only the flows that USE it keeps every other
+ * flow readable by that older reader, and turns the rest into "the reader is the wrong one".
+ * Every save routes through it, so a v1 file without one keeps its version byte for byte.
+ *
+ * The walk is over the whole value rather than the four fields a predicate lives in today (step
+ * `expect`, `success`, `requires`, `ensures`), so a predicate slot added later cannot be missed.
+ * ponytail: a literal `{ kind: "compare" }` inside an `equals` value also bumps it; that only costs
+ * the older reader a file it could have read.
+ */
+export function flowFileVersionFor(flow: { readonly version: number }): number {
+  if (usesCompare(flow)) return COMPARE_FLOW_FILE_VERSION;
+  // A file whose compare was edited away drops back; any other version is left as it was written.
+  return COMPARE_FLOW_FILE_VERSION === flow.version ? FLOW_FILE_VERSION : flow.version;
+}
+
+function usesCompare(value: unknown): boolean {
+  if (null === value || 'object' !== typeof value) return false;
+  if (Array.isArray(value)) return value.some(usesCompare);
+  const record = value as Record<string, unknown>;
+  return PredicateKind.COMPARE === record['kind'] || Object.values(record).some(usesCompare);
+}
 
 /** How a flow step is anchored to the live DOM at replay time (semantic, never a volatile ref). */
 export const AnchorKind = {

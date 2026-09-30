@@ -230,7 +230,7 @@ export function parseFlowFileText(text: string): FlowResult<FlowFile> {
       code: FlowErrorCode.WRONG_VERSION,
       detail:
         `this flow file is version ${String(declared)} and this Reticle reads versions ` +
-        `${[...READABLE_FLOW_VERSIONS].join(' and ')}. The file is not damaged, the reader is the ` +
+        `${[...READABLE_FLOW_VERSIONS].join(', ')}. The file is not damaged, the reader is the ` +
         'wrong one. ' +
         'Upgrade or downgrade Reticle rather than editing the flow.',
     };
