@@ -238,7 +238,7 @@ require('@reticlehq/electron/preload');
 
 It **must** be in the preload. `contextBridge.exposeInMainWorld` hands the renderer a deeply frozen object, so nothing in the page can instrument it afterwards; the preload is the last point where `ipcRenderer.invoke` is still writable. A sandboxed preload cannot resolve `node_modules`, so either bundle it (electron-vite and Forge do by default) or set `sandbox: false`.
 
-Without the IPC observer, `reticle_network` returns nothing, `act_and_wait` has no request to settle on, and `assert { net }` is vacuously true. That is a false green by construction.
+Without the IPC observer, `reticle_observe { action: "network" }` returns nothing, `act_and_wait` has no request to settle on, and `assert { net }` is vacuously true. That is a false green by construction.
 
 ## Tauri
 

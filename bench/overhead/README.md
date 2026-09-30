@@ -43,7 +43,7 @@ The result above is the small hostile fixture. Re-run against `?enterprise=1` �
 
 The first attempt at this measurement was invalid and worth recording: `measure.mjs` hardcoded a nav click to the hostile view, so it loaded the enterprise fixture and then navigated away from it, returning numbers identical to the small page. A harness that silently measures the wrong thing produces a plausible number, which is worse than an error.
 
-**Pointing the query tools at the same page found a real bug the overhead number could not see** — `reticle_query` with thousands of matches was failing MCP output validation outright. See the commit "a broad query on a large page returned an ERROR, not a result". Overhead is not the only scale axis.
+**Pointing the query tools at the same page found a real bug the overhead number could not see** — `reticle_look { action: "find" }` with thousands of matches was failing MCP output validation outright. See the commit "a broad query on a large page returned an ERROR, not a result". Overhead is not the only scale axis.
 
 ### How this got here, because the intermediate numbers were alarming
 

@@ -124,7 +124,7 @@ A renamed or obsolete flow otherwise lingers in `reticle_flow {action:"list"}` a
 - `drift`: an anchor missed (a testid was renamed, or a signal never fired). The result is **legible**, never a blind failure: `{ step, anchor, drift: { reasonKind: "testid_not_found", nearest: "send-message" } }`. (This is the "whose fault is it" principle.)
 - `error`: the flow file is missing/invalid, or a resolved action failed. Runtime failures include the failed step and a top-level error envelope.
 
-A testid-_preserving_ refactor (you moved markup but kept the testids) still replays green. A step whose element has **no testid** is anchored on its component + source location (`{ kind: "component", component, source: { file, line } }`), an auto-derived stable anchor, so a flow records cleanly with zero hand-added testids and replay re-resolves it via `reticle_query by:'component'`.
+A testid-_preserving_ refactor (you moved markup but kept the testids) still replays green. A step whose element has **no testid** is anchored on its component + source location (`{ kind: "component", component, source: { file, line } }`), an auto-derived stable anchor, so a flow records cleanly with zero hand-added testids and replay re-resolves it via `reticle_look { action: "find" } by:'component'`.
 
 ### The decision envelope: what to do next, not just pass/fail
 

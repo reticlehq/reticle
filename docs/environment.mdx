@@ -1,0 +1,87 @@
+---
+title: Environment variables
+description: Every environment variable Reticle reads, what it changes, and which process reads it.
+icon: sliders
+---
+
+Reticle works with none of these set. Each one changes a single behaviour, and most are read once, by the process named in the table: the daemon at startup, the CLI command you run, or a build plugin when your dev server starts. A daemon that is already running keeps the values it started with, so after changing a daemon setting run `npx @reticlehq/server restart`.
+
+## Connection and ports
+
+| Variable | Read by | What it does |
+| --- | --- | --- |
+| `RETICLE_PORT` | daemon, CLI, build plugins | The bridge and daemon port. `.reticle.json`'s `port` sets it per project; this overrides it. |
+| `RETICLE_HOST` | daemon | The bridge bind host. Loopback by default. Anything else exposes the bridge beyond this machine, so it is opt-in. |
+| `RETICLE_TOKEN` | daemon | A shared secret the page must present when it connects. The pairing token covers this automatically; set it only for a hand-wired setup. |
+| `RETICLE_PAIRING_TOKEN_DIR` | daemon, `init`, build plugins | Where the auto-provisioned pairing token lives. Defaults to `~/.reticle`. Relocate it for CI or a read-only home directory. |
+| `RETICLE_ALLOWED_ORIGINS` | daemon | Comma-separated WebSocket origins the bridge accepts. |
+| `RETICLE_STATE_DIR` | daemon, CLI | Daemon state: pid files, the discovery registry and logs. Defaults to `~/.reticle`. |
+| `RETICLE_DAEMON_READY_TIMEOUT_MS` | MCP proxy | How long the MCP proxy waits for a daemon to come up before reporting it unreachable. |
+| `RETICLE_DEV` | `@reticlehq/next` | Instrument even when `NODE_ENV` says production, for `NODE_ENV=production next dev`. |
+
+## Daemon lifetime
+
+| Variable | Read by | What it does |
+| --- | --- | --- |
+| `RETICLE_IDLE_SHUTDOWN_MS` | daemon | How long the daemon waits with no agent, no page and no lease before it exits. `0` keeps it running. |
+| `RETICLE_IDLE_ATTACHED_MS` | daemon | The same wait while an agent is attached, which is longer so a slow install or a thinking human is not cut off. Derived from the base when unset. |
+| `RETICLE_MCP_PROXY_IDLE_MS` | MCP proxy | How long an abandoned MCP stdio proxy waits before it exits. `0` disables the watcher. |
+| `RETICLE_JOURNAL` | daemon | Turns the causal journal off (`0`, `false`, `off`) or on. On by default. |
+
+## Browser
+
+| Variable | Read by | What it does |
+| --- | --- | --- |
+| `RETICLE_CDP_URL` | daemon | Attach to a browser that is already running, over CDP, instead of launching one. |
+| `RETICLE_MAX_CONTEXTS` | daemon | The most leased headless browser contexts the pool runs at once. |
+| `RETICLE_MAX_MESSAGES_PER_SECOND` | daemon | Events per second a page may send before the bridge starts sampling them. It never disconnects. Raise it for a legitimately busy app, such as a streaming dashboard. |
+
+## Tools and output
+
+| Variable | Read by | What it does |
+| --- | --- | --- |
+| `RETICLE_ADVERTISE_ALL_TOOLS` | daemon | Advertise every tool directly instead of the default surface. Everything is reachable either way, through `reticle_run`. |
+| `RETICLE_VERIFY_SURFACE` | daemon | Advertise the smallest surface that can still produce a verdict. |
+| `RETICLE_TOOL_PROFILE` | daemon | Retired. Any value it used to accept still resolves to a sensible surface, and the daemon says which one it used instead. |
+| `RETICLE_ENCODING` | daemon | How tool results are written for the agent. Compact JSON by default; `pretty` indents it, and `toon` is a denser tabular form. The typed result is the same in every encoding. |
+| `RETICLE_NO_UPSELL` | daemon | Silences every upgrade hint. |
+
+## Gate and CI
+
+| Variable | Read by | What it does |
+| --- | --- | --- |
+| `RETICLE_SKIP_GATE` | `reticle gate --hook` | Lets an agent's stop hook proceed past a failing gate. The skip is printed and recorded, never silent. It does not affect `reticle gate` without `--hook`, which is what CI runs. |
+| `RETICLE_VERIFY_TOKEN` | `reticle serve --http` | The bearer token the optional HTTP verify endpoint requires. |
+| `RETICLE_SECRET_<FIELD>` | replay, verify, crawl | The value typed into a password or secret field at replay. A recorded flow never stores it. See [what is recorded](/what-is-recorded). |
+
+## Cloud and the autonomous drive
+
+| Variable | Read by | What it does |
+| --- | --- | --- |
+| `RETICLE_API_KEY` | CLI, daemon | The API key minted on the platform. |
+| `RETICLE_CLOUD_KEY` | CLI, daemon | The key's earlier name. Still honoured. |
+| `RETICLE_CLOUD_URL`, `RETICLE_URL` | CLI, daemon | The platform host. `RETICLE_CLOUD_URL` wins when both are set. |
+| `RETICLE_SYNC_INTERVAL_MS` | `reticle sync --watch` | How often the watching sync runs. Every 60 seconds by default. |
+| `ANTHROPIC_API_KEY` | autonomous drive | The key the drive's model uses when no coding agent is in the loop. Without it, the drive is unavailable and everything else is unaffected. |
+| `RETICLE_HARNESS_MODEL` | autonomous drive | The model the drive uses. A small one by default. |
+| `RETICLE_HARNESS_BASE_URL` | autonomous drive | A proxy or gateway in front of the model API. |
+| `RETICLE_HARNESS_MAX_STEPS` | autonomous drive | A hard ceiling on model turns in one drive. It bounds cost. |
+| `RETICLE_HARNESS_DRIVER` | autonomous drive | Which model drives: `anthropic` (the default) or `jev`. |
+| `JEV_API_KEY`, `RETICLE_HARNESS_JEV_URL` | autonomous drive | A direct key and base URL for the `jev` driver. The usual path is `RETICLE_API_KEY` through the platform. |
+| `OPENAI_API_KEY`, `RETICLE_HARNESS_OPENAI_MODEL` | autonomous drive | A direct key and model for the OpenAI driver. |
+
+## Licensing
+
+| Variable | Read by | What it does |
+| --- | --- | --- |
+| `RETICLE_LICENSE_KEY` | daemon | The Enterprise licence key. See [licence activation](/license-activation). |
+
+## Telemetry and feedback
+
+| Variable | Read by | What it does |
+| --- | --- | --- |
+| `RETICLE_TELEMETRY` | CLI, daemon | `0`, `false` or `off` turns anonymous usage telemetry off. `DO_NOT_TRACK` is honoured too. See [telemetry](/telemetry). |
+| `RETICLE_TELEMETRY_FILE` | CLI, daemon | Write telemetry to a local JSONL file and send nothing, so you can read exactly what would be sent. |
+| `RETICLE_TELEMETRY_URL`, `RETICLE_TELEMETRY_KEY` | CLI, daemon | Send telemetry to a different host or project, such as an EU region or your own instance. |
+| `RETICLE_FEEDBACK` | daemon | Turns off the feedback channel only. Usage telemetry follows `RETICLE_TELEMETRY`. |
+| `RETICLE_TRACE` | daemon, CLI | Verbose internal tracing for people working on Reticle itself. Off by default. |

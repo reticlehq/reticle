@@ -24,7 +24,7 @@ Everything else is built on top of that. A **framework adapter** (React, Vue, Sv
 
 | Realm | Environment |
 | --- | --- |
-| [`dom/`](dom) | A web page. Published as `@reticlehq/browser`. |
+| [`browser/`](browser) | A web page. Published as `@reticlehq/browser`. |
 | [`electron/`](electron) | An Electron app's main process, where the window lives and messages cross between halves. |
 
 ## The feedback loop belongs to the realm

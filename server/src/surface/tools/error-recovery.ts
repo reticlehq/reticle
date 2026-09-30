@@ -542,7 +542,7 @@ const INVALID_NAME_REJECTION = /^invalid (?:[a-z]+ )*name: /i;
  */
 export const FEEDBACK_ASK =
   'This error is not one Reticle recognizes, which means it may be a defect in Reticle rather than in ' +
-  'the app. If you believe Reticle misbehaved, call reticle_feedback with a root-cause analysis and ' +
+  'the app. If you believe Reticle misbehaved, call reticle_session { action: "feedback" } with a root-cause analysis and ' +
   'the call trace before moving on — that report is the only way this gets fixed.';
 
 /** The error envelope sent to the agent: the message, plus a recovery hint when one is known. */

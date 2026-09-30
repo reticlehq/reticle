@@ -72,7 +72,7 @@ Those rules are why the browser SDK cannot accidentally pull in a filesystem cal
 
 **Why it exists:** this is the part that makes Reticle different from a browser-automation tool. Because it runs _inside_ the app rather than driving it from outside, it can see a state mutation and a fired signal, not just a rendered pixel.
 
-**Depends on:** `@reticlehq/core`. [`reticle_query`](/tools/query) speaks role, label and testid rather than CSS selectors through its own local accessibility engine, so what a snapshot reports is exactly what a query matches.
+**Depends on:** `@reticlehq/core`. [`reticle_look { action: "find" }`](/tools/query) speaks role, label and testid rather than CSS selectors through its own local accessibility engine, so what a snapshot reports is exactly what a query matches.
 
 **Install it directly when** you are not on React, or you want `connect()` under your own control:
 
@@ -147,7 +147,7 @@ export default defineConfig({ plugins: [reticle(), react()] });
 
 **Stamps `data-reticle-source="file:line:col"` onto JSX host elements.**
 
-**Why it exists:** React 19 dropped `_debugSource`, which is what source mapping used to rely on. This plugin puts the information back, at build time, in dev only. Without it, `reticle_inspect` can still tell you the component name but not the file.
+**Why it exists:** React 19 dropped `_debugSource`, which is what source mapping used to rely on. This plugin puts the information back, at build time, in dev only. Without it, `reticle_look { action: "element" }` can still tell you the component name but not the file.
 
 **Depends on:** nothing. **Peer:** `@babel/core`.
 

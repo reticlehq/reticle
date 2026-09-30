@@ -11,7 +11,7 @@ npx @reticlehq/server feedback [--rating 1-5] [--bug] "what worked, what didn't"
 npx @reticlehq/server feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement> "what happened"
 ```
 
-The `--agent` form is for an agent that cannot reach the `reticle_feedback` tool: during `init`, while instrumentation is half wired, or when the daemon will not start. Those are the reports that are hardest to hear and most needed, because every other path requires the tool surface to already work.
+The `--agent` form is for an agent that cannot reach the `reticle_session { action: "feedback" }` tool: during `init`, while instrumentation is half wired, or when the daemon will not start. Those are the reports that are hardest to hear and most needed, because every other path requires the tool surface to already work.
 
 ## Flags
 
@@ -63,5 +63,5 @@ npx @reticlehq/server feedback --agent --kind gap \
   icon="comments"
   href="/tools/session-and-feedback"
 >
-  `reticle_feedback` when the tools are reachable.
+  `reticle_session { action: "feedback" }` when the tools are reachable.
 </Card>

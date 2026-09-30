@@ -55,7 +55,7 @@ Useful at the end of a drive, when the agent is about to report success. "I veri
 }
 ```
 
-Note the token redaction. Credential-shaped values are stripped here exactly as they are in [`reticle_network`](/tools/network), so reading storage never puts a session token in your context.
+Note the token redaction. Credential-shaped values are stripped here exactly as they are in [`reticle_observe { action: "network" }`](/tools/network), so reading storage never puts a session token in your context.
 
 localStorage, sessionStorage and readable cookies.
 

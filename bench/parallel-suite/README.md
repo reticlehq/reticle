@@ -1,6 +1,6 @@
 # Suite wall-time: sequential vs parallel
 
-Runs the **real** `reticle_flow_verify` handler twice against a live app — sequential (one shared tab) vs `{ parallel: N }` (one leased isolated context per flow) — and reports wall-time, speedup, and how the two verdicts differ.
+Runs the **real** `reticle_verify { action: "flows" }` handler twice against a live app — sequential (one shared tab) vs `{ parallel: N }` (one leased isolated context per flow) — and reports wall-time, speedup, and how the two verdicts differ.
 
 ```bash
 # 1. bench-app running and pointed at the port this script owns:

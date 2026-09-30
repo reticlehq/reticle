@@ -66,4 +66,4 @@ For every false green you confirm, the test that missed it is still there and wi
 
 ---
 
-Index of everything, one page at a time: `curl https://docs.reticle.sh/llms.txt`. Found a case Reticle could not see? `reticle_feedback` with `kind: "gap"`: that is the signal that decides what gets built.
+Index of everything, one page at a time: `curl https://docs.reticle.sh/llms.txt`. Found a case Reticle could not see? `reticle_session { action: "feedback" }` with `kind: "gap"`: that is the signal that decides what gets built.

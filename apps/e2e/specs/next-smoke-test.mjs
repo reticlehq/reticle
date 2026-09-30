@@ -135,7 +135,8 @@ const tagged = await T('reticle_assert', {
 });
 check(
   'two distinct actions in one click are not reported as a duplicate write',
-  tagged.pass === true && tagged.verified !== 'unknown',
+  // `yes` only: `no-fault` would also pass `!== 'unknown'`, and it means nothing was proved.
+  tagged.pass === true && tagged.verified === 'yes',
   `pass=${String(tagged.pass)} verified=${String(tagged.verified)} ${tagged.failureReason ?? ''}`,
 );
 

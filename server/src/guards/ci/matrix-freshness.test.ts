@@ -1,8 +1,8 @@
 /**
  * `docs/matrix/MATRIX.md` must not read as current when its records are not.
  *
- * The matrix holds MCP-client records for **2.5.0 only**, and the repo ships 2.13.1 — eight minor
- * releases, every one of them able to move the config path, the entry shape or the tool count that
+ * The matrix holds MCP-client records from releases long behind the one shipping, and every release
+ * between them is able to move the config path, the entry shape or the tool count that
  * those rows are about. `matrix.mjs --validate` checks records that EXIST, so a version with no
  * records at all is indistinguishable from a version nobody has submitted for; there is no shape of
  * missing data for it to reject. Meanwhile the page publishes to users under a heading that says
@@ -40,14 +40,13 @@ const currentVersion = (): string => {
 /** `2.13.1` → `2.13`. Records are per release, but a patch does not invalidate one. */
 const minor = (version: string): string => version.split('.').slice(0, 2).join('.');
 
-/** Every `docs/matrix/<version>/` that holds at least one record, newest first. */
+/** Every `docs/matrix/<version>/` that holds at least one record, newest first. Numeric, so 2.11.0 sorts above 2.5.0. */
 const recordVersions = (): string[] =>
   readdirSync(MATRIX_DIR, { withFileTypes: true })
     .filter((e) => e.isDirectory())
     .filter((e) => readdirSync(join(MATRIX_DIR, e.name)).some((f) => f.endsWith('.json')))
     .map((e) => e.name)
-    .sort()
-    .reverse();
+    .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
 
 /**
  * The banner, machine-checkable on purpose: it has to name the version the records came from AND the

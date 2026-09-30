@@ -22,7 +22,7 @@ The basics in [Getting Started](getting-started.md) work with **zero app changes
 
 Adoption is **free → cheap → targeted**. You don't instrument everything; you reuse what you have, then add the handful of facts the DOM can't express.
 
-**1. Reuse your existing `data-testid` (free).** If you already test with Playwright or Cypress, your testids work in Reticle unchanged; `reticle_query({ by: 'testid', value: 'checkout' })` matches them exactly. No new markup, no new code.
+**1. Reuse your existing `data-testid` (free).** If you already test with Playwright or Cypress, your testids work in Reticle unchanged; `reticle_look({ action: "find", by: 'testid', value: 'checkout' })` matches them exactly. No new markup, no new code.
 
 **2. Advertise the surface from your existing constants (cheap).** You already keep a `TestIds` constant object for your E2E suite. Pass it straight in. Now `reticle_capabilities()` tells a fresh agent your whole surface without reading source.
 
@@ -107,7 +107,7 @@ If `mutate` throws, the mutation never happened, so **the signal is not emitted 
 
 > **The documented exception:** genuinely view-level signals (render or async completions like `diff:shown` or `caption:generated`, which aren't store state) legitimately stay in your components. Only commit-point signals belong in the store layer.
 
-Pair this with store registration so the agent can _read_ state instead of you emitting a signal per fact: `registerStore('workspace', useWorkspace)`, then `reticle_state({ store: 'workspace' })`.
+Pair this with store registration so the agent can _read_ state instead of you emitting a signal per fact: `registerStore('workspace', useWorkspace)`, then `reticle_look({ action: "state", store: 'workspace' })`.
 
 ## 4. Self-registering domains (`registerReticleDomain`)
 
@@ -164,7 +164,7 @@ Or turn it on with the shipped preset: `plugin.configs.recommended`, which sets 
 
 Reticle observes and drives a tab through the in-page SDK plus (optionally) CDP. It **cannot bring to front or recover a browser tab the OS won't let it script**: a backgrounded tab, say, or a non-default browser (Dia, etc.) reporting `hidden:true` / `throttled:true`.
 
-When that happens, `reticle_sessions` and every act/assert result carry a `session.recommendation` saying so. The escape hatch is **`reticle drive <url>`** (add `--headed` to watch). Reticle launches and owns a guaranteed-scriptable browser. See [usage §18](usage.md#18-real-input-mode-native-hover--drag) for the full note.
+When that happens, `reticle_session { action: "list" }` and every act/assert result carry a `session.recommendation` saying so. The escape hatch is **`reticle drive <url>`** (add `--headed` to watch). Reticle launches and owns a guaranteed-scriptable browser. See [usage §18](usage.md#18-real-input-mode-native-hover--drag) for the full note.
 
 ## Checklist
 

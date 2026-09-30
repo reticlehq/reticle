@@ -362,7 +362,7 @@ It exists for two reasons that pull the same way:
 
 One deliberate exception to the rules above: `RETICLE_TELEMETRY_FILE` keeps telemetry ENABLED inside a Reticle source checkout. The checkout guard exists to stop us phoning home, and writing a local file is not phoning home, while a release sweep is driven from exactly there, so a sink that inherited the guard would record nothing and look like it had worked.
 
-`sent: true` from `reticle_feedback` means the record landed in the file, which is the honest reading of "captured" for a recorded run. An unwritable path degrades to a no-op and reports `false`; it never takes the daemon down.
+`sent: true` from `reticle_session { action: "feedback" }` means the record landed in the file, which is the honest reading of "captured" for a recorded run. An unwritable path degrades to a no-op and reports `false`; it never takes the daemon down.
 
 ## Adding things: what to do
 

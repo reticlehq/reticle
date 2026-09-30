@@ -92,6 +92,39 @@ function substantiveMatches(
   return elements.filter((e) => e.name.length > 0 || (e.text ?? '').trim().length > 0);
 }
 
+/**
+ * The first SDK release that can answer each element state added after the vocabulary was first
+ * published. A page built before it never finds the name in its state list, so it reports the state
+ * as not held, and an `absent` check on it passes whatever the page shows.
+ */
+const ELEMENT_STATE_SINCE: Readonly<Partial<Record<ElementState, string>>> = {
+  // The key is checked against ElementState by the Record type, so a misspelt state cannot compile.
+  pressed: '3.4.0',
+};
+
+/** Leading `major.minor.patch` as numbers; a pre-release of a version counts as that version. */
+function versionParts(version: string): [number, number, number] | undefined {
+  const m = /^(\d+)\.(\d+)\.(\d+)/.exec(version);
+  return null === m ? undefined : [Number(m[1]), Number(m[2]), Number(m[3])];
+}
+
+/** The state, when the page's SDK is older than the first release that answers it. */
+function stateTheSdkPredates(
+  sdk: string | undefined,
+  state: ElementState | undefined,
+): { sdk: string; state: ElementState; since: string } | undefined {
+  const since = state === undefined ? undefined : ELEMENT_STATE_SINCE[state];
+  if (sdk === undefined || state === undefined || since === undefined) return undefined;
+  const have = versionParts(sdk);
+  const need = versionParts(since);
+  if (have === undefined || need === undefined) return undefined;
+  for (let i = 0; i < 3; i += 1) {
+    if (have[i] !== need[i])
+      return (have[i] ?? 0) < (need[i] ?? 0) ? { sdk, state, since } : undefined;
+  }
+  return undefined;
+}
+
 export async function evalElement(
   session: PredicateSession,
   query: ElementQuery,
@@ -99,6 +132,21 @@ export async function evalElement(
   absent: boolean,
   diagnose: boolean,
 ): Promise<EvalResult> {
+  const tooOld = stateTheSdkPredates(session.sdkVersion, state);
+  if (tooOld !== undefined) {
+    const reason =
+      `the page's SDK is ${tooOld.sdk}, and the '${tooOld.state}' state needs ${tooOld.since} or ` +
+      `newer: an older page cannot see it and would report it as not held. Update the page's ` +
+      `@reticlehq packages to ${tooOld.since} or newer`;
+    return {
+      pass: false,
+      failureReason: reason,
+      inconclusive: reason,
+      observed: `SDK ${tooOld.sdk}`,
+      expected: `SDK ${tooOld.since} or newer, which can answer '${tooOld.state}'`,
+      assertion: 'element.state',
+    };
+  }
   // Fields the browser's locator would have DROPPED, enforced back here — see residualQueryChecks.
   // Checked before the round-trip when nothing can enforce them: a predicate that cannot be evaluated
   // must say so rather than resolve to whatever the surviving half of it happened to match.

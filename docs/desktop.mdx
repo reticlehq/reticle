@@ -88,7 +88,7 @@ The rows in **bold** are re-proven by a committed battery on every change, `pnpm
 | Capability | Electron | Tauri | Note |
 | --- | --- | --- | --- |
 | sessions, snapshot, query, inspect | yes | yes | `inspect` returns `src/App.tsx:104` in a dev build; a packaged production renderer has no source map, so it reports `n/a` |
-| capabilities, state (live store) | yes | yes | `reticle_state` reads the real store |
+| capabilities, state (live store) | yes | yes | `reticle_look { action: "state" }` reads the real store |
 | act (click/fill/type/select) | yes | yes |  |
 | **act_and_wait, wait_for, assert** | yes | yes | signal / state / route / net / console predicates |
 | console errors | yes | yes | catches what the UI never shows |
@@ -285,12 +285,12 @@ A packaged renderer runs on `file://`, where `pushState('/settings')` rewrites t
 
 ## What IPC looks like to an agent
 
-A desktop app reaches its backend over IPC, not HTTP. `fetch`/`XHR` patching cannot see that, so without the IPC observer every backend call in your app is a blind spot: `reticle_network` returns nothing, `act_and_wait` has no in-flight request to settle on, and `assert { net }` is vacuously true. That is a false green by construction.
+A desktop app reaches its backend over IPC, not HTTP. `fetch`/`XHR` patching cannot see that, so without the IPC observer every backend call in your app is a blind spot: `reticle_observe { action: "network" }` returns nothing, `act_and_wait` has no in-flight request to settle on, and `assert { net }` is vacuously true. That is a false green by construction.
 
 Reticle records each IPC call as an ordinary request, so the tools you already use work unchanged:
 
 ```jsonc
-// reticle_network { urlContains: "ipc://" }
+// reticle_observe { action: "network", urlContains: "ipc://" }
 {
   "calls": [
     { "method": "ipc", "url": "ipc://todos:load", "status": 200, "ms": 134 },
@@ -299,7 +299,7 @@ Reticle records each IPC call as an ordinary request, so the tools you already u
 }
 ```
 
-IPC has no status code. `200`/`500` are synthetic, mapped from whether the call succeeded or failed, precisely so that `reticle_network { status: 500 }` and `assert { kind: "net", status: 500 }` keep working. On Tauri you will see `status: 500` next to `statusText: "OK"`. That is not a bug: the transport really did answer 200, and the 500 is the command's own verdict. `ok` is authoritative, and on Electron `error` carries the message your main process returned:
+IPC has no status code. `200`/`500` are synthetic, mapped from whether the call succeeded or failed, precisely so that `reticle_observe { action: "network", status: 500 }` and `assert { kind: "net", status: 500 }` keep working. On Tauri you will see `status: 500` next to `statusText: "OK"`. That is not a bug: the transport really did answer 200, and the 500 is the command's own verdict. `ok` is authoritative, and on Electron `error` carries the message your main process returned:
 
 ```jsonc
 // reticle_assert { predicate: { kind: "net", urlContains: "ipc://todos:archive", status: 500 } }

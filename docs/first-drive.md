@@ -72,8 +72,8 @@ node server/dist/command/cli.js verify http://localhost:4310/ --port 4400 \
 
 If your editor has the Reticle MCP server, the same app is now drivable. The four calls worth knowing, in the order you actually use them:
 
-- `reticle_snapshot`: what is on the page
-- `reticle_query { by: "testid", value: "..." }`: find one thing, cheaply
+- `reticle_look { action: "page" }`: what is on the page
+- `reticle_look { action: "find", by: "testid", value: "..." }`: find one thing, cheaply
 - `reticle_act_and_wait { ref, action, until }` (**the one that produces a verdict**)
 - `reticle_observe`: everything the page did, when you need the evidence
 
