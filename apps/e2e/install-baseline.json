@@ -55,8 +55,7 @@
     "ℹ SvelteKit setup verified, drive unverified → src/hooks.client.ts",
     "✓ Reticle client hook → src/hooks.client.ts",
     "✓ Vite plugin → vite.config.ts",
-    "✓ Capabilities + store → src/reticle-dev.ts",
-    "ℹ AGENT: finish the capabilities file → src/reticle-dev.ts"
+    "✓ Capabilities + store → src/reticle-dev.ts"
   ],
   "cra": [
     "– MCP server (global) → global (claude user scope)",

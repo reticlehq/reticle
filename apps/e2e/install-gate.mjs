@@ -1617,21 +1617,8 @@ for (const r of results) {
  * like any other. It excuses only the CONTROL: the claim that mis-wiring this scaffold would be
  * detected. For anything listed, that claim is currently unproven, and the install-gate green for
  * it means "nothing failed", not "a failure would have been caught".
- *
- * The reason is recorded as what is actually known, not as a theory. Four explanations for
- * `monorepo-subdir` were offered and all four were disproved, so the entry says so rather than
- * repeating the most recent guess. What IS observed: `init` is told bridgePort + 1 and the
- * generated connect bakes that port, yet the app's session appears on bridgePort. Reproduce with
- * `--self-test --only monorepo-subdir --keep` and print `sessionsOn(bridgePort)` alongside
- * `sessionsOn(bridgePort + 1)` at the assertion. Corrupting `projectId` in `.reticle.json` after
- * `init` does NOT restore the control — tried, and reverted.
  */
-const CONTROL_CANNOT_FAIL = new Map([
-  [
-    'monorepo-subdir',
-    'mis-wiring the bridge port is not detected here; the override path is unidentified',
-  ],
-]);
+const CONTROL_CANNOT_FAIL = new Map([]);
 
 if (SELF_TEST) {
   // Inverted, and per scaffold. A green here would mean the session check passes regardless of
