@@ -152,3 +152,66 @@ describe('requestBodyMatches and signal.dataMatches share the same grammar', () 
     expect(miss.observed).toContain('"order.total" is 40');
   });
 });
+
+describe('a redacted signal field is unknown, never present', () => {
+  // The transport sanitizer writes the marker for every sensitive key, whatever it held — undefined
+  // included — so `*` over a redacted field used to pass on a value nobody saw.
+  it('does not let `*` pass on a redacted nested field', async () => {
+    const session = new WindowSession([signalEvent('login', { user: { token: REDACTED_VALUE } })]);
+    const r = await evaluatePredicate(session, {
+      kind: 'signal',
+      name: 'login',
+      dataMatches: { 'user.token': '*' },
+    });
+    expect(r.pass).toBe(false);
+    expect(r.inconclusive).toContain('"user.token"');
+  });
+
+  it('does not let `*` pass on a redacted top-level field either', async () => {
+    const session = new WindowSession([signalEvent('login', { token: REDACTED_VALUE })]);
+    const r = await evaluatePredicate(session, {
+      kind: 'signal',
+      name: 'login',
+      dataMatches: { token: '*' },
+    });
+    expect(r.pass).toBe(false);
+    expect(r.inconclusive).toBeDefined();
+  });
+
+  it('cannot count signals whose deciding field was redacted', async () => {
+    const session = new WindowSession([
+      signalEvent('login', { token: 'visible' }),
+      signalEvent('login', { token: REDACTED_VALUE }),
+    ]);
+    const r = await evaluatePredicate(session, {
+      kind: 'signal',
+      name: 'login',
+      dataMatches: { token: 'visible' },
+      count: 1,
+    });
+    expect(r.pass).toBe(false);
+    expect(r.inconclusive).toBeDefined();
+  });
+
+  it('still passes on a readable payload beside a redacted one', async () => {
+    const session = new WindowSession([
+      signalEvent('login', { token: REDACTED_VALUE }),
+      signalEvent('login', { token: 'visible' }),
+    ]);
+    const r = await evaluatePredicate(session, {
+      kind: 'signal',
+      name: 'login',
+      dataMatches: { token: 'visible' },
+    });
+    expect(r.pass).toBe(true);
+  });
+});
+
+describe('a literal dotted key is read as written, redaction included', () => {
+  it('judges a literal "a.b" beside a redacted "a"', async () => {
+    const body = JSON.stringify({ 'a.b': 1, a: REDACTED_VALUE });
+    const r = await response(body, { 'a.b': 1 });
+    expect(r.pass).toBe(true);
+    expect(r.inconclusive).toBeUndefined();
+  });
+});
