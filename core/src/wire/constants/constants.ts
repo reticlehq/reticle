@@ -266,7 +266,10 @@ export const DEFAULT_PLATFORM_URL = 'https://app.reticle.sh';
 
 /** The platform URL from the environment, else the hosted service. No trailing slash. */
 export function platformUrlFrom(env: Record<string, string | undefined>): string {
-  return (cloudUrlFrom(env) ?? DEFAULT_PLATFORM_URL).replace(/\/+$/, '');
+  // A loop, not /\/+$/: that pattern is polynomial on a value made of many slashes.
+  let url = cloudUrlFrom(env) ?? DEFAULT_PLATFORM_URL;
+  while (url.endsWith('/')) url = url.slice(0, -1);
+  return url;
 }
 
 /**
