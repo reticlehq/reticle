@@ -781,7 +781,7 @@ export function main(): void {
       void handleHunt(parsed.dir);
       break;
     case 'gate':
-      void handleGate(parsed.files, parsed.since, parsed.hook);
+      void handleGate(parsed.files, parsed.since, parsed.hook, parsed.acceptCoverage);
       break;
     case 'report':
       void handleReport(parsed.session, parsed.hook);

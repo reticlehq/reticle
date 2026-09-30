@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  acceptCurrent,
   emptyLedger,
   levelsOf,
   mergeLedger,
@@ -81,6 +82,38 @@ describe('the ratchet', () => {
       writes: { seen: [], branched: ['POST /b'], unhandled: [] },
     });
     expect(regressions(fixed)).toEqual([]);
+  });
+});
+
+describe('accepting a coverage drop', () => {
+  // A level can fall for a reason nobody needs to cover: a control removed on purpose, a label
+  // that carries a count. Without a way to say so, the ratchet stays red until someone deletes
+  // .reticle/coverage.json by hand, which also throws away everything it measured.
+  it('lowers the best to today, so the drop stops blocking, and keeps what was measured', () => {
+    const covered = raiseBest(
+      mergeLedger(emptyLedger(), {
+        writes: { seen: ['POST /a'], branched: ['POST /a'], unhandled: [] },
+      }),
+    );
+    const grown = mergeLedger(covered, {
+      writes: { seen: ['POST /b'], branched: [], unhandled: [] },
+    });
+    expect(regressions(grown)).toHaveLength(1);
+    const accepted = acceptCurrent(grown);
+    expect(regressions(accepted)).toEqual([]);
+    expect(accepted.writes).toEqual(grown.writes);
+  });
+
+  it('still blocks a drop that happens after the one it accepted', () => {
+    const accepted = acceptCurrent(
+      mergeLedger(emptyLedger(), {
+        writes: { seen: ['POST /a', 'POST /b'], branched: ['POST /a'], unhandled: [] },
+      }),
+    );
+    const worse = mergeLedger(accepted, {
+      writes: { seen: ['POST /c'], branched: [], unhandled: [] },
+    });
+    expect(regressions(worse)).toHaveLength(1);
   });
 });
 

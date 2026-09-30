@@ -176,6 +176,16 @@ export function raiseBest(ledger: AppLedger): AppLedger {
   return { ...ledger, best };
 }
 
+/**
+ * Today's levels become the best, so a drop someone decided to accept stops blocking. What was
+ * measured stays; only the bar moves, and only when asked (`reticle gate --accept-coverage`).
+ */
+export function acceptCurrent(ledger: AppLedger): AppLedger {
+  const best: Record<string, number> = {};
+  for (const l of levelsOf(ledger)) if (l.pct !== undefined) best[l.level] = l.pct;
+  return { ...ledger, best };
+}
+
 /** Levels now below the best they ever reached — something new appeared and nothing covered it. */
 export function regressions(
   ledger: AppLedger,
@@ -238,7 +248,18 @@ export class LedgerStore {
 
   /** Fold a delta in, raise the best, persist, and hand back the result. */
   async merge(delta: LedgerDelta): Promise<AppLedger> {
-    const next = raiseBest(mergeLedger(await this.load(), delta));
+    return this.#save(raiseBest(mergeLedger(await this.load(), delta)));
+  }
+
+  /** Accept today's levels as the best. Returns the drops that were accepted. */
+  async acceptCurrent(): Promise<ReturnType<typeof regressions>> {
+    const ledger = await this.load();
+    const accepted = regressions(ledger);
+    if (accepted.length > 0) await this.#save(acceptCurrent(ledger));
+    return accepted;
+  }
+
+  async #save(next: AppLedger): Promise<AppLedger> {
     await this.#fs.mkdir(dirname(this.#path));
     const body = `${JSON.stringify({ version: LEDGER_VERSION, ledger: next })}\n`;
     await writeFileAtomic(this.#fs, this.#path, body);

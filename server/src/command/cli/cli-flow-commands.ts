@@ -210,6 +210,8 @@ export async function handleGate(
   since: string | undefined,
   /** Hook mode: prose for a human, and silence when there was simply nothing to check. */
   hook = false,
+  /** Accept today's coverage levels as the best before judging, for a drop that was intended. */
+  acceptCoverage = false,
 ): Promise<void> {
   try {
     const fs = createNodeFileSystem();
@@ -260,7 +262,9 @@ export async function handleGate(
     // The coverage ledger, when one exists: a level that fell below its best, and changed code the
     // browser loaded and never ran. A project that never folded coverage has an empty ledger and
     // neither can fire.
-    const ledger = await new LedgerStore(fs, reticleRoot).load();
+    const ledgerStore = new LedgerStore(fs, reticleRoot);
+    const coverageAccepted = acceptCoverage ? await ledgerStore.acceptCurrent() : [];
+    const ledger = await ledgerStore.load();
     const result = gateDecision({
       affected,
       passing,
@@ -291,6 +295,7 @@ export async function handleGate(
         ? { coverageRegressed: result.coverageRegressed }
         : {}),
       ...(result.unexecuted.length > 0 ? { unexecuted: result.unexecuted } : {}),
+      ...(coverageAccepted.length > 0 ? { coverageAccepted } : {}),
       coverage: flowCoverage,
     });
     // Two non-zero codes, because two callers want opposite things from the same run. CI wants any
