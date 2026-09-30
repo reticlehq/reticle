@@ -30,7 +30,7 @@ Write down what is on screen before you touch anything, or you have nothing to c
 reticle_look({ action: "find", sessionId, by: "role", value: "row" })
 ```
 
-Use whatever the rows really are (`row`, `listitem`, `article`, or a `testid`). Keep the visible text of the **first** and **last** row. Those two are what the next steps assert on.
+Use whatever the rows really are (`row`, `listitem`, `article`, or a `testid`). Keep the visible text of **every** row, not a sample: a repeat from the middle of page 1 is as much a bug as one from the top. If the result says it was truncated, scope the find to the list (`scope: "<the list's ref>"`) until it is not, or say which rows you could not see.
 
 ## 2. Load the next page, and name the consequence first
 
@@ -44,14 +44,16 @@ reticle_act_and_wait({ sessionId, ref: "<next control>", action: "click", until:
 ]}})
 ```
 
-For **infinite scroll or "Load more"**, the page is appended, so the first page must still be there and the request must have answered:
+For **"Load more" or infinite scroll**, the page is appended, so the first page must still be there and the request must have answered. Use the action that really triggers the load: `click` for a "Load more" button, `scrollIntoView` on the list's end for a list that loads when scrolled.
 
 ```
-reticle_act_and_wait({ sessionId, ref: "<load more or the list end>", action: "scrollIntoView", until: { kind: "allOf", predicates: [
+reticle_act_and_wait({ sessionId, ref: "<load more button>", action: "click", until: { kind: "allOf", predicates: [
   { kind: "net", urlContains: "/api/items", ok: true },
   { kind: "text", contains: "<first row of page 1>" },
 ]}})
 ```
+
+If the list pages **on the client** (all rows arrive in one response and the page only slices them), no request fires, and a `net` clause would wait for one that never comes. Drop it, keep the text clauses, and say in your report that the server's paging was not exercised.
 
 `urlContains` must name the list's own endpoint. A predicate that any request satisfies proves nothing about this list.
 
@@ -65,8 +67,8 @@ reticle_look({ action: "find", sessionId, by: "role", value: "row" })
 
 Compare the text with what you recorded in step 1:
 
-- **Paged**: no row of page 2 may also be a row of page 1. An overlap means the offset or cursor did not move.
-- **Appended**: the first page's rows appear once each, and the new ones follow them. A page-1 row that now appears twice means the batch was appended twice or re-fetched.
+- **Paged**: no row of page 2 may be any row of page 1. An overlap anywhere in the list means the offset or cursor did not move.
+- **Appended**: every page-1 row appears once, and the new ones follow them. A page-1 row that now appears twice means the batch was appended twice or re-fetched.
 
 That comparison is evidence you read, so turn the result into a verdict. Take one row that is only on the new page and assert it:
 
@@ -87,17 +89,21 @@ reticle_assert({ sessionId, predicate: { kind: "anyOf", predicates: [
 ]}})
 ```
 
-For an infinite scroll, scroll to the end once more and prove the page asked for nothing:
+For an infinite scroll, scroll to the end once more, then let the page go quiet before you claim it asked for nothing. An observer that fires after a delay would otherwise land after a zero reading had already passed:
 
 ```
-reticle_act_and_wait({ sessionId, ref: "<the list end>", action: "scrollIntoView", until: { kind: "net", urlContains: "/api/items", count: 0 } })
+reticle_act({ sessionId, ref: "<the list end>", action: "scrollIntoView" })
+reticle_assert({ sessionId, timeout_ms: 5000, predicate: { kind: "allOf", predicates: [
+  { kind: "settled", quietMs: 1500 },
+  { kind: "net", urlContains: "/api/items", count: 0 },
+]}})
 ```
 
 A list that keeps requesting pages past the end is a real finding even when nothing new renders.
 
 ## Honesty
 
-Only `verified: "yes"` is a pass. A page 2 that rendered with no request behind it (client-side slicing) is still a pass for the rows, but say so: the server's paging was never exercised. Say which endpoint you asserted on, and report any step you could not reach as **unknown**, not passed.
+Only `verified: "yes"` is a pass. For a client-side list, a `yes` covers the rows you asserted and nothing about the server: say so. Say which endpoint you asserted on, and report any step you could not reach as **unknown**, not passed.
 
 ---
 
