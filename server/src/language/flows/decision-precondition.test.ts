@@ -18,7 +18,7 @@ import { buildSuiteVerdict } from './decision.js';
  */
 const replay = (over: Partial<FlowReplayResult>): FlowReplayResult => ({
   name: 'f',
-  status: ReplayStatus.OK,
+  status: ReplayStatus.UNVERIFIABLE,
   steps: [],
   ...over,
 });
@@ -34,6 +34,10 @@ describe('a flow that never ran because its precondition failed', () => {
       },
     ]);
     expect(verdict.passed).toBe(0);
+    expect(verdict.status).toBe('unverifiable');
+    expect(verdict.unverifiable).toEqual([
+      { flow: 'needs-login', reason: 'a precondition of this flow does not hold' },
+    ]);
   });
 
   it('is not counted as a failure either', () => {
@@ -47,6 +51,7 @@ describe('a flow that never ran because its precondition failed', () => {
       },
     ]);
     expect(verdict.failures.map((f) => f.flow)).not.toContain('needs-login');
+    expect(verdict.status).toBe('unverifiable');
   });
 
   it('still counts a genuine failure as a failure beside it', () => {
@@ -57,5 +62,6 @@ describe('a flow that never ran because its precondition failed', () => {
     ]);
     expect(verdict.failures.map((f) => f.flow)).toEqual(['broken']);
     expect(verdict.passed).toBe(0);
+    expect(verdict.status).toBe('fail');
   });
 });

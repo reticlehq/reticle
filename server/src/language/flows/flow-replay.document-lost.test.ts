@@ -222,7 +222,7 @@ describe('the verdict a caller gets back when the document went', () => {
 
   it('is unverifiable, never a pass and never a failure of the app', () => {
     const result = lostDocumentResult('open-invoice', lost);
-    expect(result.status).toBe(ReplayStatus.OK);
+    expect(result.status).toBe(ReplayStatus.UNVERIFIABLE);
     expect(result.unverifiable?.reason, 'nothing here says the app is wrong').toBeDefined();
     expect(result.error, 'a thrown transport error told the caller nothing').toBeUndefined();
   });

@@ -86,6 +86,7 @@ const REPLAY_VERDICTS: ReadonlyMap<string, { verified: Verified; passed: boolean
   [ReplayStatus.OK, { verified: Verified.YES, passed: true }],
   [ReplayStatus.DRIFT, { verified: Verified.NO, passed: false }],
   [ReplayStatus.ERROR, { verified: Verified.UNKNOWN, passed: false }],
+  [ReplayStatus.UNVERIFIABLE, { verified: Verified.UNKNOWN, passed: false }],
 ]);
 function replayVerdict(
   toolName: string,

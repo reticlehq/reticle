@@ -18,9 +18,11 @@ import {
   RunKind,
   RunStatus,
   type CommandResult,
+  type FlowFile,
   type FlowReplayResult,
   type ReticleEvent,
 } from '@reticlehq/core';
+import { REDACTED_FILL } from './fields/flow-secret-field.js';
 import { IntentStore } from '@/memory/intent/intent-store.js';
 import { FlowAssertionGrade } from './flow-classify.js';
 import { TOOLS, type ToolDeps } from '@/surface/tools/tools.js';
@@ -32,7 +34,7 @@ import { FlowStore, type FlowAnnotations } from './flows.js';
 import { ProjectStore } from '@/memory/project/project-store.js';
 import { AnnotationStore } from './stores/annotation-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '@/memory/project/fs/fs-port.js';
-import { flowPath } from '@/memory/project/dir/reticle-dir.js';
+import { flowDir, flowPath } from '@/memory/project/dir/reticle-dir.js';
 import { asRecord, asString } from '@reticlehq/core';
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
@@ -402,6 +404,85 @@ describe('reticle_flow_replay — a green that cannot go red (#341)', () => {
     // than trusted: a field the handler sets and the schema omits returns as nothing, silently.
     const schema = tool(ReticleTool.FLOW_REPLAY).outputSchema;
     expect(schema).toHaveProperty('unverifiable');
+    expect(schema).toHaveProperty('status');
+    const statusSchema = (schema as Record<string, import('zod').ZodTypeAny>)['status'];
+    expect(statusSchema?.description).toContain('unverifiable');
+    expect(statusSchema?.safeParse('unverifiable').success).toBe(true);
+  });
+
+  it('a flow missing required secrets returns status unverifiable at the tool boundary', async () => {
+    const missingSecretFlow: FlowFile = {
+      version: 1,
+      name: 'missing-secret',
+      createdAt: clock.now(),
+      steps: [
+        {
+          tool: 'reticle_act',
+          anchor: { kind: AnchorKind.TESTID, value: 'login-password' },
+          action: ActionType.FILL,
+          args: { value: REDACTED_FILL },
+        },
+      ],
+    };
+    await fs.mkdir(flowDir(root));
+    await fs.writeFile(
+      flowPath(root, asFlowName('missing-secret')),
+      JSON.stringify(missingSecretFlow),
+    );
+
+    const savedEnv = process.env['RETICLE_SECRET_LOGIN_PASSWORD'];
+    delete process.env['RETICLE_SECRET_LOGIN_PASSWORD'];
+    try {
+      const res = await replay('missing-secret');
+      expect(res.status).toBe(ReplayStatus.UNVERIFIABLE);
+      expect(res.status).not.toBe(ReplayStatus.OK);
+      expect(res.steps).toHaveLength(0);
+      expect(res.unverifiable?.reason).toBeDefined();
+      expect(res.unverifiable?.reason).toContain('RETICLE_SECRET_LOGIN_PASSWORD');
+    } finally {
+      if (savedEnv !== undefined) {
+        process.env['RETICLE_SECRET_LOGIN_PASSWORD'] = savedEnv;
+      }
+    }
+  });
+
+  it('a flow with an unmet precondition returns status unverifiable at the tool boundary', async () => {
+    const unmetPreconditionFlow: FlowFile = {
+      version: 1,
+      name: 'unmet-precondition',
+      createdAt: clock.now(),
+      startPath: '/dashboard',
+      requires: [{ kind: 'signal', name: 'prerequisite:satisfied' }],
+      steps: [
+        {
+          tool: 'reticle_act',
+          anchor: { kind: AnchorKind.TESTID, value: 'login-submit' },
+          action: ActionType.CLICK,
+        },
+      ],
+    };
+    await fs.mkdir(flowDir(root));
+    await fs.writeFile(
+      flowPath(root, asFlowName('unmet-precondition')),
+      JSON.stringify(unmetPreconditionFlow),
+    );
+
+    const deps = fakeDeps(
+      fs,
+      root,
+      scriptedSession((testid) =>
+        'absent-header' === testid ? { elements: [] } : { elements: [{ ref: `e-${testid}` }] },
+      ),
+    );
+    const res = (await tool(ReticleTool.FLOW_REPLAY).handler(deps, {
+      flowName: 'unmet-precondition',
+    })) as FlowReplayResult;
+
+    expect(res.status).toBe(ReplayStatus.UNVERIFIABLE);
+    expect(res.status).not.toBe(ReplayStatus.OK);
+    expect(res.steps).toHaveLength(0);
+    expect(res.unverifiable?.reason).toBeDefined();
+    expect(res.unverifiable?.reason).toContain('precondition of this flow does not hold');
   });
 });
 

@@ -256,6 +256,12 @@ export function buildSuiteVerdict(
   const unverifiable: { flow: string; reason: string }[] = [];
   let passed = 0;
   for (const { replay, flow } of runs) {
+    if (replay.status === ReplayStatus.UNVERIFIABLE) {
+      const reason =
+        replay.unverifiable?.reason ?? unverifiableReason(flow) ?? 'the flow could not be graded';
+      unverifiable.push({ flow: replay.name, reason });
+      continue;
+    }
     if (replay.status === ReplayStatus.OK) {
       /*
        * The REPLAY's own answer first, then the grader's.

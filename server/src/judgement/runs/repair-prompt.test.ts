@@ -33,6 +33,16 @@ describe('buildRepairPacket', () => {
     expect(buildRepairPacket(replay(ReplayStatus.OK))).toBeUndefined();
   });
 
+  it('returns undefined for an unverifiable replay', () => {
+    expect(
+      buildRepairPacket(
+        replay(ReplayStatus.UNVERIFIABLE, {
+          unverifiable: { reason: 'precondition unmet' },
+        }),
+      ),
+    ).toBeUndefined();
+  });
+
   it('builds a packet from an error replay (no decision), picking the failing step', () => {
     const packet = buildRepairPacket(
       replay(ReplayStatus.ERROR, {

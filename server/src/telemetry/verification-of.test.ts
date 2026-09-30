@@ -295,6 +295,16 @@ describe('a flow replay carries a verdict', () => {
     expect(verdict?.falseGreenCaught).toBe(false);
   });
 
+  it('an unverifiable replay is unknown, never a pass and never a fail', () => {
+    const verdict = verificationOf(
+      REPLAY,
+      { name: 'checkout', status: ReplayStatus.UNVERIFIABLE, steps: [] },
+      10,
+    );
+    expect(verdict).toMatchObject({ verified: Verified.UNKNOWN, passed: false });
+    expect(verdict?.falseGreenCaught).toBe(false);
+  });
+
   it('reads the replay vocabulary for the replay tool only', () => {
     // `ok` is not a verdict word anywhere else, and a merged action that happens to answer with one
     // must not be counted as a verification it never made.

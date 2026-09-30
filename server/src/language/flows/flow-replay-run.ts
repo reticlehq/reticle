@@ -75,8 +75,11 @@ export function latestRecordedFlow(
 export { flowErrorMessage } from './flow-result.js';
 import { flowErrorMessage } from './flow-result.js';
 
+/** Replay statuses that represent an actual recorded run in project.json. */
+type RecordedReplayStatus = Exclude<ReplayStatus, typeof ReplayStatus.UNVERIFIABLE>;
+
 /** Map the wire ReplayStatus onto the persisted RunStatus (ok→pass). */
-function replayToRunStatus(status: ReplayStatus): RunStatus {
+function replayToRunStatus(status: RecordedReplayStatus): RunStatus {
   switch (status) {
     case ReplayStatus.OK:
       return RunStatus.PASS;
@@ -95,7 +98,7 @@ function replayToRunStatus(status: ReplayStatus): RunStatus {
 async function recordReplayRun(
   deps: ToolDeps,
   name: string,
-  status: ReplayStatus,
+  status: RecordedReplayStatus,
   driftSteps: number,
   durationMs: number,
   projectId: ProjectId | undefined,
@@ -551,7 +554,7 @@ async function firstUnmetPrecondition(
 export function lostDocumentResult(name: string, lost: DocumentLostDuringReplay): FlowReplayResult {
   return {
     name,
-    status: ReplayStatus.OK,
+    status: ReplayStatus.UNVERIFIABLE,
     steps: lost.steps,
     unverifiable: {
       reason:
@@ -667,7 +670,7 @@ export async function replayNamedFlow(
     const names = missing.map((each) => each.envKey).join(', ');
     return {
       name: replayable.name,
-      status: ReplayStatus.OK,
+      status: ReplayStatus.UNVERIFIABLE,
       steps: [],
       unverifiable: {
         reason:
@@ -688,7 +691,7 @@ export async function replayNamedFlow(
   if (unmet !== undefined) {
     return {
       name: replayable.name,
-      status: ReplayStatus.OK,
+      status: ReplayStatus.UNVERIFIABLE,
       steps: [],
       unverifiable: { reason: unmet },
     };

@@ -61,6 +61,22 @@ describe('recordSuiteFlakes', () => {
     SUITE_LEDGER_TIMEOUT_MS,
   );
 
+  it('does not treat an unverifiable replay as a failure for the ledger', async () => {
+    let flaky: readonly string[] = [];
+    for (const status of [
+      ReplayStatus.OK,
+      ReplayStatus.UNVERIFIABLE,
+      ReplayStatus.OK,
+      ReplayStatus.OK,
+      ReplayStatus.UNVERIFIABLE,
+    ]) {
+      flaky = await recordSuiteFlakes(fs, root, round({ checkout: status }));
+    }
+    expect(flaky, 'unverifiable runs must not turn an otherwise passing flow into a flake').toEqual(
+      [],
+    );
+  });
+
   it(
     'records EVERY flow in a batch, not just the first or last',
     async () => {

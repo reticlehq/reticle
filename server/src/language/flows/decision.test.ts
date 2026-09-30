@@ -280,6 +280,25 @@ describe('buildSuiteVerdict — a flow that cannot fail is not a pass', () => {
     expect(v.unverifiable?.[0]?.flow).toBe('empty');
   });
 
+  it('handles ReplayStatus.UNVERIFIABLE: not passed, not failed, placed in unverifiable bucket', () => {
+    const v = buildSuiteVerdict([
+      {
+        replay: {
+          name: 'missing-secrets',
+          status: ReplayStatus.UNVERIFIABLE,
+          steps: [],
+          unverifiable: { reason: 'missing secret RETICLE_SECRET_LOGIN_PASSWORD' },
+        },
+      },
+    ]);
+    expect(v.passed).toBe(0);
+    expect(v.failed).toBe(0);
+    expect(v.status).toBe('unverifiable');
+    expect(v.unverifiable).toEqual([
+      { flow: 'missing-secrets', reason: 'missing secret RETICLE_SECRET_LOGIN_PASSWORD' },
+    ]);
+  });
+
   it('names WHY it could not be verified, so the fix is obvious', () => {
     const v = buildSuiteVerdict([{ replay: okReplay('empty'), flow: emptyFlow('empty') }]);
     expect(v.unverifiable?.[0]?.reason ?? '').toMatch(/assert|step/i);
