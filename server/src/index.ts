@@ -13,7 +13,10 @@ import {
   projectCandidates,
 } from '@reticlehq/core/artifacts';
 import { discoverProjectConfigs } from './command/cli/config/config-discovery.js';
-import { artifactRootResolver } from './memory/project/artifact-root-resolver.js';
+import {
+  artifactRootResolver,
+  projectDirectoryFor,
+} from './memory/project/artifact-root-resolver.js';
 import type { Server } from 'node:http';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -327,12 +330,12 @@ async function resolveRealInput(
 /** Start the Reticle bridge (browser WS endpoint) and, by default, the MCP stdio server. */
 
 /**
- * The SDK-upgrade sentence for THIS project's package.json, evaluated at each HELLO so a
- * just-edited manifest is what we name. Falls back to the framework-neutral sensor when cwd is
- * not an app.
+ * The SDK-upgrade sentence for the package.json of the project the page announced, evaluated at
+ * each HELLO so a just-edited manifest is what we name. The daemon's cwd only when that project's
+ * directory is unknown, and the framework-neutral sensor when that is not an app either (#1135).
  */
-function sdkFixForCwd(): string {
-  return sdkFixForDirectory(SERVER_VERSION, process.cwd());
+function sdkFixForProject(projectId?: string): string {
+  return sdkFixForDirectory(SERVER_VERSION, projectDirectoryFor(projectId) ?? process.cwd());
 }
 
 /**
@@ -392,7 +395,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     readProjectId(process.cwd()),
   );
   const security = await resolveBridgeSecurityWithAutoToken(options);
-  const bridge = new Bridge({ port, sdkFix: sdkFixForCwd, ...security });
+  const bridge = new Bridge({ port, sdkFix: sdkFixForProject, ...security });
   // Server-authoritative liveness: a Node-side reaper (immune to browser throttling) ends sessions
   // whose agent has gone idle, so a forgotten/crashed agent never leaves the HUD "running" forever.
   const reaper = new SessionReaper(bridge.sessions);
@@ -542,7 +545,12 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
 
   const security = await resolveBridgeSecurityWithAutoToken(options);
   const shared = createSharedServer(security.token === undefined ? {} : { token: security.token });
-  const bridge = new Bridge({ port, server: shared.httpServer, sdkFix: sdkFixForCwd, ...security });
+  const bridge = new Bridge({
+    port,
+    server: shared.httpServer,
+    sdkFix: sdkFixForProject,
+    ...security,
+  });
   // The daemon owns listen (below), so the real bind error is reported there; absorb bridge.ready's
   // mirror rejection so a port collision can't surface as an unhandled promise rejection.
   void bridge.ready.catch(() => undefined);

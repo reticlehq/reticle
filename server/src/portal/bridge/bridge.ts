@@ -194,10 +194,11 @@ interface BridgeOptions {
    */
   server?: http.Server;
   /**
-   * The SDK-upgrade sentence to attach when a HELLO is skewed. Injected so the daemon can name
-   * this project's packages and package manager; tests that omit it get the no-project fallback.
+   * The SDK-upgrade sentence to attach when a HELLO is skewed, for the project that HELLO named.
+   * Injected so the daemon can name that project's packages and package manager; tests that omit
+   * it get the no-project fallback.
    */
-  sdkFix?: () => string;
+  sdkFix?: (projectId?: string) => string;
 }
 
 /**
@@ -274,7 +275,7 @@ export class Bridge {
   readonly #maxSessions: number;
   readonly #maxPendingConnections: number;
   readonly #helloTimeoutMs: number;
-  readonly #sdkFix: () => string;
+  readonly #sdkFix: (projectId?: string) => string;
   #pendingConnections = 0;
   #onReplay: ReplayRequestHandler | undefined;
   /**
@@ -643,7 +644,7 @@ export class Bridge {
               ...(parsed.contractParts === undefined
                 ? {}
                 : { contractParts: parsed.contractParts }),
-              fix: this.#sdkFix(),
+              fix: this.#sdkFix(parsed.projectId),
             },
             {
               version: SERVER_VERSION,

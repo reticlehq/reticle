@@ -15,6 +15,7 @@ import {
   PROJECT_REGISTRY_FILE,
   emptyProjectRegistry,
   parseProjectRegistry,
+  type ProjectCandidate,
 } from '@reticlehq/core/artifacts';
 import { type ProjectId, ReticleDir } from '@reticlehq/core';
 import {
@@ -49,30 +50,53 @@ function daemonSitsInAProject(daemonRoot: string): boolean {
   }
 }
 
+/**
+ * Every project this machine knows the directory of: discovered `.reticle.json` files first, then
+ * the user-level registry. Read on each call, since `init` can run in another terminal while the
+ * daemon is up.
+ */
+function knownProjectCandidates(): ProjectCandidate[] {
+  let registry = emptyProjectRegistry();
+  try {
+    const path = join(homedir(), ReticleDir.ROOT, PROJECT_REGISTRY_FILE);
+    registry = existsSync(path)
+      ? parseProjectRegistry(JSON.parse(readFileSync(path, 'utf8')))
+      : registry;
+  } catch {
+    // A cache that cannot be read is an empty cache, never an error: the daemon still resolves
+    // through discovery, and falls back to its own root exactly as it did before this existed.
+  }
+  let discovery: ConfigDiscovery = { found: [], searched: [] };
+  try {
+    discovery = discoverProjectConfigs(process.cwd());
+  } catch {
+    // Same reasoning: a diagnostic search that throws must not take a tool call with it.
+  }
+  return projectCandidatesFrom(discovery, registry);
+}
+
+/**
+ * The directory of the project a page announced, or undefined when this machine does not know it.
+ *
+ * A daemon is shared: started from `$HOME`, a monorepo root, or another project's MCP client, its
+ * cwd is often not the app that sent the HELLO. The version-skew remedy read `package.json` from
+ * cwd anyway, so it fell back to the generic sensor package and told a Next.js project to install
+ * `@reticlehq/browser` (#1135). This is the same lookup the artifact root uses, keyed by the page's
+ * own project id.
+ */
+export function projectDirectoryFor(projectId: string | undefined): string | undefined {
+  if (projectId === undefined) return undefined;
+  return knownProjectCandidates().find((candidate) => candidate.projectId === projectId)?.directory;
+}
+
 export function artifactRootResolver(
   daemonRoot: string,
 ): (projectId: ProjectId | undefined, origin?: string) => ArtifactRoot {
   const daemonIsProject = daemonSitsInAProject(daemonRoot);
   return (projectId, origin) => {
-    let registry = emptyProjectRegistry();
-    try {
-      const path = join(homedir(), ReticleDir.ROOT, PROJECT_REGISTRY_FILE);
-      registry = existsSync(path)
-        ? parseProjectRegistry(JSON.parse(readFileSync(path, 'utf8')))
-        : registry;
-    } catch {
-      // A cache that cannot be read is an empty cache, never an error: the daemon still resolves
-      // through discovery, and falls back to its own root exactly as it did before this existed.
-    }
-    let discovery: ConfigDiscovery = { found: [], searched: [] };
-    try {
-      discovery = discoverProjectConfigs(process.cwd());
-    } catch {
-      // Same reasoning: a diagnostic search that throws must not take a tool call with it.
-    }
     const resolved = resolveArtifactRoot({
       projectId,
-      candidates: projectCandidatesFrom(discovery, registry),
+      candidates: knownProjectCandidates(),
       daemonRoot,
     });
     if (resolved.reason === ArtifactRootReason.MATCHED_PROJECT) return resolved;

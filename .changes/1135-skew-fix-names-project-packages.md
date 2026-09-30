@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`: the version-skew fix names the packages of the project that connected, not the daemon's working directory.** A shared daemon, started from `$HOME`, a monorepo root or another project's MCP client, read `package.json` from its own cwd. So a Next.js page on a skewed SDK was told to install `@reticlehq/browser`, a package the project never used. The fix line now reads the `package.json` and lockfile of the project the page announced, found through the project registry and discovered `.reticle.json` files, and falls back to the cwd only when that project is unknown. Closes [#1135](https://github.com/reticlehq/reticle/issues/1135).
