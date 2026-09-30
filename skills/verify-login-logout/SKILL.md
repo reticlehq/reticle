@@ -32,7 +32,7 @@ reticle_act_and_wait({ sessionId, ref: "<sign-in button>", action: "click", unti
 ]}})
 ```
 
-All three, because each alone can lie: a route change can happen on the client before the server answers, and a user menu can render from a stale cache. Use the app's real endpoint, landing route and signed-in marker.
+All three, because each alone can lie: a route change can happen on the client before the server answers, and a user menu can render from a stale cache. Use the app's real origin, endpoints, landing route and signed-in marker throughout: the ones here are examples.
 
 `reticle_run({ tool: "reticle_storage", sessionId, args: {} })` shows what the app stored. Sensitive keys come back redacted and httpOnly cookies are invisible to the page by design, so this is evidence about where the session lives, not a verdict.
 
@@ -45,15 +45,18 @@ reticle_act_and_wait({ sessionId, ref: "<sign-out control>", action: "click", un
 ]}})
 ```
 
-Landing on the sign-in page proves the UI moved. It does not prove the session ended. Navigate straight to a protected page and prove it refuses you:
+Landing on the sign-in page proves the UI moved. It does not prove the session ended. Navigate straight to a protected page, on the app's real origin and route, and prove it refuses you:
 
 ```
-reticle_navigate({ sessionId, url: "http://localhost:3000/dashboard" })
+reticle_navigate({ sessionId, url: "<the app's origin>/dashboard" })
 reticle_assert({ sessionId, predicate: { kind: "allOf", predicates: [
   { kind: "route", contains: "/login" },
   { kind: "text", contains: "Sign in" },
+  { kind: "net", urlContains: "/api/me", status: 401 },
 ]}})
 ```
+
+The `net` clause is what proves the **server** ended the session. A client-side guard can redirect to `/login` off a cleared flag while the server still honours the old session, and the route and text would pass. The request the page makes to learn who is signed in must now be refused. If the page makes no such request, say so and report the server half as **unknown**.
 
 A protected page that still renders after sign-out is the most important finding this skill can produce. Report it even if everything else passed.
 
@@ -70,14 +73,15 @@ reticle_run({ tool: "reticle_network_mock", sessionId, args: {
 Reload a protected page and name what must happen:
 
 ```
-reticle_navigate({ sessionId, url: "http://localhost:3000/dashboard" })
+reticle_navigate({ sessionId, url: "<the app's origin>/dashboard" })
 reticle_assert({ sessionId, timeout_ms: 5000, predicate: { kind: "allOf", predicates: [
+  { kind: "net", urlContains: "/api/me", status: 401 },
   { kind: "route", contains: "/login" },
   { kind: "console", level: "error", absent: true },
 ]}})
 ```
 
-The console clause matters: an app that "handles" expiry by throwing an uncaught error and showing a blank page has not handled it. Clear the mock with `{ clear: true }` when you are done.
+The `net` clause proves the mocked `401` was the thing the app reacted to. If the app never called the mocked endpoint, a redirect that happens anyway is a coincidence, not expiry handling, so the verdict is **unknown** until you mock the call it really makes. The console clause matters: an app that "handles" expiry by throwing an uncaught error and showing a blank page has not handled it. Clear the mock with `{ clear: true }` when you are done.
 
 ## Honesty
 
