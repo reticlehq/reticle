@@ -703,6 +703,17 @@ function parseTargetArgs(rest: string[]): { files: string[]; since?: string } {
 }
 
 /**
+ * Whether this command talks to a daemon on the resolved port, and so must not run when
+ * the workspace port conflict (cli-port) has said the port is a guess. `init` carries a port but resolves the
+ * workspace itself, and a tutorial only dials one when asked to run.
+ */
+export function dialsTheDaemon(parsed: CliResult): boolean {
+  if ('init' === parsed.kind) return false;
+  if ('tutorial' === parsed.kind) return parsed.run;
+  return 'port' in parsed;
+}
+
+/**
  * @param defaultHeadless Whether a browser Reticle launches should be hidden when no flag says
  *   otherwise. Injected rather than read from the environment here, because this module is pure —
  *   `cli.ts` decides it from `CI`. The product default is FALSE: showing the run is what makes it

@@ -5,6 +5,15 @@
  * Preload is mechanical — prepend one line — so it is APPLY. Main is only APPLY when the file
  * constructs exactly one BrowserWindow as `const <name> = new BrowserWindow(`; anything else
  * (zero, several, a factory) is MANUAL carrying the doctor's existing fix text, not a guess.
+ *
+ * BOTH ARE DEV-ONLY, as the adapter's README says they must be. They used to be written unguarded
+ * — a static import in preload, a static import and call in main — so `electron-vite build` and
+ * `electron-forge package` bundled the IPC shim (which patches `ipcRenderer.invoke` and exposes
+ * `__reticleIpc`) and the screenshot IPC handler into the shipped app. Each is now behind a guard
+ * the bundler replaces at build time, so a production build folds the branch away and carries
+ * neither. Measured on electron-vite: absent from a production build, present in
+ * `--mode development`, which is the build the renderer's `desktop: true` also instruments.
+ * A line an older `init` wrote is rewritten in place on a re-run.
  */
 
 import { matchingParenEnd } from './brace-scan.js';
@@ -17,44 +26,97 @@ import { PatchKind, type SourcePatch } from './patch-kind.js';
 
 const ESM_PRELOAD_EXT = /\.(?:ts|mts|mjs)$/i;
 const WINDOW_DECL = /const\s+(\w+)\s*=\s*new\s+BrowserWindow\s*\(/g;
-const IMPORT_LINE = /^import\s.+from\s+['"][^'"]+['"];?\s*$/gm;
-const REQUIRE_LINE = /^(?:const|let|var)\s+.+=\s+require\s*\(/gm;
+
+/** Replaced by Vite in every bundled main and preload, so a production build folds it to false. */
+const BUILD_MODE_GUARD = "import.meta.env.MODE !== 'production'";
+/**
+ * Forge's own dev-server define (`MAIN_WINDOW_VITE_DEV_SERVER_URL` in its template): a URL under
+ * `electron-forge start`, undefined in a package, and declared by the template — so it folds AND
+ * typechecks, where Forge's `tsconfig` has no types for `import.meta.env`.
+ */
+const FORGE_DEV_SERVER_DEFINE = /\b([A-Z][A-Z0-9_]*_VITE_DEV_SERVER_URL)\b/;
+/** An unbundled CommonJS main has nothing to fold, so it asks at runtime. */
+const PACKAGED_GUARD = "!require('electron').app.isPackaged";
+
+/** The unguarded lines an older `init` wrote, rewritten in place on a re-run. */
+const LEGACY_PRELOAD_IMPORT = new RegExp(`^import '${PRELOAD_REQUIRE}'\\n`, 'm');
+const LEGACY_MAIN_IMPORT = new RegExp(
+  `^(?:import \\{ installReticleCapture \\} from '${CAPTURE_REQUIRE}'|const \\{ installReticleCapture \\} = require\\('${CAPTURE_REQUIRE}'\\);)\\n`,
+  'm',
+);
+const LEGACY_MAIN_CALL = /^([ \t]*)installReticleCapture\((\w+)\)[ \t]*;?[ \t]*$/m;
 
 function isEsmPath(path: string): boolean {
   return ESM_PRELOAD_EXT.test(path);
 }
 
-function preloadLine(path: string): string {
-  return isEsmPath(path) ? `import '${PRELOAD_REQUIRE}'\n` : `require('${PRELOAD_REQUIRE}');\n`;
+/**
+ * The shim line, first in the file.
+ *
+ * A DYNAMIC import behind the build mode, for a bundled preload. Not a `require`: the electron-vite
+ * template lints with `no-require-imports`, and a clean install must not fail the project's own lint.
+ * Not the static import either, which no guard can remove. The cost is that the shim installs a
+ * microtask after the preload body runs rather than before it — still before the page's own
+ * scripts, and every exposed API that calls `ipcRenderer.invoke` at call time (electron-toolkit's
+ * included) is observed; one that captured the function itself (`invoke: ipcRenderer.invoke`) is
+ * not. Verified end to end on electron-vite: IPC observed and screenshots saved in dev, and no
+ * Reticle code in a production build.
+ *
+ * `viteTypes` is for Electron Forge, whose preload is SANDBOXED by Electron's default and whose
+ * tsconfig has no `import.meta.env` types. The same guarded line works there because Forge builds its
+ * preload with `codeSplitting: false` and the real build mode: the dynamic import is inlined into the
+ * one file a sandbox can load under `electron-forge start`, and folds away under `package`. Measured
+ * on a scaffolded Forge 8 app — Forge used to get the static import instead, which no guard removes,
+ * so the packaged app shipped the shim. The reference line supplies the types, so `tsc` stays green.
+ */
+const VITE_CLIENT_TYPES = '/// <reference types="vite/client" />\n';
+
+function preloadLine(path: string, viteTypes: boolean): string {
+  if (!isEsmPath(path)) return `require('${PRELOAD_REQUIRE}');\n`;
+  return (
+    (viteTypes ? VITE_CLIENT_TYPES : '') +
+    `if (${BUILD_MODE_GUARD}) {\n` +
+    `  // Reticle IPC observation, dev only — written by \`reticle init\`. A production build drops it.\n` +
+    `  void import('${PRELOAD_REQUIRE}').catch(() => undefined)\n` +
+    `}\n`
+  );
 }
 
-export function patchElectronPreload(source: string, path: string): SourcePatch {
+export function patchElectronPreload(source: string, path: string, viteTypes = false): SourcePatch {
+  if (isEsmPath(path) && LEGACY_PRELOAD_IMPORT.test(source)) {
+    return {
+      kind: PatchKind.APPLY,
+      code: `${preloadLine(path, viteTypes)}${source.replace(LEGACY_PRELOAD_IMPORT, '')}`,
+    };
+  }
   if (source.includes(PRELOAD_REQUIRE)) {
     return { kind: PatchKind.ALREADY };
   }
-  return { kind: PatchKind.APPLY, code: `${preloadLine(path)}${source}` };
+  return { kind: PatchKind.APPLY, code: `${preloadLine(path, viteTypes)}${source}` };
 }
 
-function insertMainImport(source: string, path: string): string {
-  if (source.includes(CAPTURE_REQUIRE)) return source;
-  if (isEsmPath(path)) {
-    const line = `import { installReticleCapture } from '${CAPTURE_REQUIRE}'`;
-    const matches = [...source.matchAll(IMPORT_LINE)];
-    const last = matches[matches.length - 1];
-    if (last?.index === undefined) return `${line}\n${source}`;
-    const end = last.index + last[0].length;
-    return `${source.slice(0, end)}\n${line}${source.slice(end)}`;
+/** The guarded capture call for this main file. Nothing to import at the top: it loads itself. */
+function captureCall(source: string, path: string, windowName: string): string {
+  if (!isEsmPath(path)) {
+    return `if (${PACKAGED_GUARD}) require('${CAPTURE_REQUIRE}').installReticleCapture(${windowName})`;
   }
-  const line = `const { installReticleCapture } = require('${CAPTURE_REQUIRE}');`;
-  const matches = [...source.matchAll(REQUIRE_LINE)];
-  const last = matches[matches.length - 1];
-  if (last?.index === undefined) return `${line}\n${source}`;
-  const endOfLine = source.indexOf('\n', last.index);
-  const end = endOfLine < 0 ? source.length : endOfLine;
-  return `${source.slice(0, end)}\n${line}${source.slice(end)}`;
+  const guard = FORGE_DEV_SERVER_DEFINE.exec(source)?.[1] ?? BUILD_MODE_GUARD;
+  return `if (${guard}) void import('${CAPTURE_REQUIRE}').then(({ installReticleCapture }) => installReticleCapture(${windowName}))`;
 }
 
 export function patchElectronMain(source: string, path = 'electron/main.cjs'): SourcePatch {
+  const legacyCall = LEGACY_MAIN_CALL.exec(source);
+  if (LEGACY_MAIN_IMPORT.test(source) && legacyCall?.[2] !== undefined) {
+    const withoutImport = source.replace(LEGACY_MAIN_IMPORT, '');
+    const indent = legacyCall[1] ?? '';
+    return {
+      kind: PatchKind.APPLY,
+      code: withoutImport.replace(
+        LEGACY_MAIN_CALL,
+        `${indent}${captureCall(withoutImport, path, legacyCall[2])}`,
+      ),
+    };
+  }
   if (source.includes(CAPTURE_REQUIRE)) {
     return { kind: PatchKind.ALREADY };
   }
@@ -72,6 +134,9 @@ export function patchElectronMain(source: string, path = 'electron/main.cjs'): S
   if (';' === source[insertAt]) insertAt += 1;
   const indentMatch = /^[ \t]*/.exec(source.slice(source.lastIndexOf('\n', matches[0].index) + 1));
   const indent = indentMatch?.[0] ?? '  ';
-  const withCall = `${source.slice(0, insertAt)}\n${indent}installReticleCapture(${name})${source.slice(insertAt)}`;
-  return { kind: PatchKind.APPLY, code: insertMainImport(withCall, path) };
+  const call = captureCall(source, path, name);
+  return {
+    kind: PatchKind.APPLY,
+    code: `${source.slice(0, insertAt)}\n${indent}${call}${source.slice(insertAt)}`,
+  };
 }

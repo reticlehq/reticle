@@ -109,6 +109,27 @@ describe('decideOpen', () => {
       ),
     ).toEqual({ action: 'reuse', url: 'http://localhost:4310/app' });
   });
+
+  /**
+   * `verify --expect` against a url whose only tab had last been heard from 105s earlier — a frozen
+   * page, visible, heartbeating nothing. `decideOpen` read only the url, so it drove that tab and the
+   * verdict was `unknown — command 'match' timed out after 8000ms`. A tab silent past the daemon's own
+   * staleness threshold is not a tab anybody can be handed.
+   */
+  it('treats a tab silent past the staleness threshold as absent, and opens the url', async () => {
+    const { SESSION_HEALTH } = await import('@reticlehq/core');
+    const url = 'http://localhost:4310/';
+    const frozen = { url, lastSeenMs: SESSION_HEALTH.STALE_THRESHOLD_MS + 1 };
+    expect(decideOpen([frozen], url)).toEqual({ action: 'open', url });
+    expect(decideOpen([{ ...frozen, lastSeenMs: 1_000 }], url)).toEqual({ action: 'reuse', url });
+  });
+
+  it('carries lastSeenMs through the status summary it decides on', () => {
+    const { sessions } = summarizeStatus({
+      sessions: [{ sessionId: 's1', url: 'http://localhost:4310/', lastSeenMs: 105_000 }],
+    });
+    expect(sessions[0]?.lastSeenMs).toBe(105_000);
+  });
 });
 
 describe('summarizeStatus carries hidden', () => {

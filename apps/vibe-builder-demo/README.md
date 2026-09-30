@@ -80,7 +80,7 @@ OUTER Reticle (bridge :4433) ─drives─▶ Builder UI (instrumented, /builder.
                                        ▼
                           INNER Reticle (bridge :4422) ─drives─▶ preview sandbox → verdict
                                        │
-   OUTER Reticle reads the Builder UI's `builder` store (reticle_state) ◀── verdict surfaces in the UI
+   OUTER Reticle reads the Builder UI's `builder` store (reticle_look { action: "state" }) ◀── verdict surfaces in the UI
                                        ▼
                   asserts: blind green-lit · inner Reticle blocked the buggy build
 ```

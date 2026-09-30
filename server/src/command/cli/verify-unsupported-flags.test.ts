@@ -105,6 +105,31 @@ describe('what verify does without --expect', () => {
       }),
     ).toEqual({ route: VerifyRoute.REFUSE, message: portBusyMessage(PORT) });
   });
+
+  // `init` ends by naming `reticle verify <url> --explore` as the first run, and leaves a daemon on
+  // the port — so the very command it recommended refused on every install that worked.
+  it('hands --explore to the daemon that owns the port instead of refusing', () => {
+    expect(
+      routeVerify({
+        hasPredicate: false,
+        explore: true,
+        presence: PortPresence.DAEMON,
+        port: PORT,
+      }),
+    ).toEqual({ route: VerifyRoute.ADHOC_EXPLORE });
+  });
+
+  it('still refuses --explore with a flag only its own browser can honour', () => {
+    expect(
+      routeVerify({
+        hasPredicate: false,
+        explore: true,
+        wantsOwnBrowser: true,
+        presence: PortPresence.DAEMON,
+        port: PORT,
+      }).route,
+    ).toBe(VerifyRoute.REFUSE);
+  });
 });
 
 describe('--storage-state alongside --expect', () => {

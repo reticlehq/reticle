@@ -15,13 +15,13 @@ Point your agent at it. On Claude Code, register it at user scope:
 claude mcp add reticle -s user -- npx @reticlehq/server mcp
 ```
 
-Default tools (18):
+Default tools (10):
 
-`reticle_sessions`, `reticle_snapshot`, `reticle_query`, `reticle_inspect`, `reticle_navigate`, `reticle_act`, `reticle_act_sequence`, `reticle_act_and_wait`, `reticle_observe`, `reticle_wait_for`, `reticle_assert`, `reticle_network`, `reticle_console`, `reticle_state`, `reticle_feedback`, `reticle_session`, `reticle_tools`, `reticle_run`.
+`reticle_navigate`, `reticle_look`, `reticle_act`, `reticle_act_and_wait`, `reticle_observe`, `reticle_assert`, `reticle_session`, `reticle_tools`, `reticle_run`, `reticle_verify`.
 
 Only `reticle_act_and_wait` and `reticle_assert` return a verdict; everything else moves or reads the app.
 
-Another 30 tools ship but are not advertised, to keep the per-turn tool payload small: screenshots and visual diff, saved flows, recording, baselines, clock control, viewport, crawl, coverage, network mocking, leases and more. Reach any of them by name with `reticle_run`, list them with `reticle_tools`, or advertise the whole surface with `RETICLE_ADVERTISE_ALL_TOOLS=1` (this roughly doubles the per-turn tool payload).
+More tools ship but are not advertised, to keep the per-turn tool payload small: screenshots and visual diff, saved flows, recording, baselines, clock control, viewport, crawl, coverage, network mocking, leases and more. Reach any of them by name with `reticle_run`, list them with `reticle_tools`, or advertise the whole surface with `RETICLE_ADVERTISE_ALL_TOOLS=1` (this roughly doubles the per-turn tool payload).
 
 See the [main README](https://github.com/reticlehq/reticle).
 

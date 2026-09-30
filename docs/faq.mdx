@@ -38,7 +38,7 @@ Support beyond that is uneven, and we would rather say so than let you find out:
 <Accordion title="Can it tell me whether my UI looks good?">
   No. Reticle verifies behaviour, not aesthetics. Visual correctness and "does this feel right" remain a human job, or a visual-diff tool's.
 
-It does read design tokens. [`reticle_inspect`](/tools/inspect) reports whether a colour came from your theme or from someone's clipboard. But that is a consistency check, not taste.
+It does read design tokens. [`reticle_look { action: "element" }`](/tools/inspect) reports whether a colour came from your theme or from someone's clipboard. But that is a consistency check, not taste.
 
 </Accordion>
 
@@ -58,7 +58,7 @@ Measured on the same app: Reticle caught 10 of 10 injected bugs, Playwright MCP 
 </Accordion>
 
 <Accordion title="Can I run several apps or tabs at once?">
-  Yes. Each is a session. Pass `sessionId` to any tool when more than one is connected, and [`reticle_sessions`](/tools/sessions) lists them.
+  Yes. Each is a session. Pass `sessionId` to any tool when more than one is connected, and [`reticle_session { action: "list" }`](/tools/sessions) lists them.
 
 Reticle scopes to your project and prefers the active tab, and it **refuses rather than guesses** when the choice is ambiguous. A refusal you can act on beats a silent pick of the wrong tab.
 
@@ -85,7 +85,7 @@ Anonymous usage telemetry is sent separately and can be turned off with `reticle
 
 <Accordion title="Does it work with WebGL / react-three-fiber?">
   Partially. Reticle's model of an app is DOM + store + network. A WebGL or react-three-fiber
-  subtree is a single `<canvas>` to `reticle_query` / `reticle_snapshot`: Reticle cannot pick faces
+  subtree is a single `<canvas>` to `reticle_look { action: "find" }` / `reticle_look { action: "page" }`: Reticle cannot pick faces
   or drive the camera inside the scene.
 
 DOM, registered store state, and network **around** the canvas still work, and that is often where the consequential bugs live (import counts, mesh stats, solver results that contradict the UI). `init` prints this limit when it detects react-three-fiber so an adopting team does not discover it only after trying to verify the feature they care about.

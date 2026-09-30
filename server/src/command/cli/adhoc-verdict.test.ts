@@ -183,3 +183,87 @@ describe('a verdict carried as text, not structured content', () => {
     expect(result.code).toBe(1);
   });
 });
+
+/**
+ * `reticle verify <url> --expect …` straight after init, with the app running and no browser open.
+ * It answered `verified: unknown` and a paragraph telling the reader to open a url — and the url it
+ * named was another project's dev server on 5173, not the one they had just typed. The url was
+ * already in the command; opening it is the whole request.
+ */
+describe('a url with no connected tab', () => {
+  const actionOf = (args: Record<string, unknown>): string | undefined =>
+    (args['args'] as { action?: string } | undefined)?.action;
+
+  const leasing = (over: { acquire?: unknown } = {}) => {
+    const calls: { name: string; args: Record<string, unknown> }[] = [];
+    const tool: ToolCaller = {
+      call: (name, args) => {
+        calls.push({ name, args });
+        if (ReticleTool.RUN === name && 'acquire' === actionOf(args)) {
+          return Promise.resolve({ structuredContent: over.acquire ?? { sessionId: 'lease-1' } });
+        }
+        return Promise.resolve({ structuredContent: { verified: 'yes' } });
+      },
+      close: () => Promise.resolve(),
+    };
+    return { calls, tool };
+  };
+
+  it('leases a browser at that url, asserts on it, and releases it', async () => {
+    const c = leasing();
+    const result = await runAdhocVerdict({
+      port: 4400,
+      url: 'http://localhost:5190/',
+      predicate: { kind: 'text', contains: 'count is 0' },
+      connect: () => Promise.resolve(c.tool),
+      sessions: () => Promise.resolve([]),
+    });
+    expect(result.code).toBe(0);
+    expect(c.calls.map((x) => [x.name, actionOf(x.args)])).toEqual([
+      [ReticleTool.RUN, 'acquire'],
+      [ReticleTool.ASSERT, undefined],
+      [ReticleTool.RUN, 'release'],
+    ]);
+    expect(c.calls[1]?.args['sessionId']).toBe('lease-1');
+  });
+
+  it('uses the tab already open on that origin instead of leasing, navigating it there', async () => {
+    const c = leasing();
+    await runAdhocVerdict({
+      port: 4400,
+      url: 'http://localhost:5190/cart',
+      predicate: { kind: 'text', contains: 'x' },
+      connect: () => Promise.resolve(c.tool),
+      sessions: () => Promise.resolve([{ url: 'http://localhost:5190/' }]),
+    });
+    expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.NAVIGATE, ReticleTool.ASSERT]);
+  });
+
+  // Navigating a tab to the url it already shows reloads it, and a reloaded Electron window is a
+  // session that disconnects under the assert: `unknown — session disconnected`.
+  it('does not reload a tab that is already on that url', async () => {
+    const c = leasing();
+    await runAdhocVerdict({
+      port: 4400,
+      url: 'http://localhost:5190',
+      predicate: { kind: 'text', contains: 'x' },
+      connect: () => Promise.resolve(c.tool),
+      sessions: () => Promise.resolve([{ url: 'http://localhost:5190/' }]),
+    });
+    expect(c.calls.map((x) => x.name)).toEqual([ReticleTool.ASSERT]);
+  });
+
+  it('reports why the lease failed instead of asserting against nothing', async () => {
+    const c = leasing({ acquire: { error: 'Chromium is not installed for Playwright — run: x' } });
+    const result = await runAdhocVerdict({
+      port: 4400,
+      url: 'http://localhost:5190/',
+      predicate: { kind: 'text', contains: 'x' },
+      connect: () => Promise.resolve(c.tool),
+      sessions: () => Promise.resolve([]),
+    });
+    expect(result.code).toBe(1);
+    expect(result.lines.join('\n')).toMatch(/Chromium is not installed/);
+    expect(c.calls.map((x) => x.name)).not.toContain(ReticleTool.ASSERT);
+  });
+});

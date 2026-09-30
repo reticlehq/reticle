@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` + `@reticlehq/init` + `@reticlehq/vite-plugin` — a first install on a machine already running Reticle for another project.** `init` gives the new project its own port when another project's daemon holds the default, records it in `.reticle.json`, and everything after `init` (the CLI and the Vite plugin) uses it. A plain Vite app with no `vite.config` gets one written instead of a paste-it-yourself step, and a Vite app with no known renderer gets `@reticlehq/browser` rather than `@reticlehq/react`. The bridge's different-project refusal now says to give this project its own port, and `verify` and `drive` turn a missing Chromium into the pinned install command. Closes [#1195](https://github.com/reticlehq/reticle/pull/1195).

@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/init` — re-running `init` with the same non-default `--port` broke the app's build.** Every generated connect file that already carried the bridge URL (Next's `reticle-dev.tsx`, the SvelteKit client hook, the Nuxt plugin, and the others) got a second `url:` key inserted beside the first, and `next build` failed with `TS1117: An object literal cannot have multiple properties with the same name`. A same-port re-run now leaves those files alone. TanStack Start's connect component also moves with a new `--port` now; before, it answered "file exists" and the page kept dialling the old port.

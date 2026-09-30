@@ -699,10 +699,15 @@ describe('buildPlan — non-React apps are marked unverified', () => {
       buildPlan(input({ detection: detection(Framework.VITE, 0, lib) })),
       `${lib} is UNVERIFIED`,
     );
+  const gatedLibStep = (framework: Framework, lib: UiLibrary) =>
+    maybeStep(
+      buildPlan(input({ detection: detection(framework, 0, lib) })),
+      `${lib} setup verified, drive unverified`,
+    );
 
   it('flags Vue and Preact apps as a NOTICE — worth reading, but not work to do', () => {
     for (const lib of [UiLibrary.VUE, UiLibrary.PREACT] as const) {
-      const s = libStep(lib);
+      const s = libStep(lib) ?? gatedLibStep(Framework.VITE, lib);
       // Not MANUAL: the app is wired and working, it is just not covered by a gate. Counting this as
       // an outstanding step made "steps remaining" a number that could never reach zero.
       expect(s?.status).toBe(StepStatus.NOTICE);
@@ -714,7 +719,36 @@ describe('buildPlan — non-React apps are marked unverified', () => {
     // `src/lib/Counter.svelte:5` and the identical drive on Vue reports no `source` at all — so this
     // assertion was pinning a promise a Vue reader could not collect on.
     expect(libStep(UiLibrary.PREACT)?.detail).toContain('does too');
-    expect(libStep(UiLibrary.VUE)?.detail).toContain('does NOT come through');
+    expect(gatedLibStep(Framework.VITE, UiLibrary.VUE)?.detail).toContain('does NOT come through');
+  });
+
+  /**
+   * Nuxt was labelled "vue is UNVERIFIED" while the install gate scaffolds Nuxt (and Vite + Vue) from
+   * scratch on every change. The label has to match the gate's scaffold list: the SETUP is proven
+   * there, the drive is not, and the title says both.
+   */
+  it('says the setup is verified for a stack the install gate scaffolds', () => {
+    for (const framework of [Framework.NUXT, Framework.VITE]) {
+      const s = gatedLibStep(framework, UiLibrary.VUE);
+      expect(s?.status, framework).toBe(StepStatus.NOTICE);
+      expect(s?.detail, framework).toContain('install gate');
+      expect(
+        maybeStep(
+          buildPlan(input({ detection: detection(framework, 0, UiLibrary.VUE) })),
+          'vue is UNVERIFIED',
+        ),
+        framework,
+      ).toBeUndefined();
+    }
+  });
+
+  it('still calls a stack the gate does not scaffold UNVERIFIED', () => {
+    const astroVue = maybeStep(
+      buildPlan(input({ detection: detection(Framework.ASTRO, 0, UiLibrary.VUE) })),
+      'vue is UNVERIFIED',
+    );
+    expect(astroVue?.detail).toContain('No CI gate covers vue');
+    expect(libStep(UiLibrary.PREACT)).toBeDefined();
   });
 
   it('an UNVERIFIED stack still reports zero manual steps when everything applied', () => {

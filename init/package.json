@@ -35,8 +35,7 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE",
-    "NOTICE"
+    "LICENSE"
   ],
   "sideEffects": false,
   "keywords": [

@@ -30,11 +30,17 @@ export const StepTitle = {
   NUXT_RESTART: 'Restart the Nuxt dev server',
   CONNECT_SNIPPET_REACT_ROUTER: 'Connect snippet (React Router)',
   CONNECT_SNIPPET_TANSTACK_START: 'Connect snippet (TanStack Start)',
+  TANSTACK_START_CONNECT_COMPONENT: 'ReticleConnect component (TanStack Start)',
+  CONNECT_SNIPPET_REMIX: 'Connect snippet (Remix)',
+  CONNECT_SNIPPET_ANGULAR: 'Connect snippet (Angular)',
+  ANGULAR_TOKEN_PROXY: 'Angular dev-server token route',
+  ANGULAR_SERVE_CONFIG: 'Angular serve target (proxyConfig)',
+  ANGULAR_SETUP_GATED: 'Angular setup verified, drive unverified',
   ELECTRON_VITE_PLUGIN: 'Vite plugin (electron-vite renderer)',
   ELECTRON_PRELOAD: 'Electron preload (IPC shim)',
   ELECTRON_CAPTURE: 'Electron capture (screenshots)',
   TANSTACK_START_UNVERIFIED: 'TanStack Start is UNVERIFIED',
-  SVELTEKIT_UNVERIFIED: 'SvelteKit is UNVERIFIED',
+  SVELTEKIT_SETUP_GATED: 'SvelteKit setup verified, drive unverified',
   CLIENT_HOOK: 'Reticle client hook',
   CONNECT_SNIPPET_ASTRO: 'Connect snippet (Astro)',
   ASTRO_RETICLE_DEV: 'Astro ReticleDev module',
@@ -68,6 +74,14 @@ export const CONNECT_STEP_TITLES: ReadonlySet<StepTitle> = new Set<StepTitle>([
   StepTitle.NUXT_CONFIG,
   StepTitle.CONNECT_SNIPPET_REACT_ROUTER,
   StepTitle.CONNECT_SNIPPET_TANSTACK_START,
+  // The component and the line that renders it are two steps, for the reason Next's are.
+  StepTitle.TANSTACK_START_CONNECT_COMPONENT,
+  StepTitle.CONNECT_SNIPPET_REMIX,
+  StepTitle.CONNECT_SNIPPET_ANGULAR,
+  // Both halves of how an Angular page gets its pairing token. Without the route the connect is
+  // refused on the token, and without the serve-target entry `ng serve` never mounts the route.
+  StepTitle.ANGULAR_TOKEN_PROXY,
+  StepTitle.ANGULAR_SERVE_CONFIG,
   StepTitle.CLIENT_HOOK,
   StepTitle.CONNECT_MODULE,
   StepTitle.RETICLE_DEV_COMPONENT,
@@ -92,6 +106,9 @@ export const CONNECT_STEP_TITLES: ReadonlySet<StepTitle> = new Set<StepTitle>([
   // electron-vite's connect IS the renderer plugin. Without it the SDK never injects, and the
   // preload/capture steps are not enough to produce a session.
   StepTitle.ELECTRON_VITE_PLUGIN,
+  // A policy that refuses the bridge WebSocket is a guaranteed non-connection on EVERY framework, so
+  // a ⚠ on it (a policy init could not edit) must fail init rather than read as advice.
+  StepTitle.CSP,
 ]);
 
 /** True when this step is what makes the app dial the daemon. */

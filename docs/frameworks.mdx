@@ -1,11 +1,11 @@
 ---
 title: 'Frameworks: proven, wired, and the difference'
 sidebarTitle: Frameworks
-description: Which frameworks Reticle supports, which are wired but unverified, and the exact wiring for each one. React, Next.js, Remix, Astro, SvelteKit, TanStack Start, Nuxt, Vue and plain HTML.
+description: Which frameworks Reticle supports, which are wired but unverified, and the exact wiring for each one. React, Next.js, Remix, Astro, SvelteKit, TanStack Start, Nuxt, Vue, Angular and plain HTML.
 icon: layer-group
 ---
 
-**React + Vite, Next.js, Remix and Astro are fully supported, each with an example app driven to a verdict in CI. Astro, SvelteKit, Nuxt, React Router framework mode, Create React App and Vue have their INSTALL gated: the install gate scaffolds each from scratch on every change and requires a real session, but no gate drives them to a verdict. TanStack Start, Preact and plain HTML are wired and documented but not gated at all, so treat them as plausible rather than proven.** The exact wiring for each is below.
+**React + Vite, Next.js, Remix and Astro are fully supported, each with an example app driven to a verdict in CI. Astro, SvelteKit, Nuxt, React Router framework mode, Create React App, Vue and Angular have their INSTALL gated: the install gate scaffolds each from scratch on every change and requires a real session, but no gate drives them to a verdict. TanStack Start, Preact and plain HTML are wired by `init` and documented but not gated at all, so treat them as plausible rather than proven.** The exact wiring for each is below.
 
 Reticle is a verification layer that embeds a dev-only SDK in your running web app so an AI coding agent can prove a change works. Its core is framework-neutral: DOM, network, console, routing, animations and source mapping work anywhere JavaScript runs.
 
@@ -32,6 +32,7 @@ Two columns say different things and it is worth keeping them apart. **CI gate**
 | **Nuxt** | yes | no | install only | unproven | Install gated, drive unverified |
 | **React Router (framework mode)** | yes | no | install only | yes | Install gated, drive unverified |
 | **Create React App** | yes | no | install only | unproven | Install gated, drive unverified |
+| **Angular 17+** | yes | no | install only | no | Install gated, drive unverified |
 | **Plain HTML** | yes | no | no | no | Wired, unverified |
 | **Vue (non-Nuxt)** | as Vite | no | install only | no | Install gated, drive unverified |
 | **Preact** | as Vite | no | no | transform-tested; drive unproven | Sensor, React adapter via `preact/compat` |
@@ -86,9 +87,9 @@ module.exports = withReticle({/* your config */});
 
 ## Remix and Astro
 
-Remix uses the Vite plugin with `inject: false`: Remix SSRs its own HTML, so the plugin's connect-injection does not fire, but the stamping half still puts `file:line` on a verdict.
+Remix v2 on Vite is its own framework to `init`, not plain Vite. Remix SSRs its own HTML, so the plugin's `index.html` injection never reaches the page and the connect comes from `app/entry.client.tsx` instead, the same way as React Router framework mode. `init` adds the dev-only connect line to that entry, or writes the file when the app has none: `app/entry.client.tsx` only exists after `remix reveal`, so the written file is Remix's own default entry (`RemixBrowser`, `hydrateRoot`) with the one line added. The Vite plugin, `reticle()` in the `vite.config` that carries `vitePlugin`, stamps `file:line` and serves the connect module the entry imports. The classic Remix compiler (no `vite.config`) gets a manual step rather than a green plan, because there is no plugin to serve that module.
 
-Astro is the same on the plugin (wire it with `inject: false` if you want source pointers on JSX islands) and uses a different channel for the pairing token. `vite.define` does not reach Astro's client pipeline on 7.2+, so the identifier stays literal and the bridge refuses the dial. `init` reads the token in frontmatter and puts it on a `<meta name="reticle-pairing-token">`. Reading it per request also means a token written after the dev server started is picked up on the next load, with no restart.
+Astro uses the Vite plugin (wire it with `inject: false` if you want source pointers on JSX islands) and uses a different channel for the pairing token. `vite.define` does not reach Astro's client pipeline on 7.2+, so the identifier stays literal and the bridge refuses the dial. `init` reads the token in frontmatter and puts it on a `<meta name="reticle-pairing-token">`. Reading it per request also means a token written after the dev server started is picked up on the next load, with no restart.
 
 Use a processed page `<script>` with a static SDK import. Vite owns that module graph from the first transform:
 
@@ -155,7 +156,7 @@ useEffect(() => {
 }, []);
 ```
 
-`init` detects Start and prints this recipe. There is no example app and no CI gate, so treat a connected session as the proof, not the plan.
+`init` writes this for you: a `src/reticle-connect.tsx` client effect that connects, declares `__RETICLE_TOKEN__` so `tsc` passes, and loads `src/reticle-dev.ts`, plus `<ReticleConnect />` rendered before `<Scripts />` in `src/routes/__root.tsx`. When the root route is not a shape it can patch, it prints a recipe naming the real parts (`shellComponent`, `<Scripts />`) instead. There is no example app and no CI gate, so treat a connected session as the proof, not the plan.
 
 ## Nuxt
 
@@ -235,14 +236,28 @@ The same shape works for webpack, Parcel, and the Vue and Svelte CLIs.
 
 ## Plain HTML
 
+A directory with an `index.html` and no `package.json` is wired by `init` itself: it writes the connect snippet into `index.html`, before `</body>`, writes `.reticle.json`, and hands over to setup. The block is marked, so a re-run finds it and never writes a second one, and a re-run with a new `--port` rewrites the port inside it. It loads the SDK from a CDN and runs only when the page is opened on `localhost`, `127.0.0.1` or `[::1]`: a static file has no development build to strip it, so the host is the only line between the snippet and a published page. The page carries no pairing token: `init` writes it into `reticle.local.js` beside the page, which the snippet imports, and adds that file to `.gitignore`. Keep it out of anything you publish, and let each teammate run `reticle init` for their own. Several pages and no `index.html` is a choice `init` does not make for you: it prints the snippet, filled in with your project id and token, for you to paste:
+
 ```html
 <script type="module">
-  import { reticle } from '/node_modules/@reticlehq/browser/dist/index.js';
-  reticle.connect();
+  import { reticle } from 'https://cdn.jsdelivr.net/npm/@reticlehq/browser@<version>/+esm';
+  reticle.connect({ projectId: '<your-project-id>', token: '<pairing token>' });
 </script>
 ```
 
-Keep it out of your production template. Reticle self-disables when the build reports `NODE_ENV=production`, but a second lock on a door leading to your users is a reasonable number.
+A bare `/node_modules/...` import does not work here: the SDK's own `dist` imports bare specifiers, which a browser cannot resolve without a bundler. A page with a `package.json` and a bundler takes the entry-module path above instead.
+
+## Angular
+
+Angular 17 and later, on the Vite-based `@angular/build` dev server. `init` installs only `@reticlehq/browser`, the framework-neutral sensor, and makes three edits:
+
+- **The browser entry** (`src/main.ts`, or whatever `angular.json` names) gets a connect guarded on Angular's `ngDevMode` global (`typeof ngDevMode === 'undefined' || ngDevMode`), through a dynamic `import('@reticlehq/browser')` appended after the bootstrap. A production `ng build` defines `ngDevMode` as `false`, so the build drops the block and the chunk with it. The output carries no Reticle code at all, and the app never waits on Reticle. `isDevMode()` is not used because the build cannot fold a function call; an entry wired that way by an older `init` is rewritten in place on the next run.
+- **`reticle.proxy.mjs`**, beside `angular.json`, answers one same-origin route, `/__reticle/pairing-token`, with this machine's pairing token, read from `~/.reticle/pairing-token` at request time. It refuses a request that did not arrive over loopback or came from another origin.
+- **`angular.json`** gets the serve target's `proxyConfig` pointed at that file. `ng serve` loads it; `ng build` never reads a proxy config, so a production bundle has no route to the token and the token is never written into the project.
+
+The token takes that route because the Angular CLI has no config file that runs code: a literal in `angular.json` commits a per-machine secret, and a gitignored module imported from `main.ts` is bundled into `ng build` whether or not anything can reach it. An existing `proxyConfig` is yours and is never replaced: the step goes manual and names the entry to add to it. A workspace with several served applications is also manual, because which one is the app is not `init`'s to guess.
+
+You get DOM, network, console, routing and state tools. You do not get component identity (that is the React adapter) or a `source` field (the stamper covers JSX and Svelte). The install gate scaffolds an Angular app (no SSR) on every change and requires a session; SSR was proven by hand, and nothing drives an Angular app to a verdict.
 
 ## Server-rendered apps (Django, Flask, FastAPI, Rails)
 
@@ -331,7 +346,7 @@ Electron and Tauri invert the direction: your app dials the daemon, and there is
 
 ## Not supported
 
-Angular and Solid appear in dependency detection but have no wiring, no adapter and no gate. The sensor may work if you call `connect()` yourself. Nothing proves it, so we are not going to list them as supported.
+Solid appears in dependency detection but has no wiring, no adapter and no gate. The sensor may work if you call `connect()` yourself. Nothing proves it, so we are not going to list them as supported.
 
 ## Frequently asked questions
 

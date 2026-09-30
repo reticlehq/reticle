@@ -221,6 +221,34 @@ describe('diagnoseDesktop — verifying a bundled preload from its ARTIFACT', ()
     expect(codes(findings)).toContain(DesktopFinding.ELECTRON_PRELOAD_MISSING);
   });
 
+  /**
+   * The capture check string-matched the require, which bundling erases: an electron-vite app whose
+   * main process DID install the helper was told `./out/main/index.js — the main process never
+   * installs the capture helper`. The helper registers the contract's capture channel, and that
+   * string survives bundling the same way the preload's window global does.
+   */
+  it('accepts a bundled main whose output registers the capture channel', () => {
+    const findings = diagnoseDesktop(
+      project({
+        'package.json': bundledPkg,
+        'out/main/index.js': 'ipcMain.handle("__reticle:capture", async (event, options) => {})',
+      }),
+      4400,
+    );
+    expect(codes(findings)).not.toContain(DesktopFinding.ELECTRON_CAPTURE_MISSING);
+  });
+
+  it('still reports a bundled main that never registers it', () => {
+    const findings = diagnoseDesktop(
+      project({
+        'package.json': bundledPkg,
+        'out/main/index.js': 'app.whenReady().then(createWindow)',
+      }),
+      4400,
+    );
+    expect(codes(findings)).toContain(DesktopFinding.ELECTRON_CAPTURE_MISSING);
+  });
+
   it('still says nothing when there is neither a source nor a build output to read', () => {
     const findings = diagnoseDesktop(
       project({

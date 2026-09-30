@@ -14,7 +14,14 @@
  */
 import { describe, expect, it } from 'vitest';
 import { buildPlan, StepStatus, type PlanInput } from '@/plan/plan.js';
-import { CONTAINER_MARKERS, containerisedDevServerNote } from './containerised-dev-server.js';
+import {
+  CONTAINER_MARKERS,
+  CONTAINERISED_TITLE,
+  containerisedDevServerNote,
+  runsDevServer,
+} from './containerised-dev-server.js';
+import { runInit } from '@/run.js';
+import { memoryIo } from '@/memory-io.test-helpers.js';
 import { Framework, PackageManager, UiLibrary } from '@/detect/detect.js';
 
 const INPUT: PlanInput = {
@@ -75,5 +82,81 @@ describe('the containerised dev-server notice', () => {
     expect(CONTAINER_MARKERS).toContain('docker-compose.yml');
     expect(CONTAINER_MARKERS).toContain('compose.yaml');
     expect(CONTAINER_MARKERS).toContain('.devcontainer/devcontainer.json');
+  });
+});
+
+/**
+ * React Router's template ships a production Dockerfile — a multi-stage build ending in
+ * `CMD ["npm", "run", "start"]` — and the notice fired on it, telling a reader whose dev server runs
+ * on the host to rebuild an image and mount a token. A container file only means something here when
+ * the container runs the dev server.
+ */
+describe('which container files count', () => {
+  const REACT_ROUTER_DOCKERFILE = `FROM node:20-alpine AS development-dependencies-env
+COPY . /app
+WORKDIR /app
+RUN npm ci
+
+FROM node:20-alpine AS build-env
+COPY . /app/
+COPY --from=development-dependencies-env /app/node_modules /app/node_modules
+WORKDIR /app
+RUN npm run build
+
+FROM node:20-alpine
+COPY ./package.json package-lock.json /app/
+COPY --from=build-env /app/build /app/build
+WORKDIR /app
+CMD ["npm", "run", "start"]
+`;
+
+  it('ignores a production image that builds and starts the app', () => {
+    expect(runsDevServer('Dockerfile', REACT_ROUTER_DOCKERFILE, 'react-router dev')).toBe(false);
+  });
+
+  it('counts a container that runs the dev script or a dev-server command', () => {
+    expect(runsDevServer('Dockerfile', 'CMD ["npm", "run", "dev"]', 'vite')).toBe(true);
+    expect(runsDevServer('Dockerfile', 'CMD pnpm dev --host', undefined)).toBe(true);
+    expect(runsDevServer('docker-compose.yml', 'command: yarn dev', undefined)).toBe(true);
+    expect(runsDevServer('compose.yaml', 'command: npx next dev -H 0.0.0.0', undefined)).toBe(true);
+    expect(runsDevServer('Dockerfile', 'CMD ["npx", "vite", "--host"]', undefined)).toBe(true);
+    expect(runsDevServer('Dockerfile', 'CMD ng serve --host 0.0.0.0', undefined)).toBe(true);
+    // The app's own dev script, whatever it is called on the command line.
+    expect(runsDevServer('Dockerfile', 'CMD react-router dev', 'react-router dev')).toBe(true);
+  });
+
+  it('does not count vite build or vite preview as a dev server', () => {
+    expect(runsDevServer('Dockerfile', 'RUN npx vite build\nCMD npx vite preview', undefined)).toBe(
+      false,
+    );
+  });
+
+  it('always counts a devcontainer — it is the dev environment by definition', () => {
+    expect(runsDevServer('.devcontainer/devcontainer.json', '{}', undefined)).toBe(true);
+  });
+
+  it('is silent on a React Router app whose only container file is its production Dockerfile', () => {
+    const io = memoryIo({
+      'package.json': JSON.stringify({
+        name: 'rr',
+        scripts: {
+          dev: 'react-router dev',
+          build: 'react-router build',
+          start: 'react-router-serve ./build/server/index.js',
+        },
+        dependencies: {
+          react: '^19.0.0',
+          'react-router': '^7.0.0',
+          '@react-router/node': '^7.0.0',
+        },
+        devDependencies: { '@react-router/dev': '^7.0.0', vite: '^7.0.0' },
+      }),
+      'react-router.config.ts': 'export default { ssr: true };\n',
+      'vite.config.ts':
+        "import { reactRouter } from '@react-router/dev/vite';\nimport { defineConfig } from 'vite';\nexport default defineConfig({ plugins: [reactRouter()] });\n",
+      Dockerfile: REACT_ROUTER_DOCKERFILE,
+    });
+    runInit({ cwd: '/app', port: undefined, mcp: false, install: false, dryRun: true }, io);
+    expect(io.lines.join('\n')).not.toContain(CONTAINERISED_TITLE);
   });
 });

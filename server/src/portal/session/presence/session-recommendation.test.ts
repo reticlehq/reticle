@@ -86,7 +86,7 @@ describe('buildSessionRecommendation', () => {
 //
 // Driven on MarkText, a shipped Electron editor: its window went to the background, the session
 // reported `hidden: true, throttled: true`, and the recommendation told the agent to acquire a
-// lease — `reticle_run { tool: "reticle_lease", action: "acquire", url }`. A lease opens a headless
+// lease — `reticle_run { tool: "reticle_lease", args: { action: "acquire", url } }`. A lease opens a headless
 // BROWSER context. For an Electron or Tauri app the window IS the client; the app's whole reason to
 // exist is the shell around it, and a browser pointed at the same dev-server URL is a different
 // program with no IPC, no main process and no Rust commands. The advice cannot be followed, and the

@@ -16,6 +16,7 @@
  */
 
 import { ReticleDir } from '@reticlehq/core';
+import { parseMajor } from '@/detect/detect.js';
 import { blockAfter } from './brace-scan.js';
 import { PatchKind, type SourcePatch } from './patch-kind.js';
 
@@ -38,6 +39,41 @@ export interface ViteOwningConfig {
    * path writes. Astro's path never writes that name into the config, so it supplies its own.
    */
   readonly alreadyMarker?: string;
+  /**
+   * The installed Vite's major (see `installedViteMajor`), or null when nothing on disk said.
+   *
+   * Decides whether the dep-optimizer target is written at all. Vite 7 moved the optimizer to
+   * rolldown and deprecated `optimizeDeps.esbuildOptions`: on Nuxt 4.5 / Vite 8 the key printed a
+   * deprecation warning on every dev start and build. The target exists for esbuild, which cannot
+   * lower some of the SDK's syntax to Vite's older default; rolldown has no such gap, so on 7+ there
+   * is nothing to write under either key.
+   */
+  readonly viteMajor?: number | null | undefined;
+}
+
+/** The first Vite whose dep optimizer is rolldown — the same line the Vite plugin draws. */
+const ROLLDOWN_OPTIMIZER_MAJOR = 7;
+
+function writesEsbuildTarget(config: ViteOwningConfig): boolean {
+  const major = config.viteMajor;
+  return undefined === major || null === major || major < ROLLDOWN_OPTIMIZER_MAJOR;
+}
+
+/** The optimizer target, in each of the two shapes this file writes it. */
+const ESBUILD_TARGET = "esbuildOptions: { target: 'es2022' }";
+const ESBUILD_TARGET_INNER = `\n      ${ESBUILD_TARGET},`;
+const ESBUILD_TARGET_WHOLE = `, ${ESBUILD_TARGET}`;
+
+/**
+ * A config an older `init` patched, with the esbuild target taken back out on a rolldown Vite.
+ *
+ * Only our own literal, in the exact shapes we wrote it — an `esbuildOptions` the app set itself is
+ * theirs, and is left to Vite's deprecation notice to talk about.
+ */
+function withoutStaleEsbuildTarget(source: string, config: ViteOwningConfig): string | null {
+  if (writesEsbuildTarget(config) || !source.includes(ESBUILD_TARGET)) return null;
+  const out = source.replace(ESBUILD_TARGET_INNER, '').replace(ESBUILD_TARGET_WHOLE, '');
+  return out === source ? null : out;
 }
 
 /** Present in a patched config AND in a hand-followed recipe — so both count as already wired. */
@@ -124,7 +160,7 @@ function viteKeys(config: ViteOwningConfig): readonly { key: string; inner: stri
     { key: 'build', inner: `\n      target: 'es2022',` },
     {
       key: 'optimizeDeps',
-      inner: `\n      include: [${sdkInclude(config)}],\n      esbuildOptions: { target: 'es2022' },`,
+      inner: `\n      include: [${sdkInclude(config)}],${writesEsbuildTarget(config) ? ESBUILD_TARGET_INNER : ''}`,
     },
     // Merged in first, so a `server: { port }` the app already set keeps its port. An app that
     // already sets `server.watch` itself is the one shape this loses to — the inner `watch` key would
@@ -144,7 +180,7 @@ function viteKeys(config: ViteOwningConfig): readonly { key: string; inner: stri
 function wholeKeys(config: ViteOwningConfig): Readonly<Record<string, string>> {
   const keys: Record<string, string> = {
     build: `\n    build: { target: 'es2022' },`,
-    optimizeDeps: `\n    optimizeDeps: { include: [${sdkInclude(config)}], esbuildOptions: { target: 'es2022' } },`,
+    optimizeDeps: `\n    optimizeDeps: { include: [${sdkInclude(config)}]${writesEsbuildTarget(config) ? ESBUILD_TARGET_WHOLE : ''} },`,
     server: `\n    server: { watch: { ignored: [${WATCH_IGNORE_LITERAL}] } },`,
   };
   if (usesDefineToken(config)) {
@@ -222,7 +258,7 @@ function viteBlock(config: ViteOwningConfig): string {
     : '';
   return `  vite: {
 ${marker}    build: { target: 'es2022' },
-    optimizeDeps: { include: [${sdkInclude(config)}], esbuildOptions: { target: 'es2022' } },
+    optimizeDeps: { include: [${sdkInclude(config)}]${writesEsbuildTarget(config) ? ESBUILD_TARGET_WHOLE : ''} },
 ${define}    server: { watch: { ignored: [${WATCH_IGNORE_LITERAL}] } },
   },
 `;
@@ -241,7 +277,12 @@ function withOwningMarker(source: string, config: ViteOwningConfig, braceAt: num
 }
 
 export function patchViteOwningConfig(source: string, config: ViteOwningConfig): SourcePatch {
-  if (source.includes(alreadyMarker(config))) return { kind: PatchKind.ALREADY };
+  if (source.includes(alreadyMarker(config))) {
+    const cleaned = withoutStaleEsbuildTarget(source, config);
+    return null === cleaned
+      ? { kind: PatchKind.ALREADY }
+      : { kind: PatchKind.APPLY, code: cleaned };
+  }
   // A `vite: { ... }` block is an object literal, so our keys can go straight after the brace and
   // whatever is already in there is untouched. Refusing outright was the only genuine install defect
   // left in the gate: the config bailed while the LAYOUT patch applied anyway, leaving an app with a
@@ -286,4 +327,60 @@ export function patchViteOwningConfig(source: string, config: ViteOwningConfig):
     kind: PatchKind.APPLY,
     code: withHelper(withBlock, config),
   };
+}
+
+/**
+ * The major version of the Vite this app will actually run, read from disk.
+ *
+ * Needed by the configs `init` patches for frameworks that own their Vite instance (Nuxt, Astro):
+ * Vite 7 moved the dep optimizer to rolldown and deprecated `optimizeDeps.esbuildOptions`, so the
+ * key `init` wrote printed a deprecation warning on every dev start and build there. The Vite
+ * plugin answers the same question for itself (`optimizerOptionsKey` in @reticlehq/vite-plugin),
+ * but these frameworks never load the plugin.
+ *
+ * Nuxt and Astro do not list `vite` in the app's package.json — it comes with the framework — so the
+ * declared range is the last resort, after the hoisted package and pnpm's store. Null when none
+ * says: the caller keeps the older key, as the plugin does, because a deprecation notice is a much
+ * smaller failure than an option the installed Vite has never heard of.
+ */
+
+interface ViteReader {
+  readFile(relPath: string): string | null;
+  listDirs(relPath: string): readonly string[];
+}
+
+interface DeclaredDeps {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+}
+
+const HOISTED_VITE = 'node_modules/vite/package.json';
+const PNPM_STORE = 'node_modules/.pnpm';
+/** A pnpm store entry for vite itself: `vite@8.0.16` or `vite@7.1.2_@types+node@24…`. */
+const PNPM_VITE_ENTRY = /^vite@(\d+)\./;
+
+export function installedViteMajor(io: ViteReader, pkg: DeclaredDeps): number | null {
+  const hoisted = io.readFile(HOISTED_VITE);
+  if (null !== hoisted) {
+    try {
+      const parsed: unknown = JSON.parse(hoisted);
+      const version =
+        'object' === typeof parsed && null !== parsed
+          ? (parsed as { version?: unknown }).version
+          : undefined;
+      const major = 'string' === typeof version ? parseMajor(version) : undefined;
+      if (major !== undefined) return major;
+    } catch {
+      // Unreadable manifest: fall through to the store and the declared range.
+    }
+  }
+  // ponytail: several copies can sit in the store and the newest is taken; resolving the framework's
+  // own `vite` through its dependency chain is the upgrade if a stale newer copy ever misleads this.
+  const stored = io
+    .listDirs(PNPM_STORE)
+    .map((name) => PNPM_VITE_ENTRY.exec(name)?.[1])
+    .filter((major): major is string => major !== undefined)
+    .map(Number);
+  if (stored.length > 0) return Math.max(...stored);
+  return parseMajor(pkg.dependencies?.['vite'] ?? pkg.devDependencies?.['vite']) ?? null;
 }

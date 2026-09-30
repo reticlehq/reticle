@@ -23,15 +23,21 @@ export const CHROMIUM_ANTI_THROTTLING_ARGS = [
 ] as const;
 
 /** The options object handed to `chromium.launch` at both launch sites. */
-interface ChromiumLaunchOptions {
+export interface ChromiumLaunchOptions {
   headless: boolean;
   args: string[];
+  /** An installed Chrome/Edge to drive instead of Playwright's own build; absent = the bundled one. */
+  channel?: string;
 }
 
 /**
  * Build the launch options for a headless or headed Chromium. Pure; returns a fresh mutable array
  * each call so no caller can mutate the constant behind everyone else's back.
  */
-export function chromiumLaunchOptions(headless: boolean): ChromiumLaunchOptions {
-  return { headless, args: [...CHROMIUM_ANTI_THROTTLING_ARGS] };
+export function chromiumLaunchOptions(headless: boolean, channel?: string): ChromiumLaunchOptions {
+  return {
+    headless,
+    args: [...CHROMIUM_ANTI_THROTTLING_ARGS],
+    ...(channel === undefined ? {} : { channel }),
+  };
 }

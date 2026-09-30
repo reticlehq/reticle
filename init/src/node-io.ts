@@ -95,7 +95,7 @@ function runnable(command: string): string {
 function spawnAllowed(
   command: string,
   args: readonly string[],
-  options: { cwd?: string; stdio: 'inherit' | 'ignore' },
+  options: { cwd?: string; stdio: 'inherit' | 'ignore' | 'pipe'; encoding?: 'utf8' },
 ): ReturnType<typeof spawnSync> {
   const name = runnable(command);
   if (NodePlatform.WINDOWS !== process.platform) {
@@ -183,6 +183,11 @@ export function buildNodeIo(cwd: string, host: InitHost): InitIo {
       // Inherit stdio so the install's own progress is visible to the user.
       const result = spawnAllowed(command, args, { cwd, stdio: 'inherit' });
       return 0 === result.status;
+    },
+    capture(command, args) {
+      const result = spawnAllowed(command, args, { cwd, stdio: 'pipe', encoding: 'utf8' });
+      const text = (part: unknown): string => ('string' === typeof part ? part : '');
+      return { ok: 0 === result.status, output: `${text(result.stdout)}${text(result.stderr)}` };
     },
     /** One access check, rather than discovering it as an EACCES stack four phases later. */
     canWrite() {

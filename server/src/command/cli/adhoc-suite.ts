@@ -18,6 +18,8 @@ import { ReticleTool } from '@reticlehq/core';
 import {
   connectOverSse,
   endpointFor,
+  leaseIfNoTab,
+  releaseLease,
   refusalText,
   verdictOf,
   type AdhocVerdict,
@@ -37,6 +39,9 @@ export interface AdhocSuiteOptions {
 
 /** The only status that is a pass. `unverifiable` means nothing was checked, which is not one. */
 const PASSED = 'pass';
+
+/** The `reticle_verify` actions this file asks for. */
+const EXPLORE_ACTION = 'explore';
 
 /**
  * How long a SUITE may take, against the SDK's 60s default for one request.
@@ -74,30 +79,7 @@ export async function runAdhocSuite(options: AdhocSuiteOptions): Promise<AdhocVe
     };
   }
   try {
-    // Spread rather than set: an explicit `undefined` is a key the tools reject as an unknown
-    // parameter, which would turn "no tab named" into a refusal. Same rule as the one-shot path.
-    const result = await caller.call(
-      ReticleTool.VERIFY,
-      {
-        action: 'flows',
-        ...(options.select === undefined ? {} : { select: options.select }),
-        ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
-      },
-      SUITE_TIMEOUT_MS,
-    );
-    const refusal = refusalText(result);
-    if (refusal !== undefined) return { code: 1, lines: ['status: unverifiable', refusal] };
-    const report = verdictOf(result, 'status');
-    const status = 'string' === typeof report?.['status'] ? report['status'] : 'unverifiable';
-    const summary = 'string' === typeof report?.['summary'] ? report['summary'] : undefined;
-    return {
-      code: PASSED === status ? 0 : 1,
-      lines: [
-        `status: ${status}`,
-        ...(summary === undefined ? [] : [summary]),
-        JSON.stringify(report ?? result, null, 2),
-      ],
-    };
+    return await replaySuite(caller, options);
   } catch (error) {
     return {
       code: 1,
@@ -106,6 +88,116 @@ export async function runAdhocSuite(options: AdhocSuiteOptions): Promise<AdhocVe
       ],
     };
   } finally {
+    await caller.close().catch(() => undefined);
+  }
+}
+
+/** The saved suite through an open connection, as a verdict. Shared by the suite and explore paths. */
+async function replaySuite(
+  caller: ToolCaller,
+  options: { select?: string[]; sessionId?: string },
+): Promise<AdhocVerdict> {
+  // Spread rather than set: an explicit `undefined` is a key the tools reject as an unknown
+  // parameter, which would turn "no tab named" into a refusal. Same rule as the one-shot path.
+  const result = await caller.call(
+    ReticleTool.VERIFY,
+    {
+      action: 'flows',
+      ...(options.select === undefined ? {} : { select: options.select }),
+      ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
+    },
+    SUITE_TIMEOUT_MS,
+  );
+  const refusal = refusalText(result);
+  if (refusal !== undefined) return { code: 1, lines: ['status: unverifiable', refusal] };
+  const report = verdictOf(result, 'status');
+  const status = 'string' === typeof report?.['status'] ? report['status'] : 'unverifiable';
+  const summary = 'string' === typeof report?.['summary'] ? report['summary'] : undefined;
+  return {
+    code: PASSED === status ? 0 : 1,
+    lines: [
+      `status: ${status}`,
+      ...(summary === undefined ? [] : [summary]),
+      JSON.stringify(report ?? result, null, 2),
+    ],
+  };
+}
+
+export interface AdhocExploreOptions {
+  port: number;
+  /** The app to explore; opened in a Reticle browser when the daemon has no tab on its origin. */
+  url: string;
+  /** Who to be, or what to accomplish. */
+  persona?: string;
+  token?: string;
+  connect?: (endpoint: URL) => Promise<ToolCaller>;
+  /** The tabs the daemon has connected. See runAdhocVerdict. */
+  sessions: () => Promise<readonly { url: string }[]>;
+}
+
+/**
+ * `verify <url> --explore` against the daemon that already owns the port: open the url, let the
+ * daemon's model drive it and record flows, then replay them — the same three steps the path that
+ * boots its own daemon takes, so the exit code means the same thing on both.
+ *
+ * It used to refuse here, and that refusal was the first thing a new user met: `init` leaves its
+ * daemon on the port and then recommends exactly this command as the first run.
+ */
+export async function runAdhocExplore(options: AdhocExploreOptions): Promise<AdhocVerdict> {
+  const connect = options.connect ?? connectOverSse;
+  let caller: ToolCaller;
+  try {
+    caller = await connect(endpointFor(options.port, options.token));
+  } catch (error) {
+    return {
+      code: 1,
+      lines: [
+        `could not reach the daemon on port ${String(options.port)}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      ],
+    };
+  }
+  let leased: string | undefined;
+  try {
+    const opened = await leaseIfNoTab(caller, options.url, options.sessions);
+    if ('failed' in opened) return { code: 1, lines: ['status: unverifiable', ...opened.failed] };
+    leased = opened.leased;
+    const pin = leased === undefined ? {} : { sessionId: leased };
+    const drove = await caller.call(
+      ReticleTool.VERIFY,
+      {
+        action: EXPLORE_ACTION,
+        ...(options.persona === undefined ? {} : { persona: options.persona }),
+        ...pin,
+      },
+      SUITE_TIMEOUT_MS,
+    );
+    const refusal = refusalText(drove);
+    if (refusal !== undefined) return { code: 1, lines: ['status: unverifiable', refusal] };
+    const report = verdictOf(drove, 'savedFlows');
+    const recorded = [report?.['savedFlows'], report?.['rewroteFlows']].flatMap((list) =>
+      Array.isArray(list) ? list.filter((name): name is string => 'string' === typeof name) : [],
+    );
+    const summary = 'string' === typeof report?.['summary'] ? report['summary'] : undefined;
+    const note = 'string' === typeof report?.['note'] ? report['note'] : undefined;
+    const drive = [
+      ...(summary === undefined ? [] : [summary]),
+      ...(note === undefined ? [] : [note]),
+    ];
+    // A drive that left nothing to replay proved nothing, however long it ran.
+    if (0 === recorded.length) return { code: 1, lines: ['status: unverifiable', ...drive] };
+    const suite = await replaySuite(caller, pin);
+    return { code: suite.code, lines: [...drive, ...suite.lines] };
+  } catch (error) {
+    return {
+      code: 1,
+      lines: [
+        `the explore could not be run: ${error instanceof Error ? error.message : String(error)}`,
+      ],
+    };
+  } finally {
+    if (leased !== undefined) await releaseLease(caller, leased);
     await caller.close().catch(() => undefined);
   }
 }

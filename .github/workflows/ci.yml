@@ -571,7 +571,7 @@ jobs:
           # `adapters/` is spelled out rather than taken whole. Before the directory move this list
           # named eight paths, and `packages/(vite-plugin|next|babel-plugin|browser|react)` were five
           # of them; collapsing them to `adapters/` silently added three that were never in scope —
-          # the lint plugin, and the Electron and Tauri realms. This gate scaffolds ten WEB apps, so a
+          # the lint plugin, and the Electron and Tauri realms. This gate scaffolds thirteen WEB apps, so a
           # dev-only lint rule or a desktop realm cannot change whether one of them installs, and a
           # Tauri change is Rust that no JS gate compiles at all. The build plugins do the wiring, the
           # browser realm is what dials, and `init` installs the framework adapter, so those three
@@ -633,10 +633,10 @@ jobs:
           fi
       # WHICH install-gate cells to run, as an explicit os/scaffold list.
       #
-      # Ubuntu always runs all eleven: it is the cheap platform, a cell takes 6-7 minutes, and ten of
+      # Ubuntu always runs all thirteen: it is the cheap platform, a cell takes 6-7 minutes, and ten of
       # them start at once without queuing. Windows is the opposite on every count -- 8 to 28
       # minutes for the same work -- so a PULL REQUEST runs three of them and everything else runs
-      # all eleven. The three are chosen to cover the distinct install shapes rather than to be
+      # all thirteen. The three are chosen to cover the distinct install shapes rather than to be
       # representative: `cra` owns its own HTML and is the heaviest tree (the 28-minute cell),
       # `next-app-router` is the framework whose Windows install shipped broken in 2.3.0, and
       # `vite-react` is the plain plugin path most projects take.
@@ -646,7 +646,7 @@ jobs:
       # deserves it -- an edit under `init/` or `install/`, say.
       - id: install_matrix
         run: |
-          ALL='vite-react vite-vue vite-vanilla next-app-router next-pages-router monorepo-subdir astro sveltekit cra nuxt react-router'
+          ALL='vite-react vite-vue vite-vanilla next-app-router next-pages-router monorepo-subdir astro sveltekit cra nuxt react-router remix angular'
           # A MERGE QUEUE entry gets the same short Windows list as the pull request, and for a
           # stronger version of the same reason.
           #
@@ -674,7 +674,7 @@ jobs:
           # router, the monorepo walk-up), and one Windows scaffold that is not the flaky one. The
           # full ten were the largest share of runner minutes and caught nothing the other jobs
           # did not in the measured window, while starving the 20-job pool the queue also needs.
-          # The QUEUE still runs all eleven on Linux before anything lands; nightly runs all eleven on both.
+          # The QUEUE still runs all thirteen on Linux before anything lands; nightly runs all thirteen on both.
           PR_LINUX='vite-react next-app-router monorepo-subdir'
           case "${{ github.event_name }}" in
             pull_request) LINUX="$PR_LINUX"; WINDOWS='vite-react' ;;
@@ -798,6 +798,13 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: playwright-${{ runner.os }}-
       - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
+      # Angular 21's dependency tree crashes npm 10's installer ("Cannot read properties of null
+      # (reading 'edgesOut')") during the scaffold's own install, before Reticle is involved;
+      # reproduced locally with a fresh `ng new` on npm 10, and npm 11 installs it. Node 22 ships
+      # npm 10, so this one cell uses npm 11.
+      - name: npm 11 for the Angular scaffold
+        if: matrix.scaffold == 'angular'
+        run: npm install -g npm@11
       # The negative control FIRST. It mis-wires each scaffold's port so no session can appear and
       # requires the gate to go red; if it passes, the gate proves nothing and the run below would be
       # a green that means nothing. check-boundaries and check-lossy-transforms already self-test in

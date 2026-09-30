@@ -18,7 +18,7 @@ import {
 } from '@reticlehq/core';
 import { SseFrameParser } from './sse-frame-parser.js';
 export { SseFrameParser, type SseFrame } from './sse-frame-parser.js';
-export { probeDaemon, waitForDaemon } from './proxy/proxy-daemon-probe.js';
+export { probeDaemon, waitForDaemon, waitForDaemonBind } from './proxy/proxy-daemon-probe.js';
 import { probeDaemon } from './proxy/proxy-daemon-probe.js';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 import { buildServerInstructions } from './server-instructions.js';
@@ -59,7 +59,7 @@ import { OutageReason, OutageStage, reportMcpOutage } from './faults/mcp-outage.
 import { postToSession } from './proxy/mcp-post-transport.js';
 import { reconnectDelayMs } from './proxy/proxy-backoff.js';
 import { PROXY_IDLE_EXIT_EVENT, ProxyIdleExit, resolveProxyIdleExitMs } from './proxy-idle-exit.js';
-export { reconnectDelayMs, RECONNECT_BASE_MS, RECONNECT_CAP_MS } from './proxy/proxy-backoff.js';
+export { reconnectDelayMs } from './proxy/proxy-backoff.js';
 
 export {
   MCP_PROXY_HTTP_AGENT_OPTIONS,

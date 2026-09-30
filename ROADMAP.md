@@ -11,7 +11,7 @@ Reticle's edge is seeing the **program**, not the pixels — app state, signals,
 ## Near-term
 
 - **Zero-install tier.** Drive any React app over CDP with no SDK installed — component state, network, and console at parity with the read everyone benchmarks — as the on-ramp, with the SDK as the upsell for signals, named stores, and `file:line`. (The fiber reader already works; the remaining piece is a boundary decision on where the CDP-injected reader lives.)
-- **More framework state adapters.** Broaden first-class `reticle_state` support across the stores React and Next apps actually use.
+- **More framework state adapters.** Broaden first-class `reticle_look { action: "state" }` support across the stores React and Next apps actually use.
 - **Sharper diagnosis.** Keep tightening the failure capsule — first-divergence + blast radius + the exact `file:line` — since the measured win is fewer agent tool-calls to a fix, not just detection.
 - **The install has to end in a verdict.** Most people who install never see one. `init` now waits for a real page to connect rather than reporting the files it wrote, and the funnel from install to first verdict is instrumented end to end. Keep pulling on whatever the next narrowest point turns out to be.
 
@@ -24,7 +24,7 @@ Reticle's edge is seeing the **program**, not the pixels — app state, signals,
 
 ## Enterprise (source-available)
 
-SSO/SAML, SCIM, RBAC, audit logs, and verify-before-merge policy gates live under `server/ee/`, source-available and free for development/evaluation, unlocked in production by a license key. The core verification engine stays free forever.
+SSO/SAML, SCIM, RBAC, audit logs, and verify-before-merge policy gates live under `server/src/features/ee/`, source-available and free for development/evaluation, unlocked in production by a license key. The core verification engine stays free forever.
 
 ## Beyond the browser: mobile and native
 
@@ -51,5 +51,4 @@ Until both are answered, treat this section as a direction rather than a commitm
 ## Not planned
 
 - Turning Reticle into a general browser-automation framework — it gates _edits_ inside the agent loop; Playwright gates _releases_, and the honest recommendation is to use both.
-- Any telemetry or phone-home. It runs on your machine, in your infra, and stays that way.
 - Claiming a platform is supported before an agent can drive a real app on it and get a verdict. "Installed" already had to be redefined as "a verdict was produced" once; a platform badge earned by a scaffold rather than a drive is the same mistake at a larger scale.

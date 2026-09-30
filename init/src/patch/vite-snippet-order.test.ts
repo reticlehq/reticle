@@ -39,4 +39,9 @@ describe('the Vite snippet a reader copies by hand', () => {
     expect(written).toContain('plugins: [reticle(), react()]');
     expect(snippet).toContain('plugins: [reticle(), react()]');
   });
+
+  /** Pasted into an empty file as printed, Vite died with `ReferenceError: defineConfig is not defined`. */
+  it('imports every name it uses, so it boots when pasted as-is', () => {
+    expect(snippet).toContain("import { defineConfig } from 'vite';");
+  });
 });

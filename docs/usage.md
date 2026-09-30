@@ -640,7 +640,7 @@ Capture everything that happens across a span. Useful for "run my whole checkout
 
 ```jsonc
 reticle_record {action:"start"}({ recordingName: "checkout" })
-// …agent performs the flow (reticle_act / reticle_act_sequence)…
+// …agent performs the flow (reticle_act, single or with steps)…
 reticle_record {action:"stop"}({ recordingName: "checkout" })
 // → {
 //     recordingName,

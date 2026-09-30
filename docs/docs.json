@@ -139,7 +139,8 @@
                   "cli/feedback",
                   "cli/identify",
                   "cli/help",
-                  "cli/cloud"
+                  "cli/cloud",
+                  "environment"
                 ]
               },
               {

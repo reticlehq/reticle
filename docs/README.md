@@ -24,6 +24,7 @@ Everything here is published to [docs.reticle.sh](https://docs.reticle.sh) by `d
 | [capabilities.mdx](capabilities.mdx) | coverage, storage, fake clocks, crawl, visual diff, network mocking |
 | [recipes.mdx](recipes.mdx) | worked examples for real situations, with the response each returned |
 | [actions.mdx](actions.mdx) | every action and its arguments, including `press` and its history |
+| [environment.mdx](environment.mdx) | every environment variable Reticle reads, what it changes, and which process reads it |
 | [faq.mdx](faq.mdx) | production, frameworks, comparisons, and the honest limits |
 | [tools/overview.mdx](tools/overview.mdx) | the 18 advertised tools, the 30 in the cold tail, and why |
 | [tools/snapshot.mdx](tools/snapshot.mdx) | `reticle_look { action: "page" }`: three modes, from full tree to a 25-token route check |

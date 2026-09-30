@@ -300,6 +300,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'dev-server',
     // `reticle gate` ratchets on the coverage ledger and blocks changed code that never ran.
     'exhaust',
+    // `verify <url> --expect` opens the url when no tab is on it, by the same rule `reticle open`
+    // uses (decideOpen), so the two commands cannot disagree about which tab counts.
+    'launch',
     'answers',
     'binding',
     'suite',

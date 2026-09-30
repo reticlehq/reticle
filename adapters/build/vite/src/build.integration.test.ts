@@ -164,6 +164,45 @@ describe('disabled production build', () => {
     },
     HOOK_TIMEOUT_MS,
   );
+
+  /**
+   * `reticle({ desktop: true })` is what init writes for electron-vite, and a production renderer
+   * built with it carried the whole SDK and dialled the daemon: `electron-vite preview` connected.
+   * A real `vite build`, because the claim is about what lands in the artefact.
+   */
+  it(
+    'ships no connect and no SDK from a desktop production build',
+    async () => {
+      const runBuild = required(build, 'vite.build');
+      const root = mkdtempSync(join(tmpdir(), 'reticle-desktop-build-'));
+      const outDir = join(root, 'dist');
+      dirs.push(root);
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(
+        join(root, 'index.html'),
+        '<script type="module" src="/src/main.js"></script>\n',
+      );
+      writeFileSync(join(root, 'src/main.js'), "document.title = 'desktop-app';\n");
+
+      await runBuild({
+        root,
+        configFile: false,
+        logLevel: 'silent',
+        plugins: [reticle({ desktop: true })],
+        build: { outDir },
+      });
+
+      const assetsDir = join(outDir, 'assets');
+      const bundle = readdirSync(assetsDir)
+        .filter((file) => file.endsWith('.js'))
+        .map((file) => readFileSync(join(assetsDir, file), 'utf8'))
+        .join('\n');
+      expect(bundle).toContain('desktop-app');
+      expect(bundle).not.toContain('allowInProduction');
+      expect(bundle).not.toContain('/reticle');
+    },
+    HOOK_TIMEOUT_MS,
+  );
 });
 
 /**

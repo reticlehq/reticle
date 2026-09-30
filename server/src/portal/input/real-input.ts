@@ -12,7 +12,7 @@
 import { takeJsCoverage, type ScriptCoverage } from './js-coverage.js';
 import type { Browser, Page } from 'playwright';
 import { stampedDriveUrl } from './drive-url-stamp.js';
-import { chromiumLaunchOptions } from '@/chromium-launch-options.js';
+import { launchChromium } from '@/launch-chromium.js';
 import { chromiumLaunchHint, gotoOptions } from '@/portal/pool/playwright-launcher.js';
 import { BrowserLaunchKind } from '@reticlehq/core/telemetry';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
@@ -471,7 +471,7 @@ export const launchedChromium: LaunchFn = async (headless) => {
   }
   const settle = getSessionMetrics().recordConnectAttempt(BrowserLaunchKind.LAUNCHED);
   try {
-    const browser = await mod.chromium.launch(chromiumLaunchOptions(headless));
+    const browser = await launchChromium(mod.chromium, headless);
     settle();
     return browser;
   } catch (e) {

@@ -17,7 +17,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { cspConnectSrcProblem, devCspAddition } from './csp-check.js';
+import { cspConnectSrcProblem, devCspAddition, patchCspMetaConnectSrc } from './csp-check.js';
 
 const PORT = 4400;
 
@@ -86,5 +86,31 @@ describe('devCspAddition', () => {
 
   it('says out loud that it is development-only', () => {
     expect(devCspAddition(PORT)).toMatch(/development|dev only|NODE_ENV/i);
+  });
+});
+
+/**
+ * A re-run with a new `--port` over an electron-vite renderer whose CSP `init` had already opened:
+ * the new pair was APPENDED beside the old one, so the policy grew a stale pair on every move and
+ * kept admitting a port nothing listens on any more.
+ */
+describe('patchCspMetaConnectSrc on a port move', () => {
+  const meta = (policy: string): string =>
+    `<head><meta http-equiv="Content-Security-Policy" content="${policy}" /></head>`;
+
+  it('replaces the pair it wrote, rather than appending a second', () => {
+    const once = patchCspMetaConnectSrc(meta("default-src 'self'"), 4400) ?? '';
+    const moved = patchCspMetaConnectSrc(once, 4411) ?? '';
+    expect(moved).toContain('ws://localhost:4411 ws://127.0.0.1:4411');
+    expect(moved).not.toContain(':4400');
+    expect(moved.match(/connect-src/g)).toHaveLength(1);
+    expect(patchCspMetaConnectSrc(moved, 4411)).toBeUndefined();
+  });
+
+  it('keeps a loopback source the app wrote itself, which is not a bridge pair', () => {
+    const own = meta("connect-src 'self' ws://localhost:3000");
+    const patched = patchCspMetaConnectSrc(own, 4411) ?? '';
+    expect(patched).toContain('ws://localhost:3000');
+    expect(patched).toContain('ws://localhost:4411 ws://127.0.0.1:4411');
   });
 });

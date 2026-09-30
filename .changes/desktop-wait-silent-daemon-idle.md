@@ -1,0 +1,3 @@
+### Fixed
+
+- **A desktop `init` could sit silent for ten minutes while the daemon it was waiting on shut itself down.** Electron was given the cold-Rust-build budget meant for Tauri, nothing was printed after "Waiting for the app to launch and dial in.", and the daemon `init` had just started counted none of the wait as activity, so it idled out at five minutes and the app came up to a closed port. Electron now gets a budget sized for Electron (Tauri keeps its own), the connect wait prints how long it has waited and how long is left, and a running `init` holds its daemon open until it finishes. It also says "detected an Electron app" now, not "a electron app".

@@ -68,7 +68,7 @@ The recovery, not the absence of a crash:
 
 1. The error is **shown to the user**: a specific element, not just "the page did not blank".
 2. The app **stayed usable**: retry works, the form still has its input, navigation is not stuck.
-3. **State is honest**: `reticle_state` shows the failure, not a half-applied optimistic update. A UI that rolled back visually while the store kept the optimistic value is the classic bug here, and only the store read finds it.
+3. **State is honest**: `reticle_look { action: "state" }` shows the failure, not a half-applied optimistic update. A UI that rolled back visually while the store kept the optimistic value is the classic bug here, and only the store read finds it.
 4. **No uncaught error** in the console.
 
 ## Honesty

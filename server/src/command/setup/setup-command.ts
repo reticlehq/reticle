@@ -10,23 +10,34 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { planAgentConfigs, type PlatformPaths } from './agent-configs.js';
-import { AppShape, readShape } from './desktop-shape.js';
+import { AppShape, describeShape, readShape } from './desktop-shape.js';
 import { stopOnInterrupt } from './terminal/interrupt.js';
 import { stopOnCrash, crashSentence } from './terminal/crash.js';
 import { applyAgentPlan, applyAgentSkills } from './agent-writer.js';
 import { ApprovalOutcome, grantAutoApproval } from './auto-approve.js';
 import { agentIo } from './agent-io.js';
-import { EnsureDaemon, ensureDaemon, nodeEnsureDaemonDeps } from './bringup/ensure-daemon.js';
+import {
+  EnsureDaemon,
+  ensureDaemon,
+  holdDaemon,
+  nodeEnsureDaemonDeps,
+  nodeRetireDeps,
+  retireMovedDaemons,
+} from './bringup/ensure-daemon.js';
 import { openInBrowser } from '@/command/cli/launch/cli-launch.js';
+import { openLeaseFor } from './bringup/connect-lease.js';
 import { readProjectId } from '@/command/cli/ports/resolve/cli-port.js';
-import { reticleStateHome } from '@/command/daemon/daemon.js';
+import { spawnSync } from 'node:child_process';
+import { isAlive, reticleStateHome } from '@/command/daemon/daemon.js';
 import { readDevServers } from '@/command/daemon/dev-servers.js';
 import { urlOfExistingApp } from './probe/existing-app.js';
+import { handedOverUrl, stopHandedOver } from './bringup/dev-server-files.js';
 import { listSessions, OwnedDevServer, probePage } from './node-effects.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
-import { summarizeStatus } from '@/command/cli/launch/cli-launch.js';
+import { daemonSkew, summarizeStatus } from '@/command/cli/launch/cli-launch.js';
 import {
   runSetupPhases,
+  SetupPhase,
   type SetupEffects,
   type SetupInput,
   type SetupOutcome,
@@ -81,6 +92,8 @@ interface SetupCommandInput extends Omit<SetupInput, 'shape'> {
   readonly env: Readonly<Record<string, string>>;
   /** Register the MCP server with the coding agents init does not itself reach. */
   readonly registerAgents: boolean;
+  /** The bridge's pairing token, for the MCP transport a connect-proof lease is opened over. */
+  readonly pairingToken?: string | undefined;
 }
 
 /** `electron` in either dependency list, read the same way init's desktop doctor reads it. */
@@ -165,16 +178,84 @@ type SetupCommandResult = SetupOutcome;
  * instrumented app they can watch is the deliverable, and killing it would leave them with config
  * files and a dead tab.
  */
+/** How long a stopped dev server gets to let go of its port before the new one is started. */
+const HANDED_OVER_EXIT_MS = 10_000;
+const HANDED_OVER_EXIT_POLL_MS = 100;
+
+/** Stop the server a previous init handed over for `appDir`, and wait (bounded) for it to exit. */
+async function restartHandedOverServer(appDir: string): Promise<boolean> {
+  let stoppedPid: number | undefined;
+  const stopped = stopHandedOver(reticleStateHome(), appDir, {
+    alive: isAlive,
+    kill: (pid) => {
+      stoppedPid = pid;
+      try {
+        // Its own process group (it was spawned detached), so what it started goes with it.
+        if ('win32' === process.platform) {
+          spawnSync('taskkill', ['/PID', String(pid), '/T', '/F']);
+        } else {
+          process.kill(-pid, 'SIGTERM');
+        }
+      } catch {
+        /* already gone */
+      }
+    },
+  });
+  const deadline = Date.now() + HANDED_OVER_EXIT_MS;
+  while (undefined !== stoppedPid && isAlive(stoppedPid) && Date.now() < deadline) {
+    await new Promise((done) => setTimeout(done, HANDED_OVER_EXIT_POLL_MS));
+  }
+  return stopped;
+}
+
 export async function runSetupCommand(
   input: SetupCommandInput,
   print: (line: string) => void,
 ): Promise<SetupCommandResult> {
   if (input.registerAgents) registerOtherAgents(print);
 
+  // A moved port first: this project's daemon on the OLD port would otherwise be the one the page
+  // finds and dials, while everything below waits on the new one.
+  const retired = await retireMovedDaemons(
+    readProjectId(input.appDir),
+    input.bridgePort,
+    nodeRetireDeps(),
+  );
+  for (const port of retired) {
+    print(
+      `stopped this project's Reticle daemon on port ${String(port)}: the project now uses ` +
+        `${String(input.bridgePort)}, and the page would have kept dialling the old one.`,
+    );
+  }
+  // And the dev server a previous init left running, which may have read the old port once at
+  // startup (Next does) — so the attach below would keep a page dialling the daemon just stopped.
+  if (0 < retired.length && (await restartHandedOverServer(input.appDir))) {
+    print(
+      `stopped the dev server a previous init started, so it restarts on port ${String(input.bridgePort)}.`,
+    );
+  }
+
   // Before the app is booted, because the app's whole job from here is to dial this port. Without
   // it the phases wait out their budget and then report the SDK as the thing that failed.
-  const daemon = await ensureDaemon(input.bridgePort, nodeEnsureDaemonDeps());
-  if (EnsureDaemon.UNAVAILABLE === daemon) {
+  const daemon = await ensureDaemon(
+    input.bridgePort,
+    nodeEnsureDaemonDeps((status) => undefined !== daemonSkew(status)),
+  );
+  if (undefined !== daemon.message) print(daemon.message);
+  if (EnsureDaemon.SKEWED_IN_USE === daemon.state) {
+    // Stop here: every hello from the page would be refused, and waiting out the connect budget
+    // only to blame the page is the run this exists to prevent.
+    return {
+      ok: false,
+      reachedPhase: SetupPhase.DEV_SERVER,
+      flowSaved: false,
+      notes: undefined === daemon.message ? [] : [daemon.message],
+      fallback: [
+        `Once those sessions are done, free the port with \`npx @reticlehq/server kill --port ${String(input.bridgePort)}\` and re-run init.`,
+      ],
+    };
+  }
+  if (EnsureDaemon.UNAVAILABLE === daemon.state) {
     print(
       `could not start the Reticle daemon on port ${String(input.bridgePort)}, so nothing is listening for the app to connect to. Run \`npx @reticlehq/server serve --port ${String(input.bridgePort)}\` and try again.`,
     );
@@ -188,7 +269,7 @@ export async function runSetupCommand(
     hasTauriConf: existsSync(join(input.appDir, 'src-tauri', 'tauri.conf.json')),
     hasElectronDep: hasElectronDependency(input.appDir),
   });
-  if (AppShape.WEB !== shape) print(`detected a ${shape} app`);
+  if (AppShape.WEB !== shape) print(`detected ${describeShape(shape)}`);
 
   const server = new OwnedDevServer();
 
@@ -198,13 +279,17 @@ export async function runSetupCommand(
       server.start(command, cwd, input.env);
       return Promise.resolve();
     },
-    existingAppUrl: () =>
-      Promise.resolve(
-        urlOfExistingApp(readDevServers(reticleStateHome()), {
-          projectId: readProjectId(input.appDir),
-          root: input.appDir,
-        }),
-      ),
+    // The server the plugin announced (Vite), or failing that the one a previous init handed over
+    // and recorded — the only way to know a Next or Angular server on the port is this project's own.
+    existingAppUrl: async () =>
+      urlOfExistingApp(readDevServers(reticleStateHome()), {
+        projectId: readProjectId(input.appDir),
+        root: input.appDir,
+      }) ??
+      (await handedOverUrl(reticleStateHome(), input.appDir, {
+        alive: isAlive,
+        answers: async (url) => (await probePage(url)).served,
+      })),
     devServerOutput: () => server.output(),
     devServerExited: () => server.exited(),
     devServerQuietForMs: () => server.quietForMs(),
@@ -212,22 +297,17 @@ export async function runSetupCommand(
     probePage,
     openBrowser: async (url) => {
       const failure = await openInBrowser(url);
-      if (null !== failure) {
-        print(
-          `could not open a browser (${failure}). Nothing was opened, and nothing else here will ` +
-            // Three wordings have been wrong in a row, each naming a way out that does not exist on
-            // the machine being spoken to. It said `reticle_run({ tool: "reticle_lease", ... })`:
-            // the default surface advertises neither name and ships no hatch to reach the second.
-            // It then said `reticle open <url>`, which asks the OS to launch the default browser --
-            // the very thing that just failed -- so it returned the reader to the same wall.
-            // This one names no command: the missing piece is a browser, and the honest sentence
-            // says which url needs one rather than inventing a Reticle that can conjure it.
-            `open one: this asks the OS for your default browser, and it is a machine with none — ` +
-            `CI, a container, an SSH session, WSL with no host browser. Point any browser that can ` +
-            `reach it at ${url}; the session appears within a second of the page loading.`,
-        );
-      }
+      if (null === failure) return undefined;
+      // It used to end "nothing else here will open one", which stopped being true once a
+      // Reticle-owned browser could always launch: run-setup opens a lease on this failure, so the
+      // reader is told what happens next rather than sent to find a browser by hand.
+      print(
+        `could not open a browser (${failure}), so the connect proof will come from a ` +
+          `Reticle-owned headless browser instead. To use the app yourself, point any browser at ${url}.`,
+      );
+      return failure;
     },
+    openLease: (url) => openLeaseFor(input.bridgePort, url, input.pairingToken),
     listSessions: () => listSessions(input.bridgePort),
     // `summarizeStatus` already narrows this payload for `reticle status`; reusing it here keeps one
     // reader of the wire shape rather than two that can disagree about which key carries the reason.
@@ -257,14 +337,27 @@ export async function runSetupCommand(
   activeDevServerStop = () => {
     server.stop();
   };
+  // Hold the daemon for as long as this run waits on it. Its idle rule counted none of this as
+  // activity, and on a slow desktop build the daemon init had just started idled out mid-wait.
+  const releaseDaemon = holdDaemon(input.bridgePort);
   try {
-    const outcome = await runSetupPhases({ ...input, shape }, effects);
+    const outcome = await runSetupPhases(
+      { ...input, shape, projectId: readProjectId(input.appDir) },
+      effects,
+    );
     // The app stays up only when there is something worth watching.
-    if (outcome.ok) server.handOver();
+    if (outcome.ok) {
+      server.handOver(outcome.url);
+      // Its output is on a file now, not this terminal, so say where: a compile error that used to
+      // scroll past here is the first thing somebody will look for.
+      const log = server.logPath();
+      if (undefined !== log) print(`The dev server keeps running; its output goes to ${log}`);
+    }
     return {
       ...outcome,
     };
   } finally {
+    releaseDaemon();
     releaseSignals();
     activeDevServerStop = null;
     server.stop();

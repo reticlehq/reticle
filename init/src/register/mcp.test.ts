@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { runInit } from '@/run.js';
+import { memoryIo } from '@/memory-io.test-helpers.js';
 import {
   claudeAddCommand,
-  claudeExistsProbe,
+  claudeHasReticle,
   mcpManual,
   mcpWindowsNote,
   MCP_SERVER_NAME,
@@ -34,20 +36,104 @@ describe('claudeAddCommand', () => {
   });
 });
 
-describe('claudeExistsProbe', () => {
-  it('passes NO options — `claude mcp get` accepts none', () => {
-    // With `-s user` the probe exits 1 ("unknown option '-s'") on every machine, so init concluded
-    // "not registered", ran `claude mcp add`, and that exits 1 with "already exists" — every re-run
-    // reported a failed MCP step and a manual command that fails identically.
-    expect(claudeExistsProbe()).toEqual({
-      command: 'claude',
-      args: ['mcp', 'get', 'reticle'],
-    });
+/**
+ * `claude mcp get reticle` health-checks the entry by LAUNCHING it: `npx @reticlehq/server mcp` in
+ * the project, which starts a daemon on whatever `.reticle.json` says — before `init` has rewritten
+ * it. A port move resurrected the old-port daemon about two seconds after it was stopped.
+ * Registration is read from Claude's config instead.
+ */
+describe('claudeHasReticle', () => {
+  const HOME = '/home/u';
+  const APP = '/work/app';
+  const entry = { command: 'npx', args: ['@reticlehq/server', 'mcp'] };
+  const files = (
+    over: Record<string, unknown>,
+  ): { readFile: (p: string) => string | null; homeDir: () => string } => ({
+    readFile: (p) => {
+      const value = over[p.replace(/\\/g, '/')];
+      return value === undefined ? null : JSON.stringify(value);
+    },
+    homeDir: () => HOME,
   });
 
-  it('probes the server claudeAddCommand registers', () => {
-    expect(claudeAddCommand().args).toContain('reticle');
-    expect(claudeExistsProbe().args).toContain('reticle');
+  it('finds a user-scope entry', () => {
+    expect(
+      claudeHasReticle(
+        files({ [`${HOME}/.claude.json`]: { mcpServers: { reticle: entry } } }),
+        APP,
+        undefined,
+      ),
+    ).toBe(true);
+  });
+
+  it('finds a local-scope entry for this project, and not for another', () => {
+    const config = {
+      [`${HOME}/.claude.json`]: { projects: { [APP]: { mcpServers: { reticle: entry } } } },
+    };
+    expect(claudeHasReticle(files(config), APP, undefined)).toBe(true);
+    expect(claudeHasReticle(files(config), '/work/other', undefined)).toBe(false);
+  });
+
+  it('finds a project-scope .mcp.json', () => {
+    expect(
+      claudeHasReticle(
+        files({ [`${APP}/.mcp.json`]: { mcpServers: { reticle: entry } } }),
+        APP,
+        undefined,
+      ),
+    ).toBe(true);
+  });
+
+  it('reads the config dir Claude was told to use', () => {
+    const io = files({ '/cfg/.claude.json': { mcpServers: { reticle: entry } } });
+    expect(claudeHasReticle(io, APP, '/cfg')).toBe(true);
+    expect(claudeHasReticle(io, APP, undefined)).toBe(false);
+  });
+
+  it('is false with no entry, and for a config it cannot parse', () => {
+    expect(
+      claudeHasReticle(
+        files({ [`${HOME}/.claude.json`]: { mcpServers: { other: entry } } }),
+        APP,
+        undefined,
+      ),
+    ).toBe(false);
+    expect(
+      claudeHasReticle({ readFile: () => '{not json', homeDir: () => HOME }, APP, undefined),
+    ).toBe(false);
+  });
+});
+
+describe('init never launches the MCP server to check registration', () => {
+  it('spawns no `claude mcp get` (or list) at all', () => {
+    const ran: string[] = [];
+    const io = memoryIo({
+      'package.json': JSON.stringify({
+        name: 'a',
+        dependencies: { react: '^19.0.0' },
+        devDependencies: { vite: '^7.0.0' },
+      }),
+      'vite.config.ts': "import { defineConfig } from 'vite';\nexport default defineConfig({});\n",
+    });
+    const recorded = {
+      ...io,
+      probe: (command: string, args: readonly string[]) => {
+        ran.push(`${command} ${args.join(' ')}`);
+        return true;
+      },
+      exec: (command: string, args: readonly string[]) => {
+        ran.push(`${command} ${args.join(' ')}`);
+        return true;
+      },
+    };
+    runInit(
+      { cwd: '/project', port: undefined, mcp: true, install: false, dryRun: false },
+      recorded,
+    );
+    expect(
+      ran.filter((c) => /\bmcp (get|list)\b/.test(c)),
+      ran.join(' | '),
+    ).toEqual([]);
   });
 });
 

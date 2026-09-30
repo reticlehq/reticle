@@ -21,7 +21,7 @@ import { handleMcp } from './cli/mcp-command.js';
 import { handleReport } from './cli/report-command.js';
 import { daemonProjectAt, resolveDaemonForProject } from './daemon/daemon-resolve.js';
 import { pickDaemonPortToBind } from './daemon/binding/free-port.js';
-import { portForInit } from './setup/init/init-port.js';
+import { portForInit, portFromEnv } from './setup/init/init-port.js';
 import { daemonStartOptions } from './cli/daemon-start-options.js';
 import {
   handleWatch,
@@ -95,10 +95,25 @@ import {
   devServerPortWarning,
   readProjectPort,
   readProjectId,
+  workspacePortConflict,
+  projectDirOf,
 } from './cli/ports/resolve/cli-port.js';
+import {
+  nodeSpawner,
+  readTextFile,
+  reexecAtVersion,
+  versionMatchNote,
+  versionToMatch,
+} from './cli/launch/sdk-version-match.js';
 import type { StartOptions } from '@/index.js';
 
-import { DAEMON_INNER_COMMAND, PORT_FLAG, parseCliArgs, CLI_USAGE } from './cli/cli-parse.js';
+import {
+  DAEMON_INNER_COMMAND,
+  PORT_FLAG,
+  parseCliArgs,
+  CLI_USAGE,
+  dialsTheDaemon,
+} from './cli/cli-parse.js';
 import { handleFeedback, handleIdentify, handleTelemetry } from '@/telemetry/feedback-cli.js';
 import { installDaemonTelemetry } from '@/telemetry/daemon-telemetry.js';
 import { reportCliRun } from '@/telemetry/cli-telemetry.js';
@@ -128,7 +143,10 @@ async function handleInit(parsed: {
   driveModel?: string | undefined;
 }): Promise<void> {
   const cwd = process.cwd();
-  const port = await portForInit(parsed.port, readProjectPort(cwd), readProjectId(cwd), {
+  // RETICLE_PORT counts as explicit, as it does for every other command: resolved once here, so the
+  // port written into the project and the port the runtime phase binds are the same number.
+  const explicit = parsed.port ?? portFromEnv(process.env);
+  const port = await portForInit(explicit, readProjectPort(cwd), readProjectId(cwd), {
     // The registry names a daemon's owner; an older daemon that never registered is known by the
     // projects its connected pages announced.
     daemonProjects: async (p) => {
@@ -642,6 +660,26 @@ export function main(): void {
   const licenseKey = licenseKeyFromEnvFiles(process.cwd());
   if (licenseKey !== undefined) process.env[LICENSE_KEY_ENV] = licenseKey;
   const argv = process.argv.slice(2);
+  // Before anything reports or writes: a CLI a major away from the project's SDK makes every verdict
+  // `version_skew`, and the unpinned `npx @reticlehq/server` every agent entry uses resolves the
+  // LATEST major whatever the project installed. Hand the same arguments to the matching release and
+  // step aside — it reports its own run. See cli/launch/sdk-version-match.ts.
+  const matchVersion = versionToMatch({
+    argv,
+    cliVersion: SERVER_VERSION,
+    env: process.env,
+    projectDir: projectDirOf(process.cwd()),
+    readFile: readTextFile,
+  });
+  if (matchVersion !== undefined) {
+    process.stderr.write(`${versionMatchNote(matchVersion, SERVER_VERSION)}\n`);
+    reexecAtVersion(matchVersion, argv, process.env, {
+      spawn: nodeSpawner,
+      exit: (code) => process.exit(code),
+      warn: (line) => process.stderr.write(`${line}\n`),
+    });
+    return;
+  }
   // Every invocation passes through here — the single chokepoint for the "how often is it used / how
   // many distinct machines + projects" metrics. Fire-and-forget: a metric must never delay or fail a run.
   //
@@ -667,14 +705,20 @@ export function main(): void {
     void runCloudCommand(argv).then((code) => process.exit(code));
     return;
   }
-  const portEnv = process.env[ReticleEnv.PORT];
-  const envPort = portEnv !== undefined ? parseInt(portEnv, 10) : undefined;
+  const envPort = portFromEnv(process.env);
   const projectPort = readProjectPort(process.cwd());
   // Say so rather than letting the daemon fight the dev server for the port and fail with an
   // EADDRINUSE that mentions neither file nor cause.
   if (projectPort !== undefined && isLikelyDevServerPort(projectPort)) {
     process.stderr.write(`${devServerPortWarning(projectPort)}\n`);
   }
+  // A monorepo root whose wired apps disagree on a port: nothing is picked, and without this line the
+  // default below would be — another project's daemon, answered as if it were this one.
+  const portConflict =
+    projectPort === undefined && envPort === undefined && !argv.includes(PORT_FLAG)
+      ? workspacePortConflict(process.cwd())
+      : undefined;
+  if (portConflict !== undefined) process.stderr.write(`${portConflict}\n`);
   // Registry BEFORE the default, and after both explicit sources.
   //
   // This is the line that ends the split brain. Build plugins have always asked the registry which
@@ -691,6 +735,11 @@ export function main(): void {
   // Headed by default; hidden only where there is no display to be headed on. A run nobody can see
   // is a run nobody trusts, and every "did it actually do anything?" cost a human round-trip.
   const parsed = parseCliArgs(argv, defaultPort, process.env['CI'] !== undefined);
+  // The refusal the line above promised. Printing it and carrying on let the default port answer
+  // anyway, for whichever project's daemon owned it.
+  if (portConflict !== undefined && dialsTheDaemon(parsed)) {
+    process.exit(1);
+  }
 
   switch (parsed.kind) {
     case 'error':

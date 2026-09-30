@@ -92,3 +92,38 @@ describe('a listener that is slow is not a listener that is absent', () => {
     expect(found).toEqual([3000]);
   });
 });
+
+/**
+ * The probe asks `[::1]` by address, and Node then names that address in the Host header. Angular's
+ * SSR dev server validates Host and answers `[::1]:4200` with a 400, printing
+ * `ERROR: Bad Request ("http://[::1]:4200/")` into the user's own dev terminal on every sweep — every
+ * few seconds, for as long as the daemon ran. The address picks the family; the Host header is what a
+ * browser on that machine would send.
+ */
+describe('the Host header the probe sends', () => {
+  it('names localhost on every loopback family, never the literal address', async () => {
+    const { createServer } = await import('node:http');
+    const hosts: string[] = [];
+    const server = createServer((req, res) => {
+      hosts.push(String(req.headers.host));
+      res.writeHead(200, { 'content-type': 'text/html' });
+      res.end('<html></html>');
+    });
+    const port = await new Promise<number>((resolve, reject) => {
+      server.once('error', reject);
+      // `::` accepts both families on the stacks CI runs, so both probes arrive here.
+      server.listen(0, () => {
+        const addr = server.address();
+        if (null === addr || 'string' === typeof addr) reject(new Error('no port'));
+        else resolve(addr.port);
+      });
+    });
+    try {
+      expect(await anyFamilyServes(port)).toBe(true);
+      expect(hosts.length).toBeGreaterThan(0);
+      for (const host of hosts) expect(host).toBe(`localhost:${String(port)}`);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+});

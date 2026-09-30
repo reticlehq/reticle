@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "tauri dev",
     "dev:vite": "vite",
-    "build:vite": "vite build",
+    "build:vite": "vite build --mode development",
     "typecheck": "tsc -b"
   },
   "dependencies": {

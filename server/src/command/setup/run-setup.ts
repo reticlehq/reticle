@@ -21,7 +21,7 @@ import {
   urlToWatch,
   WaitVerdict,
 } from './bringup/dev-server-wait.js';
-import { waitProgressLine } from './terminal/wait-progress.js';
+import { connectProgressLine, waitProgressLine } from './terminal/wait-progress.js';
 
 /**
  * Windows gets longer to say something before silence counts as a wedge.
@@ -36,7 +36,7 @@ import { waitProgressLine } from './terminal/wait-progress.js';
  */
 const WINDOWS_QUIET_MEANS_HUNG_MS = 3 * 60_000;
 const WINDOWS_QUIET_MEANS_HUNG_MS_APPLIES = 'win32' === process.platform;
-import { pickSession, type CandidateSession } from './session-pick.js';
+import { liveSessionOfProject, pickSession, type CandidateSession } from './session-pick.js';
 import {
   readPage,
   describePage,
@@ -56,6 +56,13 @@ const SDK_READY_WINDOW_MS = 15_000;
 
 /** The wait left when no browser was opened: only a tab that is ALREADY loaded can still appear. */
 const NO_BROWSER_GRACE_MS = 3_000;
+/**
+ * How long a system browser that SAID it opened gets to produce a session before init proves the
+ * connect in a Reticle-owned browser instead. A launcher's exit is not a window: macOS `open` against
+ * a default browser that does not answer exits 1 only after the launch check has already counted it
+ * as opened, and init then waited out its whole connect budget over a correct install.
+ */
+const SYSTEM_BROWSER_GRACE_MS = 15_000;
 
 export const SetupPhase = {
   DEV_SERVER: 'dev-server',
@@ -95,6 +102,21 @@ export interface DaemonReason {
   readonly full?: string;
 }
 
+/** A lease this run opened for its connect proof, and the way to hand it back. */
+export interface OwnedBrowser {
+  readonly sessionId: string;
+  readonly release: () => Promise<void>;
+}
+
+/** Hand a lease back. Best-effort: a lease that already expired is already gone. */
+async function releaseLease(lease: OwnedBrowser | undefined): Promise<void> {
+  try {
+    await lease?.release();
+  } catch {
+    /* nothing to undo */
+  }
+}
+
 export interface SetupEffects {
   /** Start the dev server. Resolves once started; the caller owns stopping it. */
   readonly startDevServer: (command: string, cwd: string) => Promise<void>;
@@ -123,8 +145,17 @@ export interface SetupEffects {
    * short (`vite-react`, `vite-vue`, `next-app-router`, `monorepo-subdir`, run 35242186243 against
    * 35232727716). A non-zero launcher exit means UNKNOWN, not "no browser": it reports whether the
    * COMMAND succeeded, never whether a window opened. Do not shorten a wait on it.
+   *
+   * It may resolve with the launcher's own failure, and that is used for exactly one thing: to ALSO
+   * open a Reticle-owned browser, so the proof does not depend on a window that may never appear.
+   * Adding a second source of a session is safe on a false alarm; cutting the wait was not.
    */
-  readonly openBrowser: (url: string) => Promise<void>;
+  readonly openBrowser: (url: string) => Promise<string | void>;
+  /**
+   * Open the url in a browser Reticle owns (a pooled lease), for a run with no system browser to
+   * lean on: `--no-open`, CI, a container, an agent. Optional: absent means no lease is attempted.
+   */
+  readonly openLease?: (url: string) => Promise<OwnedBrowser | { readonly failed: string }>;
   readonly listSessions: () => Promise<CandidateSession[]>;
   /**
    * The daemon's own account of why nothing connected, if it can be asked.
@@ -146,6 +177,8 @@ export interface SetupEffects {
 
 export interface SetupInput {
   readonly appDir: string;
+  /** This project's id, so a live tab of it can be told from another app's on the same url. */
+  readonly projectId?: string | undefined;
   readonly devCommand?: string | undefined;
   /** The app is already served here, so nothing is started. */
   readonly suppliedUrl?: string | undefined;
@@ -162,6 +195,13 @@ export interface SetupInput {
   readonly openBrowser: boolean;
   /** Web, Electron or Tauri. Desktop changes three things; see desktop-shape.ts. */
   readonly shape: AppShape;
+  /**
+   * The served HTML carries the SDK marker on this shape: Vite's index.html injection, or a plain
+   * HTML page with the snippet pasted in. Every other framework delivers the connect in the JS
+   * bundle, so "the SDK is NOT in the page" is the permanent state of a healthy page there, and
+   * saying it sent people to restart a dev server that was fine.
+   */
+  readonly htmlCarriesSdk: boolean;
   readonly phaseTimeoutMs: number;
   readonly pollMs: number;
 }
@@ -318,9 +358,13 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
   const requiredRuntime = isDesktop(input.shape) ? input.shape : undefined;
   // A tab already on this URL is the answer. Opening another is how three sessions appear.
   // `before` is empty so pickSession will take that tab rather than waiting for a new one.
+  //
+  // Not only when attached: a server init started itself (Next, Angular — nothing announces) has a
+  // url too, and a live tab of this project already on it is just as much the answer. Without this
+  // every re-run opened one more tab.
   const alreadyConnected = attachedToExisting
     ? pickSession(listed, url, new Set(), requiredRuntime)
-    : null;
+    : liveSessionOfProject(listed, url, input.projectId, requiredRuntime);
   const before = new Set(listed.map((s) => s.sessionId));
   // Do not put a window in front of somebody until the page behind it can actually do something.
   //
@@ -335,7 +379,12 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
   // proof that nothing can ever dial in.
   const budgetMs = input.connectBudgetMs ?? Math.max(input.phaseTimeoutMs, policy.connectBudgetMs);
   let openedBrowser = false;
-  if (null === alreadyConnected && input.openBrowser && policy.openBrowser) {
+  let lease: OwnedBrowser | undefined;
+  // `--no-open` used to skip this whole block, so nothing was opened and the run ended on "never
+  // dialled the bridge" over a correct install. With a lease to fall back on it is entered too, and
+  // only the system browser is skipped.
+  const canLease = undefined !== fx.openLease;
+  if (null === alreadyConnected && policy.openBrowser && (input.openBrowser || canLease)) {
     // SERVED is the precondition, not SDK_PRESENT: a url that answers nothing is the only state
     // where a window is certainly useless. Whether the SDK is in the served HTML is a DIFFERENT
     // question — Vite injects a marker, while Nuxt, React Router, Astro, SvelteKit and CRA deliver
@@ -351,6 +400,7 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
       { now: () => fx.now(), sleep: (ms: number) => fx.sleep(ms) },
       Math.min(SDK_READY_WINDOW_MS, budgetMs),
       input.pollMs,
+      input.htmlCarriesSdk,
     );
     if (PageFinding.NOT_SERVED === finding || PageFinding.TLS_REFUSED === finding) {
       note(describePage(finding, url));
@@ -361,11 +411,22 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
     } else {
       // Said BEFORE the window appears, so somebody watching a page that stays inert has already
       // been told which of the two it is.
-      if (PageFinding.SDK_MISSING === finding) note(describePage(finding, url));
+      if (PageFinding.SDK_MISSING === finding && input.htmlCarriesSdk) {
+        note(describePage(finding, url));
+      }
       // `= true` means ATTEMPTED, which is the most that is knowable — see openBrowser above for
       // why the launcher's own exit code must not be read as "no window appeared".
-      await fx.openBrowser(url);
-      openedBrowser = true;
+      const launcherFailed = input.openBrowser ? await fx.openBrowser(url) : undefined;
+      openedBrowser = input.openBrowser;
+      if (undefined !== fx.openLease && (!input.openBrowser || undefined !== launcherFailed)) {
+        const owned = await fx.openLease(url);
+        if ('failed' in owned) {
+          note(`Could not open ${url} in a Reticle-owned browser either: ${owned.failed}`);
+        } else {
+          lease = owned;
+          openedBrowser = true;
+        }
+      }
     }
   }
   // Waiting the full budget for a session when nothing was opened to create one is dead time, and
@@ -380,12 +441,47 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
       ? budgetMs
       : Math.min(NO_BROWSER_GRACE_MS, budgetMs));
   let session: CandidateSession | null = alreadyConnected;
+  const waitStartedAt = fx.now();
+  let connectSpokeAtMs: number | undefined;
+  let leaseFallbackTried = false;
   while (null === session) {
     // On a desktop app, only the desktop window counts. AppShape and the runtime a page reports use
     // the same three names, so the shape IS the requirement — see session-pick.
     session = pickSession(await fx.listSessions(), url, before, requiredRuntime);
     if (null !== session) break;
     if (deadline <= fx.now()) break;
+    if (
+      !leaseFallbackTried &&
+      undefined === lease &&
+      undefined !== fx.openLease &&
+      openedBrowser &&
+      input.openBrowser &&
+      !isDesktop(input.shape) &&
+      fx.now() - waitStartedAt >= SYSTEM_BROWSER_GRACE_MS
+    ) {
+      leaseFallbackTried = true;
+      const owned = await fx.openLease(url);
+      if ('failed' in owned) {
+        note(`Could not open ${url} in a Reticle-owned browser either: ${owned.failed}`);
+      } else {
+        lease = owned;
+      }
+      continue;
+    }
+    // Not in silence: a desktop run used to print one line and then nothing for ten minutes.
+    const waitedMs = fx.now() - waitStartedAt;
+    const progress = connectProgressLine(
+      waitedMs,
+      connectSpokeAtMs,
+      deadline - waitStartedAt,
+      policy.awaiting,
+    );
+    if (undefined !== progress) {
+      // To the person only: it is progress, not a finding, and in `notes` it would split the
+      // page description printed before and after this wait into two copies.
+      fx.note(progress);
+      connectSpokeAtMs = waitedMs;
+    }
     await fx.sleep(input.pollMs);
   }
   if (null === session) {
@@ -417,8 +513,13 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
         fx.note(why.lead);
         notes.push(why.full ?? why.lead);
       }
-      note(describePage(readPage(await fx.probePage(url)), url));
+      const finding = readPage(await fx.probePage(url));
+      // Silent on a bundle-connect shape: its HTML never carries the SDK, so the absence says nothing.
+      if (PageFinding.SDK_MISSING !== finding || input.htmlCarriesSdk) {
+        note(describePage(finding, url, undefined !== why));
+      }
     }
+    await releaseLease(lease);
     return stop(input, SetupPhase.CONNECT, { url }, notes);
   }
 
@@ -442,6 +543,15 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
   // has no such tools to call. The facts were right and the shape made them unreadable, which on
   // the last line of onboarding is the same as not saying them.
   note(`✓ Connected. ${url} is instrumented. Onboarding is done; nothing is verified yet.`);
+  // Said, because "connected" otherwise reads as "your browser connected": the page that dialled
+  // was a headless one Reticle launched and has now closed, and nothing is open on this screen.
+  if (undefined !== lease && session.sessionId === lease.sessionId) {
+    note(
+      'The proof came from a Reticle-owned headless browser (now closed), not a window of yours — ' +
+        `open ${url} in your own browser to use the app.`,
+    );
+  }
+  await releaseLease(lease);
   note('');
   note('Next, prove one flow. Your agent does this:');
   note(

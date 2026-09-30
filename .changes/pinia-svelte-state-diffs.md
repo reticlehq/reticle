@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/browser` — a Pinia store never produced a state diff.** `piniaStore` handed back `$state`, one live reactive object, so the state observer compared each mutation against itself: a click that moved `count` from 1 to 2 reported `stateDiffs: []` with no unwatched-state flag, which reads as "the app changed no state". Svelte stores had the same problem whenever a component wrote `$store.field = x`, which sets the store to its own mutated object. Both adapters now copy the plain objects and arrays in the state on every read, so the observer has a before and an after to compare.

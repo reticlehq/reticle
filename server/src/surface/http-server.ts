@@ -6,6 +6,7 @@ import {
   MCP_MESSAGE_PATH,
   MCP_SHUTDOWN_EVENT,
   STATUS_PATH,
+  STATUS_HOLD_QUERY,
   DRIVE_PATH,
 } from '@reticlehq/core';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
@@ -34,7 +35,8 @@ export interface SharedServer {
    */
   attachMcp(factory: () => McpServer): void;
   /** Register the JSON the daemon returns from GET /status (live sessions + health for `reticle status`). */
-  attachStatus(provider: () => unknown): void;
+  /** `held`: the request carried STATUS_HOLD_QUERY — a setup run is waiting on this daemon. */
+  attachStatus(provider: (held: boolean) => unknown): void;
   /**
    * Register the handler behind POST /drive: open a driveable browser at `url` and answer with the
    * session it registered.
@@ -75,7 +77,7 @@ export interface SharedServer {
 export function createSharedServer(options: { token?: string } = {}): SharedServer {
   type McpFactory = () => McpServer;
   let mcpFactory: McpFactory | undefined;
-  let statusProvider: (() => unknown) | undefined;
+  let statusProvider: ((held: boolean) => unknown) | undefined;
   let driveProvider: ((url: string) => Promise<unknown>) | undefined;
   let agentPresence: ((connected: boolean) => void) | undefined;
   const transports = new Map<string, SSEServerTransport>();
@@ -139,7 +141,9 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
     }
 
     if ('GET' === req.method && path === STATUS_PATH) {
-      const body = JSON.stringify(statusProvider?.() ?? { running: true });
+      // A setup run waiting on this daemon says so on its polls; see daemon-usefulness.
+      const held = url.searchParams.has(STATUS_HOLD_QUERY);
+      const body = JSON.stringify(statusProvider?.(held) ?? { running: true });
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(body);
       return;
@@ -276,7 +280,7 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
     res.end('not found');
   });
 
-  function attachStatus(provider: () => unknown): void {
+  function attachStatus(provider: (held: boolean) => unknown): void {
     statusProvider = provider;
   }
 

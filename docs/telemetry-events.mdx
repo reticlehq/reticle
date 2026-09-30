@@ -269,7 +269,7 @@ A periodic roll-up from a daemon that is still running.
 
 **Wire name:** `feedback_submitted`. **Emitted from:** `server/src/telemetry/feedback.ts:256` and `:270`. **Session-scoped:** yes. **Payload block:** `feedback`.
 
-The one kind that carries author-written free text, which is exactly why it is never emitted passively. It exists only because an agent called `reticle_feedback` or a human ran [`reticle feedback`](/cli/feedback). It has its own kill switch.
+The one kind that carries author-written free text, which is exactly why it is never emitted passively. It exists only because an agent called `reticle_session { action: "feedback" }` or a human ran [`reticle feedback`](/cli/feedback). It has its own kill switch.
 
 ### `FeedbackSchema`
 

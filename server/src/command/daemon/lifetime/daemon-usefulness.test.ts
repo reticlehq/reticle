@@ -18,6 +18,8 @@ import {
   noteToolCall,
   everServedToolCall,
   resetDaemonUsefulness,
+  noteSetupHold,
+  SETUP_HOLD_MS,
 } from './daemon-usefulness.js';
 
 beforeEach(() => resetDaemonUsefulness());
@@ -100,6 +102,22 @@ describe('buildIdlePredicate', () => {
 
   it('the original rule still holds: no agent, no session, no lease is idle', () => {
     expect(buildIdlePredicate(() => false, sessions(0, false), pool(0))()).toBe(true);
+  });
+
+  // init started this daemon, then waited on a cold desktop build for longer than the idle grace;
+  // the daemon exited (`reticle_daemon_idle_exit`) while init was still waiting on it to be dialled.
+  it('is never idle while a setup run is holding it, and is again once the hold lapses', () => {
+    let now = 1_000;
+    const idle = buildIdlePredicate(
+      () => false,
+      sessions(0, false),
+      pool(0),
+      () => now,
+    );
+    noteSetupHold(now);
+    expect(idle()).toBe(false);
+    now += SETUP_HOLD_MS;
+    expect(idle()).toBe(true);
   });
 
   it('never idle while a session is connected, even with no agent attached', () => {

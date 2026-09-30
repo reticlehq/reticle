@@ -12,12 +12,31 @@
 import { join } from 'node:path';
 import { detect, Framework } from './detect.js';
 import { detectNonJsEcosystem, noPackageJsonMessage } from './non-js-project.js';
-import { findWorkspaceApps, PACKAGE_JSON } from './workspace-apps.js';
+import { findWorkspaceApps, PACKAGE_JSON, workspacePackageDirs } from './workspace-apps.js';
+import { projectIdOf, RETICLE_CONFIG_FILE } from './existing-config.js';
 import { chooseWorkspaceApp, withoutTrailingSlashes } from './declared/app-choice.js';
 import type { InitIo, InitOptions, InitResult } from '@/run-types.js';
 
 /** Re-enter `init`, scoped to one directory of the workspace. */
 type RunInit = (options: InitOptions, io: InitIo) => InitResult;
+
+const ROOT_CONFIG_LEAD = `This root's ${RETICLE_CONFIG_FILE} names`;
+
+/**
+ * The one workspace package whose `.reticle.json` carries the project the root's does.
+ *
+ * The root config is a copy of the app's (see `agentRootConfigStep`), so the projectId is what ties
+ * the two together; no path is stored. Searched across every package directory rather than the
+ * discovered apps, because the app `--app` named is the app whether or not discovery would list it.
+ */
+function appNamedByRootConfig(io: InitIo): string | undefined {
+  const wanted = projectIdOf(io.readFile(RETICLE_CONFIG_FILE));
+  if (wanted === undefined) return undefined;
+  const named = workspacePackageDirs(io).filter(
+    (dir) => projectIdOf(io.readFile(`${dir}/${RETICLE_CONFIG_FILE}`)) === wanted,
+  );
+  return 1 === named.length ? named[0] : undefined;
+}
 
 const AMBIGUOUS_HEADER =
   'Several apps found in this workspace. Re-run `reticle init` inside the one you want:';
@@ -66,6 +85,12 @@ export function redirectToWorkspaceApp(
     return { ok: false, applied: 0, manual: 1 };
   }
   if (here.framework !== Framework.HTML) return null; // this directory IS the app
+
+  // A root that an earlier `--app` run (or a run inside the app) already pointed at one app has
+  // answered the question discovery would ask. Ignoring it made every re-run at the root refuse
+  // again with the same list, and exit 1 over a setup that had worked.
+  const pointed = appNamedByRootConfig(io);
+  if (pointed !== undefined) return enterApp(options, io, pointed, ROOT_CONFIG_LEAD, runInit);
 
   const apps = findWorkspaceApps(io);
   // An explicitly named app answers the ambiguity. Refusing to guess is right, but "re-run inside the

@@ -124,6 +124,36 @@ describe('a running Vite dev server announces itself', () => {
   );
 
   /**
+   * SvelteKit and TanStack Start connect themselves and are written `inject: false`. The early return
+   * that skips serving the connect module also skipped this announcement, so a dev server `init`
+   * itself started for them was invisible to everything that asks which dev servers are running.
+   */
+  it(
+    'announces with inject: false too — only the injection is switched off',
+    async () => {
+      const create = createServer;
+      if (create === undefined) throw new Error('vite.createServer did not resolve');
+      const home = mkdtempSync(join(tmpdir(), 'reticle-announce-home-'));
+      dirs.push(home);
+      process.env[ReticleEnv.STATE_DIR] = home;
+
+      const root = appRoot();
+      const server = await create({
+        root,
+        logLevel: 'silent',
+        configFile: false,
+        server: { port: 0, host: '127.0.0.1' },
+        resolve: { alias: { '@reticlehq/react': join(root, 'src/sdk.js') } },
+        plugins: [reticle({ inject: false })],
+      });
+      servers.push(server);
+      await server.listen();
+      expect(entriesIn(home)).toHaveLength(1);
+    },
+    SERVER_BOOT_BUDGET_MS,
+  );
+
+  /**
    * A closed dev server that still claims to be running is worse than one that never announced: it
    * reports a wired, live app over a dead port and sends the reader to look at their browser.
    */

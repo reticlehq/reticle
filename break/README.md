@@ -53,7 +53,7 @@ Auto-restarting the caller is deliberately not attempted. Resuming a conversatio
 - **Restarts a stale dev server.** One started before the build config was edited keeps serving the old bundle: the wiring is correct and nothing connects, 100% of the time.
 - **Waits for the server to actually serve.** A URL in a log is an announcement, not readiness — Next prints `- Local: …` before it can answer.
 - **Drives the tab a human is looking at.** A daemon accumulates sessions; taking the first URL match drove whichever it listed first, usually the oldest, while the HUD played to an empty room.
-- **Finishes the capabilities file** when the session reports `hasCapabilities:false`, before driving — otherwise `reticle_state` returns nothing and every verdict rests on the DOM alone.
+- **Finishes the capabilities file** when the session reports `hasCapabilities:false`, before driving — otherwise `reticle_look { action: "state" }` returns nothing and every verdict rests on the DOM alone.
 - **Replays instead of re-driving** once a flow is saved. The first drive is a model choosing what to prove. Every one after it is `reticle verify`: deterministic, no model.
 
 ### Registering with the other agents

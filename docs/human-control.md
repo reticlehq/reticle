@@ -17,7 +17,7 @@ The panel header shows a running **✓N ✗M** tally: the verdict score, live. I
 MCP is **pull-based**: the agent only receives data when it calls a tool. Reticle can't freeze the model mid-thought, but it **intercepts the agent's next tool call**, which is exactly when the agent would touch the page. That makes steering reliable:
 
 - **Nudge** (a message, no pause). Your text is queued and rides back on the agent's **next** tool result as `guidance` (delivered once). The agent reads it and adjusts.
-- **Pause.** The agent's next `reticle_act` / `reticle_act_and_wait` / `reticle_act_sequence` **refuses to execute** and returns `{ paused: true, guidance: ["<your message>"], hint: "…" }`. The page is untouched until resume. _Read-only tools (snapshot/query/observe) still work_, so the agent can look while paused.
+- **Pause.** The agent's next `reticle_act` (single or `steps`) / `reticle_act_and_wait` **refuses to execute** and returns `{ paused: true, guidance: ["<your message>"], hint: "…" }`. The page is untouched until resume. _Read-only tools (snapshot/query/observe) still work_, so the agent can look while paused.
 - **End.** The session is over; the panel shows "Session ended" and clears.
 
 ## From the panel (the human)
@@ -35,7 +35,7 @@ The floating panel (bottom-center, `present: true`) gives you:
 You don't have to describe a bug in prose. **Point at it.** The flag captures the element's re-resolvable anchor _and_ the source `file:line` (when the framework stamped one), so the agent fixes the exact element and code, not a guess. The loop:
 
 1. **You** flag the element and type the problem → Reticle emits a `HUMAN_MARK`.
-2. **The agent** drains it with `reticle_session {action:"review"}`, getting note + element label + `source: { file, line }` + a ready-to-act `fix` hint. `reticle_sessions` also reports `pendingMarks` so the agent notices flags.
+2. **The agent** drains it with `reticle_session {action:"review"}`, getting note + element label + `source: { file, line }` + a ready-to-act `fix` hint. `reticle_session { action: "list" }` also reports `pendingMarks` so the agent notices flags.
 3. **The agent** opens the file, fixes it, and calls `reticle_session {action:"review"}({ resolve: "m1" })`.
 4. **You** see **"✓ fixed: \<your note\>"** land in the panel. Flag → fix → confirmation.
 

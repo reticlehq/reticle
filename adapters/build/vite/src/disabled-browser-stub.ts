@@ -1,7 +1,27 @@
 export const RETICLE_DISABLED_STUB = '\0reticle-disabled-stub';
 
-export const isReticleDisabledWebBuild = (desktop: boolean, command: string | undefined): boolean =>
-  !desktop && 'build' === command;
+const BUILD_COMMAND = 'build';
+/** The mode `vite build` and `electron-vite build` use unless the command line says otherwise. */
+const PRODUCTION_MODE = 'production';
+
+/**
+ * Whether this is a build that must ship no Reticle runtime at all: the SDK swapped for the stub
+ * below, nothing injected.
+ *
+ * Every production build, desktop included. `desktop: true` used to exempt the whole build, and it
+ * is what `reticle init` writes for electron-vite, so a RELEASE renderer carried the full SDK and
+ * dialled `ws://localhost:<port>/reticle`: `electron-vite preview` of a production build connected
+ * to the daemon. A release binary gets the same guarantee a web bundle does. A packaged desktop
+ * build that SHOULD be instrumented (a smoke app driven headless) says so the way Vite already
+ * provides, by building in another mode: `vite build --mode development`. An unknown mode counts as
+ * production, because the cost of guessing wrong the other way is an instrumented release.
+ */
+export const isReticleDisabledBuild = (
+  desktop: boolean,
+  command: string | undefined,
+  mode: string | undefined,
+): boolean =>
+  BUILD_COMMAND === command && (!desktop || mode === undefined || PRODUCTION_MODE === mode);
 
 export const RETICLE_DISABLED_STUB_CODE = `
 export class Reticle {
