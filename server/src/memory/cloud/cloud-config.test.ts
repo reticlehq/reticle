@@ -229,6 +229,34 @@ describe('resolveProjectCloud — per-project cloud binding + sync policy', () =
       expect(cloud.projectId).toBe('shop');
     });
 
+    // Measured end to end: a key exported for the hosted service, in a repo linked elsewhere, printed
+    // "set RETICLE_API_KEY" — which was set. Each way of not attaching now says which one it is.
+    it('says the exported key is for another host when that is why it did not attach', async () => {
+      await writeLink({ projectId: 'shop', url: 'http://localhost:8890' });
+      const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, {
+        RETICLE_API_KEY: 'rk_live_ci',
+      });
+      expect(cloud.config).toBeNull();
+      expect(cloud.reason).toContain('http://localhost:8890');
+      expect(cloud.reason).toContain(HOSTED);
+      expect(cloud.reason).toContain('RETICLE_CLOUD_URL=http://localhost:8890');
+    });
+
+    it('says a linked repo has no key on this machine when none is stored or exported', async () => {
+      await writeLink({ projectId: 'shop', url: HOSTED });
+      const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, {});
+      expect(cloud.config).toBeNull();
+      expect(cloud.reason).toContain('reticle login');
+      expect(cloud.reason).toContain('RETICLE_API_KEY');
+    });
+
+    it('says to link or set a key when there is neither', async () => {
+      const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, {});
+      expect(cloud.config).toBeNull();
+      expect(cloud.reason).toContain('reticle link');
+      expect(cloud.reason).toContain('RETICLE_API_KEY');
+    });
+
     it('attaches an unlinked repo to the hosted service with only the key set', async () => {
       const cloud = await resolveProjectCloud(fs, reticleRoot, homeDir, {
         RETICLE_API_KEY: 'rk_live_ci',

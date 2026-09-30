@@ -554,7 +554,7 @@ const cmdSync = async (argv: readonly string[]): Promise<number> => {
   const reticleRoot = join(process.cwd(), RETICLE_DIR);
   const cloud = await resolveProjectCloud(fs, reticleRoot, homedir(), process.env);
   if (null === cloud.config) {
-    err('cloud not attached here — run `reticle link` (or set RETICLE_API_KEY)');
+    err(cloud.reason ?? 'cloud not attached here: run `reticle link`, or set RETICLE_API_KEY');
     return 1;
   }
   const config = cloud.config;
@@ -624,7 +624,9 @@ const repoCloud = async (): Promise<{ url: string; apiKey: string }> => {
     process.env,
   );
   if (null === cloud.config)
-    throw new Error('cloud not attached here — run `reticle link` (or set RETICLE_API_KEY)');
+    throw new Error(
+      cloud.reason ?? 'cloud not attached here: run `reticle link`, or set RETICLE_API_KEY',
+    );
   return cloud.config;
 };
 

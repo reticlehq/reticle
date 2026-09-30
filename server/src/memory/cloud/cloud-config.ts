@@ -10,7 +10,7 @@
  * user-level credential. "Cloud attached" = a valid link file AND a key for its project id (or env creds).
  */
 import { join } from 'node:path';
-import { ReticleDir, ReticleEnv } from '@reticlehq/core';
+import { DEFAULT_PLATFORM_URL, ReticleDir, ReticleEnv } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { resolveCloudConfig, type CloudConfig } from './cloud-sync.js';
 
@@ -55,6 +55,8 @@ export interface ProjectCloud {
   verify: VerifyMode;
   /** The cloud project id this project is linked to (for display/logging); null when env-fallback. */
   projectId: string | null;
+  /** Why `config` is null, in words a person can act on. Absent when attached. */
+  reason?: string;
 }
 
 interface CloudLink {
@@ -181,11 +183,15 @@ export async function resolveProjectCloud(
   const link = parseLink(await readJson(fs, join(reticleRoot, CLOUD_LINK_FILE)));
   if (null === link) {
     // No per-project link → the env vars are the whole story (legacy single-project / CI behaviour).
+    const config = resolveCloudConfig(env);
     return {
-      config: resolveCloudConfig(env),
+      config,
       policy: DEFAULT_SYNC_POLICY,
       verify: VerifyMode.LOCAL,
       projectId: null,
+      ...(null === config
+        ? { reason: 'cloud not attached here: run `reticle link`, or set RETICLE_API_KEY' }
+        : {}),
     };
   }
   const policy: SyncPolicy = {
@@ -210,9 +216,24 @@ export async function resolveProjectCloud(
   const key =
     stored ??
     (fromEnv !== null && fromEnv.url === normalizeCloudUrl(link.url) ? fromEnv.apiKey : null);
-  const config: CloudConfig | null =
-    key !== null ? { url: normalizeCloudUrl(link.url), apiKey: key } : null;
-  return { config, policy, verify: link.verify, projectId: link.projectId };
+  const linkedUrl = normalizeCloudUrl(link.url);
+  const config: CloudConfig | null = key !== null ? { url: linkedUrl, apiKey: key } : null;
+  const reason =
+    config !== null
+      ? undefined
+      : fromEnv !== null
+        ? `this repo is linked to ${linkedUrl}, and RETICLE_API_KEY is set for ${fromEnv.url}: ` +
+          `set RETICLE_CLOUD_URL=${linkedUrl} to use that key here, or run \`reticle login\` for it`
+        : `this repo is linked to ${linkedUrl}, and this machine has no key for it: run ` +
+          '`reticle login`, or set RETICLE_API_KEY' +
+          (DEFAULT_PLATFORM_URL === linkedUrl ? '' : ` with RETICLE_CLOUD_URL=${linkedUrl}`);
+  return {
+    config,
+    policy,
+    verify: link.verify,
+    projectId: link.projectId,
+    ...(reason === undefined ? {} : { reason }),
+  };
 }
 
 /**
