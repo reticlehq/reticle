@@ -85,6 +85,11 @@ import {
   openInBrowser,
   openCommand,
 } from './cli/launch/cli-launch.js';
+import { navigateLeftTab } from './cli/launch/open-navigate.js';
+import {
+  defaultPairingTokenDir,
+  readOrCreatePairingTokenSync,
+} from '@/portal/bridge/pairing-token.js';
 import { fetchStatus } from './daemon/binding/daemon-status-probe.js';
 import { handleDrive } from './cli/drive/drive-command.js';
 import { handleVerify } from './cli/cli-verify.js';
@@ -457,7 +462,7 @@ async function waitForNewSession(port: number, before: number): Promise<boolean>
   return false;
 }
 
-function handleOpen(requestedPort: number, url: string | undefined): void {
+function handleOpen(requestedPort: number, url: string | undefined, navigate = false): void {
   // Our project's daemon first: `discoverDaemonPort` returns the LOWEST live daemon on the machine,
   // whoever it belongs to, so on a machine running two projects `reticle open` could drive the other
   // one's browser. It stays as the last resort for a caller with no project id, where any daemon is
@@ -491,6 +496,19 @@ function handleOpen(requestedPort: number, url: string | undefined): void {
       // A tab on the right origin, on the WRONG page. Kept (that is what stops a tab piling up per
       // run) but never reported as done: `reusing` here read as "your url is open" for a page nobody
       // had opened.
+      if ('left-as-is' === decision.action && navigate && decision.sessionId !== undefined) {
+        const token = readOrCreatePairingTokenSync(defaultPairingTokenDir());
+        log('reticle_open', {
+          port,
+          ...(await navigateLeftTab({
+            port,
+            sessionId: decision.sessionId,
+            url: decision.requested,
+            ...(token === undefined || 0 === token.length ? {} : { token }),
+          })),
+        });
+        return;
+      }
       if ('left-as-is' === decision.action) {
         log('reticle_open', {
           port,
@@ -498,8 +516,8 @@ function handleOpen(requestedPort: number, url: string | undefined): void {
           requested: decision.requested,
           note:
             `a tab is connected on this origin but sitting on ${decision.url} — it was LEFT THERE, ` +
-            `not navigated to ${decision.requested}. Drive it with reticle_navigate, or open the url ` +
-            'in the browser yourself.',
+            `not navigated to ${decision.requested}. Pass --navigate to move it, drive it with ` +
+            'reticle_navigate, or open the url in the browser yourself.',
         });
         return;
       }
@@ -859,7 +877,7 @@ export function main(): void {
       process.stdout.write(`${renderTutorial(parsed.audience)}\n`);
       break;
     case 'open':
-      handleOpen(parsed.port, parsed.url);
+      handleOpen(parsed.port, parsed.url, parsed.navigate);
       break;
     case 'drive':
       handleDrive(parsed, readProjectId(process.cwd()));

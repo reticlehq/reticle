@@ -73,7 +73,8 @@ export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticl
   reticle restart [--port N] [--force]                 (kill, then start a daemon and wait for a real bind)
   reticle status [--port N] [--json]                   (a readable block; --json for the event)
   reticle doctor [--port N]                            (one command to diagnose setup: Chromium, daemon, port)
-  reticle open  [url] [--port N]                        (show the app: reuse the connected tab, else open one)
+  reticle open  [url] [--port N] [--navigate]           (show the app: reuse the connected tab, else open one;
+                --navigate moves a tab on that origin to the url instead of leaving it)
   reticle verify <url> [--port N] [--headed] [--timeout N] [--storage-state <file>] [--session-id <id>]  (one-shot: drive the URL, verify saved flows, exit 0=pass)
                        [--explore] [--persona <who>]   (no saved flows? let Reticle drive the app itself and record them)
                        [--select <label>]              (repeatable: verify only flows carrying these labels — no model, exit 0=pass)
@@ -280,6 +281,8 @@ const HOOKS_FLAG = '--hooks';
 const JSON_FLAG = '--json';
 const NO_DRIVE_FLAG = '--no-drive';
 const NO_OPEN_FLAG = '--no-open';
+/** `reticle open <url> --navigate`: move a tab already on the origin to the url (#1140). */
+const NAVIGATE_FLAG = '--navigate';
 const NO_AGENTS_FLAG = '--no-agents';
 /**
  * Restart the calling client so IT gets the tools.
@@ -357,7 +360,7 @@ export type CliResult =
   | { kind: 'setup-mcp' }
   | { kind: 'setup-install'; runtimeSecs: number; installSecs: number; mcp: boolean }
   | { kind: 'tutorial'; audience: TutorialAudience; run: boolean; port: number; headless: boolean }
-  | { kind: 'open'; port: number; url?: string }
+  | { kind: 'open'; port: number; url?: string; navigate: boolean }
   | {
       kind: '_daemon';
       port: number;
@@ -896,7 +899,10 @@ export function parseCliArgs(
       const port = parsePortFlag(rest, defaultPort);
       // The first non-flag arg is the url (optional — omitting reuses a connected tab).
       const url = rest.find((a) => !a.startsWith('--') && a !== String(port));
-      return url !== undefined ? { kind: 'open', port, url } : { kind: 'open', port };
+      const navigate = rest.includes(NAVIGATE_FLAG);
+      return url !== undefined
+        ? { kind: 'open', port, url, navigate }
+        : { kind: 'open', port, navigate };
     }
     case DRIVE_COMMAND: {
       const r = parseDriveSuffix(rest, defaultPort, defaultHeadless);
