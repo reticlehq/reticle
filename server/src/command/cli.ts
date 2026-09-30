@@ -433,6 +433,10 @@ async function waitForNewSession(port: number, before: number): Promise<boolean>
   return false;
 }
 
+/** What to do about a same-origin tab `open` left where it was. */
+const OPEN_LEFT_AS_IS_REMEDY =
+  'Pass --navigate to move it, drive it with reticle_navigate, or open the url in the browser yourself.';
+
 function handleOpen(requestedPort: number, url: string | undefined, navigate = false): void {
   // Our project's daemon first: `discoverDaemonPort` returns the LOWEST live daemon on the machine,
   // whoever it belongs to, so on a machine running two projects `reticle open` could drive the other
@@ -450,7 +454,13 @@ function handleOpen(requestedPort: number, url: string | undefined, navigate = f
     .then(async (port) => {
       await ensureDaemon(port);
       const { sessions } = summarizeStatus(await fetchStatus(port));
-      const decision = decideOpen(sessions, url);
+      // `--navigate` MOVES a tab, so it may only pick one of ours: on a daemon serving two projects,
+      // the origin match alone could hand it the other project's tab. Reuse and the note are read-only.
+      const candidates =
+        navigate && myProject !== undefined
+          ? sessions.filter((s) => s.projectId === undefined || s.projectId === myProject)
+          : sessions;
+      const decision = decideOpen(candidates, url);
       if ('need-url' === decision.action) {
         log('reticle_open', {
           port,
@@ -469,15 +479,15 @@ function handleOpen(requestedPort: number, url: string | undefined, navigate = f
       // had opened.
       if ('left-as-is' === decision.action && navigate && decision.sessionId !== undefined) {
         const token = readOrCreatePairingTokenSync(defaultPairingTokenDir());
-        log('reticle_open', {
+        const moved = await navigateLeftTab({
           port,
-          ...(await navigateLeftTab({
-            port,
-            sessionId: decision.sessionId,
-            url: decision.requested,
-            ...(token === undefined || 0 === token.length ? {} : { token }),
-          })),
+          sessionId: decision.sessionId,
+          url: decision.requested,
+          ...(token === undefined || 0 === token.length ? {} : { token }),
         });
+        log('reticle_open', { port, ...moved });
+        // A loop or CI step reads the exit code, so a failed move must not exit 0.
+        if (moved['error'] !== undefined) process.exit(1);
         return;
       }
       if ('left-as-is' === decision.action) {
@@ -487,8 +497,7 @@ function handleOpen(requestedPort: number, url: string | undefined, navigate = f
           requested: decision.requested,
           note:
             `a tab is connected on this origin but sitting on ${decision.url} — it was LEFT THERE, ` +
-            `not navigated to ${decision.requested}. Pass --navigate to move it, drive it with ` +
-            'reticle_navigate, or open the url in the browser yourself.',
+            `not navigated to ${decision.requested}. ${OPEN_LEFT_AS_IS_REMEDY}`,
         });
         return;
       }
