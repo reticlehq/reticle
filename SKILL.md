@@ -122,10 +122,10 @@ Work down this list and stop at the first row that fits. Do not hand-drive a flo
 | --- | --- | --- |
 | "Did my edit break anything?" | `reticle_verify({ action: "change", files: ["src/App.tsx"] })` | 1 |
 | "Does every saved journey still work?" | `reticle_verify({ action: "flows" })` | 1 |
-| "Does this new behaviour work?" | ONE `reticle_act_and_wait` with `until` | 1 |
+| "Does this new behaviour work?" | `reticle_act_and_wait` on the step that ENDS the journey | 1+ |
 | No MCP available at all | `npx @reticlehq/server verify <url>`, then `gate --since HEAD~1` (below); `verify` has no `--since` | 2, no MCP |
 
-Replay before you drive. A covered journey re-verifies for a few hundred tokens; driving it costs tens of thousands, because driving spends turns and replay spends none.
+Replay before you drive: a covered journey re-verifies for a few hundred tokens, and driving it costs tens of thousands.
 
 `{action:"change"}` answers `unknown` when no saved flow covers your files. Nothing ran, so nothing was proved: drive it yourself, and never read it as a pass. `"no"` names the step that broke and what it found instead, so a regression arrives located. If a locator was RENAMED rather than broken, `{action:"heal"}` rebinds it, re-asserting the saved consequence first and refusing if that stops firing, so it repairs a locator and never an intent.
 
@@ -157,7 +157,7 @@ Whether that flow is worth anything depends on how you drove it. A step keeps a 
 
 ## When you do have to drive by hand
 
-Three calls, and the last one is the only one that counts:
+Done means the journey's END is proved. Drive every step your change touches and put the verdict on the step that ends it:
 
 ```
 reticle_session()                                    // connected? if empty, read `why` — it names the fix
@@ -169,7 +169,7 @@ reticle_act_and_wait({ sessionId, ref, action: "click", until: { kind: "allOf", 
 ]}})                                                 // ← the verdict
 ```
 
-Prefer `reticle_act_and_wait({ ref, action, until })`. It names the expected consequence **before** the action, which is the difference between a check and a rationalisation.
+`until` names the consequence **before** the action, which makes it a check. Add `durable: true` when the change should survive a reload.
 
 The advertised surface is deliberately small (`default` 10, `all` 30, the wider one behind `RETICLE_ADVERTISE_ALL_TOOLS=1`), and is not all there is. `reticle_tools` lists EVERY registered tool, `{ names: [...] }` loads full argument grammar, and `reticle_run { tool, args }` calls any of them, advertised or not. A retired name answers with where it went, not "not found".
 

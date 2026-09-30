@@ -122,7 +122,23 @@ const bytesOf = (json: string): number => Buffer.byteLength(json, 'utf8');
  * the agent being able to find it — a predicate nothing advertises is a predicate nobody calls,
  * which is how the substring became the only reach in the first place.
  */
-const DEFAULT_SURFACE_BYTE_BUDGET = 24_900;
+/*
+ * Moved 24_900 -> 25_100 for the `compare` predicate and dotted paths in `bodyMatches`.
+ *
+ * The decision, since going over is one: this is EVIDENCE, the same case `bodyMatches` made above. It
+ * is the only way to state "the page shows what the server answered" without already knowing the
+ * answer, and that is the refund false green, where every channel was green on a hundred-fold wrong
+ * amount. Measured at 25,081 B, so about 45 tokens a turn.
+ *
+ * Paid for as far as it could be: the kind list gains one word, the hint carries one example instead
+ * of an explanation, and the `reticle_assert` parameter names the kind without its fields. A kind
+ * the agent cannot see in the list is a kind nobody writes, so the word itself is not negotiable.
+ */
+/*
+ * With the coverage and crawl additions beside it (25_250 on their own), the two together measure
+ * 25,451 to 25,459 B: 25_500.
+ */
+const DEFAULT_SURFACE_BYTE_BUDGET = 25_500;
 // Raised, each time deliberately, each time with the measurement that bought it.
 //
 // LATEST RAISE, 24_600 -> 24_700. `reticle_verify { action: "explore" }` gained a `driver`
@@ -199,6 +215,25 @@ const DEFAULT_SURFACE_BYTE_BUDGET = 24_900;
 // from it (#982). Hit in practice while proving a release: the first tool call of that session was
 // `reticle_tools { action: "list" }`, and it was refused.
 //
+// FIFTH RAISE, 24_900 -> 25_000. `reticle_act_and_wait` gained `durable`: 24,975 B measured for
+// the whole default surface with it, the description already cut to one clause.
+//
+// What it buys: every verdict before it was scoped to one action's window, so "it saved" was proved
+// by the toast that said so. `durable` reloads and requires the consequence to hold on the fresh
+// document — the one question about persistence no other parameter can ask, and the difference
+// between a UI that advanced and a change that stuck. That is evidence, not prose.
+//
+// SIXTH RAISE, 25_000 -> 25_100. `reticle_verify { action: "coverage" }` gained `app`: 25,074 B
+// measured, the description cut to one clause. It is the one switch that turns "which controls did
+// I touch on this page" into the app-wide ledger — reached, touched, proved, completed, branched and
+// executed, each with what is missing — which is how "covered everything" becomes checkable rather
+// than claimed. Evidence, not prose.
+//
+// SEVENTH RAISE, 25_100 -> 25_250. `reticle_verify { action: "crawl" }` gained `exhaustive`: 25,214 B
+// measured. It is the only switch that asks for EVERYTHING — every reachable state walked, every
+// write's failure path driven, all of it folded into the ledger — where every other parameter asks
+// about one page or one action. Without it "don't skip anything" has no call to make.
+//
 // The ratchet stays a ratchet: every raise names its evidence, and the next one has to do the same.
 
 describe('advertised surface cost', () => {
@@ -234,7 +269,19 @@ describe('advertised surface cost', () => {
  * The budget is deliberately loose. This one is not shipped to users, so the number is here to catch
  * a surprise rather than to squeeze; the DEFAULT budget above is the ratchet that matters.
  */
-const ALL_SURFACE_BYTE_BUDGET = 140_000;
+// 140_000 -> 140_200 for `durable` on reticle_act_and_wait (140,106 B measured), declared as a loose
+// record so the output side costs as little as it can while a validating client still keeps it.
+// 140_200 -> 140_400 for `app` on reticle_coverage (140,293 B measured), a loose record for the
+// same reason `durable` is one.
+// 140_400 -> 140_500 for crawl's `exhaustive` output block (140,433 B measured).
+/*
+ * Moved 140_000 -> 146_000 for the `compare` predicate. Every tool that takes a predicate carries
+ * the full union in its schema, so one new member with four source shapes is paid once per such
+ * tool: measured at 145,213 B. Nothing in it is prose to trim; it is the shape of the claim.
+ */
+// With `durable`, `app` and `exhaustive` beside `compare`, the two together measure 145,676 to
+// 145,684 B, inside 146_000.
+const ALL_SURFACE_BYTE_BUDGET = 146_000;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {

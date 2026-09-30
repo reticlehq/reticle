@@ -69,17 +69,23 @@ const DASHBOARD =
   '- button "Diagnostics" (ref=e20)\n- button "Hostile" (ref=e21)\n- button "Sign out" (ref=e23)';
 
 describe('a crawl says so when its own clicks revealed controls it did not visit', () => {
-  it('does not claim untruncated coverage after the surface grew', async () => {
-    // The exact shape measured against the bench app: budget to spare, and a clean-looking result.
+  /*
+   * The report is honest now; the crawl also goes THROUGH the door. It used to stop at the three
+   * login controls with nine steps unused, which made it depth-zero by construction on any app
+   * behind a login, a tab or a modal.
+   */
+  it('visits the controls its own clicks revealed, while budget remains', async () => {
     const session = new RevealingSession(LOGIN, DASHBOARD);
     const report = await crawl(session, { maxSteps: 12 }, noSleep);
-    expect(report.stepsRun).toBe(3);
-    expect(report.truncated).toBe(true);
+    expect(report.stepsRun).toBe(9);
+    expect(report.visited).toContain('- button "Overview"');
+    expect(report.truncated).toBe(false);
   });
 
-  it('says how many appeared and were never visited', async () => {
+  it('says how many appeared and were never visited when the budget stops it', async () => {
     const session = new RevealingSession(LOGIN, DASHBOARD);
-    const report = await crawl(session, { maxSteps: 12 }, noSleep);
+    const report = await crawl(session, { maxSteps: 3 }, noSleep);
+    expect(report.truncated).toBe(true);
     expect(report.coverageNote).toBeDefined();
     expect(report.coverageNote).toContain('6');
     // "floor, not a total" is the existing phrasing for the sibling case; the reader should meet the
@@ -109,6 +115,28 @@ describe('a crawl says so when its own clicks revealed controls it did not visit
     const session = new RevealingSession(DASHBOARD, DASHBOARD);
     const report = await crawl(session, { maxSteps: 2 }, noSleep);
     expect(report.stepsRun).toBe(2);
+    expect(report.truncated).toBe(true);
+  });
+});
+
+describe('following revealed controls is bounded', () => {
+  it('stops after a fixed number of rounds on a page that keeps revealing more', async () => {
+    let n = 0;
+    const endless = {
+      elapsed: () => 0,
+      eventsSince: () => [{ type: 'dom.added', t: 1, data: {} } as unknown as ReticleEvent],
+      command: (name: string): Promise<CommandResult> => {
+        if (name === ReticleCommand.SNAPSHOT) {
+          n += 1;
+          const tree = `- button "Next ${String(n)}" (ref=e${String(n)})`;
+          return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result: { tree } });
+        }
+        const result = { ok: true, dispatched: true };
+        return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result });
+      },
+    };
+    const report = await crawl(endless, { maxSteps: 50 }, noSleep);
+    expect(report.stepsRun).toBeLessThan(50);
     expect(report.truncated).toBe(true);
   });
 });

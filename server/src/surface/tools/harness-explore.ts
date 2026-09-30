@@ -41,6 +41,7 @@ import {
   type ToolOutcome,
 } from '@/features/harness/harness.js';
 import { reticleToolset } from './harness-toolset.js';
+import { secretEnvKey } from '@/language/flows/flows.js';
 
 export interface ExploreOptions {
   /** Who to be, or what to accomplish. Appended to the standing instruction. */
@@ -548,6 +549,7 @@ function buildDriver(
      * With no such key the label heuristic answers, exactly as it did before this existed.
      */
     fillValue: fillValues({
+      secret: (label) => env[secretEnvKey(label)],
       ...(fills === undefined ? {} : { cache: fills }),
       ...(harnessOptionsFromEnv(env) === undefined
         ? {}

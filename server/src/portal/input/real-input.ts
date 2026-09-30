@@ -9,6 +9,7 @@
  * Node-only. Playwright is loaded via DYNAMIC `import('playwright')` so non-CDP users never
  * pay for it; the type-only import is elided by `tsc`, so the build stays green without it.
  */
+import { takeJsCoverage, type ScriptCoverage } from './js-coverage.js';
 import type { Browser, Page } from 'playwright';
 import { stampedDriveUrl } from './drive-url-stamp.js';
 import { launchChromium } from '@/launch-chromium.js';
@@ -91,6 +92,14 @@ export interface RealInputProvider {
    * Optional: a provider with no owned browser simply omits it.
    */
   setMocks?(sessionUrl: string, rules: MockRule[]): Promise<boolean>;
+  /**
+   * What of the app's own code ran since the last take (V8 coverage, Chromium only), or undefined
+   * when no driven page matches or collection had not started. The first call starts collecting,
+   * because collection slows every script on the page and a slower page can let a console error land
+   * after a clean-console check passed. Optional: a provider with no owned browser cannot see the
+   * engine's counters.
+   */
+  takeCodeCoverage?(sessionUrl: string): Promise<ScriptCoverage[] | undefined>;
   /**
    * Pin the correlated page's viewport to fixed pixel dimensions so a screenshot baseline is
    * reproducible across machines (the missing piece of CI-stable visual regression, alongside masks
@@ -272,6 +281,8 @@ export class CdpRealInputProvider implements RealInputProvider {
   /** Pages already listening. #pageFor resolves on EVERY call, so without this each action would add
    *  another listener and every response would be emitted once per action taken so far. */
   readonly #listening = new WeakSet<object>();
+  /** Pages collecting V8 coverage — see js-coverage.ts. */
+  readonly #covering = new WeakSet<Page>();
   #browser: Browser | undefined;
 
   constructor(options: CdpProviderOptions) {
@@ -318,6 +329,11 @@ export class CdpRealInputProvider implements RealInputProvider {
     );
     if (page !== undefined) this.#listen(page);
     return page;
+  }
+
+  async takeCodeCoverage(sessionUrl: string): Promise<ScriptCoverage[] | undefined> {
+    const page = await this.#pageFor(sessionUrl);
+    return page === undefined ? undefined : takeJsCoverage(page, this.#covering);
   }
 
   async isAvailableFor(sessionUrl: string): Promise<boolean> {
@@ -479,6 +495,8 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
   readonly #onNetworkDetail: ((detail: NetworkDetail) => void) | undefined;
   #browser: Browser | undefined;
   #page: Page | undefined;
+  /** Pages collecting V8 coverage — see js-coverage.ts. */
+  readonly #covering = new WeakSet<Page>();
 
   constructor(options: LaunchedProviderOptions) {
     this.#driveUrl = options.driveUrl;
@@ -636,6 +654,11 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
     if (page === undefined) return false;
     await page.setViewportSize({ width: size.width, height: size.height });
     return true;
+  }
+
+  takeCodeCoverage(_sessionUrl: string): Promise<ScriptCoverage[] | undefined> {
+    const page = this.#livePage();
+    return page === undefined ? Promise.resolve(undefined) : takeJsCoverage(page, this.#covering);
   }
 
   /** Apply network-mock rules to the owned page; false before navigate / after dispose. */

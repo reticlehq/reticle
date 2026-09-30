@@ -162,6 +162,7 @@ A verification tool that cannot describe the quality of its own evidence is aski
 | `predicate` | Alias for `until`, the name `assert` and `wait_for` use |
 | `timeout_ms` | Maximum wait, defaulting to 4000. `0` evaluates the predicate once, no wait |
 | `refuseWhenThrottled` | Throw rather than act on a throttled tab |
+| `durable` | After a `yes`, reload the page and require the element, text and state parts of `until` to hold again. A consequence that is gone after the reload turns the verdict into `no`: the UI advanced, the change did not persist |
 
 Omitting `until` waits for network and DOM idle, which is the deterministic replacement for a fixed sleep. To assert a consequence **and** settle, combine them:
 

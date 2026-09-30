@@ -77,3 +77,25 @@ describe('it distinguishes the kinds of not-verified', () => {
     expect(out).toMatch(/proving nothing/);
   });
 });
+
+describe('a changed component nothing has driven', () => {
+  it('is named, with the call that fixes it', () => {
+    const out = gateHookMessage(GateExit.FAIL, { ...none, unflowed: ['src/NewWizard.tsx'] }) ?? '';
+    expect(out).toContain('src/NewWizard.tsx');
+    expect(out).toContain('reticle_act_and_wait');
+  });
+});
+
+describe('coverage the hook reports', () => {
+  it('names a fallen level with the call that finds what is uncovered, and unexecuted files', () => {
+    const out =
+      gateHookMessage(GateExit.FAIL, {
+        ...none,
+        coverageRegressed: ['branched 100% -> 50%'],
+        unexecuted: ['src/Refund.tsx'],
+      }) ?? '';
+    expect(out).toContain('branched 100% -> 50%');
+    expect(out).toContain('exhaustive');
+    expect(out).toContain('src/Refund.tsx');
+  });
+});

@@ -23,30 +23,33 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { FLOW_FILE_VERSION, FlowErrorCode } from '@reticlehq/core';
+import { FLOW_FILE_VERSION, FlowErrorCode, READABLE_FLOW_VERSIONS } from '@reticlehq/core';
 import { parseFlowFileText } from './flow-expect-grammar.js';
+
+/** One past every version this reader knows: the file a NEWER Reticle writes. */
+const NEWER = Math.max(...READABLE_FLOW_VERSIONS) + 1;
 
 const flowAt = (version: unknown): string =>
   JSON.stringify({ version, name: 'f', createdAt: 0, steps: [] });
 
 describe('a flow file written by a different Reticle', () => {
   it('reports a wrong version, not a malformed file', () => {
-    const out = parseFlowFileText(flowAt(FLOW_FILE_VERSION + 1));
+    const out = parseFlowFileText(flowAt(NEWER));
     expect(out.ok).toBe(false);
     if (out.ok) return;
     expect(out.code).toBe(FlowErrorCode.WRONG_VERSION);
   });
 
   it('says which version it found and which it reads', () => {
-    const out = parseFlowFileText(flowAt(FLOW_FILE_VERSION + 1));
+    const out = parseFlowFileText(flowAt(NEWER));
     expect(out.ok).toBe(false);
     if (out.ok) return;
-    expect(out.detail).toContain(String(FLOW_FILE_VERSION + 1));
+    expect(out.detail).toContain(String(NEWER));
     expect(out.detail).toContain(String(FLOW_FILE_VERSION));
   });
 
   it('does not tell the author to regenerate a file that is not damaged', () => {
-    const out = parseFlowFileText(flowAt(FLOW_FILE_VERSION + 1));
+    const out = parseFlowFileText(flowAt(NEWER));
     expect(out.ok).toBe(false);
     if (out.ok) return;
     expect(out.detail ?? '').not.toContain('malformed');

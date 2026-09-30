@@ -191,6 +191,20 @@ describe('the one instruction that asks for less work', () => {
       expect(text).toMatch(/stop\./);
     }
   });
+
+  /*
+   * ...and finished means the END of the journey. The rule used to read "when every consequence you
+   * set out to check has one, stop", which let the agent pick a set of one: a single click, one
+   * verdict, done — while the step the change actually broke sat three pages further on.
+   */
+  it('defines finished as the end of the journey, not its first yes', () => {
+    for (const previouslyConnected of [true, false]) {
+      const text = buildServerInstructions({ previouslyConnected });
+      expect(text).toMatch(/journey's END/);
+      expect(text).toMatch(/durable: true/);
+      expect(text).not.toMatch(/set out to check/);
+    }
+  });
 });
 
 /**

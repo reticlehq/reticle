@@ -99,7 +99,7 @@ Stop at the first row that fits.
 | --- | --- | --- |
 | "Did my edit break anything?" | `reticle_verify({ action: "change", files: ["src/App.tsx"] })` | 1 |
 | "Does this known journey still work?" | `reticle_run({ tool: "reticle_flow_replay", args: { flowName: "login" } })` | 1 |
-| "Does this new behaviour work?" | `reticle_act { steps: [...] }` for the setup, then ONE `reticle_act_and_wait` | 2 |
+| "Does this new behaviour work?" | `reticle_act { steps: [...] }` to the last page, then `reticle_act_and_wait` on the step that ENDS the journey | 2 |
 | No MCP reachable at all | `npx @reticlehq/server verify <url>` in the shell | 1, no MCP |
 
 `reticle_flow_replay` is **not on the advertised tool list**. It is reached through `reticle_run` exactly as written, which is the supported call shape and why you have to be told it exists. `reticle_verify {action:"change"}` answers `unknown` when no saved flow covers the files you changed: nothing ran, so nothing was proved. That is the honest answer and the signal to record one, never a pass.
@@ -110,8 +110,8 @@ Four calls for a login, not fourteen. Every call is a full model turn, and in a 
 
 1. `reticle_look({ action: "page", mode: "interactive" })` **once**, for the whole flow. Elements are addressable by role and name, so you do not need to add `data-testid` anywhere.
 2. `reticle_act { steps: [...] }` for the setup: every fill and every intermediate click in ONE call.
-3. `reticle_act_and_wait({ ref, action, until })` for the final step only. `until` names the expected consequence **before** the action fires, which is the difference between a check and a rationalisation.
-4. `reticle_look({ action: "state" })` once at the end. If it comes back empty or `hasCapabilities` is false, the capabilities file `init` generated registered nothing, which is what its `ℹ AGENT: finish the capabilities file` line was telling you. Finish it yourself before you drive: open `src/reticle-dev.*`, register the app's store if it has one, and list the `testids` the flow you picked actually touches. That is a setup step rather than a decision: a few lines in a file `init` already wrote for you. Never report a clean install over an empty state read.
+3. `reticle_act_and_wait({ ref, action, until })` for the step that ENDS the journey (the confirmation, the saved record, the last page), not the first click that looks like success. `until` names that end state **before** the action fires, which is the difference between a check and a rationalisation. Pass `durable: true` when the change should survive a reload. A step on the way with a consequence of its own (a save, a submit) gets its own `expect` in `steps`, so a journey that breaks at step three fails at step three.
+4. `reticle_look({ action: "state" })` once at the end. If it comes back empty or `hasCapabilities` is false, the capabilities file `init` generated registered nothing, which is what its `ℹ AGENT: finish the capabilities file` line was telling you. Finish it yourself before you drive: open `src/reticle-dev.*`, register the app's store if it has one, and list the `testids` the flow you picked actually touches. Do not offer, and do not ask; it is a few lines in a file `init` already wrote for you. Never report a clean install over an empty state read.
 
 Assert what the app _did_, not what it _shows_. A UI that renders the value it just sent, rather than the value the server returned, passes every DOM-level check ever written:
 

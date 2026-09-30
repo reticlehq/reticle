@@ -284,6 +284,10 @@ export const RAW_TOOLS: ToolDef[] = [
         .describe(
           'True when the page exceeded the snapshot cap. The tree is then a document-order PREFIX: an element being absent from it does NOT mean it is absent from the page.',
         ),
+      // The refs a capped read never entered — re-read one with `scope`. Undeclared, a validating
+      // client stripped it, and a truncated tree arrived with no way to finish reading it.
+      unread: z.array(z.string()).optional(),
+      unreadOverflow: z.boolean().optional(),
       note: z
         .string()
         .optional()

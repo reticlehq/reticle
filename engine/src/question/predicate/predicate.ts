@@ -17,6 +17,7 @@ import { evalRoute } from './predicate-route.js';
 import { describeSuperseded } from './observed-in-window.js';
 import { evalElement, withTextProperty } from './predicate-element.js';
 import { evalState } from './predicate-state.js';
+import { evalCompare } from './predicate-compare.js';
 import {
   PredicateSchema,
   evalNet,
@@ -335,6 +336,8 @@ async function evaluatePredicateRaw(
         counts === undefined ? events : events.filter((e) => !isAmbient(counts, ambientKeyOf(e)));
       return evalSettled(settleEvents, predicate, session.elapsed());
     }
+    case PredicateKind.COMPARE:
+      return evalCompare(session, events, predicate, diagnose);
     case PredicateKind.ALL_OF: {
       const results = clearStarvedWhenSiblingsSaw(
         predicate.predicates,

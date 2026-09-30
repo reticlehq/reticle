@@ -13,7 +13,8 @@ import { aliasParam } from './args/alias-args.js';
 import { resolveSessionWithin } from '@/portal/session/timing/resolve-within.js';
 import { WALL_CLOCK } from '@/portal/session/timing/wall-clock.js';
 import { timeoutMsSchema } from './args/numeric-bounds.js';
-import { captureAct, pathOf } from '@/language/flows/replay.js';
+import { captureAct, captureVerdictedAct, pathOf } from '@/language/flows/replay.js';
+import { durableArg, durableOutput, reloadAndRecheck, withDurability } from './act/durable.js';
 
 import {
   ActionType,
@@ -47,12 +48,9 @@ import {
 } from '@/memory/intent/inline-intent.js';
 import { declaresState } from '@reticlehq/engine/question/predicate/predicate-asks.js';
 import { isStateUnwatched } from '@reticlehq/engine/evidence/blind-spots.js';
-import {
-  inFlightRequestLabels,
-  repeatedRequestLabels,
-  waitForInFlight,
-} from './act/settle-in-flight.js';
-import { waitForReaction } from './act/react-grace.js';
+import { inFlightRequestLabels, repeatedRequestLabels } from './act/settle-in-flight.js';
+import { finishAfterMatch } from './act/after-match.js';
+import { noteProved } from './act/proved-controls.js';
 import { decideVerified } from '@reticlehq/engine/evidence/verified.js';
 import { honestyForVerdict } from '@reticlehq/engine/evidence/honesty.js';
 import {
@@ -354,9 +352,7 @@ export const ACT_TOOLS: ToolDef[] = [
         .describe(
           'Action-specific arguments: { value } for fill/select, { text } for type/press (the key NAME, e.g. Escape or Tab), { modifiers: ["Meta","Shift"] } for a press shortcut (Meta/Control/Shift/Alt), { toRef } for drag (the ref to drop ON — without it the drag lands nowhere), { confirmDangerous: true } for a potentially destructive control. For upload: { path } is a path on disk (absolute or relative to project root; daemon reads real bytes) or { name, content?, type? } for inline bytes.',
         ),
-      predicate: PredicateSchema.optional().describe(
-        'Alias for `until` (the name reticle_assert / reticle_wait_for use).',
-      ),
+      predicate: PredicateSchema.optional().describe('Alias for `until`.'),
       until: PredicateSchema.optional().describe(
         'Predicate to wait for after the action completes (same shape as reticle_assert). OMIT to wait for the page to SETTLE — network + DOM idle — the deterministic default instead of a sleep. To assert a consequence AND settle, allOf them: { kind: "allOf", predicates: [<your predicate>, { kind: "settled" }] }.',
       ),
@@ -370,9 +366,11 @@ export const ACT_TOOLS: ToolDef[] = [
         .optional()
         .describe('Throw if the tab is throttled. Default: false.'),
       intent: intentArg,
+      durable: durableArg,
       ...sessionIdShape,
     },
     outputSchema: {
+      durable: durableOutput,
       effect: z
         .unknown()
         .describe('The reticle_act result (dispatched, settled, inputMode, etc.).'),
@@ -546,6 +544,9 @@ export const ACT_TOOLS: ToolDef[] = [
         await readAlreadyTrue(session, until, since);
       // Same as the ACT handler: the route this step RAN on, before the action can move the app.
       const routeBeforeWait = pathOf(session.url);
+      // Recorded in `finally`, once the verdict is known — see captureVerdictedAct.
+      let dispatched: { result: unknown } | undefined;
+      let recordedVerdict: string | undefined;
       try {
         // actCommand is the single interception point for upload+path rewrite.
         //
@@ -564,7 +565,7 @@ export const ACT_TOOLS: ToolDef[] = [
         );
         if (actResult !== null) {
           if (!actResult.ok) throw new Error(actResult.error ?? 'act failed');
-          captureAct(deps.recordings, args, actResult.result, routeBeforeWait);
+          dispatched = { result: actResult.result };
           // Dispatched — now this act owns the cursor and the effect. Marking its OWN measurement
           // also stops the spread below from inheriting an earlier reticle_act's action and
           // mutation count.
@@ -598,34 +599,12 @@ export const ACT_TOOLS: ToolDef[] = [
         session = followed.session;
         verdict = followed.verdict;
 
-        // The predicate resolves the INSTANT it holds, which on an optimistically-navigating app is
-        // while the write is still in flight — so the verdict was taken over a window the app had not
-        // finished, and came back `unknown / unsettled` asking the CALLER to re-check. A login that
-        // genuinely succeeded returned at 492ms of an 8000ms budget with every corroborating channel
-        // agreeing. Spend the rest of the budget the caller already granted.
-        //
-        // This decides nothing: it waits for the answer instead of guessing at it. A response that
-        // arrives as a FAILURE still contradicts — and now arrives INSIDE the window, where the
-        // detector can see it at all — while a request still open when the budget genuinely runs out
-        // reports unsettled exactly as before, an honest limit rather than an early exit. Costs
-        // nothing on the common path, where no request is in flight.
+        // After a match, let the app finish before the window closes — see act/after-match.ts.
         if (verdict.pass && timeout > 0) {
-          const sleep = {
-            sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
-          };
-          const spent = (): number => timeout - (session.elapsed() - predicateStarted);
-          await waitForInFlight(session, since, spent(), sleep);
-          // Waiting for the response moved the hazard rather than removing it: the response now lands
-          // inside the window BY DESIGN, and the app's re-render happens a task or two later. Close
-          // the window in that gap and every channel agrees the app took a successful write and did
-          // nothing — `response-ignored`, i.e. `verified:"no"` on a correct app, produced entirely by
-          // where we stopped looking. A false accusation is the more damaging direction of error for
-          // a verification tool: it sends someone to fix code that is not broken.
-          //
-          // So the response is not the end of the window; the app's REACTION to it is. Paid only in
-          // the shape that would otherwise be accused — a successful mutating write with nothing
-          // moved after it — and short enough that a genuinely dropped response is still reported.
-          await waitForReaction(session, since, spent(), sleep);
+          const left = (): number => timeout - (session.elapsed() - predicateStarted);
+          const reverted = await finishAfterMatch(session, until, since, baselines, left);
+          if (reverted !== undefined)
+            verdict = { pass: false, failureReason: reverted, observed: reverted };
         }
 
         const r = asRecord(actResult?.result);
@@ -778,47 +757,54 @@ export const ACT_TOOLS: ToolDef[] = [
         const outcomePending = acceptedWriteLabels(windowEvents);
         const outcomeUnread = unreadWriteLabels(windowEvents);
         const stillInFlight = inFlightRequestLabels(windowEvents, session.url, session.background);
-        const decision = decideVerified({
-          pass: verdict.pass,
-          // Threaded rather than looked up: decideVerified is pure and has no session.
-          ...sessionVerdictFacts(session),
-          // The caller NAMED the consequence rather than defaulting to "wait for idle". A
-          // declaration made before the action is what this tool sells, and idle-settlement was
-          // overriding it — see `declaredConsequence`. An explicit `{ kind: "settled" }` is not a
-          // declaration about the app's behaviour, it IS the idle wait, so it does not count.
-          declaredConsequence: until.kind !== PredicateKind.SETTLED,
-          // A body-independent declaration that held is a channel the unread payload does not own.
-          // Omit when false: a net-only `until` must still hit `outcome_unread`.
-          ...(declaresBodyIndependentChannel(until) ? { independentOfBody: true } : {}),
-          ...(alreadyTrue ? { alreadyTrue } : {}),
-          ...(alreadyTrueHiddenMatch ? { alreadyTrueHiddenMatch } : {}),
-          // An assertion nobody could evaluate must not be reported as one the app failed.
-          ...(verdict.inconclusive === undefined ? {} : { inconclusive: verdict.inconclusive }),
-          // Nor must one nobody could OBSERVE. This is the act path, so it is the one that produced
-          // the measured false red: a reload mid-wait, graded assertion_failed at the clicked
-          // component's own file and line.
-          ...(true === verdict.observationLost
-            ? { observationLost: true, lastUrl: session.url }
-            : {}),
-          ...(absenceBlindSpot === undefined ? {} : { absenceBlindSpot }),
-          honesty,
-          contradictions,
-          ...(0 === outcomePending.length ? {} : { outcomePending }),
-          ...(outcomeUnread.length > 0 ? { outcomeUnread } : {}),
-          // `settled` is genuinely optional: a wait that declared no predicate never measured it, and
-          // passing `false` there would report "never settled" about something never asked to settle.
-          ...(settledOutcome === undefined ? {} : { settled: settledOutcome }),
-          // What the wait was for and what was still outstanding when it ended. Read only by the
-          // UNSETTLED clauses; supplied always because both of them are reachable from here and the
-          // window is already in hand.
-          unsettled: {
-            waitedFor: describeWaitTarget(until),
-            stillInFlight,
-            // The retry loop that leaves nothing outstanding — see repeatedRequestLabels.
-            repeated: repeatedRequestLabels(windowEvents),
-          },
-          ...(namedNetIsInFlight(until, stillInFlight) ? { namedRequestInFlight: true } : {}),
-        });
+        const { decision, durable } = await withDurability(
+          args['durable'],
+          until,
+          decideVerified({
+            pass: verdict.pass,
+            // Threaded rather than looked up: decideVerified is pure and has no session.
+            ...sessionVerdictFacts(session),
+            // The caller NAMED the consequence rather than defaulting to "wait for idle". A
+            // declaration made before the action is what this tool sells, and idle-settlement was
+            // overriding it — see `declaredConsequence`. An explicit `{ kind: "settled" }` is not a
+            // declaration about the app's behaviour, it IS the idle wait, so it does not count.
+            declaredConsequence: until.kind !== PredicateKind.SETTLED,
+            // A body-independent declaration that held is a channel the unread payload does not own.
+            // Omit when false: a net-only `until` must still hit `outcome_unread`.
+            ...(declaresBodyIndependentChannel(until) ? { independentOfBody: true } : {}),
+            ...(alreadyTrue ? { alreadyTrue } : {}),
+            ...(alreadyTrueHiddenMatch ? { alreadyTrueHiddenMatch } : {}),
+            // An assertion nobody could evaluate must not be reported as one the app failed.
+            ...(verdict.inconclusive === undefined ? {} : { inconclusive: verdict.inconclusive }),
+            // Nor must one nobody could OBSERVE. This is the act path, so it is the one that produced
+            // the measured false red: a reload mid-wait, graded assertion_failed at the clicked
+            // component's own file and line.
+            ...(true === verdict.observationLost
+              ? { observationLost: true, lastUrl: session.url }
+              : {}),
+            ...(absenceBlindSpot === undefined ? {} : { absenceBlindSpot }),
+            honesty,
+            contradictions,
+            ...(0 === outcomePending.length ? {} : { outcomePending }),
+            ...(outcomeUnread.length > 0 ? { outcomeUnread } : {}),
+            // `settled` is genuinely optional: a wait that declared no predicate never measured it, and
+            // passing `false` there would report "never settled" about something never asked to settle.
+            ...(settledOutcome === undefined ? {} : { settled: settledOutcome }),
+            // What the wait was for and what was still outstanding when it ended. Read only by the
+            // UNSETTLED clauses; supplied always because both of them are reachable from here and the
+            // window is already in hand.
+            unsettled: {
+              waitedFor: describeWaitTarget(until),
+              stillInFlight,
+              // The retry loop that leaves nothing outstanding — see repeatedRequestLabels.
+              repeated: repeatedRequestLabels(windowEvents),
+            },
+            ...(namedNetIsInFlight(until, stillInFlight) ? { namedRequestInFlight: true } : {}),
+          }),
+          (part) => reloadAndRecheck(deps, session, part, timeout),
+        );
+        recordedVerdict = String(decision.verified);
+        noteProved(session, recordedVerdict, actResult?.result);
         // Computed once: the verdict block reports it, and the instrumentation gaps are a second
         // reading of the same evidence rather than a new observation.
         const actionSummary = causalSummary(windowEvents, {
@@ -960,6 +946,7 @@ export const ACT_TOOLS: ToolDef[] = [
           // agent cannot miss it by not asking. Omitted entirely when clean, so a healthy action
           // pays nothing.
           ...(contradictions.length > 0 ? { contradictions } : {}),
+          ...(durable === undefined ? {} : { durable }),
           honesty: honestyForVerdict(String(decision.verified), honesty),
           // Without its summary: it is byte-identical to `summary` two fields up. See wireCapsule.
           ...(capsule === undefined ? {} : { capsule: wireCapsule(capsule) }),
@@ -969,6 +956,14 @@ export const ACT_TOOLS: ToolDef[] = [
           ...healthEnvelope(currentOf(deps.sessions, session)),
         });
       } finally {
+        if (dispatched !== undefined)
+          captureVerdictedAct(
+            deps.recordings,
+            args,
+            dispatched.result,
+            routeBeforeWait,
+            recordedVerdict,
+          );
         deps.recordings.markEnded(pathOf(currentOf(deps.sessions, session).url));
         acted.finishAction(
           verdictEffect,

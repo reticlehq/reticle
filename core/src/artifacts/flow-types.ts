@@ -8,6 +8,7 @@ import { CONSEQUENCE_KINDS, PRESENCE_GRADED } from '@/verdict/consequence.js';
 import { PredicateKind } from '@/verdict/consequence.js';
 import { PredicateSchema, type Predicate } from '@/verdict/predicate.js';
 import { sessionBoundField, sessionRefRefusal } from '@/verdict/predicate-tree.js';
+import { isConsequenceSource } from '@/verdict/compare-source.js';
 import { FlowExpectSchema, flowExpectToPredicate } from './flow-expect-flat.js';
 
 // The older flat shape and its reader live together; both are re-exported so the one public name
@@ -920,7 +921,12 @@ export function staleKnownBugs(
 
 /** True when a FlowExpect asserts at least one consequence (any of the ConsequenceKind fields set). */
 export function flowExpectHasConsequence(expect: Predicate | undefined): boolean {
-  return expectClauses(expect).some((clause) => CONSEQUENCE_KINDS.has(clause.kind));
+  return expectClauses(expect).some(
+    (clause) =>
+      CONSEQUENCE_KINDS.has(clause.kind) ||
+      (PredicateKind.COMPARE === clause.kind &&
+        (isConsequenceSource(clause.left) || isConsequenceSource(clause.right))),
+  );
 }
 
 /**
@@ -941,7 +947,10 @@ export function flowExpectHasConsequence(expect: Predicate | undefined): boolean
  */
 export function flowExpectIsPresenceOnly(expect: Predicate | undefined): boolean {
   if (expect === undefined || flowExpectHasConsequence(expect)) return false;
-  return expectClauses(expect).some((clause) => PRESENCE_GRADED.has(clause.kind));
+  // A `compare` reaching here reads text on both sides, which is two readings of the same DOM.
+  return expectClauses(expect).some(
+    (clause) => PRESENCE_GRADED.has(clause.kind) || PredicateKind.COMPARE === clause.kind,
+  );
 }
 
 /**

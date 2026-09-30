@@ -19,7 +19,7 @@
 // below it registers one. The spec was wrong and the product was right — which is the whole reason
 // a rule gets driven against a real app and not only unit-tested.
 import { chromium } from 'playwright';
-import { start, TOOLS } from '@reticlehq/server';
+import { start, TOOLS, RecordingStore } from '@reticlehq/server';
 import { waitForSession } from '../wait-for-session.mjs';
 
 let pass = 0,
@@ -40,6 +40,7 @@ const server = await start({ port: PORT, mcp: false });
 let raised = null;
 const deps = {
   sessions: server.bridge.sessions,
+  recordings: new RecordingStore(),
   project: {
     recordRoutes: async () => {},
     bestObservability: async () => undefined,

@@ -301,6 +301,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     // `verify <url> --expect` opens the url when no tab is on it, by the same rule `reticle open`
     // uses (decideOpen), so the two commands cannot disagree about which tab counts.
     'launch',
+    // `reticle gate` ratchets on the coverage ledger and blocks changed code that never ran.
+    'exhaust',
     'answers',
     'binding',
     'suite',
@@ -404,7 +406,16 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * exists removed five edges and the second place to forget a field when that type grows one.
    */
   demo: ['tools', 'bridge', 'cli'],
-  crawl: ['args', 'project', 'tools', 'facts'],
+  // `exhaustive` is crawl's mode: the explorer and ledger it runs, the fill values the harness
+  // already chooses (and the RETICLE_SECRET_* names replay reads), and the mocks that break a write.
+  crawl: ['args', 'project', 'tools', 'facts', 'exhaust', 'flows', 'harness', 'input'],
+  /**
+   * The app-wide coverage ledger. It persists to `.reticle/coverage.json` through the same three
+   * project-memory directories every other store uses, and reads routes the way crawl does.
+   */
+  // `facts` and `session`: a full page load replaces the session, and the explorer must follow it
+  // (session-port.ts) with the same reconnect wait `navigate { reload }` uses.
+  exhaust: ['dir', 'fs', 'project', 'facts', 'session'],
   daemon: ['lifetime', 'binding', 'telemetry'],
   domain: ['args', 'dir', 'flows', 'oracles', 'project', 'tools'],
   ee: ['license'],
@@ -680,6 +691,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   tools: [
     // A lease that never dialled reads the served page's CSP, the same reader doctor uses.
     'dev-server',
+    // `reticle_coverage { app: true }` folds a session into the app-wide ledger.
+    'exhaust',
     'hooks',
     'navigation',
     'lifetime',

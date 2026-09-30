@@ -152,7 +152,7 @@ Stop at the first row that fits. Do not hand-drive a flow you could replay.
 | --- | --- | --- |
 | "Did my edit break anything?" | `reticle_verify({ action: "change", files: ["src/App.tsx"] })` | 1 |
 | "Does this known journey still work?" | `reticle_run({ tool: "reticle_flow_replay", args: { flowName: "login" } })` | 1 |
-| "Does this new behaviour work?" | `reticle_act { steps: [...] }` for the setup, then ONE `reticle_act_and_wait` | 2 |
+| "Does this new behaviour work?" | `reticle_act { steps: [...] }` to the last page, then `reticle_act_and_wait` on the step that ENDS the journey | 2 |
 | No MCP available at all | `npx @reticlehq/server verify <url>` in the shell | 1, no MCP |
 
 `reticle_flow_replay` is **not on the advertised tool list**: it is reached through `reticle_run` exactly as written. That is the supported call shape, and it is why you have to be told it exists.

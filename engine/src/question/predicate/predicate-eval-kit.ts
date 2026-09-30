@@ -1,4 +1,4 @@
-import { PredicateKind, REDACTED_VALUE } from '@reticlehq/core';
+import { PredicateKind, REDACTED_VALUE, selectPath } from '@reticlehq/core';
 import type { Predicate } from './predicate-schema.js';
 
 /**
@@ -158,15 +158,126 @@ function structurallyEqual(got: unknown, want: unknown): boolean {
   return keys.every((k) => k in b && structurallyEqual(a[k], b[k]));
 }
 
-/** Shallow JSON pattern match: each key in `pattern` must match (see matchValue). */
+/** One pattern key read out of a payload: its value, or where the walk stopped. */
+export interface FieldReading {
+  found: boolean;
+  value: unknown;
+  /** On a miss, the keys that were there at the deepest level reached. */
+  availableKeys?: string[];
+}
+
+/**
+ * Read one pattern key out of a payload.
+ *
+ * A key the payload holds AS WRITTEN wins, so a literal `"a.b"` key keeps meaning what it always
+ * meant. Otherwise a dotted key is a path in the grammar `state.path` already speaks — own keys and
+ * canonical array indices, via `selectPath` — because most APIs wrap their answer
+ * (`{ data: { status } }`) and a top-level-only match left `bodyContains` as the only reach for a
+ * nested field, the substring a key name has already fooled once.
+ */
+export function readField(actual: Record<string, unknown>, key: string): FieldReading {
+  if (Object.hasOwn(actual, key)) return { found: true, value: actual[key] };
+  if (!key.includes('.'))
+    return { found: false, value: undefined, availableKeys: Object.keys(actual) };
+  const selection = selectPath(actual, key);
+  return selection.found
+    ? { found: true, value: selection.value }
+    : {
+        found: false,
+        value: undefined,
+        ...(selection.availableKeys === undefined
+          ? {}
+          : { availableKeys: selection.availableKeys }),
+      };
+}
+
+/**
+ * JSON pattern match: each key in `pattern` must match (see matchValue).
+ *
+ * A key is a field name or a dotted path to one (see readField). A nested literal OBJECT is still
+ * compared whole, as `equals` is: loosening that would quietly turn every existing exact assertion
+ * into a partial one, and the dotted path is the field-by-field form.
+ */
 export function dataMatches(
   actual: Record<string, unknown>,
   pattern: Record<string, unknown>,
 ): boolean {
   for (const [key, want] of Object.entries(pattern)) {
-    if (!matchValue(actual[key], want)) return false;
+    if (!matchValue(readField(actual, key).value, want)) return false;
   }
   return true;
+}
+
+/**
+ * The first pattern key that did not hold, said the way an agent can act on: what the field held,
+ * or that it was missing and which keys were there instead.
+ *
+ * A whole-object comparison that failed only because the payload carries MORE keys gets told the
+ * dotted path that would have matched the one field, because that is the mistake it almost always is.
+ */
+export function describeFieldMiss(
+  actual: Record<string, unknown>,
+  pattern: Record<string, unknown>,
+): string | undefined {
+  for (const [key, want] of Object.entries(pattern)) {
+    const reading = readField(actual, key);
+    if (matchValue(reading.value, want)) continue;
+    if (!reading.found) {
+      const keys = reading.availableKeys ?? [];
+      return `${JSON.stringify(key)} is missing${0 === keys.length ? '' : ` (keys there: ${keys.join(', ')})`}`;
+    }
+    const held = `${JSON.stringify(key)} is ${JSON.stringify(reading.value)}`;
+    const firstNested = nestedLiteralKey(want);
+    return firstNested === undefined
+      ? held
+      : `${held} — a nested object is compared WHOLE; to match one field, key it by its path: ${JSON.stringify(`${key}.${firstNested}`)}`;
+  }
+  return undefined;
+}
+
+/** The first key of a nested literal object pattern, or undefined for anything else. */
+function nestedLiteralKey(want: unknown): string | undefined {
+  if ('object' !== typeof want || null === want || Array.isArray(want)) return undefined;
+  const keys = Object.keys(want);
+  if (keys.some((k) => k.startsWith('$'))) return undefined;
+  return keys[0];
+}
+
+/** The same, over a captured body — undefined when the body is not a JSON object. */
+export function describeBodyFieldMiss(
+  body: string,
+  pattern: Record<string, unknown>,
+): string | undefined {
+  const actual = parseJsonObject(body);
+  return actual === undefined ? undefined : describeFieldMiss(actual, pattern);
+}
+
+export function parseJsonObject(body: string): Record<string, unknown> | undefined {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    return undefined;
+  }
+  if (null === payload || 'object' !== typeof payload || Array.isArray(payload)) return undefined;
+  return payload as Record<string, unknown>;
+}
+
+/**
+ * Did redaction hide this key, at it or at any parent on its path?
+ *
+ * A parent redacted wholesale (`{ secrets: "[REDACTED]" }`) makes every field under it unreadable,
+ * and reporting that as "missing" would blame the server for the observer's own redaction.
+ */
+export function redactedOnPath(actual: Record<string, unknown>, key: string): boolean {
+  if (Object.hasOwn(actual, key)) return REDACTED_VALUE === actual[key];
+  const segments = key.split('.');
+  for (let i = 1; i <= segments.length; i += 1) {
+    const prefix = selectPath(actual, segments.slice(0, i).join('.'));
+    if (!prefix.found) return false;
+    if (REDACTED_VALUE === prefix.value) return true;
+  }
+  return false;
 }
 
 /**
@@ -178,7 +289,7 @@ export function dataMatches(
 export type BodyFieldVerdict = 'match' | 'mismatch' | { redacted: string };
 
 /**
- * Shallow JSON field match over a captured body, for either half of the exchange.
+ * JSON field match over a captured body, for either half of the exchange.
  *
  * One function because both halves ask the identical question, and the request side already had
  * this exact sequence written out — parse, reject a non-object, check the wanted keys for
@@ -189,15 +300,9 @@ export type BodyFieldVerdict = 'match' | 'mismatch' | { redacted: string };
  * exist for those bodies.
  */
 export function matchJsonBody(body: string, pattern: Record<string, unknown>): BodyFieldVerdict {
-  let payload: unknown;
-  try {
-    payload = JSON.parse(body);
-  } catch {
-    return 'mismatch';
-  }
-  if (null === payload || 'object' !== typeof payload || Array.isArray(payload)) return 'mismatch';
-  const actual = payload as Record<string, unknown>;
-  const redacted = Object.keys(pattern).find((key) => REDACTED_VALUE === actual[key]);
+  const actual = parseJsonObject(body);
+  if (actual === undefined) return 'mismatch';
+  const redacted = Object.keys(pattern).find((key) => redactedOnPath(actual, key));
   if (redacted !== undefined) return { redacted };
   return dataMatches(actual, pattern) ? 'match' : 'mismatch';
 }

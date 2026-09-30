@@ -280,3 +280,37 @@ describe('a declared channel independent of the response body', () => {
     ).toBe(false);
   });
 });
+
+describe('a comparison is body-independent only through a side the body does not own', () => {
+  const RESPONSE = {
+    from: PredicateKind.NET,
+    urlContains: '/api/refund',
+    path: 'refunded',
+  } as const;
+
+  it('does not read two response-body fields as a channel beside the body', () => {
+    expect(
+      declaresBodyIndependentChannel({
+        kind: PredicateKind.COMPARE,
+        left: RESPONSE,
+        right: { from: PredicateKind.NET, urlContains: '/api/balance', path: 'refunded' },
+      }),
+    ).toBe(false);
+  });
+
+  it('reads a side on screen, in a signal or in a store', () => {
+    for (const other of [
+      { from: PredicateKind.TEXT, scope: '#refunded' },
+      { from: PredicateKind.SIGNAL, name: 'refund:done', path: 'amount' },
+      { from: PredicateKind.STATE, path: 'refund.amount' },
+    ] as const) {
+      expect(
+        declaresBodyIndependentChannel({
+          kind: PredicateKind.COMPARE,
+          left: RESPONSE,
+          right: other,
+        }),
+      ).toBe(true);
+    }
+  });
+});

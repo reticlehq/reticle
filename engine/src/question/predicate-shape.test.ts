@@ -187,6 +187,14 @@ describe('nestedKeysOf reaches one level into an object field', () => {
     expect(nestedKeysOf(schema)).toEqual([]);
   });
 
+  it('lists every option of a union of objects once, the shape of a compare side', () => {
+    const union = z.discriminatedUnion('from', [
+      z.object({ from: z.literal('a'), path: z.string() }),
+      z.object({ from: z.literal('b'), path: z.string(), scope: z.string() }),
+    ]);
+    expect(nestedKeysOf(union)).toEqual(['from', 'path', 'scope']);
+  });
+
   it('does not expand transitively', () => {
     // One level is the contract: the sentence exists to make the next call land, not to print the
     // schema. `query.source` is an object too.

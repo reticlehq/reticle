@@ -98,6 +98,24 @@ const CHECKS = {
       throw new Error('submit is enabled for a whitespace-only service');
   },
 
+  /**
+   * The DEEP one, and DEPENDS ON `missing-modal` for the same reason the form check does.
+   *
+   * Every consequence on the way holds — the dialog closes, the row appears, and the app even
+   * announces the deploy is live. The assertion is the end state a user waits for: the row they
+   * created reads `live`. An arm that verifies the first step, or believes the announcement, claims
+   * FIXED here while this still fails, which is the false green this scenario exists to count.
+   */
+  'deploy-never-ships': async (page) => {
+    await signIn(page);
+    await page.getByTestId('nav-deployments').click({ timeout: STEP_MS });
+    await page.getByTestId('new-deploy').click({ timeout: STEP_MS });
+    await page.getByTestId('deploy-name').fill('depth-probe', { timeout: STEP_MS });
+    await page.getByTestId('deploy-submit').click({ timeout: STEP_MS });
+    const row = page.locator('[data-testid^="row-"]', { hasText: 'depth-probe' });
+    await row.getByText('live', { exact: true }).waitFor({ timeout: STEP_MS });
+  },
+
   'silent-dom-regression': async (page) => {
     await signIn(page);
     // The count is the assertion: one card is silently dropped and the layout still looks fine.

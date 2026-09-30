@@ -26,6 +26,37 @@
 import { PredicateKind } from './consequence.js';
 import type { Predicate } from './predicate.js';
 
+/**
+ * The plain clause each side of a `compare` reads, so a walker that asks "which endpoints, signals,
+ * stores or elements does this predicate depend on?" answers for a comparison without learning its
+ * shape. They are READERS of the same channel, never claims: a compare's `net` side is not an
+ * assertion that some call succeeded, only that the comparison reads one.
+ */
+export function compareSourceClauses(
+  predicate: Extract<Predicate, { kind: typeof PredicateKind.COMPARE }>,
+): readonly Predicate[] {
+  return [predicate.left, predicate.right].map((source): Predicate => {
+    switch (source.from) {
+      case PredicateKind.NET:
+        return {
+          kind: PredicateKind.NET,
+          urlContains: source.urlContains,
+          ...(source.method === undefined ? {} : { method: source.method }),
+        };
+      case PredicateKind.SIGNAL:
+        return { kind: PredicateKind.SIGNAL, name: source.name };
+      case PredicateKind.STATE:
+        return {
+          kind: PredicateKind.STATE,
+          path: source.path,
+          ...(source.store === undefined ? {} : { store: source.store }),
+        };
+      case PredicateKind.TEXT:
+        return { kind: PredicateKind.TEXT, scope: source.scope };
+    }
+  });
+}
+
 /** Every clause at the top level: the predicate itself, or the members of a top-level `allOf`. */
 export function conjuncts(predicate: Predicate | undefined): readonly Predicate[] {
   if (predicate === undefined) return [];
@@ -154,6 +185,16 @@ export function sessionBoundField(predicate: Predicate): string | undefined {
       return ref('element.query.scope', predicate.query.scope);
     case PredicateKind.ANIMATION:
       return ref('animation.target', predicate.target);
+    case PredicateKind.COMPARE:
+      for (const [side, source] of [
+        ['left', predicate.left],
+        ['right', predicate.right],
+      ] as const) {
+        if (PredicateKind.TEXT !== source.from) continue;
+        const found = ref(`compare.${side}.scope`, source.scope);
+        if (found !== undefined) return found;
+      }
+      return undefined;
     default:
       return undefined;
   }

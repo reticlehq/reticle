@@ -151,9 +151,17 @@ export function fillValues(deps: {
   generator?: HarnessDriverOptions;
   /** One line about where the drive is, so a value suits the page it is typed on. */
   context?: () => string;
+  /**
+   * A value the user SUPPLIED for this field — the same `RETICLE_SECRET_<FIELD>` replay reads for
+   * a redacted one. Checked first so a drive gets past a login, and never cached: the cache is a
+   * file on disk.
+   */
+  secret?: (label: string) => string | undefined;
 }): (label: string) => Promise<string> {
   let spent = 0;
   return async (label: string): Promise<string> => {
+    const supplied = deps.secret?.(label);
+    if (supplied !== undefined && supplied.length > 0) return supplied;
     const cached = deps.cache?.get(label);
     if (cached !== undefined) return cached;
 

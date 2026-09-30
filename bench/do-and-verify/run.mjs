@@ -98,6 +98,10 @@ const TASKS = {
     'Users report that on the Deployments page, typing in the service filter box no longer filters the table — the same rows stay on screen whatever they type.',
   'broken-form-validation':
     'Users report that the new-deployment form accepts a service name that is only spaces, and lets them submit it.',
+  // The DEEP one: every step on the way works, so only a check made at the END of the journey can
+  // tell a real fix from a claimed one. Nothing measured depth before it.
+  'deploy-never-ships':
+    'Users report that a new deployment never goes live — the row they created stays "building", even after a notification says it is live.',
 };
 
 /**

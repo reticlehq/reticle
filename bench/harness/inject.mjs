@@ -72,6 +72,21 @@ const REGRESSIONS = {
       replaceOnce(F.store, '    set({ newDeployOpen });', '    set({ newDeployOpen: false });');
     },
   },
+  'deploy-never-ships': {
+    files: [F.store],
+    apply() {
+      // The END of the create-deployment journey breaks, and nothing before it does: the dialog
+      // closes, the row appears, deploy:created fires, and a beat later the "is live" toast and
+      // deploy:shipped still fire too. Only the record never goes live — the go-live update matches
+      // the NEXT id, not this one. A check that stops at the first consequence, or trusts the app's
+      // own announcement, passes on this build. Comment-free, so source-reading gets no label.
+      replaceOnce(
+        F.store,
+        "    setTimeout(() => {\n      set({\n        deployments: get().deployments.map((d) => (d.id === id ? { ...d, status: 'live' } : d)),",
+        "    setTimeout(() => {\n      set({\n        deployments: get().deployments.map((d) => (d.id === depSeq ? { ...d, status: 'live' } : d)),",
+      );
+    },
+  },
   'broken-form-validation': {
     files: [F.modal],
     apply() {
