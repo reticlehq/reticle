@@ -22,7 +22,8 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import ts from 'typescript';
 import { craDevModuleFile, craDevModulePath } from './cra.js';
-import { VITE_DEV_MODULE_PATH, viteDevModuleFile } from './snippets.js';
+import { tanstackStartConnectFile, tanstackStartConnectPath } from './tanstack-start.js';
+import { VITE_DEV_MODULE_PATH, reactRouterEntryPatch, viteDevModuleFile } from './snippets.js';
 import { buildPlan, StepStatus, type PlanInput } from '@/plan/plan.js';
 import { Framework, PackageManager, UiLibrary, type Detection } from '@/detect/detect.js';
 
@@ -307,5 +308,55 @@ describe('the JavaScript module init writes for a JavaScript project stays JavaS
   it('leaves the TypeScript branch of that generator marked as TypeScript', () => {
     expect(craDevModulePath(true)).toBe('src/reticle-dev.ts');
     expect(craDevModuleFile(4400, 'proj-abc', { typescript: true })).toContain('export {};');
+  });
+});
+
+describe('the React Router client-entry line typechecks under a strict tsconfig', () => {
+  /**
+   * Reported from a fresh React Router framework-mode scaffold: `npm run typecheck` went red on
+   * `TS2307: Cannot find module '/@reticle-connect'` the moment `init` wrote the entry. The module
+   * is served by the Vite plugin in dev and exists nowhere a compiler can resolve it.
+   */
+  it('compiles beside vite/client with no declaration for the served module', () => {
+    const line = reactRouterEntryPatch('') ?? '';
+    expect(line).toContain('@reticle-connect');
+    expect(
+      typecheck({
+        [VITE_ENV_DTS_PATH]: VITE_CLIENT_TYPES,
+        'src/entry.client.ts': `${line}\nexport {};\n`,
+      }),
+    ).toEqual([]);
+  });
+
+  it('asks the dev server for the module under the app base, and only in dev', () => {
+    const line = reactRouterEntryPatch('') ?? '';
+    expect(line).toContain('import.meta.env.DEV');
+    expect(line).toContain('import.meta.env.BASE_URL');
+  });
+});
+
+describe('the TanStack Start connect component typechecks under a strict tsconfig', () => {
+  /**
+   * The recipe this replaced used `__RETICLE_TOKEN__` undeclared, so a Start app that followed it
+   * failed `tsc` with `TS2304: Cannot find name '__RETICLE_TOKEN__'`.
+   */
+  it('compiles with no vite/client and no declaration of the plugin globals', () => {
+    const sdk = sdkStub();
+    for (const name of SDK_PACKAGES) {
+      sdk[`node_modules/${name}/index.d.ts`] =
+        `${sdk[`node_modules/${name}/index.d.ts`] ?? ''}` +
+        'export declare const reticle: { connect(options: Record<string, unknown>): void };\n' +
+        'export declare function install(): void;\n';
+    }
+    expect(
+      typecheck({
+        ...sdk,
+        'node_modules/react/package.json': '{ "name": "react", "types": "index.d.ts" }\n',
+        'node_modules/react/index.d.ts':
+          'export declare function useEffect(effect: () => void, deps?: readonly unknown[]): void;\n',
+        [VITE_DEV_MODULE_PATH]: reactDevModule(),
+        [tanstackStartConnectPath()]: tanstackStartConnectFile(4688, 'demo'),
+      }),
+    ).toEqual([]);
   });
 });

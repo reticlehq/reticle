@@ -47,7 +47,7 @@ reticle({
   inject, // default true; auto-inject reticle.connect()
   captureNetworkBodies, // default false; record request/response bodies on reticle_network
   allowNonLocalhost, // default false; allow a page/bridge that is not on localhost (needs a token)
-  desktop, // default false; also apply to `vite build`, for an Electron/Tauri renderer
+  desktop, // default false; for an Electron/Tauri renderer (see below)
   onWarn, // where a diagnostic goes; defaults to the console
 });
 ```
@@ -56,7 +56,7 @@ reticle({
 
 `allowNonLocalhost` is for a dev server that cannot be served on localhost — a host-based multi-tenant frontend, or an app with cookie-scoped auth on a custom dev hostname. It is **not sufficient on its own**: the SDK also requires a pairing token outside localhost, and refuses with "a pairing token is required outside localhost" when it is missing. The plugin supplies one automatically from the daemon's `~/.reticle/pairing-token`, so a running daemon is normally all it takes — pass `token` yourself only when that file is unreachable. A bridge that is itself non-local must also use `wss://`. Settable as `VITE_RETICLE_ALLOW_NON_LOCALHOST=1` for a single session.
 
-`desktop: true` makes the plugin apply to `vite build` as well and calls `connect()` with `allowInProduction`, because a packaged desktop renderer is a production build with no dev server. That means an instrumented production bundle, which a web app must never ship. Keep it behind your own dev-only build target.
+`desktop: true` injects `connect()` into the renderer's entry module and calls it with `allowInProduction`, because a desktop renderer reports `NODE_ENV=production`. It instruments the dev server, and a `vite build` only when that build runs in a non-production mode (`vite build --mode development`), for a packaged renderer you drive with no dev server. A production-mode build, which is what `vite build` and `electron-vite build` do by default, ships no Reticle code at all, exactly like a web build.
 
 ### Opting one file out of source stamping
 

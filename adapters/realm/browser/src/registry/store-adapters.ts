@@ -19,6 +19,46 @@ import { markAdapterSource, type StoreLike, type StoreSubscribe } from './stores
  * adds no dependency and no bundle weight for an app that uses none of them.
  */
 
+/**
+ * A structural copy of a value some library keeps mutating in place.
+ *
+ * The state observer diffs the previous read against the next by reference, which is right for the
+ * immutable-update libraries (Zustand, Redux, XState, Valtio's `snapshot`, MobX's `toJS`) and wrong
+ * for the ones that hand out one live object and mutate it: Pinia's `$state`, and a Svelte store fed
+ * back its own mutated value. Only plain objects and arrays are walked — they are what those stores
+ * hold, and reading them through a Vue proxy is an ordinary property read. Anything else (Date, Map,
+ * class instances) is kept by reference, so a mutation INSIDE one is still missed.
+ * ponytail: plain objects/arrays only; walk Map/Set when a store that mutates one shows up.
+ *
+ * A read that throws (a misbehaving reactive trap) falls back to the live value, which is exactly
+ * what these adapters returned before: the transport serializer guards each key of that.
+ */
+function snapshotLive(value: unknown): unknown {
+  try {
+    return copyPlain(value, new WeakMap());
+  } catch {
+    return value;
+  }
+}
+
+function copyPlain(value: unknown, seen: WeakMap<object, unknown>): unknown {
+  if ('object' !== typeof value || null === value) return value;
+  const done = seen.get(value);
+  if (done !== undefined) return done;
+  if (Array.isArray(value)) {
+    const out: unknown[] = [];
+    seen.set(value, out);
+    for (const item of value) out.push(copyPlain(item, seen));
+    return out;
+  }
+  const proto: unknown = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== null) return value;
+  const out: Record<string, unknown> = {};
+  seen.set(value, out);
+  for (const [key, item] of Object.entries(value)) out[key] = copyPlain(item, seen);
+  return out;
+}
+
 /** The minimum of TanStack Query's `QueryClient` that this adapter touches. */
 interface QueryLike {
   queryKey: readonly unknown[];
@@ -345,7 +385,10 @@ export function svelteStore(
       let called = false;
       stopSubscription(
         readable.subscribe((next) => {
-          value = next;
+          // Copied for the same reason as `piniaStore`: `$cart.items = x` in a component compiles to
+          // `cart.set($cart)` — the SAME object, mutated — so the observer's baseline was the new
+          // value and the change diffed as nothing.
+          value = snapshotLive(next);
           called = true;
         }),
       );
@@ -435,10 +478,11 @@ interface PiniaStoreLike {
  */
 export function piniaStore(store: PiniaStoreLike): StoreLike {
   return {
-    // `$state` is a live reactive proxy, so this reads through to the current value rather than
-    // snapshotting at registration. The transport serializer walks it like any object and guards
-    // each key, which is what keeps a throwing reactive trap from costing the whole read.
-    getState: (): unknown => store.$state,
+    // `$state` is ONE live reactive proxy for the life of the store. Handed back as-is, the state
+    // observer's baseline and the value it diffs against were the same object, so every mutation
+    // compared equal to itself: a click that moved `count` 1 -> 2 reported `stateDiffs: []`, which
+    // reads as "the app changed nothing". A copy per read is what gives the diff two states.
+    getState: (): unknown => snapshotLive(store.$state),
     subscribe: (listener: () => void): (() => void) =>
       store.$subscribe(() => listener(), { ...PINIA_SUBSCRIBE_OPTIONS }),
   };

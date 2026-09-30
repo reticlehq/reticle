@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildPlan, StepStatus, type PlanInput } from './plan/plan.js';
 import { Framework, PackageManager, UiLibrary, type Detection } from './detect/detect.js';
+import { isConnectStep } from './plan/connect-steps.js';
 
 function detection(framework: Framework): Detection {
   return {
@@ -56,9 +57,16 @@ describe('a CSP that blocks the bridge is reported by init', () => {
     expect(step?.detail ?? '').toContain('ws://127.0.0.1:4400');
   });
 
-  it('is a NOTICE — something to know, not a step init can perform', () => {
+  /**
+   * It used to be a NOTICE, so init waited out its whole connect budget over an app the browser was
+   * guaranteed to refuse, without saying it would not connect. A policy init cannot edit is a ⚠ on a
+   * step the app cannot connect without.
+   */
+  it('blocks when the policy is somewhere init cannot edit', () => {
     const plan = buildPlan(input({ nextConfigSource: `headers: "connect-src 'self'"` }));
-    expect(cspSteps(plan)[0]?.status).toBe(StepStatus.NOTICE);
+    const [step] = cspSteps(plan);
+    expect(step?.status).toBe(StepStatus.MANUAL);
+    expect(isConnectStep(step?.title ?? '')).toBe(true);
   });
 
   it('reads a CSP meta tag in the root layout too', () => {
@@ -107,9 +115,13 @@ describe('a CSP that blocks the bridge is reported by init', () => {
 // full list, `index.html` included. The check you run BEFORE anything works looked at less than the
 // one you run after it has failed.
 describe('the policy is read wherever an app actually declares one', () => {
-  it('warns on a meta CSP in an Electron renderer index.html', () => {
+  it('patches a meta CSP in an Electron renderer index.html to admit the bridge', () => {
+    // electron-vite's own template: `default-src 'self'` and no connect-src. The finding used to be
+    // the inline-script rule, whose fix (move the snippet to public/reticle-connect.js) is false for
+    // an app the plugin wires — desktop mode injects into the entry module, not an inline script.
     const plan = buildPlan(
       input({
+        detection: detection(Framework.ELECTRON_VITE),
         cspSources: {
           'src/renderer/index.html': `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self';">`,
         },
@@ -117,7 +129,44 @@ describe('the policy is read wherever an app actually declares one', () => {
     );
     const [step] = cspSteps(plan);
     expect(step?.target).toBe('src/renderer/index.html');
-    expect(step?.detail ?? '').toContain('ws://localhost:4400');
+    expect(step?.status).toBe(StepStatus.APPLY);
+    expect(step?.detail ?? '').not.toContain('reticle-connect.js');
+    expect(step?.write?.content).toContain(
+      `content="default-src 'self'; script-src 'self'; connect-src 'self' ws://localhost:4400 ws://127.0.0.1:4400;"`,
+    );
+  });
+
+  it('appends to a connect-src that is already there, keeping what it allows', () => {
+    const plan = buildPlan(
+      input({
+        detection: detection(Framework.VITE),
+        cspSources: {
+          'index.html': `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.example.com">`,
+        },
+      }),
+    );
+    expect(cspSteps(plan)[0]?.write?.content).toContain(
+      `connect-src 'self' https://api.example.com ws://localhost:4400 ws://127.0.0.1:4400"`,
+    );
+  });
+
+  it('is left alone on a re-run, once the bridge is admitted', () => {
+    const once = buildPlan(
+      input({
+        detection: detection(Framework.ELECTRON_VITE),
+        cspSources: {
+          'src/renderer/index.html': `<meta http-equiv="Content-Security-Policy" content="default-src 'self'">`,
+        },
+      }),
+    );
+    const patched = cspSteps(once)[0]?.write?.content ?? '';
+    const twice = buildPlan(
+      input({
+        detection: detection(Framework.ELECTRON_VITE),
+        cspSources: { 'src/renderer/index.html': patched },
+      }),
+    );
+    expect(cspSteps(twice)).toEqual([]);
   });
 
   it('warns on a plain Vite index.html too', () => {

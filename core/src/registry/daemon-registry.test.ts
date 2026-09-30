@@ -67,3 +67,29 @@ describe('pickDaemonPort — match by projectId, drop the dead, never guess', ()
     expect(pickDaemonPort([entry({ projectId: 'mine' })], undefined, allAlive)).toBeNull();
   });
 });
+
+/**
+ * `init --port <new>` left the old daemon for the same project alive. Discovery by projectId found
+ * both, took the lower port, and the page dialled the OLD daemon while init waited on the new one —
+ * which it then reported as "connected to a DIFFERENT Reticle daemon" and exited 1.
+ */
+describe('pickDaemonPort — the configured port wins when a daemon is on it', () => {
+  const both = [
+    entry({ port: 4400, pid: 1, projectId: 'mine' }),
+    entry({ port: 4460, pid: 2, projectId: 'mine' }),
+  ];
+
+  it('dials the configured port, not the lowest of this project’s daemons', () => {
+    expect(pickDaemonPort(both, 'mine', () => true, 4460)).toBe(4460);
+  });
+
+  it('falls back to discovery when nothing live is on the configured port', () => {
+    expect(pickDaemonPort(both, 'mine', (pid) => 2 !== pid, 4460)).toBe(4400);
+  });
+
+  it('wins even when the daemon there registered another project, because the file said so', () => {
+    expect(
+      pickDaemonPort([entry({ port: 4460, pid: 3, projectId: 'other' })], 'mine', () => true, 4460),
+    ).toBe(4460);
+  });
+});

@@ -11,6 +11,8 @@
  *   watching, and the verdict describes a page the user cannot see.
  */
 
+import { SESSION_HEALTH } from '@reticlehq/core';
+
 /** The fields of a daemon session this decision actually reads. */
 export interface CandidateSession {
   readonly sessionId: string;
@@ -22,11 +24,40 @@ export interface CandidateSession {
   readonly hasCapabilities?: boolean;
   /** Which shell answered. Absent on an SDK too old to report one — see requiredRuntime below. */
   readonly runtime?: string;
+  /** The project the page reported. Absent on an SDK too old to report one. */
+  readonly projectId?: string;
 }
 
 /** Sorts a hidden tab after a visible one; among equals, the least stale first. */
 const isLive = (s: CandidateSession): boolean => true !== s.hidden && true !== s.throttled;
 const staleness = (s: CandidateSession): number => s.lastSeenMs ?? Number.POSITIVE_INFINITY;
+
+/**
+ * A tab of THIS project on `url` that is demonstrably alive right now, or null.
+ *
+ * Stricter than `pickSession`, because it decides whether to open a window at all: every init run
+ * opened another tab even when this project already had a live one on the url, and the pile-up then
+ * made every tool called without a sessionId fail with "multiple sessions connected". Reused only on
+ * positive evidence — the page names this project, is visible, and was heard from inside the
+ * daemon's staleness threshold — because reusing a dead tab is the worse mistake: nothing opens and
+ * nothing connects.
+ */
+export function liveSessionOfProject(
+  sessions: readonly CandidateSession[],
+  url: string,
+  projectId: string | undefined,
+  requiredRuntime?: string,
+): CandidateSession | null {
+  if (undefined === projectId || 0 === projectId.length) return null;
+  const mine = sessions.filter(
+    (s) =>
+      projectId === s.projectId &&
+      true !== s.hidden &&
+      undefined !== s.lastSeenMs &&
+      s.lastSeenMs <= SESSION_HEALTH.STALE_THRESHOLD_MS,
+  );
+  return pickSession(mine, url, new Set(), requiredRuntime);
+}
 
 /**
  * The session to drive, or null when nothing on this url qualifies.

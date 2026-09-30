@@ -6,7 +6,12 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
-const { withReticle, readPairingToken, discoverDaemonUrl } = require('./index.cjs');
+const {
+  withReticle,
+  readPairingToken,
+  discoverDaemonUrl,
+  knowsAllowedDevOrigins,
+} = require('./index.cjs');
 
 const TOKEN_ENV = 'RETICLE_PAIRING_TOKEN_DIR';
 
@@ -210,6 +215,84 @@ describe('discoverDaemonUrl', () => {
     const cwd = project('shop-abc123');
     expect(discoverDaemonUrl(cwd, join(tmpdir(), 'reticle-absent-home-xyz'), live)).toBeUndefined();
   });
+
+  /**
+   * The user edited `port` in .reticle.json. The daemon and the CLI follow the file; the page kept
+   * dialling the `url` literal init wrote into reticle-dev.tsx, because with no daemon registered yet
+   * nothing here spoke up and the literal was all that was left.
+   */
+  it('falls back to the port in .reticle.json when no daemon is registered for this project', () => {
+    const cwd = project('shop-abc123');
+    writeFileSync(
+      join(cwd, '.reticle.json'),
+      JSON.stringify({ projectId: 'shop-abc123', port: 4471 }),
+    );
+    const dir = home([{ port: 4400, pid: 111, projectId: 'blog-def456' }]);
+    expect(discoverDaemonUrl(cwd, dir, live)).toBe('ws://localhost:4471/reticle');
+  });
+
+  it('still prefers the live daemon for this project over the port written in the file', () => {
+    const cwd = project('shop-abc123');
+    writeFileSync(
+      join(cwd, '.reticle.json'),
+      JSON.stringify({ projectId: 'shop-abc123', port: 4471 }),
+    );
+    const dir = home([{ port: 4407, pid: 111, projectId: 'shop-abc123' }]);
+    expect(discoverDaemonUrl(cwd, dir, live)).toBe('ws://localhost:4407/reticle');
+  });
+
+  // `init --port 4471` over a project whose daemon was on 4407 left both alive and both this
+  // project's. Discovery took the lower one, so the page dialled the OLD daemon while init waited on
+  // the new one and exited 1. A live daemon on the configured port is the answer.
+  it('dials the configured port when a live daemon is registered there, over a lower one', () => {
+    const cwd = project('shop-abc123');
+    writeFileSync(
+      join(cwd, '.reticle.json'),
+      JSON.stringify({ projectId: 'shop-abc123', port: 4471 }),
+    );
+    const dir = home([
+      { port: 4407, pid: 111, projectId: 'shop-abc123' },
+      { port: 4471, pid: 222, projectId: 'shop-abc123' },
+    ]);
+    expect(discoverDaemonUrl(cwd, dir, live)).toBe('ws://localhost:4471/reticle');
+    expect(discoverDaemonUrl(cwd, dir, (pid) => 222 !== pid)).toBe('ws://localhost:4407/reticle');
+  });
+
+  it('ignores a port in the file that is not a TCP port', () => {
+    const cwd = project('shop-abc123');
+    writeFileSync(join(cwd, '.reticle.json'), JSON.stringify({ projectId: 'x', port: '4471' }));
+    expect(discoverDaemonUrl(cwd, home([]), live)).toBeUndefined();
+  });
+});
+
+/**
+ * Next 16 blocks its dev resources (`/_next/*`, HMR) for any origin not in `allowedDevOrigins`, and
+ * only `localhost` is allowed by default. A tab Reticle opened on 127.0.0.1 or [::1] therefore got
+ * the HTML and nothing else: no hydration, so the connect effect never ran and the SDK "never
+ * dialled the bridge".
+ */
+describe('allowedDevOrigins', () => {
+  const previousEnv = process.env.NODE_ENV;
+  afterEach(() => {
+    process.env.NODE_ENV = previousEnv;
+  });
+
+  it('adds the loopback hosts in development, keeping the ones the app already listed', () => {
+    process.env.NODE_ENV = 'development';
+    const out = withReticle({ allowedDevOrigins: ['my.dev', '127.0.0.1'] });
+    expect(out.allowedDevOrigins).toEqual(['my.dev', '127.0.0.1', '[::1]']);
+  });
+
+  it('knows the key only on the Next releases that accept it', () => {
+    // An unknown key is an "Invalid next.config.js options" warning on every boot of an older Next.
+    expect(knowsAllowedDevOrigins('15.1.7')).toBe(false);
+    expect(knowsAllowedDevOrigins('15.2.1')).toBe(false);
+    expect(knowsAllowedDevOrigins('15.2.2')).toBe(true);
+    expect(knowsAllowedDevOrigins('16.3.7')).toBe(true);
+    expect(knowsAllowedDevOrigins('14.2.29')).toBe(false);
+    expect(knowsAllowedDevOrigins('14.2.30')).toBe(true);
+    expect(knowsAllowedDevOrigins('13.5.6')).toBe(false);
+  });
 });
 
 /**
@@ -344,8 +427,8 @@ describe('the dev signal under a production NODE_ENV', () => {
     expect(withReticle(input)).toBe(input);
   });
 
-  it('says why it disabled itself, naming the variable', () => {
-    process.env.NODE_ENV = 'production';
+  /** What withReticle printed while evaluating the config once. */
+  const printed = () => {
     const said = [];
     const realLog = console.log;
     console.log = (...args) => said.push(args.join(' '));
@@ -354,10 +437,31 @@ describe('the dev signal under a production NODE_ENV', () => {
     } finally {
       console.log = realLog;
     }
-    const line = said.join('\n');
-    expect(line).toContain('NODE_ENV');
-    // And the way out, not just the diagnosis — the reader is stuck without it.
-    expect(line).toContain('RETICLE_DEV');
-    expect(line.toLowerCase()).toContain('reticle');
+    return said.join('\n');
+  };
+
+  it('says why it disabled itself on a dev server, naming the variable', () => {
+    process.env.NODE_ENV = 'production';
+    // Set by `next dev` on the server process it forks, and by nothing else.
+    process.env.NEXT_PRIVATE_WORKER = '1';
+    try {
+      const line = printed();
+      expect(line).toContain('NODE_ENV');
+      // And the way out, not just the diagnosis — the reader is stuck without it.
+      expect(line).toContain('RETICLE_DEV');
+      expect(line.toLowerCase()).toContain('reticle');
+    } finally {
+      delete process.env.NEXT_PRIVATE_WORKER;
+    }
+  });
+
+  /**
+   * `next build` and `next typegen` evaluate the config with NODE_ENV=production too, where being
+   * off is simply correct. Printing the dev-server explanation there read as something being wrong.
+   */
+  it('says nothing during a build or type generation, where production is correct', () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.NEXT_PRIVATE_WORKER;
+    expect(printed()).toBe('');
   });
 });

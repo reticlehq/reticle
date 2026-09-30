@@ -92,6 +92,20 @@ describe('chromium doctor line', () => {
     expect(chromiumHint(installed)).toBe('✓ installed (chromium-1223)');
   });
 
+  // Reticle drives an installed Chrome or Edge when its own build is absent, so "✗ missing" on such a
+  // machine sent the reader to a 150 MiB download that nothing needed.
+  it('passes on a missing build when an installed browser stands in for it', () => {
+    const line = chromiumHint({
+      ...installed,
+      exists: false,
+      installedRevisions: [],
+      fallback: 'Google Chrome',
+    });
+    expect(line).toMatch(/^✓ /);
+    expect(line).toContain('Google Chrome');
+    expect(line).toContain('npx playwright@1.61.1 install chromium');
+  });
+
   it('names the path it probed, so a wrong lookup is visible', () => {
     const line = chromiumHint({ ...installed, exists: false, installedRevisions: [] });
     expect(line).toContain(MAC_EXECUTABLE);

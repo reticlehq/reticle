@@ -9,6 +9,7 @@ const INPUT: SetupInput = {
   devCommand: 'npm run dev',
   openBrowser: true,
   shape: AppShape.WEB,
+  htmlCarriesSdk: true,
   phaseTimeoutMs: 1_000,
   pollMs: 1,
 };
@@ -154,6 +155,52 @@ describe('it never starts a second server for this project', () => {
   });
 });
 
+/**
+ * Every init run opened another tab in the user's browser, even when this project already had a
+ * live session on that url — and then every tool called without a sessionId failed with "multiple
+ * sessions connected". The reuse only ran when init had ATTACHED to an announced server; a server
+ * init started itself (Next, Angular: nothing announces) opened a fresh tab every time.
+ */
+describe('it reuses a live tab of this project rather than opening another', () => {
+  const URL = 'http://localhost:5173';
+  const MINE = { ...INPUT, projectId: 'mine' };
+
+  it('drives the live session already on this url, and opens nothing', async () => {
+    const fx = world({
+      listSessions: () =>
+        Promise.resolve([
+          { sessionId: 'open-tab', url: `${URL}/`, projectId: 'mine', lastSeenMs: 800 },
+        ]),
+    });
+    const r = await runSetupPhases(MINE, fx);
+    expect(fx.opened).toEqual([]);
+    expect(r.sessionId).toBe('open-tab');
+    expect(r.ok).toBe(true);
+  });
+
+  it('still opens one when that tab has gone silent', async () => {
+    const fx = world({
+      listSessions: () =>
+        Promise.resolve([
+          { sessionId: 'frozen', url: `${URL}/`, projectId: 'mine', lastSeenMs: 105_000 },
+        ]),
+    });
+    await runSetupPhases(MINE, fx);
+    expect(fx.opened).toEqual([URL]);
+  });
+
+  it("still opens one when the tab on that url is another project's, or hidden", async () => {
+    for (const tab of [
+      { sessionId: 'theirs', url: URL, projectId: 'other', lastSeenMs: 800 },
+      { sessionId: 'hidden', url: URL, projectId: 'mine', lastSeenMs: 800, hidden: true },
+    ]) {
+      const fx = world({ listSessions: () => Promise.resolve([tab]) });
+      await runSetupPhases(MINE, fx);
+      expect(fx.opened, tab.sessionId).toEqual([URL]);
+    }
+  });
+});
+
 describe('when it cannot continue, it says what is left', () => {
   // Writing files is not an install, so none of these may report ok.
   it('stops rather than inventing a dev command', async () => {
@@ -249,6 +296,73 @@ describe('when it cannot continue, it says what is left', () => {
   });
 });
 
+/**
+ * SvelteKit, Nuxt, React Router, Remix, TanStack Start, Astro, CRA, Angular and Next deliver the
+ * connect in the JS bundle, so their served HTML never carries the SDK. "The SDK is NOT in the
+ * page … restart the dev server" was printed for every one of them, sometimes on the line right
+ * before "Connected.", and sent people to restart a server that was fine.
+ */
+describe('a framework whose HTML never carries the SDK', () => {
+  const BUNDLED: SetupInput = { ...INPUT, htmlCarriesSdk: false };
+  const htmlWithoutSdk = (): Promise<PageProbe> =>
+    Promise.resolve({ served: true, sdkInPage: false });
+
+  it('says nothing about the SDK being missing from the page, before or after the wait', async () => {
+    const notes: string[] = [];
+    const fx = world({
+      probePage: htmlWithoutSdk,
+      listSessions: () => Promise.resolve([]),
+      note: (line: string) => notes.push(line),
+    });
+    const out = await runSetupPhases(BUNDLED, fx);
+    expect(out.ok).toBe(false);
+    expect(notes.join('\n')).not.toContain('NOT in the page');
+  });
+
+  it('does not hold the window back waiting for a marker that will never appear', async () => {
+    let probesBeforeOpen = 0;
+    let opened = false;
+    const fx = world({
+      probePage: () => {
+        if (!opened) probesBeforeOpen += 1;
+        return htmlWithoutSdk();
+      },
+      openBrowser: () => {
+        opened = true;
+        return Promise.resolve();
+      },
+    });
+    // A supplied url, so every probe counted here is the pre-open one.
+    await runSetupPhases({ ...BUNDLED, suppliedUrl: 'http://localhost:5173' }, fx);
+    expect(opened).toBe(true);
+    expect(probesBeforeOpen).toBe(1);
+  });
+});
+
+/**
+ * "The SDK IS in the page … and never dialled the bridge" is a claim about the bridge that only the
+ * daemon can make. Printed under a daemon reason saying it REFUSED the page's hello, it contradicted
+ * the one piece of positive evidence in the run and sent the reader to a localhost guard.
+ */
+describe('a page the daemon turned away', () => {
+  it('reports the refusal and never says the page did not dial', async () => {
+    const notes: string[] = [];
+    const fx = world({
+      listSessions: () => Promise.resolve([]),
+      daemonWhy: () =>
+        Promise.resolve({
+          lead: 'no browser session connected, and the reason is not the app: this daemon REFUSED the last page that dialled it',
+        }),
+      note: (line: string) => notes.push(line),
+    });
+    await runSetupPhases(INPUT, fx);
+    const all = notes.join('\n');
+    expect(all).toContain('REFUSED the last page');
+    expect(all).toContain('SDK IS in the page');
+    expect(all).not.toContain('never dialled the bridge');
+  });
+});
+
 describe('a desktop app', () => {
   // The harmful one: the app's own window is the client, so a browser tab would be a SECOND session
   // that is not the app — the stale-tab false green, arranged deliberately.
@@ -289,6 +403,89 @@ describe('opting out', () => {
     const r = await runSetupPhases({ ...INPUT, openBrowser: false }, fx);
     expect(fx.opened).toEqual([]);
     expect(r.ok).toBe(false);
+  });
+});
+
+/*
+ * `init --no-open` (CI, a container, an agent) opened nothing and then reported "never dialled the
+ * bridge" over a correct install. A Reticle-owned browser can always launch, so the connect proof
+ * comes from a lease there, which is released once it has said its piece.
+ */
+describe('the connect proof without a system browser', () => {
+  const URL_ = 'http://localhost:5173';
+
+  /** Sessions appear only once the lease is open, and the release is recorded. */
+  function leasingWorld(over: Partial<SetupEffects> = {}) {
+    const leased: string[] = [];
+    let released = 0;
+    const lines: string[] = [];
+    const fx = world({
+      listSessions: () =>
+        Promise.resolve(0 === leased.length ? [] : [{ sessionId: 'lease-1', url: URL_ }]),
+      openLease: (u: string) => {
+        leased.push(u);
+        return Promise.resolve({
+          sessionId: 'lease-1',
+          release: () => {
+            released += 1;
+            return Promise.resolve();
+          },
+        });
+      },
+      note: (l: string) => lines.push(l),
+      ...over,
+    });
+    return { fx, leased, lines, released: () => released };
+  }
+
+  it('proves the connect with a Reticle lease on --no-open, and releases it', async () => {
+    const w = leasingWorld();
+    const r = await runSetupPhases({ ...INPUT, openBrowser: false }, w.fx);
+    expect(w.fx.opened).toEqual([]);
+    expect(w.leased).toEqual([URL_]);
+    expect(r.ok).toBe(true);
+    expect(w.released()).toBe(1);
+    expect(w.lines.join(' ')).toMatch(/Reticle-owned headless browser/);
+  });
+
+  it('falls back to a lease when the system browser could not be opened', async () => {
+    const w = leasingWorld({
+      openBrowser: () => Promise.resolve('xdg-open: no method available'),
+    });
+    const r = await runSetupPhases(INPUT, w.fx);
+    expect(w.leased).toEqual([URL_]);
+    expect(r.ok).toBe(true);
+  });
+
+  // A launcher can report success and still show nothing: macOS `open` against a default browser
+  // that does not answer exits 1 only after the two seconds the launch check waits, so it read as
+  // "opened" and init sat out its whole connect budget over a correct install.
+  it('falls back to a lease when the system browser said it opened but no tab ever connected', async () => {
+    const w = leasingWorld();
+    const r = await runSetupPhases(INPUT, w.fx);
+    expect(w.fx.opened).toEqual([URL_]);
+    expect(w.leased).toEqual([URL_]);
+    expect(r.ok).toBe(true);
+    expect(w.lines.join(' ')).toMatch(/Reticle-owned headless browser/);
+  });
+
+  it('does not lease when the system browser opened', async () => {
+    const w = leasingWorld({
+      listSessions: () => Promise.resolve([{ sessionId: 'tab', url: URL_ }]),
+    });
+    const r = await runSetupPhases(INPUT, w.fx);
+    expect(w.leased).toEqual([]);
+    expect(w.lines.join(' ')).not.toMatch(/headless/);
+    expect(r.ok).toBe(true);
+  });
+
+  it('says why when the lease itself could not open', async () => {
+    const w = leasingWorld({
+      openLease: () => Promise.resolve({ failed: 'no Chromium, Chrome or Edge on this machine' }),
+    });
+    const r = await runSetupPhases({ ...INPUT, openBrowser: false }, w.fx);
+    expect(r.ok).toBe(false);
+    expect(w.lines.join(' ')).toContain('no Chromium, Chrome or Edge');
   });
 });
 
@@ -516,7 +713,7 @@ describe('a failed connect leads with what the daemon knows', () => {
     });
     await runSetupPhases(INPUT, fx);
     const whyAt = notes.findIndex((n) => n.includes('REFUSED the last page'));
-    const pageAt = notes.findIndex((n) => n.includes('never dialled the bridge'));
+    const pageAt = notes.findIndex((n) => n.includes('SDK IS in the page'));
     expect(whyAt).toBeGreaterThanOrEqual(0);
     expect(pageAt).toBeGreaterThanOrEqual(0);
     expect(whyAt).toBeLessThan(pageAt);
@@ -584,5 +781,19 @@ describe('a failed connect leads with what the daemon knows', () => {
     const out = await runSetupPhases(INPUT, fx);
     expect(out.ok).toBe(false);
     expect(notes.join('\n')).toContain('never dialled the bridge');
+  });
+});
+
+// A desktop init printed "Waiting for the app to launch and dial in." and then nothing at all for
+// the whole of its budget.
+describe('the connect wait says it is still waiting', () => {
+  it('prints progress while the app window has not dialled in', async () => {
+    const printed: string[] = [];
+    const fx = world({
+      listSessions: () => Promise.resolve([]),
+      note: (line: string) => printed.push(line),
+    });
+    await runSetupPhases({ ...INPUT, shape: AppShape.ELECTRON, connectBudgetMs: 40_000 }, fx);
+    expect(printed.some((l) => l.includes('Still waiting for the Electron window'))).toBe(true);
   });
 });

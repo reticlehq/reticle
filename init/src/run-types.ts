@@ -81,6 +81,11 @@ export interface InitIo {
   scoped(relPath: string): InitIo;
   /** Runs a subprocess to completion (inherits stdio); returns true on exit code 0. */
   exec(command: string, args: readonly string[]): boolean;
+  /**
+   * Runs a subprocess quietly and returns its combined output — for a failure whose text names its
+   * cause (see explainInstallFailure). Optional: without it the generic failure text stands.
+   */
+  capture?(command: string, args: readonly string[]): { ok: boolean; output: string };
   /** Runs a subprocess quietly (no stdio) for a yes/no check; returns true on exit code 0. */
   probe(command: string, args: readonly string[]): boolean;
   /** Can this process write into the project root — see preflight.ts. */

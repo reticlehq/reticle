@@ -12,7 +12,8 @@
 import { describe, expect, it } from 'vitest';
 import { detect, Framework, UiLibrary, type DetectInput } from '@/detect/detect.js';
 import { buildPlan, frameworkPackages, StepStatus, type PlanInput } from '@/plan/plan.js';
-import { tanstackStartSteps, VITE_PLUGIN_DETAIL, viteSteps } from '@/plan/plan-framework.js';
+import { tanstackStartSteps } from '@/plan/plan-framework.js';
+import { VITE_PLUGIN_DETAIL, viteSteps } from '@/plan/plan-vite.js';
 import { TANSTACK_START_ROOT_PATH } from './tanstack-start.js';
 import { isConnectStep } from '@/plan/connect-steps.js';
 

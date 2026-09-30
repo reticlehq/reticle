@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { htmlManual } from './patch/snippets.js';
+import { UiLibrary } from './detect/detect.js';
 
 /**
  * A snippet we tell people to paste has to COMPILE in the project we are telling them to paste it
@@ -19,7 +20,9 @@ import { htmlManual } from './patch/snippets.js';
  * hand-checked guard worth having at all.
  */
 describe('the pasteable CRA/webpack snippet compiles where it is pasted', () => {
-  const snippet = htmlManual(4400, 'demo');
+  // A React app on webpack: the one this snippet is written for. With no UI library detected the
+  // same recipe names the framework-neutral sensor instead, because that is what init installed.
+  const snippet = htmlManual(4400, 'demo', undefined, UiLibrary.REACT);
 
   it('never reaches for the bare global CRA forbids', () => {
     // The guard this originally policed (`window.location.hostname === 'localhost'`) is gone: it is

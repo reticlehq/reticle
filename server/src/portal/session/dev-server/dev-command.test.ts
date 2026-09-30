@@ -120,4 +120,30 @@ describe('detectDevCommand', () => {
     const files = { [PKG]: JSON.stringify({ scripts: { dev: '  ' } }) };
     expect(detectDevCommand(DIR, reader(files))).toBeUndefined();
   });
+
+  // A desktop project's `dev` is its renderer's dev server (plain `vite` on the Tauri template):
+  // handing that over starts a server no window ever opens onto. Same rule init uses.
+  it('hands a Tauri project its own launcher, not the renderer dev server', () => {
+    const files = {
+      [PKG]: JSON.stringify({
+        scripts: { dev: 'vite', tauri: 'tauri' },
+        devDependencies: { '@tauri-apps/cli': '^2' },
+      }),
+      [at('pnpm-lock.yaml')]: '',
+    };
+    expect(detectDevCommand(DIR, reader(files))).toEqual({
+      command: 'pnpm run tauri dev',
+      script: 'tauri',
+    });
+  });
+
+  it('runs the Tauri CLI directly when no script names it, and claims no script', () => {
+    const files = {
+      [PKG]: JSON.stringify({
+        scripts: { dev: 'vite' },
+        devDependencies: { '@tauri-apps/cli': '^2' },
+      }),
+    };
+    expect(detectDevCommand(DIR, reader(files))).toEqual({ command: 'npx tauri dev' });
+  });
 });

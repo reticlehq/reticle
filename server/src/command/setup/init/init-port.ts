@@ -8,7 +8,24 @@
  *
  * Undefined means the default.
  */
-import { RETICLE_DEFAULT_PORT } from '@reticlehq/core';
+import { RETICLE_DEFAULT_PORT, ReticleEnv } from '@reticlehq/core';
+
+const MAX_PORT = 65_535;
+
+/**
+ * `RETICLE_PORT`, when it names a port. The one reader of it for the CLI, `init` included.
+ *
+ * `init` took only `--port`, so a shell that exported RETICLE_PORT got a project wired, and a daemon
+ * started, on the default port while every other command it ran dialled the exported one. Fed to
+ * `portForInit` as the explicit port, so the files phase writes it into `.reticle.json` and the
+ * runtime phase binds it: the two halves of `init` cannot disagree.
+ */
+export function portFromEnv(env: Readonly<Record<string, string | undefined>>): number | undefined {
+  const raw = env[ReticleEnv.PORT];
+  if (undefined === raw || !/^\d+$/.test(raw)) return undefined;
+  const port = Number(raw);
+  return 0 < port && port <= MAX_PORT ? port : undefined;
+}
 
 export async function portForInit(
   explicit: number | undefined,

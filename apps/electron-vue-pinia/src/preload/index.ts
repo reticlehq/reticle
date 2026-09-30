@@ -1,4 +1,7 @@
-import '@reticlehq/electron/preload'
+if (import.meta.env.MODE !== 'production') {
+  // Reticle IPC observation, dev only — written by `reticle init`. A production build drops it.
+  void import('@reticlehq/electron/preload').catch(() => undefined)
+}
 import { contextBridge } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 

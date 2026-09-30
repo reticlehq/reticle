@@ -28,12 +28,39 @@ function createWindow(): void {
 `;
 
 describe('patchElectronPreload', () => {
-  it('prepends an ESM import for .ts', () => {
-    const r = patchElectronPreload(ESM_PRELOAD, 'src/preload/index.ts');
+  it('prepends an ESM import for .ts when the preload may be sandboxed (Forge)', () => {
+    const r = patchElectronPreload(ESM_PRELOAD, 'src/preload.ts', false);
     expect(r.kind).toBe(PatchKind.APPLY);
     if (r.kind !== PatchKind.APPLY) return;
     expect(r.code.startsWith(`import '${PRELOAD_REQUIRE}'`)).toBe(true);
     expect(r.code).toContain('contextBridge');
+  });
+
+  /**
+   * The shim was a static import with no dev guard, so `electron-vite build` bundled it into the
+   * packaged preload. `import.meta.env.MODE` is replaced at build time, so a production build folds
+   * the branch away and the output carries no Reticle code (measured on electron-vite: gone in a
+   * production build, present in `--mode development`, which the renderer's `desktop: true` also
+   * instruments).
+   */
+  it('guards the shim on the build mode for an electron-vite preload, still first', () => {
+    const r = patchElectronPreload(ESM_PRELOAD, 'src/preload/index.ts');
+    if (r.kind !== PatchKind.APPLY) throw new Error(r.kind);
+    expect(r.code.startsWith("if (import.meta.env.MODE !== 'production') {")).toBe(true);
+    expect(r.code).toContain(`void import('${PRELOAD_REQUIRE}')`);
+    // Not a require(): the electron-vite template lints with no-require-imports.
+    expect(r.code).not.toContain(`require('${PRELOAD_REQUIRE}')`);
+    expect(r.code).not.toContain(`import '${PRELOAD_REQUIRE}'`);
+    expect(patchElectronPreload(r.code, 'src/preload/index.ts').kind).toBe(PatchKind.ALREADY);
+  });
+
+  it('rewrites the unguarded import an older init wrote, in place', () => {
+    const legacy = `import '${PRELOAD_REQUIRE}'\n${ESM_PRELOAD}`;
+    const r = patchElectronPreload(legacy, 'src/preload/index.ts');
+    if (r.kind !== PatchKind.APPLY) throw new Error(r.kind);
+    expect(r.code).not.toContain(`import '${PRELOAD_REQUIRE}'`);
+    expect(r.code.match(/@reticlehq\/electron\/preload/g)).toHaveLength(1);
+    expect(r.code.startsWith("if (import.meta.env.MODE !== 'production') {")).toBe(true);
   });
 
   it('prepends a require for .cjs', () => {
@@ -56,11 +83,58 @@ describe('patchElectronMain', () => {
     const r = patchElectronMain(SINGLE_WINDOW, 'src/main/index.ts');
     expect(r.kind).toBe(PatchKind.APPLY);
     if (r.kind !== PatchKind.APPLY) return;
-    expect(r.code).toContain("import { installReticleCapture } from '@reticlehq/electron/main'");
-    expect(r.code).toContain('installReticleCapture(mainWindow)');
+    // A dynamic import behind the build mode, never a static one: the static import put the capture
+    // handler into every packaged main bundle.
+    expect(r.code).not.toContain(
+      "import { installReticleCapture } from '@reticlehq/electron/main'",
+    );
+    expect(r.code).toContain(
+      "if (import.meta.env.MODE !== 'production') void import('@reticlehq/electron/main').then(({ installReticleCapture }) => installReticleCapture(mainWindow))",
+    );
     const ctorEnd = r.code.indexOf('})');
     const callAt = r.code.indexOf('installReticleCapture(mainWindow)');
     expect(callAt).toBeGreaterThan(ctorEnd);
+  });
+
+  it('guards a Forge main on the dev-server URL the file already branches on', () => {
+    // Forge defines `<NAME>_VITE_DEV_SERVER_URL` at build time, undefined in a package, and its
+    // template declares it — so it folds AND typechecks, where `import.meta.env` does not.
+    const forge = SINGLE_WINDOW.replace(
+      "  mainWindow.loadURL('http://localhost:5173')",
+      '  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {\n    mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL)\n  }',
+    );
+    const r = patchElectronMain(forge, 'src/main.ts');
+    if (r.kind !== PatchKind.APPLY) throw new Error(r.kind);
+    expect(r.code).toContain(
+      "if (MAIN_WINDOW_VITE_DEV_SERVER_URL) void import('@reticlehq/electron/main')",
+    );
+    expect(r.code).not.toContain('import.meta.env');
+  });
+
+  it('guards an unbundled CommonJS main on app.isPackaged', () => {
+    const cjs = SINGLE_WINDOW.replace(
+      "import { app, BrowserWindow } from 'electron'",
+      "const { app, BrowserWindow } = require('electron')",
+    );
+    const r = patchElectronMain(cjs, 'electron/main.cjs');
+    if (r.kind !== PatchKind.APPLY) throw new Error(r.kind);
+    expect(r.code).toContain(
+      "if (!require('electron').app.isPackaged) require('@reticlehq/electron/main').installReticleCapture(mainWindow)",
+    );
+    expect(patchElectronMain(r.code, 'electron/main.cjs').kind).toBe(PatchKind.ALREADY);
+  });
+
+  it('rewrites the unguarded import and call an older init wrote, in place', () => {
+    const legacy = SINGLE_WINDOW.replace(
+      "import { app, BrowserWindow } from 'electron'",
+      "import { app, BrowserWindow } from 'electron'\nimport { installReticleCapture } from '@reticlehq/electron/main'",
+    ).replace('  })\n', '  })\n  installReticleCapture(mainWindow)\n');
+    const r = patchElectronMain(legacy, 'src/main/index.ts');
+    if (r.kind !== PatchKind.APPLY) throw new Error(r.kind);
+    expect(r.code).not.toContain('import { installReticleCapture }');
+    expect(r.code.match(/installReticleCapture\(mainWindow\)/g)).toHaveLength(1);
+    expect(r.code).toContain("if (import.meta.env.MODE !== 'production') void import(");
+    expect(patchElectronMain(r.code, 'src/main/index.ts').kind).toBe(PatchKind.ALREADY);
   });
 
   it('is idempotent', () => {

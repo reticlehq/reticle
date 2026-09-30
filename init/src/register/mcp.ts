@@ -12,6 +12,7 @@
  * global agent config.
  */
 
+import { join } from 'node:path';
 import { RETICLE_NPM_PACKAGE } from '@/version.js';
 
 // The name is a wire identity and lives in the contract; re-exported here so the registration writers
@@ -103,14 +104,55 @@ export function claudeAddCommand(): ClaudeAddCommand {
   return { command: CLAUDE_CLI, args, display: `${CLAUDE_CLI} ${args.join(' ')}` };
 }
 
-/** Probe args that tell us whether an `reticle` server already exists in any scope (exit 0 = exists). */
-export function claudeExistsProbe(): { command: string; args: string[] } {
-  // NO `-s`: `claude mcp get` takes no options at all, so passing one exits 1 with "unknown option
-  // '-s'" — the probe answered "not registered" on EVERY machine, init then ran `claude mcp add`,
-  // which exits 1 with "already exists", and a re-run reported `[⚠] step failed` plus a manual
-  // command that fails the same way. A false positive from a project-scoped entry costs one skipped
-  // registration; the flag cost every re-run a failed step.
-  return { command: CLAUDE_CLI, args: [MCP_SUBCOMMAND, 'get', MCP_SERVER_NAME] };
+/** Where Claude Code keeps its state: `$CLAUDE_CONFIG_DIR/.claude.json`, else `~/.claude.json`. */
+const CLAUDE_STATE_FILE = '.claude.json';
+
+/** `mcpServers` holds a `reticle` entry. */
+function namesReticle(scope: unknown): boolean {
+  if ('object' !== typeof scope || null === scope) return false;
+  const servers: unknown = (scope as { mcpServers?: unknown }).mcpServers;
+  return 'object' === typeof servers && null !== servers && MCP_SERVER_NAME in servers;
+}
+
+function parsed(source: string | null): unknown {
+  if (null === source) return undefined;
+  try {
+    return JSON.parse(source);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Is a `reticle` server already registered with Claude Code, in any scope this project sees?
+ *
+ * READ FROM CLAUDE'S OWN CONFIG, never asked of the CLI. `claude mcp get reticle` health-checks the
+ * entry by LAUNCHING it — `npx @reticlehq/server mcp` in the project — which starts a daemon on
+ * whatever `.reticle.json` says before `init` has rewritten it. A re-run moving the port brought the
+ * old-port daemon back about two seconds after it was stopped. `claude mcp list` health-checks
+ * every server the same way.
+ *
+ * The three scopes `claude mcp add` writes: user (`mcpServers` at the top of the state file), local
+ * (`projects[<dir>].mcpServers`, keyed by absolute path) and project (`<dir>/.mcp.json`). Without a
+ * project directory only user scope is looked at. An unreadable file answers "not registered",
+ * which costs at worst a `claude mcp add` that reports the entry already exists.
+ */
+export function claudeHasReticle(
+  io: { readFile(path: string): string | null; homeDir(): string },
+  projectDir: string | undefined,
+  configDir: string | undefined = process.env['CLAUDE_CONFIG_DIR'],
+): boolean {
+  const state = parsed(io.readFile(join(configDir ?? io.homeDir(), CLAUDE_STATE_FILE)));
+  if (namesReticle(state)) return true;
+  if (projectDir === undefined) return false;
+  const projects: unknown =
+    'object' === typeof state && null !== state
+      ? (state as { projects?: unknown }).projects
+      : undefined;
+  if ('object' === typeof projects && null !== projects) {
+    if (namesReticle((projects as Record<string, unknown>)[projectDir])) return true;
+  }
+  return namesReticle(parsed(io.readFile(join(projectDir, CLAUDE_PROJECT_CONFIG))));
 }
 
 /** Probe args for whether the `claude` CLI is installed at all. */

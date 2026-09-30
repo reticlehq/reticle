@@ -11,7 +11,7 @@
 import { CONTAINERISED_TITLE, containerisedDevServerNote } from '@/diagnose/containerised-dev-server.js';
 import { mcpWindowsNote } from '@/register/mcp.js';
 import { unverifiedUiLibraryNote, WEBGL_CANVAS_LIMIT_NOTE } from '@/patch/snippets.js';
-import { FRAMEWORK_ADAPTERS } from './framework-adapter.js';
+import { FRAMEWORK_ADAPTERS, installGated } from './framework-adapter.js';
 import { NodePlatform } from '@/detect/platform.js';
 import { UiLibrary } from '@/detect/detect.js';
 // `Step` and `PlanInput` are TYPES, so importing them back from `plan.ts` is erased at build
@@ -64,12 +64,13 @@ export function uiLibraryStep(input: PlanInput): Step[] {
   if (lib === UiLibrary.REACT) return [];
   if (FRAMEWORK_ADAPTERS[input.detection.framework].carriesOwnUnverifiedNote) return [];
   if (lib === UiLibrary.UNKNOWN) return [];
+  const gated = installGated(input.detection.framework, lib);
   return [
     {
-      title: `${lib} is UNVERIFIED`,
+      title: gated ? `${lib} setup verified, drive unverified` : `${lib} is UNVERIFIED`,
       target: 'package.json',
       status: StepStatus.NOTICE,
-      detail: unverifiedUiLibraryNote(lib),
+      detail: unverifiedUiLibraryNote(lib, gated),
     },
   ];
 }

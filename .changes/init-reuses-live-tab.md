@@ -1,0 +1,3 @@
+### Fixed
+
+- **`init` opened another browser tab on every run, and the pile-up broke every tool call without a `sessionId`.** A live tab of this project already on the app's url was only reused when `init` had attached to a server the Vite plugin announced; for a server `init` started itself, it opened one more tab each time, and tools then failed with "multiple sessions connected". `init` now reuses a visible, recently-heard tab of this project on that url wherever the server came from, and when several healthy tabs are connected and exactly one has the window focus, tools target that one instead of refusing.

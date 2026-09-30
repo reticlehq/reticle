@@ -17,7 +17,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { waitProgressLine, WAIT_PROGRESS_EVERY_MS } from './wait-progress.js';
+import { connectProgressLine, waitProgressLine, WAIT_PROGRESS_EVERY_MS } from './wait-progress.js';
 
 describe('waitProgressLine', () => {
   it('says nothing before the first interval — a fast start stays quiet', () => {
@@ -61,5 +61,30 @@ describe('waitProgressLine', () => {
   it('reports how long it has been waiting, in whole seconds', () => {
     const line = String(waitProgressLine(90_000, 'http://x', undefined));
     expect(line).toContain('90s');
+  });
+});
+
+/**
+ * The connect wait was silent too. A desktop init printed "Waiting for the app to launch and dial in."
+ * and then nothing for its whole ten-minute budget, which reads as hung.
+ */
+describe('connectProgressLine', () => {
+  it('says nothing on a normal connect', () => {
+    expect(connectProgressLine(2_000, undefined, 120_000, 'the app')).toBeUndefined();
+  });
+
+  it('speaks once per interval, naming what it waits for and how long is left', () => {
+    const line = connectProgressLine(
+      WAIT_PROGRESS_EVERY_MS,
+      undefined,
+      180_000,
+      'the Electron window',
+    );
+    expect(line).toContain('the Electron window');
+    expect(line).toContain('15s');
+    expect(line).toContain('165s');
+    expect(
+      connectProgressLine(WAIT_PROGRESS_EVERY_MS + 1_000, WAIT_PROGRESS_EVERY_MS, 180_000, 'x'),
+    ).toBeUndefined();
   });
 });

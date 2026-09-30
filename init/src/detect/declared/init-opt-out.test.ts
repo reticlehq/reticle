@@ -17,7 +17,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { hasOptOut, OPT_OUT_MARKER } from './init-opt-out.js';
-import { viteSteps } from '@/plan/plan-framework.js';
+import { viteSteps } from '@/plan/plan-vite.js';
 import { StepStatus } from '@/plan/plan.js';
 
 describe('an explicit opt-out in a file init would edit', () => {

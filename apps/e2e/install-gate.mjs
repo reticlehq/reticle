@@ -141,11 +141,18 @@ const SELF_TEST_PORT_OFFSET = 60;
 const BRIDGE_PORT_BASE =
   Number(process.env.INSTALL_GATE_PORT ?? '4788') +
   (process.argv.includes('--self-test') ? SELF_TEST_PORT_OFFSET : 0);
-const APP_PORT_BASE =
-  Number(process.env.INSTALL_GATE_APP_PORT ?? '4820') +
-  (process.argv.includes('--self-test') ? SELF_TEST_PORT_OFFSET : 0);
-/** Generous: a cold Next build is slow, and a timeout here reads as an install failure. */
-const BOOT_TIMEOUT_MS = 180_000;
+/**
+ * How long init's handed-over dev server gets to answer once init has exited. Short, because init
+ * only reports success after a session connected through that very server: it was answering a
+ * moment ago, and a bound here is a bound, not a measurement of how fast a server boots.
+ */
+const HANDOVER_ANSWER_MS = 15_000;
+/**
+ * How long to wait for the dev server to WRITE something after the gate edits a source file. The
+ * write is the point: a server whose output went to a pipe nobody reads dies on it. A bound, not a
+ * timing assertion — the check that follows asks whether the server still answers.
+ */
+const EDIT_LOG_WAIT_MS = 15_000;
 const CONNECT_TIMEOUT_MS = 45_000;
 /** After a session appears, how long to wait for `hasCapabilities` to flip true on reannounce. */
 const CAPABILITIES_WAIT_MS = 10_000;
@@ -251,7 +258,11 @@ async function startLocalRegistry() {
     config,
     readFileSync(join(ROOT, 'scripts/verdaccio.yaml'), 'utf8')
       .replace('/tmp/reticle-verdaccio-storage', storage.split('\\').join('/'))
-      .replace('/tmp/reticle-verdaccio-htpasswd', htpasswd.split('\\').join('/')),
+      .replace('/tmp/reticle-verdaccio-htpasswd', htpasswd.split('\\').join('/'))
+      // The config file pins 4873. Without this, INSTALL_GATE_REGISTRY_PORT moved every URL the gate
+      // uses and not the port Verdaccio binds, so a second registry on the machine made the gate die
+      // with EADDRINUSE before a single scaffold ran.
+      .replace('listen: 0.0.0.0:4873', `listen: 0.0.0.0:${String(REGISTRY_PORT)}`),
   );
   const proc = spawn(process.execPath, [VERDACCIO_BIN, '--config', config], {
     cwd: ROOT,
@@ -374,8 +385,6 @@ const PNPM_LOCK_STUB = "lockfileVersion: '9.0'\n";
  *   - `initFrom` — the directory `init` is invoked from (default: the app's)
  *   - `create`   — the scaffold command. Omitted only where no usable one exists (see `cra`)
  *   - `files`    — files written into the WORKDIR instead of, or on top of, a create command
- *   - `devEnv`   — environment for the gate's own dev server, for a framework whose port is not a
- *     flag (CRA reads `PORT`, and has no `--port`)
  *   - `seed`     — extra files written into the WORKDIR after scaffolding, before install
  *   - `hidePnpm` — make `pnpm` unusable for the `init` call only
  *   - `dropLocalLockfile` — delete the app's own lockfile after install, so package-manager
@@ -403,6 +412,7 @@ const INIT_DEV_PORTS = {
   vite: [5173, 5174, 5175],
   next: [3000, 3001, 3002],
   astro: [4321, 4322, 4323],
+  angular: [4200, 4201, 4202],
 };
 
 /**
@@ -489,6 +499,10 @@ const PROBE_MARKUP = {
   nuxt: {
     'app/app/app.vue': `<template>\n  <h1 data-testid="${PROBE_MARKUP_TESTID}">Nuxt</h1>\n</template>\n`,
   },
+  // The root component's template. `<router-outlet />` stays, so the app is still the scaffold's app.
+  angular: {
+    'app/src/app/app.html': `<h1 data-testid="${PROBE_MARKUP_TESTID}">Angular</h1>\n<router-outlet />\n`,
+  },
 };
 
 const SCAFFOLDS = [
@@ -497,7 +511,6 @@ const SCAFFOLDS = [
     what: 'Vite + React — the vite-plugin path (config patch + injected connect)',
     initDevPorts: INIT_DEV_PORTS.vite,
     create: ['npm', ['create', 'vite@latest', 'app', '--yes', '--', '--template', 'react-ts']],
-    dev: (port) => ['npm', ['run', 'dev', '--', '--port', String(port), '--strictPort']],
   },
   {
     // The NON-REACT path, and the reason it is here is not hypothetical. 2.8.0 nearly shipped an
@@ -513,7 +526,6 @@ const SCAFFOLDS = [
     what: 'Vite + Vue — the non-React path (sensor instead of the React kit)',
     initDevPorts: INIT_DEV_PORTS.vite,
     create: ['npm', ['create', 'vite@latest', 'app', '--yes', '--', '--template', 'vue']],
-    dev: (port) => ['npm', ['run', 'dev', '--', '--port', String(port), '--strictPort']],
   },
   {
     // The app with NO vite.config at all, which is what `npm create vite`'s vanilla template ships.
@@ -524,7 +536,6 @@ const SCAFFOLDS = [
     what: 'Vite, vanilla — no vite.config to patch, so init must create one',
     initDevPorts: INIT_DEV_PORTS.vite,
     create: ['npm', ['create', 'vite@latest', 'app', '--yes', '--', '--template', 'vanilla-ts']],
-    dev: (port) => ['npm', ['run', 'dev', '--', '--port', String(port), '--strictPort']],
   },
   {
     id: 'next-app-router',
@@ -546,7 +557,6 @@ const SCAFFOLDS = [
         '--yes',
       ],
     ],
-    dev: (port) => ['npm', ['run', 'dev', '--', '-p', String(port)]],
   },
   {
     id: 'next-pages-router',
@@ -571,7 +581,6 @@ const SCAFFOLDS = [
         '--yes',
       ],
     ],
-    dev: (port) => ['npm', ['run', 'dev', '--', '-p', String(port)]],
   },
   {
     id: 'monorepo-subdir',
@@ -616,7 +625,6 @@ const SCAFFOLDS = [
         '--yes',
       ],
     ],
-    dev: (port) => ['npm', ['run', 'dev', '--', '-p', String(port)]],
   },
   // ── the frameworks that own their own HTML ───────────────────────────────────────────────────
   //
@@ -646,7 +654,6 @@ const SCAFFOLDS = [
       ['--yes', 'nuxi@latest', 'init', 'app', '--template', 'minimal', '--packageManager', 'npm', '--no-gitInit', '--no-install'],
     ],
     files: PROBE_MARKUP.nuxt,
-    dev: (port) => ['npm', ['run', 'dev', '--', '--port', String(port)]],
   },
   {
     id: 'react-router',
@@ -656,7 +663,6 @@ const SCAFFOLDS = [
     what: 'React Router framework mode — the client entry init writes, because HTML injection never fires',
     initDevPorts: INIT_DEV_PORTS.vite,
     create: ['npx', ['--yes', 'create-react-router@latest', 'app', '--no-install', '--no-git-init', '--yes']],
-    dev: (port) => ['npm', ['run', 'dev', '--', '--port', String(port), '--strictPort']],
   },
   {
     id: 'astro',
@@ -667,7 +673,6 @@ const SCAFFOLDS = [
       ['create', 'astro@latest', 'app', '--', '--template', 'minimal', '--no-install', '--no-git', '--skip-houston', '-y'],
     ],
     files: PROBE_MARKUP.astro,
-    dev: (port) => ['npm', ['run', 'dev', '--', '--port', String(port)]],
   },
   {
     id: 'sveltekit',
@@ -675,16 +680,69 @@ const SCAFFOLDS = [
     initDevPorts: INIT_DEV_PORTS.vite,
     create: ['npx', ['--yes', 'sv', 'create', 'app', '--template', 'minimal', '--types', 'ts', '--no-add-ons', '--no-install']],
     files: PROBE_MARKUP.sveltekit,
-    dev: (port) => ['npm', ['run', 'dev', '--', '--port', String(port), '--strictPort']],
   },
   {
     id: 'cra',
     what: 'Create React App — hand-built fixture, JS not TS, react-scripts 5 (see CRA_FILES)',
     initDevPorts: INIT_DEV_PORTS.next,
     files: CRA_FILES,
-    // CRA has no `--port`. It reads `PORT`, which is why `devEnv` exists.
-    dev: () => ['npm', ['start']],
-    devEnv: (port) => ({ PORT: String(port) }),
+  },
+  {
+    id: 'remix',
+    // Remix v2 on Vite was classified as plain Vite: the plugin's index.html injection never reaches
+    // a page Remix renders itself, so init reported green over an app that never connected. It is
+    // React Router framework mode under its old name, with its own default client entry
+    // (`RemixBrowser`) that init has to write whole, because `app/entry.client.tsx` only exists after
+    // `remix reveal`.
+    //
+    // Pinned, both halves, because neither `@latest` works any more. `create-remix` 2.17 refuses to
+    // scaffold and points at create-react-router, and every 2.x fetches its template from the remix
+    // repository's default branch, which is no longer Remix v2 — so the template is named at the
+    // matching release tag. Remix v2 is in maintenance; the pin is the app its users actually have.
+    what: 'Remix v2 on Vite — its own client entry, because Remix renders the document itself',
+    initDevPorts: INIT_DEV_PORTS.vite,
+    create: [
+      'npx',
+      [
+        '--yes',
+        'create-remix@2.16.8',
+        'app',
+        '--template',
+        'https://github.com/remix-run/remix/tree/remix@2.16.8/templates/remix',
+        '--no-install',
+        '--no-git-init',
+        '--yes',
+      ],
+    ],
+  },
+  {
+    id: 'angular',
+    // Angular used to fall through to the plain-HTML path: the React kit, the wrong index.html, and
+    // snippets that did not compile or that shipped the pairing token. init now patches the browser
+    // entry with an isDevMode() connect and serves the token from a proxy config that only `ng serve`
+    // loads — three edits, one of them to angular.json, that only a browser can prove connect.
+    //
+    // No SSR: the SSR build adds a server entry, not a different connect path. `@angular/cli@21`, not
+    // `@latest`: 22 refuses to run below Node 22.22.3, and this repo supports Node from 22.12, so an
+    // unpinned scaffold would fail on a supported machine for a reason that is not about Reticle.
+    // Raise the pin when the repo's own Node floor moves past 22's.
+    what: 'Angular 17+ (no SSR) — isDevMode() connect in the entry, the token over an ng-serve proxy',
+    initDevPorts: INIT_DEV_PORTS.angular,
+    create: [
+      'npx',
+      [
+        '--yes',
+        '@angular/cli@21',
+        'new',
+        'app',
+        '--ssr=false',
+        '--skip-git',
+        '--skip-install',
+        '--defaults',
+        '--interactive=false',
+      ],
+    ],
+    files: PROBE_MARKUP.angular,
   },
 ];
 
@@ -795,6 +853,82 @@ async function sessionsOn(port) {
   } catch {
     return [];
   }
+}
+
+/** Answers at all, polled: a server that is up but busy compiling gets the whole bound. */
+async function answersWithin(url, ms) {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    if (await reachable(url)) return true;
+    await sleep(500);
+  }
+  return false;
+}
+
+/**
+ * `init --json`'s output split in two: the plan and progress lines a person reads, and the one
+ * pretty-printed object at the end (`JSON.stringify(outcome, null, 2)` in init-runtime.ts). An
+ * init that failed before its runtime phase prints no object, and `result` is undefined.
+ */
+function splitInitJson(stdout) {
+  const at = stdout.lastIndexOf('\n{\n') + 1;
+  try {
+    return { text: stdout.slice(0, at), result: JSON.parse(stdout.slice(at)) };
+  } catch {
+    return { text: stdout, result: undefined };
+  }
+}
+
+/**
+ * The first loopback url a dev server printed — its "Local:" line on every framework here. Read
+ * independently of init's own parser, so a regression there cannot agree with itself.
+ */
+function announcedUrlIn(log) {
+  const plain = log.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+  return /https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]):\d+/.exec(plain)?.[0];
+}
+const hostOf = (url) => {
+  try {
+    return url === undefined ? undefined : new URL(url).hostname;
+  } catch {
+    return undefined;
+  }
+};
+const portOf = (url) => {
+  try {
+    return url === undefined ? undefined : Number(new URL(url).port) || undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * A module each scaffold's app actually loads, first match wins. Editing one is what makes a dev
+ * server write: an HMR update on Vite, a recompile on Next, a rebuild on CRA and Angular.
+ */
+const EDIT_CANDIDATES = [
+  'src/App.tsx',
+  'src/App.vue',
+  'src/main.ts',
+  'app/page.tsx',
+  'pages/index.tsx',
+  'app/root.tsx',
+  'src/routes/+page.svelte',
+  'app/app.vue',
+  'src/pages/index.astro',
+  'src/index.js',
+];
+const MARKUP_EXTENSIONS = /\.(vue|svelte|astro)$/;
+
+/** Append a comment to the first candidate that exists; its path, or undefined when none does. */
+function editSourceAfterHandover(app) {
+  const rel = EDIT_CANDIDATES.find((c) => existsSync(join(app, c)));
+  if (rel === undefined) return undefined;
+  const comment = MARKUP_EXTENSIONS.test(rel)
+    ? '\n<!-- edited by the install gate after init handed over -->\n'
+    : '\n// edited by the install gate after init handed over\n';
+  writeFileSync(join(app, rel), `${readFileSync(join(app, rel), 'utf8')}${comment}`);
+  return rel;
 }
 
 /**
@@ -929,12 +1063,14 @@ async function driveScaffold(scaffold, index) {
   // A port pair per scaffold. Sequential runs would be fine sharing one, but a scaffold that leaves
   // a dev server behind must not be able to make the NEXT scaffold look broken.
   const bridgePort = BRIDGE_PORT_BASE + index * 2;
-  const appPort = APP_PORT_BASE + index * 2;
+  // The port init is told to use. One off in the self-test, so the app is wired to a bridge the
+  // gate's own daemon is not on and no session can appear.
+  const initPort = SELF_TEST ? bridgePort + 1 : bridgePort;
 
   console.log(`\n──────── ${scaffold.id} ────────`);
   note(scaffold.what);
   await freePortSafely(bridgePort);
-  await freePortSafely(appPort);
+  await freePortSafely(initPort);
 
   // `realpathSync.native`, because on Windows `tmpdir()` hands back the 8.3 SHORT form —
   // `C:\Users\RUNNER~1\AppData\Local\Temp`, which is literally what the gate's own log prints.
@@ -954,7 +1090,8 @@ async function driveScaffold(scaffold, index) {
   // Where `init` is invoked. Defaults to the app, which is the only shape that used to exist here.
   const initFrom = scaffold.initFrom === undefined ? app : join(workdir, scaffold.initFrom);
   let daemon;
-  let dev;
+  /** The app url init reported in `--json`, whose dev server the gate keeps and must stop after. */
+  let appUrl;
   /**
    * Ports init said it was using, captured where `report` is in scope.
    *
@@ -1027,11 +1164,14 @@ async function driveScaffold(scaffold, index) {
     await clearInitDevPorts(scaffold, note);
 
     let report = '';
+    let initStderr = '';
     let initExit = 0;
     try {
       report = run(
         'node',
-        [CLI, 'init', '--port', String(SELF_TEST ? bridgePort + 1 : bridgePort), '--no-mcp'],
+        // `--json`, so the app url is init's own answer rather than one this gate composes. See the
+        // hand-over section below for why that matters.
+        [CLI, 'init', '--port', String(initPort), '--no-mcp', '--json'],
         initFrom,
         {
           npm_config_registry: REGISTRY,
@@ -1040,8 +1180,12 @@ async function driveScaffold(scaffold, index) {
       );
     } catch (err) {
       initExit = err.status ?? 1;
-      report = `${err.stdout ?? ''}${err.stderr ?? ''}`;
+      report = err.stdout ?? '';
+      initStderr = err.stderr ?? '';
     }
+    // The plan and progress lines, then one JSON object on stdout: the result an agent reads.
+    const { text: initText, result: initResult } = splitInitJson(report);
+    report = `${initText}${initStderr}`;
     console.log(
       report
         .split('\n')
@@ -1066,7 +1210,7 @@ async function driveScaffold(scaffold, index) {
     // there is: which bridge port init was told to use, which ports its report mentions, and which
     // daemon claims which project.
     if (0 !== initExit) {
-      note(`init was told to use bridge port ${String(SELF_TEST ? bridgePort + 1 : bridgePort)}`);
+      note(`init was told to use bridge port ${String(initPort)}`);
       note(`init's report mentions ports: ${handedOverPorts.join(', ') || '(none)'}`);
       dumpEvidence([], bridgePort);
     }
@@ -1158,49 +1302,56 @@ async function driveScaffold(scaffold, index) {
       `${String((report.match(/\[✓\]/g) ?? []).length)} ✓ mark(s)`,
     );
 
-    // ── 4. stop what init handed over, BEFORE booting our own ──────────────────────────────────
+    // ── 4. what init handed over, used as it was handed over ────────────────────────────────────
     //
-    // init leaves the app running on purpose: the user gets an instrumented app they can watch.
-    // The gate then boots its own on a different port, and for Vite two servers are harmless. For
-    // Next they are not — both write the same `.next` directory, and the second one finds it being
-    // rewritten underneath itself and never binds. That reported as "the app boots ❌" with Next's
-    // telemetry banner as the detail, which is not about booting at all.
+    // The gate used to throw both of these away — it composed `http://localhost:<port>` itself and
+    // booted a dev server of its own — and each hid a defect that shipped and killed first runs:
     //
-    // Doing it here rather than in the finally also stops one scaffold's leftovers reaching the
-    // next one, which is what degraded a whole run down the list.
-    for (const port of handedOverPorts) {
+    //   - The URL. On a cold Next 16 first compile init's page probe timed out on `localhost`, moved
+    //     on to `127.0.0.1`, which answered first, and reported THAT as the app url. Next blocks its
+    //     dev resources for an origin outside `allowedDevOrigins`, so the page never hydrated, the
+    //     connect never ran, and init exited 1 on a correct install — green here, because the gate
+    //     opened `localhost` itself. So the url is taken from init's `--json` result, and it has to
+    //     be on the host the dev server announced.
+    //   - The server. init spawned the dev server with piped output, and once init exited nobody held
+    //     the read end: the server's next log line was an EPIPE, and it died. A user saw "connected",
+    //     then the app and its port went away on the first edit. The gate killed that server and
+    //     started its own, so it could never see it die. So the handed-over server is the one driven
+    //     here, and it has to still answer after init has exited AND after a source edit, which is
+    //     the log line that killed it.
+    appUrl = typeof initResult?.url === 'string' ? initResult.url : undefined;
+    chk(
+      "init's --json names the app url",
+      appUrl !== undefined,
+      appUrl ?? (initResult === undefined ? 'no JSON result in init output' : 'the result has no url'),
+    );
+    // Where the handed-over server writes, which init prints; the announced url is read from there.
+    const devLogPath = /its output goes to (\S.*)$/m.exec(report)?.[1]?.trim();
+    const devLog = () => {
+      try {
+        return undefined === devLogPath ? '' : readFileSync(devLogPath, 'utf8');
+      } catch {
+        return '';
+      }
+    };
+    const announced = announcedUrlIn(devLog());
+    // react-scripts prints no url outside a tty, and every dev server here binds `localhost` unless
+    // told otherwise — which is the host a user types.
+    const expectedHost = hostOf(announced) ?? 'localhost';
+    chk(
+      '  on the host the dev server announced',
+      appUrl !== undefined && hostOf(appUrl) === expectedHost,
+      `${String(appUrl)} — announced ${announced ?? `nothing (expected ${expectedHost})`}`,
+    );
+    const appPort = portOf(appUrl);
+
+    // init's DAEMON is not kept: the gate owns the daemon (step 5). Everything else init mentioned
+    // is freed too, except the one server this gate is about to drive.
+    for (const port of new Set([...handedOverPorts, initPort])) {
       if (port !== appPort) await freePortSafely(port);
     }
-    // And the default range, whether or not `init` mentioned it. `handedOverPorts` is read out of
-    // init's STDOUT, so a dev server that bound a port without announcing one — or that init failed
-    // before printing — was never freed and outlived the scaffold. That is the leak this phase
-    // hands to the next one.
     await clearInitDevPorts(scaffold, note, appPort);
     handedOverPorts = [];
-
-    // Killing the process does not undo a half-written `.next`. That is the other half of the same
-    // problem and the reason the mitigation above was not enough: init's dev server is stopped
-    // mid-compile, leaving a build directory that describes a build nobody finished, and the gate's
-    // own server then reads it, finds it inconsistent and exits without ever binding. Reported as
-    // "the app boots ❌" with Next's telemetry banner as the detail, on all three Next scaffolds,
-    // on Linux only — where Next gets far enough to have written something before it is killed.
-    //
-    // Next rebuilds this from source, so deleting it costs a cold compile and nothing else.
-    //
-    // Best-effort, like every other cleanup here. On Windows the dev server still holds files under
-    // `.next\dev` when this runs, so the delete raises ENOTEMPTY — and Windows does not need this
-    // in the first place: it passed 5/5 before the removal existed, because Next there does not get
-    // far enough to leave an inconsistent build behind. Throwing turned a Linux fix into a Windows
-    // failure on the one scaffold whose dev server was slowest to let go.
-    const nextBuildDir = join(app, '.next');
-    if (existsSync(nextBuildDir)) {
-      try {
-        rmSync(nextBuildDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 500 });
-        note('removed a .next left behind by the dev server init handed over');
-      } catch (err) {
-        note(`left .next in place (${String(err).slice(0, 100)}) — the boot below may still be cold`);
-      }
-    }
 
     // ── 5. own the daemon before the app can dial it (harness rule 2) ───────────────────────────
     //
@@ -1219,43 +1370,11 @@ async function driveScaffold(scaffold, index) {
     daemon = await startOwnedDaemon(bridgePort, { cliPath: CLI, cwd: daemonCwd });
     const transport = watchTransport(bridgePort);
 
-    // ── 6. boot, and open it in a real browser ──────────────────────────────────────────────────
-    const [devCmd, devArgs] = scaffold.dev(appPort);
-    const devSpawn = pm(devCmd, devArgs);
-    dev = spawn(devSpawn.cmd, devSpawn.args, {
-      cwd: app,
-      detached: !WIN,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, BROWSER: 'none', ...(scaffold.devEnv?.(appPort) ?? {}) },
-      ...devSpawn.shellOpts,
-    });
-    const devLog = [];
-    dev.stdout.on('data', (d) => devLog.push(String(d)));
-    dev.stderr.on('data', (d) => devLog.push(String(d)));
-
-    const bootDeadline = Date.now() + BOOT_TIMEOUT_MS;
-    let booted = false;
-    while (Date.now() < bootDeadline) {
-      if (await reachable(`http://localhost:${String(appPort)}/`)) {
-        booted = true;
-        break;
-      }
-      await sleep(500);
-    }
-    // The LAST 300 characters of a dev server's log is its banner, not its error — Next prints a
-    // telemetry notice on the way out, so every boot failure here was reported as
-    // "…completely anonymous telemetry regarding usage." and the actual cause was never shown.
-    // Lines that look like a failure first, then the tail as context.
-    const devText = devLog.join('');
-    const devErrors = devText
-      .split('\n')
-      .filter((l) => /error|failed|EADDRINUSE|cannot|ENOENT|exit/i.test(l))
-      .slice(-6)
-      .join(' | ');
+    // ── 6. the handed-over server, after init has exited, in a real browser ─────────────────────
     chk(
-      'the app boots',
-      booted,
-      booted ? `:${String(appPort)}` : `${devErrors || '(no error lines)'} ⟨tail⟩ ${devText.slice(-300)}`,
+      "init's dev server still answers after init exited",
+      appUrl !== undefined && (await answersWithin(appUrl, HANDOVER_ANSWER_MS)),
+      `${String(appUrl)}${devLogPath === undefined ? ' (init named no dev-server log)' : ''}`,
     );
 
     const { chromium } = await import('playwright');
@@ -1279,10 +1398,8 @@ async function driveScaffold(scaffold, index) {
       ws.on('socketerror', (e) => wsAttempts.push(`FAILED ${ws.url()} — ${String(e)}`));
     });
     try {
-      await page.goto(`http://localhost:${String(appPort)}/`, {
-        waitUntil: 'domcontentloaded',
-        timeout: 60_000,
-      });
+      if (appUrl === undefined) throw new Error('init reported no app url to open');
+      await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     } catch (err) {
       consoleLines.push(`goto failed: ${String(err).slice(0, 120)}`);
     }
@@ -1300,9 +1417,10 @@ async function driveScaffold(scaffold, index) {
     // whose url was `http://localhost:5173/`, which is a SvelteKit server from the run before it.
     // CRA does not serve 5173 and never did; the gate reported a working CRA install on evidence
     // from a different framework. That is the exact failure this whole file exists to prevent, one
-    // level up. The browser above was pointed at `appPort`, so that is the only session that can
+    // level up. The browser above was pointed at init's url, so that is the only session that can
     // answer for what was installed here.
-    const isOurs = (s) => String(s?.url ?? '').includes(`:${String(appPort)}`);
+    const isOurs = (s) =>
+      appPort !== undefined && String(s?.url ?? '').includes(`:${String(appPort)}`);
     const connectDeadline = Date.now() + CONNECT_TIMEOUT_MS;
     let sessions = [];
     while (Date.now() < connectDeadline) {
@@ -1346,6 +1464,24 @@ async function driveScaffold(scaffold, index) {
       if (!passed) dumpEvidence(consoleLines, bridgePort, failedResponses, wsAttempts);
     }
 
+    // ── 7. a source edit, which is a log line, and the handed-over server must survive it ──────
+    const logBefore = devLog().length;
+    const edited = editSourceAfterHandover(app);
+    const logDeadline = Date.now() + EDIT_LOG_WAIT_MS;
+    while (Date.now() < logDeadline && devLog().length === logBefore) await sleep(500);
+    note(
+      devLog().length > logBefore
+        ? `the dev server wrote to its log after the edit of ${String(edited)}`
+        : `the dev server wrote nothing within ${String(EDIT_LOG_WAIT_MS / 1000)}s of the edit`,
+    );
+    chk(
+      '  and still answers after a source edit',
+      edited !== undefined && appUrl !== undefined && (await answersWithin(appUrl, HANDOVER_ANSWER_MS)),
+      edited === undefined
+        ? `none of ${EDIT_CANDIDATES.join(', ')} exists in this scaffold`
+        : `edited ${edited}; log tail: ${devLog().slice(-200).replace(/\s+/g, ' ')}`,
+    );
+
     // ── 9. Reticle wrote nothing into the directory it was merely STARTED in ────────────────────
     //
     // The one negative assertion in this gate, and the only kind that can catch this class: every
@@ -1366,9 +1502,10 @@ async function driveScaffold(scaffold, index) {
   } catch (err) {
     chk('the scaffold ran to completion', false, String(err).slice(0, 300));
   } finally {
-    if (dev !== undefined) killTree(dev.pid);
     if (daemon !== undefined) await daemon.stop();
-    await freePortSafely(appPort);
+    // The server init handed over, which the gate drove instead of starting its own.
+    const handedOverAppPort = portOf(appUrl);
+    if (handedOverAppPort !== undefined) await freePortSafely(handedOverAppPort);
     // The dev server INIT started and handed over, which is not the one above.
     //
     // Handing it over is the product behaviour: init leaves the user with a running instrumented
@@ -1376,9 +1513,7 @@ async function driveScaffold(scaffold, index) {
     // vite squatting the port the NEXT scaffold's init would ask for, and the run degraded down the
     // list while the first scaffold looked fine. Three "the app boots" failures, none of them about
     // booting.
-    for (const port of handedOverPorts) {
-      if (port !== appPort) await freePortSafely(port);
-    }
+    for (const port of handedOverPorts) await freePortSafely(port);
     if (KEEP) note(`kept: ${workdir}`);
     // A dev server that has just been signalled is still flushing `.next` into this directory, so
     // the first rmdir loses a race it does not have to lose.
@@ -1420,8 +1555,6 @@ for (const offset of [0, SELF_TEST_PORT_OFFSET]) {
     const b = Number(process.env.INSTALL_GATE_PORT ?? '4788') + offset + i * 2;
     allGatePorts.add(b);
     allGatePorts.add(b + 1);
-    const a = Number(process.env.INSTALL_GATE_APP_PORT ?? '4820') + offset + i * 2;
-    allGatePorts.add(a);
   }
 }
 for (const port of allGatePorts) {

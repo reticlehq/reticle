@@ -16,6 +16,7 @@ import { detect, Framework, UiLibrary } from './detect/detect.js';
 import { frameworkPackages } from './plan/plan.js';
 import { nuxtManual, nuxtPluginPath } from './patch/snippets.js';
 import { nuxtSteps } from './plan/plan-framework.js';
+import { StepTitle } from './plan/connect-steps.js';
 import { StepStatus, type PlanInput } from './plan/plan.js';
 import { patchNuxtConfig } from './patch/nuxt-patch.js';
 import { PatchKind } from './patch/patch-kind.js';
@@ -120,6 +121,20 @@ describe('the plugin init writes', () => {
     expect(step?.status).toBe(StepStatus.ALREADY);
   });
 
+  it('asks for a restart only when this run changed what Nuxt reads at startup', () => {
+    const first = nuxtSteps(planInput());
+    expect(first.some((s) => StepTitle.NUXT_RESTART === s.title)).toBe(true);
+    const patchedConfig = first.find((s) => s.title === StepTitle.NUXT_CONFIG)?.write?.content;
+    expect(patchedConfig).toBeDefined();
+    const again = nuxtSteps(
+      planInput({
+        nuxtPluginExists: true,
+        nuxtConfig: { path: 'nuxt.config.ts', source: patchedConfig ?? '' },
+      }),
+    );
+    expect(again.some((s) => StepTitle.NUXT_RESTART === s.title)).toBe(false);
+  });
+
   it('still prints the recipe when the config cannot be patched', () => {
     // The token is inlined BY the config. A plugin written beside a config we could not patch is an
     // app that dials the bridge and is refused — so both halves go manual together, as Astro does.
@@ -189,8 +204,10 @@ describe('the recipe', () => {
     expect(recipe).toContain('proj-1');
   });
 
-  it('does not claim verified support it does not have', () => {
-    expect(recipe).toContain('UNVERIFIED');
+  // Nuxt is in the install gate now, so the recipe says what that proves and no more.
+  it('claims only the verification the install gate gives it', () => {
+    expect(recipe).toContain('install gate');
+    expect(recipe).not.toContain('UNVERIFIED');
   });
 });
 

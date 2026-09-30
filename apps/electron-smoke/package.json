@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -s first \"vite\" \"wait-on tcp:5174 && electron .\"",
-    "dev:packaged": "vite build && cross-env RETICLE_DEMO_FILE=1 electron .",
+    "dev:packaged": "vite build --mode development && cross-env RETICLE_DEMO_FILE=1 electron .",
     "typecheck": "tsc -b"
   },
   "main": "electron/main.cjs",

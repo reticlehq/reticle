@@ -13,6 +13,7 @@ import { Framework, UiLibrary } from '@/detect/detect.js';
 import type { FoundStore } from '@/detect/capabilities.js';
 import { RETICLE_VERSION } from '@/version.js';
 import { VITE_ENV_DEV_DECLARATION } from './vite-env-types.js';
+import { posix } from 'node:path';
 
 /**
  * The SDK as one import a plain page can actually resolve.
@@ -33,7 +34,14 @@ import { VITE_ENV_DEV_DECLARATION } from './vite-env-types.js';
  * PINNED to this server's version on purpose. A floating import upgrades the page SDK underneath a
  * daemon that did not move, which is `version_skew` arriving by a route nothing checks.
  */
-const CDN_SDK_URL = `https://cdn.jsdelivr.net/npm/@reticlehq/browser@${RETICLE_VERSION}/+esm`;
+/**
+ * Where a generated file sends someone to learn `registerStore`. A URL, not a path into
+ * `node_modules/@reticlehq/server`: the server is never installed into the app, so the path the
+ * generated files used to name did not exist in any project they were written into.
+ */
+export const STATE_DOCS_URL = 'https://docs.reticle.sh/state-management';
+
+export const CDN_SDK_URL = `https://cdn.jsdelivr.net/npm/@reticlehq/browser@${RETICLE_VERSION}/+esm`;
 
 /**
  * The connect argument literal: a non-default port adds a `url`, and a projectId is always passed
@@ -83,11 +91,21 @@ export function connectArgWithToken(
  * UNKNOWN keeps the kit deliberately. Absence of evidence is not evidence of Vue, and guessing
  * "sensor" on no information silently drops component identity from apps that should have it.
  *
- * Except on plain Vite, where the absence IS the evidence: nothing there renders React but a
- * `react` the app depends on itself, so no renderer found is a vanilla, Lit, Solid or Angular app.
+ * Except where the absence IS the evidence: on these stacks nothing renders React but a `react` the
+ * app depends on itself, so no renderer found is a vanilla, Lit, Solid or Angular app.
  */
+const RENDERER_IS_DECLARED: ReadonlySet<Framework | undefined> = new Set<Framework | undefined>([
+  Framework.VITE,
+  // A package.json with no UI library and no bundler Reticle recognises. It was handed
+  // `@reticlehq/react` and `react` — a React install into a page with no React in it.
+  Framework.HTML,
+  // Forge's Vite template is vanilla TypeScript; a React renderer declares `react` like any app.
+  Framework.ELECTRON_FORGE,
+  Framework.ANGULAR,
+]);
+
 export function usesReactKit(uiLibrary: UiLibrary, framework?: Framework): boolean {
-  if (UiLibrary.UNKNOWN === uiLibrary) return framework !== Framework.VITE;
+  if (UiLibrary.UNKNOWN === uiLibrary) return !RENDERER_IS_DECLARED.has(framework);
   return uiLibrary !== UiLibrary.VUE && uiLibrary !== UiLibrary.SVELTE;
 }
 
@@ -133,6 +151,16 @@ function frameworkPluginExample(uiLibrary: UiLibrary): string {
   }
 }
 
+/**
+ * The `defineConfig` import each printed config needs. The snippets call `defineConfig`, and one
+ * pasted as printed into an empty file used to die with `ReferenceError: defineConfig is not
+ * defined` because the import was left out.
+ */
+const DEFINE_CONFIG_IMPORT = {
+  VITE: "import { defineConfig } from 'vite';",
+  ELECTRON_VITE: "import { defineConfig } from 'electron-vite';",
+} as const;
+
 /** The Vite-config snippet printed when we can't safely auto-patch the config. */
 export function viteManual(
   port: number | undefined,
@@ -153,6 +181,7 @@ lowercase JSX tag is not an element. Stamping one crashes the app at commit time
 pointers, not the app.`;
   return `Add the Reticle plugin to your Vite config:
 
+  ${DEFINE_CONFIG_IMPORT.VITE}
   import { reticle } from '@reticlehq/vite-plugin';
 
   export default defineConfig({
@@ -168,8 +197,11 @@ from \`vite build\`.${note}`;
 /**
  * The electron-vite recipe: the plugin belongs in `renderer`, never in `main` or `preload`.
  *
- * `desktop: true` is load-bearing. Without it the plugin is serve-only, so a packaged renderer
- * (a production build with no dev server) ships with no connect() at all.
+ * `desktop: true` is load-bearing: it injects connect() into the entry module and passes
+ * `allowInProduction`, because a packaged renderer has no dev server and reports
+ * `NODE_ENV=production`, so without it the SDK's production backstop refuses to start. It does not
+ * instrument a release — a production-mode `electron-vite build` is stubbed like a web bundle — so
+ * a packaged renderer that should be driven is built with `--mode development`.
  */
 export function electronViteManual(
   port: number | undefined,
@@ -181,6 +213,7 @@ export function electronViteManual(
       : `desktop: true, port: ${String(port)}, captureNetworkBodies: true`;
   return `Add the Reticle plugin to the \`renderer\` block of electron.vite.config, not \`main\`:
 
+  ${DEFINE_CONFIG_IMPORT.ELECTRON_VITE}
   import { reticle } from '@reticlehq/vite-plugin';
 
   export default defineConfig({
@@ -191,8 +224,9 @@ export function electronViteManual(
     },
   });
 
-\`desktop: true\` is required: a packaged renderer is a production build with no dev server, so the
-default serve-only plugin is dropped from \`vite build\` and the shipped app never connects.
+\`desktop: true\` is required: a packaged renderer has no dev server and reports production, and
+without it the SDK refuses to start there. A production-mode build still ships no Reticle code; to drive a
+packaged renderer with no dev server, build it with \`--mode development\`.
 
 Also add \`import '@reticlehq/electron/preload'\` as the first line of your preload, and
 \`installReticleCapture(win)\` in main after you construct the BrowserWindow.`;
@@ -239,7 +273,7 @@ export function nextReticleDevFile(
     found.length > 0
       ? found.map((s) => `        registerStore('${s.key}', ${s.ident});`).join('\n')
       : 0 === stores.length
-        ? '        // No state library detected. If you add one, register it here — see node_modules/@reticlehq/server/docs/usage.md.'
+        ? `        // No state library detected. If you add one, register it here — see ${STATE_DOCS_URL}`
         : stores.map((h) => `        // import your store, then: ${h}`).join('\n');
   const registerNames = found.length > 0 ? ', registerStore' : '';
   // Multiline connect + single blank after imports (#684): the one-line connect and the double blank
@@ -486,11 +520,12 @@ export function viteDevModuleFile(
     found.length > 0
       ? found.map((s) => `  registerStore('${s.key}', ${s.ident});`).join('\n')
       : 0 === stores.length
-        ? '  // No state library detected. If you add one, register it here — see node_modules/@reticlehq/server/docs/usage.md.'
+        ? `  // No state library detected. If you add one, register it here — see ${STATE_DOCS_URL}`
         : stores.map((h) => `  // import your store, then: ${h}`).join('\n');
   const registerImport =
     found.length > 0 ? 'registerCapabilities, registerStore' : 'registerCapabilities';
-  return `// Dev-only. Imported automatically by @reticlehq/vite-plugin, so you do not need to import it.
+  return `// Dev-only. Loaded for you after connect() — by @reticlehq/vite-plugin's injected connect, or by
+// the connect file init wrote for a framework that connects itself — so you do not import it.
 // Self-guards on import.meta.env.DEV, so it is a no-op in a production build.
 import { ${registerImport} } from '${sdk.specifier}';
 ${storeImports.length > 0 ? `${storeImports}\n` : ''}
@@ -518,6 +553,15 @@ ${VITE_ENV_DEV_DECLARATION}`;
 
 /** Where that module goes. Matches @reticlehq/vite-plugin's convention list. */
 export const VITE_DEV_MODULE_PATH = 'src/reticle-dev.ts';
+
+/**
+ * The dev module as a relative import from `fromFile` — for the frameworks that connect themselves
+ * and so have to load it themselves (see svelteKitHooksFile, tanstackStartConnectFile).
+ */
+export function devModuleSpecifier(fromFile: string): string {
+  const rel = posix.relative(posix.dirname(fromFile), VITE_DEV_MODULE_PATH.replace(/\.ts$/, ''));
+  return rel.startsWith('.') ? rel : `./${rel}`;
+}
 /**
  * electron-vite's renderer Vite root is `src/renderer`, so the plugin looks for
  * `src/renderer/src/reticle-dev.ts` — not the package-root path a plain Vite app uses.
@@ -640,8 +684,21 @@ export function htmlManual(
   port: number | undefined,
   projectId?: string,
   pairingToken?: string,
+  // Which SDK the bundled form imports must be the one init INSTALLED. A page with no UI library
+  // now gets the sensor, and a snippet still naming `@reticlehq/react` would import a package that
+  // is not there.
+  uiLibrary: UiLibrary = UiLibrary.UNKNOWN,
 ): string {
   const withToken = connectArgWithToken(port, projectId, pairingToken);
+  const sdk = sdkImport(uiLibrary, Framework.HTML);
+  const bundledImport = sdk.usesInstall
+    ? `void import('${sdk.specifier}').then(({ reticle, install }) => {
+          install();
+          reticle.connect(${withToken});
+        });`
+    : `void import('${sdk.specifier}').then(({ reticle }) => {
+          reticle.connect(${withToken});
+        });`;
   const tokenNote =
     pairingToken === undefined || 0 === pairingToken.length
       ? ''
@@ -651,13 +708,10 @@ export function htmlManual(
   return `No Vite/Next plugin detected — wire the dev-only connect by hand. Pick the form for your setup:
 
   • Bundled app (Create React App, webpack, Parcel, Vue/Svelte CLI, etc.) — add to your ENTRY module
-    (e.g. src/index.js or src/main.js), where '@reticlehq/react' resolves through your bundler:
+    (e.g. src/index.js or src/main.js), where '${sdk.specifier}' resolves through your bundler:
 
       if (process.env.NODE_ENV !== 'production') {
-        void import('@reticlehq/react').then(({ reticle, install }) => {
-          install();
-          reticle.connect(${withToken});
-        });
+        ${bundledImport}
       }${tokenNote}
 
   • Plain HTML with NO build step (FastAPI, Flask, Django, Rails, Streamlit, a hand-written page) —
@@ -684,7 +738,7 @@ export const SVELTEKIT_HOOKS_PATH = 'src/hooks.client.ts';
  * component names and source mapping do not, and no CI gate covers this stack. Saying so beats
  * reporting all-green.
  */
-export function unverifiedUiLibraryNote(library: string): string {
+export function unverifiedUiLibraryNote(library: string, installGated = false): string {
   // Preact is not in the same position as Vue or Svelte and must not be told it is. The React
   // adapter reaches Preact through `preact/compat`, which is what `docs/frameworks.mdx` has always
   // said, so telling a Preact reader they get no component identity contradicts our own docs and
@@ -694,14 +748,14 @@ export function unverifiedUiLibraryNote(library: string): string {
     'preact' === library
       ? 'React component identity — component names and stacks — comes from `@reticlehq/react`, which reaches Preact through `preact/compat`. That path is not covered by a CI gate here, so treat it as expected-to-work rather than proven.'
       : 'What `@reticlehq/react` adds and you will NOT get is React component identity: component names and component stacks.';
-  return `Detected a ${library} app. Reticle's DOM, network, console and state tools work here. ${'vue' === library ? 'Source `file:line` does NOT come through: the build plugin stamps JSX and, separately, Svelte components, and a Vue single-file component is neither — measured, a Svelte counter reports `src/lib/Counter.svelte:5` and the same drive on Vue reports no source at all.' : 'Source `file:line` does too — the build plugin stamps it for this library (measured on preact and svelte).'} ${identity} ${'vue' === library ? 'The install gate scaffolds a Vue app from scratch on every change, so this SETUP is proven; no gate drives a Vue app to a verdict, so the drive is not.' : `No CI gate covers ${library}.`} Driven on every change: Vite + React, Next.js, Remix, Astro. If something doesn't work, please open an issue.`;
+  return `Detected a ${library} app. Reticle's DOM, network, console and state tools work here. ${'vue' === library ? 'Source `file:line` does NOT come through: the build plugin stamps JSX and, separately, Svelte components, and a Vue single-file component is neither — measured, a Svelte counter reports `src/lib/Counter.svelte:5` and the same drive on Vue reports no source at all.' : 'Source `file:line` does too — the build plugin stamps it for this library (measured on preact and svelte).'} ${identity} ${installGated ? `The install gate scaffolds this ${library} stack from scratch on every change, so this SETUP is proven; no gate drives it to a verdict, so the drive is not.` : `No CI gate covers ${library}.`} Driven on every change: Vite + React, Next.js, Astro. If something doesn't work, please open an issue.`;
 }
 
-export const UNVERIFIED_FRAMEWORK_NOTE =
-  'Reticle has no SvelteKit app and no CI gate for one, so this wiring is untested — it may work, but nothing proves it and nothing will tell us if it breaks. Supported and gated today: Vite + React, Next.js, Remix and Astro. If the hook does not register a session, please open an issue.';
+export const SVELTEKIT_SETUP_GATED_NOTE =
+  'The install gate scaffolds a SvelteKit app on every release and requires this hook to connect a session, so the wiring is proven; driving flows on SvelteKit to a verdict is not. If the hook does not register a session, please open an issue.';
 
 export const UNVERIFIED_TANSTACK_START_NOTE =
-  'Reticle has no TanStack Start app and no CI gate for one, so this wiring is untested — it may work, but nothing proves it and nothing will tell us if it breaks. Supported and gated today: Vite + React, Next.js, Remix and Astro. If the client effect does not register a session, please open an issue.';
+  'Reticle has no TanStack Start app and no CI gate for one, so this wiring is untested — it may work, but nothing proves it and nothing will tell us if it breaks. Gated today: Vite (React, Vue), Next.js, Nuxt, React Router, Remix, Astro, SvelteKit, Create React App and Angular. If the client effect does not register a session, please open an issue.';
 
 /**
  * Printed when init detects react-three-fiber. Reticle's model is DOM + store + network; a WebGL
@@ -748,6 +802,9 @@ if (import.meta.env.DEV) {
       ...(sdkVersion.length > 0 ? { sdkVersion } : {}),
     });
 ${registerCapabilitiesCall(testids, '    ')}
+    // Your stores and capabilities live in ${VITE_DEV_MODULE_PATH}. Only the plugin's injected
+    // connect imports that file, and SvelteKit never runs it, so this hook loads it instead.
+    void import('${devModuleSpecifier(SVELTEKIT_HOOKS_PATH)}');
   });
 }
 
@@ -801,11 +858,30 @@ export function webpack4TranspileNote(reactScriptsMajor: number): string {
 /** React Router's client-entry override point, in framework mode. */
 export const REACT_ROUTER_ENTRY_PATH = 'app/entry.client.tsx';
 
-/** The dev-only module @reticlehq/vite-plugin serves: connect() with the token already in it. */
-const RETICLE_CONNECT_MODULE = '/@reticle-connect';
+/**
+ * The dev-only module @reticlehq/vite-plugin serves: connect() with the token already in it. Named
+ * without its leading slash, because that is the part both the current line and the old one carry.
+ */
+const RETICLE_CONNECT_MODULE = '@reticle-connect';
 
-/** The one line that puts Reticle in a React Router client entry. */
-const REACT_ROUTER_CONNECT_LINE = `if (import.meta.env.DEV) void import('/@reticle-connect');`;
+/**
+ * The one line that puts Reticle in a React Router client entry — and in a Remix one.
+ *
+ * The specifier is BUILT, not written as a literal. `import('/@reticle-connect')` is a module only
+ * the Vite dev server can answer, so `tsc` cannot resolve it: a fresh framework-mode scaffold went
+ * red on `npm run typecheck` (`TS2307: Cannot find module '/@reticle-connect'`) the moment `init`
+ * wrote it. A computed specifier is typed `Promise<any>` and never resolved, so no declaration, no
+ * suppression comment and no tsconfig edit is needed. The browser still asks the dev server for the
+ * same URL, which the plugin serves; `BASE_URL` keeps it right under a non-root `base`. `@vite-ignore`
+ * is Vite's own marker for a dynamic import it should not try to analyse, not a lint suppression. In
+ * a production build `import.meta.env.DEV` is false and the whole line is dropped.
+ */
+export const REACT_ROUTER_CONNECT_LINE =
+  'if (import.meta.env.DEV) void import(/* @vite-ignore */ `${import.meta.env.BASE_URL}@reticle-connect`);';
+
+/** The line `init` used to write, which fails `tsc`; replaced in place on a re-run. */
+const REACT_ROUTER_CONNECT_LINE_UNTYPED =
+  "if (import.meta.env.DEV) void import('/@reticle-connect');";
 
 /**
  * The client entry `init` writes when React Router framework mode has none.
@@ -849,6 +925,9 @@ startTransition(() => {
  * still be evaluated first, and this is a side-effect import.
  */
 export function reactRouterEntryPatch(source: string): string | null {
+  if (source.includes(REACT_ROUTER_CONNECT_LINE_UNTYPED)) {
+    return source.replace(REACT_ROUTER_CONNECT_LINE_UNTYPED, REACT_ROUTER_CONNECT_LINE);
+  }
   if (source.includes(RETICLE_CONNECT_MODULE)) return null;
   const lines = source.split('\n');
   let lastImport = -1;

@@ -298,6 +298,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   cli: [
     // doctor reads the document the dev server serves (served-document.ts) to judge its CSP.
     'dev-server',
+    // `verify <url> --expect` opens the url when no tab is on it, by the same rule `reticle open`
+    // uses (decideOpen), so the two commands cannot disagree about which tab counts.
+    'launch',
     'answers',
     'binding',
     'suite',

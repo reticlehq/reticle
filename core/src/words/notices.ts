@@ -77,7 +77,7 @@ export const THROTTLED_WARNING =
  */
 export const THROTTLED_STARVED_NOTE =
   'this tab is throttled and has not rendered; a miss here is not evidence the UI is absent. ' +
-  'acquire a scriptable context with reticle_run { tool: "reticle_lease", action: "acquire", url } ' +
+  'acquire a scriptable context with reticle_run { tool: "reticle_lease", args: { action: "acquire", url } } ' +
   '(the human can run `reticle drive <url>` if they have a shell)';
 
 /**
@@ -178,7 +178,7 @@ export const DESKTOP_WINDOW_BACKGROUNDED =
   "this app window is in the background, and a backgrounded webview clamps its timers and rAF — a synthetic action can land on a page that never advances. Bring the app window to the front and retry. A lease is NOT the answer for a desktop app: it opens a browser context, which has none of this app's IPC or commands.";
 
 export const HIDDEN_TAB_RECOMMENDATION =
-  'tab hidden and may be un-focusable from here; timers and rAF are clamped in a background tab, so an action can land on a page that never advances. Refocus it, or acquire a guaranteed scriptable context yourself with `reticle_run { tool: "reticle_lease", action: "acquire", url }` (a human can equivalently run `reticle drive <url>`) — ' +
+  'tab hidden and may be un-focusable from here; timers and rAF are clamped in a background tab, so an action can land on a page that never advances. Refocus it, or acquire a guaranteed scriptable context yourself with `reticle_run { tool: "reticle_lease", args: { action: "acquire", url } }` (a human can equivalently run `reticle drive <url>`) — ' +
   LEASE_IS_INVISIBLE_NOTE;
 
 /**

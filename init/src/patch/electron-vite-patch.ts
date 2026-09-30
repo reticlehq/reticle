@@ -25,7 +25,7 @@ const RENDERER_NOT_LITERAL_REASON =
 const WRONG_BLOCK_REASON =
   'reticle() is in this file but not in the `renderer` block — the plugin belongs where there is a document, and leaving it in `main` or `preload` would report success for an app that cannot connect';
 const MISSING_DESKTOP_REASON =
-  'reticle() is already in the `renderer` block but without `desktop: true` — a packaged renderer is a production build with no dev server, so the plugin is dropped from `vite build` and the shipped app has no connect()';
+  'reticle() is already in the `renderer` block but without `desktop: true` — a packaged renderer has no dev server and reports production, so without it the SDK refuses to start there and the packaged app never connects';
 
 function reticlePluginCall(port: number | undefined): string {
   const options = [

@@ -13,7 +13,7 @@
  * Pure. The facts arrive from the watch; nothing here touches the disk or the clock.
  */
 
-import { NoSessionAction, ReticleEnv } from '@reticlehq/core';
+import { NoSessionAction, RETICLE_URL_PARAM, ReticleEnv } from '@reticlehq/core';
 import type { DevCommand } from './dev-server/dev-command.js';
 
 /** The executable half of the no-session payload. */
@@ -69,6 +69,38 @@ interface NextActionFacts {
    * action that cannot help and can overwrite it.
    */
   authRefused?: boolean;
+  /**
+   * The bridge refused the last hello for a non-token reason (protocol or wire-contract skew), in
+   * the bridge's own `cause — fix` sentence. Current, like `authRefused`: nothing connected since.
+   * Every other action below would send the agent to start, open or re-wire an app that is running,
+   * instrumented and being turned away.
+   */
+  helloRefused?: string;
+  /**
+   * The url the session that went away was on, from the daemon's own tombstone. Positive evidence
+   * about where THIS project's app lives, which the port scan is not: the scan is machine-wide, and
+   * its one hit is as likely to be another repo's dev server as this one's.
+   */
+  lastKnownUrl?: string;
+}
+
+/**
+ * The departed session's url as a human would type it: the params a Reticle launcher stamps on a
+ * lease are stripped, because reopening WITH them would adopt the dead lease's identity. Undefined
+ * for a url that does not parse, or one with no port to name (a desktop webview's opaque origin).
+ */
+function reopenableUrl(raw: string | undefined): { url: string; port: number } | undefined {
+  if (raw === undefined) return undefined;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return undefined;
+  }
+  if ('http:' !== url.protocol && 'https:' !== url.protocol) return undefined;
+  for (const param of Object.values(RETICLE_URL_PARAM)) url.searchParams.delete(param);
+  const port = '' === url.port ? ('https:' === url.protocol ? 443 : 80) : Number(url.port);
+  return { url: url.toString(), port };
 }
 
 /** `reticle init`, the only command here that is Reticle's own and so cannot be wrong. */
@@ -88,6 +120,15 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
     return { action: NoSessionAction.DAEMON_SPLIT, reason: splitBrain };
   }
 
+  if (facts.helloRefused !== undefined) {
+    return {
+      action: NoSessionAction.OPEN_APP,
+      reason:
+        `a page dialled this daemon and was refused (${facts.helloRefused}); do that, then reload ` +
+        'the page — the SDK does not retry after a refusal.',
+    };
+  }
+
   // `authRefused` is checked here and not only further down, because this branch short-circuits.
   //
   // Both refusal branches below were already written and already right, and neither could be
@@ -104,17 +145,26 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
   if (facts.everConnected && true !== facts.authRefused) {
     const listening = facts.listening;
     const only = 1 === listening.length ? listening[0] : undefined;
+    // The departed session's own url first: it is where this project's app demonstrably was, while
+    // a lone port from the scan may belong to anybody.
+    const known = reopenableUrl(facts.lastKnownUrl);
     const bound =
-      0 === listening.length
-        ? ''
+      known !== undefined
+        ? ` It was last on ${known.url}; reopen that — do not start a second stack.`
+        : 0 === listening.length
+          ? ''
+          : only === undefined
+            ? ` An app is already listening on ${listening.join(', ')}; just open the URL the human names — do not start a second stack.`
+            : ` An app is already listening on ${String(only)}; just open ${LOCALHOST}:${String(only)} — do not start a second stack.`;
+    const target =
+      known !== undefined
+        ? { command: `${OPEN_COMMAND} ${known.url}`, port: known.port }
         : only === undefined
-          ? ` An app is already listening on ${listening.join(', ')}; just open the URL the human names — do not start a second stack.`
-          : ` An app is already listening on ${String(only)}; just open ${LOCALHOST}:${String(only)} — do not start a second stack.`;
+          ? {}
+          : { command: `${OPEN_COMMAND} ${LOCALHOST}:${String(only)}`, port: only };
     return {
       action: NoSessionAction.REOPEN_APP,
-      ...(only === undefined
-        ? {}
-        : { command: `${OPEN_COMMAND} ${LOCALHOST}:${String(only)}`, port: only }),
+      ...target,
       reason:
         'a session was connected to this daemon earlier, so the wiring is correct — the tab was ' +
         'closed, reloaded, or the lease aged out. Reopen the app, or take one you own with ' +
@@ -180,7 +230,9 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
       reason:
         'nothing is listening on the ports Reticle scans, so the app is probably not running — ' +
         'though that scan is narrow, so if it IS up on another port, ask for its URL instead of ' +
-        `starting a second one. This is the project's own \`${dev.script}\` script — run it in the ` +
+        `starting a second one. This is the project's own ` +
+        (undefined === dev.script ? 'launcher' : `\`${dev.script}\` script`) +
+        ` — run it in the ` +
         'background, tell the human it is running, then call reticle_sessions again.',
     };
   }

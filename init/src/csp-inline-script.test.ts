@@ -102,6 +102,25 @@ describe('diagnoseWebCsp', () => {
     expect(findings[0]?.problem).toContain('connect-src');
   });
 
+  /**
+   * Only the hand-pasted HTML snippet is inline. A plugin-wired app connects from an external module
+   * (web) or from its entry module (desktop), so the inline rule is not what blocks it — and
+   * reporting it hid the connect-src finding that was.
+   */
+  it('reports the socket block, not the inline rule, for an app that pastes no snippet', () => {
+    const findings = diagnoseWebCsp(
+      read({
+        'index.html': `<meta http-equiv="Content-Security-Policy" content="default-src 'self'">`,
+      }),
+      PORT,
+      [],
+      { inlineSnippet: false },
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.problem).toContain('connect-src');
+    expect(findings[0]?.problem).not.toContain(EXTERNAL_CONNECT_PATH);
+  });
+
   it('finds nothing on an app with no CSP', () => {
     expect(diagnoseWebCsp(read({ 'next.config.js': 'export default {}' }), PORT)).toEqual([]);
   });

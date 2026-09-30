@@ -45,13 +45,15 @@ describe('advice names a call the reader can actually make', () => {
 
   it('replaces the lease escape hatch with one that exists when neither tool is advertised', () => {
     const out = liveCallText(
-      'drive your own browser with reticle_run { tool: "reticle_lease", action: "acquire", url }',
+      'drive your own browser with reticle_run { tool: "reticle_lease", args: { action: "acquire", url } }',
       MERGED,
     );
     expect(out).not.toContain('reticle_run');
     expect(out).not.toContain('reticle_lease');
     // The CLI is the escape hatch that survives on every surface, because it is not a tool.
     expect(out).toContain('reticle open');
+    // The call nests `args: { … }`; a body that stopped at the first `}` left the outer one behind.
+    expect(out).not.toMatch(/\}\s*$/);
   });
 
   /**
@@ -82,7 +84,7 @@ describe('advice names a call the reader can actually make', () => {
 
   it('keeps the lease advice verbatim where the tools exist', () => {
     const text =
-      'drive your own browser with reticle_run { tool: "reticle_lease", action: "acquire", url }';
+      'drive your own browser with reticle_run { tool: "reticle_lease", args: { action: "acquire", url } }';
     expect(liveCallText(text, FULL)).toBe(text);
   });
 
@@ -92,7 +94,7 @@ describe('advice names a call the reader can actually make', () => {
     // unchanged.
     const serialised = JSON.stringify({
       recovery:
-        'drive your own browser with reticle_run { tool: "reticle_lease", action: "acquire", url }',
+        'drive your own browser with reticle_run { tool: "reticle_lease", args: { action: "acquire", url } }',
     });
     const out = liveCallText(serialised, MERGED);
     expect(out).not.toContain('reticle_run');

@@ -1,0 +1,3 @@
+### Fixed
+
+- **The dev server `init` leaves running could fill the disk with its log.** Its output went straight to `~/.reticle/dev-server-<hash>.log` with no size limit, and an upstream echo loop (TanStack devtools and Vite 8 forwarding each other's console output) grew one to 2.9 GB in about five minutes. The output now goes through a small supervisor that lives exactly as long as the server and rotates the log past 8 MB, keeping the newest output, so a project's log never exceeds 16 MB. The server still survives `init` exiting. Logs left by dev servers that are no longer running are now deleted.

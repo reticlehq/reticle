@@ -1,0 +1,3 @@
+### Fixed
+
+- **`init --port <new>` left the old daemon running, and the page dialled it.** The build plugins (Vite and Next) chose a live daemon registered for the project ahead of `.reticle.json`, and the lowest port among several, so the app connected to the daemon on the old port while `init` waited on the new one and exited 1 with "connected to a DIFFERENT Reticle daemon" — on Svelte, Vue, Remix, React Router and Next. The configured port now wins whenever a daemon is live on it, with registry discovery only when nothing is, and `init` stops this project's daemon on the port it moved away from unless another project's tab is still using it.

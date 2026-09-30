@@ -48,8 +48,16 @@ export function readPage(probe: PageProbe): PageFinding {
 /**
  * What the page adds to the daemon's account. Deliberately a sentence to APPEND, not a replacement:
  * the daemon's diagnosis names the fix, and this says what the page looked like when we checked.
+ *
+ * `daemonSpoke`: the daemon already gave its account. Whether the page dialled is ITS fact (it
+ * sees every hello, including one it refused), so the SDK_PRESENT sentence then states only the
+ * page fact. Saying "never dialled the bridge" under "this daemon REFUSED the last page" contradicted
+ * the one piece of positive evidence in the run.
  */
-export function describePage(finding: PageFinding, url: string): string {
+export function describePage(finding: PageFinding, url: string, daemonSpoke = false): string {
+  if (PageFinding.SDK_PRESENT === finding && daemonSpoke) {
+    return `The SDK IS in the page at ${url}; the daemon's account above says what became of it.`;
+  }
   switch (finding) {
     case PageFinding.NOT_SERVED:
       // Leads with the cause. The break-matrix asserts this phrasing because it is what a reader
@@ -110,11 +118,18 @@ export async function findingBeforeOpen(
   clock: { readonly now: () => number; readonly sleep: (ms: number) => Promise<void> },
   windowMs: number,
   pollMs: number,
+  /**
+   * The served HTML carries the SDK marker on this shape. When it does not (the connect is in the
+   * JS bundle), SDK_MISSING is the permanent state of a healthy page, and waiting for it to change
+   * only delays the window that would load the bundle.
+   */
+  htmlCarriesSdk = true,
 ): Promise<PageFinding> {
   const readyBy = clock.now() + windowMs;
   let finding = readPage(await probe());
   while (
-    (PageFinding.SDK_MISSING === finding || PageFinding.NOT_SERVED === finding) &&
+    ((htmlCarriesSdk && PageFinding.SDK_MISSING === finding) ||
+      PageFinding.NOT_SERVED === finding) &&
     clock.now() < readyBy
   ) {
     await clock.sleep(pollMs);

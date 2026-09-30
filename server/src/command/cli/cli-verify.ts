@@ -13,7 +13,7 @@
 import { join, basename } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { runAdhocVerdict } from './adhoc-verdict.js';
-import { runAdhocSuite } from './adhoc-suite.js';
+import { runAdhocExplore, runAdhocSuite } from './adhoc-suite.js';
 import {
   exploreApp,
   harnessAvailable,
@@ -47,7 +47,7 @@ import {
 } from '@/command/daemon/binding/port-presence.js';
 import { EXPECT_FLAG } from './cli-parse-grammar.js';
 import { probeDaemon } from '@/surface/mcp/mcp-proxy.js';
-import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
+import { fetchStatus, summarizeStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import {
   cloudFetch,
   createProgressReporter,
@@ -516,12 +516,26 @@ export function expectNeedsDaemonMessage(port: number, presence: PortPresence): 
   );
 }
 
+/**
+ * The model key is set here but not in the daemon, which is where the drive runs. The daemon is
+ * usually the one `init` or the agent's MCP client started, from an environment without the key.
+ */
+export function daemonLacksKeyMessage(port: number): string {
+  return (
+    `${ReticleEnv.HARNESS_KEY} is set in this shell, but the daemon on port ${String(port)} was ` +
+    'started without it, and the drive runs inside the daemon. Restart it from this shell so it ' +
+    `inherits the key: npx @reticlehq/server restart --port ${String(port)}`
+  );
+}
+
 /** What `verify` does next, once the options and the state of the port are both known. */
 export const VerifyRoute = {
   /** Ask the daemon that already owns the port for a one-shot verdict on the predicate. */
   ADHOC: 'adhoc',
   /** Ask the daemon that already owns the port to replay the saved flows. See runAdhocSuite. */
   ADHOC_SUITE: 'adhoc-suite',
+  /** Ask the daemon that already owns the port to explore the url and record flows. */
+  ADHOC_EXPLORE: 'adhoc-explore',
   /** Boot our own daemon, drive the url, replay the flows saved on disk. */
   FLOWS: 'flows',
   /** Answer the caller, and run nothing. */
@@ -532,6 +546,7 @@ export type VerifyRoute = (typeof VerifyRoute)[keyof typeof VerifyRoute];
 export type VerifyPlan =
   | { route: typeof VerifyRoute.ADHOC }
   | { route: typeof VerifyRoute.ADHOC_SUITE }
+  | { route: typeof VerifyRoute.ADHOC_EXPLORE }
   | { route: typeof VerifyRoute.FLOWS }
   | { route: typeof VerifyRoute.REFUSE; message: string };
 
@@ -548,11 +563,17 @@ export function routeVerify(args: {
   /** True when the caller supplied a predicate, by `--expect` or `--expect-file`. */
   hasPredicate: boolean;
   /**
-   * True when the caller asked for something only a browser of OUR OWN can do: `--explore` (a model
-   * driving a fresh page), `--headed`, or `--storage-state`. The running daemon's tab can honour
-   * none of them, so replaying there would silently ignore the request.
+   * True when the caller asked for something only a browser of OUR OWN can do: `--headed` or
+   * `--storage-state`. The running daemon's tab can honour neither, so replaying there would
+   * silently ignore the request.
    */
   wantsOwnBrowser?: boolean;
+  /**
+   * `--explore`: a model drives the url and records flows. The daemon on the port runs the same
+   * drive (`reticle_verify { action: "explore" }`), so this is NOT a reason to need our own browser —
+   * it used to be, and `init` leaves exactly that daemon behind before recommending this command.
+   */
+  explore?: boolean;
   presence: PortPresence;
   port: number;
 }): VerifyPlan {
@@ -562,6 +583,9 @@ export function routeVerify(args: {
       : { route: VerifyRoute.REFUSE, message: expectNeedsDaemonMessage(args.port, args.presence) };
   }
   if (args.presence !== PortPresence.DAEMON) return { route: VerifyRoute.FLOWS };
+  if (true === args.explore && true !== args.wantsOwnBrowser) {
+    return { route: VerifyRoute.ADHOC_EXPLORE };
+  }
   // No predicate, but there may be SAVED FLOWS, and a daemon already owns the port: replay them
   // there rather than refusing, unless the request needs a browser that path never opens.
   return true === args.wantsOwnBrowser
@@ -643,8 +667,8 @@ export function handleVerify(parsed: {
     const presence = await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus });
     const plan = routeVerify({
       hasPredicate: expectation !== undefined,
-      wantsOwnBrowser:
-        true === parsed.explore || !parsed.headless || parsed.storageState !== undefined,
+      wantsOwnBrowser: !parsed.headless || parsed.storageState !== undefined,
+      explore: true === parsed.explore || parsed.persona !== undefined,
       presence,
       port,
     });
@@ -667,6 +691,9 @@ export function handleVerify(parsed: {
           port,
           ...(parsed.url !== undefined && '' !== parsed.url ? { url: parsed.url } : {}),
           predicate: expectation,
+          // Read fresh, not from `presence`: that probe asks whether a daemon is on the port, and
+          // this asks whether a TAB is — the difference between asserting and opening the url first.
+          sessions: async () => summarizeStatus(await fetchStatus(port)).sessions,
           ...(parsed.sessionId === undefined ? {} : { sessionId: parsed.sessionId }),
           ...((t: string | undefined) => (t === undefined || 0 === t.length ? {} : { token: t }))(
             readOrCreatePairingTokenSync(defaultPairingTokenDir()),
@@ -689,6 +716,29 @@ export function handleVerify(parsed: {
         });
         for (const line of suite.lines) ports.out(line);
         ports.exit(suite.code);
+        return;
+      }
+      // `--explore` with a daemon on the port — the state `init` leaves behind right before it names
+      // this command as the first run. The daemon drives and records; this process only asks.
+      case VerifyRoute.ADHOC_EXPLORE: {
+        const explored = await runAdhocExplore({
+          port,
+          url: parsed.url,
+          ...(parsed.persona === undefined ? {} : { persona: parsed.persona }),
+          sessions: async () => summarizeStatus(await fetchStatus(port)).sessions,
+          ...((t: string | undefined) => (t === undefined || 0 === t.length ? {} : { token: t }))(
+            readOrCreatePairingTokenSync(defaultPairingTokenDir()),
+          ),
+        });
+        for (const line of explored.lines) ports.out(line);
+        // The drive runs INSIDE the daemon, so the key has to be in ITS environment. A reader who
+        // exported it in this shell and got "set ANTHROPIC_API_KEY" back has been told to do the
+        // thing they just did; say where the key is actually missing.
+        if (0 !== explored.code && harnessAvailable(process.env)) {
+          const refusedForKey = explored.lines.some((line) => line.includes(MSG_NO_HARNESS_KEY));
+          if (refusedForKey) ports.fail(daemonLacksKeyMessage(port));
+        }
+        ports.exit(explored.code);
         return;
       }
       case VerifyRoute.FLOWS:
