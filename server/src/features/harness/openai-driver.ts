@@ -173,18 +173,31 @@ function parseArgs(raw: string): Record<string, unknown> {
   }
 }
 
+/**
+ * Where a Chat Completions call goes. The platform does not expose `/v1/chat/completions`; it
+ * exposes its own path and forwards. A base URL that is not OpenAI's is the platform's, which is
+ * the only other thing this talks to.
+ */
+export function openAiCompletionsUrl(options: Pick<OpenAiDriverOptions, 'baseUrl'>): string {
+  const baseUrl = options.baseUrl ?? DEFAULT_OPENAI_BASE_URL;
+  return `${baseUrl}${DEFAULT_OPENAI_BASE_URL === baseUrl ? OPENAI_PATH : PLATFORM_PATH}`;
+}
+
+/**
+ * The small GPT models refuse function tools on Chat Completions while reasoning is on: measured,
+ * `gpt-5.6-luna` answers 400 to the first request that carries tools. A driving turn is a choice,
+ * not a plan, so no hidden reasoning is also the right depth and the cheapest one.
+ */
+export const OPENAI_REASONING_EFFORT = 'none';
+
 /** Build a driver backed by Chat Completions. */
 export function openAiDriver(options: OpenAiDriverOptions): ModelDriver {
   const model = options.model ?? DEFAULT_OPENAI_MODEL;
-  const baseUrl = options.baseUrl ?? DEFAULT_OPENAI_BASE_URL;
   const doFetch = options.fetch ?? ((url, init) => fetch(url, init));
-  // The platform does not expose `/v1/chat/completions`; it exposes its own path and forwards. A
-  // base URL that is not OpenAI's is the platform's, which is the only other thing this talks to.
-  const path = DEFAULT_OPENAI_BASE_URL === baseUrl ? OPENAI_PATH : PLATFORM_PATH;
 
   return {
     async turn(input): Promise<ModelTurn> {
-      const response = await doFetch(`${baseUrl}${path}`, {
+      const response = await doFetch(openAiCompletionsUrl(options), {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -193,6 +206,7 @@ export function openAiDriver(options: OpenAiDriverOptions): ModelDriver {
         body: JSON.stringify({
           model,
           max_completion_tokens: MAX_TOKENS,
+          reasoning_effort: OPENAI_REASONING_EFFORT,
           tools: input.tools.map(toWireTool),
           messages: [{ role: 'system', content: input.system }, ...toWireMessages(input.history)],
         }),

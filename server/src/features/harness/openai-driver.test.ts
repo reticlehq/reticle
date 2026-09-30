@@ -11,6 +11,7 @@ import type { HistoryEntry, ToolOutcome } from './harness.js';
 
 interface SentBody {
   model: string;
+  reasoning_effort?: string;
   messages: {
     role: string;
     content?: string | null;
@@ -53,6 +54,9 @@ describe('driving over Chat Completions', () => {
     });
     const body = seen.bodies[0];
     expect(body?.messages[0]).toEqual({ role: 'system', content: 'drive it' });
+    // The small GPT models answer 400 to a Chat Completions request that carries tools with
+    // reasoning on; every driving turn carries tools.
+    expect(body?.reasoning_effort).toBe('none');
     expect(body?.messages[1]).toEqual({ role: 'user', content: 'begin' });
     expect(body?.tools[0]).toMatchObject({
       type: 'function',

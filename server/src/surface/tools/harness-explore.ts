@@ -30,7 +30,11 @@ import { buildDomainModel } from '@/judgement/domain/domain-model.js';
 import { readContract } from '@/memory/project/dir/reticle-dir.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
 import { buildHarnessPlan, planAsText, type HarnessPlan } from './harness-plan.js';
-import { openAiDriver, openAiOptionsFromEnv } from '@/features/harness/openai-driver.js';
+import {
+  openAiDriver,
+  openAiOptionsFromEnv,
+  type OpenAiDriverOptions,
+} from '@/features/harness/openai-driver.js';
 import { fetchPlatformConfig, type ConfigFetch } from '@/features/harness/platform-config.js';
 import {
   DEFAULT_MAX_STEPS,
@@ -551,6 +555,10 @@ function buildDriver(
     fillValue: fillValues({
       secret: (label) => env[secretEnvKey(label)],
       ...(fills === undefined ? {} : { cache: fills }),
+      // GPT first: a linked machine reaches it through the platform with no key of its own.
+      ...(openAiOptionsFromEnv(env) === undefined
+        ? {}
+        : { openai: openAiOptionsFromEnv(env) as OpenAiDriverOptions }),
       ...(harnessOptionsFromEnv(env) === undefined
         ? {}
         : { generator: harnessOptionsFromEnv(env) as HarnessDriverOptions }),

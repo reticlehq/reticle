@@ -36,6 +36,12 @@ import {
   type HarnessDriverOptions,
   type HarnessFetch,
 } from './driver.js';
+import {
+  DEFAULT_OPENAI_MODEL,
+  OPENAI_REASONING_EFFORT,
+  openAiCompletionsUrl,
+  type OpenAiDriverOptions,
+} from './openai-driver.js';
 
 /** Deliberately small. A field value is a phrase; anything longer is the model misunderstanding. */
 const MAX_TOKENS = 64;
@@ -99,6 +105,45 @@ const PROMPT = (label: string, context: string): string =>
   `real user would plausibly enter, and short. If the field wants an identifier or a code, invent a ` +
   `well-formed one.`;
 
+/**
+ * A model's one-line answer as a field value, or nothing. A model asked for one value occasionally
+ * answers with a sentence about the value; anything long enough to be prose is not a field value,
+ * and typing prose proves nothing about the app.
+ */
+function asValue(raw: string | undefined): string | undefined {
+  const text = raw?.trim().split('\n')[0];
+  if (text === undefined || 0 === text.length) return undefined;
+  return 80 < text.length ? undefined : text.replace(/^["']|["']$/g, '');
+}
+
+/** One string from GPT over Chat Completions — directly, or through the platform with its key. */
+async function generateWithOpenAi(
+  options: OpenAiDriverOptions,
+  label: string,
+  context: string,
+): Promise<string | undefined> {
+  const call: HarnessFetch = options.fetch ?? ((url, init) => fetch(url, init));
+  try {
+    const res = await call(openAiCompletionsUrl(options), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${options.apiKey}` },
+      body: JSON.stringify({
+        model: options.model ?? DEFAULT_OPENAI_MODEL,
+        max_completion_tokens: MAX_TOKENS,
+        reasoning_effort: OPENAI_REASONING_EFFORT,
+        messages: [{ role: 'user', content: PROMPT(label, context) }],
+      }),
+    });
+    if (!res.ok) return undefined;
+    const parsed = JSON.parse(await res.text()) as {
+      choices?: { message?: { content?: string | null } }[];
+    };
+    return asValue(parsed.choices?.[0]?.message?.content ?? undefined);
+  } catch {
+    return undefined;
+  }
+}
+
 /** One string from a generating model, or nothing. Never throws: a drive must not fail over a field. */
 async function generateOne(
   options: HarnessDriverOptions,
@@ -124,16 +169,12 @@ async function generateOne(
     if (!res.ok) return undefined;
     const parsed: unknown = JSON.parse(await res.text());
     const content = (parsed as { content?: { type?: string; text?: string }[] }).content ?? [];
-    const text = content
-      .filter((block) => 'text' === block.type)
-      .map((block) => block.text ?? '')
-      .join('')
-      .trim()
-      .split('\n')[0];
-    if (text === undefined || 0 === text.length) return undefined;
-    // A model asked for one value occasionally answers with a sentence about the value. Anything
-    // long enough to be prose is not a field value, and typing prose proves nothing about the app.
-    return 80 < text.length ? undefined : text.replace(/^["']|["']$/g, '');
+    return asValue(
+      content
+        .filter((block) => 'text' === block.type)
+        .map((block) => block.text ?? '')
+        .join(''),
+    );
   } catch {
     // Offline, refused, rate-limited, malformed. All the same answer: use the heuristic.
     return undefined;
@@ -148,6 +189,9 @@ async function generateOne(
  */
 export function fillValues(deps: {
   cache?: FillCache;
+  /** GPT, the generator a Jev drive pairs with. Asked ahead of `generator` when both are set. */
+  openai?: OpenAiDriverOptions;
+  /** Anthropic, for a machine that holds only that key. */
   generator?: HarnessDriverOptions;
   /** One line about where the drive is, so a value suits the page it is typed on. */
   context?: () => string;
@@ -166,11 +210,22 @@ export function fillValues(deps: {
     if (cached !== undefined) return cached;
 
     const fallback = heuristicFillValue(label);
-    if (deps.generator === undefined || !needsGeneration(label) || MAX_PER_DRIVE <= spent)
+    const { openai, generator } = deps;
+    if (
+      (openai === undefined && generator === undefined) ||
+      !needsGeneration(label) ||
+      MAX_PER_DRIVE <= spent
+    )
       return fallback;
 
     spent += 1;
-    const generated = await generateOne(deps.generator, label, deps.context?.() ?? '');
+    const context = deps.context?.() ?? '';
+    const generated =
+      openai !== undefined
+        ? await generateWithOpenAi(openai, label, context)
+        : generator !== undefined
+          ? await generateOne(generator, label, context)
+          : undefined;
     if (generated === undefined) return fallback;
     // Cached under the LABEL, not the ref: refs expire with the page, labels are what the next drive
     // and every replay will meet again.

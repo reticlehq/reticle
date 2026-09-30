@@ -70,6 +70,44 @@ describe('what a drive types into a field', () => {
   });
 });
 
+describe('generating with GPT', () => {
+  const completing = (text: string) => {
+    const seen: { url: string; body: Record<string, unknown> }[] = [];
+    const fetch: HarnessFetch = (url, init) => {
+      seen.push({ url, body: JSON.parse(init.body) as Record<string, unknown> });
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify({ choices: [{ message: { content: text } }] })),
+      });
+    };
+    return { seen, fetch };
+  };
+
+  it('asks GPT over Chat Completions, ahead of an Anthropic generator', async () => {
+    const gpt = completing('Northwind Trading Co.');
+    const claude = answering('never');
+    const fill = fillValues({
+      openai: { apiKey: 'sk-openai', fetch: gpt.fetch },
+      generator: generator(claude),
+    });
+    expect(await fill('Business name')).toBe('Northwind Trading Co.');
+    expect(claude).not.toHaveBeenCalled();
+    expect(gpt.seen[0]?.url).toBe('https://api.openai.com/v1/chat/completions');
+    expect(gpt.seen[0]?.body['reasoning_effort']).toBe('none');
+  });
+
+  // A linked project holds no OpenAI key: the platform forwards with its own.
+  it('goes through the platform when that is where the key points', async () => {
+    const gpt = completing('Northwind');
+    const fill = fillValues({
+      openai: { apiKey: 'rk_live_x', baseUrl: 'https://api.reticle.test', fetch: gpt.fetch },
+    });
+    expect(await fill('Business name')).toBe('Northwind');
+    expect(gpt.seen[0]?.url).toBe('https://api.reticle.test/v1/model/openai');
+  });
+});
+
 describe('paying for a value once', () => {
   it('reuses what the project already learned, without asking again', async () => {
     const cache = memoryCache();
