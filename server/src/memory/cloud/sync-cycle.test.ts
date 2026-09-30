@@ -553,13 +553,31 @@ describe('it sends only the difference', () => {
     expect(report.derivedSent).toEqual(['impact']);
   });
 
-  it('does not pay a round trip for flows alone when nothing else moved', async () => {
-    // Flows ride along; they are not worth waking the network for on their own.
-    const { calls } = await cycle(
-      { status: { knownRunIds: [] } },
-      source({ flows: () => [{ name: 'sign-in' }] }),
+  // Flows used to ride along only when something else moved, so a flow saved or edited with no new
+  // run never reached the platform. Found syncing a real repo end to end: 23 flows, "nothing to send".
+  it('sends a changed flow set on its own, once, and not again while it is unchanged', async () => {
+    const src = source({ flows: () => [{ name: 'sign-in' }] });
+    const first = await cycle(
+      { status: { knownRunIds: [] }, sync: { flows: { accepted: 1 } } },
+      src,
     );
-    expect(calls.some((c) => 'POST' === c.method)).toBe(false);
+    expect(first.calls.some((c) => 'POST' === c.method)).toBe(true);
+    expect(first.report.flowsSent).toBe(1);
+    const second = await cycle({ status: { knownRunIds: [] } }, src, first.written.state);
+    expect(second.calls.some((c) => 'POST' === c.method)).toBe(false);
+  });
+
+  it('sends the flow set again once a flow in it changes', async () => {
+    const first = await cycle(
+      { status: { knownRunIds: [] }, sync: { flows: { accepted: 1 } } },
+      source({ flows: () => [{ name: 'sign-in', steps: [] }] }),
+    );
+    const edited = await cycle(
+      { status: { knownRunIds: [] }, sync: { flows: { accepted: 1 } } },
+      source({ flows: () => [{ name: 'sign-in', steps: [{ action: 'click' }] }] }),
+      first.written.state,
+    );
+    expect(edited.calls.some((c) => 'POST' === c.method)).toBe(true);
   });
 
   /*
@@ -612,12 +630,15 @@ describe('it sends only the difference', () => {
     ]);
   });
 
-  it('does not pay a round trip for capsules alone when nothing else moved', async () => {
-    const { calls } = await cycle(
-      { status: { knownRunIds: [] } },
-      source({ capsules: () => [{ id: 'c1' }] }),
+  it('sends a changed capsule set on its own, once, and not again while it is unchanged', async () => {
+    const src = source({ capsules: () => [{ id: 'c1' }] });
+    const first = await cycle(
+      { status: { knownRunIds: [] }, sync: { capsules: { accepted: 1 } } },
+      src,
     );
-    expect(calls.some((c) => 'POST' === c.method)).toBe(false);
+    expect(first.calls.some((c) => 'POST' === c.method)).toBe(true);
+    const second = await cycle({ status: { knownRunIds: [] } }, src, first.written.state);
+    expect(second.calls.some((c) => 'POST' === c.method)).toBe(false);
   });
 
   it('reports how many capsules the server accepted', async () => {
@@ -964,9 +985,15 @@ describe('a platform that predates a record kind', () => {
   const OLD = { status: { stateHashes: { impact: null, flake: null, intent: null } } };
 
   it('sends nothing it does not list, cycle after cycle, and stays ok', async () => {
-    const first = await cycle(OLD, withNewKinds);
-    const second = await cycle(OLD, withNewKinds);
-    for (const run of [first, second]) {
+    // The flow set goes once (it changed from nothing); after that, only unlisted kinds remain, and
+    // those are never sent.
+    const first = await cycle({ ...OLD, sync: { flows: { accepted: 1 } } }, withNewKinds);
+    const firstBody = first.calls.find((c) => 'POST' === c.method)?.body as Record<string, unknown>;
+    expect(Object.keys(firstBody ?? {})).not.toContain('envelopes');
+    expect(Object.keys(firstBody ?? {})).not.toContain('assertion-tiers');
+    const second = await cycle(OLD, withNewKinds, first.written.state);
+    const third = await cycle(OLD, withNewKinds, second.written.state);
+    for (const run of [second, third]) {
       expect(run.calls.some((c) => 'POST' === c.method)).toBe(false);
       expect(run.report.ok).toBe(true);
     }

@@ -118,6 +118,13 @@ export interface CloudSyncState {
    * every flow and capsule along with it.
    */
   refusedRuns?: Record<string, RefusedRun>;
+  /**
+   * Hashes of the flow set and the capsule set the platform last answered for. A flow saved or
+   * edited with no new run used to wait for one, because flows only rode along with other data; now
+   * a changed set is sent on its own, and an unchanged one is not sent again.
+   */
+  sentFlowsHash?: string;
+  sentCapsulesHash?: string;
 }
 
 interface RefusedRun {
@@ -411,10 +418,9 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
     }
     if (unsupported.length > 0)
       heldBack.push(`this platform does not accept ${unsupported.join(', ')} yet`);
-    // Flows are small and upserted by name, so they ride along whenever anything else does rather
-    // than earning a round trip of their own.
-    const ridesAlong = sendable.length > 0 || derivedOffered.length > 0;
-    const flows = (ridesAlong ? deps.source.flows() : []).filter((flow, index) => {
+    // Flows and capsules are upserted by name/id, so the whole set goes whenever it differs from the
+    // set the platform last answered for, and rides along with anything else being sent.
+    const flows = deps.source.flows().filter((flow, index) => {
       const version = numberAt(flow, 'version');
       if (flowVersions === undefined || version === undefined || flowVersions.includes(version))
         return true;
@@ -424,10 +430,15 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
       heldArtifacts = true;
       return false;
     });
-    if (flows.length > 0) bundle['flows'] = flows;
-    // Same gate as flows: only when something else is already going. A cycle that sent capsules and
-    // nothing else would wake the server on every tick of an idle machine.
-    const capsules = ridesAlong ? deps.source.capsules() : [];
+    const capsulesAll = deps.source.capsules();
+    const flowsHash = hashPayload(flows);
+    const capsulesHash = hashPayload(capsulesAll);
+    const flowsChanged = flows.length > 0 && flowsHash !== deps.state.sentFlowsHash;
+    const capsulesChanged = capsulesAll.length > 0 && capsulesHash !== deps.state.sentCapsulesHash;
+    const ridesAlong =
+      sendable.length > 0 || derivedOffered.length > 0 || flowsChanged || capsulesChanged;
+    if (ridesAlong && flows.length > 0) bundle['flows'] = flows;
+    const capsules = ridesAlong ? capsulesAll : [];
     if (capsules.length > 0) bundle['capsules'] = capsules;
 
     let runsSent = 0;
@@ -498,7 +509,13 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
           refused.push({ part: kind, reason: `${kind}: ${verdict}` });
       }
     }
-    if (requests > 0 && pushError === undefined) nextState.lastPushAt = deps.now();
+    if (requests > 0 && pushError === undefined) {
+      nextState.lastPushAt = deps.now();
+      // The platform answered for these sets, refusals included (reported above, and not re-offered
+      // until the set changes — the same rule as a refused run).
+      if (ridesAlong && flows.length > 0) nextState.sentFlowsHash = flowsHash;
+      if (capsules.length > 0) nextState.sentCapsulesHash = capsulesHash;
+    }
     nextState.refusedRuns = refusedRuns;
     if (pushError !== undefined) {
       nextState.sentRunIds = allRuns.map((r) => r.runId).filter((id) => known.has(id));
