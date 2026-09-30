@@ -70,10 +70,27 @@ function findProjectConfigDir(cwd: string): string | undefined {
  */
 export function projectDirOf(cwd: string): string {
   const configDir = findProjectConfigDir(cwd);
-  if (configDir !== undefined) return configDir;
+  if (configDir !== undefined) return appPointedAtBy(configDir) ?? configDir;
   const apps = workspaceAppPorts(cwd);
   const only = 1 === apps.length ? apps[0] : undefined;
   return only === undefined ? resolve(cwd) : join(resolve(cwd), only.app);
+}
+
+/**
+ * The one workspace app below `dir` whose own config names the project `dir`'s does, or undefined.
+ *
+ * `init` writes a copy of the app's `.reticle.json` at the root the agent runs from, so the root's
+ * config is a pointer to that app rather than a project of its own. The projectId is the link — no
+ * path is stored — and a root whose id no app shares, or several do, is its own project.
+ */
+function appPointedAtBy(dir: string): string | undefined {
+  const id = readConfigAt(dir)?.['projectId'];
+  if ('string' !== typeof id || 0 === id.length) return undefined;
+  const named = workspaceApps(dir).filter(
+    (app) => id === readConfigAt(join(dir, app))?.['projectId'],
+  );
+  const only = 1 === named.length ? named[0] : undefined;
+  return only === undefined ? undefined : join(dir, only);
 }
 
 /** The `.reticle.json` in exactly `dir` — no walk — or undefined when absent or not an object. */
@@ -123,21 +140,27 @@ export function readProjectPort(cwd: string): number | undefined {
 
 /** Each workspace app under `cwd` whose own `.reticle.json` records a port. */
 function workspaceAppPorts(cwd: string): { app: string; port: number }[] {
+  const found: { app: string; port: number }[] = [];
+  for (const app of workspaceApps(cwd)) {
+    // The app's OWN file only — walking up from an unwired sibling would reach the root, or past it.
+    const port = configPort(readConfigAt(join(cwd, app)));
+    if (port !== undefined) found.push({ app, port });
+  }
+  return found;
+}
+
+/** init's workspace discovery under `cwd`, relative app directories; empty when `cwd` is no package. */
+function workspaceApps(cwd: string): string[] {
   // Only from a directory that is itself a package: a root with no package.json is not a workspace,
   // and scanning, say, a home directory would adopt the port of whichever checkout happened to sit
   // there.
   if (packageNameAt(cwd) === undefined) return [];
-  const found: { app: string; port: number }[] = [];
   try {
-    for (const app of findWorkspaceApps(buildNodeIo(cwd, SILENT_HOST))) {
-      // The app's OWN file only — walking up from an unwired sibling would reach the root, or past it.
-      const port = configPort(readConfigAt(join(cwd, app)));
-      if (port !== undefined) found.push({ app, port });
-    }
+    return findWorkspaceApps(buildNodeIo(cwd, SILENT_HOST));
   } catch {
     // Discovery touches the filesystem; an unreadable tree is simply no further evidence.
+    return [];
   }
-  return found;
 }
 
 /**

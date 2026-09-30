@@ -107,7 +107,13 @@ import {
 } from './cli/launch/sdk-version-match.js';
 import type { StartOptions } from '@/index.js';
 
-import { DAEMON_INNER_COMMAND, PORT_FLAG, parseCliArgs, CLI_USAGE } from './cli/cli-parse.js';
+import {
+  DAEMON_INNER_COMMAND,
+  PORT_FLAG,
+  parseCliArgs,
+  CLI_USAGE,
+  dialsTheDaemon,
+} from './cli/cli-parse.js';
 import { handleFeedback, handleIdentify, handleTelemetry } from '@/telemetry/feedback-cli.js';
 import { installDaemonTelemetry } from '@/telemetry/daemon-telemetry.js';
 import { reportCliRun } from '@/telemetry/cli-telemetry.js';
@@ -729,6 +735,11 @@ export function main(): void {
   // Headed by default; hidden only where there is no display to be headed on. A run nobody can see
   // is a run nobody trusts, and every "did it actually do anything?" cost a human round-trip.
   const parsed = parseCliArgs(argv, defaultPort, process.env['CI'] !== undefined);
+  // The refusal the line above promised. Printing it and carrying on let the default port answer
+  // anyway, for whichever project's daemon owned it.
+  if (portConflict !== undefined && dialsTheDaemon(parsed)) {
+    process.exit(1);
+  }
 
   switch (parsed.kind) {
     case 'error':

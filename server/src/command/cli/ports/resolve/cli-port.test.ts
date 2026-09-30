@@ -325,6 +325,19 @@ describe('the port of a workspace app, read from the monorepo root', () => {
     expect(projectDirOf(join(dir, 'apps/web'))).toBe(join(dir, 'apps/web'));
   });
 
+  // `init` writes a byte-identical copy of the app's `.reticle.json` at the root the agent runs from.
+  // Finding that copy first named the ROOT as the project, so the SDK version the CLI matches itself
+  // to was read from the root's node_modules — never from apps/web, where pnpm installed it.
+  it('names the app, not the root, when the root holds init’s copy of the app’s config', async () => {
+    const config = { projectId: 'web-abc123', port: 4417 };
+    await writeJson('package.json', { name: 'repo', workspaces: ['apps/*'] });
+    await app('web');
+    await app('api');
+    await writeJson('apps/web/.reticle.json', config);
+    await writeJson('.reticle.json', config);
+    expect(projectDirOf(dir)).toBe(join(dir, 'apps/web'));
+  });
+
   it('knows a desktop shell from the app it serves', async () => {
     await writeJson('package.json', { name: 'repo', workspaces: ['apps/*'] });
     await app('web', 4417);
