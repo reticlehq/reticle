@@ -35,7 +35,12 @@ export async function takeJsCoverage(
   page: Page,
   covering: WeakSet<Page>,
 ): Promise<ScriptCoverage[] | undefined> {
-  if (!covering.has(page)) return undefined;
+  // Nothing collects until something asks: collection slows every script on the page. The first
+  // take starts it and has nothing to report yet.
+  if (!covering.has(page)) {
+    await startJsCoverage(page, covering);
+    return undefined;
+  }
   try {
     const entries = await page.coverage.stopJSCoverage();
     covering.delete(page);

@@ -104,6 +104,8 @@ export const CRAWL_TOOLS: ToolDef[] = [
         ...(true === args['confirmDangerous'] ? { confirmDangerous: true } : {}),
       };
       if (true === args['exhaustive']) {
+        // Starts code-coverage collection, so the drive below is measured. See takeCodeCoverage.
+        await deps.realInput?.takeCodeCoverage?.(session.url);
         return runExhaustive({
           sessions: deps.sessions,
           session,

@@ -9,7 +9,7 @@
  * Node-only. Playwright is loaded via DYNAMIC `import('playwright')` so non-CDP users never
  * pay for it; the type-only import is elided by `tsc`, so the build stays green without it.
  */
-import { startJsCoverage, takeJsCoverage, type ScriptCoverage } from './js-coverage.js';
+import { takeJsCoverage, type ScriptCoverage } from './js-coverage.js';
 import type { Browser, Page } from 'playwright';
 import { stampedDriveUrl } from './drive-url-stamp.js';
 import { chromiumLaunchOptions } from '@/chromium-launch-options.js';
@@ -94,8 +94,10 @@ export interface RealInputProvider {
   setMocks?(sessionUrl: string, rules: MockRule[]): Promise<boolean>;
   /**
    * What of the app's own code ran since the last take (V8 coverage, Chromium only), or undefined
-   * when no driven page matches or coverage is not being collected. Collection starts when the page
-   * is first seen. Optional: a provider with no owned browser cannot see the engine's counters.
+   * when no driven page matches or collection had not started. The first call starts collecting,
+   * because collection slows every script on the page and a slower page can let a console error land
+   * after a clean-console check passed. Optional: a provider with no owned browser cannot see the
+   * engine's counters.
    */
   takeCodeCoverage?(sessionUrl: string): Promise<ScriptCoverage[] | undefined>;
   /**
@@ -325,12 +327,7 @@ export class CdpRealInputProvider implements RealInputProvider {
       browser.contexts().flatMap((c) => c.pages()),
       sessionUrl,
     );
-    if (page !== undefined) {
-      this.#listen(page);
-      // ponytail: an attached page has already loaded, so its load-time functions read as never
-      // run. A `reticle drive` page starts collecting before navigation and has no such gap.
-      await startJsCoverage(page, this.#covering);
-    }
+    if (page !== undefined) this.#listen(page);
     return page;
   }
 
@@ -518,8 +515,6 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
     this.#page = page;
     // Capture CDP-authoritative response detail into the driven session's journal (best-effort).
     if (this.#onNetworkDetail !== undefined) attachNetworkDetail(page, this.#onNetworkDetail);
-    // Before the first navigation, so functions that run only while the app boots are counted.
-    await startJsCoverage(page, this.#covering);
     try {
       // Same navigation rule as the pool, and for the same measured reason: Playwright's default
       // waits for `load`, which an app with one never-finishing subresource never fires — 30s of

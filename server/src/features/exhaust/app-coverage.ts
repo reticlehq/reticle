@@ -19,7 +19,7 @@ export interface AppCoverageReport {
 }
 
 const NO_CODE_NOTE =
-  'The `executed` level is unmeasured here: code coverage needs a browser Reticle drives (`reticle drive`, or RETICLE_CDP_URL). The other levels are real.';
+  'The `executed` level is unmeasured here: code coverage needs a browser Reticle drives (`reticle drive`, or RETICLE_CDP_URL), and collection starts at the first coverage request, so drive and ask again. The other levels are real.';
 
 export async function foldAppCoverage(input: {
   fs: FileSystemPort;
