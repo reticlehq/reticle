@@ -633,6 +633,9 @@ export class Bridge {
           // The daemon is the single judge of skew, and HELLO is where the page announces itself.
           // Reported on the session (reticle_sessions) AND queued for the next tool result, because an
           // agent driving a flow never calls reticle_sessions and would never learn.
+          // Read only if the page IS skewed: the fix reads the project's package.json and lockfile,
+          // and a compatible page (nearly every HELLO) should not pay for that on connect.
+          const fixForThisProject = (): string => this.#sdkFix(parsed.projectId);
           const skew = describeSkew(
             {
               what: 'the page',
@@ -644,7 +647,9 @@ export class Bridge {
               ...(parsed.contractParts === undefined
                 ? {}
                 : { contractParts: parsed.contractParts }),
-              fix: this.#sdkFix(parsed.projectId),
+              get fix(): string {
+                return fixForThisProject();
+              },
             },
             {
               version: SERVER_VERSION,

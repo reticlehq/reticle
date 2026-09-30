@@ -50,6 +50,15 @@ describe('projectDirectoryFor', () => {
     expect(projectDirectoryFor('acme')).toBe(app);
   });
 
+  it('refuses an id two checkouts declare, rather than picking one', () => {
+    const twin = join(scratch, 'acme-copy');
+    mkdirSync(twin, { recursive: true });
+    writeFileSync(join(twin, '.reticle.json'), JSON.stringify({ projectId: 'acme' }));
+    vi.spyOn(process, 'cwd').mockReturnValue(twin);
+
+    expect(projectDirectoryFor('acme')).toBeUndefined();
+  });
+
   it('answers undefined for a project it does not know, or none', () => {
     expect(projectDirectoryFor('someone-else')).toBeUndefined();
     expect(projectDirectoryFor(undefined)).toBeUndefined();

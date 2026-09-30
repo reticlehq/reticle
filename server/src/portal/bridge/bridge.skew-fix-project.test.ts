@@ -6,7 +6,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
-import { LOOPBACK_HOST, MessageKind, RETICLE_WS_PATH } from '@reticlehq/core';
+import { CONTRACT_FINGERPRINT, LOOPBACK_HOST, MessageKind, RETICLE_WS_PATH } from '@reticlehq/core';
 import { Bridge } from './bridge.js';
 
 const asked: (string | undefined)[] = [];
@@ -54,8 +54,9 @@ function hello(sessionId: string, projectId?: string): void {
   });
 }
 
+/** Fifteen seconds, like the bridge harness: shorter waits have failed on a loaded Windows runner. */
 async function waitForSession(sessionId: string): Promise<void> {
-  for (let i = 0; i < 200; i++) {
+  for (let i = 0; i < 750; i++) {
     if (bridge.sessions.get(sessionId) !== undefined) return;
     await new Promise<void>((r) => setTimeout(r, 20));
   }
@@ -68,6 +69,33 @@ describe('a skewed HELLO asks for the fix of its own project', () => {
     await waitForSession('from-acme');
 
     expect(asked).toContain('acme');
+  });
+
+  it('does not ask at all for a page that is not skewed', async () => {
+    const before = asked.length;
+    const sock = new WebSocket(`ws://${LOOPBACK_HOST}:${String(port)}${RETICLE_WS_PATH}`, {
+      origin: 'http://localhost',
+    });
+    open.push(sock);
+    sock.on('open', () => {
+      sock.send(
+        JSON.stringify({
+          kind: MessageKind.HELLO,
+          protocolVersion: 1,
+          sessionId: 'compatible',
+          url: 'http://localhost:3000/',
+          title: 'compatible',
+          adapters: [],
+          hasCapabilities: false,
+          projectId: 'acme',
+          contract: CONTRACT_FINGERPRINT,
+        }),
+      );
+      sock.on('message', () => undefined);
+    });
+    await waitForSession('compatible');
+
+    expect(asked.slice(before)).toEqual([]);
   });
 
   it('asks with no project when the page announced none, so the caller falls back', async () => {

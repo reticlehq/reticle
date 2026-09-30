@@ -86,7 +86,14 @@ function knownProjectCandidates(): ProjectCandidate[] {
  */
 export function projectDirectoryFor(projectId: string | undefined): string | undefined {
   if (projectId === undefined) return undefined;
-  return knownProjectCandidates().find((candidate) => candidate.projectId === projectId)?.directory;
+  const directories = new Set(
+    knownProjectCandidates()
+      .filter((candidate) => candidate.projectId === projectId)
+      .map((candidate) => candidate.directory),
+  );
+  // Two checkouts declaring one id are refused, as the artifact root refuses them: naming one of
+  // them would read the wrong app's package.json and prescribe its packages to the other.
+  return 1 === directories.size ? [...directories][0] : undefined;
 }
 
 export function artifactRootResolver(
