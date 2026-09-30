@@ -58,14 +58,19 @@ export const unconfirmedInjectionMessage = (): string =>
  * `reticle status`. Known examples: SvelteKit, Nuxt, Astro, React Router in framework mode and
  * TanStack Start. Each was found the same way — a user waiting on a session that could never
  * arrive — so the plain-language cause comes first and the fix comes second.
+ *
+ * The fix it names keeps `inject` ON. It used to say "pass `inject: false`", and on a React Router
+ * app, whose client entry imports the connect module this plugin serves, following that advice
+ * switched the module off and broke a working connect.
  */
-export const htmlHookNeverRanMessage = (): string =>
+export const htmlHookNeverRanMessage = (connectModule: string): string =>
   `[${RETICLE_VITE_PLUGIN_NAME}] this app will never connect: the dev server never asked this ` +
-  'plugin to transform any HTML, so reticle.connect() was never added to the page. That usually ' +
-  'means your framework renders its own HTML instead of serving index.html — SvelteKit, Nuxt, ' +
-  'Astro, React Router (framework mode) and TanStack Start all do. Fix: import ' +
-  "'@reticlehq/browser' and call reticle.connect({ token: __RETICLE_TOKEN__ }) yourself from your " +
-  'app entry file, and pass `inject: false` to this plugin so the two do not both try.';
+  'plugin to transform any HTML and nothing loaded its connect module, so reticle.connect() never ' +
+  'reached the page. That usually means your framework renders its own HTML instead of serving ' +
+  'index.html — SvelteKit, Nuxt, Astro, React Router (framework mode) and TanStack Start all do. ' +
+  `Fix: in dev, dynamically import '${connectModule}' from your client entry file — this plugin ` +
+  "serves that module, so leave `inject` on — or import '@reticlehq/browser' there " +
+  'and call reticle.connect({ token: __RETICLE_TOKEN__ }) yourself.';
 
 /**
  * The state behind those three messages, and the rules for reaching each one.
@@ -81,8 +86,13 @@ export interface InjectionWatchDeps {
   readonly inject: boolean;
   /** Whether the desktop entry module was transformed. Read late: it flips during the session. */
   readonly injected: () => boolean;
-  /** Whether Vite ever asked us to transform the app's HTML. Read late, for the same reason. */
-  readonly htmlTransformed: () => boolean;
+  /**
+   * Whether connect() reached the page by ANY route: the HTML hook, the served connect module, or a
+   * hand-written connect. Read late, for the same reason.
+   */
+  readonly connectDelivered: () => boolean;
+  /** The URL the connect module is served at (base-aware, so read late), for the web message. */
+  readonly connectModule: () => string;
   readonly warn: (message: string) => void;
   /** Injected so a test does not wait ten real seconds. Defaults to the module-level timer. */
   readonly schedule?: (run: () => void, ms: number) => void;
@@ -131,10 +141,10 @@ export function createInjectionWatch(deps: InjectionWatchDeps): InjectionWatch {
    * `warn(htmlHookNeverRanMessage())` needs to see it.
    */
   const checkHtmlHookRan = (): void => {
-    if (deps.desktop || !deps.inject || deps.htmlTransformed()) return;
+    if (deps.desktop || !deps.inject || deps.connectDelivered()) return;
     // Nobody has opened the app. That says nothing about whether it can connect.
     if (!htmlRequested) return;
-    deps.warn(htmlHookNeverRanMessage());
+    deps.warn(htmlHookNeverRanMessage(deps.connectModule()));
   };
 
   /**

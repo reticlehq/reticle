@@ -7,7 +7,7 @@ icon: shield-halved
 `reticle gate` is what makes verification unavoidable. It computes the [affected](/cli/affected) flows, looks for a passing artifact for each, and fails the command if any is missing. An agent that edits a covered file cannot call itself finished without re-verifying.
 
 ```bash
-npx @reticlehq/server gate [--since <ref>] [file...]
+npx @reticlehq/server gate [--since <ref>] [--accept-coverage] [file...]
 ```
 
 ## Arguments and flags
@@ -16,6 +16,7 @@ npx @reticlehq/server gate [--since <ref>] [file...]
 | --- | --- | --- | --- |
 | `file...` | strings, positional | none | Explicit changed files |
 | `--since <ref>` | string | `HEAD` when no files are given | Also include files git reports as changed since this ref |
+| `--accept-coverage` | boolean | off | Accept today's coverage levels as the new best before judging. Use it when a drop was intended, such as a control you removed on purpose. The run reports what it accepted as `coverageAccepted` |
 
 ## What blocks and what does not
 
@@ -24,6 +25,10 @@ npx @reticlehq/server gate [--since <ref>] [file...]
 | `uncovered` | Yes | An affected flow with no passing artifact |
 | `downgraded` | Yes | A flow whose assertions were weakened since its last passing run. A green bought by weakening the test is the gaming move this exists to stop |
 | `deletedCoverage` | Yes | A flow that covered a changed file and has since vanished. Coverage deleted, not satisfied |
+| `unflowed` | Yes | A changed interactive component that no saved flow drives. Only once the project has saved flows, so a first day never blocks |
+| `coverageRegressed` | Yes | A [coverage](/capabilities) level fell below the best it has reached: something new appeared that nothing covers. Cover it, or accept the drop with `--accept-coverage` |
+| `unexecuted` | Yes | A changed file the browser loaded during a drive and never ran a function of |
+| `coverageStale` | No | A changed file whose code coverage was taken before its last edit. Its counts describe the old code, so `unexecuted` cannot judge it either way. Take coverage again after driving the change to measure it |
 | `quarantined` | No | Flows the flake ledger has quarantined. Surfaced, never blocking, because one unexplained flake that blocks a merge destroys trust in the red |
 
 ## What it prints
@@ -41,14 +46,14 @@ One `reticle_gate` line. Real capture from this repository, with the flow lists 
 }
 ```
 
-`downgraded` and `deletedCoverage` appear only when they are non-empty, and neither was present in that run. The CLI prints this as a single line of JSON; it is pretty-printed here to be readable.
+`downgraded`, `deletedCoverage`, `unflowed`, `coverageRegressed`, `unexecuted`, `coverageStale` and `coverageAccepted` appear only when they are non-empty, and none was present in that run. The coverage categories need a coverage ledger, which a project gets from `reticle_verify { action: "crawl", exhaustive: true }` or `reticle_verify { action: "coverage", app: true }`; without one they never fire. The CLI prints this as a single line of JSON; it is pretty-printed here to be readable.
 
 ## Exit codes
 
 | Code | Meaning |
 | --- | --- |
-| `0` | Every affected, non-flaky flow has a passing artifact and nothing was weakened or deleted |
-| `1` | Something is uncovered, downgraded or deleted. Also `1` on any internal fault: the gate fails closed |
+| `0` | Every affected, non-flaky flow has a passing artifact, nothing was weakened or deleted, and coverage held |
+| `1` | Something is uncovered, downgraded, deleted, unflowed, unexecuted, or coverage fell. Also `1` on any internal fault: the gate fails closed |
 
 Measured on this repository, `npx @reticlehq/server gate --since HEAD~1` exited `1` with the output above: 0 of 47 flows covered, 39 uncovered and 8 quarantined.
 

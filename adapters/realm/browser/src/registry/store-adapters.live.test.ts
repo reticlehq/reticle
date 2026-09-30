@@ -19,6 +19,9 @@ import {
   xstateStore,
 } from './store-adapters.js';
 import { sanitizeForTransport } from '@/security/serialization.js';
+import { EventType } from '@reticlehq/core';
+import { installStoreState } from '@/observers/state.js';
+import { registerStore, unregisterStore } from '@/registry/stores.js';
 
 /**
  * The adapters, against the REAL libraries.
@@ -224,5 +227,51 @@ describe('store adapters against the libraries they claim to support', () => {
     unsub();
     cart.items.push('sku-2');
     expect(fired).toBe(1);
+  });
+
+  it('pinia: a mutation reaches the state observer as a diff, top-level and nested', () => {
+    // `$state` is one live proxy. Returned as-is, the observer's baseline and the value it diffs
+    // against were the SAME object, so a click that moved count 1 -> 2 reported `stateDiffs: []`
+    // with no unwatched flag — "nothing changed", which was false.
+    setActivePinia(createPinia());
+    const useCounter = defineStore('live-counter', () => {
+      const count = ref(1);
+      const profile = ref({ name: 'a' });
+      return { count, profile };
+    });
+    const counter = useCounter();
+    const events: { type: string; data: unknown }[] = [];
+    const teardown = installStoreState((type, data) => events.push({ type, data }));
+    registerStore('counter', piniaStore(counter));
+    try {
+      counter.count += 1;
+      counter.profile.name = 'b';
+      const changes = events.filter((e) => EventType.STATE_CHANGE === e.type).map((e) => e.data);
+      expect(changes).toEqual([
+        { name: 'counter', path: 'count', old: 1, value: 2 },
+        { name: 'counter', path: 'profile', old: { name: 'a' }, value: { name: 'b' } },
+      ]);
+    } finally {
+      teardown();
+      unregisterStore('counter');
+    }
+  });
+
+  it('svelte: a store set back to its own mutated object still diffs', () => {
+    // `$cart.items = x` in a component compiles to `cart.set($cart)`: the same object, mutated.
+    const cart = writable({ items: 1 });
+    const events: { type: string; data: unknown }[] = [];
+    const teardown = installStoreState((type, data) => events.push({ type, data }));
+    registerStore('svelte-cart', svelteStore(cart));
+    try {
+      const current = get(cart);
+      current.items = 2;
+      cart.set(current);
+      const changes = events.filter((e) => EventType.STATE_CHANGE === e.type).map((e) => e.data);
+      expect(changes).toEqual([{ name: 'svelte-cart', path: 'items', old: 1, value: 2 }]);
+    } finally {
+      teardown();
+      unregisterStore('svelte-cart');
+    }
   });
 });

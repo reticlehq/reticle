@@ -61,7 +61,7 @@ The `reticle_*` tools are already there. In your project directory:
 npx @reticlehq/server init
 ```
 
-Like `npm init` or `git init`, this is the per-project step: it installs the SDK, wires it into your app's entry point, restarts your dev server and then opens your app to prove a session connected. It is idempotent. Run it twice and the second run reports what was already done rather than doing it again.
+Like `npm init` or `git init`, this is the per-project step: it installs the SDK, wires it into your app's entry point, starts your dev server and then opens your app to prove a session connected. It is idempotent. Run it twice and the second run reports what was already done rather than doing it again.
 
 Step 1 is once per machine. This step is once per project.
 
@@ -236,7 +236,7 @@ That third state is the one that matters. Most tools have two outcomes and quiet
   <Accordion title="How long does it actually take to install Reticle?">
     Two commands, and no restart if you run them in order. The installer registers the MCP server
     with every agent on the machine, so opening your agent afterwards is all that is needed. Then
-    `npx @reticlehq/server init` wires the project and restarts your dev server for you. The MCP
+    `npx @reticlehq/server init` wires the project, starts your dev server and opens the app for you. The MCP
     registration is global, so every later project starts with the tools already there.
   </Accordion>
 

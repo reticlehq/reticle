@@ -45,8 +45,11 @@ const NO_TOOL_EQUIVALENT: readonly {
     // \u2014 so the optional group could not match, the clause survived, and the replacement landed
     // inside the original quoting. What an agent read was the human-equivalent clause twice over,
     // with backticks nested three deep.
+    // The body allows ONE nested object, because the call is `{ tool, args: { action, url } }`: the
+    // hint used to put `action` and `url` beside `tool`, which reticle_run refuses, and a `[^}]*\}`
+    // body stopped at the inner brace and left ` }` behind once the hint was corrected.
     pattern:
-      /`?reticle_run\s*\{\s*tool:\s*\\?"reticle_lease\\?"[^}]*\}`?(\s*\([^)]*\))?(\s*[-\u2014]+\s*reticle_lease is[^.]*\.)?/g,
+      /`?reticle_run\s*\{\s*tool:\s*\\?"reticle_lease\\?"(?:[^{}]|\{[^{}]*\})*\}`?(\s*\([^)]*\))?(\s*[-\u2014]+\s*reticle_lease is[^.]*\.)?/g,
     instead: 'the CLI: `reticle open <url>` (a human can equivalently run `reticle drive <url>`)',
   },
   {

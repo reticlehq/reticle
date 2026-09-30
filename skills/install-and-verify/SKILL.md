@@ -36,7 +36,7 @@ cat .reticle.json 2>/dev/null || echo NOT_FOUND
 - `NOT_FOUND` → **SETUP** below.
 - File exists → **VERIFY** below. If `reticle_session { action: "list" }` then returns an empty list, go to [references/troubleshooting.md](references/troubleshooting.md); do not restart setup.
 
-Both paths are about THIS PROJECT. The machine step is separate and comes first: one command that puts the CLI on PATH and registers the MCP server with every agent it can reach.
+Both paths are about THIS PROJECT. The machine step is separate and comes first: one command that puts the CLI on PATH, registers the MCP server with the coding agents it finds, and pre-approves Reticle's own tools where an agent has a per-server approval rule (Claude Code, for one). A user who would rather choose each step can follow `https://docs.reticle.sh/install-manual.md` instead.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh | sh     # macOS, Linux
@@ -57,13 +57,13 @@ Every earlier point looks like success and is not:
 
 **Do not tell the user Reticle is set up until step 5 has produced a verdict.** The single most common outcome in the field is an agent that finishes step 1, reports success, and leaves a user with config files and no instrumented page.
 
-## Setup runs to the end without you
+## Finish the setup steps
 
-**Do not stop, and do not ask the user anything, until their app is running with Reticle inside it and a session is connected.** Everything between here and that point is yours to do: run `init`, fix the wiring it could not, start the dev server, open the browser. Not one of those needs a human, and every one of them has been the place an onboarding turn died with nothing to show.
+**Finish the setup steps; ask the user only when a step needs their decision.** Running `init`, fixing wiring it could not, starting the dev server and opening the browser are setup steps, not decisions.
 
-Questions you must not ask, because the repo you are sitting in already answers them: which framework, which package manager, which port, which editor or MCP client, whether to start the dev server, whether to open the browser, whether to carry on. Decide, act, and say what you did in one line.
+The repo already answers which framework, package manager, port, editor or MCP client, so work those out rather than asking. Say what you did in one line.
 
-There are exactly three places you may stop, and none is a question about a preference:
+Three places always need the user:
 
 1. **No recognisable dev script in `package.json`.** Say so; do not invent one.
 2. **Your host asks the human to approve a command.** That prompt belongs to the host. Never bypass or suppress it, and take a refusal as the answer. `init` writing a pre-approval rule for the `reticle` server is not that: it is a scoped, announced config change the human asked for by running the command, and it covers only Reticle's own tools.
@@ -103,7 +103,7 @@ The command reads the repository. It cannot read the request, and these live onl
 
 Add `--license <key>` if the user gave you one: it writes `RETICLE_LICENSE_KEY` to `.env` and keeps `.env` out of git.
 
-**Ask the user nothing else.** Framework, package manager, port, editor, MCP client: every one is answerable from the repo you are sitting in.
+Framework, package manager, port, editor and MCP client are answerable from the repo you are sitting in, so work them out rather than asking.
 
 ## Then read what it gives you back
 
@@ -136,7 +136,7 @@ Never echo the key back in your reply, and never put it in a commit, a code comm
 
 # VERIFY
 
-**Only `reticle_act_and_wait` and `reticle_assert` produce a verdict.** Everything else (`act`, `snapshot`, `query`, `navigate`, `observe`, `network`, `console`) moves or reads the app and proves nothing. A drive that ends without one of those two has no result, however many tools it used.
+**Verdicts come from `reticle_act_and_wait`, `reticle_assert`, and `reticle_act { steps }` when a step declares `expect`.** Everything else (a bare `act`, `look`, `navigate`, `observe`) moves or reads the app and proves nothing. A drive that ends without a verdict has no result, however many tools it used.
 
 Prefer `reticle_act_and_wait({ ref, action, until })`. It names the expected consequence before the action, which is the difference between a check and a rationalisation.
 
@@ -152,7 +152,7 @@ Stop at the first row that fits. Do not hand-drive a flow you could replay.
 | --- | --- | --- |
 | "Did my edit break anything?" | `reticle_verify({ action: "change", files: ["src/App.tsx"] })` | 1 |
 | "Does this known journey still work?" | `reticle_run({ tool: "reticle_flow_replay", args: { flowName: "login" } })` | 1 |
-| "Does this new behaviour work?" | `reticle_act { steps: [...] }` for the setup, then ONE `reticle_act_and_wait` | 2 |
+| "Does this new behaviour work?" | `reticle_act { steps: [...] }` to the last page, then `reticle_act_and_wait` on the step that ENDS the journey | 2 |
 | No MCP available at all | `npx @reticlehq/server verify <url>` in the shell | 1, no MCP |
 
 `reticle_flow_replay` is **not on the advertised tool list**: it is reached through `reticle_run` exactly as written. That is the supported call shape, and it is why you have to be told it exists.

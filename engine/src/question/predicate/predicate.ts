@@ -17,6 +17,7 @@ import { evalRoute } from './predicate-route.js';
 import { describeSuperseded } from './observed-in-window.js';
 import { evalElement, withTextProperty } from './predicate-element.js';
 import { evalState } from './predicate-state.js';
+import { evalCompare } from './predicate-compare.js';
 import {
   PredicateSchema,
   evalNet,
@@ -98,7 +99,22 @@ function annotateThrottledMiss(
   if (true !== session.throttled?.()) return result;
   if (decidedByAnAlreadyAnnotatedClause(predicate)) return result;
   if (failureRestsOnSeeing(predicate)) return result;
+  if (foundTextSplitAcrossChildren(result)) return result;
   return { ...result, inconclusive: THROTTLED_STARVED_NOTE };
+}
+
+/**
+ * Did the miss come with proof that the page rendered the very string it was looking for?
+ *
+ * The starved-tab caveat is for a page that may not have painted. A text miss that carries a
+ * split-text owner is the browser saying the string IS in the rendered page, split across one
+ * container's children — so the tab ran, and the failure is the locator's. Reported from Next's
+ * template: the throttle note led a response whose own near-miss named the heading holding the text,
+ * and the agent was sent to wait out a starvation that had not happened.
+ */
+function foundTextSplitAcrossChildren(result: EvalResult): boolean {
+  const evidence = result.evidence;
+  return 'object' === typeof evidence && null !== evidence && 'splitText' in evidence;
 }
 
 /**
@@ -320,6 +336,8 @@ async function evaluatePredicateRaw(
         counts === undefined ? events : events.filter((e) => !isAmbient(counts, ambientKeyOf(e)));
       return evalSettled(settleEvents, predicate, session.elapsed());
     }
+    case PredicateKind.COMPARE:
+      return evalCompare(session, events, predicate, diagnose);
     case PredicateKind.ALL_OF: {
       const results = clearStarvedWhenSiblingsSaw(
         predicate.predicates,

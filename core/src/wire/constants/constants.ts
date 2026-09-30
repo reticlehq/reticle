@@ -32,6 +32,13 @@ export const MCP_SHUTDOWN_EVENT = 'reticle-shutdown';
 /** Local-only daemon introspection — `reticle status` GETs this for sessions + health at a glance. */
 export const STATUS_PATH = '/status';
 /**
+ * Query flag on STATUS_PATH: the caller (a running `reticle init`) is waiting on this daemon, so it
+ * must not idle out yet. Without it the daemon init started exited mid-wait on a slow desktop build.
+ */
+export const STATUS_HOLD_QUERY = 'hold';
+/** How long one hold lasts. The holder renews it well inside this window for as long as it waits. */
+export const STATUS_HOLD_MS = 60_000;
+/**
  * Local-only drive request — `reticle drive <url>` POSTs `{url}` here when a daemon already owns the
  * bridge port, and gets back the pooled session that daemon opened. The CLI asks instead of binding,
  * so the two never fight over the port. Same trust tier as STATUS_PATH.
@@ -446,6 +453,8 @@ export const ReticleDir = {
   AMBIENT_FILE: 'ambient.json',
   /** per-flow flake ledger — replay outcomes that decide intermittent-failure quarantine. */
   FLAKE_FILE: 'flake.json',
+  /** The app-wide coverage ledger — see server features/exhaust/ledger.ts. */
+  COVERAGE_FILE: 'coverage.json',
   /**
    * the project's cloud binding — .reticle/cloud.json, written by `reticle link`. Git-checked and
    * non-secret: the project id, the API origin, and where its dashboard lives. The KEY lives in

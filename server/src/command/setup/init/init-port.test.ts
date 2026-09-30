@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { portForInit } from './init-port.js';
+import { portForInit, portFromEnv } from './init-port.js';
 
 const OTHER_PROJECT = 'shop-1234abcd';
 const RELOCATED = 4401;
@@ -52,5 +52,28 @@ describe('portForInit', () => {
         deps(OTHER_PROJECT, true, ['blog-9f00aa11']),
       ),
     ).toBeUndefined();
+  });
+});
+
+/**
+ * Every other command honours RETICLE_PORT; `init` read only `--port`, so a shell that exported it
+ * got a project wired (and a daemon started) on the default while everything else it ran dialled
+ * the exported port.
+ */
+describe('portFromEnv', () => {
+  it('reads RETICLE_PORT, so init resolves the port the rest of the CLI does', () => {
+    expect(portFromEnv({ RETICLE_PORT: '4455' })).toBe(4455);
+  });
+
+  it('is undefined when it is unset, empty or not a port', () => {
+    expect(portFromEnv({})).toBeUndefined();
+    expect(portFromEnv({ RETICLE_PORT: '' })).toBeUndefined();
+    expect(portFromEnv({ RETICLE_PORT: 'abc' })).toBeUndefined();
+    expect(portFromEnv({ RETICLE_PORT: '70000' })).toBeUndefined();
+  });
+
+  it('is written into the project exactly as an explicit port is', async () => {
+    const explicit = portFromEnv({ RETICLE_PORT: '4455' });
+    expect(await portForInit(explicit, 4471, undefined, deps(OTHER_PROJECT))).toBe(4455);
   });
 });

@@ -18,6 +18,7 @@ import type { CommandResult } from '@reticlehq/core';
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { ToolDeps } from './tools.js';
+import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
 
 const FROM = 'http://localhost:3000/';
 const TO = 'http://localhost:3000/dashboard';
@@ -61,7 +62,11 @@ function fakeDeps(arrivesOnLook: number): { deps: ToolDeps; looks: () => number 
     },
   };
   return {
-    deps: { sessions: sessions as SessionManager, now: () => 0 } as unknown as ToolDeps,
+    deps: {
+      sessions: sessions as SessionManager,
+      now: () => 0,
+      recordings: new RecordingStore(),
+    } as unknown as ToolDeps,
     looks: () => look,
   };
 }

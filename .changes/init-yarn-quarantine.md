@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/init` — on Yarn 4, a brand-new Reticle release failed to install and `init` blamed the dev server.** Yarn quarantines versions younger than its `npmMinimalAgeGate` (`All versions satisfying "3.3.0" are quarantined`). `init` told you to run the same `yarn add` by hand, which fails the same way, then booted the app and said the SDK was not in the page and the dev server needed a restart. It now names the age gate and prints the command that works (`YARN_NPM_MINIMAL_AGE_GATE=0 yarn add -D …`, or wait out the gate), and any failed dependency install now stops setup at the report instead of booting an app that has no Reticle wired into it.

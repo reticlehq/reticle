@@ -262,11 +262,15 @@ export async function evalElement(
     observed: `no matching element on the page${suffix}`,
     expected: `an element matching ${subject}${state === undefined ? '' : ` in state '${state}'`}`,
     assertion: 'element.present',
-    ...(present.length > 0
+    // `splitText` rides on the evidence because it is a POSITIVE observation: the browser found the
+    // string in the rendered page. `annotateThrottledMiss` reads it so a miss on a backgrounded tab
+    // is not blamed on a render that demonstrably happened.
+    ...(present.length > 0 || splitText !== undefined
       ? {
           evidence: {
-            presentTestids: present,
-            ...(total === undefined ? {} : { presentTestidsTotal: total }),
+            ...(present.length > 0 ? { presentTestids: present } : {}),
+            ...(total === undefined || 0 === present.length ? {} : { presentTestidsTotal: total }),
+            ...(splitText === undefined ? {} : { splitText: match.hint?.splitText }),
           },
         }
       : {}),
@@ -291,6 +295,12 @@ function textOf(element: unknown): string {
   return 'string' === typeof value ? value : '';
 }
 
+/** The text of every element a passing match described, joined — what a reader sees there. */
+export function joinedText(evidence: unknown): string {
+  const described = Array.isArray(evidence) ? evidence : [];
+  return described.map(textOf).join(' ').trim();
+}
+
 export function withTextProperty(
   base: EvalResult,
   assertion: PropertyAssertion,
@@ -299,7 +309,7 @@ export function withTextProperty(
 ): EvalResult {
   if (!base.pass) return base;
   const described = Array.isArray(base.evidence) ? base.evidence : [];
-  const text = described.map(textOf).join(' ').trim();
+  const text = joinedText(described);
   const result = satisfiesProperty(text, assertion, baseline);
   // Nothing was compared — a relative property with no before-reading. See the twin in `evalState`.
   if (true === result.unevaluated) {

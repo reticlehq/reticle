@@ -74,6 +74,16 @@ export function classifyPort(
 export const PROBE_HOSTS: readonly string[] = ['127.0.0.1', '::1'];
 
 /**
+ * The name the probe gives in its Host header, whichever address it dialled.
+ *
+ * Node names the dialled address, so the `::1` probe sent `Host: [::1]:4200`. Angular's SSR dev
+ * server validates Host, answered 400, and printed `ERROR: Bad Request ("http://[::1]:4200/")` into
+ * the user's dev terminal on every sweep, for as long as the daemon ran. The address picks the
+ * family; the header says what a browser on this machine would.
+ */
+const PROBE_HOST_HEADER = 'localhost';
+
+/**
  * Does this port serve a DOCUMENT — i.e. is it a dev server rather than merely something listening?
  *
  * A bare TCP connect reported macOS ControlCenter (AirPlay Receiver, on by default on every Mac,
@@ -86,7 +96,14 @@ function probeState(port: number, host: string): Promise<PortState> {
     // the whole difference between "nothing is there" and "something is there and still compiling".
     let connected = false;
     const req = request(
-      { host, port, path: '/', method: 'GET', timeout: HTTP_PROBE_TIMEOUT_MS },
+      {
+        host,
+        port,
+        path: '/',
+        method: 'GET',
+        timeout: HTTP_PROBE_TIMEOUT_MS,
+        headers: { host: `${PROBE_HOST_HEADER}:${String(port)}` },
+      },
       (res) => {
         const answer = looksLikeDevServer(res.statusCode ?? 0, res.headers['content-type']);
         res.resume(); // drain, so the socket closes rather than lingering

@@ -12,13 +12,13 @@ metadata:
 
 Reticle embeds a dev-only SDK in the running app and exposes it to you as `reticle_*` MCP tools. You look, act, observe, and assert against the real app. No screenshots.
 
-## Setup runs to the end without you
+## Finish the setup steps
 
-**The plugin already registered the MCP server, so this whole file runs with no client restart and no human input at all.** Do not stop, and do not ask the user anything, until their app is running with Reticle inside it and a session is connected. Everything between here and that point is yours to do: run `init`, fix the wiring it could not, start the dev server, open the browser.
+**The plugin already registered the MCP server, so this file runs with no client restart.** Finish the setup steps; ask the user only when a step needs their decision. Running `init`, fixing wiring it could not, starting the dev server and opening the browser are setup steps, not decisions.
 
-Questions you must not ask, because the repo you are sitting in already answers them: which framework, which package manager, which port, whether to start the dev server, whether to open the browser, whether to carry on. Decide, act, and say what you did in one line. A setup turn that ends in a question ends with nothing verified, and that is the most common way this fails in the field.
+The repo already answers which framework, package manager and port, so work those out rather than asking. Say what you did in one line.
 
-There are exactly two places you may stop, and neither is a question about a preference:
+Two places always need the user:
 
 1. **No recognisable dev script in `package.json`.** Say so; do not invent one.
 2. **Your host asks the human to approve a command.** That prompt belongs to the host. Never bypass or suppress it, and take a refusal as the answer. `init` writing a pre-approval rule for the `reticle` server is not that: it is a scoped, announced config change the human asked for by running the command, and it covers only Reticle's own tools.
@@ -29,10 +29,10 @@ There are exactly two places you may stop, and neither is a question about a pre
 cat .reticle.json 2>/dev/null || echo NOT_FOUND
 ```
 
-- `NOT_FOUND` → **ONBOARD**, then **VERIFY**. Do not stop between them.
+- `NOT_FOUND` → **ONBOARD**, then **VERIFY**.
 - File exists → **VERIFY**.
 
-Either way you are finished only when `reticle_act_and_wait` or `reticle_assert` has produced a verdict. Config files are not an install, and a listed session is not a result.
+Either way you are finished only when a verdict exists: from `reticle_act_and_wait`, `reticle_assert`, or `reticle_act { steps }` where a step declares `expect`. Config files are not an install, and a listed session is not a result.
 
 ---
 
@@ -66,7 +66,7 @@ The command reads the repository. It cannot read the request, and these live onl
 
 Add `--license <key>` if the user gave you one: it writes `RETICLE_LICENSE_KEY` to `.env` and keeps `.env` out of git.
 
-**Ask the user nothing else.** Framework, package manager, port, editor, MCP client: every one is answerable from the repo you are sitting in.
+Framework, package manager, port, editor and MCP client are answerable from the repo you are sitting in, so work them out rather than asking.
 
 ## Then read what it gives you back
 
@@ -87,7 +87,7 @@ curl https://docs.reticle.sh/troubleshooting.md     # nothing connected, click d
 
 # VERIFY
 
-**Only `reticle_act_and_wait` and `reticle_assert` produce a verdict.** Everything else (`act`, `snapshot`, `query`, `navigate`, `observe`, `network`, `console`) moves or reads the app and proves nothing, however many tools it used.
+**Verdicts come from `reticle_act_and_wait`, `reticle_assert`, and `reticle_act { steps }` when a step declares `expect`.** Everything else (a bare `act`, `look`, `navigate`, `observe`) moves or reads the app and proves nothing, however many tools it used.
 
 `verified: "unknown"` is not a pass. It means Reticle drove the app and could not tell what happened, so report it as unknown. `verified: "no-fault"` is not a pass either: the page settled and no channel complained, but nothing was declared to prove. **Never weaken a check to make it pass.** That converts a real signal into a false one, which is the failure this product exists to prevent.
 
@@ -99,7 +99,7 @@ Stop at the first row that fits.
 | --- | --- | --- |
 | "Did my edit break anything?" | `reticle_verify({ action: "change", files: ["src/App.tsx"] })` | 1 |
 | "Does this known journey still work?" | `reticle_run({ tool: "reticle_flow_replay", args: { flowName: "login" } })` | 1 |
-| "Does this new behaviour work?" | `reticle_act { steps: [...] }` for the setup, then ONE `reticle_act_and_wait` | 2 |
+| "Does this new behaviour work?" | `reticle_act { steps: [...] }` to the last page, then `reticle_act_and_wait` on the step that ENDS the journey | 2 |
 | No MCP reachable at all | `npx @reticlehq/server verify <url>` in the shell | 1, no MCP |
 
 `reticle_flow_replay` is **not on the advertised tool list**. It is reached through `reticle_run` exactly as written, which is the supported call shape and why you have to be told it exists. `reticle_verify {action:"change"}` answers `unknown` when no saved flow covers the files you changed: nothing ran, so nothing was proved. That is the honest answer and the signal to record one, never a pass.
@@ -110,7 +110,7 @@ Four calls for a login, not fourteen. Every call is a full model turn, and in a 
 
 1. `reticle_look({ action: "page", mode: "interactive" })` **once**, for the whole flow. Elements are addressable by role and name, so you do not need to add `data-testid` anywhere.
 2. `reticle_act { steps: [...] }` for the setup: every fill and every intermediate click in ONE call.
-3. `reticle_act_and_wait({ ref, action, until })` for the final step only. `until` names the expected consequence **before** the action fires, which is the difference between a check and a rationalisation.
+3. `reticle_act_and_wait({ ref, action, until })` for the step that ENDS the journey (the confirmation, the saved record, the last page), not the first click that looks like success. `until` names that end state **before** the action fires, which is the difference between a check and a rationalisation. Pass `durable: true` when the change should survive a reload. A step on the way with a consequence of its own (a save, a submit) gets its own `expect` in `steps`, so a journey that breaks at step three fails at step three.
 4. `reticle_look({ action: "state" })` once at the end. If it comes back empty or `hasCapabilities` is false, the capabilities file `init` generated registered nothing, which is what its `ℹ AGENT: finish the capabilities file` line was telling you. Finish it yourself before you drive: open `src/reticle-dev.*`, register the app's store if it has one, and list the `testids` the flow you picked actually touches. Do not offer, and do not ask; it is a few lines in a file `init` already wrote for you. Never report a clean install over an empty state read.
 
 Assert what the app _did_, not what it _shows_. A UI that renders the value it just sent, rather than the value the server returned, passes every DOM-level check ever written:

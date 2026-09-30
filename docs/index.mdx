@@ -73,12 +73,15 @@ Afterwards, use it whenever you change any user-facing behaviour.
   The four files it writes, the marks it prints, and how to read its report.
 </Card>
 
-<CardGroup cols={2}>
+<CardGroup cols={3}>
   <Card title="Quickstart" icon="rocket" href="/quickstart">
     Install, connect your agent, and get a real verdict. Five minutes.
   </Card>
   <Card title="Why Reticle" icon="lightbulb" href="/why-reticle">
     The false-green problem, and the evidence that this fixes it.
+  </Card>
+  <Card title="Use cases" icon="list-check" href="/use-cases">
+    Agent-built changes, security behaviour, accessibility, performance, SEO basics and personas.
   </Card>
 </CardGroup>
 
@@ -127,18 +130,25 @@ Reticle clicks, watches, and reports what actually happened. A verdict of `unkno
     single step.
   </Card>
   <Card title="Yours, locally" icon="lock">
-    Dev-only, localhost-only, offline. Your app's data never leaves the machine.
+    Dev-only and localhost-only. Your app's data stays on your machine; anonymous usage counts are
+    sent unless you [turn them off](/telemetry).
   </Card>
 </CardGroup>
 
+## What people use it for
+
+Beyond proving an agent's change, people use Reticle to check security behaviour (access control by role, calls that must never fire, CSP violations), accessibility and UX (roles, names, focus, keyboard), performance (request counts, long tasks, layout shift), SEO basics (titles, headings, links, redirects), and to drive the app as different users. [Use cases](/use-cases) has what each one checks and a call to run.
+
+It pairs well with a visual testing tool for pixel diffs, Playwright for sites you don't own, axe for full WCAG audits and a security scanner for vulnerability discovery.
+
 ## The evidence
 
-We publish the losses too. Reticle is not the right tool for driving a site you don't own, and it does not see pixels.
+Every number is measured by a committed harness, including the ties.
 
 ![One honest test, two apps: Reticle has the highest Verification Efficiency on the controlled app and the lowest observation cost on the real dashboard](/images/bench-two-apps.png)
 
 <Card title="Read the full benchmark" icon="chart-column" href="/benchmarks">
-  How every number was measured, what it means, and where Reticle comes second.
+  How every number was measured, what it means, and where the tools tie.
 </Card>
 
 ## Built for agents, readable by humans
@@ -151,7 +161,7 @@ Reticle is used by a coding agent far more often than by a person, so these docs
 
 ## Build with us
 
-Reticle is early, and the sharp edges get filed down fastest when someone tells us where they are.
+The roadmap moves on what people actually hit, so tell us.
 
 <CardGroup cols={2}>
   <Card title="Join the Discord" icon="discord" href="https://discord.gg/BwAbzv9ZRz">
@@ -163,4 +173,4 @@ Reticle is early, and the sharp edges get filed down fastest when someone tells 
   </Card>
 </CardGroup>
 
-Found a bug, or something you wished existed? `reticle_feedback` sends it in one call, from wherever you are. If Reticle could not tell you what happened, that is our defect and we want to know.
+Found a bug, or something you wished existed? `reticle_session { action: "feedback" }` sends it in one call from your agent, and `npx @reticlehq/server feedback "…"` from a terminal. If Reticle could not tell you what happened, that is our defect and we want to know.

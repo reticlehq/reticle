@@ -81,10 +81,24 @@ function pagePolicySource(file: string, source: string): string {
   return source.replace(/contentSecurityPolicy\s*[:=]\s*(['\x22`])[\s\S]*?\1/g, '');
 }
 
+export interface WebCspOptions {
+  /**
+   * Whether this app connects through the hand-pasted INLINE snippet — the plain-HTML path. Only
+   * then can `script-src` stop the connect from running. Every plugin-wired app connects from an
+   * external module (web) or from its entry module (desktop), and for those the inline rule was
+   * reported INSTEAD of the connect-src block that actually stopped them — with a fix (move the
+   * snippet to public/reticle-connect.js) that does not apply to an app with no snippet. Defaults to
+   * true because `doctor` does not know how the app is wired, and the inline finding carries the
+   * connect-src addition too.
+   */
+  readonly inlineSnippet?: boolean;
+}
+
 export function diagnoseWebCsp(
   read: ReadFile,
   port: number,
   alsoCheck: readonly string[] = [],
+  options: WebCspOptions = {},
 ): CspDiagnosis[] {
   const findings: CspDiagnosis[] = [];
   for (const file of [...alsoCheck, ...CSP_FILES]) {
@@ -94,7 +108,8 @@ export function diagnoseWebCsp(
     // `script-src` first, because it is the earlier failure. A policy that blocks the inline
     // snippet means there is no SDK at all, so a `connect-src` finding on the same file would be
     // describing a socket that is never opened -- true, and the wrong thing to fix first (#679).
-    const inline = cspInlineScriptProblem(source, port);
+    const inline =
+      false === options.inlineSnippet ? undefined : cspInlineScriptProblem(source, port);
     if (inline !== undefined) {
       findings.push({
         file,

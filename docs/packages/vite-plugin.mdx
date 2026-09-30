@@ -61,7 +61,7 @@ Plus a dynamic import of your dev module if one exists. It looks for `src/reticl
 | `token` | `string` | `readPairingToken()`, from `~/.reticle/pairing-token` |
 | `sourceMapping` | `boolean` | `true`. Set `false` to skip the Babel pass |
 | `inject` | `boolean` | `true`. Set `false` to call `connect()` yourself |
-| `desktop` | `boolean` | `false`. When `true` the plugin also applies to `vite build` and passes `allowInProduction: true`, which is what an Electron or Tauri renderer needs |
+| `desktop` | `boolean` | `false`. When `true` the connect passes `allowInProduction: true`, which an Electron or Tauri renderer needs, and a `vite build` in a non-production mode (`--mode development`) is instrumented too. A production-mode build is stubbed like a web build |
 | `captureNetworkBodies` | `boolean` | `false`. Also enabled by `VITE_RETICLE_CAPTURE_BODIES=1` |
 | `onWarn` | `(message: string) => void` | `console.warn` |
 
@@ -87,7 +87,7 @@ Types: `ReticleVitePluginOptions`, `ReticleVitePlugin`, `ViteDevServerLike`.
 reticle({ desktop: true });
 ```
 
-A packaged Electron or Tauri renderer is a production build loaded from a custom protocol, so the default guards would refuse. This one flag drops `apply: 'serve'` and opts the connect call into production.
+A packaged Electron or Tauri renderer is loaded from a custom protocol with no dev server and reports `NODE_ENV=production`, so the default guards would refuse. This flag injects the connect into the entry module and opts it into production. It does NOT instrument a release: a production-mode `vite build` (the default) ships no Reticle code, exactly like a web build. To drive a packaged renderer with no dev server, build it with `vite build --mode development`.
 
 <Card title="Desktop wiring in full" icon="display" href="/desktop">
   Including the Tauri CSP whose failure is completely silent.

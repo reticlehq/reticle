@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
 import {
   BlindSpotKind,
   ChannelId,
@@ -44,7 +45,10 @@ function depsFor(stores: Record<string, unknown>, sessionId: string): ToolDeps {
     { sessionId },
   );
   const sessions: Partial<SessionManager> = { resolve: () => session };
-  return { sessions: sessions as SessionManager } as unknown as ToolDeps;
+  return {
+    sessions: sessions as SessionManager,
+    recordings: new RecordingStore(),
+  } as unknown as ToolDeps;
 }
 
 const tool = (name: string): ToolDef => {

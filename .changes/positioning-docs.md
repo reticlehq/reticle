@@ -1,0 +1,4 @@
+### Changed
+
+- **Docs — a new [Use cases](https://docs.reticle.sh/use-cases) page covers what people verify with Reticle beyond agent-built changes:** security behaviour (access control by role, forbidden calls, CSP violations), accessibility and UX, performance, SEO basics, and driving the app as different users, each with a call you can run. The README, `llms.txt` and the skill point to it, and "not for" lists became one "pairs well with" section.
+- **Docs and agent guidance now agree on the facts.** Telemetry is described the same way everywhere (anonymous usage counts by default, your app's data stays local, how to opt out), framework support is stated once in Frameworks, verdicts are named as coming from `reticle_act_and_wait`, `reticle_assert` and `reticle_act { steps }` with `expect`, the MCP briefing no longer tells an agent to restart the dev server `init` just started, and the skill files no longer ask the agent to suggest a call or a GitHub star.

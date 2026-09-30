@@ -19,10 +19,9 @@
  * `framework-adapter.test.ts` asserts the seam between the two halves.
  */
 
-import { Framework } from '@/detect/detect.js';
+import { Framework, UiLibrary } from '@/detect/detect.js';
 import { StepTitle } from './connect-steps.js';
 import {
-  VITE_PLUGIN_DETAIL,
   astroSteps,
   craSteps,
   htmlSteps,
@@ -31,10 +30,41 @@ import {
   reactRouterSteps,
   svelteKitSteps,
   tanstackStartSteps,
-  viteSteps,
 } from './plan-framework.js';
-import { electronViteSteps } from './plan-electron-vite.js';
+import { VITE_PLUGIN_DETAIL, viteSteps } from './plan-vite.js';
+import { electronForgeSteps, electronViteSteps } from './plan-electron-vite.js';
+import { angularSteps } from './plan-angular.js';
+import { REMIX_CLASSIC_MANUAL, remixEntryFile } from '@/patch/remix.js';
+import { StepStatus } from './plan-types.js';
 import type { PlanInput, Step } from './plan-types.js';
+
+/** Where the classic Remix compiler's ⚠ points: the file that says which compiler this is. */
+const REMIX_CLASSIC_TARGET = 'remix.config.js';
+
+/**
+ * Remix v2: React Router framework mode's steps, with Remix's own default entry and title.
+ *
+ * No Vite config is the classic compiler — `vitePlugin` is the only way Remix runs on Vite, and it
+ * lives in that file — and wiring the entry there would import a module nothing serves.
+ */
+function remixSteps(input: PlanInput): Step[] {
+  if (null === input.viteConfig) {
+    return [
+      {
+        title: StepTitle.CONNECT_SNIPPET_REMIX,
+        target: REMIX_CLASSIC_TARGET,
+        status: StepStatus.MANUAL,
+        detail: REMIX_CLASSIC_MANUAL,
+      },
+    ];
+  }
+  return [
+    ...reactRouterSteps(input, StepTitle.CONNECT_SNIPPET_REMIX, remixEntryFile),
+    // The plugin stamps file:line, and it is also what serves the `/@reticle-connect` module the
+    // entry imports.
+    ...viteSteps(input, VITE_PLUGIN_DETAIL.REACT_ROUTER),
+  ];
+}
 
 // An app dev installs exactly the audience-scoped browser-side dependencies — never the retired
 // `@reticlehq/core` umbrella (which dragged the Node MCP server + ws into every app). The kit is the
@@ -78,6 +108,31 @@ interface FrameworkAdapter {
   readonly carriesOwnUnverifiedNote: boolean;
 }
 
+/**
+ * The stacks the install gate scaffolds from scratch on every change (`SCAFFOLDS` in
+ * `apps/e2e/install-gate.mjs`), as framework → the UI libraries its scaffolds render.
+ *
+ * The one place `init` says which setups are PROVEN. Nuxt was labelled "vue is UNVERIFIED" while the
+ * gate scaffolded it on every change, because nothing here knew the gate existed. Add a scaffold
+ * there, add its stack here. Only the setup is proven: no gate drives these apps to a verdict.
+ */
+const INSTALL_GATE_STACKS: Partial<Record<Framework, readonly UiLibrary[]>> = {
+  [Framework.VITE]: [UiLibrary.REACT, UiLibrary.VUE, UiLibrary.UNKNOWN],
+  [Framework.NEXT]: [UiLibrary.REACT],
+  [Framework.NUXT]: [UiLibrary.VUE],
+  [Framework.REACT_ROUTER]: [UiLibrary.REACT],
+  [Framework.REMIX]: [UiLibrary.REACT],
+  [Framework.ASTRO]: [UiLibrary.UNKNOWN],
+  [Framework.SVELTEKIT]: [UiLibrary.SVELTE],
+  [Framework.CRA]: [UiLibrary.REACT],
+  [Framework.ANGULAR]: [UiLibrary.UNKNOWN],
+};
+
+/** Whether the install gate scaffolds this stack — see INSTALL_GATE_STACKS. */
+export function installGated(framework: Framework, uiLibrary: UiLibrary): boolean {
+  return INSTALL_GATE_STACKS[framework]?.includes(uiLibrary) ?? false;
+}
+
 export const FRAMEWORK_ADAPTERS: Record<Framework, FrameworkAdapter> = {
   [Framework.NEXT]: {
     // Next is React by construction, so the detection cannot disagree in a way worth honouring.
@@ -117,7 +172,9 @@ export const FRAMEWORK_ADAPTERS: Record<Framework, FrameworkAdapter> = {
     packages: (kit) => [kit, RETICLE_VITE_PLUGIN],
     // The Vite plugin too, for the reason SvelteKit gets it: React Router framework mode IS a Vite
     // app, and the plugin is what stamps data-reticle-source. Without it the app connects and every
-    // verdict comes back with no file:line.
+    // verdict comes back with no file:line. Injection stays ON, unlike SvelteKit and Start: the
+    // client entry imports `/@reticle-connect`, which the plugin serves only while inject is on, and
+    // that module is what loads the dev module here.
     steps: (input) => [
       ...reactRouterSteps(input),
       ...viteSteps(input, VITE_PLUGIN_DETAIL.REACT_ROUTER),
@@ -131,7 +188,12 @@ export const FRAMEWORK_ADAPTERS: Record<Framework, FrameworkAdapter> = {
     // The Vite plugin as well as the client hook. `init` already INSTALLS @reticlehq/vite-plugin for
     // SvelteKit and then never wired it into the config, so it sat in package.json doing nothing —
     // which is why a SvelteKit app connected fine and every verdict had no file:line.
-    steps: (input) => [...svelteKitSteps(input), ...viteSteps(input, VITE_PLUGIN_DETAIL.SVELTEKIT)],
+    // `inject: false` because the client hook connects; the plugin's injection never fires here, and
+    // left on it only warns ten seconds into every page load that the app will never connect.
+    steps: (input) => [
+      ...svelteKitSteps(input),
+      ...viteSteps(input, VITE_PLUGIN_DETAIL.SVELTEKIT, false),
+    ],
     connectStepTitles: [StepTitle.CLIENT_HOOK, StepTitle.VITE_PLUGIN],
     carriesOwnUnverifiedNote: true,
   },
@@ -154,6 +216,35 @@ export const FRAMEWORK_ADAPTERS: Record<Framework, FrameworkAdapter> = {
     connectStepTitles: [StepTitle.ELECTRON_VITE_PLUGIN],
     carriesOwnUnverifiedNote: false,
   },
+  [Framework.ELECTRON_FORGE]: {
+    // electron-vite's three packages, with the kit the UI-library check chose: Forge's Vite template
+    // renders no React, and `@reticlehq/react` carries `react` in its peer dependencies.
+    packages: (kit) => [kit, RETICLE_VITE_PLUGIN, RETICLE_ELECTRON],
+    steps: electronForgeSteps,
+    // The renderer config's plugin IS the connect, as under electron-vite.
+    connectStepTitles: [StepTitle.VITE_PLUGIN],
+    carriesOwnUnverifiedNote: false,
+  },
+  [Framework.REMIX]: {
+    // React Router framework mode's packages, for the reason its steps are that mode's: the same
+    // framework under its previous name.
+    packages: (kit) => [kit, RETICLE_VITE_PLUGIN],
+    steps: remixSteps,
+    connectStepTitles: [StepTitle.CONNECT_SNIPPET_REMIX, StepTitle.VITE_PLUGIN],
+    carriesOwnUnverifiedNote: false,
+  },
+  [Framework.ANGULAR]: {
+    // The sensor alone. There is no build plugin for the Angular CLI to load, and the React kit is
+    // what used to be installed here, with `react` beside it.
+    packages: () => [RETICLE_BROWSER_SDK],
+    steps: angularSteps,
+    connectStepTitles: [
+      StepTitle.CONNECT_SNIPPET_ANGULAR,
+      StepTitle.ANGULAR_TOKEN_PROXY,
+      StepTitle.ANGULAR_SERVE_CONFIG,
+    ],
+    carriesOwnUnverifiedNote: true,
+  },
   [Framework.TANSTACK_START]: {
     // Start IS a Vite app, so the plugin still stamps `data-reticle-source` — only the connect
     // injection is inapplicable, and that is the plan's business (`inject: false`).
@@ -162,7 +253,11 @@ export const FRAMEWORK_ADAPTERS: Record<Framework, FrameworkAdapter> = {
       ...tanstackStartSteps(input),
       ...viteSteps(input, VITE_PLUGIN_DETAIL.TANSTACK_START, false),
     ],
-    connectStepTitles: [StepTitle.CONNECT_SNIPPET_TANSTACK_START, StepTitle.VITE_PLUGIN],
+    connectStepTitles: [
+      StepTitle.CONNECT_SNIPPET_TANSTACK_START,
+      StepTitle.TANSTACK_START_CONNECT_COMPONENT,
+      StepTitle.VITE_PLUGIN,
+    ],
     // The Start recipe carries its own UNVERIFIED line; a second generic notice would argue with it.
     carriesOwnUnverifiedNote: true,
   },

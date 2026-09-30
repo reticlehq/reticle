@@ -49,3 +49,27 @@ export function waitProgressLine(
     `somewhere else, that url is the thing to check first.`
   );
 }
+
+/**
+ * The same, for the wait on a session after the app is up.
+ *
+ * That wait was silent as well: a desktop init printed "Waiting for the app to launch and dial in."
+ * and then nothing for the whole of its budget. Naming what is awaited and how long remains is what
+ * lets somebody tell a slow start from a wedged one — and when to stop waiting themselves.
+ */
+export function connectProgressLine(
+  elapsedMs: number,
+  lastSpokeAtMs: number | undefined,
+  budgetMs: number,
+  awaiting: string,
+): string | undefined {
+  if (elapsedMs < WAIT_PROGRESS_EVERY_MS) return undefined;
+  if (lastSpokeAtMs !== undefined && elapsedMs - lastSpokeAtMs < WAIT_PROGRESS_EVERY_MS) {
+    return undefined;
+  }
+  const seconds = (ms: number): string => `${String(Math.max(0, Math.floor(ms / 1000)))}s`;
+  return (
+    `Still waiting for ${awaiting} to connect: ${seconds(elapsedMs)} so far, giving up in ` +
+    `${seconds(budgetMs - elapsedMs)}.`
+  );
+}

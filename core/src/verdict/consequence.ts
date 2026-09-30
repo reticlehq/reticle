@@ -46,6 +46,8 @@ export const PredicateKind = {
   CONSOLE: 'console',
   ANIMATION: 'animation',
   SETTLED: 'settled',
+  /** Two observed values, related to each other — see compare-source.ts. */
+  COMPARE: 'compare',
   ALL_OF: 'allOf',
   ANY_OF: 'anyOf',
   NOT: 'not',

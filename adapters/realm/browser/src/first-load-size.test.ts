@@ -258,7 +258,12 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * and size, and that redaction runs where the page records the request. Raised by 1,000 over the
  * measurement, per the note above.
  */
-const MAX_FIRST_LOAD_BYTES = 245_700;
+/*
+ * 245_700 -> 246_700, for the snapshot's depth-cut marker (this branch) beside the store snapshots
+ * that let a Pinia or Svelte mutation diff: together 245,705 B measured on main with both, over the
+ * old ceiling by 5. Raised by 1,000 over the measurement, per the note above.
+ */
+const MAX_FIRST_LOAD_BYTES = 246_700;
 /*
  * Raised a fifth time, 233_300 -> 233_400, for a route to be assertable in a SAVED flow. 57 B.
  *

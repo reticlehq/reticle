@@ -46,9 +46,9 @@ import { surfaceVocabulary, listOf, type SurfaceVocabulary } from './surface-voc
 const verdictDiscipline = (v: SurfaceVocabulary): string =>
   `Reticle verifies a running web app from the inside: go (${v.navigate}), look (${listOf(v.look, v.find)}), act and prove in one hop (${v.actAndWait}), observe (${listOf(v.observe, v.state, v.network, v.console)}), assert (${v.assert}). Verify a user-facing change against the real app before you call it done — \`npx @reticlehq/server gate --since <ref>\` fails unless a passing artifact covers every flow your edits affect — and never weaken a check to make it pass.
 
-Only ${v.actAndWait} and ${v.assert} produce a verdict. ${v.act.length > 0 ? `${v.act} and e` : 'E'}verything else moves or reads the app and proves nothing, so a drive that ends without one of those two has no result however many tools it used. Prefer ${v.actAndWait}({ ref, action, until }) — it names the expected consequence BEFORE the action, which is the difference between a check and a rationalisation. Only verified:"yes" is a pass — "unknown" means Reticle could not tell what happened, "no-fault" means nothing was declared to prove. Report either as not proved.
+Only ${v.act.length > 0 ? `${v.actAndWait}, ${v.assert} and ${v.act}{steps}` : `${v.actAndWait} and ${v.assert}`} produce a verdict. Everything else moves or reads the app and proves nothing, so a drive that ends without one of those two has no result however many tools it used. Prefer ${v.actAndWait}({ ref, action, until }) — it names the expected consequence BEFORE the action, which is the difference between a check and a rationalisation. Only verified:"yes" is a pass — "unknown" means Reticle could not tell what happened, "no-fault" means nothing was declared to prove. Report either as not proved.
 
-A "yes" over a clean capture IS the answer — re-reading the page after one finds the same state. When every consequence you set out to check has one, stop.
+Done is the journey's END proved, not its first step: drive each step your change touches and give the last an \`until\` naming the end state (\`durable: true\` if it must persist). A "yes" on it over a clean capture IS the answer — stop.
 
 DIAGNOSING a bug? Read the source first — Reticle proves what the app DOES, not why. Drive to CONFIRM a fix, not to find one.`;
 
@@ -88,15 +88,17 @@ const replayFirst = (v: SurfaceVocabulary): string => {
  *
  * Deliberately concrete: the command, what it does to the app, and the call that confirms it. A
  * general instruction to "set Reticle up" is the state these agents are already in — they have the
- * tools and no app, and nothing tells them that combination is incomplete. It also names the dev
- * server restart, because a plugin added to a config the running server already read is the single
- * most common way this step half-succeeds.
+ * tools and no app, and nothing tells them that combination is incomplete. `init` starts the dev
+ * server and opens the app itself, so the restart is named only for the case it cannot cover: a dev
+ * server that was already running read the config before `init` edited it, which is the single most
+ * common way this step half-succeeds. Telling every agent to restart sent them to kill the server
+ * `init` had just started.
  */
 const firstMoveFor = (
   v: SurfaceVocabulary,
 ): string => `FIRST: no app has ever connected to Reticle in this project, so nothing here can be verified yet. Having these tools is not the same as being set up — the tools reach a daemon, and the daemon has nothing to look at until the app itself is instrumented.
 
-Fix that before anything else: run \`npx @reticlehq/server init\` in the project, then RESTART the dev server (a plugin added to a config the running server already read is not in the bundle), then load the app in a browser. Confirm with ${v.sessions} — a session listed there is the proof, and until one appears no other tool can tell you anything about this app.`;
+Fix that before anything else: run \`npx @reticlehq/server init\` in the project. It starts the dev server and opens the app itself; only if a dev server was ALREADY running without Reticle, restart it and reload the tab. Confirm with ${v.sessions} — a session listed there is the proof, and until one appears no other tool can tell you anything about this app.`;
 
 /**
  * When to reach for the tools that are advertised but never explained, and how to reach the two
@@ -118,7 +120,7 @@ Fix that before anything else: run \`npx @reticlehq/server init\` in the project
  */
 const reachFor = (v: SurfaceVocabulary): string => {
   const lines = [
-    `${v.observe} is the evidence channel: everything the page did since a cursor, in one read. Take it BEFORE you call a build broken — measured, stripping the observation tools TRIPLED false alarms, because an agent that stops observing reaches for the verdict without the evidence. ${v.settle} settles a page that is changing without you; ${v.inspect} maps an element to its source file:line, which turns a finding into an edit${v.yield.length > 0 ? `; ${v.yield} hands the tab back to the human` : ''}.`,
+    `${v.observe} is the evidence channel: everything the page did since a cursor, in one read. Take it BEFORE you call a build broken — measured, stripping the observation tools TRIPLED false alarms. ${v.settle} settles a page that is changing without you; ${v.inspect} maps an element to its source file:line, which turns a finding into an edit${v.yield.length > 0 ? `; ${v.yield} hands the tab back to the human` : ''}.`,
   ];
   // Said ONLY when both halves are advertised. A catalogue with no way to invoke what it lists sends
   // the agent at a tool it cannot call and then off the product entirely — see

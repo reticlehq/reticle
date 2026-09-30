@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { scanTestids, storeHints, scanStores, MAX_TESTIDS } from './capabilities.js';
+import { nextReticleDevFile, STATE_DOCS_URL, viteDevModuleFile } from '@/patch/snippets.js';
+import { nuxtPluginFile } from '@/patch/nuxt-snippets.js';
 
 /**
  * Every app came up with `hasCapabilities: false` and a `reticle_state` holding only
@@ -45,7 +47,7 @@ describe('storeHints', () => {
     const hints = storeHints(new Set(['zustand', 'lodash']));
     expect(hints).toHaveLength(1);
     expect(hints[0]).toContain('zustand' in {} ? '' : 'registerStore');
-    expect(hints[0]).toContain('useStore');
+    expect(hints[0]).toContain('<');
   });
 
   /**
@@ -64,7 +66,40 @@ describe('storeHints', () => {
     const hints = storeHints(new Set(['@tanstack/react-query', 'jotai', 'zustand']));
     expect(hints).toHaveLength(2);
     expect(hints.join(' ')).toContain('jotaiStore');
-    expect(hints.join(' ')).toContain('useStore');
+  });
+
+  /**
+   * Reported from fresh scaffolds: every Svelte app was told to `svelteStore(cartStore)`, and a
+   * create-vue app with `useCounterStore` was told `piniaStore(useCartStore())`. Both names were made
+   * up from the dependency alone, and an agent following the line imports something that is not there.
+   */
+  it('names the Pinia store the source actually defines', () => {
+    const hints = storeHints(new Set(['pinia']), [
+      {
+        path: 'src/stores/counter.ts',
+        source: "export const useCounterStore = defineStore('counter', () => {});",
+      },
+    ]);
+    expect(hints).toEqual(["registerStore('counter', piniaStore(useCounterStore()))"]);
+  });
+
+  it('names no Pinia store it did not find, and says what to fill in instead', () => {
+    const [hint] = storeHints(new Set(['pinia']));
+    expect(hint).not.toContain('useCartStore');
+    expect(hint).toContain('piniaStore(');
+    expect(hint).toMatch(/<[^>]+>/);
+  });
+
+  it('names the Svelte store the source actually exports', () => {
+    expect(
+      storeHints(new Set(['svelte']), [
+        { path: 'src/lib/stores.ts', source: 'export const count = writable(0);' },
+      ]),
+    ).toEqual(["registerStore('count', svelteStore(count))"]);
+  });
+
+  it('says nothing for Svelte itself — every Svelte app depends on it, stores or not', () => {
+    expect(storeHints(new Set(['svelte']))).toEqual([]);
   });
 
   it('says nothing when the app has no store library we can read', () => {
@@ -175,5 +210,19 @@ describe('scanning testids out of source', () => {
   it('keeps an id with a dollar that is not an interpolation', () => {
     // `$` alone is legal in an attribute value and appears in real ids (price$, usd$total).
     expect(scanTestids(['<i data-testid="total$usd" />'])).toEqual(['total$usd']);
+  });
+});
+
+/** The server package is never installed into the app, so a path into it names nothing that exists. */
+describe('where a generated file sends someone to learn registerStore', () => {
+  it('is the docs URL, not a path into node_modules', () => {
+    for (const file of [
+      viteDevModuleFile([], []),
+      nextReticleDevFile(undefined),
+      nuxtPluginFile(undefined),
+    ]) {
+      expect(file).not.toContain('node_modules/@reticlehq/server');
+      expect(file).toContain(STATE_DOCS_URL);
+    }
   });
 });

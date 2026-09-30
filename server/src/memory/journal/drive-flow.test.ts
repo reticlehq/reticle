@@ -193,3 +193,46 @@ describe('a drive flow is named after why it was driven', () => {
     expect(programs[0]?.name).toBe('drive-close-an-issue');
   });
 });
+
+/*
+ * Cutting at EVERY route change turned cart → shipping → payment into three one-page fragments, and
+ * dropped each fragment with no expect — so the depth of a drive never survived into its flow. A
+ * route change the previous action CAUSED is the same journey; only a jump the tape did not make
+ * (a navigate between steps) or leaving a sign-in starts a new one.
+ */
+describe('a journey that moves across pages stays one flow', () => {
+  const at = (route: string, endPage: string, expectIt = false, args = {}): RecordedStep => ({
+    ...step(expectIt, route),
+    endPage,
+    args: { ref: 'e1', action: 'click', ...args },
+  });
+
+  it('keeps steps together when the previous action navigated to the next route', () => {
+    const { programs, outcome } = driveFlowsFrom({
+      steps: [at('/cart', '/shipping'), at('/shipping', '/payment'), at('/payment', '/done', true)],
+    });
+    expect(programs).toHaveLength(1);
+    expect(programs[0]?.startPath).toBe('/cart');
+    expect(programs[0]?.steps).toHaveLength(3);
+    expect(outcome.unprovenSteps).toBeUndefined();
+  });
+
+  it('still cuts after a sign-in, even one that navigated onward', () => {
+    const password = { action: 'fill', by: 'testid', value: 'password', args: { value: 'x' } };
+    const { programs } = driveFlowsFrom({
+      steps: [
+        at('/login', '/login', false, password),
+        at('/login', '/app', true),
+        at('/app', '/app', true),
+      ],
+    });
+    expect(programs.map((p) => p.startPath)).toEqual(['/login', '/app']);
+  });
+
+  it('cuts where the route changed without the previous action causing it', () => {
+    const { programs } = driveFlowsFrom({
+      steps: [at('/a', '/a', true), at('/b', '/b', true)],
+    });
+    expect(programs.map((p) => p.startPath)).toEqual(['/a', '/b']);
+  });
+});

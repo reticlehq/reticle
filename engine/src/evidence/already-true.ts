@@ -16,7 +16,7 @@
  * So these are the kinds worth evaluating BEFORE the act, to find out whether the green means
  * anything.
  */
-import { PredicateKind, type ElementDescriptor } from '@reticlehq/core';
+import { PredicateKind, compareSourceClauses, type ElementDescriptor } from '@reticlehq/core';
 import type { Predicate } from '@/question/predicate/predicate.js';
 import { asksForComparison } from './baseline.js';
 
@@ -57,6 +57,10 @@ export function readsDomState(predicate: Predicate): boolean {
       return predicate.predicates.some(readsDomState);
     case PredicateKind.NOT:
       return readsDomState(predicate.predicate);
+    // A comparison between two LIVE readings (text, a store) can already agree before the click, and
+    // then it proves nothing about the click. A `net` or `signal` side is floored like any other.
+    case PredicateKind.COMPARE:
+      return compareSourceClauses(predicate).some(readsDomState);
     default:
       return false;
   }

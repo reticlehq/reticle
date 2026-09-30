@@ -17,8 +17,9 @@ A desktop app reaches its backend over **IPC, not HTTP**. Patching `fetch`/`XHR`
 ## Electron: two lines, none in your app code
 
 ```ts
-// vite.config.ts — desktop:true also runs the plugin for `vite build`, because a packaged
-// renderer is a production build with no dev server
+// vite.config.ts — desktop:true lets connect() start in a packaged renderer (NODE_ENV=production).
+// A default (production-mode) `vite build` ships no Reticle code; to drive a packaged
+// renderer with no dev server, build it with `vite build --mode development`
 export default defineConfig({
   base: './', // file:// needs relative asset paths
   plugins: [react(), reticle({ desktop: true })],

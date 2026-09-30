@@ -160,6 +160,17 @@ export function drivenSteps(toolCalls: readonly ToolOutcome[]): DrivenStep[] {
  * rather than as a failure — it calls for a better check, not a code change, and collapsing the two
  * would send an agent to rewrite working code.
  */
+/** The pages the drive's own snapshots reported, in order, each distinct page once. */
+function pagesReached(toolCalls: readonly ToolOutcome[]): string[] {
+  const pages: string[] = [];
+  for (const call of toolCalls) {
+    if (ReticleTool.SNAPSHOT !== call.name || call.isError) continue;
+    const route = asString(asRecord(asRecord(call.result)['status'])['route']);
+    if (route !== undefined && !pages.includes(route)) pages.push(route);
+  }
+  return pages;
+}
+
 export function describeDrive(
   toolCalls: readonly ToolOutcome[],
   savedFlows: readonly string[],
@@ -208,10 +219,16 @@ export function describeDrive(
     (step) => Verified.YES !== step.verified && Verified.NO !== step.verified,
   );
 
+  const pages = pagesReached(toolCalls);
   const lines: string[] = [
     ...(replayLine === undefined ? [] : [replayLine]),
     `Drove ${String(steps.length)} action(s): ${String(proved.length)} proved, ` +
       `${String(failed.length)} failed, ${String(undecided.length)} not decided.`,
+    // How DEEP it got. An action count reads the same for a checkout walked to its receipt and for
+    // eleven clicks on the home page; the pages reached are what tell them apart.
+    ...(0 === pages.length
+      ? []
+      : [`Reached ${String(pages.length)} page(s): ${pages.join(' → ')}.`]),
   ];
 
   for (const step of steps.slice(0, MAX_LISTED)) {

@@ -13,11 +13,18 @@
  */
 
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { Socket } from 'node:net';
-import type { Readable } from 'node:stream';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { isAlive } from '@/command/daemon/daemon.js';
+import { DEV_SERVER_LOG_CAP_BYTES, ROTATED_SUFFIX } from './bringup/dev-server-log-cap.js';
+import {
+  devServerLogName,
+  recordHandOver,
+  sweepDeadDevServers,
+} from './bringup/dev-server-files.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
+import { reticleStateHome } from '@/command/daemon/daemon.js';
 import {
   descendants,
   parseLsofPorts,
@@ -27,45 +34,65 @@ import {
 } from './terminal/listeners.js';
 import type { CandidateSession } from './session-pick.js';
 import type { PageProbe } from './probe/page-probe.js';
-import { loopbackProbeUrls } from './probe/loopback-probe-urls.js';
+import { isAddressMiss, loopbackProbeUrls } from './probe/loopback-probe-urls.js';
 
 const WINDOWS = 'win32' === process.platform;
 /** A page fetch that is slow is a page fetch that failed, for our purposes. */
 const PROBE_TIMEOUT_MS = 5_000;
 
-/**
- * Stop an inherited stdio pipe from holding the event loop open.
- *
- * A child's piped stdout is a Socket at runtime and a Readable in the types, which has no `unref`.
- * Narrowing through Socket keeps that honest rather than asserting it.
- */
-function releasePipe(stream: Readable | null | undefined): void {
-  if (stream instanceof Socket) stream.unref();
-}
+/** The supervisor that owns the server's output and keeps its log bounded. */
+const LOG_CAP_SCRIPT = fileURLToPath(new URL('./bringup/dev-server-log-cap.js', import.meta.url));
 
 /** The dev server this process started, and the only one it will ever stop. */
 export class OwnedDevServer {
   private child: ChildProcess | undefined;
-  private buffer = '';
-  private lastOutputAt = Date.now();
+  private log: string | undefined;
+  private cwd: string | undefined;
+  private startedAt = Date.now();
   private handedOver = false;
 
+  constructor(private readonly logDir: string = reticleStateHome()) {}
+
+  /**
+   * Start it with its output going to a bounded log, through a supervisor that outlives `init`.
+   *
+   * Not a pipe into THIS process. A pipe's read end belonged to `init`; once it exited nobody held
+   * it, and the server's next write (a compile error, an HMR line, SvelteKit's first warning) was an
+   * EPIPE that killed it: "it connected, then the app went away". And not a bare file either, which
+   * has no ceiling: an upstream echo loop grew one to 2.9 GB in five minutes. The supervisor reads
+   * the server's pipes for as long as they are open and rotates the file past a cap — see
+   * dev-server-log-cap.ts. It is the process group leader, so `pid()` and `stop()` cover both.
+   */
   start(command: string, cwd: string, env: Readonly<Record<string, string>>): void {
-    const child = spawn(command, {
-      cwd,
-      shell: true,
-      // Its own process group, so stopping it stops what it started rather than only the wrapper.
-      detached: !WINDOWS,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, ...env },
-    });
-    const collect = (chunk: Buffer | string): void => {
-      this.buffer += String(chunk);
-      this.lastOutputAt = Date.now();
-    };
-    child.stdout?.on('data', collect);
-    child.stderr?.on('data', collect);
-    this.child = child;
+    mkdirSync(this.logDir, { recursive: true });
+    // Logs of servers that are gone, from every project, so the state home stops growing a file
+    // per app ever started. This one's are replaced below anyway.
+    sweepDeadDevServers(this.logDir, { alive: isAlive, now: Date.now(), keep: cwd });
+    const log = join(this.logDir, devServerLogName(cwd));
+    // Unlinked rather than truncated: a previous server for this project may still hold the old
+    // file open, and truncating under it would interleave its lines into this run's output.
+    rmSync(log, { force: true });
+    rmSync(`${log}${ROTATED_SUFFIX}`, { force: true });
+    this.child = spawn(
+      process.execPath,
+      [LOG_CAP_SCRIPT, log, String(DEV_SERVER_LOG_CAP_BYTES), command],
+      {
+        cwd,
+        // Its own process group, so stopping it stops what it started rather than only the wrapper.
+        detached: !WINDOWS,
+        // Nothing of ours: the supervisor holds the server's pipes, and init holds none of its.
+        stdio: 'ignore',
+        env: { ...process.env, ...env },
+      },
+    );
+    this.log = log;
+    this.cwd = cwd;
+    this.startedAt = Date.now();
+  }
+
+  /** Where the server's output goes, for the line that hands it over. */
+  logPath(): string | undefined {
+    return this.log;
   }
 
   /** The process group leader, for a caller that has to clean up what it handed over. */
@@ -74,15 +101,27 @@ export class OwnedDevServer {
   }
 
   output(): string {
-    return this.buffer;
+    if (undefined === this.log) return '';
+    try {
+      return readFileSync(this.log, 'utf8');
+    } catch {
+      return '';
+    }
   }
 
   exited(): boolean {
     return undefined !== this.child && null !== this.child.exitCode;
   }
 
+  /** Since the log last grew, which is since the server last printed anything. */
   quietForMs(): number {
-    return Date.now() - this.lastOutputAt;
+    let lastOutputAt = this.startedAt;
+    try {
+      if (undefined !== this.log) lastOutputAt = Math.max(lastOutputAt, statSync(this.log).mtimeMs);
+    } catch {
+      /* not written yet */
+    }
+    return Date.now() - lastOutputAt;
   }
 
   /** Ports anything in this server's process tree is listening on. */
@@ -111,24 +150,20 @@ export class OwnedDevServer {
     );
   }
 
-  /** Hand the running server to the user. After this, `stop()` does nothing. */
   /**
-   * Leave the server running and stop holding it.
+   * Leave the server running and stop holding it. After this, `stop()` does nothing.
    *
-   * `unref` on the child is NOT enough: its stdout and stderr are pipes owned by this process, and
-   * an open pipe keeps the event loop alive on its own. So `init` printed "setup complete" and then
-   * hung until something killed it, turning a successful run into a non-zero exit — which is
-   * exactly what the install gate reported, on a run whose every other assertion passed.
-   *
-   * The streams are unref'd rather than destroyed: the server is still writing to them, and
-   * destroying the read end of a live pipe risks an EPIPE in somebody else's dev server.
+   * Only `unref` is needed: the output is the supervisor's, so no pipe of ours holds the event loop
+   * (`init` once printed "setup complete" and hung on one). `url` is recorded beside the log, so the
+   * next `init` attaches to this server rather than starting a second one beside it.
    */
-  handOver(): void {
+  handOver(url?: string): void {
     this.handedOver = true;
-    const child = this.child;
-    releasePipe(child?.stdout);
-    releasePipe(child?.stderr);
-    child?.unref();
+    this.child?.unref();
+    const pid = this.child?.pid;
+    if (undefined !== url && undefined !== pid && undefined !== this.cwd) {
+      recordHandOver(this.logDir, { pid, url, appDir: this.cwd });
+    }
   }
 
   stop(): void {
@@ -188,14 +223,16 @@ function windowsProcessPairs(): ProcessPair[] {
  * server that is already running.
  *
  * On loopback, the announced host is tried first and the other loopback families follow when it
- * misses — so an IPv6-only Vite that printed `127.0.0.1` still counts as served (#884).
+ * is REFUSED — so an IPv6-only Vite that printed `127.0.0.1` still counts as served (#884). Only
+ * refused: a timeout means the right server is slow, and the caller polls again on the same host.
+ * See `isAddressMiss` for the Next 16 first run that hopping on a timeout broke.
  */
-export async function probePage(url: string): Promise<PageProbe> {
+export async function probePage(url: string, timeoutMs = PROBE_TIMEOUT_MS): Promise<PageProbe> {
   const candidates = loopbackProbeUrls(url);
   let sawTlsRefused = false;
   for (const candidate of candidates) {
     try {
-      const res = await fetch(candidate, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
+      const res = await fetch(candidate, { signal: AbortSignal.timeout(timeoutMs) });
       const body = await res.text();
       const sdkInPage = /@reticlehq|@reticle-connect|reticle-dev/.test(body);
       // Only stamp reachedUrl when we had to leave the announcement — callers that already have
@@ -212,6 +249,7 @@ export async function probePage(url: string): Promise<PageProbe> {
       if (/certificate|SELF_SIGNED|DEPTH_ZERO|ERR_TLS|unable to verify/i.test(message)) {
         sawTlsRefused = true;
       }
+      if (!isAddressMiss(err)) break;
     }
   }
   return { served: false, sdkInPage: false, ...(sawTlsRefused ? { tlsRefused: true } : {}) };

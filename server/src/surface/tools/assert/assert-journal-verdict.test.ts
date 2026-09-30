@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
 import type { WebSocket } from 'ws';
 import {
   EventType,
@@ -68,7 +69,14 @@ function journalledSession(): {
   const sink = fakeSink();
   session.setJournal(new JournalRecorder(sink, { now: () => session.elapsed(), flushAt: 100 }));
   const sessions: Partial<SessionManager> = { resolve: () => session };
-  return { session, deps: { sessions: sessions as SessionManager } as unknown as ToolDeps, sink };
+  return {
+    session,
+    deps: {
+      sessions: sessions as SessionManager,
+      recordings: new RecordingStore(),
+    } as unknown as ToolDeps,
+    sink,
+  };
 }
 
 const SIGNAL_NAME = 'todo:added';

@@ -99,6 +99,16 @@ export interface NoSessionFacts {
    */
   authRefused?: boolean;
   /**
+   * The bridge refused the last hello for something OTHER than its token — a protocol number out of
+   * range, or a hello that failed the wire schema outright — and nothing has connected since.
+   *
+   * The same positive evidence as `authRefused`, with a different fix. Without it the daemon had
+   * recorded the refusal and `init` still ended on "the SDK is in the page and never dialled the
+   * bridge", about a page that dialled and was turned away. `reason` follows the `cause — fix`
+   * shape the bridge writes; the page and project are what the refused hello said about itself.
+   */
+  helloRefused?: { reason: string; url?: string; projectId?: string };
+  /**
    * The framework `.reticle.json` declares, when there is one.
    *
    * Used to RANK the causes rather than to print a static differential. Nuxt is the case that made
@@ -107,6 +117,14 @@ export interface NoSessionFacts {
    * hint the agent reads hours later never mentioned it.
    */
   framework?: string;
+  /**
+   * The project is a desktop shell (Electron, Tauri), read from the project the way `doctor` reads it.
+   *
+   * Its page exists only inside its own window, so every "open the app's URL in a browser" and
+   * every lease offer below is the wrong move there: it loads the renderer without the shell's IPC
+   * bridge or native APIs, which is not the app being verified. Absent means web.
+   */
+  desktop?: boolean;
   /**
    * `.reticle.json` files found OUTSIDE this daemon's directory — a workspace app, a repo root.
    *
@@ -157,6 +175,9 @@ export interface NoSessionFacts {
   lastKnownStatus?: number;
 }
 
+/** How every hello-refusal reason the bridge records separates its cause from its fix. */
+const CAUSE_FIX_SEPARATOR = ' — ';
+
 /** The lowest HTTP status that means the server itself failed to answer the route. */
 const SERVER_ERROR_FLOOR = 500;
 
@@ -197,6 +218,7 @@ const URL_THEN_LEASE =
  * diagnosed the problem.
  */
 function leaseAdvice(base: string, facts: NoSessionFacts): string {
+  if (true === facts.desktop) return DESKTOP_NO_BROWSER;
   const caveat = leaseCaveat(facts.leaseBrowser);
   return caveat === undefined ? base : `${base} ${caveat}`;
 }
@@ -346,6 +368,31 @@ const OPEN_THE_APP =
   'Reticle only ever sees a page that is LOADED, so the commonest cause by a distance is that no ' +
   `browser has opened the app yet: run ${OPEN_CMD} with the app's own URL (or ask the ` +
   'human to open it).';
+
+/**
+ * The desktop twin of OPEN_THE_APP. A desktop app's page exists only inside its own window, and the
+ * guidance used to send an Electron user to a browser URL — which reaches the renderer's dev server
+ * and none of the app around it.
+ */
+const DESKTOP_OPEN_THE_APP =
+  'This is a desktop app, and Reticle sees it only from inside its own window, so the commonest ' +
+  'cause by a distance is that the desktop app is not running: start it yourself, in the ' +
+  "background, with the project's desktop dev command (the script that runs `tauri dev`, " +
+  '`electron-vite dev`, `electron-forge start` or `electron .`), not the plain web dev server.';
+
+/** Why the browser and lease routes are withheld for a desktop app. Replaces the lease offer. */
+const DESKTOP_NO_BROWSER =
+  'Do not open its URL in a browser or with a lease: that loads the renderer outside the desktop ' +
+  'shell, without its IPC bridge or native APIs, so it is not the app you are verifying.';
+
+function openTheApp(facts: NoSessionFacts): string {
+  return true === facts.desktop ? DESKTOP_OPEN_THE_APP : OPEN_THE_APP;
+}
+
+/** The "(or run open)" aside — a desktop window is reopened by the app, not by a browser command. */
+function orOpenCommand(facts: NoSessionFacts): string {
+  return true === facts.desktop ? '' : ` (or run ${OPEN_CMD_BARE})`;
+}
 
 /**
  * What a machine-wide port scan can and cannot say.
@@ -528,6 +575,25 @@ export function explainNoSession(facts: NoSessionFacts): {
     );
   }
 
+  // Beside the token refusal and for the same reason: a turned-away hello is current, positive
+  // evidence, and every branch below reasons from an absence.
+  if (facts.helloRefused !== undefined) {
+    const { reason: said, url, projectId } = facts.helloRefused;
+    const split = said.indexOf(CAUSE_FIX_SEPARATOR);
+    const cause = -1 === split ? said : said.slice(0, split);
+    const fix = -1 === split ? undefined : said.slice(split + CAUSE_FIX_SEPARATOR.length);
+    const page = undefined === url || '' === url ? 'a page' : `the page at ${url}`;
+    const project = undefined === projectId ? '' : ` (project ${projectId})`;
+    return reason(
+      // ponytail: shares the token refusal's code, because a new code is a telemetry wire change
+      // and that surface has its own owner; split it out as `hello_refused` there.
+      NoSessionReason.AUTH_REFUSED,
+      `no browser session connected: ${page}${project} dialled this daemon and was REFUSED ` +
+        `because ${cause}${undefined === fix ? '' : `; fix: ${fix}`}. Only an SDK dials the ` +
+        'bridge, so the app is running and instrumented — do not go looking for a stopped dev server.',
+    );
+  }
+
   if (everConnected) {
     // A reaped lease first, because it is the one cause with POSITIVE evidence behind it. Calling
     // it "the tab was closed, ask the human to reopen the app" is wrong on every clause (#157):
@@ -562,15 +628,15 @@ export function explainNoSession(facts: NoSessionFacts): {
           `is correct. The page was torn down while on ${facts.lastKnownUrl}, and that route answers ` +
           `HTTP ${String(facts.lastKnownStatus)} right now — a server error in the app, not a closed ` +
           'tab and not an install problem. A route that throws server-side tears the page down and ' +
-          'the SDK cannot reconnect to it. Fix the route, then reload the tab (or run ' +
-          `${OPEN_CMD_BARE}).${alreadyListeningClause(listening)} ${RETRY}`,
+          'the SDK cannot reconnect to it. Fix the route, then reload the tab' +
+          `${orOpenCommand(facts)}.${alreadyListeningClause(listening)} ${RETRY}`,
       );
     }
     return reason(
       NoSessionReason.TAB_GONE,
       'no browser session connected, but one WAS connected to this daemon earlier, so the wiring ' +
         `is correct. ${tabGoneWhat(facts.lastKnownUrl)} Ask the human to reopen ` +
-        `the app (or run ${OPEN_CMD_BARE}), or reload the tab. ${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`,
+        `the app${orOpenCommand(facts)}, or reload the tab. ${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`,
       alreadyListeningClause(listening).trim(),
     );
   }
@@ -587,7 +653,7 @@ export function explainNoSession(facts: NoSessionFacts): {
         : unattributedListeners(listening);
     return reason(
       NoSessionReason.APP_NOT_REOPENED,
-      `${RESTARTED_LEAD} ${OPEN_THE_APP} ${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`,
+      `${RESTARTED_LEAD} ${openTheApp(facts)} ${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`,
       `${DO_NOT_REINSTALL} ${listeners} ${rankedCauses(facts)}`,
     );
   }
@@ -599,7 +665,7 @@ export function explainNoSession(facts: NoSessionFacts): {
     return reason(
       NoSessionReason.CONFIG_ELSEWHERE,
       'no browser session connected, and this daemon has never seen one. ' +
-        `${configsElsewhereClause(facts)} ${OPEN_THE_APP} ${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`,
+        `${configsElsewhereClause(facts)} ${openTheApp(facts)} ${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`,
       'This daemon was started somewhere that is not the project, which is the normal outcome when ' +
         `an editor launches it from your home directory. ${unattributedListeners(listening)} ` +
         `${rankedCauses(facts)}`,
@@ -640,7 +706,7 @@ export function explainNoSession(facts: NoSessionFacts): {
     }
     return reason(
       NoSessionReason.NO_LISTENER,
-      `${stallClause(facts)}no browser session connected, and this daemon has never seen one. ${OPEN_THE_APP} ` +
+      `${stallClause(facts)}no browser session connected, and this daemon has never seen one. ${openTheApp(facts)} ` +
         'Nothing is listening on the ports Reticle scans either, and the usual reason is a dev ' +
         'server that is not running: start it yourself in the background with the command in ' +
         '`next_action`, tell the human in one line that it is running, then open the app in a ' +
@@ -678,7 +744,7 @@ export function explainNoSession(facts: NoSessionFacts): {
   return reason(
     NoSessionReason.SDK_NOT_REACHING_DAEMON,
     `${stallClause(facts)}no browser session connected, and this daemon has never seen one for this project, which is ` +
-      `wired for Reticle. ${OPEN_THE_APP} If the page IS open and still does not appear, the SDK ` +
+      `wired for Reticle. ${openTheApp(facts)} If the page IS open and still does not appear, the SDK ` +
       `is not reaching this daemon (on ${String(port)}). ${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`,
     `${unattributedListeners(listening)} ${rankedCauses(facts)}`,
   );

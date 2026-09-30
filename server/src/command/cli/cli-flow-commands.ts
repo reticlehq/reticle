@@ -15,7 +15,18 @@ import { type ProjectId, ReticleDir, RunFlowStatus } from '@reticlehq/core';
 import { FlowStore } from '@/language/flows/flows.js';
 import { RunStore } from '@/judgement/runs/artifact/run-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '@/memory/project/fs/fs-port.js';
-import { affectedSavedFlows, type NamedFlow } from '@/language/flows/change/flow-sources.js';
+import {
+  affectedSavedFlows,
+  toFlowSources,
+  type NamedFlow,
+} from '@/language/flows/change/flow-sources.js';
+import { isInteractiveSource, unflowedFiles } from '@/language/flows/change/affected.js';
+import {
+  LedgerStore,
+  regressions,
+  staleChanged,
+  unexecutedChanged,
+} from '@/features/exhaust/ledger.js';
 import { gateDecision } from '@/language/flows/change/gate.js';
 import { FlakeStore } from '@/language/flows/stores/flake-store.js';
 import { formatBuddyStatus } from '@/language/flows/buddy-status.js';
@@ -24,7 +35,7 @@ import { AssertionTiersStore } from '@/language/flows/stores/assertion-tiers-sto
 import { detectDowngrades } from '@/judgement/outcome/assertion-integrity.js';
 import { computeCoverage, flowCoverageReport } from '@/language/flows/suite/coverage.js';
 import { createWatchBatcher } from '@/language/flows/change/watch-batcher.js';
-import { watch } from 'node:fs';
+import { readFileSync, statSync, watch } from 'node:fs';
 import { log } from '@/log.js';
 /** Load the {name, steps} of every saved flow for the active project. */
 /** Explicit files plus, when --since is given, the git-changed files since that ref. */
@@ -182,11 +193,39 @@ export async function handleCapsules(): Promise<void> {
  * changed files. Flaky flows are quarantined (surfaced, not blocking). The environment-side enforcement
  * that makes verification unavoidable. Never throws; a fault fails closed (exit 1).
  */
+/**
+ * A changed file's text, or '' when it is gone. `git diff --name-only` answers from the repository
+ * root while the gate may run in a package below it, so leading segments are dropped until the path
+ * resolves from `cwd`.
+ */
+function atChangedPath<T>(cwd: string, file: string, read: (path: string) => T): T | undefined {
+  const parts = file.split('/');
+  for (let i = 0; i < parts.length; i += 1) {
+    try {
+      return read(join(cwd, ...parts.slice(i)));
+    } catch {
+      // not at this depth; try the path one segment shorter
+    }
+  }
+  return undefined;
+}
+
+function readChangedFile(cwd: string, file: string): string {
+  return atChangedPath(cwd, file, (path) => readFileSync(path, 'utf8')) ?? '';
+}
+
+/** When a changed file was last modified, or undefined when it is gone. Same lookup as its text. */
+function changedFileModifiedAt(cwd: string, file: string): number | undefined {
+  return atChangedPath(cwd, file, (path) => statSync(path).mtimeMs);
+}
+
 export async function handleGate(
   files: string[],
   since: string | undefined,
   /** Hook mode: prose for a human, and silence when there was simply nothing to check. */
   hook = false,
+  /** Accept today's coverage levels as the best before judging, for a drop that was intended. */
+  acceptCoverage = false,
 ): Promise<void> {
   try {
     const fs = createNodeFileSystem();
@@ -226,7 +265,37 @@ export async function handleGate(
     const deleted = Object.entries(baseline)
       .filter(([name, entry]) => !byName.has(name) && entry.sources.some((f) => changedSet.has(f)))
       .map(([name]) => name);
-    const result = gateDecision({ affected, passing, flaky, downgraded, deleted });
+    // Only against a suite that exists: a project with no flows yet is NOTHING_TO_CHECK, and
+    // demanding a flow per edited component on its first day would block every stop.
+    const unflowed =
+      0 === allFlows.length
+        ? []
+        : unflowedFiles(toFlowSources(allFlows), changed, (file) =>
+            isInteractiveSource(readChangedFile(process.cwd(), file)),
+          );
+    // The coverage ledger, when one exists: a level that fell below its best, and changed code the
+    // browser loaded and never ran. A project that never folded coverage has an empty ledger and
+    // neither can fire.
+    const ledgerStore = new LedgerStore(fs, reticleRoot);
+    const coverageAccepted = acceptCoverage ? await ledgerStore.acceptCurrent() : [];
+    const ledger = await ledgerStore.load();
+    const unexecuted = unexecutedChanged(ledger.code, changed);
+    // Changed files whose coverage predates the edit: their counts describe the old code, so
+    // `unexecuted` cannot judge them either way. Named rather than silently read as covered; not
+    // blocking, because a destructive exhaustive crawl after every edit is not a price a gate may set.
+    const coverageStale = staleChanged(ledger, changed, (file) =>
+      changedFileModifiedAt(process.cwd(), file),
+    ).filter((file) => !unexecuted.includes(file));
+    const result = gateDecision({
+      affected,
+      passing,
+      flaky,
+      downgraded,
+      deleted,
+      unflowed,
+      coverageRegressed: regressions(ledger),
+      unexecuted,
+    });
     // Verified-surface coverage over flows: how much of the saved suite this run actually exercised.
     const coverage = computeCoverage(
       { testids: [], signals: [], flows: allFlows.map((f) => f.name) },
@@ -242,6 +311,13 @@ export async function handleGate(
       quarantined: result.quarantined,
       ...(result.downgraded.length > 0 ? { downgraded: result.downgraded } : {}),
       ...(result.deleted.length > 0 ? { deletedCoverage: result.deleted } : {}),
+      ...(result.unflowed.length > 0 ? { unflowed: result.unflowed } : {}),
+      ...(result.coverageRegressed.length > 0
+        ? { coverageRegressed: result.coverageRegressed }
+        : {}),
+      ...(result.unexecuted.length > 0 ? { unexecuted: result.unexecuted } : {}),
+      ...(coverageStale.length > 0 ? { coverageStale } : {}),
+      ...(coverageAccepted.length > 0 ? { coverageAccepted } : {}),
       coverage: flowCoverage,
     });
     // Two non-zero codes, because two callers want opposite things from the same run. CI wants any
@@ -270,6 +346,11 @@ export async function handleGate(
           // A downgrade is reported per flow with its step indices; the hook names the flow.
           downgraded: result.downgraded.map((d) => d.flow),
           deleted: result.deleted,
+          unflowed: result.unflowed,
+          coverageRegressed: result.coverageRegressed.map(
+            (r) => `${r.level} ${String(r.was)}% -> ${String(r.now)}%`,
+          ),
+          unexecuted: result.unexecuted,
         });
         if (message !== undefined) process.stderr.write(`${message}\n`);
       }

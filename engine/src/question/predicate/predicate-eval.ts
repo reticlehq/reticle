@@ -19,9 +19,12 @@ import type { Predicate } from './predicate-schema.js';
 import {
   clipBody,
   dataMatches,
+  describeBodyFieldMiss,
+  describeFieldMiss,
   describeNetFilter,
   matchJsonBody,
   num,
+  redactedOnPath,
   str,
   type EvalResult,
 } from './predicate-eval-kit.js';
@@ -524,11 +527,15 @@ export function evalNet(
   }
   if (bodyMismatch !== undefined && 0 === matches.length) {
     // The call is there and its body is there; only the VALUE differs. Counting it as zero matches
-    // points at the wiring, which is the one place the defect is not.
+    // points at the wiring, which is the one place the defect is not. A field clause also names the
+    // field that differed, because a 200-character clip may not reach it.
+    const field =
+      p.bodyMatches === undefined ? undefined : describeBodyFieldMiss(bodyMismatch, p.bodyMatches);
+    const because = field === undefined ? '' : `: ${field}`;
     return {
       pass: false,
-      failureReason: `a call matching ${describeNetFilter(p)} was made and answered ${JSON.stringify(clipBody(bodyMismatch))}, which does not carry ${wantedBody(p)} — the request fired, the response value is what differed`,
-      observed: `response body ${JSON.stringify(clipBody(bodyMismatch))}`,
+      failureReason: `a call matching ${describeNetFilter(p)} was made and answered ${JSON.stringify(clipBody(bodyMismatch))}, which does not carry ${wantedBody(p)}${because} — the request fired, the response value is what differed`,
+      observed: `response body ${JSON.stringify(clipBody(bodyMismatch))}${because}`,
       expected: `a response body carrying ${wantedBody(p)}`,
       assertion: 'net.bodyContains',
     };
@@ -624,14 +631,39 @@ export function evalSignal(
   events: ReticleEvent[],
   p: Extract<Predicate, { kind: typeof PredicateKind.SIGNAL }>,
 ): EvalResult {
+  /**
+   * A pattern key the transport sanitizer redacted on a payload of the right name. The marker is
+   * written for a sensitive key whatever it held, so neither `*` nor a value can be judged against it
+   * — the same rule the body clauses keep.
+   */
+  let redactedField: string | undefined;
   const isMatch = (e: ReticleEvent): boolean => {
     if (e.type !== EventType.SIGNAL) return false;
     if (p.name !== undefined && str(e.data['name']) !== p.name) return false;
     if (p.dataMatches !== undefined) {
       const payload = (e.data['data'] ?? {}) as Record<string, unknown>;
+      const hidden =
+        'object' === typeof payload
+          ? Object.keys(p.dataMatches).find((key) => redactedOnPath(payload, key))
+          : undefined;
+      if (hidden !== undefined) {
+        redactedField ??= hidden;
+        return false;
+      }
       if (!dataMatches(payload, p.dataMatches)) return false;
     }
     return true;
+  };
+  const redactedVerdict = (): EvalResult | undefined => {
+    if (redactedField === undefined) return undefined;
+    const field = JSON.stringify(redactedField);
+    return {
+      pass: false,
+      inconclusive: `signal '${p.name ?? '(any)'}' fired, but its ${field} was REDACTED before it was recorded, so this clause cannot be judged — a redacted field is unknown, not different. Assert on a non-sensitive key, or on the effect the value had`,
+      observed: `a signal payload whose ${field} is ${REDACTED_VALUE}`,
+      expected: `signal '${p.name ?? '(any)'}' with payload matching ${JSON.stringify(p.dataMatches)}`,
+      assertion: 'signal.payload',
+    };
   };
 
   // `count` (exact) turns presence into a cardinality assertion, exactly as it does on `net`. The
@@ -640,8 +672,12 @@ export function evalSignal(
   // signal fires once beside a mistyped sibling and a presence check cannot say which is which.
   // Counting only what the MATCHER matched is what separates them. Omit = presence (≥1).
   if (p.count !== undefined) {
+    const matched = events.filter(isMatch).length;
+    // A redacted payload might have been one of the matches, so no count over it is decided.
+    const unjudgeable = redactedVerdict();
+    if (unjudgeable !== undefined) return unjudgeable;
     return evalExactCount({
-      matched: events.filter(isMatch).length,
+      matched,
       want: p.count,
       noun: 'signal(s)',
       filter: describeSignalFilter(p),
@@ -651,6 +687,9 @@ export function evalSignal(
 
   const hit = events.find(isMatch);
   if (hit !== undefined) return { pass: true, evidence: hit.data };
+  // `find` scanned every event to get here, so a redacted payload has been seen if there was one.
+  const unjudgeable = redactedVerdict();
+  if (unjudgeable !== undefined) return unjudgeable;
 
   // Near-miss: show signals that fired with the same name (so the agent sees the real data).
   const sameName = events
@@ -659,6 +698,11 @@ export function evalSignal(
         e.type === EventType.SIGNAL && (p.name === undefined || str(e.data['name']) === p.name),
     )
     .map((e) => e.data['data'] ?? e.data);
+  const first = sameName[0];
+  const fieldMiss =
+    p.dataMatches !== undefined && 'object' === typeof first && first !== null
+      ? describeFieldMiss(first as Record<string, unknown>, p.dataMatches)
+      : undefined;
   return {
     pass: false,
     failureReason:
@@ -667,7 +711,7 @@ export function evalSignal(
         : `no signal matched ${JSON.stringify(p)}`,
     observed:
       sameName.length > 0
-        ? `signal '${p.name ?? '(any)'}' fired ${String(sameName.length)}x, payload: ${JSON.stringify(sameName[0])}`
+        ? `signal '${p.name ?? '(any)'}' fired ${String(sameName.length)}x, payload: ${JSON.stringify(first)}${fieldMiss === undefined ? '' : `; ${fieldMiss}`}`
         : // Name what DID fire: a typo'd signal name and a genuinely dead action produce the same
           // sentence otherwise, and the agent cannot tell them apart. See observed-in-window.ts.
           `signal '${p.name ?? '(any)'}' never fired; ${describeObserved(

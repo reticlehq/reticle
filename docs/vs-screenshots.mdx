@@ -80,11 +80,11 @@ Those are real bugs and structural reads can miss them. Reticle has `reticle_scr
 
 The argument is not "screenshots are bad". It is that a screenshot cannot answer "did the code work", and that is the question an AI coding agent needs answered on every change.
 
-## The honest limits
+## What is measured, and what is not
 
-We have not proven that Reticle makes agents _fix_ more bugs. A controlled test did not show a fix-rate improvement; the benchmark was confounded and we are still working on measuring it properly.
+What is measured is detection: 10 of 10 injected regressions caught with zero false alarms, against 9 and 8 for the alternatives, and one false green against a Playwright script's 29 over an 88-bug registry.
 
-What is measured is detection: 10 of 10 injected regressions caught with zero false alarms, against 9 and 8 for the alternatives.
+What is not established is that Reticle makes agents _fix_ more bugs. A fix-loop test on a small fixture found the same fix rate with and without it; [Why Reticle](/why-reticle#what-the-fix-rate-test-measured) says what that test could and could not show.
 
 ## FAQ
 

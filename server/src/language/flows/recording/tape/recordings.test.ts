@@ -6,7 +6,12 @@ import {
   type RecordedStep,
   type CompiledProgram,
 } from './recordings.js';
-import { captureAct, compileActStep, compileSequenceStep } from '@/language/flows/replay.js';
+import {
+  captureAct,
+  captureAssertion,
+  compileActStep,
+  compileSequenceStep,
+} from '@/language/flows/replay.js';
 
 const step = (tool: string, stable = true): RecordedStep => ({ tool, stable, args: {} });
 
@@ -232,5 +237,35 @@ describe('anchor priority — which handle survives a replay', () => {
     // resolves to the wrong element or to nothing.
     const args = step({ role: 'button', component: 'Toolbar' }).args;
     expect(args['by']).toBe('component');
+  });
+});
+
+// "act, then assert" used to save a flow of bare clicks: only the act tools reached the recorder, so
+// the assertion that proved the step never made it into the regression test.
+describe('captureAssertion', () => {
+  const sig = (name: string) => ({ kind: 'signal' as const, name });
+
+  it('folds a passing assertion into the last captured step', () => {
+    const store = new RecordingStore();
+    store.capture(step('reticle_act'));
+    captureAssertion(store, sig('cart:added'));
+    expect(store.stop(AMBIENT_RECORDING)?.steps[0]?.expect).toEqual(sig('cart:added'));
+  });
+
+  it('keeps what the step already declared, and adds to it', () => {
+    const store = new RecordingStore();
+    store.capture({ ...step('reticle_act'), expect: sig('a') });
+    captureAssertion(store, sig('b'));
+    captureAssertion(store, sig('c'));
+    expect(store.stop(AMBIENT_RECORDING)?.steps[0]?.expect).toEqual({
+      kind: 'allOf',
+      predicates: [sig('a'), sig('b'), sig('c')],
+    });
+  });
+
+  it('does nothing when no step has been captured yet', () => {
+    const store = new RecordingStore();
+    captureAssertion(store, sig('a'));
+    expect(store.active()).toEqual([]);
   });
 });

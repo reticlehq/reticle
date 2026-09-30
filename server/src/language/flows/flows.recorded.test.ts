@@ -9,6 +9,7 @@ import {
   ActionType,
   AnchorKind,
   EventType,
+  COMPARE_FLOW_FILE_VERSION,
   FLOW_FILE_VERSION,
   FlowErrorCode,
   RecordedSaveError,
@@ -78,6 +79,26 @@ describe('FlowStore.saveFlow — temp-dir fs', () => {
     if (!loaded.ok) throw new Error('expected ok');
     expect(loaded.value.steps).toHaveLength(2);
     expect(loaded.value.steps[0]?.anchor).toEqual({ kind: AnchorKind.TESTID, value: 'pay' });
+  });
+
+  it('saveFlow stamps a flow that compares past what an older reader knew, and only that flow', async () => {
+    const compareStep = {
+      ...clickStep('refund'),
+      expect: {
+        kind: 'compare',
+        left: { from: 'text', scope: '#refunded' },
+        right: { from: 'net', urlContains: '/api/refund', path: 'refunded' },
+      },
+    } as unknown as FlowFile['steps'][number];
+    await store.saveFlow(flowFile('refund', [compareStep]));
+    await store.saveFlow(flowFile('checkout', [clickStep('pay')]));
+    const onDisk = async (name: string): Promise<unknown> =>
+      (JSON.parse(await fs.readFile(join(root, 'flows', `${name}.json`))) as { version: unknown })
+        .version;
+    expect(await onDisk('refund')).toBe(COMPARE_FLOW_FILE_VERSION);
+    expect(await onDisk('checkout')).toBe(FLOW_FILE_VERSION);
+    const loaded = await store.load('refund');
+    expect(loaded.ok).toBe(true);
   });
 
   it('saveFlow rejects an unsafe name (no file written)', async () => {

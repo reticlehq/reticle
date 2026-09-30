@@ -3,7 +3,7 @@
  * 1000-line cap): its path, the plugin file itself, the notice, and the manual fallback.
  */
 import { ReticleDir } from '@reticlehq/core';
-import { connectArg, registerCapabilitiesCall } from './snippets.js';
+import { connectArg, registerCapabilitiesCall, STATE_DOCS_URL } from './snippets.js';
 
 /** Where a Nuxt dev-only client plugin belongs. `.client` keeps it out of SSR; Nuxt auto-registers it. */
 const NUXT_PLUGIN_PATH = 'app/plugins/reticle.client.ts';
@@ -60,9 +60,9 @@ export default defineNuxtPlugin(() => {
       ...(root.length > 0 ? { root } : {}),
     });
 
-    // What the agent can drive without guessing. Add a store here too — registerStore('cart',
-    // piniaStore(useCartStore())) — and the agent can check what the app BELIEVES, not just what it
-    // rendered. See node_modules/@reticlehq/server/docs/usage.md.
+    // What the agent can drive without guessing. Add a store here too — for Pinia,
+    // registerStore('<key>', piniaStore(<useYourStore>())) — and the agent can check what the app
+    // BELIEVES, not just what it rendered. See ${STATE_DOCS_URL}
 ${registerCapabilitiesCall(testids, '    ')}
   });
 });
@@ -140,6 +140,6 @@ and no index.html to inject into. Wire it with a dev-only CLIENT plugin, which i
 
 The package is @reticlehq/browser — the framework-neutral sensor. DOM, network, console, routing and
 source file:line all work in Vue. What you do not get is React component identity, which is the only
-thing the React adapter adds. There is no Nuxt app in this project's CI, so this path is UNVERIFIED:
-if something does not work, please open an issue.`;
+thing the React adapter adds. The install gate scaffolds a Nuxt app on every release and requires a session, so this wiring
+is proven; if something does not work, please open an issue.`;
 }

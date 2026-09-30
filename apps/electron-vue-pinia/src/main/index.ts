@@ -1,7 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import { installReticleCapture } from '@reticlehq/electron/main'
 import icon from '../../resources/icon.png?asset'
 
 /**
@@ -25,7 +24,10 @@ function createWindow(): void {
       backgroundThrottling: false
     }
   })
-  installReticleCapture(mainWindow)
+  if (import.meta.env.MODE !== 'production')
+    void import('@reticlehq/electron/main').then(({ installReticleCapture }) =>
+      installReticleCapture(mainWindow)
+    )
 
   // A desktop renderer has no visible console unless you open DevTools, so a Reticle connect
   // failure would otherwise be completely silent in the desktop spec log.

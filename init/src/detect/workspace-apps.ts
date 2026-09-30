@@ -1,5 +1,7 @@
+import { dirname, join, relative, sep } from 'node:path';
 import type { InitIo } from '@/run-types.js';
 import { DEV_SCRIPT_NAMES } from './dev-script.js';
+import { detect, Framework, UiLibrary } from './detect.js';
 
 /**
  * The file names that say what a directory IS, shared by everything that has to ask.
@@ -134,24 +136,64 @@ function hasDevScript(pkgRaw: string): boolean {
   }
 }
 
-function looksLikeApp(dir: string, io: Pick<InitIo, 'exists' | 'readFile'>): boolean {
+/** How strongly a directory claims to be the app somebody is working in. */
+const AppSignal = {
+  /** A page to connect: a bundler, a UI framework, or an index.html of its own. */
+  UI: 'ui',
+  /** Something that can be served and shows no page — an API, a worker, a server-rendered backend. */
+  SERVED: 'served',
+  NONE: 'none',
+} as const;
+type AppSignal = (typeof AppSignal)[keyof typeof AppSignal];
+
+/** The pages a package can serve without any framework to say so. */
+const OWN_PAGES = ['index.html', 'public/index.html', 'src/index.html'];
+
+function parsedManifest(pkgRaw: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(pkgRaw);
+    return 'object' === typeof parsed && parsed !== null ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Whether a package with a dev script has a page. Asked of the same detector the plan uses, so
+ * "is this the app" and "which framework is it" cannot disagree about what a UI dependency is.
+ */
+function hasPage(dir: string, pkgRaw: string, io: Pick<InitIo, 'exists'>): boolean {
+  const found = detect({
+    pkg: parsedManifest(pkgRaw),
+    configFiles: new Set(),
+    lockfiles: new Set(),
+  });
+  if (Framework.HTML !== found.framework || UiLibrary.UNKNOWN !== found.uiLibrary) return true;
+  return OWN_PAGES.some((page) => io.exists(`${dir}/${page}`));
+}
+
+function appSignal(dir: string, io: Pick<InitIo, 'exists' | 'readFile'>): AppSignal {
   const pkgRaw = io.readFile(`${dir}/${PACKAGE_JSON}`);
-  if (null === pkgRaw) return false;
+  if (null === pkgRaw) return AppSignal.NONE;
   const configs = [
     ...VITE_CONFIG_CANDIDATES,
     ...ELECTRON_VITE_CONFIG_CANDIDATES,
     ...NEXT_CONFIG_CANDIDATES,
   ];
-  if (configs.some((c) => io.exists(`${dir}/${c}`))) return true;
+  if (configs.some((c) => io.exists(`${dir}/${c}`))) return AppSignal.UI;
   // `next.config` is optional in Next, so the dependency list is the other half of the signal.
-  if (APP_DEPS.some((d) => pkgRaw.includes(`"${d}"`))) return true;
+  if (APP_DEPS.some((d) => pkgRaw.includes(`"${d}"`))) return AppSignal.UI;
   // And the honest third: an app somebody can SERVE. Asking only for a bundler missed every app
   // built on anything else — Remix, Astro, a plain node server — and in a monorepo missing it means
   // init never redirects, wires the ROOT, and reports ✓ for files nothing compiles.
   //
   // A monorepo root has no dev script by design, and a package that can only be BUILT is not the app
   // somebody is working in, so this stays a filter rather than matching every directory.
-  return hasDevScript(pkgRaw);
+  if (!hasDevScript(pkgRaw)) return AppSignal.NONE;
+  // But a dev script alone is also what an API package has, and counting it made every workspace
+  // with a backend beside its web app "ambiguous" (#1148): the root refused, and its hint named the
+  // backend. A package with a dev script and no page is only a candidate when nothing else is.
+  return hasPage(dir, pkgRaw, io) ? AppSignal.UI : AppSignal.SERVED;
 }
 
 /**
@@ -187,12 +229,75 @@ export function findWorkspaceApps(io: Pick<InitIo, 'exists' | 'readFile' | 'list
   });
   // A declared parent can itself BE the app (`workspaces: ["web"]`), so check both the directory and
   // its children rather than assuming one level of nesting.
+  const served: string[] = [];
+  const consider = (dir: string): void => {
+    const signal = appSignal(dir, io);
+    if (AppSignal.UI === signal) found.push(dir);
+    if (AppSignal.SERVED === signal) served.push(dir);
+  };
   for (const parent of parents) {
-    if (looksLikeApp(parent, io)) found.push(parent);
-    for (const name of io.listDirs(parent)) {
-      const dir = `${parent}/${name}`;
-      if (looksLikeApp(dir, io)) found.push(dir);
-    }
+    consider(parent);
+    for (const name of io.listDirs(parent)) consider(`${parent}/${name}`);
   }
-  return [...new Set(found)];
+  // A backend is still the app when it is the only thing that can be served — a server-rendered
+  // app is exactly that — so it is demoted, never dropped.
+  return [...new Set(found.length > 0 ? found : served)];
+}
+
+/**
+ * Every package directory the workspace declares or holds, app-shaped or not.
+ *
+ * For the questions discovery's filter must not answer — "which package does the root config name"
+ * is about identity, and a package `--app` wired is the app whether or not it looks like one.
+ */
+export function workspacePackageDirs(io: Pick<InitIo, 'readFile' | 'listDirs'>): string[] {
+  const pkgRaw = io.readFile(PACKAGE_JSON);
+  const pnpmWorkspace = io.readFile(PNPM_WORKSPACE);
+  const parents = workspaceParents({
+    ...(null === pnpmWorkspace ? {} : { pnpmWorkspace }),
+    ...(null === pkgRaw ? {} : { pkgWorkspaces: parsedManifest(pkgRaw)['workspaces'] }),
+    topLevelDirs: io.listDirs('.'),
+  });
+  return [...new Set(parents.flatMap((p) => [p, ...io.listDirs(p).map((n) => `${p}/${n}`)]))];
+}
+
+/** How far up `init` looks for the workspace a package belongs to. Deeper than any real layout. */
+const MAX_WORKSPACE_DEPTH = 8;
+
+/**
+ * The workspace root that DECLARES `cwd` as one of its packages, or undefined.
+ *
+ * `init` run inside `apps/web` wrote `.reticle.json` there only, and `reticle mcp` finds that file by
+ * walking UP from where the agent stands — so an agent opened at the repo root never found it, fell
+ * back to the default port, and drove whichever daemon was there. `init --app apps/web` run from the
+ * root writes the root pointer and the agent files at the root; this is what lets a run from inside
+ * the app arrive at the same state.
+ *
+ * Only the NEAREST workspace root is asked, and only its declaration counts: a directory that merely
+ * sits under a repo with a package.json is not that repo's app, and guessing it is would write
+ * config into a stranger's root.
+ */
+export function enclosingWorkspaceRoot(
+  cwd: string,
+  io: Pick<InitIo, 'readFile'>,
+): string | undefined {
+  let dir = dirname(cwd);
+  for (let depth = 0; depth < MAX_WORKSPACE_DEPTH; depth++) {
+    const pnpmWorkspace = io.readFile(join(dir, PNPM_WORKSPACE));
+    const pkgRaw = io.readFile(join(dir, PACKAGE_JSON));
+    const pkgWorkspaces = null === pkgRaw ? undefined : parsedManifest(pkgRaw)['workspaces'];
+    if (null !== pnpmWorkspace || pkgWorkspaces !== undefined) {
+      const declared = workspaceParents({
+        ...(null === pnpmWorkspace ? {} : { pnpmWorkspace }),
+        ...(pkgWorkspaces === undefined ? {} : { pkgWorkspaces }),
+      });
+      const rel = relative(dir, cwd).split(sep).join('/');
+      const member = declared.some((base) => rel === base || dirname(rel) === base);
+      return member ? dir : undefined;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) return undefined;
+    dir = parent;
+  }
+  return undefined;
 }

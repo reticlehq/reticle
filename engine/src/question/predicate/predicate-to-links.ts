@@ -1,4 +1,4 @@
-import { ConsequenceKind, PredicateKind } from '@reticlehq/core';
+import { ConsequenceKind, PredicateKind, compareSourceClauses } from '@reticlehq/core';
 import type { Predicate } from './predicate-schema.js';
 import type { ExpectedLink } from '@reticlehq/core';
 
@@ -35,6 +35,8 @@ export function predicateToExpectedLinks(predicate: Predicate): ExpectedLink[] {
     case PredicateKind.ALL_OF:
     case PredicateKind.ANY_OF:
       return predicate.predicates.flatMap(predicateToExpectedLinks);
+    case PredicateKind.COMPARE:
+      return compareSourceClauses(predicate).flatMap(predicateToExpectedLinks);
     default:
       return [];
   }

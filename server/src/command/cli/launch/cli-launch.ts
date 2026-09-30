@@ -1,6 +1,6 @@
 import { NodePlatform } from '@/machine/platform.js';
 import { spawn } from 'node:child_process';
-import { isOpaqueOrigin } from '@reticlehq/core';
+import { isOpaqueOrigin, SESSION_HEALTH } from '@reticlehq/core';
 import { daemonFix, describeSkew } from '@/command/version/version-skew.js';
 import { CONTRACT_FINGERPRINT } from '@reticlehq/core';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
@@ -32,9 +32,19 @@ function statusField(payload: unknown, key: string): string | undefined {
  * another agent's session on a version bump, which is worse than a loud line.
  */
 export async function warnOnDaemonSkew(port: number): Promise<void> {
-  const status = await fetchStatus(port);
+  const skew = daemonSkew(await fetchStatus(port));
+  if (skew !== undefined) log('reticle_daemon_skew', { port, warning: skew });
+}
+
+/**
+ * The skew sentence for a daemon's `/status` body, or undefined when it speaks our contract.
+ *
+ * Shared with `init`, which must not ADOPT a skewed daemon: an older one refuses every hello from
+ * the page init just instrumented.
+ */
+export function daemonSkew(status: unknown): string | undefined {
   const daemonVersion = statusField(status, 'version');
-  const skew = describeSkew(
+  return describeSkew(
     {
       what: 'the daemon already running on this port',
       version: daemonVersion,
@@ -44,7 +54,6 @@ export async function warnOnDaemonSkew(port: number): Promise<void> {
     },
     { version: SERVER_VERSION, contract: CONTRACT_FINGERPRINT },
   );
-  if (skew !== undefined) log('reticle_daemon_skew', { port, warning: skew });
 }
 
 /** What `reticle open` should do: reuse an already-connected tab, open a new one, or ask for a url. */
@@ -84,7 +93,7 @@ function sameOrigin(a: string, b: string): boolean {
  * is a bigger surprise than being told where the tab actually is.
  */
 export function decideOpen(
-  all: { url: string; unresponsive?: boolean; hidden?: boolean }[],
+  all: { url: string; unresponsive?: boolean; hidden?: boolean; lastSeenMs?: number }[],
   url: string | undefined,
 ): OpenDecision {
   // A tab that has stopped answering is not a tab you can be handed. `open` is the command a caller
@@ -98,10 +107,17 @@ export function decideOpen(
   // three checks that could never resolve. Opening the url instead costs one foreground tab and the
   // hidden one is left exactly where it was — nothing is navigated out from under anybody.
   //
-  // HIDDEN, not `throttled`: throttled is `hidden || stale`, and a stale-but-visible tab is usually
-  // a quiet page that drives fine. Excluding those would pile up a duplicate tab per run, which is
-  // the thing the origin match below exists to prevent.
-  const sessions = all.filter((s) => true !== s.unresponsive && true !== s.hidden);
+  // And a tab the SDK has gone SILENT in. The page heartbeats on a native timer every few seconds
+  // whatever it is doing, so a quiet page is not a silent one: past the daemon's own staleness
+  // threshold the page is frozen (a discarded tab, a sleeping machine, a wedged main thread). This
+  // looked only at the url, and `verify --expect` drove a tab last heard from 105s earlier into
+  // "command 'match' timed out after 8000ms" instead of opening the url it had been given.
+  const sessions = all.filter(
+    (s) =>
+      true !== s.unresponsive &&
+      true !== s.hidden &&
+      (s.lastSeenMs ?? 0) <= SESSION_HEALTH.STALE_THRESHOLD_MS,
+  );
   if (url === undefined) {
     const first = sessions[0];
     if (first !== undefined) return { action: 'reuse', url: first.url };

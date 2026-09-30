@@ -61,6 +61,9 @@ const PINNED_VERSIONS: Record<string, string> = {
   // this line going red is the reminder to decide what happens to the ones already written.
   'open-verification/src/vocabulary/memory.ts': '.int().positive()',
   'server/src/judgement/capsule/capsule-store.ts': 'CAPSULE_VERSION',
+  // Only version 1 exists. A bump must migrate `best`: reading an old file as empty resets the
+  // ratchet silently, which is the empty-on-mismatch trap the note above describes.
+  'server/src/features/exhaust/ledger.ts': 'LEDGER_VERSION',
   'server/src/language/flows/stores/assertion-tiers-store.ts': '1',
   'server/src/language/flows/recording/flake.ts': '1',
   'server/src/memory/intent/intent-shard.ts': 'INTENT_SHARD_VERSION,INTENT_SHARD_VERSION',

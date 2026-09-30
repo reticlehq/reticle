@@ -38,12 +38,12 @@ You never install `@reticlehq/server`. Your agent runs it with `npx`.
 
 The package split is not cosmetic. Each boundary enforces something:
 
-| Package   | Runs in     | Hard rule                                              |
-| --------- | ----------- | ------------------------------------------------------ |
-| `core`    | both        | Depends only on `zod`. Sits at the bottom of the graph |
-| `browser` | the browser | Never imports a Node API                               |
-| `server`  | Node        | Never imports a DOM API                                |
-| `react`   | the browser | Optional. Core must work without it                    |
+| Package | Runs in | Hard rule |
+| --- | --- | --- |
+| `core` | both | Depends only on `zod` and `open-verification`. Sits at the bottom of the graph |
+| `browser` | the browser | Never imports a Node API |
+| `server` | Node | Never imports a DOM API |
+| `react` | the browser | Optional. Core must work without it |
 
 Those rules are why the browser SDK cannot accidentally pull in a filesystem call, and why the server cannot accidentally depend on `window`. They are enforced by the dependency graph, not by discipline.
 

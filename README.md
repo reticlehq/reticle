@@ -15,7 +15,7 @@ It drives your real running app, reads what actually happened, and hands back **
 
 [![npm](https://img.shields.io/npm/v/@reticlehq/server?color=8b7bff&labelColor=15131f&logo=npm)](https://www.npmjs.com/package/@reticlehq/server) [![downloads](https://img.shields.io/npm/dm/@reticlehq/react?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@reticlehq/react) [![stars](https://img.shields.io/github/stars/reticlehq/reticle?color=ff9f87&labelColor=15131f&logo=github)](https://github.com/reticlehq/reticle/stargazers) [![license](https://img.shields.io/badge/license-Apache--2.0%20%2B%20FSL-46d6a0?labelColor=15131f)](LICENSE) [![OpenSSF](https://api.securityscorecards.dev/projects/github.com/reticlehq/reticle/badge)](https://securityscorecards.dev/viewer/?uri=github.com/reticlehq/reticle) [![Discord](https://img.shields.io/badge/Discord-join-8b7bff?labelColor=15131f&logo=discord&logoColor=white)](https://discord.gg/BwAbzv9ZRz)
 
-[**Install**](#install) · [**Use it**](#use-it) · [How it works](#how-it-works) · [vs Playwright](#why-not-playwright) · [Benchmarks](#benchmarks) · [Limits](#limits) · [Docs](https://docs.reticle.sh)
+[**Install**](#install) · [**Use it**](#use-it) · [Use cases](#what-people-use-reticle-for) · [How it works](#how-it-works) · [vs Playwright](#why-not-playwright) · [Benchmarks](#benchmarks) · [Safe to install](#built-to-be-safe-to-install) · [Docs](https://docs.reticle.sh)
 
 <br/>
 
@@ -34,12 +34,7 @@ It drives your real running app, reads what actually happened, and hands back **
 
 Three steps. The first one is the whole install.
 
-**Before you run any of it.** Reticle is a dev tool that edits your build config and registers an MCP server, so here is what it does, up front, rather than after you have run it:
-
-- **You do not need an account, and a verdict is entirely local.** Nothing is sent anywhere unless you explicitly run `reticle login` and `reticle link`, or set `RETICLE_API_KEY`. Without them there is nowhere for anything to go.
-- **See the plan before anything is written to your project:** `npx @reticlehq/server init --dry-run` prints every file it would touch and writes nothing. `--app <dir>` picks which app in a monorepo; `--no-mcp` skips registering with your agents; `--files-only` writes the files and stops. (The machine-level installer in step 1 has no dry run — it is a shell script, so read it first if you want to know what it does.)
-- **If you do link a project,** what syncs is yours to choose with `reticle config --runs/--memory/--flows on|off`, and [what each of those contains is written down](docs/what-is-recorded.md). A flow records the journey you drove, so drive staging rather than production until you have read it.
-- **The CLI sends anonymous usage events** (event names and a random id — no code, no page content). `RETICLE_TELEMETRY=0`, `DO_NOT_TRACK=1` or `reticle telemetry disable` turns them off.
+Reticle is a dev tool that edits your build config and registers an MCP server. What it touches, and what it sends, is under [Built to be safe to install](#built-to-be-safe-to-install). To see the plan before anything is written to your project, run `npx @reticlehq/server init --dry-run`: it prints every file it would touch and writes nothing.
 
 ### 1. Run the installer
 
@@ -55,7 +50,13 @@ curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/inst
 irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex
 ```
 
-It puts `reticle` on your PATH and registers the MCP server with **every coding agent it can reach**: Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, Copilot CLI, OpenCode, Warp, Kiro, Amazon Q, Cline, Amp, Continue and Factory Droid. Nothing is written outside your agent configs and `~/.reticle`. It is a shell script: `curl -fsSL <url> | less` reads it before you run it.
+What the installer does:
+
+- puts `reticle` on your PATH;
+- registers the MCP server with the coding agents it finds on the machine: Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, Copilot CLI, OpenCode, Warp, Kiro, Amazon Q, Cline, Amp, Continue and Factory Droid;
+- pre-approves Reticle's own tools in agents that have a per-server approval rule (on Claude Code, `permissions.allow` gains `mcp__reticle`), so you are not asked to accept every call. It covers only the `reticle` server.
+
+Nothing is written outside your agent configs and `~/.reticle`. It is a shell script, so `curl -fsSL <url> | less` reads it before you run it. Prefer to choose each step yourself? Use the [manual install](#manual-install) below.
 
 Codex CLI keeps a TOML config we don't rewrite, so the installer prints the four lines to paste and where they go. It tells you; it doesn't pretend.
 
@@ -73,7 +74,7 @@ In your project, let your agent run:
 RETICLE_INSTALL_SOURCE=readme npx @reticlehq/server init
 ```
 
-Like `npm init` or `git init`, this is the per-project step. It installs the dev-only SDK, wires your build config, restarts your dev server, and then **opens your app and proves a session connected.** A config file is not an install, so `init` doesn't stop until it has seen your app.
+Like `npm init` or `git init`, this is the per-project step. It installs the dev-only SDK, wires your build config, starts your dev server, and then **opens your app and proves a session connected.** A config file is not an install, so `init` doesn't stop until it has seen your app. If a dev server was already running without Reticle, restart it once so it picks up the new config.
 
 **Step 1 is once per machine. This step is once per project.**
 
@@ -85,6 +86,7 @@ npx @reticlehq/server doctor
 
 Or just ask your agent: _"Is Reticle connected to my app?"_
 
+<a id="manual-install"></a>
 <details>
 <summary><b>Manual install</b> (no pipe to shell)</summary>
 
@@ -95,9 +97,7 @@ npm install -g @reticlehq/server   # 1. the CLI
 npx @reticlehq/server setup mcp    # 2. register it with your agents
 ```
 
-Step 2 registers the same agents as the installer, and writes the `/reticle` skill where the agent supports one. On Claude Code it also pre-approves the Reticle tools, so there is no Accept prompt on every call.
-
-Any other MCP client: point it at `npx @reticlehq/server mcp`.
+Step 2 registers the same agents as the installer, writes the `/reticle` skill where the agent supports one, and pre-approves Reticle's own tools the same way. To register nothing automatically, skip step 2 and add the server to your client yourself, which leaves its approval prompts as they are:
 
 ```jsonc
 { "mcpServers": { "reticle": { "command": "npx", "args": ["@reticlehq/server", "mcp"] } } }
@@ -163,6 +163,18 @@ You never write test syntax. You say what should be true, in plain English.
 > "Walk the main routes with Reticle. Tell me anything broken."
 
 Reticle answers with evidence: the request that fired, the state that changed, the console line, and the file to open.
+
+### What people use Reticle for
+
+Anything the running app does is something an agent can check. Beyond verifying agent-built changes, people use Reticle for:
+
+- **Security checks.** Access control holds for each role (the protected call returns `403`), forbidden calls fire zero times, a secret never renders in the page, and CSP violations surface as console errors. It proves your app's security behaviour and pairs with a vulnerability scanner, which finds the holes.
+- **Accessibility and UX.** Controls are reachable by role and accessible name, focus moves into a dialog when it opens, and `Enter` or `Escape` fires the action from the keyboard. Pairs with a full WCAG audit such as axe.
+- **Performance and monitoring.** One request per action instead of five, largest-contentful-paint, layout shift and long tasks read from the page, React render counts, and saved flows replayed against staging in CI.
+- **SEO checks.** Page title, headings, every link with its `href`, redirects landing on the right route, and a crawl that finds dead controls and failed requests.
+- **Personas and simulation.** `explore` drives a journey described in plain words (`--persona "a new user who signs up"`), each role gets its own isolated browser context, and several agents drive the same app in parallel.
+
+Each one, with what it checks and a call you can run: [docs.reticle.sh/use-cases](https://docs.reticle.sh/use-cases).
 
 **Make it unavoidable in CI**
 
@@ -272,7 +284,7 @@ reticle_assert({
 
 <p align="center">
   <img src="assets/readme/benchmark-chart.svg" width="880"
-       alt="Reticle catches 14x more bugs where the screen looks right: 28 versus 2 across the six categories the two tools disagree on, and 85/86 versus 59/86 overall." />
+       alt="Reticle catches 14x more bugs where the screen looks right: 28 versus 2 across the six categories the two tools disagree on, and 85/88 versus 59/88 overall." />
 </p>
 
 <p align="center">
@@ -296,20 +308,29 @@ Faster for a structural reason rather than a browser-speed one: a time-gated tra
 
 ---
 
-## Limits
-
-A verification tool that oversells its reach is worse than none.
+## Capabilities and limits
 
 |  |  |
 | --- | --- |
 | **Strong** | silent failed requests, state that disagrees with the screen, stale caches, double-submits, a write that failed while the UI moved on |
 | **Partial** | races around a single action. It detects `request-never-settled` and `duplicate-request`; it is not a scheduler-level race analyser |
-| **Not the tool** | cross-browser rendering, visual regressions, sites you don't own. That's Playwright |
 | **Can't see yet** | IndexedDB, Web Workers, closed shadow roots, cross-origin iframes |
 
 **When Reticle can't see something, it says so.** A verdict is `yes`, `no`, or `unknown`, where `unknown` means the evidence couldn't decide. Never a quiet pass.
 
-**Cost:** zero bytes in production. The SDK sits behind `import.meta.env.DEV` and is dead-code eliminated; a runtime guard refuses to connect under `NODE_ENV=production`. No app data leaves your machine.
+**Pairs well with:** a visual testing tool for pixel-level diffs, Playwright for sites you don't own and a cross-browser matrix, axe for full WCAG audits, and a security scanner for vulnerability discovery. Reticle checks what your own app does; those tools cover the rest.
+
+---
+
+## Built to be safe to install
+
+- **Dev-only SDK.** It sits behind `import.meta.env.DEV` (the Vite plugin applies only to `serve`) and is dead-code eliminated from production builds, and a runtime guard refuses to connect when the build reports `NODE_ENV=production`.
+- **Localhost-only bridge.** The daemon binds `127.0.0.1`, and an app pairs with it using a token stored owner-only at `~/.reticle/pairing-token`, so another page on your machine cannot drive your session.
+- **No arbitrary code.** The SDK runs a fixed set of commands (look, act, read state, navigate). There is no "evaluate this JavaScript" tool.
+- **Credentials redacted at the source.** Passwords, tokens, API keys and card numbers in captured request and response bodies, storage and state are replaced with `[REDACTED]` before they reach the agent.
+- **Your app's data stays on your machine.** DOM, network bodies, console output, state and source are never sent anywhere. You need no account, and a verdict is produced locally. If you choose to connect a project (`reticle login` and `reticle link`, or `RETICLE_API_KEY` in CI), what syncs is yours to set with `reticle config --runs/--memory/--flows on|off`, and [what each contains is written down](docs/what-is-recorded.md).
+- **Anonymous usage counts are sent by default:** which commands ran, which tools an agent called, whether a verdict was produced, with a random id and nothing from your app. `reticle telemetry disable`, `RETICLE_TELEMETRY=0` or `DO_NOT_TRACK=1` turns them off. [The complete list](docs/telemetry.md).
+- **You see the plan first.** `init --dry-run` writes nothing; `--no-mcp` skips agent registration; `--files-only` writes the files and stops. Reporting a security issue: [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -317,10 +338,10 @@ A verification tool that oversells its reach is worse than none.
 
 |  |  |
 | --- | --- |
-| **Web** | Next.js (App + Pages), Vite + React, CRA, SvelteKit, Svelte, Astro, Vue 3, Preact, plain HTML |
+| **Web** | React + Vite, Next.js, Remix and Astro are driven to a verdict in CI; more frameworks are install-gated or wired. **[Frameworks](docs/frameworks.mdx) is the one list of what is proven, and how far** |
 | **Desktop** | Electron, Tauri, including the IPC boundary a browser-only tool can't see |
 | **Agents** | anything that speaks MCP. Config written automatically for Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, Copilot CLI, OpenCode, Warp, Kiro, Amazon Q, Cline, Amp, Continue, Factory Droid. Codex CLI is a printed four-line paste |
-| **Browsers** | Chrome, Edge, Arc, Brave, Opera, Firefox, Safari, plus Electron and Tauri webviews |
+| **Browsers** | the SDK runs in the tab you already have open; the tested and driven browser is Chromium, plus Electron and Tauri webviews |
 | **State** | zustand and Redux need no adapter. Shipped: TanStack Query, Jotai, XState, Valtio, MobX, Recoil, Svelte stores, Pinia |
 | **OS** | macOS, Linux, Windows |
 
@@ -338,9 +359,11 @@ What DOES ship, since 3.2.0, is Jev driving the app rather than routing inside i
 
 [Quickstart](https://docs.reticle.sh/quickstart) · [Frameworks](https://docs.reticle.sh/frameworks) · [Troubleshooting](https://docs.reticle.sh/troubleshooting) · [Architecture](docs/architecture.md) · [Contributing](CONTRIBUTING.md)
 
-## Community
+## Get help and community
 
 **[Join the Discord →](https://discord.gg/BwAbzv9ZRz)** Where the work happens in the open: what's being built, what's up for grabs, and design calls before they land.
+
+Stuck on setup, or want to talk through your use case? [Book a call with the founders](https://calendar.app.google/h9NRDbBBQetyTzWM6), or open an [issue](https://github.com/reticlehq/reticle/issues).
 
 <a href="https://github.com/reticlehq/reticle/graphs/contributors"><img src="https://contrib.rocks/image?repo=reticlehq/reticle" alt="Contributors" /></a>
 
@@ -348,6 +371,10 @@ If Reticle proves useful, a ⭐ helps other developers find it.
 
 ## License
 
-SDK and adapters are **Apache-2.0**. The server is **FSL** (source-available, converts to Apache-2.0 after two years). See [LICENSE](LICENSE).
+- **The SDK, adapters, core and engine are Apache-2.0.** Ship them inside your own apps.
+- **The server, CLI and `init` are FSL-1.1-ALv2:** free for any use except offering Reticle itself as a competing product or service, and each version becomes Apache-2.0 two years after release.
+- **Enterprise features need a license key** in production; they are free for development and evaluation.
+
+[LICENSE](LICENSE) has the details.
 
 `dev-only` · `localhost-only` · `your app data stays local`

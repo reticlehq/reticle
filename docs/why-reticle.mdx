@@ -63,37 +63,30 @@ Observing one real dashboard once, with no bug involved:
 That last column is the one that matters more than the token counts. The other tools can _describe_ what a page looks like. Only Reticle can check whether the thing the app itself considers success actually happened.
 
 <Card title="How every number was measured" icon="chart-column" href="/benchmarks">
-  The full method, the raw data, and the scenarios where Reticle comes second.
+  The full method, the raw data, and the scenarios where the tools tie.
 </Card>
 
-## Where Reticle loses
+On raw cost per glance, Chrome DevTools MCP is cheaper: 758 tokens against 815. It catches fewer bugs, which is why the efficiency column favours Reticle.
 
-A benchmark that only shows you the wins is an advertisement wearing a lab coat. Ours doesn't.
+## What the fix-rate test measured
 
-- **Sites you don't own.** Reticle needs a dev-only SDK inside the app. If you're driving a third party's website, use Playwright. That is what it's for, and it's excellent at it.
-- **Pixels.** Reticle reads the program, not the screen. If your bug is "the button is three pixels too far left", Reticle is the wrong instrument.
-- **Chrome DevTools MCP is cheaper per look.** 758 tokens against our 815. It catches fewer bugs, so the efficiency works out in our favour, but on raw cost per glance it wins.
+We ran a fix-loop ablation: agents fixed 8 bugs injected into a small fixture app, with Reticle and without it, on a strong model and on a weaker one. **It did not show a fix-rate improvement at either tier.** The strong model fixed 8 of 8 in both conditions and the weaker one 7 of 8 in both, and the Reticle arm made roughly five to six times the tool calls, because driving an app costs more than reading a few short files.
 
-## What we have not proven
+The test cannot settle the question in either direction, and the reasons are specific: the fixture is small enough to read whole, several injected bugs were labelled by a comment on the changed line, and "fixed" was checked by a string disappearing rather than by the app behaving. One case pointed each way. The weaker model without Reticle claimed a fix it never applied, and the live re-check caught that with Reticle; with Reticle, the same model over-edited a stylesheet the string check scored as a pass. The full log is in [`bench/fix-loop/results.md`](https://github.com/reticlehq/reticle/blob/main/bench/fix-loop/results.md).
 
-Being honest here costs us something, and we'd rather pay it than have you find out later.
+A separate, smaller measurement of the source pointer alone found the same fix rate with and without it (6 of 6) and fewer tool calls with it (12 against 22). The pointer removed the search; it did not make the agent more capable.
 
-We ran a controlled test of whether an agent equipped with Reticle _fixes_ more bugs than one without it. **It did not show a fix-rate improvement.** The benchmark was confounded in ways we can point at, and we don't consider the question settled. But we are not going to claim a number we didn't measure.
+That is what Reticle is designed to improve: not the agent, but the verdict it reports. A broken build reads as broken, a failure arrives with the evidence and the `file:line`, and "I couldn't tell" is reported as that. In the 88-bug head-to-head against a Playwright script, Reticle reported one false green where the script reported 29.
 
-What Reticle demonstrably does is catch failures that are invisible to the alternatives, and hand back the file and line to go fix. Whether that translates into a better fix rate is a separate question, and we're still working on measuring it properly.
+## When to use it
 
-## When you should use it
+You own the app, an agent edits it, and you want the agent to prove its work rather than assure you of it. It needs a dev build it can instrument, and React (and any framework whose build plugin stamps source) adds source pointers on top. [Use cases](/use-cases) covers what people check with it beyond change verification, from access control to accessibility.
 
-<CardGroup cols={2}>
-  <Card title="A good fit" icon="circle-check">
-    You own the app. An agent edits it. You want the agent to prove its work rather than assure you
-    of it. React gets you source pointers on top.
-  </Card>
-  <Card title="A bad fit" icon="circle-xmark">
-    You're testing a site you don't control, you need pixel-level visual regression, or your app has
-    no dev build to instrument.
-  </Card>
-</CardGroup>
+## Pairs well with
+
+- **Playwright** for driving sites you don't own and a cross-browser matrix. Reticle needs its dev-only SDK inside the app.
+- **A visual testing tool** for pixel-level regression. Reticle reads the program, not the screen, so "the button is three pixels too far left" is a job for pixels.
+- **axe** for full WCAG audits, and **a security scanner** for vulnerability discovery.
 
 ## The one-sentence version
 

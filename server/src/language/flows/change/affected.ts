@@ -51,3 +51,44 @@ export function affectedFlows(
   }
   return { affected, unknownProvenance };
 }
+
+/** A file a source stamper can put on an element — the only files a flow's manifest can ever name. */
+const COMPONENT_FILE = /\.(?:jsx|tsx|vue|svelte|astro)$/;
+/** Same test-file rule the stampers use, so a test is never demanded a flow. */
+const TEST_FILE = /(?:\.(?:test|spec)\.[^./]+$)|(?:^|\/)__tests__\//;
+/**
+ * Something a step could act on: a handler prop (`onClick=`, `@click`, `v-on:`, `on:submit`) or a
+ * native control.
+ *
+ * ponytail: a text heuristic, not a parse. A flow's manifest only names the file of the element a
+ * step ACTED on, so a display-only component can never be attributed and demanding a flow for one
+ * would block forever. A handler passed in from a parent under another name escapes it; upgrade to
+ * recording the source of the element an `expect` matched if that proves common.
+ */
+const INTERACTIVE =
+  /\bon[A-Z]\w*=|@[a-z]+[=.]|\bv-on:|\bon:[a-z]+|<(?:button|input|select|textarea|form|a|summary)[\s>/]/;
+
+export function isInteractiveSource(text: string): boolean {
+  return INTERACTIVE.test(text);
+}
+
+/**
+ * Changed interactive components that no saved flow's manifest names.
+ *
+ * `affectedFlows` starts from the flows, so a file no flow ever touched affects nothing — and a gate
+ * built only on it passed a brand-new feature that had never been driven. This starts from the
+ * change instead. `isInteractive` is injected so the decision stays pure; the CLI reads the file.
+ */
+export function unflowedFiles(
+  flows: readonly FlowSources[],
+  changedFiles: readonly string[],
+  isInteractive: (file: string) => boolean,
+): string[] {
+  const sources = flows.flatMap((flow) => (flow.sources ?? []).map(normalize));
+  return changedFiles.filter((file) => {
+    const c = normalize(file);
+    if (!COMPONENT_FILE.test(c) || TEST_FILE.test(c)) return false;
+    if (sources.some((s) => c === s || c.endsWith(`/${s}`) || s.endsWith(`/${c}`))) return false;
+    return isInteractive(file);
+  });
+}

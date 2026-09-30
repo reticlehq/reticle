@@ -99,7 +99,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * a shallow walk over the contract's own type belongs beside the contract. Moving it here took a
    * cross-layer reach out of the server and left the file count as the only cost.
    */
-  'core/src/verdict': 15,
+  'core/src/verdict': 16,
   'core/src/wire': 16,
   // 16 since `snapshot-tree.ts`. The snapshot tree is a format the BROWSER writes and several
   // things on the Node side read back, and its parser was living beside the MCP tool handlers — so
@@ -137,7 +137,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // `predicate-eval.ts`: it is a pure rule with an incident behind it, and it is the kind of thing
   // that gets quietly re-broken when it lives inside the evaluator it constrains. This directory is
   // now the largest flat one in the package and is the next thing here worth grouping.
-  'engine/src/question/predicate': 20,
+  'engine/src/question/predicate': 21,
   /*
    * Crossed ten when the fast-drive budget and a portable byte counter landed. The guard asks for
    * grouping rather than recording at this moment, and grouping is the wrong move HERE specifically:
@@ -149,7 +149,15 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   'engine/src/window': 11,
   // vite-env-types.ts owns the type-only environment declaration emitted by the dev-module generator.
   // +1: nuxt-snippets.ts, split out of snippets.ts when it crossed the 1000-line cap.
-  'init/src/patch': 16,
+  // +3: angular.ts, remix.ts and static-page.ts — one per stack `init` learned to wire, each beside
+  // the patchers of its kind rather than folded into snippets.ts, which is near the cap already.
+  'init/src/patch': 19,
+  // Crossed the line at 11 with `plan-angular.ts` and `plan-electron-vite.ts`, one per stack `init`
+  // learned to wire, each beside the other per-framework builders. 12 with `plan-vite.ts`: the Vite
+  // plugin and capabilities steps every Vite-based stack composes, split out of `plan-framework.ts`
+  // when two merges took it to the edge of the 1000-line cap. Recorded rather than grouped, because
+  // these files ARE the plan, and a `frameworks/` subdirectory would split one dispatch in two.
+  'init/src/plan': 12,
   // Crossed the line as the protocol grew the two things a subject must declare about ITSELF rather
   // than about what it can see: how it may be driven, and the state a suite starts from. Recorded
   // rather than grouped -- this directory IS the vocabulary, and splitting it would put nouns an
@@ -197,7 +205,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * true queries the page. Two guards in tension, and the line cap is the one whose rule is explicit
    * about what to do.
    */
-  'server/src/surface/tools/act': 12,
+  // +3: durable.ts, after-match.ts and proved-controls.ts, what act_and_wait does once its
+  // predicate holds.
+  'server/src/surface/tools/act': 15,
   // 19 since `setup-mcp-cli.ts`: the terminal half of `reticle setup mcp`, which the one-line
   // installer runs before any project exists. It sits HERE and not in `setup/` because the reach
   // guard refused `command -> setup` and CLI handlers already live in this directory.
@@ -214,7 +224,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // itself. Its own leaf because the SDK reads the same constant to decide not to show a human a
   // first-run tour over a page nobody is looking at -- a rule split across two packages is worth
   // one file that names it.
-  'server/src/portal/input': 11,
+  // +1: js-coverage.ts, the browser engine's code coverage beside the other driven-page capabilities.
+  'server/src/portal/input': 12,
   // 22 since `session-verdict-facts.ts` was extracted (the count is source files, not tests): both
   // verdict-producing tools were threading the same session facts into `decideVerified` with the
   // same conditional-spread idiom, and a third fact would have been a third copy. Raised on

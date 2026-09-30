@@ -166,6 +166,22 @@ describe('nextActionFor', () => {
     expect(next.command).toBe('reticle open http://localhost:5173');
     expect(next.port).toBe(5173);
   });
+
+  // First run on a machine with another project's dev server on 5173: the app was on 5190, the
+  // scan does not cover 5190, and the one command handed back opened the OTHER project. The daemon
+  // had the right url in hand — it was already quoted in the prose beside the command.
+  it('reopens the url the departed session was on, not a port the scan happened to find', () => {
+    const next = nextActionFor({
+      everConnected: true,
+      initialized: true,
+      listening: [5173],
+      dev: DEV,
+      lastKnownUrl: 'http://localhost:5190/counter?__reticle_session=lease-1&tab=2',
+    });
+    expect(next.action).toBe(NoSessionAction.REOPEN_APP);
+    expect(next.command).toBe('reticle open http://localhost:5190/counter?tab=2');
+    expect(next.port).toBe(5190);
+  });
 });
 
 describe('renderNextAction', () => {

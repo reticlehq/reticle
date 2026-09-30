@@ -1,7 +1,7 @@
 {
   "name": "@reticlehq/server",
   "version": "3.3.0",
-  "description": "Reticle bridge + MCP server. Hosts the browser WS endpoint and exposes MCP tools to the coding agent.",
+  "description": "Reticle CLI, bridge and MCP server: a coding agent drives your running web app from the inside and gets a verdict with evidence, for change verification, access control, accessibility, performance and SEO checks.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -70,6 +70,7 @@
     "mcp",
     "ai-agents",
     "testing",
+    "verification",
     "cli"
   ],
   "reticle": {

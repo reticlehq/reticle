@@ -11,13 +11,14 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { desktopLaunch } from '@reticlehq/init';
 
 /** A dev script, as something an agent can actually run. */
 export interface DevCommand {
   /** The literal shell command, e.g. `pnpm run dev`. */
   command: string;
-  /** The package.json script it runs. */
-  script: string;
+  /** The package.json script it runs. Absent when the command runs a CLI directly (`npx tauri dev`). */
+  script?: string;
   /** The port the script PINS, when it pins one. Absent means the tool picks — never a guess. */
   port?: number;
 }
@@ -63,18 +64,22 @@ function pinnedPort(script: string): number | undefined {
   return Number.isSafeInteger(port) ? port : undefined;
 }
 
-/** The scripts block of a package.json, or an empty one for anything unreadable/unparseable. */
-function readScripts(raw: string | undefined): Record<string, unknown> {
-  if (raw === undefined) return {};
+/** The parsed package.json, or undefined for anything unreadable/unparseable. */
+function readManifest(raw: string | undefined): unknown {
+  if (raw === undefined) return undefined;
   try {
-    const parsed: unknown = JSON.parse(raw);
-    if (null === parsed || 'object' !== typeof parsed) return {};
-    const scripts = (parsed as { scripts?: unknown }).scripts;
-    if (null === scripts || 'object' !== typeof scripts) return {};
-    return scripts as Record<string, unknown>;
+    return JSON.parse(raw);
   } catch {
-    return {};
+    return undefined;
   }
+}
+
+/** The scripts block of a parsed package.json, or an empty one. */
+function scriptsOf(manifest: unknown): Record<string, unknown> {
+  if (null === manifest || 'object' !== typeof manifest) return {};
+  const scripts = (manifest as { scripts?: unknown }).scripts;
+  if (null === scripts || 'object' !== typeof scripts) return {};
+  return scripts as Record<string, unknown>;
 }
 
 /**
@@ -87,10 +92,23 @@ export function detectDevCommand(
   directory: string,
   read: (path: string) => string | undefined = readTextFile,
 ): DevCommand | undefined {
-  const scripts = readScripts(read(join(directory, PACKAGE_JSON)));
+  const manifest = readManifest(read(join(directory, PACKAGE_JSON)));
+  const scripts = scriptsOf(manifest);
   const manager =
     LOCKFILES.find(({ file }) => read(join(directory, file)) !== undefined)?.manager ??
     DEFAULT_PACKAGE_MANAGER;
+  // A desktop shell's `dev` is its renderer's dev server, which no window ever opens onto. init's
+  // rule decides which launcher it is, so the command the daemon hands an agent and the one init
+  // spawns are the same.
+  const desktop = desktopLaunch(manifest);
+  if (desktop !== undefined) {
+    if ('command' in desktop) return { command: desktop.command };
+    const command = `${manager} run ${desktop.script}`;
+    return {
+      command: 0 < desktop.args.length ? `${command} ${desktop.args}` : command,
+      script: desktop.script,
+    };
+  }
   for (const script of DEV_SCRIPTS) {
     const body = scripts[script];
     if ('string' !== typeof body || 0 === body.trim().length) continue;

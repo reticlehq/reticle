@@ -68,11 +68,26 @@ interface ShapePolicy {
   readonly connectBudgetMs: number;
   /** Said out loud, because a desktop run looks stuck if nobody explains the wait. */
   readonly note: string | undefined;
+  /** What the connect wait is waiting on, for the progress lines it prints while it waits. */
+  readonly awaiting: string;
 }
 
 const WEB_CONNECT_MS = 120_000;
 /** A cold `tauri dev` compiles the Rust side before a window exists. */
-const DESKTOP_CONNECT_MS = 10 * 60_000;
+const TAURI_CONNECT_MS = 10 * 60_000;
+/**
+ * Electron has no compile step of that size: its window is a Node process loading a dev server that
+ * is already up. It was given Tauri's ten minutes, so a run whose window was never going to dial in
+ * sat silent for all of them — longer than the daemon it was waiting on stayed alive.
+ */
+const ELECTRON_CONNECT_MS = 3 * 60_000;
+
+/** "a Tauri app", "an Electron app": printed when the shape is detected. */
+export function describeShape(shape: AppShape): string {
+  if (AppShape.ELECTRON === shape) return 'an Electron app';
+  if (AppShape.TAURI === shape) return 'a Tauri app';
+  return 'a web app';
+}
 
 export function policyFor(shape: AppShape): ShapePolicy {
   if (AppShape.WEB === shape) {
@@ -81,12 +96,14 @@ export function policyFor(shape: AppShape): ShapePolicy {
       requireHttpReady: true,
       connectBudgetMs: WEB_CONNECT_MS,
       note: undefined,
+      awaiting: 'the page',
     };
   }
   return {
     openBrowser: false,
     requireHttpReady: false,
-    connectBudgetMs: DESKTOP_CONNECT_MS,
+    connectBudgetMs: AppShape.TAURI === shape ? TAURI_CONNECT_MS : ELECTRON_CONNECT_MS,
+    awaiting: AppShape.TAURI === shape ? 'the Tauri window' : 'the Electron window',
     note:
       AppShape.TAURI === shape
         ? 'Tauri app: not opening a browser, because its own window is the client. A cold `tauri dev` builds the Rust side first, so the window can take minutes to appear.'

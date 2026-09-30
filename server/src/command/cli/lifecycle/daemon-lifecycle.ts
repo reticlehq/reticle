@@ -18,7 +18,7 @@
 import { log } from '@/log.js';
 import { RETICLE_VERIFY_DEFAULT_PORT } from '@/index.js';
 import { verifyEndpointMismatch } from '@/status-payload.js';
-import { probeDaemon } from '@/surface/mcp/mcp-proxy.js';
+import { probeDaemon, waitForDaemonBind } from '@/surface/mcp/mcp-proxy.js';
 import { stateDirProblem } from '@/command/daemon/state-dir.js';
 import {
   readPid,
@@ -115,7 +115,7 @@ async function serveWithHonestExit(parsed: {
   // The child binds asynchronously and, when it cannot, exits 1 long after this process would have
   // reported success. Wait for it to ANSWER — `/status` responding is the only evidence a daemon
   // exists that does not come from the pid file the child may never have earned.
-  const bound = await waitForPresence(parsed.port, PortPresence.DAEMON, SERVE_BIND_TIMEOUT_MS);
+  const bound = await waitForDaemonBind(parsed.port);
   if (!bound) {
     const settled = await probePresence(parsed.port, { tcpOpen: probeDaemon, status: fetchStatus });
     const startupCause = readDaemonStartupCause(logPath(parsed.port), startupStartedAt);
@@ -147,28 +147,10 @@ async function serveWithHonestExit(parsed: {
   log('reticle_daemon_spawned', { port: parsed.port, ...(parsed.http ? { http: true } : {}) });
 }
 
-/** How long `serve` waits for the child to bind. Generous: a cold daemon start is seconds. */
-const SERVE_BIND_TIMEOUT_MS = 15_000;
-const PRESENCE_POLL_MS = 150;
-
 /** How long a daemon gets to shut down on its own before `stop` stops asking politely. */
 const GRACEFUL_STOP_MS = 5000;
 /** How long after SIGKILL before we accept the process is not ours to kill and say so. */
 const FORCED_STOP_MS = 2000;
-
-async function waitForPresence(
-  port: number,
-  want: PortPresence,
-  timeoutMs: number,
-): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    const presence = await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus });
-    if (presence === want) return true;
-    if (Date.now() >= deadline) return false;
-    await new Promise((resolve) => setTimeout(resolve, PRESENCE_POLL_MS));
-  }
-}
 
 export function handleStop(port: number, quiet: boolean): void {
   const pid = readPid(port);

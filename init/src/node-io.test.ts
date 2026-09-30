@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { buildNodeIo, RUNNABLE_COMMANDS } from './node-io.js';
 import { SILENT_HOST } from './host.js';
 import { PackageManager } from './detect/detect.js';
-import { claudeAddCommand, claudeAvailableProbe, claudeExistsProbe } from './register/mcp.js';
+import { claudeAddCommand, claudeAvailableProbe } from './register/mcp.js';
 import { installCommandParts } from './detect/detect.js';
 
 describe('the commands init is allowed to run', () => {
@@ -12,10 +12,9 @@ describe('the commands init is allowed to run', () => {
     }
   });
 
-  it('covers the MCP registration command and both of its probes', () => {
+  it('covers the MCP registration command and its availability probe', () => {
     expect(RUNNABLE_COMMANDS).toContain(claudeAddCommand().command);
     expect(RUNNABLE_COMMANDS).toContain(claudeAvailableProbe().command);
-    expect(RUNNABLE_COMMANDS).toContain(claudeExistsProbe().command);
   });
 
   // The guard exists because `shellOpt` spawns through a shell on Windows, where the command name

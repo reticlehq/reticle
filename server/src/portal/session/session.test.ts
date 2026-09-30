@@ -254,6 +254,26 @@ describe('SessionManager.resolve() auto-selection', () => {
   });
 });
 
+/**
+ * Tabs piled up — every `init` run opened another — and every tool called without a sessionId failed
+ * with "multiple sessions connected". Healthy tabs heartbeat on the same cadence, so their recency
+ * gap is noise; the one tab with the window focus is the one a human is looking at.
+ */
+describe('several healthy tabs, one of them focused', () => {
+  it('picks the focused tab instead of refusing', () => {
+    const mgr = new SessionManager();
+    const sA = new Session({ ...HELLO, sessionId: 'a' }, fakeSocket, () => 0);
+    sA.touch();
+    sA.applyHealth(false, true);
+    const sB = new Session({ ...HELLO, sessionId: 'b' }, fakeSocket, () => 0);
+    sB.touch();
+    sB.applyHealth(false, false);
+    mgr.add(sB);
+    mgr.add(sA);
+    expect(mgr.resolve().id).toBe('a');
+  });
+});
+
 describe('tab-health recommendation', () => {
   it('info() carries the recommendation when hidden', () => {
     const { session } = makeSession();

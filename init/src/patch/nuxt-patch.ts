@@ -33,6 +33,6 @@ const NUXT_VITE_CONFIG: ViteOwningConfig = {
   sdkSpecifier: sdkImport(UiLibrary.VUE).specifier,
 };
 
-export function patchNuxtConfig(source: string): SourcePatch {
-  return patchViteOwningConfig(source, NUXT_VITE_CONFIG);
+export function patchNuxtConfig(source: string, viteMajor: number | null = null): SourcePatch {
+  return patchViteOwningConfig(source, { ...NUXT_VITE_CONFIG, viteMajor });
 }

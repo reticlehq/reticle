@@ -79,7 +79,13 @@ function fakeSession(
   );
   const session = stub;
   const sessions: Partial<SessionManager> = { resolve: () => session };
-  return { session, deps: { sessions: sessions as SessionManager } as unknown as ToolDeps };
+  return {
+    session,
+    deps: {
+      sessions: sessions as SessionManager,
+      recordings: new RecordingStore(),
+    } as unknown as ToolDeps,
+  };
 }
 
 const navPredicate = {

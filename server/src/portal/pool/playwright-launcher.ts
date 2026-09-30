@@ -8,7 +8,7 @@
 
 import type { Browser } from 'playwright';
 import { BrowserLaunchKind } from '@reticlehq/core/telemetry';
-import { chromiumLaunchOptions } from '@/chromium-launch-options.js';
+import { launchChromium } from '@/launch-chromium.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import { classifyConnectFailure } from '@/telemetry/connect-failure.js';
 import {
@@ -127,7 +127,7 @@ export function playwrightLauncher(opts: { headless?: boolean } = {}): Launcher 
     // number that actually costs memory and the one that explains a slow machine.
     const settle = getSessionMetrics().recordConnectAttempt(BrowserLaunchKind.POOLED);
     try {
-      const browser = wrapBrowser(await chromium.launch(chromiumLaunchOptions(headless)));
+      const browser = wrapBrowser(await launchChromium(chromium, headless));
       settle();
       return browser;
     } catch (err) {

@@ -11,7 +11,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { planDevScript, DevScriptChoice } from './dev-script.js';
+import { desktopLaunch, devCommandFrom, planDevScript, DevScriptChoice } from './dev-script.js';
 
 const pm = 'pnpm';
 
@@ -61,5 +61,39 @@ describe('it never starts a second server', () => {
 
   it('names no command when it is not going to run one', () => {
     expect(planDevScript({ dev: 'vite' }, pm, true).command).toBe(undefined);
+  });
+});
+
+/**
+ * A desktop shell's `dev` script is its RENDERER's dev server. On the official Tauri template `dev`
+ * is plain `vite`: init ran it, no window ever opened, and the run waited out its whole budget.
+ */
+describe('a desktop project', () => {
+  const TAURI_TEMPLATE = {
+    scripts: { dev: 'vite', build: 'tsc && vite build', tauri: 'tauri' },
+    devDependencies: { '@tauri-apps/cli': '^2' },
+  };
+
+  it('launches Tauri through its own script, not the renderer dev server', () => {
+    expect(devCommandFrom(TAURI_TEMPLATE, 'npm')).toBe('npm run tauri dev');
+    expect(devCommandFrom(TAURI_TEMPLATE, 'pnpm')).toBe('pnpm tauri dev');
+  });
+
+  it('runs the Tauri CLI directly when no script names it', () => {
+    const pkg = { scripts: { dev: 'vite' }, devDependencies: { '@tauri-apps/cli': '^2' } };
+    expect(devCommandFrom(pkg, 'npm')).toBe('npx tauri dev');
+  });
+
+  it('launches Electron Forge through the script that runs it', () => {
+    const pkg = {
+      scripts: { dev: 'vite', start: 'electron-forge start' },
+      devDependencies: { '@electron-forge/cli': '^7' },
+    };
+    expect(devCommandFrom(pkg, 'npm')).toBe('npm run start');
+  });
+
+  it('leaves a web project on its dev script', () => {
+    expect(devCommandFrom({ scripts: { dev: 'vite' } }, 'npm')).toBe('npm run dev');
+    expect(desktopLaunch({ scripts: { dev: 'vite' } })).toBeUndefined();
   });
 });

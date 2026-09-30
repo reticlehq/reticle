@@ -45,7 +45,7 @@ describe('grading a plan by what it declared', () => {
   it('never hides how much of the plan proved nothing', () => {
     // 63 driven and 47 declared is not "75% verified" — it is verified for 47 and silent about 16,
     // and the answer has to say so rather than average it away.
-    const grade = gradeSequence([held(), silent(), silent(), silent()]);
+    const grade = gradeSequence([silent(), silent(), silent(), held()]);
     expect(grade.verified).toBe(Verified.YES);
     expect(grade.declared).toBe(1);
     expect(grade.total).toBe(4);
@@ -81,5 +81,42 @@ describe('grading a plan by what it declared', () => {
     const grade = gradeSequence([silent()], { planned: 2, dispatched: false });
     expect(grade.because).not.toContain('was driven');
     expect(grade.because).toContain('nothing was dispatched');
+  });
+});
+
+/*
+ * A journey graded on a lighter bar than one action. A plan whose only declared step was the FIRST
+ * answered yes while the end of the journey was never checked, and a step whose channels disagreed
+ * (the UI advanced while its write failed) still counted as held — both are verdicts act_and_wait
+ * would not have given.
+ */
+describe('a journey is proved at its end, and a contradiction is a failure', () => {
+  it('is unknown when the last step, where the journey ends, declared nothing', () => {
+    const grade = gradeSequence([held(), silent(), silent()]);
+    expect(grade.verified).toBe(Verified.UNKNOWN);
+    expect(grade.because).toMatch(/last step/i);
+  });
+
+  it('is no when a step held while its channels disagreed', () => {
+    const grade = gradeSequence([
+      { declared: true, held: true, contradicted: ['ui-advanced-request-failed'] },
+      held(),
+    ]);
+    expect(grade.verified).toBe(Verified.NO);
+    expect(grade.because).toContain('ui-advanced-request-failed');
+  });
+
+  it('is no when a step could not be performed, declared or not', () => {
+    const grade = gradeSequence([held(), { declared: false, held: false, observed: 'no ref' }], {
+      planned: 3,
+      dispatched: true,
+    });
+    expect(grade.verified).toBe(Verified.NO);
+  });
+
+  it('is unknown when fewer steps ran than were planned', () => {
+    const grade = gradeSequence([held()], { planned: 3, dispatched: true });
+    expect(grade.verified).toBe(Verified.UNKNOWN);
+    expect(grade.because).toContain('1 of 3');
   });
 });

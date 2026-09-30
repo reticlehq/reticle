@@ -17,10 +17,11 @@
  * container — it needs an image rebuild and a fresh volume. The same field install lost two and a
  * half minutes discovering that through a failed build.
  *
- * DETECTION IS DELIBERATELY CHEAP AND OVER-EAGER. A Dockerfile or a compose file near the app is not
- * proof the dev server runs in one — plenty of repos containerise only production. But this step
- * asks for nothing and changes nothing, so a false positive costs one paragraph the reader skips,
- * while a false negative costs what it cost in the field.
+ * DETECTION IS CHEAP, AND ERRS TOWARDS SPEAKING — but a container file counts only when it RUNS a
+ * dev server (see runsDevServer). It used to count on presence alone, and React Router's own
+ * template ships a production Dockerfile, so every React Router install was told to rebuild an image
+ * and mount a token for a dev server that runs on the host. A devcontainer still counts on presence:
+ * it is the development environment by definition.
  */
 
 import { ReticleEnv } from '@reticlehq/core';
@@ -59,4 +60,43 @@ export function containerisedDevServerNote(marker: string): string {
     '     The token is inlined when the dev server resolves its config, so restart it afterwards. ' +
     'Run the Reticle daemon at least once first, or Docker creates a DIRECTORY at that host path.'
   );
+}
+
+const DEVCONTAINER = '.devcontainer/devcontainer.json';
+
+/**
+ * Commands that start a dev server, in shell form or Dockerfile exec form (`["npm", "run", "dev"]`).
+ * The separator class takes quotes and commas so both spellings match. `vite` counts bare, or
+ * followed by a flag, but never as `vite build` / `vite preview`, which serve nothing live.
+ */
+const SEP = `["',\\s]+`;
+const DEV_SERVER_COMMANDS: readonly RegExp[] = [
+  new RegExp(`\\b(?:npm|pnpm|yarn|bun)${SEP}(?:run${SEP})?dev\\b`),
+  new RegExp(`\\b(?:next|nuxt|nuxi|astro|react-router|remix|vinxi)${SEP}dev\\b`),
+  new RegExp(`\\bng${SEP}serve\\b`),
+  new RegExp(`\\breact-scripts${SEP}start\\b`),
+  new RegExp(`\\bwebpack${SEP}serve\\b|\\bwebpack-dev-server\\b`),
+  /\bvite["']?(?=\s*(?:$|--|["']?\s*[\],]))/m,
+];
+
+/**
+ * Does this container file run the app's dev server?
+ *
+ * @param devScript the app's own `scripts.dev`, so a container that runs it by its command rather
+ *   than through the package manager (`CMD react-router dev`) still counts.
+ */
+export function runsDevServer(
+  marker: string,
+  content: string,
+  devScript: string | undefined,
+): boolean {
+  if (DEVCONTAINER === marker) return true;
+  if (
+    devScript !== undefined &&
+    0 < devScript.trim().length &&
+    content.includes(devScript.trim())
+  ) {
+    return true;
+  }
+  return DEV_SERVER_COMMANDS.some((command) => command.test(content));
 }

@@ -4,7 +4,7 @@ description: 'The full reference and cookbook: every tool, flag, and workflow, w
 icon: book
 ---
 
-Every Reticle drive is the same four steps: **look** (`reticle_look { action: "page" }` / `reticle_look { action: "find" }`), **act** (`reticle_act` / `reticle_act { steps: [...] }`), **observe** (`reticle_observe` / `reticle_observe { action: "network" }` / `reticle_look { action: "state" }`), **assert** (`reticle_assert`). Only `reticle_act_and_wait` and `reticle_assert` produce a verdict, so a run that ends anywhere else proved nothing. This page is the full reference for every tool, predicate, action and flag in that loop.
+Every Reticle drive is the same four steps: **look** (`reticle_look { action: "page" }` / `reticle_look { action: "find" }`), **act** (`reticle_act` / `reticle_act { steps: [...] }`), **observe** (`reticle_observe` / `reticle_observe { action: "network" }` / `reticle_look { action: "state" }`), **assert** (`reticle_assert`). Verdicts come from `reticle_act_and_wait`, `reticle_assert`, and `reticle_act { steps }` when a step declares `expect`, so a run that ends anywhere else proved nothing. This page is the full reference for every tool, predicate, action and flag in that loop.
 
 If you haven't set up Reticle yet, start with [Getting Started](getting-started.md).
 
@@ -183,7 +183,7 @@ The timeline + summary of what happened.
 
 Act, then wait for a predicate: the whole act→observe→assert loop in one hop.
 
-- **args:** `ref`, `action`, `args?`, `until: <predicate>`, `timeout_ms?` (default 4000; 0 = evaluate once), `refuseWhenThrottled?`, `intent?`, `sessionId?`.
+- **args:** `ref`, `action`, `args?`, `until: <predicate>`, `timeout_ms?` (default 4000; 0 = evaluate once), `refuseWhenThrottled?`, `intent?`, `durable?` (after a yes, reload and require `until`'s element/text/state parts to hold again), `sessionId?`.
 - **returns:** `{ effect, verdict, trace, session, warning? }`. `effect` is the action result (`{ ok, ref, action }`), `verdict` is `{ pass, evidence?, failureReason? }`, `trace` is the reaction report of everything the app did after the action, and `session` is the tab-health block `{ lastSeenMs, throttled, focused }` (with a `warning` when throttled). A failing `verdict` still returns `effect` + `trace` so you can see what _did_ happen. The predicate is automatically floored at this act's cursor, so it only matches events the action actually caused.
 
 ### `reticle_assert { action: "wait" }`
@@ -396,7 +396,7 @@ A `state` assertion is graded as a **consequence** (a wrong element or stale ren
 - `timeout_ms` (on `assert`/`wait_for`): wait up to N ms for it to become true.
 - `since` (on `net`/`console` leaves): only consider events after this cursor (from `act`).
 
-`dataMatches` uses shallow JSON matching; `*` means "present, any value".
+`dataMatches` matches field by field; a key can be a dotted path (`"order.total"`, `"items.0.id"`), and `*` means "present, any value".
 
 ---
 
@@ -732,7 +732,7 @@ No, for basic look/act/observe. You'll get better results by adding `data-testid
 
 ### Does it work without React?
 
-The core (DOM/network/route/console/animation/snapshot/actions) is framework-agnostic and is gated against a vanilla-TS app. React, Next.js, Remix and Astro each have an app and a CI gate. SvelteKit is wired end-to-end. `reticle init` writes the client hook and the Vite plugin, and the plugin stamps `data-reticle-source` into `.svelte` components so verdicts carry `file:line`. But there is still no SvelteKit app in CI, so it is unverified rather than supported. Vue has a Pinia store adapter and nothing else: no detection, no `.vue` stamping, no gate. See [what Svelte support is and is not](getting-started.md#what-svelte-support-is-and-what-it-is-not).
+The core (DOM/network/route/console/animation/snapshot/actions) is framework-agnostic and is gated against a vanilla-TS app. What is proven for each framework, from driven to a verdict in CI to install-gated to wired but unverified, is listed once in [Frameworks](frameworks.mdx). See also [what Svelte support is and is not](getting-started.md#what-svelte-support-is-and-what-it-is-not).
 
 ### Can it judge whether my UI looks good?
 
@@ -858,6 +858,7 @@ It does **not** freeze `requestAnimationFrame`/microtasks (React's scheduler kee
   "dataMatches": { "count": { "$gte": 1 }, "sections": { "$contains": "hook" } },
 }
 // operators: $gte $lte $gt $lt $contains (array/substring) $length ; "*" = present
+// keys: a field name, or a dotted path into nested data ("order.total", "items.0.id")
 ```
 
 On a failed signal assert, the result includes a **near-miss**: the signals that _did_ fire with that name + their data. And `reticle_observe`'s summary now includes `domChanged` (in-place text/attribute re-renders, not just added/removed nodes).

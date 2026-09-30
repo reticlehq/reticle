@@ -1,6 +1,6 @@
 # @reticlehq/core
 
-The **foundation** of [Reticle](https://github.com/reticlehq/reticle) — the shared wire contract that every Reticle package imports: types, [zod](https://zod.dev) schemas, constants, and the messages that cross the browser ↔ bridge ↔ agent boundary. It is isomorphic (runs in a browser or in Node), depends only on `zod`, and re-exports nothing.
+The **foundation** of [Reticle](https://github.com/reticlehq/reticle) — the shared wire contract that every Reticle package imports: types, [zod](https://zod.dev) schemas, constants, and the messages that cross the browser ↔ bridge ↔ agent boundary. It is isomorphic (runs in a browser or in Node), depends only on `zod` and [`open-verification`](https://www.npmjs.com/package/open-verification) (the protocol whose vocabulary it is written in), and re-exports nothing.
 
 Most people never install this directly. Install the package for your audience instead:
 

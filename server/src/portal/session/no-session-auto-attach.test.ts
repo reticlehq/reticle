@@ -97,6 +97,7 @@ describe('auto-attach when a dev server is already running', () => {
         initialized: true,
         directory: projectDir({ wired: true }),
         probe: () => Promise.resolve([5173]),
+        ownDevServerPorts: () => [5173],
         attach: (url) => {
           opened.push(url);
           return Promise.resolve();
@@ -124,6 +125,7 @@ describe('auto-attach when a dev server is already running', () => {
           initialized: true,
           directory: projectDir({ wired: true }),
           probe: () => Promise.resolve([5173]),
+          ownDevServerPorts: () => [5173],
           attach: (url) => {
             opened.push(url);
             return Promise.resolve();
@@ -150,6 +152,7 @@ describe('auto-attach when a dev server is already running', () => {
         initialized: false,
         directory: projectDir({ wired: false }),
         probe: () => Promise.resolve([5173]),
+        ownDevServerPorts: () => [5173],
         attach: () => {
           attempts += 1;
           return Promise.resolve();
@@ -158,6 +161,62 @@ describe('auto-attach when a dev server is already running', () => {
       await settle();
       stop();
       expect(attempts).toBe(0);
+    },
+    TEMP_PROJECT_TIMEOUT_MS,
+  );
+
+  it(
+    'never attaches to a port no evidence ties to this project — it may be another repo’s app',
+    async () => {
+      let attempts = 0;
+      const { manager, hint } = stubSessions();
+      const stop = startNoSessionWatch({
+        sessions: manager,
+        port: 4400,
+        initialized: true,
+        directory: projectDir({ wired: true }),
+        probe: () => Promise.resolve([5173]),
+        ownDevServerPorts: () => [],
+        attach: () => {
+          attempts += 1;
+          return Promise.resolve();
+        },
+      });
+      await settle();
+      const message = hint();
+      stop();
+      expect(attempts).toBe(0);
+      // The diagnosis still names what it saw, so declining to guess is not silence.
+      expect(message).toContain('5173');
+    },
+    TEMP_PROJECT_TIMEOUT_MS,
+  );
+
+  it(
+    'attaches to the port this project’s own last session was on',
+    async () => {
+      const opened: string[] = [];
+      const { manager } = stubSessions();
+      const withHistory = {
+        ...manager,
+        lastKnown: () => ({ id: 's-1', url: 'http://localhost:5173/cart', projectId: 'app-1' }),
+      } as unknown as SessionManager;
+      const stop = startNoSessionWatch({
+        sessions: withHistory,
+        port: 4400,
+        initialized: true,
+        directory: projectDir({ wired: true }),
+        probe: () => Promise.resolve([5173]),
+        ownDevServerPorts: () => [],
+        routeStatus: () => Promise.resolve(undefined),
+        attach: (url) => {
+          opened.push(url);
+          return Promise.resolve();
+        },
+      });
+      await settle();
+      stop();
+      expect(opened).toEqual(['http://localhost:5173']);
     },
     TEMP_PROJECT_TIMEOUT_MS,
   );
@@ -195,6 +254,7 @@ describe('auto-attach when a dev server is already running', () => {
         initialized: true,
         directory: projectDir({ wired: true }),
         probe: () => Promise.resolve([5173]),
+        ownDevServerPorts: () => [5173],
         attach: () => Promise.reject(new Error('chromium is not installed')),
       });
       await settle();
@@ -217,6 +277,7 @@ describe('auto-attach when a dev server is already running', () => {
         initialized: true,
         directory: projectDir({ wired: true }),
         probe: () => Promise.resolve([5173]),
+        ownDevServerPorts: () => [5173],
         attach: () =>
           Promise.reject(new Error('listen EADDRINUSE: address already in use :::4400')),
       });

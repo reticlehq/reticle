@@ -13,8 +13,9 @@ Everything here is published to [docs.reticle.sh](https://docs.reticle.sh) by `d
 | Page | What it answers |
 | --- | --- |
 | [quickstart.mdx](quickstart.mdx) | five minutes to a real verdict; every response on it was captured live |
-| [what-is-reticle.mdx](what-is-reticle.mdx) | the definition, what Reticle is NOT, and what it needs to run |
-| [why-reticle.mdx](why-reticle.mdx) | the false-green problem, the measured case, and where we lose |
+| [what-is-reticle.mdx](what-is-reticle.mdx) | the definition, where it fits beside other tools, and what it needs to run |
+| [why-reticle.mdx](why-reticle.mdx) | the false-green problem, the measured case, and what pairs well with it |
+| [use-cases.mdx](use-cases.mdx) | what people verify with it: agent-built changes, security behaviour, accessibility, performance, SEO basics, personas |
 | [install-agentic.mdx](install-agentic.mdx) | what `npx @reticlehq/server init` writes, and how to read its marks |
 | [install-manual.mdx](install-manual.mdx) | wiring the MCP server and SDK by hand, per agent and framework |
 | [skill-setup.md](skill-setup.md) | the setup half of SKILL.md: what to pass `init`, reading its report, and what to do when it cannot finish |

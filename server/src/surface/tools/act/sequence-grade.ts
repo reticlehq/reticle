@@ -35,6 +35,11 @@ export interface StepExpectation {
   /** What was seen instead, on a miss — the half of the answer a repair actually needs. */
   observed?: string;
   expected?: string;
+  /**
+   * Contradiction kinds positively observed in this step's window — deciding ones only, the same
+   * filter act_and_wait applies. A held step with one is a UI that advanced over a failed write.
+   */
+  contradicted?: readonly string[];
 }
 
 export interface SequenceGrade {
@@ -67,7 +72,9 @@ export function gradeSequence(
   const total = Math.max(plan.planned, steps.length);
   const declaring = steps.filter((step) => step.declared);
   const declared = declaring.length;
-  const missed = declaring.find((step) => true !== step.held);
+  // `held: false` on an undeclared step means it could not be performed at all — the journey broke
+  // there whether or not anything was declared about it.
+  const missed = steps.find((step) => (step.declared ? true !== step.held : false === step.held));
 
   // A miss decides the grade before coverage does. How much of the plan declared nothing is
   // context on a red, never a softening of it.
@@ -78,6 +85,18 @@ export function gradeSequence(
       declared,
       total,
       because: `a declared consequence did not hold — observed ${observed}`,
+    };
+  }
+
+  // Same rule as a single action: an observed contradiction outranks a consequence that held.
+  const contradictedAt = steps.findIndex((step) => (step.contradicted ?? []).length > 0);
+  if (contradictedAt >= 0) {
+    const kinds = (steps[contradictedAt]?.contradicted ?? []).join(', ');
+    return {
+      verified: Verified.NO,
+      declared,
+      total,
+      because: `step ${String(contradictedAt + 1)}: channels disagree about this action (${kinds}) even though it went on`,
     };
   }
 
@@ -109,6 +128,25 @@ export function gradeSequence(
             plan.dispatched
             ? `all ${String(total)} step(s) declared nothing, so the app was driven but not verified — give each step an \`expect\` naming the consequence it causes`
             : `nothing was dispatched, so none of the ${String(total)} step(s) ran — read the per-step \`error\` for the one that was refused, and fix that before adding an \`expect\``,
+    };
+  }
+
+  // A journey is proved at its END. Declaring only early steps checks that it started, and a yes
+  // there was the one a single act_and_wait on the last step would never have given.
+  if (steps.length < total) {
+    return {
+      verified: Verified.UNKNOWN,
+      declared,
+      total,
+      because: `only ${String(steps.length)} of ${String(total)} steps ran, so the journey never reached its end`,
+    };
+  }
+  if (true !== steps.at(-1)?.declared) {
+    return {
+      verified: Verified.UNKNOWN,
+      declared,
+      total,
+      because: `the last step, where the journey ends, declared nothing — give it an \`expect\` naming the end state (${String(declared)} of ${String(total)} steps declared one)`,
     };
   }
 

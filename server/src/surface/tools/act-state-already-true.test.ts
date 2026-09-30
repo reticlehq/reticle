@@ -13,7 +13,7 @@ import { TOOLS, type ToolDeps } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '@/memory/project/baselines.js';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
-import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
+import { AMBIENT_RECORDING, RecordingStore } from '@/language/flows/recording/tape/recordings.js';
 import { FlowStore } from '@/language/flows/flows.js';
 import { ProjectStore } from '@/memory/project/project-store.js';
 import { AnnotationStore } from '@/language/flows/stores/annotation-store.js';
@@ -117,6 +117,7 @@ function createStateSession(options: StateSessionOptions = {}) {
     lastAct: new LastAct(),
     beginAction: () => 'a1',
     finishAction: () => undefined,
+    recordAction: () => 'a2',
     command,
     queryEvents: () => Promise.resolve(noEvents),
     eventsSince: () => noEvents,
@@ -368,5 +369,122 @@ describe('what an already_true verdict tells the agent about the pre-action stat
 
     expect(res['verifiedReason']).not.toBe(VerifiedReason.ALREADY_TRUE);
     expect(res['alreadyTrueEvidence']).toBeUndefined();
+  });
+});
+
+/*
+ * The recorder captured the step BEFORE the verdict, so an `until` that came back `no` or
+ * `no-fault` was saved as the flow's expectation — a regression test asserting something that was
+ * never once observed to hold because of the action.
+ */
+describe('the recorded step keeps its consequence only when the verdict proved it', () => {
+  const until = { kind: PredicateKind.STATE, path: 'cart.count', equals: 3 };
+  const recorded = (deps: ToolDeps) => deps.recordings.stop(AMBIENT_RECORDING)?.steps ?? [];
+
+  it('a no-fault (already true) verdict records the action without the expectation', async () => {
+    const { deps } = createStateSession({ initialStore: { app: { cart: { count: 3 } } } });
+    await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
+      ref: 'btn',
+      action: 'click',
+      timeout_ms: 0,
+      until,
+    });
+    const steps = recorded(deps);
+    expect(steps).toHaveLength(1);
+    expect(steps[0]?.expect).toBeUndefined();
+  });
+
+  it('a proved verdict records the expectation', async () => {
+    const { deps } = createStateSession({
+      initialStore: { app: { cart: { count: 0 } }, cart: { count: 0 } },
+      onAct: (set) => set({ app: { cart: { count: 3 } }, cart: { count: 3 } }),
+    });
+    await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
+      ref: 'btn',
+      action: 'click',
+      timeout_ms: 0,
+      until,
+    });
+    expect(recorded(deps)[0]?.expect).toEqual(until);
+  });
+});
+
+describe('act, then assert: the assertion is kept on the step it proved', () => {
+  it('a passing reticle_assert after the act joins the recorded expectation', async () => {
+    const { deps } = createStateSession({
+      initialStore: { app: { cart: { count: 0 } }, cart: { count: 0 } },
+      onAct: (set) => set({ app: { cart: { count: 3 } }, cart: { count: 3 } }),
+    });
+    await tool(ReticleTool.ACT).handler(deps, { ref: 'btn', action: 'click' });
+    const check = { kind: PredicateKind.STATE, path: 'cart.count', equals: 3 };
+    const res = (await tool(ReticleTool.ASSERT).handler(deps, { predicate: check })) as Record<
+      string,
+      unknown
+    >;
+    expect(res['verified']).toBe(Verified.YES);
+    expect(deps.recordings.stop(AMBIENT_RECORDING)?.steps[0]?.expect).toEqual(check);
+  });
+
+  /*
+   * act → navigate → assert: the assertion was proved on the page the navigation opened, and
+   * replaying it right after the click — which is where the flow would keep it — asks it of a page
+   * it was never true on.
+   */
+  it('is not kept on the act when a navigation came between them', async () => {
+    const { deps } = createStateSession({
+      initialStore: { app: { cart: { count: 0 } }, cart: { count: 0 } },
+      onAct: (set) => set({ app: { cart: { count: 3 } }, cart: { count: 3 } }),
+    });
+    await tool(ReticleTool.ACT).handler(deps, { ref: 'btn', action: 'click' });
+    // A reload through the tool, as an agent would do it. The fake page comes back at once.
+    (deps.sessions as unknown as { get: () => unknown }).get = () => undefined;
+    let clock = 0;
+    const timed = { ...deps, now: () => (clock += 1000) };
+    await tool(ReticleTool.NAVIGATE)
+      .handler(timed, { reload: true, timeout_ms: 1 })
+      .catch(() => undefined);
+    const check = { kind: PredicateKind.STATE, path: 'cart.count', equals: 3 };
+    const res = (await tool(ReticleTool.ASSERT).handler(deps, { predicate: check })) as Record<
+      string,
+      unknown
+    >;
+    expect(res['verified']).toBe(Verified.YES);
+    const step = deps.recordings.stop(AMBIENT_RECORDING)?.steps[0];
+    expect(step).toBeDefined();
+    expect(step?.expect).toBeUndefined();
+  });
+});
+
+// The coverage ledger's PROVED level: a control counts only when its act came back `yes`.
+describe('a proved act is remembered as a proved control', () => {
+  const until = { kind: PredicateKind.STATE, path: 'cart.count', equals: 3 };
+
+  it('records the control on a yes, and not on a no-fault', async () => {
+    const proved: unknown[] = [];
+    const yes = createStateSession({
+      initialStore: { app: { cart: { count: 0 } }, cart: { count: 0 } },
+      onAct: (set) => set({ app: { cart: { count: 3 } }, cart: { count: 3 } }),
+    });
+    (yes.session as unknown as { recordProvedFrom: (p: unknown) => void }).recordProvedFrom = (p) =>
+      proved.push(p);
+    await tool(ReticleTool.ACT_AND_WAIT).handler(yes.deps, {
+      ref: 'b',
+      action: 'click',
+      timeout_ms: 0,
+      until,
+    });
+    expect(proved).toHaveLength(1);
+
+    const already = createStateSession({ initialStore: { app: { cart: { count: 3 } } } });
+    (already.session as unknown as { recordProvedFrom: (p: unknown) => void }).recordProvedFrom = (
+      p,
+    ) => proved.push(p);
+    await tool(ReticleTool.ACT_AND_WAIT).handler(already.deps, {
+      ref: 'b',
+      action: 'click',
+      timeout_ms: 0,
+      until,
+    });
+    expect(proved).toHaveLength(1);
   });
 });

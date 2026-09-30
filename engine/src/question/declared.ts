@@ -18,7 +18,7 @@
  * something that never happened. Pure: a predicate in, a description out.
  */
 
-import { PredicateKind, QueryBy, type ElementQuery } from '@reticlehq/core';
+import { PredicateKind, QueryBy, compareSourceClauses, type ElementQuery } from '@reticlehq/core';
 import type { Predicate } from './predicate/predicate-eval.js';
 
 /** A failing call the caller named in advance — matched against the window's real calls. */
@@ -109,6 +109,9 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
       case PredicateKind.ALL_OF:
         for (const child of p.predicates) walk(child);
         return;
+      case PredicateKind.COMPARE:
+        for (const child of compareSourceClauses(p)) walk(child);
+        return;
       case PredicateKind.NET: {
         netUrls.push(p.urlContains ?? '');
         const declaredFailure =
@@ -172,6 +175,10 @@ export function declaresBodyIndependentChannel(predicate: Predicate | undefined)
       case PredicateKind.STATE:
       case PredicateKind.ROUTE:
         return true;
+      // Only through a side the body does not own. Two body fields compared with each other are
+      // still body evidence, and another write's unread answer stays unread beside them.
+      case PredicateKind.COMPARE:
+        return [p.left, p.right].some((side) => PredicateKind.NET !== side.from);
       case PredicateKind.ELEMENT:
         return (
           true !== p.absent &&

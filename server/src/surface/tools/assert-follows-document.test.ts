@@ -11,6 +11,7 @@
  * refusal to guess is as much the contract as the follow is.
  */
 import { describe, expect, it } from 'vitest';
+import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
 import { EventType, ReticleTool, type ReticleEvent } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from './tools.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
@@ -63,7 +64,7 @@ function depsOver(all: Session[], resolved: Session): ToolDeps {
     get: (id: string) => all.find((s) => s.id === id),
     all: () => all,
   };
-  return { sessions: sessions as SessionManager } as ToolDeps;
+  return { sessions: sessions as SessionManager, recordings: new RecordingStore() } as ToolDeps;
 }
 
 function assertTool() {

@@ -5,7 +5,7 @@ description: What Reticle keeps on your machine, what is redacted, and what it t
 
 Reticle drives your app and reads what it did. That means it holds real content from real pages, so this page says exactly what it keeps, where it keeps it, and what it takes to make any of it leave.
 
-If you read one line: **a verdict is entirely local and needs no account.** Nothing is sent anywhere until you run `reticle login` and `reticle link`. Without them there is nowhere for anything to go.
+If you read one line: **a verdict is entirely local and needs no account.** Nothing from your project is sent anywhere until you run `reticle login` and `reticle link`. Without them there is nowhere for it to go. (Anonymous usage counts, which carry nothing from your app, are separate and described in [Telemetry](telemetry.md).)
 
 ## On your machine
 

@@ -115,8 +115,8 @@ const ASTRO_VITE_CONFIG: ViteOwningConfig = {
   alreadyMarker: ASTRO_VITE_OWNING_MARKER,
 };
 
-export function patchAstroConfig(source: string): SourcePatch {
-  return patchViteOwningConfig(source, ASTRO_VITE_CONFIG);
+export function patchAstroConfig(source: string, viteMajor: number | null = null): SourcePatch {
+  return patchViteOwningConfig(source, { ...ASTRO_VITE_CONFIG, viteMajor });
 }
 
 /**

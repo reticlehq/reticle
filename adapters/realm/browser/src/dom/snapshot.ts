@@ -394,8 +394,16 @@ function visit(child: Element, depth: number, ctx: WalkCtx, inLive: boolean): vo
 }
 
 function walk(parent: Element, depth: number, ctx: WalkCtx, inLive = false): void {
-  if (depth > ctx.maxDepth) return;
   const children = pierceChildren(parent);
+  if (depth > ctx.maxDepth) {
+    // Cut exactly like the node cap: this subtree is UNREAD, not absent. It used to return here
+    // with nothing said, so a deeply nested form read as a page without it.
+    if (children.length > 0) {
+      ctx.truncated = true;
+      recordUnread([parent], ctx);
+    }
+    return;
+  }
   for (let index = 0; index < children.length; index += 1) {
     if (ctx.nodes >= ctx.maxNodes) {
       ctx.truncated = true;

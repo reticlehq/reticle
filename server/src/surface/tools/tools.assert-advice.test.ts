@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
 import { EventType, ReticleCommand, type CommandResult, type ReticleEvent } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
@@ -30,7 +31,7 @@ function depsWith(opts: { matched?: boolean; events?: ReticleEvent[] }): ToolDep
     bufferHealth: () => ({ total: 0, dropped: 0 }),
   });
   const sessions: Partial<SessionManager> = { resolve: () => stub };
-  return { sessions: sessions as SessionManager } as ToolDeps;
+  return { sessions: sessions as SessionManager, recordings: new RecordingStore() } as ToolDeps;
 }
 
 function assertTool() {

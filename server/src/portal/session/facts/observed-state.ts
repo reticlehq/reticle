@@ -113,6 +113,20 @@ export class ObservedState {
   }
 
   /**
+   * Controls whose action came back `verified: "yes"` on a declared consequence — the PROVED level
+   * of the coverage ledger. Same label identity as `actedLabels`, so the two compare directly.
+   */
+  readonly #provedLabels = new Set<string>();
+
+  recordProvedLabel(label: string): void {
+    if (label.length > 0) this.#provedLabels.add(label);
+  }
+
+  provedLabels(): ReadonlySet<string> {
+    return this.#provedLabels;
+  }
+
+  /**
    * Record bridge-side sampling as a blind spot.
    *
    * Every other blind spot is reported BY the SDK, which cannot report this one: the events were
@@ -126,4 +140,25 @@ export class ObservedState {
   blindSpots(): Readonly<Record<string, number>> {
     return this.#blindSpots;
   }
+}
+
+/**
+ * The snapshot-shaped labels an act reply names its control by: the testid, and `role "name"`.
+ *
+ * The TESTID first: it is the strongest identity a control has and it survives any re-render.
+ * Coverage previously matched only on `role "name"`, so a control with a testid but no accessible
+ * name — or on a stack where the act reply carried neither — was unrecognisable after a re-render,
+ * and coverage read `exercised: 0` however much work had been done.
+ */
+export function controlLabelsOf(payload: unknown): string[] {
+  if (typeof payload !== 'object' || null === payload) return [];
+  const record = payload as Record<string, unknown>;
+  const labels: string[] = [];
+  const testid = record['testid'];
+  if ('string' === typeof testid && testid.length > 0) labels.push(testid);
+  const role = record['role'];
+  const name = record['name'];
+  if ('string' === typeof role && 'string' === typeof name && role.length > 0 && name.length > 0)
+    labels.push(`${role} "${name}"`);
+  return labels;
 }

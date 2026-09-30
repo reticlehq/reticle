@@ -88,6 +88,19 @@ function scopeMissError(connected: Session[], scope?: ResolveScope): string {
 /** How many bridge-initiated closes to remember for diagnosis. */
 const MAX_REMEMBERED_CLOSURES = 5;
 
+/** What a refused hello said about itself: the page it was on and the project it claimed. */
+export interface RefusedPage {
+  readonly url?: string;
+  readonly projectId?: string;
+}
+
+/** One bridge-initiated close, with the page that was turned away when the hello named one. */
+export interface ClosureRecord {
+  readonly at: number;
+  readonly reason: string;
+  readonly page?: RefusedPage;
+}
+
 /**
  * How many recently-departed session ids to remember for successor rebind.
  *
@@ -293,7 +306,7 @@ export class SessionManager {
    * @reticlehq/browser enabled", which is precisely wrong: the app IS running and instrumented. It
    * was hung up on. Keeping the last few reasons turns an unexplained disappearance into a fact.
    */
-  readonly #recentClosures: { at: number; reason: string }[] = [];
+  readonly #recentClosures: ClosureRecord[] = [];
 
   /**
    * What the daemon knows about WHY nothing is connected, refreshed in the background.
@@ -381,15 +394,21 @@ export class SessionManager {
     return this.#everConnected;
   }
 
-  /** Record a bridge-initiated close so `resolve` can explain a session that vanished. */
-  noteClosure(reason: string, at: number): void {
-    this.#recentClosures.push({ at, reason });
+  /**
+   * Record a bridge-initiated close so `resolve` can explain a session that vanished.
+   *
+   * `page` is what the refused hello said about itself, when it said anything. A refusal is the one
+   * piece of positive evidence the no-session diagnosis has, and "a page was refused" without WHICH
+   * page leaves the reader unable to tell their app from another project's tab on the same port.
+   */
+  noteClosure(reason: string, at: number, page?: RefusedPage): void {
+    this.#recentClosures.push({ at, reason, ...(page === undefined ? {} : { page }) });
     if (this.#recentClosures.length > MAX_REMEMBERED_CLOSURES) this.#recentClosures.shift();
     this.#connectedSinceLastClosure = false;
   }
 
   /** The most recent bridge-initiated close, if any. */
-  lastClosure(): { at: number; reason: string } | undefined {
+  lastClosure(): ClosureRecord | undefined {
     return this.#recentClosures[this.#recentClosures.length - 1];
   }
 
@@ -583,6 +602,17 @@ export class SessionManager {
     const allThrottled = bestScore >= 1;
     const RECENCY_GAP_MS = allThrottled ? 0 : 1_000;
     const clearWinner = runnerUp === undefined || best.ms + RECENCY_GAP_MS < runnerUp.ms;
+
+    // Healthy tabs heartbeat on the same cadence, so the recency gap between two of them is noise.
+    // When exactly one has the window focus it is the one a human is looking at: tabs piled up one
+    // per `init` run, and every tool called without a sessionId was refused while one of them was
+    // plainly the tab in front. Only among healthy ones — focus says nothing about a wedged tab.
+    const focused = allThrottled ? [] : candidates.filter((x) => x.s.health().focused);
+    const [onlyFocused, secondFocused] = focused;
+    if (!clearWinner && onlyFocused !== undefined && secondFocused === undefined) {
+      onlyFocused.s.markAgentActivity();
+      return onlyFocused.s;
+    }
 
     if (!clearWinner) {
       // Ambiguous: list sessions with their health so the agent can choose.

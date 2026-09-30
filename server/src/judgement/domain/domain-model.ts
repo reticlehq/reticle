@@ -16,6 +16,7 @@
 import {
   AnchorKind,
   PredicateKind,
+  compareSourceClauses,
   type Predicate,
   type CapabilitiesContract,
   type FlowFile,
@@ -90,6 +91,7 @@ function walkClauses(predicate: Predicate | undefined): readonly Predicate[] {
     return predicate.predicates.flatMap(walkClauses);
   }
   if (PredicateKind.NOT === predicate.kind) return walkClauses(predicate.predicate);
+  if (PredicateKind.COMPARE === predicate.kind) return compareSourceClauses(predicate);
   return [predicate];
 }
 

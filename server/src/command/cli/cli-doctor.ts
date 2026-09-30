@@ -11,7 +11,8 @@ import { projectWiringLine } from './doctor/doctor-project-line.js';
 import { hasProjectConnectedBefore } from '@/memory/recall/prior/connection-memory.js';
 import { sessionsLine, type SessionsLine } from './doctor/doctor-sessions-line.js';
 import { captureLookup, describeForeignHolder, findPortHolder } from './ports/port-holder.js';
-import { chromiumHint, probeChromium } from './doctor/browser/chromium-hint.js';
+import { chromiumHint } from './doctor/browser/chromium-hint.js';
+import { probeChromiumWithFallback } from '@/launch-chromium.js';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 import { CONTRACT_FINGERPRINT } from '@reticlehq/core';
 import {
@@ -21,10 +22,12 @@ import {
   diagnoseWebCsp,
   isDesktopProject,
   resolveWebCspFindings,
+  webCspOptionsFor,
 } from '@reticlehq/init';
 import {
   RETICLE_CONFIG_BASENAME,
   diagnosePortMismatch,
+  readProjectFramework,
   readProjectId,
   readProjectPort,
 } from './ports/resolve/cli-port.js';
@@ -96,7 +99,7 @@ export async function handleDoctor(port: number): Promise<void> {
   // the branches below already say so in their own terms.
   let sessions: SessionsLine | undefined;
   let daemonStatus: unknown;
-  line(doctorRow(DoctorRow.CHROMIUM, chromiumHint(await probeChromium())));
+  line(doctorRow(DoctorRow.CHROMIUM, chromiumHint(await probeChromiumWithFallback())));
   // Ask the PORT, not just the pid file. "not running on :4400" has been printed about a port that
   // was demonstrably occupied, which sends the reader to start a daemon that cannot bind. The three
   // states are genuinely different problems with different fixes, so doctor names which one it is.
@@ -264,7 +267,13 @@ export async function handleDoctor(port: number): Promise<void> {
     projectId,
   );
   const csp = resolveWebCspFindings({
-    predicted: diagnoseWebCsp(readProjectFile, port),
+    // With the wiring `init` recorded, so the two commands name the same rule for one policy.
+    predicted: diagnoseWebCsp(
+      readProjectFile,
+      port,
+      [],
+      webCspOptionsFor(readProjectFramework(process.cwd())),
+    ),
     ...(observedCsp === undefined ? {} : { observed: observedCsp }),
     connected,
   });

@@ -16,6 +16,7 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import { crawlEmptyNote } from './crawl-empty.js';
+import { failedRequests, isConsoleError } from '@/features/exhaust/session-fold.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { parseInteractive } from '@reticlehq/core';
 import { sourceOf } from '@/surface/tools/tools-helpers.js';
@@ -154,10 +155,6 @@ function isActivity(e: ReticleEvent): boolean {
   );
 }
 
-function isConsoleError(e: ReticleEvent): boolean {
-  return e.type === EventType.CONSOLE_ERROR || e.type === EventType.ERROR_UNCAUGHT;
-}
-
 const SOURCE_FRAME = /^(.*):(\d+):(\d+)$/;
 const COMPONENT_STACK_FIELDS = ['componentStack', 'message'] as const;
 const URL_SOURCE_PROTOCOLS: ReadonlySet<string> = new Set([
@@ -259,14 +256,6 @@ function sourceFromConsoleError(event: ReticleEvent): string | undefined {
     : `${file}:${String(directLine)}`;
 }
 
-function failedRequests(events: ReticleEvent[], floor: number): ReticleEvent[] {
-  return events.filter((e) => {
-    if (e.type !== EventType.NET_REQUEST) return false;
-    const status = asNumber(e.data['status']);
-    return status !== undefined && status >= floor;
-  });
-}
-
 /**
  * Controls whose correct behaviour IS to do nothing when clicked.
  *
@@ -300,20 +289,30 @@ export function legitimatelyInert(desc: string): boolean {
  * fails — this is a disclosure, and failing the whole crawl to report on coverage would be worse
  * than the silence it is fixing.
  */
-async function countRevealed(
+async function revealedItems(
   session: CrawlSession,
   opts: CrawlOptions,
   before: ReadonlyArray<{ ref: string; desc: string }>,
-): Promise<number> {
+): Promise<{ ref: string; desc: string }[]> {
   const snap = await session.command(ReticleCommand.SNAPSHOT, {
     mode: 'interactive',
     ...(opts.scope !== undefined ? { scope: opts.scope } : {}),
   });
-  if (!snap.ok) return 0;
+  if (!snap.ok) return [];
   const tree = ((snap.result ?? {}) as { tree?: string }).tree ?? '';
   const known = new Set(before.map((i) => (i.ref !== '' ? i.ref : i.desc)));
-  return parseInteractive(tree).filter((i) => !known.has(i.ref !== '' ? i.ref : i.desc)).length;
+  return parseInteractive(tree).filter((i) => !known.has(i.ref !== '' ? i.ref : i.desc));
 }
+
+/**
+ * How many times a crawl re-enumerates to follow what its own clicks revealed.
+ *
+ * ponytail: rounds, not a real frontier. Each round clicks what the previous one uncovered (a
+ * dashboard behind a login, a modal's contents), which is the depth a one-pass crawl never had. A
+ * page that reveals something new on every click would otherwise never end; past this it reports
+ * the rest as unvisited, as before. `maxSteps` still bounds the total.
+ */
+const REVEAL_ROUNDS = 2;
 
 /**
  * The confirmation half of the dead-control rule. Kept separate so the rule above reads as one
@@ -328,7 +327,7 @@ async function stillSilent(
   session: CrawlSession,
   item: { ref: string; desc: string },
   settleMs: number,
-  opts: { confirmDangerous?: boolean },
+  confirm: boolean,
   sleep: CrawlSleep,
 ): Promise<boolean> {
   const since = session.elapsed();
@@ -337,7 +336,7 @@ async function stillSilent(
     const again = await session.command(ReticleCommand.ACT, {
       ref: item.ref,
       action: ActionType.CLICK,
-      args: true === opts.confirmDangerous ? { [DANGEROUS_ACTION_CONFIRM_ARG]: true } : {},
+      args: confirm ? { [DANGEROUS_ACTION_CONFIRM_ARG]: true } : {},
     });
     await sleep(settleMs);
     // A control that has GONE (the first click removed it) is not a dead control — it did something.
@@ -377,154 +376,168 @@ export async function crawl(
   const seen = new Set<string>();
 
   let stepsRun = 0;
-  for (const item of items) {
-    if (stepsRun >= maxSteps) break;
-    // Dedupe by ref (the unique element), not by label — two "Delete"/"Edit" controls share a desc
-    // but are different controls; collapsing them by label under-covers list/table UIs.
-    const dedupeKey = item.ref !== '' ? item.ref : item.desc;
-    if (seen.has(dedupeKey)) continue; // don't re-click the same control
-    seen.add(dedupeKey);
-    stepsRun += 1;
-    visited.push(item.desc);
+  const found = [...items];
+  let frontier: readonly { ref: string; desc: string }[] = items;
+  for (let round = 0; ; round += 1) {
+    // `confirmDangerous` covers the controls on the page the caller pointed the crawl at. What a
+    // click REVEALED is new: the "Yes, delete" behind a "Delete" was confirmed with the same flag,
+    // so one call finished a deletion nobody authorized the second half of.
+    const confirm = 0 === round && true === opts.confirmDangerous;
+    for (const item of frontier) {
+      if (stepsRun >= maxSteps) break;
+      // Dedupe by ref (the unique element), not by label — two "Delete"/"Edit" controls share a desc
+      // but are different controls; collapsing them by label under-covers list/table UIs.
+      const dedupeKey = item.ref !== '' ? item.ref : item.desc;
+      if (seen.has(dedupeKey)) continue; // don't re-click the same control
+      seen.add(dedupeKey);
+      stepsRun += 1;
+      visited.push(item.desc);
 
-    const since = session.elapsed();
-    session.beginAction?.(ReticleTool.CRAWL, { ref: item.ref, action: ActionType.CLICK });
-    let act;
-    /*
-     * A full page load reconnects the SDK, which rejects whatever command was in flight.
-     *
-     * On a server-rendered app that is what following a link DOES — every navigation replaces the
-     * session — so the rejection is evidence the click worked, not that it failed. Crawl used to let
-     * it propagate and died on link one of every Django, Rails or plain-HTML app.
-     *
-     * Recorded as a navigation rather than swallowed: a control that took the page somewhere is the
-     * opposite of a dead one, and reporting it as dead would be the false negative crawl exists to
-     * find.
-     */
-    let navigatedAway = false;
-    try {
-      // One span per control clicked, so a slow crawl names the control rather than reporting a
-      // single multi-second total. The settle sleep below is INSIDE it deliberately: it is part of
-      // what a step costs, and hiding it would make the fixed budget look free.
-      act = await span('crawl.step', { ref: item.ref, desc: item.desc }, async () => {
-        const clicked = await session.command(ReticleCommand.ACT, {
-          ref: item.ref,
-          action: ActionType.CLICK,
-          args: true === opts.confirmDangerous ? { [DANGEROUS_ACTION_CONFIRM_ARG]: true } : {},
+      const since = session.elapsed();
+      session.beginAction?.(ReticleTool.CRAWL, { ref: item.ref, action: ActionType.CLICK });
+      let act;
+      /*
+       * A full page load reconnects the SDK, which rejects whatever command was in flight.
+       *
+       * On a server-rendered app that is what following a link DOES — every navigation replaces the
+       * session — so the rejection is evidence the click worked, not that it failed. Crawl used to let
+       * it propagate and died on link one of every Django, Rails or plain-HTML app.
+       *
+       * Recorded as a navigation rather than swallowed: a control that took the page somewhere is the
+       * opposite of a dead one, and reporting it as dead would be the false negative crawl exists to
+       * find.
+       */
+      let navigatedAway = false;
+      try {
+        // One span per control clicked, so a slow crawl names the control rather than reporting a
+        // single multi-second total. The settle sleep below is INSIDE it deliberately: it is part of
+        // what a step costs, and hiding it would make the fixed budget look free.
+        act = await span('crawl.step', { ref: item.ref, desc: item.desc }, async () => {
+          const clicked = await session.command(ReticleCommand.ACT, {
+            ref: item.ref,
+            action: ActionType.CLICK,
+            args: confirm ? { [DANGEROUS_ACTION_CONFIRM_ARG]: true } : {},
+          });
+          await sleep(settleMs);
+          return clicked;
         });
-        await sleep(settleMs);
-        return clicked;
-      });
-    } catch (err) {
-      if (!isSessionReplacedError(err)) throw err;
-      navigatedAway = true;
-    } finally {
-      // Close on every exit so a throw cannot leak the window onto the next control's events.
-      session.finishAction?.();
-    }
-    const events = session.eventsSince(since);
-    // Captured at act time, so it survives a click that unmounts its own control.
-    const src = sourceOf(asRecord(act?.result)['source']);
-    const controlSource = src === undefined ? undefined : `${src.file}:${String(src.line)}`;
-    const source = controlSource === undefined ? {} : { source: controlSource };
+      } catch (err) {
+        if (!isSessionReplacedError(err)) throw err;
+        navigatedAway = true;
+      } finally {
+        // Close on every exit so a throw cannot leak the window onto the next control's events.
+        session.finishAction?.();
+      }
+      const events = session.eventsSince(since);
+      // Captured at act time, so it survives a click that unmounts its own control.
+      const src = sourceOf(asRecord(act?.result)['source']);
+      const controlSource = src === undefined ? undefined : `${src.file}:${String(src.line)}`;
+      const source = controlSource === undefined ? {} : { source: controlSource };
 
-    const errs = events.filter(isConsoleError);
-    for (const e of errs) {
-      counts.consoleErrors += 1;
-      const errorSource = sourceFromConsoleError(e) ?? controlSource;
-      anomalies.push({
-        kind: CrawlAnomalyKind.CONSOLE_ERROR,
-        ref: item.ref,
-        desc: item.desc,
-        detail: asString(e.data['message']) ?? e.type,
-        ...(errorSource === undefined ? {} : { source: errorSource }),
-      });
-    }
-
-    for (const e of failedRequests(events, CRAWL_DEFAULTS.FAILED_STATUS)) {
-      counts.failedRequests += 1;
-      const method = asString(e.data['method']) ?? '';
-      const url = asString(e.data['url']) ?? '';
-      const status = asNumber(e.data['status']);
-      anomalies.push({
-        kind: CrawlAnomalyKind.FAILED_REQUEST,
-        ref: item.ref,
-        desc: item.desc,
-        detail: `${method} ${url} → ${status ?? ''}`.trim(),
-        ...source,
-      });
-    }
-
-    // CONTRADICTIONS: the channels disagree about what this click did. Reported per control, so a
-    // crawl of an unknown app surfaces its false greens without anyone knowing where to look.
-    // A crawl clicks controls that navigate, so its windows are the ones most likely to straddle a
-    // document boundary — and a finding here is reported against a specific control by name.
-    for (const c of findContradictions(events, {
-      currentDocumentId: session.currentDocumentId,
-      currentEditEpoch: session.currentEditEpoch,
-      appOrigin: session.url,
-      background: session.background,
-      // A hidden tab cannot be observed, so its silence is not evidence. Stated from the session
-      // rather than left to a heartbeat landing inside a 300ms window.
-      pageHidden: session.throttled?.(),
-      // The crawl's window IS one control's click, so it can name the floor the consequence rules
-      // need — without it a crawl would report nothing about the UI moving, which is most of what a
-      // crawl is for.
-      actionSince: since,
-    })) {
-      counts.contradictions += 1;
-      anomalies.push({
-        kind: c.kind,
-        ref: item.ref,
-        desc: item.desc,
-        detail: `${c.claim}, but ${c.counter} — ${c.detail}`,
-        ...source,
-      });
-    }
-
-    // DEAD: the click dispatched but the app produced no activity and no error to explain it.
-    //
-    // Unless the control is SUPPOSED to be inert. A control clicked twice with no reaction may be
-    // legitimately inert — a `[disabled]` button, an already `[checked]` radio, a text input (a click
-    // focuses it; mutating would be the surprise). An anomaly list that is all false positives is
-    // worse than no anomaly list: the agent spends its budget disproving it and learns to skip it.
-    //
-    // Deliberately NOT fixed by counting focus as activity: focus moving is not the app reacting, and
-    // treating it as such would make a genuinely dead button that takes focus look alive — trading
-    // noise for the false negative this check exists to catch.
-    const dispatched = asRecord(act?.result)['dispatched'] !== false && true === act?.ok;
-    if (
-      // A control that took the page somewhere is the OPPOSITE of a dead one. Without this, every
-      // link on a server-rendered app would be reported as an anomaly by the check that exists to
-      // find controls which do nothing.
-      !navigatedAway &&
-      dispatched &&
-      0 === errs.length &&
-      !events.some(isActivity) &&
-      !legitimatelyInert(item.desc)
-    ) {
-      // CONFIRM IT. One silent sample is a sample, not a fact, and this is the strongest claim the
-      // crawler makes — "your button does nothing" is the finding a reader acts on immediately.
-      //
-      // Measured on a fixture whose FIXED twin has a working primary CTA: the crawl reported it dead
-      // on 2 of 3 runs, always a control the drive had already clicked successfully moments earlier.
-      // A false positive in this tier is the most expensive kind there is — it is the tier a verdict
-      // is built from, and the twin column is the whole claim this product makes.
-      //
-      // A second click costs one round trip on the rare control that looked dead, and nothing at all
-      // on every control that did not. A genuinely dead control is silent twice; the flake is not.
-      if (await stillSilent(session, item, settleMs, opts, sleep)) {
-        counts.deadControls += 1;
+      const errs = events.filter(isConsoleError);
+      for (const e of errs) {
+        counts.consoleErrors += 1;
+        const errorSource = sourceFromConsoleError(e) ?? controlSource;
         anomalies.push({
-          kind: CrawlAnomalyKind.DEAD_CONTROL,
+          kind: CrawlAnomalyKind.CONSOLE_ERROR,
           ref: item.ref,
           desc: item.desc,
-          detail:
-            'clicked TWICE and the app did nothing either time (no DOM/network/route/signal change)',
+          detail: asString(e.data['message']) ?? e.type,
+          ...(errorSource === undefined ? {} : { source: errorSource }),
+        });
+      }
+
+      for (const e of failedRequests(events, CRAWL_DEFAULTS.FAILED_STATUS)) {
+        counts.failedRequests += 1;
+        const method = asString(e.data['method']) ?? '';
+        const url = asString(e.data['url']) ?? '';
+        const status = asNumber(e.data['status']);
+        anomalies.push({
+          kind: CrawlAnomalyKind.FAILED_REQUEST,
+          ref: item.ref,
+          desc: item.desc,
+          detail: `${method} ${url} → ${status ?? ''}`.trim(),
           ...source,
         });
       }
+
+      // CONTRADICTIONS: the channels disagree about what this click did. Reported per control, so a
+      // crawl of an unknown app surfaces its false greens without anyone knowing where to look.
+      // A crawl clicks controls that navigate, so its windows are the ones most likely to straddle a
+      // document boundary — and a finding here is reported against a specific control by name.
+      for (const c of findContradictions(events, {
+        currentDocumentId: session.currentDocumentId,
+        currentEditEpoch: session.currentEditEpoch,
+        appOrigin: session.url,
+        background: session.background,
+        // A hidden tab cannot be observed, so its silence is not evidence. Stated from the session
+        // rather than left to a heartbeat landing inside a 300ms window.
+        pageHidden: session.throttled?.(),
+        // The crawl's window IS one control's click, so it can name the floor the consequence rules
+        // need — without it a crawl would report nothing about the UI moving, which is most of what a
+        // crawl is for.
+        actionSince: since,
+      })) {
+        counts.contradictions += 1;
+        anomalies.push({
+          kind: c.kind,
+          ref: item.ref,
+          desc: item.desc,
+          detail: `${c.claim}, but ${c.counter} — ${c.detail}`,
+          ...source,
+        });
+      }
+
+      // DEAD: the click dispatched but the app produced no activity and no error to explain it.
+      //
+      // Unless the control is SUPPOSED to be inert. A control clicked twice with no reaction may be
+      // legitimately inert — a `[disabled]` button, an already `[checked]` radio, a text input (a click
+      // focuses it; mutating would be the surprise). An anomaly list that is all false positives is
+      // worse than no anomaly list: the agent spends its budget disproving it and learns to skip it.
+      //
+      // Deliberately NOT fixed by counting focus as activity: focus moving is not the app reacting, and
+      // treating it as such would make a genuinely dead button that takes focus look alive — trading
+      // noise for the false negative this check exists to catch.
+      const dispatched = asRecord(act?.result)['dispatched'] !== false && true === act?.ok;
+      if (
+        // A control that took the page somewhere is the OPPOSITE of a dead one. Without this, every
+        // link on a server-rendered app would be reported as an anomaly by the check that exists to
+        // find controls which do nothing.
+        !navigatedAway &&
+        dispatched &&
+        0 === errs.length &&
+        !events.some(isActivity) &&
+        !legitimatelyInert(item.desc)
+      ) {
+        // CONFIRM IT. One silent sample is a sample, not a fact, and this is the strongest claim the
+        // crawler makes — "your button does nothing" is the finding a reader acts on immediately.
+        //
+        // Measured on a fixture whose FIXED twin has a working primary CTA: the crawl reported it dead
+        // on 2 of 3 runs, always a control the drive had already clicked successfully moments earlier.
+        // A false positive in this tier is the most expensive kind there is — it is the tier a verdict
+        // is built from, and the twin column is the whole claim this product makes.
+        //
+        // A second click costs one round trip on the rare control that looked dead, and nothing at all
+        // on every control that did not. A genuinely dead control is silent twice; the flake is not.
+        if (await stillSilent(session, item, settleMs, confirm, sleep)) {
+          counts.deadControls += 1;
+          anomalies.push({
+            kind: CrawlAnomalyKind.DEAD_CONTROL,
+            ref: item.ref,
+            desc: item.desc,
+            detail:
+              'clicked TWICE and the app did nothing either time (no DOM/network/route/signal change)',
+            ...source,
+          });
+        }
+      }
     }
+
+    if (coverageCapped || stepsRun >= maxSteps || REVEAL_ROUNDS <= round) break;
+    const next = await revealedItems(session, opts, found);
+    if (0 === next.length) break;
+    found.push(...next);
+    frontier = next;
   }
 
   // One more look, AFTER the clicks. The enumeration above happened before any of them, so anything
@@ -534,10 +547,10 @@ export async function crawl(
   // as new, and a surface that SHRANK (a modal closed) reports nothing, because nothing went
   // unvisited. Skipped when the snapshot was already capped: that case has its own note and a second
   // one would only muddy it.
-  const revealed = coverageCapped ? 0 : await countRevealed(session, opts, items);
+  const revealed = coverageCapped ? 0 : (await revealedItems(session, opts, found)).length;
 
   return {
-    interactiveFound: items.length,
+    interactiveFound: found.length,
     stepsRun,
     anomalies,
     counts,
@@ -545,7 +558,7 @@ export async function crawl(
     // True when coverage was bounded for EITHER reason: the step budget ran out, or the page was
     // bigger than one snapshot. Conflating "I stopped early" with "I saw everything" is what turns a
     // partial sweep into "all controls healthy".
-    truncated: items.length > stepsRun || coverageCapped || revealed > 0,
+    truncated: found.length > stepsRun || coverageCapped || revealed > 0,
     ...(coverageCapped
       ? { coverageNote: CAPPED_SNAPSHOT_NOTE }
       : revealed > 0
@@ -555,7 +568,7 @@ export async function crawl(
     // same answer. See crawl-empty.
     ...(() => {
       const note = crawlEmptyNote({
-        interactiveFound: items.length,
+        interactiveFound: found.length,
         stepsRun,
         maxSteps,
         truncated: coverageCapped,

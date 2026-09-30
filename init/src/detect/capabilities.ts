@@ -60,16 +60,48 @@ const STORE_LIBRARIES: readonly (readonly [dep: string, hint: string])[] = [
   ['@tanstack/react-query', "registerStore('queries', tanstackQueryStore(queryClient))"],
   [
     'zustand',
-    "registerStore('app', useStore) // pass the store itself, not () => store.getState()",
+    "registerStore('app', <yourStore>) // pass the store itself, not () => store.getState()",
   ],
   ['@reduxjs/toolkit', "registerStore('app', store)"],
   ['redux', "registerStore('app', store)"],
-  ['jotai', "registerStore('app', jotaiStore(getDefaultStore(), { cart, user }))"],
-  ['valtio', "registerStore('app', valtioStore(state))"],
-  ['mobx', "registerStore('app', mobxStore(state))"],
-  ['xstate', "registerStore('machine', xstateStore(actor))"],
-  ['pinia', "registerStore('cart', piniaStore(useCartStore()))"],
-  ['svelte', "registerStore('cart', svelteStore(cartStore))"],
+  ['jotai', "registerStore('app', jotaiStore(getDefaultStore(), { <yourAtoms> }))"],
+  ['valtio', "registerStore('app', valtioStore(<yourProxyState>))"],
+  ['mobx', "registerStore('app', mobxStore(<yourObservable>))"],
+  ['xstate', "registerStore('machine', xstateStore(<yourActor>))"],
+  ['pinia', "registerStore('<key>', piniaStore(<useYourStore>()))"],
+];
+
+/**
+ * The adapter-wrapped libraries whose store the SOURCE can name for us, and how.
+ *
+ * Every hint above used to carry a made-up identifier, and two of them were wrong on every app of
+ * their kind: each Svelte app was told `svelteStore(cartStore)` and a create-vue app defining
+ * `useCounterStore` was told `piniaStore(useCartStore())`. An agent that follows a hint imports what
+ * it names. So where the declaration has a shape we can read, the hint names what is actually there;
+ * where it does not, the hint says what to fill in with a placeholder instead of a guess.
+ *
+ * Svelte has no generic hint at all: every Svelte app depends on `svelte`, so the dependency says
+ * nothing about whether it has a store, and a hint on it fired the "finish the capabilities file"
+ * notice on every Svelte app there is.
+ */
+const SOURCE_NAMED_STORES: readonly (readonly [
+  dep: string,
+  declaration: RegExp,
+  hint: (m: RegExpMatchArray) => string | undefined,
+])[] = [
+  [
+    'pinia',
+    /export\s+const\s+([A-Za-z_$][\w$]*)\s*=\s*defineStore\s*\(\s*['"`]([^'"`]+)['"`]/g,
+    (m) =>
+      m[1] === undefined || m[2] === undefined
+        ? undefined
+        : `registerStore('${m[2]}', piniaStore(${m[1]}()))`,
+  ],
+  [
+    'svelte',
+    /export\s+const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:writable|readable|derived)\s*[<(]/g,
+    (m) => (m[1] === undefined ? undefined : `registerStore('${m[1]}', svelteStore(${m[1]}))`),
+  ],
 ];
 
 /**
@@ -94,10 +126,21 @@ const AUTO_DISCOVERED_DEPS: ReadonlySet<string> = new Set([
  * The store libraries this app depends on AND the running app cannot reveal on its own, as
  * ready-to-uncomment registration lines.
  */
-export function storeHints(deps: ReadonlySet<string>): string[] {
-  return STORE_LIBRARIES.filter(([dep]) => deps.has(dep) && !AUTO_DISCOVERED_DEPS.has(dep)).map(
-    ([, hint]) => hint,
-  );
+export function storeHints(
+  deps: ReadonlySet<string>,
+  files: readonly { path: string; source: string }[] = [],
+): string[] {
+  const named = new Map<string, string[]>();
+  for (const [dep, declaration, hint] of SOURCE_NAMED_STORES) {
+    if (!deps.has(dep)) continue;
+    const found = files.flatMap(({ source }) =>
+      [...source.matchAll(declaration)].flatMap((m) => hint(m) ?? []),
+    );
+    if (found.length > 0) named.set(dep, found);
+  }
+  return STORE_LIBRARIES.filter(([dep]) => deps.has(dep) && !AUTO_DISCOVERED_DEPS.has(dep))
+    .flatMap(([dep, hint]) => named.get(dep) ?? [hint])
+    .concat(named.get('svelte') ?? []);
 }
 
 /** A store instance we found in the app's own source, with everything needed to import and register it. */

@@ -47,6 +47,11 @@ export interface ChromiumProbe {
    * and kept reading "not installed", with no way to see that neither was ever searched.
    */
   searchedPaths?: readonly string[] | undefined;
+  /**
+   * The installed browser Reticle drives instead when its own build is absent (`Google Chrome`,
+   * `Microsoft Edge`) — see launch-chromium. Present only when `exists` is false and one was found.
+   */
+  fallback?: string | undefined;
 }
 
 /**
@@ -203,6 +208,11 @@ export function chromiumHint(probe: ChromiumProbe): string {
       : `✓ installed (${probe.wantedRevision})`;
   }
   const command = chromiumInstallCommand(probe.playwrightVersion);
+  // Not a failure: every Reticle browser launches on this one. The install command stays on the
+  // line for a reader who wants the exact build the tests run against.
+  if (probe.fallback !== undefined && probe.executablePath !== undefined) {
+    return `✓ using the installed ${probe.fallback} (Playwright's own Chromium is not installed; ${command} adds it)`;
+  }
   if (probe.executablePath === undefined) {
     // Same rule as the missing-browser line below: a verdict with nowhere to check it against reads
     // as a broken check. The roots say whether this process even searched the directory the reader

@@ -76,6 +76,7 @@ function harness(): { session: Session; deps: ToolDeps; ledger: IntentStore } {
   const sessions: Partial<SessionManager> = { resolve: () => session };
   const deps = {
     sessions: sessions as SessionManager,
+    recordings: new RecordingStore(),
     fs,
     reticleRoot: ROOT,
     now: () => 1_000,

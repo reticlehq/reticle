@@ -77,6 +77,7 @@ export const BROWSER_TOOLS: ToolDef[] = [
         // back past this point. Reported from the field as an assertion whose clauses all passed
         // coming back `contradicted` by hundreds of 500s against resources that were already gone.
         before.lastAct.markNavigated(before.elapsed());
+        deps.recordings.markNavigated();
         await commandOrThrow(deps, asString(args['sessionId']), ReticleCommand.REFRESH, {
           hard: true === args['hard'],
         });
@@ -115,6 +116,7 @@ export const BROWSER_TOOLS: ToolDef[] = [
       // document just as thoroughly. `beginAction` attributes events to this action; it does not move
       // the window a later assert judges over, and those are two different jobs.
       session.lastAct.markNavigated(session.elapsed());
+      deps.recordings.markNavigated();
       try {
         const result = (await commandOrThrow(
           deps,

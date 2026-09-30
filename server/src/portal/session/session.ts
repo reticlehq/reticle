@@ -49,7 +49,7 @@ import {
   type EventQueryOptions,
 } from '@/memory/journal/journal-query.js';
 import { type AmbientCounts } from '@reticlehq/engine/window/ambient.js';
-import { ObservedState } from './facts/observed-state.js';
+import { ObservedState, controlLabelsOf } from './facts/observed-state.js';
 import {
   recordBrowserLatency,
   recordHudUse,
@@ -428,20 +428,16 @@ export class Session implements HandshakeFacts {
    * against the same control after a re-render gave it a different ref.
    */
   private recordActedLabelFrom(result: CommandResult): void {
-    const payload = result.result;
-    if (typeof payload !== 'object' || null === payload) return;
-    const record = payload as Record<string, unknown>;
-    // The TESTID first: it is the strongest identity a control has and it survives any re-render.
-    // Coverage previously matched only on `role "name"`, so a control with a testid but no accessible
-    // name — or on a stack where the act reply carried neither — was unrecognisable after a
-    // re-render, and coverage read `exercised: 0` however much work had been done.
-    const testid = record['testid'];
-    if ('string' === typeof testid && testid.length > 0) this.#observed.recordActedLabel(testid);
-    const role = record['role'];
-    const name = record['name'];
-    if (typeof role !== 'string' || typeof name !== 'string') return;
-    if (0 === role.length || 0 === name.length) return;
-    this.#observed.recordActedLabel(`${role} "${name}"`);
+    for (const label of controlLabelsOf(result.result)) this.#observed.recordActedLabel(label);
+  }
+
+  /** A control whose action PROVED its declared consequence — the coverage ledger's `proved`. */
+  recordProvedFrom(actPayload: unknown): void {
+    for (const label of controlLabelsOf(actPayload)) this.#observed.recordProvedLabel(label);
+  }
+
+  provedLabels(): ReadonlySet<string> {
+    return this.#observed.provedLabels();
   }
 
   actedRefs(): ReadonlySet<string> {

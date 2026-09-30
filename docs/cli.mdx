@@ -112,6 +112,15 @@ policy       https://github.com/reticlehq/reticle/blob/main/docs/telemetry.md
 
 A bare `reticle` with no arguments is not help. It is `reticle serve`.
 
+<Note>
+  When the Reticle SDK installed in the project is a different **major** version from the CLI you ran,
+  the CLI hands the same command to `npx @reticlehq/server@<that version>`, so an unpinned
+  `npx @reticlehq/server` never pairs a daemon with an SDK it cannot talk to. `init`, `update`,
+  `rollback`, `setup install`, `version` and `help` always run as typed, and so does a command whose
+  version you pinned yourself (`npx @reticlehq/server@<version> …`). Set `RETICLE_NO_VERSION_MATCH=1` to
+  turn it off.
+</Note>
+
 <Warning>
   `reticle verify` binds the bridge port itself, so it fails if a daemon is already listening, which
   is the normal state once your agent has started one. Stop the daemon first, or point it elsewhere

@@ -133,7 +133,7 @@ export default defineConfig({
 });
 ```
 
-`desktop: true` does the two things a desktop shell needs and a web app must never get: the plugin also runs for `vite build` (a packaged renderer is a production build with **no dev server**, so the default serve-only gating would ship an app with no `connect()` at all), and `connect()` is called with `allowInProduction` so the SDK's production backstop does not refuse to start. Keep it behind your own dev-only build so an instrumented bundle can never reach a release binary.
+`desktop: true` does two things a desktop shell needs: `connect()` is injected into the renderer's entry module, so a renderer loaded with no dev server still resolves it, and it is called with `allowInProduction`, because a packaged renderer reports `NODE_ENV=production` and the SDK's production backstop would otherwise refuse to start. It instruments the dev server, and a `vite build` **only when that build runs in a non-production mode**: `vite build --mode development`, for a packaged renderer you want to drive with no dev server. A production-mode build, which is what `vite build` and `electron-vite build` do by default, is stubbed exactly like a web bundle: it carries no SDK and never dials `ws://localhost`, so a release binary built the normal way is clean.
 
 Nothing to add in your app code. You can still call `reticle.connect()` by hand and pass `inject: false` if you want control.
 
@@ -157,9 +157,11 @@ That line is what makes your main-process calls visible. It has to live in the p
 
 **Preload sandboxing.** A sandboxed preload cannot resolve `node_modules`, so the bare `require` above fails with `module not found: @reticlehq/electron/preload`. Either bundle your preload (electron-vite and Electron Forge do this by default; the require is inlined at build time and sandboxing stays on), or set `sandbox: false` in `webPreferences`.
 
-**Packaged renderers.** An app that loads its renderer with `loadFile` runs on `file://`, which is a production Vite build. Pass `allowInProduction: true` to `connect()` for that mode, or keep the SDK gated behind `import.meta.env.DEV` so it never enters the shipped binary at all.
+**Packaged renderers.** An app that loads its renderer with `loadFile` runs on `file://` with no dev server. To drive one, build its renderer with `vite build --mode development` (the plugin then instruments it, `allowInProduction` included). The default production-mode build ships no Reticle code at all.
 
 Working example: [`apps/electron-smoke`](https://github.com/reticlehq/reticle/tree/main/apps/electron-smoke).
+
+**Electron Forge.** `reticle init` recognises Forge's Vite template (`vite.renderer.config.*` and no `vite.config.*`) and wires it the same three ways: `reticle()` in the renderer config, the preload shim, and `installReticleCapture` in main. The plugin goes in **without** `desktop: true`, because `electron-forge start` serves the renderer through a real Vite dev server, so the ordinary serve-time injection reaches the window and `electron-forge package` ships a renderer with no Reticle code. `init` starts the app with the script that runs `electron-forge start`, not the renderer's dev script. A vanilla renderer gets `@reticlehq/browser` rather than the React kit.
 
 ## Tauri setup
 
@@ -363,9 +365,11 @@ Playwright MCP is faster. It is also structurally unable to see an IPC failure, 
     Tauri, no: WKWebView exposes no CDP endpoint, so Playwright cannot attach at all.
   </Accordion>
   <Accordion title="Does the SDK end up in my shipped binary?">
-    Only if you put it there. Keep the plugin behind a dev-only build, or gate `connect()` on
-    `import.meta.env.DEV`. `desktop: true` exists because a packaged renderer is a production build,
-    so it opts that one build into instrumentation deliberately.
+    No, not from a normal build. With `desktop: true` a production-mode `vite build` or
+    `electron-vite build` is stubbed like a web bundle: no SDK, no `ws://localhost` dial. Only a
+    build you run in another mode (`vite build --mode development`) is instrumented, which is how
+    you drive a packaged renderer with no dev server. A `connect()` you wrote by hand is yours to
+    gate on `import.meta.env.DEV`.
   </Accordion>
   <Accordion title="Why does a Tauri response show status 500 with statusText OK?">
     The IPC transport really did answer HTTP 200. The 500 is Reticle translating the Rust command's

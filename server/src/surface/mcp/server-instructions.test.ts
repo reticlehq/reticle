@@ -31,6 +31,18 @@ describe('buildServerInstructions', () => {
       expect(text).toContain(ReticleTool.SESSION);
     });
 
+    /*
+     * `init` starts the dev server and opens the app itself. This line used to say "run init, then
+     * RESTART the dev server, then load the app in a browser" to every agent, which contradicted
+     * skills/install-and-verify and sent agents to kill the server init had just started. The
+     * restart only applies to a dev server that was already running before init edited its config.
+     */
+    it('does not tell every agent to restart the dev server init just started', () => {
+      expect(text).toContain('starts the dev server and opens the app itself');
+      expect(text).toMatch(/only if a dev server was ALREADY running/);
+      expect(text).not.toMatch(/then RESTART the dev server/);
+    });
+
     it('still carries the verdict discipline and the feedback ask', () => {
       expect(text).toContain(ReticleTool.ACT_AND_WAIT);
       // Feedback is an action on the session tool wherever the family is merged.
@@ -177,6 +189,20 @@ describe('the one instruction that asks for less work', () => {
       const text = buildServerInstructions({ previouslyConnected });
       expect(text).toMatch(/clean capture IS the answer/);
       expect(text).toMatch(/stop\./);
+    }
+  });
+
+  /*
+   * ...and finished means the END of the journey. The rule used to read "when every consequence you
+   * set out to check has one, stop", which let the agent pick a set of one: a single click, one
+   * verdict, done — while the step the change actually broke sat three pages further on.
+   */
+  it('defines finished as the end of the journey, not its first yes', () => {
+    for (const previouslyConnected of [true, false]) {
+      const text = buildServerInstructions({ previouslyConnected });
+      expect(text).toMatch(/journey's END/);
+      expect(text).toMatch(/durable: true/);
+      expect(text).not.toMatch(/set out to check/);
     }
   });
 });

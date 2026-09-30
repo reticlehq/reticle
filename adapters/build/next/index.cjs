@@ -19,6 +19,8 @@ const PAIRING_TOKEN_DIR_ENV = 'RETICLE_PAIRING_TOKEN_DIR';
  * nothing, which is why `RETICLE_PAIRING_TOKEN_DIR` above is a local constant too.
  */
 const DEV_OVERRIDE_ENV = 'RETICLE_DEV';
+/** Next's own marker on the server process `next dev` forks. See the production gate below. */
+const NEXT_DEV_WORKER_ENV = 'NEXT_PRIVATE_WORKER';
 const PAIRING_TOKEN_FILE = 'pairing-token';
 const RETICLE_CONFIG_FILE = '.reticle.json';
 const RETICLE_HOME_DIR = '.reticle';
@@ -85,9 +87,12 @@ function readPairingToken() {
  *
  * The rule is core's, mirrored rather than imported for the same reason the constants above are: this
  * package is plain CJS tooling with no ESM/TS dependency on core. Kept deliberately identical:
- *   1. drop dead daemons (crashed, or a stale entry left by a kill -9);
- *   2. among the living, prefer a projectId match, lowest port on a tie;
- *   3. return undefined when nothing matches, so the app falls back to the default port rather than
+ *   1. the port in `.reticle.json` wins whenever a live daemon not serving ANOTHER project is
+ *      registered on it — `init --port`
+ *      used to leave the old daemon alive, and discovery took the lower port and dialled it;
+ *   2. drop dead daemons (crashed, or a stale entry left by a kill -9);
+ *   3. among the living, prefer a projectId match, lowest port on a tie;
+ *   4. return undefined when nothing matches, so the app falls back to the default port rather than
  *      auto-connecting to a daemon serving a DIFFERENT project — a wrong connect is worse than an
  *      honest default, because it reports another app's state as this one's.
  *
@@ -120,16 +125,44 @@ function defaultIsAlive(pid) {
   }
 }
 
+const MAX_TCP_PORT = 65535;
+
+/** @param {number} port */
+const bridgeUrl = (port) => `ws://${RETICLE_CLIENT_HOST}:${String(port)}${RETICLE_WS_PATH}`;
+
+/**
+ * The same order the Vite plugin's `chooseDaemonPort` states: a live daemon registered for this
+ * project, then the `port` in `.reticle.json`, and only then the `url` literal `reticle init` wrote
+ * into the generated ReticleDev component (which this value overrides page-side). The file comes
+ * before the literal because it is what the daemon and the CLI read: a user who edited it moved the
+ * daemon, and the page kept dialling the old literal with nothing saying why.
+ */
 function discoverDaemonUrl(cwd = process.cwd(), home = reticleHomeDir(), alive = defaultIsAlive) {
   let projectId;
+  let configuredPort;
   try {
     const parsed = JSON.parse(fs.readFileSync(path.join(cwd, RETICLE_CONFIG_FILE), 'utf8'));
     projectId = typeof parsed?.projectId === 'string' ? parsed.projectId : undefined;
+    const port = parsed?.port;
+    configuredPort = Number.isInteger(port) && port > 0 && port <= MAX_TCP_PORT ? port : undefined;
   } catch {
     return undefined; // no .reticle.json: this project has not been through `reticle init`
   }
-  if (projectId === undefined || projectId.length === 0) return undefined;
-  const dir = home;
+  const discovered = discoverRegisteredPort(projectId, home, alive, configuredPort);
+  const port = discovered ?? configuredPort;
+  return port === undefined ? undefined : bridgeUrl(port);
+}
+
+/**
+ * The live daemon registered in `home` for `projectId`, lowest port on a tie — or the configured port,
+ * when a live daemon registered there is not another project's (core's `pickDaemonPort`, rule 1).
+ * @param {string | undefined} projectId
+ * @param {string} dir
+ * @param {(pid: number) => boolean} alive
+ * @param {number | undefined} configuredPort
+ * @returns {number | undefined}
+ */
+function discoverRegisteredPort(projectId, dir, alive, configuredPort) {
   let files;
   try {
     files = fs.readdirSync(dir);
@@ -145,13 +178,15 @@ function discoverDaemonUrl(cwd = process.cwd(), home = reticleHomeDir(), alive =
     } catch {
       continue; // a half-written or corrupt entry is not a daemon
     }
-    if (entry?.projectId !== projectId) continue;
-    if (typeof entry.port !== 'number' || typeof entry.pid !== 'number') continue;
+    if (typeof entry?.port !== 'number' || typeof entry.pid !== 'number') continue;
     if (!alive(entry.pid)) continue;
+    const mine = entry.projectId === projectId;
+    const unnamed = entry.projectId === undefined || projectId === undefined;
+    if (entry.port === configuredPort && (mine || unnamed)) return configuredPort;
+    if (projectId === undefined || projectId.length === 0 || !mine) continue;
     ports.push(entry.port);
   }
-  if (ports.length === 0) return undefined;
-  return `ws://${RETICLE_CLIENT_HOST}:${String(Math.min(...ports))}${RETICLE_WS_PATH}`;
+  return ports.length === 0 ? undefined : Math.min(...ports);
 }
 
 /**
@@ -214,6 +249,58 @@ function turbopackConfig(existing) {
       ...(supportsRuleConditions() ? { '*.js': { ...rule, condition: { not: 'foreign' } } } : {}),
     },
   };
+}
+
+/**
+ * The loopback hosts a Reticle-opened tab may arrive on, in the form Next compares: the Origin's
+ * `hostname`, which keeps the brackets on IPv6. `localhost` is not listed because Next always
+ * allows it.
+ */
+const LOOPBACK_DEV_ORIGINS = ['127.0.0.1', '[::1]'];
+
+/**
+ * Whether this Next release accepts `allowedDevOrigins`. It arrived in 15.2.2 and was backported to
+ * 14.2.30; on anything older it is an unknown key, which Next reports as "Invalid next.config.js
+ * options detected" on every boot. An unreadable version is assumed modern, as elsewhere here.
+ * @param {string | undefined} version
+ * @returns {boolean}
+ */
+function knowsAllowedDevOrigins(version) {
+  const [major, minor, patch] = String(version)
+    .split('.')
+    .map((n) => parseInt(n, 10));
+  if (!Number.isFinite(major)) return true;
+  const at = (m, p) => minor > m || (minor === m && patch >= p);
+  if (major > 15) return true;
+  if (major === 15) return at(2, 2);
+  if (major === 14) return at(2, 30);
+  return false;
+}
+
+/** The installed Next's version, read from the APP (see resolveFromApp), or undefined. */
+function installedNextVersion() {
+  try {
+    return String(require(resolveFromApp('next/package.json')).version);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The app's `allowedDevOrigins` plus the loopback hosts, or undefined when this Next does not know
+ * the key.
+ *
+ * Next 16 BLOCKS its dev resources (`/_next/*`, HMR) for an origin outside this list, and only
+ * `localhost` is allowed by default. A tab opened on 127.0.0.1 or [::1] — which is where a first
+ * run lands when `localhost` answers slowly on a cold compile — got the HTML and nothing else: no
+ * hydration, so the connect effect never ran and the SDK "never dialled the bridge".
+ * @param {string[] | undefined} existing
+ * @returns {string[] | undefined}
+ */
+function devOrigins(existing) {
+  if (!knowsAllowedDevOrigins(installedNextVersion())) return undefined;
+  const mine = Array.isArray(existing) ? existing : [];
+  return [...mine, ...LOOPBACK_DEV_ORIGINS.filter((host) => !mine.includes(host))];
 }
 
 /** Whether this Next's Turbopack accepts a rule `condition` (added with Next 16). */
@@ -315,19 +402,27 @@ function withReticle(nextConfig = {}, options = {}) {
    * responsible and the way out (#1069).
    */
   if (process.env.NODE_ENV === 'production' && process.env[DEV_OVERRIDE_ENV] !== '1') {
-    console.log(
-      `[reticle] instrumentation is OFF because NODE_ENV=production. That is correct for a build. ` +
-        `If this is a dev server you want instrumented, set ${DEV_OVERRIDE_ENV}=1 (or do not export ` +
-        `NODE_ENV=production for it) — nothing else about your config needs to change.`,
-    );
+    // Only on a dev server, where being off is the surprise. `next build` and `next typegen`
+    // evaluate this config under NODE_ENV=production too, and there off is simply correct: the
+    // line read as a fault in every build log. NEXT_PRIVATE_WORKER is set by `next dev` on the
+    // server process it forks (Next 13 through 16) and by no other command.
+    if (process.env[NEXT_DEV_WORKER_ENV] === '1') {
+      console.log(
+        `[reticle] instrumentation is OFF because NODE_ENV=production. ` +
+          `If this is a dev server you want instrumented, set ${DEV_OVERRIDE_ENV}=1 (or do not export ` +
+          `NODE_ENV=production for it) — nothing else about your config needs to change.`,
+      );
+    }
     return nextConfig;
   }
 
   const userWebpack = nextConfig.webpack;
   const token = readPairingToken();
   const daemonUrl = discoverDaemonUrl();
+  const allowedDevOrigins = devOrigins(nextConfig.allowedDevOrigins);
   return {
     ...nextConfig,
+    ...(allowedDevOrigins !== undefined ? { allowedDevOrigins } : {}),
     ...(supportsTurbopackKey() ? { turbopack: turbopackConfig(nextConfig.turbopack) } : {}),
     // Expose the token to the client bundle as process.env.NEXT_PUBLIC_RETICLE_TOKEN (Next's convention
     // for client-readable env), so a dev-only client connect can present it. Minted here if the file
@@ -365,4 +460,4 @@ function withReticle(nextConfig = {}, options = {}) {
   };
 }
 
-module.exports = { withReticle, readPairingToken, discoverDaemonUrl };
+module.exports = { withReticle, readPairingToken, discoverDaemonUrl, knowsAllowedDevOrigins };

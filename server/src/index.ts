@@ -66,7 +66,7 @@ import {
   MCP_DISCONNECT_SUMMARY,
 } from './portal/session/session-reaper.js';
 import { wireSessionScope } from './portal/session/no-session-watch.js';
-import { buildIdlePredicate } from './command/daemon/lifetime/daemon-usefulness.js';
+import { buildIdlePredicate, noteSetupHold } from './command/daemon/lifetime/daemon-usefulness.js';
 import { resolveToolSurface } from './surface/tools/tool-surface.js';
 import { statusPayload } from './status-payload.js';
 import { CdpRealInputProvider, LaunchedRealInputProvider } from './portal/input/real-input.js';
@@ -86,7 +86,7 @@ import {
 } from './command/cli/ports/resolve/cli-port.js';
 import { hasAnyProjectConnectedBefore } from './memory/recall/prior/connection-memory.js';
 import { reticleStateHome } from './command/daemon/daemon.js';
-import { probeChromium } from './command/cli/doctor/browser/chromium-hint.js';
+import { probeLaunchableChromium } from './launch-chromium.js';
 import { attachJournal } from './wire-journal.js';
 import { reportOnboardingStep } from './telemetry/onboarding-funnel.js';
 import { AMBIENT_RECORDING } from './language/flows/recording/tape/recordings.js';
@@ -489,7 +489,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       artifactRootFor: artifactRootResolver(reticleRoot),
       now,
       bridgePort: port,
-      browserProbe: probeChromium,
+      browserProbe: probeLaunchableChromium,
       // The daemon's OWN project, so a tool can tell "this session is mine" from "this session
       // belongs to a sibling app under the same daemon". contract_save refuses on the second.
       ...(activeProjectId === undefined ? {} : { projectId: activeProjectId }),
@@ -568,15 +568,17 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   // answers WHY rather than just "sessionCount: 0".
   // `verifyPort` rides along so a later `serve --http` can tell whether this daemon already honours
   // the requested `--http-port` instead of silently ignoring the flag (#687).
-  shared.attachStatus(() =>
-    statusPayload(
+  shared.attachStatus((held) => {
+    // `init` holds the daemon it is waiting on, so the idle rule cannot shut it down mid-wait.
+    if (held) noteSetupHold(Date.now());
+    return statusPayload(
       bridge.sessions.count(),
       bridge.sessions.list(),
       bridge.sessions.noSessionHint(),
       verifyHttp?.port,
       bridge.sessions.noSessionLead(),
-    ),
-  );
+    );
+  });
   // Agent-independent presence: the daemon outlives any single agent, so when the LAST agent's MCP
   // connection drops (it stopped, or is waiting on the human), end every session and push a clear
   // "go to your terminal" notice to the panel — the human is on the browser and must not lose a typed
@@ -704,7 +706,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     artifactRootFor: artifactRootResolver(reticleRoot),
     now,
     bridgePort: port,
-    browserProbe: probeChromium,
+    browserProbe: probeLaunchableChromium,
     // A finished verification should not sit behind a one-minute timer — see ToolDeps.onRunPersisted.
     onRunPersisted: (): void => cloudSync.nudge(),
   };

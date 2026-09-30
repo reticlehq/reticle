@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { AppShape, isDesktop, isDesktopOrigin, policyFor, readShape } from './desktop-shape.js';
+import {
+  AppShape,
+  describeShape,
+  isDesktop,
+  isDesktopOrigin,
+  policyFor,
+  readShape,
+} from './desktop-shape.js';
 
 describe('reading the shell', () => {
   it('is a web app when nothing says otherwise', () => {
@@ -66,5 +73,21 @@ describe('the origin a tauri webview serves from', () => {
 
   it('does not mistake a dev server for one', () => {
     expect(isDesktopOrigin('http://localhost:1420/')).toBe(false);
+  });
+});
+
+describe('sized to the shell, and said in English', () => {
+  // Electron was handed Tauri's cold-Rust-build budget: a window that was never going to dial in
+  // kept init silent for ten minutes, outliving the daemon it was waiting on.
+  it('gives Electron less than a cold Tauri build, and more than a browser tab', () => {
+    const electron = policyFor(AppShape.ELECTRON).connectBudgetMs;
+    expect(electron).toBeLessThan(policyFor(AppShape.TAURI).connectBudgetMs);
+    expect(electron).toBeGreaterThan(policyFor(AppShape.WEB).connectBudgetMs);
+  });
+
+  // init printed "detected a electron app".
+  it('uses the right article', () => {
+    expect(describeShape(AppShape.ELECTRON)).toBe('an Electron app');
+    expect(describeShape(AppShape.TAURI)).toBe('a Tauri app');
   });
 });

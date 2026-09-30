@@ -37,7 +37,7 @@ Reticle is a pnpm + Turborepo monorepo. The split is not cosmetic: each boundary
 
 | Package | Runs in | Responsibility | Hard rule |
 | --- | --- | --- | --- |
-| `@reticlehq/core` | both | The **wire contract**: every constant + zod schema crossing any boundary | Depends only on `zod` |
+| `@reticlehq/core` | both | The **wire contract**: every constant + zod schema crossing any boundary | Depends only on `zod` and `open-verification` |
 | `@reticlehq/browser` | the browser | Instrument the page; execute commands; emit events | Never imports Node APIs |
 | `@reticlehq/server` | Node | The bridge, the MCP server, the `reticle` CLI, flow/run storage | Never imports DOM APIs |
 | `@reticlehq/react` | the browser | The SDK **kit** you install in a browser app: re-exports the browser sensor (so one install gives both `reticle` and `install`) and maps a DOM node → React component → source `file:line` | Core works without the source-mapping half |
