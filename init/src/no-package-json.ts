@@ -17,8 +17,14 @@ import {
   streamlitSetupMessage,
 } from './detect/non-js-project.js';
 import { InitFailure } from './diagnose/init-failure.js';
-import { HTML_INDEX_PATH, withStaticSnippet } from './patch/static-page.js';
 import {
+  HTML_INDEX_PATH,
+  STATIC_TOKEN_MODULE,
+  staticTokenFiles,
+  withStaticSnippet,
+} from './patch/static-page.js';
+import {
+  connectArg,
   connectArgWithToken,
   djangoMiddlewareSnippet,
   reticleConfigContent,
@@ -33,8 +39,9 @@ import type { InitIo, InitOptions, InitResult } from './run-types.js';
 
 const SNIPPET_WRITTEN =
   `Wrote the dev-only connect snippet into ${HTML_INDEX_PATH}. It runs only when the page is ` +
-  'opened on localhost, and it carries this machine’s pairing token — keep it out of anything you ' +
-  'publish, and let each teammate run `reticle init` for their own.';
+  `opened on localhost. This machine’s pairing token is in ${STATIC_TOKEN_MODULE}, which is ` +
+  'gitignored — keep it out of anything you publish, and let each teammate run `reticle init` ' +
+  'for their own.';
 const SNIPPET_ALREADY = `${HTML_INDEX_PATH} already loads the Reticle SDK — nothing to change.`;
 
 /**
@@ -45,6 +52,11 @@ const SNIPPET_ALREADY = `${HTML_INDEX_PATH} already loads the Reticle SDK — no
  * as the setup failing on exactly the path that works.
  */
 function wireStaticPage(options: InitOptions, io: InitIo, connect: string): InitResult {
+  for (const [path, content] of Object.entries(
+    staticTokenFiles(io.host.pairingToken(), (p) => io.readFile(p)),
+  )) {
+    io.writeFile(path, content);
+  }
   const html = io.readFile(HTML_INDEX_PATH) ?? '';
   // A page that already connects still has its port compared: the snippet bakes the daemon URL, and
   // a re-run with a new `--port` that answered "already" left the page dialling the old daemon.
@@ -109,7 +121,8 @@ export function initWithoutPackageJson(options: InitOptions, io: InitIo): InitRe
   // One page at the root is a page we can see whole. Several, or none, is a choice that is not ours.
   if (!streamlit && !django && io.exists(HTML_INDEX_PATH)) {
     writeConfig();
-    return wireStaticPage(options, io, connect);
+    // Without the token: the page is the deployable artifact, so the token goes beside it instead.
+    return wireStaticPage(options, io, connectArg(options.port, nonJsProjectId));
   }
   io.print(
     // Two genuinely different situations used to share one sentence: a JS developer in the wrong

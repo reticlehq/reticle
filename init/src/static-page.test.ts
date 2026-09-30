@@ -14,7 +14,11 @@ import { Framework, UiLibrary } from './detect/detect.js';
 import { frameworkPackages } from './plan/plan.js';
 import { runInit, type InitOptions } from './run.js';
 import { memoryIo, TEST_PAIRING_TOKEN } from './memory-io.test-helpers.js';
-import { STATIC_SNIPPET_MARKER, withStaticSnippet } from './patch/static-page.js';
+import {
+  STATIC_SNIPPET_MARKER,
+  STATIC_TOKEN_MODULE,
+  withStaticSnippet,
+} from './patch/static-page.js';
 
 const OPTS: InitOptions = {
   cwd: '/site',
@@ -70,14 +74,29 @@ describe('init on a page with no package.json', () => {
     expect(result.ok).toBe(true);
     expect(result.context?.appDir).toBe('/site');
     expect(io.written['index.html']).toContain(STATIC_SNIPPET_MARKER);
-    expect(io.written['index.html']).toContain(TEST_PAIRING_TOKEN);
     expect(io.written['.reticle.json']).toBeDefined();
   });
 
-  it('says the token is in the file, since this is the one path where it has to be', () => {
+  /**
+   * The page is the deployable artifact, and the machine's pairing token was written into it as a
+   * literal: commit or publish index.html and the token went with it, loopback guard or not. It now
+   * lives in a module beside the page that init gitignores, which any static server serves.
+   */
+  it('keeps the pairing token out of index.html, in a gitignored module the page loads', () => {
+    const io = memoryIo({ 'index.html': PAGE, '.gitignore': 'dist\n' });
+    runInit(OPTS, io);
+    const page = io.written['index.html'] ?? '';
+    expect(page).not.toContain(TEST_PAIRING_TOKEN);
+    expect(page).toContain(`import('./${STATIC_TOKEN_MODULE}')`);
+    expect(io.written[STATIC_TOKEN_MODULE]).toContain(TEST_PAIRING_TOKEN);
+    expect(io.written['.gitignore']).toBe(`dist\n${STATIC_TOKEN_MODULE}\n`);
+    expect(io.lines.join('\n')).toMatch(/pairing token/i);
+  });
+
+  it('creates the .gitignore entry when there is no .gitignore', () => {
     const io = memoryIo({ 'index.html': PAGE });
     runInit(OPTS, io);
-    expect(io.lines.join('\n')).toMatch(/pairing token/i);
+    expect(io.written['.gitignore']).toBe(`${STATIC_TOKEN_MODULE}\n`);
   });
 
   it('changes nothing on a second run', () => {

@@ -13,12 +13,20 @@
  *   does not even fetch the SDK. The printed bundled-app recipe deliberately does NOT do this
  *   (a hosts-file dev alias defeats it, see html-no-build.test.ts) — that recipe has NODE_ENV.
  * - It is marked, so a re-run recognises its own block and never writes a second one.
+ * - It carries no pairing token. The token used to be a literal in the page, so committing or
+ *   publishing index.html published it; it now sits in a module beside the page that `init`
+ *   gitignores, which the block imports and any static server serves. Absent — a teammate's
+ *   checkout, a published copy — the connect goes without one, and the bridge says why it refused.
  */
 
 import { CDN_SDK_URL } from './snippets.js';
 
 /** The page a static site serves at its root, and the one file `init` will write the snippet into. */
 export const HTML_INDEX_PATH = 'index.html';
+
+/** The gitignored module beside the page that holds this machine's pairing token. */
+export const STATIC_TOKEN_MODULE = 'reticle.local.js';
+const GITIGNORE_PATH = '.gitignore';
 
 /** Opens the block `init` writes; a re-run looks for it. */
 export const STATIC_SNIPPET_MARKER = '<!-- reticle:connect (dev only, written by reticle init) -->';
@@ -43,14 +51,50 @@ export function hasStaticSnippet(html: string): boolean {
 
 function block(connectArgLiteral: string): string {
   const hosts = LOOPBACK_HOSTS.map((h) => `'${h}'`).join(', ');
+  const arg =
+    '' === connectArgLiteral
+      ? '{ token: local.token }'
+      : `{ ...${connectArgLiteral}, token: local.token }`;
   return `    ${STATIC_SNIPPET_MARKER}
     <script type="module">
       if ([${hosts}].includes(location.hostname)) {
-        import('${CDN_SDK_URL}').then(({ reticle }) => reticle.connect(${connectArgLiteral}));
+        Promise.all([
+          import('${CDN_SDK_URL}'),
+          import('./${STATIC_TOKEN_MODULE}').catch(() => ({})),
+        ]).then(([{ reticle }, local]) => reticle.connect(${arg}));
       }
     </script>
     ${STATIC_SNIPPET_END}
 `;
+}
+
+/** The token module's content. Rewritten on every run, so a re-minted token is picked up. */
+export function staticTokenModule(pairingToken: string): string {
+  return (
+    `// This machine's Reticle pairing token, written by \`reticle init\`. Gitignored: never commit\n` +
+    `// or publish it — each machine runs \`reticle init\` for its own.\n` +
+    `export const token = '${pairingToken}';\n`
+  );
+}
+
+/** The files to write so the token module exists and git ignores it; only what actually changes. */
+export function staticTokenFiles(
+  pairingToken: string | undefined,
+  readFile: (path: string) => string | null,
+): Record<string, string> {
+  if (pairingToken === undefined || 0 === pairingToken.length) return {};
+  const files: Record<string, string> = {};
+  const module = staticTokenModule(pairingToken);
+  if (readFile(STATIC_TOKEN_MODULE) !== module) files[STATIC_TOKEN_MODULE] = module;
+  const ignore = readFile(GITIGNORE_PATH) ?? '';
+  const covered = ignore
+    .split('\n')
+    .some((l) => [STATIC_TOKEN_MODULE, `/${STATIC_TOKEN_MODULE}`].includes(l.trim()));
+  if (!covered) {
+    files[GITIGNORE_PATH] =
+      `${'' === ignore ? '' : ignore.replace(/\n*$/, '\n')}${STATIC_TOKEN_MODULE}\n`;
+  }
+  return files;
 }
 
 /**
