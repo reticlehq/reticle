@@ -164,6 +164,9 @@ export async function freePortSafely(port, { onNote = () => {} } = {}) {
 
 function kill(pids, hard) {
   for (const pid of pids) {
+    // A client socket this process holds on the port (a keep-alive fetch to the app it just
+    // polled) lists it as a holder, and signalling it ends the run as "Terminated" mid-cleanup.
+    if (Number(pid) === process.pid || Number(pid) === process.ppid) continue;
     try {
       if ('win32' === process.platform) {
         killTree(pid);
