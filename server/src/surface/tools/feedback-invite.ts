@@ -40,16 +40,17 @@ export type FrictionKind = (typeof FrictionKind)[keyof typeof FrictionKind];
  */
 const REPEAT_INVITE_AT = 3;
 
+/** The call that files feedback. The old `reticle_feedback` name only answers with a redirect. */
+const FEEDBACK_CALL = 'reticle_session { action: "feedback" }';
+
 const LINES: Record<FrictionKind, string> = {
-  [FrictionKind.UNKNOWN_TOOL]:
-    'no such tool — reticle_feedback tells us what you expected it to do, which is how it gets built',
+  [FrictionKind.UNKNOWN_TOOL]: `no such tool — ${FEEDBACK_CALL} tells us what you expected it to do, which is how it gets built`,
   [FrictionKind.UNKNOWN_VERDICT]:
-    'Reticle could not tell what happened here. If you expected otherwise, reticle_feedback. An ' +
+    `Reticle could not tell what happened here. If you expected otherwise, ${FEEDBACK_CALL}. An ` +
     'unknown verdict is our defect, not yours',
-  [FrictionKind.REPEATING]:
-    'stuck on the same call? reticle_feedback — say what you were trying to do and it gets fixed',
+  [FrictionKind.REPEATING]: `stuck on the same call? ${FEEDBACK_CALL} — say what you were trying to do and it gets fixed`,
   [FrictionKind.REFUSED]:
-    'if that diagnosis was wrong or unhelpful, reticle_feedback — error messages are a product ' +
+    `if that diagnosis was wrong or unhelpful, ${FEEDBACK_CALL} — error messages are a product ` +
     'surface and we fix the ones that fail',
 };
 
