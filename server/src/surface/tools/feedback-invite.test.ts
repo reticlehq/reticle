@@ -67,7 +67,7 @@ describe('frictionOf', () => {
 
 describe('the lines themselves', () => {
   it.each(Object.values(FrictionKind))('%s names the tool an agent must call', (kind) => {
-    expect(inviteFor(kind)).toContain('reticle_feedback');
+    expect(inviteFor(kind)).toContain('reticle_session { action: "feedback" }');
   });
 
   it.each(Object.values(FrictionKind))('%s stays short — this is paid per result', (kind) => {

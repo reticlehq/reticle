@@ -18,6 +18,11 @@ export interface PredicateSession {
   /** Milliseconds since connect — the same clock that stamps event `t` (injected, testable). */
   elapsed(): number;
   /**
+   * The page SDK's package version from its hello, when it sent one. Read to refuse an element
+   * state the page is too old to answer (see ELEMENT_STATE_SINCE). Undefined for a hand-wired page.
+   */
+  sdkVersion?: string | undefined;
+  /**
    * Where the app is RIGHT NOW — the session's live URL, kept current across SPA navigation.
    *
    * Read by the `route` predicate when the window holds no route change, which is the only way

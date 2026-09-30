@@ -27,7 +27,7 @@ export function crawlEmptyNote(outcome: CrawlOutcome): string | undefined {
   }
   return (
     `${String(outcome.interactiveFound)} interactive controls were found and none of them were clicked. ` +
-    `That is not an empty page, so something stopped the loop — report it with reticle_feedback, ` +
+    `That is not an empty page, so something stopped the loop — report it with reticle_session { action: "feedback" }, ` +
     `including this page's URL and one control's ref.`
   );
 }

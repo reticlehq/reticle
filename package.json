@@ -30,7 +30,6 @@
     "bench": "node bench/harness/bench-all.mjs",
     "bench:full": "node bench/harness/bench-all.mjs --full",
     "bench:gate": "node bench/harness/gate.mjs",
-    "bench:tool-gate": "node bench/harness/tool-gate.mjs",
     "bench:dashboard": "node bench/dashboard.mjs",
     "bench:intent-effect": "node bench/harness/intent-effect.mjs",
     "publish:dry-run": "pnpm build && pnpm -r publish --access public --no-git-checks --dry-run",
@@ -56,7 +55,6 @@
     "check:stale-issues:self-test": "node scripts/check-stale-issues.mjs --self-test",
     "check:pending-release": "node scripts/check-pending-release.mjs",
     "check:pending-release:self-test": "node scripts/check-pending-release.mjs --self-test",
-    "remap:prs": "node scripts/remap-stranded-prs.mjs",
     "gate:conformance:self-test": "node conformance/run-self.mjs --self-test && node conformance/run-desktop.mjs --self-test && node conformance/run-cli.mjs --self-test"
   },
   "pnpm": {

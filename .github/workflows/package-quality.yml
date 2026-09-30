@@ -172,6 +172,11 @@ jobs:
           # ~235KB of room over the measurement, matching the shape of the previous raise rather
           # than clearing today's number by a hair. The docs remain the first place to look.
           #
+          # RAISED to 6,200,000 on 2026-09-30 for #1202: this branch on main measured 6,017,969,
+          # 68KB over. That is the exhaustive crawl, the app-wide coverage ledger with code
+          # coverage from the driven browser, `act_and_wait { durable }` and `reticle gate
+          # --accept-coverage`. ~182KB of room, the same shape as the raises below.
+          #
           # RAISED to 5,950,000 on 2026-09-29. main measured 5,728,640 -- 21KB under the old
           # ceiling -- and the flow-fidelity branch 5,754,246, packed both ways:
           #
@@ -183,7 +188,7 @@ jobs:
           # replayable run fields. ~196KB of room, the same shape as the two raises above.
           server_bytes=$(cd server && npm pack --dry-run --json 2>/dev/null | sed -n '/^\[/,$p' | node -e "process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d)[0].unpackedSize))")
           echo "server unpacked: $server_bytes bytes"
-          if [ "$server_bytes" -gt 5950000 ]; then
-            echo "::error::@reticlehq/server unpacked size $server_bytes exceeds the 5950KB budget"
+          if [ "$server_bytes" -gt 6200000 ]; then
+            echo "::error::@reticlehq/server unpacked size $server_bytes exceeds the 6200KB budget"
             exit 1
           fi

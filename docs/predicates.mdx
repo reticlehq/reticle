@@ -7,7 +7,7 @@ icon: filter
 
 A predicate declares what should be true, as `{ kind, ...fields }`. Reticle has twelve kinds: `signal`, `state`, `net`, `route`, `element`, `text`, `console`, `animation`, `settled`, and the combinators `allOf`, `anyOf` and `not`. Which one you pick decides whether a green means anything.
 
-It is the argument to `until` on [`reticle_act_and_wait`](/tools/act-and-wait), and to `predicate` on [`reticle_assert`](/tools/assert) and [`reticle_wait_for`](/tools/wait-for).
+It is the argument to `until` on [`reticle_act_and_wait`](/tools/act-and-wait), and to `predicate` on [`reticle_assert`](/tools/assert) and [`reticle_assert { action: "wait" }`](/tools/wait-for).
 
 Every predicate is `{ kind, ...fields }`.
 
@@ -55,7 +55,7 @@ Take the advice. `element` and `text` are convenient and weak; `signal`, `state`
 
 `attrs` is a list of attribute **names**, such as `["href", "data-status"]`. It **projects** those attributes onto each match so you can read them back, and it does not filter. `["data-status=complete"]` is refused: it would otherwise look up an attribute literally named `data-status=complete`, find none, and leave the predicate resting on the locator alone, which is a green for any value the element happens to hold.
 
-To READ the values, call `reticle_query` with `attrs` and look at the `attrs` map on each match. To ASSERT one: a form field's value goes in the query as `value`, while a state expressed as a data attribute is better asserted as the consequence it stands for, such as a `signal`, a `net` call, or the text the user actually sees.
+To READ the values, call `reticle_look { action: "find" }` with `attrs` and look at the `attrs` map on each match. To ASSERT one: a form field's value goes in the query as `value`, while a state expressed as a data attribute is better asserted as the consequence it stands for, such as a `signal`, a `net` call, or the text the user actually sees.
 
 ```json
 { "kind": "element", "query": { "role": "textbox", "name": "Amount", "value": "274.58" } }

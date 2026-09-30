@@ -1,6 +1,6 @@
 # Troubleshooting
 
-## `reticle_sessions` returns an empty list
+## `reticle_session { action: "list" }` returns an empty list
 
 This is the most common failure by a wide margin, and it almost always means **the SDK is not in the page**.
 
@@ -131,7 +131,7 @@ RETICLE_CDP_URL=http://localhost:9222 npx @reticlehq/server mcp
 Any of these that cost you more than a minute is worth one call:
 
 ```
-reticle_feedback { kind: "bug" | "gap" | "ambiguity", text: "what happened" }
+reticle_session { action: "feedback", kind: "bug" | "gap" | "ambiguity", text: "what happened" }
 ```
 
 or, if the tools are unreachable:

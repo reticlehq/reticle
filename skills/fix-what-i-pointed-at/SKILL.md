@@ -61,4 +61,4 @@ They pointed at "that button". Report on "the Pay button on checkout", with what
 
 ---
 
-Everything else: `curl https://docs.reticle.sh/llms.txt`. If a mark arrived without a usable source pointer, that is worth a `reticle_feedback` with `kind: "gap"`.
+Everything else: `curl https://docs.reticle.sh/llms.txt`. If a mark arrived without a usable source pointer, that is worth a `reticle_session { action: "feedback" }` with `kind: "gap"`.

@@ -431,7 +431,8 @@ const POLL_INTERVAL_MS = 150;
 const MIN_RECHECK_GAP_MS = 25;
 
 /**
- * How long an exact-count predicate keeps watching AFTER it first reads true.
+ * How long an exact-count predicate, or one claiming something is absent, keeps watching AFTER it
+ * first reads true.
  *
  * A count only rises while a window is open, so "exactly N" is a statement about the END of one and
  * cannot be settled early — yet every wait here resolves the moment a check passes. Live, on a real
@@ -472,6 +473,22 @@ function assertsExactCount(predicate: Predicate): boolean {
 }
 
 /**
+ * Does this predicate claim that something did NOT happen: an `absent` check, or a `not`?
+ *
+ * Such a claim is about the END of a window for the same reason an exact count is, and reads true
+ * at the start of every window by construction. Settled on its first reading, a clean-console check
+ * passed on a page whose `console.error` landed a few milliseconds later, which the bench measured
+ * once the page ran slower. It holds for the same bounded window as a count; see COUNT_CONFIRM_MS.
+ */
+function claimsAbsence(predicate: Predicate): boolean {
+  if (PredicateKind.NOT === predicate.kind) return true;
+  if (PredicateKind.ALL_OF === predicate.kind || PredicateKind.ANY_OF === predicate.kind) {
+    return predicate.predicates.some(claimsAbsence);
+  }
+  return 'absent' in predicate && true === predicate.absent;
+}
+
+/**
  * Evaluate now, else wait for it to become true (on each event + a poll) until timeout. `since` is
  * the event-time floor (see evaluatePredicate) so a waiter cannot resolve on a stale buffered event.
  */
@@ -503,8 +520,9 @@ export function waitForPredicate(
     let cooldownTimer: ReturnType<typeof setTimeout> | undefined;
     /** One-shot re-check timed to when a time-based predicate could first pass. See retryAfterMs. */
     let hintTimer: ReturnType<typeof setTimeout> | undefined;
-    // An exact-count wait keeps watching after it first reads true — see COUNT_CONFIRM_MS.
-    const holdsForCount = assertsExactCount(predicate);
+    // An exact count or an absence keeps watching after it first reads true — see COUNT_CONFIRM_MS
+    // and claimsAbsence.
+    const holdsForCount = assertsExactCount(predicate) || claimsAbsence(predicate);
     let confirming = false;
     let confirmTimer: ReturnType<typeof setTimeout> | undefined;
     /** Report a wait that could not run, and END it — see guardedCheck. */
@@ -662,6 +680,13 @@ export function waitForPredicate(
     const timer = setTimeout(() => {
       void evaluatePredicate(reader, predicate, since, true, baselines)
         .then((r) => {
+          // A count or an absence that already read true and was holding to confirm: the caller's
+          // budget IS the end of its window, so this reading is the answer, whichever way it went.
+          // Forcing it to a fail would turn every honest absence under a short budget into a red.
+          if (confirming) {
+            finish(r);
+            return;
+          }
           // Spread the near-miss, do NOT hand-copy two fields. The oracle computes observed / expected
           // / assertion — the structured cause the repair literature ranks above prose — and the old
           // `{ pass, evidence, failureReason }` construction DISCARDED them on every timed-out wait and

@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
+import { NodePlatform } from '@reticlehq/init';
 import {
   SDK_PACKAGES,
   VersionMatchEnv,
@@ -158,10 +159,17 @@ function fakeSpawner(code: number): {
 }
 
 describe('reexecAtVersion', () => {
+  // The platform is pinned: on Windows the whole command is one shell string and argv is empty
+  // (a .cmd needs a shell), so asserting on argv without it passed on POSIX and failed on Windows.
   it('inherits stdio, marks the child, and exits with its code', async () => {
     const { spawner, calls } = fakeSpawner(7);
     const code = await new Promise<number>((resolve) => {
-      reexecAtVersion('2.14.0', ['mcp'], { PATH: '/bin' }, { spawn: spawner, exit: resolve });
+      reexecAtVersion(
+        '2.14.0',
+        ['mcp'],
+        { PATH: '/bin' },
+        { spawn: spawner, exit: resolve, platform: NodePlatform.MACOS },
+      );
     });
     expect(code).toBe(7);
     expect(calls).toHaveLength(1);
@@ -169,6 +177,20 @@ describe('reexecAtVersion', () => {
     expect(calls[0]?.argv).toContain('@reticlehq/server@2.14.0');
     expect(calls[0]?.env[VersionMatchEnv.REEXECUTED]).toBe('1');
     expect(calls[0]?.env['PATH']).toBe('/bin');
+  });
+
+  it('on Windows, runs the pinned server through a shell with the version in the command', async () => {
+    const { spawner, calls } = fakeSpawner(0);
+    await new Promise<number>((resolve) => {
+      reexecAtVersion(
+        '2.14.0',
+        ['mcp'],
+        { PATH: 'C:\\bin' },
+        { spawn: spawner, exit: resolve, platform: NodePlatform.WINDOWS },
+      );
+    });
+    expect(calls[0]?.file).toContain('@reticlehq/server@2.14.0');
+    expect(calls[0]?.env[VersionMatchEnv.REEXECUTED]).toBe('1');
   });
 });
 

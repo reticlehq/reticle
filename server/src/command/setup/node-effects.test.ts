@@ -102,7 +102,9 @@ describe('the dev server this process owns', () => {
   it('reports what the server printed, and how long it has been quiet', async () => {
     const server = new OwnedDevServer(LOG_DIR);
     server.start('echo "  Local: http://localhost:1234"', process.cwd(), {});
-    await sleep(600);
+    // Polled, not slept: a fixed 600ms asserted a duration, and a shell starts slower on Windows,
+    // so the output was still empty there. The per-test timeout is the bound.
+    while (!server.output().includes('http://localhost:1234')) await sleep(50);
     expect(server.output()).toContain('http://localhost:1234');
     expect(server.quietForMs()).toBeGreaterThanOrEqual(0);
     server.stop();

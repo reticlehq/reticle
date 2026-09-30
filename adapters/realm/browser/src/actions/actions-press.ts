@@ -206,11 +206,3 @@ export async function pressCombo(
   }
   return prevented;
 }
-
-/**
- * Why an in-page zoom is refused. Exported so the server and the SDK say the identical sentence.
- */
-export const ZOOM_NEEDS_REAL_BROWSER_MSG =
-  'cannot zoom from inside the page — CSS zoom changes how it LOOKS without changing the layout ' +
-  'viewport, visualViewport or media queries, so a layout that breaks at 200% would be reported as ' +
-  'checked and passing. Drive a real browser (reticle drive <url>, or reticle_lease) and zoom there.';

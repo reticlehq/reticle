@@ -21,10 +21,10 @@ It must come **first**, before your own `require('electron')` and before `contex
 Each call then reaches the agent as an ordinary network record — `ipc://<channel>`, with `initiator: "ipc"`, the duration, and the error the main process actually threw:
 
 ```
-reticle_network { ok: false }  →  ipc://todos:archive  ok:false  "archive is not implemented"
+reticle_observe { action: "network", ok: false }  →  ipc://todos:archive  ok:false  "archive is not implemented"
 ```
 
-Without it, a desktop app's whole backend is invisible: `reticle_network` reports nothing, which reads as "this app makes no backend calls" rather than "you are blind to all of them". The SDK declares that as a `coverage: partial` blind spot rather than letting the silence pass, and `reticle doctor` names the missing line.
+Without it, a desktop app's whole backend is invisible: `reticle_observe { action: "network" }` reports nothing, which reads as "this app makes no backend calls" rather than "you are blind to all of them". The SDK declares that as a `coverage: partial` blind spot rather than letting the silence pass, and `reticle doctor` names the missing line.
 
 > A **sandboxed** preload cannot resolve `node_modules`. Either bundle the preload (electron-vite and Electron Forge do this by default, and the `require` is inlined at build time, so sandboxing stays on) or set `sandbox: false` for an unbundled dev preload.
 

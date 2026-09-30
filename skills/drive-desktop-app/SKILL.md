@@ -69,7 +69,7 @@ reticle_act_and_wait({ sessionId, ref, action: "click", until: { kind: "allOf", 
 
 **IPC has no status code.** `200`/`500` are synthetic, mapped from whether the command succeeded, precisely so the same predicates keep working. On Tauri you will see `status: 500` next to `statusText: "OK"`. That is not a bug: the transport answered fine and the `500` is the command's own verdict. `ok` is authoritative.
 
-`reticle_state` reads the live store exactly as on the web. `reticle_screenshot` and `reticle_visual_diff` work once the platform's capture step is wired. Electron needs nothing extra; Tauri needs the crate. Headless on Tauri is `RETICLE_HEADLESS=1`, and screenshots keep working because the capture renders the webview rather than the screen.
+`reticle_look { action: "state" }` reads the live store exactly as on the web. `reticle_screenshot` and `reticle_visual_diff` work once the platform's capture step is wired. Electron needs nothing extra; Tauri needs the crate. Headless on Tauri is `RETICLE_HEADLESS=1`, and screenshots keep working because the capture renders the webview rather than the screen.
 
 ## What a missing observer looks like
 

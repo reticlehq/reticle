@@ -131,7 +131,7 @@ That `ℹ` line is the one people skim past, so here it is in full:
 ```
   [ℹ] AGENT: finish the capabilities file → src/reticle-dev.ts
       src/reticle-dev.ts was written but registers nothing, so `hasCapabilities` stays false
-      and reticle_state has nothing to read.
+      and reticle_look { action: "state" } has nothing to read.
 ```
 
 `init` wrote the file, but a brand-new Vite template has no testids and no state library, so there was nothing to register. Reticle tells you this instead of counting it as a win. See [Instrument your app](/instrumentation) for what to put in it.

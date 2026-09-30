@@ -66,7 +66,7 @@ These three were each wrong by the time somebody checked: the table read 68 / 48
 
 | Token | Produced by | Consumed by | Invalidated by |
 | --- | --- | --- | --- |
-| `sessionId` | `reticle_sessions`, HELLO | ~every tool | tab close; **survives reload** via `sessionStorage` |
+| `sessionId` | `reticle_session { action: "list" }`, HELLO | ~every tool | tab close; **survives reload** via `sessionStorage` |
 | `ref` (`e115`) | `snapshot`, `query`, `scroll_to` | `inspect`, `act`, `act_and_wait`, `state` | any re-render; refuses cleanly rather than clicking the new occupant |
 | `actionId` (`a2`) | `act`, `act_and_wait` | `observe`, `network`, `console` filters | window expiry |
 | `since` cursor | every read | every read | ring-buffer eviction |

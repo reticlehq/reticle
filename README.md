@@ -19,12 +19,14 @@ It drives your real running app, reads what actually happened, and hands back **
 
 <br/>
 
-<a href="https://www.youtube.com/watch?v=XCC0wST0rJA&loop=1&playlist=XCC0wST0rJA">
-  <img src="https://img.youtube.com/vi/XCC0wST0rJA/maxresdefault.jpg" width="800"
-       alt="Watch: an agent drives a real app, reads the network and the store, and returns a verdict with the file:line to fix" />
+<!-- An animated image, because GitHub strips iframes and no embedded player can autoplay here. Mux
+     serves at most 10 seconds as a GIF; the link opens the full video. -->
+<a href="https://player.mux.com/ap7hnnu4j36BRV6wEcop1NZVpJTjVSedxpW1AaXdD3I?metadata-video-title=reticle%27s+demo+&video-title=reticle%27s+demo+">
+  <img src="https://image.mux.com/ap7hnnu4j36BRV6wEcop1NZVpJTjVSedxpW1AaXdD3I/animated.gif?start=2&end=12&width=640&fps=15" width="640"
+       alt="An agent says the invoice fix works; Reticle drives the Pay button, sees the card charged twice, and names PayButton.tsx:31" />
 </a>
 
-<sub>▶ Two minutes. An agent finds a bug the screen was hiding, and proves the fix.</sub>
+<sub>▶ An agent says its fix works. Reticle catches the double charge it missed. Click for the full demo.</sub>
 
 </div>
 

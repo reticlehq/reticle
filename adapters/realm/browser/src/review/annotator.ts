@@ -163,11 +163,6 @@ export class Annotator {
     this.#root?.style.setProperty('--reticle-mark-accent', hex);
   }
 
-  /** @deprecated HUD expand/collapse owns annotate mode; chrome buttons are hide/clear. */
-  attachFlagButton(btn: HTMLElement): void {
-    this.attachChrome({ markersBtn: btn });
-  }
-
   attachChrome(chrome: AnnotatorChrome): void {
     this.#markersBtn = chrome.markersBtn;
     this.#clearBtn = chrome.clearBtn;

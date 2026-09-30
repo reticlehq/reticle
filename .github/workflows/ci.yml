@@ -798,6 +798,13 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: playwright-${{ runner.os }}-
       - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
+      # Angular 21's dependency tree crashes npm 10's installer ("Cannot read properties of null
+      # (reading 'edgesOut')") during the scaffold's own install, before Reticle is involved;
+      # reproduced locally with a fresh `ng new` on npm 10, and npm 11 installs it. Node 22 ships
+      # npm 10, so this one cell uses npm 11.
+      - name: npm 11 for the Angular scaffold
+        if: matrix.scaffold == 'angular'
+        run: npm install -g npm@11
       # The negative control FIRST. It mis-wires each scaffold's port so no session can appear and
       # requires the gate to go red; if it passes, the gate proves nothing and the run below would be
       # a green that means nothing. check-boundaries and check-lossy-transforms already self-test in

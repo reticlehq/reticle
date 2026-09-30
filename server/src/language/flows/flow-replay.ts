@@ -8,17 +8,7 @@ import {
   testidDrift,
   ambiguousAnchorDrift,
 } from './flow-anchor.js';
-export {
-  anchorLabel,
-  componentLabel,
-  componentQueryArgs,
-  editDistance,
-  expectElementDrift,
-  nearestIsAmbiguous,
-  nearestTestid,
-  resolveQuery,
-  testidDrift,
-} from './flow-anchor.js';
+export { nearestIsAmbiguous, nearestTestid, resolveQuery } from './flow-anchor.js';
 import type { FlowReplaySession, WaitForSignal, Sleep } from './flow-replay-types.js';
 export type { FlowReplaySession, WaitForSignal, Sleep } from './flow-replay-types.js';
 import { routeOfEvent, routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route.js';

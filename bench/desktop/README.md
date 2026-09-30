@@ -39,7 +39,7 @@ Each contender is run against a **freshly reloaded app**. Without that reset the
 
 **It is also structurally blind here.** The claim is not "Playwright guessed wrong" — it is that nothing in its output _mentions_ the failed call, so no verification strategy built on that output can distinguish "archived" from "the archive failed and the UI lied". Its channel is the accessibility tree; IPC is not in it. The benchmark asserts this directly by searching everything Playwright returned for any trace of the failure, rather than by grading its answer.
 
-**The lean Reticle path is 3.6× cheaper** than Playwright MCP (277 vs 992 tokens) _and_ correct. That is the part worth internalising: this is not a cost-for-accuracy trade. Asking one targeted question (`reticle_network { status: 500 }`, 109 bytes) beats reading two accessibility snapshots (3845 bytes), because a snapshot re-describes the whole page to answer a question about one call.
+**The lean Reticle path is 3.6× cheaper** than Playwright MCP (277 vs 992 tokens) _and_ correct. That is the part worth internalising: this is not a cost-for-accuracy trade. Asking one targeted question (109 bytes, measured as `reticle_network { status: 500 }`, the call's name before it merged into `reticle_observe { action: "network", status: 500 }`; not re-measured since the rename) beats reading two accessibility snapshots (3845 bytes), because a snapshot re-describes the whole page to answer a question about one call.
 
 **Tauri is not a contest.** Playwright cannot attach to a WKWebView at all. There is no CDP endpoint to connect to, so the row is a capability statement, not a score.
 

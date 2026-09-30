@@ -1560,6 +1560,70 @@ describe('net count is exact, not "at least" — the double-submit must not pass
 });
 
 /**
+ * "Absent" and "not" are claims about the END of a window, exactly like an exact count, and the wait
+ * used to settle them on the first reading. Measured on the bench's console-clean scenario: a
+ * clean-console check replayed green on a page whose console.error landed a few ms after the first
+ * poll, once the page ran slower. The count hold now covers them too.
+ */
+describe('absence and negation hold like a count — a late error must not pass', () => {
+  class LiveSession implements PredicateSession {
+    readonly #events: ReticleEvent[] = [];
+    readonly #listeners = new Set<(event: ReticleEvent) => void>();
+    elapsed(): number {
+      return 0;
+    }
+    command(): Promise<CommandResult> {
+      return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result: {} });
+    }
+    eventsSince(cursor = 0): ReticleEvent[] {
+      return this.#events.filter((e) => e.t >= cursor);
+    }
+    onEvent(listener: (event: ReticleEvent) => void): () => void {
+      this.#listeners.add(listener);
+      return () => {
+        this.#listeners.delete(listener);
+      };
+    }
+    push(event: ReticleEvent): void {
+      this.#events.push(event);
+      for (const l of this.#listeners) l(event);
+    }
+  }
+
+  it('FAILS a clean-console check when the error lands 59ms after the first reading', async () => {
+    const session = new LiveSession();
+    const verdict = waitForPredicate(
+      session,
+      { kind: 'console', level: 'error', absent: true },
+      5000,
+    );
+    setTimeout(() => session.push(ev(EventType.CONSOLE_ERROR, { message: 'late' }, 69)), 59);
+    expect((await verdict).pass).toBe(false);
+  });
+
+  it('FAILS a `not` whose inner claim becomes true 59ms later', async () => {
+    const session = new LiveSession();
+    const verdict = waitForPredicate(
+      session,
+      { kind: 'not', predicate: { kind: 'signal', name: 'error:shown' } },
+      5000,
+    );
+    setTimeout(() => session.push(ev(EventType.SIGNAL, { name: 'error:shown' }, 69)), 59);
+    expect((await verdict).pass).toBe(false);
+  });
+
+  it('still passes an honest absence, without burning the timeout', async () => {
+    const session = new LiveSession();
+    const verdict = waitForPredicate(
+      session,
+      { kind: 'console', level: 'error', absent: true },
+      10_000,
+    );
+    expect((await verdict).pass).toBe(true);
+  }, 3_000);
+});
+
+/**
  * The same rule on the signal channel, which shares `count` with `net` and shares the defect it
  * exists to catch.
  *
@@ -1985,5 +2049,23 @@ describe('net predicate: ok — asserting on outcome, not a fabricated status', 
   it('still honours an explicit status, so nothing that worked before changes', async () => {
     const session = new FakeSession([ipcFail]);
     expect((await evaluatePredicate(session, { kind: 'net', status: 500 })).pass).toBe(true);
+  });
+});
+
+describe('a confirming hold ends at the caller budget, not in a forced fail', () => {
+  it('passes an honest absence whose budget is shorter than the hold', async () => {
+    const session = {
+      elapsed: () => 0,
+      command: () =>
+        Promise.resolve({ kind: 'command_result' as const, id: 'x', ok: true, result: {} }),
+      eventsSince: () => [],
+      onEvent: () => () => undefined,
+    } satisfies PredicateSession;
+    const r = await waitForPredicate(
+      session,
+      { kind: 'console', level: 'error', absent: true },
+      60,
+    );
+    expect(r.pass).toBe(true);
   });
 });

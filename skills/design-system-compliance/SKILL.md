@@ -62,4 +62,4 @@ This checks **compliance with the tokens the project declares**. It is not an op
 
 ---
 
-Everything else, one page at a time: `curl https://docs.reticle.sh/llms.txt`. Design token check missing something you needed? `reticle_feedback` with `kind: "gap"`.
+Everything else, one page at a time: `curl https://docs.reticle.sh/llms.txt`. Design token check missing something you needed? `reticle_session { action: "feedback" }` with `kind: "gap"`.

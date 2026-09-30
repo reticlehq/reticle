@@ -298,11 +298,11 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   cli: [
     // doctor reads the document the dev server serves (served-document.ts) to judge its CSP.
     'dev-server',
+    // `reticle gate` ratchets on the coverage ledger and blocks changed code that never ran.
+    'exhaust',
     // `verify <url> --expect` opens the url when no tab is on it, by the same rule `reticle open`
     // uses (decideOpen), so the two commands cannot disagree about which tab counts.
     'launch',
-    // `reticle gate` ratchets on the coverage ledger and blocks changed code that never ran.
-    'exhaust',
     'answers',
     'binding',
     'suite',

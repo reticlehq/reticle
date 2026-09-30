@@ -25,7 +25,7 @@ The rows are kept as a record of what was run. They are not a baseline. **Record
 
 So they were all run. **Every script below passes.** The two defects that surfaced are fixed:
 
-- `suite-rre.mjs` recorded flows that asserted nothing and then demanded a `pass` verdict, which `reticle_flow_verify` correctly refuses — so **`pnpm bench` exited 1** and `replay-determinism` never ran at all. Each flow now carries a success oracle.
+- `suite-rre.mjs` recorded flows that asserted nothing and then demanded a `pass` verdict, which `reticle_verify { action: "flows" }` correctly refuses — so **`pnpm bench` exited 1** and `replay-determinism` never ran at all. Each flow now carries a success oracle.
 - `clock-timetravel.mjs` failed on `reticle_clock {reset:true}` with `TypeError: Illegal invocation`. That one was **not a bench bug** — see "A product bug this directory caught" below.
 
 **The prerequisite column is the point.** Every script that looked broken during this sweep was actually a script whose fixture nobody had started, and that is why "which of these works" was unanswerable.
@@ -35,16 +35,16 @@ So they were all run. **Every script below passes.** The two defects that surfac
 | **Replay pass** — the regression floor | `replay-bench`, `replay-detect`, `replay-detect-consequence`, `replay-detect-state`, `network-cardinality-bench`, `forbidden-call-bench`, `console-clean-bench`, `state-blast-radius-bench`, `suite-rre`, `replay-determinism` | `pnpm bench` boots its own | ✅ 10/10, 279s |
 | **Entry points** | `bench-all`, `gate` | — | ✅ |
 | **Shared libraries** — imported, never run alone | `adapters`, `mcp-client`, `tokenizer`, `inject`, `ports`, `record` | — | ✅ (via callers) |
-| **Diagnostics** | `probe` · `schema-dump <playwright\|devtools\|reticle>` | bench fixtures; `schema-dump` **requires the tool as argv[2]** and crashes without it | ✅ |
+| **Diagnostics** | `probe` | bench fixtures | ✅ |
 | **Reticle-only studies** | `clock-timetravel`, `source-localize`, `render-storm-bench`, `state-desync-bench`, `leak-stress`, `multi-agent-throughput`, `schema-tax` | bench fixtures (api `:8787` + bench-app `:4312`) | ✅ |
 | **Needs another fixture** | `stress-tiers`, `measure-large-dom` | `apps/large-dom-bench` on **`:4313`** — without it they fail in a way that reads like rot | ✅ `stress-tiers` |
 | **Needs a prior run** | `compiled-suite-vs-replay` | run `suite-rre.mjs` first (it consumes the saved flows) | ✅ |
 | **Needs competitor MCPs + network** | `visual-bug-bench` | downloads `@playwright/mcp` + `chrome-devtools-mcp` via npx | ✅ parity 6/6/6 |
 | **Rendering / reporting** | `charts`, `make-readme-chart`, `../dashboard.mjs` | existing raws | ✅ |
-| **Not run in this sweep** | `run-observation` + `analyze` (~12 min, drives competitors), `claude-agent-loop` / `openai-agent-loop` (**needs an API key**), `capture-screens`, `visual-regression-bench` (needs `reticle drive`) | as noted | ⚠ unverified |
+| **Not run in this sweep** | `run-observation` + `analyze` (~12 min, drives competitors), `claude-agent-loop` / `openai-agent-loop` (**needs an API key**), `visual-regression-bench` (needs `reticle drive`) | as noted | ⚠ unverified |
 | **Intent + context effect** | `intent-effect` (+ `intent-effect-metrics`, `intent-effect-verdict` — shared rule modules, unit-tested, imported by `gate`) | bench fixtures **already up** (it boots none) + an API key; see [`INTENT-EFFECT.md`](INTENT-EFFECT.md) | ✅ keyless path (reports NOT MEASURED, exits 1) |
 
-The subdirectories (`fix-loop/`, `honesty/`, `pw-vs-reticle/`, `diagnosis/`, `first-drive/`, `overhead/`, `parallel-suite/`, `desktop/`) are each a completed study with its own README and results file, and were **not** re-run here. Same rule: evidence for a published claim, run by hand, not a gate.
+The subdirectories (`honesty/`, `pw-vs-reticle/`, `diagnosis/`, `first-drive/`, `overhead/`, `parallel-suite/`, `desktop/`) are each a completed study with its own README and results file, and were **not** re-run here. Same rule: evidence for a published claim, run by hand, not a gate.
 
 **Adding a script?** Put it in a class above **with its prerequisite**. A script whose fixture is undocumented is one that will be misdiagnosed as rotted by whoever runs it next.
 
@@ -75,8 +75,7 @@ harness/                  all runnable code
   claude-agent-loop.mjs   Layer B: real Claude tool-use loop, authoritative usage tokens (needs API key)
   analyze.mjs             Phase 4 aggregates -> raw/analysis.json
   charts.mjs              Phase 5 SVG chart generator
-  capture-screens.mjs     real failure-state screenshots + console/network evidence
-  probe.mjs schema-dump.mjs   connectivity + tool-schema probes
+  probe.mjs               connectivity probe
 raw/                      measured outputs (observation-results.json, analysis.json, snapshot-*)
                           NOTE: run-meta.json is referenced in older text but is no longer produced.
 logs/                     run logs (observation-run*.log, demo/api logs)
@@ -111,7 +110,6 @@ node bench/harness/run-observation.mjs
 # 4. analysis + visuals
 node bench/harness/analyze.mjs
 node bench/harness/charts.mjs
-node bench/harness/capture-screens.mjs
 
 # 5. Layer B — full agent loop (authoritative usage tokens). REQUIRES a key.
 ANTHROPIC_API_KEY=sk-... node bench/harness/claude-agent-loop.mjs

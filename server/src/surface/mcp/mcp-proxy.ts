@@ -59,7 +59,7 @@ import { OutageReason, OutageStage, reportMcpOutage } from './faults/mcp-outage.
 import { postToSession } from './proxy/mcp-post-transport.js';
 import { reconnectDelayMs } from './proxy/proxy-backoff.js';
 import { PROXY_IDLE_EXIT_EVENT, ProxyIdleExit, resolveProxyIdleExitMs } from './proxy-idle-exit.js';
-export { reconnectDelayMs, RECONNECT_BASE_MS, RECONNECT_CAP_MS } from './proxy/proxy-backoff.js';
+export { reconnectDelayMs } from './proxy/proxy-backoff.js';
 
 export {
   MCP_PROXY_HTTP_AGENT_OPTIONS,
