@@ -14,6 +14,7 @@ import { runQuery } from './query.js';
 
 beforeEach(() => {
   document.body.innerHTML = `
+    <a href="/help">Help</a>
     <svg id="plan" viewBox="0 0 30 10">
       <a href="/rooms/2"><rect width="10" height="10"/></a>
       <a href="/rooms/3"><rect x="10" width="10" height="10"/><title>Kitchen</title></a>
@@ -38,11 +39,15 @@ describe('scoping to an SVG element', () => {
     expect(again.elements[0]?.ref).toBe(ref);
   });
 
-  it('a query scoped to the <svg> searches inside it', () => {
-    const result = runQuery({ scope: '#plan', by: QueryBy.ROLE, value: 'link' });
+  it('a query scoped to the <svg> searches inside it, and only inside it', () => {
+    const whole = runQuery({ by: QueryBy.ROLE, value: 'link' });
+    const scoped = runQuery({ scope: '#plan', by: QueryBy.ROLE, value: 'link' });
 
-    expect(result.scopeMissing).not.toBe(true);
-    expect(result.elements.length).toBeGreaterThan(0);
+    expect(scoped.scopeMissing).not.toBe(true);
+    // The page has three links; the plan holds two of them. Scoped, the one outside is not found.
+    expect(whole.elements).toHaveLength(3);
+    expect(scoped.elements).toHaveLength(2);
+    expect(scoped.elements.map((el) => el.name)).not.toContain('Help');
   });
 
   it('a scope that matches nothing is still reported missing', () => {
