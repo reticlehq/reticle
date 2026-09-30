@@ -62,16 +62,19 @@ function isEsmPath(path: string): boolean {
  * not. Verified end to end on electron-vite: IPC observed and screenshots saved in dev, and no
  * Reticle code in a production build.
  *
- * `guarded` is false for a preload that may be SANDBOXED (Forge's template is, by Electron's
- * default): a sandboxed preload can load no second file, so the only form that works there is the
- * static import the bundler inlines. The `.catch` keeps a preload somebody sandboxed anyway from
- * logging an unhandled rejection; the renderer still connects, and the SDK reports IPC as a blind
- * spot rather than letting the silence pass.
+ * `viteTypes` is for Electron Forge, whose preload is SANDBOXED by Electron's default and whose
+ * tsconfig has no `import.meta.env` types. The same guarded line works there because Forge builds its
+ * preload with `codeSplitting: false` and the real build mode: the dynamic import is inlined into the
+ * one file a sandbox can load under `electron-forge start`, and folds away under `package`. Measured
+ * on a scaffolded Forge 8 app — Forge used to get the static import instead, which no guard removes,
+ * so the packaged app shipped the shim. The reference line supplies the types, so `tsc` stays green.
  */
-function preloadLine(path: string, guarded: boolean): string {
+const VITE_CLIENT_TYPES = '/// <reference types="vite/client" />\n';
+
+function preloadLine(path: string, viteTypes: boolean): string {
   if (!isEsmPath(path)) return `require('${PRELOAD_REQUIRE}');\n`;
-  if (!guarded) return `import '${PRELOAD_REQUIRE}'\n`;
   return (
+    (viteTypes ? VITE_CLIENT_TYPES : '') +
     `if (${BUILD_MODE_GUARD}) {\n` +
     `  // Reticle IPC observation, dev only — written by \`reticle init\`. A production build drops it.\n` +
     `  void import('${PRELOAD_REQUIRE}').catch(() => undefined)\n` +
@@ -79,17 +82,17 @@ function preloadLine(path: string, guarded: boolean): string {
   );
 }
 
-export function patchElectronPreload(source: string, path: string, guarded = true): SourcePatch {
-  if (guarded && isEsmPath(path) && LEGACY_PRELOAD_IMPORT.test(source)) {
+export function patchElectronPreload(source: string, path: string, viteTypes = false): SourcePatch {
+  if (isEsmPath(path) && LEGACY_PRELOAD_IMPORT.test(source)) {
     return {
       kind: PatchKind.APPLY,
-      code: `${preloadLine(path, true)}${source.replace(LEGACY_PRELOAD_IMPORT, '')}`,
+      code: `${preloadLine(path, viteTypes)}${source.replace(LEGACY_PRELOAD_IMPORT, '')}`,
     };
   }
   if (source.includes(PRELOAD_REQUIRE)) {
     return { kind: PatchKind.ALREADY };
   }
-  return { kind: PatchKind.APPLY, code: `${preloadLine(path, guarded)}${source}` };
+  return { kind: PatchKind.APPLY, code: `${preloadLine(path, viteTypes)}${source}` };
 }
 
 /** The guarded capture call for this main file. Nothing to import at the top: it loads itself. */

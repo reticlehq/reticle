@@ -50,17 +50,16 @@ export function electronViteSteps(input: PlanInput): Step[] {
   return [
     plugin,
     ...capabilitiesStep(input, ELECTRON_VITE_DEV_MODULE_PATH),
-    ...electronPreloadStep(input, true),
+    ...electronPreloadStep(input, false),
     ...electronCaptureStep(input),
   ];
 }
 
 /**
- * `guarded` is whether the shim may sit behind a dev guard: electron-vite's template runs its preload
- * unsandboxed, Forge's is sandboxed by Electron's default and can only take the static import. See
+ * `viteTypes` is for Forge, whose tsconfig has no `import.meta.env` types for the dev guard. See
  * `patchElectronPreload`.
  */
-function electronPreloadStep(input: PlanInput, guarded: boolean): Step[] {
+function electronPreloadStep(input: PlanInput, viteTypes: boolean): Step[] {
   const file = input.electronPreload ?? null;
   if (null === file) {
     return [
@@ -76,7 +75,7 @@ function electronPreloadStep(input: PlanInput, guarded: boolean): Step[] {
     patchStep(
       StepTitle.ELECTRON_PRELOAD,
       file.path,
-      patchElectronPreload(file.source, file.path, guarded),
+      patchElectronPreload(file.source, file.path, viteTypes),
       'require the IPC shim as the first line of preload, dev only',
       ELECTRON_PRELOAD_FIX,
     ),
@@ -127,7 +126,7 @@ const FORGE_RENDERER_DETAIL =
 export function electronForgeSteps(input: PlanInput): Step[] {
   return [
     ...viteSteps(input, FORGE_RENDERER_DETAIL),
-    ...electronPreloadStep(input, false),
+    ...electronPreloadStep(input, true),
     ...electronCaptureStep(input),
   ];
 }

@@ -28,12 +28,29 @@ function createWindow(): void {
 `;
 
 describe('patchElectronPreload', () => {
-  it('prepends an ESM import for .ts when the preload may be sandboxed (Forge)', () => {
-    const r = patchElectronPreload(ESM_PRELOAD, 'src/preload.ts', false);
-    expect(r.kind).toBe(PatchKind.APPLY);
-    if (r.kind !== PatchKind.APPLY) return;
-    expect(r.code.startsWith(`import '${PRELOAD_REQUIRE}'`)).toBe(true);
+  /**
+   * Forge's preload was given the static import, which no guard can remove, so `electron-forge
+   * package` shipped the IPC shim. Measured on a scaffolded Forge 8 app: Forge builds its preload
+   * with `codeSplitting: false` and the real build mode, so the guarded dynamic import is inlined
+   * into the one sandbox-safe file under `development` and folds away under `production`. Forge's
+   * tsconfig has no `import.meta.env` types, which the reference supplies.
+   */
+  it('guards the shim for a Forge preload too, with the vite types its tsconfig lacks', () => {
+    const r = patchElectronPreload(ESM_PRELOAD, 'src/preload.ts', true);
+    if (r.kind !== PatchKind.APPLY) throw new Error(r.kind);
+    expect(r.code.startsWith('/// <reference types="vite/client" />\n')).toBe(true);
+    expect(r.code).toContain("if (import.meta.env.MODE !== 'production') {");
+    expect(r.code).not.toContain(`import '${PRELOAD_REQUIRE}'`);
     expect(r.code).toContain('contextBridge');
+    expect(patchElectronPreload(r.code, 'src/preload.ts', true).kind).toBe(PatchKind.ALREADY);
+  });
+
+  it('rewrites the unguarded import an older init wrote into a Forge preload', () => {
+    const legacy = `import '${PRELOAD_REQUIRE}'\n${ESM_PRELOAD}`;
+    const r = patchElectronPreload(legacy, 'src/preload.ts', true);
+    if (r.kind !== PatchKind.APPLY) throw new Error(r.kind);
+    expect(r.code).not.toContain(`import '${PRELOAD_REQUIRE}'`);
+    expect(r.code.match(/@reticlehq\/electron\/preload/g)).toHaveLength(1);
   });
 
   /**
