@@ -175,9 +175,12 @@ describe('the note tells the truth about source pointers', () => {
   });
 
   it('says Vue’s install is gated while its drive is not', async () => {
-    // Understating is as wrong as overstating: the install gate scaffolds Vue from scratch now.
-    const note = (await import('./patch/snippets.js')).unverifiedUiLibraryNote('vue');
+    // Understating is as wrong as overstating: the install gate scaffolds Vue from scratch now —
+    // under Vite and Nuxt, which is what `installGated` answers; Vue under Astro is not scaffolded.
+    const { unverifiedUiLibraryNote } = await import('./patch/snippets.js');
+    const note = unverifiedUiLibraryNote('vue', true);
     expect(note).toContain('SETUP is proven');
     expect(note).not.toContain('No CI gate covers vue');
+    expect(unverifiedUiLibraryNote('vue', false)).toContain('No CI gate covers vue');
   });
 });

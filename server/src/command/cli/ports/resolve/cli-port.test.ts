@@ -8,6 +8,9 @@ import {
   readProjectId,
   projectIdsAt,
   readProjectPort,
+  workspacePortConflict,
+  projectDirOf,
+  readProjectIsDesktop,
   resolvePort,
   isLikelyDevServerPort,
   devServerPortWarning,
@@ -249,6 +252,107 @@ describe('projectIdsAt', () => {
 
   it('is empty in a directory that is not a project at all', () => {
     expect(projectIdsAt(dir)).toEqual([]);
+  });
+});
+
+/**
+ * From a monorepo root whose app was wired in `apps/web`, the config walk only went UP, found
+ * nothing, and every command fell back to the default port: `status`, `mcp` and `verify` talked to
+ * whichever project owned that daemon. `projectIdsAt` already looked DOWN; the port now does too.
+ */
+describe('the port of a workspace app, read from the monorepo root', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'reticle-wsport-'));
+  });
+  afterEach(async () => {
+    await removeTempDir(dir);
+  });
+
+  async function writeJson(path: string, value: unknown): Promise<void> {
+    await mkdir(join(dir, path, '..'), { recursive: true });
+    await writeFile(join(dir, path), JSON.stringify(value), 'utf8');
+  }
+
+  async function app(name: string, port?: number): Promise<void> {
+    await writeJson(`apps/${name}/package.json`, { name, scripts: { dev: 'vite' } });
+    if (port !== undefined) await writeJson(`apps/${name}/.reticle.json`, { port });
+  }
+
+  it('uses the one wired app below the root', async () => {
+    await writeJson('package.json', { name: 'repo', workspaces: ['apps/*'] });
+    await app('web', 4417);
+    await app('api');
+    expect(readProjectPort(dir)).toBe(4417);
+    expect(workspacePortConflict(dir)).toBeUndefined();
+  });
+
+  it('picks nothing, and says so, when two wired apps disagree', async () => {
+    await writeJson('package.json', { name: 'repo', workspaces: ['apps/*'] });
+    await app('web', 4417);
+    await app('admin', 4418);
+    expect(readProjectPort(dir)).toBeUndefined();
+    const warning = workspacePortConflict(dir) ?? '';
+    expect(warning).toContain('apps/web');
+    expect(warning).toContain('4417');
+    expect(warning).toContain('apps/admin');
+    expect(warning).toContain('4418');
+  });
+
+  it('agrees with itself when several apps share one port', async () => {
+    await writeJson('package.json', { name: 'repo', workspaces: ['apps/*'] });
+    await app('web', 4417);
+    await app('admin', 4417);
+    expect(readProjectPort(dir)).toBe(4417);
+    expect(workspacePortConflict(dir)).toBeUndefined();
+  });
+
+  it('still prefers a config at or above the working directory', async () => {
+    await writeJson('package.json', { name: 'repo', workspaces: ['apps/*'] });
+    await writeJson('.reticle.json', { port: 4499 });
+    await app('web', 4417);
+    await app('admin', 4418);
+    expect(readProjectPort(dir)).toBe(4499);
+    expect(workspacePortConflict(dir)).toBeUndefined();
+  });
+
+  it('names the directory of the project it serves', async () => {
+    await writeJson('package.json', { name: 'repo', workspaces: ['apps/*'] });
+    await app('web', 4417);
+    await app('api');
+    expect(projectDirOf(dir)).toBe(join(dir, 'apps/web'));
+    expect(projectDirOf(join(dir, 'apps/web'))).toBe(join(dir, 'apps/web'));
+  });
+
+  // `init` writes a byte-identical copy of the app's `.reticle.json` at the root the agent runs from.
+  // Finding that copy first named the ROOT as the project, so the SDK version the CLI matches itself
+  // to was read from the root's node_modules — never from apps/web, where pnpm installed it.
+  it('names the app, not the root, when the root holds init’s copy of the app’s config', async () => {
+    const config = { projectId: 'web-abc123', port: 4417 };
+    await writeJson('package.json', { name: 'repo', workspaces: ['apps/*'] });
+    await app('web');
+    await app('api');
+    await writeJson('apps/web/.reticle.json', config);
+    await writeJson('.reticle.json', config);
+    expect(projectDirOf(dir)).toBe(join(dir, 'apps/web'));
+  });
+
+  it('knows a desktop shell from the app it serves', async () => {
+    await writeJson('package.json', { name: 'repo', workspaces: ['apps/*'] });
+    await app('web', 4417);
+    expect(readProjectIsDesktop(dir)).toBe(false);
+    await writeJson('apps/web/package.json', {
+      name: 'web',
+      scripts: { dev: 'electron-vite dev' },
+      devDependencies: { electron: '^34', 'electron-vite': '^2' },
+    });
+    expect(readProjectIsDesktop(dir)).toBe(true);
+  });
+
+  it('does not search below a directory that is not a package', async () => {
+    await app('web', 4417);
+    expect(readProjectPort(dir)).toBeUndefined();
   });
 });
 

@@ -45,6 +45,9 @@ function memoryIo(
   // Simulate the Cursor config dir existing when requested.
   const present = { ...files };
   if (cursor) present[`${HOME}/.cursor`] = '';
+  // A registered Claude Code is an entry in its state file, which init reads rather than asking
+  // `claude mcp get` (that launches the server — see claudeHasReticle).
+  if (mcpExists) present[`${HOME}/.claude.json`] = JSON.stringify({ mcpServers: { reticle: {} } });
   // Absolute paths (home-dir config) bypass the scoping prefix, matching the real IO.
   /**
    * Normalise separators before keying.
@@ -122,7 +125,7 @@ function memoryIo(
       execCalls.push({ command, args });
       return 'function' === typeof execOk ? execOk(command, args) : execOk;
     },
-    probe: (_command, args) => (args.includes('get') ? mcpExists : claudeAvailable),
+    probe: () => claudeAvailable,
     print: (l) => lines.push(l),
     host: { ...SILENT_HOST, pairingToken: () => HOST_TOKEN },
   };
@@ -229,6 +232,31 @@ describe('runInit', () => {
     expect(out).toMatch(/import \{ reticle \} from 'https:\/\//);
     expect(out).toContain('reticle.connect(');
     expect(out).not.toMatch(/from '@reticlehq\/\w+'/);
+  });
+
+  it('moves the port in an existing non-JS .reticle.json when --port changes', () => {
+    // The daemon starts on the requested port; a config still naming the old one sends the agent to
+    // a daemon that is no longer there.
+    const io = memoryIo({
+      'requirements.txt': 'fastapi\n',
+      '.reticle.json': JSON.stringify({ framework: 'html', projectId: 'p', port: 4688 }),
+    });
+    runInit({ ...OPTS, port: 4689 }, io);
+    expect(JSON.parse(io.written['.reticle.json'] ?? '{}')).toEqual({
+      framework: 'html',
+      projectId: 'p',
+      port: 4689,
+    });
+    expect(io.lines.join('\n')).toContain('port 4688 → 4689');
+  });
+
+  it('leaves an existing non-JS .reticle.json alone when the port is unchanged', () => {
+    const io = memoryIo({
+      'requirements.txt': 'fastapi\n',
+      '.reticle.json': JSON.stringify({ framework: 'html', projectId: 'p', port: 4688 }),
+    });
+    runInit({ ...OPTS, port: 4688 }, io);
+    expect(io.written['.reticle.json']).toBeUndefined();
   });
 
   it('hands a Streamlit app its executable HTML helper', () => {

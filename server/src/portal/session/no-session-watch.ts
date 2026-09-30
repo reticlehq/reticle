@@ -23,6 +23,7 @@ import type { NoSessionNextAction } from './no-session-next-action.js';
 import {
   readProjectFramework,
   readProjectId,
+  readProjectIsDesktop,
   readProjectPort,
 } from '@/command/cli/ports/resolve/cli-port.js';
 import { discoverProjectConfigs } from '@/command/cli/config/config-discovery.js';
@@ -37,6 +38,8 @@ import type { SessionManager } from './session-manager.js';
 import { probeDaemon } from '@/surface/mcp/mcp-proxy.js';
 import { findOccupiedSiblings } from '@/command/cli/ports/sibling-ports.js';
 import { isAuthRefusalReason } from '@/portal/bridge/auth-failure-reason.js';
+import { devServersForProject } from '@reticlehq/core';
+import { readDevServers } from '@/command/daemon/dev-servers.js';
 
 /** Slow enough to be free, fast enough that a dev server started 15s ago is already reflected. */
 const REFRESH_MS = 15_000;
@@ -98,6 +101,15 @@ interface NoSessionWatchOptions {
    * Omitted on a daemon with no pool, and auto-attach is then simply off.
    */
   attach?: (url: string) => Promise<unknown>;
+  /**
+   * The ports THIS project's dev servers announced into the registry the build plugins write.
+   *
+   * Auto-attach opens a port only when it can be attributed to this project. The port scan is
+   * machine-wide, so its one hit is as likely to be another repo's app as this one's — and now that
+   * the attach path can launch an installed Chrome, a wrong guess parks a hidden headless browser on
+   * somebody else's app. Injected for tests; production reads the registry scoped by projectId/root.
+   */
+  ownDevServerPorts?: () => readonly number[];
   /**
    * What the route the last session was on answers right now, as an HTTP status, or undefined
    * when there is no answer to report.
@@ -250,6 +262,33 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
    * Bounded by construction: one attempt per port per daemon. A failure is recorded, never retried —
    * a retry loop against a broken Chromium install would spin for the daemon's whole life.
    */
+  const ownDevServerPorts =
+    options.ownDevServerPorts ??
+    ((): readonly number[] =>
+      devServersForProject(readDevServers(stateDir), {
+        projectId: readProjectId(directory),
+        root: directory,
+      }).map((entry) => entry.port));
+
+  /**
+   * Is `port` demonstrably this project's app? Either its dev server announced it, or this
+   * project's own last session was on it. Anything else is a guess, and a guess that opens a
+   * browser is worse than the sentence the diagnosis already writes about the ports it saw.
+   */
+  const attributable = (port: number): boolean => {
+    if (ownDevServerPorts().includes(port)) return true;
+    const known = options.sessions.lastKnown?.();
+    const projectId = readProjectId(directory);
+    if (known === undefined || projectId === undefined || known.projectId !== projectId) {
+      return false;
+    }
+    try {
+      return Number(new URL(known.url).port) === port;
+    } catch {
+      return false;
+    }
+  };
+
   const autoAttach = async (ports: readonly number[]): Promise<void> => {
     const attach = options.attach;
     if (attach === undefined) return;
@@ -257,6 +296,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
     const [only] = ports;
     if (only === undefined || attempted.has(only)) return;
     if (!isWired()) return;
+    if (!attributable(only)) return;
     attempted.add(only);
     try {
       await attach(`${LOCALHOST}:${String(only)}`);
@@ -331,6 +371,20 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
     isAuthRefusalReason(options.sessions.lastClosure?.()?.reason) &&
     true !== options.sessions.connectedSinceLastClosure?.();
 
+  /**
+   * A hello refused for anything but its token, while it is still the bridge's current state.
+   *
+   * Only closures that carry the refused page count: the bridge attaches one exactly when a HELLO
+   * was turned away, so an origin or handshake-pool refusal (which has its own sentence on
+   * `resolve`) is not mistaken for one. Same ordering clause as the token refusal above.
+   */
+  const currentHelloRefusal = (): NoSessionFacts['helloRefused'] => {
+    const closure = options.sessions.lastClosure?.();
+    if (closure?.page === undefined || isAuthRefusalReason(closure.reason)) return undefined;
+    if (true === options.sessions.connectedSinceLastClosure?.()) return undefined;
+    return { reason: closure.reason, ...closure.page };
+  };
+
   const nextAction = (scope: ProjectScopeFacts): NoSessionNextAction => {
     const split = splitBrain();
     return nextActionFor({
@@ -341,8 +395,18 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
       // Read when asked, like every other fact here: a page can dial at any moment, and a daemon
       // that cached "nothing has been refused" at boot would keep saying so.
       authRefused: lastCloseWasAuthFailure(),
+      ...(() => {
+        const refused = currentHelloRefusal();
+        return refused === undefined ? {} : { helloRefused: refused.reason };
+      })(),
       ...(split === undefined ? {} : { splitBrain: split }),
       listening,
+      // The url the departed tab was on — the same tombstone the prose diagnosis quotes, so the
+      // command and the sentence beside it name the same page.
+      ...(() => {
+        const known = options.sessions.lastKnown?.();
+        return known === undefined ? {} : { lastKnownUrl: known.url };
+      })(),
       // Read when asked, like everything else here: a `package.json` can gain a dev script, and a
       // daemon that cached "there is none" at boot would keep saying so for the rest of the day.
       dev: detectDevCommand(directory),
@@ -380,12 +444,19 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
       // beside it still said the tab had been closed. One fact, two answers, and only one of them
       // was right. Read when asked, like the rest: a page can be refused at any moment.
       authRefused: lastCloseWasAuthFailure(),
+      ...(() => {
+        const refused = currentHelloRefusal();
+        return refused === undefined ? {} : { helloRefused: refused };
+      })(),
       // Ranks the causes. Read when asked, like the rest: `init` writes this file after the daemon
       // starts on an ordinary first install.
       ...(() => {
         const framework = readProjectFramework(directory);
         return framework === undefined ? {} : { framework };
       })(),
+      // A desktop app is opened by its own dev command, never by a browser URL or a lease. Read when
+      // asked, like the framework: `init` may wire the app after this daemon started.
+      ...(readProjectIsDesktop(directory) ? { desktop: true } : {}),
       // Decided from the session that actually went away, not from a lifetime tally: the lease
       // sentence is only right when the thing that vanished WAS a lease.
       leaseExpired: (() => {

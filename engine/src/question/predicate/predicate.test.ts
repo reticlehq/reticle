@@ -926,6 +926,39 @@ describe('a throttled tab timeout is not a missing render', () => {
     expect(result.inconclusive).toBe(THROTTLED_STARVED_NOTE);
   });
 
+  it('a text miss whose string IS on the page, split across children, is not blamed on throttling', async () => {
+    // Next's template on a backgrounded tab: `contains: "To get started, edit the page.tsx file."`
+    // came back "this tab is throttled and has not rendered" while the SAME response said the
+    // string was on the page, split across the heading's children. Finding the text proves the tab
+    // rendered it; the miss is the locator's, and the recovery is the split-text retry.
+    const heading = {
+      ref: asRef('e7'),
+      role: 'heading',
+      name: 'To get started, edit the page.tsx file.',
+      states: [],
+      visible: true,
+    };
+    const session = new ThrottledSession([], () => ({
+      matched: false,
+      count: 0,
+      elements: [],
+      hint: {
+        route: '/',
+        presentTestids: [],
+        presentRegions: [],
+        knownEmptyState: false,
+        splitText: heading,
+      },
+    }));
+    const result = await evaluatePredicate(session, {
+      kind: 'text',
+      contains: 'To get started, edit the page.tsx file.',
+    });
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toBeUndefined();
+    expect(result.failureReason).toContain('split across the children');
+  });
+
   it('an unthrottled timeout still looks like a near-miss, not a starved tab', async () => {
     const session = new FakeSession([]);
     const result = await waitForPredicate(

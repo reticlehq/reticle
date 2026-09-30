@@ -100,7 +100,7 @@ describe('bootSession against a port a Reticle daemon already owns', () => {
       if ('GET' === req.method && (req.url ?? '').startsWith(STATUS_PATH)) {
         res
           .writeHead(200, { 'Content-Type': 'application/json' })
-          .end(JSON.stringify({ running: true }));
+          .end(JSON.stringify({ running: true, version: '0.0.0', sessions: [] }));
         return;
       }
       res.writeHead(404).end();

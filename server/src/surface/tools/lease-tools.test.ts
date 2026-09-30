@@ -706,6 +706,30 @@ describe('prioritising a tab that is already open', () => {
     );
   });
 
+  // A tab last heard from 105s earlier was named as the one to drive instead of the lease — a frozen
+  // page that answers nothing, which is exactly when a lease is the right call.
+  it('does not name a tab the SDK has gone silent in', async () => {
+    const { SESSION_HEALTH } = await import('@reticlehq/core');
+    const frozen = {
+      id: 's-frozen',
+      projectId: 'bench',
+      url: 'http://localhost:4312/',
+      lastSeenMs: () => SESSION_HEALTH.STALE_THRESHOLD_MS + 1,
+      pushNarration: () => undefined,
+    };
+    const { pool } = fakePool();
+    const deps = {
+      sessions: { all: () => [frozen], get: () => frozen },
+      pool,
+    } as unknown as ToolDeps;
+
+    const out = (await tool(ReticleTool.LEASE_ACQUIRE)(deps, {
+      url: 'http://localhost:4312/',
+    })) as Record<string, unknown>;
+
+    expect('preferExisting' in out).toBe(false);
+  });
+
   it('never REFUSES the lease — isolation is a legitimate need', async () => {
     // The fix must not break agents that genuinely want a clean context. It steers; it does not veto.
     const watcher = { id: 's-human', projectId: 'acme', pushNarration: () => undefined };

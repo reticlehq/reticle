@@ -1,11 +1,11 @@
 /**
- * How each framework gets wired: the Vite plugin, the three Next files, the SvelteKit client hook.
- * `plan.ts` is the plan's SHAPE (statuses, ordering, the agent/MCP steps); this is the per-framework
- * detail, and they grow for different reasons.
+ * How each framework gets wired: the three Next files, the SvelteKit client hook, CRA, Nuxt, Astro
+ * and the rest. `plan.ts` is the plan's SHAPE (statuses, ordering, the agent/MCP steps); this is the
+ * per-framework detail, and they grow for different reasons. The Vite plugin and the capabilities
+ * module every Vite-based stack shares live in `plan-vite.ts`.
  */
 
 import { bridgeWsUrl } from '@reticlehq/core';
-import { newViteConfig, patchViteConfig, VitePatchKind, VITE_IMPORT } from '@/patch/vite-config.js';
 import { patchNextConfig, patchRootLayout, patchPagesApp } from '@/patch/next-patch.js';
 import {
   ASTRO_ENV_DTS_PATH,
@@ -27,17 +27,14 @@ import {
 } from '@/patch/cra.js';
 import { PatchKind, type SourcePatch } from '@/patch/patch-kind.js';
 import {
-  viteManual,
   NEXT_LAYOUT_MANUAL,
   NEXT_LAYOUT_PATH,
-  viteDevModuleFile,
-  VITE_DEV_MODULE_PATH,
   nextReticleDevFile,
   NEXT_RETICLE_DEV_PATH,
   nextConfigManual,
   svelteKitHooksFile,
   SVELTEKIT_HOOKS_PATH,
-  UNVERIFIED_FRAMEWORK_NOTE,
+  SVELTEKIT_SETUP_GATED_NOTE,
   astroManual,
   nuxtManual,
   nuxtPluginFile,
@@ -51,284 +48,19 @@ import {
   UNVERIFIED_TANSTACK_START_NOTE,
   htmlManual,
 } from '@/patch/snippets.js';
-import { hasOptOut, OPT_OUT_MARKER } from '@/detect/declared/init-opt-out.js';
-import { Framework } from '@/detect/detect.js';
 import { StepStatus, type PlanInput, type Step } from './plan-types.js';
-import { RETICLE_DEFAULT_PORT } from '@reticlehq/core';
-import { CSP_STEP_TITLE } from '@/diagnose/csp-check.js';
 import { StepTitle } from './connect-steps.js';
-import { tanstackStartManual, TANSTACK_START_ROOT_PATH } from '@/patch/tanstack-start.js';
-import { diagnoseWebCsp } from '@/diagnose/csp-doctor.js';
+import {
+  patchTanstackStartRoot,
+  tanstackStartConnectFile,
+  tanstackStartConnectPath,
+  tanstackStartManual,
+  TANSTACK_START_ROOT_PATH,
+} from '@/patch/tanstack-start.js';
 import { patchNuxtConfig } from '@/patch/nuxt-patch.js';
-
-/** What adding `reticle()` to a Vite config buys, which differs by framework. */
-export const VITE_PLUGIN_DETAIL = {
-  /** A plain Vite app gets both halves from the plugin. */
-  VITE: 'add reticle() to plugins (also injects connect())',
-  /**
-   * SvelteKit renders through app.html, so the plugin's HTML injection never fires and connect()
-   * comes from the client hook instead. The plugin is still required: it is what stamps
-   * data-reticle-source into .svelte components, and without it every verdict on a SvelteKit app
-   * comes back with no file:line at all.
-   */
-  SVELTEKIT: 'add reticle() to plugins (stamps data-reticle-source in .svelte components)',
-  /**
-   * React Router framework mode renders through its own request handler, so the plugin's HTML
-   * injection never fires and connect() comes from the client entry instead. The plugin is still
-   * required for the same reason it is under SvelteKit: without it every verdict on the app comes
-   * back with no file:line at all.
-   */
-  REACT_ROUTER: 'add reticle() to plugins (stamps data-reticle-source in .tsx components)',
-  /**
-   * TanStack Start SSRs its own HTML, so the plugin's HTML injection never fires and connect()
-   * comes from a client effect instead. `inject: false` is load-bearing honesty: leaving the
-   * default would keep reporting "also injects connect()" for a transform that never runs.
-   * The plugin is still required for the same reason it is under SvelteKit: without it every
-   * verdict on the app comes back with no file:line at all.
-   */
-  TANSTACK_START:
-    'add reticle({ inject: false }) to plugins (stamps data-reticle-source; Start SSRs its own HTML so connect() cannot come from the plugin)',
-} as const;
-
-const CAPABILITIES_TITLE = StepTitle.CAPABILITIES;
-
-/**
- * The one step `init` genuinely cannot finish, addressed to the AGENT reading this report.
- *
- * It used to read "Capabilities are empty until you edit that file" and describe the consequence to
- * a human — homework, in a report a human mostly does not read, naming no file to open and no thing
- * to look for. The agent that ran `init` is right there, has the codebase, and can finish this in
- * the same minute; what it needed was the specific instruction, not the rationale.
- *
- * What is left is exactly what could not be PROVEN from source: which atoms/actor/queryClient an
- * adapter-wrapped store should be built from, and which elements matter enough to name. `init`
- * emits nothing it cannot prove, because a wrong import here throws on every dev page load — worse
- * than an empty file.
- */
-const CAPABILITIES_TODO_TITLE = StepTitle.CAPABILITIES_TODO;
-
-function capabilitiesTodo(path: string, stores: readonly string[]): string {
-  return (
-    `This app's state lives in a library nothing in the running app points at, so it is the one ` +
-    `thing Reticle cannot find for itself — reticle_state will not see it until you say where it ` +
-    `is.\n` +
-    `Do this now, before driving anything:\n` +
-    `  1. In ${path}, uncomment the suggested line and complete it: ${stores.join('; ')}.\n` +
-    `  2. Prove it: drive one flow and check reticle_state returns your key. An empty state read ` +
-    `means the line is still not doing anything, whatever else went green.`
-  );
-}
-
-/**
- * The dev module carrying `registerCapabilities` / `registerStore`.
- *
- * Without it every app came up `hasCapabilities: false` with a `reticle_state` holding nothing but
- * `__reticle_renders` — the state-truth read was unavailable on every app out of the box. Written
- * only when absent, because it is the one generated file a user is expected to EDIT.
- */
-/**
- * Is there state left that ONLY the app can hand over?
- *
- * This used to ask a much bigger question — "does the generated file register anything at all?" —
- * and fired on almost every install, because almost every install generated a file whose testids
- * and stores were both empty. The answer was homework: go read the source, uncomment a line, add
- * data-testid attributes, then drive to prove it. Several turns, on every onboarding.
- *
- * Two of those three are no longer anyone's homework. Testids are read from the live DOM, and a
- * store passed through a React context provider (Redux, TanStack Query) is discovered and
- * registered on the first commit. What is left is the genuinely unreachable case: a module-scope
- * store, or one needing an argument only the source supplies — Zustand, Jotai atoms, an XState
- * actor. Nothing in the running app points at those, so the notice still has to fire, and it now
- * fires ONLY there.
- *
- * `wired` are stores init resolved and wrote a live `registerStore` call for. Hints are not
- * registrations: they land in the file as a commented line, and counting one as a registration
- * silences the notice whose whole purpose is to say "act on the hint".
- */
-function needsManualStore(hints: readonly string[], wired: readonly unknown[]): boolean {
-  return hints.length > 0 && 0 === wired.length;
-}
-
-export function capabilitiesStep(input: PlanInput, path: string = VITE_DEV_MODULE_PATH): Step[] {
-  if (true === input.viteDevModuleExists) {
-    return [
-      {
-        title: CAPABILITIES_TITLE,
-        target: path,
-        status: StepStatus.ALREADY,
-        detail: 'file exists, left alone, it is yours to edit',
-      },
-    ];
-  }
-  const testids = input.testids ?? [];
-  const stores = input.storeHints ?? [];
-  const wired = input.foundStores ?? [];
-  // Testids no longer need counting here. They are read from the live DOM at announce time, so a
-  // number printed at install time would be a stale claim about a codebase that is about to change —
-  // which is exactly what "no data-testid values yet" used to be on an app whose testids arrive with
-  // a lazy route.
-  const found = 'testids read from the live DOM';
-  // A store we found and WIRED is a registration, so the notice must not fire. A store HINT is not:
-  // `stores` holds suggestions, written into the file as a commented line of the form
-  // `// import your store, then: registerStore(...)`. Counting a suggestion as a registration let
-  // the hint silence the notice whose entire job is to say "act on the hint".
-  //
-  // Measured against a real product UI (rowy — 70+ deps, jotai, a whole src/atoms tree): init
-  // detected jotai, offered one commented line, emitted NO notice, and wrote
-  // `registerCapabilities({ testids: [], signals: [], stores: [] })`. So `hasCapabilities` stayed
-  // false, `reticle_state` was empty forever, and the install gate reported "connected: 1,
-  // manual ⚠: none". Every check green, state observability zero.
-  //
-  // jotai is still exactly that case. A Redux or TanStack app is not, any more: its store rides a
-  // context provider and the React adapter registers it on the first commit, so `storeHints` no
-  // longer names either one and this notice no longer fires for them.
-  const nothingToRegister = needsManualStore(stores, wired);
-  return [
-    {
-      title: CAPABILITIES_TITLE,
-      target: path,
-      status: StepStatus.APPLY,
-      detail: `${found}; ${
-        wired.length > 0
-          ? `registered ${wired.map((s) => `'${s.key}'`).join(', ')} from your source`
-          : stores.length > 0
-            ? `store: uncomment the ${String(stores.length)} suggested line(s)`
-            : 'no state library detected'
-      }`,
-      write: {
-        path,
-        content: viteDevModuleFile(
-          testids,
-          stores,
-          wired,
-          input.detection.uiLibrary,
-          input.detection.framework,
-        ),
-      },
-      dependsOnInstall: true,
-    },
-    // The write is real; what it registers is not. `registerCapabilities({ testids: [], signals: [],
-    // stores: [] })` registers nothing, so `hasCapabilities` stays false — correctly — and the ✓
-    // above reads as if the feature is on. Reported as exactly that confusion: "hasCapabilities false
-    // on every session while init said ✓ Capabilities + store".
-    //
-    // Beside the write rather than replacing it, for two reasons: only APPLY steps are written
-    // (run.ts), and SKILL.md tells the reader to skip ✓ lines — so a caveat carried on the ✓ is a
-    // caveat nobody reads.
-    ...(nothingToRegister
-      ? [
-          {
-            title: CAPABILITIES_TODO_TITLE,
-            target: path,
-            status: StepStatus.NOTICE,
-            detail: capabilitiesTodo(path, stores),
-          } satisfies Step,
-        ]
-      : []),
-  ];
-}
-
-export function viteSteps(
-  input: PlanInput,
-  detail: string = VITE_PLUGIN_DETAIL.VITE,
-  inject = true,
-): Step[] {
-  // Capabilities are independent of whether the config needed patching. Attaching them to the APPLY
-  // branch meant a re-run on an already-wired app silently never created the module.
-  return [...viteConfigSteps(input, detail, inject), ...capabilitiesStep(input)];
-}
-
-function viteConfigSteps(input: PlanInput, detail: string, inject = true): Step[] {
-  const cfg = input.viteConfig;
-  const port = input.options.port;
-  // Stamp `data-reticle-source` unless this app renders through a non-DOM React reconciler, where a
-  // lowercase JSX tag is not an element and the stamp crashes the app at commit time. See
-  // `Detection.customReconciler`.
-  const stampSource = true !== input.detection?.customReconciler;
-  // An explicit "not here" is not an invitation. `init` runs unattended in a repo it has just met,
-  // and it was reported adding the plugin to an app whose config said Reticle was deliberately
-  // excluded. A NOTICE rather than a ⚠: opting out is a decision, not something to go and fix.
-  if (cfg !== null && hasOptOut(cfg.source)) {
-    return [
-      {
-        title: StepTitle.VITE_PLUGIN,
-        target: cfg.path,
-        status: StepStatus.NOTICE,
-        detail: `left alone: this config carries ${OPT_OUT_MARKER}. Remove that marker to instrument this app.`,
-      },
-    ];
-  }
-  // Plain Vite runs happily with no config file (`npm create vite`'s vanilla template has none), so
-  // make one. Only there: a Vite-based framework's missing config also lost the framework's own
-  // plugin, and a file carrying ours alone would not boot the app.
-  const plainVite = Framework.VITE === input.detection.framework;
-  if (null === cfg) {
-    if (!plainVite) {
-      return [
-        {
-          title: StepTitle.VITE_PLUGIN,
-          target: 'vite.config',
-          status: StepStatus.MANUAL,
-          detail: viteManual(port, input.detection.uiLibrary, inject, stampSource),
-        },
-      ];
-    }
-    const path = input.detection.typescript ? 'vite.config.ts' : 'vite.config.mjs';
-    return [
-      {
-        title: StepTitle.VITE_PLUGIN,
-        target: path,
-        status: StepStatus.APPLY,
-        detail,
-        write: {
-          path,
-          content: newViteConfig(port, true === input.captureBodies, inject, stampSource),
-          expect: [VITE_IMPORT, 'reticle('],
-        },
-        dependsOnInstall: true,
-      },
-    ];
-  }
-  const patch = patchViteConfig(
-    cfg.source,
-    port,
-    true === input.captureBodies,
-    inject,
-    stampSource,
-  );
-  if (patch.kind === VitePatchKind.ALREADY) {
-    return [
-      {
-        title: StepTitle.VITE_PLUGIN,
-        target: cfg.path,
-        status: StepStatus.ALREADY,
-        detail: 'reticle() already in plugins',
-      },
-    ];
-  }
-  if (patch.kind === VitePatchKind.MANUAL) {
-    return [
-      {
-        title: StepTitle.VITE_PLUGIN,
-        target: cfg.path,
-        status: StepStatus.MANUAL,
-        detail: `${patch.reason}\n\n${viteManual(port, input.detection.uiLibrary, inject, stampSource)}`,
-      },
-    ];
-  }
-  return [
-    {
-      title: StepTitle.VITE_PLUGIN,
-      target: cfg.path,
-      status: StepStatus.APPLY,
-      detail,
-      // Both halves, because either alone is a config that does not wire: the import without the
-      // call leaves `plugins` untouched, and the call without the import does not build.
-      write: { path: cfg.path, content: patch.code, expect: [VITE_IMPORT, 'reticle('] },
-      dependsOnInstall: true,
-    },
-  ];
-}
+import { alreadyOrMovedPort } from './port-steps.js';
+import { capabilitiesTodo, needsManualStore } from './plan-vite.js';
+import { HTML_INDEX_PATH, hasStaticSnippet } from '@/patch/static-page.js';
 
 /**
  * Turn a conservative source patch into a step: applied when it patched, already when the wiring is
@@ -403,12 +135,16 @@ export function nextSteps(input: PlanInput): Step[] {
           status: StepStatus.MANUAL,
           detail: NEXT_DEV_FILE_STALE_DETAIL,
         }
-      : {
-          title: StepTitle.RETICLE_DEV_COMPONENT,
-          target: devPath,
-          status: StepStatus.ALREADY,
-          detail: 'file exists',
-        }
+      : alreadyOrMovedPort(
+          {
+            title: StepTitle.RETICLE_DEV_COMPONENT,
+            target: devPath,
+            status: StepStatus.ALREADY,
+            detail: 'file exists',
+          },
+          input.nextReticleDevSource,
+          input.options.port,
+        )
     : {
         title: StepTitle.RETICLE_DEV_COMPONENT,
         target: devPath,
@@ -451,7 +187,7 @@ export function nextSteps(input: PlanInput): Step[] {
     needsManualStore(input.storeHints ?? [], input.nextFoundStores ?? [])
       ? [
           {
-            title: CAPABILITIES_TODO_TITLE,
+            title: StepTitle.CAPABILITIES_TODO,
             target: devPath,
             status: StepStatus.NOTICE,
             detail: capabilitiesTodo(devPath, input.storeHints ?? []),
@@ -627,7 +363,7 @@ export function nuxtSteps(input: PlanInput): Step[] {
     },
   ];
   if (null === config) return manual;
-  const configPatch = patchNuxtConfig(config.source);
+  const configPatch = patchNuxtConfig(config.source, input.viteMajor ?? null);
   if (configPatch.kind === PatchKind.MANUAL) return manual;
   const notice: Step = {
     title: StepTitle.NUXT_RESTART,
@@ -639,12 +375,16 @@ export function nuxtSteps(input: PlanInput): Step[] {
   // capabilities. Rewriting it would take those with it.
   const plugin: Step =
     true === input.nuxtPluginExists
-      ? {
-          title: StepTitle.CONNECT_SNIPPET_NUXT,
-          target: pluginPath,
-          status: StepStatus.ALREADY,
-          detail: 'file exists',
-        }
+      ? alreadyOrMovedPort(
+          {
+            title: StepTitle.CONNECT_SNIPPET_NUXT,
+            target: pluginPath,
+            status: StepStatus.ALREADY,
+            detail: 'file exists',
+          },
+          input.nuxtPluginSource,
+          input.options.port,
+        )
       : {
           title: StepTitle.CONNECT_SNIPPET_NUXT,
           target: pluginPath,
@@ -669,7 +409,11 @@ export function nuxtSteps(input: PlanInput): Step[] {
       'inline the pairing token and keep the journal out of the watcher',
       nuxtManual(input.options.port, input.options.projectId),
     ),
-    notice,
+    // Only when this run changed something Nuxt reads at startup. A re-run that found everything in
+    // place, attached to the running server and connected was still told to restart it.
+    ...(StepStatus.ALREADY === plugin.status && PatchKind.ALREADY === configPatch.kind
+      ? []
+      : [notice]),
   ];
 }
 
@@ -686,7 +430,13 @@ export function nuxtSteps(input: PlanInput): Step[] {
  * would replace that default with one that never hydrates. When it is present, one line is added to
  * it and nothing else is touched.
  */
-export function reactRouterSteps(input: PlanInput): Step[] {
+export function reactRouterSteps(
+  input: PlanInput,
+  // Remix v2 is the same framework under its old name and takes the same entry, with its own
+  // default hydration (`RemixBrowser`) and its own title — see plan-remix.ts.
+  title: StepTitle = StepTitle.CONNECT_SNIPPET_REACT_ROUTER,
+  newEntry: () => string = reactRouterEntryFile,
+): Step[] {
   const detail =
     'connect from the client entry — framework mode renders HTML through its own request handler, ' +
     "so the Vite plugin's index.html injection never fires";
@@ -694,11 +444,11 @@ export function reactRouterSteps(input: PlanInput): Step[] {
   if (true !== input.reactRouterEntryExists || null === existing) {
     return [
       {
-        title: StepTitle.CONNECT_SNIPPET_REACT_ROUTER,
+        title,
         target: REACT_ROUTER_ENTRY_PATH,
         status: StepStatus.APPLY,
         detail: `create the dev-only ${detail}`,
-        write: { path: REACT_ROUTER_ENTRY_PATH, content: reactRouterEntryFile() },
+        write: { path: REACT_ROUTER_ENTRY_PATH, content: newEntry() },
         dependsOnInstall: true,
       },
     ];
@@ -707,13 +457,13 @@ export function reactRouterSteps(input: PlanInput): Step[] {
   return [
     null === patched
       ? {
-          title: StepTitle.CONNECT_SNIPPET_REACT_ROUTER,
+          title,
           target: REACT_ROUTER_ENTRY_PATH,
           status: StepStatus.ALREADY,
           detail: 'already imported',
         }
       : {
-          title: StepTitle.CONNECT_SNIPPET_REACT_ROUTER,
+          title,
           target: REACT_ROUTER_ENTRY_PATH,
           status: StepStatus.APPLY,
           detail: `add one line to ${detail}`,
@@ -724,47 +474,78 @@ export function reactRouterSteps(input: PlanInput): Step[] {
 }
 
 /**
- * TanStack Start: the client-document connect, printed rather than written.
+ * TanStack Start: a client connect component, written, and rendered in the root document.
  *
- * `src/routes/__root.tsx` is the document Start SSRs. A static import of the SDK on that module
- * 500s, so writing one is worse than a documented manual step. See `tanstackStartManual`.
+ * ATOMIC, like Astro: the component on disk with nothing rendering it is a guaranteed
+ * non-connection, so when the root cannot be patched BOTH halves go back to the recipe.
  */
 export function tanstackStartSteps(input: PlanInput): Step[] {
   const root = input.tanstackStartRoot ?? TANSTACK_START_ROOT_PATH;
-  return [
-    {
-      title: StepTitle.TANSTACK_START_UNVERIFIED,
-      target: root,
-      status: StepStatus.NOTICE,
-      detail: UNVERIFIED_TANSTACK_START_NOTE,
-    },
-    {
-      title: StepTitle.CONNECT_SNIPPET_TANSTACK_START,
-      target: root,
-      status: StepStatus.MANUAL,
-      detail: tanstackStartManual(input.options.port, input.options.projectId, root),
-    },
-  ];
+  const unverified: Step = {
+    title: StepTitle.TANSTACK_START_UNVERIFIED,
+    target: root,
+    status: StepStatus.NOTICE,
+    detail: UNVERIFIED_TANSTACK_START_NOTE,
+  };
+  const recipe = tanstackStartManual(input.options.port, input.options.projectId, root);
+  const source = input.tanstackStartRootSource ?? null;
+  const patch: SourcePatch =
+    null === source
+      ? { kind: PatchKind.MANUAL, reason: `could not read ${root}` }
+      : patchTanstackStartRoot(source, root);
+  const rendered = patchStep(
+    StepTitle.CONNECT_SNIPPET_TANSTACK_START,
+    root,
+    patch,
+    'render <ReticleConnect /> before <Scripts /> in the root document',
+    recipe,
+  );
+  if (PatchKind.MANUAL === patch.kind) return [unverified, rendered];
+  const title = StepTitle.TANSTACK_START_CONNECT_COMPONENT;
+  const path = tanstackStartConnectPath(root);
+  const content = tanstackStartConnectFile(input.options.port, input.options.projectId, root);
+  const component: Step =
+    true === input.tanstackStartConnectExists
+      ? // "file exists" used to end it without reading the port inside, so a re-run with a new
+        // `--port` left the page dialling the daemon that had moved.
+        alreadyOrMovedPort(
+          { title, target: path, status: StepStatus.ALREADY, detail: 'file exists' },
+          input.tanstackStartConnectSource,
+          input.options.port,
+        )
+      : {
+          title,
+          target: path,
+          status: StepStatus.APPLY,
+          detail: 'create the dev-only client connect (Start SSRs its own HTML)',
+          write: { path, content },
+          dependsOnInstall: true,
+        };
+  return [unverified, component, rendered];
 }
 
 export function svelteKitSteps(input: PlanInput): Step[] {
   const unverified: Step = {
-    title: StepTitle.SVELTEKIT_UNVERIFIED,
+    title: StepTitle.SVELTEKIT_SETUP_GATED,
     target: SVELTEKIT_HOOKS_PATH,
     status: StepStatus.NOTICE,
-    detail: UNVERIFIED_FRAMEWORK_NOTE,
+    detail: SVELTEKIT_SETUP_GATED_NOTE,
   };
   // SvelteKit can't use the Vite-plugin injection (it renders via app.html) — wire a client hook
   // that SvelteKit runs on startup, which is the path that can register a session at all.
   if (true === input.svelteKitHooksExists) {
     return [
       unverified,
-      {
-        title: StepTitle.CLIENT_HOOK,
-        target: SVELTEKIT_HOOKS_PATH,
-        status: StepStatus.ALREADY,
-        detail: 'file exists',
-      },
+      alreadyOrMovedPort(
+        {
+          title: StepTitle.CLIENT_HOOK,
+          target: SVELTEKIT_HOOKS_PATH,
+          status: StepStatus.ALREADY,
+          detail: 'file exists',
+        },
+        input.svelteKitHooksSource,
+        input.options.port,
+      ),
     ];
   }
   return [
@@ -820,7 +601,7 @@ export function astroSteps(input: PlanInput): Step[] {
   // layout ✓ — which reads as one step done and one caveat when it is actually a guaranteed
   // non-connection. If either half cannot be applied, BOTH go manual with the single recipe.
   const manualWithLayout = astroManual(input.options.port, input.options.projectId, layout.path);
-  const configPatch = patchAstroConfig(config.source);
+  const configPatch = patchAstroConfig(config.source, input.viteMajor ?? null);
   const layoutPatch = patchAstroLayout(layout.source, layout.path);
   if (configPatch.kind === PatchKind.MANUAL || layoutPatch.kind === PatchKind.MANUAL) {
     return [
@@ -888,53 +669,6 @@ export function astroSteps(input: PlanInput): Step[] {
 }
 
 /**
- * A Content-Security-Policy whose `connect-src` excludes the bridge, said out loud at install time.
- *
- * Both reported cases were Next apps where `init` printed success for every step and the app then
- * never connected: the browser blocked the WebSocket and reported it in its own console, which
- * nothing on this side reads. A NOTICE rather than a step, because editing someone's security policy
- * is theirs to do — but it carries the exact text to paste, which is the difference between a
- * warning and a fix.
- */
-export function cspStep(input: PlanInput): Step[] {
-  // Reads the SAME list `reticle doctor` reads. It used to read a hand-written pair —
-  // `[nextConfigSource, nextLayout?.source]` — while csp-doctor.ts already carried the full set
-  // including `index.html`, which is where every Vite and Electron app declares its policy. So the
-  // command you run BEFORE anything works checked less than the one you run after it has failed.
-  //
-  // Measured on MarkText, a production Electron editor: its renderer sets `default-src 'self'` with
-  // no `connect-src`, the browser blocked the bridge WebSocket, and `init` printed a clean plan. The
-  // daemon cannot see a dial that never left the page, so nothing anywhere said why — and the check
-  // that would have said it was sitting one import away.
-  // The pre-read Next sources are folded in ON TOP of the shared list, not replaced by it: init
-  // resolves `nextConfigFile` across more spellings than CSP_FILES names (`.mts`, for one), and a
-  // layout is found by search rather than by a fixed path. Two sources of the same truth is the
-  // problem being fixed here — one of them being a SUPERSET is not.
-  const extra: Record<string, string | undefined> = {
-    ...(input.nextConfigFile !== null && input.nextConfigFile !== undefined
-      ? { [input.nextConfigFile]: input.nextConfigSource ?? undefined }
-      : {}),
-    ...(input.nextLayout ? { [input.nextLayout.path]: input.nextLayout.source } : {}),
-  };
-  const read = (file: string): string | undefined => extra[file] ?? input.cspSources?.[file];
-  const findings = diagnoseWebCsp(read, input.options.port ?? RETICLE_DEFAULT_PORT, [
-    ...Object.keys(extra),
-  ]);
-  const first = findings[0];
-  if (first === undefined) return [];
-  return [
-    {
-      title: CSP_STEP_TITLE,
-      target: first.file,
-      status: StepStatus.NOTICE,
-      // `problem` already ends with the text to paste; `fix` is the same sentence for callers that
-      // want it on its own (doctor renders them separately). Printing both said it twice.
-      detail: first.problem,
-    },
-  ];
-}
-
-/**
  * The plain-HTML path: no bundler to hook, so the connect snippet is printed for a hand edit.
  *
  * A function of its own, and NOT a fallthrough. Every framework is sent here on purpose or not at
@@ -942,12 +676,34 @@ export function cspStep(input: PlanInput): Step[] {
  * where the if/else chain this replaced used to hand it these instructions silently.
  */
 export function htmlSteps(input: PlanInput): Step[] {
+  // Read the page before calling the step undone. It used to be MANUAL unconditionally, so a re-run
+  // over a page that already connects said "This app will NOT connect until the ⚠ step".
+  const index = input.htmlIndexSource ?? null;
+  if (null !== index && hasStaticSnippet(index)) {
+    return [
+      alreadyOrMovedPort(
+        {
+          title: StepTitle.CONNECT_SNIPPET,
+          target: HTML_INDEX_PATH,
+          status: StepStatus.ALREADY,
+          detail: 'index.html already loads the Reticle SDK',
+        },
+        index,
+        input.options.port,
+      ),
+    ];
+  }
   return [
     {
       title: StepTitle.CONNECT_SNIPPET,
-      target: 'index.html',
+      target: HTML_INDEX_PATH,
       status: StepStatus.MANUAL,
-      detail: htmlManual(input.options.port, input.options.projectId, input.pairingToken),
+      detail: htmlManual(
+        input.options.port,
+        input.options.projectId,
+        input.pairingToken,
+        input.detection.uiLibrary,
+      ),
     },
   ];
 }

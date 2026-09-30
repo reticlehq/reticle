@@ -56,12 +56,69 @@ export function planDevScript(
   if (serving) return { choice: DevScriptChoice.ALREADY_SERVING };
   const name = CANDIDATES.find((c) => 'string' === typeof scripts[c] && scripts[c] !== '');
   if (name === undefined) return { choice: DevScriptChoice.NO_SCRIPT };
-  // `npm` needs `run`; the others take the script name directly. Getting this wrong prints a
-  // command that fails, which is worse than printing nothing. `npm` is never corepack-prefixed (it
-  // ships with node), so this comparison still identifies it correctly.
-  const command =
-    'npm' === packageManagerCommand ? `npm run ${name}` : `${packageManagerCommand} ${name}`;
-  return { choice: DevScriptChoice.START, script: name, command };
+  return {
+    choice: DevScriptChoice.START,
+    script: name,
+    command: runScript(packageManagerCommand, name),
+  };
+}
+
+/**
+ * `npm` needs `run`; the others take the script name directly. Getting this wrong prints a command
+ * that fails, which is worse than printing nothing. `npm` is never corepack-prefixed (it ships with
+ * node), so this comparison still identifies it correctly.
+ */
+function runScript(packageManagerCommand: string, script: string): string {
+  return 'npm' === packageManagerCommand
+    ? `npm run ${script}`
+    : `${packageManagerCommand} ${script}`;
+}
+
+/** How a desktop shell is launched: through one of its scripts, or its CLI when none names it. */
+export type DesktopLaunch =
+  { readonly script: string; readonly args: string } | { readonly command: string };
+
+const TAURI_CLI_PACKAGE = '@tauri-apps/cli';
+/** The official template's script: `"tauri": "tauri"`, so `<pm> tauri dev` is its dev command. */
+const TAURI_SCRIPT = 'tauri';
+const TAURI_DEV_ARG = 'dev';
+const TAURI_DIRECT = 'npx tauri dev';
+const FORGE_CLI_PACKAGE = '@electron-forge/cli';
+const FORGE_START = /\belectron-forge\s+start\b/;
+const FORGE_DIRECT = 'npx electron-forge start';
+
+function manifestRecord(pkg: unknown, key: string): Record<string, unknown> {
+  const value: unknown = 'object' === typeof pkg && null !== pkg ? Reflect.get(pkg, key) : {};
+  return 'object' === typeof value && null !== value ? (value as Record<string, unknown>) : {};
+}
+
+/**
+ * The desktop shell's own launcher, when the manifest names one; undefined for anything else.
+ *
+ * A desktop project's `dev` script is its RENDERER's dev server: on the official Tauri template it
+ * is plain `vite`, so init ran it, no window ever opened, and the run waited out its whole budget
+ * for a session only the window could create. The shell's CLI is what opens the window.
+ *
+ * Exported because the daemon names a dev command too (its no-session next action), and two
+ * readers of one manifest have to give one answer.
+ */
+export function desktopLaunch(pkg: unknown): DesktopLaunch | undefined {
+  const scripts = manifestRecord(pkg, 'scripts');
+  const deps = {
+    ...manifestRecord(pkg, 'dependencies'),
+    ...manifestRecord(pkg, 'devDependencies'),
+  };
+  const tauriScript = scripts[TAURI_SCRIPT];
+  if ('string' === typeof tauriScript && 0 < tauriScript.trim().length) {
+    return { script: TAURI_SCRIPT, args: TAURI_DEV_ARG };
+  }
+  if (undefined !== deps[TAURI_CLI_PACKAGE]) return { command: TAURI_DIRECT };
+  const forge = Object.entries(scripts).find(
+    ([, body]) => 'string' === typeof body && FORGE_START.test(body),
+  );
+  if (undefined !== forge) return { script: forge[0], args: '' };
+  if (undefined !== deps[FORGE_CLI_PACKAGE]) return { command: FORGE_DIRECT };
+  return undefined;
 }
 
 /**
@@ -76,6 +133,12 @@ export function devCommandFrom(pkg: unknown, packageManagerCommand: string): str
     // Takes the PARSED manifest. It used to take the raw string and parse it a fourth time — the
     // caller now reads the file once, through a guard, so there is one place a malformed manifest
     // can be noticed and it is not this one.
+    const desktop = desktopLaunch(pkg);
+    if (undefined !== desktop) {
+      if ('command' in desktop) return desktop.command;
+      const run = runScript(packageManagerCommand, desktop.script);
+      return 0 < desktop.args.length ? `${run} ${desktop.args}` : run;
+    }
     const scripts =
       'object' === typeof pkg && null !== pkg
         ? ((pkg as { scripts?: Record<string, string> }).scripts ?? {})
@@ -84,4 +147,15 @@ export function devCommandFrom(pkg: unknown, packageManagerCommand: string): str
   } catch {
     return undefined;
   }
+}
+
+/** The dev script's own command line (`react-router dev`, `vite`), or undefined when there is none. */
+export function devScriptBody(pkg: unknown): string | undefined {
+  const scripts: unknown =
+    'object' === typeof pkg && null !== pkg ? (pkg as { scripts?: unknown }).scripts : undefined;
+  if ('object' !== typeof scripts || null === scripts) return undefined;
+  const table = scripts as Record<string, unknown>;
+  const name = CANDIDATES.find((c) => 'string' === typeof table[c] && table[c] !== '');
+  const body = name === undefined ? undefined : table[name];
+  return 'string' === typeof body ? body : undefined;
 }

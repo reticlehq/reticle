@@ -1,4 +1,9 @@
-import { RETICLE_IPC_GLOBAL, realmOf, realmOfProject } from '@reticlehq/core';
+import {
+  RETICLE_CAPTURE_CHANNEL,
+  RETICLE_IPC_GLOBAL,
+  realmOf,
+  realmOfProject,
+} from '@reticlehq/core';
 
 /**
  * Setup RCA for desktop apps.
@@ -197,7 +202,14 @@ function diagnoseElectron(read: ReadFile, main: string): DesktopDiagnosis[] {
   }
 
   const mainSource = read(main);
-  if (mainSource !== undefined && !mainSource.includes(CAPTURE_REQUIRE)) {
+  // The require OR the contract's capture channel. `main` is usually the BUILD output, and bundling
+  // erases the require: an electron-vite app that did install the helper was told it never had. The
+  // helper registers the channel by its contract string, which survives bundling — the same
+  // artifact-level evidence the preload check above reads from the IPC global.
+  const captureWired =
+    true === mainSource?.includes(CAPTURE_REQUIRE) ||
+    true === mainSource?.includes(RETICLE_CAPTURE_CHANNEL);
+  if (mainSource !== undefined && !captureWired) {
     findings.push({
       code: DesktopFinding.ELECTRON_CAPTURE_MISSING,
       file: main,

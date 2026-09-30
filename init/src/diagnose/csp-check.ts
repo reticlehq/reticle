@@ -164,5 +164,83 @@ export function devCspAddition(port: number): string {
   );
 }
 
+/** A `<meta http-equiv="Content-Security-Policy" content=…>` tag's content attribute, by quote. */
+const CSP_META = /<meta\b[^>]*http-equiv\s*=\s*["']?content-security-policy["']?[^>]*>/gi;
+const CONTENT_ATTR = /(\bcontent\s*=\s*)(["'])((?:(?!\2).)*)\2/i;
+
+/** A loopback WebSocket source, with its port captured. */
+const LOOPBACK_WS = /^ws:\/\/(?:localhost|127\.0\.0\.1):(\d+)$/;
+
+/**
+ * The ports for which BOTH bridge origins are present — the pair this file writes, and the only
+ * loopback sources it may take back out.
+ *
+ * A port move used to APPEND the new pair beside the old one, so the policy kept admitting a port
+ * nothing listened on and grew a pair per move. One `ws://localhost:3000` the app wrote for its own
+ * dev server is not a pair, and is left alone.
+ */
+function stalePairs(sources: readonly string[], port: number): Set<string> {
+  const ports = sources.flatMap((source) => LOOPBACK_WS.exec(source)?.[1] ?? []);
+  return new Set(
+    ports.filter(
+      (p) =>
+        String(port) !== p && bridgeOrigins(Number(p)).every((origin) => sources.includes(origin)),
+    ),
+  );
+}
+
+/** The policy with both bridge origins admitted to `connect-src`, every other directive untouched. */
+function withBridgeOrigins(policy: string, port: number): string {
+  const origins = bridgeOrigins(port);
+  const directives = policy.split(';');
+  const connect = directives.findIndex((d) => /^\s*connect-src\b/i.test(d));
+  if (-1 !== connect) {
+    const current = directives[connect] ?? '';
+    const sources = current.trim().split(/\s+/);
+    const stale = stalePairs(sources, port);
+    const kept = sources.filter((source) => !stale.has(LOOPBACK_WS.exec(source)?.[1] ?? ''));
+    const missing = origins.filter((origin) => !kept.includes(origin));
+    const lead = /^\s*/.exec(current)?.[0] ?? '';
+    directives[connect] = `${lead}${[...kept, ...missing].join(' ')}`;
+    return directives.join(';');
+  }
+  // No connect-src: the socket falls back to default-src, so the new directive starts from what
+  // default-src already allowed — adding it bare would take 'self' away from every fetch the app does.
+  const fallback = directiveSources(policy, 'default-src') ?? [];
+  const added = ` connect-src ${[...fallback, ...origins].join(' ')}`;
+  const trimmed = policy.trimEnd();
+  return trimmed.endsWith(';') ? `${trimmed}${added};` : `${trimmed};${added}`;
+}
+
+/**
+ * The same HTML with every CSP `<meta>` that blocks the bridge made to admit it, or undefined when
+ * none needed it — the one policy location `init` can edit safely, because it is a file of the app's
+ * own and the edit is a pair of sources appended to one directive.
+ *
+ * Reproduced on electron-vite's own template: `default-src 'self'` and no `connect-src`, so the
+ * bridge WebSocket is refused and init waited out its whole budget. The origins are loopback-only;
+ * a static `<meta>` has no development branch, so they are present in a packaged build too, where
+ * nothing listens on them. On a port move the pair is REPLACED (see stalePairs).
+ */
+export function patchCspMetaConnectSrc(html: string, port: number): string | undefined {
+  let changed = false;
+  const out = html.replace(CSP_META, (tag) =>
+    tag.replace(CONTENT_ATTR, (whole, head: string, quote: string, policy: string) => {
+      if (cspConnectSrcProblem(policy, port) === undefined) return whole;
+      changed = true;
+      return `${head}${quote}${withBridgeOrigins(policy, port)}${quote}`;
+    }),
+  );
+  return changed ? out : undefined;
+}
+
+/** What the patched step says it did. */
+export function cspPatchedDetail(port: number): string {
+  return (
+    `admit the Reticle bridge (${bridgeOrigins(port).join(' ')}) to connect-src — the policy ` +
+    'blocked the WebSocket, so the app could never connect'
+  );
+}
+
 /** The step title, named here so `doctor` and the plan cannot drift apart on what this check is called. */
 export const CSP_STEP_TITLE = 'Content-Security-Policy';

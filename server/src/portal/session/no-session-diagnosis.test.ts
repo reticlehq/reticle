@@ -790,3 +790,45 @@ describe('a page that was refused is not a page that never came', () => {
     expect(msg).not.toMatch(/token/i);
   });
 });
+
+/**
+ * A desktop app's page exists only inside its own window. The guidance told an Electron user to open
+ * the app's URL in a browser and to reach for reticle_lease — which loads the renderer outside the
+ * shell, without its IPC bridge, and is not the app being verified. For a desktop project every
+ * branch that says "open it" now says "run the desktop dev command" instead.
+ */
+describe('diagnoseNoSession — a desktop project', () => {
+  const base: NoSessionFacts = {
+    everConnected: false,
+    initialized: true,
+    listening: [],
+    port: 4400,
+  };
+  const shapes: NoSessionFacts[] = [
+    { ...base, desktop: true },
+    { ...base, desktop: true, listening: [5173] },
+    { ...base, desktop: true, listening: [5173], previouslyConnected: true },
+    { ...base, desktop: true, initialized: false, configsElsewhere: [{ directory: '/x/app' }] },
+  ];
+
+  it('names the desktop dev command and never a browser URL or a lease', () => {
+    for (const facts of shapes) {
+      const msg = diagnoseNoSession(facts);
+      expect(msg).toMatch(/desktop dev command/);
+      expect(msg).not.toMatch(/reticle_lease \{action:"acquire"/);
+      expect(msg).not.toMatch(/open <url>|server open`/);
+    }
+  });
+
+  it('does not send a desktop window that went away to a browser either', () => {
+    const msg = diagnoseNoSession({ ...base, desktop: true, everConnected: true });
+    expect(msg).not.toMatch(/reticle_lease \{action:"acquire"/);
+    expect(msg).not.toMatch(/server open`/);
+  });
+
+  it('leaves a web project told to open the app in a browser', () => {
+    const msg = diagnoseNoSession({ ...base, listening: [5173] });
+    expect(msg).not.toMatch(/desktop dev command/);
+    expect(msg).toMatch(/open <url>/);
+  });
+});

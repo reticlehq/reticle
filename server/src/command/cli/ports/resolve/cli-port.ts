@@ -15,6 +15,7 @@ import {
   buildNodeIo,
   deriveProjectId,
   findWorkspaceApps,
+  isDesktopProject,
   packageName,
 } from '@reticlehq/init';
 import { asProjectId, type ProjectId } from '@reticlehq/core';
@@ -45,20 +46,62 @@ const MAX_CONFIG_SEARCH_DEPTH = 6;
  * Returns undefined when nothing is found, which keeps every caller's existing default intact.
  */
 export function findProjectConfig(cwd: string): Record<string, unknown> | undefined {
+  const dir = findProjectConfigDir(cwd);
+  return dir === undefined ? undefined : readConfigAt(dir);
+}
+
+/** The directory holding the nearest `.reticle.json` at or above `cwd`, by the same walk. */
+function findProjectConfigDir(cwd: string): string | undefined {
   let dir = resolve(cwd);
   for (let depth = 0; depth <= MAX_CONFIG_SEARCH_DEPTH; depth += 1) {
-    try {
-      const raw = readFileSync(`${dir}/${RETICLE_CONFIG_BASENAME}`, 'utf8');
-      const config: unknown = JSON.parse(raw);
-      if ('object' === typeof config && config !== null && !Array.isArray(config)) {
-        return config as Record<string, unknown>;
-      }
-    } catch {
-      // Absent, unreadable, or not JSON at this level — keep walking.
-    }
+    if (readConfigAt(dir) !== undefined) return dir;
     const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
+  }
+  return undefined;
+}
+
+/**
+ * The directory of the project this invocation serves: where its `.reticle.json` is, else the one
+ * wired workspace app below a monorepo root, else `cwd` itself. What the CLI reads the installed SDK
+ * from, so it answers for the app the port above belongs to rather than for the directory it was
+ * started in.
+ */
+export function projectDirOf(cwd: string): string {
+  const configDir = findProjectConfigDir(cwd);
+  if (configDir !== undefined) return appPointedAtBy(configDir) ?? configDir;
+  const apps = workspaceAppPorts(cwd);
+  const only = 1 === apps.length ? apps[0] : undefined;
+  return only === undefined ? resolve(cwd) : join(resolve(cwd), only.app);
+}
+
+/**
+ * The one workspace app below `dir` whose own config names the project `dir`'s does, or undefined.
+ *
+ * `init` writes a copy of the app's `.reticle.json` at the root the agent runs from, so the root's
+ * config is a pointer to that app rather than a project of its own. The projectId is the link — no
+ * path is stored — and a root whose id no app shares, or several do, is its own project.
+ */
+function appPointedAtBy(dir: string): string | undefined {
+  const id = readConfigAt(dir)?.['projectId'];
+  if ('string' !== typeof id || 0 === id.length) return undefined;
+  const named = workspaceApps(dir).filter(
+    (app) => id === readConfigAt(join(dir, app))?.['projectId'],
+  );
+  const only = 1 === named.length ? named[0] : undefined;
+  return only === undefined ? undefined : join(dir, only);
+}
+
+/** The `.reticle.json` in exactly `dir` — no walk — or undefined when absent or not an object. */
+function readConfigAt(dir: string): Record<string, unknown> | undefined {
+  try {
+    const config: unknown = JSON.parse(readFileSync(join(dir, RETICLE_CONFIG_BASENAME), 'utf8'));
+    if ('object' === typeof config && config !== null && !Array.isArray(config)) {
+      return config as Record<string, unknown>;
+    }
+  } catch {
+    // Absent, unreadable, or not JSON at this level.
   }
   return undefined;
 }
@@ -71,14 +114,69 @@ export function findProjectConfig(cwd: string): Record<string, unknown> | undefi
  */
 export { DEV_SERVER_PORTS, isLikelyDevServerPort, devServerPortWarning } from '@reticlehq/init';
 
+/** A config's `port`, when it is a usable TCP port. */
+function configPort(config: Record<string, unknown> | undefined): number | undefined {
+  const p = config?.['port'];
+  if ('number' === typeof p && Number.isInteger(p) && p > 0 && p < 65536) return p;
+  return undefined;
+}
+
 /**
  * Read the port stored in the project's .reticle.json (written by `reticle init`).
  * Returns undefined if the file is absent, unreadable, or has no valid numeric port.
+ *
+ * With no config at or above `cwd`, it looks DOWN, the same way `projectIdsAt` does. Running from a
+ * monorepo root whose app was wired in `apps/web` used to find nothing and fall back to the default
+ * port, so `status`, `mcp` and `verify` quietly talked to another project's daemon. One wired app
+ * below, or several that agree, give their port; several that disagree give none, and
+ * `workspacePortConflict` is what says so rather than letting the default win in silence.
  */
 export function readProjectPort(cwd: string): number | undefined {
-  const p = findProjectConfig(cwd)?.['port'];
-  if ('number' === typeof p && Number.isInteger(p) && p > 0 && p < 65536) return p;
-  return undefined;
+  const config = findProjectConfig(cwd);
+  if (config !== undefined) return configPort(config);
+  const ports = new Set(workspaceAppPorts(cwd).map((a) => a.port));
+  return 1 === ports.size ? [...ports][0] : undefined;
+}
+
+/** Each workspace app under `cwd` whose own `.reticle.json` records a port. */
+function workspaceAppPorts(cwd: string): { app: string; port: number }[] {
+  const found: { app: string; port: number }[] = [];
+  for (const app of workspaceApps(cwd)) {
+    // The app's OWN file only — walking up from an unwired sibling would reach the root, or past it.
+    const port = configPort(readConfigAt(join(cwd, app)));
+    if (port !== undefined) found.push({ app, port });
+  }
+  return found;
+}
+
+/** init's workspace discovery under `cwd`, relative app directories; empty when `cwd` is no package. */
+function workspaceApps(cwd: string): string[] {
+  // Only from a directory that is itself a package: a root with no package.json is not a workspace,
+  // and scanning, say, a home directory would adopt the port of whichever checkout happened to sit
+  // there.
+  if (packageNameAt(cwd) === undefined) return [];
+  try {
+    return findWorkspaceApps(buildNodeIo(cwd, SILENT_HOST));
+  } catch {
+    // Discovery touches the filesystem; an unreadable tree is simply no further evidence.
+    return [];
+  }
+}
+
+/**
+ * The sentence for a monorepo root whose wired apps name different ports, or undefined when there is
+ * nothing to choose between. `readProjectPort` refuses to pick one; this is what tells the person
+ * which ports exist and how to name the one they meant.
+ */
+export function workspacePortConflict(cwd: string): string | undefined {
+  if (findProjectConfig(cwd) !== undefined) return undefined;
+  const apps = workspaceAppPorts(cwd);
+  if (new Set(apps.map((a) => a.port)).size < 2) return undefined;
+  const listed = apps.map((a) => `${a.app} (:${String(a.port)})`).join(', ');
+  return (
+    `This workspace has more than one app wired for Reticle, on different ports: ${listed}. ` +
+    'Not guessing which one you meant — run the command from inside that app, or pass --port.'
+  );
 }
 
 /**
@@ -150,6 +248,22 @@ export function readProjectFramework(cwd: string): string | undefined {
   const framework = findProjectConfig(cwd)?.['framework'];
   if ('string' === typeof framework && framework.length > 0) return framework;
   return undefined;
+}
+
+/**
+ * Whether the project this directory serves is a desktop shell (Electron, Tauri) — the same question
+ * `doctor` asks, answered from the same files. Read so the no-session guidance stops sending a
+ * desktop user to a browser URL.
+ */
+export function readProjectIsDesktop(cwd: string): boolean {
+  const dir = projectDirOf(cwd);
+  return isDesktopProject((relative) => {
+    try {
+      return readFileSync(join(dir, relative), 'utf8');
+    } catch {
+      return undefined;
+    }
+  });
 }
 
 /**

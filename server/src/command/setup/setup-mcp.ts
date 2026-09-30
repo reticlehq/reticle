@@ -3,7 +3,7 @@ import {
   MCP_CLIENTS,
   claudeAddCommand,
   claudeAvailableProbe,
-  claudeExistsProbe,
+  claudeHasReticle,
   detectMcpClients,
   mergeClientConfig,
   clientSpec,
@@ -92,8 +92,8 @@ export function setupMcp(io: SetupMcpIo): SetupMcpResult {
   const available = claudeAvailableProbe();
   if (io.runCli(available.command, available.args)) {
     detected.push(McpClient.CLAUDE_CODE);
-    const already = claudeExistsProbe();
-    if (io.runCli(already.command, already.args)) {
+    // Read from Claude's config: `claude mcp get` health-checks by launching the server.
+    if (claudeHasReticle(io, undefined)) {
       alreadyThere.push(McpClient.CLAUDE_CODE);
     } else {
       const cmd = claudeAddCommand();

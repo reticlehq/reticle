@@ -2,20 +2,24 @@ import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import http from 'node:http';
 import net from 'node:net';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import {
-  alreadyWired,
-  binaryExists,
-  flowsSaved,
-  OwnedDevServer,
-  probePage,
-} from './node-effects.js';
+import { alreadyWired, binaryExists, flowsSaved, probePage } from './node-effects.js';
+
+/**
+ * From the BUILT module, like the handover tests below: the server runs under a supervisor script
+ * (dev-server-log-cap) that `start` spawns by path next to the module, and only the build has it.
+ */
+const { OwnedDevServer } = (await import(
+  pathToFileURL(join(process.cwd(), 'dist/command/setup/node-effects.js')).href
+)) as typeof import('./node-effects.js');
 
 const isWindows = 'win32' === process.platform;
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+/** The dev server's log goes here, not into the real state home. */
+const LOG_DIR = mkdtempSync(join(tmpdir(), 'dev-server-log-'));
 
 /** Who is LISTENING on this port right now, as a pid list — empty when nobody is. */
 const holdersOf = (port: number): string =>
@@ -52,7 +56,7 @@ describe('the dev server this process owns', () => {
     'stops what it started, including what that started',
     async () => {
       const port = 59_231;
-      const server = new OwnedDevServer();
+      const server = new OwnedDevServer(LOG_DIR);
       // A shell that spawns node: the port belongs to the GRANDCHILD, which is the shape that makes
       // killing only the process we hold insufficient.
       server.start(
@@ -71,7 +75,7 @@ describe('the dev server this process owns', () => {
     'leaves it running once handed over, because that is the deliverable',
     async () => {
       const port = 59_232;
-      const server = new OwnedDevServer();
+      const server = new OwnedDevServer(LOG_DIR);
       server.start(
         `node -e "require('http').createServer((q,r)=>r.end('hi')).listen(${port},'127.0.0.1')"`,
         process.cwd(),
@@ -96,7 +100,7 @@ describe('the dev server this process owns', () => {
   );
 
   it('reports what the server printed, and how long it has been quiet', async () => {
-    const server = new OwnedDevServer();
+    const server = new OwnedDevServer(LOG_DIR);
     server.start('echo "  Local: http://localhost:1234"', process.cwd(), {});
     await sleep(600);
     expect(server.output()).toContain('http://localhost:1234');
@@ -104,8 +108,32 @@ describe('the dev server this process owns', () => {
     server.stop();
   }, 10_000);
 
+  // The next init attaches by this record; without it a Next or Angular re-run hit "port 3000 is
+  // already in use" against the server init itself had left running.
+  it('records where the server it hands over is, beside its log', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'handover-record-'));
+    const server = new OwnedDevServer(dir);
+    server.start('node -e "setTimeout(() => {}, 5000)"', dir, {});
+    server.handOver('http://localhost:3000');
+    const record = readdirSync(dir).find((f) => f.endsWith('.json'));
+    expect(record).toBeDefined();
+    expect(JSON.parse(readFileSync(join(dir, record ?? ''), 'utf8'))).toMatchObject({
+      pid: server.pid(),
+      url: 'http://localhost:3000',
+      appDir: dir,
+    });
+    const pid = server.pid() ?? 0;
+    try {
+      process.kill(isWindows ? pid : -pid, 'SIGKILL');
+    } catch {
+      /* already gone */
+    }
+    await sleep(50);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
   it('has nothing to stop when nothing was started', () => {
-    expect(() => new OwnedDevServer().stop()).not.toThrow();
+    expect(() => new OwnedDevServer(LOG_DIR).stop()).not.toThrow();
   });
 });
 
@@ -145,6 +173,49 @@ describe('probing the page', () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   });
+
+  // The Next 16 first run: the announced host is the RIGHT server, compiling. Walking on to the
+  // other family on that timeout found a sibling that answered first, and the app url was rewritten
+  // to an origin Next refuses its dev resources to — so the SDK never ran.
+  it('keeps waiting on the announced host when it is slow, rather than hopping family', async ({
+    skip,
+  }) => {
+    const canBind = await new Promise<boolean>((resolve) => {
+      const probe = net.createServer();
+      probe.once('error', () => resolve(false));
+      probe.listen(0, '::1', () => probe.close(() => resolve(true)));
+    });
+    if (!canBind) {
+      skip();
+      return;
+    }
+    // Accepts on 127.0.0.1 and never answers: a first compile still in progress.
+    const held: net.Socket[] = [];
+    const slow = net.createServer((socket) => held.push(socket));
+    const port = await new Promise<number>((resolve, reject) => {
+      slow.once('error', reject);
+      slow.listen(0, '127.0.0.1', () => {
+        const addr = slow.address();
+        if (null === addr || 'string' === typeof addr) reject(new Error('no port'));
+        else resolve(addr.port);
+      });
+    });
+    // The same port on the other family answers at once — the sibling that used to win.
+    const fast = http.createServer((_req, res) => res.end('<html></html>'));
+    await new Promise<void>((resolve, reject) => {
+      fast.once('error', reject);
+      fast.listen(port, '::1', () => resolve());
+    });
+    try {
+      const probe = await probePage(`http://127.0.0.1:${String(port)}/`, 300);
+      expect(probe.served).toBe(false);
+      expect(probe.reachedUrl).toBeUndefined();
+    } finally {
+      for (const s of held) s.destroy();
+      await new Promise<void>((resolve) => slow.close(() => resolve()));
+      await new Promise<void>((resolve) => fast.close(() => resolve()));
+    }
+  });
 });
 
 describe('reading the project', () => {
@@ -181,11 +252,11 @@ describe('handing the dev server over', () => {
   it('lets the process exit, rather than holding it open on the child’s pipes', () => {
     const script = `
       import { OwnedDevServer } from '${pathToFileURL(join(process.cwd(), 'dist/command/setup/node-effects.js')).href}';
-      const server = new OwnedDevServer();
-      // A stand-in dev server: long-lived and chatty, so its pipes are genuinely active.
-      server.start('node -e "setInterval(() => console.log(1), 50)"', process.cwd(), {});
+      const server = new OwnedDevServer(${JSON.stringify(LOG_DIR)});
+      // A stand-in dev server: long-lived and chatty, so it is genuinely writing.
+      server.start('node -e "setInterval(() => process.stdout.write(String(1)), 50)"', process.cwd(), {});
       setTimeout(() => {
-        console.log(JSON.stringify({ pid: server.pid() }));
+        process.stdout.write(JSON.stringify({ pid: server.pid() }) + "\\n");
         server.handOver();
       }, 300);
     `;
@@ -209,4 +280,88 @@ describe('handing the dev server over', () => {
       }
     }
   });
+
+  // The server used to write into pipes this process owned. Once init exited nobody held the read
+  // end, so the dev server's NEXT line — a compile error, an HMR update, SvelteKit's first warning —
+  // was an EPIPE and it died: "it connected, then the app went away". Its output goes to a file.
+  it.skipIf(isWindows)(
+    'keeps the handed-over server alive and logging after init has exited',
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'handover-'));
+      const beat = join(dir, 'beat');
+      writeFileSync(
+        join(dir, 'chatty.cjs'),
+        `let i = 0;
+         setInterval(() => {
+           i += 1;
+           process.stdout.write('line ' + i + '\\n');
+           require('fs').writeFileSync(${JSON.stringify(beat)}, String(i));
+         }, 20);`,
+      );
+      const script = `
+        import { OwnedDevServer } from '${pathToFileURL(join(process.cwd(), 'dist/command/setup/node-effects.js')).href}';
+        const server = new OwnedDevServer(${JSON.stringify(dir)});
+        server.start('node chatty.cjs', ${JSON.stringify(dir)}, {});
+        const ready = setInterval(() => {
+          if (!server.output().includes('line 1')) return;
+          clearInterval(ready);
+          process.stdout.write(JSON.stringify({ pid: server.pid() }) + "\\n");
+          server.handOver();
+        }, 20);
+      `;
+      const parent = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+        encoding: 'utf8',
+        timeout: 10_000,
+      });
+      const reported: unknown = JSON.parse(parent.stdout.trim().split('\n')[0] ?? '{}');
+      const pid =
+        'object' === typeof reported && null !== reported && 'pid' in reported
+          ? Number((reported as { pid?: unknown }).pid ?? 0)
+          : 0;
+      const beatNow = (): number => {
+        try {
+          return Number(readFileSync(beat, 'utf8'));
+        } catch {
+          return 0;
+        }
+      };
+      const alive = (): boolean => {
+        try {
+          process.kill(pid, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      try {
+        expect(pid, 'the parent never reported the server it handed over').toBeGreaterThan(0);
+        // Bounded poll for PROGRESS, not a duration: the server must write well past the moment
+        // init let go of it. A dead one stops beating and the deadline decides.
+        const afterExit = beatNow();
+        const deadline = Date.now() + 10_000;
+        while (beatNow() < afterExit + 10 && Date.now() < deadline) await sleep(20);
+        expect(beatNow(), 'the server stopped writing once init exited').toBeGreaterThanOrEqual(
+          afterExit + 10,
+        );
+        expect(alive(), 'the handed-over server died').toBe(true);
+        const logged = readdirSync(dir)
+          .filter((f) => f.endsWith('.log'))
+          .map((f) => readFileSync(join(dir, f), 'utf8'))
+          .join('');
+        expect(logged, 'its output after the handover went nowhere').toContain(
+          `line ${String(afterExit + 5)}`,
+        );
+      } finally {
+        if (0 < pid) {
+          try {
+            process.kill(-pid, 'SIGKILL');
+          } catch {
+            /* already gone, which is the failure this test reports */
+          }
+        }
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+    20_000,
+  );
 });

@@ -8,20 +8,32 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { RETICLE_DEFAULT_PORT } from '@reticlehq/core';
-import { FEEDBACK_HINT, type InitResult } from '@reticlehq/init';
+import { FEEDBACK_HINT, Framework, type InitResult } from '@reticlehq/init';
 import { confirmInstall, nodeConfirmDeps } from '@/command/setup/terminal/confirm.js';
 import { writeLicenseKey } from '@/command/setup/license-key.js';
 import { registerOtherAgents, runSetupCommand } from '@/command/setup/setup-command.js';
 import { bridgeOccupied } from '@/command/setup/bringup/bridge-port.js';
+import {
+  defaultPairingTokenDir,
+  readOrCreatePairingTokenSync,
+} from '@/portal/bridge/pairing-token.js';
 import { relaunchDecision } from '@/command/setup/bringup/relaunch.js';
 import { claudeTranscriptExists, codexSessionFor } from '@/command/setup/terminal/transcripts.js';
 import { probePresence } from '@/command/daemon/binding/port-presence.js';
 import { probeDaemon } from '@/surface/mcp/proxy/proxy-daemon-probe.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { collectEnv, DEFAULT_PHASE_TIMEOUT_MS } from '@/command/setup/setup-options.js';
+import { staticPageDevCommand } from '@/command/setup/bringup/static-page-server.js';
 
 /** How often the runtime phases look again: fast enough not to be the wait, slow enough to be free. */
 const POLL_MS = 250;
+
+/**
+ * The shapes whose served HTML carries the SDK marker: Vite injects it into index.html, and a plain
+ * HTML page has the snippet pasted in. Everything else connects from the JS bundle, where a fetch
+ * of the document can never see it. See `htmlCarriesSdk` in run-setup.ts.
+ */
+const HTML_CARRIES_SDK: ReadonlySet<string> = new Set([Framework.VITE, Framework.HTML]);
 
 /** Just enough of the parsed command to decide and run. */
 interface InitRuntimeArgs {
@@ -165,6 +177,9 @@ export async function continueAfterInit(
       appDir: context.appDir,
       invokedAt: cwd,
       bridgePort: port,
+      // Read here because this is the layer that already owns the bridge: setup opens a lease over
+      // the daemon's MCP transport for `--no-open`, and that transport is gated on this token.
+      pairingToken: readOrCreatePairingTokenSync(defaultPairingTokenDir()),
       env: collectEnv(parsed.env ?? []),
       openBrowser: false !== parsed.open,
       registerAgents: wantsAgents(parsed),
@@ -178,7 +193,20 @@ export async function continueAfterInit(
         ? {}
         : { connectBudgetMs: parsed.timeoutSeconds * 1000 }),
       pollMs: POLL_MS,
-      ...(undefined === context.devCommand ? {} : { devCommand: context.devCommand }),
+      htmlCarriesSdk: HTML_CARRIES_SDK.has(context.framework),
+      // A plain page with no dev script gets Reticle's own static server, so the page is actually
+      // served and the connect can be proved, instead of stopping at "start the app yourself".
+      ...((): { devCommand?: string } => {
+        const devCommand =
+          context.devCommand ??
+          (undefined === parsed.url
+            ? staticPageDevCommand({
+                appDir: context.appDir,
+                isStaticPage: Framework.HTML === context.framework,
+              })
+            : undefined);
+        return undefined === devCommand ? {} : { devCommand };
+      })(),
       ...(undefined === parsed.url ? {} : { suppliedUrl: parsed.url }),
     },
     (line) => io.print(line),

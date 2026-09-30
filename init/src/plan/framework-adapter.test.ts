@@ -69,7 +69,8 @@ describe('the framework registry', () => {
       ALL_FRAMEWORKS.flatMap((f) => [...FRAMEWORK_ADAPTERS[f].connectStepTitles]),
     );
     const orphaned = [...CONNECT_STEP_TITLES].filter(
-      (t) => t !== StepTitle.PAIRING_TOKEN && !claimed.has(t),
+      // The CSP step belongs to no framework: the policy check runs ahead of all of them.
+      (t) => t !== StepTitle.PAIRING_TOKEN && t !== StepTitle.CSP && !claimed.has(t),
     );
     expect(orphaned).toEqual([]);
   });
@@ -161,6 +162,12 @@ describe('the tables the registry deliberately does not own', () => {
       'reached by the vite.config check, which `looksLikeApp` runs before the deps',
     [Framework.CRA]: 'reached by the dev-script check; react-scripts apps always declare `start`',
     [Framework.HTML]: 'not an npm-shaped app at all — there is no dependency that names it',
+    [Framework.ELECTRON_FORGE]:
+      'reached by the `vite` dependency the Forge Vite template declares directly',
+    [Framework.REMIX]: 'reached by the vite.config check, and on the classic compiler by `dev`',
+    [Framework.ANGULAR]:
+      'reached by the dev-script check (`start: ng serve`), which reads `@angular/core` as a UI ' +
+      'framework — the CLI never puts a bundler in the manifest',
   };
 
   it('names every framework as present in or absent from APP_DEPS', () => {
@@ -202,6 +209,9 @@ describe('the tables the registry deliberately does not own', () => {
       'Astro has no one policy site: a middleware, an adapter header, or a per-page meta tag',
     [Framework.REACT_ROUTER]:
       'declared in the request handler the app owns, so there is no fixed file to read',
+    [Framework.ELECTRON_FORGE]: ['index.html'],
+    [Framework.REMIX]: 'same as React Router — the app owns the request handler',
+    [Framework.ANGULAR]: ['src/index.html'],
   };
 
   it('names every framework as present in or absent from CSP_FILES', () => {

@@ -19,7 +19,7 @@ import { SVELTE_FILE } from './svelte-source.js';
 const JSX_FILE = /\.[jt]sx$/;
 /** Rollup virtual-module ids start with a NUL byte; never transform those. */
 const VIRTUAL_PREFIX = '\0';
-const NODE_MODULES = 'node_modules';
+export const NODE_MODULES = 'node_modules';
 
 /** A module id we may stamp at all: not virtual, not a dependency. Extension decides which stamper. */
 export function stampableId(id: string): string | null {

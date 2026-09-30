@@ -1,5 +1,6 @@
 import * as http from 'node:http';
-import { LOOPBACK_HOST, STATUS_PATH } from '@reticlehq/core';
+import { z } from 'zod';
+import { LOOPBACK_HOST, STATUS_HOLD_QUERY, STATUS_PATH } from '@reticlehq/core';
 import { loopbackAgent } from '@/surface/loopback-agent.js';
 
 /**
@@ -19,19 +20,42 @@ import { loopbackAgent } from '@/surface/loopback-agent.js';
 const STATUS_PROBE_TIMEOUT_MS = 1000;
 
 /**
- * GET the daemon's /status JSON. Resolves to the parsed body, or undefined on any failure.
+ * The fields every Reticle daemon's `/status` has carried, which no stranger's is likely to.
+ *
+ * Any JSON used to count. An unrelated MCP server on the port init chose answered `/status` with its
+ * own body, was adopted as the daemon, the page's bridge dial got WebSocket 404s, and init blamed the
+ * dev server. `contract` is NOT required: a daemon from before it existed is still Reticle, and has
+ * to be recognised as one so init can replace it as skewed rather than call it a stranger.
+ */
+const ReticleStatusSchema = z
+  .object({
+    running: z.literal(true),
+    version: z.string().min(1),
+    sessions: z.array(z.unknown()),
+  })
+  .passthrough();
+
+/**
+ * GET the daemon's /status JSON. Resolves to the parsed body, or undefined on any failure —
+ * including a body that is not a Reticle daemon's, so every caller reads a stranger as absent and
+ * `probePresence` calls the port FOREIGN.
  *
  * `host` defaults to loopback, which is every caller's actual target — except `bootSession`
  * (reticlehq/reticle#1165 review), whose Bridge can bind a non-default host via `RETICLE_HOST`.
  * Hardcoding loopback here made that preflight check the wrong address.
  */
-export function fetchStatus(port: number, host: string = LOOPBACK_HOST): Promise<unknown> {
+export function fetchStatus(
+  port: number,
+  host: string = LOOPBACK_HOST,
+  /** Also tell the daemon a setup run is waiting on it, so it does not idle out mid-wait. */
+  hold = false,
+): Promise<unknown> {
   return new Promise((resolve) => {
     const req = http.get(
       {
         host,
         port,
-        path: STATUS_PATH,
+        path: hold ? `${STATUS_PATH}?${STATUS_HOLD_QUERY}=1` : STATUS_PATH,
         timeout: STATUS_PROBE_TIMEOUT_MS,
         // Shares the proxy's keep-alive agent: the proxy calls this on every reconnect, and a socket
         // per probe is the same churn the POST leg was fixed for.
@@ -43,7 +67,8 @@ export function fetchStatus(port: number, host: string = LOOPBACK_HOST): Promise
         res.on('data', (chunk: string) => (body += chunk));
         res.on('end', () => {
           try {
-            resolve(JSON.parse(body));
+            const parsed = ReticleStatusSchema.safeParse(JSON.parse(body));
+            resolve(parsed.success ? parsed.data : undefined);
           } catch {
             resolve(undefined);
           }
@@ -74,6 +99,8 @@ interface StatusSession {
   pendingMarks: number;
   /** The tab is attached and answering nothing — see Session.unresponsive. Absent on an older daemon. */
   unresponsive?: true;
+  /** Since the SDK last sent anything, heartbeats included. Absent on a body that did not say. */
+  lastSeenMs?: number;
 }
 
 /**
@@ -113,6 +140,7 @@ export function summarizeStatus(payload: unknown): {
         stale: true === r['stale'],
         pendingMarks: 'number' === typeof r['pendingMarks'] ? r['pendingMarks'] : 0,
         ...(true === r['unresponsive'] ? { unresponsive: true as const } : {}),
+        ...('number' === typeof r['lastSeenMs'] ? { lastSeenMs: r['lastSeenMs'] } : {}),
       };
     })
     .filter((s): s is StatusSession => s !== null);

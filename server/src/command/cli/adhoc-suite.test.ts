@@ -12,7 +12,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/core';
-import { runAdhocSuite } from './adhoc-suite.js';
+import { runAdhocExplore, runAdhocSuite } from './adhoc-suite.js';
 import type { ToolCaller } from './adhoc-verdict.js';
 
 function caller(answer: unknown): { tool: ToolCaller; calls: { name: string; args: unknown }[] } {
@@ -134,5 +134,90 @@ describe('a saved-flow suite against the running daemon', () => {
     });
     expect(result.code).toBe(1);
     expect(result.lines.join('\n')).toContain('ECONNREFUSED');
+  });
+});
+
+/**
+ * `reticle verify <url> --explore` after init — the first run init itself recommends — refused
+ * because init's daemon owned the port. The same daemon runs the same explore, so ask it, then
+ * replay what it recorded: the verdict is the suite's, exactly as on the path that owns its browser.
+ */
+describe('exploring through the running daemon', () => {
+  const actionOf = (name: string, args: Record<string, unknown>): string | undefined =>
+    ReticleTool.VERIFY === name
+      ? (args['action'] as string | undefined)
+      : (args['args'] as { action?: string } | undefined)?.action;
+
+  const recording = (answers: Record<string, unknown> = {}) => {
+    const calls: { name: string; args: Record<string, unknown> }[] = [];
+    const defaults: Record<string, unknown> = {
+      acquire: { structuredContent: { sessionId: 'lease-9' } },
+      explore: { structuredContent: { stopReason: 'done', savedFlows: ['counter'] } },
+      flows: { structuredContent: { status: 'pass', summary: '1/1 passed' } },
+    };
+    const tool: ToolCaller = {
+      call: (name, args) => {
+        calls.push({ name, args });
+        const action = actionOf(name, args) ?? '';
+        return Promise.resolve(answers[action] ?? defaults[action] ?? {});
+      },
+      close: () => Promise.resolve(),
+    };
+    return { calls, tool, actions: () => calls.map((c) => actionOf(c.name, c.args)) };
+  };
+
+  const explore = (tool: ToolCaller, tabs: { url: string }[] = []) =>
+    runAdhocExplore({
+      port: 4400,
+      url: 'http://localhost:5190/',
+      persona: 'a visitor',
+      connect: () => Promise.resolve(tool),
+      sessions: () => Promise.resolve(tabs),
+    });
+
+  it('leases the url, explores it as the persona, replays the flows, then releases', async () => {
+    const c = recording();
+    const result = await explore(c.tool);
+    expect(c.actions()).toEqual(['acquire', 'explore', 'flows', 'release']);
+    expect(c.calls[1]?.args).toEqual({
+      action: 'explore',
+      persona: 'a visitor',
+      sessionId: 'lease-9',
+    });
+    expect(c.calls[2]?.args['sessionId']).toBe('lease-9');
+    expect(result.code).toBe(0);
+  });
+
+  it('drives the tab already open on that origin, and leases nothing', async () => {
+    const c = recording();
+    await explore(c.tool, [{ url: 'http://localhost:5190/' }]);
+    expect(c.actions()).toEqual(['explore', 'flows']);
+  });
+
+  it('exits non-zero, and replays nothing, when the drive recorded nothing', async () => {
+    const c = recording({
+      explore: { structuredContent: { stopReason: 'done', savedFlows: [], note: 'nothing saved' } },
+    });
+    const result = await explore(c.tool, [{ url: 'http://localhost:5190/' }]);
+    expect(result.code).toBe(1);
+    expect(c.actions()).not.toContain('flows');
+    expect(result.lines.join('\n')).toContain('nothing saved');
+  });
+
+  it("prints the daemon's refusal as a sentence, e.g. no model configured", async () => {
+    const c = recording({
+      explore: {
+        isError: true,
+        content: [{ type: 'text', text: JSON.stringify({ error: 'No model configured' }) }],
+      },
+    });
+    const result = await explore(c.tool, [{ url: 'http://localhost:5190/' }]);
+    expect(result.code).toBe(1);
+    expect(result.lines).toContain('No model configured');
+  });
+
+  it('fails the run when the replay fails', async () => {
+    const c = recording({ flows: { structuredContent: { status: 'fail' } } });
+    expect((await explore(c.tool)).code).toBe(1);
   });
 });

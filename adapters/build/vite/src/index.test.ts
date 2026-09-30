@@ -320,6 +320,49 @@ describe('desktop injection cannot fail silently', () => {
   });
 });
 
+/**
+ * `desktop: true` is what init writes for electron-vite, and a release build used to carry the whole
+ * SDK and dial the daemon: `electron-vite preview` of a production build connected. A release binary
+ * must be exactly as clean as a web production bundle, so a production-mode build is stubbed for
+ * desktop too; only a build the user explicitly runs in another mode (`--mode development`, for a
+ * packaged smoke build) is instrumented.
+ */
+describe('a desktop production build carries no instrumentation', () => {
+  const production = { root: '/app', command: 'build', mode: 'production' };
+
+  it('injects nothing into the entry of a production build', () => {
+    const plugin = reticle({ desktop: true });
+    plugin.configResolved?.(production);
+    plugin.resolveId('/src/main.tsx', '/app/index.html');
+    expect(plugin.transform('const a = 1;', '/app/src/main.tsx')?.code ?? '').not.toContain(
+      'reticle.connect',
+    );
+    expect(plugin.transformIndexHtml('<html></html>')).toEqual([]);
+  });
+
+  it('swaps the SDK for the inert stub, as a web build does', () => {
+    const plugin = reticle({ desktop: true });
+    plugin.configResolved?.(production);
+    expect(plugin.resolveId('@reticlehq/browser')).not.toBe('@reticlehq/browser');
+    expect(plugin.resolveId('@reticlehq/browser')).not.toBeNull();
+  });
+
+  it('does not fail the build for having injected nothing on purpose', () => {
+    const plugin = reticle({ desktop: true });
+    plugin.configResolved?.(production);
+    expect(() => plugin.buildEnd?.()).not.toThrow();
+  });
+
+  it('still instruments a build explicitly run in a non-production mode', () => {
+    const plugin = reticle({ desktop: true });
+    plugin.configResolved?.({ ...production, mode: 'development' });
+    plugin.resolveId('/src/main.tsx', '/app/index.html');
+    expect(plugin.transform('const a = 1;', '/app/src/main.tsx')?.code ?? '').toContain(
+      'reticle.connect',
+    );
+  });
+});
+
 describe('desktop injection is loud in dev too, not only in build', () => {
   /**
    * `buildEnd` covers the dangerous case — a packaged binary that ships uninstrumented. Dev had no
@@ -430,6 +473,46 @@ describe('desktop injection is loud in dev too, not only in build', () => {
     plugin.transformIndexHtml('<html></html>');
     plugin.checkHtmlHookForTest?.();
     expect(warnings).toEqual([]);
+  });
+
+  /**
+   * A framework that renders its own HTML can still get the connect in: React Router's client entry
+   * imports `/@reticle-connect`, which this plugin serves from `load`. Counting only the HTML hook
+   * told every such app, ten seconds after each page load and while it WAS connected, that it would
+   * never connect, and to pass `inject: false`, which switches off the module the entry imports.
+   */
+  it('stays quiet when the page loaded the connect module this plugin serves', () => {
+    const warnings: string[] = [];
+    const plugin = reticle({ onWarn: (m) => warnings.push(m) });
+    plugin.configResolved?.({ root: '/app', command: 'serve' });
+    serveRequest(plugin, { url: '/', headers: { accept: 'text/html' } });
+    plugin.load(RETICLE_CONNECT_MODULE);
+    plugin.checkHtmlHookForTest?.();
+    expect(warnings).toEqual([]);
+  });
+
+  it("stays quiet when an app module carries a hand-written connect (SvelteKit's client hook)", () => {
+    const warnings: string[] = [];
+    const plugin = reticle({ onWarn: (m) => warnings.push(m) });
+    plugin.configResolved?.({ root: '/app', command: 'serve' });
+    serveRequest(plugin, { url: '/', headers: { accept: 'text/html' } });
+    plugin.transform(
+      "const token = typeof __RETICLE_TOKEN__ !== 'undefined' ? __RETICLE_TOKEN__ : '';",
+      '/app/src/hooks.client.ts',
+    );
+    plugin.checkHtmlHookForTest?.();
+    expect(warnings).toEqual([]);
+  });
+
+  it('never advises a change that switches off the module the app imports', () => {
+    const warnings: string[] = [];
+    const plugin = reticle({ onWarn: (m) => warnings.push(m) });
+    plugin.configResolved?.({ root: '/app', command: 'serve' });
+    serveRequest(plugin, { url: '/', headers: { accept: 'text/html' } });
+    plugin.checkHtmlHookForTest?.();
+    const text = warnings.join(' ');
+    expect(text).not.toContain('inject: false');
+    expect(text).toContain(RETICLE_CONNECT_MODULE);
   });
 
   it('stays quiet on the web once the HTML hook has run', () => {

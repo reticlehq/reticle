@@ -9,20 +9,25 @@ import type { InitOptions, InitIo, InitResult, InitContext } from './run-types.j
 export type { InitOptions, InitIo, InitResult } from './run-types.js';
 
 import { dirname, join } from 'node:path';
-import { CONTAINER_MARKERS } from './diagnose/containerised-dev-server.js';
+import { CONTAINER_MARKERS, runsDevServer } from './diagnose/containerised-dev-server.js';
+import { explainInstallFailure } from './diagnose/install-retries.js';
 import { CSP_FILES } from './diagnose/csp-doctor.js';
 import { preflight } from './plan/preflight.js';
-import {
-  detectDjangoProject,
-  detectStreamlitProject,
-  djangoSetupMessage,
-  noPackageJsonMessage,
-  streamlitSetupMessage,
-} from './detect/non-js-project.js';
-import { devCommandFrom } from './detect/dev-script.js';
+import { devCommandFrom, devScriptBody } from './detect/dev-script.js';
 import { restartHint, FEEDBACK_HINT } from './diagnose/closing-hint.js';
 import { projectIdOf, rememberProjectOnDisk } from './project/remember-project.js';
-import { detect, Framework, type DetectInput, UiLibrary } from './detect/detect.js';
+import {
+  ANGULAR_WORKSPACE_FILE,
+  detect,
+  FORGE_RENDERER_CONFIGS,
+  Framework,
+  type DetectInput,
+  type PackageManager,
+  UiLibrary,
+} from './detect/detect.js';
+import { ANGULAR_PROXY_PATH, angularEntry } from './patch/angular.js';
+import { HTML_INDEX_PATH } from './patch/static-page.js';
+import { initWithoutPackageJson } from './no-package-json.js';
 import { wasMcpRegistered } from './register/mcp-registered.js';
 import { pickAstroHost } from './patch/astro-host.js';
 import {
@@ -32,12 +37,15 @@ import {
   VITE_CONFIG_CANDIDATES,
 } from './detect/workspace-apps.js';
 import { redirectToWorkspaceApp } from './detect/workspace-redirect.js';
+import { enclosingWorkspaceRoot } from './detect/workspace-apps.js';
 import { isConnectStep } from './plan/connect-steps.js';
 import { CURSOR_RULE_PATH, RETICLE_MD_PATH } from './project/agent-rules.js';
 import { CLAUDE_SETTINGS_PATH } from './plan/stop-hook-step.js';
 import { CRA_ENV_PATH } from './patch/cra.js';
 import { NEXT_LAYOUT_CANDIDATES, NEXT_PAGES_APP_CANDIDATES } from './patch/next-patch.js';
 import { formatGeneratedSource } from './patch/format-generated.js';
+import { tanstackStartConnectPath } from './patch/tanstack-start.js';
+import { installedViteMajor } from './patch/vite-owning-config.js';
 
 /** CRA's bundled entry, in the order create-react-app itself generates them. */
 const CRA_ENTRY_CANDIDATES = ['src/index.tsx', 'src/index.jsx', 'src/index.ts', 'src/index.js'];
@@ -60,7 +68,7 @@ import {
   type Plan,
   type PlanInput,
 } from './plan/plan.js';
-import { claudeAvailableProbe, claudeExistsProbe } from './register/mcp.js';
+import { claudeAvailableProbe, claudeHasReticle } from './register/mcp.js';
 import { reticleDevLocation } from './patch/next-patch.js';
 import { scanTestids, storeHints, scanStores } from './detect/capabilities.js';
 import { CLAUDE_PROJECT_CONFIG, CURSOR_PROJECT_MARKER } from './register/mcp-clients.js';
@@ -68,12 +76,7 @@ import { deriveProjectId, packageName } from './project/project-id.js';
 import {
   VITE_DEV_MODULE_PATH,
   ELECTRON_VITE_DEV_MODULE_PATH,
-  connectArgWithToken,
   nuxtPluginPath,
-  staticPageSnippet,
-  djangoMiddlewareSnippet,
-  reticleConfigContent,
-  streamlitPageSnippet,
 } from './patch/snippets.js';
 import { NUXT_CONFIG_CANDIDATES } from './patch/nuxt-patch.js';
 import { CLAUDE_COMMAND_PATH, CURSOR_COMMAND_PATH } from './register/slash-command.js';
@@ -258,6 +261,21 @@ function agentRootOf(options: InitOptions): string | undefined {
   return root === undefined || root === options.cwd ? undefined : root;
 }
 
+/** What the Angular steps read: the workspace file, the entry it names, and our proxy module. */
+function angularInputs(
+  io: InitIo,
+): Pick<PlanInput, 'angularWorkspace' | 'angularEntry' | 'angularProxySource'> {
+  const workspace = io.readFile(ANGULAR_WORKSPACE_FILE);
+  const entryPath = angularEntry(workspace);
+  const entry = io.readFile(entryPath);
+  return {
+    angularWorkspace:
+      null === workspace ? null : { path: ANGULAR_WORKSPACE_FILE, source: workspace },
+    angularEntry: null === entry ? null : { path: entryPath, source: entry },
+    angularProxySource: io.readFile(ANGULAR_PROXY_PATH),
+  };
+}
+
 function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanInput {
   // Stable identity derived from the app's package.json name + root, so it survives port changes.
   const projectId = deriveProjectId(packageName(pkg), options.cwd);
@@ -273,7 +291,14 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
     nodeModulesMarkers,
   };
   const detection = detect(detectInput);
-  const vitePath = firstPresent(rootFiles, VITE_CONFIG_CANDIDATES);
+  // Forge has no `vite.config.*`; its renderer config IS the Vite config the plugin belongs in, and
+  // handing it over under that name is what lets the ordinary Vite patcher do the work.
+  const vitePath = firstPresent(
+    rootFiles,
+    Framework.ELECTRON_FORGE === detection.framework
+      ? FORGE_RENDERER_CONFIGS
+      : VITE_CONFIG_CANDIDATES,
+  );
   const viteSource = null === vitePath ? null : io.readFile(vitePath);
   const viteConfig =
     vitePath !== null && viteSource !== null ? { path: vitePath, source: viteSource } : null;
@@ -291,8 +316,8 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
   // global config file. Only probe when the MCP step is in play.
   const availableProbe = claudeAvailableProbe();
   const claudeCli = options.mcp ? io.probe(availableProbe.command, availableProbe.args) : false;
-  const existsProbe = claudeExistsProbe();
-  const mcpExists = claudeCli ? io.probe(existsProbe.command, existsProbe.args) : false;
+  // Read from Claude's config, never `claude mcp get`: that launches the server — see claudeHasReticle.
+  const mcpExists = claudeCli ? claudeHasReticle(io, io.cwd()) : false;
 
   // Every MCP client this machine shows evidence of. Conservative and one-directional: we write
   // into a config a client ALREADY has, and never create ~/.gemini or ~/.codeium for somebody who
@@ -360,8 +385,14 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
     // repo that containerises it — `frontend/` under a root `docker-compose.yml` is the shape this
     // came from. Only the first match is reported; the note is the same whichever file found it.
     ...(() => {
-      const marker = CONTAINER_MARKERS.find(
-        (name) => io.exists(name) || io.exists(join('..', name)),
+      // Only a file that RUNS the dev server: a production-only image is the common case, and
+      // React Router's template ships one. See runsDevServer.
+      const devScript = devScriptBody(pkg);
+      const marker = CONTAINER_MARKERS.find((name) =>
+        [name, join('..', name)].some((path) => {
+          const content = io.readFile(path);
+          return null !== content && runsDevServer(name, content, devScript);
+        }),
       );
       return marker === undefined ? {} : { containerMarker: marker };
     })(),
@@ -385,7 +416,7 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
         : null,
     // Capabilities: scanned, never asked for. Bounded — a hint for the agent, not a repo index.
     testids: scanTestids(sourceFiles.map((f) => f.source)),
-    storeHints: storeHints(dependencyNames(pkg)),
+    storeHints: storeHints(dependencyNames(pkg), sourceFiles),
     foundStores: scanStores(sourceFiles, dependencyNames(pkg)),
     nextFoundStores: scanStores(sourceFiles, dependencyNames(pkg), dirname(devLocation.path)),
     viteDevModuleExists: io.exists(
@@ -398,6 +429,7 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
     nextReticleDevExists: io.exists(devLocation.path),
     nextReticleDevSource: io.readFile(devLocation.path),
     svelteKitHooksExists: io.exists(SVELTEKIT_HOOKS),
+    svelteKitHooksSource: io.readFile(SVELTEKIT_HOOKS),
     reactRouterEntryExists: io.exists(REACT_ROUTER_ENTRY),
     // The SOURCE, so an entry the app already owns is ADDED TO rather than replaced — it is an
     // override of React Router's default, and everything in it is load-bearing.
@@ -407,8 +439,24 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
         ? { path: nuxtConfigPath, source: nuxtConfigSource }
         : null,
     nuxtHasAppDir,
+    viteMajor: installedViteMajor(io, detectInput.pkg),
     nuxtPluginExists: io.exists(nuxtPluginPath(nuxtHasAppDir)),
-    tanstackStartRoot: TANSTACK_START_ROOT_CANDIDATES.find((file) => io.exists(file)),
+    nuxtPluginSource: io.readFile(nuxtPluginPath(nuxtHasAppDir)),
+    ...(() => {
+      const root = TANSTACK_START_ROOT_CANDIDATES.find((file) => io.exists(file));
+      return root === undefined
+        ? {}
+        : {
+            tanstackStartRoot: root,
+            tanstackStartRootSource: io.readFile(root),
+            tanstackStartConnectExists: io.exists(tanstackStartConnectPath(root)),
+            tanstackStartConnectSource: io.readFile(tanstackStartConnectPath(root)),
+          };
+    })(),
+    ...(Framework.ANGULAR === detection.framework ? angularInputs(io) : {}),
+    ...(Framework.HTML === detection.framework
+      ? { htmlIndexSource: io.readFile(HTML_INDEX_PATH) }
+      : {}),
     craEntry: craEntryOf(io),
     craEnv: io.readFile(CRA_ENV_PATH),
     pairingToken: io.host.pairingToken(),
@@ -459,6 +507,7 @@ function report(
   failed: ReadonlySet<string>,
   skipped: ReadonlySet<string>,
   degraded: ReadonlyMap<string, string>,
+  why: ReadonlyMap<string, string>,
   io: InitIo,
   projectDir: string,
   agentRoot: string | undefined,
@@ -522,7 +571,7 @@ function report(
     const detail = skipped.has(s.target)
       ? SKIPPED_DETAIL
       : downgraded && s.exec !== undefined
-        ? `step failed — run manually: ${s.exec.fallback}`
+        ? (why.get(s.target) ?? `step failed — run manually: ${s.exec.fallback}`)
         : s.detail;
     io.print(`  [${STATUS_SYMBOL[status]}] ${s.title} → ${s.target}`);
     if (status === StepStatus.APPLY) applied++;
@@ -602,10 +651,8 @@ function sdkPackagesPresent(
   );
 }
 
-function applyEffects(
-  plan: Plan,
-  io: InitIo,
-): { failed: Set<string>; skipped: Set<string>; degraded: Map<string, string> } {
+function applyEffects(plan: Plan, io: InitIo, packageManager: PackageManager): Effects {
+  const why = new Map<string, string>();
   const failed = new Set<string>();
   const skipped = new Set<string>();
   const degraded = new Map<string, string>();
@@ -683,7 +730,11 @@ function applyEffects(
       failed.add(s.target);
       // A failed install only blocks the wiring when the packages are genuinely ABSENT. See
       // sdkPackagesPresent: the guard protects "the import resolves", not "our subprocess exited 0".
-      if (s.target === DEPS_TARGET) installFailed = true;
+      if (s.target === DEPS_TARGET) {
+        installFailed = true;
+        const explained = explainInstallFailure(io, packageManager, exec, s.detail);
+        if (explained !== undefined) why.set(s.target, explained);
+      }
     }
   }
   // Where this project lives, remembered for a daemon that will be started somewhere else.
@@ -697,7 +748,15 @@ function applyEffects(
   if (projectId !== undefined) {
     rememberProjectOnDisk(io, projectId, io.cwd(), Date.now());
   }
-  return { failed, skipped, degraded };
+  return { failed, skipped, degraded, why };
+}
+
+/** What applying the plan did, per step target. `why` carries a failure's real cause when known. */
+interface Effects {
+  failed: Set<string>;
+  skipped: Set<string>;
+  degraded: Map<string, string>;
+  why: Map<string, string>;
 }
 
 /**
@@ -714,8 +773,20 @@ function classifyInitFailure(failed: ReadonlySet<string>): string {
   return InitFailure.OTHER;
 }
 
+/**
+ * Where the agent stands when `init` runs inside a workspace package: the workspace root.
+ *
+ * The same answer `--app` from the root already gives (see enterApp), so both routes into one app
+ * leave the root in one state — a pointer config and the agent files an agent opened there reads.
+ */
+function withWorkspaceRoot(options: InitOptions, io: InitIo): InitOptions {
+  if (options.agentRoot !== undefined || true === options.redirected) return options;
+  const root = enclosingWorkspaceRoot(options.cwd, io);
+  return root === undefined ? options : { ...options, agentRoot: root };
+}
+
 export function runInit(options: InitOptions, io: InitIo): InitResult {
-  const result = runInitSteps(options, io);
+  const result = runInitSteps(withWorkspaceRoot(options, io), io);
   // The ask goes here, not in report(): report() is only the success-shaped path, and the exits that
   // matter most are the ones that never reach it — no package.json, an ambiguous workspace — where
   // setup died before anything ran and the person holding the report has the least to go on. This
@@ -784,59 +855,7 @@ function runInitSteps(options: InitOptions, io: InitIo): InitResult {
   // directory with no package.json is definitively not.
   const redirectedEarly = redirectToWorkspaceApp(options, io, pkgRaw ?? {}, runInit);
   if (redirectedEarly !== null) return redirectedEarly;
-  if (null === pkgRaw) {
-    const streamlit = detectStreamlitProject((file) => io.readFile(file), io.rootFiles());
-    // Asked only when Streamlit already said no, so the two can never both claim the page.
-    const django =
-      !streamlit &&
-      detectDjangoProject((file) => io.exists(join(options.cwd, file)), io.rootFiles());
-    io.print(
-      // Two genuinely different situations used to share one sentence: a JS developer in the wrong
-      // directory, and a project that is not JavaScript at all. The second reads the old wording as
-      // a path problem and goes looking for a directory that cannot exist — reported from a
-      // Streamlit app, where the search continued into hunting for a browser bundle to inject by
-      // hand before the real answer surfaced.
-      streamlit
-        ? streamlitSetupMessage()
-        : django
-          ? djangoSetupMessage()
-          : noPackageJsonMessage((file) => io.exists(join(options.cwd, file)), io.rootFiles()),
-    );
-    // The message says "add the snippet below". Print the snippet, or the message is the same
-    // broken promise in the other direction. `connectArg` carries the port; there is no projectId
-    // to bake, because a projectId is derived from the package.json that does not exist here.
-    // Scope the project on disk before printing anything, so the daemon can serve this page.
-    //
-    // This path used to print and exit, leaving no `.reticle.json` at all — and the reporter who
-    // asked for the Django path had to hand-write one alongside the middleware. Without it the
-    // daemon has no config in its own directory, refuses the page's dial, and every downstream
-    // symptom points somewhere other than the cause (see #685). The projectId derivation already
-    // handles the no-package case: it falls back to the root folder name, fingerprinted by the
-    // absolute path so two checkouts stay distinct.
-    //
-    // Written only when absent. A config a user or an earlier run already placed here is theirs.
-    const nonJsProjectId = deriveProjectId(undefined, io.cwd());
-    if (!io.exists(RETICLE_CONFIG_FILE)) {
-      io.writeFile(
-        RETICLE_CONFIG_FILE,
-        reticleConfigContent(Framework.HTML, options.port, nonJsProjectId, io.host.installSource()),
-      );
-      rememberProjectOnDisk(io, nonJsProjectId, io.cwd(), Date.now());
-      io.print(`Wrote ${RETICLE_CONFIG_FILE} (project "${nonJsProjectId}").`);
-    }
-    const connect = connectArgWithToken(options.port, nonJsProjectId, io.host.pairingToken());
-    io.print(
-      streamlit
-        ? streamlitPageSnippet(connect)
-        : django
-          ? djangoMiddlewareSnippet(connect)
-          : staticPageSnippet(connect),
-    );
-    // The onboarding funnel had NO instrumentation, so a setup that died here was indistinguishable
-    // from someone who never ran the command — the two failure modes with the most different fixes.
-    io.host.reportOutcome({ ok: false, reason: InitFailure.NO_PACKAGE_JSON });
-    return { ok: false, applied: 0, manual: 0 };
-  }
+  if (null === pkgRaw) return initWithoutPackageJson(options, io);
 
   // Init is the flow a user experiences the wait of personally, and the fixture gate measures it at
   // 1–6s per app with no explanation of the spread. These three spans split that number into detect
@@ -868,9 +887,11 @@ function runInitSteps(options: InitOptions, io: InitIo): InitResult {
   planInput.detection = { ...planInput.detection, packageManagerCommand };
   const plan = io.host.span('init.plan', {}, () => buildPlan(planInput));
   const effects = options.dryRun
-    ? { failed: new Set<string>(), skipped: new Set<string>(), degraded: new Map<string, string>() }
-    : io.host.span('init.apply', { steps: plan.steps.length }, () => applyEffects(plan, io));
-  const { failed, skipped, degraded } = effects;
+    ? { failed: new Set<string>(), skipped: new Set<string>(), degraded: new Map(), why: new Map() }
+    : io.host.span('init.apply', { steps: plan.steps.length }, () =>
+        applyEffects(plan, io, planInput.detection.packageManager),
+      );
+  const { failed, skipped, degraded, why } = effects;
   // The project's own dev command, so the closing line names what a human would actually type.
   const devCommand = devCommandFrom(pkgRaw, packageManagerCommand);
   const result = report(
@@ -879,6 +900,7 @@ function runInitSteps(options: InitOptions, io: InitIo): InitResult {
     failed,
     skipped,
     degraded,
+    why,
     io,
     options.cwd,
     agentRootOf(options),
@@ -951,7 +973,11 @@ function runInitSteps(options: InitOptions, io: InitIo): InitResult {
     stack: plan.framework,
     ...(result.ok ? {} : { reason: classifyInitFailure(failed) }),
   });
-  if (true === options.deferOutcome) return { ...result, context, outcome };
+  // A failed dependency install skipped every wiring step, so there is no instrumented app to boot:
+  // without a context the runtime stops at this report, rather than starting the dev server and
+  // diagnosing an SDK that was never installed as a dev server that needs restarting.
+  const handover = failed.has(DEPS_TARGET) ? {} : { context };
+  if (true === options.deferOutcome) return { ...result, ...handover, outcome };
   io.host.reportOutcome(outcome);
-  return { ...result, context };
+  return { ...result, ...handover };
 }

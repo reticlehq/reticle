@@ -20,6 +20,8 @@
  * fresh one on the next call, which is a path already exercised hundreds of times a day.
  */
 
+import { STATUS_HOLD_MS } from '@reticlehq/core';
+
 /** Set the first time any tool is dispatched through runTool — the chokepoint every path shares. */
 let servedToolCall = false;
 
@@ -31,9 +33,34 @@ export function everServedToolCall(): boolean {
   return servedToolCall;
 }
 
+/**
+ * How long one hold from a setup run keeps the daemon from idling out. `init` renews it on a timer
+ * well inside this window for as long as it runs, so a run that dies stops holding within it.
+ */
+export const SETUP_HOLD_MS = STATUS_HOLD_MS;
+
+/**
+ * When a setup run last said it is waiting on this daemon — see STATUS_HOLD_QUERY.
+ *
+ * `init` starts the daemon and can then wait on the app longer than the idle grace: a cold desktop
+ * build, a slow first compile. The daemon counted none of that as activity, idled out
+ * (`reticle_daemon_idle_exit`) while init was still waiting for the app to dial it, and the app came
+ * up to a closed port.
+ */
+let setupHeldAt: number | undefined;
+
+export function noteSetupHold(now: number): void {
+  setupHeldAt = now;
+}
+
+function setupHolding(now: number): boolean {
+  return undefined !== setupHeldAt && now - setupHeldAt < SETUP_HOLD_MS;
+}
+
 /** Tests only. */
 export function resetDaemonUsefulness(): void {
   servedToolCall = false;
+  setupHeldAt = undefined;
 }
 
 interface UsefulnessFacts {
@@ -79,8 +106,10 @@ export function buildIdlePredicate(
   agentConnected: () => boolean,
   sessions: IdleSessions,
   pool: IdlePool,
+  now: () => number = () => Date.now(),
 ): () => boolean {
   return () =>
+    !setupHolding(now()) &&
     (!agentConnected() ||
       isUselessDaemon({
         servedToolCall: everServedToolCall(),

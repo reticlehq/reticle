@@ -36,7 +36,14 @@ interface Recorded {
 }
 
 function machine(m: Machine = {}): Recorded {
-  const files = m.files ?? {};
+  // A registered Claude Code is an entry in its state file — which is what is read now, instead of
+  // `claude mcp get`, which launches the server to health-check it.
+  const files: Record<string, string> = {
+    ...(true === m.claudeAlreadyRegistered
+      ? { '.claude.json': JSON.stringify({ mcpServers: { reticle: { command: 'npx' } } }) }
+      : {}),
+    ...(m.files ?? {}),
+  };
   const writes: { path: string; contents: string }[] = [];
   const ran: string[] = [];
   const steps: OnboardingStep[] = [];
@@ -54,8 +61,6 @@ function machine(m: Machine = {}): Recorded {
       ran.push(`${command} ${args.join(' ')}`);
       if (CLAUDE !== command) return false;
       if (true !== m.claudeInstalled) return false;
-      // `claude mcp get reticle` exits 0 only when an entry is already there.
-      if (args.includes('get')) return true === m.claudeAlreadyRegistered;
       return true;
     },
     reportStep: (s) => void steps.push(s),
@@ -89,6 +94,10 @@ describe('a client that owns its own registration is still a client', () => {
     expect(result.alreadyThere).toContain('claude-code');
     expect(result.registered).not.toContain('claude-code');
     expect(ran.some((c) => c.includes('mcp add'))).toBe(false);
+    expect(
+      ran.some((c) => /\bmcp (get|list)\b/.test(c)),
+      'launched the server to check',
+    ).toBe(false);
   });
 
   // The negative control. Without this, "detect everything always" would pass the two above and

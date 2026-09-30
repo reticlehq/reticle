@@ -75,7 +75,7 @@ function startFakeDaemon(): Promise<FakeDaemon> {
     if ('GET' === req.method && (req.url ?? '').startsWith(STATUS_PATH)) {
       res
         .writeHead(200, { 'Content-Type': 'application/json' })
-        .end(JSON.stringify({ running: true }));
+        .end(JSON.stringify({ running: true, version: '0.0.0', sessions: [] }));
       return;
     }
     if ('POST' === req.method) {

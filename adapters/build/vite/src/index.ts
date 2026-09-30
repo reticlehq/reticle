@@ -10,11 +10,12 @@ import {
   RETICLE_ROOT_GLOBAL,
   RETICLE_SDK_VERSION_GLOBAL,
 } from '@reticlehq/core';
-import { readConfiguredPort, resolveProjectId } from './project-id.js';
-import { discoverDaemonPort } from './discover-port.js';
+import { resolveProjectId } from './project-id.js';
+import { resolveDaemonPort } from './discover-port.js';
 import { announceDevServer } from './announce.js';
 import { stampSvelte } from './svelte-source.js';
 import {
+  NODE_MODULES,
   ignoredFileNotice,
   optsOutOfStamping,
   shouldStamp,
@@ -32,7 +33,7 @@ import {
 import {
   RETICLE_DISABLED_STUB_CODE,
   RETICLE_DISABLED_STUB,
-  isReticleDisabledWebBuild,
+  isReticleDisabledBuild,
 } from './disabled-browser-stub.js';
 import { connectArgs } from './connect-args.js';
 
@@ -168,14 +169,15 @@ export interface ReticleVitePluginOptions {
    * This build is an Electron/Tauri renderer. Changes two things a desktop shell needs and a web app
    * must not get:
    *
-   *  - A packaged desktop renderer IS a production build with no dev server, so it needs the real
-   *    `connect()` wiring during `vite build` — the web default's stub-swap must not apply to it.
+   *  - connect() is injected into the HTML's entry module rather than as a virtual <script src>,
+   *    so a packaged renderer with no dev server still resolves it — but only for a build run in a
+   *    NON-production mode (`vite build --mode development`). A production-mode build is stubbed
+   *    exactly like a web one, so a release binary never carries the SDK. See
+   *    isReticleDisabledBuild.
    *  - `connect()` is called with `allowInProduction`, because that same renderer reports
    *    NODE_ENV=production and the SDK's prod backstop would otherwise refuse to start.
    *
-   * Off by default and never inferred: turning it on means an instrumented production BUNDLE, which
-   * is exactly what a web app must never ship. Keep it behind your own dev-only build (a dev target,
-   * or `process.env.NODE_ENV !== 'production'` in vite.config) so it cannot reach a release binary.
+   * Off by default and never inferred.
    */
   desktop?: boolean;
   /**
@@ -312,6 +314,8 @@ export interface ReticleVitePlugin {
   configResolved?: (config: {
     root?: string;
     command?: string;
+    /** 'production' unless `--mode` says otherwise. See isReticleDisabledBuild. */
+    mode?: string;
     base?: string;
     /** Vitest's block, read only to spot browser mode. See isVitestBrowserServer. */
     test?: unknown;
@@ -532,11 +536,9 @@ export function connectModuleSource(
  * The web plugin also builds, replacing the browser SDK with an inert stub so a default
  * production bundle ships no Reticle runtime code at all.
  *
- * `desktop: true` is the ONE documented exception, and it inverts that guarantee deliberately: a
- * packaged Electron/Tauri renderer IS a production build with no dev server, so the web default's
- * stub-replacement would ship an app with no connect() at all. The cost is that the flag hands
- * gating back to the caller — keep it behind your own dev-only build target so an instrumented
- * bundle can never reach a release binary.
+ * `desktop: true` keeps that guarantee for a production-mode build. It instruments `serve`, and a
+ * build only when it runs in another mode (`vite build --mode development`), which is how a packaged
+ * smoke renderer with no dev server still gets its connect(). See isReticleDisabledBuild.
  */
 /**
  * The daemon's journal directory, as a matcher every chokidar major honours.
@@ -570,6 +572,10 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
   let root: string | undefined;
   /** 'serve' | 'build'. The dev check only applies to serve; buildEnd covers the other. */
   let command: string | undefined;
+  /** Vite's resolved mode. Decides whether a desktop build may be instrumented at all. */
+  let mode: string | undefined;
+  /** A build that must carry no Reticle runtime. See isReticleDisabledBuild. */
+  const disabledBuild = (): boolean => isReticleDisabledBuild(desktop, command, mode);
   /** Vite's resolved `base`. Undefined until configResolved, which is before any HTML is served. */
   let base: string | undefined;
   /** True only when THIS server is Vitest's browser-mode runner — see isVitestBrowserServer. */
@@ -582,20 +588,33 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
   /**
    * Whether Vite ever asked us to transform the app's HTML.
    *
-   * On the web this is how the connect script gets in, so "this never happened" and "this app will
-   * not connect" are the same statement — which is what makes a warning safe here, unlike the
-   * desktop entry-module flag above.
+   * On the web this is the usual way the connect script gets in, but not the only one: see
+   * connectDelivered below, which the web warning reads together with this.
    */
   let htmlTransformed = false;
+  /**
+   * Whether the connect reached the page by a route OTHER than the HTML hook.
+   *
+   * A framework that renders its own HTML never calls `transformIndexHtml`, and still connects when
+   * its client entry imports the module `load` serves (React Router) or calls connect() itself with
+   * the token this plugin inlines (SvelteKit's client hook). Counting only the hook told those apps,
+   * ten seconds after every page load and while they WERE connected, that they would never connect.
+   */
+  let connectDelivered = false;
+  /** The last port warning printed, so a disagreement is said once and not on every request. */
+  let lastPortWarning: string | undefined;
   /**
    * Resolve port + token at the moment of injection, not at plugin construction. By the time a
    * module is served or built the daemon is up and has written its pairing token; resolving early
    * would bake in `undefined` and the app would fail auth on every connect.
    */
   const resolveLazy = (): ReticleVitePluginOptions => {
-    // An explicit option, then the port init recorded, then whichever daemon serves this project.
-    const port =
-      resolved.port ?? readConfiguredPort(process.cwd()) ?? discoverDaemonPort(resolved.projectId);
+    // Wherever the daemon for this project actually is; the order is argued in discover-port.ts.
+    const { port, warning } = resolveDaemonPort(resolved.port, resolved.projectId, process.cwd());
+    if (warning !== undefined && warning !== lastPortWarning) {
+      lastPortWarning = warning;
+      warn(warning);
+    }
     const withPort = port !== undefined ? { ...resolved, port } : resolved;
     const token = withPort.token ?? readPairingToken();
     const withToken = token !== undefined ? { ...withPort, token } : withPort;
@@ -626,7 +645,8 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
     desktop,
     inject,
     injected: () => injected,
-    htmlTransformed: () => htmlTransformed,
+    connectDelivered: () => htmlTransformed || connectDelivered,
+    connectModule: () => connectModuleUrl(base),
     warn,
   });
 
@@ -717,7 +737,12 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
       };
     },
     transform(code, id) {
-      if (isReticleDisabledWebBuild(desktop, command)) return null;
+      if (disabledBuild()) return null;
+      // A hand-written connect in app code reads the token this plugin inlines; that is the
+      // connect reaching the page without the HTML hook. See connectDelivered.
+      if (!connectDelivered && code.includes(RETICLE_TOKEN_GLOBAL) && !id.includes(NODE_MODULES)) {
+        connectDelivered = true;
+      }
       // Desktop injection: prepend connect() to the HTML's own entry module. It is a REAL module, so
       // its bare `@reticlehq/react` import resolves through the normal pipeline in both dev and
       // build — which a virtual <script src> only ever did in dev.
@@ -749,7 +774,7 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
       return stamp(code, id);
     },
     resolveId(id, importer) {
-      if (isReticleDisabledWebBuild(desktop, command) && id === RETICLE_SENSOR) {
+      if (disabledBuild() && id === RETICLE_SENSOR) {
         return RETICLE_DISABLED_STUB;
       }
       // Desktop: remember the module the HTML points at, so `transform` can prepend connect() into
@@ -767,17 +792,19 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
       return inject && id === RETICLE_CONNECT_MODULE ? RETICLE_CONNECT_MODULE : null;
     },
     load(id) {
-      if (isReticleDisabledWebBuild(desktop, command) && id === RETICLE_DISABLED_STUB) {
+      if (disabledBuild() && id === RETICLE_DISABLED_STUB) {
         return RETICLE_DISABLED_STUB_CODE;
       }
       if (!inject || id !== RETICLE_CONNECT_MODULE) return null;
       const source = currentConnectSource();
       lastServedConnectSource = source;
+      connectDelivered = true;
       return source;
     },
     configResolved(config) {
       root = config.root;
       command = config.command;
+      mode = config.mode;
       base = config.base;
       vitestBrowser = isVitestBrowserServer(config);
     },
@@ -802,7 +829,6 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
      * appearing IS a change), and makes the module inert once it has settled.
      */
     configureServer(server) {
-      if (!inject) return;
       // The web post-condition is armed by the first DOCUMENT REQUEST, in the middleware below.
       //
       // Not from `transformIndexHtml`, because a framework that renders its own HTML never calls it
@@ -853,6 +879,11 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
       } else {
         announce();
       }
+      // Everything below serves or watches the injected connect, so `inject: false` stops HERE and
+      // not at the top. SvelteKit and TanStack Start are written `inject: false` because they connect
+      // themselves, and returning before the announcement made the dev server `init` started for
+      // them invisible to everything that asks which dev servers are running.
+      if (!inject) return;
       server.middlewares.use((req, _res, next) => {
         // One middleware, two observations. A second `use()` would work equally well in Vite and
         // is the obvious way to write this, but it makes the ORDER of registration load-bearing for
@@ -879,14 +910,15 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
      * build that could not instrument must fail loudly instead of shipping a binary that lies.
      */
     buildEnd() {
-      if (!desktop || !inject || injected) return;
+      // A production build injects nothing on purpose; see isReticleDisabledBuild.
+      if (!desktop || !inject || injected || disabledBuild()) return;
       throw new Error(notInjectedMessage());
     },
     checkInjectedForTest: watch.checkInjected,
     checkHtmlHookForTest: watch.checkHtmlHookRan,
     injectionWatchForTest: watch,
     transformIndexHtml() {
-      if (isReticleDisabledWebBuild(desktop, command)) return [];
+      if (disabledBuild()) return [];
       htmlTransformed = true;
       if (desktop && inject && 'serve' === command) watch.armDesktopCheck();
       // Desktop injects via the entry module instead (see transform) — a tag here would be a dead

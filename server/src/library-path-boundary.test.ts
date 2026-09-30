@@ -67,6 +67,11 @@ const DECLARED_CROSSINGS: Record<string, string> = {
   'telemetry/install-source.ts':
     'Re-exports `configWithInstallSource`. `init` is the only thing that writes `.reticle.json`, so ' +
     'the writer lives with it; this module stays the one place to read about install attribution.',
+  'portal/session/dev-server/dev-command.ts':
+    'Reads `desktopLaunch`, the pure manifest rule that says a Tauri or Electron Forge app starts ' +
+    'through its own CLI rather than its renderer’s `dev` script. init spawns that command, and ' +
+    'the no-session next action hands an agent the same one; two copies of the rule disagreed, and ' +
+    'the daemon handed Tauri users plain `vite`. No code path, only a string decision.',
 };
 
 /** Every module in `reached` that imports the scaffolder package directly. */

@@ -3,6 +3,7 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { LOOPBACK_HOST, MCP_SSE_PATH } from '@reticlehq/core';
 import { TOKEN_QUERY_PARAM } from '@/portal/bridge/token-auth.js';
 import { ReticleTool } from '@reticlehq/core';
+import { decideOpen } from '@/command/cli/launch/cli-launch.js';
 
 /**
  * A verdict from the CLI, against the daemon that is already running.
@@ -56,6 +57,97 @@ interface AdhocVerdictOptions {
   token?: string;
   /** Injected so a test does not need a live daemon. */
   connect?: (endpoint: URL) => Promise<ToolCaller>;
+  /**
+   * The tabs the daemon has connected, so a url with none on its origin can be opened here rather
+   * than refused. Absent = never lease, which is the old behaviour and what the unit tests that do
+   * not care get.
+   */
+  sessions?: () => Promise<readonly { url: string }[]>;
+}
+
+/** The lease tool is reached through `reticle_run`, the route that works on every tool profile. */
+const LeaseAction = { ACQUIRE: 'acquire', RELEASE: 'release' } as const;
+
+/**
+ * Generous on purpose: on a machine with no Chrome, Edge or Playwright Chromium the FIRST lease
+ * downloads Chromium before it can open anything (see launch-chromium), which outlives the MCP
+ * client's 60s default and would report a timeout for a lease that was about to succeed.
+ */
+const LEASE_TIMEOUT_MS = 300_000;
+
+const leaseFailedLine = (url: string): string =>
+  `could not open ${url} in a Reticle browser, so nothing was checked:`;
+
+/**
+ * Open `url` in a Reticle-leased browser when the daemon has no tab on its origin.
+ *
+ * `{}` means a tab is already there (drive it); `{ leased }` names the lease this call opened, which
+ * the caller must hand to `releaseLease`; `{ failed }` is the lease's own refusal, as lines to print —
+ * a missing browser, an app that is not up — so nothing is asserted against a page that never opened.
+ */
+export async function leaseIfNoTab(
+  caller: ToolCaller,
+  url: string,
+  sessions: () => Promise<readonly { url: string }[]>,
+): Promise<{ leased?: string; alreadyAt?: boolean } | { failed: string[] }> {
+  const open = [...(await sessions())];
+  if ('open' !== decideOpen(open, url).action) {
+    return open.some((s) => sameDocument(s.url, url)) ? { alreadyAt: true } : {};
+  }
+  return acquireLease(caller, url);
+}
+
+/**
+ * Whether two urls name the same document, ignoring a trailing slash and the hash.
+ *
+ * `verify <url>` navigated a tab already showing that url, which reloads it. In a desktop window
+ * that reload is a disconnect: the assert ran against a session that was gone ~20ms later and
+ * answered `unknown — session disconnected`.
+ */
+function sameDocument(a: string, b: string): boolean {
+  try {
+    const x = new URL(a);
+    const y = new URL(b);
+    const path = (u: URL): string => u.pathname.replace(/\/+$/, '');
+    return x.origin === y.origin && path(x) === path(y) && x.search === y.search;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Open `url` in a Reticle-leased browser unconditionally: `{ leased }` names the lease, which the
+ * caller hands to `releaseLease`; `{ failed }` is the lease's own refusal, as lines to print.
+ * `init`'s connect proof on a machine with no system browser takes this path directly.
+ */
+export async function acquireLease(
+  caller: ToolCaller,
+  url: string,
+): Promise<{ leased: string } | { failed: string[] }> {
+  const acquired = await caller.call(
+    ReticleTool.RUN,
+    { tool: ReticleTool.LEASE, args: { action: LeaseAction.ACQUIRE, url } },
+    LEASE_TIMEOUT_MS,
+  );
+  const sessionId = verdictOf(acquired, 'sessionId')?.['sessionId'];
+  if ('string' === typeof sessionId) return { leased: sessionId };
+  const why = verdictOf(acquired, 'error')?.['error'];
+  return {
+    failed: [
+      leaseFailedLine(url),
+      'string' === typeof why ? why : (refusalText(acquired) ?? JSON.stringify(acquired)),
+    ],
+  };
+}
+
+/** Hand back a lease `leaseIfNoTab` opened. Best-effort: an expired lease is already gone. */
+export async function releaseLease(caller: ToolCaller, sessionId: string): Promise<void> {
+  await caller
+    .call(ReticleTool.RUN, {
+      tool: ReticleTool.LEASE,
+      args: { action: LeaseAction.RELEASE, sessionId },
+    })
+    .catch(() => undefined);
 }
 
 /** The narrow slice of an MCP client this needs — one call, then close. */
@@ -181,12 +273,27 @@ export async function runAdhocVerdict(options: AdhocVerdictOptions): Promise<Adh
       ],
     };
   }
+  let leased: string | undefined;
   try {
     // Spread rather than set: an explicit `sessionId: undefined` is a key the tools reject as an
     // unknown parameter, which would turn "no tab named" into a refusal.
-    const pin = options.sessionId === undefined ? {} : { sessionId: options.sessionId };
-    if (options.url !== undefined && options.url.length > 0) {
-      await caller.call(ReticleTool.NAVIGATE, { url: options.url, ...pin });
+    const url = options.url !== undefined && options.url.length > 0 ? options.url : undefined;
+    // A url and no tab on its origin: this used to refuse with "open the app first" and name some
+    // OTHER listening port as the one to open. The caller already said which url; open it here, in
+    // a Reticle browser, and hand the lease back when the verdict is in.
+    let alreadyAt = false;
+    if (url !== undefined && options.sessionId === undefined && options.sessions !== undefined) {
+      const opened = await leaseIfNoTab(caller, url, options.sessions);
+      if ('failed' in opened) return { code: 1, lines: ['verified: unknown', ...opened.failed] };
+      leased = opened.leased;
+      alreadyAt = true === opened.alreadyAt;
+    }
+    const aimed = options.sessionId ?? leased;
+    const pin = aimed === undefined ? {} : { sessionId: aimed };
+    // A fresh lease, or a tab already showing this url, is already AT it; navigating again would
+    // only reload the page — and reload a desktop window out from under the assert.
+    if (url !== undefined && leased === undefined && !alreadyAt) {
+      await caller.call(ReticleTool.NAVIGATE, { url, ...pin });
     }
     const result = await caller.call(ReticleTool.ASSERT, { predicate: options.predicate, ...pin });
     const refusal = refusalText(result);
@@ -215,6 +322,7 @@ export async function runAdhocVerdict(options: AdhocVerdictOptions): Promise<Adh
       ],
     };
   } finally {
+    if (leased !== undefined) await releaseLease(caller, leased);
     await caller.close().catch(() => undefined);
   }
 }

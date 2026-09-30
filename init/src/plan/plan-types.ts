@@ -198,6 +198,8 @@ export interface PlanInput {
   viteDevModuleExists?: boolean | undefined;
   /** Whether src/hooks.client.ts already exists (SvelteKit idempotency). */
   svelteKitHooksExists?: boolean;
+  /** Its content, so a re-run with a new `--port` can move the URL baked into it. */
+  svelteKitHooksSource?: string | null | undefined;
   /** Whether app/entry.client.tsx already exists — it decides whether init writes one or patches it. */
   reactRouterEntryExists?: boolean;
   /**
@@ -208,12 +210,16 @@ export interface PlanInput {
    * added to whatever the app already put in it. Existence alone could only ever print a recipe.
    */
   reactRouterEntrySource?: string | null | undefined;
+  /** The installed Vite's major, for the configs that own their Vite (see `installedViteMajor`). */
+  viteMajor?: number | null | undefined;
   /** Discovered Nuxt config: its path + source, or null. It is where the pairing token is inlined. */
   nuxtConfig?: { path: string; source: string } | null | undefined;
   /** Whether the app has an `app/` directory — Nuxt 4's srcDir, and so where plugins are scanned. */
   nuxtHasAppDir?: boolean | undefined;
   /** Whether the Nuxt client plugin already exists (idempotency — the file is the owner's to edit). */
   nuxtPluginExists?: boolean | undefined;
+  /** Its content, so a re-run with a new `--port` can move the URL baked into it. */
+  nuxtPluginSource?: string | null | undefined;
   /**
    * TanStack Start's document module, when found (`src/routes/__root.tsx` or `app/routes/__root.tsx`).
    *
@@ -221,6 +227,23 @@ export interface PlanInput {
    * 500s — but the path has to be the one that actually exists, not a guess.
    */
   tanstackStartRoot?: string | undefined;
+  /** Its content, so `init` can render the connect component in it rather than print a recipe. */
+  tanstackStartRootSource?: string | null | undefined;
+  /** Whether the connect component `init` writes beside `routes/` already exists (it is the owner's). */
+  tanstackStartConnectExists?: boolean | undefined;
+  /** Its content, so a re-run with a new `--port` can move the URL baked into it. */
+  tanstackStartConnectSource?: string | null | undefined;
+  /** `angular.json`, read so the serve target can be pointed at the token route. */
+  angularWorkspace?: { path: string; source: string } | null | undefined;
+  /** The browser entry `angular.json` names (`src/main.ts` by default) — where the connect goes. */
+  angularEntry?: { path: string; source: string } | null | undefined;
+  /** The generated `reticle.proxy.mjs`, when a previous run left one (idempotency). */
+  angularProxySource?: string | null | undefined;
+  /**
+   * The plain-HTML app's `index.html`, when it has one — so a re-run over a page that already
+   * carries the connect snippet reports it as done instead of "will NOT connect".
+   */
+  htmlIndexSource?: string | null | undefined;
   /** CRA's bundled entry (src/index.tsx or .js) — where the connect import has to go. */
   craEntry?: { path: string; source: string } | null;
   /** Existing .env.development.local, so an unrelated variable in it survives. */

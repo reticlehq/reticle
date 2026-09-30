@@ -134,7 +134,7 @@ startTransition(() => {
     const content = reactRouterSteps(planInput(null))[0]?.write?.content ?? '';
     expect(content).toContain('hydrateRoot');
     expect(content).toContain('HydratedRouter');
-    expect(content).toContain("import('/@reticle-connect')");
+    expect(content).toContain('@reticle-connect`)');
   });
 
   it('adds one line to an entry the app already has, keeping everything in it', () => {
@@ -143,7 +143,7 @@ startTransition(() => {
     )[0];
     expect(step?.status).toBe(StepStatus.APPLY);
     const content = step?.write?.content ?? '';
-    expect(content).toContain("import('/@reticle-connect')");
+    expect(content).toContain('@reticle-connect`)');
     expect(content).toContain('HydratedRouter');
     // Their file, plus one line — not a rewrite.
     for (const line of DEFAULT_ENTRY.trim().split('\n')) expect(content).toContain(line);
@@ -157,6 +157,17 @@ startTransition(() => {
       planInput({ path: REACT_ROUTER_ENTRY_PATH, source: once?.write?.content ?? '' }),
     )[0];
     expect(twice?.status).toBe(StepStatus.ALREADY);
+  });
+
+  it('replaces the line older inits wrote, which fails tsc, instead of calling it done', () => {
+    const old = DEFAULT_ENTRY.replace(
+      "import { hydrateRoot } from 'react-dom/client';",
+      "import { hydrateRoot } from 'react-dom/client';\nif (import.meta.env.DEV) void import('/@reticle-connect');",
+    );
+    const step = reactRouterSteps(planInput({ path: REACT_ROUTER_ENTRY_PATH, source: old }))[0];
+    expect(step?.status).toBe(StepStatus.APPLY);
+    expect(step?.write?.content).not.toContain("import('/@reticle-connect')");
+    expect(step?.write?.content?.match(/@reticle-connect/g)).toHaveLength(1);
   });
 
   it('says why the plugin alone cannot do it', () => {

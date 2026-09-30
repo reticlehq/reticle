@@ -42,11 +42,13 @@ export { configWithInstallSource } from './project/install-source-config.js';
 export { projectIdOf, rememberProjectOnDisk, type RegistryIo } from './project/remember-project.js';
 export {
   detectPackageManager,
+  Framework,
   installCommandParts,
   parseMajor,
   PackageManager,
 } from './detect/detect.js';
 export { findWorkspaceApps } from './detect/workspace-apps.js';
+export { desktopLaunch, type DesktopLaunch } from './detect/dev-script.js';
 export { deriveProjectId, packageName } from './project/project-id.js';
 export { refreshAgentRules } from './project/refresh-rules.js';
 export { diagnoseDesktop, isDesktopProject } from './diagnose/desktop-doctor.js';
@@ -58,6 +60,7 @@ export {
   type CspDiagnosis,
   type ObservedWebDocument,
 } from './diagnose/csp-doctor.js';
+export { webCspOptionsFor } from './diagnose/csp-step.js';
 export { reticleConfigContent } from './patch/snippets.js';
 
 /**
@@ -82,6 +85,6 @@ export {
   // asks the same question and had no way to ask it: Claude Code keeps no config file, so the
   // file-reading detector cannot see it, and the installer silently skipped the commonest client.
   claudeAvailableProbe,
-  claudeExistsProbe,
+  claudeHasReticle,
 } from './register/mcp.js';
 export { detectMcpClients, type DetectedClient } from './register/detect-clients.js';
