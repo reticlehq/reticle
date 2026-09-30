@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PredicateKind, Verified, VerifiedReason, type Predicate } from '@reticlehq/core';
-import { durablePart, revertedAfterMatch, withDurability } from './durable.js';
+import { durabilityOf, durablePart, revertedAfterMatch, withDurability } from './durable.js';
 
 /*
  * Every verdict was scoped to one action's window, so "saved" was proved by the toast that said so
@@ -90,5 +90,31 @@ describe('revertedAfterMatch — an optimistic UI that rolled back', () => {
 
   it('says nothing for a consequence that happened once and cannot revert', async () => {
     expect(await revertedAfterMatch(session(false), sig, 0, undefined)).toBeUndefined();
+  });
+});
+
+/*
+ * A fresh page that cannot answer — its store not up yet, the tab gone mid-read — is not a page that
+ * said no. Every non-pass used to become `held: false`, reported as a definite "did not persist".
+ */
+describe('durabilityOf — a re-check that could not be read is not a failed one', () => {
+  it('keeps an unreadable re-check inconclusive, and the verdict unknown', async () => {
+    const durable = durabilityOf({ pass: false, inconclusive: 'store unavailable' });
+    expect(durable.held).toBeUndefined();
+    const yes = { verified: Verified.YES, verifiedReason: VerifiedReason.PROVED, because: 'held' };
+    const out = await withDurability(true, el, yes, () => Promise.resolve(durable));
+    expect(out.decision.verified).toBe(Verified.UNKNOWN);
+    expect(out.decision.verifiedReason).toBe(VerifiedReason.INCONCLUSIVE);
+  });
+
+  it('treats a re-check the tab left mid-read as lost, not failed', () => {
+    expect(durabilityOf({ pass: false, observationLost: true }).held).toBeUndefined();
+  });
+
+  it('still says no when the fresh page answered and the consequence is gone', () => {
+    expect(durabilityOf({ pass: false, observed: 'no element matched' })).toEqual({
+      held: false,
+      observed: 'no element matched',
+    });
   });
 });

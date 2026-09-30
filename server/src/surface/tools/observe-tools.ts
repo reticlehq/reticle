@@ -601,7 +601,8 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       session.recordAction(ReticleTool.ASSERT, asRecord(args), verdictEffect);
       // A passing check over the default window (since the last act) is proof of that act, so it
       // joins that step in the recording — otherwise "act, then assert" saves a bare click. An
-      // explicit `since` may reach back past the last step, where replay would not find it.
+      // explicit `since` may reach back past the last step, where replay would not find it. The
+      // store itself refuses when a navigation came after that step: see RecordingStore.markNavigated.
       if (Verified.YES === decision['verified'] && args['since'] === undefined) {
         captureAssertion(deps.recordings, predicate);
       }

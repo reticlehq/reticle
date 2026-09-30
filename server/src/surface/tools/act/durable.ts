@@ -63,11 +63,34 @@ export function durablePart(p: Predicate): Predicate | undefined {
   return RE_READABLE.has(p.kind) ? p : undefined;
 }
 
-/** What the re-check found. `held` absent means the page never came back to be asked. */
+/**
+ * What the re-check found. `held` absent means no answer: the page never came back to be asked, or
+ * it came back and could not answer (`inconclusive`).
+ */
 export interface Durability {
   held?: boolean;
   observed?: string;
   skipped?: string;
+  inconclusive?: string;
+}
+
+/**
+ * A re-check's predicate result, as durability. Only a page that ANSWERED can say the consequence is
+ * gone: an unreadable one (its store not up yet) or one the tab left mid-read is no answer, and
+ * reporting either as "did not persist" is a confident no about something nobody saw.
+ */
+export function durabilityOf(verdict: {
+  pass: boolean;
+  observed?: string | undefined;
+  inconclusive?: string | undefined;
+  observationLost?: boolean | undefined;
+}): Durability {
+  const observed = verdict.observed === undefined ? {} : { observed: verdict.observed };
+  if (true === verdict.pass) return { held: true, ...observed };
+  if (verdict.inconclusive !== undefined)
+    return { inconclusive: verdict.inconclusive, ...observed };
+  if (true === verdict.observationLost) return observed;
+  return { held: false, ...observed };
 }
 
 /**
@@ -89,6 +112,16 @@ export async function withDurability(
   }
   const durable = await recheck(part);
   if (true === durable.held) return { decision, durable };
+  if (durable.inconclusive !== undefined) {
+    return {
+      durable,
+      decision: {
+        verified: Verified.UNKNOWN,
+        verifiedReason: VerifiedReason.INCONCLUSIVE,
+        because: `the consequence held, but the reloaded page could not answer whether it still does (${durable.inconclusive})`,
+      },
+    };
+  }
   if (durable.held === undefined) {
     return {
       durable,
@@ -129,11 +162,7 @@ export async function reloadAndRecheck(
   });
   const fresh = back ? deps.sessions.get(session.id) : undefined;
   if (fresh === undefined) return {};
-  const verdict = await waitForPredicate(fresh, part, timeoutMs, 0);
-  return {
-    held: true === verdict.pass,
-    ...(verdict.observed === undefined ? {} : { observed: verdict.observed }),
-  };
+  return durabilityOf(await waitForPredicate(fresh, part, timeoutMs, 0));
 }
 
 /**

@@ -424,6 +424,35 @@ describe('act, then assert: the assertion is kept on the step it proved', () => 
     expect(res['verified']).toBe(Verified.YES);
     expect(deps.recordings.stop(AMBIENT_RECORDING)?.steps[0]?.expect).toEqual(check);
   });
+
+  /*
+   * act → navigate → assert: the assertion was proved on the page the navigation opened, and
+   * replaying it right after the click — which is where the flow would keep it — asks it of a page
+   * it was never true on.
+   */
+  it('is not kept on the act when a navigation came between them', async () => {
+    const { deps } = createStateSession({
+      initialStore: { app: { cart: { count: 0 } }, cart: { count: 0 } },
+      onAct: (set) => set({ app: { cart: { count: 3 } }, cart: { count: 3 } }),
+    });
+    await tool(ReticleTool.ACT).handler(deps, { ref: 'btn', action: 'click' });
+    // A reload through the tool, as an agent would do it. The fake page comes back at once.
+    (deps.sessions as unknown as { get: () => unknown }).get = () => undefined;
+    let clock = 0;
+    const timed = { ...deps, now: () => (clock += 1000) };
+    await tool(ReticleTool.NAVIGATE)
+      .handler(timed, { reload: true, timeout_ms: 1 })
+      .catch(() => undefined);
+    const check = { kind: PredicateKind.STATE, path: 'cart.count', equals: 3 };
+    const res = (await tool(ReticleTool.ASSERT).handler(deps, { predicate: check })) as Record<
+      string,
+      unknown
+    >;
+    expect(res['verified']).toBe(Verified.YES);
+    const step = deps.recordings.stop(AMBIENT_RECORDING)?.steps[0];
+    expect(step).toBeDefined();
+    expect(step?.expect).toBeUndefined();
+  });
 });
 
 // The coverage ledger's PROVED level: a control counts only when its act came back `yes`.

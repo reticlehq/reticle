@@ -117,6 +117,8 @@ const AMBIENT_STEP_CAP = 400;
 export class RecordingStore {
   readonly #active = new Map<string, ActiveRecording>();
   readonly #compiled = new Map<string, CompiledProgram>();
+  /** A navigation came after the last captured step — see markNavigated. */
+  #navigatedSinceStep = false;
 
   start(name: string, cursor: number, startPath?: string): void {
     const openedOver = new Map<string, number>();
@@ -156,6 +158,7 @@ export class RecordingStore {
    * anything should not carry an empty tape, and "did anything happen at all" stays answerable.
    */
   capture(step: RecordedStep, route?: string): void {
+    this.#navigatedSinceStep = false;
     if (!this.#active.has(AMBIENT_RECORDING)) {
       this.#active.set(AMBIENT_RECORDING, {
         cursor: 0,
@@ -191,6 +194,7 @@ export class RecordingStore {
    * the proof. What the step already declared is kept; the new check joins it under `allOf`.
    */
   attachExpect(expect: Predicate): void {
+    if (this.#navigatedSinceStep) return;
     for (const rec of this.#active.values()) {
       const last = rec.steps.at(-1);
       if (last === undefined) continue;
@@ -202,6 +206,15 @@ export class RecordingStore {
             ? { ...held, predicates: [...held.predicates, expect] }
             : { kind: PredicateKind.ALL_OF, predicates: [held, expect] };
     }
+  }
+
+  /**
+   * A navigation happened. Navigating records no step, so until the next one is captured, a check
+   * proved now is about the page the navigation opened, not about the last step — and kept on that
+   * step, replay would ask it right after the click, of a page it was never true on.
+   */
+  markNavigated(): void {
+    this.#navigatedSinceStep = true;
   }
 
   /**
