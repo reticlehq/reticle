@@ -186,6 +186,7 @@ describe('an empty repo and an up-to-date repo do not say the same thing', () =>
       derivedSent: [],
       refused: [],
       held: [],
+      notRetried: [],
       pulled: 0,
       morePending: false,
       ...over,
@@ -219,6 +220,7 @@ describe('when the server refuses what was pushed', () => {
       derivedSent: [],
       refused: [],
       held: [],
+      notRetried: [],
       pulled: 0,
       morePending: false,
     });
@@ -255,6 +257,7 @@ describe('when the server refuses what was pushed', () => {
       derivedSent: [],
       refused: [],
       held: [],
+      notRetried: [],
       pulled: 0,
       morePending: false,
     });
@@ -1117,5 +1120,54 @@ describe('a large backlog goes up in bounded batches', () => {
     // Index 0 of the second batch is the first run past the batch size.
     expect(report.runsRejected.map((r) => r.index)).toContain(SYNC_BATCH_LIMITS.MAX_RUNS);
     expect(written.state?.sentRunIds).not.toContain(`r${String(SYNC_BATCH_LIMITS.MAX_RUNS)}`);
+  });
+});
+
+/**
+ * A run the server rejected was offered again on every cycle, and the flows riding with it kept
+ * the daemon on its fast interval, for an answer that could not change. It is now remembered with
+ * the reason and what the platform said it reads, and retried only when either could change it.
+ */
+describe('a refused run is not re-offered until something could change the answer', () => {
+  const REJECT = { runs: { accepted: 0, rejected: [{ index: 0, reason: 'unknown field "x"' }] } };
+  const ACCEPTS = { runVersions: [1, 2, 3], flowVersions: [1, 2], derived: [] };
+  const src = (payload: Record<string, unknown>) =>
+    source({
+      runs: () => [{ runId: 'bad', payload: { runId: 'bad', ...payload } }],
+      flows: () => [{ name: 'sign-in', version: 2 }],
+    });
+
+  it('does not send it again, reports it, and sends it once the platform reads more', async () => {
+    const first = await cycle({ status: { accepts: ACCEPTS }, sync: REJECT }, src({}));
+    expect(first.calls.some((c) => 'POST' === c.method)).toBe(true);
+    const state = first.written.state ?? {};
+
+    const second = await cycle({ status: { accepts: ACCEPTS }, sync: REJECT }, src({}), state);
+    expect(second.calls.some((c) => 'POST' === c.method)).toBe(false);
+    expect(second.report.ok).toBe(false);
+    expect(describeSync(second.report)).toContain(
+      'refused, not retried: 1 run(s) (unknown field "x")',
+    );
+    expect(second.written.state?.lastError).toContain('refused, not retried');
+
+    const upgraded = { ...ACCEPTS, runVersions: [1, 2, 3, 4] };
+    const third = await cycle(
+      { status: { accepts: upgraded }, sync: { runs: { accepted: 1 } } },
+      src({}),
+      second.written.state ?? {},
+    );
+    expect(third.calls.some((c) => 'POST' === c.method)).toBe(true);
+    expect(third.report.ok).toBe(true);
+    expect(third.written.state?.refusedRuns).toEqual({});
+  });
+
+  it('retries it when the run file itself changes', async () => {
+    const first = await cycle({ status: { accepts: ACCEPTS }, sync: REJECT }, src({}));
+    const again = await cycle(
+      { status: { accepts: ACCEPTS }, sync: REJECT },
+      src({ fixed: true }),
+      first.written.state ?? {},
+    );
+    expect(again.calls.some((c) => 'POST' === c.method)).toBe(true);
   });
 });

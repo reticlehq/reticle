@@ -111,6 +111,19 @@ export interface CloudSyncState {
    * fills the gap the server declared and never overrides the server on a question it answered.
    */
   sentRunIds?: string[];
+  /**
+   * Runs the server refused, by run id: its reason, and the two things that could change the answer
+   * (a hash of the run file, and of what the platform said it reads). A refused run is not offered
+   * again until one of them changes; re-offering it every cycle got the same refusal and dragged
+   * every flow and capsule along with it.
+   */
+  refusedRuns?: Record<string, RefusedRun>;
+}
+
+interface RefusedRun {
+  reason: string;
+  payloadHash: string;
+  acceptsHash: string;
 }
 
 export interface SyncReport {
@@ -139,6 +152,8 @@ export interface SyncReport {
    * not read. Sending it would only be refused again on every cycle.
    */
   held: string[];
+  /** Runs refused on an earlier cycle and not offered again, because nothing has changed since. */
+  notRetried: Array<{ runId: string; reason: string }>;
   /** Decisions collected from the dashboard. */
   pulled: number;
   /** True when the pull page was full — call again now rather than waiting for the next tick. */
@@ -278,6 +293,7 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
     derivedSent: [],
     refused: [],
     held: [],
+    notRetried: [],
     pulled: 0,
     morePending: false,
   };
@@ -351,7 +367,23 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
 
     // 2. SEND — only what the server does not already have, and only what it can read.
     const allRuns = deps.source.runs();
-    const unsent = allRuns.filter((r) => !known.has(r.runId));
+    const acceptsHash = hashPayload(held.accepts ?? null);
+    const priorRefusals = isRecord(deps.state.refusedRuns) ? deps.state.refusedRuns : {};
+    const refusedRuns: Record<string, RefusedRun> = {};
+    const notRetried: Array<{ runId: string; reason: string }> = [];
+    const unsent = allRuns.filter((run) => {
+      if (known.has(run.runId)) return false;
+      const prior = priorRefusals[run.runId];
+      const unchanged =
+        prior !== undefined &&
+        'string' === typeof prior.reason &&
+        prior.acceptsHash === acceptsHash &&
+        prior.payloadHash === hashPayload(run.payload);
+      if (!unchanged) return true;
+      refusedRuns[run.runId] = prior;
+      notRetried.push({ runId: run.runId, reason: prior.reason });
+      return false;
+    });
     const sendable = unsent.filter((run) => {
       const version = numberAt(run.payload, 'schemaVersion');
       if (runVersions === undefined || version === undefined || runVersions.includes(version))
@@ -427,9 +459,12 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
       runsSent += runs.accepted;
       // Accepted means the server has it. A rejected run was refused by index, so it is exactly as
       // unsent as it was before and must never be remembered as delivered.
-      const refusedHere = new Set(runs.rejected.map((r) => r.index));
+      const refusedHere = new Map(runs.rejected.map((r) => [r.index, r.reason]));
       batch.forEach((run, index) => {
-        if (!refusedHere.has(index)) known.add(run.runId);
+        const reason = refusedHere.get(index);
+        if (reason === undefined) known.add(run.runId);
+        else
+          refusedRuns[run.runId] = { reason, payloadHash: hashPayload(run.payload), acceptsHash };
       });
       runsRejected.push(
         ...runs.rejected.map((r) => ({ index: r.index + offset, reason: r.reason })),
@@ -464,6 +499,7 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
       }
     }
     if (requests > 0 && pushError === undefined) nextState.lastPushAt = deps.now();
+    nextState.refusedRuns = refusedRuns;
     if (pushError !== undefined) {
       nextState.sentRunIds = allRuns.map((r) => r.runId).filter((id) => known.has(id));
       deps.sink.writeState({ ...nextState, lastError: pushError });
@@ -476,6 +512,7 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
         derivedSent,
         refused,
         held: heldBack,
+        notRetried,
         error: pushError,
       };
     }
@@ -505,6 +542,7 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
         runsRejected,
         refused,
         held: heldBack,
+        notRetried,
         error,
       };
     }
@@ -530,7 +568,11 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
 
     const report: SyncReport = {
       // Anything refused, or any artifact held back, means the dashboard is missing something.
-      ok: 0 === runsRejected.length && 0 === refused.length && !heldArtifacts,
+      ok:
+        0 === runsRejected.length &&
+        0 === refused.length &&
+        0 === notRetried.length &&
+        !heldArtifacts,
       runsSent,
       runsRejected,
       flowsSent,
@@ -538,6 +580,7 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
       derivedSent,
       refused,
       held: heldBack,
+      notRetried,
       pulled: decisions.length,
       morePending: true === pulled.more,
       /*
@@ -643,6 +686,11 @@ function problemsOf(report: SyncReport): string[] {
     const first = report.runsRejected[0]?.reason ?? report.refused[0]?.reason ?? 'no reason given';
     problems.push(`${String(count)} rejected — ${first}`);
   }
+  const firstRefusal = report.notRetried[0];
+  if (firstRefusal !== undefined)
+    problems.push(
+      `refused, not retried: ${String(report.notRetried.length)} run(s) (${firstRefusal.reason})`,
+    );
   if (report.held.length > 0) problems.push(`not sent: ${report.held.join('; ')}`);
   return problems;
 }

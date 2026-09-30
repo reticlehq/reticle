@@ -530,7 +530,9 @@ describe('the last push', () => {
  * completed, so it counted as success, and the one fact worth reading was dropped.
  */
 describe('a refusal is not silence', () => {
+  let posts = 0;
   const refusing = (url: string): Promise<{ status: number; text: string }> => {
+    if (!url.includes('/pull') && !url.includes('/status')) posts += 1;
     const body = url.includes('/pull')
       ? { triage: [], cursor: '0:' }
       : url.includes('/status')
@@ -555,9 +557,14 @@ describe('a refusal is not silence', () => {
     });
     await d.syncNow();
     await d.syncNow();
+    await d.syncNow();
+    await d.syncNow();
     expect(vi.mocked(emitSyncHook)).toHaveBeenCalledWith(expect.objectContaining({ ok: false }));
+    // Once as refused, once as "not retried"; never again per cycle.
     const logged = lines.filter((l) => l.includes('unknown field'));
-    expect(logged).toHaveLength(1);
+    expect(logged).toHaveLength(2);
+    expect(logged[1]).toContain('refused, not retried');
+    expect(posts, 'the refused run was offered once, not every cycle').toBe(1);
     d.stop();
     vi.restoreAllMocks();
   });

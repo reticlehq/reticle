@@ -591,6 +591,7 @@ const cmdSync = async (argv: readonly string[]): Promise<number> => {
         ...(report.refused.length > 0 ? { refused: report.refused } : {}),
       },
       ...(report.held.length > 0 ? { notSent: report.held } : {}),
+      ...(report.notRetried.length > 0 ? { notRetried: report.notRetried } : {}),
       pulled: report.pulled,
       ...(report.morePending ? { morePending: true } : {}),
       ...(report.error === undefined ? {} : { error: report.error }),
