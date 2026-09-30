@@ -8,7 +8,7 @@
  * deterministically with no model in the loop at all.
  */
 
-import { ReticleEnv, ReticleTool, apiKeyFrom, cloudUrlFrom, asRecord } from '@reticlehq/core';
+import { ReticleEnv, ReticleTool, cloudUrlFrom, asRecord } from '@reticlehq/core';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
 import type { ToolDeps } from './tool-kit.js';
 import {
@@ -146,8 +146,9 @@ const msgUnknownDriver = (asked: string): string =>
  *
  * Resolved into the env rather than threaded through four call sites: the drivers and the
  * preference lookup all read an env record, and giving them a completed one leaves each of them
- * exactly as simple as it was. An EXPLICIT variable still wins — someone who exported a key meant
- * that key, and CI has no linked project to read.
+ * exactly as simple as it was. The key precedence is the resolver's, the same as sync's and the
+ * CLI's: the stored key for the link's host, else the exported one (which is how CI, with no
+ * keystore, gets here). An explicitly exported HOST still wins, so a proxy is not overridden.
  *
  * The credential arrives through `deps.linkedCloud`, a port, because resolving it here would make
  * the tool surface reach into `memory/cloud` — a reach the directory guard refused, correctly.
@@ -156,7 +157,6 @@ export async function withLinkedCredential(
   deps: ToolDeps,
   env: Record<string, string | undefined>,
 ): Promise<Record<string, string | undefined>> {
-  if (apiKeyFrom(env) !== undefined) return env;
   try {
     const linked = await deps.linkedCloud?.();
     if (linked === undefined || null === linked) return env;

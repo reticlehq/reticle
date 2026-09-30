@@ -306,15 +306,18 @@ describe('finding the key a linked machine already has', () => {
     expect(env['RETICLE_CLOUD_URL']).toBe('https://app.reticle.sh');
   });
 
-  /** Someone who exported a key meant that key — and CI has no linked project to read. */
-  it('leaves an explicitly exported key alone', async () => {
+  /*
+   * The same precedence as sync, `reticle push` and `reticle verify`: the resolved credential (the
+   * stored key for the link's host, else the exported one) wins. It used to be the other way round
+   * here only, so one machine could push with one key and drive with another.
+   */
+  it('prefers the resolved credential over an exported key, like every other caller', async () => {
     const env = await withLinkedCredential(linked(FILED), { RETICLE_API_KEY: 'rk_live_exported' });
-    expect(env['RETICLE_API_KEY']).toBe('rk_live_exported');
+    expect(env['RETICLE_API_KEY']).toBe('rk_live_filed');
   });
 
-  it('honours the legacy name as explicit too, rather than overwriting it', async () => {
-    const env = await withLinkedCredential(linked(FILED), { RETICLE_CLOUD_KEY: 'rk_live_legacy' });
-    expect(env['RETICLE_API_KEY']).toBeUndefined();
+  it('uses the exported key when the resolver returns it, which is what CI sees', async () => {
+    const env = await withLinkedCredential(linked(null), { RETICLE_CLOUD_KEY: 'rk_live_legacy' });
     expect(env['RETICLE_CLOUD_KEY']).toBe('rk_live_legacy');
   });
 
