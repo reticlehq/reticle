@@ -87,7 +87,8 @@ function readPairingToken() {
  *
  * The rule is core's, mirrored rather than imported for the same reason the constants above are: this
  * package is plain CJS tooling with no ESM/TS dependency on core. Kept deliberately identical:
- *   1. the port in `.reticle.json` wins whenever a live daemon is registered on it — `init --port`
+ *   1. the port in `.reticle.json` wins whenever a live daemon not serving ANOTHER project is
+ *      registered on it — `init --port`
  *      used to leave the old daemon alive, and discovery took the lower port and dialled it;
  *   2. drop dead daemons (crashed, or a stale entry left by a kill -9);
  *   3. among the living, prefer a projectId match, lowest port on a tie;
@@ -154,7 +155,7 @@ function discoverDaemonUrl(cwd = process.cwd(), home = reticleHomeDir(), alive =
 
 /**
  * The live daemon registered in `home` for `projectId`, lowest port on a tie — or the configured port,
- * when a live daemon of any project is registered there (core's `pickDaemonPort`, rule 1).
+ * when a live daemon registered there is not another project's (core's `pickDaemonPort`, rule 1).
  * @param {string | undefined} projectId
  * @param {string} dir
  * @param {(pid: number) => boolean} alive
@@ -179,9 +180,10 @@ function discoverRegisteredPort(projectId, dir, alive, configuredPort) {
     }
     if (typeof entry?.port !== 'number' || typeof entry.pid !== 'number') continue;
     if (!alive(entry.pid)) continue;
-    if (entry.port === configuredPort) return configuredPort;
-    if (projectId === undefined || projectId.length === 0 || entry.projectId !== projectId)
-      continue;
+    const mine = entry.projectId === projectId;
+    const unnamed = entry.projectId === undefined || projectId === undefined;
+    if (entry.port === configuredPort && (mine || unnamed)) return configuredPort;
+    if (projectId === undefined || projectId.length === 0 || !mine) continue;
     ports.push(entry.port);
   }
   return ports.length === 0 ? undefined : Math.min(...ports);

@@ -258,6 +258,19 @@ describe('discoverDaemonUrl', () => {
     expect(discoverDaemonUrl(cwd, dir, (pid) => 222 !== pid)).toBe('ws://localhost:4407/reticle');
   });
 
+  it('never lets another project’s daemon on the configured port beat this project’s own', () => {
+    const cwd = project('shop-abc123');
+    writeFileSync(
+      join(cwd, '.reticle.json'),
+      JSON.stringify({ projectId: 'shop-abc123', port: 4471 }),
+    );
+    const dir = home([
+      { port: 4471, pid: 111, projectId: 'blog-def456' },
+      { port: 4407, pid: 222, projectId: 'shop-abc123' },
+    ]);
+    expect(discoverDaemonUrl(cwd, dir, live)).toBe('ws://localhost:4407/reticle');
+  });
+
   it('ignores a port in the file that is not a TCP port', () => {
     const cwd = project('shop-abc123');
     writeFileSync(join(cwd, '.reticle.json'), JSON.stringify({ projectId: 'x', port: '4471' }));

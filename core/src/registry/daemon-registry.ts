@@ -38,7 +38,8 @@ export type DaemonRegistryEntry = z.infer<typeof DaemonRegistryEntrySchema>;
 /**
  * Pick the daemon port an app should connect to, given the registry entries, the app's projectId, and
  * a liveness probe. Pure so both the vite and next plugins share one rule and it's unit-testable:
- * 1. the port the project CONFIGURED wins whenever a live daemon is registered on it;
+ * 1. the port the project CONFIGURED wins whenever a live daemon is registered on it that is not
+ * another project's (a daemon naming no project counts; one naming a different project never does);
  * 2. otherwise drop dead daemons (crashed, stale entry);
  * 3. among the living, prefer the one whose projectId matches the app's — lowest port wins on a tie;
  * 4. return null when nothing matches, so the caller falls back to the default port (never guesses a
@@ -48,7 +49,9 @@ export type DaemonRegistryEntry = z.infer<typeof DaemonRegistryEntrySchema>;
  * for the same project is still alive. Discovery by projectId then found both, took the lower, and
  * the page dialled the OLD daemon: init waited on the new one and exited with "connected to a
  * DIFFERENT Reticle daemon". `.reticle.json` is what the daemon and the CLI follow, so when a daemon
- * answers there it is the answer; the registry only speaks when nothing does.
+ * answers there it is the answer; the registry only speaks when nothing does. Another project's
+ * daemon squatting that port is not an answer: the pairing token is per machine, so taking it would
+ * pair this page with that project's bridge while this project's own daemon sat live elsewhere.
  */
 export function pickDaemonPort(
   entries: readonly DaemonRegistryEntry[],
@@ -58,7 +61,12 @@ export function pickDaemonPort(
 ): number | null {
   if (
     undefined !== configuredPort &&
-    entries.some((e) => e.port === configuredPort && isAlive(e.pid))
+    entries.some(
+      (e) =>
+        e.port === configuredPort &&
+        isAlive(e.pid) &&
+        (e.projectId === undefined || projectId === undefined || e.projectId === projectId),
+    )
   ) {
     return configuredPort;
   }

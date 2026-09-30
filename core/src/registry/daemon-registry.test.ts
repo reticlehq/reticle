@@ -87,9 +87,19 @@ describe('pickDaemonPort — the configured port wins when a daemon is on it', (
     expect(pickDaemonPort(both, 'mine', (pid) => 2 !== pid, 4460)).toBe(4400);
   });
 
-  it('wins even when the daemon there registered another project, because the file said so', () => {
-    expect(
-      pickDaemonPort([entry({ port: 4460, pid: 3, projectId: 'other' })], 'mine', () => true, 4460),
-    ).toBe(4460);
+  // Another project's daemon on this project's configured port used to win rule 1, so the page
+  // paired with that project's daemon (the pairing token is per machine, not per project) even while
+  // this project's own daemon was live on another port.
+  it('never lets another project’s daemon on the configured port beat this project’s own', () => {
+    const foreignOnConfigured = [
+      entry({ port: 4460, pid: 3, projectId: 'other' }),
+      entry({ port: 4400, pid: 1, projectId: 'mine' }),
+    ];
+    expect(pickDaemonPort(foreignOnConfigured, 'mine', () => true, 4460)).toBe(4400);
+    expect(pickDaemonPort(foreignOnConfigured.slice(0, 1), 'mine', () => true, 4460)).toBeNull();
+  });
+
+  it('still takes the configured port when the daemon there names no project', () => {
+    expect(pickDaemonPort([entry({ port: 4460, pid: 3 })], 'mine', () => true, 4460)).toBe(4460);
   });
 });
