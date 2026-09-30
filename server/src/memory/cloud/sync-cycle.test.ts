@@ -120,6 +120,8 @@ describe('a quiet machine costs nothing', () => {
         runs: () => [{ runId: 'a', payload: { runId: 'a' } }],
         derived: (kind) => ('impact' === kind ? IMPACT : undefined),
       }),
+      // A machine that has synced before: it delivered this exact run.
+      { sentRunHashes: { a: hashPayload({ runId: 'a' }) } },
     );
     expect(report.ok).toBe(true);
     expect(report.runsSent).toBe(0);
@@ -448,6 +450,7 @@ describe('it sends only the difference', () => {
           { runId: 'new', payload: { runId: 'new' } },
         ],
       }),
+      { sentRunHashes: { old: hashPayload({ runId: 'old' }) } },
     );
     const post = calls.find((c) => 'POST' === c.method);
     expect((post?.body as { runs: Array<{ runId: string }> }).runs).toEqual([{ runId: 'new' }]);
@@ -474,7 +477,10 @@ describe('it sends only the difference', () => {
           { runId: 'b', payload: { runId: 'b' } },
         ],
       }),
-      { sentRunIds: ['b'] },
+      {
+        sentRunIds: ['b'],
+        sentRunHashes: { a: hashPayload({ runId: 'a' }), b: hashPayload({ runId: 'b' }) },
+      },
     );
     expect(calls.some((c) => 'POST' === c.method)).toBe(false);
   });
@@ -488,7 +494,7 @@ describe('it sends only the difference', () => {
           { runId: 'b', payload: { runId: 'b' } },
         ],
       }),
-      { sentRunIds: ['b'] },
+      { sentRunIds: ['b'], sentRunHashes: { a: hashPayload({ runId: 'a' }) } },
     );
     const post = calls.find((c) => 'POST' === c.method);
     expect((post?.body as { runs: Array<{ runId: string }> }).runs).toEqual([{ runId: 'b' }]);
@@ -926,6 +932,87 @@ describe('the request itself', () => {
     );
     expect(written.state?.lastPushAt).toBe(NOW);
     expect(written.state?.lastPullAt).toBe(NOW);
+  });
+});
+
+/*
+ * A run can change after it was sent. A session's live drive run is rewritten after every verdict,
+ * under the same id, so the server held the first few verdicts and never saw the rest: the send was
+ * decided by id alone, and an id the server already had was never sent again. Measured on a real
+ * dashboard: a tab's run pushed at 14:52 with 5 checks, then another hour of verdicts in the same
+ * tab that never reached it. The server upserts a run by id, so sending it again is the fix; the
+ * machine remembers what it sent so it can tell a changed run from one it already delivered.
+ */
+describe('a run that changed after it was sent', () => {
+  const run = (verdicts: number) => ({
+    runId: 'drive-s1',
+    payload: { runId: 'drive-s1', verdicts },
+  });
+
+  it('sends it again, because the server only has the old content', async () => {
+    const { calls } = await cycle(
+      { status: { knownRunIds: ['drive-s1'] }, sync: { runs: { accepted: 1, rejected: [] } } },
+      source({ runs: () => [run(9)] }),
+      { sentRunHashes: { 'drive-s1': hashPayload(run(5).payload) } },
+    );
+    const post = calls.find((c) => 'POST' === c.method);
+    expect((post?.body as { runs: unknown[] }).runs).toEqual([run(9).payload]);
+  });
+
+  it('does not send it again when nothing about it changed', async () => {
+    const { calls } = await cycle(
+      { status: { knownRunIds: ['drive-s1'] } },
+      source({ runs: () => [run(5)] }),
+      { sentRunHashes: { 'drive-s1': hashPayload(run(5).payload) } },
+    );
+    expect(calls.some((c) => 'POST' === c.method)).toBe(false);
+  });
+
+  it('remembers the content it just delivered, so the next change is the one that counts', async () => {
+    const { written } = await cycle(
+      { status: { knownRunIds: [] }, sync: { runs: { accepted: 1, rejected: [] } } },
+      source({ runs: () => [run(5)] }),
+    );
+    expect(written.state?.sentRunHashes).toEqual({ 'drive-s1': hashPayload(run(5).payload) });
+  });
+
+  /*
+   * A machine upgraded onto this has never hashed anything, and some of what the server holds from
+   * it is already stale: the run that exposed this was pushed with 1 check and held 5 on disk. So a
+   * run with no record is sent once, and recorded. Taking it as a baseline instead would leave exactly
+   * that run wrong forever, since a closed tab never changes again. It costs one re-send of what
+   * retention keeps, once; skipping costs the data.
+   */
+  it('sends once a run it has no record of, then remembers it', async () => {
+    const { calls, written } = await cycle(
+      { status: { knownRunIds: ['drive-s1'] }, sync: { runs: { accepted: 1, rejected: [] } } },
+      source({ runs: () => [run(5)] }),
+    );
+    const post = calls.find((c) => 'POST' === c.method);
+    expect((post?.body as { runs: unknown[] }).runs).toEqual([run(5).payload]);
+    expect(written.state?.sentRunHashes).toEqual({ 'drive-s1': hashPayload(run(5).payload) });
+  });
+
+  it('keeps the old record when the changed run is refused, so it is tried again', async () => {
+    const before = hashPayload(run(5).payload);
+    const { written } = await cycle(
+      {
+        status: { knownRunIds: ['drive-s1'] },
+        sync: { runs: { accepted: 0, rejected: [{ index: 0, reason: 'too large' }] } },
+      },
+      source({ runs: () => [run(9)] }),
+      { sentRunHashes: { 'drive-s1': before } },
+    );
+    expect(written.state?.sentRunHashes).toEqual({ 'drive-s1': before });
+  });
+
+  it('forgets the record of a run that is no longer on disk', async () => {
+    const { written } = await cycle(
+      { status: { knownRunIds: ['drive-s1'] } },
+      source({ runs: () => [run(5)] }),
+      { sentRunHashes: { 'drive-s1': hashPayload(run(5).payload), gone: 'x' } },
+    );
+    expect(Object.keys(written.state?.sentRunHashes ?? {})).toEqual(['drive-s1']);
   });
 });
 

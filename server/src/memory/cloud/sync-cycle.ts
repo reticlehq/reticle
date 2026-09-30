@@ -112,6 +112,15 @@ export interface CloudSyncState {
    */
   sentRunIds?: string[];
   /**
+   * The content hash of each run as the server last ACCEPTED it, for the runs still held locally.
+   *
+   * A run is not immutable: a session's live drive run is rewritten after every verdict under the
+   * same id. Sending by id alone delivered its first version and never the rest, so the server held
+   * a tab's first few verdicts and none after. The server upserts a run by id, so a changed run is
+   * simply sent again; this is how the machine tells a changed run from one it already delivered.
+   */
+  sentRunHashes?: Record<string, string>;
+  /**
    * Runs the server refused, by run id: its reason, and the two things that could change the answer
    * (a hash of the run file, and of what the platform said it reads). A refused run is not offered
    * again until one of them changes; re-offering it every cycle got the same refusal and dragged
@@ -282,6 +291,19 @@ function partResult(body: Record<string, unknown>, part: string) {
  * Split runs into requests bounded by count and by serialized size. A run bigger than the byte
  * bound on its own still goes, alone: it cannot be split, and holding it back would hide it.
  */
+/** The delivery record, kept only for the runs still on disk — the same bound as `sentRunIds`. */
+function heldHashes(
+  runs: ReadonlyArray<{ runId: string }>,
+  recorded: Record<string, string>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const { runId } of runs) {
+    const hash = recorded[runId];
+    if (hash !== undefined) out[runId] = hash;
+  }
+  return out;
+}
+
 function batchRuns<T extends { payload: unknown }>(runs: readonly T[]): T[][] {
   const batches: T[][] = [];
   let current: T[] = [];
@@ -395,8 +417,21 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
     const priorRefusals = isRecord(deps.state.refusedRuns) ? deps.state.refusedRuns : {};
     const refusedRuns: Record<string, RefusedRun> = {};
     const notRetried: Array<{ runId: string; reason: string }> = [];
+    // Same rule as every record read from disk: only a string can equal a hash we computed.
+    const recorded: Record<string, string> = {};
+    if (isRecord(deps.state.sentRunHashes))
+      for (const [id, hash] of Object.entries(deps.state.sentRunHashes))
+        if ('string' === typeof hash) recorded[id] = hash;
+    /*
+     * Changed means no record, or a record that differs. No record has to count: a machine upgraded
+     * onto this holds runs the server has in an older version (measured: pushed with 1 check, 5 on
+     * disk), and a tab that has closed never changes again to earn a re-send. So each such run is
+     * sent once and recorded, a one-time cost bounded by what retention keeps.
+     */
+    const delivered = (run: { runId: string; payload: unknown }): boolean =>
+      known.has(run.runId) && recorded[run.runId] === hashPayload(run.payload);
     const unsent = allRuns.filter((run) => {
-      if (known.has(run.runId)) return false;
+      if (delivered(run)) return false;
       const prior = priorRefusals[run.runId];
       const unchanged =
         prior !== undefined &&
@@ -515,8 +550,10 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
       const refusedHere = new Map(runs.rejected.map((r) => [r.index, r.reason]));
       batch.forEach((run, index) => {
         const reason = refusedHere.get(index);
-        if (reason === undefined) known.add(run.runId);
-        else
+        if (reason === undefined) {
+          known.add(run.runId);
+          recorded[run.runId] = hashPayload(run.payload);
+        } else
           refusedRuns[run.runId] = { reason, payloadHash: hashPayload(run.payload), acceptsHash };
       });
       runsRejected.push(
@@ -578,6 +615,7 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
     nextState.refusedSets = refusedSets;
     if (pushError !== undefined) {
       nextState.sentRunIds = allRuns.map((r) => r.runId).filter((id) => known.has(id));
+      nextState.sentRunHashes = heldHashes(allRuns, recorded);
       deps.sink.writeState({ ...nextState, lastError: pushError });
       return {
         ...empty,
@@ -599,6 +637,7 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
      * will never be attempted — so the record follows the artifacts and needs no number of its own.
      */
     nextState.sentRunIds = allRuns.map((r) => r.runId).filter((id) => known.has(id));
+    nextState.sentRunHashes = heldHashes(allRuns, recorded);
 
     // 3. COLLECT — always, even when there was nothing to send.
     const query =
