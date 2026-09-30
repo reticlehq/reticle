@@ -22,6 +22,7 @@ import { REPO_ROOT } from '@/machine/repo-root.js';
 
 interface Manifest {
   readonly name?: string;
+  readonly files?: readonly string[];
   readonly dependencies?: Record<string, string>;
   readonly peerDependencies?: Record<string, string>;
   readonly optionalDependencies?: Record<string, string>;
@@ -40,10 +41,25 @@ const GENERATED_TEXT: Readonly<Record<string, readonly string[]>> = {
   ],
 };
 
+/**
+ * Resolved from the USER's project at run time, inside a try/catch, never from the package's own
+ * dependencies: `init` formats the files it writes with the project's own Prettier when it has one.
+ */
+const USER_PROJECT_RESOLVED: Readonly<Record<string, readonly string[]>> = {
+  '@reticlehq/init': ['prettier'],
+};
+
 const BUILTINS = new Set(builtinModules);
 const STATEMENT =
   /^\s*(?:import|export)\b[^'"`]*?\bfrom\s+['"]([^'"./@][^'"]*|@[^/'"]+\/[^'"]+)['"]/gm;
 const SIDE_EFFECT = /^\s*import\s+['"]([^'"./@][^'"]*|@[^/'"]+\/[^'"]+)['"]/gm;
+/**
+ * CommonJS: `@reticlehq/next` and `@reticlehq/electron` ship `.cjs` that loads with `require`. Only
+ * where code can call it (line start, after `=`, `(`, `,` or `return`), so advice text that SAYS
+ * "add require('…') to your preload" is not read as an import.
+ */
+const REQUIRE =
+  /(?:^|[=(,]|\breturn)\s*require\(\s*['"]([^'"./@][^'"]*|@[^/'"]+\/[^'"]+)['"]\s*\)/gm;
 
 function packageOf(specifier: string): string {
   const parts = specifier.split('/');
@@ -67,35 +83,55 @@ function publishable(): { dir: string; manifest: Manifest }[] {
     }));
 }
 
-function shippedSources(dir: string): string[] {
+/**
+ * What a package ships, as source: its compiled `src/`, plus any script its `files` list ships as
+ * written (`index.cjs`, `main.cjs`). Scoped by `files` so a build script that never ships cannot
+ * be read as a runtime import.
+ */
+function shippedSources({ dir, manifest }: { dir: string; manifest: Manifest }): string[] {
   const rel = relative(REPO_ROOT, dir);
-  return execFileSync('git', ['ls-files', '--', `${rel}/src`], { cwd: REPO_ROOT, encoding: 'utf8' })
+  const direct = (manifest.files ?? [])
+    .filter((f) => /\.(c|m)?js$/.test(f))
+    .map((f) => `${rel}/${f}`);
+  return execFileSync('git', ['ls-files', '--', `${rel}/src`, ...direct], {
+    cwd: REPO_ROOT,
+    encoding: 'utf8',
+  })
     .split('\n')
-    .filter((f) => /\.(ts|tsx|mts|cts)$/.test(f) && !/\.test\.|\.d\.ts$|\/test\//.test(f));
+    .filter(
+      (f) =>
+        /\.(ts|tsx|mts|cts|js|cjs|mjs)$/.test(f) && !/\.test\.|\.d\.(c|m)?ts$|\/test\//.test(f),
+    );
 }
 
 describe('published packages import only what they declare', () => {
   const packages = publishable();
 
-  it('finds the packages and their source at all', () => {
+  // Every package, not some: `some` let the two CommonJS packages pass with nothing read at all.
+  it('finds the packages, and source to read in every one', () => {
     expect(packages.length).toBeGreaterThan(8);
-    expect(packages.some((p) => shippedSources(p.dir).length > 0)).toBe(true);
+    const unread = packages
+      .filter((p) => 0 === shippedSources(p).length)
+      .map((p) => p.manifest.name ?? p.dir);
+    expect(unread).toEqual([]);
   });
 
   it.each(packages.map((p) => [p.manifest.name ?? p.dir, p] as const))(
     '%s declares every package its shipped source imports',
-    (_name, { dir, manifest }) => {
+    (_name, pkg) => {
+      const { manifest } = pkg;
       const declared = new Set([
         manifest.name ?? '',
         ...Object.keys(manifest.dependencies ?? {}),
         ...Object.keys(manifest.peerDependencies ?? {}),
         ...Object.keys(manifest.optionalDependencies ?? {}),
         ...(GENERATED_TEXT[manifest.name ?? ''] ?? []),
+        ...(USER_PROJECT_RESOLVED[manifest.name ?? ''] ?? []),
       ]);
       const undeclared = new Set<string>();
-      for (const file of shippedSources(dir)) {
+      for (const file of shippedSources(pkg)) {
         const text = readFileSync(join(REPO_ROOT, file), 'utf8');
-        for (const re of [STATEMENT, SIDE_EFFECT]) {
+        for (const re of [STATEMENT, SIDE_EFFECT, REQUIRE]) {
           for (const m of text.matchAll(re)) {
             const specifier = m[1] ?? '';
             // A template placeholder or prose is not a module specifier.
