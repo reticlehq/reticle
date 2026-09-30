@@ -315,6 +315,8 @@ export interface StartPathArrival {
   session?: Session;
   /** Set when the RESET itself is why step 1 cannot start — the reason a step-1 red is not drift. */
   resetCost?: string;
+  /** Set when the tab was sent away and nothing reconnected: the old handle will never answer (#1129). */
+  lost?: string;
 }
 
 /**
@@ -375,7 +377,7 @@ export async function arriveAtStartPath(
   // gone after is the reload's doing, not the flow file's. Without this, an app holding its session
   // in memory comes back signed out and step 1 blames a component that is completely fine.
   const resolvedBefore = here && (await firstStepResolvesHere(session, flow));
-  const arrived = await navigateAndAwait(
+  const outcome = await navigateAndAwait(
     sessions,
     session,
     destination,
@@ -384,7 +386,16 @@ export async function arriveAtStartPath(
     clock,
     here,
   );
-  if (arrived === undefined) return {};
+  if ('lost' === outcome.kind) {
+    return {
+      lost:
+        `replay ${here ? 'reloaded' : 'navigated to'} ${target} before step 1 and no page reconnected ` +
+        `within ${String(timeoutMs)}ms, so the session it was driving is gone and nothing ran. A slow ` +
+        `or backgrounded tab can take longer to come back: bring it to the front and replay`,
+    };
+  }
+  if ('refused' === outcome.kind) return {};
+  const arrived = outcome.session;
   if (!resolvedBefore || (await firstStepResolvesHere(arrived, flow))) return { session: arrived };
   return {
     session: arrived,
@@ -423,6 +434,10 @@ function resetCostHint(flow: FlowFile, target: string): string {
  * to move and this decides how, which is also why the deliberate short-circuits live up there and
  * not in here: a caller that has already decided it must move should not have to argue with them.
  */
+/** How a navigate ended: a successor arrived, it was refused (the tab is untouched), or it was lost. */
+export type NavigateOutcome =
+  { kind: 'arrived'; session: Session } | { kind: 'refused' } | { kind: 'lost' };
+
 export async function navigateAndAwait(
   sessions: SessionManager,
   session: {
@@ -437,18 +452,18 @@ export async function navigateAndAwait(
   clock: ArrivalClock = REAL_ARRIVAL_CLOCK,
   /** True when the destination is the page we are already on — see `arrivedSuccessor`. */
   isReload: boolean = false,
-): Promise<Session | undefined> {
+): Promise<NavigateOutcome> {
   // A leased tab is addressed by URL params, so navigating without them would strand the lease.
   const url = carryReticleIdentity(session.url, destination);
   try {
     const outcome = await session.command(ReticleCommand.NAVIGATE, { url });
-    if (!outcome.ok || true !== asRecord(outcome.result)['ok']) return undefined;
+    if (!outcome.ok || true !== asRecord(outcome.result)['ok']) return { kind: 'refused' };
   } catch (error: unknown) {
     // A navigation that unloads the page rejects the very command that asked for it — the transport
     // dies with the document. Reading that as "the navigate failed" skipped the arrival poll below
     // and left replay driving a handle that could never answer again, which is how a flow with a
     // startPath died at step 1 on an app that had loaded perfectly. Anything else is a real refusal.
-    if (!isDocumentGoneError(error)) return undefined;
+    if (!isDocumentGoneError(error)) return { kind: 'refused' };
   }
   const deadline = clock.now() + timeoutMs;
   for (;;) {
@@ -458,8 +473,9 @@ export async function navigateAndAwait(
       expectedPath,
       isReload ? session : undefined,
     );
-    if (arrived !== undefined) return arrived;
-    if (clock.now() >= deadline) return undefined;
+    if (arrived !== undefined) return { kind: 'arrived', session: arrived };
+    // Sent, and the page unloaded: the handle is dead, which is not the same as refused (#1129).
+    if (clock.now() >= deadline) return { kind: 'lost' };
     await clock.sleep(START_PATH_POLL_MS);
   }
 }
@@ -621,6 +637,16 @@ export async function replayNamedFlow(
   // on the session the SDK reconnects as. When arrival can't be confirmed, replay proceeds on the
   // connected session — and the hint below turns the wrong-page drift into an actionable next move.
   const arrival = await arriveAtStartPath(deps.sessions, connected, loaded.value);
+  // Continuing on `connected` after the tab left timed every step out on a dead handle (#1129).
+  if (arrival.lost !== undefined) {
+    const reason = arrival.lost;
+    return {
+      name: loaded.value.name,
+      status: ReplayStatus.OK,
+      steps: [],
+      unverifiable: { reason },
+    };
+  }
   const session = arrival.session ?? connected;
   // The reset's own cost outranks the wrong-page hint: if the reload is why step 1 cannot start,
   // "navigate there and replay" is advice that would do the same thing again.

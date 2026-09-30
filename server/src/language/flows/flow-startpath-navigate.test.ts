@@ -288,6 +288,8 @@ describe('arriveAtStartPath — replay navigates to the flow start page before s
     const { calls, session } = tab('http://localhost:3000/reset-password', { accepted: false });
     const arrived = await arriveAtStartPath(manager([]), session, flow('/login'));
     expect(arrived.session).toBeUndefined();
+    // Refused is not lost: the tab never left, so the connected session still answers.
+    expect(arrived.lost).toBeUndefined();
     expect(calls.filter((c) => c.name === ReticleCommand.NAVIGATE)).toHaveLength(1);
   });
 
@@ -303,6 +305,9 @@ describe('arriveAtStartPath — replay navigates to the flow start page before s
       instantClock(100),
     );
     expect(arrived.session).toBeUndefined();
+    // The navigate WAS sent: the handle replay holds is gone, and continuing on it would time every
+    // step out. Said, so replay can stop as unverifiable instead (#1129).
+    expect(arrived.lost).toContain('no page reconnected within 500ms');
   });
 
   it('keeps waiting through the teardown gap where the old id resolves to nothing yet', async () => {

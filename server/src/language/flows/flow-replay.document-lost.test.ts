@@ -185,10 +185,13 @@ describe('navigateAndAwait — the navigation that kills its own transport', () 
       1_000,
       clock,
     );
-    expect(arrived?.id, 'the page loaded — the rejection was the proof of it').toBe('fresh');
+    expect(
+      'arrived' === arrived.kind ? arrived.session.id : arrived.kind,
+      'the page loaded — the rejection was the proof of it',
+    ).toBe('fresh');
   });
 
-  it('still gives up when no successor ever arrives', async () => {
+  it('still gives up when no successor ever arrives, and says the handle is LOST', async () => {
     const dying = {
       id: 'old',
       url: 'http://localhost:3000/home',
@@ -207,9 +210,13 @@ describe('navigateAndAwait — the navigation that kills its own transport', () 
         return Promise.resolve();
       },
     };
-    expect(
-      await navigateAndAwait(sessions, dying, 'http://x/login', '/login', 300, clock),
-    ).toBeUndefined();
+    // Lost, not refused: the navigate was sent and the page unloaded, so the old handle is dead and
+    // a caller that went on using it would time out on every command (#1129).
+    expect(await navigateAndAwait(sessions, dying, 'http://x/login', '/login', 300, clock)).toEqual(
+      {
+        kind: 'lost',
+      },
+    );
   });
 });
 
