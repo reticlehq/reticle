@@ -58,6 +58,14 @@ export interface ToolDeps<Ext = unknown> {
    * `tools.ts`, which keeps every existing `ToolDeps` construction working unchanged.
    */
   snapshots?: SnapshotCache;
+  /**
+   * The skew between THIS client's MCP server and the daemon, told once to this connection only.
+   *
+   * Per attach for the same reason as `snapshots`: one daemon serves every agent on the machine, and
+   * a daemon-wide queue handed one agent's "restart your MCP server" to whichever agent called next,
+   * whose server matched (#1136). Absent ⇒ this connection's server matched, or it did not announce.
+   */
+  peerSkew?: { take(): string | undefined };
   /** cross-run outcome memory (.reticle/project.json). */
   project: ProjectStore;
   /** optional native-input provider. undefined ⇒ everything stays synthetic. */

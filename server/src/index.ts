@@ -40,6 +40,7 @@ import type { StartOptions } from './start-options.js';
 export type { StartOptions } from './start-options.js';
 import { Bridge } from './portal/bridge/bridge.js';
 import { sdkFixForDirectory } from './command/version/sdk-fix.js';
+import { connectionSkew } from './command/version/version-nudge.js';
 import { SERVER_VERSION } from './command/version/identity/server-version.js';
 import { BaselineStore } from './memory/project/baselines.js';
 import { RecordingStore } from './language/flows/recording/tape/recordings.js';
@@ -696,9 +697,11 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   const effectiveDeps = realInput !== undefined ? { ...deps, realInput } : deps;
   // Read per attach, not once: a project that gets wired while this daemon is alive should stop
   // being told to wire itself on the next agent that connects.
-  shared.attachMcp(() =>
+  shared.attachMcp((peerSkew) =>
     createMcpServer(
-      effectiveDeps,
+      peerSkew === undefined
+        ? effectiveDeps
+        : { ...effectiveDeps, peerSkew: connectionSkew(peerSkew) },
       profile,
       // See the sibling call in `start`: a live session outweighs empty/stale durable memory (#1138).
       bridge.sessions.count() > 0 ||

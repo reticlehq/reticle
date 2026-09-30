@@ -13,14 +13,17 @@
  */
 import { CONTRACT_FINGERPRINT } from '@reticlehq/core';
 import { SERVER_VERSION } from './identity/server-version.js';
-import { daemonFix, describeSkew, SkewPair } from './version-skew.js';
-import { noteVersionSkew } from './version-nudge.js';
+import { daemonFix, describeSkew } from './version-skew.js';
 
 export const PEER_VERSION_PARAM = 'peerVersion';
 export const PEER_CONTRACT_PARAM = 'peerContract';
 
-/** Compare an attaching agent process against this daemon, and queue the nudge when they disagree. */
-export function noteAgentPeer(version: string | null, contract: string | null): void {
+/**
+ * Compare an attaching agent process against this daemon: the skew to tell THAT connection, or
+ * undefined when they agree. Returned rather than queued daemon-wide, because it is true only for the
+ * agent that announced it (#1136).
+ */
+export function agentPeerSkew(version: string | null, contract: string | null): string | undefined {
   const skew = describeSkew(
     {
       what: "the agent's MCP server",
@@ -32,5 +35,5 @@ export function noteAgentPeer(version: string | null, contract: string | null): 
     },
     { version: SERVER_VERSION, contract: CONTRACT_FINGERPRINT },
   );
-  if (skew !== undefined) noteVersionSkew(SkewPair.DAEMON, skew);
+  return skew;
 }

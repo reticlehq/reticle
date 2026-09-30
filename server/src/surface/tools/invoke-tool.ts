@@ -630,7 +630,7 @@ export async function runTool<Ext>(
   // reticle_sessions.versionSkew and a CLI log line — two places an agent driving a flow never
   // looks — so it could work a whole session against a mismatched pair and never learn the one fact
   // that explains the behaviour. It rides out here on whatever tool it happens to be calling.
-  const skew = isPlainObject(raw) ? takeVersionSkew() : undefined;
+  const skew = isPlainObject(raw) ? takeVersionSkew(deps.peerSkew) : undefined;
   // A feedback report that was accepted and then failed to send. Same one-shot channel, because the
   // reporter is the only person who can act on it and they are not reading the daemon log — and a
   // report announced as accepted and then silently lost is the failure the awaited send existed to

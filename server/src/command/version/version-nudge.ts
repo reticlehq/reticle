@@ -13,7 +13,7 @@
  */
 
 import { EnvelopeKey } from '@/surface/tools/tool-kit.js';
-import type { SkewPair } from './version-skew.js';
+import { SkewPair } from './version-skew.js';
 
 interface VersionSkewNudge {
   pair: SkewPair;
@@ -34,8 +34,30 @@ export function noteVersionSkew(pair: SkewPair, action: string): void {
   pending.set(pair, action);
 }
 
-/** The next undelivered skew, once. */
-export function takeVersionSkew(): VersionSkewNudge | undefined {
+/**
+ * A daemon skew bound to the one MCP connection whose server announced it, told once (#1136).
+ *
+ * The page pair stays in the daemon-wide queue: it is a fact about a tab, true for whoever asks.
+ * This pair is a fact about the CALLER, and telling it to a different caller is advice to restart
+ * a server that is fine, or to run `reticle stop` and cut every agent on the daemon.
+ */
+export function connectionSkew(action: string): { take(): string | undefined } {
+  let pendingAction: string | undefined = action;
+  return {
+    take: () => {
+      const taken = pendingAction;
+      pendingAction = undefined;
+      return taken;
+    },
+  };
+}
+
+/** The next undelivered skew, once: this connection's own first, then the daemon-wide queue. */
+export function takeVersionSkew(connection?: {
+  take(): string | undefined;
+}): VersionSkewNudge | undefined {
+  const own = connection?.take();
+  if (own !== undefined) return { pair: SkewPair.DAEMON, action: own };
   for (const [pair, action] of pending) {
     pending.delete(pair);
     delivered.set(pair, action);
@@ -53,12 +75,15 @@ export function takeVersionSkew(): VersionSkewNudge | undefined {
  * feedback ask is replaced: the skew IS the next move, and inviting a bug report about it is
  * backwards. A recognized recovery is kept; the envelope still rides along.
  */
-export function takeVersionSkewOnto(payload: {
-  error: string;
-  recovery?: string;
-  feedback?: string;
-}): Record<string, unknown> {
-  const skew = takeVersionSkew();
+export function takeVersionSkewOnto(
+  payload: {
+    error: string;
+    recovery?: string;
+    feedback?: string;
+  },
+  connection?: { take(): string | undefined },
+): Record<string, unknown> {
+  const skew = takeVersionSkew(connection);
   if (skew === undefined) return payload;
   const { feedback, ...rest } = payload;
   return {

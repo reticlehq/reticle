@@ -323,7 +323,7 @@ export function buildDynamicTools(
         // is reached through here: a stale ref, a paused session, a missing pairing token all came
         // back as the agent's arguments being wrong, which is advice that spends the retry.
         const message = error instanceof Error ? error.message : String(error);
-        return { ...takeVersionSkewOnto(buildErrorPayload(message)), tool: name };
+        return { ...takeVersionSkewOnto(buildErrorPayload(message), deps.peerSkew), tool: name };
       }
     },
   };

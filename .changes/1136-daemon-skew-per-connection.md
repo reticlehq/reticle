@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`: a daemon-skew warning reaches the agent it is about, and no other.** Two agents sharing a daemon shared one skew queue. When one attached with a different MCP server version, the warning went out on the next tool result from any agent, including one whose server matched, and told it to restart its own MCP server or run `reticle stop`, which cuts every agent on the daemon. The skewed agent might never see it, because it is delivered once. Daemon skew is now held per MCP connection and delivered only on that connection's results. Page (SDK) skew stays daemon-wide, since it is a fact about a tab. Closes [#1136](https://github.com/reticlehq/reticle/issues/1136).

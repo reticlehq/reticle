@@ -10,7 +10,7 @@ import {
 } from '@reticlehq/core';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import {
-  noteAgentPeer,
+  agentPeerSkew,
   PEER_VERSION_PARAM,
   PEER_CONTRACT_PARAM,
 } from '@/command/version/peer-announce.js';
@@ -32,7 +32,7 @@ export interface SharedServer {
    * so each concurrent Claude Code client needs its own McpServer.
    * Must be called before listen.
    */
-  attachMcp(factory: () => McpServer): void;
+  attachMcp(factory: (peerSkew?: string) => McpServer): void;
   /** Register the JSON the daemon returns from GET /status (live sessions + health for `reticle status`). */
   attachStatus(provider: () => unknown): void;
   /**
@@ -73,7 +73,7 @@ export interface SharedServer {
  * WS /reticle → browser SDK connections (via WebSocketServer)
  */
 export function createSharedServer(options: { token?: string } = {}): SharedServer {
-  type McpFactory = () => McpServer;
+  type McpFactory = (peerSkew?: string) => McpServer;
   let mcpFactory: McpFactory | undefined;
   let statusProvider: (() => unknown) | undefined;
   let driveProvider: ((url: string) => Promise<unknown>) | undefined;
@@ -204,7 +204,7 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
       // own check (a stderr line no agent reads), a nudge queued here rides out on the agent's next
       // tool result. That is the pair the user hits after `npm update`: a cached npx MCP package
       // talking to a daemon from a different build.
-      noteAgentPeer(
+      const peerSkew = agentPeerSkew(
         url.searchParams.get(PEER_VERSION_PARAM),
         url.searchParams.get(PEER_CONTRACT_PARAM),
       );
@@ -216,7 +216,8 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
       // Fresh McpServer per connection: the MCP SDK's Protocol layer only supports
       // one active transport per Server instance, so concurrent clients each need
       // their own instance backed by the same shared ToolDeps.
-      const mcpServer = mcpFactory();
+      // Handed to THIS connection's server only: the skew is about this agent, not the daemon (#1136).
+      const mcpServer = mcpFactory(peerSkew);
       const transport = new SSEServerTransport(MCP_MESSAGE_PATH, res);
       const sid = transport.sessionId;
       transports.set(sid, transport);

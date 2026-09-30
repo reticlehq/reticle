@@ -762,7 +762,10 @@ export function createMcpServer(
             {
               type: 'text' as const,
               text: JSON.stringify(
-                liveCallValues(takeVersionSkewOnto(buildErrorPayload(message)), advertisedNames),
+                liveCallValues(
+                  takeVersionSkewOnto(buildErrorPayload(message), deps.peerSkew),
+                  advertisedNames,
+                ),
               ),
             },
           ],
