@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { getAccessibleName, isVisible } from './a11y.js';
+import { installShadowRegistry } from './shadow-registry.js';
 
 describe('name from content for roles that allow it', () => {
   // A segmented filter written as `<button role="radio">held</button>` is an extremely ordinary
@@ -284,6 +285,58 @@ describe('slotted content inherits visibility from where it is slotted', () => {
     } finally {
       host.remove();
     }
+  });
+});
+
+describe('slotted into a closed details in a CLOSED shadow root', () => {
+  /**
+   * `assignedSlot` is null for a closed root by design, so the walk cannot learn the slot from the
+   * child. A root the registry captured can still be asked from inside, which is how the closed
+   * variant of #1175 is answered; an uncaptured closed root stays unreadable, as it always was.
+   */
+  let uninstall: (() => void) | undefined;
+  afterEach(() => {
+    uninstall?.();
+    uninstall = undefined;
+  });
+
+  function mountClosed(): { host: HTMLElement; child: HTMLElement } {
+    const host = document.createElement('div');
+    const shadow = host.attachShadow({ mode: 'closed' });
+    shadow.innerHTML = '<details><summary>More</summary><slot></slot></details>';
+    const child = document.createElement('button');
+    child.textContent = 'Reset';
+    host.append(child);
+    document.body.append(host);
+    return { host, child };
+  }
+
+  it('hides the child when the registry captured the closed root', () => {
+    uninstall = installShadowRegistry();
+    const { host, child } = mountClosed();
+    try {
+      expect(isVisible(child)).toBe(false);
+    } finally {
+      host.remove();
+    }
+  });
+});
+
+describe('a summary is found by its local name, so XHTML reads the same', () => {
+  it('keeps a lowercase-tagName summary of a closed details visible', () => {
+    const doc = document.implementation.createDocument('http://www.w3.org/1999/xhtml', 'html');
+    const body = doc.createElementNS('http://www.w3.org/1999/xhtml', 'body');
+    doc.documentElement.append(body);
+    const details = doc.createElementNS('http://www.w3.org/1999/xhtml', 'details');
+    const summary = doc.createElementNS('http://www.w3.org/1999/xhtml', 'summary');
+    summary.textContent = 'More';
+    details.append(summary);
+    body.append(details);
+    expect(summary.tagName).toBe('summary');
+    const label = doc.createElementNS('http://www.w3.org/1999/xhtml', 'span');
+    summary.append(label);
+
+    expect(isVisible(label)).toBe(true);
   });
 });
 

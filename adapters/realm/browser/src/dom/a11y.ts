@@ -11,13 +11,15 @@ import {
   isTextArea,
 } from './realm.js';
 import { refs } from './addressing/refs.js';
+import { capturedRootOf } from './shadow-registry.js';
 import { inspectChart } from './chart.js';
 import { isSensitiveKey } from '@/security/serialization.js';
 import { formatSource, sourceFromDom } from './addressing/source.js';
 
 const HTML_DETAILS_TAG = 'details';
 const HTML_DETAILS_OPEN_ATTRIBUTE = 'open';
-const HTML_SUMMARY_TAG = 'SUMMARY';
+// `localName`, not `tagName`: an XHTML document keeps `tagName` lowercase, an HTML one uppercases it.
+const HTML_SUMMARY_TAG = 'summary';
 
 /**
  * Roles whose accessible name comes from their text content (ARIA's `nameFrom: author content`).
@@ -389,7 +391,9 @@ function hiddenInsideClosedDetails(el: Element): boolean {
   // The first `<summary>` CHILD, read from `children` rather than `:scope > summary`: inside a
   // shadow root some selector engines answer `:scope` with nothing, and every summary slotted
   // content sits under then read as hidden.
-  const summary = Array.from(details.children).find((child) => HTML_SUMMARY_TAG === child.tagName);
+  const summary = Array.from(details.children).find(
+    (child) => HTML_SUMMARY_TAG === child.localName,
+  );
   return summary === undefined || !summary.contains(el);
 }
 
@@ -418,6 +422,22 @@ function selfHidden(el: Element): boolean {
 }
 
 /**
+ * The slot a light-DOM child renders in when its host's shadow root is CLOSED. `assignedSlot` is
+ * null there by design, but a root the registry captured can still be asked from inside which of
+ * its slots holds the child. Null when the host has no captured closed root.
+ */
+function slotInCapturedClosedRoot(el: Element): HTMLSlotElement | null {
+  const host = el.parentElement;
+  if (null === host || null !== host.shadowRoot) return null;
+  const root = capturedRootOf(host);
+  if (null === root) return null;
+  for (const slot of Array.from(root.querySelectorAll('slot'))) {
+    if (slot.assignedElements().includes(el)) return slot;
+  }
+  return null;
+}
+
+/**
  * The next node up the COMPOSED tree: the assigned slot for slotted content, else `parentElement`,
  * or the shadow host when the walk reaches the top of a shadow tree. A ShadowRoot is a DocumentFragment, so `parentElement` is null there,
  * and query candidates include shadow content (open roots always, captured closed roots too — see
@@ -428,9 +448,10 @@ function parentAcrossShadowBoundary(el: Element): Element | null {
   // A SLOTTED element renders where its slot is, not as a child of the host: its composed parent
   // is `assignedSlot`, inside the host's shadow tree. Going straight to `parentElement` (the host)
   // skipped every ancestor of the slot, so light-DOM content slotted into a closed `<details>` in a
-  // component's shadow root still read visible (#1175). A closed root reports no `assignedSlot`,
-  // and the walk falls back to the host as before.
-  const slot = el.assignedSlot;
+  // component's shadow root still read visible (#1175). A closed root reports no `assignedSlot`, so
+  // for one Reticle captured the slot is found from inside it; an uncaptured one falls back to the
+  // host as before.
+  const slot = el.assignedSlot ?? slotInCapturedClosedRoot(el);
   if (null !== slot) return slot;
   if (null !== el.parentElement) return el.parentElement;
   // `host` exists on a ShadowRoot and not on a Document, the other thing getRootNode() returns
