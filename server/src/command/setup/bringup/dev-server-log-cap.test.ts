@@ -5,7 +5,15 @@
 
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BoundedLog, ROTATED_SUFFIX } from './dev-server-log-cap.js';
@@ -35,6 +43,22 @@ describe('the bounded log', () => {
     expect(readFileSync(path, 'utf8').endsWith('END')).toBe(true);
     rmSync(dir, { recursive: true, force: true });
   });
+
+  // A rotation closed the descriptor, then its rename threw, and every later write went to that
+  // closed descriptor inside the swallowing catch: the log went silent for the rest of the server's
+  // life. A directory squatting on the rotated name is a rename that fails on every platform.
+  it('keeps logging, still bounded, when the rotation cannot rename the file', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bounded-log-'));
+    const path = join(dir, 'dev.log');
+    mkdirSync(`${path}${ROTATED_SUFFIX}`);
+    writeFileSync(join(`${path}${ROTATED_SUFFIX}`, 'occupied'), 'x');
+    const log = new BoundedLog(path, 100);
+    for (let i = 0; i < 50; i += 1) log.write(Buffer.from(`line ${String(i)}\n`));
+    log.close();
+    expect(readFileSync(path, 'utf8')).toContain('line 49');
+    expect(size(path)).toBeLessThanOrEqual(100);
+    rmSync(dir, { recursive: true, force: true });
+  });
 });
 
 describe('the supervisor process', () => {
@@ -44,7 +68,7 @@ describe('the supervisor process', () => {
   it('bounds a server that floods its output, and exits with the server', () => {
     const dir = mkdtempSync(join(tmpdir(), 'log-cap-'));
     const path = join(dir, 'dev.log');
-    const flood = `node -e "for (let i = 0; i < 20000; i++) console.log('echo ' + i); process.exitCode = 3"`;
+    const flood = `node -e "for (let i = 0; i < 20000; i++) process.stdout.write('echo ' + i + '\\n'); process.exitCode = 3"`;
     const run = spawnSync(process.execPath, [script, path, '2000', flood], {
       encoding: 'utf8',
       timeout: 20_000,

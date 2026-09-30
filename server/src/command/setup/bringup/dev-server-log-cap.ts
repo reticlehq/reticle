@@ -27,28 +27,35 @@ import { pathToFileURL } from 'node:url';
 
 /** Per file. The log and its one rotated predecessor together never exceed twice this. */
 export const DEV_SERVER_LOG_CAP_BYTES = 8 * 1024 * 1024;
+const APPEND = 'a';
+const TRUNCATE = 'w';
 /** The single predecessor a rotation keeps. */
 export const ROTATED_SUFFIX = '.1';
 
 /** Appends to `path`, rotating it to `path.1` whenever the next write would pass `capBytes`. */
 export class BoundedLog {
-  #fd: number;
+  /** Undefined only between a rotation's close and a reopen that failed; the next write retries. */
+  #fd: number | undefined;
   #size = 0;
 
   constructor(
     private readonly path: string,
     private readonly capBytes: number = DEV_SERVER_LOG_CAP_BYTES,
   ) {
-    this.#fd = openSync(path, 'a');
+    this.#fd = openSync(path, APPEND);
   }
 
   write(chunk: Buffer): void {
     try {
-      if (0 < this.#size && this.#size + chunk.length > this.capBytes) this.#rotate();
+      if (this.#fd === undefined || (0 < this.#size && this.#size + chunk.length > this.capBytes)) {
+        this.#rotate();
+      }
+      const fd = this.#fd;
+      if (fd === undefined) return;
       // A single chunk bigger than the cap is kept only in its tail: it is still bounded.
       const kept =
         chunk.length > this.capBytes ? chunk.subarray(chunk.length - this.capBytes) : chunk;
-      writeSync(this.#fd, kept);
+      writeSync(fd, kept);
       this.#size += kept.length;
     } catch {
       // Disk full, a removed state dir: the output is lost, the server is not. Never throw here.
@@ -56,17 +63,31 @@ export class BoundedLog {
   }
 
   close(): void {
+    const fd = this.#fd;
+    this.#fd = undefined;
+    if (fd === undefined) return;
     try {
-      closeSync(this.#fd);
+      closeSync(fd);
     } catch {
       /* already closed */
     }
   }
 
+  /**
+   * Close, rename to the predecessor, reopen. A rename that fails (the rotated name is taken, or on
+   * Windows something holds the file) truncates in place instead: the predecessor is lost, the bound
+   * and the newest output are not. It used to leave the descriptor closed, and every later write
+   * vanished inside `write`'s catch.
+   */
   #rotate(): void {
-    closeSync(this.#fd);
-    renameSync(this.path, `${this.path}${ROTATED_SUFFIX}`);
-    this.#fd = openSync(this.path, 'a');
+    this.close();
+    let flags = APPEND;
+    try {
+      renameSync(this.path, `${this.path}${ROTATED_SUFFIX}`);
+    } catch {
+      flags = TRUNCATE;
+    }
+    this.#fd = openSync(this.path, flags);
     this.#size = 0;
   }
 }
