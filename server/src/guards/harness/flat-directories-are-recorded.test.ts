@@ -216,7 +216,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // itself. Its own leaf because the SDK reads the same constant to decide not to show a human a
   // first-run tour over a page nobody is looking at -- a rule split across two packages is worth
   // one file that names it.
-  // +1: js-coverage.ts, V8 coverage beside the other driven-page capabilities.
+  // +1: js-coverage.ts, the browser engine's code coverage beside the other driven-page capabilities.
   'server/src/portal/input': 12,
   // 22 since `session-verdict-facts.ts` was extracted (the count is source files, not tests): both
   // verdict-producing tools were threading the same session facts into `decideVerified` with the
