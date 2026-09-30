@@ -36,6 +36,7 @@ import {
   pressKeys,
   holdKey,
   pressCombo,
+  closeModalOnEscape,
 } from './actions-press.js';
 
 /**
@@ -705,6 +706,7 @@ async function dispatchOther(
       // the identical gesture with a mouse button worked. The asymmetry was the bug.
       const hold = clampHold(args['holdMs']);
       if (hold > 0) await holdKey(el, key, code, mods, hold);
+      closeModalOnEscape(el, key, down);
       asSyntheticInput(() =>
         el.dispatchEvent(new KeyboardEvent('keyup', { key, code, bubbles: true, ...mods })),
       );

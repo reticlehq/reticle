@@ -206,3 +206,34 @@ export async function pressCombo(
   }
   return prevented;
 }
+/** A `<dialog>` currently open as MODAL. `:modal` is read in a try: an engine without it has none. */
+function openModalDialog(el: ActionTarget): HTMLDialogElement | null {
+  const dialog = el.closest('dialog');
+  if (null === dialog || !dialog.open) return null;
+  try {
+    return dialog.matches(':modal') ? dialog : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The browser's default action for Escape in a modal dialog, which a dispatched key never gets.
+ *
+ * A synthetic `KeyboardEvent` is untrusted, and untrusted key events do not make the close request
+ * a real Escape does. So `press Escape` inside a `showModal()` dialog fired no `cancel`, and an app
+ * that closes through `onCancel` (or relies on the default close) read as broken while a keyboard
+ * closes it (#1123). Emulated the way Enter's form submit is: only when the keydown was not
+ * prevented, and through `requestClose()` where the engine has it, which fires `cancel` and then
+ * `close`. Elsewhere a cancelable `cancel` is dispatched and `close()` runs only if nobody cancelled it.
+ */
+export function closeModalOnEscape(el: ActionTarget, key: string, keydownProceeded: boolean): void {
+  if ('Escape' !== key || !keydownProceeded) return;
+  const dialog = openModalDialog(el);
+  if (null === dialog) return;
+  if ('function' === typeof dialog.requestClose) {
+    dialog.requestClose();
+    return;
+  }
+  if (dialog.dispatchEvent(new Event('cancel', { cancelable: true }))) dialog.close();
+}
