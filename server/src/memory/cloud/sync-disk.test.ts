@@ -45,6 +45,20 @@ describe('reading what is on disk', () => {
     expect(diskSource(root).flows()).toHaveLength(2);
   });
 
+  // The flow store still saves and loads flows flat in `.reticle/flows/` (a flow saved with no
+  // project id, or before flows were kept per project), and sync read only the subfolders: every
+  // such flow was skipped while the cycle reported ok. Found syncing a real repo's `.reticle`.
+  it('finds legacy flat flows beside the per-project ones', () => {
+    write(join(ReticleDir.FLOWS_SUBDIR, 'checkout.json'), { name: 'checkout' });
+    write(join(ReticleDir.FLOWS_SUBDIR, 'app-1', 'sign-in.json'), { name: 'sign-in' });
+    expect(
+      diskSource(root)
+        .flows()
+        .map((f) => (f as { name: string }).name)
+        .sort(),
+    ).toEqual(['checkout', 'sign-in']);
+  });
+
   it('reads each derived record from its own file', () => {
     write(ReticleDir.IMPACT_FILE, { counts: { calls: 4 } });
     write(ReticleDir.FLAKE_FILE, { version: 1 });
