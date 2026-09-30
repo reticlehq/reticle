@@ -94,6 +94,15 @@ describe('reticle_run refuses a wrong-typed argument the way a direct call would
     expect(out.intents).toBeUndefined();
   });
 
+  it('an empty intents array is refused at the boundary, as the schema now says', async () => {
+    const { run } = harness();
+
+    const out = await run(ReticleTool.INTENT, { action: 'declare', intents: [] });
+
+    expect(out.error).toContain('invalid parameter for reticle_intent');
+    expect(out.error).toContain('intents');
+  });
+
   it('a well-typed declare still stores what it was given', async () => {
     const { run } = harness();
 

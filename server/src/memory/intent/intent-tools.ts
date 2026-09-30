@@ -78,6 +78,8 @@ export const INTENT_TOOLS: ToolDef[] = [
               .optional(),
           }),
         )
+        // Non-empty in the schema too, so the advertised contract says what `declare` enforces.
+        .min(1)
         .optional()
         .describe('declare only. Batchable — declare every intent for a feature in one call.'),
       id: z.string().optional().describe('bind only: which intent the predicate proves.'),
