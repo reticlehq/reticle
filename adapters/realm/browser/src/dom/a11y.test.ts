@@ -233,6 +233,60 @@ describe('visibility composes across a shadow boundary', () => {
   });
 });
 
+describe('slotted content inherits visibility from where it is slotted', () => {
+  /**
+   * A light-DOM child renders at its slot, so a `<details>` around the slot inside the host's shadow
+   * root is its ancestor on screen, though never in `parentElement` (#1175). The walk went from the
+   * child straight to the host, and the closed disclosure hid nothing.
+   */
+  function mountSlotted(open: boolean): {
+    host: HTMLElement;
+    child: HTMLElement;
+    kept: HTMLElement;
+  } {
+    const host = document.createElement('div');
+    const shadow = host.attachShadow({ mode: 'open' });
+    shadow.innerHTML =
+      '<details><summary><slot name="label"></slot></summary><slot></slot></details>';
+    if (open) shadow.querySelector('details')?.setAttribute('open', '');
+    const kept = document.createElement('span');
+    kept.slot = 'label';
+    kept.textContent = 'Advanced';
+    const child = document.createElement('button');
+    child.textContent = 'Reset';
+    host.append(kept, child);
+    document.body.append(host);
+    return { host, child, kept };
+  }
+
+  it('hides content slotted into a closed details', () => {
+    const { host, child } = mountSlotted(false);
+    try {
+      expect(isVisible(child)).toBe(false);
+    } finally {
+      host.remove();
+    }
+  });
+
+  it('keeps content slotted into the summary visible, as a browser does', () => {
+    const { host, kept } = mountSlotted(false);
+    try {
+      expect(isVisible(kept)).toBe(true);
+    } finally {
+      host.remove();
+    }
+  });
+
+  it('shows the slotted content once the details is open', () => {
+    const { host, child } = mountSlotted(true);
+    try {
+      expect(isVisible(child)).toBe(true);
+    } finally {
+      host.remove();
+    }
+  });
+});
+
 describe('label for> on a labelable element other than input/textarea/select', () => {
   /**
    * `<button>` is a labelable element (as are `<meter>`, `<output>` and `<progress>`), and a native

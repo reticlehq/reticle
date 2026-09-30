@@ -17,7 +17,7 @@ import { formatSource, sourceFromDom } from './addressing/source.js';
 
 const HTML_DETAILS_TAG = 'details';
 const HTML_DETAILS_OPEN_ATTRIBUTE = 'open';
-const HTML_DIRECT_SUMMARY_SELECTOR = ':scope > summary';
+const HTML_SUMMARY_TAG = 'SUMMARY';
 
 /**
  * Roles whose accessible name comes from their text content (ARIA's `nameFrom: author content`).
@@ -386,8 +386,11 @@ function hiddenInsideClosedDetails(el: Element): boolean {
   if (null === parent) return false;
   const details = parent.closest(HTML_DETAILS_TAG);
   if (null === details || details.hasAttribute(HTML_DETAILS_OPEN_ATTRIBUTE)) return false;
-  const summary = details.querySelector(HTML_DIRECT_SUMMARY_SELECTOR);
-  return null === summary || !summary.contains(el);
+  // The first `<summary>` CHILD, read from `children` rather than `:scope > summary`: inside a
+  // shadow root some selector engines answer `:scope` with nothing, and every summary slotted
+  // content sits under then read as hidden.
+  const summary = Array.from(details.children).find((child) => HTML_SUMMARY_TAG === child.tagName);
+  return summary === undefined || !summary.contains(el);
 }
 
 /**
@@ -415,13 +418,20 @@ function selfHidden(el: Element): boolean {
 }
 
 /**
- * The next node up the COMPOSED tree: `parentElement`, or the shadow host when the walk reaches
- * the top of a shadow tree. A ShadowRoot is a DocumentFragment, so `parentElement` is null there,
+ * The next node up the COMPOSED tree: the assigned slot for slotted content, else `parentElement`,
+ * or the shadow host when the walk reaches the top of a shadow tree. A ShadowRoot is a DocumentFragment, so `parentElement` is null there,
  * and query candidates include shadow content (open roots always, captured closed roots too — see
  * `embeddedRootsUnder`). Without the hop, nothing that hides the host — a closed `<details>`,
  * display:none, aria-hidden — is ever seen by the walk inside the host's shadow tree.
  */
 function parentAcrossShadowBoundary(el: Element): Element | null {
+  // A SLOTTED element renders where its slot is, not as a child of the host: its composed parent
+  // is `assignedSlot`, inside the host's shadow tree. Going straight to `parentElement` (the host)
+  // skipped every ancestor of the slot, so light-DOM content slotted into a closed `<details>` in a
+  // component's shadow root still read visible (#1175). A closed root reports no `assignedSlot`,
+  // and the walk falls back to the host as before.
+  const slot = el.assignedSlot;
+  if (null !== slot) return slot;
   if (null !== el.parentElement) return el.parentElement;
   // `host` exists on a ShadowRoot and not on a Document, the other thing getRootNode() returns
   // for a connected element.
