@@ -97,3 +97,43 @@ describe('Escape is left alone where a browser would not close anything', () => 
     expect(dialog.open).toBe(true);
   });
 });
+
+describe('every way to press Escape reaches the dialog the same way', () => {
+  it('as a chord, keys: ["Escape"]', async () => {
+    const { dialog, button, seen } = modalDialog({ requestClose: true });
+
+    await executeAction(refs.refFor(button), ActionType.PRESS, { keys: ['Escape'] });
+
+    expect(seen).toEqual(['cancel', 'close']);
+    expect(dialog.open).toBe(false);
+  });
+
+  it('held: the dialog closes on the first keydown, before the repeats', async () => {
+    const { dialog, button } = modalDialog({ requestClose: true });
+    const openAtEachKeydown: boolean[] = [];
+    button.addEventListener('keydown', () => openAtEachKeydown.push(dialog.open));
+
+    await executeAction(refs.refFor(button), ActionType.PRESS, { key: 'Escape', holdMs: 120 });
+
+    expect(openAtEachKeydown.length).toBeGreaterThan(1);
+    expect(openAtEachKeydown[0], 'the first keydown sees the dialog still open').toBe(true);
+    expect(openAtEachKeydown.slice(1), 'the repeats run against a closed dialog').not.toContain(
+      true,
+    );
+  });
+
+  it('from a non-modal dialog nested inside the modal one', async () => {
+    const { dialog, seen } = modalDialog({ requestClose: true });
+    const inner = document.createElement('dialog');
+    inner.setAttribute('open', '');
+    const field = document.createElement('button');
+    field.textContent = 'Inner';
+    inner.append(field);
+    dialog.append(inner);
+
+    await escape(field);
+
+    expect(seen).toEqual(['cancel', 'close']);
+    expect(dialog.open).toBe(false);
+  });
+});

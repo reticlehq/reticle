@@ -196,6 +196,8 @@ export async function pressCombo(
       ),
     );
     if (!ok) prevented = true;
+    // The same default a single Escape gets: `keys: ["Escape"]` is the same key.
+    closeModalOnEscape(el, key, ok);
   }
   if (holdMs > 0) await sleep(holdMs);
   for (const key of [...keys].reverse()) {
@@ -206,15 +208,31 @@ export async function pressCombo(
   }
   return prevented;
 }
-/** A `<dialog>` currently open as MODAL. `:modal` is read in a try: an engine without it has none. */
-function openModalDialog(el: ActionTarget): HTMLDialogElement | null {
-  const dialog = el.closest('dialog');
-  if (null === dialog || !dialog.open) return null;
+/** Is this dialog open as MODAL? `:modal` is read in a try: an engine without it cannot say. */
+function isOpenModal(dialog: HTMLDialogElement): boolean {
+  if (!dialog.open) return false;
   try {
-    return dialog.matches(':modal') ? dialog : null;
+    return dialog.matches(':modal');
   } catch {
-    return null;
+    // Without `:modal` a modal and a non-modal open dialog look identical from here, and Escape
+    // closes only the first. Guessing would close a dialog a keyboard leaves open.
+    return false;
   }
+}
+
+/**
+ * The innermost open MODAL `<dialog>` around the target. Walks past a non-modal dialog nested
+ * inside one, because Escape there still closes the modal the browser's top layer holds.
+ */
+function openModalDialog(el: ActionTarget): HTMLDialogElement | null {
+  for (
+    let dialog = el.closest('dialog');
+    null !== dialog;
+    dialog = dialog.parentElement?.closest('dialog') ?? null
+  ) {
+    if (isOpenModal(dialog)) return dialog;
+  }
+  return null;
 }
 
 /**

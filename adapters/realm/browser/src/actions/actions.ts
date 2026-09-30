@@ -699,6 +699,7 @@ async function dispatchOther(
           new KeyboardEvent('keydown', { key, code, bubbles: true, cancelable: true, ...mods }),
         ),
       );
+      closeModalOnEscape(el, key, down); // on keydown, as a browser does, before any hold
       // A HELD key, with the auto-repeat a browser sends while it is down.
       //
       // The mouse has had `holdMs` since hold-to-confirm; the keyboard did not, so a key that has to
@@ -706,7 +707,6 @@ async function dispatchOther(
       // the identical gesture with a mouse button worked. The asymmetry was the bug.
       const hold = clampHold(args['holdMs']);
       if (hold > 0) await holdKey(el, key, code, mods, hold);
-      closeModalOnEscape(el, key, down);
       asSyntheticInput(() =>
         el.dispatchEvent(new KeyboardEvent('keyup', { key, code, bubbles: true, ...mods })),
       );
