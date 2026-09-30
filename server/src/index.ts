@@ -485,6 +485,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       project,
       fs,
       reticleRoot,
+      linkedCloud: linkedCloudPort(fs, reticleRoot, homedir(), process.env),
       artifactRootFor: artifactRootResolver(reticleRoot),
       now,
       bridgePort: port,

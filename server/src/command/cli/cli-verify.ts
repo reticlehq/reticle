@@ -51,11 +51,13 @@ import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import {
   cloudFetch,
   createProgressReporter,
-  resolveCloudConfig,
   syncProgressToCloud,
   syncRunToCloud,
   SyncOutcome,
+  type CloudConfig,
 } from '@/memory/cloud/cloud-sync.js';
+import { linkedCloudPort } from '@/memory/cloud/cloud-config.js';
+import { homedir } from 'node:os';
 import { ReticleRunner, type VerifyProgressListener } from '@/judgement/runs/reticle-runner.js';
 import { createRunnerPort } from '@/judgement/runs/runner-port.js';
 import { RunStore } from '@/judgement/runs/artifact/run-store.js';
@@ -123,6 +125,11 @@ export interface VerifyPorts {
   out: (line: string) => void;
   fail: (line: string) => void;
   exit: (code: number) => void;
+  /**
+   * The platform credential for this repo: the stored key for a linked repo, else the exported
+   * one. A port so the push is testable, and so this reads what every other caller reads.
+   */
+  cloud: () => Promise<CloudConfig | null>;
 }
 
 interface VerifyArgs {
@@ -214,7 +221,7 @@ export async function runVerify(args: VerifyArgs, ports: VerifyPorts): Promise<v
      * live progress by it until the finished run replaces the whole picture.
      */
     const streamId = randomUUID();
-    const cloud = resolveCloudConfig(process.env);
+    const cloud = await ports.cloud().catch(() => null);
     const progress = createProgressReporter(streamId, cloud, cloudFetch);
     let run: ReticleVerificationRun;
     try {
@@ -225,7 +232,7 @@ export async function runVerify(args: VerifyArgs, ports: VerifyPorts): Promise<v
       progress.stop();
       await progress.flush().catch(() => undefined);
     }
-    await pushRunToCloud(run, ports); // best-effort; opt-in; never changes the verdict or exit code
+    await pushRunToCloud(run, cloud, ports); // best-effort; opt-in; never changes the verdict or exit code
     /*
      * The last event anybody watching is waiting for, sent after the artifact has actually landed —
      * so "pushed" on a dashboard means the run is really there, not that we were about to try.
@@ -279,13 +286,16 @@ async function explore(
 }
 
 /**
- * Best-effort push of a finished run to the cloud dashboard. Opt-in: only fires when the user has set
- * RETICLE_CLOUD_URL + RETICLE_API_KEY (the "shifted to server" step). Absent → no-op, nothing leaves the
- * machine (the no-phone-home default). A push failure NEVER changes the verdict or exit code — the run is
+ * Best-effort push of a finished run to the cloud dashboard. Opt-in: only fires when this repo is
+ * linked or RETICLE_API_KEY is set. Absent → no-op, nothing leaves the machine (the no-phone-home
+ * default). A push failure NEVER changes the verdict or exit code — the run is
  * already reported locally; the cloud copy is an enhancement.
  */
-async function pushRunToCloud(run: ReticleVerificationRun, ports: VerifyPorts): Promise<void> {
-  const config = resolveCloudConfig(process.env);
+async function pushRunToCloud(
+  run: ReticleVerificationRun,
+  config: CloudConfig | null,
+  ports: VerifyPorts,
+): Promise<void> {
   if (null === config) return;
   const result = await syncRunToCloud(run, config, cloudFetch);
   if (result.outcome === SyncOutcome.SYNCED) {
@@ -634,6 +644,7 @@ export function handleVerify(parsed: {
     out: (line) => process.stdout.write(`${line}\n`),
     fail: (line) => process.stderr.write(`${line}\n`),
     exit: (code) => process.exit(code),
+    cloud: linkedCloudPort(createNodeFileSystem(), reticleRoot, homedir(), process.env),
   };
   // Asked BEFORE anything binds. The listen failure arrives asynchronously on the server object,
   // long after `start` has resolved, so no `.catch` on that promise can ever see it — which is why

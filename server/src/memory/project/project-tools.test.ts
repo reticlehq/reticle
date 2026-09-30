@@ -1,5 +1,5 @@
 import { removeTempDir } from '@/machine/temp-dir.js';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -187,5 +187,33 @@ describe('project tools — temp dir, never touches the repo', () => {
       },
       HISTORY_WRITE_TIMEOUT_MS,
     );
+  });
+});
+
+/**
+ * The team's regression memory was read with the environment's credential only, so a repo linked
+ * with a stored key and nothing exported never saw it. It now uses the linked credential port.
+ */
+describe('reticle_project reads the platform with the linked credential', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('asks the linked platform with the stored key when nothing is exported', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'reticle-proj-cloud-'));
+    const calls: Array<{ url: string; auth: string | undefined }> = [];
+    vi.stubGlobal('fetch', (url: string, init: { headers: Record<string, string> }) => {
+      calls.push({ url, auth: init.headers['authorization'] });
+      return Promise.resolve(new Response('{"broken":[]}', { status: 200 }));
+    });
+    const deps: ToolDeps = {
+      ...fakeDeps(createNodeFileSystem(), join(dir, '.reticle')),
+      linkedCloud: () => Promise.resolve({ url: 'https://cloud.test', apiKey: 'rk_live_stored' }),
+    };
+    const res = (await tool(ReticleTool.PROJECT).handler(deps, {})) as { cloud?: unknown };
+    expect(calls[0]?.url).toMatch(/^https:\/\/cloud\.test\/v1\/project\/regression/);
+    expect(calls[0]?.auth).toBe('Bearer rk_live_stored');
+    expect(res.cloud).toEqual({ broken: [] });
+    await removeTempDir(dir);
   });
 });

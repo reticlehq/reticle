@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   RunAgentKind,
   RunFlowStatus,
@@ -82,6 +82,7 @@ function harness(conn: Partial<VerifyConnection>): { ports: VerifyPorts; rec: Re
     out: (line) => rec.out.push(line),
     fail: (line) => rec.fail.push(line),
     exit: (code) => rec.exit.push(code),
+    cloud: () => Promise.resolve(null),
   };
   return { ports, rec };
 }
@@ -171,6 +172,7 @@ describe('runVerify', () => {
       out: (line) => rec.out.push(line),
       fail: (line) => rec.fail.push(line),
       exit: (code) => rec.exit.push(code),
+      cloud: () => Promise.resolve(null),
     };
     await runVerify(ARGS, ports);
     expect(rec.exit).toEqual([1]);
@@ -332,5 +334,33 @@ describe('verifying a subset', () => {
 
     expect(asked).toEqual(['money']);
     expect(rec.exit).toEqual([0]);
+  });
+});
+
+/**
+ * `reticle verify` read the platform credential from the environment only, so a repo that had
+ * run `reticle link` and exported nothing never had its run pushed. It now asks the same resolver
+ * every other caller does, handed in as a port.
+ */
+describe('the run is pushed with the linked credential', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('pushes to the linked platform with the stored key when nothing is exported', async () => {
+    const calls: Array<{ url: string; auth: string | undefined }> = [];
+    vi.stubGlobal('fetch', (url: string, init: { headers: Record<string, string> }) => {
+      calls.push({ url, auth: init.headers['authorization'] });
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    });
+    const { ports } = harness({});
+    await runVerify(ARGS, {
+      ...ports,
+      cloud: () => Promise.resolve({ url: 'https://cloud.test', apiKey: 'rk_live_stored' }),
+    });
+    expect(calls).toContainEqual({
+      url: 'https://cloud.test/v1/runs',
+      auth: 'Bearer rk_live_stored',
+    });
   });
 });

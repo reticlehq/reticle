@@ -62,7 +62,9 @@ function numericDelta(before: number | undefined, after: number | undefined): nu
  * "what's broken vs before" from the cloud. Absent creds / unreachable → undefined (agent stays local).
  */
 async function cloudRegression(deps: ToolDeps, sessionId: string | undefined): Promise<unknown> {
-  const config = resolveCloudConfig(process.env);
+  // The same resolver every caller uses (stored key for a linked repo, else the exported one);
+  // the environment alone only for an embedder that wires no linked-credential port.
+  const config = await (deps.linkedCloud?.() ?? Promise.resolve(resolveCloudConfig(process.env)));
   if (null === config) return undefined;
   let projectId: ProjectId | undefined;
   try {
