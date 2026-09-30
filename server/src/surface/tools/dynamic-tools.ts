@@ -63,6 +63,18 @@ const TOOLS_LIST_ACTION = 'list';
 const TOOLS_ARG_HINT =
   'name the tools you want in `names`: reticle_tools { names: ["reticle_act_and_wait"] } — or call it with no arguments for the full catalog';
 
+/**
+ * The refusal for arguments of the wrong type, naming each offending key and what it declared.
+ * `path` is joined for a nested value (`intents.0.id`); a missing required key reads as the key.
+ */
+function invalidParamsError(toolName: string, issues: readonly z.ZodIssue[]): string {
+  const named = issues.map((issue) => {
+    const where = 0 === issue.path.length ? '(arguments)' : issue.path.join('.');
+    return `${where} (${issue.message})`;
+  });
+  return `invalid ${1 === named.length ? 'parameter' : 'parameters'} for ${toolName}: ${named.join('; ')} — NOT applied, so any result would be an answer to a different question`;
+}
+
 /** The keys not declared by `shape`, in call order. */
 function unknownKeys(args: Record<string, unknown>, shape: object): string[] {
   const declared = new Set(Object.keys(shape));
@@ -315,8 +327,24 @@ export function buildDynamicTools(
           hint: 'fix the arguments and call reticle_run again',
         };
       }
+      // Keys are not enough: the TYPES are the other half of what a direct call's SDK validation
+      // refuses. Unchecked here, `reticle_viewport { width: "1440" }` from a client that stringifies
+      // numbers reached the handler, which read a non-number as missing and set the page to 64x64,
+      // and `reticle_intent { action: "declare", intents: "[...]" }` stored nothing and answered
+      // `{ intents: [] }` (#1118). The parsed value goes on, as it does on the direct path, so a
+      // schema's defaults and transforms apply the same way through either door.
+      const typed = z.object(target.inputSchema).safeParse(callArgs);
+      if (!typed.success) {
+        return {
+          error: invalidParamsError(name, typed.error.issues),
+          tool: name,
+          params: paramInfo(target.inputSchema),
+          ...(target.example === undefined ? {} : { example: target.example }),
+          hint: 'fix the arguments and call reticle_run again',
+        };
+      }
       try {
-        return await runTool(target, deps, callArgs);
+        return await runTool(target, deps, typed.data);
       } catch (error) {
         // The SAME payload the direct tool path builds — recovery included. Answering every failure
         // with "fix the arguments" threw that away, and under the default profile nearly every tool

@@ -49,8 +49,8 @@ export const VIEWPORT_TOOLS: ToolDef[] = [
       recommendation: z.string().optional(),
     },
     handler: async (deps, args) => {
-      const width = clampDim(args['width']);
-      const height = clampDim(args['height']);
+      const width = clampDim('width', args['width']);
+      const height = clampDim('height', args['height']);
       const session = deps.sessions.resolve(asString(args['sessionId']));
       const provider = viewportProvider(deps);
       if (provider !== undefined) {
@@ -79,8 +79,19 @@ export const VIEWPORT_TOOLS: ToolDef[] = [
   },
 ];
 
-/** Clamp a requested dimension into [MIN_DIM, MAX_DIM]; a missing/NaN value falls back to MIN_DIM. */
-function clampDim(value: unknown): number {
-  const n = 'number' === typeof value && Number.isFinite(value) ? Math.round(value) : MIN_DIM;
-  return Math.max(MIN_DIM, Math.min(n, MAX_DIM));
+/**
+ * Clamp a requested dimension into [MIN_DIM, MAX_DIM]; a missing value falls back to MIN_DIM.
+ *
+ * A value that is PRESENT but not a finite number is refused, not read as missing: a client that
+ * sent `"1440"` meant 1440, and answering with a 64px page it never asked for made every later
+ * snapshot, click and screenshot on that page read as broken (#1118).
+ */
+function clampDim(key: string, value: unknown): number {
+  if (value === undefined) return MIN_DIM;
+  if ('number' !== typeof value || !Number.isFinite(value)) {
+    throw new Error(
+      `${ReticleTool.VIEWPORT}: \`${key}\` must be a number of CSS px, got ${JSON.stringify(value)} — NOT applied`,
+    );
+  }
+  return Math.max(MIN_DIM, Math.min(Math.round(value), MAX_DIM));
 }

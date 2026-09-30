@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`: `reticle_run` accepted wrong-typed arguments, and two tools turned them into a confident wrong answer.** A client that sent `"1440"` for a number reached `reticle_viewport` through `reticle_run`, which set the page to 64x64 and every later snapshot, click and screenshot read as broken. `reticle_intent { action: "declare" }` with a stringified or missing `intents` stored nothing and answered `{ intents: [] }`. `reticle_run` now checks the target tool's argument types the way a direct call does and refuses by name. `reticle_viewport` refuses a non-numeric dimension, and `declare` with nothing to declare is an error. Closes [#1118](https://github.com/reticlehq/reticle/issues/1118).
