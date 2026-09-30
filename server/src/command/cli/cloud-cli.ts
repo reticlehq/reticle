@@ -554,7 +554,7 @@ const cmdSync = async (argv: readonly string[]): Promise<number> => {
   const reticleRoot = join(process.cwd(), RETICLE_DIR);
   const cloud = await resolveProjectCloud(fs, reticleRoot, homedir(), process.env);
   if (null === cloud.config) {
-    err('cloud not attached here — run `reticle link` (or set RETICLE_CLOUD_URL/KEY)');
+    err('cloud not attached here — run `reticle link` (or set RETICLE_API_KEY)');
     return 1;
   }
   const config = cloud.config;
@@ -588,7 +588,9 @@ const cmdSync = async (argv: readonly string[]): Promise<number> => {
         flows: report.flowsSent,
         records: report.derivedSent,
         ...(report.runsRejected.length > 0 ? { rejected: report.runsRejected } : {}),
+        ...(report.refused.length > 0 ? { refused: report.refused } : {}),
       },
+      ...(report.held.length > 0 ? { notSent: report.held } : {}),
       pulled: report.pulled,
       ...(report.morePending ? { morePending: true } : {}),
       ...(report.error === undefined ? {} : { error: report.error }),
@@ -621,7 +623,7 @@ const repoCloud = async (): Promise<{ url: string; apiKey: string }> => {
     process.env,
   );
   if (null === cloud.config)
-    throw new Error('cloud not attached here — run `reticle link` (or set RETICLE_CLOUD_URL/KEY)');
+    throw new Error('cloud not attached here — run `reticle link` (or set RETICLE_API_KEY)');
   return cloud.config;
 };
 

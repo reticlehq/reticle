@@ -4,10 +4,13 @@
  * reason a process refuses to exit.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { emitSyncHook } from '@/hooks/hook-emit.js';
 import { startSyncDaemon } from './sync-daemon.js';
+
+vi.mock('@/hooks/hook-emit.js', () => ({ emitSyncHook: vi.fn() }));
 import type { ProjectCloud } from './cloud-config.js';
 
 const LINKED: ProjectCloud = {
@@ -519,5 +522,43 @@ describe('the last push', () => {
     const settled = server.count();
     await vi.advanceTimersByTimeAsync(30_000);
     expect(server.count()).toBe(settled);
+  });
+});
+
+/**
+ * A cycle whose only outcome was a refusal logged nothing and told the hook it was ok: the push
+ * completed, so it counted as success, and the one fact worth reading was dropped.
+ */
+describe('a refusal is not silence', () => {
+  const refusing = (url: string): Promise<{ status: number; text: string }> => {
+    const body = url.includes('/pull')
+      ? { triage: [], cursor: '0:' }
+      : url.includes('/status')
+        ? {}
+        : { runs: { accepted: 0, rejected: [{ index: 0, reason: 'unknown field "verdicts"' }] } };
+    return Promise.resolve({ status: 200, text: JSON.stringify(body) });
+  };
+
+  it('tells the hook the cycle was not ok, and logs the reason once', async () => {
+    mkdirSync(join(root, 'runs'), { recursive: true });
+    writeFileSync(join(root, 'runs', 'a.json'), JSON.stringify({ runId: 'a' }));
+    const lines: string[] = [];
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown): boolean => {
+      lines.push(String(chunk));
+      return true;
+    });
+    const d = startSyncDaemon({
+      reticleRoot: root,
+      cloud: () => Promise.resolve(LINKED),
+      request: refusing,
+      intervalMs: 1000,
+    });
+    await d.syncNow();
+    await d.syncNow();
+    expect(vi.mocked(emitSyncHook)).toHaveBeenCalledWith(expect.objectContaining({ ok: false }));
+    const logged = lines.filter((l) => l.includes('unknown field'));
+    expect(logged).toHaveLength(1);
+    d.stop();
+    vi.restoreAllMocks();
   });
 });

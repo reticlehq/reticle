@@ -283,6 +283,18 @@ export function platformCredentialFrom(
   return apiKey === undefined ? undefined : { url: platformUrlFrom(env), apiKey };
 }
 
+/**
+ * How many runs one `POST /v1/sync` may carry, by count and by serialized size.
+ *
+ * One request used to carry every unsent run, so a backlog bigger than the platform's body limit
+ * was refused whole, offered again next cycle, and never caught up. The byte bound sits well under
+ * that limit because flows, capsules and derived records ride in the first request too.
+ */
+export const SYNC_BATCH_LIMITS = {
+  MAX_RUNS: 50,
+  MAX_BYTES: 4 * 1024 * 1024,
+} as const;
+
 /** Hard transport bounds shared by the browser and bridge. */
 export const TRANSPORT_LIMITS = {
   MAX_MESSAGE_BYTES: 1024 * 1024,

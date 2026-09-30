@@ -126,6 +126,14 @@ export interface SyncDaemon {
   flush: () => Promise<void>;
 }
 
+/** Whether a cycle landed or collected anything — what earns the fast interval and a log line. */
+const movedAnything = (report: SyncReport): boolean =>
+  report.runsSent > 0 ||
+  report.flowsSent > 0 ||
+  report.capsulesSent > 0 ||
+  report.derivedSent.length > 0 ||
+  report.pulled > 0;
+
 const defaultRequest = async (
   url: string,
   init: { method: string; headers: Record<string, string>; body?: string },
@@ -213,12 +221,8 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
           log('reticle_cloud_sync_failed', { root, error: report.error });
           continue;
         }
-        const moved =
-          report.runsSent > 0 ||
-          report.flowsSent > 0 ||
-          report.capsulesSent > 0 ||
-          report.derivedSent.length > 0 ||
-          report.pulled > 0;
+        if (!report.ok) log('reticle_cloud_sync_failed', { root, error: describeSync(report) });
+        const moved = movedAnything(report);
         // The root is NAMED here and not in the single-root log below, because with several repos
         // reporting, "synced 3 runs" without a directory is not an answer to "synced from where".
         if (moved) log('reticle_cloud_synced', { root, summary: describeSync(report) });
@@ -266,27 +270,27 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
       // failed. The log below is deliberately quiet when idle, which is right for a log and wrong
       // for a hook: from outside, "nothing changed" and "sync has been broken since Tuesday" are
       // the same silence, and a consumer that cannot tell them apart has to guess.
+      /*
+       * `ok`, not "no transport error": a push the server refused completed its HTTP exchange and
+       * still left the dashboard without the thing. The refusal's reason rides as the error.
+       */
+      const failure = report.error ?? (report.ok ? undefined : describeSync(report));
       emitSyncHook({
         runsPushed: report.runsSent,
-        ok: report.error === undefined,
-        ...(report.error === undefined ? {} : { error: report.error }),
+        ok: report.ok,
+        ...(failure === undefined ? {} : { error: failure }),
       });
-      if (report.error !== undefined) {
-        if (report.error !== reportedError) {
-          reportedError = report.error;
-          log('reticle_cloud_sync_failed', { error: report.error });
-        }
-      } else {
-        reportedError = undefined;
+      if (failure !== undefined && failure !== reportedError) {
+        reportedError = failure;
+        log('reticle_cloud_sync_failed', { error: failure });
+      }
+      if (report.error === undefined) {
+        if (failure === undefined) reportedError = undefined;
         // Only when something actually moved. A per-minute "nothing to send" is noise that trains
         // people to stop reading the log.
-        const moved =
-          report.runsSent > 0 ||
-          report.flowsSent > 0 ||
-          report.capsulesSent > 0 ||
-          report.derivedSent.length > 0 ||
-          report.pulled > 0;
-        if (moved) log('reticle_cloud_synced', { summary: describeSync(report) });
+        const moved = movedAnything(report);
+        if (moved && failure === undefined)
+          log('reticle_cloud_synced', { summary: describeSync(report) });
         /*
          * A cycle that moved something means a drive is in progress, so the next one comes sooner;
          * one that moved nothing means the machine is idle, so it backs straight off. The rate

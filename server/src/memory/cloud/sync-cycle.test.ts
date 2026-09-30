@@ -7,6 +7,7 @@
  * that was ever authoritative.
  */
 import { describe, expect, it } from 'vitest';
+import { FlowErrorCode, SYNC_BATCH_LIMITS } from '@reticlehq/core';
 import {
   describeSync,
   runSyncCycle,
@@ -183,6 +184,8 @@ describe('an empty repo and an up-to-date repo do not say the same thing', () =>
       flowsSent: 0,
       capsulesSent: 0,
       derivedSent: [],
+      refused: [],
+      held: [],
       pulled: 0,
       morePending: false,
       ...over,
@@ -214,6 +217,8 @@ describe('when the server refuses what was pushed', () => {
       flowsSent: 0,
       capsulesSent: 0,
       derivedSent: [],
+      refused: [],
+      held: [],
       pulled: 0,
       morePending: false,
     });
@@ -248,6 +253,8 @@ describe('when the server refuses what was pushed', () => {
       flowsSent: 0,
       capsulesSent: 0,
       derivedSent: [],
+      refused: [],
+      held: [],
       pulled: 0,
       morePending: false,
     });
@@ -400,7 +407,10 @@ describe('the page baselines and check strengths leave the laptop', () => {
   });
 
   it('sends envelopes and assertion tiers the server does not hold', async () => {
-    const { calls } = await cycle({}, withKnowledge);
+    const { calls } = await cycle(
+      { status: { stateHashes: { envelopes: null, 'assertion-tiers': null } } },
+      withKnowledge,
+    );
     const push = calls.find((c) => 'POST' === c.method);
     expect(push?.body).toMatchObject({ envelopes: ENVELOPES, 'assertion-tiers': TIERS });
   });
@@ -523,7 +533,10 @@ describe('it sends only the difference', () => {
 
   it('sends it the moment the record actually changes', async () => {
     const { report } = await cycle(
-      { status: { stateHashes: { impact: hashPayload(IMPACT) } } },
+      {
+        status: { stateHashes: { impact: hashPayload(IMPACT) } },
+        sync: { state: { impact: 'accepted' } },
+      },
       source({ derived: (kind) => ('impact' === kind ? { ...IMPACT, changed: true } : undefined) }),
     );
     expect(report.derivedSent).toEqual(['impact']);
@@ -531,7 +544,7 @@ describe('it sends only the difference', () => {
 
   it('sends a record the server has never seen', async () => {
     const { report } = await cycle(
-      { status: { stateHashes: { impact: null } } },
+      { status: { stateHashes: { impact: null } }, sync: { state: { impact: 'accepted' } } },
       source({ derived: (kind) => ('impact' === kind ? IMPACT : undefined) }),
     );
     expect(report.derivedSent).toEqual(['impact']);
@@ -580,7 +593,10 @@ describe('it sends only the difference', () => {
    */
   it('carries a capsule when a bug moved the impact record and no run exists', async () => {
     const { calls } = await cycle(
-      { status: { knownRunIds: [] }, sync: { capsules: { accepted: 1 } } },
+      {
+        status: { knownRunIds: [], stateHashes: { impact: null } },
+        sync: { capsules: { accepted: 1 } },
+      },
       source({
         runs: () => [],
         derived: (kind) => ('impact' === kind ? { counts: { failed: 1 } } : undefined),
@@ -839,5 +855,267 @@ describe('the request itself', () => {
     );
     expect(written.state?.lastPushAt).toBe(NOW);
     expect(written.state?.lastPullAt).toBe(NOW);
+  });
+});
+
+/**
+ * Everything the server refused is visible, not only runs.
+ *
+ * The push answer carries a rejection list per part and a status per derived record. The cycle read
+ * only the runs, so a flow, a capsule or a record the platform threw away was reported as sent, the
+ * cycle said ok, and the error was cleared: the dashboard missed it and nothing anywhere said so.
+ */
+describe('every refusal is reported, whichever part it was', () => {
+  const OLD_KINDS = { impact: null, flake: null, intent: null };
+
+  it('reports a refused flow, fails the cycle and keeps the reason as the last error', async () => {
+    const { report, written } = await cycle(
+      {
+        status: { stateHashes: OLD_KINDS },
+        sync: {
+          runs: { accepted: 1, rejected: [] },
+          flows: { accepted: 0, rejected: [{ index: 0, reason: 'steps must be an array' }] },
+        },
+      },
+      source({
+        runs: () => [{ runId: 'a', payload: { runId: 'a' } }],
+        flows: () => [{ name: 'checkout', version: 2 }],
+      }),
+    );
+    expect(report.ok).toBe(false);
+    expect(describeSync(report)).toContain('checkout');
+    expect(describeSync(report)).toContain('steps must be an array');
+    expect(written.state?.lastError).toContain('steps must be an array');
+  });
+
+  it('reports a refused capsule', async () => {
+    const { report } = await cycle(
+      {
+        status: { stateHashes: OLD_KINDS },
+        sync: {
+          runs: { accepted: 1, rejected: [] },
+          capsules: { accepted: 0, rejected: [{ index: 0, reason: 'capsule too large' }] },
+        },
+      },
+      source({
+        runs: () => [{ runId: 'a', payload: { runId: 'a' } }],
+        capsules: () => [{ id: 'c1' }],
+      }),
+    );
+    expect(report.ok).toBe(false);
+    expect(describeSync(report)).toContain('capsule too large');
+  });
+
+  it('counts a derived record as sent only when the server accepted it', async () => {
+    const { report, written } = await cycle(
+      {
+        status: { stateHashes: OLD_KINDS },
+        sync: { state: { impact: 'accepted', flake: 'flows must be an object' } },
+      },
+      source({
+        derived: (kind) => ('impact' === kind || 'flake' === kind ? { v: kind } : undefined),
+      }),
+    );
+    expect(report.derivedSent).toEqual(['impact']);
+    expect(report.ok).toBe(false);
+    expect(describeSync(report)).toContain('flows must be an object');
+    expect(written.state?.lastError).toContain('flake');
+  });
+
+  it('keeps the last error when only runs were refused', async () => {
+    const { report, written } = await cycle(
+      {
+        status: {},
+        sync: { runs: { accepted: 0, rejected: [{ index: 0, reason: 'missing runId' }] } },
+      },
+      source({ runs: () => [{ runId: 'a', payload: {} }] }),
+      { lastError: 'old' },
+    );
+    expect(report.ok).toBe(false);
+    expect(written.state?.lastError).toContain('missing runId');
+  });
+
+  it('clears the last error once a cycle refuses nothing', async () => {
+    const { report, written } = await cycle(
+      { status: {}, sync: { runs: { accepted: 1, rejected: [] } } },
+      source({ runs: () => [{ runId: 'a', payload: { runId: 'a' } }] }),
+      { lastError: 'old' },
+    );
+    expect(report.ok).toBe(true);
+    expect(written.state?.lastError).toBeUndefined();
+  });
+});
+
+/**
+ * A platform that does not know a record kind never returns a hash for it, so "hash differs" was
+ * true forever: every cycle re-uploaded that record, dragged every flow and capsule along with it,
+ * and the daemon, seeing something move, stayed on its fast interval.
+ */
+describe('a platform that predates a record kind', () => {
+  const ENVELOPES = { version: 1, routes: {} };
+  const withNewKinds = source({
+    derived: (kind) =>
+      'envelopes' === kind ? ENVELOPES : 'assertion-tiers' === kind ? { version: 1 } : undefined,
+    flows: () => [{ name: 'sign-in', version: 2 }],
+  });
+  const OLD = { status: { stateHashes: { impact: null, flake: null, intent: null } } };
+
+  it('sends nothing it does not list, cycle after cycle, and stays ok', async () => {
+    const first = await cycle(OLD, withNewKinds);
+    const second = await cycle(OLD, withNewKinds);
+    for (const run of [first, second]) {
+      expect(run.calls.some((c) => 'POST' === c.method)).toBe(false);
+      expect(run.report.ok).toBe(true);
+    }
+  });
+
+  it('says once which kinds it held back', () => {
+    return cycle(OLD, withNewKinds).then(({ report }) => {
+      const line = describeSync(report);
+      expect(line).toContain(
+        'not sent: this platform does not accept envelopes, assertion-tiers yet',
+      );
+      expect(line.match(/not sent/g)).toHaveLength(1);
+    });
+  });
+
+  it('prefers the explicit list of accepted kinds when the platform sends one', async () => {
+    const { calls } = await cycle(
+      {
+        status: {
+          stateHashes: { impact: null },
+          accepts: { runVersions: [3], derived: ['impact', 'envelopes'] },
+        },
+        sync: { state: { envelopes: 'accepted' } },
+      },
+      withNewKinds,
+    );
+    const push = calls.find((c) => 'POST' === c.method)?.body as Record<string, unknown>;
+    expect(Object.keys(push)).toContain('envelopes');
+    expect(Object.keys(push)).not.toContain('assertion-tiers');
+  });
+});
+
+/**
+ * The platform says which file versions it reads. A flow or run in a version it does not read is
+ * held back with a sentence that says what to do, rather than sent to be refused on every cycle.
+ */
+describe('artifacts in a version the platform does not read', () => {
+  const FLOW_V3 = { name: 'checkout', version: 3 };
+  const FLOW_V2 = { name: 'sign-in', version: 2 };
+  const ACCEPTS = { flowVersions: [1, 2], runVersions: [1, 2, 3], derived: [] };
+
+  it('holds back a flow in a version the platform does not read, and sends the rest', async () => {
+    const { report, calls } = await cycle(
+      { status: { accepts: ACCEPTS }, sync: { runs: { accepted: 1 }, flows: { accepted: 1 } } },
+      source({
+        runs: () => [{ runId: 'a', payload: { runId: 'a', schemaVersion: 3 } }],
+        flows: () => [FLOW_V3, FLOW_V2],
+      }),
+    );
+    const push = calls.find((c) => 'POST' === c.method)?.body as { flows: unknown[] };
+    expect(push.flows).toEqual([FLOW_V2]);
+    expect(describeSync(report)).toContain(
+      'not sent: this platform reads flow versions 1, 2; checkout is version 3 — update the platform or remove `compare` from the flow',
+    );
+  });
+
+  it('explains a flow refused for its version by a platform that did not say what it reads', async () => {
+    const { report } = await cycle(
+      {
+        status: {},
+        sync: {
+          runs: { accepted: 1 },
+          flows: {
+            accepted: 0,
+            rejected: [
+              {
+                index: 0,
+                reason: 'flow version 3 is newer than this platform reads (1, 2)',
+                code: FlowErrorCode.WRONG_VERSION,
+                version: 3,
+              },
+            ],
+          },
+        },
+      },
+      source({
+        runs: () => [{ runId: 'a', payload: { runId: 'a' } }],
+        flows: () => [FLOW_V3],
+      }),
+    );
+    expect(report.ok).toBe(false);
+    expect(describeSync(report)).toContain(
+      'checkout is version 3 — update the platform or remove `compare` from the flow',
+    );
+  });
+
+  it('holds back a run in a version the platform does not read, and never marks it sent', async () => {
+    const { report, calls, written } = await cycle(
+      { status: { accepts: { ...ACCEPTS, runVersions: [1, 2] } }, sync: { runs: { accepted: 1 } } },
+      source({
+        runs: () => [
+          { runId: 'new', payload: { runId: 'new', schemaVersion: 3 } },
+          { runId: 'old', payload: { runId: 'old', schemaVersion: 2 } },
+        ],
+      }),
+    );
+    const push = calls.find((c) => 'POST' === c.method)?.body as { runs: unknown[] };
+    expect(push.runs).toEqual([{ runId: 'old', schemaVersion: 2 }]);
+    expect(written.state?.sentRunIds).toEqual(['old']);
+    expect(describeSync(report)).toContain(
+      'not sent: this platform reads run versions 1, 2; run new is version 3',
+    );
+  });
+});
+
+/**
+ * One POST carried every unsent run. A backlog larger than the platform's body limit was refused
+ * whole, the next cycle offered the same backlog, and it could never catch up.
+ */
+describe('a large backlog goes up in bounded batches', () => {
+  const runs = (n: number, pad = 0) =>
+    Array.from({ length: n }, (_, i) => ({
+      runId: `r${String(i)}`,
+      payload: { runId: `r${String(i)}`, pad: 'x'.repeat(pad) },
+    }));
+
+  it('splits by count and folds every batch into one report', async () => {
+    const total = SYNC_BATCH_LIMITS.MAX_RUNS * 2 + 3;
+    const { report, calls, written } = await cycle(
+      { status: {}, sync: { runs: { accepted: SYNC_BATCH_LIMITS.MAX_RUNS, rejected: [] } } },
+      source({ runs: () => runs(total) }),
+    );
+    const posts = calls.filter((c) => 'POST' === c.method);
+    expect(posts.map((p) => (p.body as { runs: unknown[] }).runs.length)).toEqual([
+      SYNC_BATCH_LIMITS.MAX_RUNS,
+      SYNC_BATCH_LIMITS.MAX_RUNS,
+      3,
+    ]);
+    expect(report.runsSent).toBe(SYNC_BATCH_LIMITS.MAX_RUNS * 3);
+    expect(written.state?.sentRunIds).toHaveLength(total);
+  });
+
+  it('splits by size, so no batch passes the byte bound', async () => {
+    const big = Math.floor(SYNC_BATCH_LIMITS.MAX_BYTES / 3);
+    const { calls } = await cycle({ status: {} }, source({ runs: () => runs(5, big) }));
+    const posts = calls.filter((c) => 'POST' === c.method);
+    expect(posts.length).toBeGreaterThan(1);
+    for (const p of posts)
+      expect(JSON.stringify(p.body).length).toBeLessThanOrEqual(SYNC_BATCH_LIMITS.MAX_BYTES);
+  });
+
+  it('maps a rejection in a later batch back to the run it names', async () => {
+    const total = SYNC_BATCH_LIMITS.MAX_RUNS + 2;
+    const { report, written } = await cycle(
+      {
+        status: {},
+        sync: { runs: { accepted: 1, rejected: [{ index: 0, reason: 'bad run' }] } },
+      },
+      source({ runs: () => runs(total) }),
+    );
+    // Index 0 of the second batch is the first run past the batch size.
+    expect(report.runsRejected.map((r) => r.index)).toContain(SYNC_BATCH_LIMITS.MAX_RUNS);
+    expect(written.state?.sentRunIds).not.toContain(`r${String(SYNC_BATCH_LIMITS.MAX_RUNS)}`);
   });
 });

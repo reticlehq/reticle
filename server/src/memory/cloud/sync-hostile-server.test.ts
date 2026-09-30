@@ -123,18 +123,21 @@ describe('a server that answers with nonsense', () => {
     expect(report.runsSent, 'b was known, a was not').toBe(1);
   });
 
-  it('treats stateHashes of the wrong type as unknown rather than throwing', async () => {
+  // An unreadable list names no kind this platform accepts, so nothing derived is offered. Sending
+  // on a guess would re-send it every cycle, because such a server never answers with a hash.
+  it('treats stateHashes of the wrong type as naming no kinds rather than throwing', async () => {
     const { report } = await cycle(
       { status: { stateHashes: 'nope' } },
       {},
       source({ derived: (k) => ('impact' === k ? { counts: 1 } : undefined) }),
     );
-    expect(report.derivedSent).toEqual(['impact']);
+    expect(report.derivedSent).toEqual([]);
+    expect(report.held).toEqual(['this platform does not accept impact yet']);
   });
 
   it('treats a non-string state hash as "unknown" and re-sends the record', async () => {
     const { report } = await cycle(
-      { status: { stateHashes: { impact: 12345 } } },
+      { status: { stateHashes: { impact: 12345 } }, sync: { state: { impact: 'accepted' } } },
       {},
       source({ derived: (k) => ('impact' === k ? { counts: 1 } : undefined) }),
     );
