@@ -11,7 +11,7 @@ import {
   type QueryResult,
   TRANSPORT_LIMITS,
 } from '@reticlehq/core';
-import { isElement, isFrame, isHtmlElement, isInput, isSelect, isTextArea } from './realm.js';
+import { isActionTarget, isElement, isFrame, isInput, isSelect, isTextArea } from './realm.js';
 import { capturedRootOf } from './shadow-registry.js';
 import {
   getAccessibleName,
@@ -150,11 +150,16 @@ function resolveContainer(scope: string | undefined): {
   scopeMissing: boolean;
 } {
   if (scope === undefined) return { container: document.body, scopeMissing: false };
+  // An SVG element is a scope too. `look` hands out refs for SVG links, and the action layer drives
+  // them, so refusing one here reported a scope the page plainly has as MISSING - a floor plan whose
+  // rooms are `<a href>` inside an `<svg>` could be clicked but never scoped to (#1122). The locators
+  // below read only what Element has (attributes, children, text), which is also why `elementsUnder`
+  // already walks SVG descendants.
   const byRef = refs.resolve(scope);
-  if (isHtmlElement(byRef)) return { container: byRef, scopeMissing: false };
+  if (isActionTarget(byRef)) return { container: byRef, scopeMissing: false };
   try {
     const found = document.querySelector(scope);
-    if (isHtmlElement(found)) return { container: found, scopeMissing: false };
+    if (isActionTarget(found)) return { container: found, scopeMissing: false };
   } catch {
     // invalid selector - treat as a missing scope, never a whole-page search
   }
