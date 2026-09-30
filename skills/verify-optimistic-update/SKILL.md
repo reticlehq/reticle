@@ -44,14 +44,14 @@ This proves the UI updated before the server answered. It is the claim the next 
 
 ## 3. Prove it reverts, and says why
 
-Once the request has failed, the new value must be gone, the old one back, and the user told:
+Once the request has failed, the new value must be gone, the old one back, and the user told. Name the app's real failure message, scoped to its alert, because any other alert already on the page would satisfy a bare role check:
 
 ```
 reticle_assert({ sessionId, timeout_ms: 5000, predicate: { kind: "allOf", predicates: [
   { kind: "net", urlContains: "/api/todos", method: "PATCH", status: 500 },
   { kind: "text", contains: "Buy oat milk", absent: true },
   { kind: "text", contains: "Buy milk" },
-  { kind: "element", query: { role: "alert" } },
+  { kind: "text", contains: "Could not save", scope: "[role=alert]" },
   { kind: "console", level: "error", absent: true },
 ]}})
 ```
@@ -64,20 +64,35 @@ reticle_assert({ sessionId, predicate: { kind: "state", path: "todos.0.title", e
 
 ## 4. Remove the mock, and prove success sticks
 
+Clear the mock, then make the **same** change again from the state the rollback left. The ref from step 2 may be stale after a re-render, and a rename needs its new value entered again, so read the page first:
+
 ```
 reticle_run({ tool: "reticle_network_mock", sessionId, args: { clear: true } })
-reticle_act_and_wait({ sessionId, ref: "<rename or toggle>", action: "click", until: { kind: "allOf", predicates: [
+reticle_look({ action: "page", sessionId, mode: "interactive" })
+```
+
+Redo whatever set up the edit (for a rename, `reticle_act` the field with the new value), then save and name the outcome:
+
+```
+reticle_act_and_wait({ sessionId, ref: "<save or toggle>", action: "click", until: { kind: "allOf", predicates: [
   { kind: "net", urlContains: "/api/todos", method: "PATCH", ok: true },
   { kind: "text", contains: "Buy oat milk" },
 ]}})
 ```
 
-Then reload and prove the server kept it, which is what "saved" means:
+Then reload and prove the server kept it, which is what "saved" means. Use a real reload and wait for the new page, not a navigate to the URL you are already on:
 
 ```
-reticle_navigate({ sessionId, url: "http://localhost:3000/todos" })
-reticle_assert({ sessionId, predicate: { kind: "text", contains: "Buy oat milk" } })
+reticle_navigate({ sessionId, reload: true })
 ```
+
+It must answer `confirmed: true` with a `sessionId`. Assert on that session, which is the reloaded page:
+
+```
+reticle_assert({ sessionId: "<sessionId from the reload>", predicate: { kind: "text", contains: "Buy oat milk" } })
+```
+
+If the reload is not confirmed, report persistence as **unknown**.
 
 ## Honesty
 
