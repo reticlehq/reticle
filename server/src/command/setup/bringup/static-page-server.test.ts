@@ -13,7 +13,7 @@ function site(): string {
   const root = mkdtempSync(join(tmpdir(), 'reticle-static-'));
   writeFileSync(join(root, STATIC_PAGE_INDEX), '<html><body>home</body></html>');
   mkdirSync(join(root, 'js'));
-  writeFileSync(join(root, 'js', 'app.js'), 'console.log(1)');
+  writeFileSync(join(root, 'js', 'app.js'), 'window.loaded = 1;');
   return root;
 }
 
