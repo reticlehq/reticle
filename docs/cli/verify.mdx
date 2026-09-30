@@ -7,7 +7,7 @@ icon: circle-check
 `reticle verify` is the CI command: no model in the loop, no MCP. It boots the engine in drive mode, waits for the in-page SDK to dial back, replays every saved flow, renders the verdict, and exits.
 
 ```bash
-npx @reticlehq/server verify <url> [--headed] [--timeout N] [--storage-state <file>]
+npx @reticlehq/server verify <url> [--headed] [--timeout N] [--storage-state <file>] [--expect <json> | --expect-file <path>]
 ```
 
 It uses the same runner and the same verdict as the MCP and HTTP paths, so a platform agent that can only run a shell command gets a byte-identical artifact.
@@ -20,6 +20,15 @@ It uses the same runner and the same verdict as the MCP and HTTP paths, so a pla
 | `--headed` | boolean | `false` (headless) | Show the browser |
 | `--timeout N` | number, ms | `15000` | How long to wait for a browser session to dial back |
 | `--storage-state <file>` | string | unset | A Playwright storage state file. This is how you verify flows behind a login without scripting the login every time |
+| `--expect <json>` | string | unset | A JSON predicate graded against the tab a running daemon already owns. Exit 0 only on a verified pass. Cannot combine with `--storage-state` |
+| `--expect-file <path>` | string | unset | Same as `--expect`, but read the JSON from a file. Prefer this on Windows PowerShell: `npx.cmd` re-parses `--expect '{...}'` and strips the inner quotes |
+
+On Windows PowerShell, write the predicate to a file and pass `--expect-file` so the JSON never goes through shell quoting:
+
+```powershell
+'{"kind":"text","value":"Saved"}' | Set-Content expect.json
+npx @reticlehq/server verify http://localhost:3000 --expect-file expect.json
+```
 
 ## What it prints
 
