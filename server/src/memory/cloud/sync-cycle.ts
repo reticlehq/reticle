@@ -125,6 +125,20 @@ export interface CloudSyncState {
    */
   sentFlowsHash?: string;
   sentCapsulesHash?: string;
+  /**
+   * A flow or capsule set the platform refused, kept so the refusal stays visible on the cycles that
+   * do not resend it, and so the set is offered again once it changes or the platform reads more.
+   */
+  refusedSets?: Partial<Record<SetPart, RefusedSet>>;
+}
+
+type SetPart = 'flow' | 'capsule';
+
+interface RefusedSet {
+  hash: string;
+  acceptsHash: string;
+  count: number;
+  reason: string;
 }
 
 interface RefusedRun {
@@ -161,6 +175,8 @@ export interface SyncReport {
   held: string[];
   /** Runs refused on an earlier cycle and not offered again, because nothing has changed since. */
   notRetried: Array<{ runId: string; reason: string }>;
+  /** Flow or capsule sets refused on an earlier cycle and not offered again. */
+  setsNotRetried: Array<{ part: SetPart; count: number; reason: string }>;
   /** Decisions collected from the dashboard. */
   pulled: number;
   /** True when the pull page was full — call again now rather than waiting for the next tick. */
@@ -301,6 +317,7 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
     refused: [],
     held: [],
     notRetried: [],
+    setsNotRetried: [],
     pulled: 0,
     morePending: false,
   };
@@ -433,8 +450,33 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
     const capsulesAll = deps.source.capsules();
     const flowsHash = hashPayload(flows);
     const capsulesHash = hashPayload(capsulesAll);
-    const flowsChanged = flows.length > 0 && flowsHash !== deps.state.sentFlowsHash;
-    const capsulesChanged = capsulesAll.length > 0 && capsulesHash !== deps.state.sentCapsulesHash;
+    const priorSets = isRecord(deps.state.refusedSets) ? deps.state.refusedSets : {};
+    const setsNotRetried: Array<{ part: SetPart; count: number; reason: string }> = [];
+    const refusedSets: Partial<Record<SetPart, RefusedSet>> = {};
+    /** A set is due when it changed, or when it was refused and the platform now reads more. */
+    const due = (
+      part: SetPart,
+      hash: string,
+      size: number,
+      sentHash: string | undefined,
+    ): boolean => {
+      if (0 === size) return false;
+      const prior = priorSets[part];
+      if (prior !== undefined && prior.hash === hash) {
+        if (prior.acceptsHash !== acceptsHash) return true;
+        refusedSets[part] = prior;
+        setsNotRetried.push({ part, count: prior.count, reason: prior.reason });
+        return false;
+      }
+      return hash !== sentHash;
+    };
+    const flowsChanged = due('flow', flowsHash, flows.length, deps.state.sentFlowsHash);
+    const capsulesChanged = due(
+      'capsule',
+      capsulesHash,
+      capsulesAll.length,
+      deps.state.sentCapsulesHash,
+    );
     const ridesAlong =
       sendable.length > 0 || derivedOffered.length > 0 || flowsChanged || capsulesChanged;
     if (ridesAlong && flows.length > 0) bundle['flows'] = flows;
@@ -500,6 +542,22 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
       }
       for (const r of capsulesPart.rejected)
         refused.push({ part: 'capsule', reason: `capsule #${String(r.index)}: ${r.reason}` });
+      const firstOf = (part: SetPart): string =>
+        refused.find((r) => r.part === part)?.reason ?? 'no reason given';
+      if (flowsPart.rejected.length > 0)
+        refusedSets.flow = {
+          hash: flowsHash,
+          acceptsHash,
+          count: flowsPart.rejected.length,
+          reason: firstOf('flow'),
+        };
+      if (capsulesPart.rejected.length > 0)
+        refusedSets.capsule = {
+          hash: capsulesHash,
+          acceptsHash,
+          count: capsulesPart.rejected.length,
+          reason: firstOf('capsule'),
+        };
       // `state` has a key per record sent: "accepted", or the message that refused it.
       const state = isRecord(answer['state']) ? answer['state'] : {};
       for (const kind of derivedOffered) {
@@ -517,6 +575,7 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
       if (capsules.length > 0) nextState.sentCapsulesHash = capsulesHash;
     }
     nextState.refusedRuns = refusedRuns;
+    nextState.refusedSets = refusedSets;
     if (pushError !== undefined) {
       nextState.sentRunIds = allRuns.map((r) => r.runId).filter((id) => known.has(id));
       deps.sink.writeState({ ...nextState, lastError: pushError });
@@ -589,6 +648,7 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
         0 === runsRejected.length &&
         0 === refused.length &&
         0 === notRetried.length &&
+        0 === setsNotRetried.length &&
         !heldArtifacts,
       runsSent,
       runsRejected,
@@ -598,6 +658,7 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
       refused,
       held: heldBack,
       notRetried,
+      setsNotRetried,
       pulled: decisions.length,
       morePending: true === pulled.more,
       /*
@@ -708,6 +769,8 @@ function problemsOf(report: SyncReport): string[] {
     problems.push(
       `refused, not retried: ${String(report.notRetried.length)} run(s) (${firstRefusal.reason})`,
     );
+  for (const set of report.setsNotRetried)
+    problems.push(`refused, not retried: ${String(set.count)} ${set.part}(s) (${set.reason})`);
   if (report.held.length > 0) problems.push(`not sent: ${report.held.join('; ')}`);
   return problems;
 }

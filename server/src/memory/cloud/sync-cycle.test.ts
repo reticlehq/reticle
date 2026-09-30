@@ -187,6 +187,7 @@ describe('an empty repo and an up-to-date repo do not say the same thing', () =>
       refused: [],
       held: [],
       notRetried: [],
+      setsNotRetried: [],
       pulled: 0,
       morePending: false,
       ...over,
@@ -221,6 +222,7 @@ describe('when the server refuses what was pushed', () => {
       refused: [],
       held: [],
       notRetried: [],
+      setsNotRetried: [],
       pulled: 0,
       morePending: false,
     });
@@ -258,6 +260,7 @@ describe('when the server refuses what was pushed', () => {
       refused: [],
       held: [],
       notRetried: [],
+      setsNotRetried: [],
       pulled: 0,
       morePending: false,
     });
@@ -565,6 +568,50 @@ describe('it sends only the difference', () => {
     expect(first.report.flowsSent).toBe(1);
     const second = await cycle({ status: { knownRunIds: [] } }, src, first.written.state);
     expect(second.calls.some((c) => 'POST' === c.method)).toBe(false);
+  });
+
+  // Measured against a platform that reads only flow version 1: every flow was refused on the first
+  // push, and the second push said "nothing to send" and cleared the error, so nothing showed that
+  // the dashboard had none of the project's flows.
+  it('keeps a refused flow set visible, cycle after cycle, without resending it', async () => {
+    const src = source({ flows: () => [{ name: 'sign-in', version: 2 }] });
+    const refusing = {
+      status: { knownRunIds: [] },
+      sync: { flows: { accepted: 0, rejected: [{ index: 0, reason: 'expected version 1' }] } },
+    };
+    const first = await cycle(refusing, src);
+    expect(first.report.ok).toBe(false);
+    const second = await cycle({ status: { knownRunIds: [] } }, src, first.written.state);
+    expect(second.calls.some((c) => 'POST' === c.method)).toBe(false);
+    expect(second.report.ok).toBe(false);
+    expect(describeSync(second.report)).toContain('refused, not retried: 1 flow(s)');
+    expect(describeSync(second.report)).toContain('expected version 1');
+    expect(second.written.state?.lastError).toContain('expected version 1');
+  });
+
+  it('offers a refused flow set again once the platform says it reads more', async () => {
+    const src = source({ flows: () => [{ name: 'sign-in', version: 2 }] });
+    const first = await cycle(
+      {
+        status: { knownRunIds: [] },
+        sync: { flows: { accepted: 0, rejected: [{ index: 0, reason: 'expected version 1' }] } },
+      },
+      src,
+    );
+    const upgraded = await cycle(
+      {
+        status: {
+          knownRunIds: [],
+          accepts: { flowVersions: [1, 2], runVersions: [1], derived: [] },
+        },
+        sync: { flows: { accepted: 1 } },
+      },
+      src,
+      first.written.state,
+    );
+    expect(upgraded.calls.some((c) => 'POST' === c.method)).toBe(true);
+    expect(upgraded.report.flowsSent).toBe(1);
+    expect(upgraded.report.ok).toBe(true);
   });
 
   it('sends the flow set again once a flow in it changes', async () => {
