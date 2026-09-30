@@ -141,6 +141,9 @@ describe('the crawl output schema declares everything crawl returns', () => {
     visited: ['button "Save"'],
     truncated: false,
     coverageNote: CAPPED_SNAPSHOT_NOTE,
+    notJudged: [
+      { ref: 'e2', desc: 'button "Load"', reason: 'not judged: the tab is in the background' },
+    ],
   };
 
   /**

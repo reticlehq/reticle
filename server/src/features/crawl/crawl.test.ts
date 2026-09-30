@@ -416,3 +416,35 @@ describe('a control that is SUPPOSED to do nothing is not an anomaly', () => {
     expect(legitimatelyInert(desc)).toBe(false);
   });
 });
+
+/**
+ * A background tab cannot show a reaction, so its silence is not a dead control (#1130).
+ *
+ * The DOM observer flushes on animation frames, which a hidden tab clamps, so a working control's
+ * re-render can emit nothing inside the sample window. The contradiction check already reads
+ * `pageHidden`; the dead-control check did not, and reported every silent control on a hidden tab.
+ */
+describe('crawl on a background tab', () => {
+  const hidden = (throttled: boolean): CrawlSession => ({
+    ...fakeSession(tree(['button "Save" (ref=e1)']), { e1: { events: [] } }),
+    throttled: () => throttled,
+  });
+
+  it('a silent control is not judged dead, and says why', async () => {
+    const r = await crawl(hidden(true), {}, noSleep);
+
+    expect(r.counts.deadControls).toBe(0);
+    expect(r.anomalies.some((a) => a.kind === CrawlAnomalyKind.DEAD_CONTROL)).toBe(false);
+    expect(r.notJudged?.map(({ ref, desc }) => ({ ref, desc }))).toEqual([
+      { ref: 'e1', desc: 'button "Save"' },
+    ]);
+    expect(r.notJudged?.[0]?.reason).toContain('background');
+  });
+
+  it('the same silence on a foreground tab is still a dead control', async () => {
+    const r = await crawl(hidden(false), {}, noSleep);
+
+    expect(r.counts.deadControls).toBe(1);
+    expect(r.notJudged).toBeUndefined();
+  });
+});
