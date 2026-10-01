@@ -436,8 +436,19 @@ export async function tryRealInput(
       const performed = await provider.perform(session.url, action, PRESS_HAS_NO_BOX, performArgs);
       if (!performed.performed) return synthetic(InputModeReason.PROVIDER_DECLINED);
       // No `center`: a key addresses focus, not a point. The placeholder's zero happened nowhere.
+      //
+      // `heldMs` IS forwarded, and it is the whole reason this object is not just the three fields
+      // above: `reticle_act`'s description promises `effect.heldMs` reports the hold actually
+      // achieved, and on the real path the act result IS the `effect` block. Dropping it here made
+      // that promise true on the synthetic path and silently false on the one this release added
+      // `holdMs` to — an agent checking for an armed hold-to-confirm control read `undefined`.
       return {
-        result: { performed: true, action, inputMode: performed.inputMode },
+        result: {
+          performed: true,
+          action,
+          inputMode: performed.inputMode,
+          ...(performed.heldMs !== undefined ? { heldMs: performed.heldMs } : {}),
+        },
         settled: true,
       };
     } catch {

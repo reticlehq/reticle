@@ -84,6 +84,16 @@ export interface RealInputResult {
    * saying `real` would describe a gesture that never ran.
    */
   inputMode: InputMode;
+  /**
+   * How long the key was ACTUALLY held, for a real press that was asked to hold. Absent for every
+   * other gesture, and for a press with no `holdMs` — the same rule the synthetic path uses, where
+   * an absent `heldMs` means "this action does not hold" rather than "it held for no time".
+   *
+   * Measured rather than echoed back: `holdMs: 1200` against a 1200ms animation is a race by
+   * construction, and a throttled tab stretches the wait. A caller needs to tell "held 1200" from
+   * "held 1204", and can only do that with the achieved number.
+   */
+  heldMs?: number;
 }
 
 /** Options for a page screenshot — full-page scroll capture and/or a clip box. */
@@ -225,18 +235,36 @@ type ConnectFn = (url: string) => Promise<Browser>;
  * — an app that counts repeats needs the synthetic path, and a caller that sees a held key do
  * nothing now has a reason to try it.
  */
-async function pressViaKeyboard(page: Page, args: RealInputArgs, sleep: SleepFn): Promise<void> {
+async function pressViaKeyboard(
+  page: Page,
+  args: RealInputArgs,
+  sleep: SleepFn,
+  now: () => number,
+): Promise<number> {
   const key = pressKeyFromArgs(args);
   const modifiers = pressModifiersFromArgs(args);
   const chord = 0 < modifiers.length ? `${modifiers.join('+')}+${key}` : key;
   const holdMs = clampHoldMs(args.holdMs);
   if (0 === holdMs) {
     await page.keyboard.press(chord);
-    return;
+    return 0;
   }
   await page.keyboard.down(chord);
-  await sleep(holdMs);
+  const startedAt = now();
+  try {
+    await sleep(holdMs);
+  } catch (error) {
+    // The wait failed, and the caller is about to run the synthetic path — which presses this SAME
+    // key a second time. If the driver's copy stays down, a held modifier then colours every later
+    // action for the rest of the run. Releasing here is best-effort on purpose: whatever went wrong
+    // with the wait is the error worth reporting, and a throw from `up` would replace it.
+    await page.keyboard.up(chord).catch(() => undefined);
+    throw error;
+  }
+  // NOT in a `finally`: on the ordinary path a failed release is a real failure the caller must
+  // hear about, and swallowing it would report a press whose key is still down.
   await page.keyboard.up(chord);
+  return now() - startedAt;
 }
 
 /**
@@ -278,13 +306,20 @@ export async function performGesture(
   box: ElementBox,
   args: RealInputArgs,
   sleep: SleepFn,
+  /** Injected so a test can assert the achieved hold deterministically; defaults to the real clock. */
+  now: () => number = Date.now,
 ): Promise<RealInputResult> {
   // Ahead of the box, not after it: a press addresses focus rather than a point, and the
   // placeholder box its caller passes would otherwise be turned into a (0,0) that reads like a real
   // location. The result reports NO `center` for the same reason.
   if (action === ActionType.PRESS) {
-    await pressViaKeyboard(page, args, sleep);
-    return { performed: true, inputMode: InputMode.REAL };
+    const heldMs = await pressViaKeyboard(page, args, sleep, now);
+    return {
+      performed: true,
+      inputMode: InputMode.REAL,
+      // Omitted rather than 0 when there was no hold — see `RealInputResult.heldMs`.
+      ...(heldMs > 0 ? { heldMs } : {}),
+    };
   }
 
   const center = boxCenter(box);
@@ -363,6 +398,8 @@ interface CdpProviderOptions {
   cdpUrl: string;
   /** Injected so the settle delay is deterministic in tests; defaults to a real Node timer. */
   sleep?: SleepFn;
+  /** Injected so a measured hold is deterministic in tests; defaults to the real clock. */
+  now?: () => number;
   /** Injected connector so unit tests can stub Playwright without import. */
   connect?: ConnectFn;
   /**
@@ -402,6 +439,7 @@ const cdpConnect: ConnectFn = async (url) => {
 export class CdpRealInputProvider implements RealInputProvider {
   readonly #cdpUrl: string;
   readonly #sleep: SleepFn;
+  readonly #now: () => number;
   readonly #connect: ConnectFn;
   readonly #onNetworkDetail: ((detail: NetworkDetail) => void) | undefined;
   /** Pages already listening. #pageFor resolves on EVERY call, so without this each action would add
@@ -414,6 +452,7 @@ export class CdpRealInputProvider implements RealInputProvider {
   constructor(options: CdpProviderOptions) {
     this.#cdpUrl = options.cdpUrl;
     this.#sleep = options.sleep ?? nodeSleep;
+    this.#now = options.now ?? Date.now;
     this.#connect = options.connect ?? cdpConnect;
     this.#onNetworkDetail = options.onNetworkDetail;
   }
@@ -478,7 +517,7 @@ export class CdpRealInputProvider implements RealInputProvider {
   ): Promise<RealInputResult> {
     const page = await this.#pageFor(sessionUrl);
     if (page === undefined) return undriven(action, box);
-    return performGesture(page, action, box, args, this.#sleep);
+    return performGesture(page, action, box, args, this.#sleep, this.#now);
   }
 
   /** PNG of the correlated page, or undefined if none matches. */
@@ -571,6 +610,8 @@ export interface LaunchedProviderOptions {
   headless: boolean;
   /** Injected so the settle delay is deterministic in tests; defaults to a real Node timer. */
   sleep?: SleepFn;
+  /** Injected so a measured hold is deterministic in tests; defaults to the real clock. */
+  now?: () => number;
   /** Injected launcher so unit tests can stub Playwright; defaults to dynamic import('playwright'). */
   launch?: LaunchFn;
   /** When set, re-invoke the page's reticle.connect with these after load (drive-a-hosted-preview). */
@@ -615,6 +656,7 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
   readonly #driveUrl: string;
   readonly #headless: boolean;
   readonly #sleep: SleepFn;
+  readonly #now: () => number;
   readonly #launch: LaunchFn;
   readonly #injectConnect: InjectConnectOptions | undefined;
   readonly #storageState: string | undefined;
@@ -628,6 +670,7 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
     this.#driveUrl = options.driveUrl;
     this.#headless = options.headless;
     this.#sleep = options.sleep ?? nodeSleep;
+    this.#now = options.now ?? Date.now;
     this.#launch = options.launch ?? launchedChromium;
     this.#injectConnect = options.injectConnect;
     this.#storageState = options.storageState;
@@ -754,7 +797,7 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
   ): Promise<RealInputResult> {
     const page = this.#livePage();
     if (page === undefined) return Promise.resolve(undriven(action, box));
-    return performGesture(page, action, box, args, this.#sleep);
+    return performGesture(page, action, box, args, this.#sleep, this.#now);
   }
 
   /** PNG of the owned page, or undefined before navigate / after dispose. */

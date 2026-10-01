@@ -490,6 +490,34 @@ describe('reticle_act routes a document press through real input', () => {
     expect(provider.calls[0]?.args).toEqual({ text: 'Escape', holdMs: 1200 });
   });
 
+  it('reports the ACHIEVED hold on the result, not only sending the request', async () => {
+    // #1296. `reticle_act` promises `effect.heldMs` reports what was achieved, and on the real path
+    // the act result IS the effect block. Sending `holdMs` and dropping the measurement made that
+    // promise true on the synthetic path and silently false on this one, so an agent checking for
+    // an armed hold-to-confirm control read `undefined` — the hold it was confirming had just been
+    // added to this path.
+    const provider: RealInputProvider = {
+      isAvailableFor: () => Promise.resolve(true),
+      perform: () => Promise.resolve({ performed: true, inputMode: InputMode.REAL, heldMs: 1_204 }),
+    };
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    const res = await runAct(fakeDeps(provider, state), {
+      action: 'press',
+      args: { text: 'Escape', holdMs: 1200 },
+    });
+
+    expect((res.result as Record<string, unknown>)['heldMs']).toBe(1_204);
+  });
+
+  it('omits heldMs on the result when the press held nothing', async () => {
+    const provider = makeProvider(true);
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    const res = await runAct(fakeDeps(provider, state), { action: 'press', args: { text: 'Tab' } });
+
+    // Absent, not 0 — the same rule the synthetic effect block uses.
+    expect('heldMs' in (res.result as Record<string, unknown>)).toBe(false);
+  });
+
   it('routes an explicit code away BEFORE inspecting, naming the key-level reason', async () => {
     // The driver presses by KEY name; `code` is the caller saying the physical key differs. A ref is
     // given here so both candidates apply — `code` names the KEY and wins, because "you passed a

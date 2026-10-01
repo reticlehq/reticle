@@ -221,6 +221,65 @@ describe('performGesture drives press through the real keyboard', () => {
     expect(held).toEqual(['down:Meta+k', 'up:Meta+k']);
   });
 
+  it('reports the hold it actually achieved, not the number it was asked for', async () => {
+    const { page } = keyboardPage();
+    // An injected clock, so the assertion is about the measurement rather than about how long the
+    // machine took: the wait overshoots on a throttled tab, and a caller needs to tell "held 1200"
+    // from "held 1204". The test advances the clock itself rather than racing a real timer.
+    let t = 1_000;
+    const result = await performGesture(
+      page,
+      ActionType.PRESS,
+      NO_BOX,
+      { key: 'Space', holdMs: 1200 },
+      () => {
+        t += 1204; // the achieved hold, which is what must be reported
+        return Promise.resolve();
+      },
+      () => t,
+    );
+
+    expect(result.heldMs).toBe(1204);
+  });
+
+  it('omits heldMs entirely when there was no hold to measure', async () => {
+    const { page } = keyboardPage();
+    const result = await performGesture(page, ActionType.PRESS, NO_BOX, { key: 'Tab' }, noSleep);
+    // Absent, not 0: an absent key says "this action does not hold", where a 0 reads as "it held
+    // for no time" — the same rule the synthetic path's effect block uses.
+    expect('heldMs' in result).toBe(false);
+  });
+
+  it('releases the key when the wait fails, so it cannot stay held', async () => {
+    // #1295. The caller catches the throw and runs the SYNTHETIC path, which presses this same key
+    // again — so a driver copy left down colours every later action for the rest of the run.
+    const { page, held } = keyboardPage();
+    const boom = new Error('the page went away mid-hold');
+
+    await expect(
+      performGesture(page, ActionType.PRESS, NO_BOX, { key: 'Control', holdMs: 1200 }, () =>
+        Promise.reject(boom),
+      ),
+    ).rejects.toBe(boom);
+
+    expect(held).toEqual(['down:Control', 'up:Control']);
+  });
+
+  it('still reports a failed RELEASE on the ordinary path, rather than swallowing it', async () => {
+    // The mirror of the test above: releasing best-effort is for the failure path only. A press
+    // whose key is still down must not report success.
+    const page = {
+      keyboard: {
+        press: () => Promise.resolve(),
+        down: () => Promise.resolve(),
+        up: () => Promise.reject(new Error('release failed')),
+      },
+    } as unknown as Page;
+    await expect(
+      performGesture(page, ActionType.PRESS, NO_BOX, { key: 'Space', holdMs: 50 }, noSleep),
+    ).rejects.toThrow('release failed');
+  });
+
   it('keeps mouse actions reporting real mode too, so the field is not press-only', async () => {
     const moves: string[] = [];
     const page = {

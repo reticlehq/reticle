@@ -75,3 +75,106 @@ describe('press sets modifier flags (#393)', () => {
     expect(anyMod).toBe(false);
   });
 });
+
+/**
+ * #1294: a modifier named in `keys` did not reach the event flags.
+ *
+ * `modifiers` is a fixed set of flags for the whole press, which is exactly why `keys` exists — a
+ * SEQUENCE whose held state changes partway through. `pressCombo` read the flags from `args.modifiers`
+ * alone, so `{ keys: ['Control', 'k'] }` pressed Control and then dispatched the `k` keydown with
+ * `ctrlKey: false`. A shortcut handler checking `event.ctrlKey` did nothing while the action
+ * reported success.
+ *
+ * The expectations below are the browser's own, read off a real Chromium: a modifier's OWN keydown
+ * carries its flag already true, its OWN keyup carries it already false, and every event in between
+ * carries the held state as it stands at that moment.
+ */
+describe('a modifier named in keys sets its own flag (#1294)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  /** Records every keyboard event on a fresh button, as `key:flag` pairs. */
+  function record(): { el: HTMLElement; seen: string[] } {
+    const el = document.createElement('button');
+    document.body.appendChild(el);
+    const seen: string[] = [];
+    // `as const` rather than a plain array: the literal union selects the KeyboardEvent overload,
+    // where a widened `string` falls back to the bare Event one and `e.key` stops existing.
+    for (const type of ['keydown', 'keyup'] as const) {
+      el.addEventListener(type, (e) => {
+        seen.push(`${e.key} ctrl=${String(e.ctrlKey)} shift=${String(e.shiftKey)}`);
+      });
+    }
+    return { el, seen };
+  }
+
+  it('reaches a handler that only responds to event.ctrlKey', async () => {
+    const el = document.createElement('button');
+    document.body.appendChild(el);
+    let fired = false;
+    el.addEventListener('keydown', (e) => {
+      if ('k' === e.key && e.ctrlKey) fired = true;
+    });
+    await executeAction(refs.refFor(el), ActionType.PRESS, { keys: ['Control', 'k'] });
+    expect(fired).toBe(true);
+  });
+
+  it('carries the held state through the sequence the way a real keyboard does', async () => {
+    const { el, seen } = record();
+    await executeAction(refs.refFor(el), ActionType.PRESS, { keys: ['Control', 'k'] });
+    // Control's own keydown is already true; the `k` and its release inherit it; Control's own
+    // keyup is already false. Anything else puts one event out by one step.
+    expect(seen).toEqual([
+      'Control ctrl=true shift=false',
+      'k ctrl=true shift=false',
+      'k ctrl=true shift=false',
+      'Control ctrl=false shift=false',
+    ]);
+  });
+
+  it('holds every modifier in a two-modifier sequence, in press order', async () => {
+    const { el, seen } = record();
+    await executeAction(refs.refFor(el), ActionType.PRESS, { keys: ['Control', 'Shift', 'k'] });
+    expect(seen).toEqual([
+      'Control ctrl=true shift=false',
+      'Shift ctrl=true shift=true',
+      'k ctrl=true shift=true',
+      'k ctrl=true shift=true',
+      'Shift ctrl=true shift=false',
+      'Control ctrl=false shift=false',
+    ]);
+  });
+
+  it('accepts the aliases in keys, so Ctrl and Cmd are not a separate vocabulary', async () => {
+    const { el, seen } = record();
+    await executeAction(refs.refFor(el), ActionType.PRESS, { keys: ['Ctrl', 'k'] });
+    expect(seen[1]).toBe('k ctrl=true shift=false');
+  });
+
+  it('composes with args.modifiers instead of overriding it', async () => {
+    const { el, seen } = record();
+    await executeAction(refs.refFor(el), ActionType.PRESS, {
+      modifiers: ['Shift'],
+      keys: ['Control', 'k'],
+    });
+    // Shift is held from the start (it came from `modifiers`), Control joins at its own keydown.
+    expect(seen).toEqual([
+      'Control ctrl=true shift=true',
+      'k ctrl=true shift=true',
+      'k ctrl=true shift=true',
+      'Control ctrl=false shift=true',
+    ]);
+  });
+
+  it('leaves a plain multi-key sequence with every flag false', async () => {
+    const { el, seen } = record();
+    await executeAction(refs.refFor(el), ActionType.PRESS, { keys: ['a', 'b'] });
+    expect(seen).toEqual([
+      'a ctrl=false shift=false',
+      'b ctrl=false shift=false',
+      'b ctrl=false shift=false',
+      'a ctrl=false shift=false',
+    ]);
+  });
+});
