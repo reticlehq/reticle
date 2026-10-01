@@ -262,6 +262,24 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * 245_700 -> 246_700, for the snapshot's depth-cut marker (this branch) beside the store snapshots
  * that let a Pinia or Svelte mutation diff: together 245,705 B measured on main with both, over the
  * old ceiling by 5. Raised by 1,000 over the measurement, per the note above.
+ *
+ * `press` reaching a real keyboard (a document key through the driver's keyboard) landed inside that
+ * headroom and did NOT move this number: 246,182 -> 246,331 B, re-measured after this branch was
+ * rebased onto current main rather than carried over from its old base. The +149 is attributed by
+ * rebundling, not guessed: every byte of it is `core/dist/wire/global-press.js`, 328 -> 477, which
+ * now carries the readers the server uses to decide what a press needs (`pressKeysFromArgs`, and the
+ * `keys` branch of `isGlobalPress`). It is written down because two plausible ways to avoid even that
+ * were tried and both were wrong:
+ *
+ * Moving `MODIFIER_ALIASES` into its own module changed the bundle by ZERO bytes — the table is only
+ * referenced from `pressModifiersFromArgs`, which no page code calls, so esbuild already drops it. A
+ * probe of the shipped text for `option`/`command`/`super` reads PRESENT either way, because the
+ * BROWSER package's own `pressModifiers` contains the same aliases; that probe cannot tell the two
+ * tables apart and must not be used as evidence.
+ *
+ * And routing the page's `pressCode` through core's `explicitCodeFromArgs` — a symbol only the daemon
+ * needs — cost 77 B of every page load for a string check the page already did. Sharing is not free
+ * when only one side needs the shared thing.
  */
 const MAX_FIRST_LOAD_BYTES = 246_700;
 /*

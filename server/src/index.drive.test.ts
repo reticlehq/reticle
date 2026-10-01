@@ -61,7 +61,11 @@ function makeFakeLaunched(navigateRejects?: DriveError): FakeLaunched {
     isAvailableFor: () => Promise.resolve(true),
     perform(_url, _action, box) {
       this.performCalls += 1;
-      return Promise.resolve({ performed: true, center: boxCenter(box) });
+      return Promise.resolve({
+        performed: true,
+        center: boxCenter(box),
+        inputMode: InputMode.REAL,
+      });
     },
   };
   return provider;

@@ -17,7 +17,16 @@ import { chromiumLaunchHint, gotoOptions } from '@/portal/pool/playwright-launch
 import { BrowserLaunchKind } from '@reticlehq/core/telemetry';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import { classifyConnectFailure } from '@/telemetry/connect-failure.js';
-import { ActionType, DriveErrorCode, DRIVE_PLAYWRIGHT_MISSING_MSG } from '@reticlehq/core';
+import {
+  ActionType,
+  DriveErrorCode,
+  DRIVE_PLAYWRIGHT_MISSING_MSG,
+  InputMode,
+  InputModeReason,
+  pressKeyFromArgs,
+  pressKeysFromArgs,
+  pressModifiersFromArgs,
+} from '@reticlehq/core';
 import { installNetworkMocks, type MockRule } from './network-mock.js';
 import { attachNetworkDetail, type NetworkDetail } from './network-detail.js';
 import { injectedConnectArgs } from '@/portal/pool/zero-install.js';
@@ -30,20 +39,43 @@ export interface ElementBox {
   height: number;
 }
 
-/** Args forwarded from reticle_act (fill value, type text, drag drop-target box). */
-export interface RealInputArgs {
+/**
+ * Args forwarded from reticle_act (fill value, type text, press key, drag drop-target box).
+ *
+ * A `type`, not an `interface`: only the alias form gets an implicit index signature, so the core
+ * arg readers take it as a plain record without a cast at every call site.
+ */
+export type RealInputArgs = {
   value?: string;
   text?: string;
+  /** For press: the key name, e.g. Escape or Tab. `text` also carries it; `key` is the fallback. */
+  key?: string;
+  /** For press: modifier names (Meta/Control/Shift/Alt; aliases like `cmd` accepted). */
+  modifiers?: string[];
+  /**
+   * For press: several keys held down TOGETHER, pressed in order and released in reverse. Read but
+   * never forwarded — a chord with a non-modifier key has no `page.keyboard.press` spelling, so the
+   * caller routes such a press to the synthetic dispatcher before it reaches here.
+   */
+  keys?: string[];
   /** For drag: the resolved box of the drop-target ref (toRef). */
   toBox?: ElementBox;
   steps?: number;
-}
+};
 
-interface RealInputResult {
+/** What a provider reports for one driven gesture. Exported so a fake can build it by name. */
+export interface RealInputResult {
   /** True if a native gesture was actually driven. */
   performed: boolean;
-  /** Center used, for diagnostics/tests. */
-  center: { cx: number; cy: number };
+  /** Center used, for diagnostics/tests. ABSENT for a key press: see `undriven`. */
+  center?: { cx: number; cy: number };
+  /**
+   * Which path this result came from. `real` whenever a gesture was actually driven, so a caller
+   * reading it on a `performed: true` result learns nothing it did not already know — it is here
+   * for the `performed: false` case, where the caller is about to take the synthetic path and
+   * saying `real` would describe a gesture that never ran.
+   */
+  inputMode: InputMode;
 }
 
 /** Options for a page screenshot — full-page scroll capture and/or a clip box. */
@@ -135,8 +167,8 @@ export function boxCenter(box: ElementBox): { cx: number; cy: number } {
 }
 
 /**
- * Which actions are driven by native pointer input. fill/type stay synthetic unless a
- * provider explicitly runs them.
+ * Which actions are driven by a native pointer. `press` is excluded on purpose — a key has no
+ * pointer, and widening this would change what every existing caller of it means.
  */
 export function isPointerAction(action: ActionType): boolean {
   return (
@@ -147,6 +179,24 @@ export function isPointerAction(action: ActionType): boolean {
   );
 }
 
+/**
+ * The routing question `tryRealInput` asks: does this action have a real-input path at all? Wider
+ * than `isPointerAction` by `press`, which needs no coordinates.
+ */
+export function isRealInputAction(action: ActionType): boolean {
+  return isPointerAction(action) || action === ActionType.PRESS;
+}
+
+/**
+ * A gesture that was NOT driven. No center for a key press — a zero would read as a real point.
+ *
+ * `inputMode` is SYNTHETIC: no real gesture ran, so this is the path the caller is about to take.
+ */
+function undriven(action: ActionType, box: ElementBox): RealInputResult {
+  const base: RealInputResult = { performed: false, inputMode: InputMode.SYNTHETIC };
+  return action === ActionType.PRESS ? base : { ...base, center: boxCenter(box) };
+}
+
 /** Settle delay after a native gesture so the reaction can begin to flush (named, not free). */
 const REAL_INPUT_SETTLE_MS = 16;
 /** Default number of interpolation steps for a native drag. */
@@ -154,6 +204,40 @@ const DEFAULT_DRAG_STEPS = 8;
 
 type SleepFn = (ms: number) => Promise<void>;
 type ConnectFn = (url: string) => Promise<Browser>;
+
+/**
+ * Drive a `press` with a real keyboard — coordinate-free; the key goes to whatever holds focus.
+ * Key and modifiers come from the same core helpers the synthetic dispatcher uses, so the two paths
+ * cannot read the same args differently.
+ */
+async function pressViaKeyboard(page: Page, args: RealInputArgs): Promise<void> {
+  const key = pressKeyFromArgs(args);
+  const modifiers = pressModifiersFromArgs(args);
+  const chord = 0 < modifiers.length ? `${modifiers.join('+')}+${key}` : key;
+  await page.keyboard.press(chord);
+}
+
+/**
+ * The `press`es this module will NOT drive: a chord that only the in-page dispatcher can express.
+ *
+ * `args.keys` asks for several keys held down TOGETHER, pressed in order and released in reverse.
+ * That is not a `page.keyboard.press` chord — a non-modifier key cannot appear before the last `+`
+ * — and a real keyboard cannot aim a key at a named element. Both are routed to the synthetic path
+ * by the caller, which reports the reason rather than pretending a different gesture happened.
+ *
+ * `keys` is named first because it identifies the KEY, where `ref` names only the target: when both
+ * apply, the reason should say the more specific thing that could not be honoured.
+ */
+export function unspellablePressReason(
+  ref: string,
+  args: Record<string, unknown>,
+): InputModeReason | undefined {
+  if (0 < pressKeysFromArgs(args).length) {
+    return InputModeReason.SYNTHETIC_MULTI_KEY_PRESS_PREFERRED;
+  }
+  if (0 < ref.length) return InputModeReason.SYNTHETIC_ELEMENT_PRESS_PREFERRED;
+  return undefined;
+}
 
 /**
  * Shared gesture executor: drive a native gesture on an already-resolved Page. Used by both the
@@ -166,28 +250,41 @@ export async function performGesture(
   args: RealInputArgs,
   sleep: SleepFn,
 ): Promise<RealInputResult> {
+  // Ahead of the box, not after it: a press addresses focus rather than a point, and the
+  // placeholder box its caller passes would otherwise be turned into a (0,0) that reads like a real
+  // location. The result reports NO `center` for the same reason.
+  if (action === ActionType.PRESS) {
+    await pressViaKeyboard(page, args);
+    return { performed: true, inputMode: InputMode.REAL };
+  }
+
   const center = boxCenter(box);
   const { cx, cy } = center;
+  const real = (performed: boolean): RealInputResult => ({
+    performed,
+    center,
+    inputMode: InputMode.REAL,
+  });
 
   if (action === ActionType.HOVER) {
     await page.mouse.move(cx, cy);
     await page.mouse.move(cx + 1, cy);
     await page.mouse.move(cx, cy);
     await sleep(REAL_INPUT_SETTLE_MS);
-    return { performed: true, center };
+    return real(true);
   }
   if (action === ActionType.CLICK) {
     await page.mouse.move(cx, cy);
     await page.mouse.click(cx, cy);
-    return { performed: true, center };
+    return real(true);
   }
   if (action === ActionType.DBLCLICK) {
     await page.mouse.move(cx, cy);
     await page.mouse.dblclick(cx, cy);
-    return { performed: true, center };
+    return real(true);
   }
   if (action === ActionType.DRAG) {
-    if (args.toBox === undefined) return { performed: false, center };
+    if (args.toBox === undefined) return real(false);
     const dst = boxCenter(args.toBox);
     const steps = args.steps ?? DEFAULT_DRAG_STEPS;
     await page.mouse.move(cx, cy);
@@ -198,14 +295,14 @@ export async function performGesture(
       await page.mouse.move(px, py, { steps: 1 });
     }
     await page.mouse.up();
-    return { performed: true, center };
+    return real(true);
   }
   if (action === ActionType.FILL || action === ActionType.TYPE) {
     await page.mouse.click(cx, cy);
     await page.keyboard.type(args.value ?? args.text ?? '');
-    return { performed: true, center };
+    return real(true);
   }
-  return { performed: false, center };
+  return real(false);
 }
 
 /**
@@ -351,7 +448,7 @@ export class CdpRealInputProvider implements RealInputProvider {
     args: RealInputArgs,
   ): Promise<RealInputResult> {
     const page = await this.#pageFor(sessionUrl);
-    if (page === undefined) return { performed: false, center: boxCenter(box) };
+    if (page === undefined) return undriven(action, box);
     return performGesture(page, action, box, args, this.#sleep);
   }
 
@@ -627,7 +724,7 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
     args: RealInputArgs,
   ): Promise<RealInputResult> {
     const page = this.#livePage();
-    if (page === undefined) return Promise.resolve({ performed: false, center: boxCenter(box) });
+    if (page === undefined) return Promise.resolve(undriven(action, box));
     return performGesture(page, action, box, args, this.#sleep);
   }
 

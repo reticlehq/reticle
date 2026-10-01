@@ -415,7 +415,7 @@ A `state` assertion is graded as a **consequence** (a wrong element or stale ren
 | `select` | `{ value }` | `<select>` option |
 | `check` / `uncheck` | n/a | checkbox/radio |
 | `submit` | n/a | submits the element's `<form>` |
-| `press` | `{ key, modifiers? }` | keydown/up (default `Enter`); `modifiers`: an array of `Meta` / `Control` / `Shift` / `Alt` for Cmd+K-style shortcuts |
+| `press` | `{ key, modifiers? }` | keydown/up (default `Enter`); `modifiers`: an array of `Meta` / `Control` / `Shift` / `Alt` for Cmd+K-style shortcuts. With a `ref` the key is dispatched AT that element; with NO ref it is a document key (Escape, Tab, a shortcut) and goes through the real keyboard, so it can actually move focus |
 | `scrollIntoView` | n/a |  |
 | `upload` | `{ name, content?, type? }` | sets a file on `<input type=file>` |
 | `drag` | `{ toRef }` | pointer-based drag (dnd-kit / rbd) + HTML5 DnD |
@@ -1053,6 +1053,8 @@ When `inputMode` is `"synthetic"` and the target has hover/enter handlers, the r
 | `provider-declined` / `provider-error` | the CDP provider declined or threw (the latter also sets `warning`) |
 | `not-a-pointer-action` | `fill`/`type`/etc. are always synthetic by design |
 | `synthetic-click-preferred` | a `click`/`dblclick` ran the occlusion-honest synthetic path by default; pass `args:{ native:true }` to force a trusted native click |
+| `synthetic-element-press-preferred` | the `press` named a `ref`/`target`, so it stayed synthetic on purpose: dispatching AT that element reaches it exactly, while a real keyboard sends the key to whatever holds focus. A `press` with NO ref is a document key (Escape, Tab, a modifier shortcut) and does run through the real keyboard when one is configured |
+| `synthetic-multi-key-press-preferred` | the `press` named `keys` — several keys held down **together**, pressed in order and released in reverse. Only the in-page dispatcher implements that sequence; a real keyboard chord cannot express it |
 
 (No `inputModeReason` is set when real input simply isn't configured; synthetic is the expected default there.)
 
