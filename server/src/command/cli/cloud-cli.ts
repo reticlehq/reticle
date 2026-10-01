@@ -13,7 +13,7 @@ import { basename, join } from 'node:path';
 import { z } from 'zod';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { CLOUD_LINK_FILE, resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
-import { memoryReadUrl } from '@/memory/cloud/memory-scope.js';
+import { memoryReadUrl, scopeMemoryResponse } from '@/memory/cloud/memory-scope.js';
 import { applyCredential, findCredential } from './auth/cloud-keystore.js';
 import { defaultProjectFor } from './project-name.js';
 import { RETICLE_CONFIG_BASENAME } from './ports/resolve/cli-port.js';
@@ -729,9 +729,13 @@ const cmdMemory = async (argv: readonly string[]): Promise<number> => {
     err('usage: reticle memory [--subject <name>]');
     return 2;
   }
-  // Scoped to the LINKED project. Without it this printed whatever the key covered, which on a
-  // workspace with two repos is somebody else's knowledge under this project's heading.
-  emit(await api('GET', memoryReadUrl(url, { projectId, subject }), apiKey));
+  // Scoped to the LINKED project, on the way out AND on the way back. Without the parameter
+  // this printed whatever the key covered; without the filter it still would, for as long as the
+  // platform ignores a parameter it does not know yet — which is exactly the window this ships in.
+  // This is the command whose whole job is "what does THIS project know", so a sibling's answer
+  // arriving under this heading is the one output nobody can tell from a correct one.
+  const scope = { projectId, subject };
+  emit(scopeMemoryResponse(await api('GET', memoryReadUrl(url, scope), apiKey), projectId));
   return 0;
 };
 

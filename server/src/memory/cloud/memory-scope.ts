@@ -23,20 +23,39 @@
  * empty — and empty is the answer that looks like a fact rather than a failure. Kept, the unfiltered
  * case is exactly the behaviour that shipped before this file existed.
  *
- * Lives beside `cloud-sync.ts` rather than in `recall/` because that is where every other platform
- * path constant lives, and because both readers already reach this directory: a home under `recall/`
- * would make `flows` reach a directory it never needed.
+ * ## Every reader, and that word is load-bearing
+ *
+ * Three callers read this endpoint: the `reticle_memory` tool, flow replay's automatic consultation,
+ * and `reticle memory` at a terminal. The first two consume a LIST and filter it; the third prints
+ * the server's JSON verbatim, and so needs the filter applied to a whole envelope — `scopeMemoryResponse`
+ * below. The CLI was left unfiltered in the first cut of this change while a comment claimed all three
+ * were covered, which is the one failure mode a shared helper is supposed to make impossible.
+ *
+ * Lives beside `cloud-sync.ts` rather than in `recall/` because that is where the other platform path
+ * constants live, and because both readers already reach this directory: a home under `recall/` would
+ * make `flows` reach a directory it never needed.
  */
+
+/**
+ * The path this module builds, spelled once, for the same reason as the names below.
+ *
+ * Here rather than in `cloud-sync.ts`'s group of `CLOUD_*_PATH` constants: that group describes the
+ * calls THAT file makes, and cloud-sync has no memory reader at all. Adding this one there would make
+ * the group a registry of every endpoint in the package rather than a description of one file's calls.
+ */
+const CLOUD_MEMORY_PATH = '/v1/memory';
 
 /**
  * The wire names, spelled once.
  *
  * `PROJECT_ID` is a request parameter AND a response field. They are the same word on purpose — the
  * server echoes back what it was asked about — and one constant keeps a rename from moving only one
- * of the two, which would silently restore the unfiltered read.
+ * of the two, which would silently restore the unfiltered read. `SUBJECT` is a request parameter only
+ * and is named for the same reason: it is a spelling the platform owns, not ours.
  */
 export const MemoryScopeField = {
   PROJECT_ID: 'projectId',
+  SUBJECT: 'subject',
 } as const;
 
 /**
@@ -77,12 +96,15 @@ const projectToName = (projectId: string | null | undefined): string | undefined
  */
 export function memoryReadUrl(baseUrl: string, scope: MemoryReadScope): string {
   const parts: string[] = [];
-  if (scope.subject !== undefined) parts.push(`subject=${encodeURIComponent(scope.subject)}`);
+  if (scope.subject !== undefined) {
+    parts.push(`${MemoryScopeField.SUBJECT}=${encodeURIComponent(scope.subject)}`);
+  }
   const projectId = projectToName(scope.projectId);
   if (projectId !== undefined) {
     parts.push(`${MemoryScopeField.PROJECT_ID}=${encodeURIComponent(projectId)}`);
   }
-  return 0 === parts.length ? `${baseUrl}/v1/memory` : `${baseUrl}/v1/memory?${parts.join('&')}`;
+  const url = `${baseUrl}${CLOUD_MEMORY_PATH}`;
+  return 0 === parts.length ? url : `${url}?${parts.join('&')}`;
 }
 
 /**
@@ -104,4 +126,24 @@ export function keepOwnProject(
     if ('string' !== typeof stated || 0 === stated.length) return true;
     return stated === mine;
   });
+}
+
+/**
+ * The same filter, for a caller that prints the server's envelope rather than reading a list.
+ *
+ * `reticle memory` writes the response to stdout as JSON, so filtering has to preserve every other
+ * field the server sent and replace only `entries`. A body that is not an object, or carries no
+ * `entries` array, is handed back untouched: this is somebody else's server, and guessing at its
+ * shape is how a diagnostic command starts dropping the thing it was asked to print.
+ *
+ * That restraint is the difference between a filtered read and a blind one. `readProjectMemory`
+ * degrades to `UNREACHABLE` when the shape is wrong because a tool has to answer something; the CLI
+ * has no such duty and shows the caller exactly what arrived.
+ */
+export function scopeMemoryResponse(body: unknown, projectId: string | null | undefined): unknown {
+  if (null === body || 'object' !== typeof body) return body;
+  const envelope = body as Record<string, unknown>;
+  const entries = envelope['entries'];
+  if (!Array.isArray(entries)) return body;
+  return { ...envelope, entries: keepOwnProject(entries, projectId) };
 }
