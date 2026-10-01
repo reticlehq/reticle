@@ -29,6 +29,7 @@ export * from './wire/constants/constants.js'; // EventType, ActionType, wire co
 export * from './identity/source-constants.js'; // DATA_RETICLE_SOURCE_ATTR, RETICLE_ROOT_GLOBAL
 export * from './wire/event-classification.js'; // CHURN_TYPES — shared eviction priority for buffer/queue
 export * from './wire/global-press.js'; // which press is a document key (Escape / Tab / a shortcut)
+export * from './wire/hold.js'; // clampHoldMs — the bounded hold both input paths honour
 export * from './verdict/verified-constants.js'; // Verified — the one field an agent gates on
 // Its own module so a page that never needs it does not download it — see first-load-size.
 export * from './verdict/verdict-attribution.js';

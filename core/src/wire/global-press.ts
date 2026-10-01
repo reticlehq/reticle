@@ -51,6 +51,16 @@ export function pressKeysFromArgs(args: Record<string, unknown>): string[] {
   return keys;
 }
 
+/**
+ * An explicit `code` the caller named, if any. The browser derives one from the key when this is
+ * absent (`pressCode`); an explicit one always wins there, because a caller driving a non-US layout
+ * knows something that derivation cannot.
+ */
+export function explicitCodeFromArgs(args: Record<string, unknown>): string | undefined {
+  const code = args['code'];
+  return 'string' === typeof code && 0 < code.length ? code : undefined;
+}
+
 /** Canonical modifier names, in chord order — the spelling Playwright accepts. */
 export const PRESS_MODIFIERS = ['Alt', 'Control', 'Meta', 'Shift'] as const;
 export type PressModifier = (typeof PRESS_MODIFIERS)[number];

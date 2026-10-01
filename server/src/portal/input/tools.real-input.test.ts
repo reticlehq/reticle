@@ -475,6 +475,40 @@ describe('reticle_act routes a document press through real input', () => {
     expect(provider.calls[0]?.args).toEqual({ text: 'k', modifiers: ['Meta'] });
   });
 
+  it('forwards holdMs, so a held key holds through the driver too', async () => {
+    // Without this the real path is the WEAKER one: the synthetic dispatcher has held a key for
+    // `holdMs` all along, and a hold-to-confirm control driven through the driver would see an
+    // instant tap reported as a success. Escape because a document key is the only press that
+    // reaches the driver at all — a named element stays synthetic by design.
+    const provider = makeProvider(true);
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    await runAct(fakeDeps(provider, state), {
+      action: 'press',
+      args: { text: 'Escape', holdMs: 1200 },
+    });
+
+    expect(provider.calls[0]?.args).toEqual({ text: 'Escape', holdMs: 1200 });
+  });
+
+  it('routes an explicit code away BEFORE inspecting, naming the key-level reason', async () => {
+    // The driver presses by KEY name; `code` is the caller saying the physical key differs. A ref is
+    // given here so both candidates apply — `code` names the KEY and wins, because "you passed a
+    // ref" would hide the request that actually could not be honoured.
+    const provider = makeProvider(true);
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    const res = await runAct(fakeDeps(provider, state), {
+      ref: 'e1',
+      action: 'press',
+      args: { text: 'z', code: 'KeyY' },
+    });
+
+    expect(res.inputMode).toBe(InputMode.SYNTHETIC);
+    expect(res.inputModeReason).toBe(InputModeReason.SYNTHETIC_KEY_CODE_PRESS_PREFERRED);
+    expect(state.inspectRefs).toEqual([]);
+    expect(provider.calls).toHaveLength(0);
+    expect(state.actCalls).toBe(1);
+  });
+
   it('routes a multi-key press with no ref at all — it never reaches INSPECT', async () => {
     // `keys` counts as a document press, so no ref is demanded; the router then hands it to the
     // synthetic dispatcher because only the page can hold several keys down at once.

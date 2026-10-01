@@ -25,7 +25,7 @@ import type { ElementBox, RealInputArgs } from '@/portal/input/real-input.js';
 import { boxCenter, isRealInputAction, unspellablePressReason } from '@/portal/input/real-input.js';
 import { assertDragNotDestructive, assertNotDestructive } from './act/act-danger.js';
 import { NATIVE_INPUT_ARG } from '@reticlehq/core';
-import { asRecord, asString } from '@reticlehq/core';
+import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { type ToolDeps, commandOrThrow } from './tool-kit.js';
 import { asBox } from './act/act-helpers.js';
 import { isAbsolute, join, relative, extname, basename, resolve } from 'node:path';
@@ -421,8 +421,14 @@ export async function tryRealInput(
   if (Array.isArray(modifiers)) {
     performArgs.modifiers = modifiers.filter((m): m is string => 'string' === typeof m);
   }
-  // `keys` is read but not forwarded: a chord of several held keys is routed away above, so
-  // carrying it into the provider would only invite a driver to guess at a spelling it lacks.
+  // A held key is the whole point of a hold-to-confirm control, and the synthetic path has honoured
+  // `holdMs` all along. Not forwarding it made the real keyboard the WEAKER of the two paths: it
+  // drove the key instantly and reported a hold that never held.
+  const holdMs = asNumber(inner['holdMs']);
+  if (holdMs !== undefined) performArgs.holdMs = holdMs;
+  // `keys` and `code` are read but not forwarded: both are routed away above — a multi-key sequence
+  // and an explicit physical code have no driver spelling — so carrying them into the provider would
+  // only invite it to guess at a gesture the caller did not ask for.
 
   // A document key has no element of its own: skip INSPECT and the box entirely.
   if (action === ActionType.PRESS) {

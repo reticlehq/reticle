@@ -19,8 +19,10 @@ import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import { classifyConnectFailure } from '@/telemetry/connect-failure.js';
 import {
   ActionType,
+  clampHoldMs,
   DriveErrorCode,
   DRIVE_PLAYWRIGHT_MISSING_MSG,
+  explicitCodeFromArgs,
   InputMode,
   InputModeReason,
   pressKeyFromArgs,
@@ -58,6 +60,12 @@ export type RealInputArgs = {
    * caller routes such a press to the synthetic dispatcher before it reaches here.
    */
   keys?: string[];
+  /**
+   * For press: how long to keep the key down between keydown and keyup. The same argument the
+   * synthetic path has always honoured, so a hold-to-confirm key driven through the driver holds
+   * for exactly as long as one driven in the page.
+   */
+  holdMs?: number;
   /** For drag: the resolved box of the drop-target ref (toRef). */
   toBox?: ElementBox;
   steps?: number;
@@ -209,12 +217,26 @@ type ConnectFn = (url: string) => Promise<Browser>;
  * Drive a `press` with a real keyboard — coordinate-free; the key goes to whatever holds focus.
  * Key and modifiers come from the same core helpers the synthetic dispatcher uses, so the two paths
  * cannot read the same args differently.
+ *
+ * A `holdMs` splits the chord into down / wait / up, the same shape the page uses for a held key.
+ * `keyboard.press` would send it instantly instead, reporting a hold-to-confirm that never held.
+ * The one thing this cannot reproduce is the auto-repeat a held key emits: the driver sends a single
+ * keydown, where the in-page path sends the repeats a browser would. Named rather than papered over
+ * — an app that counts repeats needs the synthetic path, and a caller that sees a held key do
+ * nothing now has a reason to try it.
  */
-async function pressViaKeyboard(page: Page, args: RealInputArgs): Promise<void> {
+async function pressViaKeyboard(page: Page, args: RealInputArgs, sleep: SleepFn): Promise<void> {
   const key = pressKeyFromArgs(args);
   const modifiers = pressModifiersFromArgs(args);
   const chord = 0 < modifiers.length ? `${modifiers.join('+')}+${key}` : key;
-  await page.keyboard.press(chord);
+  const holdMs = clampHoldMs(args.holdMs);
+  if (0 === holdMs) {
+    await page.keyboard.press(chord);
+    return;
+  }
+  await page.keyboard.down(chord);
+  await sleep(holdMs);
+  await page.keyboard.up(chord);
 }
 
 /**
@@ -222,11 +244,15 @@ async function pressViaKeyboard(page: Page, args: RealInputArgs): Promise<void> 
  *
  * `args.keys` asks for several keys held down TOGETHER, pressed in order and released in reverse.
  * That is not a `page.keyboard.press` chord — a non-modifier key cannot appear before the last `+`
- * — and a real keyboard cannot aim a key at a named element. Both are routed to the synthetic path
- * by the caller, which reports the reason rather than pretending a different gesture happened.
+ * — and a real keyboard cannot aim a key at a named element. `args.code` is the third: the driver
+ * presses by KEY name and offers no way to send a physical `code` that disagrees with it, so
+ * `{ text: 'z', code: 'KeyY' }` would strike a different key than the one asked for. All three are
+ * routed to the synthetic path by the caller, which reports the reason rather than pretending a
+ * different gesture happened.
  *
- * `keys` is named first because it identifies the KEY, where `ref` names only the target: when both
- * apply, the reason should say the more specific thing that could not be honoured.
+ * Ordered by how specifically the caller asked: `keys` then `code` name the KEY, `ref` names only
+ * the target. Two can apply at once, and the earlier one is the more unusual request — the reason
+ * should name that, not the generic "you passed a ref".
  */
 export function unspellablePressReason(
   ref: string,
@@ -234,6 +260,9 @@ export function unspellablePressReason(
 ): InputModeReason | undefined {
   if (0 < pressKeysFromArgs(args).length) {
     return InputModeReason.SYNTHETIC_MULTI_KEY_PRESS_PREFERRED;
+  }
+  if (explicitCodeFromArgs(args) !== undefined) {
+    return InputModeReason.SYNTHETIC_KEY_CODE_PRESS_PREFERRED;
   }
   if (0 < ref.length) return InputModeReason.SYNTHETIC_ELEMENT_PRESS_PREFERRED;
   return undefined;
@@ -254,7 +283,7 @@ export async function performGesture(
   // placeholder box its caller passes would otherwise be turned into a (0,0) that reads like a real
   // location. The result reports NO `center` for the same reason.
   if (action === ActionType.PRESS) {
-    await pressViaKeyboard(page, args);
+    await pressViaKeyboard(page, args, sleep);
     return { performed: true, inputMode: InputMode.REAL };
   }
 

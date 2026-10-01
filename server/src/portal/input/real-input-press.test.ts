@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ActionType, InputModeReason } from '@reticlehq/core';
+import { ActionType, InputModeReason, MAX_HOLD_MS } from '@reticlehq/core';
 import type { Page } from 'playwright';
 import {
   isPointerAction,
@@ -16,20 +16,27 @@ import {
 /**
  * Records each keyboard call and ignores the mouse entirely.
  *
- * A `down`/`up` pair is a REFUSAL, not a recording: this path presses a chord and releases it, so an
- * implementation that reached for the held-key API would be doing something the caller did not ask
- * for. Rejecting is how that shows up as a failure rather than as silence.
+ * `press` and `down`/`up` are recorded SEPARATELY because a hold is not a press: a bare
+ * `keyboard.press` cannot hold a key, so a test that only watched `pressed` would pass against an
+ * implementation that dropped `holdMs` — which is exactly how the gap got in.
  */
-function keyboardPage(): { page: Page; pressed: string[] } {
+function keyboardPage(): { page: Page; pressed: string[]; held: string[] } {
   const pressed: string[] = [];
+  const held: string[] = [];
   const page = {
     keyboard: {
       press: (key: string) => {
         pressed.push(key);
         return Promise.resolve();
       },
-      down: () => Promise.reject(new Error('a press is not a hold')),
-      up: () => Promise.reject(new Error('a press is not a hold')),
+      down: (key: string) => {
+        held.push(`down:${key}`);
+        return Promise.resolve();
+      },
+      up: (key: string) => {
+        held.push(`up:${key}`);
+        return Promise.resolve();
+      },
     },
     mouse: {
       move: () => Promise.reject(new Error('press must not drive the mouse')),
@@ -39,7 +46,7 @@ function keyboardPage(): { page: Page; pressed: string[] } {
       up: () => Promise.reject(new Error('press must not drive the mouse')),
     },
   } as unknown as Page;
-  return { page, pressed };
+  return { page, pressed, held };
 }
 
 const NO_BOX = { x: 0, y: 0, width: 0, height: 0 };
@@ -146,6 +153,74 @@ describe('performGesture drives press through the real keyboard', () => {
     expect(result.performed).toBe(true);
   });
 
+  it('holds a key for holdMs instead of tapping it', async () => {
+    const { page, pressed, held } = keyboardPage();
+    const slept: number[] = [];
+    const result = await performGesture(
+      page,
+      ActionType.PRESS,
+      NO_BOX,
+      { key: 'Space', holdMs: 1200 },
+      (ms) => {
+        slept.push(ms);
+        return Promise.resolve();
+      },
+    );
+
+    // Down, wait, up — the shape the page uses for a held key. `pressed` must stay empty: a bare
+    // `keyboard.press` would report a hold-to-confirm that released immediately.
+    expect(held).toEqual(['down:Space', 'up:Space']);
+    expect(pressed).toEqual([]);
+    expect(slept).toEqual([1200]);
+    expect(result.performed).toBe(true);
+  });
+
+  it('caps an unbounded hold at the shared maximum, like the synthetic path', async () => {
+    const { page, held } = keyboardPage();
+    const slept: number[] = [];
+    await performGesture(
+      page,
+      ActionType.PRESS,
+      NO_BOX,
+      { key: 'Space', holdMs: 10_000_000 },
+      (ms) => {
+        slept.push(ms);
+        return Promise.resolve();
+      },
+    );
+
+    expect(slept).toEqual([MAX_HOLD_MS]);
+    expect(held).toEqual(['down:Space', 'up:Space']);
+  });
+
+  it('still taps when holdMs is absent, zero, or not a number', async () => {
+    // `unknown` on purpose: the last case is a caller sending a string where a number belongs,
+    // and it must reach the clamp rather than being refused by the compiler first.
+    const cases: Record<string, unknown>[] = [
+      { key: 'Tab' },
+      { key: 'Tab', holdMs: 0 },
+      { key: 'Tab', holdMs: 'x' },
+    ];
+    for (const args of cases) {
+      const { page, pressed, held } = keyboardPage();
+      await performGesture(page, ActionType.PRESS, NO_BOX, args, noSleep);
+      expect(pressed, `args ${JSON.stringify(args)}`).toEqual(['Tab']);
+      expect(held, `args ${JSON.stringify(args)}`).toEqual([]);
+    }
+  });
+
+  it('holds the whole chord, modifiers included', async () => {
+    const { page, held } = keyboardPage();
+    await performGesture(
+      page,
+      ActionType.PRESS,
+      NO_BOX,
+      { key: 'k', modifiers: ['Meta'], holdMs: 50 },
+      noSleep,
+    );
+    expect(held).toEqual(['down:Meta+k', 'up:Meta+k']);
+  });
+
   it('keeps mouse actions reporting real mode too, so the field is not press-only', async () => {
     const moves: string[] = [];
     const page = {
@@ -182,6 +257,26 @@ describe('unspellablePressReason — which presses the real keyboard must not be
   it('routes a press that named an element away too', () => {
     expect(unspellablePressReason('e1', { text: 'Enter' })).toBe(
       InputModeReason.SYNTHETIC_ELEMENT_PRESS_PREFERRED,
+    );
+  });
+
+  it('routes an explicit physical code away, which the driver cannot send', () => {
+    // `{ text: 'z', code: 'KeyY' }` is a caller on a non-US layout saying the physical key differs
+    // from the logical one. `page.keyboard.press` presses by KEY name, so the driver would strike
+    // 'z' — a different key than the one asked for, reported as the one asked for.
+    expect(unspellablePressReason('', { text: 'z', code: 'KeyY' })).toBe(
+      InputModeReason.SYNTHETIC_KEY_CODE_PRESS_PREFERRED,
+    );
+  });
+
+  it('names the key-naming cases before the ref case, however many apply', () => {
+    // Each of these names the KEY; `ref` names only the target. The reason should say which of the
+    // two key-level requests was made, because "you passed a ref" hides the one that mattered.
+    expect(unspellablePressReason('e1', { text: 'z', code: 'KeyY' })).toBe(
+      InputModeReason.SYNTHETIC_KEY_CODE_PRESS_PREFERRED,
+    );
+    expect(unspellablePressReason('e1', { keys: ['Control', 'k'], code: 'KeyY' })).toBe(
+      InputModeReason.SYNTHETIC_MULTI_KEY_PRESS_PREFERRED,
     );
   });
 

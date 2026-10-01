@@ -1,6 +1,7 @@
 import {
   ActionType,
   ActionWarning,
+  clampHoldMs,
   DANGEROUS_ACTION_CONFIRM_ARG,
   ElementState,
   NATIVE_INPUT_ARG,
@@ -417,21 +418,6 @@ function activeRef(el: Element): string | null {
  * await internally; the probe wrapper builds the result once they resolve.
  */
 /**
- * The longest a single action may hold the pointer down, in milliseconds.
- *
- * An unbounded `holdMs` is a tool call that never returns, which is the failure the transport layer
- * is shaped around. 30s is far above any real hold-to-confirm (the reported case was 1.2s) and far
- * below a hang.
- */
-const MAX_HOLD_MS = 30_000;
-
-/** A hold the caller asked for, bounded and sanitised. Non-numbers and negatives mean "no hold". */
-function clampHold(raw: unknown): number {
-  if ('number' !== typeof raw || !Number.isFinite(raw) || raw <= 0) return 0;
-  return Math.min(raw, MAX_HOLD_MS);
-}
-
-/**
  * The outcome of dispatching one action: whether the primary event was prevented, and — for a hold —
  * how long the pointer was actually down.
  *
@@ -459,7 +445,7 @@ async function dispatchFor(
     //
     // `args.holdMs` keeps the pointer down in between, which is the only way to drive a
     // hold-to-confirm control. Capped: an unbounded hold is a tool call that never returns.
-    const hold = clampHold(args['holdMs']);
+    const hold = clampHoldMs(args['holdMs']);
     return await fireClickSequence(
       el,
       0 === hold ? undefined : { ms: hold, sleep, now: () => Date.now() },
@@ -468,7 +454,7 @@ async function dispatchFor(
   if (ActionType.TAP === action) {
     // A finger, not a mouse. `holdMs` makes it a long press — the gesture behind a context menu or
     // a reorder handle, which has no mouse equivalent worth pretending about.
-    const hold = clampHold(args['holdMs']);
+    const hold = clampHoldMs(args['holdMs']);
     return await fireTapSequence(
       el,
       0 === hold ? undefined : { ms: hold, sleep, now: () => Date.now() },
@@ -520,7 +506,7 @@ async function dispatchOther(
       );
       // hover-dwell: keep "hovering" for holdMs so timer-gated reveals can mount. Capped like
       // click's: unbounded, it is the same never-returns hazard.
-      const holdMs = clampHold(args['holdMs']);
+      const holdMs = clampHoldMs(args['holdMs']);
       if (holdMs > 0) await sleep(holdMs);
       return !moved;
     }
@@ -689,7 +675,7 @@ async function dispatchOther(
       // SEVERAL keys held together, released in reverse — what a keyboard physically does.
       // `modifiers` cannot express this: they are flags on ONE event, so "Control held while k and
       // then j are struck" had no spelling at all.
-      if (combo.length > 0) return await pressCombo(el, combo, mods, clampHold(args['holdMs']));
+      if (combo.length > 0) return await pressCombo(el, combo, mods, clampHoldMs(args['holdMs']));
       const key = pressKey(args);
       const code = pressCode(args, key);
       // Marked as ours like the click sequence: the annotator leaves annotate mode on Escape, so an
@@ -705,7 +691,7 @@ async function dispatchOther(
       // The mouse has had `holdMs` since hold-to-confirm; the keyboard did not, so a key that has to
       // be held — a game control, hold-to-delete, a press-and-hold reveal — was undriveable while
       // the identical gesture with a mouse button worked. The asymmetry was the bug.
-      const hold = clampHold(args['holdMs']);
+      const hold = clampHoldMs(args['holdMs']);
       if (hold > 0) await holdKey(el, key, code, mods, hold);
       asSyntheticInput(() =>
         el.dispatchEvent(new KeyboardEvent('keyup', { key, code, bubbles: true, ...mods })),

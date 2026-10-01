@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ActionType } from './constants/constants.js';
 import {
+  explicitCodeFromArgs,
   isGlobalPress,
   isGlobalPressCall,
   pressKeyFromArgs,
@@ -109,5 +110,17 @@ describe('which keys a press holds down together', () => {
   it('drops entries that are not usable key names, rather than pressing an empty string', () => {
     expect(pressKeysFromArgs({ keys: ['Control', '', 'k', 7, null] })).toEqual(['Control', 'k']);
     expect(pressKeysFromArgs({ keys: 'Control' }), 'a bare string is not a list').toEqual([]);
+  });
+});
+
+describe('an explicit physical code', () => {
+  it('is read as given — it overrides the derivation in the page, so the driver must know', () => {
+    expect(explicitCodeFromArgs({ code: 'KeyY' })).toBe('KeyY');
+  });
+
+  it('is undefined when absent, empty, or not a string', () => {
+    expect(explicitCodeFromArgs({})).toBeUndefined();
+    expect(explicitCodeFromArgs({ code: '' })).toBeUndefined();
+    expect(explicitCodeFromArgs({ code: 7 })).toBeUndefined();
   });
 });
