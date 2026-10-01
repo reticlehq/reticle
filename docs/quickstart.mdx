@@ -5,7 +5,7 @@ description: Install Reticle, connect your coding agent, and get a real verdict 
 icon: rocket
 ---
 
-**Run the installer in a terminal, open your coding agent, then run `init` in your project.** Reticle is a verification layer for AI coding agents: it embeds a dev-only SDK in your running web app so an agent can prove a change works instead of guessing.
+**Run the installer once, then run `reticle connect --project "My App"` in your project.** Reticle embeds a dev-only SDK in your running app, signs you in through browser approval when needed, and syncs your checks to the project you name.
 
 By the end of this page your agent will click a button in your app and prove what happened: the request that fired, the state that changed, and the file to open if it didn't.
 
@@ -53,17 +53,19 @@ npm install -g @reticlehq/server
 npx @reticlehq/server setup mcp
 ```
 
-## Step 2. Open your coding agent, and wire the project
+## Step 2. Connect this project
 
-The `reticle_*` tools are already there. In your project directory:
+In your project directory, before opening your coding agent:
 
 ```bash
-npx @reticlehq/server init
+npx @reticlehq/server connect --project "My App"
 ```
 
-Like `npm init` or `git init`, this is the per-project step: it installs the SDK, wires it into your app's entry point, starts your dev server and then opens your app to prove a session connected. It is idempotent. Run it twice and the second run reports what was already done rather than doing it again.
+This installs the SDK, wires your app, starts the dev server, and checks that a browser session connected. It then opens browser sign-in approval if needed, links this folder to the named cloud project, and sends existing local history. Approve the short code shown in the browser and terminal; the command resumes by itself. A saved sign-in is reused after the cloud accepts it. Open your coding agent once this command finishes; if it was already open during installation, restart it to load the new tools.
 
 Step 1 is once per machine. This step is once per project.
+
+Want local-only verification without an account? Run `reticle init` in this step instead. You can run `reticle connect` later to sync your history.
 
 Prefer to install the skill and let the agent run setup itself? On Claude Code the plugin registers the MCP server and the skill in one step:
 
@@ -80,7 +82,7 @@ npx skills add reticlehq/reticle
 
 Then type `/reticle` and the agent runs the install from the skill.
 
-Useful flags, from `reticle init` itself:
+Useful flags for the local-only `reticle init` path:
 
 ```
 reticle init  [--dry-run] [--port N] [--no-mcp] [--no-install] [--app <dir>]
@@ -90,7 +92,7 @@ reticle init  [--dry-run] [--port N] [--no-mcp] [--no-install] [--app <dir>]
               only make sense once the tools are reachable.
 ```
 
-Start with `--dry-run` if you want to see the plan before anything is written.
+Start with `reticle init --dry-run` if you want to see the app changes before anything is written.
 
 <Tip>
   In a monorepo, `init` will find several apps and ask which one you mean. `--app packages/web`
@@ -107,9 +109,9 @@ npx @reticlehq/server doctor
 
 `doctor` diagnoses the whole setup in one command: Chromium, the daemon, the port. If something is wrong this is the page you want before you start debugging your app instead.
 
-## Step 4. Start your app and open it
+## Step 4. Open your app again when you need it
 
-Start your dev server as usual, then:
+`connect` already started the dev server and opened the app. On a later day, start your dev server as usual, then:
 
 ```bash
 npx @reticlehq/server open
