@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // A saved flow whose consequence legitimately takes longer than replay's default wait.
 //
 // Replay's wait for a declared consequence was a fixed 4s with no env var, no flow field and no
@@ -54,7 +55,7 @@ const fsp = createNodeFileSystem();
 const now = () => Date.now();
 const flows = new FlowStore(fsp, reticleRoot, { now });
 const project = new ProjectStore(fsp, reticleRoot, { now });
-const server = await start({ port: 4400, mcp: false });
+const server = await start({ port: TEST_BRIDGE_PORT, mcp: false });
 const deps = {
   sessions: server.bridge.sessions,
   baselines: new BaselineStore(),

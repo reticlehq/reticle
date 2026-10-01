@@ -43,6 +43,26 @@ function world(
 }
 
 describe('the whole sequence, when everything works', () => {
+  it('honours an explicit startup budget even while the launcher keeps printing', async () => {
+    let clock = 0;
+    const fx = world({
+      devServerOutput: () => 'still building',
+      probePage: () => Promise.resolve({ served: false, sdkInPage: false }),
+      listSessions: () => Promise.resolve([]),
+      now: () => clock,
+      sleep: (ms) => {
+        clock += ms;
+        return Promise.resolve();
+      },
+    });
+    const input = { ...INPUT, startupBudgetMs: 1_000, pollMs: 250 };
+    const result = await runSetupPhases(input, fx);
+    expect(result.ok).toBe(false);
+    expect(result.reachedPhase).toBe(SetupPhase.DEV_SERVER);
+    expect(clock).toBe(1_000);
+    expect(result.notes.join(' ')).toContain('1000ms');
+  });
+
   /*
    * Onboarding ends at a connected app, and that IS the proof the install worked: the SDK is in
    * the page, the bridge paired, and the tools have something to talk to.

@@ -57,7 +57,16 @@ fn archive_todo(_id: u32) -> Result<(), String> {
 
 fn main() {
     tauri::Builder::default()
-        .on_page_load(reticle_tauri::on_page_load)
+        .on_page_load(|webview, payload| {
+            reticle_tauri::on_page_load(webview, payload);
+            if payload.event() == tauri::webview::PageLoadEvent::Finished {
+                let window = webview.window();
+                let observed = window.clone();
+                let _ = window.run_on_main_thread(move || {
+                    eprintln!("reticle-headless-visible={:?}", observed.is_visible());
+                });
+            }
+        })
         .manage(Store {
             todos: Mutex::new(vec![
                 Todo {
@@ -79,6 +88,20 @@ fn main() {
             archive_todo,
             reticle_tauri::reticle_capture
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_, event| match event {
+            tauri::RunEvent::ExitRequested { code, .. } => {
+                eprintln!("tauri smoke: exit requested {code:?}");
+            }
+            tauri::RunEvent::WindowEvent { label, event, .. } => {
+                if matches!(
+                    event,
+                    tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
+                ) {
+                    eprintln!("tauri smoke: window {label}: {event:?}");
+                }
+            }
+            _ => {}
+        });
 }

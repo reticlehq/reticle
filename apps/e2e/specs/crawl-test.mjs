@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // HONESTY-CRITICAL: prove the autonomous crawler runs end-to-end against a real app — it
 // discovers interactive controls, clicks them (bounded), and returns a structured anomaly report
 // WITHOUT a script. Bounded (maxSteps) so it always terminates.
@@ -12,7 +13,7 @@ const chk = (l, o, d = '') => {
   o ? pass++ : fail++;
 };
 
-const server = await start({ port: 4400, mcp: false });
+const server = await start({ port: TEST_BRIDGE_PORT, mcp: false });
 const deps = {
   sessions: server.bridge.sessions,
   project: { recordRoutes: async () => {} },

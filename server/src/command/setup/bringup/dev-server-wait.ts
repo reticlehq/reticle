@@ -26,6 +26,8 @@ export interface WaitFacts {
   readonly quietForMs: number;
   /** Milliseconds since the wait began. */
   readonly elapsedMs: number;
+  /** Explicit caller limit; otherwise a busy build keeps the default ceiling. */
+  readonly budgetMs?: number | undefined;
   /**
    * How long silence may mean "still starting" on THIS machine. Defaults to QUIET_MEANS_HUNG_MS.
    *
@@ -62,7 +64,7 @@ export const WAIT_CEILING_MS = 25 * 60_000;
 export function judgeWait(facts: WaitFacts): WaitVerdict {
   if (facts.serving) return WaitVerdict.READY;
   if (facts.launcherExited) return WaitVerdict.DEAD;
-  if (facts.elapsedMs >= WAIT_CEILING_MS) return WaitVerdict.HUNG;
+  if (facts.elapsedMs >= (facts.budgetMs ?? WAIT_CEILING_MS)) return WaitVerdict.HUNG;
   // Output IS progress. Silence is what distinguishes a build from a wedge.
   return facts.quietForMs >= (facts.quietMeansHungMs ?? QUIET_MEANS_HUNG_MS)
     ? WaitVerdict.HUNG

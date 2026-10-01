@@ -29,7 +29,7 @@ import { ActionType, FeedbackKind, QueryBy, SnapshotMode } from '@reticlehq/core
 const SAFE_ENUM_PARAMS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   // Every entry DERIVED from the enum core already owns, never hand-listed. The first version listed
   // them literally and was wrong on the day it shipped, not merely at risk: `action` was missing
-  // `fill`, `dblclick`, `submit`, `scrollIntoView`, `drag` and `webmcp` — so `fill`, one of the most
+  // `fill`, `dblclick`, `submit`, `scrollIntoView` and `drag` — so `fill`, one of the most
   // common actions there is, silently reported as `other` — while carrying a `scroll` that
   // `ActionType` does not define. `mode` mixed SnapshotMode with unrelated session-lifecycle values.
   // Deriving is not tidiness here; it is the difference between the data being right and being wrong.

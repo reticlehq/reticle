@@ -83,6 +83,22 @@ jobs:
       - run: pnpm test:unit
         env:
           TURBO_LOG_ORDER: stream # a hung task must say so while it hangs (see ci.yml)
+      # A type-correct release must also complete the real MCP/browser verification loop.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-Linux-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: playwright-Linux-
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:smoke
+      - name: Release smoke evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-smoke-evidence
+          path: artifacts/smoke/
+          if-no-files-found: warn
+          retention-days: 14
       # RETICLE_ISSUER_PUBLIC_KEY is consumed by @reticlehq/server's `prepack`, which bakes it into the
       # built artifact (scripts/stamp-issuer-key.mjs). It has to be here rather than in an earlier step:
       # prepack rebuilds dist from scratch, so anything stamped before this point is deleted, and the

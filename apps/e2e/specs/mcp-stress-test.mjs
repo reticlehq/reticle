@@ -26,7 +26,7 @@ const PORT = process.env.MCP_STRESS_PORT ?? '4731';
 const SQUAT_PORT = process.env.MCP_SQUAT_PORT ?? '4732';
 const RESET_PORT = process.env.MCP_RESET_PORT ?? '4733';
 const FLAP_PORT = process.env.MCP_FLAP_PORT ?? '4734';
-const proxyLogPath = (port) => path.join(os.homedir(), '.reticle', `proxy-${port}.log`);
+const proxyLogPath = (port) => path.join(process.env.RETICLE_STATE_DIR ?? path.join(os.homedir(), '.reticle'), `proxy-${port}.log`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let pass = 0;

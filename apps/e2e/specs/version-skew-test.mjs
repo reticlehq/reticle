@@ -256,7 +256,7 @@ ws.on('close', (code, reason) => {
 // silently not run at all.
 let token;
 try {
-  token = readFileSync(path.join(homedir(), '.reticle', 'pairing-token'), 'utf8').trim();
+  token = readFileSync(path.join(process.env.RETICLE_PAIRING_TOKEN_DIR ?? path.join(homedir(), '.reticle'), 'pairing-token'), 'utf8').trim();
 } catch {
   token = undefined;
 }

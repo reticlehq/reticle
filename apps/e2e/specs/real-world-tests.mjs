@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // Real-world Reticle coverage against the showcase dashboard (apps/bench-app on :4310 + apps/api on :8787).
 // Exercises the full loop on a believable product UI: capability discovery → auth → live store
 // state → routing → virtualized scroll-to-find → autonomous crawl. Plain synthetic input (no CDP),
@@ -16,7 +17,7 @@ const chk = (l, o, d = '') => { console.log(`   ${o ? '✅' : '❌'} ${l}${d ? '
 const reticleRoot = path.join(os.tmpdir(), `reticle-rw-${process.pid}`, '.reticle');
 const fsp = createNodeFileSystem();
 const now = () => Date.now();
-const server = await start({ port: 4400, mcp: false });
+const server = await start({ port: TEST_BRIDGE_PORT, mcp: false });
 const deps = {
   sessions: server.bridge.sessions, baselines: new BaselineStore(), recordings: new RecordingStore(),
   flows: new FlowStore(fsp, reticleRoot, { now }), project: new ProjectStore(fsp, reticleRoot, { now }),

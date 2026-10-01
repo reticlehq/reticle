@@ -4,19 +4,181 @@
   "points": [
     {
       "flows": 2,
-      "reticle_verify_tokens": 321,
+      "reticle_verify_tokens": 556,
       "status": "unverifiable",
+      "verdict": {
+        "status": "unverifiable",
+        "total": 2,
+        "passed": 2,
+        "failed": 0,
+        "summary": "all 2 flows pass — only 0 of 10 steps declared a consequence; the rest were driven, not verified — 24 known route(s) never opened: /compose, /#/qr-codes, /deployments, /#/disputes, /#/app, /#/banking, /#/customers, /#/invoices, /#/payment-button, /#/payment-links, /#/payment-pages, /#/payroll, /#/route, /#/settings, /#/settlements, /#/subscriptions, /#/transactions, /#/home, /transactions#/disputes, /transactions#/payment-links, /transactions#/route, /transactions#/payment-pages, /transactions#/settings, /transactions#/subscriptions — 1 contradiction(s): a channel disagrees with what the app showed, on suite-500 — these flows shared one session and ran in order, so a pass here may rest on state an earlier flow left behind; replay with `parallel` to give each its own context",
+        "failures": [],
+        "isolation": "shared-session",
+        "coverage": {
+          "steps": 10,
+          "declared": 0
+        },
+        "unreached": [
+          "/compose",
+          "/#/qr-codes",
+          "/deployments",
+          "/#/disputes",
+          "/#/app",
+          "/#/banking",
+          "/#/customers",
+          "/#/invoices",
+          "/#/payment-button",
+          "/#/payment-links",
+          "/#/payment-pages",
+          "/#/payroll",
+          "/#/route",
+          "/#/settings",
+          "/#/settlements",
+          "/#/subscriptions",
+          "/#/transactions",
+          "/#/home",
+          "/transactions#/disputes",
+          "/transactions#/payment-links",
+          "/transactions#/route",
+          "/transactions#/payment-pages",
+          "/transactions#/settings",
+          "/transactions#/subscriptions"
+        ],
+        "contradictions": [
+          {
+            "flow": "suite-500",
+            "step": 3,
+            "kind": "request-never-settled",
+            "claim": "the UI moved forward and the action reported done",
+            "counter": "1 request(s) were still in flight",
+            "detail": "GET http://localhost:8787/api/items?limit=1"
+          }
+        ],
+        "flaky": [
+          "suite-500",
+          "suite-shape",
+          "suite-404",
+          "suite-route",
+          "harness-drive-qr-codes"
+        ],
+        "session_lease": {
+          "sessionId": "s46e26102-4acd-4486-b6bb-13e1645b59c9",
+          "opened_at": 1790836212627,
+          "IMPORTANT": "When you stop driving, call reticle_session {action:\"yield\", mode:\"waiting\"|\"ask\"}. The panel reads \"live\" until you do. {action:\"end\"} when the task is done; it revives on your next action."
+        }
+      },
       "passed": 2,
       "competitor_redrive_tokens": 60498,
-      "suite_rre_ratio": 188
+      "suite_rre_ratio": 109
     },
     {
       "flows": 4,
-      "reticle_verify_tokens": 327,
+      "reticle_verify_tokens": 847,
       "status": "unverifiable",
+      "verdict": {
+        "status": "unverifiable",
+        "total": 4,
+        "passed": 4,
+        "failed": 0,
+        "summary": "all 4 flows pass — only 0 of 19 steps declared a consequence; the rest were driven, not verified — 24 known route(s) never opened: /compose, /#/qr-codes, /deployments, /#/disputes, /#/app, /#/banking, /#/customers, /#/invoices, /#/payment-button, /#/payment-links, /#/payment-pages, /#/payroll, /#/route, /#/settings, /#/settlements, /#/subscriptions, /#/transactions, /#/home, /transactions#/disputes, /transactions#/payment-links, /transactions#/route, /transactions#/payment-pages, /transactions#/settings, /transactions#/subscriptions — 6 contradiction(s): a channel disagrees with what the app showed, on suite-404, suite-500, suite-shape — these flows shared one session and ran in order, so a pass here may rest on state an earlier flow left behind; replay with `parallel` to give each its own context",
+        "failures": [],
+        "isolation": "shared-session",
+        "coverage": {
+          "steps": 19,
+          "declared": 0
+        },
+        "unreached": [
+          "/compose",
+          "/#/qr-codes",
+          "/deployments",
+          "/#/disputes",
+          "/#/app",
+          "/#/banking",
+          "/#/customers",
+          "/#/invoices",
+          "/#/payment-button",
+          "/#/payment-links",
+          "/#/payment-pages",
+          "/#/payroll",
+          "/#/route",
+          "/#/settings",
+          "/#/settlements",
+          "/#/subscriptions",
+          "/#/transactions",
+          "/#/home",
+          "/transactions#/disputes",
+          "/transactions#/payment-links",
+          "/transactions#/route",
+          "/transactions#/payment-pages",
+          "/transactions#/settings",
+          "/transactions#/subscriptions"
+        ],
+        "contradictions": [
+          {
+            "flow": "suite-404",
+            "step": 2,
+            "kind": "request-never-settled",
+            "claim": "the UI moved forward and the action reported done",
+            "counter": "1 request(s) were still in flight",
+            "detail": "POST http://localhost:8787/api/login"
+          },
+          {
+            "flow": "suite-404",
+            "step": 3,
+            "kind": "request-never-settled",
+            "claim": "the UI moved forward and the action reported done",
+            "counter": "1 request(s) were still in flight",
+            "detail": "GET http://localhost:8787/api/items?limit=1"
+          },
+          {
+            "flow": "suite-500",
+            "step": 3,
+            "kind": "request-never-settled",
+            "claim": "the UI moved forward and the action reported done",
+            "counter": "1 request(s) were still in flight",
+            "detail": "GET http://localhost:8787/api/items?limit=1"
+          },
+          {
+            "flow": "suite-500",
+            "step": 4,
+            "kind": "request-never-settled",
+            "claim": "the UI moved forward and the action reported done",
+            "counter": "1 request(s) were still in flight",
+            "detail": "GET http://localhost:8787/api/broken/500"
+          },
+          {
+            "flow": "suite-shape",
+            "step": 3,
+            "kind": "request-never-settled",
+            "claim": "the UI moved forward and the action reported done",
+            "counter": "1 request(s) were still in flight",
+            "detail": "GET http://localhost:8787/api/items?limit=1"
+          },
+          {
+            "flow": "suite-shape",
+            "step": 4,
+            "kind": "request-never-settled",
+            "claim": "the UI moved forward and the action reported done",
+            "counter": "1 request(s) were still in flight",
+            "detail": "GET http://localhost:8787/api/broken/wrong-data"
+          }
+        ],
+        "flaky": [
+          "suite-500",
+          "suite-shape",
+          "suite-404",
+          "suite-route",
+          "harness-drive-qr-codes"
+        ],
+        "session_lease": {
+          "sessionId": "s568f5733-1991-4ad6-b8da-b4effab575cd",
+          "opened_at": 1790836219482,
+          "IMPORTANT": "When you stop driving, call reticle_session {action:\"yield\", mode:\"waiting\"|\"ask\"}. The panel reads \"live\" until you do. {action:\"end\"} when the task is done; it revives on your next action."
+        }
+      },
       "passed": 4,
       "competitor_redrive_tokens": 120996,
-      "suite_rre_ratio": 370
+      "suite_rre_ratio": 143
     }
   ],
   "note": "reticle_flow_verify returns ONE verdict for the whole suite (passing flows counted, only failures detailed) → read-cost ~constant in K. Competitors re-drive each flow with the LLM (~30,249 tok/flow) → cost is K*per-flow. The ratio therefore GROWS with suite size: the chased RRE metric compounds."

@@ -28,20 +28,19 @@
 
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { randomBytes } from 'node:crypto';
+import { stopProcessTree } from '../apps/e2e/gate-harness.mjs';
 import path from 'node:path';
 import { ReticleCommand } from '@reticlehq/core';
 import { start, WebRealm, conformanceClient } from '@reticlehq/server';
 import { driveAll } from './drive.mjs';
-import { WEB_HANDOFF } from './handoff.mjs';
+import { readWebHandoff } from './handoff.mjs';
 import { Profile, SCENARIOS } from './scenarios/index.mjs';
 
-// The daemon's default. Not a free choice either: the renderer's SDK dials the default unless a
-// build-time value overrides it, so a spare port here produced an app that started perfectly and
-// dialled nobody -- which reads exactly like an app that failed to start.
-const PORT = 4400;
-// The main process hardcodes `http://localhost:5174`, so this is not a free choice -- picking a
-// spare port launched Electron against nothing and reported it as an app that never dialled.
+// Keep the bridge separate from the developer's daemon; the renderer receives the same port.
+const PORT = Number(process.env.CONFORMANCE_BRIDGE_PORT ?? 15401);
 const VITE_PORT = 5174;
 const ROOT = path.join(import.meta.dirname, '..');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -132,7 +131,17 @@ async function liveRealm(server) {
 }
 
 async function main() {
-  const env = { ...process.env, RETICLE_PORT: String(PORT) };
+  const state = mkdtempSync(path.join(tmpdir(), 'reticle-desktop-conformance-'));
+  const token = randomBytes(24).toString('hex');
+  writeFileSync(path.join(state, 'pairing-token'), token, { mode: 0o600 });
+  process.env.RETICLE_STATE_DIR = state;
+  process.env.RETICLE_PAIRING_TOKEN_DIR = state;
+  const env = {
+    ...process.env,
+    RETICLE_PORT: String(PORT),
+    VITE_RETICLE_TOKEN: token,
+    RETICLE_TELEMETRY: '0',
+  };
   // Started inside the try for the same reason as the web runner: `boot` spawns vite and an
   // Electron tree AFTER the bridge has bound a port, so anything it throws used to leak the
   // bridge and whichever half of `boot` had already succeeded. The web side left an `apps/api`
@@ -217,7 +226,7 @@ async function main() {
       }),
     );
   } finally {
-    await server?.stop?.();
+    await server?.close();
     // The whole process GROUP. Electron is a tree -- launcher, main, renderer, GPU helper -- and
     // killing the launcher leaves the window up to pollute the next run.
     try {
@@ -225,7 +234,7 @@ async function main() {
     } catch {
       /* already gone */
     }
-    vite?.kill();
+    if (vite !== undefined) stopProcessTree(vite.pid);
   }
   const agreement = print(report);
   // ── EXIT ────────────────────────────────────────────────────────────────────────────────────
@@ -342,14 +351,14 @@ function dishonestIfSelfTesting(client) {
 }
 
 function comparedWithWeb(report) {
-  const handoff = WEB_HANDOFF;
-  if (!existsSync(handoff)) {
+  const handoff = readWebHandoff(process.argv.includes('--self-test'));
+  if (handoff === undefined) {
     return {
       line: 'cross-surface agreement: not checked, the web pass did not run',
       disagreed: [],
     };
   }
-  const web = JSON.parse(readFileSync(handoff, 'utf8')).outcomes ?? {};
+  const web = handoff.outcomes ?? {};
   const mine = report.outcomes ?? {};
   const shared = Object.keys(mine).filter(
     (id) =>

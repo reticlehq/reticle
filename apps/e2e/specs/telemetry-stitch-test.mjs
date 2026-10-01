@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // Does what HAPPENED and what was REPORTED agree? Driven end to end, on the wire.
 //
 // `telemetry-events-test` proves each event kind can be SENT. This proves the events describe a real
@@ -32,7 +33,7 @@ import { pidOnPort } from '../port-pid.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 // The battery's bench-app dials :4400 (see run-ci.sh), so a spec that needs a session must use it.
-const PORT = process.env.STITCH_PORT ?? '4400';
+const PORT = process.env.STITCH_PORT ?? String(TEST_BRIDGE_PORT);
 const CAPTURE_PORT = Number(process.env.STITCH_CAPTURE_PORT ?? 9973);
 const APP = process.env.STITCH_APP_URL ?? 'http://localhost:4310/';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

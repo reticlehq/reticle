@@ -48,6 +48,8 @@ export interface SetupMcpResult {
   readonly detected: readonly string[];
   readonly registered: readonly string[];
   readonly alreadyThere: readonly string[];
+  /** Automatic registration was attempted but failed. */
+  readonly failed: readonly string[];
   /**
    * Clients whose config this will NOT rewrite, and which therefore still need a human.
    *
@@ -73,6 +75,7 @@ export function setupMcp(io: SetupMcpIo): SetupMcpResult {
   const detected: string[] = [];
   const registered: string[] = [];
   const alreadyThere: string[] = [];
+  const failed: string[] = [];
   const manual: ManualClient[] = [];
 
   /*
@@ -98,6 +101,7 @@ export function setupMcp(io: SetupMcpIo): SetupMcpResult {
     } else {
       const cmd = claudeAddCommand();
       if (io.runCli(cmd.command, cmd.args)) registered.push(McpClient.CLAUDE_CODE);
+      else failed.push(McpClient.CLAUDE_CODE);
     }
   }
 
@@ -116,8 +120,12 @@ export function setupMcp(io: SetupMcpIo): SetupMcpResult {
       manual.push({ id: client.id, configPath: client.configPath, docs: spec.docs });
       continue;
     }
-    io.writeFile(client.configPath, merged.content);
-    registered.push(client.id);
+    try {
+      io.writeFile(client.configPath, merged.content);
+      registered.push(client.id);
+    } catch {
+      failed.push(client.id);
+    }
   }
 
   /*
@@ -139,7 +147,8 @@ export function setupMcp(io: SetupMcpIo): SetupMcpResult {
      * SKIPPED when there was nothing to register with — not failed. Nothing went wrong; there was
      * simply no agent here, and counting that as our failure would hide the ones that are.
      *
-     * FAILED when every client we found needs a hand. That case used to fall through to COMPLETED,
+     * FAILED when no detected client is usable, whether registration failed or needs a hand.
+     * That case used to fall through to COMPLETED,
      * so the cohort with the tools registered NOWHERE was counted among the successful installs, and
      * the one number that says "did this machine get Reticle" read yes for the people it read no
      * for. Registering some and not others is still COMPLETED: the agent they are using may well be
@@ -150,12 +159,12 @@ export function setupMcp(io: SetupMcpIo): SetupMcpResult {
         ? OnboardingStepStatus.SKIPPED
         : 0 === registered.length && alreadyThere.length > 0
           ? OnboardingStepStatus.SKIPPED
-          : 0 === registered.length && 0 === alreadyThere.length && manual.length > 0
+          : 0 === registered.length && 0 === alreadyThere.length
             ? OnboardingStepStatus.FAILED
             : OnboardingStepStatus.COMPLETED,
   });
 
-  return { detected, registered, alreadyThere, manual };
+  return { detected, registered, alreadyThere, failed, manual };
 }
 
 /** Everything this machine could be asked about, for the report when nothing was found. */

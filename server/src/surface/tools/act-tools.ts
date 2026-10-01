@@ -110,8 +110,8 @@ import { readAlreadyTrue } from './act/already-true.js';
 /**
  * The action vocabulary, derived from ActionType — never retyped.
  *
- * The description used to list thirteen actions while ActionType had seventeen: blur, upload, drag
- * and webmcp were real, callable, and undocumented, because a hand-copied list drifts the moment
+ * The description used to omit callable actions such as blur, upload and drag,
+ * because a hand-copied list drifts the moment
  * someone adds an arm. Deriving both the schema and the prose from the enum makes that impossible.
  *
  * The handler already refused an unknown action with a good message; the schema now refuses it

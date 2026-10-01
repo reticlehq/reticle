@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from './gate-harness.mjs';
 // Shared boot for the desktop battery.
 //
 // Unlike the web specs, a desktop spec cannot lean on run-ci.sh: there is no server to curl and no
@@ -55,7 +56,7 @@ export function pairingToken() {
  */
 export async function bootDesktopSession({
   spawnApp,
-  port = 4400,
+  port = TEST_BRIDGE_PORT,
   extraEnv = {},
   timeoutMs = 60_000,
   urlIncludes,

@@ -1,6 +1,6 @@
 // E2E orchestrator: run each committed spec sequentially against already-running servers
-// (api:8787, demo:4310, next-smoke:3100). Each spec boots its own Reticle bridge on :4400, so we
-// free that port between specs. Exits non-zero if any spec fails — the CI regression gate.
+// (api:8787, demo:4310, next-smoke:3100). Specs share a test bridge (:14400 by default),
+// and the runner reaps only its own processes between specs. Exits non-zero if any spec fails — the CI regression gate.
 //
 // Two batteries, one runner. `--desktop` runs the Electron/Tauri specs instead of the web ones,
 // because those two need things the web battery's boot script does not provision — an Electron
@@ -8,10 +8,11 @@
 // servers. They are a separate JOB, never a silent omission: a spec on disk that belongs to neither
 // list still fails the classification check below.
 import { spawn } from 'node:child_process';
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { freePortSafely, sweepBatteryOrphans } from './gate-harness.mjs';
+import { freePortSafely, TEST_BRIDGE_PORT } from './gate-harness.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const specsDir = path.join(dir, 'specs');
@@ -181,126 +182,21 @@ if (listed.length !== EXPECTED_SPECS) {
   process.exit(1);
 }
 
-const sh = (cmd) =>
-  new Promise((res) => {
-    let out = '';
-    const child = spawn('bash', ['-c', cmd], { stdio: ['ignore', 'pipe', 'ignore'] });
-    child.stdout.on('data', (chunk) => {
-      out += String(chunk);
-    });
-    child.on('close', () => res(out.trim()));
-  });
+// A private state directory lets cleanup identify daemons spawned by this run.
+const stateDir = process.env.RETICLE_TEST_STATE_DIR ?? mkdtempSync(path.join(tmpdir(), 'reticle-e2e-'));
+process.env.RETICLE_STATE_DIR = stateDir;
+process.env.RETICLE_PORT = String(TEST_BRIDGE_PORT);
 
-/** The bridge port every spec binds. One holder left behind fails every spec after it. */
-const BRIDGE_PORT = 4400;
-
-/**
- * Free the bridge port, escalating until it actually IS free.
- *
- * A spec that fails can leave a process holding this port, and the previous version — a single
- * SIGTERM to LISTEN sockets followed by `sleep 1` — did not reliably shift it: a hung process may
- * ignore SIGTERM, and a socket mid-teardown is not in LISTEN state so it was not even looked at.
- * Every subsequent spec then died with EADDRINUSE, so ONE real failure was reported as fifteen and
- * the actual cause sat buried under fourteen spurious ones. Measured: that turned a single broken
- * spec into a dozen turns of misdiagnosis.
- *
- * Escalates TERM → KILL and polls until the port is genuinely released, then says so plainly if it
- * cannot be — a diagnosis is worth more than a cascade.
- */
 async function freePort() {
-  // Listeners first, then — only if the port is still held — everything else, named before it is
-  // touched. The previous version killed every holder on the first pass, which on 4400 includes any
-  // `reticle mcp` proxy attached to the daemon: a developer running the battery with their own agent
-  // connected lost that agent's transport, silently, with no log (the process that writes the proxy
-  // log is the one that dies). See apps/e2e/harness-rules.md.
-  const { freed, survivors } = await freePortSafely(BRIDGE_PORT, {
-    onNote: (note) => process.stdout.write(`\n[e2e] ${note}\n`),
-  });
-  if (!freed) {
-    process.stdout.write(
-      `\n[e2e] port ${String(BRIDGE_PORT)} is STILL held by ` +
-        `${survivors.map((h) => `pid ${h.pid} (${h.command})`).join(', ')} — ` +
-        `every spec below will fail with EADDRINUSE for that reason and not their own.\n`,
-    );
-  }
-}
-
-/**
- * Warn when something that is NOT ours will join the bridge.
- *
- * The battery runs on 4400 — Reticle's default, and therefore the port every developer's own app
- * dials. A single fixture tab left open in a normal browser joins every daemon the battery starts,
- * and any spec that assumes it owns the session fails with "multiple sessions connected".
- *
- * That cost most of an afternoon: three different specs failed across three runs, each of them
- * correct, all of them poisoned by two Chrome tabs on :4310 and :7699. Every hypothesis about the
- * code was wrong, because the fault was not in the code.
- *
- * It has to BAIT them rather than just look: before the battery starts nothing is listening, so
- * there is nothing for a stray tab to be connected TO. The tabs reconnect to whatever appears on
- * 4400, so this stands a daemon up for a few seconds and sees who turns up. The first version of
- * this check polled an empty port, found nothing, and would have reported all-clear every time.
- *
- * Moving the battery to a private port is the real fix and is a bigger job: bench-app, next-smoke
- * and atlas each hardcode how they dial, and half of them silently stopped connecting when the port
- * moved. Until that is done, this names the cause in one line at the top of the run instead of
- * letting a different innocent spec fail each time.
- */
-async function warnAboutForeignSessions() {
-  // Before anything: clear what a KILLED previous battery left running. Its trap never ran, so a
-  // driven browser and an MCP proxy may still be up, competing for this port and for memory. A run
-  // that inherits those reports interleaved failures and SIGKILLs that read exactly like a product
-  // regression — measured once at 17 of 31 specs, none of it real. See apps/e2e/harness-rules.md.
-  // Processes only — no ports. run-ci.sh boots api:8787, bench-app:4310 and next-smoke:3100 BEFORE
-  // this runs, so anything holding those is almost certainly this run's own fixture. Passing them
-  // here once killed all three and failed 19 specs. The bridge port is freed by freePort() below,
-  // which owns that decision.
-  await sweepBatteryOrphans([], {
-    onNote: (note) => process.stdout.write(`[e2e] ${note}\n`),
-  });
-  await freePort();
-  const daemon = spawn('node', ['server/dist/command/cli.js', 'serve', '--port', String(BRIDGE_PORT)], {
-    stdio: 'ignore',
-    detached: true,
-  });
-  let sessions = [];
+  let ownedPids = [];
   try {
-    // 12s, not 4: an SDK reconnects with backoff, so a stray tab whose last attempt just failed
-    // can take longer than a short probe to reappear. A run where the bait window closed too early
-    // reported all-clear and then lost a spec to the very tab it had missed.
-    for (let attempt = 0; attempt < 24; attempt += 1) {
-      await new Promise((r) => setTimeout(r, 500));
-      const raw = await sh(
-        `curl -s --max-time 2 http://localhost:${String(BRIDGE_PORT)}/status 2>/dev/null`,
-      );
-      if (raw === '') continue;
-      try {
-        sessions = JSON.parse(raw).sessions ?? [];
-      } catch {
-        /* daemon still coming up */
-      }
-      if (0 < sessions.length) break;
-    }
-  } finally {
-    try {
-      process.kill(-daemon.pid, 'SIGKILL');
-    } catch {
-      /* already gone */
-    }
-    await freePort();
-  }
-  if (0 === sessions.length) return;
-  process.stdout.write(
-    `\n[e2e] WARNING: ${String(sessions.length)} FOREIGN session(s) joined :${String(BRIDGE_PORT)} before the battery started:\n` +
-      sessions.map((session) => `        ${session.sessionId}  ${session.url}`).join('\n') +
-      `\n        These are not ours — most likely app tabs open in your normal browser. They will join\n` +
-      `        every daemon this battery starts, and any spec that assumes it owns the session will fail\n` +
-      `        with "multiple sessions connected". The spec will look broken and will not be.\n` +
-      `        Close those tabs before trusting a failure below.\n`,
-  );
+    ownedPids = [Number(readFileSync(path.join(stateDir, `daemon-${TEST_BRIDGE_PORT}.pid`), 'utf8'))];
+  } catch { /* no daemon has been started by this run */ }
+  const { freed, survivors } = await freePortSafely(TEST_BRIDGE_PORT, { ownedPids });
+  if (!freed) throw new Error(`Test bridge port ${TEST_BRIDGE_PORT} is occupied by ` +
+    survivors.map(holder => `pid ${holder.pid} (${holder.command})`).join(', ') +
+    '. Leave that process running and select another RETICLE_PORT.');
 }
-
-await warnAboutForeignSessions();
 
 let failed = 0;
 /** Names of the specs that failed, so the SUMMARY can name them — see below. */

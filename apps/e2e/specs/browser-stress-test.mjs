@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // Brute force against the OTHER channel: daemon ↔ browser.
 //
 // The MCP transport now survives its worst day. This is the same treatment for the socket underneath
@@ -16,7 +17,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 // Defaults are the BATTERY's: run-ci.sh boots bench-app on :4310 dialing the bridge on :4400.
 // Overridable so this can be run standalone against a privately-booted app, which is how it was
 // developed — a spec that only works inside its harness is one nobody debugs.
-const PORT = process.env.BROWSER_STRESS_PORT ?? '4400';
+const PORT = process.env.BROWSER_STRESS_PORT ?? String(TEST_BRIDGE_PORT);
 const APP = process.env.BROWSER_STRESS_APP ?? 'http://localhost:4310/';
 // The app must be dialing OUR bridge port; booting it with a different RETICLE_PORT registers no
 // session and every check below reads as a product failure. That cost a full run to notice.

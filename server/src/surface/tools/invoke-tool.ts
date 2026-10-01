@@ -395,9 +395,6 @@ export async function runTool<Ext>(
   // closure carries this call's own identity, which is also what makes peak-concurrency measurable.
   // A daemon that has served even one tool call is doing a job for somebody; see daemon-usefulness.
   noteToolCall();
-  // The ONBOARD firsts, at the chokepoint every call already passes through — so a second dispatch
-  // path cannot quietly stop reporting them the way an extra listener would.
-  noteOnboardingFirst(tool.name);
   // The impact record needs the project's own `.reticle` root, and this is the first place every
   // call knows it. Idempotent: the first root wins for the daemon's lifetime.
   initImpact({ reticleRoot: deps.reticleRoot });
@@ -430,10 +427,6 @@ export async function runTool<Ext>(
   // page and then wandered off" becomes a number instead of an impression.
   if (ACTION_TOOLS.has(tool.name)) {
     getSessionMetrics().recordAction();
-    // The two funnel rungs this branch is the authority on: the first action of the run, and the
-    // fact that this install has been driven at all. Reported from the set that already decides
-    // what "drove the page" means, so a fourth driving tool inherits both.
-    noteActed(args);
   }
   const settleTiming = getSessionMetrics().startToolCall(tool.name, args);
   const startedAt = Date.now();
@@ -576,6 +569,17 @@ export async function runTool<Ext>(
     // In a `finally` so a THROWN call still settles: otherwise every failing tool would leak a
     // concurrency slot and peakConcurrentTools would climb forever on an unhealthy session.
     settleTiming(Date.now() - startedAt);
+  }
+  // Milestones describe work that ran. Refusals and paused calls must not consume the firsts.
+  // Record action before verdict: act_and_wait can complete both in this same call.
+  if (isPlainObject(raw) && !resultIsError(raw) && raw['paused'] !== true && raw['ok'] !== false) {
+    noteOnboardingFirst(tool.name);
+    const effect = raw['effect'];
+    const acted =
+      raw['dispatched'] !== false &&
+      (!isPlainObject(effect) || effect['dispatched'] !== false) &&
+      (tool.name !== ReticleTool.ACT_AND_WAIT || isPlainObject(effect));
+    if (ACTION_TOOLS.has(tool.name) && acted) noteActed(args);
   }
   // The human-feedback ask rides out on the first VERIFICATION that completes — the one moment the
   // experience is fresh and there is something concrete to react to. It is spliced BEFORE the

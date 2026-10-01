@@ -13,6 +13,13 @@ export const InitFailure = {
   DEPENDENCY_INSTALL: 'dependency_install',
   /** The `claude mcp add` step failed — the CLI is missing or refused. Reticle installs but is unreachable. */
   MCP_REGISTRATION: 'mcp_registration',
+  /** The checkout or required tooling failed preflight. */
+  PREFLIGHT: 'preflight',
+  /** Runtime continuation could not start the app or connect its SDK. */
+  DEV_SERVER: 'dev_server',
+  APP_CONNECTION: 'app_connection',
+  BRIDGE_OCCUPIED: 'bridge_occupied',
+  RUNTIME_ERROR: 'runtime_error',
   OTHER: 'other',
 } as const;
 export type InitFailure = (typeof InitFailure)[keyof typeof InitFailure];

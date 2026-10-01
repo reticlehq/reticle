@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 import { chromium } from 'playwright';
 import os from 'node:os'; import path from 'node:path'; import nfs from 'node:fs';
 import { start, TOOLS, BaselineStore, RecordingStore, FlowStore, ProjectStore, AnnotationStore, createNodeFileSystem } from '@reticlehq/server';
@@ -7,7 +8,7 @@ const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
 let pass=0,fail=0; const chk=(l,o,d='')=>{console.log(`   ${o?'✅':'❌'} ${l}${d?'  — '+d:''}`);o?pass++:fail++;};
 const reticleRoot=path.join(os.tmpdir(),`reticle-flow-heal-${process.pid}`,'.reticle');
 const fsp=createNodeFileSystem(); const now=()=>Date.now(); const flows=new FlowStore(fsp,reticleRoot,{now}); const project=new ProjectStore(fsp,reticleRoot,{now});
-const server=await start({port:4400,mcp:false});
+const server=await start({port: TEST_BRIDGE_PORT,mcp:false});
 const deps={sessions:server.bridge.sessions,baselines:new BaselineStore(),recordings:new RecordingStore(),flows,project,fs:fsp,reticleRoot,now,annotations:new AnnotationStore()};
 const T=(n,a={})=>TOOLS.find(t=>t.name===n).handler(deps,{sessionId:'next-smoke',...a});
 const b=await chromium.launch({headless:true}); const p=await b.newPage();

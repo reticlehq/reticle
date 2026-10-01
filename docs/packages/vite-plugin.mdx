@@ -31,6 +31,8 @@ export default defineConfig({
   [`@reticlehq/server`](/packages/server).
 </Warning>
 
+Set `RETICLE_PORT` in the dev server or desktop build environment to use the same custom bridge port as the CLI. A valid value overrides discovery and `.reticle.json`; invalid values are ignored.
+
 ## Why it exists
 
 `apply: 'serve'` means it never reaches a production build. That is the guarantee that lets you leave it in the config permanently: there is no way to ship Reticle to your users by forgetting to remove a line.

@@ -188,9 +188,8 @@ export const MCP_CLIENTS: readonly ClientSpec[] = [
      * `~/.gemini/config/mcp_config.json`, and one file serves the 2.0 IDE, the CLI and the SDK. Same
      * `command`/`args` object Cursor, Windsurf and Gemini CLI already use.
      *
-     * It shares the `~/.gemini` tree with Gemini CLI, which is why the marker matters: registration is
-     * gated on the marker DIRECTORY, and these resolve to `.gemini/config` and `.gemini` respectively,
-     * so having one installed cannot make `init` write a config for the other.
+     * It shares the `~/.gemini` tree with Gemini CLI. Gemini detection requires its settings file:
+     * checking only the parent directory also matches an Antigravity-only installation.
      *
      * NOT verified against a running install. The path is documented, the merge is the shared JSON
      * path that every other client here uses, and an unparseable config still degrades to a printed
@@ -370,6 +369,8 @@ export function clientSnippet(spec: ClientSpec): string {
  */
 export function clientMarkerRelPath(spec: ClientSpec): string {
   if (spec.scope === ConfigScope.CLI) return '';
+  // Antigravity also creates ~/.gemini. The shared parent is not evidence of Gemini CLI.
+  if (spec.id === McpClient.GEMINI) return spec.relPath;
   const parts = spec.relPath.split('/');
   return parts.length > 1 ? parts.slice(0, -1).join('/') : spec.relPath;
 }

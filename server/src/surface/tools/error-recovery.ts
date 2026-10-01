@@ -329,8 +329,7 @@ const RULES: readonly { readonly match: RegExp; readonly hint: string }[] = [
   { match: /contenteditable/i, hint: RECOVERY.UNSUPPORTED_SURFACE },
   { match: /cannot hover without a real pointer/i, hint: RECOVERY.HOVER_NEEDS_POINTER },
   { match: /cannot \w+ a (disabled|readonly) </i, hint: RECOVERY.NOT_EDITABLE },
-  // Three spellings ship — "action", "native action", "WebMCP tool" — and the rule matched one, so
-  // two thirds of the same deliberate refusal still read as a possible defect.
+  // Both "action" and "native action" refusals need the same confirmation guidance.
   {
     match: /potentially destructive (?:\w+ )*(?:action|tool) blocked/i,
     hint: RECOVERY.CONFIRM_DANGEROUS,

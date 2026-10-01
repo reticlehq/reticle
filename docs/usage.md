@@ -419,7 +419,6 @@ A `state` assertion is graded as a **consequence** (a wrong element or stale ren
 | `scrollIntoView` | n/a |  |
 | `upload` | `{ name, content?, type? }` | sets a file on `<input type=file>` |
 | `drag` | `{ toRef }` | pointer-based drag (dnd-kit / rbd) + HTML5 DnD |
-| `webmcp` | `{ tool, params }` | calls a `navigator.modelContext` tool if the site exposes one |
 
 ---
 

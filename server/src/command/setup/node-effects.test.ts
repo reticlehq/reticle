@@ -50,6 +50,35 @@ async function waitForPort(port: number, want: 'held' | 'free'): Promise<string>
 }
 
 describe('the dev server this process owns', () => {
+  it.skipIf(isWindows)(
+    'keeps agent-detecting Astro launches in the owned process group',
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'astro-owned-launch-'));
+      const fixture = join(dir, 'astro-launch.cjs');
+      const server = new OwnedDevServer(dir);
+      writeFileSync(
+        fixture,
+        `
+      process.stdout.write(JSON.stringify({ backgroundMarker: process.env.ASTRO_DEV_BACKGROUND ?? null }));
+      setInterval(() => {}, 1000);
+    `,
+      );
+      try {
+        server.start(`node "${fixture}"`, dir, {});
+        const deadline = Date.now() + 10_000;
+        while (!server.output().includes('backgroundMarker') && Date.now() < deadline)
+          await sleep(50);
+        // Astro checks this marker before agent auto-backgrounding. Without it, the launcher exits
+        // and the server escapes the PID recorded for handover and cleanup.
+        expect(JSON.parse(server.output())).toMatchObject({ backgroundMarker: '1' });
+        expect(server.exited()).toBe(false);
+      } finally {
+        server.stop();
+      }
+    },
+    15_000,
+  );
+
   // The promise: stopped on every ending except success. An interrupted run used to leave one
   // listening indefinitely, holding a port nobody could account for.
   it.skipIf(isWindows)(

@@ -34,7 +34,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // like a real SDK does. Reading it here rather than hardcoding: the token is per-machine.
 const TOKEN = (() => {
   try {
-    return readFileSync(path.join(homedir(), '.reticle', 'pairing-token'), 'utf8').trim();
+    return readFileSync(path.join(process.env.RETICLE_PAIRING_TOKEN_DIR ?? path.join(homedir(), '.reticle'), 'pairing-token'), 'utf8').trim();
   } catch {
     return undefined;
   }

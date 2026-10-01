@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // Call EVERY shipped tool the way an agent calls it — over MCP stdio, against a running app.
 //
 // This spec exists because four defects shipped past every other gate, and all four were invisible
@@ -29,7 +30,7 @@ import { waitForSession } from '../wait-for-session.mjs';
 import { waitUntil } from '../wait-until.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const PORT = process.env.RETICLE_PORT ?? '4400';
+const PORT = String(TEST_BRIDGE_PORT);
 const APP = process.env.SWEEP_APP_URL ?? 'http://localhost:4310/';
 
 let pass = 0;

@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // HONESTY-CRITICAL: drive `apps/atlas`, the one committed fixture built to be HARD rather than to be
 // passed — and, until this spec existed, the one nothing ran.
 //
@@ -22,7 +23,7 @@ import { freePortSafely } from '../gate-harness.mjs';
 import { waitUntil } from '../wait-until.mjs';
 
 /** Atlas serves from here; the session is identified by it, since atlas self-assigns its id. */
-const ATLAS_PORT = 4320;
+const ATLAS_PORT = Number(process.env.ATLAS_TEST_PORT ?? 14320);
 const ATLAS_URL = `http://localhost:${String(ATLAS_PORT)}/`;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -38,21 +39,11 @@ const chk = (l, o, d = '') => {
 // It streams SSE continuously, and every spec shares the bridge on :4400 — so leaving it up floods
 // each other spec's session with churn it never caused. Measured: adding it to run-ci.sh turned five
 // green specs red. The desktop specs already own their runtime for the same reason; this follows them.
-const tokenFile = join(homedir(), '.reticle', 'pairing-token');
+const tokenFile = join(process.env.RETICLE_PAIRING_TOKEN_DIR ?? join(homedir(), '.reticle'), 'pairing-token');
 const token = existsSync(tokenFile) ? readFileSync(tokenFile, 'utf8').trim() : '';
 
-// Free :4320 before claiming it, because without this the spec cannot recover from its own past.
-//
-// It owns a fixed port and starts its server with `--strictPort`. So one leftover holder — a crashed
-// run, a spec killed by a signal before its teardown, a standalone run someone ctrl-C'd — makes the
-// NEW vite exit immediately, while the leftover keeps answering HTTP. The readiness probe is
-// therefore satisfied by the stale server, the browser loads ITS page, and that page is dialling a
-// bridge from a dead run. What gets reported is "an atlas session never connected", with a
-// healthy-looking app serving on exactly the port named in the error, and every subsequent run fails
-// the same way with no way to break out of it.
-//
-// Teardown alone cannot fix that: it only ever runs in the process that still works. Sweeping at
-// START is what makes the spec idempotent, which is the property it was missing.
+// An occupied port may belong to a developer's app. Refuse before opening a browser;
+// otherwise a readiness probe could accept that app after our own Vite fails to bind.
 await freePortSafely(ATLAS_PORT, { onNote: (note) => console.log(`   [atlas] ${note}`) });
 //
 // `detached` so this gets its OWN process group, and the teardown below can kill the group.
@@ -68,7 +59,7 @@ const atlas = spawn(
   'pnpm',
   ['--filter', '@reticlehq/atlas', 'exec', 'vite', '--port', String(ATLAS_PORT), '--strictPort'],
   {
-    env: { ...process.env, RETICLE_PORT: '4400', VITE_RETICLE_TOKEN: token },
+    env: { ...process.env, RETICLE_PORT: String(TEST_BRIDGE_PORT), VITE_RETICLE_TOKEN: token },
     stdio: 'ignore',
     detached: true,
   },
@@ -83,7 +74,7 @@ const stopAtlas = () => {
 };
 process.on('exit', stopAtlas);
 
-const server = await start({ port: 4400, mcp: false });
+const server = await start({ port: TEST_BRIDGE_PORT, mcp: false });
 for (let i = 0; i < 240; i++) {
   try { if ((await fetch(ATLAS_URL)).ok) break; } catch { /* not up yet */ }
   await sleep(500);

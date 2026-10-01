@@ -1,7 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { homedir } from 'node:os';
-import { probeCli, terminalWidth, wrapForTerminal } from '@reticlehq/init';
+import {
+  claudeAddCommand,
+  McpClient,
+  probeCli,
+  terminalWidth,
+  wrapForTerminal,
+} from '@reticlehq/init';
 import { installClosing, tutorialShownSteps } from './tutorial.js';
 import { setupMcp, knownClientLabels, type SetupMcpIo } from '@/command/setup/setup-mcp.js';
 import { reportInstallSteps } from '@/command/setup/setup-install.js';
@@ -66,6 +72,15 @@ export function handleSetupMcp(reportStep: StepReporter, standalone = true): voi
   }
   for (const id of result.registered) io.print(`  ✓ ${id}`);
   for (const id of result.alreadyThere) io.print(`  ✓ ${id} (already set up)`);
+  for (const id of result.failed) {
+    io.print(`  ⚠ ${id}: Reticle registration failed; this agent may not have the tools.`);
+    io.print(
+      id === McpClient.CLAUDE_CODE
+        ? `    Run this command to see the error and retry: ${claudeAddCommand().display}`
+        : '    Check your agent config file permissions, then retry: reticle setup mcp',
+    );
+  }
+  if (result.failed.length > 0) process.exitCode = 1;
   // Said, not skipped. These are the clients whose format we will not rewrite, and they used to be
   // counted as registered: the line below is the difference between a user who adds four lines to
   // one file and a user who believes they are set up and has no tools.

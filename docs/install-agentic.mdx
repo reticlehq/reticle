@@ -248,7 +248,7 @@ Three of these are answers only the caller has. `init` reads your repository; it
 | `--env KEY=VALUE` | What the app needs to reach a usable state: the key from `.env.example`, the mock backend, the variable that skips an auth wall. Repeatable, and a value may contain spaces and equals signs. Without it a real app sits on a login screen and there is no flow to drive. |
 | `--app <dir>` | Monorepos. `init` can find the apps that are servable; only your request says which one you are working in. |
 | `--license <key>` | Writes `RETICLE_LICENSE_KEY` to `.env` and keeps `.env` out of git. Do not do those two by hand. |
-| `--json` | One object on stdout: what was wired, what connected, the verdict, and an `agentTodo` array. For agents. |
+| `--json` | One result object on stdout; progress and package-manager output go to stderr. Default init reports runtime setup and connection. `--files-only` and `--dry-run` report the wiring result. Init does not drive a flow or produce a verification verdict. |
 | `--files-only` | Write the files, register the MCP server with every agent on the machine, pre-approve Reticle's tools, and stop: no dev server, no drive. What `init` did before it learned to boot the app, and the upgrade path for a machine that installed Reticle on an earlier version. |
 | `--no-open` | Do not open a browser: CI, a container, an SSH session, or a tab you already have. |
 | `--dry-run` | See the plan before anything is written. |

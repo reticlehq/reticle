@@ -11,11 +11,14 @@ import {
   daemonRegistryPort,
   DaemonRegistryEntrySchema,
   pickDaemonPort,
+  ReticleEnv,
   type DaemonRegistryEntry,
 } from '@reticlehq/core';
 import { stateHome } from './state-home.js';
 import { readConfiguredPort } from './project-id.js';
 import { RETICLE_VITE_PLUGIN_NAME } from './plugin-name.js';
+
+const MAX_TCP_PORT = 65_535;
 
 /** process.kill(pid, 0) throws iff the process is gone — the same liveness probe the daemon uses. */
 function isAlive(pid: number): boolean {
@@ -110,10 +113,18 @@ export function resolveDaemonPort(
   explicit: number | undefined,
   projectId: string | undefined,
   cwd: string,
+  env: NodeJS.ProcessEnv = process.env,
 ): DaemonPortChoice {
+  // The CLI treats RETICLE_PORT as an override across projects. A page must follow the same
+  // daemon even when an older instance is still registered or init wrote a different port.
+  const raw = env[ReticleEnv.PORT];
+  if (raw !== undefined && /^\d+$/.test(raw)) {
+    const port = Number(raw);
+    if (0 < port && port <= MAX_TCP_PORT) return { port, warning: undefined };
+  }
   const configured = readConfiguredPort(cwd);
   return chooseDaemonPort({
-    discovered: discoverDaemonPort(projectId, stateHome(), isAlive, configured),
+    discovered: discoverDaemonPort(projectId, stateHome(env), isAlive, configured),
     configured,
     explicit,
   });

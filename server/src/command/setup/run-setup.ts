@@ -192,6 +192,8 @@ export interface SetupInput {
    * before setup could say what was wrong.
    */
   readonly connectBudgetMs?: number | undefined;
+  /** Explicit --timeout for startup; absent preserves the adaptive build wait. */
+  readonly startupBudgetMs?: number | undefined;
   readonly openBrowser: boolean;
   /** Web, Electron or Tauri. Desktop changes three things; see desktop-shape.ts. */
   readonly shape: AppShape;
@@ -312,6 +314,7 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
           serving,
           quietForMs: fx.devServerQuietForMs(),
           elapsedMs: fx.now() - startedAt,
+          budgetMs: input.startupBudgetMs,
           quietMeansHungMs: WINDOWS_QUIET_MEANS_HUNG_MS_APPLIES
             ? WINDOWS_QUIET_MEANS_HUNG_MS
             : QUIET_MEANS_HUNG_MS,
@@ -340,8 +343,12 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
           // must not be failed, so a reader has to be able to tell "we looked at the log" from "we
           // looked at the log AND the ports".
           note(
-            'The dev server neither printed a URL nor bound a port, so setup has nothing to open. ' +
-              'Check its log, or pass --url with the address it serves.',
+            (input.startupBudgetMs !== undefined && fx.now() - startedAt >= input.startupBudgetMs
+              ? `The dev server did not become ready within ${String(input.startupBudgetMs)}ms. `
+              : undefined === watching
+                ? 'The dev server neither printed a URL nor bound a port, so setup has nothing to open. '
+                : `The dev server stopped making progress before ${watching} became ready. `) +
+              'Check its log, increase --timeout for a slow build, or pass --url with the address it serves.',
           );
           return stop(input, SetupPhase.DEV_SERVER, {}, notes);
         }

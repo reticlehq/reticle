@@ -10,8 +10,10 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 // Kept in sync with @reticlehq/core (ReticleDir / ReticleEnv). This package is plain CJS tooling and
-// deliberately has no ESM/TS dependency on core, so the two constants are mirrored here.
+// deliberately has no ESM/TS dependency on core, so these values are mirrored here.
 const PAIRING_TOKEN_DIR_ENV = 'RETICLE_PAIRING_TOKEN_DIR';
+const STATE_DIR_ENV = 'RETICLE_STATE_DIR';
+const PORT_ENV = 'RETICLE_PORT';
 /**
  * Instrument anyway, whatever NODE_ENV says — for `NODE_ENV=production next dev`.
  *
@@ -101,15 +103,9 @@ function readPairingToken() {
  * matches no daemon, which is the exact bug this function exists to remove.
  * @returns {string | undefined}
  */
-/**
- * Where Reticle keeps its per-user state: the pairing token AND the daemon registry.
- *
- * Honours the same RETICLE_PAIRING_TOKEN_DIR override the token reader uses, because it is the same
- * directory. One override rather than two keeps a test (or a sandbox) from pointing the two halves at
- * different places and getting a token from one daemon with the port of another.
- */
-function reticleHomeDir() {
-  const override = process.env[PAIRING_TOKEN_DIR_ENV];
+/** Pairing token and registry locations have separate overrides, matching the daemon. */
+function reticleHomeDir(envKey = PAIRING_TOKEN_DIR_ENV) {
+  const override = process.env[envKey];
   return override !== undefined && override.length > 0
     ? override
     : path.join(os.homedir(), RETICLE_HOME_DIR);
@@ -131,13 +127,23 @@ const MAX_TCP_PORT = 65535;
 const bridgeUrl = (port) => `ws://${RETICLE_CLIENT_HOST}:${String(port)}${RETICLE_WS_PATH}`;
 
 /**
- * The same order the Vite plugin's `chooseDaemonPort` states: a live daemon registered for this
+ * RETICLE_PORT overrides discovery. Otherwise, follow the Vite plugin's order: a live daemon for this
  * project, then the `port` in `.reticle.json`, and only then the `url` literal `reticle init` wrote
  * into the generated ReticleDev component (which this value overrides page-side). The file comes
  * before the literal because it is what the daemon and the CLI read: a user who edited it moved the
  * daemon, and the page kept dialling the old literal with nothing saying why.
  */
-function discoverDaemonUrl(cwd = process.cwd(), home = reticleHomeDir(), alive = defaultIsAlive) {
+function discoverDaemonUrl(
+  cwd = process.cwd(),
+  home = reticleHomeDir(STATE_DIR_ENV),
+  alive = defaultIsAlive,
+  env = process.env,
+) {
+  const requested = env[PORT_ENV];
+  if (requested !== undefined && /^\d+$/.test(requested)) {
+    const port = Number(requested);
+    if (Number.isInteger(port) && port > 0 && port <= MAX_TCP_PORT) return bridgeUrl(port);
+  }
   let projectId;
   let configuredPort;
   try {

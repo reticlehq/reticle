@@ -1,4 +1,4 @@
-# Local registry config for testing @reticlehq/* in a real external app without publishing to npm.
+# Local registry config for testing workspace packages in a real external app without publishing to npm.
 # Relative to THIS file, so it resolves the same on every OS. Absolute `/tmp/...` did not: a
 # Windows verdaccio read it as C:\tmp while the shell script cleaning up read it as the Git Bash
 # /tmp, so the "FRESH" reset never happened and run two died on "username is already registered".
@@ -11,6 +11,12 @@ uplinks:
     url: https://registry.npmjs.org/
 packages:
   '@reticlehq/*':
+    access: $all
+    publish: $all
+    unpublish: $all
+  # This workspace package is unscoped. Proxying it exposes the public version to npm publish,
+  # which then refuses this checkout's tarball as already published even in a fresh local registry.
+  'open-verification':
     access: $all
     publish: $all
     unpublish: $all

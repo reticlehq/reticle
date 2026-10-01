@@ -1,7 +1,5 @@
 import {
-  ActionType,
   ComponentStateReason,
-  DANGEROUS_ACTION_CONFIRM_ARG,
   ElementQuerySchema,
   ReticleCommand,
   SnapshotMode,
@@ -15,12 +13,7 @@ import {
 import { buildSnapshot } from '@/dom/snapshot.js';
 import { paintContextOf } from '@/dom/paint-context.js';
 import { matchQuery, runQuery } from '@/dom/query.js';
-import {
-  executeAction,
-  executeSequence,
-  dispatchWebMcp,
-  type ActionStep,
-} from '@/actions/actions.js';
+import { executeAction, executeSequence, type ActionStep } from '@/actions/actions.js';
 import { describe } from '@/dom/a11y.js';
 import { documentHasSourceStamps, sourceFor, formatSource } from '@/dom/addressing/source.js';
 import { themeReport } from '@/dom/theme.js';
@@ -331,14 +324,6 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
   );
   reg.set(ReticleCommand.ACT, (args) => {
     const action = str(args['action']) ?? '';
-    if (action === ActionType.WEBMCP) {
-      const inner = record(args['args']);
-      return dispatchWebMcp(
-        str(inner['tool']) ?? '',
-        record(inner['params']),
-        true === inner[DANGEROUS_ACTION_CONFIRM_ARG],
-      );
-    }
     return executeAction(str(args['ref']) ?? '', action, record(args['args']));
   });
   reg.set(ReticleCommand.ACT_SEQUENCE, (args) =>

@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // The calls SKILL.md tells an agent to make, made the way SKILL.md says to make them.
 //
 // The skill leads with one-call paths — "did my edit break anything", "does this known journey still
@@ -22,7 +23,7 @@ import { McpStdioClient } from '../../../bench/harness/mcp-client.mjs';
 import { waitForSession } from '../wait-for-session.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const PORT = process.env.RETICLE_PORT ?? '4400';
+const PORT = String(TEST_BRIDGE_PORT);
 const APP = process.env.SWEEP_APP_URL ?? 'http://localhost:4310/';
 
 let pass = 0;

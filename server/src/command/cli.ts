@@ -161,7 +161,7 @@ async function handleInit(parsed: {
       presenceIsUsable(await probePresence(p, { tcpOpen: probeDaemon, status: fetchStatus })),
     pickPort: (p) => pickDaemonPortToBind(p),
   });
-  const io = buildNodeIo(cwd, serverInitHost());
+  const io = buildNodeIo(cwd, serverInitHost(), { stderr: true === parsed.json });
   const result = runInit(
     {
       cwd,

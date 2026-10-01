@@ -28,7 +28,7 @@ fi
 # and every run after the first died on "username is already registered".
 rm -rf "${ROOT}/scripts/.local-registry"
 sleep 1
-npx --yes verdaccio@latest --config "${ROOT}/scripts/verdaccio.yaml" >/tmp/reticle-verdaccio.log 2>&1 &
+pnpm --dir "${ROOT}/apps/e2e" exec verdaccio --config "${ROOT}/scripts/verdaccio.yaml" >/tmp/reticle-verdaccio.log 2>&1 &
 for _ in $(seq 1 30); do curl -s "${REG}/-/ping" >/dev/null 2>&1 && break; sleep 1; done
 curl -s "${REG}/-/ping" >/dev/null 2>&1 || { echo "Verdaccio did not start; see /tmp/reticle-verdaccio.log"; exit 1; }
 

@@ -39,14 +39,14 @@ All three capture the visible viewport by default, so a baseline taken on one pl
 
 ### Headless
 
-`on_page_load` parks the window when `RETICLE_HEADLESS=1`:
+`on_page_load` hides the loaded window when `RETICLE_HEADLESS=1`:
 
 ```sh
 RETICLE_HEADLESS=1 cargo tauri dev
 ```
 
-The ordering matters and is the whole reason this is a function rather than a config flag. Acting during `setup` runs _before_ the webview has been presented, and a webview that has never been presented never loads its page — so the app answers nothing. Show, load, then park.
+The ordering matters and is the whole reason this is a function rather than a config flag. Acting during `setup` runs _before_ the webview has been presented, and a webview that has never been presented never loads its page — so the app answers nothing. Show, load, then hide.
 
-On macOS the park is off-screen, not `hide()`. A loaded WKWebView that is then hidden has been observed to go quiet after a pause (capture still works, because it renders the webview); parking keeps the page scheduled without claiming every Mac will hit that pause. Linux and Windows still hide: WebKitGTK keeps executing while hidden.
+On macOS 14 and later, Reticle disables WebKit's background throttling through its public `inactiveSchedulingPolicy` API before hiding the window. This keeps commands and screenshots working while the app is idle without leaving an interactive window on the desktop. Older macOS versions retain the offscreen fallback; AppKit can move that window back onto a display. Linux and Windows hide the loaded window directly.
 
 `xvfb-run -a cargo tauri dev` also works on Linux and needs no app-side change.
