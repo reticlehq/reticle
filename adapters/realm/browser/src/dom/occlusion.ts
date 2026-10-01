@@ -51,9 +51,20 @@ export function hitTestOccluder(el: Element, rect: DOMRect): Element | null {
   const withStack = doc as Document & {
     elementsFromPoint?: (this: Document, x: number, y: number) => Element[];
   };
+  /*
+   * Our own nodes are skipped so our chrome cannot be reported as covering an APP control (#783) —
+   * except the target itself. Skipping that takes the target out of its own hit test, and the first
+   * APP element underneath is blamed for covering it. Kept, it lands on the `top === el` branch
+   * below: "not occluded", like any target that is on top of itself.
+   */
+  const isOursButNotTheTarget = (candidate: Element): boolean =>
+    isReticleUi(candidate) &&
+    candidate !== el &&
+    !el.contains(candidate) &&
+    !candidate.contains(el);
   const topAt = (x: number, y: number): Element | null => {
     const found = withStack.elementsFromPoint?.(x, y) ?? [doc.elementFromPoint(x, y)];
-    return found.find((c): c is Element => null !== c && !isReticleUi(c)) ?? null;
+    return found.find((c): c is Element => null !== c && !isOursButNotTheTarget(c)) ?? null;
   };
 
   // Counted by element, so the answer names the thing actually covering the control rather than

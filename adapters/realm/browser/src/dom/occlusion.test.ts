@@ -115,3 +115,94 @@ describe('hitTestOccluder samples more than the centre', () => {
     expect(hitTestOccluder(el, new DOMRect(0, 0, 100, 100))).toBe(overlay);
   });
 });
+
+/**
+ * The stack form, which is the one the fix is about. Every test above stubs the SINGULAR
+ * `elementFromPoint`, so none can see what `topAt` does with a stack. `stubStack` installs both —
+ * the function refuses to run when `elementFromPoint` is missing.
+ */
+function stubStack(stack: (x: number, y: number) => Element[]): void {
+  Object.defineProperty(document, 'elementFromPoint', {
+    value: (x: number, y: number) => stack(x, y)[0] ?? null,
+    configurable: true,
+    writable: true,
+  });
+  Object.defineProperty(document, 'elementsFromPoint', {
+    value: (x: number, y: number) => stack(x, y),
+    configurable: true,
+    writable: true,
+  });
+}
+
+function clearStubs(): void {
+  Reflect.deleteProperty(document, 'elementFromPoint');
+  Reflect.deleteProperty(document, 'elementsFromPoint');
+  document.body.innerHTML = '';
+}
+
+/**
+ * The target can BE Reticle's own UI.
+ *
+ * `topAt` drops our nodes so our presenter never counts as an occluder of an APP control (#783).
+ * When the target is one of our nodes that filter removes the target from its own hit test, and the
+ * first APP element underneath — the page our panel floats over — is blamed instead. Every
+ * `reticle_act` on a panel control came back occluded, which is the one thing `exposePresenter`
+ * exists to allow.
+ */
+describe('a Reticle control is not occluded by what is under our own panel', () => {
+  afterEach(clearStubs);
+
+  it('does not blame the app element under the panel for covering our own button', () => {
+    const panel = document.createElement('div');
+    panel.setAttribute('data-reticle-overlay', '');
+    const hudButton = document.createElement('button');
+    panel.append(hudButton);
+    const app = document.createElement('div');
+    document.body.append(panel, app);
+    // The real stack at that point: our button on top, our panel under it, the app beneath both.
+    stubStack(() => [hudButton, panel, app, document.body]);
+    expect(hitTestOccluder(hudButton, new DOMRect(0, 0, 100, 100))).toBeNull();
+  });
+
+  it('still reports an APP modal that genuinely covers one of our controls', () => {
+    // Narrowing to "our own subtree is not an occluder of it" must not become "our controls are
+    // never occluded" — an app dialog over the panel is a real obstruction.
+    const panel = document.createElement('div');
+    panel.setAttribute('data-reticle-overlay', '');
+    const hudButton = document.createElement('button');
+    panel.append(hudButton);
+    const modal = document.createElement('div');
+    document.body.append(panel, modal);
+    stubStack(() => [modal, hudButton, panel, document.body]);
+    expect(hitTestOccluder(hudButton, new DOMRect(0, 0, 100, 100))).toBe(modal);
+  });
+});
+
+/**
+ * #783 has to survive the fix, and the tests that pinned it all used the singular form.
+ *
+ * Our overlay over an app control is not that control's occluder — the agent drives straight through
+ * it. The stack form is where that is actually decided.
+ */
+describe('our chrome over an APP control stays invisible to the hit test', () => {
+  afterEach(clearStubs);
+
+  it('does not report our overlay as covering the app control beneath it', () => {
+    const app = document.createElement('button');
+    const hud = document.createElement('div');
+    hud.setAttribute('data-reticle-overlay', '');
+    document.body.append(app, hud);
+    stubStack(() => [hud, app, document.body]);
+    expect(hitTestOccluder(app, new DOMRect(0, 0, 100, 100))).toBeNull();
+  });
+
+  it('still reports a real app overlay sitting between our chrome and the app control', () => {
+    const app = document.createElement('button');
+    const overlay = document.createElement('div');
+    const hud = document.createElement('div');
+    hud.setAttribute('data-reticle-overlay', '');
+    document.body.append(app, overlay, hud);
+    stubStack(() => [hud, overlay, app, document.body]);
+    expect(hitTestOccluder(app, new DOMRect(0, 0, 100, 100))).toBe(overlay);
+  });
+});
