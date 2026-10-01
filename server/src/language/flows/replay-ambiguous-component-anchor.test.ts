@@ -214,4 +214,21 @@ describe('a component anchor that becomes ambiguous during the stale-ref retry',
     // The original attempt only. Without the retry guard this was ['e-orig', 'e-a'] — the retry guessed.
     expect(session.acts).toEqual(['e-orig']);
   });
+
+  /**
+   * And it says SO, rather than reporting the staleness it was retrying for.
+   *
+   * The pair with the role file's equivalent, and the assertion that was missing here: without it,
+   * `does not dispatch` above passes just as well when the step reports the original stale-ref
+   * error — a sentence about an element that is GONE, sent for an element that is now three. Two
+   * diagnoses with two different fixes (narrow the anchor vs. re-record the flow) would arrive as
+   * one message, which is the defect `Reresolved` exists to remove.
+   */
+  it('reports the ambiguity as a drift, not as the stale ref it was retrying for', async () => {
+    const session = new StaleThenAmbiguousSession(1);
+    const result = await replay(session);
+    expect(result.drift?.reasonKind).toBe(DriftReason.ANCHOR_AMBIGUOUS);
+    expect(result.drift?.ambiguous).toBe(true);
+    expect(result.error).toBeUndefined();
+  });
 });
