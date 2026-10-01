@@ -246,10 +246,23 @@ async function pressViaKeyboard(
   const chord = 0 < modifiers.length ? `${modifiers.join('+')}+${key}` : key;
   const holdMs = clampHoldMs(args.holdMs);
   if (0 === holdMs) {
+    // `press` DOES take a chord string ("Control+k"), so the tap path needs no splitting.
     await page.keyboard.press(chord);
     return 0;
   }
-  await page.keyboard.down(chord);
+  /*
+   * `down`/`up` take ONE key each, unlike `press`: `down('Control+k')` throws
+   * `Unknown key: "Control+k"` — measured on a real Chromium, not assumed. The chord string the
+   * tap path uses therefore cannot express a hold, so the chord is split here: modifiers down in
+   * chord order, the key last, and released in reverse (key first, modifiers reversed), which is
+   * what a hand does and what an app's keyup bookkeeping expects.
+   *
+   * Without the split a held shortcut threw before a single key moved, the caller fell back to
+   * the synthetic path, and a real hold was impossible for any press with modifiers — the exact
+   * gesture `holdMs` exists for.
+   */
+  for (const modifier of modifiers) await page.keyboard.down(modifier);
+  await page.keyboard.down(key);
   const startedAt = now();
   try {
     await sleep(holdMs);
@@ -258,13 +271,57 @@ async function pressViaKeyboard(
     // key a second time. If the driver's copy stays down, a held modifier then colours every later
     // action for the rest of the run. Releasing here is best-effort on purpose: whatever went wrong
     // with the wait is the error worth reporting, and a throw from `up` would replace it.
-    await page.keyboard.up(chord).catch(() => undefined);
+    await releaseChord(page, key, modifiers).catch(() => undefined);
     throw error;
   }
-  // NOT in a `finally`: on the ordinary path a failed release is a real failure the caller must
-  // hear about, and swallowing it would report a press whose key is still down.
-  await page.keyboard.up(chord);
+  // NOT best-effort: on the ordinary path a failed release is a real failure the caller must hear
+  // about, and swallowing it would report a press whose key is still down.
+  await releaseChord(page, key, modifiers);
   return now() - startedAt;
+}
+
+/**
+ * Release a held chord, key first and modifiers in reverse, and report a failure as one that
+ * leaves the keyboard UNKNOWN rather than as an ordinary provider error.
+ *
+ * Every release is attempted even after one fails: a stuck `Control` is worse than a stuck letter,
+ * so a failure on the key must not skip the modifiers. The first failure is what is thrown, since
+ * it is the one that happened first, and it is wrapped in `DriveError` so the caller can tell
+ * "this gesture failed" from "this gesture may have left a key down" — the difference between a
+ * safe synthetic replay and an unsafe one.
+ */
+async function releaseChord(page: Page, key: string, modifiers: readonly string[]): Promise<void> {
+  let failure: unknown;
+  try {
+    await page.keyboard.up(key);
+  } catch (error) {
+    failure = error;
+  }
+  for (const modifier of [...modifiers].reverse()) {
+    try {
+      await page.keyboard.up(modifier);
+    } catch (error) {
+      failure ??= error;
+    }
+  }
+  if (failure !== undefined) {
+    throw new DriveError(
+      DriveErrorCode.RELEASE_FAILED,
+      `the key was pressed but could not be released, so it may still be held: ${describeFailure(failure)}`,
+    );
+  }
+}
+
+/**
+ * A thrown value as a line a reader can act on.
+ *
+ * Not `String(error)`: a non-Error thrown value (a rejected plain object, an SDK that throws a
+ * record) stringifies to `[object Object]`, which names nothing and hides the one fact the message
+ * exists to carry. Anything that is neither an Error nor a string says so rather than pretending.
+ */
+function describeFailure(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return 'string' === typeof error ? error : 'an unknown error';
 }
 
 /**

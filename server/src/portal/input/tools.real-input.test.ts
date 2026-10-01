@@ -3,6 +3,7 @@ import { LastAct } from '@/portal/session/last-act.js';
 import {
   ActionType,
   ActionWarning,
+  DriveErrorCode,
   InputMode,
   InputModeReason,
   SessionState,
@@ -16,7 +17,7 @@ import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
 import { FlowStore } from '@/language/flows/flows.js';
 import { ProjectStore } from '@/memory/project/project-store.js';
 import { AnnotationStore } from '@/language/flows/stores/annotation-store.js';
-import { boxCenter, type ElementBox, type RealInputProvider } from './real-input.js';
+import { boxCenter, DriveError, type ElementBox, type RealInputProvider } from './real-input.js';
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { BrowserPool } from '@/portal/pool/browser-pool.js';
@@ -124,12 +125,18 @@ interface RecordingProvider extends RealInputProvider {
   }[];
 }
 
-function makeProvider(available: boolean, options: { throws?: boolean } = {}): RecordingProvider {
+function makeProvider(
+  available: boolean,
+  options: { throws?: boolean | Error } = {},
+): RecordingProvider {
   const calls: RecordingProvider['calls'] = [];
   return {
     calls,
     isAvailableFor: () => Promise.resolve(available),
     perform: (_url, action, box, args) => {
+      // A specific error is thrown as given, so a test can name the CLASS the caller branches on
+      // (`DriveError` with a code) rather than only its message.
+      if (options.throws instanceof Error) return Promise.reject(options.throws);
       if (true === options.throws) return Promise.reject(new Error('cdp gone'));
       const center = boxCenter(box);
       const call: RecordingProvider['calls'][number] = {
@@ -584,6 +591,23 @@ describe('reticle_act routes a document press through real input', () => {
     expect(res.inputMode).toBe(InputMode.SYNTHETIC);
     expect(res.inputModeReason).toBe(InputModeReason.PROVIDER_ERROR);
     expect(state.actCalls).toBe(1);
+  });
+
+  it('REFUSES a release failure instead of falling back, which would press the key twice', async () => {
+    // The one throw that must not reach the synthetic path. Every other failure means the gesture
+    // did not happen. A failed release means it DID, and the key may still be down — replaying it
+    // presses the same key again on top of a keyboard that is already holding something.
+    const provider = makeProvider(true, {
+      throws: new DriveError(DriveErrorCode.RELEASE_FAILED, 'may still be held'),
+    });
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+
+    await expect(
+      runAct(fakeDeps(provider, state), { action: 'press', args: { text: 'Tab' } }),
+    ).rejects.toThrow('may still be held');
+
+    // Nothing synthetic ran: the refusal is the whole answer.
+    expect(state.actCalls).toBe(0);
   });
 
   it('keeps a press WITH a ref on the synthetic path — a real keyboard cannot address an element', async () => {

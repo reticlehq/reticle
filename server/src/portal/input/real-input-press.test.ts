@@ -210,6 +210,9 @@ describe('performGesture drives press through the real keyboard', () => {
   });
 
   it('holds the whole chord, modifiers included', async () => {
+    // `down`/`up` take ONE key each — `down('Meta+k')` throws `Unknown key: "Meta+k"`, measured on
+    // a real Chromium. So a held chord is split: modifiers down in chord order, the key last, and
+    // released key-first with the modifiers reversed, which is what a hand does.
     const { page, held } = keyboardPage();
     await performGesture(
       page,
@@ -218,7 +221,63 @@ describe('performGesture drives press through the real keyboard', () => {
       { key: 'k', modifiers: ['Meta'], holdMs: 50 },
       noSleep,
     );
-    expect(held).toEqual(['down:Meta+k', 'up:Meta+k']);
+    expect(held).toEqual(['down:Meta', 'down:k', 'up:k', 'up:Meta']);
+  });
+
+  it('splits a two-modifier hold in press order and releases it in reverse', async () => {
+    const { page, held } = keyboardPage();
+    await performGesture(
+      page,
+      ActionType.PRESS,
+      NO_BOX,
+      { key: 'k', modifiers: ['Control', 'Shift'], holdMs: 50 },
+      noSleep,
+    );
+    // Chord order is the canonical Meta/Control/Shift/Alt sequence core produces, not the order the
+    // caller typed them — that normalisation is `pressModifiersFromArgs`' job and is asserted there.
+    expect(held).toEqual([
+      'down:Control',
+      'down:Shift',
+      'down:k',
+      'up:k',
+      'up:Shift',
+      'up:Control',
+    ]);
+  });
+
+  it('never sends a chord string to down/up, which would throw before a key moved', async () => {
+    // The whole point of the split. A real Page rejects `down('Meta+k')` outright, so any test that
+    // only recorded the string would pass while the gesture died on the first call.
+    const sent: string[] = [];
+    const page = {
+      keyboard: {
+        press: (key: string) => {
+          sent.push(`press:${key}`);
+          return Promise.resolve();
+        },
+        down: (key: string) => {
+          if (key.includes('+')) return Promise.reject(new Error(`Unknown key: "${key}"`));
+          sent.push(`down:${key}`);
+          return Promise.resolve();
+        },
+        up: (key: string) => {
+          if (key.includes('+')) return Promise.reject(new Error(`Unknown key: "${key}"`));
+          sent.push(`up:${key}`);
+          return Promise.resolve();
+        },
+      },
+    } as unknown as Page;
+
+    const result = await performGesture(
+      page,
+      ActionType.PRESS,
+      NO_BOX,
+      { key: 'k', modifiers: ['Meta'], holdMs: 50 },
+      noSleep,
+    );
+
+    expect(result.performed).toBe(true);
+    expect(sent).toEqual(['down:Meta', 'down:k', 'up:k', 'up:Meta']);
   });
 
   it('reports the hold it actually achieved, not the number it was asked for', async () => {
@@ -267,7 +326,8 @@ describe('performGesture drives press through the real keyboard', () => {
 
   it('still reports a failed RELEASE on the ordinary path, rather than swallowing it', async () => {
     // The mirror of the test above: releasing best-effort is for the failure path only. A press
-    // whose key is still down must not report success.
+    // whose key is still down must not report success — and it must be distinguishable from an
+    // ordinary drive failure, because the caller answers the two differently.
     const page = {
       keyboard: {
         press: () => Promise.resolve(),
@@ -278,6 +338,37 @@ describe('performGesture drives press through the real keyboard', () => {
     await expect(
       performGesture(page, ActionType.PRESS, NO_BOX, { key: 'Space', holdMs: 50 }, noSleep),
     ).rejects.toThrow('release failed');
+    await expect(
+      performGesture(page, ActionType.PRESS, NO_BOX, { key: 'Space', holdMs: 50 }, noSleep),
+    ).rejects.toMatchObject({ code: 'release_failed' });
+  });
+
+  it('releases the remaining keys even after the first release fails', async () => {
+    // A stuck `Control` is worse than a stuck letter, so a failure on the key must not skip the
+    // modifiers. Every release is attempted; the first failure is the one reported.
+    const released: string[] = [];
+    const page = {
+      keyboard: {
+        press: () => Promise.resolve(),
+        down: () => Promise.resolve(),
+        up: (key: string) => {
+          released.push(key);
+          return 'k' === key ? Promise.reject(new Error('release failed')) : Promise.resolve();
+        },
+      },
+    } as unknown as Page;
+
+    await expect(
+      performGesture(
+        page,
+        ActionType.PRESS,
+        NO_BOX,
+        { key: 'k', modifiers: ['Control'], holdMs: 50 },
+        noSleep,
+      ),
+    ).rejects.toMatchObject({ code: 'release_failed' });
+
+    expect(released).toEqual(['k', 'Control']);
   });
 
   it('keeps mouse actions reporting real mode too, so the field is not press-only', async () => {

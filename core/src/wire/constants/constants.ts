@@ -749,6 +749,14 @@ export const DriveErrorCode = {
   PLAYWRIGHT_MISSING: 'playwright_missing',
   LAUNCH_FAILED: 'launch_failed',
   NAVIGATE_FAILED: 'navigate_failed',
+  /**
+   * A key could not be RELEASED after it was pressed. Distinct from every other drive failure
+   * because the browser is left in an unknown state: the key may still be down. The caller must
+   * not answer that by replaying the press synthetically — the replay lands on top of a keyboard
+   * that is already holding something, which is exactly the corruption the release exists to
+   * prevent.
+   */
+  RELEASE_FAILED: 'release_failed',
 } as const;
 export type DriveErrorCode = (typeof DriveErrorCode)[keyof typeof DriveErrorCode];
 

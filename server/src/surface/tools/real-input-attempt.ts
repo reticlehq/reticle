@@ -19,10 +19,21 @@
  * the base64 4/3 inflation factor applied, so the encoded payload always fits in one WebSocket
  * frame.
  */
-import { ActionType, InputModeReason, ReticleCommand, TRANSPORT_LIMITS } from '@reticlehq/core';
+import {
+  ActionType,
+  DriveErrorCode,
+  InputModeReason,
+  ReticleCommand,
+  TRANSPORT_LIMITS,
+} from '@reticlehq/core';
 import type { Session } from '@/portal/session/session.js';
 import type { ElementBox, RealInputArgs } from '@/portal/input/real-input.js';
-import { boxCenter, isRealInputAction, unspellablePressReason } from '@/portal/input/real-input.js';
+import {
+  boxCenter,
+  DriveError,
+  isRealInputAction,
+  unspellablePressReason,
+} from '@/portal/input/real-input.js';
 import { assertDragNotDestructive, assertNotDestructive } from './act/act-danger.js';
 import { NATIVE_INPUT_ARG } from '@reticlehq/core';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
@@ -451,7 +462,16 @@ export async function tryRealInput(
         },
         settled: true,
       };
-    } catch {
+    } catch (error) {
+      // The ONE failure that must not fall back. Every other throw means the gesture did not
+      // happen, and the synthetic path is the honest answer. A release that failed means the
+      // gesture DID happen and the key may still be down — replaying it synthetically presses the
+      // same key a second time on top of a keyboard that is already holding something, which is
+      // the corruption the release exists to prevent. Refusing is the only answer that cannot
+      // make it worse.
+      if (error instanceof DriveError && error.code === DriveErrorCode.RELEASE_FAILED) {
+        throw error;
+      }
       // No skew re-throw here, unlike the pointer path below: this action has a working synthetic
       // route (see the skew check above), so the honest answer to a driver that threw is the
       // fallback, not a refusal.
