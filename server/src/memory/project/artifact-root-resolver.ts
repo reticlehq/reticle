@@ -51,6 +51,25 @@ function daemonSitsInAProject(daemonRoot: string): boolean {
 }
 
 /**
+ * The project the DAEMON ITSELF belongs to, when its directory declares one.
+ *
+ * Not the same question as `daemonSitsInAProject`: that one asks whether the tree invited Reticle in
+ * at all (either mark counts, including a bare `.reticle/` from a version that predates the config
+ * file), and this one asks WHICH project it is. The difference is the whole of #1244 — a daemon in
+ * repo A serving an app from a git worktree B belongs to A and is being asked about B.
+ *
+ * Read from the same candidate list the resolver already builds, so there is one answer to "where
+ * does this project live" rather than a second `.reticle.json` parser here. A daemon whose root was
+ * passed explicitly (`--root`, or an embedder's own `reticleRoot`) is not in that list and answers
+ * undefined, which is the safe direction: it cannot prove the named project is its own, so it
+ * declines the daemon root and the session goes to the unmatched bucket instead.
+ */
+function daemonOwnProjectId(daemonRoot: string): string | undefined {
+  const directory = dirname(daemonRoot);
+  return knownProjectCandidates().find((candidate) => candidate.directory === directory)?.projectId;
+}
+
+/**
  * Every project this machine knows the directory of: discovered `.reticle.json` files first, then
  * the user-level registry. Read on each call, since `init` can run in another terminal while the
  * daemon is up.
@@ -100,6 +119,10 @@ export function artifactRootResolver(
   daemonRoot: string,
 ): (projectId: ProjectId | undefined, origin?: string) => ArtifactRoot {
   const daemonIsProject = daemonSitsInAProject(daemonRoot);
+  // Resolved beside it and ONCE, for the same reason: a directory's `.reticle.json` does not change
+  // between two tabs connecting. Only read when the daemon really is in a project, since it is the
+  // sole thing that can license a write into the daemon's own tree.
+  const daemonProjectId = daemonIsProject ? daemonOwnProjectId(daemonRoot) : undefined;
   return (projectId, origin) => {
     const resolved = resolveArtifactRoot({
       projectId,
@@ -116,6 +139,7 @@ export function artifactRootResolver(
       daemonRoot,
       daemonIsProject,
       home: homedir(),
+      ...(daemonProjectId === undefined ? {} : { daemonProjectId }),
       ...(projectId === undefined ? {} : { projectId }),
       // Only reached when no project id survives the guard. Without it every app that never
       // stamped one shares a single directory -- and that directory holds the durable half, so one
@@ -125,6 +149,9 @@ export function artifactRootResolver(
     if (root !== daemonRoot) {
       log('artifact_root_unmatched', {
         projectId: projectId ?? null,
+        // The other half of the comparison, so a reader can tell "the daemon was a guest" from
+        // "the daemon is in a DIFFERENT project" without reading the config files by hand.
+        daemonProjectId: daemonProjectId ?? null,
         reason: resolved.reason,
         root,
       });

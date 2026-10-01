@@ -13,6 +13,7 @@ import { basename, join } from 'node:path';
 import { z } from 'zod';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { CLOUD_LINK_FILE, resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
+import { memoryReadUrl } from '@/memory/cloud/memory-scope.js';
 import { applyCredential, findCredential } from './auth/cloud-keystore.js';
 import { defaultProjectFor } from './project-name.js';
 import { RETICLE_CONFIG_BASENAME } from './ports/resolve/cli-port.js';
@@ -614,8 +615,25 @@ const cmdSync = async (argv: readonly string[]): Promise<number> => {
 /** `reticle push` — the name people already type. One cycle, same as `reticle sync`. */
 const cmdPush = async (): Promise<number> => cmdSync([]);
 
-/** Resolve THIS repo's linked cloud (url + project-scoped key). Throws a friendly error if not attached. */
-const repoCloud = async (): Promise<{ url: string; apiKey: string }> => {
+/**
+ * The linked project: its cloud, and the ID the link declares. Throws a friendly error when not
+ * attached.
+ *
+ * The id rides along for `reticle memory`, whose entire job is "what does THIS project know" and
+ * which was asking with nothing but the API key. A key covers a workspace, not a repo, so on a
+ * workspace with two repos it could print a sibling's established knowledge under this project's
+ * heading with no way for the reader to tell. See `memory-scope.ts`.
+ *
+ * The other `repoCloud()` callers below still read with the key alone. That is not an oversight
+ * being papered over: this change is scoped to the memory read, and the rest each need their own
+ * look at what the platform filters on.
+ */
+const repoCloud = async (): Promise<{
+  url: string;
+  apiKey: string;
+  /** `null` when the link declared none — `resolveProjectCloud`'s own spelling, passed through. */
+  projectId: string | null;
+}> => {
   const fs = createNodeFileSystem();
   const cloud = await resolveProjectCloud(
     fs,
@@ -627,7 +645,7 @@ const repoCloud = async (): Promise<{ url: string; apiKey: string }> => {
     throw new Error(
       cloud.reason ?? 'cloud not attached here: run `reticle link`, or set RETICLE_API_KEY',
     );
-  return cloud.config;
+  return { ...cloud.config, projectId: cloud.projectId };
 };
 
 /** `reticle runs` — the linked project's recent run artifacts (the key scopes it server-side). */
@@ -704,15 +722,16 @@ const cmdIssues = async (argv: readonly string[]): Promise<number> => {
  * whole corpus to answer one question is the cost the sharded store was built to avoid.
  */
 const cmdMemory = async (argv: readonly string[]): Promise<number> => {
-  const { url, apiKey } = await repoCloud();
+  const { url, apiKey, projectId } = await repoCloud();
   const at = argv.indexOf('--subject');
   const subject = -1 === at ? undefined : argv[at + 1];
   if (-1 !== at && subject === undefined) {
     err('usage: reticle memory [--subject <name>]');
     return 2;
   }
-  const query = subject === undefined ? '' : `?subject=${encodeURIComponent(subject)}`;
-  emit(await api('GET', `${url}/v1/memory${query}`, apiKey));
+  // Scoped to the LINKED project. Without it this printed whatever the key covered, which on a
+  // workspace with two repos is somebody else's knowledge under this project's heading.
+  emit(await api('GET', memoryReadUrl(url, { projectId, subject }), apiKey));
   return 0;
 };
 

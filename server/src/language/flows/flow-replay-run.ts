@@ -54,6 +54,7 @@ import type { DeviationReport } from '@/memory/journal/deviation-report.js';
 import { homedir } from 'node:os';
 import { cloudFetch, syncRunRecordToCloud, SyncOutcome } from '@/memory/cloud/cloud-sync.js';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
+import { keepOwnProject, memoryReadUrl } from '@/memory/cloud/memory-scope.js';
 import { consultSubjectFor, selectConsulted, type ConsultedMemory } from './flow-memory-consult.js';
 import { log } from '@/log.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
@@ -188,7 +189,10 @@ async function consultProjectMemory(
     // session, and it is invisible: the feature simply never appears.
     const cloud = await resolveProjectCloud(deps.fs, root, homedir(), process.env);
     if (null === cloud.config || !cloud.policy.memory) return undefined;
-    const url = `${cloud.config.url}/v1/memory?subject=${encodeURIComponent(subject)}`;
+    // Scoped to the linked project. The key covers a whole workspace, so a read that named no
+    // project could be answered with ANOTHER repo's knowledge and this replay would carry it into a
+    // verdict as if it were this app's — see `memory-scope.ts` for the whole shape.
+    const url = memoryReadUrl(cloud.config.url, { projectId: cloud.projectId, subject });
     const res = await cloudFetch(url, {
       method: 'GET',
       headers: { authorization: `Bearer ${cloud.config.apiKey}` },
@@ -201,7 +205,9 @@ async function consultProjectMemory(
     const body = (await res.json()) as { entries?: unknown } | undefined;
     const entries = body?.entries;
     if (!Array.isArray(entries)) return undefined;
-    const picked = selectConsulted(entries as { statement?: unknown; status?: unknown }[]);
+    // Dropped here too, for as long as the platform does not filter on the parameter above.
+    const own = keepOwnProject(entries, cloud.projectId);
+    const picked = selectConsulted(own as { statement?: unknown; status?: unknown }[]);
     return 0 === picked.length ? undefined : picked;
   } catch {
     // See the note above: never the reason a verdict fails to return.
@@ -807,8 +813,9 @@ export async function replayNamedFlow(
    * moment somebody needs to know what this feature is supposed to do and who established it. A
    * knowledge base you only see when everything is already fine is decoration.
    */
-  // No projectId argument: the API key is already bound to one project server-side, so passing a
-  // second opinion about which project this is would only create a way for the two to disagree.
+  // The scope comes from the link file, inside `consultProjectMemory`. It is NOT the API key's
+  // job: a key covers a whole workspace and a workspace holds more than one repo, so "bound to one
+  // project server-side" was an assumption that handed this replay another app's knowledge.
   const knows = await consultProjectMemory(deps, loaded.value, replayRoot);
   const failed = steps.find((step) => !step.ok && step.drift === undefined);
   if (failed !== undefined) {

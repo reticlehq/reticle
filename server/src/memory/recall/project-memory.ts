@@ -13,6 +13,7 @@
  */
 import { cloudFetch } from '@/memory/cloud/cloud-sync.js';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
+import { keepOwnProject, memoryReadUrl } from '@/memory/cloud/memory-scope.js';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 
 /** Named so a read from the tool surface is distinguishable from the CLI's and from replay's. */
@@ -80,9 +81,15 @@ export async function readProjectMemory(
   if (null === cloud.config) return { ok: false, reason: MemoryUnavailable.NOT_LINKED };
   if (!cloud.policy.memory) return { ok: false, reason: MemoryUnavailable.DISABLED };
 
-  const query = opts.subject === undefined ? '' : `?subject=${encodeURIComponent(opts.subject)}`;
+  // Scoped to the LINKED project, not to whatever the key happens to cover. A workspace can hold
+  // more than one repo, and a read that named no project could be answered with another one's
+  // established knowledge — indistinguishable from this project's, and acted on. See memory-scope.
+  const url = memoryReadUrl(cloud.config.url, {
+    projectId: cloud.projectId,
+    subject: opts.subject,
+  });
   try {
-    const res = await cloudFetch(`${cloud.config.url}/v1/memory${query}`, {
+    const res = await cloudFetch(url, {
       method: 'GET',
       headers: {
         authorization: `Bearer ${cloud.config.apiKey}`,
@@ -99,7 +106,12 @@ export async function readProjectMemory(
     const body = (await res.json()) as { entries?: unknown } | undefined;
     const entries = body?.entries;
     if (!Array.isArray(entries)) return { ok: false, reason: MemoryUnavailable.UNREACHABLE };
-    const known = entries.map(asKnown).filter((k): k is KnownThing => k !== null);
+    // And drop what says it belongs elsewhere, for as long as the platform does not filter on the
+    // parameter above. `total` is counted AFTER this, so a truncated list still tells the truth
+    // about how many of THIS project's statements there were.
+    const known = keepOwnProject(entries, cloud.projectId)
+      .map(asKnown)
+      .filter((k): k is KnownThing => k !== null);
     return {
       ok: true,
       subject: opts.subject ?? null,

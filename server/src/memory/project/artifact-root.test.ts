@@ -262,6 +262,73 @@ describe('a root for a session whose project we cannot name', () => {
     ).toBe('/repo/app/.reticle');
   });
 
+  /**
+   * A worktree's flows and intents land in the main checkout (#1244).
+   *
+   * `daemonIsProject` answers "is the daemon sitting in SOME Reticle project", and the code below
+   * read it as "this session's project". Run the daemon in repo A and connect an app from a git
+   * worktree B that declares its OWN projectId: B is a named project discovery cannot see (it walks
+   * out from A's cwd and never crosses into a sibling checkout), so `resolveArtifactRoot` answers
+   * NO_MATCH, and the old unconditional `if (daemonIsProject) return daemonRoot` handed B's ledger
+   * to A. Two projects, one `.reticle/`, and the returned path named A.
+   */
+  it('refuses the daemon root for a named project that is NOT the daemon’s own', () => {
+    const root = unmatchedRoot({
+      daemonRoot: '/repo/main/.reticle',
+      daemonIsProject: true,
+      daemonProjectId: asProjectId('main-repo-1a2b'),
+      home: '/home/u',
+      projectId: asProjectId('worktree-b-3c4d'),
+    });
+
+    expect(root, 'the main checkout must not receive a worktree’s artifacts').not.toBe(
+      '/repo/main/.reticle',
+    );
+    expect(root).toBe(join('/home/u', ReticleDir.ROOT, UNMATCHED_SUBDIR, 'worktree-b-3c4d'));
+  });
+
+  it('still answers with the daemon root when the session IS the daemon’s own project', () => {
+    expect(
+      unmatchedRoot({
+        daemonRoot: '/repo/main/.reticle',
+        daemonIsProject: true,
+        daemonProjectId: asProjectId('main-repo-1a2b'),
+        home: '/home/u',
+        projectId: asProjectId('main-repo-1a2b'),
+      }),
+    ).toBe('/repo/main/.reticle');
+  });
+
+  /**
+   * The pre-2.0 SDK names no project, so there is nothing to disagree with. A daemon in its own
+   * project keeps writing to itself, which is the case this fallback was written for.
+   */
+  it('keeps the daemon root when the session named no project at all', () => {
+    expect(
+      unmatchedRoot({
+        daemonRoot: '/repo/main/.reticle',
+        daemonIsProject: true,
+        daemonProjectId: asProjectId('main-repo-1a2b'),
+        home: '/home/u',
+      }),
+    ).toBe('/repo/main/.reticle');
+  });
+
+  /**
+   * The daemon has a `.reticle/` but no `.reticle.json` — it was invited in by an older Reticle,
+   * or somebody deleted the config. It cannot prove the named project is its own, so it declines.
+   */
+  it('declines for a named project when the daemon’s own id is unknown', () => {
+    const root = unmatchedRoot({
+      daemonRoot: '/repo/main/.reticle',
+      daemonIsProject: true,
+      home: '/home/u',
+      projectId: asProjectId('worktree-b-3c4d'),
+    });
+
+    expect(root).toBe(join('/home/u', ReticleDir.ROOT, UNMATCHED_SUBDIR, 'worktree-b-3c4d'));
+  });
+
   it('keeps out of a directory that never asked for Reticle', () => {
     expect(
       unmatchedRoot({
