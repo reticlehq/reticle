@@ -75,7 +75,11 @@ export function restoreInstallPackages(directory, root) {
   const tarballs = [];
   for (const pkg of expected) {
     const tarball = resolve(directory, pkg.filename);
-    const listing = execFileSync('tar', ['-tzf', tarball], {
+    // GNU tar treats the colon in a Windows drive path as a remote archive. Stdin keeps the
+    // verified bytes local regardless of which tar the runner puts on PATH.
+    const archive = readFileSync(tarball);
+    const listing = execFileSync('tar', ['-tzf', '-'], {
+      input: archive,
       encoding: 'utf8',
       maxBuffer: 16 * 1024 * 1024,
     });
@@ -96,7 +100,10 @@ export function restoreInstallPackages(directory, root) {
           list,
           members.filter((member) => member.startsWith('package/dist/')).join('\n') + '\n',
         );
-        execFileSync('tar', ['-xzf', tarball, '-C', target, '--strip-components=1', '-T', list]);
+        execFileSync('tar', ['-xzf', '-', '--strip-components=1', '-T', list], {
+          cwd: target,
+          input: archive,
+        });
       } finally {
         rmSync(selection, { recursive: true, force: true });
       }

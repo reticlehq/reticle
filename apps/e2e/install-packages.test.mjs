@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   packageDigest,
   publishablePackages,
+  restoreInstallPackages,
   validatePackageManifest,
 } from './install-packages.mjs';
 
@@ -36,6 +38,40 @@ it.skipIf(process.platform === 'win32')(
     }
   },
 );
+
+it('restores packed builds, removes stale emitted files, and preserves checkout sources', () => {
+  const scratch = mkdtempSync(join(tmpdir(), 'reticle-package-restore-'));
+  const root = join(scratch, 'checkout');
+  const artifacts = join(scratch, 'artifacts');
+  const packed = join(scratch, 'packed');
+  try {
+    mkdirSync(join(root, 'core/dist'), { recursive: true });
+    mkdirSync(artifacts);
+    mkdirSync(join(packed, 'package/dist'), { recursive: true });
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'fixture', private: true }));
+    writeFileSync(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - core\n');
+    writeFileSync(join(root, 'core/package.json'), JSON.stringify({ name: '@fixture/core', version: '1.0.0' }));
+    writeFileSync(join(root, 'core/source.js'), 'checkout source');
+    writeFileSync(join(root, 'core/dist/stale.js'), 'stale build');
+    writeFileSync(join(packed, 'package/dist/index.js'), 'packed build');
+    writeFileSync(join(packed, 'package/source.js'), 'packed source');
+    execFileSync('git', ['init', '--quiet'], { cwd: root });
+    execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', '-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '--quiet', '-m', 'fixture'], { cwd: root });
+    const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+    const packages = publishablePackages(root);
+    const archive = execFileSync('tar', ['-czf', '-', 'package'], { cwd: packed });
+    writeFileSync(join(artifacts, packages[0].filename), archive);
+    writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({
+      sha, packages: [{ ...packages[0], sha256: packageDigest(archive) }],
+    }));
+    expect(restoreInstallPackages(artifacts, root)).toEqual([join(artifacts, packages[0].filename)]);
+    expect(readFileSync(join(root, 'core/dist/index.js'), 'utf8')).toBe('packed build');
+    expect(existsSync(join(root, 'core/dist/stale.js'))).toBe(false);
+    expect(readFileSync(join(root, 'core/source.js'), 'utf8')).toBe('checkout source');
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});
 
 describe('the install matrix consumes only complete artifacts from its own commit', () => {
   const expected = [
