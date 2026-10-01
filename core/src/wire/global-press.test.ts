@@ -48,6 +48,20 @@ describe('which press is a document key', () => {
     expect(isGlobalPress({ keys: [7, null] }), 'nor does a list of unusable names').toBe(false);
   });
 
+  it('a ONE-element `keys` answers exactly as the one-key spelling does', () => {
+    // Judging the list by its LENGTH let `{ keys: ['Enter'] }` omit the ref that `{ key: 'Enter' }` is
+    // refused without. Enter is the key that must never be a document key unreferenced: it lands on
+    // whatever holds focus, and inside a form on a focused field that submits it.
+    expect(isGlobalPress({ keys: ['Enter'] })).toBe(false);
+    expect(isGlobalPress({ keys: ['a'] })).toBe(false);
+    expect(isGlobalPress({ keys: ['Escape'] })).toBe(true);
+    expect(isGlobalPress({ keys: ['Tab'] })).toBe(true);
+    // The same answer either way, which is the invariant rather than any one of the four lines.
+    for (const key of ['Enter', 'a', 'Escape', 'Tab']) {
+      expect(isGlobalPress({ keys: [key] }), `${key} via keys`).toBe(isGlobalPress({ key }));
+    }
+  });
+
   it('Enter without modifiers is NOT global — it submits the focused control', () => {
     expect(isGlobalPress({ text: 'Enter' })).toBe(false);
     expect(isGlobalPress({}), 'the default key is Enter').toBe(false);

@@ -105,10 +105,24 @@ function hasModifiers(args: Record<string, unknown>): boolean {
  * `keys` counts even though `hasModifiers` cannot see it: a multi-key press is a sequence held at
  * the page, never aimed at one control, and without this the documented `keys` spelling would be
  * refused with "pass a ref" before anything could route it.
+ *
+ * A ONE-element `keys` is judged by the same rule as the one-key spelling rather than by its length:
+ * it names the same key, so it owes the same answer. Counting the list instead let `{ keys: ["Enter"] }`
+ * pass where `{ key: "Enter" }` is refused.
  */
 export function isGlobalPress(args: Record<string, unknown>): boolean {
   if (hasModifiers(args)) return true;
-  if (0 < pressKeysFromArgs(args).length) return true;
+  const keys = pressKeysFromArgs(args);
+  // SEVERAL keys held together is a sequence at the page, never aimed at one control.
+  if (1 < keys.length) return true;
+  // ONE key in `keys` is the same press as naming it in `key`/`text`, so it must answer the same
+  // question. Reading the list by LENGTH alone let `{ keys: ["Enter"] }` omit a ref, which the
+  // one-key spelling refuses on purpose: Enter lands on whatever holds focus, and on a focused field
+  // inside a form that submits it. The caller named a list, not a different key.
+  if (1 === keys.length) {
+    const only = keys[0];
+    return only !== undefined && GLOBAL_PRESS_KEY_SET.has(only.toLowerCase());
+  }
   return GLOBAL_PRESS_KEY_SET.has(pressKeyFromArgs(args).toLowerCase());
 }
 
