@@ -28,7 +28,33 @@
  *     limit instead of an early exit.
  */
 
-import { EventType, NetInitiator, isDevToolingUrl, isForeignTraffic } from '@reticlehq/core';
+import {
+  EventType,
+  NetInitiator,
+  isDevToolingUrl,
+  isForeignTraffic,
+  urlForMatch,
+} from '@reticlehq/core';
+
+/**
+ * What a URL is matched against, as opposed to what is shown.
+ *
+ * Redaction runs at emit time and rewrites a sensitive path segment in place: `/verify/refresh-token`
+ * becomes `/verify/[REDACTED]`, and the original survives only in `urlRaw`. A project that DECLARED
+ * `/verify/refresh-token` in `.reticle.json` `background` is matched with `String.includes`, so
+ * classifying on the displayed URL silently put the endpoint back into the in-flight count and held
+ * the settle window open — the exact defect this file exists to prevent, reached through the one
+ * field the classifier did not consult.
+ *
+ * The same division every other URL comparison in the product already uses (`urlContains`, `netCall`):
+ * match against `urlForMatch`, DISCLOSE `url`. The transcript keeps the redacted spelling.
+ */
+const matchUrlOf = (data: Record<string, unknown>): string | undefined => {
+  // `urlForMatch` answers with the empty string when the event carries no URL at all, and every
+  // classifier below takes `undefined` to mean "nothing to judge". Fails OPEN either way.
+  const url = urlForMatch(data);
+  return 0 === url.length ? undefined : url;
+};
 
 /**
  * The dev toolchain talking about ITSELF is not the app finishing its work.
@@ -38,8 +64,7 @@ import { EventType, NetInitiator, isDevToolingUrl, isForeignTraffic } from '@ret
  * deliberately disabled control — no state change, no storage change, zero application requests —
  * was graded on the strength of a Next webpack hot-update the same payload printed as ignored.
  */
-const isDevTooling = (data: Record<string, unknown>): boolean =>
-  isDevToolingUrl('string' === typeof data['url'] ? data['url'] : undefined);
+const isDevTooling = (data: Record<string, unknown>): boolean => isDevToolingUrl(matchUrlOf(data));
 
 /**
  * Somebody else's host is not the app finishing its work.
@@ -63,12 +88,7 @@ const isForeign = (
   data: Record<string, unknown>,
   appOrigin: string | undefined,
   background: readonly string[],
-): boolean =>
-  isForeignTraffic(
-    'string' === typeof data['url'] ? data['url'] : undefined,
-    appOrigin,
-    background,
-  );
+): boolean => isForeignTraffic(matchUrlOf(data), appOrigin, background);
 
 /**
  * A departure records where the browser was SENT, not a request whose result we will see — the

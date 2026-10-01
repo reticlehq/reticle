@@ -457,7 +457,10 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
       const contentType = observeValue(() => res.headers.get('content-type')) ?? null;
       // The request is done; the BODY may not be. Watch it so settle cannot pass mid-stream.
       observeSafely(() => {
-        watchStreamedBody(emit, res, id, url, contentType, res.headers.get('content-length'));
+        // The whole field pair, not `url` alone: the stream record is classified by the same
+        // `urlForMatch` the pending record is, and dropping the raw copy here put a redacted
+        // endpoint back into the settle count through the stream half.
+        watchStreamedBody(emit, res, id, urlFields, contentType, res.headers.get('content-length'));
       });
       reportedNetUrls.add(rawUrl);
       const emitRequest = (responseBodyFields: Record<string, unknown>): void => {

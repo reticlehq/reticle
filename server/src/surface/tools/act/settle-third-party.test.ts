@@ -96,3 +96,59 @@ describe('a third-party request does not keep the window unsettled', () => {
     expect(inFlightRequestIds(events, APP)).toEqual([]);
   });
 });
+
+/**
+ * A DECLARED endpoint whose path was redacted must still be recognised.
+ *
+ * Redaction runs at emit time, so a declared pattern naming a public path segment that the heuristic
+ * rewrites (`/verify/refresh-token` -> `/verify/[REDACTED]`) never matches the URL this file reads.
+ * The endpoint goes back into the in-flight count and holds the act settle-wait open — the exact
+ * defect this branch exists to fix, reached through the one field the classifier did not consult.
+ *
+ * `urlForMatch` is the field that exists for this: the displayed URL is what the agent reads, and
+ * `urlRaw` is the match haystack. Every other URL comparison in the product already splits them that
+ * way (`urlContains`, `netCall`), so classifying on the displayed URL here was the odd one out.
+ */
+describe('a declared background endpoint is recognised through redaction', () => {
+  const redacted = (
+    id: string,
+    url: string,
+    urlRaw: string,
+  ): { type: string; data: Record<string, unknown> } => ({
+    type: EventType.NET_PENDING,
+    data: { id, url, urlRaw, method: 'POST' },
+  });
+
+  it('drops it when the declared pattern only matches the RAW url', () => {
+    const events = [
+      redacted(
+        't1',
+        'http://localhost:4312/verify/[REDACTED]',
+        'http://localhost:4312/verify/refresh-token',
+      ),
+    ];
+    expect(inFlightRequestIds(events, APP, ['/verify/refresh-token'])).toEqual([]);
+  });
+
+  it('still discloses the DISPLAYED url, so the transcript never carries the raw one', () => {
+    const events = [
+      redacted(
+        't1',
+        'http://localhost:4312/verify/[REDACTED]',
+        'http://localhost:4312/verify/refresh-token',
+      ),
+    ];
+    expect(inFlightRequestLabels(events, APP, ['/verify/refresh-token'])).toEqual([]);
+  });
+
+  it('keeps a redacted endpoint the project did NOT declare', () => {
+    const events = [
+      redacted(
+        't1',
+        'http://localhost:4312/verify/[REDACTED]',
+        'http://localhost:4312/verify/refresh-token',
+      ),
+    ];
+    expect(inFlightRequestIds(events, APP, ['/api/analytics'])).toEqual(['t1']);
+  });
+});

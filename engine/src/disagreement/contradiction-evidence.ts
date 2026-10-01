@@ -153,6 +153,13 @@ export function isSameDocumentHashAnchor(event: ReticleEvent): boolean {
  * over a request that never settled". Every app that logs one dev warning got a false negative on
  * every action. The overlay's own 404s and duplicate fetches are the same story on other checks,
  * which is why the split happens ONCE here rather than in the one check that reported it.
+ *
+ * CLASSIFY on `urlForMatch`, DISCLOSE `url`. Redaction rewrites a sensitive path segment at emit
+ * time (`/verify/refresh-token` -> `/verify/[REDACTED]`) and keeps the original only in `urlRaw`, so
+ * a project's DECLARED `background` pattern — matched with `String.includes` — never matched what
+ * this read. The endpoint went back in among the app's own traffic and every rule below judged it,
+ * which is the half of the same defect the settle wait had. Disclosure deliberately keeps the
+ * DISPLAYED spelling: the raw one is the match haystack, not something to project into a transcript.
  */
 export function splitForeignTraffic(
   events: readonly ReticleEvent[],
@@ -165,11 +172,13 @@ export function splitForeignTraffic(
   const ignored: string[] = [];
   const app = events.filter((e) => {
     if (!NET_TYPES.has(e.type)) return true;
-    const url = asString(e.data['url']);
+    const matchUrl = urlForMatch(e.data);
+    const shown = asString(e.data['url']);
     // Somebody else's code, twice over: the toolchain's own channel, and any site that is not the
     // app under test. Neither can answer the question every rule below asks.
-    if (!isDevToolingUrl(url) && !isForeignTraffic(url, appOrigin, background)) return true;
-    if (url !== undefined && !ignored.includes(url)) ignored.push(url);
+    const match = 0 === matchUrl.length ? undefined : matchUrl;
+    if (!isDevToolingUrl(match) && !isForeignTraffic(match, appOrigin, background)) return true;
+    if (shown !== undefined && !ignored.includes(shown)) ignored.push(shown);
     return false;
   });
   return { app, ignored };

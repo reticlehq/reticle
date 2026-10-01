@@ -117,6 +117,12 @@ const netStreamSchema = z
     transport: z.nativeEnum(StreamTransport),
     direction: z.nativeEnum(StreamDirection),
     url: z.string(),
+    // The match haystack, exactly as NET_PENDING carries it. A stream record whose URL was redacted
+    // is classified by the same `urlForMatch` every other consumer uses; without the raw copy here
+    // the stream half of one request and the pending half disagree about whose traffic it is, and a
+    // declared `background` endpoint comes back into the settle count through the one field the
+    // classifier could not see.
+    urlRaw: z.string().optional(),
   })
   .passthrough();
 

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { EventType } from '@reticlehq/core';
 import { installNetwork } from './network.js';
 import type { Emit, Teardown } from './types.js';
 
@@ -39,6 +40,67 @@ function neverEndingResponse(contentType: string): Response {
   };
   return res as unknown as Response;
 }
+
+/**
+ * A chunked response whose body is readable — so the stream watcher actually emits.
+ *
+ * `application/json` with NO `content-length` is the chunked case `isStreamingBody` exists for; a
+ * `text/event-stream` would be skipped outright as ENDLESS_BY_DESIGN and never reach the watcher.
+ */
+function readableStreamResponse(): Response {
+  const bodyOf = (): { getReader: () => { read: () => Promise<{ done: boolean }> } } => ({
+    getReader: () => ({ read: () => Promise.resolve({ done: true }) }),
+  });
+  return {
+    headers: {
+      get: (k: string) => ('content-type' === k.toLowerCase() ? 'application/json' : null),
+    },
+    status: 200,
+    ok: true,
+    body: bodyOf(),
+    clone: () => ({ body: bodyOf() }),
+  } as unknown as Response;
+}
+
+/**
+ * A stream record has to carry the SAME two URL fields the pending record does.
+ *
+ * Redaction rewrites a sensitive path segment at emit time and keeps the original in `urlRaw`, and
+ * every consumer that CLASSIFIES a URL reads `urlForMatch` — the pending record, `urlContains`, the
+ * contradiction rules' `netCall`. The stream record was the one place the raw copy was dropped: the
+ * fetch path passed `urlFields.url` alone to the watcher, while the WebSocket and EventSource paths
+ * spread the whole object. So a declared background endpoint whose path was redacted came back into
+ * the settle count through the stream half, and `settled` stayed false with the request excluded
+ * everywhere else — the defect the two settle paths were just made to agree on, re-entered by a
+ * third field.
+ */
+describe('the stream record carries the raw url alongside the displayed one', () => {
+  it('keeps urlRaw on NET_STREAM, so a redacted endpoint stays classifiable', async () => {
+    vi.stubGlobal('fetch', () => Promise.resolve(readableStreamResponse()));
+    const { emit, events } = collect();
+    teardowns.push(installNetwork(emit, { captureBodies: true }));
+
+    await window.fetch('/verify/refresh-token');
+    await flushBody();
+
+    const stream = events.find((e) => EventType.NET_STREAM === e.type);
+    expect(stream?.data['url']).toContain('[REDACTED]');
+    expect(stream?.data['urlRaw']).toContain('refresh-token');
+  });
+
+  it('omits urlRaw entirely when nothing was redacted, so an ordinary stream pays nothing', async () => {
+    vi.stubGlobal('fetch', () => Promise.resolve(readableStreamResponse()));
+    const { emit, events } = collect();
+    teardowns.push(installNetwork(emit, { captureBodies: true }));
+
+    await window.fetch('/api/chat');
+    await flushBody();
+
+    const stream = events.find((e) => EventType.NET_STREAM === e.type);
+    expect(stream?.data['url']).toBe('/api/chat');
+    expect('urlRaw' in (stream?.data ?? {})).toBe(false);
+  });
+});
 
 describe('body capture must not block the host app', () => {
   it('returns an SSE response to the app instead of waiting for the stream to end', async () => {

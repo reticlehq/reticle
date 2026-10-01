@@ -42,7 +42,7 @@ export function watchStreamedBody(
   emit: Emit,
   res: Response,
   id: string,
-  url: string,
+  urlFields: Readonly<Record<string, unknown>>,
   contentType: string | null,
   contentLength: string | null,
 ): void {
@@ -63,7 +63,7 @@ export function watchStreamedBody(
   emit(EventType.NET_STREAM, {
     transport: StreamTransport.FETCH,
     direction: StreamDirection.OPEN,
-    url,
+    ...urlFields,
     id,
   });
   void (async () => {
@@ -95,7 +95,7 @@ export function watchStreamedBody(
     emit(EventType.NET_STREAM, {
       transport: StreamTransport.FETCH,
       direction: StreamDirection.CLOSE,
-      url,
+      ...urlFields,
       id,
       ...(gaveUp ? { gaveUp: true } : {}),
     });

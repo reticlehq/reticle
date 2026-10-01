@@ -99,6 +99,35 @@ describe('evalSettled — somebody else’s traffic is not the app finishing its
     expect(ignoredForeignOf(r)).toEqual([]);
   });
 
+  /**
+   * Redaction rewrites a sensitive path segment at emit time and keeps the original only in
+   * `urlRaw`, so classifying on the displayed url let a declared endpoint back into the count —
+   * through the one field the classifier did not consult. `urlForMatch` is the field that exists
+   * for this, and every other url comparison in the product already splits them that way.
+   */
+  it('recognises a declared endpoint whose path was redacted', () => {
+    const redacted = pending('t1', `${APP}verify/[REDACTED]`, {
+      urlRaw: `${APP}verify/refresh-token`,
+    });
+    expect(
+      evalSettled([redacted], settled, LONG_AFTER, {
+        appUrl: APP,
+        background: ['/verify/refresh-token'],
+      }).pass,
+    ).toBe(true);
+  });
+
+  it('discloses the DISPLAYED url for it, never the raw one', () => {
+    const redacted = pending('t1', `${APP}verify/[REDACTED]`, {
+      urlRaw: `${APP}verify/refresh-token`,
+    });
+    const r = evalSettled([redacted], settled, LONG_AFTER, {
+      appUrl: APP,
+      background: ['/verify/refresh-token'],
+    });
+    expect(ignoredForeignOf(r).join(' ')).not.toContain('refresh-token');
+  });
+
   // ── over-exclusion guard ──────────────────────────────────────────────────────────────────────
   it('still blocks on the app’s OWN request, foreign traffic alongside it or not', () => {
     const r = evalSettled(
