@@ -938,9 +938,8 @@ describe('the request itself', () => {
 /*
  * A run can change after it was sent. A session's live drive run is rewritten after every verdict,
  * under the same id, so the server held the first few verdicts and never saw the rest: the send was
- * decided by id alone, and an id the server already had was never sent again. Measured on a real
- * dashboard: a tab's run pushed at 14:52 with 5 checks, then another hour of verdicts in the same
- * tab that never reached it. The server upserts a run by id, so sending it again is the fix; the
+ * decided by id alone, and an id the server already had was never sent again, so every later
+ * verdict in that tab stayed on the machine. The server upserts a run by id, so sending it again is the fix; the
  * machine remembers what it sent so it can tell a changed run from one it already delivered.
  */
 describe('a run that changed after it was sent', () => {
@@ -978,7 +977,7 @@ describe('a run that changed after it was sent', () => {
 
   /*
    * A machine upgraded onto this has never hashed anything, and some of what the server holds from
-   * it is already stale: the run that exposed this was pushed with 1 check and held 5 on disk. So a
+   * it may already be stale: a run sent before it gained its later verdicts. So a
    * run with no record is sent once, and recorded. Taking it as a baseline instead would leave exactly
    * that run wrong forever, since a closed tab never changes again. It costs one re-send of what
    * retention keeps, once; skipping costs the data.

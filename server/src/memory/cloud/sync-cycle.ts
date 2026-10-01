@@ -424,8 +424,8 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
         if ('string' === typeof hash) recorded[id] = hash;
     /*
      * Changed means no record, or a record that differs. No record has to count: a machine upgraded
-     * onto this holds runs the server has in an older version (measured: pushed with 1 check, 5 on
-     * disk), and a tab that has closed never changes again to earn a re-send. So each such run is
+     * onto this can hold runs the server has only in an older version, and a tab that has closed
+     * never changes again to earn a re-send. So each such run is
      * sent once and recorded, a one-time cost bounded by what retention keeps.
      */
     const delivered = (run: { runId: string; payload: unknown }): boolean =>
