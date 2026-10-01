@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — a run that kept changing after its first sync reached the platform only once.** A session's live drive run is rewritten after every verdict under the same id, and cloud sync decided what to send by id alone, so the dashboard showed a tab's first few checks and never the rest (measured: a run pushed with 1 check while 5 sat on disk). The machine now records the content hash of each run the platform accepted and sends a run again when its content no longer matches; the platform already upserts by id. A run with no record is sent once, so a machine upgrading onto this repairs the stale copies it already left behind. A refused run keeps its old record and is retried on the existing refusal rules.
