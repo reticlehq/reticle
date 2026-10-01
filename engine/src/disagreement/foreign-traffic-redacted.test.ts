@@ -23,14 +23,13 @@ import { splitForeignTraffic } from './contradiction-evidence.js';
 
 const APP = 'http://localhost:4312/deployments';
 
-const pending = (id: string, url: string, urlRaw?: string): ReticleEvent =>
-  ({
-    t: 1,
-    seq: 1,
-    type: EventType.NET_PENDING,
-    sessionId: 's',
-    data: { id, method: 'POST', url, ...(urlRaw === undefined ? {} : { urlRaw }) },
-  }) as unknown as ReticleEvent;
+const pending = (id: string, url: string, urlRaw?: string): ReticleEvent => ({
+  t: 1,
+  seq: 1,
+  type: EventType.NET_PENDING,
+  sessionId: 's',
+  data: { id, method: 'POST', url, ...(urlRaw === undefined ? {} : { urlRaw }) },
+});
 
 const REDACTED_URL = 'http://localhost:4312/verify/[REDACTED]';
 const RAW_URL = 'http://localhost:4312/verify/refresh-token';
