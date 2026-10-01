@@ -94,7 +94,7 @@ function asksAboutBody(predicate: unknown): boolean {
  * `captureNetworkBodies` — and the reporter could not change it, since it was not their project's
  * config to edit for an unrelated verification task. The action bought nothing that was not knowable
  * in advance, and on a drive that mutates state an action is not always repeatable. That is what
- * makes it a pre-flight rather than a better failure message.
+ * makes this a pre-flight rather than a better failure message.
  *
  * Refuses ONLY on a DECLARED `captureBodies: false`. An SDK too old to announce the setting sends
  * nothing, and refusing on silence would break every session predating the announcement for a clause
