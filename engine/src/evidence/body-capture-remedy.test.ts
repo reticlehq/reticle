@@ -49,4 +49,15 @@ describe('the body-capture remedy checks whether it applies', () => {
   it('handles a prerelease tag without deciding it is ancient', () => {
     expect(bodyCaptureRemedy('2.13.0-rc.1')).toContain('captureNetworkBodies');
   });
+
+  it('says bodies are redacted by key before they are kept, and links the list (#1268)', () => {
+    // Careful agents left capture off assuming bodies would store credentials, then got
+    // outcome_unread. The reassurance has to be on the remedy at the point it is read.
+    const message = bodyCaptureRemedy('2.13.1');
+    expect(message).toMatch(/redact/i);
+    // Names the kind of key redaction keys off, not a vague promise of safety.
+    expect(message).toMatch(/api[\s-]?key|secret|credential|authorization|token/i);
+    // Links the list so the claim is checkable rather than merely asserted.
+    expect(message).toContain('https://docs.reticle.sh/what-is-recorded');
+  });
 });

@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/engine`: the body-capture remedy said "turn it on" but never that bodies are redacted before they are kept.** When an assertion needed a response body and capture was off, careful agents left it off assuming bodies would store credentials, and then got `outcome_unread`. The remedy now states that bodies are redacted by key before retention — values under `apiKey`, `secret`, `credential`, `authorization`, any `*token` and more are masked — and links [What is recorded](https://docs.reticle.sh/what-is-recorded); the docs page carries the same sentence. Closes [#1268](https://github.com/reticlehq/reticle/issues/1268).

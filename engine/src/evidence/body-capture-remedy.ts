@@ -44,7 +44,9 @@ function isAtLeast(version: string, minimum: string): boolean {
 const ENABLE_IT =
   'Turn it on where your app calls connect(): `reticle.connect({ captureNetworkBodies: true })`, ' +
   'or for the Vite plugin `reticle({ captureNetworkBodies: true })` / VITE_RETICLE_CAPTURE_BODIES=1. ' +
-  'Then re-run the action.';
+  'Bodies are redacted by key before they are kept — values under names like `apiKey`, `secret`, ' +
+  '`credential`, `authorization` or any `*token` are masked, so credentials are not stored; see ' +
+  'https://docs.reticle.sh/what-is-recorded for what is redacted. Then re-run the action.';
 
 /**
  * The remedy for this session, or the honest statement that there is none.
@@ -92,7 +94,7 @@ function asksAboutBody(predicate: unknown): boolean {
  * `captureNetworkBodies` — and the reporter could not change it, since it was not their project's
  * config to edit for an unrelated verification task. The action bought nothing that was not knowable
  * in advance, and on a drive that mutates state an action is not always repeatable. That is what
- * makes this a pre-flight rather than a better failure message.
+ * makes it a pre-flight rather than a better failure message.
  *
  * Refuses ONLY on a DECLARED `captureBodies: false`. An SDK too old to announce the setting sends
  * nothing, and refusing on silence would break every session predating the announcement for a clause
