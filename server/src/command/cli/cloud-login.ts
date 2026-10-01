@@ -74,6 +74,7 @@ const writeSession = async (
   project: string | undefined,
   link: Linker,
   email?: string,
+  autoLink = true,
 ): Promise<void> => {
   await mkdir(join(home(), SESSIONS_DIR), { recursive: true });
   // Who signed in, so a flow saved on this machine can say which person made it (FlowFile.author).
@@ -95,7 +96,7 @@ const writeSession = async (
   await writeFile(sessionPath(home(), url), body);
   await writeFile(join(home(), SESSION_FILE), body);
   emit({ loggedIn: orgName, session: join(home(), SESSION_FILE) });
-  await linkAfterLogin(url, project, link);
+  if (autoLink) await linkAfterLogin(url, project, link);
 };
 
 /**
@@ -167,6 +168,7 @@ const cmdLoginDevice = async (
   explicitUrl: string | undefined,
   project: string | undefined,
   link: Linker,
+  autoLink: boolean,
 ): Promise<number> => {
   const url = baseUrl(null, explicitUrl);
   const started = DeviceStartSchema.parse(
@@ -183,7 +185,16 @@ const cmdLoginDevice = async (
       await api('POST', `${url}/v1/auth/device/token`, null, { deviceCode: started.deviceCode }),
     );
     if ('approved' === poll.status && poll.token !== undefined && poll.org !== undefined) {
-      await writeSession(url, poll.token, poll.org.name, poll.org.id, project, link);
+      await writeSession(
+        url,
+        poll.token,
+        poll.org.name,
+        poll.org.id,
+        project,
+        link,
+        undefined,
+        autoLink,
+      );
       return 0;
     }
     if ('pending' === poll.status) {
@@ -206,11 +217,15 @@ const cmdLoginDevice = async (
  * `reticle login` — browser device flow by default; `--email <e>` (or a positional email) keeps the
  * headless two-step code path for CI/servers where opening a browser makes no sense.
  */
-export const cmdLogin = async (argv: readonly string[], link: Linker): Promise<number> => {
+export const cmdLogin = async (
+  argv: readonly string[],
+  link: Linker,
+  autoLink = true,
+): Promise<number> => {
   const f = flags(argv);
   const positional = argv[0] !== undefined && !argv[0].startsWith('--') ? argv[0] : undefined;
   const email = f['email'] ?? positional;
-  if (email === undefined) return cmdLoginDevice(f['url'], f['project'], link);
+  if (email === undefined) return cmdLoginDevice(f['url'], f['project'], link, autoLink);
   const org = f['org'];
   const url = baseUrl(null, f['url']);
 
@@ -234,7 +249,16 @@ export const cmdLogin = async (argv: readonly string[], link: Linker): Promise<n
   const parsed = LoginSchema.parse(
     await api('POST', `${url}/v1/auth/login`, null, { email, code }),
   );
-  await writeSession(url, parsed.token, parsed.org.name, parsed.org.id, f['project'], link, email);
+  await writeSession(
+    url,
+    parsed.token,
+    parsed.org.name,
+    parsed.org.id,
+    f['project'],
+    link,
+    email,
+    autoLink,
+  );
   return 0;
 };
 

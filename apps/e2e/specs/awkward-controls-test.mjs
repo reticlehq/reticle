@@ -65,7 +65,7 @@ const T = (n, a = {}) =>
 
 const b = await chromium.launch({ headless: true });
 const p = await b.newPage();
-await p.goto(APP_URL);
+await p.goto(APP_URL, { waitUntil: 'domcontentloaded' });
 await waitForSession(() => server.bridge.sessions.list(), isBench, {
   what: 'the bench-app session for the awkward-controls fixture',
 });

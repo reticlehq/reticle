@@ -1,7 +1,0 @@
-### Fixed
-
-- **`@reticlehq/vite-plugin` + `@reticlehq/next` — honor `RETICLE_PORT`.** Custom-port web and desktop apps now connect to the port selected by the CLI, even while an older daemon remains registered. Invalid environment values retain the configured fallback.
-- **`@reticlehq/next` + `@reticlehq/server` — honor the state directory override.** Next discovers daemons in `RETICLE_STATE_DIR` independently of the pairing-token directory, and MCP proxy diagnostics now follow the same writable state location as daemon logs.
-- **`reticle-tauri` — hide headless windows on macOS 14+.** Disable WebKit background throttling before hiding the loaded window, so commands and captures stay available after idle time without an offscreen window being moved back onto the desktop. Older macOS versions retain the existing fallback.
-- **`@reticlehq/server` — retain ownership of Astro dev servers.** When Reticle starts the dev server, suppress Astro’s automatic agent-terminal backgrounding so handover records and cleanup keep pointing at the live supervised process. Re-running init can reuse or restart the server it started.
-- **Development and verification — dependency security and test isolation.** Update vulnerable dependencies; isolate test bridges and daemon state; preserve unrelated processes during cleanup. Conformance negative controls no longer overwrite the web results used for desktop comparison.

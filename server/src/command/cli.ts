@@ -702,6 +702,24 @@ export function main(): void {
       process.stdout.write(`${CLI_USAGE}\n`);
       return;
     }
+    if ('connect' === argv[0]) {
+      void (async () => {
+        // A fresh project gets the same install, dev-server handover and browser proof as `init`.
+        // Its failure exits non-zero before any cloud binding can claim this repo is ready.
+        if (readProjectId(process.cwd()) === undefined) {
+          await handleInit({ port: undefined, mcp: true, dryRun: false, install: true });
+        }
+        return runCloudCommand(argv);
+      })()
+        .then((code) => process.exit(code))
+        .catch((cause: unknown) => {
+          process.stderr.write(
+            `reticle connect: ${cause instanceof Error ? cause.message : String(cause)}\n`,
+          );
+          process.exit(1);
+        });
+      return;
+    }
     void runCloudCommand(argv).then((code) => process.exit(code));
     return;
   }

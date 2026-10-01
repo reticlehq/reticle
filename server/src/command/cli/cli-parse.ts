@@ -104,6 +104,8 @@ export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticl
                                                        (OPT-IN: tell us who you are, e.g. for support or an enterprise trial)
 
 Cloud (link this project to Reticle; runs/flows recorded on the dashboard):
+  reticle connect [--project <name|id>] [--url <cloud origin>]
+                                                       (wire this app if needed, sign in, link, send local history)
   reticle login [--url <u>] [--email <e>] [--code <c>] [--org <n>]
                                                        (browser device flow by default; --email mails a code)
   reticle logout [--url <u>]                           (sign out of ONE host; others stay signed in)
@@ -192,7 +194,7 @@ const KNOWN_COMMANDS: ReadonlySet<string> = new Set([
   FEEDBACK_COMMAND,
   IDENTIFY_COMMAND,
   DAEMON_INNER_COMMAND,
-  // Cloud subcommands dispatch before the local parser but are still commands a human ran.
+  'connect',
   'login',
   'logout',
   'whoami',

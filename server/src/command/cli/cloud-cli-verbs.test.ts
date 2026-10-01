@@ -223,6 +223,47 @@ describe('cloud-cli verb contracts (#555)', () => {
     expect(session['url']).toBe(TEST_URL);
   });
 
+  it('connect reuses a valid sign-in, links the named project, and syncs local history', async () => {
+    await writeFile(join(cwd, '.reticle.json'), JSON.stringify({ projectId: 'local-1' }));
+    await writeHomeFile(
+      [SESSION_FILE],
+      JSON.stringify({ token: 'person-token', orgName: 'Acme', orgId: 'org_acme', url: TEST_URL }),
+    );
+    responder = (url) => {
+      if (url.endsWith('/v1/projects'))
+        return { body: { projects: [], projectId: 'proj_1', name: 'My App' } };
+      if (url.endsWith('/v1/keys'))
+        return { body: { projectId: 'proj_1', projectName: 'My App', key: TEST_KEY } };
+      if (url.endsWith('/v1/cloud/whoami'))
+        return { body: { projectId: 'proj_1', projectName: 'My App', orgId: 'org_acme' } };
+      return { body: { knownRunIds: [], stateHashes: {}, triage: [], cursor: '0:' } };
+    };
+
+    const code = await runCloudCommand(['connect', '--url', TEST_URL, '--project', 'My App']);
+
+    expect(code).toBe(0);
+    expect(requests.some((r) => r.url.endsWith('/v1/auth/device/start'))).toBe(false);
+    expect(requests.find((r) => r.url.endsWith('/v1/me'))?.authorization).toBe(
+      'Bearer person-token',
+    );
+    expect(requests.some((r) => r.url.endsWith('/v1/keys'))).toBe(true);
+    expect(requests.some((r) => r.url.endsWith('/v1/sync/status'))).toBe(true);
+    expect(requests.some((r) => r.url.endsWith('/v1/sync/pull'))).toBe(true);
+    const link = JSON.parse(
+      await readFile(join(cwd, RETICLE_DIR, CLOUD_LINK_FILE), 'utf8'),
+    ) as Record<string, unknown>;
+    expect(link['projectId']).toBe('proj_1');
+    expect(link['url']).toBe(TEST_URL);
+  });
+
+  it('connect refuses to claim a cloud connection before init has marked the app', async () => {
+    const code = await runCloudCommand(['connect', '--url', TEST_URL]);
+
+    expect(code).toBe(2);
+    expect(stderrBuf).toContain('reticle init');
+    expect(requests).toHaveLength(0);
+  });
+
   it('login without RETICLE_CLOUD_URL dials the hosted service, not the developer machine', async () => {
     responder = () => ({ status: 500, body: { error: { message: 'down' } } });
 

@@ -348,6 +348,11 @@ async function publishInto(proc) {
       await run('npm', ['publish', tarball, '--registry', REGISTRY, '--ignore-scripts', '--provenance=false'], ROOT, auth);
     }
   } else {
+    // The protocol has its own version. On a patch release pnpm sees its unchanged version on
+    // public npm and skips it, leaving the temporary registry without a dependency that the
+    // freshly published server and core still require. Publish it here first so every scaffold
+    // installs the entire candidate from this registry.
+    await run('npm', ['publish', '--registry', REGISTRY, '--provenance=false'], join(ROOT, 'open-verification'), auth);
     await run('pnpm', ['-r', 'publish', '--registry', REGISTRY, '--no-git-checks'], ROOT, auth, PUBLISH_TIMEOUT_MS);
   }
   return { proc, auth, stop: () => killTree(proc.pid) };
@@ -661,7 +666,9 @@ const SCAFFOLDS = [
     id: 'sveltekit',
     what: 'SvelteKit — Vite underneath, but SSR renders the document, and Svelte is not React',
     initDevPorts: INIT_DEV_PORTS.vite,
-    create: ['npx', ['--yes', 'sv', 'create', 'app', '--template', 'minimal', '--types', 'ts', '--no-add-ons', '--no-install']],
+    // Newer sv releases pull a runtime: dependency that npm 10.9 cannot resolve on our supported
+    // Node 22.14 floor. Keep this generator at the last version this gate has exercised there.
+    create: ['npx', ['--yes', 'sv@0.17.1', 'create', 'app', '--template', 'minimal', '--types', 'ts', '--no-add-ons', '--no-install']],
     files: PROBE_MARKUP.sveltekit,
   },
   {
@@ -711,6 +718,10 @@ const SCAFFOLDS = [
     // Raise the pin when the repo's own Node floor moves past 22's.
     what: 'Angular 17+ (no SSR) — isDevMode() connect in the entry, the token over an ng-serve proxy',
     initDevPorts: INIT_DEV_PORTS.angular,
+    // npm 10.9.2 crashes in Arborist's peer-set builder on the current Angular 21/Vitest
+    // scaffold before Reticle is installed. Resolve that scaffold once; the resulting lockfile
+    // lets init exercise its normal npm install path against the local registry.
+    installArgs: ['--legacy-peer-deps'],
     create: [
       'npx',
       [
@@ -1114,7 +1125,7 @@ async function driveScaffold(scaffold, index) {
     // until a moment ago — matches nothing, so npm silently falls through to the public registry and
     // the gate would measure the published SDK while reporting on local changes.
     writeFileSync(join(app, '.npmrc'), `@reticlehq:registry=${REGISTRY}\n`);
-    await run('npm', ['install', '--no-audit', '--no-fund'], app);
+    await run('npm', ['install', '--no-audit', '--no-fund', ...(scaffold.installArgs ?? [])], app);
     // The lockfile npm just wrote is the reason the inherited-lockfile trap was unreachable here.
     // `resolveLockfiles` returns the moment it sees a LOCAL lockfile — "local is authoritative" — so
     // an ancestor `pnpm-lock.yaml` is never consulted and a scaffold that seeds one passes whether
