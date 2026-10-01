@@ -48,7 +48,7 @@ describe('what an agent reads first', () => {
 });
 
 const CLOUD = 'https://cloud.test';
-const ROOT = join('/repo/apps/web', ReticleDir.ROOT);
+const APP_RETICLE = join('/repo/apps/web', ReticleDir.ROOT);
 const HOME = '/home/u';
 const LINKED = 'repo-b';
 /** Another project in the SAME workspace — the one this read must never be answered with. */
@@ -58,7 +58,7 @@ const SIBLING = 'repo-a';
 function linked(projectId = LINKED) {
   const { fs, written } = createMemoryFs();
   written.set(
-    join(ROOT, 'cloud.json').split('\\').join('/'),
+    join(APP_RETICLE, 'cloud.json').split('\\').join('/'),
     JSON.stringify({ projectId, url: CLOUD }),
   );
   written.set(
@@ -94,7 +94,7 @@ describe('which project a shared-memory read is about', () => {
   it('names the linked project on the wire', async () => {
     const { urls } = answering([]);
 
-    await readProjectMemory(linked(), ROOT, HOME, {}, { subject: 'checkout', limit: 10 });
+    await readProjectMemory(linked(), APP_RETICLE, HOME, {}, { subject: 'checkout', limit: 10 });
 
     expect(urls).toHaveLength(1);
     expect(urls[0]).toBe(`${CLOUD}/v1/memory?subject=checkout&projectId=${LINKED}`);
@@ -104,7 +104,7 @@ describe('which project a shared-memory read is about', () => {
   it('names the linked project even with no subject', async () => {
     const { urls } = answering([]);
 
-    await readProjectMemory(linked(), ROOT, HOME, {}, { limit: 10 });
+    await readProjectMemory(linked(), APP_RETICLE, HOME, {}, { limit: 10 });
 
     expect(urls[0]).toBe(`${CLOUD}/v1/memory?projectId=${LINKED}`);
   });
@@ -120,7 +120,7 @@ describe('which project a shared-memory read is about', () => {
       { statement: 'ours', status: 'proved', projectId: LINKED },
     ]);
 
-    const result = await readProjectMemory(linked(), ROOT, HOME, {}, { limit: 10 });
+    const result = await readProjectMemory(linked(), APP_RETICLE, HOME, {}, { limit: 10 });
 
     expect(result.ok && result.known.map((k) => k.statement)).toEqual(['ours']);
     expect(result.ok && result.total).toBe(1);
@@ -134,7 +134,7 @@ describe('which project a shared-memory read is about', () => {
   it('keeps an entry that does not say which project it belongs to', async () => {
     answering([{ statement: 'unsaid', status: 'agreed' }]);
 
-    const result = await readProjectMemory(linked(), ROOT, HOME, {}, { limit: 10 });
+    const result = await readProjectMemory(linked(), APP_RETICLE, HOME, {}, { limit: 10 });
 
     expect(result.ok && result.known.map((k) => k.statement)).toEqual(['unsaid']);
   });

@@ -272,6 +272,12 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // others. A flat file is cheaper than a new mutual pair. Group them when the address question
   // stops needing the caller's dependencies to answer it.
   'server/src/memory/project': 11,
+  // 11 when `memory-scope.ts` landed: which project a shared-memory READ is about, on the wire and
+  // in the response. Recorded rather than grouped, for the sibling reason above it. Its natural
+  // group would be `cloud/memory/`, and a directory named `memory` beside `server/src/memory` is a
+  // name collision the reach guard refuses outright; `cloud/scope/` would be a category invented
+  // for one member. The file is the sibling of `cloud-sync.ts`'s path constants and belongs flat.
+  'server/src/memory/cloud': 11,
   // 35 since the setup funnel: `onboarding-funnel.ts` (the one emit chokepoint), `onboarding-firsts.ts`
   // (the first look / act / verdict of a run, which only the daemon can witness) and
   // `install-trace.ts` (draining what the installer could not report, because it ran before there
