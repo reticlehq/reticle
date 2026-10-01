@@ -98,7 +98,9 @@ export function restoreInstallPackages(directory, root) {
         const list = join(selection, 'members');
         writeFileSync(
           list,
-          members.filter((member) => member.startsWith('package/dist/')).join('\n') + '\n',
+          // Selecting a directory recursively consumes its files. Listing those files again
+          // makes GNU tar seek backwards in the stdin archive and report them as missing.
+          members.filter((member) => member.startsWith('package/dist/') && !member.endsWith('/')).join('\n') + '\n',
         );
         execFileSync('tar', ['-xzf', '-', '--strip-components=1', '-T', list], {
           cwd: target,
