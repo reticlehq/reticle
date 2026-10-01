@@ -61,9 +61,18 @@ fn main() {
             reticle_tauri::on_page_load(webview, payload);
             if payload.event() == tauri::webview::PageLoadEvent::Finished {
                 let window = webview.window();
-                let observed = window.clone();
-                let _ = window.run_on_main_thread(move || {
-                    eprintln!("reticle-headless-visible={:?}", observed.is_visible());
+                // On Linux, Tao queues visibility changes for a later native event. Reading in
+                // this callback sees the old state. Poll off the main thread so it can apply hide.
+                std::thread::spawn(move || {
+                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+                    loop {
+                        let visible = window.is_visible();
+                        if !matches!(visible, Ok(true)) || std::time::Instant::now() >= deadline {
+                            eprintln!("reticle-headless-visible={visible:?}");
+                            break;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(50));
+                    }
                 });
             }
         })
