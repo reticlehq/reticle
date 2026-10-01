@@ -75,6 +75,9 @@ const isForeign = (
  * response is delivered to a document this session does not live into. It can never be matched by a
  * NET_REQUEST, so counting it as outstanding would mean no page containing an outbound link or a
  * download button ever settles again. See `NetInitiator.NAVIGATION`.
+ *
+ * The `settled` predicate asks the same question in `evalSettled`; it spells it against this same
+ * constant rather than against a string, which is what keeps the two answers one vocabulary.
  */
 const isDeparture = (data: Record<string, unknown>): boolean =>
   data['initiator'] === NetInitiator.NAVIGATION;
