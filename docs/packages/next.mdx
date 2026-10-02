@@ -44,9 +44,12 @@ Returns the config unchanged when `NODE_ENV === 'production'`. Otherwise it merg
 | --- | --- |
 | `webpack` | Pushes an `enforce: 'pre'` rule for `/\.(t\|j)sx$/`, excluding `node_modules`, using this package's loader. Your own `webpack` function still runs afterwards |
 | `turbopack` | On Next 15.3 and above only: rules for `*.tsx` and `*.jsx` pointing at `@reticlehq/next/loader` |
+| `env.NEXT_PUBLIC_RETICLE_URL` | The bridge URL: a valid `RETICLE_PORT` override, otherwise project daemon discovery and `.reticle.json` |
 | `env.NEXT_PUBLIC_RETICLE_TOKEN` | The pairing token, when one exists on disk |
 | `env.NEXT_PUBLIC_RETICLE_ROOT` | `process.cwd()`, so source paths come back repository-relative |
 | `env.NEXT_PUBLIC_RETICLE_SDK_VERSION` | The version of the app's installed `@reticlehq/react` |
+
+Daemon discovery reads `RETICLE_STATE_DIR` (default `~/.reticle`). Pairing tokens use `RETICLE_PAIRING_TOKEN_DIR` independently. The generated `ReticleDev` component reads `NEXT_PUBLIC_RETICLE_URL`; restart the dev server after changing these settings.
 
 `readPairingToken()` is also exported at runtime. It is not declared in `index.d.ts`, so TypeScript will not see it.
 

@@ -26,7 +26,7 @@ body:
     attributes:
       label: Affected files / area
       description: The package(s) and file:line(s) the finding lives in.
-      placeholder: 'packages/server/src/http-server.ts:56-73, token-auth.ts:35-38'
+      placeholder: 'server/src/http-server.ts:56-73, token-auth.ts:35-38'
     validations:
       required: true
   - type: textarea

@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "baseUrl": "."
+  },
+  "references": [
+    {
+      "path": "../open-verification"
+    }
+  ],
+  "include": ["src/**/*"]
+}

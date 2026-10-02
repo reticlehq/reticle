@@ -21,7 +21,9 @@ import { join } from 'node:path';
 
 import { fileURLToPath } from 'node:url';
 import { waitUntil } from '../wait-until.mjs';
-const DIST = join(fileURLToPath(new URL('../../../packages/server/dist', import.meta.url)));
+const DIST = join(fileURLToPath(new URL('../../../server/dist', import.meta.url)));
+// The rules that decide a verdict are their own package now, so they build to their own dist.
+const ENGINE_DIST = join(fileURLToPath(new URL('../../../engine/dist', import.meta.url)));
 const PORT = 9960;
 
 // Events that happen inside a DAEMON RUN and therefore carry `sessionId`. IMPORTED from core, not
@@ -31,7 +33,7 @@ const PORT = 9960;
 // out of core is the exact drift the telemetry contract forbids, and it is worst here, in the gate
 // that exists to catch telemetry going missing.
 const { isSessionScoped } = await import(
-  new URL('../../../packages/core/dist/index.js', import.meta.url).href
+  new URL('../../../core/dist/index.js', import.meta.url).href
 );
 const SESSION_SCOPED_EVENTS = { has: (event) => isSessionScoped(event) };
 
@@ -66,21 +68,21 @@ writeFileSync(join(root, '.git', 'config'), '[remote "origin"]\n\turl = git@gith
 const { getTelemetry } = await import(`${DIST}/telemetry/telemetry.js`);
 const { getSessionMetrics, resetSessionMetrics } = await import(`${DIST}/telemetry/session-metrics.js`);
 const { installDaemonTelemetry } = await import(`${DIST}/telemetry/daemon-telemetry.js`);
-const { installDaemonResilience } = await import(`${DIST}/daemon/daemon-resilience.js`);
+const { installDaemonResilience } = await import(`${DIST}/command/daemon/daemon-resilience.js`);
 const { submitFeedback } = await import(`${DIST}/telemetry/feedback.js`);
 const { submitIdentity } = await import(`${DIST}/telemetry/identify.js`);
 const { reportCliRun } = await import(`${DIST}/telemetry/cli-telemetry.js`);
-const { runTool } = await import(`${DIST}/tools/invoke-tool.js`);
-const { TOOLS } = await import(`${DIST}/tools/tools.js`);
-const { buildErrorPayload } = await import(`${DIST}/tools/error-recovery.js`);
-const { reportVersionChange } = await import(`${DIST}/update/updater.js`);
+const { runTool } = await import(`${DIST}/surface/tools/invoke-tool.js`);
+const { TOOLS } = await import(`${DIST}/surface/tools/tools.js`);
+const { buildErrorPayload } = await import(`${DIST}/surface/tools/error-recovery.js`);
+const { reportVersionChange } = await import(`${DIST}/command/update/updater.js`);
 const { reportMcpConnected, markDaemonStart } = await import(`${DIST}/telemetry/mcp-connection.js`);
 const { reportInitOutcome, InitFailure } = await import(`${DIST}/telemetry/init-telemetry.js`);
-const { reportMcpOutage, resetOutageReporting, OutageStage } = await import(`${DIST}/mcp/mcp-outage.js`);
-const { decideVerified } = await import(`${DIST}/honesty/verified.js`);
+const { reportMcpOutage, resetOutageReporting, OutageStage } = await import(`${DIST}/surface/mcp/faults/mcp-outage.js`);
+const { decideVerified } = await import(`${ENGINE_DIST}/evidence/verified.js`);
 // Derived from core, never re-listed here — a copied vocabulary is correct on the day it is written
 // and silently wrong at the next addition, which has already cost this repo twice.
-const { VerifiedReason } = await import(new URL('../../../packages/core/dist/index.js', import.meta.url).href);
+const { VerifiedReason } = await import(new URL('../../../core/dist/index.js', import.meta.url).href);
 const VERIFIED_REASONS = new Set(Object.values(VerifiedReason));
 const { classifyConnectFailure } = await import(`${DIST}/telemetry/connect-failure.js`);
 

@@ -1,0 +1,60 @@
+---
+title: The Open Verification Protocol
+description: The specification Reticle implements, why it is a separate package with its own licence, and how to build something else that answers the same rules.
+icon: scale-balanced
+---
+
+Reticle decides whether a change worked. **The rules it decides by are not Reticle's.** They live in a separate package, `open-verification`, under Apache-2.0, depending on nothing but `zod`.
+
+That separation is the point. A verification tool that defines its own standard of proof grades its own homework, and there is no way for you to tell the difference between a rule that is sound and a rule that happens to suit the vendor. Publishing the rules means you can read them, argue with them, and implement them yourself.
+
+## What the protocol defines
+
+A vocabulary for describing a verification, and one normative decision procedure that turns evidence into a verdict.
+
+Four verdicts, and only four: `yes`, `no`, `unknown` and `no-fault`. The third is the one that matters. `unknown` means the system could not tell what happened, and it MUST NOT collapse into either neighbour, because a tool that reports "could not tell" as "fine" is the failure this whole protocol exists to prevent.
+
+Alongside the verdict comes a **ground**: a code naming which clause decided. `no` is returned by two different clauses, so the verdict alone is too coarse to compare implementations, and the English sentence is too fine. The ground is the join key between a sentence in the specification, a JSON Schema, and a conformance test.
+
+Two rules carry most of the weight:
+
+- **Independence.** Evidence for a consequence must not come from the channel that performed the action. The thing that clicked the button does not get to testify that the button worked.
+- **Grade.** Only `consequence`-grade evidence can buy a `yes`. Seeing that an element is present is not seeing that something happened.
+
+## The documents
+
+The specification and its supporting documents ship inside the package, so `npm i open-verification` puts them in `node_modules/open-verification/` next to the schemas they describe.
+
+| Document | What it answers |
+| --- | --- |
+| `SPEC.md` | The normative specification. Every requirement carries a stable identifier such as `OVP-CHAN-2`. |
+| `CONFORMANCE.md` | What conforming means, the classes and profiles, and the exact claim an implementation may truthfully make. |
+| `SECURITY.md` | The trust model, and what this version does and does not defend against. |
+| `VERSIONING.md` | What a minor version may add, what a major may change, and which artifact is authoritative for what. |
+| `EXTENSIONS.md` | Which vocabularies are open, the naming rule, and what a receiver does with a member it does not recognise. |
+| `GOVERNANCE.md` | How it changes, and the vendor conflict it does not hide. |
+| `docs/GLOSSARY.md`, `docs/IMPLEMENTERS.md` | Non-normative. Terms of art, and a practical guide to building an implementation. |
+
+Thirty JSON Schemas are generated from the source into `dist/schema/`. Implement the protocol in any language by validating against those; you need none of the TypeScript.
+
+## Checking an implementation in an afternoon
+
+`vectors/adjudication.json` publishes one worked input and expected verdict for **every** ground the decision procedure can return. They are generated from the reference adjudicator and pinned to it by a test, so they cannot drift from the implementation they describe.
+
+Running them needs no browser, no transport and no conformance harness. If your adjudication logic agrees with all of them, it agrees with the order. If it does not, the ground names the exact clause you differ on.
+
+The full conformance suite is the next step up. Its core is deliberately vendor-neutral: the driver, the scoring and the scenarios import nothing from Reticle.
+
+## Where Reticle fits, honestly
+
+Reticle is one implementation, and today it is the only one. The specification says so in its own section 11 rather than leaving you to find out.
+
+One gap is worth stating plainly here, because it is the first thing a serious reader will check: the protocol's reference decision function, `adjudicate()`, is currently called by Reticle's conformance binding rather than by its product verdict path, which has its own implementation of the same rules. Two implementations of one decision procedure inside one repository is exactly the drift the protocol exists to prevent, and reconciling them is open work rather than a finished claim.
+
+<Card
+  title="Read the specification"
+  icon="github"
+  href="https://github.com/reticlehq/reticle/blob/main/open-verification/SPEC.md"
+>
+  The normative document, with requirement identifiers and the adjudication order.
+</Card>

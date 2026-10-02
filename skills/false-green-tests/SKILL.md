@@ -3,7 +3,7 @@ name: false-green-tests
 description: 'Find out why the tests pass but the app is broken. Catches false greens: a green suite over a feature that does not work, a mocked API standing in for a real one, an assertion that holds no matter what the app does, a click handler wired to nothing. Use when the suite is green and the user says it is broken, when a test never fails, when coverage looks fine but bugs still ship, or before trusting a passing run you did not watch.'
 license: Apache-2.0
 metadata:
-  version: 2.14.0
+  version: 3.5.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -30,7 +30,7 @@ A verdict of `no` here, against a green suite, is the false green.
 **2. The test drove a mock and the app drives an API.** Compare what the app actually requested with what the test stubbed:
 
 ```
-reticle_network({ sessionId, since })
+reticle_observe({ action: "network", sessionId, since })
 ```
 
 No request where the test asserted one means the suite verified a fixture. A stale client cache is the same failure with no request at all to look at, which is why registering TanStack Query matters: the cache is the only witness.
@@ -38,7 +38,7 @@ No request where the test asserted one means the suite verified a fixture. A sta
 **3. The UI moved and the state did not.** The strongest false green, and invisible to any DOM or screenshot check:
 
 ```
-reticle_state({ sessionId, store, path })
+reticle_look({ action: "state", sessionId, store, path })
 ```
 
 A view rendering one value while the store holds another is a bug the render tree cannot show you. If this returns empty or `hasCapabilities` is false, no store was registered: say so, because every state check above is vacuous until it is.
@@ -66,4 +66,4 @@ For every false green you confirm, the test that missed it is still there and wi
 
 ---
 
-Index of everything, one page at a time: `curl https://docs.reticle.sh/llms.txt`. Found a case Reticle could not see? `reticle_feedback` with `kind: "gap"`: that is the signal that decides what gets built.
+Index of everything, one page at a time: `curl https://docs.reticle.sh/llms.txt`. Found a case Reticle could not see? `reticle_session { action: "feedback" }` with `kind: "gap"`: that is the signal that decides what gets built.

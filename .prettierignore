@@ -8,6 +8,12 @@ pnpm-lock.yaml
 **/.turbo/**
 plan/
 coverage/
+# Reticle's OWN workspace. These files are written by the daemon, not by a person: the contract, the
+# flows, the capsules. They became visible to prettier the moment the blanket `.reticle/` ignore was
+# removed from .gitignore so that flows could be committed, and `format:check` went red on a file
+# nobody typed. A generated artifact's formatting belongs to whatever generates it — and this is the
+# one repository where those files are also the product's output.
+.reticle/
 .agents/
 GRAPH_REPORT.md
 

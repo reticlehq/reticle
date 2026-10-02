@@ -214,6 +214,13 @@ app.get('/api/flaky', (_req, res) => res.status(500).json({ error: 'flaky upstre
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
+// The app's own analytics sink, held open: same-origin background traffic that outlives any action.
+// It is what `.reticle.json` `background` exists for, and what `?ambient=hang` fires on every click.
+const ANALYTICS_HOLD_MS = 30_000;
+app.post('/api/analytics/events', (_req, res) => {
+  setTimeout(() => res.status(204).end(), ANALYTICS_HOLD_MS);
+});
+
 // --- Saved-items: server-backed write fixture for response-ignored testing ---------------
 //
 // This endpoint exists solely to give the response-ignored detector a real server write to

@@ -71,7 +71,7 @@ const LOSSY = new Set([Declaration.REPORT, Declaration.MARKER, Declaration.SIGNA
  * To add a module here, list EVERY export. An unlisted export fails the guard, which is the point.
  */
 export const READ_PATH = Object.freeze({
-  'packages/browser/src/security/serialization.ts': {
+  'adapters/realm/browser/src/security/serialization.ts': {
     TruncationReport: [Declaration.NONE, 'the report type itself'],
     sanitizeWithReport: [
       Declaration.REPORT,
@@ -94,7 +94,7 @@ export const READ_PATH = Object.freeze({
       're-exported from @reticlehq/core — replaces a high-confidence secret shape in place with REDACTED_VALUE, so the returned text carries an in-band sentinel over any redacted span',
     ],
   },
-  'packages/core/src/state-select.ts': {
+  'core/src/wire/state-select.ts': {
     PathSelection: [Declaration.NONE, 'the selection result type'],
     selectPath: [
       Declaration.REPORT,
@@ -109,7 +109,7 @@ export const READ_PATH = Object.freeze({
       'collapses past the budget to a sized sentinel — "[Array(5)]", "{…3 keys}", "[Set(2)]", "{Map(3)}". In-band because the caller asked for a depth cap and the value shape has to survive it',
     ],
   },
-  'packages/browser/src/registry/stores.ts': {
+  'adapters/realm/browser/src/registry/stores.ts': {
     StoreGetter: [Declaration.NONE, 'type'],
     StoreSubscribe: [Declaration.NONE, 'type'],
     StoreRegisteredListener: [Declaration.NONE, 'type'],
@@ -134,7 +134,7 @@ export const READ_PATH = Object.freeze({
       'returns { stores, truncation? } keyed by store name, so a 1,000-entity store that came back as 142 says so',
     ],
   },
-  'packages/browser/src/transport/transport.ts': {
+  'adapters/realm/browser/src/transport/transport.ts': {
     CommandOutcome: [Declaration.NONE, 'type'],
     MAX_QUEUE: [Declaration.NONE, 'the bound itself, exported so tests overflow the real one'],
     RECONNECT_MAX_DELAY_MS: [
@@ -150,13 +150,41 @@ export const READ_PATH = Object.freeze({
       'a full offline queue evicts its oldest events and then emits TRANSPORT_OVERFLOW { dropped } to the bridge, so the gap is declared on the stream it happened to',
     ],
   },
-  'packages/server/src/events/ring-buffer.ts': {
+  'engine/src/window/ring-buffer.ts': {
     RingBuffer: [
       Declaration.SIGNAL,
       'eviction is counted and surfaced by bufferHealth() as { total, dropped }, which session health and act summaries read to mark a window truncated',
     ],
   },
-  'packages/server/src/input/network-detail.ts': {
+  'server/src/memory/journal/session-journal.ts': {
+    JOURNAL_READ_LIMITS: [
+      Declaration.NONE,
+      'the bounds themselves, exported so a reader can name the ceilings it was held to',
+    ],
+    SessionJournalOptions: [Declaration.NONE, 'the options type'],
+    JOURNAL_EVENT_BYTES_CAP: [
+      Declaration.NONE,
+      'the write ceiling itself, a number, exported so a test can prove the bound at a few kilobytes and a reader can name what refused a batch; the loss it causes is declared by readWriteLoss() on the entry below, not by this constant',
+    ],
+    SessionJournal: [
+      Declaration.REPORT,
+      'bounded twice — one durable read materialises at most MAX_READ_BYTES, and the parse-cache it accumulates into is held to MAX_RETAINED_BYTES/EVENTS — so a session whose append-only ledger outgrew a JS string still answers, and keeps the NEWEST records either way; everything either bound removed returns from readLoss() as { droppedBytes, droppedEvents, lostThroughT?, note } beside the events, and Session.lostSince folds that into the same buffer_loss an evicted ring buffer already declares; bounded on the WRITE side too, where a batch refused by JOURNAL_EVENT_BYTES_CAP returns from readWriteLoss() rather than being dropped in silence',
+    ],
+  },
+  'server/src/memory/project/fs/fs-port.ts': {
+    FileSystemPort: [Declaration.NONE, 'the port type'],
+    createNodeFileSystem: [
+      Declaration.REPORT,
+      "readFileFrom caps what one read materialises (past V8's string ceiling, toString throws rather than shortening) and keeps the NEWEST bytes, returning `from` — where the returned text actually starts — beside the text, so a caller can see that it skipped and how far; `size` stays the file length fstat reported precisely so the two can disagree, which is how a short read becomes visible instead of silently decoding uninitialised memory",
+    ],
+  },
+  'engine/src/window/network-detail-merge.ts': {
+    mergeNetworkDetail: [
+      Declaration.REPORT,
+      'the wire body is the one field that REPLACES the in-page one rather than filling a gap, so both caveats ride with it: requestBodyTruncated follows the body that won, and requestBodyDivergedFromPage states that the two disagreed',
+    ],
+  },
+  'server/src/portal/input/network-detail.ts': {
     NetworkDetail: [Declaration.NONE, 'the payload type'],
     ResponseLike: [Declaration.NONE, 'type: the Playwright surface the attachment reads'],
     PageLike: [Declaration.NONE, 'type: the Playwright surface the attachment reads'],
@@ -164,16 +192,12 @@ export const READ_PATH = Object.freeze({
       Declaration.REPORT,
       'bounds the request body it takes raw off the network stack and returns requestBodyTruncated beside it, so a capped payload cannot be read as a whole one; redaction inside that body and the headers replaces values in place with REDACTED_VALUE, an in-band marker',
     ],
-    mergeNetworkDetail: [
-      Declaration.REPORT,
-      'the wire body is the one field that REPLACES the in-page one rather than filling a gap, so both caveats ride with it: requestBodyTruncated follows the body that won, and requestBodyDivergedFromPage states that the two disagreed',
-    ],
     attachNetworkDetail: [
       Declaration.SILENT,
       'a response whose headers() rejects is dropped with nothing said. It rejects when the page or CDP session is closing, which is exactly when responses race teardown, and the alternative on the stdio start() path is an unhandled rejection that takes down the MCP server. A real gap: a drive that navigates away mid-flight loses those details and the window does not say so',
     ],
   },
-  'packages/core/src/toon.ts': {
+  'core/src/wire/toon.ts': {
     ToonElement: [Declaration.NONE, 'type'],
     toToon: [
       Declaration.MARKER,
@@ -198,12 +222,13 @@ export const READ_PATH = Object.freeze({
  * detected secret shape, so it is the existing fixture for that MARKER declaration, not a new one.
  */
 export const CONFORMANCE_TESTS = Object.freeze([
-  'packages/core/src/lossy-conformance.test.ts',
-  'packages/browser/src/security/lossy-conformance.test.ts',
-  'packages/browser/src/security/serialization.test.ts',
-  'packages/browser/src/transport/transport.overflow-marker.test.ts',
-  'packages/server/src/events/ring-buffer.test.ts',
-  'packages/server/src/input/network-detail.lossy-conformance.test.ts',
+  'core/src/lossy-conformance.test.ts',
+  'adapters/realm/browser/src/security/lossy-conformance.test.ts',
+  'adapters/realm/browser/src/security/serialization.test.ts',
+  'adapters/realm/browser/src/transport/transport.overflow-marker.test.ts',
+  'engine/src/window/ring-buffer.test.ts',
+  'server/src/memory/journal/session-journal.lossy-conformance.test.ts',
+  'server/src/portal/input/network-detail.lossy-conformance.test.ts',
 ]);
 
 const IDENTIFIER = '[A-Za-z_$][\\w$]*';

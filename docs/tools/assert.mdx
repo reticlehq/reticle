@@ -1,0 +1,129 @@
+---
+title: reticle_assert
+description: Evaluate a predicate against what the app actually did, and get a verdict. Including a clear explanation when it fails.
+icon: gavel
+---
+
+`reticle_assert` evaluates a predicate against what the app actually did and returns a verdict: `verified` plus `pass`, evidence when it holds, and `expected` versus `observed` when it does not. Reach for it when you want a verdict on something you did not just cause, or on several actions at once.
+
+It is the second of the two tools that produce a verdict, the other being [`reticle_act_and_wait`](/tools/act-and-wait). It takes the same predicate grammar and evaluates it against what already happened.
+
+## A real failure
+
+Failures are more instructive than passes, so here is one. I asserted a route change to `/` on a page that was already at `/`:
+
+```json
+{ "predicate": { "kind": "route", "pathname": "/" } }
+```
+
+```json
+{
+  "verified": "no",
+  "verifiedReason": "assertion_failed",
+  "because": "the declared consequence did not hold",
+  "pass": false,
+  "failureReason": "no route change observed",
+  "observed": "no route change in the window",
+  "expected": "a route change to /",
+  "assertion": "route.changed",
+  "source": "src/components/Login.tsx:81",
+  "buffer": {
+    "held": 536,
+    "dropped": 11,
+    "note": "event buffer evicted older events (age/size cap): a negative result here may be a false negative; the evidence may have expired. Grade sooner or widen the buffer."
+  }
+}
+```
+
+<Note>
+  The route predicate's field is `pathname`. `path` is accepted as an alias and rewritten, but
+  `pathname` is what the published schema declares, so it is the one to write.
+</Note>
+
+<Warning>
+  Read `assertion: "route.changed"` carefully. The `route` predicate asserts that the route
+  **changed**, not that it currently equals a value. Asserting the route you are already on will
+  always fail. This catches people out, and the response says so in `expected` rather than leaving
+  you to work it out.
+</Warning>
+
+Note also `expected` and `observed` side by side. A verdict that says only "failed" makes you go digging; this one tells you what it wanted, what it saw, and where in your source the relevant element lives.
+
+## A failure that names the real value
+
+The same shape on a store read, which is the strongest kind of failure you can get, because it quotes the app's own data back at you:
+
+```json
+{
+  "predicate": { "kind": "state", "store": "app", "path": "deployments.0.status", "equals": "live" }
+}
+```
+
+```json
+{
+  "verified": "no",
+  "verifiedReason": "assertion_failed",
+  "because": "the declared consequence did not hold",
+  "pass": false,
+  "failureReason": "state 'deployments.0.status' is \"queued\", expected \"live\"",
+  "observed": "deployments.0.status = \"queued\"",
+  "expected": "deployments.0.status = \"live\"",
+  "assertion": "state.equals",
+  "evidence": { "store": "app", "path": "deployments.0.status", "value": "queued" },
+  "source": "src/components/Login.tsx:81"
+}
+```
+
+## A pass can still come with a warning
+
+A presence-only predicate passes and tells you not to trust it much:
+
+```json
+{
+  "verified": "yes",
+  "pass": true,
+  "evidence": [
+    {
+      "ref": "e606",
+      "role": "alert",
+      "name": "Invalid email or password",
+      "visible": true,
+      "source": "src/components/Login.tsx:72",
+      "states": ["present", "visible", "enabled"]
+    }
+  ],
+  "advice": "This predicate only checks element/text presence, not an observable consequence. A locator healed to the wrong element (or a stale render) can satisfy it while the feature is broken. Prefer a { signal } or { net } assertion (or allOf it with one) so green means the feature actually worked."
+}
+```
+
+## Arguments
+
+| Argument                 | What it does                                                      |
+| ------------------------ | ----------------------------------------------------------------- |
+| `predicate` (or `until`) | `{ kind, ...fields }`. See the [predicate reference](/predicates) |
+| `timeout_ms`             | If above zero, wait this long before failing. Default `0`         |
+| `since`                  | Cursor from a prior act. Scope to events after that action        |
+
+## Scope it with `since`
+
+By default an assertion already counts only events since your last act, so a signal buffered before the action cannot fake a pass. Pass `since` when you want to set that window explicitly: to scope to one particular earlier action, or to widen it deliberately across several.
+
+```json
+{ "predicate": { "kind": "net", "method": "POST" }, "since": 44395 }
+```
+
+The cursor comes from the preceding `reticle_act` response. Use it whenever you are asserting something an action was supposed to cause.
+
+## When to use assert over act_and_wait
+
+Use [`reticle_act_and_wait`](/tools/act-and-wait) when you are performing the action. Use `reticle_assert` when:
+
+- you are checking a precondition before acting;
+- the state was reached by several actions and you want one verdict over the lot;
+- you want to assert something extra about an action you already ran, using its `since` cursor.
+
+<Note>
+  `verified: "unknown"` means Reticle could not tell. It is not a pass, and it is not a failure, it
+  is a statement that the evidence was insufficient. Report it as unknown rather than rounding it in
+  either direction.
+</Note>

@@ -4,7 +4,7 @@ description: 'Zero to your agent verifying your real app, step by step, with wor
 icon: rocket
 ---
 
-**To get started with Reticle: run `npx @reticlehq/server init --flow "<the journey worth proving>"` in your project root.** That one command wires your project, starts your dev server, opens the app, waits for it to connect, and drives that flow to a verdict. You do not restart anything and you do not drive it yourself. Reticle is a verification layer that embeds a dev-only SDK in your running web app so an AI coding agent can prove a change works instead of guessing. It needs Node 20 or newer, an app you run locally, and an agent that speaks MCP.
+**To get started with Reticle Cloud: run the installer, then `reticle connect --project "My App"` in your app directory before opening your coding agent.** The installer puts the CLI on the machine and registers its MCP tools with supported agents. `connect` wires your app, checks that a browser session connected, opens sign-in approval if needed, links the named cloud project, and syncs existing history. The first run is what proves anything: ask your agent to verify one journey in your app, or use `reticle_verify { action: "explore", persona: "<the journey worth proving>" }`. A connected app is not a verified one. For local-only verification without an account, use `reticle init` instead. You need Node 20.11 or newer, an app you run locally, and an agent that speaks MCP.
 
 > **Looking for the fast path?** [Quickstart](/quickstart) gets you to a real verdict in five minutes, and every response on it was captured live. [Agentic install](/install-agentic) and [Manual install](/install-manual) cover setup in detail, per agent and per framework.
 >
@@ -46,7 +46,7 @@ Three pieces, each from the package for its audience:
 
 1. **The MCP server.** Your agent launches it with `npx @reticlehq/server mcp`; it hosts the tools _and_ the WebSocket bridge your app connects to. You don't run it by hand; the agent does.
 2. **The SDK**: `import { reticle } from '@reticlehq/react'`, a few lines in your app's dev entry point.
-3. **(Optional) React adapter + source-mapping**, so `reticle_inspect` can tell the agent which component/file to edit (also from `@reticlehq/react`).
+3. **(Optional) React adapter + source-mapping**, so `reticle_look { action: "element" }` can tell the agent which component/file to edit (also from `@reticlehq/react`).
 
 Everything is **dev-only** and **localhost-only**. It's tree-shaken out of production builds.
 
@@ -58,7 +58,17 @@ Everything is **dev-only** and **localhost-only**. It's tree-shaken out of produ
 
 ---
 
-## Fastest path: `reticle init`
+## Cloud setup: `reticle connect`
+
+After the one-time [installer](/quickstart), run this in your app directory:
+
+```bash
+npx @reticlehq/server connect --project "My App"
+```
+
+Approve the short browser code if Reticle asks you to sign in. The command then links this folder and sends any history already on the machine. Open or restart your coding agent and ask it to verify one real journey. For a new project, the dashboard has no result until that first run is recorded.
+
+## Local-only path: `reticle init`
 
 From your project root:
 
@@ -78,19 +88,19 @@ The bridge + MCP server is a single process that serves all your projects, so it
 
 Re-running is safe: already-registered and already-patched steps are skipped, and on a wired project it goes straight to proving the app still works. Preview without writing via `npx @reticlehq/server init --dry-run`.
 
-`init` does not stop at writing files. It starts your dev server (restarting one whose bundle predates the config edit), opens the app, waits for a session to connect from inside it, and drives one flow to a verdict, which it saves so later checks are a single call with no model involved. It exits non-zero if no verdict was produced and prints what is left to do.
+`init` does not stop at writing files. It starts your dev server, opens the app, and waits for a session to connect from inside it. That connection is the whole proof that onboarding worked. If a dev server was already running without Reticle, restart it once: it read the build config before `init` edited it. It exits non-zero if nothing connected and prints what is left to do. It does NOT drive. Then prove a flow. That is the FIRST RUN, and it is a separate call: `reticle_verify { action: "explore", persona: "<who does what>" }`. It drives with a model inside the daemon and records what it drove, so later checks replay it with no model in the loop.
 
-Three flags carry what the command cannot work out for itself:
+These carry what the command cannot work out for itself:
 
 | Flag | What only you know |
 | --- | --- |
-| `--flow "<what>"` | Which journey proves the thing you care about. It can list the buttons on your page; it cannot know that checkout matters and the theme toggle does not. |
+| `persona: "<what>"` | Belongs to the first run, not to `init`. Which journey proves the thing you care about: Reticle can list the buttons on your page; it cannot know that checkout matters and the theme toggle does not. |
 | `--env KEY=VALUE` | What your app needs to reach a usable state: the key from `.env.example`, the mock backend, the variable that skips an auth wall. Repeatable. |
 | `--app <dir>` | Which app in a monorepo. It finds the servable ones; only you know which you are working in. |
 
-The rest are dials: `--license <key>` (writes it to `.env` and keeps `.env` out of git), `--json` (one object for an agent to read), `--files-only` (write, register, pre-approve, and stop, which is what `init` did before it learned to boot the app, and what an existing install re-runs to pick up new wiring), `--relaunch` (prints the command that restarts the conversation you are in, with the tools loaded: the restart step most installs stall on, and it composes with `--files-only`), `--no-open`, `--no-drive`, `--dry-run`, `--port N`, `--no-mcp`, `--no-install`.
+The rest are dials: `--license <key>` (writes it to `.env` and keeps `.env` out of git), `--json` (one object for an agent to read), `--files-only` (write, register, pre-approve, and stop, which is what `init` did before it learned to boot the app, and what an existing install re-runs to pick up new wiring), `--relaunch` (prints the command that restarts the conversation you are in, with the tools loaded: the restart step most installs stall on, and it composes with `--files-only`), `--no-open`, `--dry-run`, `--port N`, `--no-mcp`, `--no-install`.
 
-Then restart your dev server and skip to [Step 4](#step-4-run-it-and-verify-the-connection). The manual steps below explain what `init` sets up, if you prefer to wire it yourself.
+If you ran `--files-only` with a dev server already running, restart it, then skip to [Step 4](#step-4-run-it-and-verify-the-connection). The manual steps below explain what `init` sets up, if you prefer to wire it yourself.
 
 ---
 
@@ -98,13 +108,22 @@ Then restart your dev server and skip to [Step 4](#step-4-run-it-and-verify-the-
 
 You don't start the server manually; your agent starts it via MCP. Register Reticle **once, at the user (global) scope** so every project picks it up. There's nothing to add per project.
 
+**The installer does this for every agent on the machine**, which is why it is the first thing on the [quickstart](/quickstart):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh | sh     # macOS, Linux
+irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex          # Windows PowerShell
+```
+
+Run it in a terminal before you open your agent and there is nothing to restart. The rest of this section is what it writes, for a machine where you would rather do it by hand.
+
 **Claude Code**, one command:
 
 ```bash
 claude mcp add reticle -s user -- npx @reticlehq/server mcp
 ```
 
-(`reticle init` runs exactly this for you. `-s user` is what makes it global; drop it for a project-local registration instead.)
+(`reticle setup mcp` and `reticle init` both run exactly this for you. `-s user` is what makes it global; drop it for a project-local registration instead.)
 
 **Cursor**: add to your global `~/.cursor/mcp.json` (not per-project; `reticle init` writes this for you):
 
@@ -116,7 +135,7 @@ claude mcp add reticle -s user -- npx @reticlehq/server mcp
 }
 ```
 
-Other MCP clients (Windsurf, Claude Desktop, …) use the same `command`/`args` shape. Restart the agent so it picks up the new server. When it launches Reticle, the bridge starts listening on `ws://localhost:4400`.
+Other MCP clients (Windsurf, Claude Desktop, …) use the same `command`/`args` shape. An agent that was already open reads its server list at startup, so reopen it once. When it launches Reticle, the bridge starts listening on `ws://localhost:4400`.
 
 > Want a different port? Set `RETICLE_PORT` in the server `env` and pass the same URL to `reticle.connect({ url })` in Step 2.
 
@@ -288,7 +307,7 @@ Either way, the rule is the same: **the app's bridge port must equal the daemon'
 
 ## Step 3: (React) component and source-file mapping
 
-This is optional but high-value: it lets `reticle_inspect` map a DOM element back to the **React component and the source file:line**, so when the agent finds a problem, it knows which file to edit. (The React adapter ships in `@reticlehq/react`; nothing extra to install.)
+This is optional but high-value: it lets `reticle_look { action: "element" }` map a DOM element back to the **React component and the source file:line**, so when the agent finds a problem, it knows which file to edit. (The React adapter ships in `@reticlehq/react`; nothing extra to install.)
 
 ```ts
 import { install as installReticleReact } from '@reticlehq/react';
@@ -309,7 +328,7 @@ export default defineConfig({
 });
 ```
 
-> **Next.js:** verified on **Next.js 15 / React 19 (app router, SWC)**. For source-file mapping, use `@reticlehq/next` instead of the Babel plugin. It adds a **dev-only webpack pre-loader that keeps SWC** and stamps `data-reticle-source` so `reticle_inspect` returns `file:line` (e.g. `app/page.tsx:30`):
+> **Next.js:** verified on **Next.js 15 / React 19 (app router, SWC)**. For source-file mapping, use `@reticlehq/next` instead of the Babel plugin. It adds a **dev-only webpack pre-loader that keeps SWC** and stamps `data-reticle-source` so `reticle_look { action: "element" }` returns `file:line` (e.g. `app/page.tsx:30`):
 >
 > ```ts
 > // next.config.ts
@@ -336,7 +355,7 @@ export default defineConfig({
 
 > "List Reticle sessions."
 
-The agent calls `reticle_sessions` and should see your tab:
+The agent calls `reticle_session { action: "list" }` and should see your tab:
 
 ```jsonc
 { "sessions": [{ "sessionId": "my-app", "url": "http://localhost:3000/", "title": "…" }] }
@@ -348,7 +367,7 @@ If the list is empty, see [Troubleshooting](#troubleshooting).
 
 ## Step 5: Your first verification
 
-> `reticle init --flow "<what>"` drives this for you and saves the flow. This section is what it does, for when you want to do it yourself.
+> `reticle_verify { action: "explore", persona: "<what>" }` drives this for you and saves the flow. This section is what it does, for when you want to do it yourself.
 
 Now just talk to your agent in plain language. For example:
 
@@ -358,7 +377,7 @@ What the agent does under the hood:
 
 ```jsonc
 // finds the button it just added
-reticle_query({ by: "role", value: "button", name: "Refresh" })   // → ref e12
+reticle_look({ action: "find", by: "role", value: "button", name: "Refresh" })   // → ref e12
 
 // clicks it
 reticle_act({ ref: "e12", action: "click" })                       // → { since: 920 }
@@ -397,12 +416,12 @@ onSaved(() => reticle.signal('order:saved', { id, total }));
 
 > **Recommended:** instead of importing `reticle` into components, inject a `createReticleEmitter()` emitter and pair each commit with `commitAndSignal(...)` so the mutation↔signal can't drift. `reticle.signal` stays the primitive underneath. See [integration-patterns.md](integration-patterns.md).
 
-**3. `registerStore` so the agent reads state directly.** No need to broadcast a signal for every fact: expose the store and the agent reads it via `reticle_state`.
+**3. `registerStore` so the agent reads state directly.** No need to broadcast a signal for every fact: expose the store and the agent reads it via `reticle_look { action: "state" }`.
 
 ```ts
 import { registerStore } from '@reticlehq/react';
 registerStore('cart', useCart); // pass the store itself → auto STATE_CHANGE diffs
-// agent: reticle_state({ store: 'cart' })  → { stores: { cart: {...} } }
+// agent: reticle_look({ action: "state", store: 'cart' })  → { stores: { cart: {...} } }
 ```
 
 **4. `registerCapabilities` so a fresh agent learns the surface without reading source.**
@@ -429,7 +448,7 @@ registerCapabilities({
 
 Once the loop works, these turn ad-hoc runs into a maintained suite:
 
-- **[Flows, recorder & self-healing](flows.md)**: record a golden path once; Reticle saves it to a git-checked `.reticle/` flow anchored on testid+signal, replays it (with legible drift), and `reticle_flow_heal` repairs renamed anchors.
+- **[Flows, recorder & self-healing](flows.md)**: record a golden path once; Reticle saves it to a git-checked `.reticle/` flow anchored on testid+signal, replays it (with legible drift), and `reticle_verify { action: "heal" }` repairs renamed anchors.
 - **[Testing with `@reticlehq/test`](testing.md)** gives you declarative `reticleTest` specs you run headless / in CI; flows can _become_ the specs.
 - **[Human-in-the-loop control](human-control.md)**: with `present: true`, pause / message / end the agent from the floating panel.
 - **[Integration patterns](integration-patterns.md)** covers the recommended zero-prod-bundle emit adapter, store-layer signals, and incremental adoption.
@@ -455,7 +474,7 @@ Everything below comes from the `@reticlehq/react` kit plus your framework's bui
 
 **You do not get** component identity. `@reticlehq/react` walks the fiber tree to answer "which component rendered this element"; there is no Svelte equivalent, so snapshots carry the file and line but no component name. Stamping targets Svelte 5's compiler AST and also accepts Svelte 4's; `.svelte.ts` runes modules are code rather than markup and are not stamped.
 
-**It is still unverified.** There is no SvelteKit app in `apps/` and no CI gate for one, so nothing would tell us when this breaks; `reticle init` says so out loud in its plan. React, Next.js, Remix and Astro each have an app and a gate. Treat SvelteKit as wired and plausible, not as supported.
+**It is install-gated, drive-unverified.** The install gate scaffolds a SvelteKit app from scratch, runs `init`, boots it and waits for a session, so the setup is proven. There is no SvelteKit example app that CI drives to a verdict, so the drive is not. [Frameworks](/frameworks) has the full status table.
 
 **Vue is install-gated, drive-unverified.** `init` detects a Vue app (as a Vite app with Vue as the UI library) and the install gate scaffolds one from scratch, runs `init`, boots it and waits for a session, so the setup is proven. What is not proven is the drive: there is no Vue example app in CI. `piniaStore` reads a Pinia store, and everything the framework-neutral core provides works. What you do not get is a `source` field, because source stamping covers JSX and Svelte components and a `.vue` single-file component is neither. See [Frameworks](/frameworks) for the full status table.
 
@@ -463,7 +482,7 @@ Everything below comes from the `@reticlehq/react` kit plus your framework's bui
 
 ## Troubleshooting
 
-**`reticle_sessions` is empty / "no browser session connected"**
+**`reticle_session { action: "list" }` is empty / "no browser session connected"**
 
 - Run **`reticle status`**. It shows whether the daemon is up and which tabs are connected (url, health, pending flagged bugs) at a glance. No connected sessions means the SDK isn't reaching the bridge.
 - Is your app actually running and open in a browser tab?
@@ -475,13 +494,13 @@ The errors Reticle returns to the agent now carry a `recovery` hint for this exa
 
 **The agent can't find an element**
 
-- Ask it to `reticle_snapshot({ mode: "interactive" })` to see what's actionable.
+- Ask it to `reticle_look({ action: "page", mode: "interactive" })` to see what's actionable.
 - Add a `data-testid` to the element for a stable handle.
 - Narrow with `scope` (a CSS selector or a ref).
 
 **Assertions are flaky on async UIs**
 
-- Use `timeout_ms` on `reticle_assert` / `reticle_wait_for`.
+- Use `timeout_ms` on `reticle_assert` / `reticle_assert { action: "wait" }`.
 - Pass the `since` cursor returned by `reticle_act` so only post-action events count.
 
 **Source file isn't resolving on React 19**
@@ -512,7 +531,7 @@ pnpm add @reticlehq/next
 
 ### What exactly does `reticle init` change in my project?
 
-Four files, and none of them are mysterious: a `.reticle.json` project config, your build config (the `reticle()` Vite plugin, or `withReticle` in `next.config`), a dev-only capabilities file at `src/reticle-dev.ts` (or `app/reticle-dev.tsx` on Next.js), and your agent's rule files. It then starts your dev server, opens the app and drives one flow, none of which changes your source: the dev server is left running for you afterwards, and the only file the drive may edit is the capabilities file, and only when your app registers none. It also registers the MCP server globally, which is a once-per-machine step rather than a per-project one. Run `npx @reticlehq/server init --dry-run` first to see the exact plan before anything is written.
+Four files, and none of them are mysterious: a `.reticle.json` project config, your build config (the `reticle()` Vite plugin, or `withReticle` in `next.config`), a dev-only capabilities file at `src/reticle-dev.ts` (or `app/reticle-dev.tsx` on Next.js), and your agent's rule files. It then starts your dev server and opens the app, neither of which changes your source: the dev server is left running for you afterwards. It also registers the MCP server globally, which is a once-per-machine step rather than a per-project one. Run `npx @reticlehq/server init --dry-run` first to see the exact plan before anything is written.
 
 ### Do I have to re-register the MCP server for every project?
 
@@ -528,7 +547,7 @@ Node 20 or newer.
 
 ### Do I need the React adapter?
 
-No, it is optional enrichment and the core works without it. What it adds is component identity, meaning `reticle_inspect` can say which React component rendered an element. Combined with a build plugin that stamps source, that is what turns a DOM node into `src/components/Login.tsx:81`, which is the difference between an agent knowing something failed and knowing which file to open.
+No, it is optional enrichment and the core works without it. What it adds is component identity, meaning `reticle_look { action: "element" }` can say which React component rendered an element. Combined with a build plugin that stamps source, that is what turns a DOM node into `src/components/Login.tsx:81`, which is the difference between an agent knowing something failed and knowing which file to open.
 
 ### Can I run several apps against Reticle at once?
 

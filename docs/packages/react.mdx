@@ -76,7 +76,7 @@ import { useReticleStore } from '@reticlehq/react/store';
 
 function Cart() {
   const [items, setItems] = useState([]);
-  useReticleStore('cart', items); // now readable via reticle_state
+  useReticleStore('cart', items); // now readable via reticle_look { action: "state" }
 }
 ```
 
@@ -87,5 +87,5 @@ function Cart() {
 React 19 dropped `_debugSource`, so `identify` can name the component but not the file unless something stamps the source at build time. That is [`@reticlehq/babel-plugin`](/packages/babel-plugin), pulled in for you by [`@reticlehq/vite-plugin`](/packages/vite-plugin) or [`@reticlehq/next`](/packages/next).
 
 <Card title="Reading component state" icon="layer-group" href="/state-management">
-  What `reticle_state` can see, and how to widen it.
+  What `reticle_look { action: "state" }` can see, and how to widen it.
 </Card>

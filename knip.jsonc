@@ -46,7 +46,7 @@
     "apps/electron-smoke": {
       "entry": ["electron/main.cjs", "electron/preload.cjs", "src/main.tsx"],
     },
-    "packages/*": {
+    "adapters/*/*": {
       "entry": ["src/index.ts", "scripts/*.mts"],
       "project": ["src/**"],
       "ignore": ["dist/**"],
@@ -54,7 +54,7 @@
   },
 
   // @reticlehq/react: probed at runtime from the USER's app, never imported here — see
-  //   packages/vite-plugin/src/installed.ts.
+  //   adapters/build/vite-plugin/src/installed.ts.
   // electron: resolved on purpose through createRequire(apps/electron-smoke/package.json) so the
   //   harnesses do not depend on hoisting. knip sees the bare require and not the base it is
   //   rooted at. Declaring it in apps/e2e would install a SECOND ~200MB Electron.
@@ -64,5 +64,5 @@
   "ignoreBinaries": ["pgrep"],
 
   // Rust; outside every JS tool in this repo.
-  "ignoreWorkspaces": ["packages/tauri"],
+  "ignoreWorkspaces": ["adapters/realm/tauri"],
 }

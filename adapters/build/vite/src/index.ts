@@ -1,0 +1,943 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { missingTokenWarning } from './token/missing-token.js';
+import { ensurePairingToken } from './token/ensure-token.js';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import {
+  RETICLE_RENDER_PREHOOK,
+  ReticleDir,
+  ReticleEnv,
+  RETICLE_ROOT_GLOBAL,
+  RETICLE_SDK_VERSION_GLOBAL,
+} from '@reticlehq/core';
+import { resolveProjectId } from './project-id.js';
+import { resolveDaemonPort } from './discover-port.js';
+import { announceDevServer } from './announce.js';
+import { stampSvelte } from './svelte-source.js';
+import {
+  NODE_MODULES,
+  ignoredFileNotice,
+  optsOutOfStamping,
+  shouldStamp,
+  shouldStampSvelte,
+  stamp,
+} from './stamping.js';
+import {
+  resolvableChain,
+  sdkPackageVersion,
+  sdkBuildFingerprint,
+  viteMajor,
+  optimizerOptionsKey,
+  optimizerOptions,
+} from './installed.js';
+import {
+  RETICLE_DISABLED_STUB_CODE,
+  RETICLE_DISABLED_STUB,
+  isReticleDisabledBuild,
+} from './disabled-browser-stub.js';
+import { connectArgs } from './connect-args.js';
+
+import {
+  createInjectionWatch,
+  notInjectedMessage,
+  type InjectionWatch,
+} from './injection-postcondition.js';
+import { RETICLE_VITE_PLUGIN_NAME } from './plugin-name.js';
+
+export { RETICLE_VITE_PLUGIN_NAME } from './plugin-name.js';
+
+// The React kit the host app imports the SDK from. It re-exports the browser sensor, so a single
+// specifier yields both `reticle` (connect) and `install` (the React adapter). NOT `@reticlehq/core`
+// — that is the isomorphic foundation and exports neither.
+const RETICLE_PACKAGE = '@reticlehq/react';
+/** The framework-neutral sensor, which a Vue or Svelte app gets instead. See installedSdk. */
+const RETICLE_SENSOR = '@reticlehq/browser';
+/**
+ * Compile-time global carrying the daemon's pairing token, for connects the plugin does not write
+ * itself. The bridge requires the token even on localhost, and nothing in a browser can read the
+ * file it lives in.
+ */
+export const RETICLE_TOKEN_GLOBAL = '__RETICLE_TOKEN__';
+
+/**
+ * The connect code is served as a real module (not an inline <script>) so that Vite's import
+ * pipeline resolves the bare `@reticlehq/react` specifier. An inline injected script is NOT run through
+ * import resolution, so its bare import would fail in the browser. This path-like id is requested
+ * by the injected <script src> and served by the load hook below.
+ */
+export const RETICLE_CONNECT_MODULE = '/@reticle-connect';
+
+/**
+ * The URL the injected `<script src>` must actually point at: `base` + the module id.
+ *
+ * {@link RETICLE_CONNECT_MODULE} is a SERVER-ROOT path, and emitting it verbatim is only correct
+ * when Vite is serving from the root. Under `base: '/playground/'` the browser asked for
+ * `/@reticle-connect`, Vite answered 404 with its own "did you mean /playground/@reticle-connect"
+ * hint, and the page rendered perfectly while never connecting (#676) — the exact failure shape
+ * Reticle exists to catch, in Reticle's own setup path.
+ *
+ * Vite does not prefix tags returned from `transformIndexHtml`, so the prefix has to be applied
+ * here. Only a path base is joined: Vite serves the dev app from the root when `base` is an
+ * external URL, so prefixing a CDN origin onto a dev-server module would point the tag off-host.
+ */
+import { mergeIgnored, type WatchPattern } from './watch-ignore.js';
+import { isVitestBrowserServer } from './vitest-browser.js';
+
+export function connectModuleUrl(base: string | undefined): string {
+  if (undefined === base || !base.startsWith('/')) return RETICLE_CONNECT_MODULE;
+  // Trimmed by slicing rather than with `/\/+$/`: a trailing-slash-run regex is a polynomial
+  // backtracking shape over a value that comes out of the user's config, and CodeQL is right to
+  // flag it. This is linear and says the same thing.
+  let end = base.length;
+  while (0 < end && '/' === base[end - 1]) end -= 1;
+  const trimmed = base.slice(0, end);
+  return 0 === trimmed.length ? RETICLE_CONNECT_MODULE : `${trimmed}${RETICLE_CONNECT_MODULE}`;
+}
+
+/**
+ * The pre-hook, as source for an inline <head> script.
+ *
+ * Deliberately dependency-free ES5 in a try/catch: it runs before anything else on the page, so it
+ * must not assume a bundler, a module system, or that React is present at all. It installs a faithful
+ * devtools hook (React calls `inject` and expects a renderer id back, and stores the renderer) and
+ * counts commits into a buffer the module-side meter adopts later.
+ */
+export const RENDER_PREHOOK_SOURCE = `(function(){try{
+var K='__REACT_DEVTOOLS_GLOBAL_HOOK__',P='${RETICLE_RENDER_PREHOOK}';
+if(globalThis[P])return;
+var B={commits:0,sinks:[]};
+globalThis[P]=B;
+var fire=function(){B.commits++;for(var i=0;i<B.sinks.length;i++){try{B.sinks[i].apply(null,arguments);}catch(e){}}};
+var h=globalThis[K];
+if(h===undefined){
+globalThis[K]={supportsFiber:true,renderers:new Map(),inject:function(r){var id=this.renderers.size+1;this.renderers.set(id,r);return id;},
+onScheduleFiberRoot:function(){},onCommitFiberRoot:fire,onPostCommitFiberRoot:function(){},onCommitFiberUnmount:function(){}};
+}else{var prev=h.onCommitFiberRoot;h.onCommitFiberRoot=function(){try{fire.apply(null,arguments);}catch(e){}
+if(typeof prev==='function')return prev.apply(this,arguments);};}
+}catch(e){}})();`;
+
+/**
+ * How many times the connect module's source may legitimately change in one dev-server session
+ * before the plugin says so.
+ *
+ * The source is a function of the port, the projectId, the pairing token and whether the app has a
+ * `reticle-dev` module — in a healthy session, the daemon starting after Vite is one change and a
+ * dev module appearing is another. Past a handful, an input is oscillating, which makes Vite
+ * re-resolve the module on every page load: the reload loop this counter makes audible.
+ */
+const CONNECT_CHURN_LIMIT = 5;
+
+/**
+ * Said ONCE, and it names the symptom the user is looking at rather than the mechanism, because the
+ * mechanism is invisible from a browser: the page reloads and nothing explains why.
+ */
+export const connectChurnWarning = (): string =>
+  `[${RETICLE_VITE_PLUGIN_NAME}] the injected connect module has changed ${String(CONNECT_CHURN_LIMIT)} ` +
+  'times in one dev-server session. Something it depends on (the bridge port, the pairing token, ' +
+  'or a reticle-dev module appearing and disappearing) is not settling, and that can make the page ' +
+  'reload repeatedly. Reticle will keep serving the newest version. Please report this at ' +
+  'https://github.com/ReticleHQ/reticle/issues with your vite.config and whether more than one ' +
+  'daemon is running (`npx @reticlehq/server status`).';
+
+export interface ReticleVitePluginOptions {
+  /** Bridge WebSocket port. Defaults to the SDK default; only baked into connect when non-default. */
+  port?: number;
+  /**
+   * Project root, so React's absolute `_debugSource.fileName` reports repo-relative. Resolved from
+   * the Vite config at injection time; set it only to override.
+   */
+  root?: string;
+  /**
+   * The installed SDK's version, so a pair skewed against the daemon can name itself instead of
+   * surfacing as a bare -32000. Read from the installed package; set it only to override.
+   */
+  sdkVersion?: string;
+  /** Stable session label for the bridge. Defaults to the SDK's auto-generated id. */
+  session?: string;
+  /**
+   * Stable project identity. Defaults to one derived from the app's package.json name + root path,
+   * so multi-project session scoping works with zero config. Override only for special setups.
+   */
+  projectId?: string;
+  /** Auth token forwarded to connect when the bridge requires one. */
+  token?: string;
+  /** Stamp data-reticle-source for React 19 source mapping. Default true (harmless on React <=18). */
+  sourceMapping?: boolean;
+  /** Auto-inject the dev-gated reticle.connect call. Default true. */
+  inject?: boolean;
+  /**
+   * This build is an Electron/Tauri renderer. Changes two things a desktop shell needs and a web app
+   * must not get:
+   *
+   *  - connect() is injected into the HTML's entry module rather than as a virtual <script src>,
+   *    so a packaged renderer with no dev server still resolves it — but only for a build run in a
+   *    NON-production mode (`vite build --mode development`). A production-mode build is stubbed
+   *    exactly like a web one, so a release binary never carries the SDK. See
+   *    isReticleDisabledBuild.
+   *  - `connect()` is called with `allowInProduction`, because that same renderer reports
+   *    NODE_ENV=production and the SDK's prod backstop would otherwise refuse to start.
+   *
+   * Off by default and never inferred.
+   */
+  desktop?: boolean;
+  /**
+   * Record request/response BODIES on `reticle_network`, not just method/url/status.
+   *
+   * Off by default because a body is the one part of a request that routinely carries a card
+   * number, a token or a customer's address, and the daemon journals what it is told.
+   *
+   * Exposed HERE because the plugin is the only `connect()` most apps have and a second `connect()`
+   * is a no-op, so an SDK option the plugin cannot pass is an option that does not exist.
+   *
+   * Also settable as `VITE_RETICLE_CAPTURE_BODIES=1`.
+   */
+  captureNetworkBodies?: boolean;
+  /**
+   * Per-body character cap for captured bodies. Default 8192; clamped to [256, 262144].
+   *
+   * Reachable here for the reason `captureNetworkBodies` is: the plugin is the only `connect()`
+   * most apps ever have, so an SDK option the plugin cannot pass is an option that does not exist.
+   *
+   * Raise it to make a NEGATIVE `bodyContains` decidable -- a negation is checked over the whole
+   * payload, so on a list endpoint bigger than the cap it is permanently undecidable, and that is
+   * the class that proves "this dangerous field is absent from every row" (#799).
+   *
+   * Also settable as `VITE_RETICLE_BODY_MAX_CHARS=65536`, so one run can raise it without editing
+   * vite.config.
+   */
+  networkBodyMaxChars?: number;
+  /**
+   * Retain a FAILED request's response body even with `captureNetworkBodies` off. Default true.
+   *
+   * Also settable as `VITE_RETICLE_NO_ERROR_BODIES=1`, which turns it OFF -- the inverse of the
+   * other env vars, because this is the one that defaults on (#800).
+   */
+  captureErrorBodies?: boolean;
+  /**
+   * Make Reticle's OWN presenter visible to snapshots and queries. CONTRIBUTORS ONLY.
+   *
+   * The presenter is hidden from every tool by design — an agent that can drive Reticle's own
+   * interface can fabricate its own impact report. The cost is that a HUD change is the only kind of
+   * change Reticle cannot be used to check. This is the hatch for that one case, and the app reports
+   * it in its capabilities so a verdict drawn with it open is never mistaken for an ordinary one.
+   *
+   * Also settable as `VITE_RETICLE_EXPOSE_PRESENTER=1`.
+   */
+  exposePresenter?: boolean;
+  /**
+   * Let Reticle run when the page or the bridge is not on localhost.
+   *
+   * Off by default: the SDK refuses outside localhost so a page on the open internet cannot be
+   * instrumented by a bridge it happened to reach. Turn it on for a dev server that CANNOT be served
+   * on localhost — a host-based multi-tenant frontend, a white-label app resolving the tenant from
+   * the `Host` header, anything with cookie-scoped auth on a custom dev hostname.
+   *
+   * NOT SUFFICIENT ON ITS OWN — a pairing token is also required. `connectionPolicy` in
+   * `@reticlehq/browser` refuses a non-localhost connect with "a pairing token is required outside
+   * localhost" whenever the token is missing or empty, whatever this flag says. The plugin supplies
+   * one automatically from the daemon's `~/.reticle/pairing-token` (see readPairingToken), so a
+   * started daemon is normally all it takes; pass `token` yourself only when the daemon's file is
+   * unreachable. A non-loopback BRIDGE additionally has to be `wss://`.
+   *
+   * Also settable as `VITE_RETICLE_ALLOW_NON_LOCALHOST=1`.
+   */
+  allowNonLocalhost?: boolean;
+  /**
+   * Where a diagnostic goes. Defaults to the console; injected so the dev-mode injection check is
+   * testable without capturing global console output.
+   */
+  onWarn?: (message: string) => void;
+}
+
+/**
+ * The slice of Vite's `UserConfig` the `config` hook reads. Everything is optional AND nullable
+ * because that is what Vite declares — a stand-in that is narrower than the real value is not a
+ * looser type, it is a stricter one, and it makes the whole plugin unassignable to `Plugin`.
+ */
+export interface ViteUserConfigLike {
+  optimizeDeps?:
+    | {
+        include?: string[] | undefined;
+        /** Whichever key the app used — the plugin reads both and writes the one this Vite wants. */
+        esbuildOptions?: Record<string, unknown> | undefined;
+        rolldownOptions?: Record<string, unknown> | undefined;
+      }
+    | undefined;
+  define?: Record<string, unknown> | undefined;
+  root?: string | undefined;
+  /**
+   * The app's own watcher config. `watch` is nullable because `null` is how a config switches the
+   * watcher off, and `ignored` is `unknown` because Vite's `AnymatchMatcher` is not an array — it is
+   * a string, a RegExp, a predicate function, or an array of those. Typing it as an array here is
+   * the narrowing that made the whole plugin unassignable to Vite's `Plugin`, and it also invited a
+   * runtime defect: see `mergeIgnored`.
+   */
+  server?: { watch?: { ignored?: unknown } | null | undefined } | undefined;
+  /**
+   * Vitest's block, when this config belongs to a Vitest run. Read ONLY to spot browser mode — see
+   * `isVitestBrowserServer`. Typed as `unknown` because it is Vitest's shape, not Vite's, and this
+   * plugin has no business asserting anything about the rest of it.
+   */
+  test?: unknown;
+}
+
+/** Structural Vite plugin shape — avoids a hard dependency on `vite` while staying assignable to its `Plugin`. */
+export interface ReticleVitePlugin {
+  name: string;
+  /**
+   * Vite's `config` hook. Used to declare the SDK's CJS runtime deps for pre-bundling — see the
+   * implementation for why omitting them makes the whole SDK fail to load on linked setups.
+   *
+   * METHOD syntax, not a property, and every field it reads is optional-and-nullable. Both halves
+   * are load-bearing, and both are the contravariance trap this file's sibling test documents:
+   * a property's parameter is checked strictly, so a narrow stand-in REJECTS the wider `UserConfig`
+   * Vite actually passes. `server.watch` is where it bit — Vite types it `WatchOptions | null`,
+   * `null` being how a config turns the watcher off, and SvelteKit's template does exactly that.
+   */
+  config?(config: ViteUserConfigLike): {
+    optimizeDeps: {
+      include: string[];
+      // Either `esbuildOptions` or `rolldownOptions`, chosen from the installed Vite's major — v7
+      // deprecated the former and warns on every boot, blaming the plugin that set it. Typed as an
+      // index signature because the key is computed; the shape under it is the same either way.
+      [optionsKey: string]: unknown;
+    };
+    define: Record<string, string>;
+    server: { watch: { ignored: WatchPattern[] } };
+  };
+  enforce: 'pre';
+  transform: (code: string, id: string) => { code: string; map: string | null } | null;
+  resolveId: (id: string, importer?: string) => string | null;
+  load: (id: string) => string | null;
+  transformIndexHtml: (html: string) => HtmlTag[];
+  /** Vite hands over the resolved config; used to resolve the HTML entry exactly. */
+  configResolved?: (config: {
+    root?: string;
+    command?: string;
+    /** 'production' unless `--mode` says otherwise. See isReticleDisabledBuild. */
+    mode?: string;
+    base?: string;
+    /** Vitest's block, read only to spot browser mode. See isVitestBrowserServer. */
+    test?: unknown;
+  }) => void;
+  /** Dev-server hook: keeps the served connect module from outliving the token it was built without. */
+  configureServer?: (server: ViteDevServerLike) => void;
+  /** Build-time post-condition: desktop injection must have happened. */
+  buildEnd?: () => void;
+  /** Runs the dev-mode injection check immediately. Test seam for the deferred timer. */
+  checkInjectedForTest?: () => void;
+  checkHtmlHookForTest?: () => void;
+  /** The post-condition watch itself, so a test drives the real predicate and not a copy of it. */
+  injectionWatchForTest?: InjectionWatch;
+}
+
+/**
+ * The slice of Vite's dev server this plugin touches, structurally — so `vite` stays a peer the
+ * plugin never imports, the same way the Svelte compiler and Playwright are handled elsewhere.
+ */
+export interface ViteDevServerLike {
+  /**
+   * Vite's own HTTP server, for the port it ACTUALLY bound and the moment it bound it. Optional and
+   * nullable because middleware mode has none — and because a structural stand-in that demands more
+   * than Vite guarantees stops being assignable, which red-builds every typechecked config.
+   */
+  httpServer?: {
+    once(event: string, listener: () => void): unknown;
+    address(): string | { port: number } | null;
+  } | null;
+  /**
+   * The URLs Vite prints on boot. Read rather than assembled: host, protocol and base are all
+   * configurable, so composing a URL here would be a guess about the one thing the dev server can
+   * simply be asked.
+   */
+  resolvedUrls?: { local: string[]; network: string[] } | null;
+  middlewares: {
+    // METHOD syntax throughout, deliberately. A property-style `(mod: object) => void` is checked
+    // strictly (contravariantly) in its parameters, so widening a parameter to `object` makes the
+    // type HARDER to satisfy, not easier — and Vite's real server stops being assignable, which
+    // red-builds every project that typechecks its config. Methods are checked bivariantly, which is
+    // the latitude a structural stand-in is asking for in the first place. See
+    // vite-types-assignable.test.ts, which fails at `tsc` if this drifts back.
+    use(
+      handler: (
+        req: { url?: string | undefined; headers?: { accept?: string | undefined } | undefined },
+        res: unknown,
+        next: () => void,
+      ) => void,
+    ): void;
+  };
+  moduleGraph: {
+    getModuleById(id: string): object | undefined;
+    invalidateModule(mod: object): void;
+  };
+}
+
+interface HtmlTag {
+  tag: string;
+  /** Absent on an inline script, which carries its source in `children` instead. */
+  attrs?: Record<string, string>;
+  /** Inline source, for a tag that has no `src`. */
+  children?: string;
+  /** `head-prepend` is required for the render pre-hook: it must run before any module script. */
+  injectTo: 'body' | 'head-prepend';
+}
+
+/**
+ * Is this resolved module id the one the HTML referenced?
+ *
+ * `resolveId` sees the specifier (`/src/main.tsx`); `transform` sees the absolute path
+ * (`/Users/me/app/src/main.tsx`). A suffix match is what bridges them. Any query suffix
+ * (`?html-proxy`, `?t=...`) is stripped first so a re-transformed module still matches.
+ */
+function isHtmlEntry(id: string, specifier: string | undefined, root: string | undefined): boolean {
+  if (specifier === undefined) return false;
+  const clean = (value: string): string => value.split('?')[0] ?? value;
+  const target = clean(specifier);
+  const candidate = clean(id);
+  if (candidate === target) return true;
+  // EXACT when the resolved root is known: Vite reports the HTML's script as a root-relative
+  // specifier (`/src/main.tsx`) while `transform` sees the absolute path, and joining the two is a
+  // real resolution rather than a guess. Suffix matching alone would also inject into
+  // `/other/src/main.tsx`, a different file that merely ends the same way.
+  if (root !== undefined && target.startsWith('/')) {
+    return candidate === `${root.replace(/\/$/, '')}${target}`;
+  }
+  // Fallback for the rare case Vite never reported a root — still better than not injecting, and the
+  // buildEnd post-condition means a wrong match cannot pass unnoticed as "nothing happened".
+  return candidate.endsWith(target.startsWith('/') ? target : `/${target}`);
+}
+
+/**
+ * Read the daemon's auto-provisioned pairing token (~/.reticle/pairing-token, or the
+ * RETICLE_PAIRING_TOKEN_DIR override) so the served app can present it. Node-side only — a browser
+ * sandbox can't read the file, which is exactly why a rogue localhost app can't forge it. Best-effort:
+ * undefined if the daemon hasn't started yet (the page reloads once it has). Exported for testing.
+ */
+export function readPairingToken(): string | undefined {
+  const override = process.env[ReticleEnv.PAIRING_TOKEN_DIR];
+  const dir =
+    override !== undefined && override.length > 0 ? override : join(homedir(), ReticleDir.ROOT);
+  // Read-or-CREATE, matching the daemon. Reading alone meant a dev server started before the daemon
+  // baked in an empty token and every page it served was refused — with the SDK loading and the
+  // socket opening, so nothing looked broken. See ensure-token for the bisect.
+  return ensurePairingToken(dir);
+}
+
+/**
+ * Pass the token through, saying so once when it is absent.
+ *
+ * Warned HERE rather than at connect time because this is the moment the value is frozen: by the
+ * time the app is refused, the empty string was inlined minutes ago and restarting the dev server is
+ * the only fix. Once per config resolve, so a watch-mode rebuild does not repeat it.
+ */
+let tokenWarned = false;
+function warnIfTokenMissing(token: string | undefined): string | undefined {
+  const warning = missingTokenWarning(token);
+  if (warning !== undefined && !tokenWarned) {
+    tokenWarned = true;
+    console.warn(warning);
+  }
+  return token;
+}
+
+/** The body of the connect module — real imports, resolved by Vite when the module is served. */
+/**
+ * The conventional app-side dev module: `registerStore` / `registerCapabilities` live here.
+ *
+ * Imported by CONVENTION rather than by patching the app's entry file: the connect is injected into
+ * a virtual module, so the alternative is `init` editing `src/main.tsx` — a file the user owns — for
+ * something that is opt-in enrichment. Convention costs one `existsSync`.
+ */
+export const RETICLE_DEV_MODULE_CANDIDATES = [
+  'src/reticle-dev.ts',
+  'src/reticle-dev.js',
+  'src/reticle-dev.tsx',
+  'src/reticle-dev.jsx',
+] as const;
+
+/** The app's dev module, as an importable path — or null when the app has none. */
+export function findDevModule(root: string, exists: (p: string) => boolean): string | null {
+  for (const rel of RETICLE_DEV_MODULE_CANDIDATES) {
+    if (exists(`${root}/${rel}`)) return `/${rel}`;
+  }
+  return null;
+}
+
+/**
+ * Which SDK package this app actually has, and whether `install()` applies.
+ *
+ * The injected connect must NOT name `@reticlehq/react` unconditionally. That is right for a React
+ * app and fatal for any other: `reticle init` gives a Vue or Svelte codebase the framework-neutral
+ * `@reticlehq/browser` — deliberately, because a package named `@reticlehq/react` with `react` in
+ * its peers has no business in a Vue app — and the injected import would then name a package that is
+ * not installed, so nothing connects and the page reports no session with no obvious cause.
+ *
+ * The React kit WINS when both resolve: it is a superset (it re-exports the sensor and adds the
+ * adapter), so an app that has it wants component identity. `install()` is the adapter's alone and
+ * the sensor does not export it — naming it against the sensor would trade a missing module for a
+ * missing export.
+ */
+export function installedSdk(
+  appRoot: string,
+  canResolve: (dep: string) => boolean = (dep) => null !== resolvableChain([dep], appRoot),
+): { specifier: string; usesInstall: boolean } {
+  try {
+    const pkgPath = join(appRoot, 'package.json');
+    if (existsSync(pkgPath)) {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as Record<
+        string,
+        Record<string, string> | undefined
+      >;
+      const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
+      if (deps[RETICLE_SENSOR] !== undefined && deps[RETICLE_PACKAGE] === undefined) {
+        return { specifier: RETICLE_SENSOR, usesInstall: false };
+      }
+      if (deps[RETICLE_PACKAGE] !== undefined) {
+        return { specifier: RETICLE_PACKAGE, usesInstall: true };
+      }
+    }
+  } catch {
+    // Ignore read or parse failures when checking dependencies
+  }
+
+  if (canResolve(RETICLE_PACKAGE)) return { specifier: RETICLE_PACKAGE, usesInstall: true };
+  if (canResolve(RETICLE_SENSOR)) return { specifier: RETICLE_SENSOR, usesInstall: false };
+  // Neither resolves: keep the historical name so the failure reads as "the SDK is not installed"
+  // rather than as a package nobody recognises.
+  return { specifier: RETICLE_PACKAGE, usesInstall: true };
+}
+
+export function connectModuleSource(
+  options: ReticleVitePluginOptions,
+  devModule: string | null = null,
+): string {
+  const args = connectArgs(options);
+  const sdk = installedSdk(options.root ?? process.cwd());
+  const named = sdk.usesInstall ? 'reticle, install' : 'reticle';
+  const call = sdk.usesInstall ? 'install();\n' : '';
+  // The only place in a Vite app that can see hot updates. `import.meta.hot` exists per module and
+  // only for modules Vite serves through its own transform; the SDK is a dependency, pre-bundled by
+  // the optimizer, and gets no hot context however it is written — so the channel is handed to it
+  // from here and the SDK owns everything after that (including which events it cares about).
+  // Guarded, because a desktop build has no dev server and therefore no hot context at all.
+  const hot = `if (import.meta.hot) reticle.observeHotUpdates(import.meta.hot);\n`;
+  const base = `import { ${named} } from '${sdk.specifier}';\n${call}reticle.connect(${args});\n${hot}`;
+  // AFTER connect: registerStore subscribes through the live SDK, and registering before there is a
+  // session to report into drops the first diffs.
+  return null === devModule ? base : `${base}import('${devModule}');\n`;
+}
+
+/**
+ * Reticle Vite plugin. Add to your `plugins` array and the entire integration is done:
+ *
+ * import { reticle } from '@reticlehq/vite-plugin';
+ * export default defineConfig({ plugins: [react(), reticle()] });
+ *
+ * The web plugin also builds, replacing the browser SDK with an inert stub so a default
+ * production bundle ships no Reticle runtime code at all.
+ *
+ * `desktop: true` keeps that guarantee for a production-mode build. It instruments `serve`, and a
+ * build only when it runs in another mode (`vite build --mode development`), which is how a packaged
+ * smoke renderer with no dev server still gets its connect(). See isReticleDisabledBuild.
+ */
+/**
+ * The daemon's journal directory, as a matcher every chokidar major honours.
+ *
+ * Exported so the one regression test can assert on the matcher itself rather than on a string that
+ * looked right and matched nothing.
+ */
+export const JOURNAL_IGNORE = new RegExp(
+  `(^|[\\\\/])${ReticleDir.ROOT.replace('.', '\\.')}([\\\\/]|$)`,
+);
+
+export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlugin {
+  const sourceMapping = options.sourceMapping !== false;
+  const inject = options.inject !== false;
+  const desktop = true === options.desktop;
+  // Resolve the stable projectId once (explicit option, else derived from package.json + cwd) so the
+  // app is identifiable across port changes with zero config.
+  const resolved: ReticleVitePluginOptions = {
+    ...options,
+    projectId: resolveProjectId(options.projectId, process.cwd()),
+  };
+  /**
+   * The specifier the HTML points at, e.g. `/src/main.tsx`.
+   *
+   * Stored UNRESOLVED, because that is what `resolveId` receives — while `transform` is handed the
+   * absolute resolved path. Comparing the two directly never matches, and the failure is silent:
+   * the bundle simply ships with no connect() in it. Hence `isHtmlEntry`'s suffix comparison.
+   */
+  let htmlEntrySpecifier: string | undefined;
+  /** Vite's resolved project root, for exact entry resolution. Undefined until configResolved. */
+  let root: string | undefined;
+  /** 'serve' | 'build'. The dev check only applies to serve; buildEnd covers the other. */
+  let command: string | undefined;
+  /** Vite's resolved mode. Decides whether a desktop build may be instrumented at all. */
+  let mode: string | undefined;
+  /** A build that must carry no Reticle runtime. See isReticleDisabledBuild. */
+  const disabledBuild = (): boolean => isReticleDisabledBuild(desktop, command, mode);
+  /** Vite's resolved `base`. Undefined until configResolved, which is before any HTML is served. */
+  let base: string | undefined;
+  /** True only when THIS server is Vitest's browser-mode runner — see isVitestBrowserServer. */
+  let vitestBrowser = false;
+  const warn = options.onWarn ?? ((message: string) => globalThis.console.warn(message));
+  /** Whether connect() actually reached a module — asserted at buildEnd, never assumed. */
+  let injected = false;
+  /** Files already announced as opted out of stamping: one line each, for the life of the server. */
+  const announcedIgnored = new Set<string>();
+  /**
+   * Whether Vite ever asked us to transform the app's HTML.
+   *
+   * On the web this is the usual way the connect script gets in, but not the only one: see
+   * connectDelivered below, which the web warning reads together with this.
+   */
+  let htmlTransformed = false;
+  /**
+   * Whether the connect reached the page by a route OTHER than the HTML hook.
+   *
+   * A framework that renders its own HTML never calls `transformIndexHtml`, and still connects when
+   * its client entry imports the module `load` serves (React Router) or calls connect() itself with
+   * the token this plugin inlines (SvelteKit's client hook). Counting only the hook told those apps,
+   * ten seconds after every page load and while they WERE connected, that they would never connect.
+   */
+  let connectDelivered = false;
+  /** The last port warning printed, so a disagreement is said once and not on every request. */
+  let lastPortWarning: string | undefined;
+  /**
+   * Resolve port + token at the moment of injection, not at plugin construction. By the time a
+   * module is served or built the daemon is up and has written its pairing token; resolving early
+   * would bake in `undefined` and the app would fail auth on every connect.
+   */
+  const resolveLazy = (): ReticleVitePluginOptions => {
+    // Wherever the daemon for this project actually is; the order is argued in discover-port.ts.
+    const { port, warning } = resolveDaemonPort(resolved.port, resolved.projectId, process.cwd());
+    if (warning !== undefined && warning !== lastPortWarning) {
+      lastPortWarning = warning;
+      warn(warning);
+    }
+    const withPort = port !== undefined ? { ...resolved, port } : resolved;
+    const token = withPort.token ?? readPairingToken();
+    const withToken = token !== undefined ? { ...withPort, token } : withPort;
+    // Resolved here for the same reason as the token: these are Node-side facts about the installed
+    // tree, and they travel in the generated connect call rather than through a `define`.
+    const appRoot = withToken.root ?? root ?? process.cwd();
+    const sdkVersion = withToken.sdkVersion ?? sdkPackageVersion(appRoot);
+    return { ...withToken, root: appRoot, sdkVersion };
+  };
+  /**
+   * The connect module's source as it would be served RIGHT NOW. Recomputed rather than cached: the
+   * daemon's token and the app's dev module can both appear after the dev server started, which is
+   * the whole reason the module is re-read at all.
+   */
+  const currentConnectSource = (): string =>
+    connectModuleSource(resolveLazy(), root === undefined ? null : findDevModule(root, existsSync));
+  /** The source `load` last handed to Vite, or undefined before the first serve. */
+  let lastServedConnectSource: string | undefined;
+  /** How many times the served source has actually changed. See connectChurnWarning. */
+  let connectChanges = 0;
+
+  /**
+   * When to conclude injection failed, and which of the three messages to say. Lives beside those
+   * messages rather than here: choosing between them is the subtlety, and it was a thousand lines
+   * from the wording it chose. The flags are read through getters because both flip mid-session.
+   */
+  const watch = createInjectionWatch({
+    desktop,
+    inject,
+    injected: () => injected,
+    connectDelivered: () => htmlTransformed || connectDelivered,
+    connectModule: () => connectModuleUrl(base),
+    warn,
+  });
+
+  return {
+    name: RETICLE_VITE_PLUGIN_NAME,
+    enforce: 'pre',
+    /**
+     * Declare the SDK itself and the optimizer cache fingerprint.
+     *
+     * The SDK itself only. It does not import a second accessibility engine, and naming CJS deps it
+     * does not use would make Vite pre-bundle packages the app may not have, then blame Reticle for a
+     * false `Failed to resolve dependency` warning.
+     */
+    config(config: ViteUserConfigLike) {
+      // Everything below asks what the APP has installed, so every lookup is rooted here and never
+      // at the plugin's own location. Vite defaults an omitted root to the cwd, and so does this.
+      const appRoot = config.root ?? process.cwd();
+      const optimizerKey = optimizerOptionsKey(viteMajor(appRoot));
+      return {
+        // Keep the daemon's journal out of the dev server's watcher.
+        //
+        // The daemon writes `.reticle/` into the PROJECT root — session journals, and `ambient.json`
+        // rewritten atomically as `ambient.json.tmp` + rename on a live session. Unignored, every
+        // journal write reads as a project file changing and Vite answers with a full page reload,
+        // which is a loop with no exit: page loads -> SDK connects and streams events -> daemon
+        // journals them -> Vite reloads the page -> SDK reconnects.
+        //
+        // A RegExp, NOT a glob: chokidar dropped glob support in v4, and Vite 7+ ships v4/v5, where
+        // `**/.reticle/**` is silently accepted and matches nothing. Vite's own defaults are globs
+        // and have the same problem, so their shape is not safe to copy here.
+        //
+        // Anchored on `^` or a separator so it matches the directory and not a file that merely ends
+        // in those characters, and both separators are accepted because chokidar reports the path in
+        // the platform's own form. Appends to the app's list rather than replacing it.
+        server: {
+          watch: {
+            ignored: mergeIgnored(config.server?.watch?.ignored, JOURNAL_IGNORE),
+          },
+        },
+        // Expose the daemon's pairing token to hand-written connects in the same Vite app. The
+        // plugin's own injected connect gets the token directly, but a connect the USER writes —
+        // SvelteKit's client hook, a custom entry — cannot reach a file only Node can read, so it
+        // would call connect() with no credential and the bridge would answer "authentication
+        // failed". Empty until the daemon has provisioned one; the page reloads once it has.
+        define: {
+          ...(config.define ?? {}),
+          [RETICLE_TOKEN_GLOBAL]: JSON.stringify(warnIfTokenMissing(readPairingToken()) ?? ''),
+          // Lets the SDK report React's absolute `_debugSource.fileName` as a repo-relative path,
+          // so source looks the same whichever React version an app is on.
+          // Kept for HAND-WRITTEN connects (SvelteKit's hook, a custom entry): those live in app
+          // source, where a define does substitute. The plugin's own injected connect passes both as
+          // arguments instead — see connectArgs.
+          [RETICLE_ROOT_GLOBAL]: JSON.stringify(appRoot),
+          [RETICLE_SDK_VERSION_GLOBAL]: JSON.stringify(sdkPackageVersion(appRoot)),
+        },
+        optimizeDeps: {
+          // Part of the cache key, not of the build: changing it is what makes Vite notice that the
+          // SDK on disk is not the SDK it pre-bundled. See sdkBuildFingerprint.
+          //
+          // Under the key THIS Vite wants. Vite 7 moved the optimizer to rolldown and deprecated
+          // `esbuildOptions`, warning on every boot — a warning attributed to the plugin that set
+          // it, which is us.
+          // Inherited from whichever key the app used, and `define` placed where this bundler will
+          // take it — rolldown refuses it at the top level. See optimizerOptions.
+          [optimizerKey]: optimizerOptions(
+            optimizerKey,
+            {
+              ...(config.optimizeDeps?.esbuildOptions ?? {}),
+              ...(config.optimizeDeps?.rolldownOptions ?? {}),
+            },
+            { __RETICLE_SDK_BUILD__: JSON.stringify(sdkBuildFingerprint(appRoot)) },
+          ),
+          include: [
+            ...(config.optimizeDeps?.include ?? []),
+            // The SDK ITSELF. Without this, Vite does not learn about @reticlehq/react until the
+            // injected connect module is requested — mid-flight, on the very first page load. It
+            // then pre-bundles it and forces a full reload, and the connect is lost in that reload:
+            // no WebSocket, no session, no console message. The FIRST load after `reticle init` —
+            // the one the whole product is judged on — silently did nothing, and it worked on the
+            // next refresh, which is the worst possible shape for a bug like this.
+            //
+            // Whichever SDK this app actually has: naming `@reticlehq/react` in a Vue app that was
+            // given the sensor produces the exact boot warning the note below is about, for a
+            // package that is correctly absent.
+            installedSdk(appRoot).specifier,
+          ],
+        },
+      };
+    },
+    transform(code, id) {
+      if (disabledBuild()) return null;
+      // A hand-written connect in app code reads the token this plugin inlines; that is the
+      // connect reaching the page without the HTML hook. See connectDelivered.
+      if (!connectDelivered && code.includes(RETICLE_TOKEN_GLOBAL) && !id.includes(NODE_MODULES)) {
+        connectDelivered = true;
+      }
+      // Desktop injection: prepend connect() to the HTML's own entry module. It is a REAL module, so
+      // its bare `@reticlehq/react` import resolves through the normal pipeline in both dev and
+      // build — which a virtual <script src> only ever did in dev.
+      if (desktop && inject && isHtmlEntry(id, htmlEntrySpecifier, root)) {
+        injected = true;
+        const withConnect = `${connectModuleSource(resolveLazy())}\n${code}`;
+        const stamped = sourceMapping && shouldStamp(id) ? stamp(withConnect, id) : null;
+        return stamped ?? { code: withConnect, map: null };
+      }
+      if (!sourceMapping) return null;
+      // Decided HERE, ahead of both stampers, so the Svelte path honours the marker too and so the
+      // opt-out is announced once regardless of which stamper would have run. The Babel plugin reads
+      // the same marker on its own for the callers that reach it without Vite (#853).
+      if (optsOutOfStamping(code, id)) {
+        if (!announcedIgnored.has(id)) {
+          announcedIgnored.add(id);
+          warn(ignoredFileNotice(id));
+        }
+        return null;
+      }
+      // `.svelte` runs on the RAW component source, which is only still markup because this plugin
+      // declares `enforce: 'pre'` and therefore transforms before @sveltejs/vite-plugin-svelte. No
+      // map: the insertions are within a line and never move one, and a wrong map is worse than none.
+      if (shouldStampSvelte(id)) {
+        const stamped = stampSvelte(code, id);
+        return null === stamped ? null : { code: stamped, map: null };
+      }
+      if (!shouldStamp(id)) return null;
+      return stamp(code, id);
+    },
+    resolveId(id, importer) {
+      if (disabledBuild() && id === RETICLE_SENSOR) {
+        return RETICLE_DISABLED_STUB;
+      }
+      // Desktop: remember the module the HTML points at, so `transform` can prepend connect() into
+      // it. A packaged build has no dev server, so the serve-time trick below — a <script src> at a
+      // virtual URL — would emit a tag pointing at a file that does not exist. That shipped an app
+      // with a dead script and NO instrumentation, which is worse than not injecting at all.
+      // `includes`, not `endsWith`: in a BUILD Vite rewrites the html entry through an html-proxy
+      // id (`/index.html?html-proxy&index=0.js`), so an endsWith check silently never matches and
+      // nothing is injected — which is exactly how this shipped a bundle with no connect() in it.
+      if (desktop && inject && importer !== undefined && importer.includes('.html')) {
+        htmlEntrySpecifier = id;
+      }
+      // Return the id verbatim so Vite serves it back to load (the bare imports inside it then
+      // go through normal resolution). No NUL prefix: the browser requests it as a URL.
+      return inject && id === RETICLE_CONNECT_MODULE ? RETICLE_CONNECT_MODULE : null;
+    },
+    load(id) {
+      if (disabledBuild() && id === RETICLE_DISABLED_STUB) {
+        return RETICLE_DISABLED_STUB_CODE;
+      }
+      if (!inject || id !== RETICLE_CONNECT_MODULE) return null;
+      const source = currentConnectSource();
+      lastServedConnectSource = source;
+      connectDelivered = true;
+      return source;
+    },
+    configResolved(config) {
+      root = config.root;
+      command = config.command;
+      mode = config.mode;
+      base = config.base;
+      vitestBrowser = isVitestBrowserServer(config);
+    },
+    /**
+     * Serve the connect module fresh, every time.
+     *
+     * `load` reads the daemon's pairing token at serve time precisely because the daemon may start
+     * after the dev server — but Vite caches the module it produced and answers every later request
+     * from that cache, INCLUDING after a full page reload. A dev server started first therefore keeps
+     * serving a tokenless connect module: the SDK gets a 1008 `authentication failed` and stops
+     * retrying (correctly — a wrong token does not fix itself), so `reticle status` shows no session
+     * while the page demonstrably contains `/@reticle-connect`, and only a dev-server restart clears
+     * it.
+     *
+     * Dropping the cached module before it is served makes `load` re-read the token, so starting the
+     * daemon and reloading the page is enough.
+     *
+     * Only when the source would ACTUALLY differ, though. A module force-invalidated on every
+     * request is re-resolved against Vite's dep optimizer on every page load, which is a
+     * self-sustaining reload loop: reload → request → invalidate → re-resolve → reload. Comparing
+     * the source first costs one string compare, keeps the late-daemon fix intact (the token
+     * appearing IS a change), and makes the module inert once it has settled.
+     */
+    configureServer(server) {
+      // The web post-condition is armed by the first DOCUMENT REQUEST, in the middleware below.
+      //
+      // Not from `transformIndexHtml`, because a framework that renders its own HTML never calls it
+      // and the check would be unreachable in the one case it exists for. But not from boot either:
+      // that fires whether or not anybody has opened the app, and tells a healthy project it will
+      // never connect. The request is the earliest moment the plugin knows enough to have an
+      // opinion.
+      // Tell `~/.reticle` this dev server exists, the moment it is actually listening.
+      //
+      // This is the one fact nobody outside this process could observe: the plugin is loaded in the
+      // dev server that is RUNNING, not merely present in a config file on disk. Its absence is the
+      // commonest setup failure there is — a plugin added to a config the running server already
+      // read — and until now that failure was indistinguishable from every other one.
+      //
+      // Deliberately reads the port and URL off the server rather than composing them. The port may
+      // be `strictPort: false` and have moved, the host and base are configurable, and every one of
+      // those is something the user can change under us.
+      const announce = (): void => {
+        const address = server.httpServer?.address();
+        const port =
+          'object' === typeof address && null !== address && undefined !== address
+            ? address.port
+            : undefined;
+        if (undefined === port) return;
+        const opts = resolveLazy();
+        const withdraw = announceDevServer({
+          port,
+          pid: process.pid,
+          root: opts.root ?? process.cwd(),
+          url: server.resolvedUrls?.local[0] ?? `http://localhost:${String(port)}/`,
+          ...(opts.sdkVersion === undefined || 0 === opts.sdkVersion.length
+            ? {}
+            : { sdkVersion: opts.sdkVersion }),
+          startedAt: Date.now(),
+          ...(opts.projectId === undefined ? {} : { projectId: opts.projectId }),
+        });
+        server.httpServer?.once('close', withdraw);
+        // `close` does not fire on Ctrl-C, which is how a dev server usually dies. The read side
+        // checks liveness anyway, so a missed withdrawal degrades rather than lies — these just
+        // keep the directory tidy in the cases we can catch.
+        process.once('exit', withdraw);
+        process.once('SIGINT', withdraw);
+        process.once('SIGTERM', withdraw);
+      };
+      // Already bound in some setups (middleware mode, a restart), not yet in the common one.
+      if (null === server.httpServer?.address() || undefined === server.httpServer?.address()) {
+        server.httpServer?.once('listening', announce);
+      } else {
+        announce();
+      }
+      // Everything below serves or watches the injected connect, so `inject: false` stops HERE and
+      // not at the top. SvelteKit and TanStack Start are written `inject: false` because they connect
+      // themselves, and returning before the announcement made the dev server `init` started for
+      // them invisible to everything that asks which dev servers are running.
+      if (!inject) return;
+      server.middlewares.use((req, _res, next) => {
+        // One middleware, two observations. A second `use()` would work equally well in Vite and
+        // is the obvious way to write this, but it makes the ORDER of registration load-bearing for
+        // anything that records a single handler — so both live here instead.
+        if (!desktop && watch.isDocumentRequest(req)) watch.noteHtmlRequest();
+        // Matched against BOTH forms: plugin middlewares run ahead of Vite's own base
+        // middleware, so the request still carries `base` here, while a middleware-mode host may
+        // have stripped it already.
+        const requestPath = (req.url ?? '').split('?')[0];
+        if (requestPath === RETICLE_CONNECT_MODULE || requestPath === connectModuleUrl(base)) {
+          if (currentConnectSource() !== lastServedConnectSource) {
+            connectChanges++;
+            if (CONNECT_CHURN_LIMIT === connectChanges) warn(connectChurnWarning());
+            const mod = server.moduleGraph.getModuleById(RETICLE_CONNECT_MODULE);
+            if (mod !== undefined) server.moduleGraph.invalidateModule(mod);
+          }
+        }
+        next();
+      });
+    },
+    /**
+     * Desktop injection is silent when it misses — the bundle simply has no connect() in it and the
+     * app looks wired while reporting nothing. That happened twice while this was being built. A
+     * build that could not instrument must fail loudly instead of shipping a binary that lies.
+     */
+    buildEnd() {
+      // A production build injects nothing on purpose; see isReticleDisabledBuild.
+      if (!desktop || !inject || injected || disabledBuild()) return;
+      throw new Error(notInjectedMessage());
+    },
+    checkInjectedForTest: watch.checkInjected,
+    checkHtmlHookForTest: watch.checkHtmlHookRan,
+    injectionWatchForTest: watch,
+    transformIndexHtml() {
+      if (disabledBuild()) return [];
+      htmlTransformed = true;
+      if (desktop && inject && 'serve' === command) watch.armDesktopCheck();
+      // Desktop injects via the entry module instead (see transform) — a tag here would be a dead
+      // URL in a packaged build. A Vitest run gets nothing unless `inject: true` says otherwise —
+      // see isVitestBrowserServer.
+      if (!inject || desktop) return [];
+      if (true !== options.inject && vitestBrowser) return [];
+      return [
+        // A CLASSIC inline script in <head>, and it has to be both.
+        //
+        // React reads `__REACT_DEVTOOLS_GLOBAL_HOOK__` when its renderer injects — which happens as
+        // soon as react-dom evaluates. A `type="module"` script runs in document order AFTER the
+        // app's entry module, so the connect module below can never install the hook in time.
+        // Measured on two independent Vite apps: the hook existed with our callback attached and
+        // `renderers.size === 0`, so the render meter counted zero forever while the docs advertised
+        // commit counts. This runs during parse, before any module, and the meter adopts its buffer.
+        { tag: 'script', children: RENDER_PREHOOK_SOURCE, injectTo: 'head-prepend' },
+        { tag: 'script', attrs: { type: 'module', src: connectModuleUrl(base) }, injectTo: 'body' },
+      ];
+    },
+  };
+}

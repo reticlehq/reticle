@@ -1,0 +1,490 @@
+import { describe, expect, it } from 'vitest';
+import {
+  PredicateKind,
+  ReticleCommand,
+  SessionState,
+  Verified,
+  VerifiedReason,
+  type CommandResult,
+  type ReticleEvent,
+} from '@reticlehq/core';
+import { LastAct } from '@/portal/session/last-act.js';
+import { TOOLS, type ToolDeps } from './tools.js';
+import { ReticleTool } from '@reticlehq/core';
+import { BaselineStore } from '@/memory/project/baselines.js';
+import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
+import { AMBIENT_RECORDING, RecordingStore } from '@/language/flows/recording/tape/recordings.js';
+import { FlowStore } from '@/language/flows/flows.js';
+import { ProjectStore } from '@/memory/project/project-store.js';
+import { AnnotationStore } from '@/language/flows/stores/annotation-store.js';
+import type { Session } from '@/portal/session/session.js';
+import type { SessionManager } from '@/portal/session/session-manager.js';
+
+interface StateSessionOptions {
+  initialStore?: Record<string, unknown>;
+  onAct?: (setStore: (s: Record<string, unknown>) => void) => void;
+  settled?: boolean;
+  stateReadOk?: boolean;
+}
+
+function createStateSession(options: StateSessionOptions = {}) {
+  const {
+    initialStore = { app: { cart: { count: 3 } }, cart: { count: 3 } },
+    onAct,
+    settled = true,
+    stateReadOk = true,
+  } = options;
+
+  const commandLog: { command: string; args: unknown; result?: unknown }[] = [];
+  let currentStore = { ...initialStore };
+  const setStore = (s: Record<string, unknown>) => {
+    currentStore = s;
+  };
+
+  const command = (name: string, args: unknown): Promise<CommandResult> => {
+    if (name === ReticleCommand.STATE_READ) {
+      if (!stateReadOk) {
+        commandLog.push({ command: name, args, result: { ok: false } });
+        return Promise.resolve({
+          kind: 'command_result',
+          id: 'sr_err',
+          ok: false,
+          error: 'store unreadable',
+        });
+      }
+      const recordArgs = (args ?? {}) as Record<string, unknown>;
+      if (recordArgs['store'] !== undefined && recordArgs['path'] !== undefined) {
+        // Scoped store read
+        const storeName = recordArgs['store'] as string;
+        const path = recordArgs['path'] as string;
+        const store = currentStore[storeName] as Record<string, unknown> | undefined;
+        const found = store !== undefined && path in store;
+        const result = {
+          found,
+          value: found ? store[path] : undefined,
+          storeNames: Object.keys(currentStore),
+        };
+        commandLog.push({ command: name, args, result });
+        return Promise.resolve({
+          kind: 'command_result',
+          id: 'sr_scoped',
+          ok: true,
+          result,
+        });
+      }
+      const result = {
+        stores: { ...currentStore },
+      };
+      commandLog.push({ command: name, args, result });
+      return Promise.resolve({
+        kind: 'command_result',
+        id: 'sr',
+        ok: true,
+        result,
+      });
+    }
+
+    if (name === ReticleCommand.ACT) {
+      onAct?.(setStore);
+      const result = {
+        dispatched: true,
+        settled,
+        effect: { domMutatedWithin: 1 },
+      };
+      commandLog.push({ command: name, args, result });
+      return Promise.resolve({
+        kind: 'command_result',
+        id: 'act',
+        ok: true,
+        result,
+      });
+    }
+
+    commandLog.push({ command: name, args });
+    return Promise.resolve({
+      kind: 'command_result',
+      id: 'other',
+      ok: true,
+      result: {},
+    });
+  };
+
+  const noEvents: ReticleEvent[] = [];
+  const stub: Partial<Session> = {
+    id: 'demo-state',
+    url: 'http://localhost:5173/app',
+    elapsed: () => 1000,
+    lastAct: new LastAct(),
+    beginAction: () => 'a1',
+    finishAction: () => undefined,
+    recordAction: () => 'a2',
+    command,
+    queryEvents: () => Promise.resolve(noEvents),
+    eventsSince: () => noEvents,
+    bufferHealth: () => ({ total: 10, dropped: 0 }),
+    lostSince: () => false,
+    blindSpots: () => ({}),
+    health: () => ({ lastSeenMs: 0, throttled: false, focused: true }),
+    throttled: () => false,
+    getState: () => SessionState.ACTIVE,
+    drainInbox: () => [],
+    inboxSize: () => 0,
+    onEvent: () => () => undefined,
+    ambientCounts: () => ({}),
+  };
+
+  const session = stub as Session;
+  const sessions: Partial<SessionManager> = { resolve: () => session };
+  const deps: ToolDeps = {
+    sessions: sessions as SessionManager,
+    baselines: new BaselineStore(),
+    recordings: new RecordingStore(),
+    flows: new FlowStore(createNodeFileSystem(), '/tmp/reticle-test/.reticle', { now: () => 0 }),
+    project: new ProjectStore(createNodeFileSystem(), '/tmp/reticle-test/.reticle', {
+      now: () => 0,
+    }),
+    annotations: new AnnotationStore(),
+    fs: createNodeFileSystem(),
+    reticleRoot: '/tmp/reticle-test/.reticle',
+    now: () => 0,
+  };
+
+  return {
+    session,
+    deps,
+    commandLog,
+    setStore,
+  };
+}
+
+function tool(name: string) {
+  const found = TOOLS.find((t) => t.name === name);
+  if (found === undefined) throw new Error(`no ${name} tool`);
+  return found;
+}
+
+describe('#864 — pre-existing STATE bypasses alreadyTrue in act_and_wait', () => {
+  it('returns no-fault / already_true when STATE condition already holds before dispatch', async () => {
+    const { deps, commandLog } = createStateSession({
+      initialStore: { app: { cart: { count: 3 } } },
+      settled: true,
+    });
+
+    const res = (await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
+      ref: 'btn-inert',
+      action: 'click',
+      timeout_ms: 0,
+      until: {
+        kind: PredicateKind.STATE,
+        path: 'cart.count',
+        equals: 3,
+      },
+    })) as Record<string, unknown>;
+
+    // 1. Proves causal contract: pre-existing STATE does not receive causal PROVED credit
+    expect(res['verified']).toBe(Verified.NO_FAULT);
+    expect(res['verifiedReason']).toBe(VerifiedReason.ALREADY_TRUE);
+    expect(res['because']).toContain('already true before this action');
+
+    // 2. Proves baseline detection evaluated STATE before action dispatch
+    const stateReadIndex = commandLog.findIndex((c) => c.command === ReticleCommand.STATE_READ);
+    const actIndex = commandLog.findIndex((c) => c.command === ReticleCommand.ACT);
+    expect(stateReadIndex).toBeGreaterThanOrEqual(0);
+    expect(actIndex).toBeGreaterThanOrEqual(0);
+    expect(stateReadIndex).toBeLessThan(actIndex);
+  });
+
+  it('works identically for scoped / named store state', async () => {
+    const { deps, commandLog } = createStateSession({
+      initialStore: { cart: { count: 3 } },
+      settled: true,
+    });
+
+    const res = (await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
+      ref: 'btn-inert',
+      action: 'click',
+      timeout_ms: 0,
+      until: {
+        kind: PredicateKind.STATE,
+        store: 'cart',
+        path: 'count',
+        equals: 3,
+      },
+    })) as Record<string, unknown>;
+
+    expect(res['verified']).toBe(Verified.NO_FAULT);
+    expect(res['verifiedReason']).toBe(VerifiedReason.ALREADY_TRUE);
+
+    const firstStateReadIndex = commandLog.findIndex(
+      (c) => c.command === ReticleCommand.STATE_READ,
+    );
+    const actIndex = commandLog.findIndex((c) => c.command === ReticleCommand.ACT);
+    expect(firstStateReadIndex).toBeGreaterThanOrEqual(0);
+    expect(firstStateReadIndex).toBeLessThan(actIndex);
+  });
+
+  it('awards causal YES when STATE was not already true and changed because of the action', async () => {
+    const ctx = createStateSession({
+      initialStore: { app: { cart: { count: 0 } }, cart: { count: 0 } },
+      onAct: (setStore) => {
+        // Action causes cart.count to become 3
+        setStore({ app: { cart: { count: 3 } }, cart: { count: 3 } });
+      },
+      settled: true,
+    });
+
+    const res = (await tool(ReticleTool.ACT_AND_WAIT).handler(ctx.deps, {
+      ref: 'btn-add-to-cart',
+      action: 'click',
+      timeout_ms: 0,
+      until: {
+        kind: PredicateKind.STATE,
+        path: 'cart.count',
+        equals: 3,
+      },
+    })) as Record<string, unknown>;
+
+    expect(res['verified']).toBe(Verified.YES);
+    expect(res['verifiedReason']).toBe(VerifiedReason.PROVED);
+
+    // Pre-dispatch STATE_READ saw count: 0 -> alreadyTrue was false
+    // Post-dispatch STATE_READ saw count: 3 -> pass was true
+    const actIndex = ctx.commandLog.findIndex((c) => c.command === ReticleCommand.ACT);
+    expect(actIndex).toBeGreaterThanOrEqual(0);
+
+    const preActRead = ctx.commandLog
+      .slice(0, actIndex)
+      .find((c) => c.command === ReticleCommand.STATE_READ);
+    const postActRead = ctx.commandLog
+      .slice(actIndex + 1)
+      .find((c) => c.command === ReticleCommand.STATE_READ);
+
+    expect(preActRead).toBeDefined();
+    const preStores = (preActRead?.result as { stores?: Record<string, unknown> })?.stores;
+    const preCart = (preStores?.['app'] as { cart?: { count?: number } })?.cart;
+    expect(preCart?.count).toBe(0);
+
+    expect(postActRead).toBeDefined();
+    const postStores = (postActRead?.result as { stores?: Record<string, unknown> })?.stores;
+    const postCart = (postStores?.['app'] as { cart?: { count?: number } })?.cart;
+    expect(postCart?.count).toBe(3);
+  });
+
+  it('preserves UNKNOWN when pre-existing STATE is true but the window never settled', async () => {
+    const { deps } = createStateSession({
+      initialStore: { app: { cart: { count: 3 } } },
+      settled: false,
+    });
+
+    const res = (await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
+      ref: 'btn-inert',
+      action: 'click',
+      timeout_ms: 0,
+      until: {
+        kind: PredicateKind.STATE,
+        path: 'cart.count',
+        equals: 3,
+      },
+    })) as Record<string, unknown>;
+
+    expect(res['verified']).toBe(Verified.UNKNOWN);
+    expect(res['verifiedReason']).toBe(VerifiedReason.ALREADY_TRUE);
+  });
+
+  it('preserves INCONCLUSIVE when store is missing rather than claiming already_true', async () => {
+    const { deps } = createStateSession({
+      initialStore: {},
+      settled: true,
+    });
+
+    const res = (await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
+      ref: 'btn-inert',
+      action: 'click',
+      timeout_ms: 0,
+      until: {
+        kind: PredicateKind.STATE,
+        path: 'cart.count',
+        equals: 3,
+      },
+    })) as Record<string, unknown>;
+
+    expect(res['verified']).toBe(Verified.UNKNOWN);
+    expect(res['verifiedReason']).toBe(VerifiedReason.INCONCLUSIVE);
+  });
+});
+
+/**
+ * `already_true` says WHAT was already true (4.1).
+ *
+ * The verdict tells an agent its assertion held before the action, so the action proved nothing.
+ * The next question is always the same - true how? what was there? - and it was unanswerable: the
+ * pre-action reading was taken, used for the pass/fail bit, and thrown away. By the time the agent
+ * could ask, the action has run and the state may have moved, so the one moment that mattered is
+ * gone for good.
+ *
+ * It costs nothing to keep. The pre-check already evaluates the predicate and already holds its
+ * evidence - `alreadyTrueHiddenMatch` reaches into exactly that object for one bit. This keeps the
+ * reading beside it rather than one derived fact about it.
+ *
+ * Why it matters beyond curiosity: `already_true` is the verdict that tells somebody their check was
+ * vacuous, and the usual cause is a stale assertion that was true all along. Naming the value is the
+ * difference between "write a better assertion" and being able to see WHICH one to write.
+ */
+describe('what an already_true verdict tells the agent about the pre-action state', () => {
+  it('reports the reading the pre-check took, not only that it passed', async () => {
+    const { deps } = createStateSession({
+      initialStore: { app: { cart: { count: 3 } } },
+      settled: true,
+    });
+
+    const res = (await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
+      ref: 'btn-inert',
+      action: 'click',
+      timeout_ms: 0,
+      until: { kind: PredicateKind.STATE, path: 'cart.count', equals: 3 },
+    })) as Record<string, unknown>;
+
+    expect(res['verifiedReason']).toBe(VerifiedReason.ALREADY_TRUE);
+    expect(
+      res['alreadyTrueEvidence'],
+      'the pre-action reading was discarded, and after the action it cannot be recovered',
+    ).toBeDefined();
+    expect(JSON.stringify(res['alreadyTrueEvidence'])).toContain('cart.count');
+  });
+
+  /* Nothing is added when the assertion was NOT already true — that verdict has real evidence. */
+  it('says nothing about a pre-action reading when the action actually caused the change', async () => {
+    const { deps } = createStateSession({
+      initialStore: { app: { cart: { count: 0 } } },
+      onAct: (setStore) => setStore({ app: { cart: { count: 1 } } }),
+      settled: true,
+    });
+
+    const res = (await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
+      ref: 'btn-add',
+      action: 'click',
+      timeout_ms: 0,
+      until: { kind: PredicateKind.STATE, path: 'cart.count', equals: 1 },
+    })) as Record<string, unknown>;
+
+    expect(res['verifiedReason']).not.toBe(VerifiedReason.ALREADY_TRUE);
+    expect(res['alreadyTrueEvidence']).toBeUndefined();
+  });
+});
+
+/*
+ * The recorder captured the step BEFORE the verdict, so an `until` that came back `no` or
+ * `no-fault` was saved as the flow's expectation — a regression test asserting something that was
+ * never once observed to hold because of the action.
+ */
+describe('the recorded step keeps its consequence only when the verdict proved it', () => {
+  const until = { kind: PredicateKind.STATE, path: 'cart.count', equals: 3 };
+  const recorded = (deps: ToolDeps) => deps.recordings.stop(AMBIENT_RECORDING)?.steps ?? [];
+
+  it('a no-fault (already true) verdict records the action without the expectation', async () => {
+    const { deps } = createStateSession({ initialStore: { app: { cart: { count: 3 } } } });
+    await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
+      ref: 'btn',
+      action: 'click',
+      timeout_ms: 0,
+      until,
+    });
+    const steps = recorded(deps);
+    expect(steps).toHaveLength(1);
+    expect(steps[0]?.expect).toBeUndefined();
+  });
+
+  it('a proved verdict records the expectation', async () => {
+    const { deps } = createStateSession({
+      initialStore: { app: { cart: { count: 0 } }, cart: { count: 0 } },
+      onAct: (set) => set({ app: { cart: { count: 3 } }, cart: { count: 3 } }),
+    });
+    await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
+      ref: 'btn',
+      action: 'click',
+      timeout_ms: 0,
+      until,
+    });
+    expect(recorded(deps)[0]?.expect).toEqual(until);
+  });
+});
+
+describe('act, then assert: the assertion is kept on the step it proved', () => {
+  it('a passing reticle_assert after the act joins the recorded expectation', async () => {
+    const { deps } = createStateSession({
+      initialStore: { app: { cart: { count: 0 } }, cart: { count: 0 } },
+      onAct: (set) => set({ app: { cart: { count: 3 } }, cart: { count: 3 } }),
+    });
+    await tool(ReticleTool.ACT).handler(deps, { ref: 'btn', action: 'click' });
+    const check = { kind: PredicateKind.STATE, path: 'cart.count', equals: 3 };
+    const res = (await tool(ReticleTool.ASSERT).handler(deps, { predicate: check })) as Record<
+      string,
+      unknown
+    >;
+    expect(res['verified']).toBe(Verified.YES);
+    expect(deps.recordings.stop(AMBIENT_RECORDING)?.steps[0]?.expect).toEqual(check);
+  });
+
+  /*
+   * act → navigate → assert: the assertion was proved on the page the navigation opened, and
+   * replaying it right after the click — which is where the flow would keep it — asks it of a page
+   * it was never true on.
+   */
+  it('is not kept on the act when a navigation came between them', async () => {
+    const { deps } = createStateSession({
+      initialStore: { app: { cart: { count: 0 } }, cart: { count: 0 } },
+      onAct: (set) => set({ app: { cart: { count: 3 } }, cart: { count: 3 } }),
+    });
+    await tool(ReticleTool.ACT).handler(deps, { ref: 'btn', action: 'click' });
+    // A reload through the tool, as an agent would do it. The fake page comes back at once.
+    (deps.sessions as unknown as { get: () => unknown }).get = () => undefined;
+    let clock = 0;
+    const timed = { ...deps, now: () => (clock += 1000) };
+    await tool(ReticleTool.NAVIGATE)
+      .handler(timed, { reload: true, timeout_ms: 1 })
+      .catch(() => undefined);
+    const check = { kind: PredicateKind.STATE, path: 'cart.count', equals: 3 };
+    const res = (await tool(ReticleTool.ASSERT).handler(deps, { predicate: check })) as Record<
+      string,
+      unknown
+    >;
+    expect(res['verified']).toBe(Verified.YES);
+    const step = deps.recordings.stop(AMBIENT_RECORDING)?.steps[0];
+    expect(step).toBeDefined();
+    expect(step?.expect).toBeUndefined();
+  });
+});
+
+// The coverage ledger's PROVED level: a control counts only when its act came back `yes`.
+describe('a proved act is remembered as a proved control', () => {
+  const until = { kind: PredicateKind.STATE, path: 'cart.count', equals: 3 };
+
+  it('records the control on a yes, and not on a no-fault', async () => {
+    const proved: unknown[] = [];
+    const yes = createStateSession({
+      initialStore: { app: { cart: { count: 0 } }, cart: { count: 0 } },
+      onAct: (set) => set({ app: { cart: { count: 3 } }, cart: { count: 3 } }),
+    });
+    (yes.session as unknown as { recordProvedFrom: (p: unknown) => void }).recordProvedFrom = (p) =>
+      proved.push(p);
+    await tool(ReticleTool.ACT_AND_WAIT).handler(yes.deps, {
+      ref: 'b',
+      action: 'click',
+      timeout_ms: 0,
+      until,
+    });
+    expect(proved).toHaveLength(1);
+
+    const already = createStateSession({ initialStore: { app: { cart: { count: 3 } } } });
+    (already.session as unknown as { recordProvedFrom: (p: unknown) => void }).recordProvedFrom = (
+      p,
+    ) => proved.push(p);
+    await tool(ReticleTool.ACT_AND_WAIT).handler(already.deps, {
+      ref: 'b',
+      action: 'click',
+      timeout_ms: 0,
+      until,
+    });
+    expect(proved).toHaveLength(1);
+  });
+});

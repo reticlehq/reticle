@@ -54,10 +54,14 @@ const REPLAY_PASS = [
   'bench/harness/replay-detect-state.mjs', // store-truth oracle catches a dead handler (state predicate)
   'bench/harness/network-cardinality-bench.mjs', // net.count:1 oracle catches a double-submit (presence passes)
   'bench/harness/forbidden-call-bench.mjs', // net.count:0 oracle catches a must-never-fire call
+  'bench/harness/compound-expect-bench.mjs', // a saved allOf of two net claims keeps both arms
   'bench/harness/console-clean-bench.mjs', // clean-console oracle catches a silent console.error on an action
   'bench/harness/state-blast-radius-bench.mjs', // state invariant catches an action's unintended store side-effect
   'bench/harness/suite-rre.mjs', // suite-scale re-run cost: reticle_flow_verify read-cost ~constant in K (compounding)
   'bench/harness/replay-determinism.mjs', // flake rate: verdict-deterministic across N replays (0% by construction)
+  // Runs AFTER suite-rre, which is what saves the flows it asks to replay. It was in neither pass,
+  // so nothing re-ran it and a name that had never existed sat in it unnoticed (#1074).
+  'bench/harness/compiled-suite-vs-replay.mjs', // the comparison a company with an existing Playwright suite faces
 ];
 // Scripted observation cost + detection accuracy. Slow (~12 min) and boots Playwright/DevTools MCPs.
 const OBSERVATION_PASS = ['bench/harness/run-observation.mjs', 'bench/harness/analyze.mjs'];
@@ -197,7 +201,7 @@ function cleanupDaemon() {
   try {
     execFileSync(
       'node',
-      ['packages/server/dist/cli.js', 'stop', '--port', RETICLE_PORT, '--quiet'],
+      ['server/dist/command/cli.js', 'stop', '--port', RETICLE_PORT, '--quiet'],
       {
         stdio: 'ignore',
       },

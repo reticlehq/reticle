@@ -196,6 +196,8 @@ Do not put this in `index.html`. A bare `@reticlehq/react` import does not resol
 
 ## Plain static HTML, no build step
 
+With an `index.html` and no `package.json`, `init` does this for you: it writes a marked, loopback-only connect snippet (SDK from a CDN, token inlined) into `index.html` before `</body>`, writes `.reticle.json`, and hands over to setup. A re-run finds its own block and never adds a second one. The rest of this section is for wiring it by hand.
+
 The browser cannot resolve a bare specifier and the SDK's own `dist` imports bare specifiers too, so pointing a `<script type="module">` at `node_modules` does not work either. Two options:
 
 1. Bundle the SDK once (`npx esbuild`) and point a dev-only `<script type="module">` at the output.
@@ -216,8 +218,9 @@ Set `"framework": "html"` in `.reticle.json`.
 ## Electron
 
 ```ts
-// vite.config.ts. desktop:true also runs the plugin for `vite build`, because a
-// packaged renderer is a production build with no dev server
+// vite.config.ts. desktop:true lets connect() start in a packaged renderer
+// (NODE_ENV=production). A default (production-mode) `vite build` ships no Reticle code; to
+// drive a packaged renderer with no dev server, build with `--mode development`
 export default defineConfig({
   base: './', // file:// needs relative asset paths
   plugins: [reticle({ desktop: true }), react()],
@@ -235,7 +238,7 @@ require('@reticlehq/electron/preload');
 
 It **must** be in the preload. `contextBridge.exposeInMainWorld` hands the renderer a deeply frozen object, so nothing in the page can instrument it afterwards; the preload is the last point where `ipcRenderer.invoke` is still writable. A sandboxed preload cannot resolve `node_modules`, so either bundle it (electron-vite and Forge do by default) or set `sandbox: false`.
 
-Without the IPC observer, `reticle_network` returns nothing, `act_and_wait` has no request to settle on, and `assert { net }` is vacuously true. That is a false green by construction.
+Without the IPC observer, `reticle_observe { action: "network" }` returns nothing, `act_and_wait` has no request to settle on, and `assert { net }` is vacuously true. That is a false green by construction.
 
 ## Tauri
 
@@ -282,9 +285,9 @@ tauri::Builder::default()
 - **Server-only rendering with no client JS** (a pure server-components page with no interactivity, plain server-rendered templates with no bundler entry). The SDK runs in the page. If nothing runs in the page, there is nothing to instrument.
 - **React Native, Flutter, native mobile.** Reticle is a web and desktop-webview tool.
 - **Production builds.** The SDK is dev-only by design and a production bundle will never connect. This is not a bug to work around.
-- **Angular, Ember, Rails or Django templates**: no `init` wiring, but they work if you can call `reticle.connect()` from a dev-guarded, client-only place in the app's own entry. Use the `@reticlehq/browser` import and the dev flag from the table at the top.
+- **Ember, Rails or Django templates**: no `init` wiring, but they work if you can call `reticle.connect()` from a dev-guarded, client-only place in the app's own entry. Use the `@reticlehq/browser` import and the dev flag from the table at the top.
 
-Gated in CI today: Vite + React, Next.js, Remix, Astro. `init` also wires SvelteKit and Nuxt, and those wirings are untested by any gate. They each render their own HTML rather than the Vite plugin's `index.html`, so the connect lives in a client hook (`src/hooks.client.ts` on SvelteKit) or a dev-only client plugin (Nuxt) rather than being auto-injected. If a session never appears on one of these, that is worth an issue.
+Gated in CI today: Vite + React, Next.js, Remix, Astro. `init` also wires SvelteKit, Nuxt, TanStack Start (a client effect in `src/reticle-connect.tsx` rendered from the root route), Remix v2 on Vite (the connect in `app/entry.client.tsx`), Angular 17+ (an `isDevMode()` connect in the browser entry, with the pairing token served by a `reticle.proxy.mjs` that only `ng serve` loads) and Electron Forge's Vite template, and those wirings are not driven by any gate. They each render their own HTML rather than the Vite plugin's `index.html`, so the connect lives in a client hook (`src/hooks.client.ts` on SvelteKit) or a dev-only client plugin (Nuxt) rather than being auto-injected. If a session never appears on one of these, that is worth an issue.
 
 Nuxt has one extra trap: a dev server that was already running does not pick up a newly created plugin file. Restart it.
 

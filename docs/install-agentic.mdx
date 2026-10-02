@@ -1,15 +1,24 @@
 ---
 title: 'Agentic install: let the agent do it'
 sidebarTitle: Agentic install
-description: One command wires Reticle into your project, boots the app, proves a session connected and drives one flow to a verdict. What it changes, what you pass it, and how to read what it returns.
+description: One command wires Reticle into your project, boots the app and proves a session connected. What it changes, what you pass it, and how to read what it returns.
 icon: wand-magic-sparkles
 ---
 
-**Run `npx @reticlehq/server init` in your project root.** It registers the MCP server for every agent it finds, installs the SDK, wires your build config, writes the agent rule files, and prints a plan you can read. It is idempotent, so running it twice is safe.
+**Run `npx @reticlehq/server init` in your project root.** It installs the SDK, wires your build config, writes the agent rule files, boots the app, and prints a plan you can read. It is idempotent, so running it twice is safe.
 
 ```bash
 npx @reticlehq/server init
 ```
+
+<Note>
+  This is the PROJECT step. The machine step comes first and is one command in a terminal, `curl
+  -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh | sh`, which
+  registers the MCP server with every agent it can reach so the tools are there when you open your
+  agent. `init` will register the server itself if nobody has, but doing it from inside an agent
+  that has already read its server list means the tools cannot appear until that agent restarts.
+  Terminal first, then open the agent, then `init`. See the [quickstart](/quickstart).
+</Note>
 
 The install is designed for the agent to run rather than you. The agent is about to be the primary user of this tool, so it may as well set up its own workspace.
 
@@ -122,7 +131,7 @@ That `ℹ` line is the one people skim past, so here it is in full:
 ```
   [ℹ] AGENT: finish the capabilities file → src/reticle-dev.ts
       src/reticle-dev.ts was written but registers nothing, so `hasCapabilities` stays false
-      and reticle_state has nothing to read.
+      and reticle_look { action: "state" } has nothing to read.
 ```
 
 `init` wrote the file, but a brand-new Vite template has no testids and no state library, so there was nothing to register. Reticle tells you this instead of counting it as a win. See [Instrument your app](/instrumentation) for what to put in it.
@@ -141,6 +150,42 @@ Four files in your project, none of them mysterious.
     ```
     The `projectId` is how Reticle scopes sessions to this project, so two apps running at once
     don't get confused for each other.
+
+    **Keeping `.reticle/` small.** Reticle bounds the directory for you, by count and by total size.
+    Add a `retain` block to change what it keeps:
+
+    ```json
+    {
+      "retain": { "sessions": 20, "visual": 10, "feedback": 20, "budgetMb": 512 }
+    }
+    ```
+
+    Those are the defaults, and every field is optional. `sessions` is how many session journals
+    survive, `visual` how many overlay diffs (pixel baselines are never deleted, because the next
+    comparison needs them), `feedback` how many local copies of reports already sent, and `budgetMb`
+    the total the whole evidence tier may occupy. `0` means keep none, and `"sessions": 0` also stops
+    journals being written in the first place.
+
+    Saved flows, capsules, baselines, the contract and the intent ledger are not touched by any of
+    this. They are the part meant to be committed, and a bound that deleted them would be deleting
+    the regression checks your team shares.
+
+    **Your app's own background calls.** An analytics or heartbeat endpoint on your app's own host
+    looks exactly like the app's work, so Reticle never guesses. If one of them keeps a verdict
+    waiting, or fails and gets blamed on an unrelated action, name it:
+
+    ```json
+    {
+      "background": ["/api/analytics/events", "/api/heartbeat"]
+    }
+    ```
+
+    Each entry is matched the way `urlContains` is. A listed request stops holding the wait open and
+    stops contradicting a claim; when a contradiction is still reported, it lists what was set aside.
+    It is never hidden from an assertion that names it: `net { urlContains: "/api/heartbeat" }` still
+    sees it. Keep entries specific: `/api` would set aside your whole backend.
+    Third-party calls (another site's beacon or SDK) need no entry; they are already set aside.
+
   </Accordion>
 
   <Accordion title="vite.config.ts (the plugin)">
@@ -199,14 +244,13 @@ Three of these are answers only the caller has. `init` reads your repository; it
 
 | Flag | When you want it |
 | --- | --- |
-| `--flow "<what>"` | **Name the journey worth proving.** `init` can list the buttons on a page; it cannot know that checkout matters and the theme toggle does not. Naming it is the difference between a drive that finishes and one that spends its budget looking for something to do. |
+| `persona: "<what>"` | **Name the journey worth proving**, on the FIRST RUN (`reticle_verify { action: "explore", persona: "<the journey worth proving>" }`), not on `init`, which does not drive. Reticle can list the buttons on a page; it cannot know that checkout matters and the theme toggle does not. Naming it is the difference between a drive that finishes and one that spends its budget looking for something to do. |
 | `--env KEY=VALUE` | What the app needs to reach a usable state: the key from `.env.example`, the mock backend, the variable that skips an auth wall. Repeatable, and a value may contain spaces and equals signs. Without it a real app sits on a login screen and there is no flow to drive. |
 | `--app <dir>` | Monorepos. `init` can find the apps that are servable; only your request says which one you are working in. |
 | `--license <key>` | Writes `RETICLE_LICENSE_KEY` to `.env` and keeps `.env` out of git. Do not do those two by hand. |
-| `--json` | One object on stdout: what was wired, what connected, the verdict, and an `agentTodo` array. For agents. |
+| `--json` | One result object on stdout; progress and package-manager output go to stderr. Default init reports runtime setup and connection. `--files-only` and `--dry-run` report the wiring result. Init does not drive a flow or produce a verification verdict. |
 | `--files-only` | Write the files, register the MCP server with every agent on the machine, pre-approve Reticle's tools, and stop: no dev server, no drive. What `init` did before it learned to boot the app, and the upgrade path for a machine that installed Reticle on an earlier version. |
 | `--no-open` | Do not open a browser: CI, a container, an SSH session, or a tab you already have. |
-| `--no-drive` | Stop once a session connects and leave the verdict to you. The only honest way to skip it. |
 | `--dry-run` | See the plan before anything is written. |
 | `--no-mcp` | Your MCP config is managed elsewhere (dotfiles, a team template). |
 | `--no-install` | You want to add the dependencies yourself, at your own versions. |

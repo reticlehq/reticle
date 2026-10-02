@@ -1,0 +1,28 @@
+/**
+ * Which of Reticle's own layers sits above which, on the page.
+ *
+ * One number, alone in a file with nothing imported. Beside the panel's stylesheet — which the
+ * annotator also has to reach — naming a z-index drags the whole panel's CSS into every page load
+ * whether or not anybody opens the panel: a hundred kilobytes reached through one integer.
+ *
+ * Anything that has to sit above the panel adds to this rather than picking its own big number, so
+ * there is one place to look when two things fight over who is on top.
+ */
+
+/**
+ * The panel's own layer.
+ *
+ * It holds the shield that stops clicks reaching the page while an agent is driving, so anything
+ * meant to stay usable must be above it. That is not theoretical: the note-taking box was buried
+ * underneath it once, and its buttons could not be clicked at all.
+ */
+export const Z_OVERLAY = 2147483600;
+
+/**
+ * The first-run tour, above the panel.
+ *
+ * It explains the panel, so it cannot sit under it — and it is the one surface here that must take
+ * clicks while the shield is up, because its whole job is to be clicked through. Added to
+ * `Z_OVERLAY` rather than given its own large number, for the reason this file exists.
+ */
+export const Z_TOUR = Z_OVERLAY + 30;

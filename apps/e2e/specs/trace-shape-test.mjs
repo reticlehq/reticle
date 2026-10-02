@@ -1,3 +1,6 @@
+// The trace shape is asserted across the WHOLE registry, including tools no capped surface
+// advertises, so this reaches them through reticle_run. That needs the extended surface: the
+// default is the nine-tool one, which has no dispatch hatch by design.
 // The trace is produced on every RETICLE_TRACE=1 run and then thrown away. This reads it.
 //
 // `runTool` opens one `tool.handler` root span per call and every stage underneath inherits its
@@ -15,11 +18,11 @@ import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { McpStdioClient } from '../../../bench/harness/mcp-client.mjs';
 import { analyzeTrace, parseTrace, formatReport } from '../trace-shape.mjs';
-import { freePortSafely } from '../gate-harness.mjs';
+import { freePortSafely, startOwnedDaemon } from '../gate-harness.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const PORT = process.env.TRACE_SHAPE_PORT ?? '4743';
-const DAEMON_LOG = path.join(homedir(), '.reticle', `daemon-${PORT}.log`);
+const DAEMON_LOG = path.join(process.env.RETICLE_STATE_DIR ?? path.join(homedir(), '.reticle'), `daemon-${PORT}.log`);
 
 let pass = 0;
 let fail = 0;
@@ -56,13 +59,18 @@ console.log('\n=== TRACE SHAPE: the call tree the daemon emits is well formed ==
 process.chdir(ROOT);
 await freePortSafely(Number(PORT));
 const before = sizeOf(DAEMON_LOG);
+const daemon = await startOwnedDaemon(Number(PORT), {
+  cliPath: path.join(ROOT, 'server/dist/command/cli.js'), cwd: ROOT,
+  env: { RETICLE_TRACE: '1', RETICLE_ADVERTISE_ALL_TOOLS: '1' },
+});
 
-const client = new McpStdioClient('node', ['packages/server/dist/cli.js', 'mcp', '--port', PORT], {
+const client = new McpStdioClient('node', ['server/dist/command/cli.js', 'mcp', '--port', PORT], {
   RETICLE_PORT: PORT,
   RETICLE_TRACE: '1',
   RETICLE_TELEMETRY: '0',
   // The gate owns this daemon for the whole spec — see apps/e2e/harness-rules.md.
   RETICLE_IDLE_SHUTDOWN_MS: '0',
+  RETICLE_ADVERTISE_ALL_TOOLS: '1',
 });
 await client.start();
 
@@ -90,7 +98,7 @@ await drive('reticle_snapshot', {});
 await drive('reticle_inspect', { ref: 'e404' });
 
 await client.stop();
-await freePortSafely(Number(PORT));
+await daemon.stop();
 
 const appended = readFrom(DAEMON_LOG, before);
 const spans = parseTrace(appended);

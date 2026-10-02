@@ -1,0 +1,76 @@
+import { asRecord, asString } from '@reticlehq/core';
+/** Small pure helpers shared by the MCP tool handlers. */
+
+/**
+ * The argument a call names a tab with.
+ *
+ * A named constant because dispatch now WRITES this key as well as reading it — see `runTool`,
+ * which pins the session it resolved into the args the handler is given — and a key spelled at both
+ * ends of that can drift without anything saying so.
+ */
+export const SESSION_ID_ARG = 'sessionId';
+
+/**
+ * The session this call is aimed at: a top-level `sessionId`, or the same key on sequence steps.
+ *
+ * `reticle_act_sequence` describes each step as equivalent to one `reticle_act`, so an agent that
+ * learned the escape hatch on the single-action tool puts `sessionId` on the step. Reading only the
+ * top-level key then auto-selects a different tab, the step refs miss, and the refusal reads as a
+ * stale ref — a confident diagnosis of the wrong thing. Top-level still wins when both are given.
+ *
+ * Mixed step ids refuse rather than pick: two named tabs is a guess we will not make.
+ */
+export function sessionIdFromArgs(args: Record<string, unknown>): string | undefined {
+  const top = asString(args[SESSION_ID_ARG]);
+  if (top !== undefined) return top;
+  const steps = args['steps'];
+  if (!Array.isArray(steps)) return undefined;
+  let found: string | undefined;
+  for (const raw of steps) {
+    const id = asString(asRecord(raw)[SESSION_ID_ARG]);
+    if (id === undefined) continue;
+    if (found !== undefined && found !== id) {
+      throw new Error(
+        `reticle_act_sequence steps name different sessionIds ('${found}' and '${id}'). ` +
+          'Pass one sessionId at the top level to target a tab. Nothing was acted on.',
+      );
+    }
+    found = id;
+  }
+  return found;
+}
+
+/**
+ * The ref this call is about to spend: a top-level `ref`, or the first sequence step's.
+ *
+ * Wrong-tab refusal keys off this. A sequence that only carries refs inside `steps` used to look
+ * like a call with no ref, so auto-selection could pick a different tab and the miss was blamed
+ * on the DOM.
+ */
+export function spentRefFromArgs(args: Record<string, unknown>): string | undefined {
+  const top = asString(args['ref']);
+  if (top !== undefined) return top;
+  const steps = args['steps'];
+  if (!Array.isArray(steps) || 0 === steps.length) return undefined;
+  return asString(asRecord(steps[0])['ref']);
+}
+
+/**
+ * A `{ file, line }` source location off an untrusted result payload, or undefined.
+ *
+ * The browser sends this alongside an act's anchor so a failure can name the file to open. Validated
+ * rather than cast: it crosses the wire, and a half-formed location rendered as "undefined:NaN" is
+ * worse than no location at all — it looks like an answer.
+ */
+export function sourceOf(
+  value: unknown,
+): { file: string; line: number; column?: number } | undefined {
+  if (null === value || typeof value !== 'object') return undefined;
+  const record = value as Record<string, unknown>;
+  const file = record['file'];
+  const line = record['line'];
+  if (typeof file !== 'string' || 0 === file.length || typeof line !== 'number') return undefined;
+  const out: { file: string; line: number; column?: number } = { file, line };
+  if ('number' === typeof record['column']) out.column = record['column'];
+  return out;
+}

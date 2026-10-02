@@ -95,7 +95,7 @@ function serverFor(toolKey, url) {
   return {
     command: 'node',
     args: [
-      path.join(REPO, 'packages/server/dist/cli.js'),
+      path.join(REPO, 'server/dist/command/cli.js'),
       'mcp',
       '--port',
       RETICLE_PORT,
@@ -458,7 +458,7 @@ async function runCell(bug, toolKey, variant) {
         execFileSync(
           'node',
           [
-            path.join(REPO, 'packages/server/dist/cli.js'),
+            path.join(REPO, 'server/dist/command/cli.js'),
             'stop',
             '--port',
             RETICLE_PORT,
@@ -507,7 +507,7 @@ async function preflightReticle(url) {
       const { execFileSync } = await import('node:child_process');
       execFileSync(
         'node',
-        [path.join(REPO, 'packages/server/dist/cli.js'), 'stop', '--port', RETICLE_PORT, '--quiet'],
+        [path.join(REPO, 'server/dist/command/cli.js'), 'stop', '--port', RETICLE_PORT, '--quiet'],
         { stdio: 'ignore' },
       );
     } catch {

@@ -57,7 +57,25 @@ fn archive_todo(_id: u32) -> Result<(), String> {
 
 fn main() {
     tauri::Builder::default()
-        .on_page_load(reticle_tauri::on_page_load)
+        .on_page_load(|webview, payload| {
+            reticle_tauri::on_page_load(webview, payload);
+            if payload.event() == tauri::webview::PageLoadEvent::Finished {
+                let window = webview.window();
+                // On Linux, Tao queues visibility changes for a later native event. Reading in
+                // this callback sees the old state. Poll off the main thread so it can apply hide.
+                std::thread::spawn(move || {
+                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+                    loop {
+                        let visible = window.is_visible();
+                        if !matches!(visible, Ok(true)) || std::time::Instant::now() >= deadline {
+                            eprintln!("reticle-headless-visible={visible:?}");
+                            break;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(50));
+                    }
+                });
+            }
+        })
         .manage(Store {
             todos: Mutex::new(vec![
                 Todo {
@@ -79,6 +97,20 @@ fn main() {
             archive_todo,
             reticle_tauri::reticle_capture
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_, event| match event {
+            tauri::RunEvent::ExitRequested { code, .. } => {
+                eprintln!("tauri smoke: exit requested {code:?}");
+            }
+            tauri::RunEvent::WindowEvent { label, event, .. } => {
+                if matches!(
+                    event,
+                    tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
+                ) {
+                    eprintln!("tauri smoke: window {label}: {event:?}");
+                }
+            }
+            _ => {}
+        });
 }

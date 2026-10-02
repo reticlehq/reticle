@@ -18,11 +18,25 @@ updates:
       - dependency-name: zod
         update-types:
           - version-update:semver-major
-      # astro 7.2 stops the Astro example connecting to the bridge; 7.0.3 works, and the SDK is not at
-      # fault (the connect script runs and dials). Measured and written up in #347. Held here rather
-      # than pinned in each grouped PR, because pinning inside the group makes Dependabot supersede
-      # the whole PR and take any review work on it with them. Remove this once #347 is resolved.
-      - dependency-name: astro
+      # Babel 8 is ESM-only and renames the plugin types (`PluginObj` became `PluginObject`), so the
+      # bump in #965 failed typecheck in the CommonJS babel plugin and the Next adapter. Moving to it
+      # is a port of both packages while users stay on Babel 7, not a version bump. Remove this
+      # when that port is planned.
+      - dependency-name: '@babel/core'
+        update-types:
+          - version-update:semver-major
+      # jsdom 30.1.x made appendChild into a large parent quadratic: the mint-storm test in
+      # adapters/realm/browser/src/dom/addressing/refs.test.ts went from ~2s to a 60s timeout, which
+      # failed the whole group in #1095. Scoped to 30.1.x so a later release is tried again.
+      - dependency-name: jsdom
+        versions:
+          - 30.1.x
+      # apps/electron-vue-pinia is the only vite 7 consumer left and exists to reproduce the
+      # electron-vite path; electron-vite 5 peers on vite <=7, so #962 moved it onto an unsupported
+      # pair. Revisit when electron-vite supports vite 8.
+      - dependency-name: vite
+        update-types:
+          - version-update:semver-major
 
   # Keep the GitHub Actions themselves current AND pinned — Dependabot updates the pinned SHAs for us.
   - package-ecosystem: github-actions
@@ -41,7 +55,7 @@ updates:
   # manifest, and CodeQL does not scan Rust at all. Its Cargo.lock is committed, so Dependabot
   # resolves against the exact versions a consumer builds.
   - package-ecosystem: cargo
-    directory: /packages/tauri
+    directory: /adapters/realm/tauri
     schedule:
       interval: weekly
       day: monday

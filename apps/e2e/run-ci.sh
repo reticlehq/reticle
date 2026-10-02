@@ -23,6 +23,12 @@ export CI="${CI:-true}"
 # Provision the bridge pairing token BEFORE the dev servers boot. next-smoke's withReticle reads it at
 # `next dev` config load (before any per-spec bridge exists) to inline into its client connect; the
 # per-spec bridges (start()) read the same file. Mirrors the real daemon-first workflow.
+# Test state and pairing are private, so existing clients cannot join the test bridge.
+export RETICLE_PORT="${RETICLE_PORT:-14400}"
+export RETICLE_TEST_STATE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/reticle-web-e2e.XXXXXX")"
+export RETICLE_STATE_DIR="$RETICLE_TEST_STATE_DIR"
+export RETICLE_PAIRING_TOKEN_DIR="$RETICLE_TEST_STATE_DIR"
+
 TOKEN_DIR="${RETICLE_PAIRING_TOKEN_DIR:-$HOME/.reticle}"
 TOKEN_FILE="$TOKEN_DIR/pairing-token"
 if [ ! -s "$TOKEN_FILE" ]; then
@@ -31,15 +37,31 @@ if [ ! -s "$TOKEN_FILE" ]; then
   chmod 600 "$TOKEN_FILE"
 fi
 
+# Build first, because the battery drives `dist` and nothing else here does.
+#
+# CI builds in the job before this script runs, so it was never wrong there. A developer typing
+# `pnpm test:e2e` got whatever `dist` happened to be on disk — which means a green battery can be
+# green about code that is not the code in the working tree, and a red one can be red about a bug
+# already fixed. Both happened while fixing the contract-skew defect: 22 of 39 specs failed against
+# a daemon compiled before the fix, and `core/dist` did not contain the new constant at all.
+#
+# Turbo makes this nearly free when nothing changed, and the alternative is a class of run that
+# cannot be trusted either way.
+echo "==> building (the battery runs against dist)"
+pnpm build > /dev/null || { echo "build failed — the battery would run against a stale dist"; exit 1; }
+
+# Refuse occupied ports; cleanup is limited to processes this run starts.
+E2E_PORTS="8787 4310 3100 $RETICLE_PORT"
+
 # Wait for the ports to be FREE before binding them.
 #
-# The cleanup below kills the listeners, but a killed process does not release its port the instant
+# Cleanup stops the recorded child processes, but a stopped process does not release its port the instant
 # the shell returns: back-to-back battery runs raced the previous run's teardown and died on
 # `EADDRINUSE :::8787` during boot — a whole 8-minute run lost to the run before it, reported as an
 # api that "died during boot". Twice in one afternoon, on a green tree. Polling here is the fix
 # because the failure is timing, not state: nothing needs killing, only waiting for.
 echo "==> waiting for the battery's ports to be free"
-for port in 8787 4310 3100; do
+for port in $E2E_PORTS; do
   for _ in $(seq 1 30); do
     lsof -nP -iTCP:"$port" -sTCP:LISTEN -t > /dev/null 2>&1 || break
     sleep 1
@@ -55,33 +77,25 @@ done
 echo "==> starting api (:8787), bench-app (:4310), next-smoke (:3100)"
 REFLECT_MS=6000 node apps/api/server.mjs > /tmp/e2e-api.log 2>&1 &
 API=$!
-# bench-app on :4310, dialing the per-spec bridge (:4400) and presenting the token the bridge requires.
-RETICLE_PORT=4400 VITE_RETICLE_TOKEN="$(cat "$TOKEN_FILE")" \
+# bench-app on :4310, dialing RETICLE_PORT and presenting this run's pairing token.
+VITE_RETICLE_TOKEN="$(cat "$TOKEN_FILE")" \
   pnpm --filter @reticlehq/bench-app exec vite --port 4310 --strictPort > /tmp/e2e-demo.log 2>&1 &
 DEMO=$!
 pnpm --filter @reticlehq/next-smoke dev > /tmp/e2e-next.log 2>&1 &
 NEXT=$!
-# Free the PORTS, not just the pids we happen to hold.
-#
-# Each of these was started through `pnpm --filter … exec`, so `$NEXT` is a pnpm wrapper and the
-# thing actually bound to :3100 is its `next-server` grandchild. Killing the wrapper orphans it: the
-# CI retry then booted into `EADDRINUSE: :::3100`, next dev exited instantly, and the second attempt
-# failed for a reason that had nothing to do with the first. The runner's own orphan sweep named the
-# survivor — `next-server (v15.5.22)` — after the job had already gone red.
-#
-# `-sTCP:LISTEN` is not optional. Without it `lsof -ti tcp:PORT` returns CLIENTS as well as the
-# listener, so the recipe everyone reaches for kills whatever is connected to the port along with
-# whatever is serving it. On a bridge port that takes the developer's own `reticle mcp` proxy with
-# it, silently, and the process that would have logged the death is the one that died. This file
-# had the unsafe form while `gate-harness.mjs` documented it as the trap to avoid, which is how a
-# rule written down in one place gets broken in another.
-E2E_PORTS='8787 4310 3100'
 cleanup() {
-  kill "$API" "$DEMO" "$NEXT" 2>/dev/null || true
-  sleep 1
-  for port in $E2E_PORTS; do
-    lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | xargs -r kill -9 2>/dev/null || true
-  done
+  node --input-type=module - "$API" "$DEMO" "$NEXT" <<'NODE'
+import { stopProcessTree } from './apps/e2e/gate-harness.mjs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+const state = process.env.RETICLE_TEST_STATE_DIR;
+for (const file of readdirSync(state)) {
+  if (/^daemon-\d+\.pid$/.test(file)) {
+    stopProcessTree(Number(readFileSync(join(state, file), 'utf8')));
+  }
+}
+for (const pid of process.argv.slice(2)) stopProcessTree(Number(pid));
+NODE
 }
 trap cleanup EXIT
 
@@ -119,9 +133,15 @@ BATTERY_STATUS=$?
 # the question the battery cannot: not "does a tool work" but "how often does it fail", which needs
 # repetition and idle time rather than one call. Modest numbers — this is the merge-gate sample, and
 # `pnpm gate:soak:record` is the longer run that re-records the baseline before a release.
-echo "==> soak + tool profile"
-node apps/e2e/soak.mjs --rounds "${SOAK_ROUNDS:-10}" --idle-ms "${SOAK_IDLE_MS:-1000}"
-SOAK_STATUS=$?
+# Once per battery, not once per shard: only the first shard (or an unsharded run) soaks.
+SOAK_STATUS=0
+case "${E2E_SHARD:-}" in
+  ''|1/*)
+    echo "==> soak + tool profile"
+    node apps/e2e/soak.mjs --rounds "${SOAK_ROUNDS:-10}" --idle-ms "${SOAK_IDLE_MS:-1000}"
+    SOAK_STATUS=$?
+    ;;
+esac
 
 # Report the battery's verdict first when both fail: it covers far more ground, so it is the more
 # useful thing to read. Neither is allowed to mask the other.

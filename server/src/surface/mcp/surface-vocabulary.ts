@@ -1,0 +1,109 @@
+import { ReticleTool } from '@reticlehq/core';
+
+/**
+ * How to CALL each job, on whichever surface is live.
+ *
+ * The instructions are the first thing an agent reads, so naming tools in prose makes the sentence
+ * and the live surface two independent facts. On a trimmed surface the briefing named tools that did
+ * not exist there, and `reticle_tools` catalogued dozens more that could not be called: an agent
+ * handed that tries a tool it was shown, fails, tries again, and stops using the product — which
+ * reads as a token saving, because a product nobody uses is cheap.
+ *
+ * `surface-coherence.test.ts` checks the documents against `CORE_TOOL_NAMES`, so it is blind to every
+ * surface but the default and cannot catch this by itself.
+ *
+ * So the names are DERIVED here from the advertised set, and the prose asks for a job rather than a
+ * tool. A briefing that names a tool the agent was not given is unrepresentable rather than merely
+ * tested for.
+ */
+export interface SurfaceVocabulary {
+  navigate: string;
+  look: string;
+  find: string;
+  inspect: string;
+  state: string;
+  observe: string;
+  network: string;
+  console: string;
+  assert: string;
+  settle: string;
+  sessions: string;
+  actAndWait: string;
+  act: string;
+  /** `reticle_session {action:"yield"}`, or empty where the surface has no session tool. */
+  yield: string;
+  feedback: string;
+  /** The discovery sentence, or empty when this surface advertises everything it can call. */
+  coldTail: string;
+  /** Which saved flows cover an edit, or empty when this surface cannot ask. */
+  affected: string;
+  /** Replay the flows an edit touches and answer with a verdict, or empty. */
+  replayChange: string;
+  /** Replay every saved flow for one suite verdict, or empty. */
+  replayAll: string;
+  /** Rebind a drifted locator, or empty when the surface cannot reach it. */
+  heal: string;
+}
+
+/** `reticle_look { action: "find" }` when the family is merged, `reticle_query` when it is not. */
+function callOf(
+  advertised: ReadonlySet<string>,
+  direct: string,
+  parent: string,
+  action: string,
+): string {
+  if (advertised.has(direct)) return direct;
+  if (advertised.has(parent)) return `${parent} {action:"${action}"}`;
+  // Neither is advertised. Say nothing rather than name a tool the agent cannot call — an empty
+  // slot costs a capability the agent has to discover; a wrong name costs the whole product.
+  return '';
+}
+
+/** Drop the empty slots, so a sentence never reads "look (), find ()". */
+export function listOf(...calls: readonly string[]): string {
+  return calls.filter((call) => call.length > 0).join(' / ');
+}
+
+export function surfaceVocabulary(advertisedNames: readonly string[]): SurfaceVocabulary {
+  const advertised = new Set(advertisedNames);
+  const call = (direct: string, parent: string, action: string): string =>
+    callOf(advertised, direct, parent, action);
+  return {
+    navigate: call(ReticleTool.NAVIGATE, ReticleTool.NAVIGATE, 'go'),
+    look: call(ReticleTool.SNAPSHOT, ReticleTool.LOOK, 'page'),
+    find: call(ReticleTool.QUERY, ReticleTool.LOOK, 'find'),
+    inspect: call(ReticleTool.INSPECT, ReticleTool.LOOK, 'element'),
+    state: call(ReticleTool.STATE, ReticleTool.LOOK, 'state'),
+    observe: call(ReticleTool.OBSERVE, ReticleTool.OBSERVE, 'events'),
+    network: call(ReticleTool.NETWORK, ReticleTool.OBSERVE, 'network'),
+    console: call(ReticleTool.CONSOLE, ReticleTool.OBSERVE, 'console'),
+    assert: call(ReticleTool.ASSERT, ReticleTool.ASSERT, 'now'),
+    settle: call(ReticleTool.WAIT_FOR, ReticleTool.ASSERT, 'wait'),
+    sessions: call(ReticleTool.SESSIONS, ReticleTool.SESSION, 'list'),
+    actAndWait: ReticleTool.ACT_AND_WAIT,
+    act: advertised.has(ReticleTool.ACT) ? ReticleTool.ACT : '',
+    yield: advertised.has(ReticleTool.SESSION) ? `${ReticleTool.SESSION} {action:"yield"}` : '',
+    feedback: call(ReticleTool.FEEDBACK, ReticleTool.SESSION, 'feedback'),
+    // Only said when it is TRUE. `reticle_tools` without `reticle_run` is a catalogue of names
+    // nothing can invoke, which is the trap this whole module was written after.
+    coldTail:
+      advertised.has(ReticleTool.TOOLS) && advertised.has(ReticleTool.RUN)
+        ? `Everything else is one hop: ${ReticleTool.TOOLS} lists it, ${ReticleTool.RUN} calls it.`
+        : '',
+    /*
+     * The replay route, resolved like every other call here.
+     *
+     * These four were the only capability the briefing never mentioned, and the omission was
+     * MEASURED rather than suspected: across 13 agent cells and 323 tool calls, with 29 saved flows
+     * sitting on disk the whole time, replay was invoked zero times. Nothing told the agent it
+     * existed. `reticle_verify`'s own description carries the full explanation — and both shipping
+     * surfaces trim it from 1,791 characters to 93, which deletes every word about flows. A rule
+     * that has to survive that trim cannot live in a tool description; it lives here, where the
+     * string is sent once per session and never trimmed.
+     */
+    affected: call(ReticleTool.AFFECTED, ReticleTool.VERIFY, 'affected'),
+    replayChange: call(ReticleTool.VERIFY_CHANGE, ReticleTool.VERIFY, 'change'),
+    replayAll: call(ReticleTool.FLOW_REPLAY, ReticleTool.VERIFY, 'flows'),
+    heal: advertised.has(ReticleTool.FLOW_HEAL) ? ReticleTool.FLOW_HEAL : '',
+  };
+}

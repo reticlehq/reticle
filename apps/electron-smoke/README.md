@@ -24,9 +24,9 @@ Point either mode at a daemon on another port with `RETICLE_PORT=4401`.
 `electron/main.cjs` exposes three IPC handlers. `todos:archive` **always rejects**, and the renderer's Archive button removes the row, writes "archived", and swallows the rejection. The UI, a screenshot, and a DOM assertion all agree the feature works:
 
 ```
-reticle_snapshot          → the row is gone, status reads "archived"
-reticle_network {status:500} → ipc://todos:archive  status 500
-                               "archive is not implemented in the backend"
+reticle_look { action: "page" }                     → the row is gone, status reads "archived"
+reticle_observe { action: "network", status: 500 } → ipc://todos:archive  status 500
+                                                     "archive is not implemented in the backend"
 ```
 
 That gap is the reason the IPC observer exists. See [docs/desktop.mdx](../../docs/desktop.mdx).

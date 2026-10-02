@@ -1,0 +1,315 @@
+import { CaptureLoss, channelsReadBy, PredicateKind } from '@reticlehq/core';
+import { sessionVerdictFacts } from '@/portal/session/session-verdict-facts.js';
+import { gapsForAction } from '@reticlehq/engine/evidence/instrumentation-gaps.js';
+import { noteSessionGaps } from '@reticlehq/engine/evidence/gap-ledger.js';
+import { declaresState } from '@reticlehq/engine/question/predicate/predicate-asks.js';
+import { isStateUnwatched } from '@reticlehq/engine/evidence/blind-spots.js';
+import type { InstrumentationGap, JournalVerdictEffect } from '@reticlehq/core/artifacts';
+import type { Predicate } from '@reticlehq/engine/question/predicate/predicate.js';
+import type { Session } from '@/portal/session/session.js';
+import {
+  findContradictions,
+  type Contradiction,
+} from '@reticlehq/engine/disagreement/contradictions.js';
+import { crashedRuleNotes } from '@reticlehq/engine/disagreement/contradiction-folds.js';
+import {
+  declaredExpectations,
+  declaresBodyIndependentChannel,
+} from '@reticlehq/engine/question/declared.js';
+import {
+  absenceBlindSpotNote,
+  blindSpotsFromState,
+  buildCoverageStatement,
+  restsOnCompleteWindow,
+  Coverage,
+  impeachesCapture,
+  transportGapNote,
+} from '@reticlehq/engine/evidence/blind-spots.js';
+import { buildHonestyBlock } from '@reticlehq/engine/evidence/honesty.js';
+import { acceptedWriteLabels } from '@reticlehq/engine/evidence/accepted-write.js';
+import { unreadWriteLabels } from '@reticlehq/engine/evidence/unread-outcome.js';
+import { decideVerified } from '@reticlehq/engine/evidence/verified.js';
+import { describeWaitTarget, namedNetIsInFlight } from '@reticlehq/engine/evidence/unsettled.js';
+import {
+  inFlightRequestLabels,
+  repeatedRequestLabels,
+} from '@/surface/tools/act/settle-in-flight.js';
+import { gradeOfPredicate } from './assert-grade.js';
+import { assertSource } from './assert-source.js';
+import { VerdictAttribution, verdictAttributionOf } from '@reticlehq/core';
+
+/**
+ * The honesty verdict for a plain `reticle_assert`.
+ *
+ * This is the single field an agent reads, and it was missing from the most-used verdict path.
+ * `act_and_wait` has always returned it; `reticle_assert` returned a bare `pass: true`.
+ *
+ * Measured on a shipments console: a dispatch answered 202 Accepted, the row rendered "dispatched"
+ * optimistically, an assert taken right after the click returned `pass: true` with no caveat, and the
+ * server reverted the write to "held" 1.2s later. The 202 machinery that exists precisely to report
+ * that as `verified: "unknown"` was never reached, because the tool an agent actually calls did not
+ * consult it. Asserting a moment earlier — while the POST was still open — is the same story with a
+ * different name: `request-never-settled`, also unreported.
+ */
+export async function assertVerdict(
+  session: Session,
+  predicate: Predicate,
+  pass: boolean,
+  /**
+   * What the oracle actually looked at. The only thing this verdict is entitled to point at — see
+   * `assertSource`, which reads the matched element descriptors' own `file:line`.
+   */
+  evidence: unknown,
+  since: number,
+  /** Set when the assertion was never evaluated — see engine/src/evidence/verified.ts. */
+  inconclusive?: string,
+  /**
+   * Set when the tab went away mid-wait, so the assertion was never OBSERVED. `reticle_assert` and
+   * `reticle_wait_for` reach the same disconnect path as the act tools, and a verdict that blames
+   * the app for a lost connection is no more honest on this route than on that one.
+   */
+  observationLost?: boolean,
+  /**
+   * Set when code changed since the last verdict with nothing declaring what it was for. Decided by
+   * `isChangeUndeclared` at the call site, which is the only place that can reach the intent ledger —
+   * this path takes a session and no `deps`.
+   */
+  changeUndeclared?: boolean,
+): Promise<{
+  decision: Record<string, unknown>;
+  contradictions: Contradiction[];
+  coverage: Record<string, unknown>;
+  gaps: InstrumentationGap[];
+  /**
+   * The bounded verdict, in the SAME shape `act_and_wait` writes into its journal action — so the
+   * journal holds one verdict shape rather than two and the run fold that reads it needs no second
+   * case. Built here because this is the one place that holds the typed decision and the predicate.
+   */
+  verdictEffect: JournalVerdictEffect;
+}> {
+  // Scope caveat, stated because it is a real limitation and not a bug: blind spots are tracked per
+  // SESSION, not per assertion window, so a cross-origin iframe seen once marks every later verdict
+  // in that session partial — including ones about a region it cannot affect. That errs toward
+  // over-warning, which is the correct direction here: the failure this guards against is a green
+  // that implies coverage it never had, and a needless caveat costs the agent a sentence.
+  const spots = blindSpotsFromState(session.blindSpots(), session.runtime);
+  const statement = buildCoverageStatement(spots);
+  const absenceBlindSpot = absenceBlindSpotNote(predicate, spots);
+  // Omitted entirely when coverage is full, so an intact page pays nothing and the field's PRESENCE
+  // is the warning.
+  const coverage =
+    Coverage.PARTIAL === statement.coverage
+      ? {
+          coverage: statement.note ?? Coverage.PARTIAL,
+          coverage_spots: statement.spots.map((sp) => ({ kind: sp.kind, count: sp.count })),
+        }
+      : {};
+  const windowEvents = await session.queryEvents({ since });
+  // Everything before the window, passed as LEARNING material only. A scale error disagrees with a
+  // value the API stated earlier in the session, which an action-scoped window can never contain —
+  // measured live, `observe` over a wide window reported `unit-mismatch` while `assert` on the same
+  // session reported none. Attribution is unchanged: findings still come only from windowEvents.
+  const prior =
+    since > 0 ? (await session.queryEvents({ since: 0 })).filter((e) => e.t < since) : [];
+  // The last act, when it falls inside the window being judged. Without it `duplicate-request` counted
+  // `method + url` across whatever window the caller asked for, so two legitimate separate saves to one
+  // endpoint were reported as a double submit — the instrument accusing the app of something nobody
+  // could show it did. An assert taken over a window that predates the act attributes nothing, and the
+  // rule then stays quiet.
+  const actCursor = session.lastAct.cursor();
+  // The same declaration the act path reads. `reticle_assert` is the other half of the verdict
+  // surface, and an error path declared here deserves the same answer it gets there — a fix that
+  // lived only on the act path would leave the sibling caller broken.
+  const declared = declaredExpectations(predicate);
+  const contradictions = findContradictions(windowEvents, {
+    prior,
+    currentDocumentId: session.currentDocumentId,
+    currentEditEpoch: session.currentEditEpoch,
+    appOrigin: session.url,
+    background: session.background,
+    expectedFailures: declared.netFailures,
+    namedNetUrls: declared.netUrls,
+    renderProved: pass && declared.rendersContent,
+    ...(actCursor !== undefined && actCursor >= since ? { actionSince: actCursor } : {}),
+  });
+  // Only a spot that IMPEACHES the capture downgrades a general verdict. Structural boundaries are
+  // reported as coverage; the narrower absence exception is computed separately above.
+  const impeaching = buildCoverageStatement(spots.filter((sp) => impeachesCapture(sp.kind)));
+  // A gap in the WINDOW, as opposed to a standing limit of the page. Both mean the same thing to the
+  // rule — part of what happened was not seen — so both belong in `blindSpots`, which is the only
+  // input `decideVerified` reads for that.
+  const gap = transportGapNote(windowEvents);
+  /**
+   * The DURABLE half of the same question. `queryEvents` above falls through to the journal once the
+   * ring buffer has evicted, and that ledger refuses writes at its byte ceiling — so a window read
+   * from it after the ceiling was reached is missing whatever the cap turned away. The in-band
+   * marker cannot carry this: it is stamped with a `t`, and any `since` later than that filters it
+   * straight back out, leaving a partial answer that looks exactly like a complete one.
+   *
+   * Called optionally because `Session` is stubbed by cast in a great many suites, and a method
+   * added to it therefore arrives as a runtime `undefined` in files that have nothing to do with
+   * this change — the cost recorded at the top of `fake-session.ts`, four times over.
+   */
+  const ledgerClosed = undefined !== (await session.journalWriteLoss?.());
+  // A consumer rule that crashed belongs here too: the engine ran with fewer rules than it claims,
+  // so part of what happened may simply not have been looked for.
+  const impeachingNotes = [impeaching.note, gap, ...crashedRuleNotes()].filter(
+    (n): n is string => n !== undefined,
+  );
+  const outcomePending = acceptedWriteLabels(windowEvents);
+  const outcomeUnread = unreadWriteLabels(windowEvents);
+  const stillInFlight = inFlightRequestLabels(windowEvents, session.url, session.background);
+  const effectiveInconclusive =
+    inconclusive ?? (!pass ? session.preconditionFailure?.() : undefined);
+  /**
+   * Does a green here rest on the window having been COMPLETE?
+   *
+   * Not a refinement of the two losses below — it is what keeps either of them usable. Scarce loss
+   * is recorded for AGE eviction too, so `lostSince(0)` is true on any session past the 60s cutoff,
+   * and assert takes a caller-chosen `since` that is often 0. Impeaching every verdict over a wide
+   * window would make `unknown` the answer to everything, which is the failure this repo has already
+   * paid for once, when `unclean_capture` became the dominant cause of `unknown` in the field. A
+   * POSITIVE assertion that passed FOUND its evidence; things lost elsewhere do not unmake it.
+   */
+  const restsOnComplete = restsOnCompleteWindow(predicate);
+  /**
+   * The buffer evicted scarce evidence from this window.
+   *
+   * assert never consulted the buffer at all, on the reasoning that it "observes an already-open
+   * window" — but eviction happens on push regardless of who opened the window, so
+   * `{ console, absent: true }` returned `yes` over a window whose evidence was gone, which is
+   * absence of evidence read as evidence of absence. The act path needs no `restsOnComplete` guard:
+   * its cursor is the action's own.
+   */
+  const bufferLost = session.lostSince(since) && restsOnComplete;
+  /** The durable ledger refused writes, on a query path that read from it. Same rule, other store. */
+  const ledgerLost = ledgerClosed && restsOnComplete;
+  const decision = decideVerified({
+    pass,
+    // What this claim needs to read, against what the page said it can see -- the protocol's
+    // first clause, and one this implementation could not run until the page started declaring.
+    // Both halves are conditional on purpose: an SDK too old to declare sends nothing, and
+    // treating that silence as an empty set would refuse every claim from every older page.
+    channelsRead: channelsReadBy(predicate),
+    ...(session.channels === undefined ? {} : { channelsObservable: session.channels }),
+    // Threaded rather than looked up: decideVerified is pure and has no session.
+    ...sessionVerdictFacts(session),
+    // Same rule as the act path: the caller named a consequence, so a settlement-only finding must
+    // not override it. A fix that lived on one half of the verdict surface would leave the other
+    // half broken, and this is the tool agents call most.
+    declaredConsequence: predicate.kind !== PredicateKind.SETTLED,
+    ...(declaresBodyIndependentChannel(predicate) ? { independentOfBody: true } : {}),
+    ...(effectiveInconclusive === undefined ? {} : { inconclusive: effectiveInconclusive }),
+    ...(true === observationLost ? { observationLost: true, lastUrl: session.url } : {}),
+    ...(absenceBlindSpot === undefined ? {} : { absenceBlindSpot }),
+    ...(namedNetIsInFlight(predicate, stillInFlight) ? { namedRequestInFlight: true } : {}),
+    honesty: buildHonestyBlock({
+      grade: gradeOfPredicate(predicate),
+      attribution: 'window',
+      truncated: bufferLost,
+      // The durable ledger stopped, and the SAME absence rule applies: a positive assertion that
+      // passed found its evidence, and events missing from the end of a file do not unmake it.
+      ledgerClosed: ledgerLost,
+      coveragePartial: Coverage.PARTIAL === statement.coverage,
+      ...(statement.note === undefined ? {} : { coverageNote: statement.note }),
+      ...(0 === impeachingNotes.length ? {} : { blindSpots: impeachingNotes }),
+      // Which loss, as an enum, beside the prose. Ours before the page's, and the memory one before
+      // the disk one: `verification.uncleanLoss` takes the first, and a window that lost both is
+      // more usefully reported as the eviction, which is the one a caller can still drive around.
+      losses: [
+        ...(bufferLost ? [CaptureLoss.BUFFER_LOSS] : []),
+        ...(ledgerLost ? [CaptureLoss.JOURNAL_LOSS] : []),
+        ...(gap === undefined ? [] : [CaptureLoss.TRANSPORT_GAP]),
+        ...(impeaching.note === undefined ? [] : [CaptureLoss.BLIND_SPOT]),
+      ],
+    }),
+    contradictions,
+    ...(0 === outcomePending.length ? {} : { outcomePending }),
+    ...(outcomeUnread.length > 0 ? { outcomeUnread } : {}),
+    // Same detail the act path supplies: this route reaches UNSETTLED through an absence-derived
+    // contradiction, and "the window closed before the app finished" is no more actionable here.
+    unsettled: {
+      waitedFor: describeWaitTarget(predicate),
+      stillInFlight,
+      repeated: repeatedRequestLabels(windowEvents),
+    },
+  });
+  // The same rule the act path uses, fed by what THIS path knows. An assertion drives nothing, so
+  // only two of the four gates can fire here: a red with no remembered source to point at, and a
+  // state assertion against an app that registers no store.
+  const gaps = gapsForAction({
+    pass,
+    ...(changeUndeclared === undefined ? {} : { changeUndeclared }),
+    source: session.lastAct.source(),
+    stateAsked: declaresState(predicate),
+    stateUnwatched: isStateUnwatched(spots),
+    // What the app DECLARED, so an under-instrumented one is told without having to be asked.
+    hasCapabilities: session.hasCapabilities,
+    // Whether the build TURNED the source stamp off, so a red with no file:line prescribes the
+    // right fix. `false` from the page is the only value that means anything; absent is unknown.
+    ...(false === session.sourceMapping ? { sourceMappingDisabled: true } : {}),
+    domMutated: false,
+    signalsFired: 0,
+  });
+  noteSessionGaps(session, gaps);
+  // The one file:line this verdict is entitled to: its own evidence, or — for a failure with no DOM
+  // clause to point at — the control last driven. Returned so the RESPONSE can echo the same value
+  // the journal keeps; one verdict must never carry two different pointers.
+  const source = assertSource({
+    predicate,
+    evidence,
+    pass,
+    lastActSource: session.lastAct.source(),
+  });
+  // Who can act on this verdict, derived from the clause that decided it — see `attributedTo` below.
+  const attributedTo = verdictAttributionOf(decision.verifiedReason);
+  return {
+    decision: decision as unknown as Record<string, unknown>,
+    contradictions,
+    coverage,
+    gaps,
+    verdictEffect: {
+      claim: describeWaitTarget(predicate),
+      verified: decision.verified,
+      ...(source === undefined ? {} : { source }),
+      // What answering this claim READ. Known here and nowhere later: a run folded from the journal
+      // has only what the journal kept, and without this it stamped `element` on every check.
+      kind: predicate.kind,
+      // The three facts that make a verdict something other than a pass/fail line. All three were
+      // known right here and none of them survived into the durable record, so nothing downstream
+      // could report them however well this moment understood them.
+      //
+      // FALSE, and this is the one value here that is easy to get wrong. This path serves `assert`,
+      // which reads a window that is already open: the claim is made after the action, not before.
+      // Recording it as pre-registered would put the product's own headline property on evidence
+      // that does not have it -- and a claim written afterwards can always be shaped to fit what
+      // happened, which is the whole reason the distinction is worth recording.
+      declaredBeforeActing: false,
+      // The deciding clause, kept. `unknown` alone cannot distinguish an outcome that has not
+      // arrived from a capture that could not be read, and only the first is worth asking about
+      // again -- which is what makes a later answer a CORRECTION rather than a second opinion.
+      reason: decision.verifiedReason,
+      /*
+       * WHOSE problem it is, in four values, finishing the sentence above.
+       *
+       * The reason names the deciding clause; this names who can act on it, which for an `unknown`
+       * is the only question the reader has. `environment` resolves by waiting, `could-not-see` by
+       * looking again with better coverage, `harness` by fixing Reticle or the call, and `code` is
+       * the only one that means go and change the app. Omitted on a proof, which has no owner.
+       *
+       * Derived here rather than inside the verdict: it is a pure function of a reason the engine
+       * already returns, and `core-coupling-only-shrinks` caps what the engine may borrow from core.
+       *
+       * Named `attributedTo`, not `attribution`, because two other things already carry that word:
+       * `honesty.attribution` a few lines up ("what the grade is attributed to" — the window), and
+       * `BugAttribution` in telemetry ("we found a defect, whose defect is it?"). Three meanings on
+       * one noun is how a reader ends up acting on the wrong one.
+       */
+      ...(attributedTo === undefined || VerdictAttribution.NONE === attributedTo
+        ? {}
+        : { attributedTo }),
+      grade: gradeOfPredicate(predicate),
+      couldNotSee: spots.map((spot) => spot.kind),
+    },
+  };
+}

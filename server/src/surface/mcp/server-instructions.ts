@@ -1,0 +1,201 @@
+import { ReticleTool } from '@reticlehq/core';
+import { SHARED_PARAM_GUIDANCE } from './shared-params.js';
+import { defaultAdvertisedNames } from '@/surface/tools/tool-surface.js';
+import { surfaceVocabulary, listOf, type SurfaceVocabulary } from './surface-vocabulary.js';
+/**
+ * What every connected agent is told, before it has asked anything.
+ *
+ * The MCP `instructions` string lands in the agent's context at the handshake — no skill file, no
+ * restart, no action from the user. For an agent that arrived through a plugin listing or a pasted
+ * config block rather than through the skill, it is the ONLY thing Reticle ever says unprompted.
+ *
+ * The lead is state-dependent, because registering the MCP server and instrumenting an app are two
+ * separate acts and only the first is a single line of config. A user therefore reaches "the tools
+ * are here" without reaching "the app is wired", and nothing in that state reads as unfinished. So a
+ * project that has never had an app connect is told the one thing it needs, and a project that has is
+ * not nagged about a step it already took. The verdict discipline and the feedback ask are constant,
+ * because they matter in both states.
+ *
+ * The stopping rule is here because every OTHER instruction pushes toward more checking — which is
+ * right when something is broken, and is the whole bill when nothing is. Without it an agent will
+ * keep driving a page whose first verdict already came back "yes" over a clean capture.
+ *
+ * The diagnose-from-source rule is here because driving the app cannot answer a question only the
+ * source can. An agent that explores to UNDERSTAND the code, rather than to confirm a fix, spends its
+ * turns asking a browser about intent.
+ */
+
+/**
+ * The tools, and the rule that only two of them decide anything.
+ *
+ * Every tool named here is resolved from the LIVE surface — see surface-vocabulary.ts for the
+ * measured reason. A briefing that names a tool the agent was not given does not merely confuse it;
+ * it makes the agent stop using the product altogether.
+ */
+/*
+ * `reticle gate` is FOLDED INTO the done sentence rather than given a paragraph, and that is the
+ * budget rule working rather than a stylistic choice.
+ *
+ * The instruction block has a hard byte cap whose own note says a raise must be paid for with a
+ * measurement, and that if one cannot be shown the right answer is to cut an older sentence. There
+ * is no measurement for `gate`: it is built, it has anti-reward-hacking, and it appeared in no
+ * surface an agent reads, which is an argument and not a number. Cutting a measured sentence to
+ * make room for an unmeasured one would be strictly worse. So it costs about a hundred characters
+ * inside the sentence that already names the exact moment it applies to, and the cap did not move.
+ */
+const verdictDiscipline = (v: SurfaceVocabulary): string =>
+  `Reticle verifies a running web app from the inside: go (${v.navigate}), look (${listOf(v.look, v.find)}), act and prove in one hop (${v.actAndWait}), observe (${listOf(v.observe, v.state, v.network, v.console)}), assert (${v.assert}). Verify a user-facing change against the real app before you call it done — \`npx @reticlehq/server gate --since <ref>\` fails unless a passing artifact covers every flow your edits affect — and never weaken a check to make it pass.
+
+Only ${v.act.length > 0 ? `${v.actAndWait}, ${v.assert} and ${v.act}{steps}` : `${v.actAndWait} and ${v.assert}`} produce a verdict. Everything else moves or reads the app and proves nothing, so a drive that ends without one of those two has no result however many tools it used. Prefer ${v.actAndWait}({ ref, action, until }) — it names the expected consequence BEFORE the action, which is the difference between a check and a rationalisation. Only verified:"yes" is a pass — "unknown" means Reticle could not tell what happened, "no-fault" means nothing was declared to prove. Report either as not proved.
+
+Done is the journey's END proved, not its first step: drive each step your change touches and give the last an \`until\` naming the end state (\`durable: true\` if it must persist). A "yes" on it over a clean capture IS the answer — stop.
+
+DIAGNOSING a bug? Read the source first — Reticle proves what the app DOES, not why. Drive to CONFIRM a fix, not to find one.`;
+
+/**
+ * Replay before you drive, when a saved flow already covers the change.
+ *
+ * WHY THIS IS IN THE BRIEFING AND NOT IN A TOOL DESCRIPTION. Across a whole bench run with saved
+ * flows on disk for every cell, replay was invoked ZERO times. Coverage was never the problem — the
+ * daemon saves a flow from every drive at teardown, so it accumulates whether or not anybody asks.
+ * `reticle_verify` carries the whole explanation in its own description, and every shipping surface
+ * trims that description down to one line, which removes every mention of flows. A rule that must
+ * survive the trim has to be here.
+ *
+ * THE ORDER IS THE POINT. Replaying after a drive proves nothing the drive did not already prove,
+ * and the drive is already paid for. The saving is avoided TURNS — orders of magnitude, driving a
+ * journey against replaying it — and it only exists if the question is asked BEFORE the browser is
+ * opened.
+ *
+ * `unknown` is load-bearing and is stated explicitly. It means no saved flow covers this change, so
+ * nothing ran and nothing was proved — and an agent that reads it as "fine" has turned the cheapest
+ * path into a false green, which is the one failure this product exists to prevent. It is the
+ * trigger to drive, never a pass.
+ *
+ * Every call is resolved from the LIVE surface, and the section disappears entirely when the surface
+ * cannot reach any of them. Naming a tool the agent was not given is the failure this module's own
+ * header warns about.
+ */
+const replayFirst = (v: SurfaceVocabulary): string => {
+  if (0 === v.replayChange.length) return '';
+  const ask =
+    v.affected.length > 0 ? `${v.affected} names the saved flows covering your edits; ` : '';
+  return `Changed code? Replay before you drive. ${ask}${v.replayChange} replays them for one verified + because — hundreds of tokens where driving the same journey costs tens of thousands. "yes": proved, stop. "no": names the step that broke. "unknown": NO saved flow covers it, so nothing was proved — drive it, and never report it as passing. What you drive by hand is saved as a flow automatically.`;
+};
+
+/**
+ * The first move, for a project no app has ever connected to.
+ *
+ * Deliberately concrete: the command, what it does to the app, and the call that confirms it. A
+ * general instruction to "set Reticle up" is the state these agents are already in — they have the
+ * tools and no app, and nothing tells them that combination is incomplete. `init` starts the dev
+ * server and opens the app itself, so the restart is named only for the case it cannot cover: a dev
+ * server that was already running read the config before `init` edited it, which is the single most
+ * common way this step half-succeeds. Telling every agent to restart sent them to kill the server
+ * `init` had just started.
+ */
+const firstMoveFor = (
+  v: SurfaceVocabulary,
+): string => `FIRST: no app has ever connected to Reticle in this project, so nothing here can be verified yet. Having these tools is not the same as being set up — the tools reach a daemon, and the daemon has nothing to look at until the app itself is instrumented.
+
+Fix that before anything else: run \`npx @reticlehq/server init\` in the project. It starts the dev server and opens the app itself; only if a dev server was ALREADY running without Reticle, restart it and reload the tab. Confirm with ${v.sessions} — a session listed there is the proof, and until one appears no other tool can tell you anything about this app.`;
+
+/**
+ * When to reach for the tools that are advertised but never explained, and how to reach the two
+ * that are explained but not advertised. Both halves of the same defect.
+ *
+ * An advertised tool arrives as a name and one line of description: enough to USE, not enough to
+ * CHOOSE. `reticle_observe` is where that costs something — dropping the observation tools TRIPLES
+ * false alarms (see TOOL_SURFACE.VERIFY), because the model stops observing and reaches for the
+ * verdict without the evidence. So observe gets a reason, not a listing.
+ *
+ * The other direction: `reticle_context` and `reticle_intent` sit on the EXTENDED surface, so they
+ * are not in the list an agent is handed. Naming one without its call shape points the agent at a
+ * tool it cannot call, which is worse than silence — it teaches distrust of everything else here. So
+ * they are written as the `reticle_run` call that works.
+ *
+ * Only in the connected state, and that is not a budget trick: an agent whose app has never
+ * connected has nothing to observe, no run to carry forward and nothing to declare an intent
+ * against. Its one instruction is the first move, and adding a second would compete with it.
+ */
+const reachFor = (v: SurfaceVocabulary): string => {
+  const lines = [
+    `${v.observe} is the evidence channel: everything the page did since a cursor, in one read. Take it BEFORE you call a build broken — measured, stripping the observation tools TRIPLED false alarms. ${v.settle} settles a page that is changing without you; ${v.inspect} maps an element to its source file:line, which turns a finding into an edit${v.yield.length > 0 ? `; ${v.yield} hands the tab back to the human` : ''}.`,
+  ];
+  // Said ONLY when both halves are advertised. A catalogue with no way to invoke what it lists sends
+  // the agent at a tool it cannot call and then off the product entirely — see
+  // surface-vocabulary.ts. Where there is no cold tail, there is nothing to say about reaching it.
+  if (v.coldTail.length > 0) {
+    lines.push(
+      `${v.coldTail} Two to know early: ${ReticleTool.RUN}({ tool: "${ReticleTool.CONTEXT}", args: {} }) returns what this run already established, after a compaction or handover, and ${ReticleTool.RUN}({ tool: "${ReticleTool.INTENT}", args: { action: "declare", ... } }) declares what a change was MEANT to do, so the verdict has something to check against other than itself.`,
+    );
+  }
+  return lines.join('\n\n');
+};
+
+/** The feedback ask. Constant: an agent that cannot get set up is the report we most need. */
+const feedbackAsk = (
+  v: SurfaceVocabulary,
+): string => `Feedback is first-class here, not a courtesy. Reticle is built FOR agents, so your experience is the only signal that decides what gets built or fixed — and it disappears when your context does. Send it with \`${v.feedback}\` the moment you notice, then carry on with your task:
+- Reticle broke, lied, or could not see something you needed (\`bug\` / \`gap\` / \`ambiguity\`).
+- You wished it could do something, or something works but costs too many calls (\`feature_request\` / \`improvement\`).
+- The install, the wiring, or the setup itself gave you trouble — including anything you had to work around by hand.
+
+Nothing is too minor, and a report costs one call. If the tools are unreachable (setup unfinished, daemon down), file the same report from the shell instead: \`reticle feedback --agent --kind <one of those kinds> "what happened"\`. Report defects in RETICLE — a bug you find in the app under test is Reticle working, and belongs in your answer to the user.`;
+
+interface InstructionState {
+  /**
+   * The names this surface actually advertises. Every tool the prose mentions is resolved from it.
+   *
+   * Optional so the two proxy call sites, which brief before a daemon has answered, keep the shipped
+   * default — but a daemon that knows its surface MUST pass it, or it briefs an agent on a product it
+   * is not serving.
+   */
+  advertised?: readonly string[];
+  /**
+   * Has an app ever connected to Reticle for this project, on this port?
+   *
+   * Read from the durable connection memory rather than from the live session list: a daemon four
+   * seconds old has no sessions and that says nothing about whether the app is wired. The question
+   * is whether this install has EVER worked, not whether it is working this second.
+   */
+  previouslyConnected: boolean;
+}
+
+/** The instructions this daemon should advertise, given what it knows about the project. */
+/**
+ * Instructions are sent ONCE at initialize; the tool surface is re-sent every turn, and costs an
+ * order of magnitude more for it. So anything true of every tool belongs in this block rather than
+ * repeated across every parameter description. See shared-params.ts.
+ */
+export function buildServerInstructions(state: InstructionState): string {
+  // Defaults to the surface this package ships, so the two proxy callers — which brief an agent
+  // before any daemon has answered — keep working unchanged.
+  // The two meta-tools are added by `buildDynamicTools`, not by the surface filter, so they are
+  // absent from CORE_TOOL_NAMES — and without them the cold-tail sentence goes silent on the very
+  // surface that has a cold tail. The default surface always carries both.
+  // The fallback is the LIVE default surface, never a hardcoded list. The proxy briefs WITHOUT
+  // passing a surface, so a stale fallback here is what every agent reaching Reticle through
+  // `reticle mcp` reads — naming tools the surface it is being served does not have.
+  const v = surfaceVocabulary(state.advertised ?? defaultAdvertisedNames());
+  const firstMove = firstMoveFor(v);
+  /*
+   * Said in BOTH states, and gated only on whether the surface can reach replay.
+   *
+   * NOT gated on `previouslyConnected`, though replay presupposes saved flows: that flag needs
+   * `readProjectId(cwd)` to resolve, and in a monorepo where the agent runs from the repo root and
+   * the app lives in a subdirectory it returns undefined. The rule would be absent exactly where it
+   * is most needed, and reach is the entire problem it exists to fix.
+   *
+   * It is safe to say with no flows, because the tool is honest without help: `affected` names
+   * nothing, `change` answers `unknown`, and `unknown` already means "drive it" — which is what a
+   * first-time reader should do anyway. The advice degrades into the correct first move rather than
+   * into a dead end.
+   */
+  const replay = replayFirst(v);
+  const base = state.previouslyConnected
+    ? `${verdictDiscipline(v)}\n\n${reachFor(v)}\n\n${feedbackAsk(v)}`
+    : `${firstMove}\n\n${verdictDiscipline(v)}\n\n${feedbackAsk(v)}`;
+  const withReplay = replay.length > 0 ? `${base}\n\n${replay}` : base;
+  return `${withReplay}\n\n${SHARED_PARAM_GUIDANCE}`;
+}

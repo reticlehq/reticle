@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // Call EVERY shipped tool the way an agent calls it — over MCP stdio, against a running app.
 //
 // This spec exists because four defects shipped past every other gate, and all four were invisible
@@ -29,7 +30,7 @@ import { waitForSession } from '../wait-for-session.mjs';
 import { waitUntil } from '../wait-until.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const PORT = process.env.RETICLE_PORT ?? '4400';
+const PORT = String(TEST_BRIDGE_PORT);
 const APP = process.env.SWEEP_APP_URL ?? 'http://localhost:4310/';
 
 let pass = 0;
@@ -62,13 +63,13 @@ const RUN_TOOL = 'reticle_run';
 // Reading it from the built server keeps the check meaningful: the assertion below is still that a
 // REAL MCP connection advertises the surface, and it is now impossible for it to disagree with the
 // surface for the boring reason.
-const { TOOL_SURFACE } = await import(pathToFileURL(path.join(ROOT, 'packages/server/dist/tools/tool-surface.js')).href);
-const { advertisedTools } = await import(pathToFileURL(path.join(ROOT, 'packages/server/dist/mcp/mcp.js')).href);
+const { TOOL_SURFACE } = await import(pathToFileURL(path.join(ROOT, 'server/dist/surface/tools/tool-surface.js')).href);
+const { advertisedTools } = await import(pathToFileURL(path.join(ROOT, 'server/dist/surface/mcp/mcp.js')).href);
 const EXTENDED_SURFACE_SIZE = advertisedTools(TOOL_SURFACE.ALL).length;
 
 const client = new McpStdioClient(
   'node',
-  ['packages/server/dist/cli.js', 'mcp', '--port', PORT, '--drive', APP],
+  ['server/dist/command/cli.js', 'mcp', '--port', PORT, '--drive', APP],
   { RETICLE_PORT: PORT, RETICLE_ADVERTISE_ALL_TOOLS: '1', RETICLE_TELEMETRY: '0' },
 );
 
@@ -270,7 +271,7 @@ await record('reticle_flow_save', { flowName: 'sweep-flow' });
 await record('reticle_flow_save_recorded', { flowName: 'sweep-flow-recorded' });
 await record('reticle_flow_replay', { flowName: 'sweep-flow', confirmDangerous: true });
 await record('reticle_verify', { action: 'flows', names: ['sweep-flow'] });
-await record('reticle_flow_heal', { flowName: 'sweep-flow' });
+await record('reticle_verify { action: "heal" }', { flowName: 'sweep-flow' });
 await record('reticle_verify', { action: 'crawl', maxSteps: 2, confirmDangerous: true });
 await record('reticle_session', { action: 'yield', mode: 'waiting' });
 
@@ -350,7 +351,7 @@ await client.stop();
 // `reticle mcp` proxies to a daemon that outlives this process; leave the port as we found it or the
 // next spec inherits a bridge it did not start.
 const { spawnSync } = await import('node:child_process');
-spawnSync('node', ['packages/server/dist/cli.js', 'stop', '--port', PORT, '--quiet'], { cwd: ROOT });
+spawnSync('node', ['server/dist/command/cli.js', 'stop', '--port', PORT, '--quiet'], { cwd: ROOT });
 
 console.log(`\n${fail === 0 ? '✅ TOOL SURFACE VERIFIED' : '❌ FAILED'} (${pass} passed, ${fail} failed)`);
 process.exit(fail === 0 ? 0 : 1);

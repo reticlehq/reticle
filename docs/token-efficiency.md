@@ -4,7 +4,7 @@ description: Why asking narrow questions costs a fraction of feeding the whole a
 icon: coins
 ---
 
-A full Reticle verify loop costs about **100 tokens**, against roughly **7,300** for a full-tree accessibility snapshot on the same page: about 73x leaner, because Reticle asks a narrow question instead of returning the page. If you re-look after an action with `reticle_snapshot({ diff: true })`, the re-read costs about 99% less again.
+A full Reticle verify loop costs about **100 tokens**, against roughly **7,300** for a full-tree accessibility snapshot on the same page: about 73x leaner, because Reticle asks a narrow question instead of returning the page. If you re-look after an action with `reticle_look({ action: "page", diff: true })`, the re-read costs about 99% less again.
 
 Agent browser tools that feed the **whole accessibility tree** to the model every step get expensive fast. Playwright MCP's own ecosystem notes its snapshots _"can exceed 50,000 tokens on complex pages,"_ with a _typical task ~114,000 tokens through MCP._ Reticle is built to ask **narrow questions** instead, so the per-interaction cost stays tiny.
 
@@ -28,9 +28,9 @@ Measured against the bench dashboard (`apps/bench-app`) **with a 1,000-item list
 
 ## Diffed snapshots: pay once, then only for changes
 
-After the first snapshot, pass `reticle_snapshot({ diff: true })` to get back **only what changed** since your last look of the same scope/mode (`mode:delta` with added/removed lines, or `mode:unchanged`). A route change auto-resets to a full snapshot, so you never read a misleading cross-page diff.
+After the first snapshot, pass `reticle_look({ action: "page", diff: true })` to get back **only what changed** since your last look of the same scope/mode (`mode:delta` with added/removed lines, or `mode:unchanged`). A route change auto-resets to a full snapshot, so you never read a misleading cross-page diff.
 
-Measured on a representative 150-row dashboard (the shipped regression benchmark `packages/server/src/tools/snapshot-cost.test.ts`, char/4 proxy):
+Measured on a representative 150-row dashboard (the shipped regression benchmark `server/src/surface/tools/snapshot-cost.test.ts`, char/4 proxy):
 
 | Payload                            |    Tokens |
 | ---------------------------------- | --------: |
@@ -40,7 +40,7 @@ Measured on a representative 150-row dashboard (the shipped regression benchmark
 
 **~99% fewer tokens** to re-look after an action, and because a `delta` carries no stale full tree, it also removes the 60K to 80K-token stale-context buildup that makes long-running agents start hallucinating selectors that no longer exist.
 
-Every `reticle_snapshot`/`reticle_query` result also carries `cost:{ bytes, tokens }` (estimated) so you can **re-scope before reading** a large body (`mode:interactive`/`status`, a tighter `scope`, or a narrower `query`) instead of paying for it first.
+Every `reticle_look { action: "page" }`/`reticle_look { action: "find" }` result also carries `cost:{ bytes, tokens }` (estimated) so you can **re-scope before reading** a large body (`mode:interactive`/`status`, a tighter `scope`, or a narrower `query`) instead of paying for it first.
 
 ## The other tax: tool schemas, paid on every request
 
@@ -53,11 +53,11 @@ Measured live, all servers in one run, same tokenizer (`bench/harness/schema-tax
 | **Reticle, the tool surface**            |    18 |    **~4,930** |
 | Playwright MCP                           |    23 |         3,725 |
 | Chrome DevTools MCP                      |    29 |         5,116 |
-| Reticle, `RETICLE_ADVERTISE_ALL_TOOLS=1` |    48 |       ~30,200 |
+| Reticle, `RETICLE_ADVERTISE_ALL_TOOLS=1` |    30 |       ~30,200 |
 
 _Measured 2026-08-12 (`bench/raw/schema-tax.json`). Reticle's default surface has gained a tool since, so treat the first row as a floor._
 
-There is one tool surface: the verify loop advertised directly, plus two meta-tools (`reticle_tools`, `reticle_run`) that reach every other tool on demand. Nothing is unreachable; the cold tail simply is not re-sent every turn.
+The default surface is the verify loop plus `reticle_tools` and `reticle_run`. The cold tail is un-advertised rather than unreachable: `reticle_run { tool, args }` calls any registered tool by name, and `RETICLE_ADVERTISE_ALL_TOOLS=1` advertises the whole table outright for suites that prefer that. Dropping the hatch was tried, and it left eleven registered tools callable by nothing at all.
 
 `RETICLE_ADVERTISE_ALL_TOOLS=1` advertises everything WITH output schemas. It is a verification switch for suites that call by name, not a mode to run agents in. It is roughly 7x the per-turn cost, which is why it is opt-in.
 

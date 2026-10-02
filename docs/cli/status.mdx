@@ -7,7 +7,7 @@ icon: heart-pulse
 `reticle status` is the command that tells you whether the install actually finished. Not a tick in a checklist: a connected app.
 
 ```bash
-npx @reticlehq/server status [--port N]
+npx @reticlehq/server status [--port N] [--json]
 ```
 
 ## Flags
@@ -15,10 +15,37 @@ npx @reticlehq/server status [--port N]
 | Flag | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `--port N` | number | `4400` (or `RETICLE_PORT`, or the port in `.reticle.json`) | Which daemon to ask |
+| `--json` | flag | off | Print the machine-readable event instead of the block below |
 
 ## What it prints
 
-One JSON line on stdout. Real capture, daemon up and no app connected:
+A short block, for whoever is reading the terminal. Real capture, daemon up with two apps connected:
+
+```text
+reticle status
+  daemon       ✓ running on :4400 (pid 90790)
+  sessions     ✓ 2 pages connected
+               http://localhost:5173/  (throttled, hidden)
+               http://localhost:7699/  (throttled, hidden)
+  agent link   enumerated
+```
+
+And with no daemon on the port:
+
+```text
+reticle status
+  daemon       ✗ not running on :4999
+  agent link   never-attached
+  next         no daemon is running on this port, which is normal. An agent starts it when it
+               first calls a Reticle tool, and it exits again when idle. Ask your agent to verify
+               something, then run status again.
+```
+
+A session's parenthesised notes are the ones that explain an answer you would otherwise call a bug: `throttled` and `hidden` mean a background tab answering slowly, `stale` means the page has moved on from what the daemon last saw, and `unresponsive` means it is not answering at all.
+
+### `--json`
+
+The same facts as one event line on stderr, for a caller that parses rather than reads:
 
 ```json
 {
@@ -33,29 +60,17 @@ One JSON line on stdout. Real capture, daemon up and no app connected:
 }
 ```
 
-With an app connected, `why` is absent and each session carries its own fields:
+It is one line in the terminal, pretty-printed here, with `why` trimmed at the ellipses. With an app connected `why` is absent and each session carries its own fields:
 
 ```json
 {
-  "t": "2026-08-15T18:45:58.190Z",
-  "event": "reticle_status",
-  "port": 4400,
-  "running": true,
-  "pid": 72698,
-  "sessionCount": 1,
-  "sessions": [
-    {
-      "sessionId": "s223e0fad-e012-43f9-a23d-6d585470c90d",
-      "url": "http://localhost:4310/",
-      "throttled": false,
-      "stale": false,
-      "pendingMarks": 0
-    }
-  ]
+  "sessionId": "s223e0fad-e012-43f9-a23d-6d585470c90d",
+  "url": "http://localhost:4310/",
+  "throttled": false,
+  "stale": false,
+  "pendingMarks": 0
 }
 ```
-
-Both are one line of JSON in the terminal, pretty-printed here, with `why` trimmed at the ellipses.
 
 | Field | Meaning |
 | --- | --- |

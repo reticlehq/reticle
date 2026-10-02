@@ -1,0 +1,971 @@
+/**
+ * Wire-level constants. No free strings anywhere in Reticle reference these directly —
+ * every string/number that crosses the browser <-> bridge <-> agent boundary is named here.
+ */
+
+export const RETICLE_DEFAULT_PORT = 4400;
+export const RETICLE_WS_PATH = '/reticle';
+/** Agent↔server MCP wire paths — served by the daemon HTTP plane, forwarded by the stdio proxy. */
+export const MCP_SSE_PATH = '/mcp/sse';
+export const MCP_MESSAGE_PATH = '/mcp/message';
+/**
+ * The name this MCP server answers to — in its own `serverInfo` handshake, and in the registration
+ * an installer writes into an agent's config. Those must be the same string or the agent registers
+ * one server and talks to another.
+ *
+ * It lives here because it is an identity that crosses the wire, not an installer detail. It used to
+ * live in `init/`, which made the MCP handshake — squarely on the library path — reach into the
+ * install-time surface for a single string, and dragged that whole subtree along behind it for any
+ * consumer embedding the engine as a library.
+ */
+export const MCP_SERVER_NAME = 'reticle';
+/**
+ * SSE event name the daemon writes to every open MCP stream immediately before it shuts itself down.
+ *
+ * A stream that simply ends looks identical from the proxy whether the daemon retired on schedule or
+ * died under it, so every planned shutdown was counted as an outage the agent suffered. The proxy
+ * cannot infer the difference — the daemon is the only thing that knows, and this is it saying so.
+ * A custom event name rather than a `message`: the proxy forwards `message` frames to the client
+ * verbatim, and this is addressed to the proxy, not to the agent.
+ */
+export const MCP_SHUTDOWN_EVENT = 'reticle-shutdown';
+/** Local-only daemon introspection — `reticle status` GETs this for sessions + health at a glance. */
+export const STATUS_PATH = '/status';
+/**
+ * Query flag on STATUS_PATH: the caller (a running `reticle init`) is waiting on this daemon, so it
+ * must not idle out yet. Without it the daemon init started exited mid-wait on a slow desktop build.
+ */
+export const STATUS_HOLD_QUERY = 'hold';
+/** How long one hold lasts. The holder renews it well inside this window for as long as it waits. */
+export const STATUS_HOLD_MS = 60_000;
+/**
+ * Local-only drive request — `reticle drive <url>` POSTs `{url}` here when a daemon already owns the
+ * bridge port, and gets back the pooled session that daemon opened. The CLI asks instead of binding,
+ * so the two never fight over the port. Same trust tier as STATUS_PATH.
+ */
+export const DRIVE_PATH = '/drive';
+export const RETICLE_PROTOCOL_VERSION = 1;
+
+/**
+ * The oldest protocol version this build still talks to.
+ *
+ * A range rather than a single number. An exact door refuses a peer one version out, which is
+ * correct when both sides ship together and wrong the moment anything else implements this -- an
+ * SDK a user has not upgraded yet is not an incompatible SDK.
+ *
+ * Equal to the current version today, so nothing changes yet. It exists so that raising the current
+ * version is a decision about what to keep supporting, rather than an automatic break.
+ */
+export const RETICLE_MIN_PROTOCOL_VERSION = 1;
+
+/**
+ * The host a CLIENT names when it dials the bridge, as opposed to the address the bridge BINDS.
+ *
+ * They are deliberately different values and both are correct. The daemon binds `127.0.0.1` so it can
+ * never be reached off-host; a client says `localhost`, which is the readable name every doc, log
+ * line and error message uses. The gap between them is covered by the IPv6 loopback alias
+ * (`loopback-alias.ts`), which serves `[::1]` too, so `localhost` reaches the daemon whichever family
+ * a platform resolves first.
+ *
+ * Named rather than inlined because it was inlined, and three generators then wrote their own: CRA
+ * emitted `127.0.0.1`, the Astro helper and the Next plugin each spelled out `localhost`. A default
+ * argument is not a single source of truth if it can be bypassed by typing the value.
+ */
+export const RETICLE_CLIENT_HOST = 'localhost';
+
+/**
+ * The one place the bridge WebSocket URL is built. The SDK connect default, the vite/next snippet
+ * generators, and the CLI's inject-connect all call this instead of hand-writing `ws://…${path}` —
+ * so the wire string can never drift across the four call sites. Host defaults to `localhost` (the
+ * dev app connects from the browser); pass it only for a non-default bind.
+ */
+export function bridgeWsUrl(
+  port: number = RETICLE_DEFAULT_PORT,
+  host: string = RETICLE_CLIENT_HOST,
+): string {
+  return `ws://${host}:${String(port)}${RETICLE_WS_PATH}`;
+}
+
+/**
+ * Namespaced URL params a pooled/headless launcher appends to the app URL so the app's own SDK adopts
+ * the lease's identity (session + project) on connect — no app code changes. Wire contract shared by
+ * the server (BrowserPool/lease tools) and the browser SDK; namespaced to avoid clashing with the
+ * app's own query params.
+ */
+export const RETICLE_URL_PARAM = {
+  SESSION: '__reticle_session',
+  PROJECT: '__reticle_project',
+  /**
+   * "Reticle opened this page for itself" — and nothing more.
+   *
+   * Deliberately NOT the session stamp. `resolveConnectIdentity` reads SESSION as the session id
+   * when the app names none, so marking a drive with it would rename every driven session to one
+   * shared constant and make two concurrent drives collide. This carries the one fact the page
+   * needs (nobody is sitting in front of it) without touching identity.
+   */
+  OPENED: '__reticle_opened',
+} as const;
+
+/** The loopback bind address. The daemon/bridge bind here by default — never expose Reticle off-host. */
+export const LOOPBACK_HOST = '127.0.0.1';
+
+/**
+ * Every environment variable Reticle reads, named once. A misspelled inline env string silently
+ * disables the control it gates (e.g. a typo'd `RETICLE_TOKEN` would disable auth) — so the names live
+ * here and nowhere else. The values are the literal process.env keys.
+ */
+export const ReticleEnv = {
+  /** Shared-secret the browser SDK must present in HELLO; absent ⇒ loopback-trust only. */
+  TOKEN: 'RETICLE_TOKEN',
+  /** Bridge bind host. Defaults to loopback; setting anything else is opt-in remote exposure. */
+  HOST: 'RETICLE_HOST',
+  /** Comma-separated WS Origin allow-list for the bridge. */
+  ALLOWED_ORIGINS: 'RETICLE_ALLOWED_ORIGINS',
+  /** Bridge/daemon WS port override. */
+  PORT: 'RETICLE_PORT',
+  /** Daemon state — pidfiles, discovery registry, logs. Defaults to `~/.reticle`. Overridable
+   * because a read-only $HOME (sandboxed agent, locked-down Windows profile, container) otherwise
+   * makes the daemon unstartable with a raw EACCES naming nothing. Reported by a Windows user. */
+  STATE_DIR: 'RETICLE_STATE_DIR',
+  /** Attach to an already-running browser over CDP instead of launching one. */
+  CDP_URL: 'RETICLE_CDP_URL',
+  /** Max simultaneous leased headless contexts in the browser pool (resource cap). */
+  MAX_CONTEXTS: 'RETICLE_MAX_CONTEXTS',
+  /**
+   * Inbound events per second before the bridge starts SAMPLING (never disconnecting).
+   *
+   * Raise it for a legitimately busy app — a streaming dashboard, a live grid — rather than accept
+   * partial coverage. Free and local: the daemon runs on the same machine, so a higher ceiling costs
+   * nothing to anyone.
+   */
+  MAX_MESSAGES_PER_SECOND: 'RETICLE_MAX_MESSAGES_PER_SECOND',
+  /** Bearer token required by the optional `reticle serve --http` verify endpoint. */
+  VERIFY_TOKEN: 'RETICLE_VERIFY_TOKEN',
+  /** Ms of continuous idleness (no agent, no browser session, no lease) before the daemon self-exits;
+   * `0` disables. Keeps Reticle from lingering on a user's machine after the editor closes. */
+  IDLE_SHUTDOWN: 'RETICLE_IDLE_SHUTDOWN_MS',
+  /** Idle re-check cadence (default 30s). Overridable so daemon-lifecycle-test can watch a full
+   * exit/wake cycle in seconds rather than minutes. */
+  IDLE_CHECK: 'RETICLE_IDLE_CHECK_MS',
+  /**
+   * Grace for a daemon with an agent ATTACHED. Longer than the base on purpose: quiet with a client
+   * present means a slow install or a thinking human, not an unwanted daemon — a flat 5 minutes was
+   * killing live runs mid-install. Derived from the base when unset.
+   */
+  IDLE_ATTACHED: 'RETICLE_IDLE_ATTACHED_MS',
+  /**
+   * How often the daemon writes `reticle_daemon_alive`, so a GAP in its log is evidence it died.
+   *
+   * Overridable for the same reason the idle windows are: a spec that has to prove "a killed daemon
+   * is distinguishable from a tidy one" cannot wait 30 seconds per beat, and a spec that instead
+   * re-implements the cadence is insensitive to the thing it claims to guard.
+   */
+  HEARTBEAT: 'RETICLE_HEARTBEAT_MS',
+  /** Directory holding the auto-provisioned pairing token. Defaults to ~/.reticle; relocatable for CI. */
+  PAIRING_TOKEN_DIR: 'RETICLE_PAIRING_TOKEN_DIR',
+  /** Force the durable causal journal off (`0`/`false`/`off`) or on (`1`/`true`/`on`); default on. */
+  JOURNAL: 'RETICLE_JOURNAL',
+  /**
+   * Verbose internal flow tracing for people working ON Reticle (`1`/`true`/`on`); default off.
+   *
+   * Distinct from the journal, which records what the AGENT did to the app. This records what
+   * RETICLE did to answer it: one line per internal stage, with its duration and nesting, so a
+   * developer can see which code a tool call actually went through and where the time went.
+   * Off by default and free when off — a trace on every tool call is a cost on the hot path.
+   */
+  TRACE: 'RETICLE_TRACE',
+  /**
+   * How many consecutive reconnects the MCP proxy attempts before it stops retrying and goes
+   * dormant. Overridable for the same reason the idle windows are: the real budget takes MINUTES to
+   * exhaust, so the one spec that proves the proxy SURVIVES exhaustion could not run at all without
+   * shortening it. A budget nobody can reach in a test is a budget nobody tests.
+   */
+  RECONNECT_ATTEMPTS: 'RETICLE_RECONNECT_ATTEMPTS',
+  /** Quiet window before an abandoned MCP stdio proxy exits; `0` disables the watcher. */
+  MCP_PROXY_IDLE: 'RETICLE_MCP_PROXY_IDLE_MS',
+  /**
+   * API key for the harness — the model that drives the app when no coding agent is in the loop.
+   *
+   * The standard Anthropic name, on purpose: a machine that can already run a coding agent can
+   * already run the harness, with nothing to configure. Absent ⇒ the harness is simply unavailable
+   * and every other part of Reticle is unaffected.
+   */
+  HARNESS_KEY: 'ANTHROPIC_API_KEY',
+  /** Model the harness drives with. Defaults to a small one — see `DEFAULT_HARNESS_MODEL`. */
+  HARNESS_MODEL: 'RETICLE_HARNESS_MODEL',
+  /** Base URL for the harness's model API, for a proxy or a gateway. */
+  HARNESS_BASE_URL: 'RETICLE_HARNESS_BASE_URL',
+  /** Hard ceiling on harness model turns in one drive. Bounds cost, not value. */
+  HARNESS_MAX_STEPS: 'RETICLE_HARNESS_MAX_STEPS',
+  /**
+   * Which model backs the harness driver: `anthropic` (the default) or `jev`.
+   *
+   * Two drivers exist because the driver's job turns out not to need a text generator. It picks the
+   * next action and says what it expects; the verdict is decided afterwards by the engine, with no
+   * model anywhere near it. A System One model answers typed questions against a state, which is
+   * exactly that job and none of the rest, so it can drive without being able to generate a
+   * sentence. Unset keeps the existing behaviour for everybody who has not asked for this.
+   */
+  HARNESS_DRIVER: 'RETICLE_HARNESS_DRIVER',
+  /**
+   * A direct Jev key, for this repo's own benchmarks and for anyone holding a TypeSafe account.
+   *
+   * Users are not expected to have one. The ordinary path is the key they already minted on the
+   * platform (`RETICLE_API_KEY`), which reaches Jev through the proxy at `RETICLE_CLOUD_URL` —
+   * this variable is the escape hatch that skips it, and it takes precedence when both are set so
+   * that a developer debugging the upstream is never silently talking to the proxy instead.
+   */
+  HARNESS_JEV_KEY: 'JEV_API_KEY',
+  /** Base URL for the Jev API, for a proxy or a gateway. Defaults to TypeSafe's own endpoint. */
+  HARNESS_JEV_URL: 'RETICLE_HARNESS_JEV_URL',
+  /** A direct OpenAI key. As with Jev, the ordinary path is the platform key and its proxy. */
+  HARNESS_OPENAI_KEY: 'OPENAI_API_KEY',
+  /** Model the OpenAI driver uses. Defaults to a small one — see `DEFAULT_OPENAI_MODEL`. */
+  HARNESS_OPENAI_MODEL: 'RETICLE_HARNESS_OPENAI_MODEL',
+  /**
+   * The API key minted on the platform, and the host it belongs to.
+   *
+   * Read through `apiKeyFrom()`, never directly — see the note on that function for why there are
+   * two names for one key and why neither may be dropped.
+   */
+  API_KEY: 'RETICLE_API_KEY',
+  /** The name this key had until 2026-09. Still honoured; see `apiKeyFrom()`. */
+  CLOUD_KEY: 'RETICLE_CLOUD_KEY',
+  /** The platform host. Read through `cloudUrlFrom()`, which also accepts `URL`. */
+  CLOUD_URL: 'RETICLE_CLOUD_URL',
+  /** The short name for `CLOUD_URL`, which people type first. `CLOUD_URL` wins when both are set. */
+  URL: 'RETICLE_URL',
+} as const;
+
+/**
+ * The platform API key, whichever name it arrives under.
+ *
+ * `RETICLE_API_KEY` is the name. `RETICLE_CLOUD_KEY` is what it was called until 2026-09, and it
+ * keeps working — not out of politeness, but because the console printed that name to every user
+ * who ever connected a project, so it is exported in shells and CI configs we cannot see or edit.
+ * A rename that silently stops reading the old name does not look like a rename to those people;
+ * it looks like the product quietly losing their credentials.
+ *
+ * ONE function, because the alternative is each caller remembering both names and one of them
+ * forgetting. That is not hypothetical: this key was read inline in several places before it was
+ * named here at all, which is exactly how a rename half-lands.
+ *
+ * The new name wins when both are set, so a user migrating can export the new one and confirm it
+ * works before removing the old.
+ */
+export function apiKeyFrom(env: Record<string, string | undefined>): string | undefined {
+  const current = env[ReticleEnv.API_KEY];
+  if (current !== undefined && 0 < current.length) return current;
+  const legacy = env[ReticleEnv.CLOUD_KEY];
+  return legacy !== undefined && 0 < legacy.length ? legacy : undefined;
+}
+
+/** The platform URL, under either name — one function so no caller forgets the second. */
+export function cloudUrlFrom(env: Record<string, string | undefined>): string | undefined {
+  const canonical = env[ReticleEnv.CLOUD_URL];
+  if (canonical !== undefined && 0 < canonical.length) return canonical;
+  const short = env[ReticleEnv.URL];
+  return short !== undefined && 0 < short.length ? short : undefined;
+}
+
+/** The hosted platform: where every client dials when nothing names another host. */
+export const DEFAULT_PLATFORM_URL = 'https://app.reticle.sh';
+
+/** The platform URL from the environment, else the hosted service. No trailing slash. */
+export function platformUrlFrom(env: Record<string, string | undefined>): string {
+  // A loop, not /\/+$/: that pattern is polynomial on a value made of many slashes.
+  let url = cloudUrlFrom(env) ?? DEFAULT_PLATFORM_URL;
+  while (url.endsWith('/')) url = url.slice(0, -1);
+  return url;
+}
+
+/**
+ * The platform credential the environment carries, or undefined when it carries no key.
+ *
+ * The key alone is enough: the URL falls back to the hosted service. Every reader of the env key
+ * goes through here, because each of them used to demand a URL as well, and a CI job that set only
+ * the key — which is what the platform tells it to do — silently reached nothing.
+ */
+export function platformCredentialFrom(
+  env: Record<string, string | undefined>,
+): { url: string; apiKey: string } | undefined {
+  const apiKey = apiKeyFrom(env);
+  return apiKey === undefined ? undefined : { url: platformUrlFrom(env), apiKey };
+}
+
+/**
+ * How many runs one `POST /v1/sync` may carry, by count and by serialized size.
+ *
+ * One request used to carry every unsent run, so a backlog bigger than the platform's body limit
+ * was refused whole, offered again next cycle, and never caught up. The byte bound sits well under
+ * that limit because flows, capsules and derived records ride in the first request too.
+ */
+export const SYNC_BATCH_LIMITS = {
+  MAX_RUNS: 50,
+  MAX_BYTES: 4 * 1024 * 1024,
+} as const;
+
+/** Hard transport bounds shared by the browser and bridge. */
+export const TRANSPORT_LIMITS = {
+  MAX_MESSAGE_BYTES: 1024 * 1024,
+  /**
+   * Inbound events per second before the bridge SAMPLES rather than records everything.
+   *
+   * The cap exists to stop a PATHOLOGICAL page (an animation loop firing DOM mutations every frame),
+   * not to throttle a busy one: an ordinary React app with an active query cache passes 1000/s, and a
+   * sampled window cannot support a verdict, so too low a cap answers `unknown` with
+   * `unclean_capture` on the first `act_and_wait` after an install (#316).
+   *
+   * The ceiling it defends is cheap — the daemon is on the same machine and a typical event is a few
+   * hundred bytes, so 20000/s is single-digit MB/s over loopback. Raising it does not raise what a
+   * runaway page can make the bridge HOLD: memory is bounded independently by the ring buffer, which
+   * evicts on `RING_BUFFER_DEFAULTS.MAX_BYTES` (this same constant through that alias) as well as on
+   * a count and an age. The rate cap defends parse cost, the ring buffer defends memory, and they are
+   * not substitutes.
+   */
+  MAX_MESSAGES_PER_SECOND: 20000,
+  MAX_SESSIONS: 32,
+  MAX_PENDING_CONNECTIONS: 16,
+  HELLO_TIMEOUT_MS: 5000,
+  MAX_BUFFER_BYTES: 8 * 1024 * 1024,
+  MAX_SESSION_ID_LENGTH: 128,
+  MAX_URL_LENGTH: 4096,
+  MAX_TITLE_LENGTH: 512,
+  MAX_ADAPTERS: 32,
+  /*
+   * The cap on ONE vocabulary in `contractParts` — the commands, events or actions a peer says it
+   * speaks.
+   *
+   * Its own number, and the reason is an outage this nearly shipped. `contractParts` reused
+   * `MAX_ADAPTERS` (32), and this implementation's own event vocabulary is larger than that. The
+   * field had never had a producer, so nothing had ever tried: the first build to actually send it
+   * had every HELLO rejected by the schema and NO SESSION COULD CONNECT AT ALL. The unit gate is
+   * blind to it — the schema accepts the shape in isolation, and only a real page talking to a real
+   * daemon fails — so the e2e battery is what caught it.
+   *
+   * 128 leaves the vocabularies room to roughly triple. A cap here is still worth having: this
+   * arrives on an unauthenticated HELLO, so it is an untrusted list and the bound is chosen here.
+   */
+  MAX_CONTRACT_NAMES: 128,
+  MAX_ADAPTER_NAME_LENGTH: 128,
+  MAX_TOKEN_LENGTH: 512,
+  MAX_COMMAND_ID_LENGTH: 128,
+  MAX_COMMAND_NAME_LENGTH: 128,
+  MAX_REF_LENGTH: 128,
+  MAX_ERROR_LENGTH: 4096,
+  /** Cap on a captured stack trace before it crosses the wire — the console observer and both React
+   *  error hooks (error-boundary, hydration-error) all truncate to this, so it is one fact. */
+  MAX_STACK_LENGTH: 4000,
+  MAX_SERIALIZE_DEPTH: 8,
+  MAX_COLLECTION_ITEMS: 200,
+  MAX_OBJECT_KEYS: 200,
+  MAX_STRING_LENGTH: 64 * 1024,
+  /** Human review marks: the note the human types when flagging a mistake on the page. */
+  MAX_MARK_NOTE_LENGTH: 2000,
+  /** Human review marks: the legible element label that pins the mark (e.g. "Submit button"). */
+  MAX_MARK_LABEL_LENGTH: 256,
+} as const;
+
+/** Replacement used when sensitive data is removed before crossing the bridge. */
+export const REDACTED_VALUE = '[REDACTED]';
+
+/** Explicit opt-in argument required for potentially destructive actions. */
+export const DANGEROUS_ACTION_CONFIRM_ARG = 'confirmDangerous';
+
+/**
+ * Opt-in argument for a TRUSTED native click, for the handlers a synthetic one cannot satisfy —
+ * file pickers, clipboard, anything gated on `isTrusted`. Only `reticle_act` can honour it: the
+ * native driver is a pointer gesture at coordinates, and the act-then-wait tool drives the page
+ * through the SDK instead.
+ */
+export const NATIVE_INPUT_ARG = 'native';
+
+/** Schema version stamped onto compiled replay programs. */
+export const REPLAY_PROGRAM_VERSION = 1;
+
+/** The git-checked Reticle workspace directory + its layout. No free strings. */
+export const ReticleDir = {
+  ROOT: '.reticle',
+  CONTRACT_FILE: 'contract.json',
+  FLOWS_SUBDIR: 'flows',
+  BASELINES_SUBDIR: 'baselines',
+  /** cross-run memory — outcomes of past runs (the "did it behave like last time?" file). */
+  PROJECT_FILE: 'project.json',
+  /**
+   * the user's own record of what Reticle has done for them — .reticle/impact.json.
+   *
+   * Local only, never uploaded, and deliberately NOT part of telemetry: telemetry answers questions
+   * about the product; this answers the user's question about their own work.
+   */
+  IMPACT_FILE: 'impact.json',
+  /** what changes were SUPPOSED to make true —.reticle/intent.json (git-checked, reviewed) */
+  INTENT_FILE: 'intent.json',
+  /**
+   * The sharded form of the same ledger —.reticle/intent/ (git-checked, for the same reason).
+   *
+   * Named here rather than inline at the store that writes it, because the partition guard over
+   * this object is what decides whether a name Reticle creates is committed or ignored. A directory
+   * spelled as a free string somewhere else is one the guard cannot see, so nobody ever makes that
+   * decision: `intent/` was written into users' repositories for that reason alone, neither
+   * classified nor ignored.
+   */
+  INTENT_SUBDIR: 'intent',
+  /**
+   * what a drive types into a field, keyed by the field's label —.reticle/fill-values.json.
+   *
+   * Git-checked on purpose. A generated value is paid for once and then belongs to the project: the
+   * next drive reuses it for free, a replay sends exactly what the recording sent, and a human who
+   * dislikes one can edit the file rather than argue with a model.
+   */
+  FILL_VALUES_FILE: 'fill-values.json',
+  /** opt-in pixel baselines —.reticle/visual/<name>.png + <name>.diff.png. */
+  VISUAL_SUBDIR: 'visual',
+  /** verification-run artifacts —.reticle/runs/<runId>.json (the OEM/CI-consumable verdict). */
+  RUNS_SUBDIR: 'runs',
+  /** fail-to-pass bug capsules —.reticle/capsules/<id>.json (a minimal failing flow + its evidence). */
+  CAPSULES_SUBDIR: 'capsules',
+  /**
+   * Where a feedback report refused delivery is copied — .reticle/feedback/.
+   *
+   * Named here rather than at the writer because the partition over this object is what decides
+   * whether a name Reticle creates is committed, ignored, or swept. It was spelled as a free string
+   * in three separate files, so the guard could not see it and nobody was ever asked.
+   */
+  FEEDBACK_SUBDIR: 'feedback',
+  /** durable causal journal —.reticle/sessions/<id>/{events,actions}.jsonl (the substrate). */
+  SESSIONS_SUBDIR: 'sessions',
+  /** append-only event ledger inside a session dir (one ReticleEvent per line). */
+  JOURNAL_EVENTS_FILE: 'events.jsonl',
+  /** append-only action ledger inside a session dir (one JournalAction per line). */
+  JOURNAL_ACTIONS_FILE: 'actions.jsonl',
+  /**
+   * the event ledger's closure report — .reticle/sessions/<id>/events.closed.json.
+   *
+   * Written once, when the byte ceiling refuses a batch, and never removed. Its PRESENCE is what
+   * makes the ceiling durable: a session id survives a reload, so the next connection reopens the
+   * same ledger with an empty memory, and a bound that lives only in one object's field is a bound
+   * per connection. Its CONTENTS are the loss report a time-windowed query cannot filter away.
+   */
+  JOURNAL_EVENTS_CLOSED_FILE: 'events.closed.json',
+  /** learned expected-envelopes per route, accumulated across runs (the deviation-report baseline). */
+  ENVELOPES_FILE: 'envelopes.json',
+  /** learned ambient (action-less churn) region map — excluded from settle/summaries/envelopes. */
+  AMBIENT_FILE: 'ambient.json',
+  /** per-flow flake ledger — replay outcomes that decide intermittent-failure quarantine. */
+  FLAKE_FILE: 'flake.json',
+  /** The app-wide coverage ledger — see server features/exhaust/ledger.ts. */
+  COVERAGE_FILE: 'coverage.json',
+  /**
+   * the project's cloud binding — .reticle/cloud.json, written by `reticle link`. Git-checked and
+   * non-secret: the project id, the API origin, and where its dashboard lives. The KEY lives in
+   * ~/.reticle/credentials.json instead, because that one must never reach a repository.
+   */
+  CLOUD_LINK_FILE: 'cloud.json',
+  /**
+   * local sync bookkeeping — .reticle/cloud-state.json. The pull cursor, when each half last ran,
+   * and the last error. NOT git-checked: it describes this machine's conversation with the server,
+   * and committing one machine's cursor would make every other machine skip what it had not seen.
+   */
+  CLOUD_STATE_FILE: 'cloud-state.json',
+  /**
+   * triage decisions pulled BACK from the dashboard — .reticle/issues.json. What a human said about
+   * a defect ("resolved", "not a bug"), so the HUD stops showing it and the next run does not
+   * re-report it as though nobody had looked.
+   */
+  ISSUES_FILE: 'issues.json',
+  /** Per-flow assertion tiers recorded on each PASSING replay — the gate's anti-downgrade baseline. */
+  TIERS_FILE: 'assertion-tiers.json',
+  /**
+   * what to run when something happens — .reticle/hooks.json. Git-checked on purpose: a hook is a
+   * decision the whole team shares, the same way a git hook or a package script is, and one that
+   * only exists on the machine that wrote it is a rule nobody else is following.
+   *
+   * It names COMMANDS, so it is exactly as trusted as `package.json` scripts in the same repository
+   * and no more: opening a repo does not run them, and Reticle runs one only when the event it is
+   * attached to actually happens. The event payload is handed over on stdin, never interpolated into
+   * the command line, so a defect's own text can never become part of a command.
+   */
+  HOOKS_FILE: 'hooks.json',
+  /**
+   * Auto-provisioned bridge pairing token, stored at ~/.reticle/pairing-token (mode 0600). Written by
+   * the daemon, read Node-side by the build plugins to inject into connect. A browser sandbox cannot
+   * read it, so a rogue localhost app can't present it — that's what stops cross-app session hijack.
+   */
+  PAIRING_TOKEN_FILE: 'pairing-token',
+} as const;
+
+/**
+ * The names INSIDE `.reticle/intent/` — kept apart from `ReticleDir`, which lists what `.reticle/`
+ * itself holds and is what the retention tiers classify.
+ */
+export const IntentDir = {
+  /** One per subject: `.reticle/intent/<subject>/intent.json`. A flow's name is its subject. */
+  SHARD_FILE: 'intent.json',
+  /** Derived from the shards: `.reticle/intent/index.json`, one line per intent. */
+  INDEX_FILE: 'index.json',
+} as const;
+
+/**
+ * Structured reasons a screenshot/visual-diff could not produce a verdict (never
+ * thrown as free strings). The visual layer is OPT-IN and CDP/Playwright-driven — it is NEVER
+ * bundled into the always-on browser SDK — so NO_PROVIDER is the common "you must `reticle drive`" case.
+ */
+export const VisualReason = {
+  NO_PROVIDER: 'no-visual-provider', // no CDP/launched browser → cannot capture pixels
+  CAPTURE_FAILED: 'capture-failed', // the page could not be screenshotted
+  BASELINE_MISSING: 'baseline-missing', // reticle_visual_diff with no saved baseline of that name
+  DIMENSION_MISMATCH: 'dimension-mismatch', // current vs baseline differ in size — can't pixel-diff
+  // { fullPage } asked of a shell that can only photograph the viewport. Reported rather than
+  // quietly downgraded: a caller who asked for the whole scroll height and silently got the visible
+  // part would bank a baseline that says nothing about the content below the fold.
+  FULL_PAGE_UNSUPPORTED: 'full-page-unsupported',
+  // The shell answered, and the window had no composited frame to photograph yet. Distinct from
+  // CAPTURE_FAILED on purpose: the capture ran and the window was empty, which is a timing fact
+  // about the window rather than a failure of the capture path. Electron's `capturePage()` returns
+  // an empty image rather than an error in that state, so without a name of its own it arrived as
+  // an unexplained no-image and read identically to a dead window and to a thrown error.
+  NOT_COMPOSITED: 'window-not-composited',
+} as const;
+export type VisualReason = (typeof VisualReason)[keyof typeof VisualReason];
+
+/** Actionable companion to NO_PROVIDER — the visual layer needs a driven browser. */
+export const VISUAL_NO_PROVIDER_RECOMMENDATION =
+  'visual capture needs a driven browser — start with `reticle drive <url>` or set RETICLE_CDP_URL; the always-on SDK does not ship a screenshotter';
+
+/** Default per-pixel color-distance threshold (pixelmatch 0..1; higher = more lenient). */
+export const VISUAL_PIXEL_THRESHOLD = 0.1;
+
+/**
+ * Autonomous "smart monkey" anomaly classes reticle_crawl reports after clicking a
+ * reachable control. Named so the agent (and tests) branch on cause, never on message text.
+ */
+/**
+ * Bounds for reticle_scroll_to — how many viewport scrolls to try before giving up on
+ * a virtualized/windowed list (which only renders visible rows, so a plain reticle_query misses
+ * off-screen items). Each scroll advances ~one viewport; the loop also stops early at the list end.
+ */
+export const SCROLL_FIND_DEFAULTS = {
+  MAX_SCROLLS: 20,
+} as const;
+
+/** Bounds so a crawl always terminates and each click has time to settle. */
+export const CRAWL_DEFAULTS = {
+  /** Max controls clicked in one crawl (then `truncated:true`). */
+  MAX_STEPS: 25,
+  /** ms to wait for a click's reaction to land in the buffer before classifying. */
+  SETTLE_MS: 300,
+  /** HTTP status at/above which a response counts as a failed request. */
+  FAILED_STATUS: 400,
+} as const;
+
+/** Default max wait for reticle_assert / reticle_wait_for / reticle_act_and_wait when the caller gives
+ *  no `timeout_ms`. One fact, shared by the server tools and the @reticlehq/test matchers so the test
+ *  package's assumption can't silently diverge from the server default. */
+export const DEFAULT_ASSERT_TIMEOUT_MS = 4000;
+
+/** How long to wait between npm registry update checks (24 h). */
+export const UpdateCheckIntervalMs = 24 * 60 * 60 * 1000;
+
+/** Schema version stamped into contract.json so a reader can reject/upgrade old files. */
+export const CONTRACT_FILE_VERSION = 1;
+
+/** Arg key on reticle_capabilities selecting the on-disk contract over the live session. */
+export const FROM_DISK_ARG = 'fromDisk';
+
+/** Structured outcome when reading contract.json fails (never thrown to the agent). */
+export const ContractReadError = {
+  MISSING: 'contract-missing', // no .reticle/contract.json on disk
+  MALFORMED: 'contract-malformed', // present but not valid JSON / fails schema
+} as const;
+export type ContractReadError = (typeof ContractReadError)[keyof typeof ContractReadError];
+
+// The event vocabulary lives beside this file and is re-exported here, so `EventType` stays one
+// import path for every consumer. See event-types.ts for why it moved.
+import { EventType } from './event-types.js';
+export { EventType };
+
+/** Bounds for the per-session ring buffer. */
+export const RING_BUFFER_DEFAULTS = {
+  MAX_EVENTS: 2000,
+  MAX_AGE_MS: 60_000,
+  MAX_BYTES: TRANSPORT_LIMITS.MAX_BUFFER_BYTES,
+} as const;
+
+/**
+ * Named phenomena the perception layer detects deterministically over the journal — capsules and
+ * deviation reports lead with these names, not raw events. The library grows in later releases; the
+ * mechanism (versioned matchers + evidence templates) lands now.
+ */
+export const PhenomenonType = {
+  /** An act dispatched but the app did nothing — no DOM/net/route/signal in its window. */
+  DEAD_CLICK: 'dead-click',
+  /** A click landed before hydration attached handlers — a silent no-op. */
+  PRE_HYDRATION_CLICK: 'pre-hydration-click',
+  /** A 5xx response that occurred while the page was hidden — looks fine, isn't. */
+  HIDDEN_500: 'hidden-500',
+  /** A request started and never completed within the window — a hung/in-flight request. */
+  HUNG_REQUEST: 'hung-request',
+  /** A React error boundary caught and swallowed — a fine-looking fallback over a broken feature. */
+  SWALLOWED_ERROR: 'swallowed-error',
+} as const;
+export type PhenomenonType = (typeof PhenomenonType)[keyof typeof PhenomenonType];
+
+/** Signal the React adapter fires once hydration commits (handlers attached). Shared browser↔server. */
+export const RETICLE_HYDRATION_SIGNAL = 'reticle:hydration-complete';
+
+/**
+ * The registered-store name the React adapter uses for render stats, read via reticle_state. It crosses
+ * the wire as a store id AND the browser SDK special-cases it as reticle-owned (so it isn't flagged as
+ * an unregistered store), so the name is one fact in core — a rename in the adapter must not silently
+ * stop the SDK's owned-store matching.
+ */
+export const RETICLE_RENDERS_STORE = '__reticle_renders';
+
+/** Global the render pre-hook parks its commit buffer on (see the vite plugin's RENDER_PREHOOK_SOURCE). */
+export const RETICLE_RENDER_PREHOOK = '__reticleRenderPreHook';
+
+/**
+ * Signal the React adapter fires when an error boundary catches (dev-only). Carried on the signal channel
+ * (the SDK's public emit surface) so the server sees a boundary that swallowed — the purest "looks fine,
+ * isn't", invisible to every other channel. `data: { message, stack?, componentStack? }`.
+ */
+export const RETICLE_ERROR_BOUNDARY_SIGNAL = 'reticle:error-boundary';
+
+/**
+ * Signal the React adapter fires on a hydration mismatch — server-rendered markup that disagrees with the
+ * client's first render. React reports these as *recoverable* errors (`hydrateRoot(el, App,
+ * { onRecoverableError })`); a mismatch silently discards the SSR DOM and re-renders on the client, so the
+ * page "looks fine" while event handlers, form state, or scroll position were lost — invisible to DOM/
+ * network/console. `data: { message, stack?, componentStack? }`.
+ */
+export const RETICLE_HYDRATION_ERROR_SIGNAL = 'reticle:hydration-error';
+
+/** The observation channel a TRUNCATED event names, so downstream knows WHICH data is incomplete. */
+export const TruncationChannel = {
+  DOM: 'dom',
+  /**
+   * The durable per-session event ledger stopped accepting writes at its byte ceiling.
+   *
+   * The only channel here that names a SERVER-side refusal rather than a browser-side batch cap, and
+   * the only one that is terminal: `dom` truncates one flood and keeps observing, while this says the
+   * file is closed and every event after it is absent from disk. A reader that finds it knows a
+   * negative answer drawn from the journal may be "the ledger was full", not "it never happened".
+   */
+  JOURNAL: 'journal',
+} as const;
+export type TruncationChannel = (typeof TruncationChannel)[keyof typeof TruncationChannel];
+
+/**
+ * How an event was linked to the action it is attributed to. `window` means the SDK stamped the
+ * currently-active action's id onto every event observed between that action's dispatch and its
+ * settle — a time-window heuristic, not proven dataflow. It is the only tier available until
+ * commit-stream linking upgrades it; the label stays on so a chain is never presented as dataflow
+ * truth (see plan risk register).
+ */
+export const EventAttribution = {
+  WINDOW: 'window',
+} as const;
+export type EventAttribution = (typeof EventAttribution)[keyof typeof EventAttribution];
+
+/** The web-perf metrics carried in an EventType.PERF event's `metric` field. */
+export const PerfMetric = {
+  /** Largest Contentful Paint (ms). */
+  LCP: 'lcp',
+  /** Cumulative Layout Shift (unitless, running sum). */
+  CLS: 'cls',
+  /** A long task blocking the main thread (ms). */
+  LONGTASK: 'longtask',
+} as const;
+export type PerfMetric = (typeof PerfMetric)[keyof typeof PerfMetric];
+
+/** Which input path executed an action — native (CDP/Playwright) vs synthetic dispatchEvent. */
+export const InputMode = {
+  REAL: 'real',
+  SYNTHETIC: 'synthetic',
+} as const;
+export type InputMode = (typeof InputMode)[keyof typeof InputMode];
+
+/**
+ * Why a pointer action ran SYNTHETIC even though a real-input provider is configured. Attached as
+ * `inputModeReason` so a real→synthetic fallback is never silent (field bug #2) — the agent can
+ * tell "I couldn't locate the element" from "the page isn't correlated to a CDP target".
+ */
+export const InputModeReason = {
+  NOT_POINTER: 'not-a-pointer-action', // fill/type never use native input
+  // Clicks default to the occlusion-honest synthetic path ("don't click, run the code") even with a
+  // provider configured; pass action arg native:true to force a trusted native click when needed.
+  SYNTHETIC_CLICK_PREFERRED: 'synthetic-click-preferred',
+  PAGE_NOT_CORRELATED: 'page-not-correlated-to-a-cdp-target', // no CDP page matches session.url
+  ELEMENT_NOT_LOCATABLE: 'element-not-locatable', // INSPECT returned no box (off-screen/stale ref)
+  DRAG_TARGET_UNRESOLVED: 'drag-target-unresolved', // drag toRef missing or not locatable
+  PROVIDER_DECLINED: 'provider-declined', // provider chose not to perform
+  PROVIDER_ERROR: 'provider-error', // provider threw → fell back to synthetic
+  /**
+   * No real-input provider is configured at all, and the caller explicitly asked for one with
+   * `native:true`. Only emitted on that explicit ask: without a provider EVERY action is synthetic,
+   * so annotating all of them would put a reason on the most-used tool in the product for no gain.
+   * An agent that asked for a trusted click, though, has an expectation to correct — and this is
+   * permanent for the session, not a transient downgrade, so it should stop asking.
+   */
+  NOT_CONFIGURED: 'real-input-not-configured-for-this-session',
+} as const;
+export type InputModeReason = (typeof InputModeReason)[keyof typeof InputModeReason];
+
+/** Best-effort caveats attached to action results so the agent can interpret a no-op. */
+export const ActionWarning = {
+  HOVER_NATIVE_ENTER_LEAVE:
+    'target has enter/leave handlers; synthetic hover may not trigger them — expect no state change',
+  /** real-input provider was available but failed; the action fell back to synthetic dispatch. */
+  REAL_INPUT_FELL_BACK:
+    'real-input provider was available but failed; fell back to synthetic dispatch',
+  /**
+   * The click point was covered by another element. Synthetic dispatch still delivered the event to
+   * your target, but a real user could NOT click it — treat the target as visually blocked, not
+   * actionable. Scroll it into a clear area or dismiss the overlay on top.
+   */
+  CLICK_OCCLUDED:
+    'target is visually occluded by another element; a real user could not click it (synthetic dispatch still delivered the event) — dismiss the overlay or scroll the target clear',
+  /**
+   * A document-key press (Escape, Tab, a modifier shortcut) was dispatched at the focused
+   * element or the document. No named target was given, so the effect must not claim one.
+   */
+  GLOBAL_PRESS:
+    'press landed on the focused element or document — no named target was given, so this effect does not claim one',
+} as const;
+export type ActionWarning = (typeof ActionWarning)[keyof typeof ActionWarning];
+
+/** Failure modes when Reticle launches/drives its own browser (`reticle drive`). */
+export const DriveErrorCode = {
+  PLAYWRIGHT_MISSING: 'playwright_missing',
+  LAUNCH_FAILED: 'launch_failed',
+  NAVIGATE_FAILED: 'navigate_failed',
+} as const;
+export type DriveErrorCode = (typeof DriveErrorCode)[keyof typeof DriveErrorCode];
+
+/** Human-facing message when the optional playwright dep is absent. */
+export const DRIVE_PLAYWRIGHT_MISSING_MSG =
+  "reticle drive needs the optional 'playwright' package — install it: pnpm add -D playwright && npx playwright install chromium";
+
+/** Actions the executor can perform against a ref. */
+/**
+ * The console levels an agent can filter by, DERIVED from the console EventTypes rather than
+ * retyped. `reticle_console { level }` matches by building `console.${level}`, so any list written
+ * out by hand is one rename away from filtering everything into an empty result — which reads as
+ * "no errors on this page".
+ */
+export const CONSOLE_LEVEL_PREFIX = 'console.';
+export const CONSOLE_LEVELS = [
+  EventType.CONSOLE_LOG,
+  EventType.CONSOLE_WARN,
+  EventType.CONSOLE_ERROR,
+  EventType.CONSOLE_INFO,
+].map((type) => type.slice(CONSOLE_LEVEL_PREFIX.length));
+
+export const ActionType = {
+  CLICK: 'click',
+  DBLCLICK: 'dblclick',
+  HOVER: 'hover',
+  FOCUS: 'focus',
+  BLUR: 'blur',
+  FILL: 'fill',
+  TYPE: 'type',
+  CLEAR: 'clear',
+  SELECT: 'select',
+  CHECK: 'check',
+  UNCHECK: 'uncheck',
+  SUBMIT: 'submit',
+  PRESS: 'press',
+  UPLOAD: 'upload',
+  SCROLL_INTO_VIEW: 'scrollIntoView',
+  /**
+   * Scroll a container (or the document) by a delta, in either axis and EITHER DIRECTION.
+   *
+   * `scrollIntoView` puts a known element on screen; this is the gesture for looking around when you
+   * do not know what you are looking for yet — back up to what scrolled past, or move sideways on a
+   * wide table. Until now the only scroll available stepped DOWN, so a page could be walked in one
+   * direction and never back, and `inspect` reported `scrollLeft`/`scrollWidth` that nothing could act on.
+   */
+  SCROLL: 'scroll',
+  DRAG: 'drag',
+  /**
+   * A TOUCH tap: pointerdown(touch) → touchstart → touchend → pointerup → click.
+   *
+   * Not a click with another name. A handler bound to `touchstart`, or one that branches on
+   * `event.pointerType`, never runs for a mouse click — so mobile-web behaviour, swipe/press
+   * affordances and touch-only controls were undriveable. `args.holdMs` makes it a LONG PRESS, the
+   * gesture behind context menus and reorder handles on touch.
+   */
+  TAP: 'tap',
+  /**
+   * Page zoom, as a fraction (1 = 100%).
+   *
+   * Real browser zoom is not scriptable from inside the page, so this needs a driven browser and
+   * REFUSES without one rather than faking it with CSS — see the note on `hover`, which refuses for
+   * the same reason. A layout that breaks at 200% is a real and common defect; a CSS transform that
+   * merely looks like zoom would report it caught while the layout viewport never changed.
+   */
+  ZOOM: 'zoom',
+} as const;
+export type ActionType = (typeof ActionType)[keyof typeof ActionType];
+
+/** Why an action's settle wait ended without a real animation frame. */
+export const SettleReason = {
+  TIMEOUT: 'timeout',
+  THROTTLED: 'throttled',
+} as const;
+export type SettleReason = (typeof SettleReason)[keyof typeof SettleReason];
+
+/** Outcome reasons for a bounded component-state read. Store reads never use these. */
+export const ComponentStateReason = {
+  UNAVAILABLE: 'component-state-unavailable',
+} as const;
+export type ComponentStateReason = (typeof ComponentStateReason)[keyof typeof ComponentStateReason];
+
+/**
+ * Result of a component-state read attempt, discriminated on `ok`. Crosses
+ * browser -> bridge -> agent as `result.component`, so the contract lives in protocol.
+ * Always JSON-serializable: hook values are sanitized (no functions/DOM nodes/cycles).
+ */
+export interface ComponentStateResult {
+  ok: boolean;
+  reason?: ComponentStateReason;
+  /** Component display name, when known. */
+  component?: string;
+  /** Positional, JSON-safe hook states. */
+  hooks?: unknown[];
+  /**
+   * Present ONLY when `hooks` is a PROJECTION — effect entries were removed. A trim is never silent:
+   * without this, a hook list short by three entries reads as the component's complete hook list.
+   */
+  truncation?: { droppedItems: number; note: string };
+}
+
+/** Element states the assertion engine can check. */
+export const ElementState = {
+  VISIBLE: 'visible',
+  HIDDEN: 'hidden',
+  ENABLED: 'enabled',
+  DISABLED: 'disabled',
+  CHECKED: 'checked',
+  EXPANDED: 'expanded',
+  PRESSED: 'pressed',
+  FOCUSED: 'focused',
+  PRESENT: 'present',
+  /**
+   * Inside the viewport right now (getBoundingClientRect intersects the window). Distinct from
+   * `visible`, which folds only aria-hidden/[hidden]/display/visibility/opacity and a closed
+   * `<details>` ancestor, and so is already true for content below the fold of a scrolling
+   * container. Without this, `scrollIntoView` is ungradeable: the target satisfied
+   * `visible`/`present` before the scroll, so act_and_wait returns already_true. (#398)
+   */
+  IN_VIEWPORT: 'inViewport',
+} as const;
+export type ElementState = (typeof ElementState)[keyof typeof ElementState];
+
+/** Query strategies, aligned with Testing Library semantics. */
+export const QueryBy = {
+  ROLE: 'role',
+  TEXT: 'text',
+  LABEL: 'label',
+  PLACEHOLDER: 'placeholder',
+  TESTID: 'testid',
+  ALT: 'alt',
+  /** Resolve by component identity / source location (auto-anchors — addresses any element with
+   * no hand-added testid). Pair with ElementQuery.component and/or.source. */
+  COMPONENT: 'component',
+} as const;
+export type QueryBy = (typeof QueryBy)[keyof typeof QueryBy];
+
+/** Commands the bridge sends to the browser SDK (the `name` field of a CommandMessage). */
+export const ReticleCommand = {
+  SNAPSHOT: 'snapshot',
+  QUERY: 'query',
+  MATCH: 'match',
+  INSPECT: 'inspect',
+  ACT: 'act',
+  ACT_SEQUENCE: 'act_sequence',
+  ANIMATIONS: 'animations',
+  NARRATE: 'narrate',
+  CLOCK: 'clock',
+  CAPABILITIES: 'capabilities',
+  STATE_READ: 'state_read',
+  /** Read localStorage / sessionStorage / readable cookies (sensitive keys redacted). */
+  STORAGE_READ: 'storage_read',
+  /** scroll a ref's nearest scrollable container by ~a viewport (virtualized lists). */
+  SCROLL: 'scroll',
+  /** Session lifecycle: agent tunes the presenter session (e.g. idle-end timeout) for the app's needs. */
+  SESSION_CONFIG: 'session_config',
+  /**
+   * Live-control: bridge → browser. Pushes the current session state to the panel so an
+   * AGENT-driven pause/end keeps the presenter in sync. `args: { state, text? }`.
+   */
+  PRESENTER: 'presenter',
+  /**
+   * Bridge -> browser: the user's own impact record, so the HUD can show what Reticle has done for
+   * them without the page asking for it. `args: { snapshot: ImpactSnapshot }`. Local data on a
+   * local socket - it is the same file the report is stored in, not a network fetch.
+   */
+  IMPACT: 'impact',
+  /**
+   * Ask the DESKTOP shell to photograph its own window and return `{ png: <base64> }`.
+   *
+   * A desktop webview has no CDP endpoint, so pixels must come from the runtime itself. Electron's
+   * `webContents.capturePage()` reads the window's backing store, which is why this beats capturing
+   * a screen region: it is correct even when the window is behind the editor, and needs no
+   * screen-recording permission. Answered only when the app installed the capture helper.
+   */
+  CAPTURE: 'capture',
+  /** Navigate the page to a new URL. `args: { url: string }`. */
+  NAVIGATE: 'navigate',
+  /** Reload the page. `args: { hard?: boolean }` — hard clears the cache via location replace trick. */
+  REFRESH: 'refresh',
+  /**
+   * Bridge → browser: the saved flows the human can replay from the panel.
+   * `args: { flows: [{ name, start? }] }` — `start` is the first step's testid anchor, a page hint the
+   * HUD uses to show a flow only where it can begin. Absent when the first step isn't testid-anchored.
+   */
+  FLOWS: 'flows',
+} as const;
+export type ReticleCommand = (typeof ReticleCommand)[keyof typeof ReticleCommand];
+
+/** Presenter intent shown to the human watcher: is the agent reading or acting? */
+export const PresenterMode = {
+  IDLE: 'idle',
+  READING: 'reading',
+  ACTING: 'acting',
+} as const;
+export type PresenterMode = (typeof PresenterMode)[keyof typeof PresenterMode];
+
+/** Snapshot rendering modes. */
+export const SnapshotMode = {
+  FULL: 'full',
+  INTERACTIVE: 'interactive',
+  STATUS: 'status',
+} as const;
+export type SnapshotMode = (typeof SnapshotMode)[keyof typeof SnapshotMode];
+
+/** Top-level envelope discriminator for messages on the WS channel. */
+export const MessageKind = {
+  HELLO: 'hello',
+  COMMAND: 'command',
+  COMMAND_RESULT: 'command_result',
+  EVENT: 'event',
+} as const;
+export type MessageKind = (typeof MessageKind)[keyof typeof MessageKind];
+
+/**
+ * WHY a lease came back `ready: false` — the two situations that were one word.
+ *
+ * `ready: false` meant exactly one thing on the mint path: the SDK never dialled in, so the app
+ * probably does not embed `@reticlehq/core`. A REUSED lease can fail readiness a second way, and it
+ * is the opposite problem: an SDK did dial in, and has since stopped answering. The next action
+ * differs — check the install versus recover the tab — so the two get names rather than sharing a
+ * bare `false`.
+ */
+export const LeaseNotReadyReason = {
+  /** No SDK dialled in within the wait. The install is the thing to look at. */
+  SDK_NEVER_DIALLED: 'sdk_never_dialled',
+  /** One dialled in and stopped answering: the tab is attached but wedged. */
+  SDK_STOPPED_ANSWERING: 'sdk_stopped_answering',
+} as const;
+export type LeaseNotReadyReason = (typeof LeaseNotReadyReason)[keyof typeof LeaseNotReadyReason];

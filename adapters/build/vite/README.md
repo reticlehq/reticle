@@ -1,0 +1,76 @@
+# @reticlehq/vite-plugin
+
+One-line Vite integration for [Reticle](https://github.com/reticlehq/reticle). The plugin does the whole dev-time wiring for you:
+
+- **Source mapping**: stamps `data-reticle-source="file:line:col"` on JSX host elements (via [`@reticlehq/babel-plugin`](https://www.npmjs.com/package/@reticlehq/babel-plugin)) so `reticle_look { action: "element" }` can report the component's source file. Needed on React 19.
+- **Auto-connect**: injects a dev-only `install(); reticle.connect()` into your entry module, so you never touch the entry file yourself.
+- **Svelte source mapping**: the same stamp on Svelte markup, applied before `@sveltejs/vite-plugin-svelte` compiles it.
+- **Dependency pre-bundling**: declares the SDK's CJS runtime deps in `optimizeDeps` so the SDK loads on linked and monorepo setups.
+- **Production-safe by construction**: `apply: 'serve'` means Vite drops the plugin entirely from `vite build`. There is no env gate to forget; instrumentation cannot reach a production web bundle.
+
+## Install
+
+```bash
+npm i -D @reticlehq/react @reticlehq/vite-plugin
+```
+
+`@reticlehq/react` is the runtime kit the injected `connect()` imports (it re-exports the browser SDK). `vite >= 4` is a peer dependency.
+
+## Use
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { reticle } from '@reticlehq/vite-plugin';
+
+export default defineConfig({
+  plugins: [reticle(), react()],
+});
+```
+
+That is the entire integration: no entry-file edit, no Babel-plugin wiring, no env gating. `npx @reticlehq/server init` writes this line for you in a Vite project, inserting `reticle()` right after the opening `[`, which is why that is the order shown here.
+
+Array order does not actually matter: the plugin declares `enforce: 'pre'`, so Vite runs it before `@vitejs/plugin-react` wherever you put it.
+
+## Options
+
+```ts
+reticle({
+  port, // bridge WebSocket port; baked into connect() only when non-default
+  session, // stable session label; defaults to a fresh per-tab id
+  projectId, // stable project identity; defaults to one derived from package.json name + root
+  token, // auth token forwarded to connect() when the bridge requires one
+  root, // project root, so reported source paths are repo-relative
+  sdkVersion, // installed SDK version, so a skewed pair can name itself
+  sourceMapping, // default true; stamp data-reticle-source (harmless on React <=18)
+  inject, // default true; auto-inject reticle.connect()
+  captureNetworkBodies, // default false; record request/response bodies on reticle_observe { action: "network" }
+  allowNonLocalhost, // default false; allow a page/bridge that is not on localhost (needs a token)
+  desktop, // default false; for an Electron/Tauri renderer (see below)
+  onWarn, // where a diagnostic goes; defaults to the console
+});
+```
+
+`captureNetworkBodies` is off by default because a body is the one part of a request that routinely carries a card number, a token, or a customer's address. It is also settable as `VITE_RETICLE_CAPTURE_BODIES=1` for a single debugging session.
+
+`allowNonLocalhost` is for a dev server that cannot be served on localhost — a host-based multi-tenant frontend, or an app with cookie-scoped auth on a custom dev hostname. It is **not sufficient on its own**: the SDK also requires a pairing token outside localhost, and refuses with "a pairing token is required outside localhost" when it is missing. The plugin supplies one automatically from the daemon's `~/.reticle/pairing-token`, so a running daemon is normally all it takes — pass `token` yourself only when that file is unreachable. A bridge that is itself non-local must also use `wss://`. Settable as `VITE_RETICLE_ALLOW_NON_LOCALHOST=1` for a single session.
+
+`desktop: true` injects `connect()` into the renderer's entry module and calls it with `allowInProduction`, because a desktop renderer reports `NODE_ENV=production`. It instruments the dev server, and a `vite build` only when that build runs in a non-production mode (`vite build --mode development`), for a packaged renderer you drive with no dev server. A production-mode build, which is what `vite build` and `electron-vite build` do by default, ships no Reticle code at all, exactly like a web build.
+
+### Opting one file out of source stamping
+
+A file whose **first non-empty line** is a comment carrying `@reticle-ignore` is not stamped, and its elements will have no `file:line`:
+
+```tsx
+// @reticle-ignore
+export function Generated() { … }
+```
+
+`/* @reticle-ignore */` works the same way, and a `.svelte` component uses `<!-- @reticle-ignore -->` because it has no line for a `//` before its markup.
+
+Whole file, first line, on purpose. The reasons to opt out are file-shaped — a generated component, a snapshot test the stamp would break — and a marker that worked from line 40 would be a marker nobody can find. `include`/`exclude` globs still exist for whole directories; this is for the one file whose reason sits with the file.
+
+It is not silent. The plugin reports each opted-out file once, by name, in the dev-server output, so an opt-out is something a reader sees rather than something they discover months later from a pointer that never resolves.
+
+Apache-2.0.

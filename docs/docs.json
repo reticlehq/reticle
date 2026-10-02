@@ -32,7 +32,7 @@
   "navigation": {
     "versions": [
       {
-        "version": "2.14.0",
+        "version": "3.5.0",
         "default": true,
         "tabs": [
           {
@@ -44,13 +44,20 @@
                   "quickstart",
                   "what-is-reticle",
                   "why-reticle",
+                  "use-cases",
                   "getting-started",
                   "for-agents"
                 ]
               },
               {
                 "group": "Install",
-                "pages": ["install-agentic", "install-manual", "frameworks"]
+                "pages": [
+                  "install-agentic",
+                  "install-manual",
+                  "what-is-recorded",
+                  "skill-setup",
+                  "frameworks"
+                ]
               },
               {
                 "group": "Instrument",
@@ -81,23 +88,23 @@
               {
                 "group": "Tools",
                 "pages": [
-                  "tools-overview",
-                  "tools-snapshot",
-                  "tools-query",
-                  "tools-inspect",
-                  "tools-navigate",
-                  "tools-act",
-                  "tools-act-and-wait",
-                  "tools-act-sequence",
-                  "tools-observe",
-                  "tools-network",
-                  "tools-console",
-                  "tools-state",
-                  "tools-wait-for",
-                  "tools-assert",
-                  "tools-sessions",
-                  "tools-tools-and-run",
-                  "tools-session-and-feedback"
+                  "tools/overview",
+                  "tools/snapshot",
+                  "tools/query",
+                  "tools/inspect",
+                  "tools/navigate",
+                  "tools/act",
+                  "tools/act-and-wait",
+                  "tools/act-sequence",
+                  "tools/observe",
+                  "tools/network",
+                  "tools/console",
+                  "tools/state",
+                  "tools/wait-for",
+                  "tools/assert",
+                  "tools/sessions",
+                  "tools/tools-and-run",
+                  "tools/session-and-feedback"
                 ]
               },
               {
@@ -121,6 +128,7 @@
                   "cli/verify",
                   "cli/affected",
                   "cli/gate",
+                  "cli/report",
                   "cli/watch",
                   "cli/capsules",
                   "cli/hunt",
@@ -132,14 +140,17 @@
                   "cli/feedback",
                   "cli/identify",
                   "cli/help",
-                  "cli/cloud"
+                  "cli/cloud",
+                  "environment"
                 ]
               },
               {
                 "group": "Packages",
                 "pages": [
                   "packages",
+                  "packages/open-verification",
                   "packages/core",
+                  "packages/engine",
                   "packages/browser",
                   "packages/server",
                   "packages/react",
@@ -158,7 +169,7 @@
               },
               {
                 "group": "Long form",
-                "pages": ["agent-cheatsheet", "reticle-manual", "usage", "faq"]
+                "pages": ["agent-cheatsheet", "reticle-manual", "usage", "autodrive", "faq"]
               }
             ]
           },
@@ -176,7 +187,7 @@
             "groups": [
               {
                 "group": "How it works",
-                "pages": ["architecture", "benchmarks", "token-efficiency"]
+                "pages": ["architecture", "protocol", "benchmarks", "token-efficiency"]
               },
               {
                 "group": "Compare",
@@ -197,7 +208,16 @@
             "groups": [
               {
                 "group": "Working on Reticle",
-                "pages": ["first-drive", "gates", "gate-plan", "fixtures", "local-registry"]
+                "pages": [
+                  "first-drive",
+                  "gates",
+                  "gate-plan",
+                  "required-checks",
+                  "state-files",
+                  "adapters",
+                  "fixtures",
+                  "local-registry"
+                ]
               },
               {
                 "group": "Internals",
@@ -324,6 +344,101 @@
     {
       "source": "/desktop-apps",
       "destination": "/desktop",
+      "permanent": true
+    },
+    {
+      "source": "/tools-act",
+      "destination": "/tools/act",
+      "permanent": true
+    },
+    {
+      "source": "/tools-act-and-wait",
+      "destination": "/tools/act-and-wait",
+      "permanent": true
+    },
+    {
+      "source": "/tools-act-sequence",
+      "destination": "/tools/act-sequence",
+      "permanent": true
+    },
+    {
+      "source": "/tools-assert",
+      "destination": "/tools/assert",
+      "permanent": true
+    },
+    {
+      "source": "/tools-console",
+      "destination": "/tools/console",
+      "permanent": true
+    },
+    {
+      "source": "/tools-inspect",
+      "destination": "/tools/inspect",
+      "permanent": true
+    },
+    {
+      "source": "/tools-navigate",
+      "destination": "/tools/navigate",
+      "permanent": true
+    },
+    {
+      "source": "/tools-network",
+      "destination": "/tools/network",
+      "permanent": true
+    },
+    {
+      "source": "/tools-observe",
+      "destination": "/tools/observe",
+      "permanent": true
+    },
+    {
+      "source": "/tools-overview",
+      "destination": "/tools/overview",
+      "permanent": true
+    },
+    {
+      "source": "/tools-query",
+      "destination": "/tools/query",
+      "permanent": true
+    },
+    {
+      "source": "/tools-session-and-feedback",
+      "destination": "/tools/session-and-feedback",
+      "permanent": true
+    },
+    {
+      "source": "/tools-sessions",
+      "destination": "/tools/sessions",
+      "permanent": true
+    },
+    {
+      "source": "/tools-snapshot",
+      "destination": "/tools/snapshot",
+      "permanent": true
+    },
+    {
+      "source": "/tools-state",
+      "destination": "/tools/state",
+      "permanent": true
+    },
+    {
+      "source": "/tools-tools-and-run",
+      "destination": "/tools/tools-and-run",
+      "permanent": true
+    },
+    {
+      "source": "/tools-wait-for",
+      "destination": "/tools/wait-for",
+      "permanent": true
+    },
+    {
+      "source": "/tools/predicates",
+      "destination": "/predicates",
+      "permanent": true
+    },
+    {
+      "source": "/tools/predicates.md",
+      "destination": "/predicates.md",
       "permanent": true
     }
   ],

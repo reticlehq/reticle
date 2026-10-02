@@ -1,0 +1,157 @@
+---
+title: 'Use cases: what people verify with Reticle'
+sidebarTitle: Use cases
+description: 'Verifying agent-built changes, security behaviour, accessibility and UX, performance, SEO basics, and driving the app as different users. What Reticle checks in each, with a call you can run.'
+icon: list-check
+---
+
+Reticle runs inside your app while it is running, so anything the app does (a request, a state change, a console line, a focus move, a route change, a performance entry) is something an agent can check and get a verdict on. People use it for more than "did my change work". This page covers the main uses. Each section lists what Reticle checks and gives one call you can run.
+
+Every predicate below is a `json` value you pass as `until` to `reticle_act_and_wait` (the consequence of an action) or as `predicate` to `reticle_assert` (a check with no action). The URLs, names and store paths are placeholders for your own. The full grammar is in [Predicates](/predicates).
+
+## Verifying agent-built changes
+
+This is what Reticle was built for: an agent says a change works, and Reticle checks it against the running app.
+
+- The request fired, returned the status you expected, and fired **once** (a double-submit is a `count` of 2).
+- Application state moved the way the UI says it did. A total on screen that disagrees with the store is a failure.
+- No console error appeared during the action.
+- A failure names the `file:line` to open (on React, and on any framework whose build plugin stamps source; see [Frameworks](/frameworks)).
+
+Click "Place order", then check all three at once:
+
+```json
+{
+  "kind": "allOf",
+  "predicates": [
+    { "kind": "net", "method": "POST", "urlContains": "/api/orders", "status": 201, "count": 1 },
+    { "kind": "state", "store": "cart", "path": "count", "equals": 0 },
+    { "kind": "console", "level": "error", "absent": true }
+  ]
+}
+```
+
+Once a journey has been driven, it is saved as a flow and replays with no model in the loop. `npx @reticlehq/server gate --since HEAD~1` fails unless a passing run covers every saved flow your edit touched.
+
+## Security checks
+
+This proves how your app behaves around security. It does not search for vulnerabilities, so it complements a vulnerability scanner rather than replacing one.
+
+- **Access control.** Signed in as a role that should be refused, the protected call returns `403` and the app shows the denial, not a success toast.
+- **Forbidden calls.** An endpoint that must not fire (an analytics beacon before consent, an admin API from a viewer's page) fires zero times: `{ "kind": "net", "urlContains": "/collect", "count": 0 }`.
+- **Secrets not rendered.** A value that must never reach the page is absent from its text. Separately, the SDK redacts credential-shaped values (tokens, API keys, passwords, card numbers) from captured request and response bodies, storage and state before they reach the agent, and shows them as `[REDACTED]`.
+- **CSP violations.** A Content Security Policy violation shows up as a console error (as a warning for report-only policies), so a CSP check needs nothing extra.
+
+As a viewer, click "Delete user" and require the refusal:
+
+```json
+{
+  "kind": "allOf",
+  "predicates": [
+    { "kind": "net", "method": "DELETE", "urlContains": "/api/admin/users", "status": 403 },
+    { "kind": "element", "query": { "role": "alert" }, "state": "visible" },
+    { "kind": "text", "contains": "sk_live_", "absent": true },
+    { "kind": "console", "contains": "Content Security Policy", "absent": true }
+  ]
+}
+```
+
+To check reachability for each role, see [Personas and simulation](#personas-and-simulation) below.
+
+## Accessibility and UX
+
+Reticle finds elements the way assistive technology does: by role and accessible name. That makes some accessibility behaviour directly checkable. For contrast, full screen-reader behaviour and complete WCAG coverage, pair it with an audit tool such as axe.
+
+- A control is reachable by its **role and accessible name**. An icon button with no name cannot be found with `{ "role": "button", "name": "Close" }`.
+- **Focus lands where it should.** When a dialog opens, focus moves into it (`state: "focused"`), and Reticle records focus dropping to `<body>` when a dialog closes.
+- **The keyboard works.** `press` with `Enter` or `Escape` fires the control's action, not just a mouse click. The [verify-keyboard-access](https://github.com/reticlehq/reticle/tree/main/skills/verify-keyboard-access) skill walks through it.
+- **Visible, enabled, checked, expanded, pressed and in-viewport** are all element states you can assert.
+
+A synthetic Tab key does not move focus in a browser, so Reticle cannot verify Tab order, and it reports that as unknown rather than as a pass.
+
+Open the "Delete project" dialog with `press` (`args: { "text": "Enter" }`) and require focus to move into it:
+
+```json
+{
+  "kind": "allOf",
+  "predicates": [
+    {
+      "kind": "element",
+      "query": { "role": "dialog", "name": "Delete project" },
+      "state": "visible"
+    },
+    { "kind": "element", "query": { "role": "button", "name": "Cancel" }, "state": "focused" }
+  ]
+}
+```
+
+## Performance and monitoring
+
+- **Request cardinality.** One keystroke in a debounced search sends one request, not one per character. The `duplicate-request` finding flags a write that fired more than once in a single action.
+- **Page performance entries.** The SDK records largest-contentful-paint, a running layout-shift total and long tasks as `perf` events, which you read with `reticle_observe { filters: ["perf"] }`. The layout-shift figure is a running sum without the windowing a Core Web Vitals CLS score uses, so it works for "no layout shift on load" and trends, not as an exact CWV number.
+- **Request timing.** Every captured request carries its duration in `reticle_observe { action: "network" }`.
+- **React render rate.** With the React adapter, the commit count is readable as the `__reticle_renders` store, so a component that re-renders continuously while the screen looks idle shows up.
+- **Recurring re-verification.** `npx @reticlehq/server verify <url>` replays your saved flows against a dev server or a staging/preview deployment and exits non-zero on a failure, so it runs in CI or on a schedule. The SDK refuses to connect in a production build, so this covers environments you control, not live production traffic.
+
+Type "shoes" into a debounced search box and require exactly one request:
+
+```json
+{ "kind": "net", "method": "GET", "urlContains": "/api/search", "count": 1 }
+```
+
+## SEO checks
+
+Reticle sees the rendered page and the routes, so it covers the behavioural half of SEO. It does not read `<head>` meta tags or score a page, so pair it with an SEO crawler for those.
+
+- `reticle_look { action: "page" }` reports the document `title` and the current route.
+- **Headings and links.** The page's heading exists under its accessible name, and `reticle_look { action: "find", by: "role", value: "link", attrs: ["href"] }` lists every link with its `href`.
+- **Redirects and routing.** A legacy URL lands on the right path: `{ "kind": "route", "pathname": "/pricing" }`.
+- **Broken links and dead controls.** `reticle_verify { action: "crawl" }` drives every reachable control and reports failed requests, console errors and controls that do nothing.
+
+After navigating to the old `/plans` URL, require the redirect and the page's main heading:
+
+```json
+{
+  "kind": "allOf",
+  "predicates": [
+    { "kind": "route", "pathname": "/pricing" },
+    { "kind": "element", "query": { "role": "heading", "name": "Pricing" }, "state": "visible" }
+  ]
+}
+```
+
+## Personas and simulation
+
+- **Drive the app as a user.** `explore` takes a persona in plain words, drives that whole journey with a model inside the daemon, and saves what it drove as a flow that later replays with no model.
+- **One context per role.** `reticle_lease { action: "acquire" }` opens an isolated browser context (its own cookies, storage and DOM) and can seed storage or cookies first, so an admin and a viewer drive the same app side by side. Reach it with `reticle_run`, or use `reticle verify <url> --storage-state <file>` from a terminal.
+- **Reachability testing.** Signed in as a role, a control that role must not have is absent, and the call behind it never fires. `reticle_verify { action: "coverage" }` lists the controls you have and have not driven this session.
+- **Multi-agent runs.** Several agents lease contexts from one shared headless Chromium, capped and queued, instead of starting a browser each. See [Multi-agent](/multi-agent-testing).
+
+Have Reticle drive a first-time user's journey and record it:
+
+```bash
+npx @reticlehq/server verify http://localhost:3000 --explore --persona "a new user who signs up and creates a first project"
+```
+
+Then, signed in as a viewer, check what that role can reach:
+
+```json
+{
+  "kind": "allOf",
+  "predicates": [
+    { "kind": "element", "query": { "role": "button", "name": "Invite member" }, "absent": true },
+    { "kind": "net", "urlContains": "/api/billing", "count": 0 }
+  ]
+}
+```
+
+## Pairs well with
+
+Reticle checks what your app does from inside it. Some jobs belong to other tools, and it works alongside them:
+
+- **Pixel-level visual diffs:** a visual testing tool. Reticle can take screenshots, but its verdicts come from behaviour, not pixels.
+- **Driving sites you don't own, or a cross-browser matrix:** Playwright. Reticle needs its dev-only SDK in the app, and its driven browser is Chromium.
+- **Full WCAG audits:** axe or a similar audit tool.
+- **Vulnerability discovery:** a security scanner.
+
+What Reticle cannot see yet: IndexedDB, Web Workers, closed shadow roots and cross-origin iframes. When part of the page was out of reach, the verdict carries a `coverage` note, so a pass reads as "nothing failed in the part I could see". When the evidence cannot decide, the verdict is `unknown`, which is never counted as a pass.

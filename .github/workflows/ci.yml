@@ -11,6 +11,18 @@ on:
   # behind it UNMERGEABLE. Nothing had ever merged through the queue, and the backlog read as
   # "stale contributor PRs" rather than as a workflow that was never wired to the thing gating it.
   merge_group:
+  # The full Windows install matrix, once a day, off the critical path.
+  #
+  # A PR and a merge-queue entry run THREE Windows scaffolds, not ten (see `install_matrix` in the
+  # `changes` job). Ten
+  # windows-latest runners requested at once is more than the pool hands out: measured on run
+  # 35297084015, nine cells started immediately and the tenth waited 37 minutes for a machine, then
+  # ran for 8 and ended the build. A third of that run's 56-minute wall clock was one cell queuing.
+  # Coverage is not reduced, it is rescheduled: every scaffold still runs on Windows every day, and
+  # `workflow_dispatch` runs the full matrix on demand when a change deserves it before merge.
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 
 # One run per branch, and the older one loses.
 #
@@ -36,6 +48,43 @@ env:
   CARGO_AUDIT_VERSION: 0.22.2
 
 jobs:
+  # The one check the expensive gates wait on, split out so they stop waiting on all four.
+  #
+  # `verify` is `format:check && lint && typecheck && test:unit` and takes ~9 minutes, and seven
+  # jobs -- every install-gate cell, e2e, desktop-e2e, conformance, bench, multi-agent -- sat behind
+  # the whole of it. Only the FIRST of the four is a reason to hold them: CLAUDE.md records a release
+  # branch, green on all four heavy gates locally, turning CI red on six prettier warnings, and
+  # `verify` being a dependency meant one unformatted file skipped every expensive gate behind it.
+  # That is the protection worth keeping, and it costs about a minute.
+  #
+  # The other three are NOT reasons to wait. `lint` and `typecheck` both `dependsOn: ["^build"]`, so
+  # a "cheap half" containing them still pays the full build -- there is no cheaper split. And a
+  # broken typecheck fails the expensive job anyway, a few minutes later, while `verify` fails it in
+  # parallel regardless. `gate` still requires the full `verify`, so nothing merges without it.
+  format-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # No build: prettier reads the tree, which is the entire reason this can run ahead of `verify`.
+      - run: pnpm format:check
+      # The changelog rule lives in the `changelog-policy` job, NOT here.
+      #
+      # It was in both, with two different exemption lists: this copy exempted `release/` and that
+      # job exempts `release/` and `v*`. The comment here said "release branches DO assemble the
+      # file, so they are exempt by branch name" while the condition did not cover the branch names
+      # this repository actually cuts releases on, so the release PR for v3.2.0 was refused by a
+      # guard whose own stated intent exempted it. One rule enforced in two places is one rule that
+      # can disagree with itself; `changelog-policy` is in `gate`'s needs, so nothing is lost.
+
   verify:
     runs-on: ubuntu-latest
     # The only job that was missing a cap, and the only one that has ever hung. On the v2.5.0 merge
@@ -45,9 +94,9 @@ jobs:
     # sat behind it for the same 6 hours.
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -83,6 +132,34 @@ jobs:
       # failure in a package nobody was editing.
       - run: pnpm lint:docs
       - run: pnpm typecheck
+      # High and critical dependency advisories fail verify and therefore the aggregate gate.
+      # Fix the dependency or document a narrowly scoped, reviewed exception before merging.
+      - name: Security audit
+        run: pnpm audit --audit-level high
+      # format:check is its own job (format-check); running it here as well cost ~30s for nothing.
+
+  # The unit suite, in parallel with verify's static checks rather than after them. It was ~4.5 of
+  # verify's ~8 minutes, and nothing in it depends on lint or typecheck having run first.
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: .turbo
+          key: turbo-linux-unit-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            turbo-linux-unit-${{ hashFiles('pnpm-lock.yaml') }}-
+            turbo-linux-unit-
+            turbo-linux-
+      - run: pnpm build
       - run: pnpm test:unit
         # Turbo buffers each task's output and prints it only when the task finishes, so a task that
         # HANGS prints nothing at all — the v2.5.0 hang was invisible until the orphan-process list
@@ -90,13 +167,6 @@ jobs:
         # uglier and worth it: whatever hangs next says so while it is hanging.
         env:
           TURBO_LOG_ORDER: stream
-      # Non-blocking: a newly-published advisory on an untouched transitive dep must not red an
-      # unrelated PR. It still runs and surfaces (warning) so the advisory is visible; act on it via
-      # a dependency bump / pnpm override, not by blocking the build.
-      - name: Security audit (advisory drift — non-blocking)
-        run: pnpm audit --audit-level high
-        continue-on-error: true
-      - run: pnpm format:check
 
   # Windows is the MAJORITY platform and has never been tested.
   #
@@ -117,11 +187,14 @@ jobs:
   # only machine honest enough to lose the race.
   windows:
     runs-on: windows-latest
+    # Queue, main, nightly and on demand; not on every PR push. It was the slowest job left on the
+    # PR critical path, and the queue still runs it before anything reaches main.
+    if: github.event_name != 'pull_request'
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -184,9 +257,9 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -202,14 +275,23 @@ jobs:
       # The POSIX-but-not-Linux surface: paths, spawn, `lsof`, temp/state dirs, port resolution.
       # Named as directories and files rather than a pattern so that adding a test here is a
       # deliberate act — a glob would silently re-grow this job back into the Linux tier.
+      # NO --passWithNoTests. That flag is what let this job rot: ten of its twelve paths moved in a
+      # directory regrouping, six named files matched nothing, and the run stayed green on four files
+      # — two of which only matched because vitest treats these arguments as SUBSTRING filters, so
+      # `src/cli` caught `cli.test.ts` by accident. A path that stops matching must now fail the job,
+      # which is the only thing that makes the explicit list below worth writing.
       - name: Platform surface (paths, spawn, lsof, temp/state dirs)
         run: |
-          pnpm --filter @reticlehq/server exec vitest run --passWithNoTests \
-            src/cli src/daemon src/project \
-            src/daemon-spawn.test.ts src/daemon-state-home.test.ts src/daemon-reclaim.test.ts \
+          pnpm --filter @reticlehq/server exec vitest run \
+            src/command/cli/ src/command/daemon/ src/memory/project/ \
+            src/command/daemon/daemon-spawn.test.ts \
+            src/command/daemon/daemon-state-home.test.ts \
+            src/command/daemon/daemon-reclaim.test.ts \
             src/multi-project.test.ts src/library-path-boundary.test.ts \
-            src/setup/listeners.test.ts src/setup/node-effects.test.ts \
-            src/tools/harness-kills-only-listeners.test.ts src/tools/upload-path-rewrite.test.ts
+            src/command/setup/terminal/listeners.test.ts \
+            src/command/setup/node-effects.test.ts \
+            src/guards/harness/harness-kills-only-listeners.test.ts \
+            src/surface/tools/upload-path-rewrite.test.ts
       - name: Daemon runtime (no app, no browser)
         run: |
           node apps/e2e/specs/daemon-lifecycle-test.mjs
@@ -223,9 +305,11 @@ jobs:
   # and Windows is cross-checked; macOS gets its own runner below.
   rust:
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Set up Rust
         run: |
           rustup update stable --no-self-update
@@ -245,21 +329,21 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            packages/tauri/target
-          key: cargo-linux-${{ hashFiles('packages/tauri/Cargo.lock') }}
+            adapters/realm/tauri/target
+          key: cargo-linux-${{ hashFiles('adapters/realm/tauri/Cargo.lock') }}
           restore-keys: cargo-linux-
       - name: Format
-        working-directory: packages/tauri
+        working-directory: adapters/realm/tauri
         run: cargo fmt --check
       - name: Lint (Linux capture path, natively)
-        working-directory: packages/tauri
+        working-directory: adapters/realm/tauri
         run: cargo clippy --all-targets -- -D warnings
       # Cross-CHECK the Windows path. It does not link here, but it does type-check `capture/
       # windows.rs` against the real `webview2-com` / `windows` bindings — verified to actually
       # compile that module, not skip it. Without this, an API bump in either crate is discovered by
       # a Windows user rather than by CI.
       - name: Check the Windows capture path
-        working-directory: packages/tauri
+        working-directory: adapters/realm/tauri
         run: cargo check --target x86_64-pc-windows-msvc
 
   # macOS gets its own runner rather than a cross-check: `capture/macos.rs` talks to WKWebView
@@ -277,7 +361,7 @@ jobs:
     if: needs.changes.outputs.rust == 'true'
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Set up Rust
         run: |
           rustup update stable --no-self-update
@@ -289,11 +373,11 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            packages/tauri/target
-          key: cargo-macos-${{ hashFiles('packages/tauri/Cargo.lock') }}
+            adapters/realm/tauri/target
+          key: cargo-macos-${{ hashFiles('adapters/realm/tauri/Cargo.lock') }}
           restore-keys: cargo-macos-
       - name: Lint (macOS capture path, natively)
-        working-directory: packages/tauri
+        working-directory: adapters/realm/tauri
         run: cargo clippy --all-targets -- -D warnings
 
   # Advisory scan for the Rust tree. Nothing watched it: the npm ecosystem in dependabot.yml cannot
@@ -308,7 +392,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Set up Rust
         run: |
           rustup update stable --no-self-update
@@ -341,7 +425,7 @@ jobs:
       # The published crate is scanned against the COMMITTED lockfile, which is the exact set of
       # versions a consumer of the crate builds.
       - name: Audit reticle-tauri
-        working-directory: packages/tauri
+        working-directory: adapters/realm/tauri
         run: cargo audit
       # The smoke app is not published, but the desktop battery compiles and RUNS it, so a
       # vulnerable dependency here still executes on a runner. Its lockfile is gitignored, so one is
@@ -375,7 +459,7 @@ jobs:
   # Until step 1 exists the job logs that it is unconfigured and exits 0.
   fixtures-dispatch:
     runs-on: ubuntu-latest
-    needs: verify
+    needs: format-check
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     timeout-minutes: 10
     steps:
@@ -398,6 +482,43 @@ jobs:
           # Reported, never fatal: the verdict lives in the other repo's run either way.
           [ "$code" = "204" ] || echo "dispatch did not succeed — check the token's Actions:write scope"
 
+  # A bounded product check before the long batteries finish. No npm scaffolding or retries.
+  smoke:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.e2e == 'true'
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: .turbo
+          key: turbo-linux-smoke-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            turbo-linux-smoke-${{ hashFiles('pnpm-lock.yaml') }}-
+            turbo-linux-
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-Linux-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: playwright-Linux-
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:smoke
+      - name: Smoke evidence (including first failure)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: smoke-evidence
+          path: artifacts/smoke/
+          if-no-files-found: warn
+          retention-days: 7
+
   # Which tiers does this PR actually need?
   #
   # The install gate scaffolds and npm-installs three real apps. Running it on a docs-only PR costs
@@ -414,15 +535,31 @@ jobs:
     timeout-minutes: 5
     outputs:
       install: ${{ steps.filter.outputs.install }}
+      # Whether the install gate's OWN machinery changed, which is the only thing that can alter
+      # whether it is still able to detect a broken install. See the self-test step for why.
+      gateself: ${{ steps.filter.outputs.gateself }}
       bench: ${{ steps.filter.outputs.bench }}
       desktop: ${{ steps.filter.outputs.desktop }}
+      conformance: ${{ steps.filter.outputs.conformance }}
       rust: ${{ steps.filter.outputs.rust }}
+      e2e: ${{ steps.filter.outputs.e2e }}
+      # WHICH scaffolds run on WHICH os, decided per event rather than hard-coded in the matrix.
+      install_matrix: ${{ steps.install_matrix.outputs.value }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - id: filter
         run: |
+          # Full qualification must also work when manually dispatched on a feature branch.
+          case "${{ github.event_name }}" in
+            schedule|workflow_dispatch)
+              for tier in install gateself desktop bench conformance rust e2e; do
+                echo "$tier=true" >> "$GITHUB_OUTPUT"
+              done
+              exit 0
+              ;;
+          esac
           # On a PR the base is the merge base with the target branch. On a PUSH TO MAIN there is no
           # base_ref, so this used to resolve to `origin/main` — which on main IS HEAD, so the diff
           # came back EMPTY, fell into the "no diff" branch below, and every merge to main paid the
@@ -434,15 +571,20 @@ jobs:
               ''|0000000000000000000000000000000000000000) BASE="HEAD~1" ;;
               *) BASE="$BEFORE" ;;
             esac
+          elif [ "${{ github.event_name }}" = "merge_group" ]; then
+            BASE="${{ github.event.merge_group.base_sha }}"
           else
             BASE="origin/${{ github.base_ref || 'main' }}"
           fi
           if ! git rev-parse --verify "$BASE" >/dev/null 2>&1; then
             echo "cannot resolve $BASE — running every tier"
             echo "install=true" >> "$GITHUB_OUTPUT"
+            echo "gateself=true" >> "$GITHUB_OUTPUT"
             echo "desktop=true" >> "$GITHUB_OUTPUT"
             echo "bench=true" >> "$GITHUB_OUTPUT"
-            echo "rust=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "conformance=true" >> "$GITHUB_OUTPUT"
+            echo "rust=true" >> "$GITHUB_OUTPUT"
+            echo "e2e=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           CHANGED="$(git diff --name-only "$BASE"...HEAD || true)"
           # Still fails OPEN. A base that resolves but produces nothing — a force-push, an empty
@@ -451,33 +593,71 @@ jobs:
           if [ -z "$CHANGED" ]; then
             echo "no diff against $BASE — running every tier"
             echo "install=true" >> "$GITHUB_OUTPUT"
+            echo "gateself=true" >> "$GITHUB_OUTPUT"
             echo "desktop=true" >> "$GITHUB_OUTPUT"
             echo "bench=true" >> "$GITHUB_OUTPUT"
-            echo "rust=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "conformance=true" >> "$GITHUB_OUTPUT"
+            echo "rust=true" >> "$GITHUB_OUTPUT"
+            echo "e2e=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           echo "changed files:"; echo "$CHANGED" | sed 's/^/  /'
+          # What the e2e battery can see: every package it boots or drives, and the apps it starts.
+          # Docs, skills, the Rust crate and fixtures it never boots cannot change its answer.
+          if grep -qE '^(core|engine|server|init|open-verification|spec-runner|adapters|apps/(e2e|api|bench-app|next-smoke|atlas|examples))/|^(package\.json|pnpm-lock\.yaml|turbo\.json|\.github/workflows/ci\.yml)$' <<< "$CHANGED"; then
+            echo "e2e=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "e2e=false" >> "$GITHUB_OUTPUT"
+          fi
           # Anything a user runs BEFORE their first session, plus the gate itself and the dependency
           # graph it installs through. Deliberately broad — the cost of a false positive is CI time,
           # the cost of a false negative is the 0%-connect class shipping again.
-          # `server/src/setup/` and the top-level `setup/` script are named here as of 2.13.0. They
+          # `server/src/command/setup/`, `install/` and `break/` are named here. They
           # are the whole of one-command onboarding — agent registration, pre-approval, the skill
-          # file, the drive — and neither was on this list, so the release that made `init` an
+          # file, the drive — and none of them was on this list, so the release that made `init` an
           # install could edit every one of them without the install gate running once.
-          if echo "$CHANGED" | grep -qE '^(packages/(init|server/src/setup|vite-plugin|next|babel-plugin|browser|react|core)/|setup/|apps/e2e/(install-gate|gate-harness|install-baseline)|package\.json|pnpm-lock\.yaml|\.github/workflows/ci\.yml)'; then
+          #
+          # `adapters/` is spelled out rather than taken whole. Before the directory move this list
+          # named eight paths, and `packages/(vite-plugin|next|babel-plugin|browser|react)` were five
+          # of them; collapsing them to `adapters/` silently added three that were never in scope —
+          # the lint plugin, and the Electron and Tauri realms. This gate scaffolds thirteen WEB apps, so a
+          # dev-only lint rule or a desktop realm cannot change whether one of them installs, and a
+          # Tauri change is Rust that no JS gate compiles at all. The build plugins do the wiring, the
+          # browser realm is what dials, and `init` installs the framework adapter, so those three
+          # stay. This restores the pre-move scope exactly; it is not a new judgement about coverage.
+          if grep -qE '^((init|core)/|server/src/command/(cli|setup)/|adapters/(build/|realm/browser/|framework/)|break/|install/|apps/e2e/(install-gate|install-control|install-packages|smoke-checks|gate-harness|install-baseline)|scripts/pack-install-gate\.mjs|package\.json|pnpm-lock\.yaml|\.github/workflows/ci\.yml)' <<< "$CHANGED"; then
             echo "install=true" >> "$GITHUB_OUTPUT"
           else
             echo "install=false" >> "$GITHUB_OUTPUT"
+          fi
+          # The gate's OWN machinery, which is a narrower question than "could the install break".
+          # The self-test proves the gate can still FAIL. That ability changes when the gate, its
+          # harness, or its recorded baseline changes -- not when somebody edits the browser SDK.
+          if grep -qE '^(apps/e2e/(install-gate|install-control|install-packages|smoke-checks|gate-harness|install-baseline)|scripts/pack-install-gate\.mjs|\.github/workflows/ci\.yml)' <<< "$CHANGED"; then
+            echo "gateself=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "gateself=false" >> "$GITHUB_OUTPUT"
           fi
           # The desktop battery boots a real Electron main process and BUILDS a Tauri binary from
           # Rust — the slowest job in this file — and it ran on every PR including docs-only ones.
           # Both adapters, both smoke apps, and the three browser/server files that are desktop-only
           # by definition: the IPC observer, desktop capture, and the setup/doctor pair that shape
-          # and diagnose a desktop install. Anything broader (all of packages/browser, say) would
+          # and diagnose a desktop install. Anything broader (all of adapters/realm/browser, say) would
           # route most PRs here and give the routing back for nothing.
-          if echo "$CHANGED" | grep -qE '^(packages/(electron|tauri)/|apps/(electron|tauri)-smoke/|packages/browser/src/observers/ipc\.ts|packages/browser/src/dom/desktop-capture\.ts|packages/server/src/setup/desktop-shape\.ts|packages/init/src/desktop-doctor\.ts|\.github/workflows/ci\.yml)'; then
+          if grep -qE '^(adapters/realm/electron/|adapters/realm/tauri/|apps/(electron|tauri)-smoke/|adapters/realm/browser/src/observers/ipc\.ts|adapters/realm/browser/src/dom/desktop-capture\.ts|server/src/command/setup/desktop-shape\.ts|init/src/diagnose/desktop-doctor\.ts|\.github/workflows/ci\.yml)' <<< "$CHANGED"; then
             echo "desktop=true" >> "$GITHUB_OUTPUT"
           else
             echo "desktop=false" >> "$GITHUB_OUTPUT"
+          fi
+          # What can change a CONFORMANCE ANSWER, which is a different question from what can
+          # break the desktop battery. The specification and its adjudicator; the suite, its
+          # scenarios and its two subject maps; the realm and the client that binds Reticle to the
+          # SPI; the two functions in core that build a protocol subject; and the two fixture apps
+          # the scenarios are planted into. Narrower than `desktop` in some places and wider in
+          # others, so it gets its own filter rather than borrowing one.
+          if grep -qE '^(open-verification/|conformance/|server/src/portal/realm/|core/src/realm/|core/src/verdict/verification-run\.ts|apps/bench-app/|apps/electron-smoke/|\.github/workflows/ci\.yml)' <<< "$CHANGED"; then
+            echo "conformance=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "conformance=false" >> "$GITHUB_OUTPUT"
           fi
           # What can move TOKEN COST, which is a different question from what can break the install.
           # A tool's description and input schema are charged to the agent on every turn, so an edit
@@ -485,20 +665,73 @@ jobs:
           # The observation payloads (snapshot, query, the verdict reasons) sit in browser and events.
           # bench-app is the fixture the numbers are measured against, so changing it moves the
           # baseline whether or not any product code changed.
-          if echo "$CHANGED" | grep -qE '^(packages/(browser|core)/src/|packages/server/src/(tools|events|session|honesty)/|apps/bench-app/|bench/|\.github/workflows/ci\.yml)'; then
+          if grep -qE '^(core/src/|adapters/realm/browser/src/|server/src/(surface/tools|portal/session)/|engine/src/(question|disagreement|window|evidence)/|apps/bench-app/|bench/|\.github/workflows/ci\.yml)' <<< "$CHANGED"; then
             echo "bench=true" >> "$GITHUB_OUTPUT"
           else
             echo "bench=false" >> "$GITHUB_OUTPUT"
           fi
-          # Only `rust-macos` reads this. The Linux `rust` job stays unconditional: it is an ubuntu
-          # runner at 1x, it cross-checks the Windows capture path, and it is the ONLY thing in CI
-          # that compiles packages/tauri at all — a skip there is a real hole, a skip on the second
-          # macOS opinion of the same crate is not.
-          if echo "$CHANGED" | grep -qE '^(packages/tauri/|apps/tauri-smoke/src-tauri/|\.github/workflows/ci\.yml)'; then
+          # Both Rust compile jobs run for crate changes. JS/docs cannot change this standalone
+          # Cargo tree; scheduled/manual runs still exercise it through the full-tier fallback.
+          if grep -qE '^(adapters/realm/tauri/|apps/tauri-smoke/src-tauri/|\.github/workflows/ci\.yml)' <<< "$CHANGED"; then
             echo "rust=true" >> "$GITHUB_OUTPUT"
           else
             echo "rust=false" >> "$GITHUB_OUTPUT"
           fi
+      # WHICH install-gate cells to run, as an explicit os/scaffold list.
+      #
+      # Ubuntu always runs all thirteen: it is the cheap platform, a cell takes 6-7 minutes, and ten of
+      # them start at once without queuing. Windows is the opposite on every count -- 8 to 28
+      # minutes for the same work -- so a PULL REQUEST runs three of them and everything else runs
+      # all thirteen. The three are chosen to cover the distinct install shapes rather than to be
+      # representative: `cra` owns its own HTML and is the heaviest tree (the 28-minute cell),
+      # `next-app-router` is the framework whose Windows install shipped broken in 2.3.0, and
+      # `vite-react` is the plain plugin path most projects take.
+      #
+      # This is a SCHEDULE change, not a coverage cut. Every scaffold still runs on Windows daily
+      # via the cron above, and `workflow_dispatch` runs the full matrix before merge when a change
+      # deserves it -- an edit under `init/` or `install/`, say.
+      - id: install_matrix
+        run: |
+          ALL='vite-react vite-vue vite-vanilla next-app-router next-pages-router monorepo-subdir astro sveltekit cra nuxt react-router remix angular'
+          # A MERGE QUEUE entry gets the same short Windows list as the pull request, and for a
+          # stronger version of the same reason.
+          #
+          # `merge_group` is not `pull_request`, so it fell into the full-matrix branch and every
+          # entry asked for twenty install cells, ten of them windows-latest -- which the comment at
+          # the top of this file already records as more than the pool hands out, for ONE run. With
+          # `maximumEntriesToBuild` at five, that is a hundred install cells plus five each of e2e,
+          # multi-agent and bench, all wanting machines at once.
+          #
+          # Measured on 2026-09-22: nine jobs of the leading entry finished, the whole second wave
+          # sat queued, and after two hours with zero jobs running anywhere in the repository the
+          # queue's own one-hour check timeout expired. Entries left the queue CLEAN, with no failing
+          # check and no CI run -- #1018, #1019 and #1022 in one morning, which reads as flaky PRs
+          # and is a starved runner pool.
+          #
+          # Coverage is not reduced, it is rescheduled, exactly as it is for a pull request: the
+          # nightly schedule runs every scaffold on Windows, `workflow_dispatch` runs the full matrix
+          # on demand, and a queue entry is the same commit the PR run already graded.
+          # The QUEUE runs no Windows install cell. The pull request already graded the same diff
+          # on Windows, and one flaky cell (next-app-router, "SDK is in the page and never dialled
+          # the bridge") ejected 13 of 17 failed queue entries, rebuilding every entry behind it.
+          # Every scaffold still runs on Windows nightly and on workflow_dispatch.
+          #
+          # A PULL REQUEST runs three Linux scaffolds, one per distinct init path (Vite, Next app
+          # router, the monorepo walk-up), and one Windows scaffold that is not the flaky one. The
+          # full ten were the largest share of runner minutes and caught nothing the other jobs
+          # did not in the measured window, while starving the 20-job pool the queue also needs.
+          # The QUEUE still runs all thirteen on Linux before anything lands; nightly runs all thirteen on both.
+          PR_LINUX='vite-react next-app-router monorepo-subdir'
+          case "${{ github.event_name }}" in
+            pull_request) LINUX="$PR_LINUX"; WINDOWS='vite-react' ;;
+            merge_group) LINUX="$ALL"; WINDOWS="" ;;
+            *) LINUX="$ALL"; WINDOWS="$ALL" ;;
+          esac
+          entries=''
+          for s in $LINUX; do entries="$entries{\"os\":\"ubuntu-latest\",\"scaffold\":\"$s\"},"; done
+          for s in $WINDOWS; do entries="$entries{\"os\":\"windows-latest\",\"scaffold\":\"$s\"},"; done
+          echo "value={\"include\":[${entries%,}]}" >> "$GITHUB_OUTPUT"
+          echo "install matrix: ubuntu=$(echo $LINUX | wc -w) windows=$(echo $WINDOWS | wc -w)"
 
   # The bot half of the client-matrix flow. A submitted record is EVIDENCE, and evidence that
   # cannot be placed — no version, no host, no error text on a failure — is decoration. Validating
@@ -511,8 +744,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
       - name: Validate every submitted matrix record
@@ -564,67 +797,95 @@ jobs:
   # cap, i.e. the documented scaling cliff: adding a sixth framework was a change to how long every
   # PR takes. Fanned out, the slowest cell is one scaffold plus install and build, about seven
   # minutes, and a seventh framework costs a runner rather than a queue.
-  install-gate:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        # astro, sveltekit and cra are the frameworks that own their own HTML (or have no bundler
-        # hook at all) and had no install coverage until now — the class where an all-green `init`
-        # produced zero sessions twice (#678, #741). Nuxt and React Router are the same class and
-        # are still absent on purpose: `init` ends both with a `[⚠]` by design, so a cell for
-        # either would be red on every run. See the note above SCAFFOLDS in install-gate.mjs.
-        scaffold:
-          [
-            vite-react,
-            vite-vue,
-            next-app-router,
-            next-pages-router,
-            monorepo-subdir,
-            astro,
-            sveltekit,
-            cra,
-            nuxt,
-            react-router,
-          ]
-    runs-on: ${{ matrix.os }}
-    needs: [verify, changes]
+  install-packages:
+    runs-on: ubuntu-latest
+    needs: [format-check, changes]
     if: needs.changes.outputs.install == 'true'
-    # One scaffold, twice (negative control then the real run), plus the workspace install and build
-    # every cell pays. Windows npm-installs a real app appreciably slower than Linux does, so the cap
-    # keeps generous headroom over the ~7 minutes this measures at.
-    timeout-minutes: 30
+    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: node scripts/pack-install-gate.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: install-packages-${{ github.sha }}
+          path: artifacts/install-packages/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
+
+  install-gate:
+    strategy:
+      fail-fast: false
+      # The event-specific matrix lives in changes: PRs run four cells, queue entries eleven
+      # Linux cells, and nightly/manual runs all eleven scaffolds on Linux and Windows.
+      matrix: ${{ fromJSON(needs.changes.outputs.install_matrix) }}
+    runs-on: ${{ matrix.os }}
+    needs: [install-packages, changes]
+    if: needs.changes.outputs.install == 'true'
+    # Retain the existing cap until artifact-based runs have been measured on Windows.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Use one set of actual prepacked npm tarballs for this SHA on every OS. Consumers still
+      # install from Verdaccio through init; only redundant compilation has moved out of the cells.
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: install-packages-${{ github.sha }}
+          path: artifacts/install-packages/
+      - id: npm-cache
+        shell: bash
+        run: echo "path=$(npm config get cache)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
         with:
-          path: .turbo
-          key: turbo-linux-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
-          restore-keys: |
-            turbo-linux-${{ hashFiles('pnpm-lock.yaml') }}-
-            turbo-linux-
-      - run: pnpm build
+          path: ${{ steps.npm-cache.outputs.path }}
+          key: npm-install-${{ runner.os }}-${{ matrix.scaffold }}-${{ hashFiles('pnpm-lock.yaml', 'apps/e2e/install-gate.mjs') }}
+          restore-keys: npm-install-${{ runner.os }}-${{ matrix.scaffold }}-
+      # The browser download was never cached: ~20s on Linux and over five minutes on a Windows
+      # install cell, every run. `install` is still run after a hit, so a newer Playwright fetches
+      # its own revision and `--with-deps` still provisions the Linux system libraries.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~\AppData\Local\ms-playwright' || '~/.cache/ms-playwright' }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: playwright-${{ runner.os }}-
       - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
-      # The negative control FIRST. It mis-wires each scaffold's port so no session can appear and
-      # requires the gate to go red; if it passes, the gate proves nothing and the run below would be
-      # a green that means nothing. check-boundaries and check-lossy-transforms already self-test in
-      # CI for the same reason.
-      - name: Install-gate self-test (a guard that has never failed is not a guard)
-        run: pnpm gate:install:self-test --only ${{ matrix.scaffold }}
-      - name: Install gate (scaffold, init, boot, open, assert a session)
-        run: pnpm gate:install --only ${{ matrix.scaffold }}
+      # Angular 21's dependency tree crashes npm 10's installer ("Cannot read properties of null
+      # (reading 'edgesOut')") during the scaffold's own install, before Reticle is involved;
+      # reproduced locally with a fresh `ng new` on npm 10, and npm 11 installs it. Node 22 ships
+      # npm 10, so this one cell uses npm 11.
+      - name: npm 11 for the Angular scaffold
+        if: matrix.scaffold == 'angular'
+        run: npm install -g npm@11
+      # Both phases share one registry publish/prepack. Recheck the control when its machinery
+      # changes, plus nightly/manual qualification; product changes always run the positive install.
+      - name: Install gate (with negative control when needed)
+        env:
+          INSTALL_GATE_PACKAGES: artifacts/install-packages
+          RUN_CONTROL: ${{ needs.changes.outputs.gateself == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+        shell: bash
+        run: |
+          args=(--only '${{ matrix.scaffold }}')
+          if [ "$RUN_CONTROL" = true ]; then args+=(--with-self-test); fi
+          set -o pipefail
+          pnpm gate:install "${args[@]}" 2>&1 | tee install-gate.log
       - name: Upload gate log on failure
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: install-gate-logs-${{ matrix.os }}-${{ matrix.scaffold }}
-          path: /tmp/reticle-verdaccio.log
+          path: install-gate.log
           if-no-files-found: ignore
 
   # Many agents, many projects, one machine. Unit tests pin the resolver's decisions; this starts real
@@ -633,12 +894,12 @@ jobs:
   # gated on `changes` — daemon lifecycle can break from almost anywhere.
   multi-agent:
     runs-on: ubuntu-latest
-    needs: [verify]
+    needs: [format-check]
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -661,12 +922,24 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
-    needs: verify
+    needs: [format-check, changes]
+    # Every non-PR event runs it. A pull request that touches none of the code the battery drives
+    # (docs, skills, a fixture it does not boot) skips it; the queue runs it again regardless.
+    if: github.event_name != 'pull_request' || needs.changes.outputs.e2e == 'true'
     timeout-minutes: 30
+    # Three parallel shards of the battery (run.mjs reads E2E_SHARD). One spec, mcp-stress, is about
+    # 120s of the ~380s total; round-robin puts it with lighter specs, so the slowest shard is ~180s.
+    # The integration suite and the soak run once, in shard 1, the lightest.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ['1/3', '2/3', '3/3']
+    env:
+      E2E_SHARD: ${{ matrix.shard }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -679,11 +952,20 @@ jobs:
             turbo-linux-${{ hashFiles('pnpm-lock.yaml') }}-
             turbo-linux-
       - run: pnpm build
+      # The browser download was never cached: ~20s on Linux and over five minutes on a Windows
+      # install cell, every run. `install` is still run after a hit, so a newer Playwright fetches
+      # its own revision and `--with-deps` still provisions the Linux system libraries.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~\AppData\Local\ms-playwright' || '~/.cache/ms-playwright' }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: playwright-${{ runner.os }}-
       - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       # Headless Chromium + a multi-service boot flakes on shared runners (timing, resource
       # contention). Retry with a clean slate between attempts so a transient flake doesn't red CI;
       # a real regression still fails (it fails every attempt).
       - name: Integration suite (real-Chromium BrowserPool tests)
+        if: matrix.shard == '1/3'
         run: |
           for attempt in 1 2 3; do
             echo "::group::integration attempt $attempt"
@@ -737,7 +1019,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: e2e-server-logs
+          name: e2e-server-logs-${{ strategy.job-index }}
           path: /tmp/e2e-*.log
           if-no-files-found: ignore
           retention-days: 7
@@ -757,13 +1039,13 @@ jobs:
   # without this ever starting.
   desktop-e2e:
     runs-on: ubuntu-latest
-    needs: [verify, changes]
+    needs: [format-check, changes]
     if: needs.changes.outputs.desktop == 'true'
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -803,6 +1085,65 @@ jobs:
         env:
           ELECTRON_DISABLE_SANDBOX: '1'
 
+  # The specification's own scenarios, driven against this implementation on a real browser AND a
+  # real Electron shell, with every verdict decided by the spec's `adjudicate` rather than by
+  # Reticle's kernel. CLAUDE.md and docs/gates.md have both listed this as required since it was
+  # written; neither made it run. A gate documented in two places and wired into none is the same
+  # defect this release kept finding in the protocol itself — defined, deferred to somebody,
+  # reached by nobody — so it is wired here rather than described again.
+  #
+  # It gates REGRESSION, never the score. `earned` stays `none` until the fixtures grow, and
+  # `--gate` fails only when a scenario that COULD be planted was driven and answered wrongly.
+  #
+  # Deliberately NOT folded into `e2e`: that job boots the demo API with REFLECT_MS=6000, and a
+  # conformance run beside it would score every scenario against a deliberately-slowed backend
+  # while still printing a number. The two also both want port 8787.
+  #
+  # Cheap despite the desktop half, because `run-desktop.mjs` needs Electron and a display and
+  # NOT Rust — it drives apps/electron-smoke, not the packaged Tauri binary that makes
+  # `desktop-e2e` the slowest job in this file.
+  conformance:
+    runs-on: ubuntu-latest
+    needs: [format-check, changes]
+    if: needs.changes.outputs.conformance == 'true'
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      # xvfb and libgbm are what let a never-shown Electron window be CREATED at all.
+      - name: Install headless display libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb libgbm1 libnss3 libasound2t64
+      - run: pnpm install --frozen-lockfile
+      # The browser download was never cached: ~20s on Linux and over five minutes on a Windows
+      # install cell, every run. `install` is still run after a hit, so a newer Playwright fetches
+      # its own revision and `--with-deps` still provisions the Linux system libraries.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~\AppData\Local\ms-playwright' || '~/.cache/ms-playwright' }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: playwright-${{ runner.os }}-
+      - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
+      - run: pnpm build
+      # FIRST, as the install gate's self-test is. It makes the subject answer "yes" to every
+      # claim and requires the gate to go RED. If this step ever passes, the scored run below
+      # is measuring something other than whether the answers are right, and its green is worth
+      # nothing.
+      - name: Negative control — a subject that says yes to everything must fail
+        run: xvfb-run -a pnpm gate:conformance:self-test
+        env:
+          ELECTRON_DISABLE_SANDBOX: '1'
+
+      - name: Score this implementation against the published specification
+        run: xvfb-run -a pnpm gate:conformance
+        env:
+          ELECTRON_DISABLE_SANDBOX: '1'
+
   # Token cost is the one property of this product nothing in CI measured, which is how a released
   # version once shipped a measurable token regression with every other gate green.
   #
@@ -814,13 +1155,18 @@ jobs:
   # the observation raws first so there is something real to grade.
   bench:
     runs-on: ubuntu-latest
-    needs: [verify, changes]
-    if: needs.changes.outputs.bench == 'true'
+    needs: [format-check, changes]
+    # After merge, not before: on every push to main (path-routed), nightly and on demand. At ~19 min
+    # it set the wall clock of every code PR and then of the merge queue, and a token regression is
+    # not something a contributor can act on. A regression is still caught minutes after it lands and
+    # always before a release; a red main run names the commit.
+    if: >-
+      (github.event_name == 'push' && needs.changes.outputs.bench == 'true') || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -833,13 +1179,21 @@ jobs:
             turbo-linux-${{ hashFiles('pnpm-lock.yaml') }}-
             turbo-linux-
       - run: pnpm build
+      # The browser download was never cached: ~20s on Linux and over five minutes on a Windows
+      # install cell, every run. `install` is still run after a hit, so a newer Playwright fetches
+      # its own revision and `--with-deps` still provisions the Linux system libraries.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~\AppData\Local\ms-playwright' || '~/.cache/ms-playwright' }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: playwright-${{ runner.os }}-
       - run: pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
       # The token proxy is a python package, and without it `countTokensProxy` returns null for every
       # payload — so every token dimension reads "this pass measured nothing" and the gate fails
       # having compared nothing. That is the honest failure it is designed to produce, and it fails
       # for a missing dependency rather than a regression, which is a slow way to learn this.
       - name: Install the token proxy the observation layer measures with
-        run: python3 -m pip install --user --quiet tiktoken
+        run: python3 -m pip install --user --quiet --require-hashes -r bench/requirements.txt
       - name: Measure (observation-cost + replay), so the gate has something real to grade
         run: pnpm bench:full
       - name: Benchmark gate (catch-rate floor, no false positives, efficiency and token bounds)
@@ -862,12 +1216,55 @@ jobs:
   # succeeded or was deliberately skipped — and FAILS if any of them failed or was cancelled.
   # `always()` is load-bearing: without it this job is itself skipped whenever a dependency is, which
   # reproduces the problem one level up.
+  # `CHANGELOG.md` is assembled from `.changes/*.md` at release time, and a PR that edits it directly
+  # is the thing that mechanism exists to prevent.
+  #
+  # The incident is written down in `.changes/README.md` and was measured, not feared: of 42 open
+  # pull requests, 23 edited `CHANGELOG.md` and 11 were CONFLICTING on it — every one of those an
+  # `[Unreleased]` section two branches appended to in the same place. The directory was created to
+  # end that, and then nothing enforced it: it has held its own README and no entries since, while
+  # every changelog-bearing commit went on editing the file directly. A documented convention with
+  # no teeth is a convention that gets rediscovered the next time a release has twenty open PRs.
+  #
+  # A release branch is exempt: assembling IS editing the file, and that is step four of RELEASING.md.
+  # Both shapes are exempt, because both are in use — `release/v2.14.0` was the branch behind one
+  # release and a bare `v3.2.0` is the branch behind the next. Matching only the prefix would fail
+  # the very PR that is allowed to do this, which is how an exemption teaches people to bypass it.
+  #
+  # Plain git for the same reason the `changes` job uses it, and it fails OPEN: if the base ref
+  # cannot be resolved the diff comes back empty and the check passes, because blocking a merge on
+  # a shallow clone would be a worse failure than missing one stray edit.
+  changelog-policy:
+    if: >-
+      github.event_name == 'pull_request' && !startsWith(github.head_ref, 'release/') && !startsWith(github.head_ref, 'v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: A changelog entry is a file in .changes/, not an edit to CHANGELOG.md
+        run: |
+          BASE="origin/${{ github.base_ref }}"
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}" 2>/dev/null || true
+          CHANGED=$(git diff --name-only "$BASE"...HEAD 2>/dev/null || true)
+          echo "$CHANGED" | grep -qx 'CHANGELOG.md' || { echo "CHANGELOG.md untouched"; exit 0; }
+          echo "This PR edits CHANGELOG.md directly."
+          echo
+          echo "Entries go in the .changes/ directory: one file per entry, named for the issue"
+          echo "and a slug, holding a '### Fixed' heading and the bullet. They are assembled"
+          echo "into CHANGELOG.md at release time."
+          echo "Two PRs adding two files never conflict; two PRs editing one file always might."
+          echo
+          echo "See .changes/README.md. If this IS the release PR, branch from release/."
+          exit 1
+
   gate:
     runs-on: ubuntu-latest
     # Every job that can fail a PR is listed HERE. A job missing from this list runs, reports, and is
     # structurally incapable of stopping a merge — which is what `windows`, `rust`, `rust-macos` and
     # `desktop-e2e` all were until they were added. `rust` in particular is the only thing in CI that
-    # compiles packages/tauri at all: it sits outside every JS gate, so an absent entry here meant a
+    # compiles adapters/realm/tauri at all: it sits outside every JS gate, so an absent entry here meant a
     # red Rust build merged clean. Adding a job to the workflow is half the work; this line is the
     # other half.
     #
@@ -880,8 +1277,13 @@ jobs:
     needs:
       [
         changes,
+        changelog-policy,
+        format-check,
         verify,
+        unit-tests,
+        smoke,
         e2e,
+        install-packages,
         install-gate,
         matrix-records,
         windows,
@@ -890,6 +1292,7 @@ jobs:
         rust-audit,
         rust-macos,
         desktop-e2e,
+        conformance,
         bench,
         multi-agent,
       ]

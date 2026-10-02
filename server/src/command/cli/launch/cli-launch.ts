@@ -1,0 +1,223 @@
+import { NodePlatform } from '@/machine/platform.js';
+import { spawn } from 'node:child_process';
+import { isOpaqueOrigin, SESSION_HEALTH } from '@reticlehq/core';
+import { daemonFix, describeSkew } from '@/command/version/version-skew.js';
+import { CONTRACT_FINGERPRINT } from '@reticlehq/core';
+import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
+import { log } from '@/log.js';
+import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
+
+/**
+ * CLI launch + status helpers — the daemon-introspection (`reticle status`) and the one-command
+ * "show me the app" flow (`reticle open`). Split out of cli.ts so that file stays under the size cap.
+ * The decision logic is pure (unit-tested); the IO (fetch, OS browser launch) is injected/isolated.
+ */
+
+// Parsing the daemon's /status payload lives beside the probe that fetches it; re-exported here for
+// the callers that already import it from this module.
+export { summarizeStatus } from '@/command/daemon/binding/daemon-status-probe.js';
+
+/** A string field off the /status body, or undefined on a daemon too old to report it. */
+function statusField(payload: unknown, key: string): string | undefined {
+  if (typeof payload !== 'object' || null === payload) return undefined;
+  const value = (payload as Record<string, unknown>)[key];
+  return 'string' === typeof value && value.length > 0 ? value : undefined;
+}
+
+/**
+ * Warn when the daemon already on this port is a different version than this CLI, and attach anyway.
+ *
+ * Attaching to whatever owns the port is the point of a daemon — but it means an upgrade does not
+ * take effect until that daemon dies, and nothing used to say so. Killing it here would take out
+ * another agent's session on a version bump, which is worse than a loud line.
+ */
+export async function warnOnDaemonSkew(port: number): Promise<void> {
+  const skew = daemonSkew(await fetchStatus(port));
+  if (skew !== undefined) log('reticle_daemon_skew', { port, warning: skew });
+}
+
+/**
+ * The skew sentence for a daemon's `/status` body, or undefined when it speaks our contract.
+ *
+ * Shared with `init`, which must not ADOPT a skewed daemon: an older one refuses every hello from
+ * the page init just instrumented.
+ */
+export function daemonSkew(status: unknown): string | undefined {
+  const daemonVersion = statusField(status, 'version');
+  return describeSkew(
+    {
+      what: 'the daemon already running on this port',
+      version: daemonVersion,
+      contract: statusField(status, 'contract'),
+      // The daemon is the peer here and this process is the agent side.
+      fix: daemonFix(daemonVersion, SERVER_VERSION),
+    },
+    { version: SERVER_VERSION, contract: CONTRACT_FINGERPRINT },
+  );
+}
+
+/** What `reticle open` should do: reuse an already-connected tab, open a new one, or ask for a url. */
+type OpenDecision =
+  | { action: 'reuse'; url: string }
+  /** A tab on that origin exists, but on another page — kept, and NOT reported as done. */
+  | { action: 'left-as-is'; url: string; requested: string }
+  | { action: 'open'; url: string }
+  | { action: 'need-url' };
+
+function sameOrigin(a: string, b: string): boolean {
+  try {
+    const origin = new URL(a).origin;
+    // Two opaque origins (desktop webviews, file:// docs) BOTH stringify to "null", so comparing them
+    // would call every desktop app the same app and reuse the wrong session. Never match on opaque.
+    if (isOpaqueOrigin(origin)) return false;
+    return origin === new URL(b).origin;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Decide what `reticle open [url]` does, given the currently-connected tabs. Pure.
+ * - no url + a tab connected → reuse it (the app is already open; don't spawn a duplicate).
+ * - no url + nothing connected → ask for one.
+ * - a HIDDEN tab is not a candidate: the url is opened instead (its own url, when none was given).
+ * - url + a tab already AT that url → reuse it (idempotent — re-running never piles up tabs).
+ * - url + a tab on that origin but another page → keep it, and say so (`left-as-is`).
+ * - url + no matching tab → open it.
+ *
+ * The origin match is why re-running this never piles up tabs, and it stays. What changed is the
+ * REPORT: matching by origin meant `reticle open http://localhost:3000/settings` answered `reusing`
+ * for a tab sitting on `http://localhost:3000/` and exited 0, so the caller read a success for a page
+ * that was never opened. Navigating the tab instead was the other option and is worse: `reticle open`
+ * is run by a human whose browser this is, and yanking the page they are looking at to somewhere else
+ * is a bigger surprise than being told where the tab actually is.
+ */
+export function decideOpen(
+  all: { url: string; unresponsive?: boolean; hidden?: boolean; lastSeenMs?: number }[],
+  url: string | undefined,
+): OpenDecision {
+  // A tab that has stopped answering is not a tab you can be handed. `open` is the command a caller
+  // reaches for to RECOVER, and reusing the wedged one left no way out short of killing the daemon:
+  // ending the session only flips a flag on the record, it does not make the page answer.
+  //
+  // A HIDDEN tab is excluded for the same reason. `open` means "show me the app", and a backgrounded
+  // tab is the one definition of an app nobody is being shown: the browser starves its timers, rAF
+  // and pointer gestures, so checks that depend on them come back inconclusive even where the
+  // behaviour works. Reported from the field as `open` answering `reusing` for a hidden tab and
+  // three checks that could never resolve. Opening the url instead costs one foreground tab and the
+  // hidden one is left exactly where it was — nothing is navigated out from under anybody.
+  //
+  // And a tab the SDK has gone SILENT in. The page heartbeats on a native timer every few seconds
+  // whatever it is doing, so a quiet page is not a silent one: past the daemon's own staleness
+  // threshold the page is frozen (a discarded tab, a sleeping machine, a wedged main thread). This
+  // looked only at the url, and `verify --expect` drove a tab last heard from 105s earlier into
+  // "command 'match' timed out after 8000ms" instead of opening the url it had been given.
+  const sessions = all.filter(
+    (s) =>
+      true !== s.unresponsive &&
+      true !== s.hidden &&
+      (s.lastSeenMs ?? 0) <= SESSION_HEALTH.STALE_THRESHOLD_MS,
+  );
+  if (url === undefined) {
+    const first = sessions[0];
+    if (first !== undefined) return { action: 'reuse', url: first.url };
+    // Nothing visible to hand back, but a hidden tab still knows the url the caller would have
+    // typed. Opening it is the whole request; `need-url` would ask for something already in hand.
+    const backgrounded = all.find((s) => true === s.hidden);
+    return backgrounded !== undefined
+      ? { action: 'open', url: backgrounded.url }
+      : { action: 'need-url' };
+  }
+  const exact = sessions.find((s) => s.url === url);
+  if (exact !== undefined) return { action: 'reuse', url: exact.url };
+  const onOrigin = sessions.find((s) => sameOrigin(s.url, url));
+  return onOrigin !== undefined
+    ? { action: 'left-as-is', url: onOrigin.url, requested: url }
+    : { action: 'open', url };
+}
+
+/**
+ * Percent-encode the cmd.exe metacharacters that `start` re-parses so a URL can't break out into
+ * command execution on Windows (`?next=x&calc` → command chaining). `%` is left untouched so an
+ * already-encoded URL isn't double-encoded; the browser decodes the escapes back to the real URL.
+ */
+function encodeForWindowsStart(url: string): string {
+  return url.replace(/[&^|<>()"'!]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
+/** The OS command that opens a URL in the default browser, per platform. Pure — unit-tested. */
+export function openCommand(
+  url: string,
+  platform: NodeJS.Platform,
+): { cmd: string; args: string[] } {
+  if (NodePlatform.MACOS === platform) return { cmd: 'open', args: [url] };
+  if (NodePlatform.WINDOWS === platform) {
+    return { cmd: 'cmd', args: ['/c', 'start', '', encodeForWindowsStart(url)] };
+  }
+  return { cmd: 'xdg-open', args: [url] };
+}
+
+/**
+ * Launch the default browser at `url` (detached). The spawn is injected so tests stay hermetic.
+ *
+ * Resolves to whether the launch COMMAND started — not to whether a page appeared. It used to return
+ * nothing at all and the caller printed `{"opened": url}` unconditionally, so a launcher that failed
+ * outright still reported success. Reported from the field as twenty minutes lost chasing a phantom
+ * port problem while nothing had ever opened.
+ */
+export async function openInBrowser(
+  url: string,
+  platform: NodeJS.Platform = process.platform,
+  run: (cmd: string, args: string[]) => Promise<string | null> = defaultRun,
+): Promise<string | null> {
+  const { cmd, args } = openCommand(url, platform);
+  return run(cmd, args);
+}
+
+/**
+ * What a finished launcher means, or null when nothing is wrong.
+ *
+ * Exported for its own tests: the headless case is the one that matters and it cannot be produced
+ * by spawning a real launcher on a developer machine.
+ */
+export function launcherFailure(code: number | null, signal: NodeJS.Signals | null): string | null {
+  if (null !== signal) return `the browser launcher was killed by ${signal}`;
+  // null code with no signal: it never reported an outcome in the window we waited. Some desktop
+  // launchers stay attached rather than handing off, and inventing a failure there would be worse
+  // than the silence — it would send someone to fix a browser that opened.
+  if (null === code || 0 === code) return null;
+  return (
+    `the browser launcher exited ${String(code)} — on a machine with no browser (CI, a container, ` +
+    'an SSH session, WSL with no host browser) it starts fine and then has nothing to open'
+  );
+}
+
+/** How long to wait for the launcher to hand off before assuming it did. */
+const LAUNCHER_EXIT_MS = 2_000;
+
+/** null when the launcher opened something; the failure message when it did not. */
+function defaultRun(cmd: string, args: string[]): Promise<string | null> {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, { detached: true, stdio: 'ignore' });
+    let settled = false;
+    const finish = (value: string | null): void => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    // An unhandled 'error' on a ChildProcess throws — and ENOENT on the launcher is exactly the case
+    // this function exists to report, so it must be listened for either way.
+    child.on('error', (err: Error) => finish(err.message));
+    // The EXIT, not the spawn. Answering "did the command begin" reported success on every headless
+    // box, where the launcher begins perfectly well and then finds nothing to open — see
+    // launcherFailure. Every launcher we use hands off and exits immediately, so this costs nothing
+    // on the path where it works.
+    child.on('exit', (code, signal) => finish(launcherFailure(code, signal)));
+    // ...and a launcher that stays attached must not hold up the install.
+    const timer = setTimeout(() => {
+      child.unref();
+      finish(null);
+    }, LAUNCHER_EXIT_MS);
+    timer.unref?.();
+  });
+}

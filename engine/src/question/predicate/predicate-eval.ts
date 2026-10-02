@@ -1,0 +1,894 @@
+import {
+  EventType,
+  PredicateKind,
+  StreamDirection,
+  isDevToolingUrl,
+  urlForMatch,
+  REDACTED_VALUE,
+  type ReticleEvent,
+} from '@reticlehq/core';
+import { describeObserved } from './observed-in-window.js';
+import { netEvidence } from './net-evidence.js';
+import {
+  checkRequestBody,
+  newRequestBodyState,
+  requestBodyVerdict,
+} from './predicate-request-body.js';
+export { evalConsole } from './predicate-console.js';
+import type { Predicate } from './predicate-schema.js';
+import {
+  clipBody,
+  dataMatches,
+  describeBodyFieldMiss,
+  describeFieldMiss,
+  describeNetFilter,
+  matchJsonBody,
+  num,
+  redactedOnPath,
+  str,
+  type EvalResult,
+} from './predicate-eval-kit.js';
+import { keyFragmentOnly } from './body-key-fragment.js';
+export {
+  clipBody,
+  dataMatches,
+  describeNetFilter,
+  matchValue,
+  str,
+  type EvalResult,
+} from './predicate-eval-kit.js';
+
+// The predicate SHAPE — the discriminated union, its aliases and its zod schema — lives in
+// predicate-schema.ts, and is re-exported here: the two halves are ONE public surface.
+export * from './predicate-schema.js';
+
+/**
+ * Did this call succeed, as the app experienced it?
+ *
+ * `ok` is authoritative when present — IPC sets it explicitly, because an IPC call has no status
+ * code and the 200/500 Reticle derives is a convenience, not a fact. Falling back to the HTTP status
+ * keeps ordinary web requests working without the observer having to set the field everywhere.
+ *
+ * This exists so an agent can assert on the OUTCOME rather than on a number Reticle invented.
+ */
+function callSucceeded(data: Record<string, unknown>): boolean {
+  if ('boolean' === typeof data['ok']) return data['ok'];
+  const status = num(data['status']);
+  return status === undefined || status < 400;
+}
+
+/**
+ * One call, as the failure report should name it: `POST /api/generate-script → 500`.
+ *
+ * The status used to be dropped here, which made the most common net failure unreadable. Asserting
+ * `{status: 200}` against a call that returned 500 reported only `POST /api/generate-script` — the
+ * very field the predicate filtered on was missing from the account of what was seen, so the agent
+ * is told the call happened and left to guess why it did not match.
+ *
+ * The arrow is OMITTED when there is no status. An in-flight or aborted request genuinely has none,
+ * and `→ undefined` would be a fabricated fact about the wire.
+ */
+function describeCall(e: ReticleEvent): string {
+  const head = `${str(e.data['method']) ?? 'GET'} ${str(e.data['url']) ?? ''}`;
+  const status = num(e.data['status']);
+  return status === undefined ? head : `${head} → ${String(status)}`;
+}
+
+/**
+ * What a miss should say when the displayed URL was redacted. Matching uses `urlRaw` when present;
+ * an older SDK has no copy, so the miss has to say which of the two it is.
+ */
+const REDACTED_PATH_HINT =
+  'this path segment was redacted — the literal you matched may be here, try bodyContains';
+
+function observedNetCalls(
+  events: readonly ReticleEvent[],
+  urlContains: string | undefined,
+): string {
+  const calls = events.filter((e) => e.type === EventType.NET_REQUEST);
+  const base = describeObserved('calls', calls.map(describeCall));
+  if (urlContains === undefined) return base;
+  const encoded = encodeURIComponent(REDACTED_VALUE);
+  const redacted = calls.some((e) => {
+    const url = str(e.data['url']) ?? '';
+    return url.includes(REDACTED_VALUE) || url.includes(encoded);
+  });
+  return redacted ? `${base}; ${REDACTED_PATH_HINT}` : base;
+}
+
+/** Same, for a signal: the matcher as applied, with the cardinality and the floor taken out. */
+function describeSignalFilter(
+  p: Extract<Predicate, { kind: typeof PredicateKind.SIGNAL }>,
+): string {
+  const { kind: _kind, count: _count, since: _since, ...filter } = p;
+  return JSON.stringify(filter);
+}
+
+/**
+ * Exact cardinality, once, for every channel that can count its matches.
+ *
+ * `net` and `signal` are the same assertion over different evidence — "this happened EXACTLY n
+ * times" — and the interesting half is the same on both: an over-count is `decided`, because a
+ * window only accumulates and a count cannot come back down, so waiting out the rest of the budget
+ * to report a double-fire buys nothing but latency.
+ *
+ * `noun` names the population in prose ("network call(s)", "signal(s)"), `filter` is the matcher as
+ * applied, and `assertion` is the oracle that judged it.
+ */
+function evalExactCount(args: {
+  matched: number;
+  want: number;
+  noun: string;
+  filter: string;
+  assertion: string;
+}): EvalResult {
+  const { matched, want, noun, filter, assertion } = args;
+  if (matched === want) return { pass: true, evidence: { matched } };
+  return {
+    pass: false,
+    ...(matched > want ? { decided: true } : {}),
+    failureReason: `expected ${String(want)} ${noun} matching ${filter}, saw ${String(matched)}`,
+    observed: `${String(matched)} matching ${noun}`,
+    expected: `exactly ${String(want)} matching ${filter}`,
+    assertion,
+  };
+}
+
+/**
+ * URL suffixes only the DOCUMENT fetches, which the network observer therefore never records.
+ *
+ * `network.ts` patches `fetch` and `XMLHttpRequest` and nothing else, so `<link rel=icon>`,
+ * `<link rel=manifest>`, stylesheets, fonts and `<img src>` are invisible to it. "No matching call"
+ * and "that class of call is not observed" are then indistinguishable, and the miss graded
+ * `assertion_failed` — a false RED. Reported from the field: an assert over `/favicon.ico`,
+ * `/site.webmanifest` and `/apple-touch-icon.png` returned `verified:"no"` while curl showed all
+ * three answering 200. A false negative here is worse than an unknown, because an agent that trusts
+ * it goes and "fixes" working code.
+ *
+ * Deliberately NOT here: `.js` and `.json`. Both are routinely fetched via `fetch`/XHR — a module
+ * preload and an API call can share a suffix — so downgrading them would hide real misses. This list
+ * is only the suffixes for which the document is the sole plausible initiator.
+ *
+ * This began as the smaller half of #447: it did not make these requests observable, it stopped
+ * Reticle claiming they did not happen. The other half, observing them via resource timing, has
+ * since landed in the browser SDK, so the two halves are no longer independent and this downgrade is
+ * now GATED: when the event stream carries at least one document-initiated record, the observer is
+ * demonstrably live and a miss over these suffixes is real evidence, graded a plain failure. Only a
+ * page whose stream holds no resource entry at all keeps the honest "cannot tell apart" answer,
+ * because there the observer may simply not exist.
+ */
+const DOCUMENT_ONLY_SUFFIXES: readonly string[] = [
+  '.ico',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.svg',
+  '.webp',
+  '.avif',
+  '.bmp',
+  '.css',
+  '.woff',
+  '.woff2',
+  '.ttf',
+  '.otf',
+  '.eot',
+  '.webmanifest',
+];
+
+/**
+ * File suffixes a click typically downloads or navigates to as a document, never as fetch/XHR.
+ *
+ * Sibling of DOCUMENT_ONLY_SUFFIXES, not a member of it. Those are subresources: once resource
+ * timing is live, a miss is evidence. A click on `<a href="/export.pdf">` is a navigation (or a
+ * Content-Disposition attachment). Resource timing of stylesheets does not make it visible, so
+ * grading the miss as "0 network calls" / a 404 is the lie #805 exists to stop — even on a page
+ * whose observer is running. `.js` / `.json` stay off this list for the same reason they stay off
+ * the other: they are routinely fetched.
+ */
+const NATIVE_DOWNLOAD_SUFFIXES: readonly string[] = [
+  '.pdf',
+  '.csv',
+  '.tsv',
+  '.zip',
+  '.gz',
+  '.tar',
+  '.xlsx',
+  '.xls',
+  '.docx',
+  '.doc',
+  '.pptx',
+  '.ppt',
+  '.ods',
+  '.odt',
+  '.rtf',
+  '.7z',
+  '.rar',
+];
+
+/**
+ * Does this filter target a class of request the observer cannot see?
+ *
+ * Read off `urlContains` only, and only when the pattern ENDS in one of the suffixes — a filter of
+ * `/api/` that happens to contain `.css` somewhere in a query string is still an ordinary XHR
+ * target. Query strings and fragments are stripped first, since `favicon.ico?v=2` is the same asset.
+ */
+function filterPath(urlContains: string): string {
+  return (urlContains.split('#')[0] ?? '').split('?')[0]?.toLowerCase() ?? '';
+}
+
+/**
+ * Does this filter target a class of request the observer cannot see?
+ *
+ * Read off `urlContains` only, and only when the pattern ENDS in one of the suffixes — a filter of
+ * `/api/` that happens to contain `.css` somewhere in a query string is still an ordinary XHR
+ * target. Query strings and fragments are stripped first, since `favicon.ico?v=2` is the same asset.
+ */
+function targetsUnobservedChannel(
+  p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
+): boolean {
+  const url = p.urlContains;
+  if (undefined === url) return false;
+  return DOCUMENT_ONLY_SUFFIXES.some((suffix) => filterPath(url).endsWith(suffix));
+}
+
+function targetsNativeDownload(p: Extract<Predicate, { kind: typeof PredicateKind.NET }>): boolean {
+  const url = p.urlContains;
+  if (undefined === url) return false;
+  return NATIVE_DOWNLOAD_SUFFIXES.some((suffix) => filterPath(url).endsWith(suffix));
+}
+
+function nativeDownloadReason(p: Extract<Predicate, { kind: typeof PredicateKind.NET }>): string {
+  return (
+    `no fetch or XHR matched ${describeNetFilter(p)}. A native download or document navigation ` +
+    `(an <a href> to a file, a Content-Disposition attachment, <a download>) never goes through ` +
+    `fetch or XMLHttpRequest, so an empty net window is not a 404 and is not evidence the export ` +
+    `failed. This is unobservable on the net channel. Assert the link href, or check the file ` +
+    `outside the browser — Reticle cannot see the bytes land`
+  );
+}
+
+function nativeDownloadMiss(
+  events: ReticleEvent[],
+  p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
+): EvalResult | undefined {
+  if (!targetsNativeDownload(p)) return undefined;
+  const reason = nativeDownloadReason(p);
+  return {
+    pass: false,
+    failureReason: reason,
+    inconclusive: reason,
+    observed: observedNetCalls(events, p.urlContains),
+    expected: `a fetch or XHR matching ${describeNetFilter(p)}`,
+    assertion: 'net.native-download',
+  };
+}
+
+/**
+ * Initiator types the browser SDK's resource-timing observer stamps onto document-initiated records
+ * (adapters/realm/browser/src/observers/network.ts). The patched transports sign themselves `fetch`,
+ * `xhr` or `beacon`, so any NET_REQUEST carrying one of these came from a `resource` entry, and its
+ * mere presence is proof the PerformanceObserver is alive on this page. Mirrors the wire; keep in
+ * sync with the browser package.
+ */
+const DOCUMENT_INITIATORS: ReadonlySet<string> = new Set([
+  'link',
+  'css',
+  'img',
+  'script',
+  'manifest',
+  'other',
+]);
+
+/**
+ * Whether a request was a subresource the DOCUMENT fetched (script, stylesheet, image…), as the
+ * resource-timing observer stamps them, rather than one the app sent through fetch, XHR, a beacon or
+ * IPC. The capsule's blast radius uses it to keep a page load out of "what this action also did".
+ */
+export function isDocumentInitiated(event: ReticleEvent): boolean {
+  if (event.type !== EventType.NET_REQUEST) return false;
+  const initiator = str(event.data['initiator']);
+  return initiator !== undefined && DOCUMENT_INITIATORS.has(initiator);
+}
+
+/**
+ * Did the observer actually report a document-initiated load?
+ *
+ * This is the gate on the unobserved-channel downgrade above. Once subresource observation landed,
+ * a miss over `.ico`/`.css`/`.woff2` is no longer inherently unknowable: if the observer is live it
+ * would have seen the favicon load, so seeing none is evidence it never fired. But the observer is
+ * opt-in-by-engine, not guaranteed: on a renderer without `PerformanceObserver` (or before any
+ * resource entry exists) nothing distinguishes "not requested" from "not visible", and the honest
+ * answer stays inconclusive. Liveness is inferred from the same events being judged: one
+ * document-initiated record anywhere in the window proves the channel works.
+ */
+function observerSawSubresources(events: ReticleEvent[]): boolean {
+  return events.some(isDocumentInitiated);
+}
+
+/** The sentence both zero-match branches hand to `inconclusive`. */
+function unobservedChannelReason(
+  p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
+): string {
+  return (
+    `no call matched ${describeNetFilter(p)}, and no document-initiated load was recorded either, ` +
+    `so this page exposed no resource timing to read: Reticle observes fetch and XMLHttpRequest ` +
+    `directly, while a request the document initiates (<link rel=icon|manifest|preload>, a ` +
+    `stylesheet, a font, <img src>) leaves no record, and that state cannot be told apart from the ` +
+    `request having been made. ` +
+    `Nothing here says the app is wrong. Check it outside the browser, or assert something the ` +
+    `document does not fetch on its own`
+  );
+}
+
+/**
+ * Appended to a zero-match `net` negative whose window starts at SDK attach.
+ *
+ * Every event's `t` is stamped `performance.now() - #start`, where `#start` is taken when the SDK
+ * is constructed, so `t` is never negative and a window with `since === 0` begins AT attach — never
+ * before it. Whatever the page did between navigation start and attach left no event at all, so
+ * "no matching call" over such a window cannot be told apart from "the call was made while nothing
+ * was watching yet".
+ *
+ * The gap is routine rather than exotic: a `fetch` from an effect in a root provider, or a classic
+ * `<script>` at the end of `<body>`, fires before a deferred module script has run. Read as proof
+ * the request was never made, that sends a reader looking for a defect in code that works —
+ * restarting dev servers and re-reading providers to establish that the request was invisible rather
+ * than absent.
+ *
+ * Same argument as DOCUMENT_ONLY_SUFFIXES one axis over: that one is a channel Reticle does not
+ * watch, this is a stretch of TIME it was not yet watching.
+ *
+ * The grade is deliberately NOT downgraded to `inconclusive`. A missing API call is the finding this
+ * oracle exists to make, and it is the strongest grade available for the startup class — session
+ * restore, feature flags, bootstrap config — which is exactly the class that silently breaks on
+ * reload. Every window an action opens carries `since > 0` and is untouched. What changes is only
+ * what the negative CLAIMS: it stops asserting the request never happened, and names the assertion
+ * that can settle it, because the state such a request produces IS observable after attach.
+ */
+const PRE_ATTACH_CAVEAT =
+  ' — note that this window starts where the SDK attached, and requests made before that are never ' +
+  'captured, so a miss here cannot tell a call that was never made apart from one made before the ' +
+  'page connected; if the call is expected during startup, assert on the state it produces instead';
+
+/**
+ * The response-body clause as the caller wrote it, for a verdict that has to quote it.
+ *
+ * One expression rather than two, because every body verdict below is the same sentence whichever
+ * clause asked the question, and printing `undefined` where the clause was `bodyMatches` is how a
+ * verdict stops being readable.
+ */
+function wantedBody(p: Extract<Predicate, { kind: typeof PredicateKind.NET }>): string {
+  return JSON.stringify(p.bodyContains ?? p.bodyMatches);
+}
+
+export function evalNet(
+  events: ReticleEvent[],
+  p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
+): EvalResult {
+  const since = p.since ?? 0;
+  /**
+   * Computed once: the gate every zero-match downgrade below reads. True means the resource-timing
+   * observer is demonstrably live in this window, so a miss is evidence rather than blindness.
+   */
+  const sawSubresources = observerSawSubresources(events);
+  /**
+   * Did any call match everything EXCEPT the body assertion, while carrying no recorded body?
+   *
+   * Bodies are opt-in, so without them a body predicate can never hold — and "no call matched" would
+   * send the caller to check the url and the method, which are both fine, instead of to the one
+   * setting that makes the assertion possible. Tracked while filtering rather than recomputed after,
+   * because it is the same pass over the same events.
+   */
+  let matchedButUnrecorded = false;
+  /** A call matched url/method but carried NO readable status (document-initiated subresource). */
+  let unobservableStatus = false;
+  /**
+   * The response body of a call that matched everything EXCEPT the body assertion, and HAD one.
+   *
+   * Reported by the first field user of `bodyContains`: a body mismatch was formatted as
+   * "expected 1 network call(s) matching {method, urlContains, status}, saw 0" — the body assertion
+   * was applied but not printed — so the verdict read "the request never fired" and sent them hunting
+   * a UI wiring bug that did not exist, when the defect was the value the server answered with.
+   */
+  let bodyMismatch: string | undefined;
+  /**
+   * The prefix of a TRUNCATED body the needle was not found in. Held apart from `bodyMismatch`
+   * because the two are different verdicts: a full body without the needle decides the assertion,
+   * a truncated one cannot (#614).
+   */
+  let truncatedBody: string | undefined;
+  /**
+   * A `bodyContains` needle that was FOUND, and found only inside a key name (#987).
+   *
+   * Not a match and not a miss: the substring is there, and it supports no claim about any value.
+   * Held with the body it was found in, because the verdict has to show both.
+   */
+  let keyFragment: { key: string; body: string } | undefined;
+  /** A response key whose captured value is `[REDACTED]`, so a `bodyMatches` clause is unjudgeable. */
+  let redactedResponseField: string | undefined;
+  const requestState = newRequestBodyState();
+  const matches = events.filter((e) => {
+    if (e.type !== EventType.NET_REQUEST || e.t < since) return false;
+    const d = e.data;
+    if (p.method !== undefined && str(d['method'])?.toUpperCase() !== p.method.toUpperCase()) {
+      return false;
+    }
+    if (p.urlContains !== undefined && !urlForMatch(d).includes(p.urlContains)) {
+      return false;
+    }
+    if (p.status !== undefined) {
+      const status = num(d['status']);
+      if (status === undefined) {
+        // Document-initiated subresources (link/css/img/manifest via resource timing) carry no
+        // readable status on engines without responseStatus. A failed assertion here would read
+        // "your change is broken" and send the caller to fix working code — the exact false
+        // negative the oracle exists to prevent. Downgrade to unknown instead.
+        unobservableStatus = true;
+        return false;
+      }
+      if (status !== p.status) return false;
+    }
+    if (p.ok !== undefined && callSucceeded(d) !== p.ok) return false;
+    if (p.bodyContains !== undefined || p.bodyMatches !== undefined) {
+      // The RESPONSE body only, and this is the whole point of these fields. Searching the request
+      // too would let `bodyContains: "1187.01"` pass on the very defect it exists to catch: the app
+      // SENT that number, so it is in the request whatever the server then did with it. The server's
+      // answer is the one channel a UI cannot fake.
+      const response = str(d['responseBody']);
+      if (response === undefined) {
+        matchedButUnrecorded = true;
+        return false;
+      }
+      // A needle missing from a body we only hold the FIRST N BYTES of is undecidable, not absent:
+      // the rest of the response was never recorded, so nothing here can say whether it was in
+      // there (#614). Grading it `pass: false` with "the response value is what differed" is the
+      // inversion the honesty rules exist to prevent — an unknown reported as decided, against a
+      // response that was very likely correct.
+      const missed = (): false => {
+        if (true === d['responseBodyTruncated']) truncatedBody ??= response;
+        else bodyMismatch ??= response;
+        return false;
+      };
+      if (p.bodyContains !== undefined) {
+        if (!response.includes(p.bodyContains)) return missed();
+        const fragment = keyFragmentOnly(response, p.bodyContains);
+        if (fragment !== undefined) {
+          keyFragment ??= { key: fragment, body: response };
+          return false;
+        }
+      }
+      if (p.bodyMatches !== undefined) {
+        const verdict = matchJsonBody(response, p.bodyMatches);
+        if ('mismatch' === verdict) return missed();
+        if ('match' !== verdict) {
+          redactedResponseField ??= verdict.redacted;
+          return false;
+        }
+      }
+    }
+    if (!checkRequestBody(d, p, requestState)) return false;
+    return true;
+  });
+  if (unobservableStatus && 0 === matches.length) {
+    // The url/method matched a document-initiated subresource whose engine could not read a status.
+    // "No matching call" would be a lie in both directions: it may have succeeded, it may have 404'd
+    // on exactly the path mistake the caller is hunting. Say the truth — not observable here.
+    return {
+      pass: false,
+      inconclusive: `a document-initiated request matching ${describeNetFilter(p)} was observed, but this engine does not expose its status code (resource timing without responseStatus) — assert on the element or route instead, or check the network tab`,
+      observed: 'a matching request with no readable status',
+      expected: `a status of ${String(p.status)} on ${JSON.stringify(p.urlContains ?? '*')}`,
+      assertion: 'net.unobservable-status',
+    };
+  }
+  if (matchedButUnrecorded && 0 === matches.length) {
+    return {
+      pass: false,
+      failureReason: `a call matched but its body was not recorded, so \`bodyContains\` could not be checked — enable it where the app calls connect(): reticle({ captureNetworkBodies: true })`,
+      observed: 'a matching call with no recorded body',
+      expected: `a body carrying ${wantedBody(p)}`,
+      assertion: 'net.bodyContains',
+    };
+  }
+  if (keyFragment !== undefined && 0 === matches.length) {
+    // Ranked above every other body verdict, because it is the only one that used to be a PASS.
+    return {
+      pass: false,
+      inconclusive: `a call matching ${describeNetFilter(p)} was answered with a body where ${JSON.stringify(p.bodyContains)} appears ONLY inside the key name ${JSON.stringify(keyFragment.key)} — no value in the response contains it, so this substring proves nothing about what any field holds. Assert the field itself: \`bodyMatches: { "<field>": <value> }\``,
+      observed: `response body ${JSON.stringify(clipBody(keyFragment.body))}`,
+      expected: `a response body carrying ${JSON.stringify(p.bodyContains)} as a value, or as a whole key`,
+      assertion: 'net.bodyContains',
+    };
+  }
+  if (redactedResponseField !== undefined && 0 === matches.length) {
+    const field = JSON.stringify(redactedResponseField);
+    return {
+      pass: false,
+      inconclusive: `a call matching ${describeNetFilter(p)} was answered, but its ${field} was REDACTED before the body was recorded, so this clause cannot be judged — a redacted field is unknown, not different. Assert on a non-sensitive key, or on the effect the value had`,
+      observed: `a matching response whose ${field} is ${REDACTED_VALUE}`,
+      expected: `a response body matching ${JSON.stringify(p.bodyMatches)}`,
+      assertion: 'net.bodyMatches',
+    };
+  }
+  const requestVerdict = requestBodyVerdict(requestState, p, matches.length);
+  if (requestVerdict !== undefined) return requestVerdict;
+  // Ranked ABOVE the mismatch branch: when both a truncated and a full body missed the needle,
+  // the honest verdict is the undecidable one. Deciding on the full body would report a failure
+  // the truncated call may well contradict.
+  if (truncatedBody !== undefined && 0 === matches.length) {
+    return {
+      pass: false,
+      inconclusive: `a call matching ${describeNetFilter(p)} was answered with a body that was TRUNCATED before it was recorded, and ${wantedBody(p)} is not in the part that was kept — so this is undecidable, not a failure. The cap is per-body and set where the app calls connect(): \`reticle.connect({ captureNetworkBodies: true, networkBodyMaxChars: 65536 })\`, or for the Vite plugin \`reticle({ networkBodyMaxChars: 65536 })\` / VITE_RETICLE_BODY_MAX_CHARS=65536 (default 8192, max 262144). An SDK older than this daemon ignores the option; a version skew on the session says so. Raise it past this response's size and re-run, or assert on something inside the recorded prefix`,
+      observed: `the first ${String(truncatedBody.length)} characters of a truncated response body ${JSON.stringify(clipBody(truncatedBody))}`,
+      expected: `a response body carrying ${wantedBody(p)}`,
+      assertion: 'net.bodyContains',
+    };
+  }
+  if (bodyMismatch !== undefined && 0 === matches.length) {
+    // The call is there and its body is there; only the VALUE differs. Counting it as zero matches
+    // points at the wiring, which is the one place the defect is not. A field clause also names the
+    // field that differed, because a 200-character clip may not reach it.
+    const field =
+      p.bodyMatches === undefined ? undefined : describeBodyFieldMiss(bodyMismatch, p.bodyMatches);
+    const because = field === undefined ? '' : `: ${field}`;
+    return {
+      pass: false,
+      failureReason: `a call matching ${describeNetFilter(p)} was made and answered ${JSON.stringify(clipBody(bodyMismatch))}, which does not carry ${wantedBody(p)}${because} — the request fired, the response value is what differed`,
+      observed: `response body ${JSON.stringify(clipBody(bodyMismatch))}${because}`,
+      expected: `a response body carrying ${wantedBody(p)}`,
+      assertion: 'net.bodyContains',
+    };
+  }
+  // `count` (exact) turns presence into a cardinality assertion — catches the double-submit /
+  // useEffect-double-fire / retry-storm regression class, where the request DID fire (presence passes)
+  // but fired the WRONG number of times. Without `count`, the matcher is presence-only (≥1).
+  if (p.count !== undefined) {
+    if (0 === matches.length) {
+      const download = nativeDownloadMiss(events, p);
+      if (download !== undefined) return download;
+    }
+    if (
+      matches.length !== p.count &&
+      0 === matches.length &&
+      targetsUnobservedChannel(p) &&
+      !sawSubresources
+    ) {
+      return {
+        pass: false,
+        failureReason: unobservedChannelReason(p),
+        inconclusive: unobservedChannelReason(p),
+        assertion: 'net.count',
+      };
+    }
+    const counted = evalExactCount({
+      matched: matches.length,
+      want: p.count,
+      noun: 'network call(s)',
+      filter: describeNetFilter(p),
+      assertion: 'net.count',
+    });
+    // Same blind head, second door: "saw 0" over a whole-session window is the same claim the
+    // presence branch makes, and just as unable to see a startup call. A `count: 0` assertion is
+    // left alone on purpose — it PASSES here, and turning that green into a non-pass is a grade
+    // change, not a wording one.
+    return 0 === matches.length && 0 === since && counted.failureReason !== undefined
+      ? { ...counted, failureReason: `${counted.failureReason}${PRE_ATTACH_CAVEAT}` }
+      : counted;
+  }
+  const hit = matches[0];
+  if (hit === undefined) {
+    const download = nativeDownloadMiss(events, p);
+    if (download !== undefined) return download;
+  }
+  if (hit === undefined && targetsUnobservedChannel(p) && !sawSubresources) {
+    const reason = unobservedChannelReason(p);
+    return {
+      pass: false,
+      failureReason: reason,
+      inconclusive: reason,
+      observed: observedNetCalls(events, p.urlContains),
+      expected: `at least one call matching ${describeNetFilter(p)}`,
+      assertion: 'net.unobserved-channel',
+    };
+  }
+  return hit !== undefined
+    ? { pass: true, evidence: netEvidence(hit.data, p) }
+    : {
+        pass: false,
+        failureReason: `no network call matched ${JSON.stringify(p)}${0 === since ? PRE_ATTACH_CAVEAT : ''}`,
+        // Same reasoning as the signal miss: "no matching call" cannot be told apart from "the app
+        // made no calls at all", and those need different fixes.
+        observed: observedNetCalls(events, p.urlContains),
+        expected: `at least one call matching ${JSON.stringify(p)}`,
+        assertion: 'net.present',
+      };
+}
+
+export function evalAnimation(
+  events: ReticleEvent[],
+  p: Extract<Predicate, { kind: typeof PredicateKind.ANIMATION }>,
+): EvalResult {
+  const wantType = true === p.completed ? EventType.ANIM_END : EventType.ANIM_START;
+  const hit = events.find((e) => {
+    if (e.type !== wantType) return false;
+    if (p.name !== undefined && str(e.data['name']) !== p.name) return false;
+    if (p.target !== undefined && e.ref !== p.target) return false;
+    return true;
+  });
+  return hit !== undefined
+    ? { pass: true, evidence: hit.data }
+    : {
+        pass: false,
+        failureReason: `no animation matched ${JSON.stringify(p)}`,
+        observed: 'no matching animation in the window',
+        expected: `an animation matching ${JSON.stringify(p)}`,
+        assertion: 'animation.present',
+      };
+}
+
+export function evalSignal(
+  events: ReticleEvent[],
+  p: Extract<Predicate, { kind: typeof PredicateKind.SIGNAL }>,
+): EvalResult {
+  /**
+   * A pattern key the transport sanitizer redacted on a payload of the right name. The marker is
+   * written for a sensitive key whatever it held, so neither `*` nor a value can be judged against it
+   * — the same rule the body clauses keep.
+   */
+  let redactedField: string | undefined;
+  const isMatch = (e: ReticleEvent): boolean => {
+    if (e.type !== EventType.SIGNAL) return false;
+    if (p.name !== undefined && str(e.data['name']) !== p.name) return false;
+    if (p.dataMatches !== undefined) {
+      const payload = (e.data['data'] ?? {}) as Record<string, unknown>;
+      const hidden =
+        'object' === typeof payload
+          ? Object.keys(p.dataMatches).find((key) => redactedOnPath(payload, key))
+          : undefined;
+      if (hidden !== undefined) {
+        redactedField ??= hidden;
+        return false;
+      }
+      if (!dataMatches(payload, p.dataMatches)) return false;
+    }
+    return true;
+  };
+  const redactedVerdict = (): EvalResult | undefined => {
+    if (redactedField === undefined) return undefined;
+    const field = JSON.stringify(redactedField);
+    return {
+      pass: false,
+      inconclusive: `signal '${p.name ?? '(any)'}' fired, but its ${field} was REDACTED before it was recorded, so this clause cannot be judged — a redacted field is unknown, not different. Assert on a non-sensitive key, or on the effect the value had`,
+      observed: `a signal payload whose ${field} is ${REDACTED_VALUE}`,
+      expected: `signal '${p.name ?? '(any)'}' with payload matching ${JSON.stringify(p.dataMatches)}`,
+      assertion: 'signal.payload',
+    };
+  };
+
+  // `count` (exact) turns presence into a cardinality assertion, exactly as it does on `net`. The
+  // double-fire is invisible to every state-only oracle — a handler wired twice leaves the store in
+  // the right shape and fires the signal twice — and so is the wrong-name fire, where the intended
+  // signal fires once beside a mistyped sibling and a presence check cannot say which is which.
+  // Counting only what the MATCHER matched is what separates them. Omit = presence (≥1).
+  if (p.count !== undefined) {
+    const matched = events.filter(isMatch).length;
+    // A redacted payload might have been one of the matches, so no count over it is decided.
+    const unjudgeable = redactedVerdict();
+    if (unjudgeable !== undefined) return unjudgeable;
+    return evalExactCount({
+      matched,
+      want: p.count,
+      noun: 'signal(s)',
+      filter: describeSignalFilter(p),
+      assertion: 'signal.count',
+    });
+  }
+
+  const hit = events.find(isMatch);
+  if (hit !== undefined) return { pass: true, evidence: hit.data };
+  // `find` scanned every event to get here, so a redacted payload has been seen if there was one.
+  const unjudgeable = redactedVerdict();
+  if (unjudgeable !== undefined) return unjudgeable;
+
+  // Near-miss: show signals that fired with the same name (so the agent sees the real data).
+  const sameName = events
+    .filter(
+      (e) =>
+        e.type === EventType.SIGNAL && (p.name === undefined || str(e.data['name']) === p.name),
+    )
+    .map((e) => e.data['data'] ?? e.data);
+  const first = sameName[0];
+  const fieldMiss =
+    p.dataMatches !== undefined && 'object' === typeof first && first !== null
+      ? describeFieldMiss(first as Record<string, unknown>, p.dataMatches)
+      : undefined;
+  return {
+    pass: false,
+    failureReason:
+      sameName.length > 0
+        ? `signal '${p.name ?? '(any)'}' fired ${String(sameName.length)}x but data didn't match`
+        : `no signal matched ${JSON.stringify(p)}`,
+    observed:
+      sameName.length > 0
+        ? `signal '${p.name ?? '(any)'}' fired ${String(sameName.length)}x, payload: ${JSON.stringify(first)}${fieldMiss === undefined ? '' : `; ${fieldMiss}`}`
+        : // Name what DID fire: a typo'd signal name and a genuinely dead action produce the same
+          // sentence otherwise, and the agent cannot tell them apart. See observed-in-window.ts.
+          `signal '${p.name ?? '(any)'}' never fired; ${describeObserved(
+            'signals',
+            events.filter((e) => e.type === EventType.SIGNAL).map((e) => str(e.data['name']) ?? ''),
+          )}`,
+    expected:
+      p.dataMatches === undefined
+        ? `signal '${p.name ?? '(any)'}' to fire`
+        : `signal '${p.name ?? '(any)'}' with payload matching ${JSON.stringify(p.dataMatches)}`,
+    // Two distinct failures behind one prose line: never fired at all, versus fired with the wrong
+    // payload. They call for different fixes, so the agent should not have to tell them apart by
+    // reading the sentence.
+    assertion: sameName.length > 0 ? 'signal.payload' : 'signal.absent',
+    evidence: sameName.length > 0 ? { nearMiss: sameName } : undefined,
+  };
+}
+
+/**
+ * Assert a value inside a registered store — the deterministic source of truth no DOM/network read
+ * can reach. Reads the store (STATE_READ), walks `path` (dot-path, numeric array indices), and matches
+ * the value against `equals` (a literal, `*` for presence, or a `{$gte,$contains,$length,…}` operator
+ * pattern — same matcher as signal `dataMatches`). This is what turns "the UI lies about the store"
+ * from a manual three-step catch into a one-line, LLM-free regression invariant a flow can carry.
+ */
+
+/**
+ * Activity that resets the "quiet" timer for a `settled` predicate: network calls and STRUCTURAL DOM
+ * mutations (nodes added/removed, attributes changed). Deliberately EXCLUDES `dom.text` and animation
+ * frames: a count-up counter, a spinner, a pulsing dot, or any looping CSS animation emits a text/anim
+ * event every frame forever, so an app with ambient motion would NEVER go quiet (observed live: one
+ * login flooded 319 dom.text events from the dashboard's count-up animations). That is the same trap
+ * that got Playwright's `networkidle` deprecated. Network + structural DOM are the real "the app is
+ * still doing work" signals; for an outcome gated on an animation finishing, assert that specific
+ * consequence (signal/net) instead of relying on settle.
+ */
+const SETTLE_ACTIVITY: ReadonlySet<EventType> = new Set([
+  EventType.NET_REQUEST,
+  EventType.DOM_ADDED,
+  EventType.DOM_REMOVED,
+  EventType.DOM_ATTR,
+]);
+
+/** The three net-shaped event types a URL can be read off — the only ones dev tooling can produce. */
+const NET_TYPES: ReadonlySet<EventType> = new Set([
+  EventType.NET_PENDING,
+  EventType.NET_REQUEST,
+  EventType.NET_STREAM,
+]);
+
+/** Default quiet window — enough to absorb a render+xhr settle without waiting on slow polls. */
+const DEFAULT_QUIET_MS = 500;
+
+/**
+ * "The page has gone quiet": no network/DOM/animation activity for at least `quietMs`. Needs the
+ * wall-clock `now` (in the buffer's time base) because "no activity in the last N ms" is relative to
+ * now, not to any buffered event — so `now` is injected (CLAUDE.md rule 7), and the wait loop's
+ * poll interval is what eventually flips this to pass once activity stops.
+ */
+export function evalSettled(
+  allEvents: ReticleEvent[],
+  p: Extract<Predicate, { kind: typeof PredicateKind.SETTLED }>,
+  now: number,
+): EvalResult {
+  const quietMs = p.quietMs ?? DEFAULT_QUIET_MS;
+
+  // Dev-tooling traffic is the framework talking about ITSELF (see DevToolingChannel) and says
+  // nothing about whether the app finished its work — but it was holding settle open. Dropped from
+  // both halves of the calculation below (in-flight AND the quiet timer) and DISCLOSED on the
+  // evidence, never silently swallowed.
+  const ignoredDevTooling: string[] = [];
+  const events = allEvents.filter((e) => {
+    if (!NET_TYPES.has(e.type)) return true;
+    const url = str(e.data['url']);
+    if (!isDevToolingUrl(url)) return true;
+    if (url !== undefined && !ignoredDevTooling.includes(url)) ignoredDevTooling.push(url);
+    return false;
+  });
+  const disclosure = 0 === ignoredDevTooling.length ? {} : { ignoredDevTooling };
+
+  // A request that STARTED (NET_PENDING) but never completed (NET_REQUEST with the same id) is
+  // still in flight — the page is NOT settled no matter how quiet the DOM has gone. Without this,
+  // a slow save reads as "settled" the instant its spinner stops mutating the DOM: the exact
+  // false-green `settled` exists to prevent.
+  //
+  // COUNT per id, don't just set-membership: a retry that reuses a request id (two NET_PENDING, one
+  // NET_REQUEST) would mark the id "done" and hide the second, still-flying request — an in-flight
+  // UNDERCOUNT that greens settle while a request is live. In-flight for an id is pendings minus
+  // completions (floored at 0); unkeyed pendings each count as one.
+  const pendingById = new Map<string, number>();
+  const doneById = new Map<string, number>();
+  let unkeyedPending = 0;
+  for (const e of events) {
+    if (e.type === EventType.NET_PENDING) {
+      const id = str(e.data['id']);
+      if (id === undefined) unkeyedPending += 1;
+      else pendingById.set(id, (pendingById.get(id) ?? 0) + 1);
+    } else if (e.type === EventType.NET_REQUEST) {
+      const id = str(e.data['id']);
+      if (id !== undefined) doneById.set(id, (doneById.get(id) ?? 0) + 1);
+    }
+  }
+  let inFlight = unkeyedPending;
+  for (const [id, pending] of pendingById) {
+    inFlight += Math.max(0, pending - (doneById.get(id) ?? 0));
+  }
+
+  // A completed request whose BODY is still streaming is not a finished request. `fetch` resolves at
+  // HEADERS, so on a Next.js App Router page the RSC payload reported complete 16 ms in while the
+  // Suspense boundary's content arrived 889 ms later — and the silence between them read as a settled
+  // page with a loading spinner still on screen. An OPEN with no CLOSE is in flight, counted the same
+  // way as a pending with no completion.
+  const openStreams = new Set<string>();
+  for (const e of events) {
+    if (e.type !== EventType.NET_STREAM) continue;
+    const id = str(e.data['id']);
+    if (id === undefined) continue;
+    const direction = str(e.data['direction']);
+    if (StreamDirection.OPEN === direction) openStreams.add(id);
+    else if (StreamDirection.CLOSE === direction) openStreams.delete(id);
+  }
+  const streaming = openStreams.size;
+
+  if (inFlight + streaming > 0) {
+    const what =
+      0 === streaming
+        ? `${String(inFlight)} request(s) still in flight`
+        : 0 === inFlight
+          ? `${String(streaming)} response body(ies) still streaming`
+          : `${String(inFlight)} request(s) in flight and ${String(streaming)} response body(ies) still streaming`;
+    return {
+      pass: false,
+      failureReason: `not settled: ${what}`,
+      observed: what,
+      expected: 'no requests in flight and no response bodies still streaming',
+      assertion: 'settled.in-flight',
+      evidence: {
+        settled: false,
+        inFlight,
+        ...(streaming > 0 ? { streaming } : {}),
+        ...disclosure,
+      },
+    };
+  }
+
+  let lastT = -1;
+  let lastType: EventType | undefined;
+  for (const e of events) {
+    if (SETTLE_ACTIVITY.has(e.type) && e.t > lastT) {
+      lastT = e.t;
+      lastType = e.type;
+    }
+  }
+  if (lastT < 0) {
+    return {
+      pass: true,
+      evidence: { settled: true, quietForMs: null, note: 'no activity to settle', ...disclosure },
+    };
+  }
+  const quietForMs = now - lastT;
+  if (quietForMs >= quietMs) {
+    return {
+      pass: true,
+      evidence: { settled: true, quietForMs, lastActivity: lastType, ...disclosure },
+    };
+  }
+  return {
+    pass: false,
+    failureReason: `not settled: last activity (${String(lastType)}) ${String(quietForMs)}ms ago, need ${String(quietMs)}ms quiet`,
+    observed: `last activity was ${String(lastType)}, ${String(quietForMs)}ms ago`,
+    expected: `${String(quietMs)}ms of quiet`,
+    assertion: 'settled.quiet',
+    evidence: { quietForMs, lastActivity: lastType, ...disclosure },
+    // The one failure in this file that knows exactly when it could stop being one: if nothing else
+    // happens, the window closes in this many ms. A waiter that re-checks THEN instead of on its next
+    // blind tick stops paying up to a full poll interval on the hottest call in the product. Only a
+    // hint — the predicate is still evaluated at that moment, and can still fail.
+    retryAfterMs: quietMs - quietForMs,
+  };
+}

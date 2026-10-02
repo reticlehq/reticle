@@ -4,7 +4,7 @@ Thanks for your interest in Reticle! Reticle is the **proof layer for AI agents*
 
 This guide covers how to set up the repo, the rules we hold the line on, and how to land a change. We aim to make contributing pleasant — if anything here is unclear, ask in [Discord](https://discord.gg/BwAbzv9ZRz) or open an issue.
 
-**Looking for something to work on?** [`good first issue`](https://github.com/reticlehq/reticle/labels/good%20first%20issue) is scoped, reviewed, and has a pointer to the file to start in. [`help wanted`](https://github.com/reticlehq/reticle/labels/help%20wanted) is bigger and unclaimed. Comment on the issue to claim it — we'll answer within a day or two, and nobody else will start on it once you have.
+**Looking for something to work on?** [`good first issue`](https://github.com/reticlehq/reticle/labels/good%20first%20issue) is scoped, reviewed, and has a pointer to the file to start in. [`help wanted`](https://github.com/reticlehq/reticle/labels/help%20wanted) is bigger and unclaimed. Comment on the issue to claim it — we'll answer within a day, and nobody else will start on it once you have. For a first contribution with no code, [`good-first-skill`](https://github.com/reticlehq/reticle/labels/good-first-skill) issues ask for one `SKILL.md` that teaches an agent a verification recipe.
 
 By participating you agree to our [Code of Conduct](CODE_OF_CONDUCT.md).
 
@@ -39,7 +39,7 @@ Every item here cost somebody a debugging session. None is discoverable by readi
 - **Port 4400 is the bridge, and something is probably on it.** Every e2e spec binds it, so a spec run with your editor's MCP client open dies with `EADDRINUSE`. Never `kill -9` the holder: on 4400 that list includes the `reticle mcp` proxy, and killing it cuts your own agent's link **with no log**, because the process that writes the log is the one that dies. Use `freePortSafely` from [`apps/e2e/gate-harness.mjs`](apps/e2e/gate-harness.mjs), which spares the proxy by design.
 - **Telemetry fails silently.** Nothing throws, no test reddens, the data is just permanently gone — `daemon_stopped` was fired just before `process.exit(0)` for months and every POST died unseen. Read [`docs/telemetry-contract.md`](docs/telemetry-contract.md) first.
 - **The fixtures are in a second repo.** Every app in `apps/` is already instrumented, so none of them can tell you whether a fresh install still works — re-running `init` over one reports "already wired" for every step and proves nothing. That question lives in [`reticle-fixtures`](https://github.com/reticlehq/reticle-fixtures), which keeps a pristine `clean` branch of real third-party apps plus `main` and `reticle/<version>`. See [`docs/fixtures.md`](docs/fixtures.md).
-- **`packages/core` is the contract and may not gain dependencies** (zod only). Anything crossing browser ↔ bridge ↔ agent is a named constant plus a zod schema there. A wire string inlined in `browser` or `server` is the bug, not a shortcut.
+- **`core` is the contract and may not gain dependencies** (zod only). Anything crossing browser ↔ bridge ↔ agent is a named constant plus a zod schema there. A wire string inlined in `browser` or `server` is the bug, not a shortcut.
 - **A new tool field needs several allowlists.** Miss one and the call silently returns nothing — measured, twice. If you add a field and it "does not arrive", start by grepping for every place the existing fields are listed.
 - **`format:check` is not run by `pnpm lint`.** CI enforces it separately, so all four heavy gates can be green locally and CI still red on formatting alone.
 - **A local gate is only trustworthy in a quiet checkout.** If something else is editing the same worktree, turbo will read files mid-write and report failures that are not yours.
@@ -54,33 +54,39 @@ Every item here cost somebody a debugging session. None is discoverable by readi
 
 ## Repository layout
 
-Five top-level directories, each with one job. If you can name which of these your change belongs to, you can find everything else.
+The packages sit at the top level — there is no `packages/` directory; it was dissolved in v3 so a package's path names what it IS rather than the fact that it is a package. If you can name which area your change belongs to, you can find everything else.
 
 | Directory | Job | Read first |
 | --- | --- | --- |
-| `packages/` | the shipped product — everything published to npm and crates.io | this section |
+| top level | the shipped product — everything published to npm and crates.io | this section |
+| `adapters/` | the shipped product's edges: one directory per realm, framework, build tool and linter | this section |
 | `apps/` | fixtures the gates drive, plus the test runner itself | [`apps/README.md`](apps/README.md) |
 | `bench/` | measurement and research. **Not a gate** — nothing here blocks a PR | [`bench/README.md`](bench/README.md) |
 | `docs/` | user docs (published to reticle.sh) **and** contributor docs | [`docs/README.md`](docs/README.md) |
 | `scripts/` | repo tooling: the boundary/lossy guards, the local registry | — |
 
-### `packages/` — the shipped product
+### The shipped product
 
 ```
-packages/core          @reticlehq/core         — wire contract, constants, zod schemas (deps: zod)
-packages/browser       @reticlehq/browser      — instrumentation SDK embedded in the app (DOM-side)
-packages/server        @reticlehq/server       — bridge + MCP server, the `reticle` CLI (Node-side)
-packages/react         @reticlehq/react        — React adapter: DOM ref -> component -> source file
-packages/vite-plugin   @reticlehq/vite-plugin  — Vite integration: stamps source + auto-injects connect()
-packages/babel-plugin  @reticlehq/babel-plugin — stamps data-reticle-source (source mapping, React 19)
-packages/next          @reticlehq/next         — Next.js source mapping (keeps SWC) via withReticle (CJS)
-packages/electron      @reticlehq/electron     — Electron main-process adapter (IPC observer, capture)
-packages/tauri         reticle-tauri           — Tauri capture backend (RUST — outside every JS gate)
-packages/test          @reticlehq/test         — spec runner + matchers for CI (peer vitest)
-packages/eslint-plugin @reticlehq/eslint-plugin — dev-only lint rule: state changed ⇒ signal fired
+core          @reticlehq/core         — wire contract, constants, zod schemas (deps: open-verification, zod)
+open-verification   open-verification  — the Open Verification Protocol: vocabulary, rules, `Realm`, `adjudicate()`
+engine        @reticlehq/engine       — the rules that decide a verdict, with no browser, daemon or CLI attached
+server        @reticlehq/server       — bridge + MCP server, the `reticle` CLI (Node-side)
+init          @reticlehq/init         — project scaffolder: `reticle init`'s codemod, no runtime (Node-side)
+spec-runner   @reticlehq/test         — spec runner + matchers for CI (peer vitest)
+conformance   —                       — drives the protocol's own scenarios against an implementation (PRIVATE)
+
+adapters/realm/browser           @reticlehq/browser      — instrumentation SDK embedded in the app (DOM-side)
+adapters/realm/electron      @reticlehq/electron     — Electron main-process adapter (IPC observer, capture)
+adapters/realm/tauri         reticle-tauri           — Tauri capture backend (RUST — outside every JS gate)
+adapters/framework/react     @reticlehq/react        — React adapter: DOM ref -> component -> source file
+adapters/build/vite          @reticlehq/vite-plugin  — Vite integration: stamps source + auto-injects connect()
+adapters/build/babel-plugin  @reticlehq/babel-plugin — stamps data-reticle-source (source mapping, React 19)
+adapters/build/next          @reticlehq/next         — Next.js source mapping (keeps SWC) via withReticle (CJS)
+adapters/lint/eslint         @reticlehq/eslint-plugin — dev-only lint rule: state changed ⇒ signal fired
 ```
 
-The TypeScript library packages (`-core`, `-browser`, `-server`, `-react`) are **strict TypeScript** and are the focus of the build/lint/test gates. `@reticlehq/babel-plugin` / `@reticlehq/next` are plain CJS tooling, and `apps/*` are local fixtures — these are excluded from the JS gates. `packages/tauri` is Rust and is invisible to all of them; CI's `rust` / `rust-macos` jobs are the only thing that compiles it.
+The TypeScript library packages are **strict TypeScript** and are the focus of the build/lint/test gates. `@reticlehq/babel-plugin` / `@reticlehq/next` are plain CJS tooling, and `apps/*` are local fixtures — these are excluded from the JS gates. `adapters/realm/tauri` is Rust and is invisible to all of them; CI's `rust` / `rust-macos` jobs are the only thing that compiles it.
 
 ### Root files worth knowing
 
@@ -105,9 +111,9 @@ pnpm lint && pnpm typecheck && pnpm test:unit    # ~2 min — ALWAYS
 
 | If you also touched… | Also run | Cost |
 | --- | --- | --- |
-| the tool surface, the wire contract (`packages/core`), or an observer | `pnpm test:e2e` | ~8 min |
+| the tool surface, the wire contract (`core`), or an observer | `pnpm test:e2e` | ~8 min |
 | `reticle init`, `vite-plugin`, `next`, `babel-plugin` — anything before a user's first session | `pnpm gate:install` | ~15 min |
-| `packages/electron`, `packages/tauri`, the IPC observer, desktop capture | `pnpm test:e2e:desktop` | ~3 min |
+| `adapters/realm/electron`, `adapters/realm/tauri`, the IPC observer, desktop capture | `pnpm test:e2e:desktop` | ~3 min |
 | telemetry, feedback, or anything that emits an event | read [`docs/telemetry-contract.md`](docs/telemetry-contract.md) **first**, then `pnpm test:e2e` | — |
 
 **This routing is the whole rule, and [`docs/gates.md`](docs/gates.md) is the full map** — every gate, what it proves, what it is blind to, and which CI job runs it. CI runs everything regardless, so skipping a tier costs you a slower red, never a missed one.
@@ -201,14 +207,31 @@ From there, point your MCP-capable agent at Reticle and ask it to verify the app
    That symlinks a `prepare-commit-msg` hook which adds the trailer when it is missing (and leaves `git commit -s` alone), plus the pre-commit quality gate.
 
 4. **Use [Conventional Commits](https://www.conventionalcommits.org/)** for commit messages, e.g. `feat(server): add reticle_viewport tool`, `fix(browser): restore patched fetch on teardown`, `docs: clarify install steps`. Common scopes mirror the packages: `protocol`, `browser`, `server`, `react`, plus `docs` / `chore`.
-5. **Keep the gates green:** `pnpm lint && pnpm typecheck && pnpm test:unit`.
-6. **Update docs and `CHANGELOG.md`** when the change is user-facing. New entries go under the `[Unreleased]` section, following [Keep a Changelog](https://keepachangelog.com/).
+5. **Keep the gates green:** run **`pnpm verify`** — one command, not four. It is `format:check && lint && typecheck && test:unit`, and the `&&` is what makes a failure stop the run: pasted as separate lines, only the last one decides the exit code, so a red `lint` in the middle reports success. `format:check` is first because CI enforces it and `pnpm lint` does not run it; `pnpm format` writes the fixes.
+6. **Update docs, and add a changelog entry as a new file in [`.changes/`](.changes/)** when the change is user-facing — **not** by editing `CHANGELOG.md`. Name it `<issue>-<slug>.md`; the format and rules are in [`.changes/README.md`](.changes/README.md), and `pnpm changelog:assemble` folds every entry into `CHANGELOG.md` at release time.
+
+   This instruction used to say to edit `CHANGELOG.md` directly, which is why `.changes/` exists and also why it kept not being used. Every PR appends to the same `[Unreleased]` section, so two open PRs conflict on it as a matter of course — and half of the pull requests open when this line was corrected were editing that file. Two PRs adding two files never conflict.
+
 7. **Open a PR against `main`** and **link the issue** it resolves (e.g. `Closes #123`). Fill out the PR template checklist.
 
+8. **Update your branch with `rebase`, never by merging `main` into it.** `main` moves; when you need it, run `git rebase origin/main` (or `git rebase --signoff origin/main`, which fixes sign-off at the same time) and `git push --force-with-lease`.
+
+   This is not a style preference. `main` merges through a **merge queue**, and the queue has to replay your branch onto whatever is at the head of `main` when your turn comes. A branch carrying merge commits is not rebaseable, so the queue cannot take it, and the pull request reports itself as blocked with **every check green and no reason given** — there is nothing to fix, no failing job to read, and no message saying what is wrong. One PR sat in exactly that state for sixteen days: approved, fully green, and unmergeable, with three `Merge branch 'main'` commits on it and nobody able to say why.
+
 For anything non-trivial, **open an issue first** so we can agree on the approach before you invest time in a PR.
+
+### What you can expect from us
+
+- **A reply to a claim or a question within a day, and a first review within two days.** If a PR has waited longer, say so on it; that is on us, not you.
+- **CI on a pull request takes about ten minutes.** The slowest suites (the benchmark, Windows unit tests, the full Windows install matrix) run in the merge queue and nightly instead, so a PR you can act on is not held up by a job you cannot.
+- **Once it is approved, the merge queue lands it.** You do not need to keep rebasing while it waits.
+
+### AI-assisted contributions
+
+Welcome, on one condition: **the tests must fail without your change.** Revert your fix locally and run the test you added; if it still passes, it is not testing the fix, and a green test that proves nothing is the one defect this project exists to catch. Say in the PR description that you checked. PRs that only reformat, rename or reword without an issue behind them will be closed.
 
 ---
 
 ## License of contributions
 
-Reticle uses a per-package license model (Apache-2.0 for the embeddable SDK packages, FSL-1.1-ALv2 for the server / CLI / umbrella, and the Reticle Enterprise License for `packages/server/src/ee/`). By contributing, you agree that your contribution is licensed under the license of the package(s) you're modifying. See the root [LICENSE](LICENSE) and each package's own `LICENSE` file.
+Reticle uses a per-package license model (Apache-2.0 for the embeddable SDK packages, FSL-1.1-ALv2 for the server / CLI / umbrella, and the Reticle Enterprise License for `server/src/features/ee/`). By contributing, you agree that your contribution is licensed under the license of the package(s) you're modifying. See the root [LICENSE](LICENSE) and each package's own `LICENSE` file.

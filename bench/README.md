@@ -21,11 +21,11 @@ The rows are kept as a record of what was run. They are not a baseline. **Record
 
 ## What in here is live — every script, executed 2026-08-11
 
-`harness/` holds 39 files and only twelve are driven by a suite. The rest are **kept one-off studies**: each produced a number in a published scorecard, and deleting one would leave that claim with no reproduction. That is deliberate, and the cost is that "a file exists in `harness/`" told you nothing about whether it still ran.
+`harness/` is the largest directory here and only a minority are driven by a suite. The rest are **kept one-off studies**: each produced a number in a published scorecard, and deleting one would leave that claim with no reproduction. That is deliberate, and the cost is that "a file exists in `harness/`" told you nothing about whether it still ran.
 
 So they were all run. **Every script below passes.** The two defects that surfaced are fixed:
 
-- `suite-rre.mjs` recorded flows that asserted nothing and then demanded a `pass` verdict, which `reticle_flow_verify` correctly refuses — so **`pnpm bench` exited 1** and `replay-determinism` never ran at all. Each flow now carries a success oracle.
+- `suite-rre.mjs` recorded flows that asserted nothing and then demanded a `pass` verdict, which `reticle_verify { action: "flows" }` correctly refuses — so **`pnpm bench` exited 1** and `replay-determinism` never ran at all. Each flow now carries a success oracle.
 - `clock-timetravel.mjs` failed on `reticle_clock {reset:true}` with `TypeError: Illegal invocation`. That one was **not a bench bug** — see "A product bug this directory caught" below.
 
 **The prerequisite column is the point.** Every script that looked broken during this sweep was actually a script whose fixture nobody had started, and that is why "which of these works" was unanswerable.
@@ -35,16 +35,16 @@ So they were all run. **Every script below passes.** The two defects that surfac
 | **Replay pass** — the regression floor | `replay-bench`, `replay-detect`, `replay-detect-consequence`, `replay-detect-state`, `network-cardinality-bench`, `forbidden-call-bench`, `console-clean-bench`, `state-blast-radius-bench`, `suite-rre`, `replay-determinism` | `pnpm bench` boots its own | ✅ 10/10, 279s |
 | **Entry points** | `bench-all`, `gate` | — | ✅ |
 | **Shared libraries** — imported, never run alone | `adapters`, `mcp-client`, `tokenizer`, `inject`, `ports`, `record` | — | ✅ (via callers) |
-| **Diagnostics** | `probe` · `schema-dump <playwright\|devtools\|reticle>` | bench fixtures; `schema-dump` **requires the tool as argv[2]** and crashes without it | ✅ |
+| **Diagnostics** | `probe` | bench fixtures | ✅ |
 | **Reticle-only studies** | `clock-timetravel`, `source-localize`, `render-storm-bench`, `state-desync-bench`, `leak-stress`, `multi-agent-throughput`, `schema-tax` | bench fixtures (api `:8787` + bench-app `:4312`) | ✅ |
 | **Needs another fixture** | `stress-tiers`, `measure-large-dom` | `apps/large-dom-bench` on **`:4313`** — without it they fail in a way that reads like rot | ✅ `stress-tiers` |
 | **Needs a prior run** | `compiled-suite-vs-replay` | run `suite-rre.mjs` first (it consumes the saved flows) | ✅ |
 | **Needs competitor MCPs + network** | `visual-bug-bench` | downloads `@playwright/mcp` + `chrome-devtools-mcp` via npx | ✅ parity 6/6/6 |
 | **Rendering / reporting** | `charts`, `make-readme-chart`, `../dashboard.mjs` | existing raws | ✅ |
-| **Not run in this sweep** | `run-observation` + `analyze` (~12 min, drives competitors), `claude-agent-loop` / `openai-agent-loop` (**needs an API key**), `capture-screens`, `visual-regression-bench` (needs `reticle drive`) | as noted | ⚠ unverified |
+| **Not run in this sweep** | `run-observation` + `analyze` (~12 min, drives competitors), `claude-agent-loop` / `openai-agent-loop` (**needs an API key**), `visual-regression-bench` (needs `reticle drive`) | as noted | ⚠ unverified |
 | **Intent + context effect** | `intent-effect` (+ `intent-effect-metrics`, `intent-effect-verdict` — shared rule modules, unit-tested, imported by `gate`) | bench fixtures **already up** (it boots none) + an API key; see [`INTENT-EFFECT.md`](INTENT-EFFECT.md) | ✅ keyless path (reports NOT MEASURED, exits 1) |
 
-The subdirectories (`fix-loop/`, `honesty/`, `pw-vs-reticle/`, `diagnosis/`, `first-drive/`, `overhead/`, `parallel-suite/`, `desktop/`) are each a completed study with its own README and results file, and were **not** re-run here. Same rule: evidence for a published claim, run by hand, not a gate.
+The subdirectories (`honesty/`, `pw-vs-reticle/`, `diagnosis/`, `first-drive/`, `overhead/`, `parallel-suite/`, `desktop/`) are each a completed study with its own README and results file, and were **not** re-run here. Same rule: evidence for a published claim, run by hand, not a gate.
 
 **Adding a script?** Put it in a class above **with its prerequisite**. A script whose fixture is undocumented is one that will be misdiagnosed as rotted by whoever runs it next.
 
@@ -60,7 +60,7 @@ Run during this sweep, it silently redrew the detection chart with Chrome DevToo
 
 `clock-timetravel.mjs` failed on `reticle_clock {reset:true}` with `TypeError: Illegal invocation`. The cause was in the SDK, not the bench: `resetClock()` re-armed the app's pending timers by calling the captured natives off a plain object (`natives.setTimeout(...)`), so the DOM received a foreign `this` and refused. An early return when nothing is pending meant it fired **only** when the app had actually queued work during the freeze — the exact case the function exists to serve.
 
-Every unit test passed throughout, because jsdom does not enforce the receiver. Only a real browser does, and in this repo the things that drive a real browser are the e2e battery and this directory. That is the argument for keeping `bench/` alive even though it gates nothing: it is one of the few places a jsdom-invisible defect can surface. Fixed in `packages/browser/src/timers/clock.ts`, with three tests that install a WebIDL-faithful strict double and go red without the fix.
+Every unit test passed throughout, because jsdom does not enforce the receiver. Only a real browser does, and in this repo the things that drive a real browser are the e2e battery and this directory. That is the argument for keeping `bench/` alive even though it gates nothing: it is one of the few places a jsdom-invisible defect can surface. Fixed in `adapters/realm/browser/src/timers/clock.ts`, with three tests that install a WebIDL-faithful strict double and go red without the fix.
 
 ## Layout
 
@@ -75,8 +75,7 @@ harness/                  all runnable code
   claude-agent-loop.mjs   Layer B: real Claude tool-use loop, authoritative usage tokens (needs API key)
   analyze.mjs             Phase 4 aggregates -> raw/analysis.json
   charts.mjs              Phase 5 SVG chart generator
-  capture-screens.mjs     real failure-state screenshots + console/network evidence
-  probe.mjs schema-dump.mjs   connectivity + tool-schema probes
+  probe.mjs               connectivity probe
 raw/                      measured outputs (observation-results.json, analysis.json, snapshot-*)
                           NOTE: run-meta.json is referenced in older text but is no longer produced.
 logs/                     run logs (observation-run*.log, demo/api logs)
@@ -87,7 +86,7 @@ artifacts/                charts + diagrams (SVG + PNG) + screens/ (real PNGs + 
 
 - Node v22+, pnpm, `python3` with `tiktoken` (proxy tokenizer; harness degrades gracefully without it).
 - Playwright Chromium installed (`pnpm exec playwright install chromium`), local Chrome (DevTools MCP).
-- `@reticlehq/server` built: `pnpm build` (the harness runs `node packages/server/dist/cli.js mcp`).
+- `@reticlehq/server` built: `pnpm build` (the harness runs `node server/dist/command/cli.js mcp`).
 
 ## Run it
 
@@ -111,10 +110,24 @@ node bench/harness/run-observation.mjs
 # 4. analysis + visuals
 node bench/harness/analyze.mjs
 node bench/harness/charts.mjs
-node bench/harness/capture-screens.mjs
 
 # 5. Layer B — full agent loop (authoritative usage tokens). REQUIRES a key.
 ANTHROPIC_API_KEY=sk-... node bench/harness/claude-agent-loop.mjs
+
+# 5b. Can a System One model do the driver's job? A de-risk, NOT a result: it asks whether Jev can
+#     batch its questions, pick one action out of a noisy candidate set, and drive a SCRIPTED state
+#     machine to a goal. No browser is involved, so nothing it prints may be quoted as a benchmark.
+JEV_API_KEY=... node bench/harness/jev-probe.mjs
+
+# 5c. The measurement that CAN be quoted: the same app, tools and loop driven by each model in turn,
+#     with only the ModelDriver differing. Writes JEV-SCORECARD.md's numbers. BENCH_REPEATS>1,
+#     because one run per arm measures one drive rather than a driver.
+ANTHROPIC_API_KEY=sk-... JEV_API_KEY=... BENCH_REPEATS=3 node bench/harness/jev-vs-llm.mjs
+
+# 5d. Do the platform and the harness actually MEET? Drives a daemon holding only a platform key
+#     against a real app, with every provider key blanked. Called by reticle-cloud's
+#     scripts/harness-sync-check.mjs, which drives the whole chain from signup onwards.
+RETICLE_CLOUD_URL=... RETICLE_API_KEY=rk_live_... node bench/harness/platform-drive.mjs
 
 # 6. Layer C — deterministic regression suite (no API key). Records each flow once, then replays it
 #    with NO model and asserts a declared consequence. This is the RRE / regression story + the
@@ -167,7 +180,7 @@ pgrep -f chrome-headless-shell | wc -l   # browsers still attached
 **Clean up:**
 
 ```bash
-node packages/server/dist/cli.js stop --port 4460 --quiet   # the polite way, first
+node server/dist/command/cli.js stop --port 4460 --quiet   # the polite way, first
 pkill -f "cli.js _daemon"                                   # then anything that ignored it
 pkill -f chrome-headless-shell
 ```

@@ -9,9 +9,9 @@
  * The excluded directories are IMAGES, and they are excluded on size: the published tarball is what
  * every user downloads, and a logo is not something anybody reads out of node_modules.
  *
- * The copy also REWRITES links. `docs/` sits at the repo root here and at `packages/server/docs` in
+ * The copy also REWRITES links. `docs/` sits at the repo root here and at `server/docs` in
  * the tarball, so every `../CONTRIBUTING.md`, `../apps/README.md` and `../bench/README.md` in the
- * shipped copy resolves inside `packages/server/`, where none of those exist — and the pruned asset
+ * shipped copy resolves inside `server/`, where none of those exist — and the pruned asset
  * directories take `docs/matrix/README.md` with them. Nineteen links, all of them silently dead in
  * the copy every user downloads and agents read out of `node_modules`. Anything that does not exist
  * in the staged output becomes an absolute GitHub URL, computed from where the file lived in the
@@ -30,6 +30,37 @@ const HERE = process.argv[3] ?? process.cwd();
 
 /** Site assets: every docs image reference is an absolute site path, so none of them resolve here. */
 export const PRUNED_ASSET_DIRS = ['images', 'logo', 'favicon', 'matrix'];
+
+/**
+ * Files that are about WORKING ON Reticle, or about the website, and are not for somebody who
+ * installed the package.
+ *
+ * The docs ship inside `@reticlehq/server` on purpose: an agent reads them from disk. That argument
+ * covers the pages describing how to USE Reticle. It does not cover the repository's own gate
+ * playbook, a plan for gates that do not exist yet, a page about a sibling repo, or the Mintlify
+ * config and stylesheet for the website, which cannot do anything in a tarball at all.
+ *
+ * Links to them are not broken by this: `relinkFile` repoints anything with no file behind it in
+ * the staged copy to the GitHub URL, which is where a contributor doc belongs anyway.
+ */
+export const PRUNED_FILES = [
+  'docs.json',
+  'style.css',
+  'gates.md',
+  'gate-plan.md',
+  'fixtures.md',
+  // Both are about ADDING telemetry to Reticle rather than about using it. `telemetry-contract.md`
+  // opens "read this before adding a tool, an event, a finding kind, or a failure path", and
+  // `telemetry-events.mdx` documents where each event is emitted FROM. Somebody who installed the
+  // package cannot act on either, and together they are 88KB of a package that went over its size
+  // budget by 72KB on the first CI run that measured it.
+  //
+  // `telemetry.md` deliberately stays. It describes what Reticle collects and how to turn it off,
+  // which is the one telemetry page a person who installed this is entitled to find without going
+  // to the website.
+  'telemetry-contract.md',
+  'telemetry-events.mdx',
+];
 
 /** Deleting into a directory Windows still holds a handle on is the normal case, so retry. */
 const GONE = { recursive: true, force: true, maxRetries: 8, retryDelay: 250 };
@@ -82,10 +113,13 @@ cpSync(join(ROOT, 'SKILL.md'), join(HERE, 'SKILL.md'));
 rmSync(join(HERE, 'docs'), GONE);
 cpSync(join(ROOT, 'docs'), join(HERE, 'docs'), { recursive: true });
 for (const dir of PRUNED_ASSET_DIRS) rmSync(join(HERE, 'docs', dir), GONE);
+for (const file of PRUNED_FILES) rmSync(join(HERE, 'docs', file), GONE);
 
 relinkFile(join(HERE, 'SKILL.md'), 'SKILL.md');
 for (const rel of markdown(join(HERE, 'docs'))) {
   relinkFile(join(HERE, 'docs', rel), `docs/${rel}`);
 }
 
-console.error('pack-docs: staged SKILL.md and docs (images excluded, escaped links absolutised)');
+console.error(
+  'pack-docs: staged SKILL.md and docs (images and contributor pages excluded, escaped links absolutised)',
+);

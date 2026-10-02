@@ -3,7 +3,7 @@ name: drive-desktop-app
 description: Drive and verify an Electron or Tauri desktop app from the inside, including the main-process and Rust IPC calls a browser tool cannot see. Use when a desktop app needs testing, when a feature works in the browser but not in the packaged app, when an IPC or invoke call needs proving, when a desktop screenshot or visual diff is wanted, or when you need a headless run of a desktop UI in CI.
 license: Apache-2.0
 metadata:
-  version: 2.14.0
+  version: 3.5.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -17,8 +17,9 @@ A desktop app reaches its backend over **IPC, not HTTP**. Patching `fetch`/`XHR`
 ## Electron: two lines, none in your app code
 
 ```ts
-// vite.config.ts — desktop:true also runs the plugin for `vite build`, because a packaged
-// renderer is a production build with no dev server
+// vite.config.ts — desktop:true lets connect() start in a packaged renderer (NODE_ENV=production).
+// A default (production-mode) `vite build` ships no Reticle code; to drive a packaged
+// renderer with no dev server, build it with `vite build --mode development`
 export default defineConfig({
   base: './', // file:// needs relative asset paths
   plugins: [react(), reticle({ desktop: true })],
@@ -68,7 +69,7 @@ reticle_act_and_wait({ sessionId, ref, action: "click", until: { kind: "allOf", 
 
 **IPC has no status code.** `200`/`500` are synthetic, mapped from whether the command succeeded, precisely so the same predicates keep working. On Tauri you will see `status: 500` next to `statusText: "OK"`. That is not a bug: the transport answered fine and the `500` is the command's own verdict. `ok` is authoritative.
 
-`reticle_state` reads the live store exactly as on the web. `reticle_screenshot` and `reticle_visual_diff` work once the platform's capture step is wired. Electron needs nothing extra; Tauri needs the crate. Headless on Tauri is `RETICLE_HEADLESS=1`, and screenshots keep working because the capture renders the webview rather than the screen.
+`reticle_look { action: "state" }` reads the live store exactly as on the web. `reticle_screenshot` and `reticle_visual_diff` work once the platform's capture step is wired. Electron needs nothing extra; Tauri needs the crate. Headless on Tauri is `RETICLE_HEADLESS=1`, and screenshots keep working because the capture renders the webview rather than the screen.
 
 ## What a missing observer looks like
 

@@ -3,7 +3,7 @@ name: agentic-tdd
 description: Test-driven development for behaviour a unit test cannot reach, by writing the expectation against the running app before writing the code. Declare the consequence first, watch it fail, implement, watch it pass. Use when building a user-facing feature, when the user asks for TDD on UI or full-stack work, when a unit test cannot express the outcome that matters, or when you want a red-green loop that runs against the real app instead of mocks.
 license: Apache-2.0
 metadata:
-  version: 2.14.0
+  version: 3.5.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -61,7 +61,7 @@ That turns the red-green loop into a regression suite you never hand-wrote.
 ## What to assert on, in order of strength
 
 1. **A signal the app fires itself** (`{ kind: "signal" }`): the app declaring success in its own vocabulary. Strongest available.
-2. **State** (`reticle_state`): what the app believes. Catches a UI that moved while the store did not.
+2. **State** (`reticle_look { action: "state" }`): what the app believes. Catches a UI that moved while the store did not.
 3. **Network**: the request, method and status. Catches a mock standing in for the real thing.
 4. **An element appearing**: necessary, never sufficient. Anything can render.
 5. **Absence of console errors**: always include it, never rely on it alone. Absence-only predicates pass on a control wired to nothing.

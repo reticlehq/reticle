@@ -3,7 +3,7 @@ name: test-error-states
 description: Force the states a happy-path run never reaches (a failing API, an empty list, a slow request, a timeout, an expired session, a toast that auto-dismisses) and check the UI actually handles them. Use when error handling was written but never run, when a loading or empty state needs verifying, when a bug only happens on a slow connection, or when a timer, poll, debounce or retry needs testing without sleeping.
 license: Apache-2.0
 metadata:
-  version: 2.14.0
+  version: 3.5.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -18,7 +18,7 @@ Every app has a `catch` block nobody has executed and an empty state nobody has 
 
 `reticle_network_mock` intercepts requests in a browser Reticle owns, and **the always-on SDK cannot do it.** A connected tab with neither `reticle drive` nor a lease still returns `{ ok: false, reason: "no-cdp-provider" }`.
 
-Your route is a leased Playwright tab (`reticle_lease acquire`) or `RETICLE_CDP_URL` pointed at a Chrome started with remote debugging:
+Your route is a leased Playwright tab (`reticle_run { tool: "reticle_lease", args: { action: "acquire", url } }`) or `RETICLE_CDP_URL` pointed at a Chrome started with remote debugging:
 
 ```bash
 # macOS — the user runs this once, in their own Chrome
@@ -53,9 +53,9 @@ Worth forcing, in rough order of how often they are broken: `500`, a `4xx` with 
 ## Skip time instead of sleeping
 
 ```
-reticle_clock({ sessionId, freeze: true })
-reticle_clock({ sessionId, advanceMs: 5000 })
-reticle_clock({ sessionId, reset: true })
+reticle_run({ tool: "reticle_clock", args: { sessionId, freeze: true } })
+reticle_run({ tool: "reticle_clock", args: { sessionId, advanceMs: 5000 } })
+reticle_run({ tool: "reticle_clock", args: { sessionId, reset: true } })
 ```
 
 Toasts that auto-dismiss, debounced search, polling, session timeouts, retry backoff. All of these are normally verified by sleeping, which is slow and flaky in equal measure. A timing assertion is a statement about the machine, so it passes on your laptop and fails in CI.
@@ -68,7 +68,7 @@ The recovery, not the absence of a crash:
 
 1. The error is **shown to the user**: a specific element, not just "the page did not blank".
 2. The app **stayed usable**: retry works, the form still has its input, navigation is not stuck.
-3. **State is honest**: `reticle_state` shows the failure, not a half-applied optimistic update. A UI that rolled back visually while the store kept the optimistic value is the classic bug here, and only the store read finds it.
+3. **State is honest**: `reticle_look { action: "state" }` shows the failure, not a half-applied optimistic update. A UI that rolled back visually while the store kept the optimistic value is the classic bug here, and only the store read finds it.
 4. **No uncaught error** in the console.
 
 ## Honesty

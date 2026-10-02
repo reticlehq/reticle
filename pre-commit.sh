@@ -5,7 +5,12 @@
 set -uo pipefail
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Ask git which tree is being committed, rather than deriving it from this script's own path.
+# `.git/hooks/pre-commit` is a symlink into the MAIN checkout, so `BASH_SOURCE[0]` resolved there
+# no matter which worktree ran `git commit` -- the hook then read `git diff --cached` in the main
+# checkout and verified a tree nobody was committing. With two worktrees open on this repo that is
+# a gate reporting green over the wrong files.
+ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT" || exit 1
 
 fail=0
@@ -16,7 +21,10 @@ step() { printf "\n%b==> %s%b\n" "$YELLOW" "$1" "$NC"; }
 # works on macOS bash 3.2). Each grep over it tolerates an empty list.
 STAGED="$(git diff --cached --name-only --diff-filter=ACM)"
 staged() { printf '%s\n' "$STAGED"; }
-ts_staged() { staged | grep -E '\.(ts|tsx)$' || true; }
+# Source this hook checks. `.mjs`/`.cjs` are included because the largest file in the repo is one
+# (`setup/reticle.mjs`, the thing a new user runs) and it had never been subject to any check below.
+# `apps/` and `bench/` are fixtures and measurement scratch, deliberately outside every gate.
+ts_staged() { staged | grep -E '\.(ts|tsx|mjs|cjs)$' | grep -vE '^(apps|bench)/' || true; }
 
 # ----- 1. SAFETY -----------------------------------------------------------
 step "Safety checks"
@@ -39,25 +47,45 @@ if git diff --cached -U0 2>/dev/null \
 fi
 
 # 1d. no `any`, no console.log, file size, bare eslint-disable
+#
+# These four mirror rules that `eslint.config.mjs` also enforces, and they must agree with it: a hook
+# that is STRICTER than the linter fails a commit that `pnpm lint` calls clean, which teaches everyone
+# to reach for --no-verify. It disagreed on three of the four, and the two text checks matched English
+# prose, so a comment reading "the same path as any other captured body" was reported as an `any` type.
+# Fifteen such reports blocked one commit and not one of them was a real violation.
+code_only() { grep -vE '^[[:space:]]*(\*|//|/\*)' "$1" | sed -E 's;//.*;;'; }
 while IFS= read -r f; do
   [ -z "$f" ] && continue
   [ -f "$f" ] || continue
-  if grep -nE '(:[[:space:]]*any\b|<any>|as any\b|any\[\])' "$f" >/dev/null; then
+  # Comment lines are stripped first, and `any` must sit where a TYPE can end -- before `)`, `,`, `;`,
+  # `=`, `>`, `[`, `|`, `&`, `}` or end of line. `any` is an ordinary English word, so after a colon it
+  # is indistinguishable from an annotation: a doc comment reading "the same path as any other captured
+  # body" and a user-facing string reading "watch: any tab of that app" were both reported as types.
+  if code_only "$f" | grep -qE '(:[[:space:]]*any[[:space:]]*([),;=>|&}[]|$)|<any>|as any[[:space:]]*([),;=>|&}[]|$)|any\[\])'; then
     note "${RED}✗ 'any' type in $f${NC}"; fail=1
   fi
   # Flag console.log CALLS only (followed by `(`), not the substring — a wire constant whose VALUE is
   # the string 'console.log' (e.g. EventType.CONSOLE_LOG) is legitimate and must not trip the gate.
-  if grep -nE '\bconsole\.log[[:space:]]*\(' "$f" >/dev/null; then
-    note "${RED}✗ console.log in $f (use console.warn/error or structured logging)${NC}"; fail=1
-  fi
-  # 600-line cap: a few cohesive units (a stateful class, the package's public-API barrel + bootstrap)
-  # sit naturally above 500 and don't decompose without artificial seams. The cap catches the genuine
-  # cohesion failures — a file sprawling well past it — without forcing those splits.
-  lines=$(wc -l < "$f" | tr -d ' ')
-  if [ "$lines" -gt 600 ]; then
-    note "${RED}✗ $f is $lines lines (> 600 cap) — split it${NC}"; fail=1
-  fi
-  if grep -nE 'eslint-disable(-next-line|-line)?' "$f" | grep -vq -- '--'; then
+  # Skipped for .js/.mjs/.cjs, where `eslint.config.mjs` turns `no-console` off: those are build and
+  # codegen scripts whose stdout IS their interface.
+  case "$f" in
+    *.js|*.mjs|*.cjs) ;;
+    *) if code_only "$f" | grep -qE '\bconsole\.log[[:space:]]*\('; then
+         note "${RED}✗ console.log in $f (use console.warn/error or structured logging)${NC}"; fail=1
+       fi ;;
+  esac
+  # The 1000-line cap, exempting tests exactly as `eslint.config.mjs` does: a fixture catalogue is long
+  # for a different reason than a god file is.
+  case "$f" in
+    *.test.ts|*.test.tsx) ;;
+    *) lines=$(wc -l < "$f" | tr -d ' ')
+       if [ "$lines" -gt 1000 ]; then
+         note "${RED}✗ $f is $lines lines (> 1000 cap) — split it${NC}"; fail=1
+       fi ;;
+  esac
+  # The directive must FOLLOW a comment opener. Matching the bare word caught prose describing the
+  # rule ("an eslint-disable per call site"), which has no `--` and so always failed.
+  if grep -nE '(//|/\*)[[:space:]]*eslint-disable(-next-line|-line)?' "$f" | grep -vq -- '--'; then
     note "${RED}✗ eslint-disable without a '-- reason' in $f${NC}"; fail=1
   fi
 done < <(ts_staged)

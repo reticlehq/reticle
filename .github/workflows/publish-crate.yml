@@ -1,6 +1,6 @@
 name: Publish reticle-tauri to crates.io
 
-# Publishes the `reticle-tauri` crate (packages/tauri) when a GitHub Release is published, or on
+# Publishes the `reticle-tauri` crate (adapters/realm/tauri) when a GitHub Release is published, or on
 # manual dispatch. Mirrors publish.yml: same triggers, same Production environment, same ref guard,
 # same "gate the artifact before shipping it" rule.
 #
@@ -15,6 +15,14 @@ name: Publish reticle-tauri to crates.io
 # exits successfully when the version is already published — matching `pnpm -r publish`, which skips
 # versions already on npm so a partial or failed run can simply be re-triggered.
 
+# Least privilege by default (OpenSSF Scorecard Token-Permissions), the same line `ci.yml` carries
+# and this file did not: "score is 0: no topLevel permission defined". Without it the workflow
+# inherits the repository default, which can be write-all — on a workflow holding a crates.io token.
+# The job below already declares `contents: read` for itself; this is the floor for anything added
+# beside it later, which is the case the rule is actually about.
+permissions:
+  contents: read
+
 on:
   release:
     types: [published]
@@ -28,9 +36,9 @@ jobs:
       contents: read
     defaults:
       run:
-        working-directory: packages/tauri
+        working-directory: adapters/realm/tauri
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Never publish from an arbitrary branch state on a manual dispatch — releases run against
       # their tag; a manual dispatch is only allowed from main. (A `release: published` event is

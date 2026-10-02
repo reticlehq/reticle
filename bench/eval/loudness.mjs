@@ -87,6 +87,10 @@ export const LOUDNESS = {
     grade: Loudness.QUIET,
     why: 'a guard stops guarding. Nothing renders wrong, nothing errors, and submit is enabled for a whitespace-only name',
   },
+  'deploy-never-ships': {
+    grade: Loudness.QUIET,
+    why: 'a value committed differently from the one announced, at the END of a journey: every step before it holds, the "is live" toast and deploy:shipped fire, and only the row read after the wait still says building',
+  },
 };
 
 /** The grade for an injection, or undefined when it has none — never a default. */

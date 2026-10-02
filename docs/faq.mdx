@@ -23,22 +23,16 @@ You get considerably better results by adding `data-testid` attributes and by [e
 </Accordion>
 
 <Accordion title="Does it work without React?">
-  The core is framework-agnostic: DOM, network, routing, console, animations, snapshots and actions are gated against a vanilla TypeScript app.
+  Yes. The core is framework-agnostic: DOM, network, routing, console, animations, snapshots and actions are gated against a vanilla TypeScript app. What varies by framework is how `connect()` gets in and whether you get a source pointer on top.
 
-Support beyond that is uneven, and we would rather say so than let you find out:
-
-| Framework | Status |
-| --- | --- |
-| React, Next.js, Remix, Astro | Supported, each with an app and a CI gate |
-| SvelteKit | Wired end to end. `init` writes the client hook, the plugin stamps `.svelte` source. But **no CI gate**, so unverified rather than supported |
-| Vue | A Pinia store adapter and nothing else. No detection, no `.vue` stamping, no gate |
+[Frameworks](/frameworks) is the one list of what is proven for each, from "driven to a verdict in CI" to "install gated" to "wired, unverified".
 
 </Accordion>
 
 <Accordion title="Can it tell me whether my UI looks good?">
-  No. Reticle verifies behaviour, not aesthetics. Visual correctness and "does this feel right" remain a human job, or a visual-diff tool's.
+  Reticle verifies behaviour, not aesthetics. Visual correctness and "does this feel right" remain a human job, or a visual-diff tool's, and Reticle pairs well with one.
 
-It does read design tokens. [`reticle_inspect`](/tools-inspect) reports whether a colour came from your theme or from someone's clipboard. But that is a consistency check, not taste.
+It does read design tokens. [`reticle_look { action: "element" }`](/tools/inspect) reports whether a colour came from your theme or from someone's clipboard. But that is a consistency check, not taste.
 
 </Accordion>
 
@@ -58,7 +52,7 @@ Measured on the same app: Reticle caught 10 of 10 injected bugs, Playwright MCP 
 </Accordion>
 
 <Accordion title="Can I run several apps or tabs at once?">
-  Yes. Each is a session. Pass `sessionId` to any tool when more than one is connected, and [`reticle_sessions`](/tools-sessions) lists them.
+  Yes. Each is a session. Pass `sessionId` to any tool when more than one is connected, and [`reticle_session { action: "list" }`](/tools/sessions) lists them.
 
 Reticle scopes to your project and prefers the active tab, and it **refuses rather than guesses** when the choice is ambiguous. A refusal you can act on beats a silent pick of the wrong tab.
 
@@ -74,9 +68,9 @@ If you believe an `unknown` is wrong, report it. Reticle's own response says as 
 </Accordion>
 
 <Accordion title="Does my data leave the machine?">
-  Your app's data, no. Reticle is dev-only, localhost-only and offline. Credential-shaped values are redacted before they leave the page. You will see `[REDACTED]` in request bodies without configuring anything.
+  Your app's data, no. Reticle is dev-only and localhost-only, and nothing from the app under test (DOM, network bodies, console, state, source) is sent. Credential-shaped values are redacted before they leave the page. You will see `[REDACTED]` in request bodies without configuring anything.
 
-Anonymous usage telemetry is sent separately and can be turned off with `reticle telemetry disable`.
+Anonymous usage counts are sent by default, separately, and carry nothing from your app. `reticle telemetry disable`, `RETICLE_TELEMETRY=0` or `DO_NOT_TRACK=1` turns them off.
 
   <Card title="Exactly what is collected" icon="chart-line" href="/telemetry">
     The complete list. If it is not on that page, it is not sent.
@@ -85,7 +79,7 @@ Anonymous usage telemetry is sent separately and can be turned off with `reticle
 
 <Accordion title="Does it work with WebGL / react-three-fiber?">
   Partially. Reticle's model of an app is DOM + store + network. A WebGL or react-three-fiber
-  subtree is a single `<canvas>` to `reticle_query` / `reticle_snapshot`: Reticle cannot pick faces
+  subtree is a single `<canvas>` to `reticle_look { action: "find" }` / `reticle_look { action: "page" }`: Reticle cannot pick faces
   or drive the camera inside the scene.
 
 DOM, registered store state, and network **around** the canvas still work, and that is often where the consequential bugs live (import counts, mesh stats, solver results that contradict the UI). `init` prints this limit when it detects react-three-fiber so an adopting team does not discover it only after trying to verify the feature they care about.
@@ -93,19 +87,27 @@ DOM, registered store state, and network **around** the canvas still work, and t
 </Accordion>
 
 <Accordion title="Is Reticle proven to make agents fix more bugs?">
-  No, and we are not going to claim it. A controlled test of fix-rate did **not** show an improvement. The benchmark was confounded in ways we can point at, and we consider the question open.
+  No. A fix-loop test on a small fixture found the same fix rate with and without Reticle, at two model tiers, and the Reticle arm made more tool calls. The fixture was small enough to read whole and the pass check looked for a string rather than behaviour, so the question is open. [Why Reticle](/why-reticle#what-the-fix-rate-test-measured) has the details.
 
-What is measured is detection: 10 of 10 injected regressions caught, with zero false alarms on a known-good control, against 9 and 8 for the alternatives.
+What Reticle is built to improve is the verdict: in the 88-bug head-to-head against a Playwright script it reported one false green to the script's 29, and on a known-good control it raised no false alarms.
 
 </Accordion>
 
 <Accordion title="Why does my agent only see some of Reticle's tools?">
   Because MCP re-sends every advertised tool definition on **every turn**, so the tool list is rent, not a one-time cost. Reticle advertises the verify loop directly and keeps the cold tail one call away.
 
-Nothing is unreachable. `reticle_tools` lists every tool (pass `names: [...]` for full parameters) and `reticle_run({ tool, args })` invokes any of them by name. If you want the whole surface advertised directly, set `RETICLE_ADVERTISE_ALL_TOOLS=1` in the **daemon's** environment and restart it, which costs roughly seven times the per-turn schema tax and is meant for suites that call by name rather than for running agents.
+`reticle_tools` lists every registered tool (pass `names: [...]` for full parameters), and `reticle_run { tool, args }` calls any of them by name, whether or not it is advertised. That hatch is what makes a trimmed surface honest: a tool it does not show is one hop away rather than out of reach. If you want the whole surface advertised directly, set `RETICLE_ADVERTISE_ALL_TOOLS=1` in the **daemon's** environment and restart it, which costs roughly seven times the per-turn schema tax and is meant for suites that call by name rather than for running agents.
 
-  <Card title="The surface, explained" icon="wrench" href="/tools-overview">
+  <Card title="The surface, explained" icon="wrench" href="/tools/overview">
     Which tools are advertised directly, and why each earned its slot.
+  </Card>
+</Accordion>
+
+<Accordion title="Can I use it for security, accessibility, performance or SEO checks?">
+  Yes, for how your own running app behaves: access control by role, calls that must never fire, CSP violations, roles and focus, request counts and long tasks, titles, headings, links and redirects. It pairs with a vulnerability scanner, an accessibility audit tool such as axe and an SEO crawler, which cover what an in-app check does not.
+
+  <Card title="Use cases" icon="list-check" href="/use-cases">
+    What each one checks, with a call you can run.
   </Card>
 </Accordion>
 </AccordionGroup>

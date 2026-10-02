@@ -5,7 +5,7 @@ Look, act, observe, assert. Only the last one counts.
 ## 1. Connect
 
 ```
-reticle_sessions()
+reticle_session({ action: "list" })
 ```
 
 The first live call blocks until the SDK connects, so this is also how you wait after starting a dev server.
@@ -20,12 +20,12 @@ Cheapest orientation first.
 
 ```
 reticle_run({ tool: "reticle_capabilities", sessionId })   // ~1 KB, the app's whole testable surface
-reticle_snapshot({ sessionId, mode: "interactive" })       // just the controls, with refs
+reticle_look({ action: "page", sessionId, mode: "interactive" })       // just the controls, with refs
 ```
 
 `reticle_capabilities` returns every registered testid, every domain signal, the registered stores, and the named flows with their steps. That is the app describing itself in its own vocabulary before you touch it. `reticle_capabilities({ fromDisk: true })` returns the same manifest from the checked-in `.reticle/contract.json` with no browser attached at all.
 
-**Do not open with `reticle_network` or `reticle_console`.** They read a buffer that predates your action, so they answer a question you have not asked yet. Read them after an act, scoped by `since`.
+**Do not open with `reticle_observe { action: "network" }` or `reticle_observe { action: "console" }`.** They read a buffer that predates your action, so they answer a question you have not asked yet. Read them after an act, scoped by `since`.
 
 Two more that nothing else replaces:
 
@@ -84,7 +84,7 @@ A failure names the assertion (`element.value`), what it observed, and what you 
 
 Two things follow.
 
-**Prefer this over reading a value and comparing it yourself.** Fetching the value with `reticle_query` and eyeballing it in your reply produces no verdict, so it does not count as verification however careful the comparison was.
+**Prefer this over reading a value and comparing it yourself.** Fetching the value with `reticle_look { action: "find" }` and eyeballing it in your reply produces no verdict, so it does not count as verification however careful the comparison was.
 
 **A locator is not a conjunction.** An element query dispatches on the first field it recognises, so a field it does not use is not a silent extra condition. `value` and `text` are checked; `label`, `placeholder`, `testid`, `alt`, `component`, and a `by` without a `value` are refused rather than ignored when something else already selected the element. A refusal costs you a turn. A silent pass would cost you the bug.
 
@@ -92,13 +92,13 @@ Two things follow.
 
 The repeat loop is cheap; the expensive part is the first drive of a surface you have not seen. Every extra round trip pays the advertised tool surface again, so a cheap first drive means fewer and bigger hops, not smaller ones.
 
-State the whole journey with `reticle_act_sequence`, then assert its consequence once. Do not act, snapshot, act, snapshot.
+State the whole journey with `reticle_act { steps: [...] }`, then assert its consequence once. Do not act, snapshot, act, snapshot.
 
 ## 6. Read program truth, not the DOM
 
-`reticle_state` returns what the app **believes**. That is the class of bug a screenshot cannot see: a stale TanStack Query cache served as fresh fires no network request, so the network log shows silence and the DOM shows a plausible number. The cache is the only witness.
+`reticle_look { action: "state" }` returns what the app **believes**. That is the class of bug a screenshot cannot see: a stale TanStack Query cache served as fresh fires no network request, so the network log shows silence and the DOM shows a plausible number. The cache is the only witness.
 
-If `reticle_state` comes back empty or `hasCapabilities` is false, no store was registered. Say so; do not treat an empty state read as a clean one. See setup.md for the registration table.
+If `reticle_look { action: "state" }` comes back empty or `hasCapabilities` is false, no store was registered. Say so; do not treat an empty state read as a clean one. See setup.md for the registration table.
 
 ## 7. Check what you did not touch
 

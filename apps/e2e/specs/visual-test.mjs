@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // HONESTY-CRITICAL: prove the visual layer end-to-end — `reticle drive` launches a real browser,
 // reticle_screenshot captures a PNG baseline to .reticle/visual/, and reticle_visual_diff perceptually
 // compares a fresh capture of the same static page (→ matched) and reports baseline-missing honestly.
@@ -23,7 +24,7 @@ const chk = (l, o, d = '') => {
 
 const reticleRoot = path.join(os.tmpdir(), `reticle-visual-${process.pid}`, '.reticle');
 const fsp = createNodeFileSystem();
-const server = await start({ port: 4400, mcp: false });
+const server = await start({ port: TEST_BRIDGE_PORT, mcp: false });
 const provider = new LaunchedRealInputProvider({ driveUrl: 'http://localhost:3100/', headless: true });
 await provider.navigate(); // launches Chromium + goto → page SDK connects to the bridge
 const deps = {

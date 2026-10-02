@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // `reticle drive` while a daemon already owns the bridge port.
 //
 // Reported twice from the field, a week apart: the daemon the agent's own MCP proxy started holds
@@ -19,11 +20,9 @@ import { fileURLToPath } from 'node:url';
 import { freePortSafely } from '../gate-harness.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const CLI = path.join(ROOT, 'packages/server/dist/cli.js');
-// :4400 and not a private port: the apps this battery boots were built to dial 4400, so a lease on
-// any other port would open a tab that can never connect and the spec would be measuring the port
-// mismatch instead of the attach. The runner frees this port between specs.
-const PORT = Number(process.env.DRIVE_ATTACH_PORT ?? '4400');
+const CLI = path.join(ROOT, 'server/dist/command/cli.js');
+// The leased tab must dial the same bridge as the rest of this run's fixtures.
+const PORT = Number(process.env.DRIVE_ATTACH_PORT ?? String(TEST_BRIDGE_PORT));
 const APP = process.env.DRIVE_ATTACH_URL ?? 'http://localhost:3100/';
 
 let pass = 0;
@@ -64,7 +63,11 @@ chk('  and names the session it opened', typeof sessionId === 'string', sessionI
 // The point of attaching rather than binding: the session belongs to the DAEMON, so the tools the
 // agent already has open on that daemon can address it. A drive that opened a browser in its own
 // process would leave /status empty here.
-const status = cli('status', '--port', String(PORT));
+// `--json`, because the question here is structural: WHICH daemon holds the session. `status`
+// answers a person in prose by default and names the session's URL rather than its id, which is the
+// right answer for a reader and the wrong one for this assertion. The id is a machine identifier and
+// lives in the machine form.
+const status = cli('status', '--json', '--port', String(PORT));
 chk(
   'the session lives in the running daemon, where the agent’s tools already are',
   typeof sessionId === 'string' && said(status).includes(sessionId),

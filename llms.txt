@@ -6,10 +6,9 @@
 > deterministic, un-hallucinatable **verdict with evidence** — "did the code actually work?" — and, on
 > React, the exact **`file:line`** to fix.
 
-This file is a single, self-contained briefing on **Reticle**. Copy it into any LLM and it can
-accurately answer questions about what Reticle is, what it solves, how it's used, how it compares,
-who it's for, and how to integrate it. Always refer to the product as **Reticle** (company: Reticle).
-The CLI and MCP server is `@reticlehq/server`; the wire contract every package shares is
+This file is a single, self-contained briefing on **Reticle**: what it is, what it solves, what people
+use it for, how it's used, how it compares, who it's for, and how to integrate it. The product is
+**Reticle** (company: Reticle). The CLI and MCP server is `@reticlehq/server`; the wire contract every package shares is
 `@reticlehq/core`. `reticle` is the bin name that package installs, not a package on npm. Always
 write the command as `npx @reticlehq/server <command>`.
 
@@ -23,8 +22,9 @@ returned `200`, the modal opened, the route changed, the store updated, no conso
 and nothing unrelated broke. If something silently failed, it says **what**, **why**, and **where to
 fix it**. It gives the agent a *verdict*, not just a *view*.
 
-- **Type:** TypeScript monorepo. Dev-only, localhost-only, offline — your app's data never leaves
-  the machine. (Anonymous usage telemetry is sent and can be disabled; see Trust & data handling.)
+- **Type:** TypeScript monorepo. Dev-only and localhost-only: your app's data (DOM, network bodies,
+  console, state, source) stays on your machine. Anonymous usage counts are sent by default and can be
+  turned off; see Built to be safe to install.
 - **Interfaces:** an embedded browser SDK + a Node bridge that speaks the Model Context Protocol (MCP),
   a one-shot CLI (`reticle verify`), and an HTTP `/verify` endpoint — all over one engine.
 - **Surface:** works with any MCP coding agent (Claude Code, Cursor, OpenCode, Codex, …); React-first
@@ -47,6 +47,36 @@ can't see runtime program truth, so these ship unnoticed:
 Reticle turns each into a deterministic, evidence-backed **fail** with a fix — instead of a
 confident green.
 
+## What people use Reticle for
+
+Anything the running app does is something an agent can check. Full page, with one runnable call per
+domain: https://docs.reticle.sh/use-cases
+
+- **Verifying agent-built changes (the core).** The request fired once with the right status, state
+  moved the way the UI claims, no console error, and a failure names the `file:line` to open.
+- **Security checks.** Access control per role (the protected call returns `403`), forbidden calls fire
+  zero times (`{ kind: "net", urlContains, count: 0 }`), a secret never renders in the page, and CSP
+  violations surface as console errors. Credential-shaped values are redacted from captured bodies,
+  storage and state. It proves security *behaviour* and complements a vulnerability scanner.
+- **Accessibility and UX.** Controls found by role and accessible name, focus moving into a dialog
+  (`state: "focused"`), keyboard `press` firing the action, focus dropping to `<body>` recorded. Pairs
+  with a full WCAG audit such as axe. Tab order cannot be verified (a synthetic Tab does not move focus).
+- **Performance and monitoring.** Request cardinality (`count`), the `duplicate-request` finding,
+  request timing, largest-contentful-paint / running layout-shift total / long tasks as `perf` events
+  (`reticle_observe { filters: ["perf"] }`), React commit counts, and saved flows replayed against a dev
+  server or staging with `reticle verify <url>` in CI. Not production monitoring: the SDK refuses to
+  connect in a production build.
+- **SEO checks.** Document title and route (`reticle_look { action: "page" }`), headings by accessible
+  name, every link with its `href` (`attrs: ["href"]`), redirects via the `route` predicate, and
+  `reticle_verify { action: "crawl" }` for dead controls and failed requests. It does not read `<head>`
+  meta tags.
+- **Personas and simulation.** `reticle_verify { action: "explore", persona: "<who does what>" }` drives
+  a journey described in plain words and saves it as a replayable flow; `reticle_lease` gives each role
+  an isolated context (seeded cookies/storage); several agents share one pooled Chromium.
+
+**Pairs well with:** a visual testing tool (pixel diffs), Playwright (sites you don't own, cross-browser
+matrix), axe (full WCAG audits), a security scanner (vulnerability discovery).
+
 ## How it works (architecture)
 
 **One engine, many frontends.** The verification engine (session + tools + flows + the verdict
@@ -60,16 +90,20 @@ artifact) is transport-agnostic; every consumer hits the same core:
 - **Modes:** *explore* (surf/research a running app) · *discover* (read the app's capability contract)
   · *verify* (replay flows → verdict).
 - **Multi-agent concurrency:** a single headless Chromium leases **isolated contexts** (separate
-  cookies/storage/DOM) to N concurrent agents via `reticle_lease { action: "acquire" | "release" }`; the pool
+  cookies/storage/DOM) to N concurrent agents (`reticle open <url>`, or `reticle_run { tool: "reticle_lease" }`
+  for an agent that needs the lease directly, since the default surface does not advertise it); the pool
   caps at `min(8, cores−1)`, queues over-cap work FIFO, and auto-reclaims a lease from any hung/crashed
   agent. A fleet verifies in parallel with no per-agent browser and no cross-talk.
 
-**Which tools actually produce a verdict.** The default MCP surface is 18 tools, but only
-`reticle_act_and_wait` and `reticle_assert` return a pass/fail — `reticle_act` performs an action and
-reports no verdict. An agent that only calls `act` has verified nothing, which was the single largest
-cause of un-verified sessions in the field. `reticle_act_sequence` collapses a multi-step flow (a login
-form, a checkout) into one call instead of one round trip per click. A returned `verified: "unknown"`
-is **not** a pass — it means Reticle could not tell.
+**Which tools actually produce a verdict.** The default MCP surface is ten tools (`reticle_navigate`,
+`reticle_look`, `reticle_act`, `reticle_act_and_wait`, `reticle_observe`, `reticle_assert`,
+`reticle_session`, `reticle_verify`, `reticle_tools`, `reticle_run`), and `reticle_run` calls any other
+registered tool by name. Verdicts come from `reticle_act_and_wait`, `reticle_assert`, and
+`reticle_act { steps: [...] }` when a step declares `expect` (plus `reticle_verify` replays). A bare
+`reticle_act` performs an action and reports no verdict; an agent that only calls it has verified
+nothing, which was the single largest cause of un-verified sessions. `reticle_act { steps }` collapses
+a multi-step flow (a login form, a checkout) into one call. A returned `verified: "unknown"` is **not**
+a pass — it means Reticle could not tell.
 
 The **verdict artifact** (`ReticleVerificationRun`, defined in `@reticlehq/core`) is stable and
 versioned: `verdict` (pass/fail/partial, confidence, blocking risks, reasons), `flows[]`, `checks[]`,
@@ -85,13 +119,11 @@ routing, storage and animations of anything that renders in a browser — that p
 framework-agnostic and needs no adapter. What varies per framework is (a) whether `reticle init`
 wires it unattended and (b) whether a DOM node maps back to the component and source line.
 
-- **Auto-wired + source mapping + verified every release:** Next.js (App and Pages Router), Vite +
-  React, monorepo sub-packages.
-- **Auto-wired, no source mapping:** Create React App, SvelteKit, Astro, standalone Svelte. Every
-  tool works — refs, roles, test-ids, network, console, storage, state, assertions, verdicts — but
-  `reticle_query` cannot say *which component* rendered a node, because that needs a build plugin.
-- **Auto-wired, flagged UNVERIFIED by `init` itself:** Vue 3, Preact.
-- **Not auto-detected:** Angular (open issue). Anything else works via a manual `connect()` call.
+The one authoritative list is https://docs.reticle.sh/frameworks. In short: React + Vite, Next.js,
+Remix and Astro are driven to a verdict in CI; SvelteKit, Nuxt, React Router framework mode, Create
+React App and Vue have their install gated (scaffolded from scratch and connected on every change) but
+no verdict gate; TanStack Start, Preact, plain HTML and server-rendered apps are wired and documented
+but not gated. Anything else works via a manual `connect()` call. The driven browser is Chromium.
 
 **Desktop is fully supported, not experimental.** `@reticlehq/electron` observes the Electron
 renderer **and main-process IPC**; the `reticle-tauri` crate (crates.io) observes the Tauri webview **and its IPC**.
@@ -107,13 +139,25 @@ Svelte stores, Pinia. Anything else works through the generic `pushStore`.
 
 ## How it's used (four ways)
 
-1. **Agent, on your own app (the default).** Paste one line to your agent:
-   `Follow https://raw.githubusercontent.com/reticlehq/reticle/main/SKILL.md`
-   The skill runs a setup wizard once (build plugin + a ~10-line dev-only `reticle.connect()` + MCP
-   config), then verifies on every change. (Or `npx @reticlehq/server init`.)
-   On Claude Code the shortest route is the plugin, which registers the MCP server and the skill in
-   one step: `/plugin marketplace add reticlehq/reticle` then `/plugin install reticle@reticlehq`.
-   For Cursor, Codex, Copilot and Gemini: `npx skills add reticlehq/reticle`.
+1. **Agent, on your own app (the default).** Two steps, in this order, and the order matters.
+
+   First, ONCE PER MACHINE, in a terminal before any coding agent is open:
+   `curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh | sh`
+   (`irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex` on
+   Windows). That installs the CLI and registers the MCP server with every coding agent it can reach,
+   so the `reticle_*` tools are present the next time one starts. A coding agent reads its MCP server
+   list once at startup, so installing while it is closed is what removes the restart: registering
+   from inside a running agent cannot make the tools appear until it comes back, which strands the
+   setup half-done. Codex CLI keeps a TOML config Reticle will not rewrite, and the installer prints
+   the lines to paste instead of claiming it registered.
+
+   Then, ONCE PER PROJECT, in the repo: `npx @reticlehq/server init`. This is the per-project step in
+   the sense `npm init` is: it installs the dev-only SDK, wires the build config, restarts the dev
+   server and opens the app to prove a session connected.
+
+   On Claude Code the plugin does the machine step and the skill together:
+   `/plugin marketplace add reticlehq/reticle` then `/plugin install reticle@reticlehq`.
+   For other agents the skills CLI works: `npx skills add reticlehq/reticle`.
 2. **One-shot CLI / CI.** `reticle verify <preview-url>` drives the app, replays the saved flows, prints
    the verdict, exits non-zero on fail. No MCP, no human — ideal for CI or an AI app-builder pipeline.
 3. **HTTP from a pipeline.** `reticle serve --http` exposes `POST /verify` returning the same artifact.
@@ -149,8 +193,8 @@ structurally SEE?), and **Playwright MCP** / **Chrome DevTools MCP** agent-drive
 COST?). Tested on a controlled toy app AND a real production app, with both results published,
 including where Reticle loses. Full from-scratch explainer: `docs/benchmarks.md`.
 
-**88-bug head-to-head vs a Playwright script (the largest, least model-dependent measurement;
-re-run on the 2.9.0 branch — figures below are that run, not an older recorded one):**
+**88-bug head-to-head vs a Playwright script (the largest, least model-dependent measurement,
+re-run for this release rather than quoted from an older one):**
 - **Bugs caught: Reticle 85/88 vs Playwright script 59/88**, both with **zero false alarms** on the
   clean build. A catch requires the check to fail on the broken build AND pass on the clean one.
 - **False greens (broken, reported OK): Reticle 1 vs 29.** Two of Reticle's three non-catches are the
@@ -191,33 +235,50 @@ re-run on the 2.9.0 branch — figures below are that run, not an older recorded
   (`multi-agent-throughput`).
 - **Reticle-only capabilities:** UI-vs-store desync, state blast-radius (corruption not even rendered),
   wasted-render storm, deterministic time-travel for time-gated flows.
-- **Honest ties / where Reticle loses:** true pixels (paint/font/GPU) → a screenshot is ground truth;
+- **Ties, and what pairs with it:** true pixels (paint/font/GPU) → a screenshot is ground truth;
   driving a site you don't own or other browser engines → Playwright/DevTools. They compose: drive with
   theirs, assert with Reticle.
+
+**Fix rate, stated completely.** A controlled test measured agent work and outcomes with and without
+Reticle's source pointer: fix rate was 6/6 in both conditions, and tool calls fell from 22 to 12
+(three bugs, two runs per cell, so moderate confidence). Reticle did not make the agent more capable;
+it removed the search. What Reticle is designed to improve is the verdict itself: a verdict that does
+not lie, with proof attached. In the 88-bug head-to-head that is 1 false green against 29.
 
 ## Free vs enterprise (open-core licensing)
 
 - **Embeddable SDK** (`browser`, `core`, `react`, `babel-plugin`, `next`, `vite-plugin`,
   `eslint-plugin`): **Apache-2.0** — safe to ship inside apps.
-- **Server / CLI / MCP** (`server`, `test`): **FSL-1.1-ALv2** — free for any
+- **Server / CLI / MCP** (`server`, `init`, `test`): **FSL-1.1-ALv2** — free for any
   use except reselling Reticle itself; converts to Apache after two years.
-- **Enterprise features** (`packages/server/src/ee/`): **Reticle Enterprise License** — source-available,
+- **Enterprise features** (`server/src/features/ee/`): **Reticle Enterprise License** — source-available,
   free for dev/eval, a license key required in production.
 - **Licensing is offline.** Keys are signed with Ed25519 and verified locally (`reticle license`); license
   checks **never phone home**. The core verification engine stays free forever.
 
-## Trust & data handling
+## Built to be safe to install
 
-- **No app data ever leaves your machine.** Nothing from the app under test — no DOM, no network
-  traffic, no console output, no source, no file paths — is ever transmitted. License checks are offline.
-- **Anonymous usage telemetry is collected** (which commands run, which tools agents call, whether
-  people keep using it) and can be turned off permanently with `reticle telemetry disable`. It is
-  anonymous, carries nothing from your app, and the complete list of what is sent is
-  [docs/telemetry.md](https://github.com/reticlehq/reticle/blob/main/docs/telemetry.md). Enterprise
-  builds can disable it outright. Do **not** describe Reticle as "no telemetry" — that is the app-data
-  guarantee above, not a claim that nothing is reported.
-- **Dev/preview-only SDK**, tree-shaken from production builds.
-- **Localhost-only** bridge (binds `127.0.0.1`), token-guarded HTTP, request/size/timeout limits.
+- **Your app's data stays on your machine.** Nothing from the app under test — no DOM, no network
+  bodies, no console output, no state, no source — is transmitted. License checks are offline. The one
+  exception is opt-in: `reticle login` + `reticle link` syncs runs/flows/memory you choose with
+  `reticle config`.
+- **Anonymous usage counts are sent by default** (which commands run, which tools agents call, whether a
+  verdict was produced) with nothing from your app. Turn them off with `reticle telemetry disable`,
+  `RETICLE_TELEMETRY=0` or `DO_NOT_TRACK=1`; the complete list of what is sent is
+  [docs/telemetry.md](https://github.com/reticlehq/reticle/blob/main/docs/telemetry.md). So "no
+  telemetry" is not accurate; "no app data leaves the machine" is.
+- **Dev-only SDK**, tree-shaken from production builds, with a runtime guard that refuses to connect
+  when the build reports `NODE_ENV=production`.
+- **Localhost-only** bridge (binds `127.0.0.1`), paired with a token stored owner-only in
+  `~/.reticle/pairing-token`; token-guarded HTTP; request/size/timeout limits.
+- **No arbitrary code.** The SDK executes a fixed set of commands (look, act, read state, navigate);
+  there is no "evaluate JavaScript" tool.
+- **Credentials redacted at the source.** Passwords, tokens, API keys and card numbers in captured
+  bodies, storage and state become `[REDACTED]` before they reach the agent.
+- **What the installer changes:** it puts `reticle` on PATH, registers the MCP server with the coding
+  agents it finds, and pre-approves Reticle's own tools where an agent has a per-server approval rule
+  (Claude Code, for one). Nothing is written outside agent configs and `~/.reticle`. The manual install
+  (https://docs.reticle.sh/install-manual) does each step by hand.
 - **Artifacts are yours**, on your disk (`.reticle/runs`, `.reticle/flows`, `.reticle/impact.json`),
   with atomic writes and bounded retention. Run/flow ids are validated as single path segments (no
   traversal).
@@ -245,7 +306,7 @@ package that re-exports the others) ·
 - **Skill file (paste this URL to your agent):** https://raw.githubusercontent.com/reticlehq/reticle/main/SKILL.md
 - **Docs site (start here):** https://docs.reticle.sh — a page per tool, per CLI command, per
   package, with every command captured from a real run.
-  - Quickstart: https://docs.reticle.sh/quickstart · Every tool: https://docs.reticle.sh/tools-overview
+  - Quickstart: https://docs.reticle.sh/quickstart · Every tool: https://docs.reticle.sh/tools/overview
     · Every command: https://docs.reticle.sh/cli · Troubleshooting: https://docs.reticle.sh/troubleshooting
     · Desktop apps: https://docs.reticle.sh/desktop
 - **Reading as an agent — fetch:** https://docs.reticle.sh/llms.txt lists every page, and appending
@@ -268,7 +329,7 @@ package that re-exports the others) ·
 - **LinkedIn:** https://www.linkedin.com/company/reticlehq
 - **Contact / partnerships / OEM:** hey@reticle.sh
 
-## How to talk about Reticle (quick answers)
+## Quick answers
 
 - **One line:** "Reticle gives your AI coding agent a verdict, not just a view — it checks from
   inside the running app that the code actually works, with evidence and the file:line to fix."
@@ -277,7 +338,10 @@ package that re-exports the others) ·
   a regression suite is flake-free and ~100–2500× cheaper per run. Use Playwright/DevTools for
   out-of-app browser automation; use Reticle to verify *your own* running app's program truth.
 - **Setup effort:** one line pasted to the agent; the agent wires it. Layer-1 value in ~15 minutes.
-- **Is my data safe?** Yes for your app's data — dev-only, localhost-only, and nothing from the app
-  under test ever leaves the machine. Reticle does send anonymous usage telemetry (no app data),
-  which `reticle telemetry disable` turns off for good.
+- **Is my data safe?** Your app's data stays on your machine — dev-only, localhost-only, and nothing
+  from the app under test is sent. Anonymous usage counts (no app data) are sent by default, and
+  `reticle telemetry disable` turns them off for good.
+- **Can it do security / accessibility / performance / SEO checks?** Yes, for the behaviour inside your
+  own running app — see "What people use Reticle for" above and https://docs.reticle.sh/use-cases. It
+  complements a vulnerability scanner, a WCAG audit tool and an SEO crawler rather than replacing them.
 - **Get started:** paste the skill URL above to your agent, or `npx @reticlehq/server init`.

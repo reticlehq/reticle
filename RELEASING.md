@@ -6,6 +6,8 @@ How versions are decided, cut, and announced. If you're contributing, the only p
 
 Every published `@reticlehq/*` package shares **one version, bumped in lockstep** — `core`, `browser`, and `server` speak the same wire contract, so a user pairing `browser@2.2.1` with `server@2.3.0` is a support question we don't want. One number means "these were tested together".
 
+**`open-verification` is deliberately outside that.** It carries no scope because it is the protocol, not our implementation of it, and its version answers to the specification rather than to this release train — package major tracks `OVP_VERSION`, held there by a test in the package and by the `NOT_LOCKSTEPPED` exclusion in `scripts/set-version.mjs`. It rode the lockstep until 3.1.0 and published an rc claiming two majors it had never taken; it is `1.0.0` now and moves on its own. Bumping the monorepo does not bump it, and `pnpm -r publish` still publishes it because the dependents pin it by exact version at pack time. The package is expected to move to its own repository; when it does, this exclusion and the guard beside it are what make that a relocation rather than a renumbering.
+
 [SemVer](https://semver.org), where the public surface is: the MCP tool names and their input/output shapes, the wire contract in `@reticlehq/core`, the exported API of each package, the `reticle` CLI flags, and the on-disk flow/journal format.
 
 - **patch** — bug fix, a new false-green class caught, docs, perf.
@@ -45,18 +47,47 @@ git switch main && git pull                     # 1. green main, nothing local
 
 pnpm format:check                               # 2. the gates. FIRST: it is the one CI enforces
 pnpm lint && pnpm typecheck && pnpm test:unit   #    that `pnpm lint` does not run
+pnpm test:smoke                                 #    real MCP/browser positive and negative verdicts
 pnpm test:e2e                                   #    required for every release, not just tool changes
+pnpm test:e2e:desktop                           #    Electron and a packaged Tauri binary; the web
+                                                #    battery boots no desktop runtime and is blind to both
+pnpm gate:conformance                           #    this implementation still answers the published
+                                                #    specification correctly, on a browser AND a shell
+pnpm gate:install                               #    ~15 min, and the only thing that can see what a
+                                                #    user runs BEFORE their first session
 pnpm lint:docs                                  #    every documented command still parses; see below
 claude plugin validate ./plugin                 #    the published Claude Code plugin still resolves
 npx skills add reticlehq/reticle -l             #    the published skills are all still discoverable
 
-node scripts/set-version.mjs 2.3.0              # 3. every artifact that carries the number, in lockstep
+node scripts/set-version.mjs 3.2.0              # 3. every artifact that carries the number, in lockstep
 pnpm install --lockfile-only                   #    …then reconcile the lockfile
 ```
 
-**The Rust crate is the twelfth artifact and it is easy to forget**, which is not hypothetical: it sat at `0.1.0` from the day it was written until 2.11.0. `publish-crate.yml` publishes only when the version is ABSENT from crates.io, so every release found `0.1.0` already there, printed "nothing to do" and exited green — a silent no-op reporting success for months, while a desktop capture-path security fix sat undelivered and the docs told users to pin the build that had it. `crate-version-lockstep.test.ts` now fails the fast unit gate if the crate is forgotten, and `set-version.mjs` writes it along with the other 44 sites — so the guard is belt to the script's braces rather than the only thing standing between a release and nothing.
+**Three of those gates were missing from this list until 2026-09-11**, and the two that matter most were the ones this release exists for: `gate:conformance`, which is the only check that this implementation still answers its own published specification, and `test:e2e:desktop`, which is the only one that starts a desktop runtime at all. `gate:install` was absent too, and it is the gate whose absence let a release ship a Next.js install that connected 0% of the time. A release checklist that names five gates while the repository has eight is a checklist that quietly narrows what "all gates green" means. `release-gates-are-listed.test.ts` now fails when a gate is added without a decision about whether a release needs it.
+
+**The Rust crate is the last artifact and it is easy to forget**, which is not hypothetical: it sat at `0.1.0` from the day it was written until 2.11.0. `publish-crate.yml` publishes only when the version is ABSENT from crates.io, so every release found `0.1.0` already there, printed "nothing to do" and exited green — a silent no-op reporting success for months, while a desktop capture-path security fix sat undelivered and the docs told users to pin the build that had it. `crate-version-lockstep.test.ts` now fails the fast unit gate if the crate is forgotten, and `set-version.mjs` writes it along with every other site — so the guard is belt to the script's braces rather than the only thing standing between a release and nothing.
+
+**Counts here are deliberately not written down.** This paragraph used to say "the twelfth artifact" and "the other 44 sites"; by 2026-09-11 it was thirteen npm packages plus the crate, and `--dry-run` reported 52 files. Both numbers were wrong and neither was load-bearing, and a stale count in the document somebody follows while cutting a release is how the crate came to sit at `0.1.0` for months in the first place. The two authorities are `pnpm -r publish --dry-run`, which lists exactly the packages that will be published, and `node scripts/set-version.mjs <version> --dry-run`, which lists exactly the files that will change. Read them rather than a sentence written on some earlier day.
 
 `set-version.mjs` replaced three manual steps, one of which addressed `Cargo.toml` **by line number** (`sed '3s/…'`): adding a comment above `version` would have silently rewritten the wrong line, in the one file whose drift has already shipped. Every rule in the script is anchored on the key instead, it refuses to write a file that does not already hold the current version, and `--dry-run` prints the list first. The four version guards are unchanged and are now the script's negative control: run it, run the gate, and a missed site is named by a test rather than found by a user.
+
+### A package npm has never seen is the one step that cannot be retried
+
+`pnpm -r publish` walks the workspace in dependency order and skips versions already on npm, so a partial run is safe to re-trigger — with one exception, and it is unforgiving.
+
+**A package being published for the FIRST time can be refused**, by a name that is taken, a name npm judges too similar to an existing one, or an org policy. Everything that depends on it has already been rewritten to an EXACT version by the time it is packed (`"open-verification": "3.1.0"`, not `workspace:*`), and npm publishes are immutable. So a refusal in the middle of the run leaves the packages that went out BEFORE it permanently uninstallable, and the fix is a new patch version of every one of them.
+
+`open-verification` was exactly this at 3.1.0: an unscoped name npm had never seen, hard-depended on by `core`, `server` and `engine`.
+
+So, before cutting a release that adds a package:
+
+```bash
+npm view <name>                                 # 404 = nobody owns it. Anything else, STOP.
+cd <package> && npm publish --access public     # publish it ALONE, first
+npm view <name> version                         # it is really there
+```
+
+Then cut the release as normal; `pnpm -r publish` finds that version present and skips it. Ordering inside the run is handled for you — the risk is not the order, it is that the first publish of a new name is the only step in the release with no way back.
 
 ### What the gates already prove about the docs, and what they do not
 
@@ -78,7 +109,7 @@ Two limits worth knowing before trusting a green run.
 
 **None of it checks the deployed site.** The guards read this repository. `docs.reticle.sh` is a separate Mintlify deployment, and it has served pages several commits behind before, so a page being correct here is not evidence that it is correct in front of a user. Check the live page after a release, not only the source.
 
-4. `pnpm changelog:assemble` — splices every `.changes/*.md` entry into `[Unreleased]` and deletes the consumed files (`--dry-run` prints the result and touches nothing). Then move `[Unreleased]` under a `## [2.3.0] — YYYY-MM-DD` heading; leave a fresh empty `[Unreleased]`.
+4. `pnpm changelog:assemble` — splices every `.changes/*.md` entry into `[Unreleased]` and deletes the consumed files (`--dry-run` prints the result and touches nothing). Then move `[Unreleased]` under a `## [3.2.0] — YYYY-MM-DD` heading; leave a fresh empty `[Unreleased]`.
 
    **First, check what landed behind it:**
 
@@ -90,9 +121,12 @@ Two limits worth knowing before trusting a green run.
 
    Not every commit earns an entry — a retuned test budget or a new internal guard changes nothing a user can observe. The question to ask of each is whether somebody deciding whether to upgrade would want to know.
 
-5. `git commit -m "chore(release): v2.3.0"` → PR → merge.
-6. `git tag v2.3.0 && git push --tags`
+5. `git commit -m "chore(release): v3.2.0"` → PR → merge.
+6. `git tag v3.2.0 && git push --tags`
 7. **Publish a GitHub Release** on that tag, body = the changelog section. This is what triggers publishing — [`.github/workflows/publish.yml`](.github/workflows/publish.yml) runs the gates again and `pnpm -r publish`es in dependency order with npm provenance. It skips versions already on npm, so a partial run is safe to re-trigger.
+
+   **Publish through the workflow, not from a laptop.** The workflow supplies `RETICLE_ISSUER_PUBLIC_KEY`, which `server`'s `prepack` stamps into the built artifact; without it the tarball ships in eval mode, where every enterprise licence key activates nothing and neither runtime nor any gate reports it. A local `pnpm -r publish` now REFUSES rather than producing that artifact quietly — `RETICLE_ALLOW_EVAL_PUBLISH=1` is the deliberate override. `--dry-run` is unaffected and stays the authority it is described as above.
+
 8. `npm view @reticlehq/server version` to confirm, then post the release in Discord `#announcements` with the one-line "why you'd care".
 
 If a release goes out broken: publish a patch. Never `npm unpublish` — installs in the wild break.

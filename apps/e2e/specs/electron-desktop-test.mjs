@@ -262,25 +262,30 @@ try {
     JSON.stringify(calls.slice(0, 3)),
   );
 
-  // The app has to have LOADED before "a passing assert still passes" means anything, and this
-  // waits for that rather than assuming it. `reticle_assert` evaluates ONCE by default — documented,
-  // deliberate, and the right default for a verdict — so asserting here raced the 120ms IPC round
-  // trip that fills the status line and lost every time. It failed deterministically rather than
-  // flakily, which is why it read like a product defect: the preceding wait watches the NETWORK, and
-  // the page's own subresources are observed long before the todos come back over IPC.
+  // Wait for the APP to finish loading before asserting on what it loaded.
   //
-  // reticle_wait_for is the tool that spends a budget (4000ms), so it establishes the precondition;
-  // the assert below is then left exactly as it was, evaluating once, which is the behaviour under
-  // test. Waiting for the app is not the same as weakening the check.
-  const ready = await blind.tool('reticle_wait_for', {
-    predicate: { kind: 'text', contains: '2 todos' },
+  // The wait above is for a subresource of the page, which arrives long before the main process
+  // answers `todos:load` -- that handler sleeps 120ms on purpose, to be a real round trip. So the
+  // assert below was running against `status: "loading"` and failing every time, and the failure
+  // looked like a Reticle defect rather than a spec that measured the wrong event. This replaced a
+  // flat sleep once already; the lesson is not "sleep instead" but "wait for the thing you are
+  // about to assert on to be POSSIBLE, not for something else that happens to be quicker".
+  //
+  // Polled through `reticle_query`, deliberately a different tool from the one under test: waiting
+  // on the assert itself would turn the check below into "assert what we already waited to be
+  // true", which passes whatever Reticle does.
+  const loaded = await waitUntil(async () => {
+    const status = await blind.tool('reticle_query', { by: 'testid', value: 'status' });
+    return JSON.stringify(status).includes('loading') ? undefined : status;
   });
-  chk('the un-instrumented app finishes its own IPC load', ready.pass === true);
+  chk('the app finished its IPC load, so there is something to assert on', loaded !== undefined);
 
   const green = await blind.tool('reticle_assert', {
     predicate: { kind: 'text', contains: '2 todos' },
   });
-  chk('a passing assert still passes', green.pass === true);
+  // The payload is printed because this one failed with nothing to go on -- every other check in
+  // this file names its evidence, and the one that did not was the one that needed it.
+  chk('a passing assert still passes', green.pass === true, JSON.stringify(green));
   chk(
     'but it now carries coverage: partial naming the missing preload',
     typeof green.coverage === 'string' && green.coverage.includes('@reticlehq/electron/preload'),

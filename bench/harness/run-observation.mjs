@@ -5,7 +5,8 @@
 import { writeFileSync } from 'node:fs';
 import { makeAdapter, NAV } from './adapters.mjs';
 import { inject, revert, revertAll } from './inject.mjs';
-import { isObservationRetryable } from './observation-retry.mjs';
+import { isObservationRetryable, isRetryableMiss } from './observation-retry.mjs';
+import { RETICLE_URL_PARAM } from '@reticlehq/core';
 import { BENCH_URL } from './ports.mjs';
 
 // Never a port literal: ports.mjs is the one place the app, the daemon and every harness agree, and
@@ -552,10 +553,50 @@ const list = wanted ? SCENARIOS.filter((s) => wanted.includes(s.id)) : SCENARIOS
  * every other fixture knob in this app is (`?reticle-break=`, `?opaque=`, `?nosource=`), and a
  * scenario that asks for none drives the byte-identical URL it drove before.
  */
-function scenarioUrl(sc) {
-  if (sc.ambient === undefined) return URL;
+function scenarioUrl(sc, tool) {
   const u = new globalThis.URL(URL);
-  u.searchParams.set('ambient', sc.ambient);
+  // Nobody is sitting in front of a benchmark arm, and `__reticle_opened` is the one fact the page
+  // needs to know that.
+  //
+  // Without it the SDK mounts its first-run tour, and the tour's scrim takes `pointer-events:auto`
+  // on purpose -- "a tour that lets you click through is not a tour". That is right for a human and
+  // fatal here: every competitor arm drives with NATIVE clicks, so `browser_click` landed on
+  // `<div class="reticle-tour-scrim is-clear">` and timed out on every scenario. The whole
+  // Playwright column came back NOT MEASURED, and the gate refused to call an unmeasured column a
+  // pass -- correctly, because a green that means "we did not look" reads like one that means "we
+  // checked".
+  //
+  // Reticle's own arm never saw it: it dispatches through the SDK rather than through the page, so
+  // the scrim is not in its way. A defect only the competitor column can feel is exactly the shape
+  // this benchmark exists to keep us honest about.
+  //
+  // Set for EVERY arm, not just the ones that broke. The tour is Reticle's onboarding, not part of
+  // what is being measured, and an arm that carries it is not running the same page as one that
+  // does not.
+  u.searchParams.set(RETICLE_URL_PARAM.OPENED, '1');
+  /*
+   * A competitor arm drives the app WITHOUT Reticle's HUD, which is the app it would actually face.
+   *
+   * `bench-app`'s own `main.tsx` has carried `?no-hud` for exactly this since it was written — "the
+   * app a non-Reticle tool (e.g. Playwright) would actually face, with NO HUD overlay to fight. The
+   * bug injector still runs, so the same bug is present" — and `pw-vs-reticle/report.mjs` states the
+   * reason plainly: "bench-app embeds the Reticle SDK, whose HUD blocks Playwright clicks". This
+   * pass never passed it.
+   *
+   * Measured: on `broken-form-validation`, `browser_click` on `deploy-submit` timed out every run.
+   * The button was enabled and 96x36, and `elementFromPoint` over its centre returned
+   * `div.reticle-hud-log-well` inside `div.reticle-chat-panel` — Reticle's own chat panel, z-index 5,
+   * `pointer-events: auto`, sitting on the modal. The HUD root above it is correctly
+   * `pointer-events: none`; the panel inside it is not.
+   *
+   * So the competitor columns were being measured against an obstacle Reticle put on the page. That
+   * is not a fair comparison in either direction: it cost Playwright a cell outright, and every
+   * other competitor cell paid whatever that overlay cost without it ever being named.
+   *
+   * NOT set for the reticle arm, which needs its own SDK to be measured at all.
+   */
+  if (tool !== undefined && tool !== 'reticle') u.searchParams.set('no-hud', '1');
+  if (sc.ambient !== undefined) u.searchParams.set('ambient', sc.ambient);
   return u.toString();
 }
 
@@ -620,7 +661,7 @@ for (const sc of list) {
           let baseline = null;
           // baseline scenarios: clean capture first
           if ('baseline' === sc.mode) {
-            const a0 = makeAdapter(tool, scenarioUrl(sc));
+            const a0 = makeAdapter(tool, scenarioUrl(sc, tool));
             openAdapter = a0;
             await a0.start();
             await a0.login();
@@ -640,7 +681,7 @@ for (const sc of list) {
           }
           if (sc.regression) inject(sc.regression);
           await sleep(400); // let vite HMR apply
-          const a = makeAdapter(tool, scenarioUrl(sc));
+          const a = makeAdapter(tool, scenarioUrl(sc, tool));
           openAdapter = a;
           await a.start();
           await a.login();
@@ -668,6 +709,34 @@ for (const sc of list) {
             _obsTokens: regr.cycle.at(-1)?.tokens_o200k ?? null,
           };
         });
+        // A MISS on a scenario that exists to be caught gets one more attempt, for the same reason
+        // a timeout does: see isRetryableMiss. A real regression misses twice, so this cannot hide
+        // one -- it only stops a single degraded run from being read as a verdict about the product.
+        if (attempt < maxAttempts && isRetryableMiss(sc, row.detected_issue)) {
+          console.log(
+            JSON.stringify({
+              s: sc.id,
+              t: tool,
+              v: 'RETRY-MISS',
+              n: 'expected detect, found none',
+            }),
+          );
+          if (openAdapter !== null) {
+            try {
+              await openAdapter.stop();
+            } catch {
+              /* already gone */
+            }
+          }
+          if (sc.regression) {
+            try {
+              revert(sc.regression);
+            } catch {
+              /* */
+            }
+          }
+          continue;
+        }
         break;
       } catch (e) {
         // Best-effort: an abandoned cell leaves its browser up, and 36 cells of leaked Chrome would

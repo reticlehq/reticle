@@ -1,0 +1,91 @@
+/**
+ * The one telemetry event a human directly causes: they typed a `reticle` command.
+ *
+ * Lives in its own module so `cli.ts` stays a dispatcher, and so the `_daemon` exclusion below sits
+ * next to the explanation of why it exists rather than buried in a startup function.
+ */
+import { TelemetryEventKind } from '@reticlehq/core/telemetry';
+import { DAEMON_INNER_COMMAND, knownCommand } from '@/command/cli/cli-parse.js';
+import { getTelemetry } from './telemetry.js';
+import { drainInstallTrace } from './install-trace.js';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
+/** Where the installer left its breadcrumbs. Same directory the telemetry id and opt-out live in. */
+const RETICLE_STATE_DIR = process.env['RETICLE_STATE_DIR'] ?? join(homedir(), '.reticle');
+import { describeCliFlags } from './argument-shape.js';
+import { resolveInstallSource } from './install-source.js';
+
+/**
+ * Report that a person ran a `reticle` subcommand.
+ *
+ * `_daemon` is EXCLUDED, and that exclusion is the whole point of this function. `reticle mcp` and
+ * `reticle serve` start the daemon by re-running this very binary, so the child re-entered the CLI
+ * entry point and emitted a second event for what a person experienced as ONE action. The old
+ * `invoke` metric was therefore inflated ~2x — and inflated worst on the agent-driven sessions that
+ * matter most, while one-shot commands like `version` counted once. That skewed the RATIO between
+ * commands, not merely the scale, which is the kind of error you cannot correct for after the fact.
+ * The daemon\'s own lifecycle is already reported by `daemon_started` / `daemon_stopped`; a spawned
+ * daemon is not a CLI run.
+ */
+/**
+ * The agent's MCP transport, not a person. `reticle mcp` is what an MCP client runs to open a stdio
+ * connection — nobody types it. Counted, it dominates an event whose whole purpose is human intent,
+ * and the agent attaching is already reported by `mcp_client_connected` with strictly more detail
+ * (reconnect, daemon age, client).
+ *
+ * `serve` is NOT excluded: nothing spawns it on a person's behalf, so typing it is a real act.
+ */
+const AGENT_TRANSPORT_COMMAND = 'mcp';
+
+/** True when this command represents a person typing something. Exported for the gate. */
+export function isHumanCliCommand(command: string): boolean {
+  return command !== AGENT_TRANSPORT_COMMAND && command !== DAEMON_INNER_COMMAND;
+}
+
+export function reportCliRun(argv: readonly string[]): void {
+  const firstArg = argv[0];
+  /*
+   * BEFORE the `_daemon` filter, deliberately.
+   *
+   * The installer's breadcrumbs have to be drained on the very next invocation whatever it is, and
+   * on most machines that is the agent spawning `reticle mcp`, which starts a daemon. Draining
+   * after the filter would leave the file sitting until somebody happened to run a human command —
+   * which on an agent-driven machine may be never.
+   *
+   * Idempotent by deletion rather than by a flag: the file is gone after the first drain, so a
+   * second invocation finds nothing. A flag would have to live somewhere, and somewhere is another
+   * file that can disagree with this one.
+   */
+  drainInstallTrace(RETICLE_STATE_DIR);
+  if (firstArg === DAEMON_INNER_COMMAND) return;
+  const command = knownCommand(firstArg);
+  const telemetry = getTelemetry();
+  // FIRST — before the human-command filter. The install happened whichever command ran, and on most
+  // machines the very first contact is the agent spawning `reticle mcp`, which that filter excludes.
+  // Behind the filter this event never fires at all on an install that only ever runs `reticle mcp`.
+  // `detach` so a quick command (`version`/`gate`) exits immediately instead of waiting out the POST.
+  if (telemetry.firstRun)
+    void telemetry.emit(TelemetryEventKind.RETICLE_INSTALLED, {
+      detach: true,
+      // WHICH published route brought this machine in. Self-declared by the channel, never inferred
+      // — see install-source.ts for which of the four routes can actually carry the marker.
+      installSource: resolveInstallSource(),
+    });
+  if (!isHumanCliCommand(command)) return;
+  void telemetry.emit(TelemetryEventKind.CLI_COMMAND_RUN, {
+    detach: true,
+    // No `actor`: with the agent's transport excluded, this event is human BY DEFINITION, so the
+    // field would be constant here — zero information. `actor` stays where it earns its place:
+    // verification_completed and bug_found, where it splits the agent's own loop from a human or
+    // CI-triggered run.
+    // A fixed, low-cardinality vocabulary WE define, so it is safe to send whole and it is the closest
+    // honest read we have on intent: `verify` and `gate` mean something very different from `status`.
+    // An unrecognized first arg reports as `unknown` rather than being echoed — an echo would put
+    // whatever someone mistyped, including a path or a URL, straight onto the wire.
+    command,
+    // Which flags were PRESENT, by name only — never their values. `--http-token` alone makes that
+    // rule absolute rather than case-by-case; `--drive` and `--storage-state` carry a URL and a path.
+    flags: describeCliFlags(argv),
+  });
+}

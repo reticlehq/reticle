@@ -1,6 +1,6 @@
 # Troubleshooting
 
-## `reticle_sessions` returns an empty list
+## `reticle_session { action: "list" }` returns an empty list
 
 This is the most common failure by a wide margin, and it almost always means **the SDK is not in the page**.
 
@@ -66,6 +66,10 @@ Nothing there means the daemon was never launched (restart the client) or it is 
 
 Only on paths with no build step to inline it (plain static HTML). The bridge rejects a connect without a token and the console says "bridge refused the connection: authentication failed". Pass it in the call; see setup.md.
 
+## The tool list is empty
+
+Some clients, including Cursor Cloud Agent, read the MCP tool list once at startup. The daemon can be up on port 4400 and `reticle_*` is still absent for the whole session. Restart the client when you can. When you cannot, drive the same tools over HTTP: `GET /mcp/sse`, then POST JSON-RPC to the path in the first `endpoint` event. The POST answers `202` with an empty body. The result comes back on the SSE stream. The handshake is in `docs/http-transport.md`.
+
 ## The `reticle_*` tools disappeared mid-session
 
 The MCP proxy lost its stream to the daemon. It reconnects on its own and replays the handshake, so this usually heals without anyone doing anything. `npx @reticlehq/server status` confirms the daemon stayed up.
@@ -127,7 +131,7 @@ RETICLE_CDP_URL=http://localhost:9222 npx @reticlehq/server mcp
 Any of these that cost you more than a minute is worth one call:
 
 ```
-reticle_feedback { kind: "bug" | "gap" | "ambiguity", text: "what happened" }
+reticle_session { action: "feedback", kind: "bug" | "gap" | "ambiguity", text: "what happened" }
 ```
 
 or, if the tools are unreachable:

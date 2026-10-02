@@ -7,7 +7,7 @@ icon: filter
 
 A predicate declares what should be true, as `{ kind, ...fields }`. Reticle has twelve kinds: `signal`, `state`, `net`, `route`, `element`, `text`, `console`, `animation`, `settled`, and the combinators `allOf`, `anyOf` and `not`. Which one you pick decides whether a green means anything.
 
-It is the argument to `until` on [`reticle_act_and_wait`](/tools-act-and-wait), and to `predicate` on [`reticle_assert`](/tools-assert) and [`reticle_wait_for`](/tools-wait-for).
+It is the argument to `until` on [`reticle_act_and_wait`](/tools/act-and-wait), and to `predicate` on [`reticle_assert`](/tools/assert) and [`reticle_assert { action: "wait" }`](/tools/wait-for).
 
 Every predicate is `{ kind, ...fields }`.
 
@@ -35,6 +35,7 @@ Take the advice. `element` and `text` are convenient and weak; `signal`, `state`
 | `element` / `text` | weak      | Something rendered. A mock renders too                 |
 | `animation`        | weak      | An animation ran or finished                           |
 | `settled`          | timing    | The page went quiet. A precondition, not a proof       |
+| `compare`          | its sides | Two readings agree: the stronger side's grade          |
 
 ## The leaves
 
@@ -48,7 +49,17 @@ Take the advice. `element` and `text` are convenient and weak; `signal`, `state`
 }
 ```
 
-`query` accepts `role`, `name`, `text`, `label`, `placeholder`, `testid`, `alt`, `scope`. `state` is one of `visible`, `hidden`, `enabled`, `disabled`, `checked`, `expanded`, `focused`, `present`.
+`query` accepts `role`, `name`, `text`, `label`, `placeholder`, `testid`, `alt`, `value`, `by`, `component`, `source`, `scope`, `self`, `attrs`. `state` is one of `visible`, `hidden`, `enabled`, `disabled`, `checked`, `expanded`, `pressed`, `focused`, `inViewport`, `present`.
+
+`value` is the one worth knowing about. `{ "role": "textbox", "name": "Amount" }` collapses to "a textbox called Amount exists", which passes against an empty field; adding `value` is what makes it an assertion about what the user will actually send. `by` selects the locator strategy explicitly, `component` and `source` match React component identity and source location, and `self` restricts a scoped match to the scope element itself rather than its descendants.
+
+`attrs` is a list of attribute **names**, such as `["href", "data-status"]`. It **projects** those attributes onto each match so you can read them back, and it does not filter. `["data-status=complete"]` is refused: it would otherwise look up an attribute literally named `data-status=complete`, find none, and leave the predicate resting on the locator alone, which is a green for any value the element happens to hold.
+
+To READ the values, call `reticle_look { action: "find" }` with `attrs` and look at the `attrs` map on each match. To ASSERT one: a form field's value goes in the query as `value`, while a state expressed as a data attribute is better asserted as the consequence it stands for, such as a `signal`, a `net` call, or the text the user actually sees.
+
+```json
+{ "kind": "element", "query": { "role": "textbox", "name": "Amount", "value": "274.58" } }
+```
 
 Add `"absent": true` to assert something is **gone**. The predicate for a removal, a dismissed toast, or a regression check.
 
@@ -61,6 +72,26 @@ Add `"absent": true` to assert something is **gone**. The predicate for a remova
 `contains` is the field the published schema declares. `value` and `text` are accepted as aliases and rewritten to it. `absent: true` asserts the text is not present, and `visible: true` requires it to be on screen rather than merely in the DOM.
 
 Use `scope` to restrict the search to a CSS selector or element ref. If Reticle reports that the text is split across the scope's children, retry its generated predicate with `"self": true`; that checks the scope root's combined subtree text while still enforcing `contains`.
+
+`satisfies` asserts a PROPERTY of the rendered text instead of its exact bytes: the same shape and the same properties [`state` accepts](#satisfies-asserting-a-property-instead-of-exact-bytes), applied where the user actually reads the value:
+
+```json
+{
+  "kind": "text",
+  "scope": "[data-testid=\"release-note\"]",
+  "self": true,
+  "satisfies": { "property": "nonEmpty" }
+}
+```
+
+That is the assertion a generated feature can pass twice. `contains` demands bytes a model's output does not repeat, so it either fails on correct output or gets weakened to a word so common it proves nothing; "the box rendered and there is something in it" is the failure the feature actually has.
+
+Two rules, both refusals rather than guesses:
+
+- **One of `contains` or `satisfies` is required.** With neither, the predicate matches any element with any text and cannot fail.
+- **`satisfies` on its own needs a `scope`** (the element whose text is read, with `self: true` for the root's own subtree). Without one the locator is every element on the page, and the property would run against whichever matched first.
+
+Both may be given, and then both must hold. `satisfies` narrows, it never excuses.
 
 ### net
 
@@ -75,6 +106,22 @@ The one that catches the expensive bug:
 ```
 
 **Exactly one.** Double-submit fails at two, and nothing on screen would have told you.
+
+Two fields read the RESPONSE BODY, so a request that succeeded with the wrong number is still a failure:
+
+```json
+{ "kind": "net", "urlContains": "/api/refund", "bodyContains": "\"refunded\":11.87" }
+```
+
+`bodyContains` is a substring test over the response body. It is deliberately not a JSON path: the string above is the whole assertion, it needs no schema, and it behaves the same on JSON, form encoding and plain text.
+
+```json
+{ "kind": "net", "urlContains": "/api/job", "bodyMatches": { "status": "completed" } }
+```
+
+`bodyMatches` is a field match, keyed like `signal.dataMatches` and taking the same operators (`*`, `$gte`, `$contains`). A key can be a dotted path into a wrapped answer: `{ "data.status": "completed" }`, `{ "items.0.id": "a1" }`, `{ "items.length": 3 }`. A nested object written out as a value is compared whole, so use the path to match one field inside it. Reach for it whenever the value is an enum, because that is the case a substring cannot decide: `bodyContains: "completed"` passes on a body carrying `"completedAt": null`, where the needle matched the KEY and the job was still queued. `completed`/`completedAt`, `success`/`successRate`, `sent`/`unsent` all have that shape.
+
+Both require body capture, `reticle({ captureNetworkBodies: true })`, and say so when the body was never recorded rather than reporting an ordinary mismatch.
 
 ### route
 
@@ -115,7 +162,7 @@ A passing route verdict quotes the transition itself:
 { "kind": "signal", "name": "webhook:received", "dataMatches": { "provider": "stripe", "id": "*" } }
 ```
 
-The app emitted a named signal via `reticle.signal()`. `dataMatches` is shallow JSON matching, and `*` means "present, any value".
+The app emitted a named signal via `reticle.signal()`. `dataMatches` matches field by field, a key can be a dotted path (`"order.total"`), and `*` means "present, any value".
 
 `count` works here exactly as it does on `net`:
 
@@ -158,6 +205,72 @@ Omit `equals` entirely to assert presence. A real `$length` check against this f
 
 Note `grade: state` in the `because` line, and that the evidence collapses each row to a size marker rather than returning forty objects.
 
+#### satisfies: asserting a property instead of exact bytes
+
+`equals` cannot express output that is right differently every run. A generated summary, a classification, a computed total: each is correct without being predictable, and an assertion that demands exact bytes either fails on correct output or gets weakened until it proves nothing. `satisfies` is the other half of `state`, and it stays decidable here with no model and no network.
+
+```json
+{ "kind": "state", "store": "app", "path": "summary.text", "satisfies": { "property": "nonEmpty" } }
+```
+
+| `property` | Extra fields | Holds when |
+| --- | --- | --- |
+| `nonEmpty` | none | it produced something at all, the honest floor for any output |
+| `oneOf` | `values` | it landed inside the allowed set, exact membership, no coercion |
+| `withinTolerance` | `of`, `tolerance` | a number near enough to the expected one, inclusive on the bound |
+| `matchesPattern` | `pattern` | its string form matches that regular expression |
+| `type` | `is` | it is that kind of thing; `array` and `object` are distinguished, which `typeof` cannot do |
+
+```json
+{
+  "kind": "allOf",
+  "predicates": [
+    {
+      "kind": "state",
+      "path": "invoice.total",
+      "satisfies": { "property": "withinTolerance", "of": 274.58, "tolerance": 0.01 }
+    },
+    {
+      "kind": "state",
+      "path": "invoice.status",
+      "satisfies": { "property": "oneOf", "values": ["draft", "sent"] }
+    },
+    { "kind": "state", "path": "invoice.lines", "satisfies": { "property": "type", "is": "array" } }
+  ]
+}
+```
+
+`equals` and `satisfies` may both be given, and then both must hold. A failing check always says what it saw, because an assertion that reports only `false` sends you back for another call to find out why, and that round trip is most of what a verdict costs.
+
+#### The relative properties: comparing with before
+
+The properties above read the present tense. Four read the past one. They compare this value with the reading taken **before the action**, which is the window a verdict is already scoped to:
+
+| property    | holds when                  |
+| ----------- | --------------------------- |
+| `unchanged` | the value is the one it was |
+| `changed`   | it is not                   |
+| `increased` | the number went up          |
+| `decreased` | the number went down        |
+
+```json
+{
+  "kind": "state",
+  "path": "cart.total",
+  "satisfies": { "property": "decreased", "by": { "op": "equals", "value": 12 } }
+}
+```
+
+`increased` and `decreased` take an optional `by`, in the protocol's own comparison vocabulary: `op` is `equals`, `at-least` or `at-most`, with an optional `tolerance` on all three. Without `by`, any movement in the right direction holds.
+
+**Give a money assertion a tolerance.** `100 - 88.13` is `11.870000000000005`, so `{ "op": "equals", "value": 11.87 }` misses by a rounding error and reads as the app charging the wrong amount. `"tolerance": 0.01` is the fix; the failure message says so when the miss is that small.
+
+A number is read out of displayed text, so `"$1,234.50"` compares as `1234.5`. A reading with no digits in it is **not** zero. `"sold out"` reports that nothing was subtracted rather than pretending the total fell to nothing.
+
+These only work where a before-reading was taken, which today is `reticle_act_and_wait`. Asked anywhere else they report `unknown` with "no before-reading was taken", never a failure, because nothing was compared and a `false` would blame the app for a reading nobody took. For the same reason a relative property is never `already_true`: `unchanged` is trivially true against a baseline taken a microsecond earlier, so the pre-action check skips it and lets the action decide.
+
+A saved flow cannot keep one yet: `FlowExpect` has no slot for `satisfies`, and rather than record a weaker assertion than the one you made, the converter records none.
+
 A miss quotes the real value back at you:
 
 ```json
@@ -189,7 +302,78 @@ This is the predicate that catches a UI-versus-store desync. A deploy that only 
 { "kind": "settled", "quietMs": 500 }
 ```
 
-Network and DOM idle. This is the deterministic replacement for a fixed sleep, not a proof of anything: combine it with a real consequence rather than asserting it alone. Omitting `until` on [`reticle_act_and_wait`](/tools-act-and-wait) waits for exactly this.
+Network and DOM idle. This is the deterministic replacement for a fixed sleep, not a proof of anything: combine it with a real consequence rather than asserting it alone. Omitting `until` on [`reticle_act_and_wait`](/tools/act-and-wait) waits for exactly this.
+
+### compare
+
+```json
+{
+  "kind": "compare",
+  "left": { "from": "text", "scope": "#refunded" },
+  "right": { "from": "net", "urlContains": "/api/refund", "path": "refunded" },
+  "as": "number"
+}
+```
+
+Two observed values must agree, and you do not have to know either one. Every other predicate checks one reading against a value you write down. That cannot catch a page that echoes the user's input instead of the server's answer unless you already know the right answer: a refund of `1187.01` that the server read as paise answered `{"refunded":11.87}`, the page showed `₹1,187.01`, and every other channel was green.
+
+Each side reads one value from a source:
+
+| `from` | Fields | Reads |
+| --- | --- | --- |
+| `net` | `urlContains`, `path`, `method?`, `body?` | A field of the LAST matching call's body. `body` is `response` (default) or `request` |
+| `signal` | `name`, `path` | A field of the last `name` signal's payload |
+| `state` | `path`, `store?` | A store value, as `state` reads it |
+| `text` | `scope` | The whole text of the element `scope` names (a CSS selector) |
+
+A `path` is a field name or a dotted path into nested data (`data.total`, `items.0.price`), and it must end on a single value, not an object.
+
+`as` is `value` (the default) or `number`:
+
+- `value` is strict equality. The text `"11.87"` and the number `11.87` are different, and the failure says so and suggests `as: "number"`.
+- `number` reads one number from each side. A JSON number is used as it is; a string contributes its only number, so `"Refunded ₹1,187.01"` reads as `1187.01`. A string holding two numbers is unknown rather than guessed at, so scope the text to the one value. Add `tolerance` for a band.
+
+A side nobody could read is never a pass. A call that never happened, a missing element or a missing field fails. A body that was not recorded, was truncated before the field, or had the field redacted is unknown. Comparing a source with itself is refused before it runs, because it would agree on every page.
+
+Two live sides (`text`, `state`) are also read before the action. If they already agreed, the result is `already_true`, because their agreement says nothing about what the action did. Put a `net` or `signal` side in the comparison to tie it to the action.
+
+Comparing request with response on the same call is legitimate, and it is the direct check for a unit mismatch:
+
+```json
+{
+  "kind": "compare",
+  "left": { "from": "net", "urlContains": "/api/refund", "body": "request", "path": "amount" },
+  "right": { "from": "net", "urlContains": "/api/refund", "path": "refunded" },
+  "as": "number"
+}
+```
+
+## Asserting a failure on purpose
+
+A fault-injection test (mock a 500, check the error UI) is asserting that a request **fails**. Say so in the predicate, or the verdict will disagree with you:
+
+```json
+{
+  "kind": "allOf",
+  "predicates": [
+    { "kind": "text", "contains": "Something went wrong" },
+    { "kind": "net", "method": "POST", "urlContains": "/api/save", "status": 503 }
+  ]
+}
+```
+
+Asserting only the error text is not enough, and this is the most common way to get a confusing `verified: "no"`. Reticle watches for "the UI moved forward while a request failed", a swallowed rejection, and one of the most expensive bugs it catches. A fault-injection test looks **exactly** like that bug from the outside: a request failed, the screen changed, nothing said that was the plan.
+
+Naming the failing call is what tells the two apart. A `net` clause with `status` of 400 or more, or `"ok": false`, which is the honest field for IPC, where there is no status code, marks that call as expected to fail, and a failure there stops being a disagreement.
+
+<Warning>
+  Declare it in the top level or inside `allOf`. A declaration inside `anyOf` is deliberately
+  ignored: only one branch of an `anyOf` has to hold, so honouring it would suppress a real
+  contradiction on the strength of a branch that never ran. `not` is ignored for the same reason in
+  reverse: `not { net status: 500 }` asserts the call did *not* fail.
+</Warning>
+
+One case is inferred for you: an `element` or `text` clause naming an access denial ("not authorised", "sign in to continue") marks the auth statuses as expected, because a denial screen is a correct outcome rather than a fault. Everything else has to be named.
 
 ## Combinators
 
@@ -210,7 +394,8 @@ Network and DOM idle. This is the deterministic replacement for a fixed sleep, n
 ```
 
 <Warning>
-A combinator needs its own `kind`, and the children go in `predicates`. A bare
+A combinator needs its own `kind`, and the children go in `predicates`, or in `of`, which is
+accepted as an alias for it. `not` takes a single child in `predicate`, or in `of`. A bare
 `{ "allOf": [ … ] }` does not parse, and neither does `{ "kind": "allOf", "allOf": [ … ] }`.
 
 Reticle refuses the call rather than running half of it. The real refusal names the field, the fix and the consequence: _"predicates: Required; unknown field allOf. Nothing ran, the predicate was not evaluated, so no verdict was produced. allOf accepts: predicates."_ Better to be told than to get a green from an assertion that never executed.
@@ -249,10 +434,10 @@ On a failure each child reports separately too, so you can see which one broke:
 | Field | Where | What it does |
 | --- | --- | --- |
 | `timeout_ms` | `assert`, `wait_for`, `act_and_wait` | Wait up to N ms for it to become true |
-| `since` | `net` and `console` leaves, and the call itself | Only consider events after this cursor |
+| `since` | `net`, `route`, `console`, `animation` and `signal` leaves, and the call itself | Only consider events after this cursor |
 
-The `since` cursor comes from a prior `reticle_act` response. Use it whenever you are asserting something an action was supposed to cause. Without it, an assertion can pass on an event from two clicks ago.
+The `since` cursor comes from a prior `reticle_act` response. Use it whenever you are asserting something an action was supposed to cause. Without it, an assertion can pass on an event from two clicks ago. That applies to every one of the five kinds above, not only to network calls: an unscoped `signal` matches a fire from an earlier action just as readily.
 
-<Card title="Where predicates get used" icon="circle-check" href="/tools-act-and-wait">
+<Card title="Where predicates get used" icon="circle-check" href="/tools/act-and-wait">
   Naming the consequence before the action is the whole point.
 </Card>

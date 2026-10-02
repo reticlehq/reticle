@@ -179,11 +179,33 @@ export const useApp = create<AppState>((set, get) => ({
     emit(Sig.DRAWER_OPENED, { id: drawerId });
   },
   closeDrawer: () => set({ drawerId: null }),
+  /**
+   * Same rule as `setPalette` below, and the same fix.
+   *
+   * This one is worse in one respect: it announces on BOTH edges, so a close that closed nothing
+   * claimed `modal:closed` just as readily as a redundant open claimed `modal:opened`. A dialog that
+   * reports being dismissed when it was never on screen is the kind of thing a flow then asserts on.
+   */
   setNewDeploy: (newDeployOpen) => {
+    if (get().newDeployOpen === newDeployOpen) return;
     set({ newDeployOpen });
     emit(newDeployOpen ? Sig.MODAL_OPENED : Sig.MODAL_CLOSED, { modal: 'new-deploy' });
   },
+  /**
+   * A signal is a claim that something HAPPENED, so a no-op must not make one.
+   *
+   * This fired `palette:opened` on every call with `true`, including the common one where the palette
+   * was already open: clicking ⌘K twice, or once while it was showing. Nothing moved — the store held
+   * the same value, so no state diff, and the palette was already mounted, so no DOM change — and the
+   * app announced success anyway.
+   *
+   * Reticle reports exactly that as `signal-without-consequence`: "the app fired palette:opened, and
+   * nothing else in the window moved, so the only evidence that anything happened is the app saying
+   * so". It was right. Found by crawling this fixture twice in a row, where the first crawl leaves the
+   * palette open and the second one clicks ⌘K into a no-op.
+   */
   setPalette: (paletteOpen) => {
+    if (get().paletteOpen === paletteOpen) return;
     set({ paletteOpen });
     if (paletteOpen) emit(Sig.PALETTE_OPENED, {});
   },

@@ -1,39 +1,30 @@
 import { defineConfig } from 'astro/config';
 import react from '@astrojs/react';
 import { reticle } from '@reticlehq/vite-plugin';
-import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
 
-// The bridge requires the daemon's auto-provisioned pairing token even on localhost. Astro SSRs its own
-// HTML, so the reticle() plugin's index.html connect-injection doesn't fire — the app connects from a
-// bundled client <script> (see src/pages/index.astro). Read the token here (Node-side) and inline it for
-// that connect. Start the daemon before `dev` so the token file exists when this config is read; until
-// then the token is empty and the page reloads once the daemon is up.
-function readPairingToken() {
-  const dir = process.env['RETICLE_PAIRING_TOKEN_DIR'] || join(homedir(), '.reticle');
-  try {
-    return readFileSync(join(dir, 'pairing-token'), 'utf8').trim();
-  } catch {
-    return '';
-  }
-}
-
-// `vite.build.target` is bumped to es2022 so Astro doesn't try to down-level the modern @reticlehq/react
-// bundle to its conservative default browser target (which fails on a destructuring transform).
+// The plugin is wired with `inject: false`. Astro SSRs its own HTML, so the connect-injection
+// never fires; the STAMPING half is what puts data-reticle-source on the JSX.
 //
-// The plugin is still wired into Astro's vite, with `inject: false`. Only the injection half is
-// inapplicable here; the STAMPING half is what puts data-reticle-source on the JSX, and without it a
-// verdict comes back with a component name and no file:line — the pointer an agent uses to go straight
-// to the code. Dropping the plugin wholesale because one of its two jobs did not apply cost this
-// example the other one.
+// The pairing token is NOT inlined here. On Astro 7.2+ `vite.define` does not reach the client
+// pipeline (#1008): the served page script still contains the literal `__RETICLE_TOKEN__`, so
+// `connect()` omits the token and the bridge refuses the dial. The page reads the file in frontmatter
+// instead and puts it on a <meta> a processed <script> queries, which also means a token written
+// AFTER the dev server started is picked up on the next request rather than needing a restart.
+//
+// `vite.build.target` is bumped to es2022 so Astro doesn't try to down-level the modern
+// @reticlehq/react bundle to its conservative default browser target.
+// `optimizeDeps.include` warms the SDK before the first page load (no esbuildOptions: Vite 8 /
+// Rolldown dropped that key).
 export default defineConfig({
   integrations: [react()],
   server: { port: 5304 },
   vite: {
+    /* reticle-vite-owning */
     build: { target: 'es2022' },
-    optimizeDeps: { esbuildOptions: { target: 'es2022' } },
-    define: { __RETICLE_TOKEN__: JSON.stringify(readPairingToken()) },
+    optimizeDeps: { include: ['@reticlehq/react'] },
     plugins: [reticle({ inject: false })],
+    // strictPort so a squatter on 5304 is a hard, named startup error instead of a silent move to the
+    // next free port, which serves the e2e harness someone else's 404 and looks like a broken connect.
+    server: { strictPort: true, watch: { ignored: [/(^|[\\/])\.reticle([\\/]|$)/] } },
   },
 });

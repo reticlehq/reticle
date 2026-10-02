@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // Drive the real Next.js app (apps/next-smoke, :3100) with Reticle to de-risk Next.
 import { chromium } from 'playwright';
 import { start, TOOLS, BaselineStore, RecordingStore } from '@reticlehq/server';
@@ -22,7 +23,7 @@ const refOf = async (by, value, name) => {
   throw new Error(`not found ${by}=${value}`);
 };
 
-const server = await start({ port: 4400, mcp: false });
+const server = await start({ port: TEST_BRIDGE_PORT, mcp: false });
 deps.sessions = server.bridge.sessions;
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage();
@@ -106,6 +107,39 @@ const countAfter =
     return now !== countBefore ? now : undefined;
   })) ?? (await T('reticle_query', { by: 'testid', value: 'note-count' })).elements?.[0]?.text;
 check('and the write really landed on the server', countBefore !== countAfter, `${String(countBefore)} -> ${String(countAfter)}`);
+
+console.log('\nTASK E — TWO distinct Server Actions fired by ONE user action');
+// #1121: both actions POST to /actions, their bodies are multipart and carry no fingerprint, so
+// method plus URL cannot tell them apart — the `Next-Action` header is the discriminator. Without
+// it, this window came back `unknown` behind a duplicate write that never happened.
+const both = await T('reticle_act', { ref: await refOf('testid', 'save-both'), action: 'click' });
+const bothCalls =
+  (await waitUntil(async () => {
+    const calls = (await T('reticle_network', { since: both.since })).calls ?? [];
+    return calls.filter((c) => c.method === 'POST' && String(c.url).includes('/actions')).length >= 2
+      ? calls
+      : undefined;
+  })) ?? (await T('reticle_network', { since: both.since })).calls ?? [];
+const bothPosts = bothCalls.filter((c) => c.method === 'POST' && String(c.url).includes('/actions'));
+check(
+  'both Server Actions are observed as writes to the same URL',
+  bothPosts.length >= 2,
+  bothPosts
+    .map((c) => `${c.method} ${String(c.url).replace(/^https?:\/\/[^/]+/, '')} -> ${c.status}`)
+    .join(', ') || 'no calls seen',
+);
+// The consequence, not the observation: the second action's tag must render, and the verdict for
+// the window must not be dragged to `unknown` by a duplicate the two actions never made.
+const tagged = await T('reticle_assert', {
+  timeout_ms: 10000,
+  predicate: { kind: 'text', contains: 'tag from one click', visible: true },
+});
+check(
+  'two distinct actions in one click are not reported as a duplicate write',
+  // `yes` only: `no-fault` would also pass `!== 'unknown'`, and it means nothing was proved.
+  tagged.pass === true && tagged.verified === 'yes',
+  `pass=${String(tagged.pass)} verified=${String(tagged.verified)} ${tagged.failureReason ?? ''}`,
+);
 
 console.log(`\n${fail === 0 ? '✅ NEXT.JS SMOKE TEST PASSED' : `❌ ${fail} FAILED`}  (${pass} passed, ${fail} failed)`);
 await browser.close();

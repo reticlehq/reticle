@@ -1,0 +1,970 @@
+import { z } from 'zod';
+import { CROSS_STEP_ADDRESS } from './flow-step-tool.js';
+import { READABLE_FLOW_VERSIONS } from './flow-constants.js';
+import { StepEffect } from './step-effect.js';
+import { ActionType } from '@/wire/constants/constants.js';
+import type { Contradiction } from '@/verdict/findings.js';
+import { CONSEQUENCE_KINDS, PRESENCE_GRADED } from '@/verdict/consequence.js';
+import { PredicateKind } from '@/verdict/consequence.js';
+import { PredicateSchema, type Predicate } from '@/verdict/predicate.js';
+import { sessionBoundField, sessionRefRefusal } from '@/verdict/predicate-tree.js';
+import { isConsequenceSource } from '@/verdict/compare-source.js';
+import { FlowExpectSchema, flowExpectToPredicate } from './flow-expect-flat.js';
+
+// The older flat shape and its reader live together; both are re-exported so the one public name
+// for "a flow's types" still answers for them.
+export { FlowExpectSchema, type FlowExpect } from './flow-expect-flat.js';
+// Its own directory's constants, which this file had been reaching through `wire/constants/constants.js`
+// to get -- the clearest cost of that re-export: artifacts went out to wire to fetch a symbol
+// that had been sitting next door the whole time.
+import {
+  AnchorKind,
+  type DriftReason,
+  FlowStatus,
+  type HealStatus,
+  type ReplayStatus,
+  type SuiteIsolation,
+} from './flow-constants.js';
+
+/**
+ * The MCP tool names that can appear as a recorded flow step's `tool`. These are the ONLY tool names
+ * that cross the wire into a persisted flow file — the browser recorder stamps them, the server replays
+ * them, and FlowStep types them — so they live in core, the wire contract. The full agent-facing tool
+ * surface stays server-side (ReticleTool); ReticleTool references THESE for the flow-persisted three, so
+ * there is one source of truth and a rename cannot silently desync the recorder from the replayer (a
+ * tool rename once killed four e2e specs — this closes the browser/server half of that drift).
+ */
+
+/**
+ * A semantic anchor: how a step re-finds its element/event at replay
+ * time. Never a volatile eXX ref. testid/role+name bind a DOM element; signal binds an event.
+ */
+export const FlowAnchorSchema = z.discriminatedUnion('kind', [
+  // `source` is provenance, not part of how the step re-finds its element — the testid does that.
+  // It rides along so a failure can say which file to open; optional, so existing flow files parse
+  // unchanged and FLOW_FILE_VERSION does not move.
+  z.object({
+    kind: z.literal(AnchorKind.TESTID),
+    value: z.string().min(1),
+    source: z
+      .object({ file: z.string(), line: z.number(), column: z.number().optional() })
+      .optional(),
+  }),
+  z.object({
+    kind: z.literal(AnchorKind.ROLE),
+    role: z.string().min(1),
+    name: z.string().optional(),
+  }),
+  z.object({ kind: z.literal(AnchorKind.SIGNAL), name: z.string().min(1) }),
+  // Auto-anchor: re-find an element by component identity / source location when it has no testid.
+  // component or source carries the durable signal; role/name are disambiguating extras.
+  z.object({
+    kind: z.literal(AnchorKind.COMPONENT),
+    component: z.string().optional(),
+    source: z
+      .object({ file: z.string(), line: z.number(), column: z.number().optional() })
+      .optional(),
+    role: z.string().optional(),
+    name: z.string().optional(),
+  }),
+]);
+export type FlowAnchor = z.infer<typeof FlowAnchorSchema>;
+
+// A ref is one session's address. Kept, it resolves to nothing on replay — and a scope that
+// resolves to nothing SATISFIES an absence check — so the step could never go red. Refused here,
+// on the one schema both the save path and the load path go through.
+export const FlowPredicateSchema = PredicateSchema.superRefine((predicate, ctx) => {
+  const field = sessionBoundField(predicate);
+  if (field === undefined) return;
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: sessionRefRefusal(field),
+  });
+});
+
+/**
+ * Accept either shape and always yield a PREDICATE.
+ *
+ * A v2 file stores the predicate directly; a v1 file stores the flat struct, and is lifted on read
+ * by `flowExpectToPredicate`. The discriminator is `kind`, which every predicate has and no flat
+ * expect ever did, so the two can never be confused for one another.
+ *
+ * Nothing is written back. A v1 file read this way stays a v1 file on disk, which is what makes the
+ * migration safe for flows that are committed to a shared repository.
+ */
+/*
+ * A union rather than a preprocess, and the difference is STRICTNESS.
+ *
+ * A preprocess lifts the raw object before anything validates it, so a v1 expect carrying a
+ * misspelled key would have had that key quietly ignored by the lift and the rest accepted — a
+ * stripped field and a green, which is the precise shape this schema was made strict to prevent.
+ *
+ * Running `FlowExpectSchema` as a branch keeps it: a v2 predicate matches the first branch on its
+ * `kind`, a well-formed v1 expect matches the second and is lifted by the transform, and an expect
+ * that is neither is refused by both. Strictness at every level of the v1 shape survives unchanged.
+ */
+const ExpectSchema = z.union([
+  FlowPredicateSchema,
+  FlowExpectSchema.transform((expect) => flowExpectToPredicate(expect)),
+]);
+
+/**
+ * The same lift over a LIST, dropping the entries that assert nothing.
+ *
+ * `requires` and `ensures` are arrays, and an element that lifts to `undefined` is a claim with no
+ * content. Keeping a hole in the list would make `canFollow` compare against nothing and report a
+ * precondition as met by a claim that says nothing at all.
+ */
+const ExpectListSchema = z
+  .array(ExpectSchema)
+  .transform((list) => list.filter((one): one is Predicate => one !== undefined));
+
+/** One step of a flow: an anchored action (+ optional expectation). */
+export interface FlowStep {
+  /** FlowStepTool.ACT | FlowStepTool.ACT_SEQUENCE (core, shared with ReticleTool). */
+  tool: string;
+  anchor: FlowAnchor;
+  /**
+   * Where this step's element came from in the source, when the build stamped one.
+   *
+   * Beside the anchor rather than inside it: only a COMPONENT anchor had room for a source, and a
+   * recorder prefers a TESTID anchor whenever the element has one — so the commonest flow could
+   * never say which files it covers, and a scoped re-verify had nothing to scope by.
+   */
+  source?: { file: string; line?: number };
+  /**
+   * A name for this step that survives editing the flow.
+   *
+   * Resume targets a step, and targeting it by POSITION breaks the moment one is inserted, removed
+   * or healed: "resume from 4" quietly means a different step than it did yesterday, and nothing
+   * reports the shift. Optional and back-compat — a flow without ids resumes by index exactly as
+   * before, which is every flow recorded before this shipped.
+   */
+  id?: string;
+  /** What this step does to the subject; absent means unknown. See StepEffect. */
+  effect?: StepEffect;
+  action?: ActionType;
+  args?: Record<string, unknown>;
+  expect?: Predicate;
+  /** true when the anchor is best-effort (no testid was resolvable at record time). NOT dropped. */
+  degraded?: boolean;
+  /**
+   * This anchor was rebound by `heal`, not chosen by whoever recorded the flow.
+   *
+   * Without it a machine-rebound locator is byte-indistinguishable from a recorded one, and three
+   * things go with that. A replay passing on a healed anchor is a weaker claim than one passing on
+   * a recorded anchor, because the rebind picked the element and the consequence only checked that
+   * SOMETHING still satisfied it. A step healed twice is a locator that is not stable, which was
+   * unknowable because the second heal overwrote the first. And a human reading the diff saw a
+   * changed testid with nothing saying who changed it.
+   *
+   * `from` is the ORIGINAL recorded anchor and survives later heals: the intermediate names were
+   * never chosen by anybody, so keeping the newest would throw away the only one a reader wants.
+   *
+   * Optional and additive — a flow without it reads exactly as before, which is every flow recorded
+   * until now, and no file version moves for it.
+   */
+  healed?: { from: string; at: number };
+  /**
+   * How long THIS step's `expect` waits for its consequence, in ms. Overrides the flow's
+   * `signalTimeoutMs` and the built-in FLOW_SIGNAL_TIMEOUT_MS default.
+   *
+   * Not a tuning knob: the wait decides whether an honest flow can ever be green. A step whose
+   * consequence legitimately takes longer than the default drifts with `signal_not_observed` and
+   * reports a working feature as NO LONGER TRUE, and the only other ways to green it are to weaken
+   * or delete the assertion, which the rules forbid.
+   *
+   * Replay must not be stricter than the tool that recorded the step: `act_and_wait` takes a
+   * `timeout_ms`, so a recorded step can carry one too.
+   */
+  timeoutMs?: number;
+  /** The page (route pathname) this step ran on, recorded at capture. */
+  page?: string;
+  /** The page it ended on once its action settled — where it led, when that differs from `page`. */
+  endPage?: string;
+  /** sub-steps for an act_sequence, each independently anchored. */
+  steps?: FlowStep[];
+  /**
+   * The flow this step runs, when `tool` is `FlowStepTool.INVOKE`.
+   *
+   * A name, not a copy. Inlining the sub-journey's steps here would produce a composite-shaped file
+   * with none of composition's value — the drift would still report a position in the outer flow,
+   * repair would still have to happen in every copy, and the sub-journey could not be reused.
+   */
+  invoke?: string;
+}
+
+const baseFlowStep = z.object({
+  tool: z.string(),
+  anchor: FlowAnchorSchema,
+  /**
+   * Where this step's element came from in the source, when the build stamped one.
+   *
+   * Written alongside the anchor rather than inside it, because only a COMPONENT anchor had a place
+   * for a source and a recorder prefers a TESTID anchor whenever the element has one — so the most
+   * common flow in existence could never say which files it covers. `reticle_verify { action:
+   * "change" }` then had nothing to scope by and re-ran the whole suite: measured on this repo's own
+   * flows, 52 replayed, 46 seconds, verdict `unknown`.
+   *
+   * Optional, and its absence still means unknown provenance, which is still re-run by default. The
+   * fail-safe must keep failing safe.
+   */
+  source: z
+    .object({ file: z.string().min(1), line: z.number().int().positive().optional() })
+    .optional(),
+  /**
+   * A name for this step that survives editing the flow.
+   *
+   * Resume targets a step, and targeting it by POSITION breaks the moment one is inserted, removed
+   * or healed: "resume from 4" quietly means a different step than it did yesterday and nothing
+   * reports the shift. Optional and back-compat — a flow without ids resumes by index exactly as
+   * before, which is every flow recorded before this shipped.
+   */
+  id: z.string().min(1).optional(),
+  /** What this step does to the subject; absent means unknown. See StepEffect. */
+  effect: z.nativeEnum(StepEffect).optional(),
+  /** Rebound by `heal` rather than recorded — see FlowStep.healed. */
+  healed: z.object({ from: z.string(), at: z.number() }).optional(),
+  action: z.nativeEnum(ActionType).optional(),
+  args: z.record(z.unknown()).optional(),
+  expect: ExpectSchema.optional(),
+  degraded: z.boolean().optional(),
+  timeoutMs: z.number().int().positive().optional(),
+  invoke: z.string().min(1).optional(),
+  /** See FlowStep.page / FlowStep.endPage. */
+  page: z.string().optional(),
+  endPage: z.string().optional(),
+});
+
+export const FlowStepSchema: z.ZodType<FlowStep> = baseFlowStep.extend({
+  steps: z.lazy(() => z.array(FlowStepSchema).optional()),
+}) as z.ZodType<FlowStep>;
+
+/**
+ * A legible-drift record returned when an anchor misses at replay.
+ * The "whose fault is it" payload: what was expected, why it's gone, and the closest surviving
+ * anchor (a concrete fix suggestion). Never a bare "command failed".
+ */
+export interface Drift {
+  /** Named reason kind (testid not found / signal not observed). */
+  reasonKind: DriftReason;
+  /** Human sentence, e.g. `testid "chat-send" not found`. */
+  reason: string;
+  /** The missed anchor value (the testid string, or the signal name). */
+  anchor: string;
+  /** Closest present testid via the live near-miss; null only when the page has no testids (or signal drift). */
+  nearest: string | null;
+  /**
+   * True when two or more present testids tie at the minimum edit distance, so `nearest` is an
+   * arbitrary pick. An ambiguous drift is NEVER auto-healed (a wrong rebind ships a bug green) —
+   * it is surfaced for a human/agent to choose. Absent ⇒ unambiguous.
+   */
+  ambiguous?: boolean;
+}
+
+/** The per-step result of re-resolving + running one anchored step. */
+/**
+ * Counts of what an app did inside one window, and the width of that window.
+ *
+ * Defined HERE because it is part of the artifact contract, and consumed by the engine that computes
+ * it: core is the bottom of the graph and everything depends on it, so one shape lives in one place
+ * rather than being declared twice and drifting.
+ */
+export interface ReactionSummary {
+  total: number;
+  network: number;
+  domAdded: number;
+  domRemoved: number;
+  domChanged: number;
+  routeChanges: number;
+  consoleErrors: number;
+  animations: number;
+  signals: number;
+}
+
+/**
+ * The digest's counts: `total` always, every other counter only when it is NON-ZERO.
+ *
+ * This shape is sparse and the full `ReactionSummary` above is not, on purpose. The digest ships on
+ * every step of every replay and on every `act_and_wait`; the full report does not. Across a
+ * four-step replay 25 of 36 counters are typically zero — every step spelling out `"network":0,
+ * "domAdded":0,"routeChanges":0,…` whether or not anything moved.
+ *
+ * Omitting a zero is a ROUTE cut and never an evidence cut: an absent counter IS zero, so the reader
+ * answers the same question from the same facts. Read one as `summary.network ?? 0`.
+ *
+ * `total` is unconditional because "the window was empty" is itself evidence, and a summary with no
+ * keys could not be told apart from one that was never computed.
+ */
+export type ReactionSummaryDigest = { total: number } & Partial<Omit<ReactionSummary, 'total'>>;
+
+/** The lean reaction report: the window and the counts, without the per-event timeline. */
+export interface ReactionDigest {
+  window_ms: number;
+  summary: ReactionSummaryDigest;
+}
+
+export interface FlowStepResult {
+  /** 0-based index of this step in the flow. */
+  step: number;
+  /**
+   * The tool the step runs — FlowStepTool.ACT | ACT_SEQUENCE | the synthetic success oracle.
+   *
+   * OMITTED when it is `ACT`, which 137/137 steps in this repo's corpus are. Read it as
+   * `tool ?? FlowStepTool.ACT`. Every reader only ever asks "is this the success oracle?", and a
+   * missing field is correctly falsy against that — so the coercion fails in the safe direction.
+   */
+  tool?: string;
+  /** The testid/signal value the step is bound to (the re-resolved anchor). */
+  anchor: string;
+  /**
+   * Where this step lives, rendered, when the flow is a COMPOSITE — `signin#0 (invoked from full#1)`.
+   *
+   * Absent for a flat flow, where `step` is already the whole answer and an address on every row
+   * would be noise on every replay of every flow.
+   */
+  at?: string;
+  /**
+   * The route (pathname) the page was on when this step ran — the "which page" of the journey.
+   * Additive/optional: present when a route is observable, absent in route-less contexts (e.g. a
+   * fake session with no route events). Lets a replay result read as a page-by-page journey.
+   */
+  page?: string;
+  /** The route the page was on once this step settled — where it led. Absent when unobservable. */
+  endPage?: string;
+  /**
+   * A compact summary of the observable CONSEQUENCE in the window right after this step ran — the
+   * "what happened" of the journey: a route change, a domain signal (e.g. a modal opening), a
+   * network call, or console errors. Additive/optional and intentionally terse (token-cheap). It
+   * captures what had landed by the time the action settled, so a very-late async effect may not
+   * appear; the asserted consequence (expect/success) is the authoritative pass/fail signal.
+   */
+  consequence?: string;
+  /**
+   * Wall-clock ms this step took (dispatch → post-settle), from the session's injected elapsed clock.
+   * Additive/optional: absent in contexts with no advancing clock. Feeds per-step run-to-run perf diffs.
+   */
+  durationMs?: number;
+  /**
+   * The event-stream span this step's evidence lives in — its drill address.
+   *
+   * `reticle_observe` already accepts `{ since, until }` and returns "the span between action A and
+   * B", so a step that carries its own window is a step somebody can ask about afterwards without
+   * re-driving anything. Without it the evidence is captured and has no address, which is why a
+   * deterministic run could say a step passed and nothing more.
+   *
+   * Bounded on BOTH ends deliberately. A `since` alone returns everything from that point to now, so
+   * on a long flow step two's window would include steps three through twenty-five — and an agent
+   * reading it would attribute the whole tail to one click.
+   *
+   * Additive/optional, and omitted rather than zero-width where no clock advanced: a `{since: 0,
+   * until: 0}` would read as "this step caused nothing" instead of "nothing here measures time".
+   */
+  window?: { since: number; until: number };
+  /**
+   * What the app DID in that window, as counts.
+   *
+   * `consequence` beside it is a sentence — readable, and not scannable. Twenty-five sentences is
+   * prose somebody has to read; twenty-five of these is a surface they can skim for the one row that
+   * is unlike the others, which is the whole difference between a step ledger and a wall of text.
+   *
+   * The counts, not the events. The per-event timeline is the expensive half and it is one
+   * `reticle_observe { since, until }` away using this step's own `window`, so the cheap form is
+   * what travels and the full form is addressable rather than sent.
+   */
+  digest?: ReactionDigest;
+  /**
+   * Channels that DISAGREE about what this step did — reported even when the step passed.
+   *
+   * That is the entire point. A step whose anchor resolved, whose action fired and whose declared
+   * consequence held, while a request in the same window failed, is the false green this product
+   * exists to catch. The detectors run independently of the assertion, so a green step with an entry
+   * here is a finding, not a contradiction in terms.
+   *
+   * Omitted when the channels agree, never an empty array: a field that is always present teaches a
+   * reader to skim past it, and the whole value here is that its presence is the signal.
+   */
+  contradictions?: Contradiction[];
+  ok: boolean;
+  error?: string;
+  note?: string;
+  /** Present iff this step stopped on an anchor miss. */
+  drift?: Drift;
+  /**
+   * A confidence-scored nearest-match rebind for this drifted step (additive,
+   * optional). Set only for a confident testid drift.
+   */
+  proposal?: HealProposal;
+}
+
+/**
+ * The autonomy decision envelope — the feedback a human used to give, made machine-actionable. From
+ * a replay result it states the verdict, what changed, WHERE in the source to look (file:line, from a
+ * component anchor), a suggested fix, and the single next action — so a coding agent decides its next
+ * move without a human in the loop. Terse by design (token-cheap).
+ */
+export interface ReplayDecision {
+  /** pass = intent held; drift = a locator/anchor missed; fail = an action or the success oracle failed. */
+  verdict: 'pass' | 'drift' | 'fail';
+  /** One-line human/agent summary of the outcome. */
+  summary: string;
+  /** What regressed (the drift reason or failure), when not a pass. */
+  whatChanged?: string;
+  /** Where to look — `file:line` from the failing step's source anchor, or the page route. */
+  whereInSource?: string;
+  /** A concrete fix hint (e.g. rebind to the nearest surviving anchor). */
+  suggestedFix?: string;
+  /** The single next action the agent should take. */
+  nextAction: string;
+}
+
+/**
+ * One flow's line in a suite verdict — pass counts as a name; a failure carries the actionable
+ * decision fields so the agent can fix it without re-querying.
+ */
+export interface SuiteFlowResult {
+  flow: string;
+  /**
+   * The flow never ran: its file failed to load, or its leased context never came up. Nothing was
+   * learned about the app, so this row is not a regression — it is Reticle reporting its own failure
+   * in the same array as the app's. Measured: one sweep emitted 8 `flow-regression` bug_found events
+   * off rows like these, from a suite where no flow ever executed.
+   */
+  couldNotRun?: boolean;
+  verdict: 'pass' | 'drift' | 'fail';
+  whatChanged?: string;
+  whereInSource?: string;
+  nextAction?: string;
+}
+
+/**
+ * The consolidated verdict of replaying EVERY known flow — the autonomous loop's "did I break
+ * anything, and what do I fix" answer in one deterministic call. Passing flows are counted; only
+ * failures carry detail (token-cheap). `status` is fail if any flow drifted or errored.
+ */
+export interface SuiteVerdict {
+  /**
+   * `unverifiable` means the suite contained flows that CANNOT FAIL, so "pass" would be a lie.
+   *
+   * A recorded flow with no steps, or one that asserts no observable consequence, replays green no
+   * matter what the app does. Reporting `pass` for it is a false green in the exact feature sold as
+   * the regression suite — measured: a flow saved as `{steps: [], intent: "..."}`, which `flow_save`
+   * had ALREADY graded assertion-free with a warning, came back "all 1 flow pass".
+   */
+  status: 'pass' | 'fail' | 'unverifiable';
+  total: number;
+  passed: number;
+  failed: number;
+  summary: string;
+  /** Only the failing flows, with their decision (verdict, what changed, where, next action). */
+  failures: SuiteFlowResult[];
+  /**
+   * How the flows were kept apart — see `SuiteIsolation`.
+   *
+   * Absent when the caller did not say. Present, it is the difference between two counts that can
+   * be compared and two that cannot: a shared-session pass may be inherited from an earlier flow.
+   */
+  isolation?: SuiteIsolation;
+  /**
+   * Flows that replayed without error but assert nothing, so their green means nothing. Counted
+   * apart from `passed` — a number that includes them is not a count of anything verified.
+   */
+  unverifiable?: { flow: string; reason: string }[];
+  /**
+   * Flows that have both passed AND failed on UNCHANGED code — intermittent, not regressions.
+   *
+   * A flake and a regression demand opposite responses: one is chased, the other is quarantined. The
+   * ledger that answers this already existed and was written only by the CLI, so an agent replaying a
+   * suite a hundred times could never learn which of its failures were noise. Omitted entirely when
+   * the ledger has not seen enough runs to say.
+   */
+  flaky?: string[];
+  /**
+   * How much of what the suite DROVE it actually proved.
+   *
+   * `unverifiable` above catches a flow that asserts nothing at all. It cannot catch the commoner
+   * shape: a flow of twelve steps where three declare a consequence and nine do not. That flow
+   * passes, counts in `passed`, and nine of its steps would have replayed green whether or not the
+   * feature worked.
+   *
+   * So the count travels. Sixty-three steps driven and forty-seven declared is not "75% verified" —
+   * it is verified for forty-seven and silent about sixteen, and only a number carrying both lets a
+   * reader tell those apart. Omitted when no flow file was available to count, because an invented
+   * zero would read as "nothing was declared" rather than "nothing was counted".
+   */
+  coverage?: { steps: number; declared: number };
+  /**
+   * Known routes this run never opened.
+   *
+   * `coverage` above counts what the suite DROVE. Neither it nor anything else here notices a route
+   * no flow goes near — so a selection replaying two of eleven flows reports "all 2 flows pass",
+   * which is true and says nothing about the nine routes that were not looked at.
+   *
+   * Known means seen before, not enumerated from the app: every flow the project holds contributes
+   * the route it starts on. Omitted when the caller knows of no routes, because "0 unreached" from
+   * an empty ledger reads as a clean sweep rather than as an unanswered question.
+   */
+  unreached?: string[];
+  /**
+   * Every channel disagreement the suite saw, including on flows that PASSED.
+   *
+   * The step-level rule already says a contradiction is reported regardless of `ok`, for the reason
+   * that a step whose action fired and whose consequence held, while a request in the same window
+   * failed, is the false green this product exists to catch. The suite verdict returned only its
+   * failures, so on a green run every one of those was computed, attached to a step, and discarded
+   * at exactly the moment somebody would have read it — a nightly run of a hundred steps reporting
+   * "all 12 flows pass".
+   *
+   * Carrying them also means a green suite is not reported as `pass`: see `status`.
+   */
+  contradictions?: SuiteContradiction[];
+}
+
+/** A step-level contradiction, addressed back to the flow and step that produced it. */
+export interface SuiteContradiction extends Contradiction {
+  flow: string;
+  /** Index within the flow, so the reader can drill straight to the step's own window. */
+  step: number;
+}
+
+/** The reticle_flow_replay envelope. */
+export interface FlowReplayResult {
+  name: string;
+  status: ReplayStatus;
+
+  /**
+   * Contradictions that span steps — found by re-running the detectors over the WHOLE replay, minus
+   * everything a step already reported.
+   *
+   * A step's window closes when the step ends, so a request fired at step 2 and still unanswered at
+   * step 5 sits outside every per-step window. It is exactly the shape a long journey produces and
+   * exactly the shape a per-step view cannot see.
+   *
+   * Omitted when the whole-span pass adds nothing over the steps.
+   */
+  crossStep?: Contradiction[];
+  /**
+   * What this flow knows after this run — every defect it has seen, and whether it is still open.
+   *
+   * Written back to the flow file so the next replay starts from it. This is how a flow gets
+   * stricter without anybody writing a new assertion: a defect observed, then observed GONE, becomes
+   * something the app can never quietly reacquire.
+   */
+  learned?: {
+    kind: string;
+    step: number;
+    state: 'open' | 'guarded';
+    cleanRuns?: number | undefined;
+  }[];
+  /** Defects this run saw disappear. The app got better here. */
+  promoted?: string[];
+  /** Guarded defects that came back. The app got worse here, and only this flow would have known. */
+  regressed?: string[];
+
+  steps: FlowStepResult[];
+  /** The machine-actionable decision derived from this replay (autonomy layer). */
+  decision?: ReplayDecision;
+  /** Set when status === 'error' (load failure or resolved action failure). */
+  error?: { code: string; message: string };
+  /**
+   * Set when the replay STOPPED before the end of the flow.
+   *
+   * Replay breaks on the first failing step, so a flow that halted returns fewer step results than
+   * it has steps — and nothing said so. A caller reading a two-step flow's one result saw a step
+   * that was simply absent, which was reported as replay "silently skipping" an action. It does not
+   * skip; it stops, and now it says where and how much it never reached. Omitted entirely when every
+   * step ran, so a clean pass carries no extra bytes.
+   */
+  halted?: { atStep: number; notAttempted: number };
+  /**
+   * Set on an `ok` replay whose flow cannot fail: it asserts no observable consequence, or has no
+   * steps at all. The replay genuinely completed, so the status stays `ok` — but a bare `ok` read
+   * as proof the feature works is exactly the false confidence `flow-risk.ts` argues against, and
+   * `reticle_flow_verify` already refuses to count these as passes. This carries the same reason,
+   * from the same function, to the single-flow caller who would otherwise never see it.
+   */
+  unverifiable?: { reason: string };
+  /**
+   * The confident rebind proposals aggregated across drifted steps (additive,
+   * optional — present only when at least one drifted step has a confident nearest match).
+   */
+  proposals?: HealProposal[];
+  /**
+   * The push-default deviation report over this replay's route segments (ranked deviations vs the learned
+   * envelope, or a fall-back note below N=3 runs). Additive; present when segments were observed.
+   */
+  deviation?: unknown;
+  /**
+   * What the project already knows about this flow, fetched from shared memory on the agent's
+   * behalf.
+   *
+   * Present only when the project is linked, memory sync is on, and the team has actually captured
+   * something about this flow. Shared memory an agent has to remember to consult is never consulted,
+   * so the verification asks on the agent's behalf — the difference between memory the platform
+   * stores and memory the platform uses.
+   *
+   * Deliberately additive and deliberately small: a verdict whose own result has been pushed below
+   * a wall of statements is a worse verdict.
+   */
+  knows?: { statement: string; status: string }[];
+}
+
+/**
+ * The on-disk flow file: diffable, git-tracked, anchor-resolved.
+ * The optional `dynamic` field (both `dynamic` + `success` are optional, so a
+ * file with neither still parses — back-compat is locked by a test).
+ */
+export const FlowFileSchema = z.object({
+  /**
+   * The format this file was WRITTEN in. Both readable versions are accepted, because a v1 file is
+   * lifted rather than refused — see READABLE_FLOW_VERSIONS.
+   */
+  version: z
+    .number()
+    .int()
+    .refine((v) => READABLE_FLOW_VERSIONS.has(v)),
+  name: z.string(),
+  /**
+   * The business goal this flow exists to verify, one line (e.g. "ship a deploy to production").
+   * Optional + back-compat (a flow without it still parses). Set via an `intent` annotation. The
+   * point of "intent + outcome oracle": a flow that declares an intent should also assert an
+   * observable business OUTCOME (a consequence success-state), or it claims to verify a goal it
+   * cannot actually check — flow-classify flags that gap.
+   */
+  intent: z.string().optional(),
+  /**
+   * The intent-ledger row this flow discharges — the id in `.reticle/intent.json`.
+   *
+   * `intent` above is the prose a recorder captured; this is the LINK to the ledger that already
+   * models declared → bound → proved and records which verdict discharged what. Without it there
+   * would be two ways to say what a change is for, which is the defect this codebase keeps paying
+   * for: a flow's goal and an intent's statement would drift apart with nothing to reconcile them.
+   *
+   * Set at save time from the flow's own prose, or written by hand to point a flow at an intent
+   * declared earlier via `reticle_intent` — a flow can prove something somebody else declared.
+   * Optional + back-compat: a flow without it replays exactly as before, and the on-disk version
+   * stays FLOW_FILE_VERSION 1.
+   */
+  intentId: z.string().optional(),
+  /**
+   * The project the flow was recorded against (the connecting session's HELLO `projectId`), stamped at
+   * save time. Scopes a flow to its app so a shared daemon's HUD lists only the current project's flows
+   * instead of every project that ever saved to that daemon. Optional + back-compat: a flow with no
+   * projectId is treated as global (visible everywhere), so pre-existing files parse and still show.
+   */
+  projectId: z.string().optional(),
+  /**
+   * The route (pathname) the journey started on, captured at record time. Replay navigates here
+   * before step 1 so a flow whose first anchor lives on another page doesn't drift on step 1 ("a
+   * step no longer matches") just because replay began on the wrong page. Optional + back-compat: a
+   * flow without it (or recorded before this shipped) replays from the current page as before, and
+   * the on-disk version stays FLOW_FILE_VERSION 1.
+   */
+  startPath: z.string().optional(),
+  // FUTURE: fixtures/preconditions — schema slot reserved, unpopulated this cut. The recorder
+  // never writes it and no fixture runner exists.
+  fixture: z.string().optional(),
+  /**
+   * What must already be true for this flow to mean anything, and what it leaves true.
+   *
+   * These are the two halves of composition. Replaying flows back to back only works when the state
+   * one leaves is the state the next expects, and nothing said so — so a suite either got lucky or
+   * produced a failure that looked like a regression and was a missing precondition. `requires` lets
+   * a replay report THAT instead: not met is `unknown` (nothing ran, nothing proved), never a
+   * failure, which is the same honesty rule an uncovered change already follows.
+   *
+   * `ensures` is the other side, and is what makes A-then-B checkable before either runs.
+   *
+   * Both optional and both absent from every flow recorded before this shipped, where absent means
+   * what it has always meant: replay from wherever the app already is, and let the steps speak.
+   * Same predicate shape as a step's `expect`, deliberately — a precondition is just a consequence
+   * somebody else's flow was responsible for.
+   */
+  requires: ExpectListSchema.optional(),
+  ensures: ExpectListSchema.optional(),
+  /**
+   * Who made this flow, stamped at save: the agent that drove it (its MCP client name) and the
+   * person signed in to the cloud key on that machine. Either is absent when it was not known —
+   * never guessed.
+   */
+  author: z
+    .object({ agent: z.string().min(1).optional(), person: z.string().min(1).optional() })
+    .optional(),
+  /** From the injected clock (ms) — deterministic in tests, byte-stable on disk. */
+  createdAt: z.number(),
+  steps: z.array(FlowStepSchema),
+  /**
+   * How long every step of this flow waits for its declared consequence, in ms. A step's own
+   * `timeoutMs` wins over it; absent both, FLOW_SIGNAL_TIMEOUT_MS applies.
+   *
+   * Flow-level because slowness is usually a property of the APP, not of one control — a remote
+   * database, a model-backed endpoint, a cold container. Optional + back-compat: a flow without it
+   * replays exactly as before and the on-disk version stays FLOW_FILE_VERSION 1.
+   */
+  signalTimeoutMs: z.number().int().positive().optional(),
+  success: ExpectSchema.optional(),
+  /**
+   * Anchors whose CONTENT must not be asserted (e.g. LLM output). Replay asserts
+   * presence, not words. Compiled from a `mark-dynamic` annotation.
+   */
+  dynamic: z.array(FlowAnchorSchema).optional(),
+  /**
+   * Free-form labels a suite selects on — `smoke`, `checkout`, `slow`.
+   *
+   * Not an enum: the useful sets are the ones a team invents for its own product, and a closed list
+   * would mean shipping somebody's release process in the contract. Optional and back-compat, so
+   * every flow already on disk keeps loading.
+   */
+  labels: z.array(z.string().min(1)).optional(),
+  /**
+   * Flows that must run, and pass, before this one.
+   *
+   * By name, because a name is what every other caller addresses a flow by. A prerequisite that is
+   * not in the run is reported rather than assumed satisfied: a checkout flow whose login was
+   * filtered out by a label would otherwise fail for a reason that has nothing to do with checkout.
+   */
+  needs: z.array(z.string().min(1)).optional(),
+  /** Whether a suite runs this flow. Absent means active — see FlowStatus. */
+  status: z.enum([FlowStatus.ACTIVE, FlowStatus.QUARANTINED, FlowStatus.DRAFT]).optional(),
+  /**
+   * What this flow has learned from being run, as opposed to what a person wrote on it.
+   *
+   * Distinct from `knownBugs` above, and the difference is who is speaking. A known bug is a HUMAN
+   * excusing a failing assertion with a traceable id. A learned guard is the SYSTEM remembering a
+   * defect it observed: `open` while the defect is still happening, `guarded` once a run stopped
+   * showing it. Only the second state asserts anything, and its return is a regression.
+   *
+   * The ordering is the safety property. A contradiction seen right now is not an assertion:
+   * asserting "must not happen" while it happens makes the flow red over an accepted defect and
+   * trains the reader to ignore it, and asserting "does happen" pins broken behaviour so the check
+   * fires when somebody FIXES the bug. See `learnFromRun` in the engine for the rule.
+   */
+  learned: z
+    .array(
+      z.object({
+        kind: z.string().min(1),
+        /*
+         * A step index, or -1 for a finding that belongs to no single step.
+         *
+         * `-1` is the address this repo already uses for a whole-span contradiction (see
+         * `decision.ts`), and declaring it `nonnegative()` here made the first cross-step finding
+         * write a flow file that could never be loaded again — the narrow writer does not validate,
+         * `load` does, and the flow was lost permanently to what read like user corruption.
+         *
+         * `min(-1)` rather than any negative number: -1 is a convention somebody chose, and -2 is a
+         * bug arriving as data.
+         */
+        step: z.number().int().min(CROSS_STEP_ADDRESS),
+        state: z.enum(['open', 'guarded']),
+        /** Consecutive runs that did not show it. One quiet run is not a fix; see learnFromRun. */
+        cleanRuns: z.number().int().nonnegative().optional(),
+      }),
+    )
+    .optional(),
+  /**
+   * Bugs this flow is KNOWN to expose, so a red for a filed reason is not re-investigated.
+   *
+   * Without it, a suite red for a known cause is indistinguishable from one that just broke: either
+   * somebody re-opens an investigation into a bug already filed, or the flow gets quarantined and
+   * stops watching the rest of the journey it covers.
+   *
+   * `assertions` is what keeps the note honest. A known-bug note is a claim about code, and code
+   * moves; a note recorded against assertions that have since changed explains away a NEW failure
+   * with an OLD excuse, which is a false green in a different costume. `staleKnownBugs` reports any
+   * note whose assertions no longer all exist, rather than trusting it.
+   */
+  knownBugs: z
+    .array(
+      z.object({
+        /** Required: an unattributable excuse is worse than none. An issue key, a URL, anything traceable. */
+        id: z.string().min(1),
+        summary: z.string().min(1),
+        /** Which of this flow's assertions the note was written against. */
+        assertions: z.array(z.string()),
+      }),
+    )
+    .optional(),
+  /**
+   * Why this flow is out of the suite, who owns getting it back, and since when.
+   *
+   * Required in full when quarantined, because a quarantine without a reason and an owner is a
+   * silent skip wearing a label: it removes the failure from the verdict AND the reason to ever fix
+   * it. `until` is the optional half — a date somebody has to look at it again.
+   */
+  quarantine: z
+    .object({
+      reason: z.string().min(1),
+      since: z.string().min(1),
+      owner: z.string().min(1),
+      until: z.string().optional(),
+    })
+    .optional(),
+});
+export type FlowFile = z.infer<typeof FlowFileSchema>;
+
+/**
+ * Is this flow excluded from the suite's verdict?
+ *
+ * Quarantine takes a flow out of the verdict, which is a real power, and the failure mode is not a
+ * malformed file — it is a flow quietly leaving the suite and nobody noticing it went. So this fails
+ * TOWARD running it: an incomplete quarantine is treated as no quarantine at all. Whoever wants a
+ * flow out has to say why, who owns getting it back, and since when.
+ *
+ * A function rather than a schema rule, deliberately. The conditional form would be a zod
+ * `.refine()` — this package has none, and a refinement does not survive into the generated JSON
+ * Schema, so an implementation reading the contract from `schema/` would never see it. "Does this
+ * file parse" and "is this flow actually excluded" are two different questions; this is the second.
+ *
+ * The status is the decision and the block is the paperwork: a leftover note without the status
+ * excludes nothing, so tidying a flow back into the suite is one field.
+ */
+export function isQuarantined(flow: Pick<FlowFile, 'status' | 'quarantine'>): boolean {
+  if (flow.status !== FlowStatus.QUARANTINED) return false;
+  const q = flow.quarantine;
+  return (
+    q !== undefined &&
+    'string' === typeof q.reason &&
+    q.reason.length > 0 &&
+    'string' === typeof q.owner &&
+    q.owner.length > 0 &&
+    'string' === typeof q.since &&
+    q.since.length > 0
+  );
+}
+
+/**
+ * The in-page → wire payload for a finished human recording. The browser
+ * compiles captured interactions into a FlowFile-shaped object (resolving semantic anchors at
+ * capture time) and emits it as ONE EventType.FLOW_RECORDED event; the server persists it.
+ */
+export const RecordedFlowSchema = z.object({
+  name: z.string(),
+  flow: FlowFileSchema,
+});
+
+/** A concrete, confidence-scored rebind proposed for one drifted step. */
+export interface HealProposal {
+  /** 0-based step index in the flow. */
+  step: number;
+  /** Old (missing) testid anchor value. */
+  from: string;
+  /** Proposed nearest present testid. */
+  to: string;
+  /** Normalized (0,1]; >= HEAL_CONFIDENCE_MIN to be applicable. */
+  confidence: number;
+}
+
+/** One applied rebind (a HealProposal that was written to disk). */
+export interface HealChange {
+  step: number;
+  from: string;
+  to: string;
+}
+
+/** The reticle_flow_heal envelope. */
+export interface FlowHealResult {
+  name: string;
+  status: HealStatus;
+  /** Whether the file was rewritten (true only when status === 'healed'). */
+  applied: boolean;
+  /** Confident, applicable rebinds. With apply:false these are the dry-run diff. */
+  proposals: HealProposal[];
+  /** Anchors actually written (empty unless applied). */
+  changed: HealChange[];
+  /** Human one-liner for the agent (e.g. "nothing to heal", floor explanation). */
+  message: string;
+  error?: { code: string; message: string };
+}
+
+export type RecordedFlow = z.infer<typeof RecordedFlowSchema>;
+
+/**
+ * One replayable-flow chip on the in-page HUD.
+ *
+ * Crosses the bridge: the daemon builds these from the flows on disk and pushes them with
+ * `ReticleCommand.FLOWS`; the presenter panel renders one ▶ button per chip. It lived as two
+ * identical `interface FlowChip` declarations — one in the server, one in the browser — which is the
+ * shape that drifts silently, because nothing links the two and no test crosses the boundary.
+ *
+ * A TYPE and not a zod schema on purpose: the browser SDK ships into the user's app and carries no
+ * zod, so the receiving side narrows the raw wire value by hand. The type is what both ends agree on.
+ */
+export interface FlowChip {
+  name: string;
+  /** The testid the flow's first step anchors to, when it has one — the panel hides chips that cannot start on the current page. */
+  start?: string;
+}
+
+/** One recorded known bug, as stored on a flow. */
+export type KnownBug = NonNullable<FlowFile['knownBugs']>[number];
+
+/**
+ * Known-bug notes that can no longer be believed.
+ *
+ * A note survives only while EVERY assertion it named is still present. Anything else — an
+ * assertion renamed, removed, or a note that named none at all — is reported rather than trusted,
+ * because the failure mode is silent and expensive: an old excuse attached to a new break reads as
+ * "known issue" and nobody looks again.
+ *
+ * A note naming no assertions is always stale. It cannot be checked against anything, so it cannot
+ * be relied on to explain anything.
+ */
+export function staleKnownBugs(
+  notes: readonly KnownBug[] | undefined,
+  currentAssertions: readonly string[],
+): KnownBug[] {
+  const present = new Set(currentAssertions);
+  return (notes ?? []).filter(
+    (note) => 0 === note.assertions.length || !note.assertions.every((a) => present.has(a)),
+  );
+}
+
+/** True when a FlowExpect asserts at least one consequence (any of the ConsequenceKind fields set). */
+export function flowExpectHasConsequence(expect: Predicate | undefined): boolean {
+  return expectClauses(expect).some(
+    (clause) =>
+      CONSEQUENCE_KINDS.has(clause.kind) ||
+      (PredicateKind.COMPARE === clause.kind &&
+        (isConsequenceSource(clause.left) || isConsequenceSource(clause.right))),
+  );
+}
+
+/**
+ * True when a FlowExpect checks ONLY presence — an element, rendered text or a route, no consequence.
+ *
+ * `text` counts here for the same reason `element` does, and leaving it out would have been the
+ * expensive kind of omission: a text-only expect would have been neither a consequence nor
+ * presence-only, so it would have fallen through to `assertion-free` — a permanent green wearing
+ * an assertion (#811). `route` is here for exactly that reason and no other.
+ *
+ * PRESENCE rather than a consequence, deliberately, and it is a close call. A route change is
+ * observed on a channel rather than queried from the DOM, so unlike `element` it cannot be
+ * satisfied by a healed-but-wrong locator — an argument for promoting it. What settles it the other
+ * way is that the LIVE verdict already grades a route assertion `presence`, and one of the two had
+ * to follow the other: a flow that graded stronger on disk than the drive that produced it would be
+ * a saved claim nobody made. Promoting both is a defensible change and a separate one, with the
+ * false-green question — can the route commit while the view does not render? — answered first.
+ */
+export function flowExpectIsPresenceOnly(expect: Predicate | undefined): boolean {
+  if (expect === undefined || flowExpectHasConsequence(expect)) return false;
+  // A `compare` reaching here reads text on both sides, which is two readings of the same DOM.
+  return expectClauses(expect).some(
+    (clause) => PRESENCE_GRADED.has(clause.kind) || PredicateKind.COMPARE === clause.kind,
+  );
+}
+
+/**
+ * Every clause an expectation contains, composites flattened.
+ *
+ * The grade is about what a flow CAN prove, so a consequence buried in an `allOf` counts exactly as
+ * much as one at the top. It got simpler with the tree rather than harder: the old version had to
+ * probe a struct for one key per kind, and a predicate carries its kind on itself.
+ */
+function expectClauses(expect: Predicate | undefined): readonly Predicate[] {
+  if (expect === undefined) return [];
+  if (PredicateKind.ALL_OF === expect.kind || PredicateKind.ANY_OF === expect.kind) {
+    return expect.predicates.flatMap(expectClauses);
+  }
+  if (PredicateKind.NOT === expect.kind) return expectClauses(expect.predicate);
+  return [expect];
+}

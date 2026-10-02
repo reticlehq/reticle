@@ -9,7 +9,7 @@ Four regressions from `bench/harness/inject.mjs` were injected into `apps/bench-
 - **A — symptom only.** The bug report as a user would write it.
 - **B — symptom + pointer.** The identical report, plus the source location — and specifically the location Reticle **actually emits**, which is where the acted ELEMENT is rendered, not where the bug is caused. Those are the same file for two of these bugs and different for the third, and getting that distinction wrong is the single easiest way to inflate this experiment (see below).
 
-Both conditions had the same repo, the same tools, and the same instructions. Agents were forbidden from using `git` in any form (`diff`, `log`, `show`, `stash`, `checkout`), because the injected change is visible in the working tree and would have handed over the answer. Correctness is the deterministic oracle in `bench/fix-loop/verify.mjs` — the injected signature is gone — not the agent's own claim. Tool-call counts are the harness's own `tool_uses`, not the agents' self-reports.
+Both conditions had the same repo, the same tools, and the same instructions. Agents were forbidden from using `git` in any form (`diff`, `log`, `show`, `stash`, `checkout`), because the injected change is visible in the working tree and would have handed over the answer. Correctness is a deterministic string oracle — the injected signature is gone — not the agent's own claim. Tool-call counts are the harness's own `tool_uses`, not the agents' self-reports.
 
 ## Result (3 bugs x 2 conditions x 2 runs = 12 agent runs)
 
@@ -51,7 +51,7 @@ Re-run with the pointer Reticle genuinely emits: **6 tool calls instead of 4**, 
 - **Two runs per cell, not more.** Enough to show the spread is small (±2 on a total of ~22), not enough for a confidence interval. Per-bug numbers move by 1–2 calls between runs.
 - **The fixture was assumed to flatter condition A. I tried to prove that and could not.**
 
-  The reasoning was: `apps/bench-app` is 34 files, so a symptom greps to the right file in 4 calls; on a real codebase the baseline would be far higher and the gap would widen. Two attempts to build that harder case, both in `packages/server/src` — **337 files, 42k lines, ten times the fixture**:
+  The reasoning was: `apps/bench-app` is 34 files, so a symptom greps to the right file in 4 calls; on a real codebase the baseline would be far higher and the gap would widen. Two attempts to build that harder case, both in `server/src` — **337 files, 42k lines, ten times the fixture**:
 
   | attempt | condition A tool calls |
   | --- | --: |

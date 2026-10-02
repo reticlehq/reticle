@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // Brute force against the THIRD channel: the agent ↔ tool boundary, one tool at a time.
 //
 // `tool-surface-sweep-test` calls every shipped tool the way an agent calls it when the agent is
@@ -26,7 +27,7 @@ import { McpStdioClient } from '../../../bench/harness/mcp-client.mjs';
 import { waitForSession } from '../wait-for-session.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const PORT = process.env.TOOL_FUZZ_PORT ?? '4400';
+const PORT = process.env.TOOL_FUZZ_PORT ?? String(TEST_BRIDGE_PORT);
 const APP = process.env.TOOL_FUZZ_APP ?? 'http://localhost:4310/';
 // 30s. The property under test is that every call SETTLES, and a hostile argument that
 // reaches a browser command waits out that command's own ~5s timeout before answering — measured on
@@ -77,7 +78,7 @@ process.chdir(ROOT);
 
 const client = new McpStdioClient(
   'node',
-  ['packages/server/dist/cli.js', 'mcp', '--port', PORT, '--drive', APP],
+  ['server/dist/command/cli.js', 'mcp', '--port', PORT, '--drive', APP],
   { RETICLE_PORT: PORT, RETICLE_ADVERTISE_ALL_TOOLS: '1', RETICLE_TELEMETRY: '0' },
 );
 await client.start();

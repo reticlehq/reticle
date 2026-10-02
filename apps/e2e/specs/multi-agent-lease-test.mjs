@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // Committed regression guard for the multi-agent / browser-pool path: many agents lease isolated
 // headless contexts from ONE shared browser against the bench-app dashboard (:4310), capped and queued, each
 // usable on return. Locks in what was validated by hand: resource is bounded, leases correlate to
@@ -35,7 +36,7 @@ const waitUntil = async (fn, ms = 12000) => {
   return false;
 };
 
-const server = await start({ port: 4400, mcp: false });
+const server = await start({ port: TEST_BRIDGE_PORT, mcp: false });
 const reticleRoot = path.join(os.tmpdir(), `reticle-malease-${process.pid}`, '.reticle');
 const fs = createNodeFileSystem();
 const now = () => Date.now();

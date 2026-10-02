@@ -24,7 +24,7 @@ import { McpStdioClient } from '../../../bench/harness/mcp-client.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const PORT = process.env.SKEW_PORT ?? '4409';
-const CLI = path.join(ROOT, 'packages', 'server', 'dist', 'cli.js');
+const CLI = path.join(ROOT, 'server', 'dist', 'command', 'cli.js');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let pass = 0;
@@ -121,18 +121,120 @@ chk(
 );
 
 // ── B. the agent's MCP server disagrees ────────────────────────────────────────────────────────
-await announcePeer('0.0.1', 'deadbeefdead');
-const mcpSkew = (await call('reticle_sessions'))?.version_skew;
+// The skew is about the agent whose server announced it, so it is told on THAT agent's connection
+// and on no other (#1136). One daemon serves every agent on the machine: handing a matched agent
+// "restart your MCP server, or run `reticle stop`" is advice that cuts everybody off.
+//
+// So the skewed agent here is a real MCP client over SSE, announcing a stale version the way an
+// old cached `npx @reticlehq/server mcp` does, and making its own tool call.
+const ssePeer = (version, contract) =>
+  new Promise((resolve, reject) => {
+    const q = `?peerVersion=${encodeURIComponent(version)}&peerContract=${encodeURIComponent(contract)}`;
+    const waiting = new Map();
+    let nextId = 1;
+    let postPath;
+    let buf = '';
+    const post = (body) =>
+      new Promise((done) => {
+        const pr = request(
+          {
+            host: 'localhost',
+            port: Number(PORT),
+            path: postPath,
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          },
+          (res) => {
+            res.resume();
+            res.on('end', done);
+          },
+        );
+        pr.on('error', () => done());
+        pr.end(JSON.stringify(body));
+      });
+    const api = {
+      rpc: (method, params) =>
+        new Promise((done) => {
+          const id = nextId++;
+          waiting.set(id, done);
+          void post({ jsonrpc: '2.0', id, method, params });
+        }),
+      notify: (method, params) => post({ jsonrpc: '2.0', method, params }),
+      close: () => req.destroy(),
+    };
+    const req = request(
+      {
+        host: 'localhost',
+        port: Number(PORT),
+        path: `/mcp/sse${q}`,
+        headers: { Accept: 'text/event-stream' },
+      },
+      (res) => {
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => {
+          buf += chunk.replace(/\r\n/g, '\n');
+          for (let at = buf.indexOf('\n\n'); at >= 0; at = buf.indexOf('\n\n')) {
+            const lines = buf.slice(0, at).split('\n');
+            buf = buf.slice(at + 2);
+            const event = lines.find((l) => l.startsWith('event:'))?.slice(6).trim();
+            const data = lines
+              .filter((l) => l.startsWith('data:'))
+              .map((l) => l.slice(5).trim())
+              .join('\n');
+            if ('endpoint' === event) {
+              postPath = data;
+              resolve(api);
+            } else if (data) {
+              try {
+                const msg = JSON.parse(data);
+                waiting.get(msg.id)?.(msg);
+                waiting.delete(msg.id);
+              } catch {
+                // not a response
+              }
+            }
+          }
+        });
+      },
+    );
+    req.on('error', reject);
+    req.end();
+  });
+
+const skewed = await ssePeer('0.0.1', 'deadbeefdead');
+await skewed.rpc('initialize', {
+  protocolVersion: '2025-03-26',
+  capabilities: {},
+  clientInfo: { name: 'stale-mcp-server', version: '0.0.1' },
+});
+await skewed.notify('notifications/initialized', {});
+
+const onMatched = (await call('reticle_sessions'))?.version_skew;
 chk(
-  'a peer on a DIFFERENT contract reaches the agent on its next tool result',
+  "a matched agent is NOT told about another agent's stale server",
+  onMatched === undefined,
+  JSON.stringify(onMatched ?? 'silent'),
+);
+
+const onSkewed = await skewed.rpc('tools/call', { name: 'reticle_sessions', arguments: {} });
+const skewedText = (onSkewed?.result?.content ?? []).map((c) => c.text ?? '').join('\n');
+let mcpSkew;
+try {
+  mcpSkew = JSON.parse(skewedText)?.version_skew;
+} catch {
+  mcpSkew = undefined;
+}
+chk(
+  'a peer on a DIFFERENT contract is told on its own next tool result',
   typeof mcpSkew?.action === 'string' && mcpSkew.pair === 'daemon',
-  String(mcpSkew?.action).slice(0, 80),
+  String(mcpSkew?.action ?? skewedText).slice(0, 80),
 );
 chk(
   'and the message tells the agent what to RUN',
   String(mcpSkew?.action).includes('reticle stop'),
   'names the command that replaces the stale daemon',
 );
+skewed.close();
 
 // ── C. the SDK in the page disagrees ───────────────────────────────────────────────────────────
 // A hand-rolled HELLO, because lying about the contract is exactly what a stale SDK does. Origin is
@@ -154,7 +256,7 @@ ws.on('close', (code, reason) => {
 // silently not run at all.
 let token;
 try {
-  token = readFileSync(path.join(homedir(), '.reticle', 'pairing-token'), 'utf8').trim();
+  token = readFileSync(path.join(process.env.RETICLE_PAIRING_TOKEN_DIR ?? path.join(homedir(), '.reticle'), 'pairing-token'), 'utf8').trim();
 } catch {
   token = undefined;
 }

@@ -6,7 +6,7 @@ icon: file-contract
 
 > For anyone (human or agent) adding a tool, an event, a finding kind, or a failure path to Reticle.
 >
-> The rules here are enforced by `packages/server/src/telemetry/telemetry-contract.test.ts`. If you break one, that test tells you which and where. This page is why.
+> The rules here are enforced by `server/src/telemetry/telemetry-contract.test.ts`. If you break one, that test tells you which and where. This page is why.
 
 ## Why this has its own contract
 
@@ -41,7 +41,7 @@ So every `bug_found` carries **`repeat`**: false the first time a KIND is seen i
 
 The denominator is **`verification_completed`**, which fires per verdict with `via`, `verified`, `passed` and `falseGreenCaught`. Defects per verification is the honest rate; raw defect counts grow with usage and say nothing on their own.
 
-**And `repeat` only means anything if the session remembers.** `SessionMetrics.reset()` runs at every periodic flush and used to clear the seen-kinds set with the window counters, so the same defect, re-found after a flush, reported `repeat: false` again. Sessions in the data run to 11.5 hours. Window counters zero on a flush; session-lifetime memory does not. (`session-window.test.ts`)
+**And `repeat` only means anything if the session remembers.** `SessionMetrics.reset()` runs at every periodic flush and used to clear the seen-kinds set with the window counters, so the same defect, re-found after a flush, reported `repeat: false` again. Sessions can run many hours. Window counters zero on a flush; session-lifetime memory does not. (`session-window.test.ts`)
 
 Two rules follow, and both are gated:
 
@@ -92,7 +92,7 @@ The single exception is `daemon_stopped`, which is **awaited**, because the proc
 | --- | --- | --- |
 | `reticle_installed` | first-ever run on a machine | install count, and the new-user curve |
 | `cli_command_run` | a human ran a `reticle` subcommand | human intent: `verify`/`gate` mean something very different from `status`. Never emitted for the internal `_daemon` spawn |
-| `daemon_started` | the daemon came up | active sessions, DAU/WAU/MAU |
+| `daemon_started` | the daemon came up | active sessions |
 | `daemon_stopped` | clean exit | the rich session roll-up. **Count sessions with this one**; see below |
 | `session_progress` | periodic flush from a LIVE daemon | same payload, `final: false`. Sum work across both |
 | `verification_completed` | a verdict was produced | the product's reason to exist: was an app actually verified |
@@ -105,6 +105,7 @@ The single exception is `daemon_stopped`, which is **awaited**, because the proc
 | `app_instrumented` | the first app carrying the SDK reached this daemon | **the funnel step everything turns on**; see below |
 | `mcp_connection_lost` | the proxy lost its daemon | **the transport-stability metric.** The disconnect that makes a user reopen `/mcp` is invisible without it |
 | `init_completed` | `reticle init` finished | does install actually work, outside the fixtures gate |
+| `onboarding_step` | each step of install / onboard / first run | WHERE people stop, which no other kind can answer |
 | `bug_found` | a defect was detected in the app under test | the value delivered, as opposed to the work done |
 | `tool_refused` | a tool could not do what was asked | WHY the largest cohort in the funnel goes quiet. See below |
 
@@ -149,7 +150,7 @@ It does **not** say which instruction variant the agent was served. `buildServer
 
 Two questions get asked of `verification_completed` constantly and both have exact answers already in the payload. Neither needs a new field, and both are read wrong without `reason`.
 
-**"A large share of verdicts come back `unknown`."** `verified` has three values and the rule that produces it has eleven clauses, so `unknown` on its own is seven different situations belonging to three different owners. **Always break `unknown` down by `verification.reason`** before treating it as a quality number:
+**"A large share of verdicts come back `unknown`."** `verified` has FOUR values (`yes`, `no`, `unknown`, `no-fault`) and the rule that produces it has eleven clauses, so `unknown` on its own is seven different situations belonging to three different owners. **Always break `unknown` down by `verification.reason`** before treating it as a quality number:
 
 - `inconclusive`, `nothing_declared`, `vacuous_grade` -- the agent's own call. Teach the agent; the product worked.
 - `outcome_pending`, `outcome_unread`, `unsettled`, `evidence_incomplete`, `window_closed_early` -- the app had not finished. Wait and re-check; often a budget that ended early.
@@ -161,6 +162,7 @@ An `unknown` rate quoted without this split is a number about all three at once 
 
 - `verified: 'no'` -- a green actively refuted by another channel. This is `falseGreenCaught`, and it is the thesis.
 - `verified: 'unknown'` -- Reticle declined to endorse a green it could not stand behind. `already_true` (the condition held before the action, so the check proved nothing) is a _correct_ refusal and not a defect anywhere.
+- `verified: 'no-fault'` -- nothing was declared to prove, so there is nothing to endorse or refute. `nothing_declared` is an `act_and_wait` with no `until`, which is the documented deterministic-settle default; the result says in its own words that this is not verification, and names what to declare. **Counting `no-fault` as a failure overstates the problem, and counting it as a pass is the false green this product exists to prevent.** It is neither: it is work done with no question asked.
 
 `falseGreenCaught` is deliberately narrow -- only `passed && verified === 'no'` -- so the wider number can be counted from `reason` without a definition change. **Do not widen it**: a metric whose definition shifts underneath it produces two series that look comparable and are not.
 
@@ -186,20 +188,22 @@ Four counters and one flag were added because the data could not answer question
 | `consecutiveRepeats` | session summary | longest back-to-back run per tool name. `toolCounts` reports five useful calls and five retries of one failing call identically, and those are opposite facts. |
 | `abandonedActions` | session summary | actions driven with no verdict AFTER them (the trailing unsettled run, not `actions - verifications`). That difference ignores order, so a verdict that drove nothing (a `flow_verify` over saved flows) silently paid for an abandoned action elsewhere. |
 | `endedWithVerdict` | session summary (final only) | did this session ever produce a verdict. The headline metric, and previously the only thing in the payload that had to be COMPUTED, from lifetime counters sitting next to windowed ones, which is a subtraction that gets read wrong. Sent as `false` rather than omitted: a session that drove an app and never asked whether it worked is the finding. |
+| `hudControls` / `hudViewMs` / `hudPanelMs` / `hudJourney` / `hudJourneyCut` | session summary | how a person used the in-page HUD this window. `hudControls` counts presses per control id (a toggle as `setting.reduceMotion:on`), `hudViewMs` times the HUD as `bubble` / `collapsed` / `expanded`, `hudPanelMs` times `chat` / `settings` / `report`, and `hudJourney` is the window's presses and view changes in order, cut at 60 with `hudJourneyCut: true`. Every id comes from core's closed `HUD_CONTROLS`, built from the attribute each control already carries; the daemon drops any other id at the wire schema, so a flow name or a typed note cannot ride in. The events never enter the evidence buffer (`hud-use-is-not-evidence.test.ts`), and a window where nobody touched the HUD is still empty, so an open tab does not flush on its own. `hud-telemetry.test.ts` walks every surface the HUD renders and fails on a control with no accepted id. |
 | `verification.browser` | `verification_completed` | `headless` \| `headed` \| `attached`: who DROVE the browser. `attached` (Reticle launched nothing, the SDK connected from a browser somebody else opened) is the common case in production, so on its own this is mostly "somebody's own browser". |
 | `verification.brand` | `verification_completed` | WHICH browser it was: `chrome` \| `edge` \| `arc` \| `dia` \| `brave` \| `opera` \| `firefox` \| `safari` \| `other`, the closed `BrowserBrand` list in core. The axis `engine` cannot answer, since Chrome, Edge, Arc, Dia and Brave are all `blink`. The SDK reads `navigator.userAgentData.brands` (and the UA string on Firefox/Safari, which expose no `userAgentData`) and normalises IN THE PAGE: a raw brand or UA string is unbounded and fingerprintable and never leaves. Anything unrecognised is `other`. **Omitted rather than `"unknown"`** when the page did not say. A desktop webview has no brand and an older SDK does not report one, and a guess is indistinguishable from a measurement on a dashboard. |
 | `verification.reason` | `verification_completed` | WHICH clause of `decideVerified` produced the verdict, from core's closed `VerifiedReason`: `inconclusive` \| `observation_lost` \| `window_closed_early` \| `assertion_failed` \| `contradicted` \| `already_true` \| `unclean_capture` \| `vacuous_grade` \| `outcome_pending` \| `outcome_unread` \| `unsettled` (the page never went idle and no consequence was declared) \| `evidence_incomplete` (the assertion held, but a channel's outcome had not arrived when the window closed) \| `proved`. See below. |
-| `verification.uncleanLoss` | `verification_completed` | WHAT was lost when `reason` is `unclean_capture`, from core's closed `CaptureLoss`: `buffer_loss` (our server ring buffer evicted evidence from the window) \| `transport_gap` (our browser queue overflowed) \| `blind_spot` (a boundary in the page, such as a cross-origin frame or a closed shadow root) \| `other`. Three owners, three fixes, and one bar on a dashboard until this existed. ONE value, not a list: a multi-value property is not something a breakdown can group by, so the first is sent, ours before the page's. **Absent whenever the capture was clean**, so its presence is itself the signal. Reported as `other` rather than omitted when the block says dirty and names nothing: a gap there would read as "no unclean verdicts happened". |
+| `verification.uncleanLoss` | `verification_completed` | WHAT was lost when `reason` is `unclean_capture`, from core's closed `CaptureLoss`: `buffer_loss` (our server ring buffer evicted evidence from the window) \| `transport_gap` (our browser queue overflowed) \| `journal_loss` (our durable event ledger hit its size cap, so evidence is missing from DISK and no re-drive of that session recovers it) \| `blind_spot` (a boundary in the page, such as a cross-origin frame or a closed shadow root) \| `other`. Four owners, four fixes, and one bar on a dashboard until this existed. ONE value, not a list: a multi-value property is not something a breakdown can group by, so the first is sent, ours before the page's, and the in-memory loss before the on-disk one. **Absent whenever the capture was clean**, so its presence is itself the signal. Reported as `other` rather than omitted when the block says dirty and names nothing: a gap there would read as "no unclean verdicts happened". |
 | `project.stackUnknownReason` | `project_profiled` | WHY there is no `stack`, from core's closed `StackUnknownReason`: `no_app_found` \| `manifest_unrecognised` (we READ an app's manifest and knew nothing in it, which one line in `STACK_BY_DEP` fixes) \| `workspace_apps_unrecognised` \| `workspace_root_no_apps` (a monorepo root where discovery surfaced no app at all) \| `discovery_failed`. `stack` unknown is one of the largest buckets and an empty field is not a cause: it collapsed four facts with four different fixes. **Absent whenever a stack WAS found**, so its presence marks the unknown bucket. Note `workspace_root_no_apps` is expected to dominate over `workspace_apps_unrecognised`: `findWorkspaceApps` admits a directory only on a Vite/Next config file or a literal `next`/`vite` dependency, so a workspace app on any other framework is never surfaced and its manifest is never read. |
 | `bug.attribution` | `bug_found` | `app` \| `request` \| `reticle`: whose fault the defect was. **Absent means unclassified**, never `app`. See below. |
 | `refusal.noSessionReason` | `tool_refused` | For `no_session` only: WHICH no-session situation, from core's closed `NoSessionReason`: `lease_expired` \| `tab_gone` \| `app_not_reopened` \| `config_elsewhere` \| `no_listener_no_config` \| `no_listener` \| `no_config` \| `sdk_not_reaching_daemon`. `no_session` is the largest refusal cohort and on its own it is a set difference: nothing connected, with no word on which of several opposite situations that was. "Restarted the dev server and it still did not connect" and "never started the app" need opposite fixes and arrived as the same silence. Derived from the branches of `explainNoSession`, not classified beside them, so the code cannot describe a diagnosis different from the sentence the user was shown. **Absent on every other refusal reason.** |
+| `verification.driven` | `verification_completed` | which driver produced the verdict, when it was not the user's own agent. Reticle's own harness drives through the same tools, so without this a session we drove reads exactly like one the user earned, and the two mean opposite things for every activation number built on top. Absent for an ordinary agent-driven verdict. |
 | `outage.stage` / `outage.reason` / `outage.attempts` | `mcp_connection_lost` | which stage of the outage, why the stream went away (closed `OutageReason`, `other` for anything unnamed), and how many reconnects had been tried. See below. |
 | `project.initialized` | `project_profiled` | has `reticle init` run here -- a `.reticle.json` is present. On `project_profiled` rather than `app_instrumented` deliberately: that event fires once per daemon start whatever happens next, so it is the only place a fact about a project reaches us for the users who never instrument anything. **Absent means an older sender, never `false`.** |
 | `project.appConnectedBefore` | `project_profiled` | has an app for THIS project ever connected to Reticle, from durable state -- not from this process. Scoped to project + port like every other reader of that state, so it cannot borrow another project's success on a shared daemon. **Absent when the daemon did not know its own port**, which is not-measured rather than `false`; a `false` invented from a read error would put the working installs into the cohort we are sizing. |
 | `connection.appConnected` | `mcp_client_connected` | was an app already attached when the agent arrived. The mirror of `instrumentation.agentAttached`, read off the same flag so the two halves cannot disagree about one daemon run. The closest thing we have to WHAT THE AGENT SAW. |
 | `installSource` | `reticle_installed`, `init_completed` | WHICH published route brought this install in, from core's closed `InstallSource`. Read from one self-declared marker (`RETICLE_INSTALL_SOURCE`) and NEVER inferred, so `unknown` is expected to dominate until every channel's own copy of the install command carries it. See below. |
 | `licenseId` / `licenseStatus` | every event, on a licensed build | Enterprise activation. `licenseStatus` is core's closed `LicenseActivation` (`active` \| `missing` \| `invalid` \| `expired`) and rides through the FAILURE states too, which is what makes a lapse distinguishable from a churn. `licenseId` is present only while a key verifies, so on identity alone a customer whose key expired and one who left are the same silence. `licenseId` is an opaque uuid that resolves to a company only against the issuance ledger held locally, so the analytics backend never holds a customer list. The organisation NAME is never sent. **All three absent on a build with no issuer key baked**, which is every OSS install, so absence means "not a licensed build" and costs nothing to say. See below. |
-| `init.confirmation` | `init_completed` | what `init` SAW after writing, from core's closed `InitConfirmation`: `connected` (an app carrying the SDK reached the daemon while it watched, and it is the only value that means installed) \| `no_daemon` (nothing was listening, so no session could arrive) \| `no_session` (a daemon was up and no app connected inside the window). **Absent means it never looked**, which is every scripted run: `init` waits only when a human is at the terminal. Read absent as "not measured", never as a failure to connect. |
+| `init.confirmation` | `init_completed` | what `init` SAW after writing, from core's closed `InitConfirmation`: `connected` (the SDK reached the daemon) \| `no_daemon` (the watcher found no daemon) \| `no_session` (a daemon was up but no app connected or instrumented dev server announced itself) \| `no_page` (an instrumented dev server was up but no page connected). Default init reports `connected` after successful runtime setup, including scripted runs; runtime failures carry a classified `reason`, without guessing a watcher classification. `--files-only` watches only in an interactive terminal. **Absent means no connection classification was recorded**, never a failed connection by itself. |
 | `automation` | every event | ADVISORY hint that the run looks automated when `CI` does not say so, from core's closed `AutomationHint`: `container` \| `hosted_workspace` \| `no_tty`. `ci` reads one environment variable set only by a runner, so a gate driven from a cloud sandbox lands as a human at a machine. **Never a filter**: people work in containers, in Codespaces, and over ssh with no terminal, and dropping a row because this is set drops real users. Absent means nothing looked automated, not that a human was present. |
 | `tzOffsetMin` | every event | minutes offset from UTC. One integer, no location. |
 | `session.updateNudged` / `session.updateOffered` | session summary | did the update nudge actually fire this daemon run, and which version it knew about. The nudge is the ENTIRE adoption mechanism for a published fix -- it rides the tool-result envelope once per daemon process -- and for several releases it emitted nothing at all. `updateNudged` is the one-shot delivery flag: `true` means an agent was told, never how often. `updateOffered` is our own published version number, so it is low-cardinality and says nothing about the machine; without it `updateNudged: false` would mean "nothing was available" and "something was and the nudge did not fire" at once, and only the second is a defect. See below. |
@@ -217,13 +221,13 @@ A licensed deployment reports which licence it is running under, so per-customer
 
 **The organisation name never goes on the wire.** It is free text somebody typed when the key was signed, so it falls under rule 3. The id is opaque; the map from id to company is a local ledger. An analytics-side breach therefore cannot expose who is evaluating Reticle.
 
-Resolution reads the EVENT's clock, not one captured at daemon start: sessions here run to eleven hours, and a key that expires mid-session has to start reporting `expired` from the event it expired on.
+Resolution reads the EVENT's clock, not one captured at daemon start: sessions can run many hours, and a key that expires mid-session has to start reporting `expired` from the event it expired on.
 
 > **This changes what a licensed deployment sends, so it is a contract term, not a quiet addition.** The enterprise agreement has to say that licensed deployments report usage attributed to their licence id, and list these fields. `RETICLE_TELEMETRY=0` and `DO_NOT_TRACK` still switch it off exactly as they switch off everything else. There is no exception for licensed installs, and adding one would put a hole in the kill switch that a security review is entitled to find.
 
 ## Why they stopped: `tool_refused`
 
-The refusal path computes a precise diagnosis, hands it to the agent as prose, and throws it away. So the biggest cohort in the funnel, the users who attach an agent and never drive, emitted nothing at all and was reachable only by subtracting two other numbers. Half of issue #172.
+The refusal path computes a precise diagnosis, hands it to the agent as prose, and throws it away. So an agent that attaches and never drives emitted nothing at all, and was reachable only by subtracting two other numbers. Half of issue #172.
 
 - `refusal_tool`: which tool, from our own fixed namespace. Never app data.
 - `refusal_reason`: the closed `RefusalReason`: `no_session` | `no_match` | `unsupported` | `bad_args` | `not_ready` | `other`. Four different owners, and one undifferentiated "they stopped" number is actionable by none of them.
@@ -252,7 +256,7 @@ Capped at 50 per daemon run. Volume is part of this taxonomy's design and a stuc
 
 What it does **not** answer: whether the agent surfaced the nudge to its human. Nothing on this side of the envelope can see that, and inferring it from a later upgrade would credit the nudge for a `reticle update` somebody ran for their own reasons -- which is precisely the credit `nudge-credit.ts` bounds to a seven-day window rather than claiming outright.
 
-One edge to know when querying: `updateNudged` reads the delivery flag, and `armUpdateNudgeFrom` re-arms it when a newer manifest lands mid-session. On a long session that spans a release it therefore reports the LAST arming's state, not "was ever shown". Sessions in the data run to eleven hours, so this is reachable; it is rare, and it errs toward `false`.
+One edge to know when querying: `updateNudged` reads the delivery flag, and `armUpdateNudgeFrom` re-arms it when a newer manifest lands mid-session. On a long session that spans a release it therefore reports the LAST arming's state, not "was ever shown". Sessions can run many hours, so this is reachable; it is rare, and it errs toward `false`.
 
 ## Which route brought them in: `installSource`
 
@@ -274,7 +278,7 @@ So `plugin` is the only route detectable without anybody typing anything (the pl
 
 ## Why a verdict came out that way: `verification.reason`
 
-`verified` has three values. The rule that produces it has **eleven clauses**. Everything in between was thrown away at the moment it was known.
+`verified` has four values: `yes`, `no`, `unknown`, `no-fault`. The rule that produces it has **eleven clauses**. Everything in between was thrown away at the moment it was known.
 
 Captured against the real classifier: `verified: 'unknown'` covered "the agent malformed the call", "the consequence was already true", "the app answered 202", "a 2xx body went unread", "the capture was not clean", "nothing was asserted at a real grade" and "the page never settled": **seven causes, two wire payloads**. They belong to three different owners (the agent, the app, Reticle) and need opposite responses: teach the agent, wait and re-check, or ship a fix. On a dashboard they were one bar. `verified: 'no'` collapsed the same way: "channels disagree" (Reticle earning its keep) and "the agent's predicate failed" were the same string.
 
@@ -313,7 +317,10 @@ The transport-stability metric shipped with an **empty payload** for months, and
 
 The lesson is not "wire the field". It is that **the battery asserted the event ARRIVED and never that it carried anything**, and a kind-only assertion cannot see an empty payload. When you add an event kind, the live check has to assert the FIELDS.
 
-- `stage` is the closed `OutageStage`: `first` (this session lost MCP at all), `budget_spent` (it stopped retrying and went dormant), or `recovered` (the link came back on its own). Each is reported **at most once per proxy process**, so the three are a per-session state and never a count.
+- `stage` is the closed `OutageStage`: `first` (this session lost MCP at all), `budget_spent` (it stopped retrying and went dormant), or `recovered` (the link came back on its own). Each is reported **at most once per proxy process per class**, where the class is benign-or-fault and `daemon_shutdown` is the only benign reason.
+
+  The class half of that key is not decoration. With a slot per stage alone, the daemon's own scheduled retirement, much the commonest reason a stream ends and not a fault at all, consumed the only slot, and a genuine `connect_error` later in the same process was never reported. A low outage count was therefore not evidence of health, and could not be distinguished from one. Keyed this way the volume is still bounded (three stages, two classes), which is what the cap exists for, while a real fault can always still be heard. Keying per REASON was rejected: a flapping proxy has six reasons available and would bill for each, which pays for the pathology.
+
 - `reason` is the closed `OutageReason`: `sse_ended` | `daemon_shutdown` | `sse_error` | `sse_aborted` | `sse_closed` | `connect_error` | `other`. The proxy's own reason strings are free text that also feeds a log, so `mcp-outage.ts` narrows them and reports **`other`** for anything unnamed. A classifier that cannot say "I don't know" lies instead, and an unbounded string must never reach the wire.
 - `attempts`: consecutive reconnects tried when this was reported.
 - `pendingLost`: in-flight tool calls this drop actually killed -- the only part an agent can FEEL. Sent always, **including zero**, because zero is the finding.
@@ -326,7 +333,7 @@ The lesson is not "wire the field". It is that **the battery asserted the event 
 
 **`first` alone is unfalsifiable, and the pair is the metric.** `first` with a matching `recovered` is a blip the agent probably never noticed (check `pendingLost`). `first` with `budget_spent` and no `recovered` is a session whose tools never came back on their own, which is the number worth driving down. Counting `first` on its own over-states the problem by roughly the whole of it.
 
-Still true and worth knowing when you query it: `mcp_connection_lost` carries **no `sessionId`** (it fires from the proxy process, not the daemon), and is capped at two per proxy process by design.
+Still true and worth knowing when you query it: `mcp_connection_lost` carries **no `sessionId`** (it fires from the proxy process, not the daemon), so it cannot be joined to a project, a stack or a verdict. Every question of the form "did losing the link stop this person verifying" is therefore unanswerable today, and that is the single most valuable thing missing from this event.
 
 ### Licence activation
 
@@ -355,14 +362,14 @@ It exists for two reasons that pull the same way:
 
 One deliberate exception to the rules above: `RETICLE_TELEMETRY_FILE` keeps telemetry ENABLED inside a Reticle source checkout. The checkout guard exists to stop us phoning home, and writing a local file is not phoning home, while a release sweep is driven from exactly there, so a sink that inherited the guard would record nothing and look like it had worked.
 
-`sent: true` from `reticle_feedback` means the record landed in the file, which is the honest reading of "captured" for a recorded run. An unwritable path degrades to a no-op and reports `false`; it never takes the daemon down.
+`sent: true` from `reticle_session { action: "feedback" }` means the record landed in the file, which is the honest reading of "captured" for a recorded run. An unwritable path degrades to a no-op and reports `false`; it never takes the daemon down.
 
 ## Adding things: what to do
 
 | You are adding | Do this | Enforced by |
 | --- | --- | --- |
 | **A tool** | Add it to `TOOLS`. Nothing else. If its name implies a verdict (`assert`/`verify`), also add it to `VERDICT_TOOLS` | `telemetry-contract.test.ts` |
-| **A verdict-producing tool** | Add it to `VERDICT_TOOLS` (`packages/server/src/tools/feedback-tools.ts`). Otherwise it emits no `verification_completed` and stops counting toward the product's headline metric | ✓ |
+| **A verdict-producing tool** | Add it to `VERDICT_TOOLS` (`server/src/surface/tools/feedback-tools.ts`). Otherwise it emits no `verification_completed` and stops counting toward the product's headline metric | ✓ |
 | **A contradiction / anomaly kind** | Add it to core's enum only. `bug-found.ts` derives from it | ✓ |
 | **A new finding shape** in a tool result | Teach `bugsInResult` the field. Add a case to the contract test | ✓ |
 | **A failure path** (connect, install, crash) | Classify it into an enum with an explicit `OTHER` bucket; a classifier that cannot say "I don't know" lies instead | ✓ |
@@ -388,3 +395,28 @@ The second is the one that matters. It drives the real built modules against a r
 ## The privacy line, in one sentence
 
 We measure **that** something happened and **what class** of thing it was, never **what** it was, in whose app, or containing what.
+
+## The setup funnel: `onboarding_step`
+
+One kind for every step of every phase, rather than an event name per step. A name per step means that every funnel query names the steps it spans, so moving, renaming or inserting one silently breaks the query that was watching it. A `phase` + `step` pair keeps the funnel a `GROUP BY` instead of a union, and a new step arrives in the existing chart rather than beside it.
+
+```
+install    script_started → runtime_ready → cli_installed → agents_detected → mcp_registered
+onboard    tour_started → concept_shown → first_look → first_act → first_verdict
+first_run  project_detected → instrumented → app_connected → driven → flow_recorded → verdict_produced
+```
+
+Four decisions are written into the shape, and each exists because the alternative loses something:
+
+- **`instrumented` and `app_connected` are separate steps.** Files written is not a page that dialled the bridge, and every silent install bug so far has lived in exactly that gap.
+- **Both tours end at a verdict.** `verdict_produced` measures a verification attempt reaching a verdict; consult `verified` to distinguish decisive answers from `unknown`. Default `init_completed` reports after app connection succeeds or runtime setup fails. With `--files-only`, it reports file setup and any interactive confirmation, without driving a flow.
+- **`abandoned` is distinct from `failed`.** With one losing status both read as "never got there", and only one of them is our bug.
+- **`skipped` is a real answer.** No coding agent on the machine, or a drive that declared no consequence worth saving, is not a failure, counting it as one hides the failures that are.
+
+`step` is a CLOSED SET, validated against the funnel's own vocabulary. It was `z.string().max(48)` with a comment promising it was never user text, and a cap is not a promise: `/Users/someone/secret/ project` is 28 characters and validated cleanly. That is a rule-3 leak from the one payload a person can edit, the installer's breadcrumb file, on disk, in their own home directory.
+
+`elapsedMs` absent means NOT MEASURED, never zero. A zero enters every average as a real duration and drags it toward a number nobody experienced.
+
+`first_look`, `first_act`, and `driven` are reported after the tool handler returns. Refusals, paused calls, and actions explicitly reported as not dispatched do not complete them. A dispatched action whose asserted consequence fails still counts as an action; it does not become a successful verification.
+
+Historical builds omitted the deferred `init_completed` on the default runtime path and counted first looks/actions before their handlers ran. Segment by version when comparing conversion across this change; missing older completion events and older action milestones cannot be repaired from aggregates. Runtime init failures now use classified reasons (`dev_server`, `app_connection`, `bridge_occupied`, `runtime_error`); preflight refusals use `preflight`. Raw errors and project paths are not sent.

@@ -1,9 +1,11 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // A saved flow whose consequence legitimately takes longer than replay's default wait.
 //
 // Replay's wait for a declared consequence was a fixed 4s with no env var, no flow field and no
 // parameter to raise it. That is not a tuning knob — it decides whether an honest flow can ever be
-// green. Two field reports, the same shape: a login whose POST measures 5.5s against a remote
-// database, and a model-backed import taking ~22s. Both were verified live with
+// green. Field reports keep arriving in the same shape: a login whose POST takes several seconds
+// against a remote database, and a model-backed import taking tens of seconds. Both were verified
+// live with
 // `act_and_wait { timeout_ms }` and returned `verified: "yes"`; the identical saved flow drifted at
 // ~4020ms with `signal_not_observed`, and the summary said NO LONGER TRUE — a working feature
 // reported to the user as a regression. The only ways to green them were to weaken or delete the
@@ -53,7 +55,7 @@ const fsp = createNodeFileSystem();
 const now = () => Date.now();
 const flows = new FlowStore(fsp, reticleRoot, { now });
 const project = new ProjectStore(fsp, reticleRoot, { now });
-const server = await start({ port: 4400, mcp: false });
+const server = await start({ port: TEST_BRIDGE_PORT, mcp: false });
 const deps = {
   sessions: server.bridge.sessions,
   baselines: new BaselineStore(),
@@ -121,9 +123,17 @@ if (input === undefined || save === undefined) {
   await T('reticle_act', { ref: input, action: 'fill', args: { value: 'slow one' } });
 
   // The declared consequence: the POST this click causes, which the server holds for SERVER_DELAY_MS.
-  const expectNet = { net: { urlContains: '/api/saved-items', method: 'POST', status: 200 } };
+  // A predicate, as a v2 flow stores it. This spec hands the flow straight to `replayFlow`, skipping
+  // the schema that lifts a v1 flat expect — so the flat shape reached the evaluator unread and BOTH
+  // checks below failed on "unknown predicate", the first one passing for that wrong reason.
+  const expectNet = {
+    kind: 'net',
+    urlContains: '/api/saved-items',
+    method: 'POST',
+    status: 200,
+  };
   const flowOf = (step) => ({
-    version: 1,
+    version: 2,
     name: 'slow-save',
     createdAt: 0,
     steps: [step],
@@ -143,7 +153,7 @@ if (input === undefined || save === undefined) {
     const fast = await replayFlow(live, flowOf({ ...stepBase }), waitForPredicate, 4000);
     chk(
       'without a declared timeout the slow consequence DRIFTS — the reported failure',
-      fast[0]?.ok === false,
+      fast[0]?.ok === false && !String(fast[0]?.drift?.reason ?? '').includes('unknown predicate'),
       `ok=${String(fast[0]?.ok)} drift=${JSON.stringify(fast[0]?.drift ?? {}).slice(0, 90)}`,
     );
 

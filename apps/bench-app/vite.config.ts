@@ -5,11 +5,21 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import babel from '@rolldown/plugin-babel';
 import reticleSource from '@reticlehq/babel-plugin';
+import { RETICLE_DEFAULT_PORT } from '@reticlehq/core';
 
-// Benchmark fixture. App serves on 4312; its Reticle SDK dials the daemon on RETICLE_PORT
-// (default 4460 — dedicated so it never collides with reticle:4400 or the local mcp daemon).
-// The benchmark harness sets RETICLE_PORT to match the daemon it spawns.
-const RETICLE_PORT = Number(process.env['RETICLE_PORT'] ?? 4460);
+// Benchmark fixture. App serves on 4310; its Reticle SDK dials the daemon on RETICLE_PORT.
+//
+// The default is the daemon's default, and it used to be 4460 "so it never collides with
+// reticle:4400 or the local mcp daemon". That reasoning does not hold: this port is one the page
+// DIALS, and dialling cannot collide with anything — only a daemon BINDING a port can, and the app
+// binds nothing. What the mismatch actually bought was a fixture that silently failed to connect.
+//
+// Every automated path sets RETICLE_PORT explicitly — `apps/e2e/run-ci.sh` to 4400, the benchmark
+// harness to whichever daemon it spawned — so the default was reached only by a human starting this
+// app by hand, which is exactly the case where the daemon they already have is on 4400. Doing that
+// cost a session: the page dialled 4460, nothing was there, and the only evidence was a line in the
+// browser console. Env still wins, so a caller can point it anywhere.
+const RETICLE_PORT = Number(process.env['RETICLE_PORT'] ?? RETICLE_DEFAULT_PORT);
 
 /**
  * The daemon auto-provisions a pairing token into ~/.reticle/pairing-token and then REQUIRES it on the

@@ -130,7 +130,7 @@ const toAnthropicTools = (tools) =>
  * driven, what was already proved.
  */
 async function runArm(compact) {
-  const client = connect({ cli: join(ROOT, 'packages/server/dist/cli.js'), port: PORT, cwd: ROOT });
+  const client = connect({ cli: join(ROOT, 'server/dist/command/cli.js'), port: PORT, cwd: ROOT });
   await client.init();
   const tools = toAnthropicTools((await client.listTools()).result?.tools ?? []);
 
@@ -139,7 +139,14 @@ async function runArm(compact) {
   // a complete-looking report of zeros — `verdict: NONE`, `rediscoveryCalls: 0` — that could be
   // read as a finding about compaction. It was a finding about nothing being switched on. A
   // measurement that cannot distinguish "no effect" from "no experiment" is worse than no number.
-  const probe = await client.call('reticle_sessions', {}, 20000);
+  // `reticle_session { action: 'list' }`, not `reticle_sessions`.
+  //
+  // The default surface is the merged NINE and it is CLOSED — an unadvertised name is not reachable
+  // at all, not merely unlisted. `reticle_sessions` stopped being advertised when the tools merged,
+  // so this probe had been failing ever since and taking the whole arm with it. The comment above
+  // is the one that applies: a measurement that cannot tell "no effect" from "no experiment" is
+  // worse than no number, and this was measuring neither.
+  const probe = await client.call('reticle_session', { action: 'list' }, 20000);
   const probeText = String(probe.result?.content?.[0]?.text ?? '');
   if (!probeText.includes('"sessionId"')) {
     client.close();

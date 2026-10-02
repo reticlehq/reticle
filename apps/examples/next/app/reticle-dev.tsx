@@ -11,6 +11,7 @@ export function ReticleDev() {
     void import('@reticlehq/react').then(({ reticle, install }) => {
       install();
       reticle.connect({
+        ...(process.env.NEXT_PUBLIC_RETICLE_URL ? { url: process.env.NEXT_PUBLIC_RETICLE_URL } : {}),
         projectId: 'example-next',
         ...(token !== undefined && token.length > 0 ? { token } : {}),
       });

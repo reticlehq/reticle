@@ -13,13 +13,9 @@ npx @reticlehq/server <command>
 ```
 
 <Warning>
-  **Always invoke it as `npx @reticlehq/server <command>`.** The tables below name the commands as
-  `reticle <command>`, because `reticle` is the bin this package installs and that is what the CLI
-  prints about itself. It is **not** a package on npm: the bare name `reticle` belongs to an
-  unrelated author, so putting `npx` in front of it downloads and runs their code instead of ours.
-  Once
-  `@reticlehq/server` is a dependency of your project, `reticle <command>` works from an npm script
-  or with the bin on your PATH.
+  If you used the installer, run `reticle <command>`: it put that bin on your PATH. Otherwise use
+  `npx @reticlehq/server <command>`. Do not put `npx` before the bare `reticle` bin name: the npm
+  package with that name belongs to an unrelated author.
 </Warning>
 
 <Note>
@@ -30,17 +26,27 @@ npx @reticlehq/server <command>
 
 ## Setup and diagnosis
 
+### `reticle connect`
+
+From an app directory, one command wires an unwired app, proves a browser session, signs in through browser approval if needed, links the chosen cloud project, and syncs existing local history. A saved sign-in is reused only after the intended cloud host accepts it. Run `reticle init` instead for local-only verification.
+
+```bash
+npx @reticlehq/server connect --project "My App"
+```
+
+For a self-hosted cloud, add `--url <cloud origin>`. If the app was already wired, `connect` keeps its local setup and refreshes the cloud link. A fresh app has no run to send until you verify a flow with your agent.
+
 ### `reticle init`
 
-Wires Reticle into the project in the current directory, then boots the app, proves a session connected and drives one flow to a verdict. It exits non-zero if no verdict was produced, and prints what is left to do.
+Wires Reticle into the project in the current directory, then boots the app and proves a session connected. It exits non-zero if nothing connected, and prints what is left to do. It does not drive: proving a flow is the FIRST RUN, `reticle verify <url> --explore --persona "<who does what>"`.
 
 ```
-reticle init  [--flow "<what to drive>"] [--env KEY=VALUE]... [--app <dir>] [--license <key>]
-              [--json] [--files-only] [--no-open] [--no-drive] [--dry-run]
-              [--port N] [--no-mcp] [--no-install] [--timeout S] [--drive-model M]
+reticle init  [--env KEY=VALUE]... [--app <dir>] [--license <key>]
+              [--json] [--files-only] [--no-open] [--dry-run]
+              [--port N] [--no-mcp] [--no-install] [--timeout S]
 ```
 
-`--flow`, `--env` and `--app` are the answers the command cannot work out for itself: which journey proves what you care about, what the app needs to reach a usable state, and which app in a monorepo. `--files-only` is what `init` did before it learned to boot the app: it still registers the MCP server and pre-approves Reticle's tools, so it doubles as the upgrade path for an existing install.
+`--env` and `--app` are the answers the command cannot work out for itself: what the app needs to reach a usable state, and which app in a monorepo. Which journey proves what you care about is asked on the first run, as `--persona`. `--files-only` is what `init` did before it learned to boot the app: it still registers the MCP server and pre-approves Reticle's tools, so it doubles as the upgrade path for an existing install.
 
 <Card title="Full walkthrough with real output" icon="wand-magic-sparkles" href="/install-agentic">
   What it writes, and how to read its four status marks.
@@ -71,25 +77,15 @@ Exits `0`. That parenthetical about the bridge port is doing a lot of work. Mixi
 
 Whether the daemon is up and which apps have connected.
 
-```json
-{
-  "t": "2026-08-15T18:45:58.190Z",
-  "event": "reticle_status",
-  "port": 4400,
-  "running": true,
-  "pid": 72698,
-  "sessionCount": 1,
-  "sessions": [
-    {
-      "sessionId": "s223e0fad-e012-43f9-a23d-6d585470c90d",
-      "url": "http://localhost:4310/",
-      "throttled": false,
-      "stale": false,
-      "pendingMarks": 0
-    }
-  ]
-}
+```text
+reticle status
+  daemon       ✓ running on :4400 (pid 90790)
+  sessions     ✓ 1 page connected
+               http://localhost:4310/
+  agent link   enumerated
 ```
+
+Add `--json` for the same facts as one machine-readable event line. See [`reticle status`](/cli/status) for the fields.
 
 Exits `0`. A session in the list is the install genuinely finished. Not a tick in a checklist, a connected app.
 
@@ -122,6 +118,15 @@ policy       https://github.com/reticlehq/reticle/blob/main/docs/telemetry.md
 
 A bare `reticle` with no arguments is not help. It is `reticle serve`.
 
+<Note>
+  When the Reticle SDK installed in the project is a different **major** version from the CLI you ran,
+  the CLI hands the same command to `npx @reticlehq/server@<that version>`, so an unpinned
+  `npx @reticlehq/server` never pairs a daemon with an SDK it cannot talk to. `init`, `update`,
+  `rollback`, `setup install`, `version` and `help` always run as typed, and so does a command whose
+  version you pinned yourself (`npx @reticlehq/server@<version> …`). Set `RETICLE_NO_VERSION_MATCH=1` to
+  turn it off.
+</Note>
+
 <Warning>
   `reticle verify` binds the bridge port itself, so it fails if a daemon is already listening, which
   is the normal state once your agent has started one. Stop the daemon first, or point it elsewhere
@@ -153,7 +158,7 @@ npx @reticlehq/server affected --since HEAD~1
 {
   "t": "2026-08-15T18:42:57.431Z",
   "event": "reticle_affected",
-  "changedFiles": ["SKILL.md", "docs/cli/doctor.mdx", "packages/init/src/agent-rules.ts"],
+  "changedFiles": ["SKILL.md", "docs/cli/doctor.mdx", "init/src/agent-rules.ts"],
   "affected": ["WEB-flow", "deploy-journey", "verify-modal", "verify-route"],
   "unknownProvenance": ["WEB-flow", "deploy-journey", "verify-modal", "verify-route"]
 }
@@ -230,7 +235,7 @@ npx @reticlehq/server feedback --agent --kind <bug|gap|ambiguity|feature_request
 
 The `--agent` form matters more than it looks: the setup that failed halfway is exactly the setup worth hearing about, and in that state the MCP tools do not exist yet.
 
-<Card title="How feedback is handled" icon="comments" href="/tools-session-and-feedback">
+<Card title="How feedback is handled" icon="comments" href="/tools/session-and-feedback">
   What each kind means, and what happens when a report cannot be delivered.
 </Card>
 

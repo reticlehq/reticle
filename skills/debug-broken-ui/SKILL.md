@@ -3,7 +3,7 @@ name: debug-broken-ui
 description: Find out why something in a running web app does not work, when the console is empty and the code looks correct. Reads the click, the request, the store and the console together and returns the file:line to open. Use when a button does nothing, a form will not submit, data will not load, a page renders blank or stale, a modal will not close, or the user says "it's broken" and the code review says it is fine.
 license: Apache-2.0
 metadata:
-  version: 2.14.0
+  version: 3.5.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -17,7 +17,7 @@ Reading the source again will not tell you why. The evidence is in the running a
 ## Do not start by guessing. Start by reproducing.
 
 ```
-reticle_snapshot({ sessionId, mode: "interactive" })   // controls only, with refs
+reticle_look({ action: "page", sessionId, mode: "interactive" })   // controls only, with refs
 reticle_act_and_wait({ sessionId, ref, action: "click", until: { kind: "element", query: { testid: "..." } } })
 ```
 
@@ -30,20 +30,20 @@ The verdict already narrows it: `no` / `contradicted` means a channel saw someth
 When the summary does point somewhere, read that channel **scoped to what you just did**: pass `since` from the act result, or you are reading a buffer that predates the click:
 
 ```
-reticle_console({ sessionId, since })
-reticle_network({ sessionId, since })
-reticle_state({ sessionId, store })
+reticle_observe({ action: "console", sessionId, since })
+reticle_observe({ action: "network", sessionId, since })
+reticle_look({ action: "state", sessionId, store })
 ```
 
 ## The diagnosis table
 
 | What you see | What it is | Next |
 | --- | --- | --- |
-| No request fired at all | the handler is not bound, or a client cache served a stale value | `reticle_inspect` the element for its `file:line`; check the cache if it is TanStack Query |
+| No request fired at all | the handler is not bound, or a client cache served a stale value | `reticle_look { action: "element" }` the element for its `file:line`; check the cache if it is TanStack Query |
 | Request fired, `4xx`/`5xx` | a real backend failure the UI swallowed | the response body is in the network entry |
 | `2xx` but nothing changed | the app never read the response: verdict says `outcome_unread` | usually a real bug in the success path |
-| Request fine, DOM fine, **store stale** | UI-vs-state desync, invisible to any screenshot | `reticle_state` is the only witness; this is the highest-value read here |
-| Click did nothing, no error | the control is dead, occluded, or disabled | `reticle_inspect` returns `occluded`, `box` (0×0), `styles.cursor`, `opacity` |
+| Request fine, DOM fine, **store stale** | UI-vs-state desync, invisible to any screenshot | `reticle_look { action: "state" }` is the only witness; this is the highest-value read here |
+| Click did nothing, no error | the control is dead, occluded, or disabled | `reticle_look { action: "element" }` returns `occluded`, `box` (0×0), `styles.cursor`, `opacity` |
 | Element "not found" that you can see | virtualised list has not mounted it | `reticle_scroll_to`. A `query` that misses is not evidence of absence |
 | Looks logged in, behaves logged out | the token never persisted | `reticle_storage` |
 | Console error that predates your click | a pre-existing fault, not your bug | call it out before continuing |
@@ -51,14 +51,14 @@ reticle_state({ sessionId, store })
 ## Get the file, not a theory
 
 ```
-reticle_inspect({ sessionId, ref })
+reticle_look({ action: "element", sessionId, ref })
 ```
 
 Returns the component and `source: { file, line }` for the element you are looking at, plus whether it is occluded, sized, disabled or off-theme. That is the pointer to open. End the investigation with a location, not a hypothesis.
 
 ## When the flow is long
 
-Do not ping-pong act → snapshot → act → snapshot to find the failing step. Drive the journey with `reticle_act_sequence` and assert once; the first step whose consequence fails is the one to look at, and you paid a fraction of the calls to find it.
+Do not ping-pong act → snapshot → act → snapshot to find the failing step. Drive the journey with `reticle_act { steps: [...] }` and assert once; the first step whose consequence fails is the one to look at, and you paid a fraction of the calls to find it.
 
 ## Before you say it is fixed
 
@@ -68,4 +68,4 @@ Re-run the reproduction as a verdict (`reticle_act_and_wait` with the consequenc
 
 ---
 
-Troubleshooting Reticle itself (as opposed to the app): `curl https://docs.reticle.sh/troubleshooting.md`. Everything else: `curl https://docs.reticle.sh/llms.txt`. If Reticle could not see something you needed, `reticle_feedback` with `kind: "gap"`.
+Troubleshooting Reticle itself (as opposed to the app): `curl https://docs.reticle.sh/troubleshooting.md`. Everything else: `curl https://docs.reticle.sh/llms.txt`. If Reticle could not see something you needed, `reticle_session { action: "feedback" }` with `kind: "gap"`.

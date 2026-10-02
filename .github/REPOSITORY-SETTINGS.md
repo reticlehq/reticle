@@ -1,53 +1,77 @@
-# Repository settings for an A+ OpenSSF Scorecard
+# OpenSSF Scorecard maintenance checklist
 
-The workflows in this directory (CI, CodeQL, Scorecard, publish) cover everything code can. A few Scorecard checks are **repository settings** that only a maintainer with admin can toggle in the GitHub UI or via `gh`. This file is the exact checklist — do these once and the security posture is A+.
+Use the [current Scorecard report](https://securityscorecards.dev/viewer/?uri=github.com/reticlehq/reticle) to prioritize failing checks. Workflow files show intent; successful runs, repository settings, release assets, and reviewed merge history show enforcement. This checklist does not guarantee a particular score.
 
-## 1. Branch protection on `main` (Scorecard: Branch-Protection, Code-Review — High weight)
+## 1. Protect `main` (Branch-Protection and Code-Review)
 
-Settings → Branches → Add rule for `main`:
-
-- [ ] **Require a pull request before merging** — with **at least 1 approving review**.
-- [ ] **Dismiss stale approvals** when new commits are pushed.
-- [ ] **Require status checks to pass** — select: `verify` (CI), `e2e`, `analyze` (CodeQL). Require branches be **up to date** before merging.
-- [ ] **Require conversation resolution** before merging.
-- [ ] **Do not allow force pushes**; **do not allow deletions**.
-- [ ] Apply the rule to **administrators too** (Scorecard rewards `EnforceAdmins`).
-
-Via CLI (adjust the check names to match the run titles):
+Inspect existing branch protection and rulesets before changing them. Preserve existing restrictions and required checks.
 
 ```bash
-gh api -X PUT repos/reticlehq/reticle/branches/main/protection \
-  -f "required_status_checks[strict]=true" \
-  -f "required_status_checks[checks][][context]=verify" \
-  -f "required_status_checks[checks][][context]=analyze" \
-  -F "enforce_admins=true" \
-  -F "required_pull_request_reviews[required_approving_review_count]=1" \
-  -F "required_pull_request_reviews[dismiss_stale_reviews]=true" \
-  -F "restrictions=null"
+gh api repos/reticlehq/reticle/branches/main/protection
+gh api repos/reticlehq/reticle/rulesets
+gh api repos/reticlehq/reticle/commits/main/check-runs --jq '.check_runs[].name'
 ```
 
-> Solo-maintainer note: requiring a review of your own PRs is friction, but Scorecard's Code-Review check reads merge history — a self-merge with no review caps the score. Options that still earn it: enable the rule and use a second account / a co-maintainer for approvals, or accept the cap as the one honest ceiling of a solo project and note it in the README (the community reads a solo project's Scorecard with that context).
+Settings → Rules → Rulesets, or Settings → Branches:
 
-## 2. Signed tags / releases (Scorecard: Signed-Releases)
+- [ ] Require a pull request before merging.
+- [ ] Require at least one approving review from another maintainer once an independent reviewer is available.
+- [ ] Dismiss stale approvals when new commits are pushed; require code-owner review.
+- [ ] Require status checks and up-to-date branches. Include `gate` (the CI aggregate), `package-quality`, and the exact CodeQL matrix check name reported by GitHub, currently expected to be `analyze (javascript-typescript)`. Preserve other required checks.
+- [ ] Require conversation resolution.
+- [ ] Block force pushes and branch deletion.
+- [ ] Enforce protection for administrators and remove routine bypasses.
+- [ ] If a merge queue is enabled, ensure every required workflow runs on `merge_group` before requiring it in the queue.
 
-npm **provenance** is already on (`publish.yml`). For the git side:
+`verify` alone does not enforce unit tests, e2e, Rust, desktop, and the other jobs included in `gate`. Package quality and CodeQL run in separate workflows and must be required separately.
 
-- [ ] Sign release tags: `git config tag.gpgSign true` (GPG) **or** adopt Sigstore `gitsign` for keyless signing. Sign at least every `vX.Y.Z` release tag.
-- [ ] Settings → General → enable **"Require signed commits"** on `main` once contributors are set up to sign (don't enable before, or you'll block yourself).
+Code-Review examines recent merge history, so enabling a rule does not repair earlier unreviewed merges. This repo's CODEOWNERS currently names one maintainer. Recruit an independent co-maintainer for reviews; another account controlled by the author and bot approvals do not supply independent human review. Until a reviewer is available, retain the CI protections and accept the review-score limitation rather than blocking all maintainer PRs.
 
-## 3. Security features (Scorecard: SAST, Vulnerabilities, Dependency-Update-Tool)
+## 2. Verify release assets (Signed-Releases)
 
-Settings → Code security and analysis:
+`publish.yml` requests npm provenance. `release-provenance.yml` fetches published npm tarballs and attaches those tarballs plus SLSA `.intoto.jsonl` provenance to the GitHub release. Confirm that both workflows succeed and that recent releases actually contain the assets.
 
-- [ ] **Dependabot alerts** + **Dependabot security updates** = ON (the `dependabot.yml` here handles version updates; these two are the alert side).
-- [ ] **Code scanning** = ON (the `codeql.yml` here provides it; confirm it's enabled).
-- [ ] **Secret scanning** + **push protection** = ON.
-- [ ] **Private vulnerability reporting** = ON (Settings → Security) — pairs with `SECURITY.md`.
+```bash
+gh run list --repo reticlehq/reticle --workflow release-provenance.yml --limit 5
+gh release list --repo reticlehq/reticle --limit 5
+# Repeat for each recent release tag:
+gh release view v3.3.0 --repo reticlehq/reticle --json assets --jq '.assets[].name'
+```
 
-## 4. Token defaults
+- [ ] Recent releases contain the published tarballs and corresponding `.intoto.jsonl` assets.
+- [ ] Investigate missing assets or failed provenance runs before publishing another release.
+- [ ] For an older release whose npm packages are still available, use the workflow's manual dispatch with that release tag and inspect the resulting assets. This attests the download of already-published tarballs; it does not retroactively prove their original build.
 
-- [ ] Settings → Actions → General → **Workflow permissions** = **Read repository contents** (the per-workflow `permissions:` blocks already declare more where needed; the default should be read-only).
+Signed tags and signed commits are useful separate controls. They do not substitute for the release-asset signatures or provenance that Signed-Releases detects.
 
-## 5. After enabling
+## 3. Resolve dependency vulnerabilities and verify security features
 
-- Let the Scorecard workflow run once (it's scheduled + on push to `main`), then add the badge: `[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/reticlehq/reticle/badge)](https://securityscorecards.dev/viewer/?uri=github.com/reticlehq/reticle)` (already added to the README; it goes live once the first run publishes).
+- [ ] Enable Dependabot alerts and security updates. `dependabot.yml` handles version updates for npm, Actions, and Cargo.
+- [ ] Confirm CodeQL runs successfully and uploads results; review unresolved findings.
+- [ ] Enable secret scanning, push protection, and private vulnerability reporting.
+- [ ] Scan committed dependency trees with OSV-Scanner and remediate findings. Scorecard's Vulnerabilities check uses OSV; a clean `pnpm audit` alone does not establish a clean Scorecard result.
+- [ ] Keep the high/critical JavaScript audit and Rust audits passing in CI. High/critical JavaScript advisories now fail `verify`, which is included in `gate`.
+- [ ] Where a vulnerability genuinely does not apply, document a narrowly scoped exception with evidence and review it when dependencies change.
+
+## 4. Keep build tools pinned and tokens restricted
+
+- [ ] Keep Actions pinned to commit SHAs and let Dependabot update them. The SLSA reusable generator retains its supported version-tag reference.
+- [ ] Move `publint@0.3.21` and `@arethetypeswrong/cli@0.18.5` into root devDependencies and regenerate `pnpm-lock.yaml` with registry access. Then replace their versioned `npx` invocations with `pnpm exec publint` and `pnpm exec attw` while preserving each package's working directory. Exact tool versions are an interim improvement; their transitive dependencies are not yet locked.
+- [ ] Use the existing lockfile-managed Verdaccio in `apps/e2e` for the local registry script.
+- [ ] Set the Actions default token permissions to read-only. Declare necessary write permissions only at job level.
+
+## 5. Best Practices badge and fuzz coverage
+
+- [ ] Register the canonical repository URL at [OpenSSF Best Practices](https://www.bestpractices.dev/) and complete the passing criteria with accurate evidence. This is separate from the Scorecard badge in README.
+- [ ] Keep `core/src/wire/redaction.fuzz.test.ts` running in the unit suite. It already uses `fast-check`, which current Scorecard versions recognize. If Fuzzing is low, check the analyzed commit and scanner version before adding another framework.
+
+Contributor diversity and maintenance checks reflect real project participation and activity. Do not manufacture contributions or reviews to raise those scores.
+
+## 6. Verify the result
+
+- [ ] Merge the workflow changes through the required checks.
+- [ ] Confirm the Scorecard workflow succeeds after the push to `main` or its weekly schedule.
+- [ ] Compare the report's analyzed commit, date, and individual checks against the baseline. Public badge updates can lag the workflow.
+- [ ] Record remaining limitations rather than promising a score before the scan completes.
+
+Check definitions evolve: consult the [official Scorecard criteria](https://github.com/ossf/scorecard/blob/main/docs/checks.md) alongside the version reported by the actual scan.

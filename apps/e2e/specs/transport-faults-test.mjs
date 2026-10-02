@@ -21,7 +21,7 @@ import { startFaultProxy, Fault } from '../fault-proxy.mjs';
 import { freePortSafely, startOwnedDaemon } from '../gate-harness.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const CLI = path.join(ROOT, 'packages/server/dist/cli.js');
+const CLI = path.join(ROOT, 'server/dist/command/cli.js');
 /** The daemon's real port, and the port the MCP proxy is pointed at. The fault sits between them. */
 const DAEMON_PORT = Number(process.env.TRANSPORT_FAULTS_DAEMON_PORT ?? '4746');
 const LINK_PORT = Number(process.env.TRANSPORT_FAULTS_LINK_PORT ?? '4747');
@@ -57,7 +57,7 @@ const alive = () => client.proc !== null && client.proc.exitCode === null && !cl
 async function callAnswered() {
   const started = Date.now();
   try {
-    await client.callTool('reticle_sessions', {}, ANSWER_BUDGET_MS);
+    await client.callTool('reticle_session', {}, ANSWER_BUDGET_MS);
     return { answered: true, ms: Date.now() - started, how: 'result' };
   } catch (err) {
     const text = String(err);

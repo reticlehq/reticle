@@ -1,10 +1,19 @@
 ---
-title: Specs for CI
-description: 'Turn an interactive drive into a repeatable suite with @reticlehq/test: declarative specs bound to signals, never DOM structure.'
+title: Write verification in code
+description: 'Write your own checks with @reticlehq/test, a plain library you call from your own script. No agent required, no test framework required. Also how you run Reticle checks in CI.'
 icon: vial
 ---
 
-To run Reticle checks in CI, install `@reticlehq/test`, write specs with `reticleTest(name, async (t) => …)`, then boot a headless session with `bootSession({ driveUrl, headless: true })` and run them with `runSpecs`. Exit non-zero when `summary.failed` is not `0`. Specs bind to **signals and testids, never DOM structure**, so they survive the refactors that break selector-based suites.
+You do not need an agent to use Reticle. `@reticlehq/test` is an ordinary library: you write a script, it drives your running app, and it tells you whether what you expected actually happened.
+
+That makes this page two things at once, and both are the same code:
+
+- **You decide what "verified" means for your app**, in a file you own, in code you can read and keep in version control.
+- **Those same checks run in CI**, so the thing you wrote by hand is the thing that guards the branch.
+
+You will need `@reticlehq/test` installed, and your app already running. Write checks with `reticleTest(name, async (t) => …)`, open a headless session with `bootSession({ driveUrl, headless: true })`, and run them with `runSpecs`. Exit non-zero when `summary.failed` is not `0`.
+
+Checks bind to **signals and testids, never DOM structure**, so they survive the refactors that break selector-based suites.
 
 Driving Reticle interactively is reconnaissance. This page is how you make it repeatable.
 

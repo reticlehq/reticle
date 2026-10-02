@@ -29,5 +29,5 @@ function readPairingToken(): string {
 export default defineConfig({
   plugins: [reticle({ inject: false }), reactRouter()],
   server: { port: 5303 },
-  define: { __RETICLE_TOKEN__: JSON.stringify(readPairingToken()) },
+  define: { __RETICLE_TOKEN__: JSON.stringify(readPairingToken()), __RETICLE_URL__: JSON.stringify(`ws://localhost:${process.env.RETICLE_PORT ?? 4400}/reticle`) },
 });

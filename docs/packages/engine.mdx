@@ -1,0 +1,40 @@
+---
+title: '@reticlehq/engine'
+description: 'The rules that decide a verdict, with no browser, daemon or CLI attached. Evidence in, verdict out.'
+icon: gavel
+---
+
+`@reticlehq/engine` is the part of Reticle that DECIDES. It reads what happened in a running app and says whether the declared consequence held. It has no browser, no daemon and no command line: evidence goes in, a verdict comes out.
+
+**Apache 2.0. Depends on [`@reticlehq/core`](/packages/core) and `zod`.**
+
+## Why it is a separate package
+
+It was nine thousand lines in the middle of the server, which meant the rules that decide a verdict could only be read, tested or trusted by running the whole daemon. Carving it out has three consequences that matter more than tidiness:
+
+- **It can be audited.** The verdict is the product, so the code that produces one is the code a sceptical reader most wants to see. It is Apache 2.0 for that reason, carved out of an otherwise source-available server.
+- **It can be reused.** Anything that has evidence in the protocol's shape can reach a verdict without Reticle in the loop.
+- **It cannot quietly depend on the daemon.** A rule that needs a browser to decide something is not a rule, it is a measurement, and the package boundary is what makes that confusion a compile error.
+
+## What is in it
+
+| Subpath | What it decides |
+| --- | --- |
+| `./question/*` | Predicates: what a claim means and whether the evidence satisfies it. |
+| `./evidence/*` | What a run proved, how strongly, and what it failed to observe. Includes the honesty grades a verdict is qualified by, and the learned guards a flow earns. |
+| `./disagreement/*` | Contradictions: two of the app's own channels saying different things. |
+| `./window/*` | What counts as "during" an action, and what is ambient noise. |
+
+Absence is treated as evidence with care, and that is most of the difficulty: a thing that did not happen is only meaningful if something was watching, so the engine distinguishes "it did not happen" from "nothing was looking".
+
+## Do you install it?
+
+Only if you are building your own verification tool on top of the protocol. It arrives as a dependency of `@reticlehq/server`.
+
+```bash
+npm install @reticlehq/engine
+```
+
+## Relationship to the protocol
+
+[`open-verification`](/packages/open-verification) states the rules; this package implements them for a real runtime and adds the machinery a real app needs, such as windowing and contradiction detection. `pnpm gate:conformance` is what keeps the two honest: it scores this implementation using the specification's own adjudicator rather than its own.

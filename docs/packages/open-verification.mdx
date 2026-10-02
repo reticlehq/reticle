@@ -1,0 +1,40 @@
+---
+title: 'open-verification'
+description: 'The Open Verification Protocol: the vocabulary a verdict is stated in, the rules that decide one, and the adjudicator that applies them.'
+icon: scale-balanced
+---
+
+`open-verification` is the specification Reticle implements, published as a package so it can be read, depended on and implemented by somebody else. It holds the vocabulary a verdict is stated in, the rules for deciding one, the `Realm` interface a runtime satisfies, and `adjudicate()`, which applies the rules to evidence.
+
+**Apache 2.0. Depends on `zod` and nothing else.** It is the floor of the dependency graph: [`@reticlehq/core`](/packages/core) sits on it, and everything else sits on core.
+
+## Why it is a separate package
+
+A verdict is the product. If the rules that decide one live inside the tool that also gathers the evidence, then "is this implementation correct?" has no answer that is not circular: scoring an implementation against its own rules makes every implementation conformant by construction.
+
+Separating them makes the question answerable. `pnpm gate:conformance` drives the specification's own scenarios against Reticle on a real browser and a real Electron shell, and every verdict is decided by the spec's `adjudicate` rather than by Reticle's kernel. A scenario Reticle answers wrongly is a failure Reticle cannot define away.
+
+It also means the part that DECIDES is auditable and reimplementable by anyone, which is why it is Apache 2.0 while the server is not.
+
+## What is in it
+
+| Export | What it is |
+| --- | --- |
+| Vocabulary | The named values a verdict and its evidence are made of: grades, refusal reasons, close conditions, channels. |
+| `Realm` | What a runtime must be able to do to be verifiable. A browser is one realm; a desktop shell is another. |
+| `adjudicate()` | Evidence in, verdict out, by the published rules. |
+| Vectors | Machine-readable fixtures under `vectors/`, so a second implementation can check itself. |
+
+`SPEC.md`, `CONFORMANCE.md`, `VERSIONING.md`, `GOVERNANCE.md` and `CHANGE-PROCESS.md` ship inside the package: the normative text travels with the code that implements it.
+
+## Do you install it?
+
+No, unless you are implementing the protocol yourself or writing something that reasons about verdicts without going through Reticle. It arrives as a dependency of `@reticlehq/core`.
+
+```bash
+npm install open-verification
+```
+
+## Versioning
+
+The protocol has its own compatibility rules, stated in `VERSIONING.md` inside the package. It is versioned in lockstep with the `@reticlehq/*` packages today; that is a release convenience, not a promise that the protocol changes whenever Reticle does.

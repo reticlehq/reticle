@@ -1,16 +1,18 @@
 ---
 title: reticle cloud commands
-description: Sign in, link a repository, and read runs and regressions from Reticle Cloud.
+description: Connect a project in one command, then read runs and regressions from Reticle Cloud.
 icon: cloud
 ---
 
-Ten subcommands bind this repository to Reticle Cloud so runs and flows land on a dashboard. They dispatch before the local parser, so `reticle login` is one tool, not a second binary.
+From your app directory, `reticle connect --project "My App"` wires the app, opens browser sign-in approval if needed, links the named cloud project, and syncs the local history already on this machine. Run the [installer](/quickstart) once on the machine first. The commands below remain available when you need to sign in or link separately.
 
 ```bash
-npx @reticlehq/server <login|logout|whoami|link|project|config|push|runs|regression|share>
+npx @reticlehq/server connect --project "My App"
 ```
 
-These are thin clients over the `/v1` API. The moat is the server, not the verbs.
+Use `--url https://your-cloud-origin` for a self-hosted cloud. `connect` checks a saved sign-in against that exact host before reuse; if it has expired, the browser approval opens again. It mints or reuses a project-scoped key, so there is no key to paste. A newly wired app may have no run to sync yet: ask your agent to verify one flow and the linked daemon will sync the result. Run `reticle whoami` to check the binding and `reticle push` to send anything still pending.
+
+The other cloud commands are thin clients over the `/v1` API. Their logic is server-side.
 
 ## Where credentials live
 
@@ -20,7 +22,13 @@ These are thin clients over the `/v1` API. The moat is the server, not the verbs
 | `~/.reticle/credentials.json` | Project-scoped API keys from `reticle link`, keyed by `projectId` | Yes |
 | `<repo>/.reticle/cloud.json` | `{ projectId, projectName, url, sync, verify }`. The non-secret binding | No, commit it |
 
-Auth for any command is `RETICLE_CLOUD_KEY` from the environment (the agent path) if set, otherwise the login token. `RETICLE_CLOUD_URL` overrides the endpoint; the default is `http://localhost:8890`. When a command falls back to that default without `RETICLE_CLOUD_URL` (or a saved session URL), it prints a one-line notice on stderr; stdout stays pure JSON for agents.
+Auth for any command is `RETICLE_API_KEY` from the environment (the agent path) if set, otherwise the login token. `RETICLE_CLOUD_URL` (or its short form `RETICLE_URL`) overrides the endpoint; without it, a command uses the saved session's host, and otherwise the hosted service, `https://app.reticle.sh`.
+
+## In CI
+
+CI needs `RETICLE_API_KEY` and nothing else: no `login`, no `link`. Commit `.reticle/cloud.json`, store the key as a secret, and the daemon and `reticle push` sync to the project the binding names. A key stored in `credentials.json` wins over the environment when both exist.
+
+The environment key is only sent to the host it belongs to: `RETICLE_CLOUD_URL` when set, otherwise the hosted service. A repo linked to a self-hosted install therefore also needs `RETICLE_CLOUD_URL` set to that install in CI. A repo with no `cloud.json` and a key in the environment syncs to the hosted service, or to `RETICLE_CLOUD_URL`.
 
 ## The commands
 
@@ -70,7 +78,7 @@ An unattached repo also gets a next-step nudge on stderr, telling you to run `re
 npx @reticlehq/server link [--project <name|id>]
 ```
 
-Binds this repository to a cloud project. With a login token it **mints** a project-scoped key, so there is nothing to paste. With `RETICLE_CLOUD_KEY` already set, it resolves that key's project instead. `--project` accepts a slug id or a display name; omitted, it uses the `default` project. Writes `cloud.json` and the key.
+Binds this repository to a cloud project. With a login token it **mints** a project-scoped key, so there is nothing to paste. With `RETICLE_API_KEY` already set, it resolves that key's project instead. `--project` accepts a slug id or a display name; omitted, it uses the `default` project. Writes `cloud.json` and the key.
 
 ### `reticle project`
 
@@ -101,7 +109,13 @@ reticle: no .reticle/cloud.json here ... run `reticle link` first
 
 ### `reticle push`
 
-Sends local run artifacts from `.reticle` to the linked project, honoring the sync policy. With `sync.runs` off it does nothing and says so. Prints `{ pushed, failed, total, project }`.
+Sends local run artifacts from `.reticle` to the linked project, honoring the sync policy. With `sync.runs` off it does nothing and says so. Prints `{ ok, project, sent, pulled }`, where `sent` carries the accepted counts and, when the server refused anything, a `rejected` array naming each run's index and reason and a `refused` array for flows, capsules and derived records. `sent.records` lists only the records the server accepted.
+
+Runs go up in batches, so a large backlog is never one oversized request.
+
+What the platform cannot read is not sent at all, and a `notSent` array says why: a record kind an older platform does not know yet (this one alone leaves `ok` true), or a flow or run in a file version it does not read. Sending those would only be refused again on every cycle.
+
+**A rejection is a failed push.** If the server refuses any artifact, `ok` is `false` and the command exits `1`, even when other artifacts in the same bundle landed. The reason is kept as `sync.lastError` in `reticle whoami`, and the background daemon logs it once, until a cycle refuses nothing. A refused run is not offered again until its file changes or the platform reports that it reads more: until then it is listed under `notRetried`, and the summary reads `refused, not retried: N run(s) (reason)`. A refused artifact never reaches the dashboard and is re-offered on every cycle, so partial loss is still loss. `ok: true` and exit `0` mean everything offered was accepted, which includes the common case of a repo that was already up to date. The accepted counts still report what did land, so a partial push is visible as one.
 
 ### `reticle runs`
 
@@ -128,17 +142,17 @@ reticle: usage: reticle share <runId>
 `push`, `runs` and `regression` all need a project to talk to. Without one they exit `1` with the same line on stderr, measured:
 
 ```
-reticle: cloud not attached here ... run `reticle link` (or set RETICLE_CLOUD_URL/KEY)
+reticle: cloud not attached here ... run `reticle link` (or set RETICLE_API_KEY)
 ```
 
 ## Exit codes
 
-| Code | Meaning                                                                             |
-| ---- | ----------------------------------------------------------------------------------- |
-| `0`  | Success                                                                             |
-| `1`  | The API call failed, or the repository is not attached where attachment is required |
-| `2`  | Usage error, or not signed in and no `RETICLE_CLOUD_KEY`                            |
-| `3`  | `regression` only: at least one flow broke                                          |
+| Code | Meaning |
+| --- | --- |
+| `0` | Success |
+| `1` | The API call failed, the repository is not attached where attachment is required, or `push` had an artifact refused |
+| `2` | Usage error, or not signed in and no `RETICLE_API_KEY` |
+| `3` | `regression` only: at least one flow broke |
 
 Output is pretty-printed JSON on stdout. Errors and next-step nudges go to stderr, so an agent parsing stdout is unaffected.
 

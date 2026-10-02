@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // HONESTY-CRITICAL: prove the instrumentation-gap surface works against a REAL app in a REAL
 // browser — that an absence in the app which weakened a verdict is reported with the change that
 // would fix it, and, just as importantly, that a verdict nothing weakened reports nothing at all.
@@ -19,7 +20,7 @@
 // below it registers one. The spec was wrong and the product was right — which is the whole reason
 // a rule gets driven against a real app and not only unit-tested.
 import { chromium } from 'playwright';
-import { start, TOOLS } from '@reticlehq/server';
+import { start, TOOLS, RecordingStore } from '@reticlehq/server';
 import { waitForSession } from '../wait-for-session.mjs';
 
 let pass = 0,
@@ -32,7 +33,7 @@ const chk = (l, o, d = '') => {
 // The battery gives every spec :4400. Overridable so this can also be run by hand on a machine
 // where an agent's own MCP daemon already holds that port — killing that one takes the agent's
 // tooling down with it, which is a documented way to lose an afternoon.
-const PORT = Number(process.env.RETICLE_PORT ?? 4400);
+const PORT = Number(TEST_BRIDGE_PORT);
 const server = await start({ port: PORT, mcp: false });
 // The coverage tool reads and raises the project's best observability. Stubbed rather than written
 // to disk: this spec is about the gap surface, and a real store would make it depend on what an
@@ -40,6 +41,7 @@ const server = await start({ port: PORT, mcp: false });
 let raised = null;
 const deps = {
   sessions: server.bridge.sessions,
+  recordings: new RecordingStore(),
   project: {
     recordRoutes: async () => {},
     bestObservability: async () => undefined,

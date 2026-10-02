@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // REGRESSION (field bug #1): real input must SURVIVE SPA navigation. Before the fix, session.url
 // froze at the hello "/" so CDP correlation broke after a client-side pushState and acts fell back
 // to synthetic. After the fix the server consumes route.change and session.url tracks the live URL.
@@ -9,7 +10,7 @@ let pass=0,fail=0; const chk=(l,o,d='')=>{console.log(`   ${o?'✅':'❌'} ${l}$
 const browser=await chromium.launch({headless:true,args:['--remote-debugging-port=9222']});
 const page=await browser.newPage();
 await page.goto('http://localhost:3100/');
-const server=await start({port:4400,mcp:false});
+const server=await start({port: TEST_BRIDGE_PORT,mcp:false});
 const provider=new CdpRealInputProvider({cdpUrl:'http://localhost:9222'});
 const deps={sessions:server.bridge.sessions,baselines:new BaselineStore(),recordings:new RecordingStore(),realInput:provider};
 const SID='next-smoke';

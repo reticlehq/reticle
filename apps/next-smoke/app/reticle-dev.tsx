@@ -28,6 +28,9 @@ export function ReticleDev() {
       // collide on one session. Override the id per tab with ?session=<id>.
       const sessionParam = new URLSearchParams(window.location.search).get('session');
       reticle.connect({
+        ...(process.env.NEXT_PUBLIC_RETICLE_URL
+          ? { url: process.env.NEXT_PUBLIC_RETICLE_URL }
+          : {}),
         session: sessionParam !== null && sessionParam.length > 0 ? sessionParam : 'next-smoke',
         present: true,
         ...(typeof token === 'string' && token.length > 0 ? { token } : {}),

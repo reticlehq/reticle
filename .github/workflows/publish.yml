@@ -1,8 +1,18 @@
 name: Publish to npm
 
-# Publishes the public @reticlehq/* packages (core, browser, react, server, init, vite-plugin,
-# next, babel-plugin, test, eslint-plugin) when a GitHub Release is published, or on manual
-# dispatch.
+# Publishes the public @reticlehq/* packages when a GitHub Release is published, or on manual
+# dispatch. THIRTEEN of them, and the list is worth naming because it is longer than people
+# assume: core, browser, react, server, init, vite-plugin, next, babel-plugin, test,
+# eslint-plugin, electron, engine, open-verification.
+#
+# The last three were absent from this comment while being published by every run. `engine` and
+# `open-verification` were carved out during v3 and nobody updated the line; `electron` predates that.
+# The true list is whatever `pnpm -r publish` selects -- every workspace package that is not
+# `private` -- and it was read off `pnpm -r publish --dry-run` rather than counted by hand.
+#
+# It matters because this comment is what a person checks before a release. Two of the three
+# unlisted packages shipped their compiled tests and source maps until v3, and a reader auditing
+# "what do we publish" from this line would not have looked at them.
 # `pnpm -r publish` walks the workspace in dependency order, skips `private` packages (the retired
 # private packages are never republished), and skips any version
 # already on npm — so a partial/failed run is safe to re-trigger.
@@ -16,6 +26,14 @@ name: Publish to npm
 # Provenance (the verified "published from GitHub Actions" badge) requires a PUBLIC repo +
 # the id-token permission below. If the repo is still private, drop the NPM_CONFIG_PROVENANCE
 # line (or make the repo public) or the publish will fail.
+
+# Least privilege by default (OpenSSF Scorecard Token-Permissions), the same line `ci.yml` carries
+# and this file did not. Without it the workflow inherits the repository default, which can be
+# write-all — on the one workflow that holds an npm token and publishes thirteen packages. CodeQL
+# flagged it `high` on the first run over this branch. The job below still declares the `id-token:
+# write` it needs for provenance; that is the point of declaring it there rather than here.
+permissions:
+  contents: read
 
 on:
   release:
@@ -32,11 +50,12 @@ jobs:
     environment: Production # NPM_TOKEN lives in this GitHub Environment
     permissions:
       contents: read
+      issues: read # the pending-release check lists open issues
       id-token: write # npm provenance
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -49,6 +68,13 @@ jobs:
         run: |
           echo "refusing to publish from ${{ github.ref }} — dispatch only from main or publish via a Release"
           exit 1
+      # 3.1.0 shipped with this label still on open issues, including five whose fix was only an
+      # unmerged pull request. The label means the fix is on this release. Outstanding ones are
+      # closed, or the label comes off, before npm sees the packages.
+      - name: Refuse a release that still has fixed-pending-release open
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/check-pending-release.mjs
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       # Gate the artifact: never publish code that fails the same checks CI enforces on every PR.
@@ -57,6 +83,22 @@ jobs:
       - run: pnpm test:unit
         env:
           TURBO_LOG_ORDER: stream # a hung task must say so while it hangs (see ci.yml)
+      # A type-correct release must also complete the real MCP/browser verification loop.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-Linux-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: playwright-Linux-
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:smoke
+      - name: Release smoke evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-smoke-evidence
+          path: artifacts/smoke/
+          if-no-files-found: warn
+          retention-days: 14
       # RETICLE_ISSUER_PUBLIC_KEY is consumed by @reticlehq/server's `prepack`, which bakes it into the
       # built artifact (scripts/stamp-issuer-key.mjs). It has to be here rather than in an earlier step:
       # prepack rebuilds dist from scratch, so anything stamped before this point is deleted, and the

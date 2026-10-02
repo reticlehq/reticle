@@ -23,6 +23,27 @@
     "noUnusedParameters": true,
     "allowJs": false,
 
+    /*
+     * `@/x` means "x from THIS package's src", at any depth.
+     *
+     * Relative only for a sibling in the same directory. Everything else is absolute, so a file's
+     * imports say WHERE something lives rather than how far away it happens to sit — and moving a
+     * file stops rewriting the imports of everything around it.
+     *
+     * `paths` lives here so there is one spelling of the rule, but `baseUrl` must be declared in
+     * EACH package's own tsconfig — in an extended config it resolves against the file it is written
+     * in, so a `baseUrl` here would point every package's `@/` at the repository root. Declared per
+     * package, `@/` is package-local by construction: `@/hooks/x` in `server` can never reach into
+     * `core`. Crossing a package boundary still means naming the package, which is what the boundary
+     * guards read.
+     *
+     * TypeScript resolves this at COMPILE time and Node does not resolve it at all — a bare `@/…` in
+     * emitted JS is a package Node will fail to find. `tsc-alias` rewrites the emitted imports back
+     * to relative paths, which is why every build and every prepack runs it, and why
+     * `scripts/prepare-dist.mjs` refuses to pack a dist that still contains one.
+     */
+    "paths": { "@/*": ["./src/*"] },
+
     "esModuleInterop": true,
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,

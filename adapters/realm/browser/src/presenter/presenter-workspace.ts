@@ -1,0 +1,251 @@
+import { RETICLE_ROOT_GLOBAL, RETICLE_URL_PARAM } from '@reticlehq/core';
+import { PresenterIcon, PRESENTER_ICON_SIZE, hiIconHtml } from './icons/presenter-icons.js';
+import type { AccountState } from '@reticlehq/core';
+import {
+  ACCOUNT_SIGNIN_ATTR,
+  ACCOUNT_TEXT,
+  accountControlHtml,
+  type AccountDetails,
+} from './presenter-account.js';
+
+const WORKSPACE_BTN_ATTR = 'data-reticle-workspace-btn';
+const WORKSPACE_MENU_ATTR = 'data-reticle-workspace-menu';
+const WORKSPACE_NAME_ATTR = 'data-reticle-workspace-name';
+const WORKSPACE_PATH_ATTR = 'data-reticle-workspace-path';
+const WORKSPACE_PROJECT_ATTR = 'data-reticle-workspace-project';
+const WORKSPACE_COPY_ATTR = 'data-reticle-workspace-copy';
+/**
+ * Where the account capsule lands: a slot, filled later, rather than markup built here.
+ *
+ * This row is built ONCE at mount, and whether the machine is signed in arrives later and can change
+ * — a `reticle login` in another terminal while the page is open is an ordinary thing to do. So the
+ * row reserves the space and `paintWorkspaceAccount` fills it whenever a snapshot lands, the same
+ * way the folder and project rows are painted rather than interpolated.
+ */
+/**
+ * The account capsule's slot, in the TOOLBAR rather than the workspace menu.
+ *
+ * It used to sit in the menu's head, which put it inside `.reticle-workspace-wrap` -- a wrapper that
+ * hides itself when no repo root and no leased project id are known. Account state has nothing to do
+ * with whether the checkout is identifiable, so on any app that injects neither, a signed-in user
+ * could never see that they were signed in.
+ */
+export const TOOLBAR_ACCOUNT_ATTR = 'data-reticle-toolbar-account';
+
+/** How long the Sign in control says "Copied" before returning to its label. */
+const COPIED_MS = 1_200;
+
+const WORKSPACE_LABEL = 'Workspace';
+const PROJECT_LABEL = 'Project';
+const COPY_PATH_LABEL = 'Copy path';
+const COPIED_PATH_LABEL = 'Copied';
+const WORKSPACE_FALLBACK = 'This page';
+
+/** Read the Vite-injected repo root, when present. */
+function readWorkspaceRoot(): string | undefined {
+  const value = (globalThis as Record<string, unknown>)[RETICLE_ROOT_GLOBAL];
+  return 'string' === typeof value && value.length > 0 ? value : undefined;
+}
+
+/** Last path segment for compact display (Codex/Cursor-style chip). */
+export function workspaceFolderLabel(root: string): string {
+  const normalized = root.replace(/\\/g, '/').replace(/\/+$/, '');
+  const parts = normalized.split('/').filter((part) => part.length > 0);
+  const last = parts[parts.length - 1];
+  return last !== undefined && last.length > 0 ? last : WORKSPACE_FALLBACK;
+}
+
+/** Project id from the URL lease stamp, when present. */
+function readProjectIdFromUrl(): string | undefined {
+  if ('undefined' === typeof window) return undefined;
+  const id = new URLSearchParams(window.location.search).get(RETICLE_URL_PARAM.PROJECT);
+  return id !== null && id.length > 0 ? id : undefined;
+}
+
+function workspaceSummary(): { folder: string; root?: string; projectId?: string } {
+  const root = readWorkspaceRoot();
+  const projectId = readProjectIdFromUrl();
+  const folder = root !== undefined ? workspaceFolderLabel(root) : WORKSPACE_FALLBACK;
+  if (root === undefined && projectId === undefined) return { folder };
+  const out: { folder: string; root?: string; projectId?: string } = { folder };
+  if (root !== undefined) out.root = root;
+  if (projectId !== undefined) out.projectId = projectId;
+  return out;
+}
+
+/** Workspace chip + detail menu - sits above the composer row. */
+export function workspaceRowHtml(): string {
+  const folderIcon = hiIconHtml(PresenterIcon.LAYOUT, PRESENTER_ICON_SIZE.HELP);
+  const caret = hiIconHtml(PresenterIcon.CARET_DOWN, PRESENTER_ICON_SIZE.HELP);
+  const copyIcon = hiIconHtml(PresenterIcon.COPY, PRESENTER_ICON_SIZE.HELP);
+  return `<div class="reticle-workspace-wrap">
+    <button type="button" class="reticle-workspace" ${WORKSPACE_BTN_ATTR} aria-haspopup="true" aria-expanded="false" title="${WORKSPACE_LABEL}">
+      <span class="reticle-workspace-icon" aria-hidden="true">${folderIcon}</span>
+      <span class="reticle-workspace-name" ${WORKSPACE_NAME_ATTR}>${WORKSPACE_FALLBACK}</span>
+      <span class="reticle-workspace-caret" aria-hidden="true">${caret}</span>
+    </button>
+    <div class="reticle-workspace-menu" ${WORKSPACE_MENU_ATTR} role="region" aria-label="${WORKSPACE_LABEL}" aria-hidden="true" hidden>
+      <div class="reticle-workspace-menu-head">
+        <div class="reticle-workspace-menu-title">${WORKSPACE_LABEL}</div>
+        <div class="reticle-workspace-menu-actions">
+          <button type="button" class="reticle-workspace-copy" ${WORKSPACE_COPY_ATTR} title="${COPY_PATH_LABEL}" aria-label="${COPY_PATH_LABEL}">${copyIcon}</button>
+        </div>
+      </div>
+      <div class="reticle-workspace-menu-row"><span class="reticle-workspace-menu-k">Folder</span><span class="reticle-workspace-menu-v" data-reticle-workspace-folder></span></div>
+      <div class="reticle-workspace-menu-row"><span class="reticle-workspace-menu-k">Path</span><span class="reticle-workspace-menu-v reticle-workspace-menu-path" ${WORKSPACE_PATH_ATTR}></span></div>
+      <div class="reticle-workspace-menu-row" data-reticle-workspace-project-row hidden><span class="reticle-workspace-menu-k">${PROJECT_LABEL}</span><span class="reticle-workspace-menu-v" ${WORKSPACE_PROJECT_ATTR}></span></div>
+    </div>
+  </div>`;
+}
+
+export function paintWorkspace(root: HTMLElement): void {
+  const summary = workspaceSummary();
+  // Nothing to say - no injected repo root, no leased project id - so the chip says nothing. A
+  // fallback like "This page" names no workspace and is exactly as true of every page: the chip earns
+  // its slot only when it can tell you WHICH checkout is being driven.
+  const wrap = root.querySelector('.reticle-workspace-wrap');
+  if (wrap instanceof HTMLElement) {
+    const known = summary.root !== undefined || summary.projectId !== undefined;
+    wrap.toggleAttribute('hidden', !known);
+  }
+  const chipName = root.querySelector(`[${WORKSPACE_BTN_ATTR}] [${WORKSPACE_NAME_ATTR}]`);
+  if (chipName instanceof HTMLElement) chipName.textContent = summary.folder;
+  const folderEl = root.querySelector('[data-reticle-workspace-folder]');
+  if (folderEl instanceof HTMLElement) folderEl.textContent = summary.folder;
+  const pathEl = root.querySelector(`[${WORKSPACE_PATH_ATTR}]`);
+  if (pathEl instanceof HTMLElement) {
+    pathEl.textContent = summary.root ?? '-';
+    pathEl.title = summary.root ?? '';
+  }
+  const projectEl = root.querySelector(`[${WORKSPACE_PROJECT_ATTR}]`);
+  const projectRow = root.querySelector('[data-reticle-workspace-project-row]');
+  const copyBtn = root.querySelector(`[${WORKSPACE_COPY_ATTR}]`);
+  if (summary.projectId !== undefined) {
+    projectRow?.removeAttribute('hidden');
+    if (projectEl instanceof HTMLElement) projectEl.textContent = summary.projectId;
+  } else {
+    projectRow?.setAttribute('hidden', '');
+    if (projectEl instanceof HTMLElement) projectEl.textContent = '';
+  }
+  if (copyBtn instanceof HTMLButtonElement) {
+    copyBtn.disabled = summary.root === undefined;
+  }
+  const btn = root.querySelector(`[${WORKSPACE_BTN_ATTR}]`);
+  if (btn instanceof HTMLElement && summary.root !== undefined) {
+    btn.title = `${WORKSPACE_LABEL}: ${summary.root}`;
+  }
+}
+
+export function mountWorkspaceSelector(root: HTMLElement): () => void {
+  const ac = new AbortController();
+  paintWorkspace(root);
+  const btn = root.querySelector(`[${WORKSPACE_BTN_ATTR}]`);
+  const menu = root.querySelector(`[${WORKSPACE_MENU_ATTR}]`);
+  const copyBtn = root.querySelector(`[${WORKSPACE_COPY_ATTR}]`);
+  if (!(btn instanceof HTMLElement) || !(menu instanceof HTMLElement)) return () => undefined;
+
+  const close = (): void => {
+    menu.setAttribute('aria-hidden', 'true');
+    menu.setAttribute('hidden', '');
+    btn.setAttribute('aria-expanded', 'false');
+  };
+
+  const open = (): void => {
+    paintWorkspace(root);
+    menu.removeAttribute('hidden');
+    menu.setAttribute('aria-hidden', 'false');
+    btn.setAttribute('aria-expanded', 'true');
+  };
+
+  const toggle = (): void => {
+    if ('true' === menu.getAttribute('aria-hidden') || menu.hasAttribute('hidden')) open();
+    else close();
+  };
+
+  const onBtnClick = (e: MouseEvent): void => {
+    e.stopPropagation();
+    toggle();
+  };
+  /*
+   * Sign in, from the capsule in the menu head. Delegated on the MENU because the capsule is
+   * repainted on every snapshot — a listener bound to the button itself would work until the first
+   * push and then silently stop, which demos perfectly and is broken by the time anyone uses it.
+   *
+   * Copies the command rather than starting anything: signing in is a device flow in a terminal, a
+   * page cannot run a CLI, and a button that quietly does nothing is worse than a line of text.
+   */
+  const onMenuClick = (e: MouseEvent): void => {
+    const target = e.target;
+    if (!(target instanceof Element)) return;
+    const signin = target.closest(`[${ACCOUNT_SIGNIN_ATTR}]`);
+    if (null === signin) return;
+    e.stopPropagation();
+    void navigator.clipboard?.writeText(ACCOUNT_TEXT.SIGNIN_COMMAND).catch(() => undefined);
+    const previous = signin.textContent;
+    signin.textContent = ACCOUNT_TEXT.COPIED;
+    setTimeout(() => {
+      signin.textContent = previous;
+    }, COPIED_MS);
+  };
+  menu.addEventListener('click', onMenuClick);
+  const onDocPointer = (e: PointerEvent): void => {
+    const target = e.target;
+    if (!(target instanceof Node)) return;
+    if (btn.contains(target) || menu.contains(target)) return;
+    close();
+  };
+  const onKeyDown = (e: KeyboardEvent): void => {
+    if ('Escape' !== e.key) return;
+    if ('true' === menu.getAttribute('aria-hidden') || menu.hasAttribute('hidden')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    close();
+  };
+  const onCopy = (e: Event): void => {
+    e.stopPropagation();
+    const path = workspaceSummary().root;
+    if (path === undefined) return;
+    void navigator.clipboard?.writeText(path);
+    if (copyBtn instanceof HTMLButtonElement) {
+      const prior = copyBtn.title;
+      copyBtn.title = COPIED_PATH_LABEL;
+      window.setTimeout(() => {
+        copyBtn.title = prior;
+      }, 1200);
+    }
+  };
+
+  btn.addEventListener('click', onBtnClick);
+  menu.addEventListener('pointerdown', (e) => e.stopPropagation());
+  copyBtn?.addEventListener('click', onCopy);
+  // These two, unlike the three above, are on `document` rather than a node this module owns — they
+  // are the ones that would outlive the presenter if teardown forgot them, so they get the
+  // AbortController; `btn`/`menu`/`copyBtn` are removed along with the node when the presenter unmounts.
+  document.addEventListener('pointerdown', onDocPointer, { signal: ac.signal });
+  document.addEventListener('keydown', onKeyDown, { signal: ac.signal });
+
+  return (): void => {
+    btn.removeEventListener('click', onBtnClick);
+    copyBtn?.removeEventListener('click', onCopy);
+    ac.abort();
+  };
+}
+
+/**
+ * Fill the account slot in the workspace menu.
+ *
+ * `offerSignIn` is TRUE here and false in the panels, which is the one asymmetry worth stating. This
+ * is persistent chrome: a capsule in the toolbar answering "whose machine is this", the way an
+ * account avatar does in every other product. A panel is something somebody opened to read a
+ * result, and interrupting that with a sign-in offer is the nag the report panel's own tests refuse.
+ */
+export function paintToolbarAccount(
+  root: HTMLElement,
+  account: AccountState | undefined,
+  dashboardUrl: string | undefined,
+  details: AccountDetails = {},
+): void {
+  const slot = root.querySelector(`[${TOOLBAR_ACCOUNT_ATTR}]`);
+  if (!(slot instanceof HTMLElement)) return;
+  slot.innerHTML = accountControlHtml(account, { ...details, dashboardUrl }, true);
+}

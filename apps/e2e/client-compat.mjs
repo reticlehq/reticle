@@ -30,11 +30,14 @@ import {
   mergeClientConfig,
   ClientMergeStatus,
   clientSnippet,
-} from '../../packages/server/dist/init/mcp-clients.js';
+} from '../../init/dist/register/mcp-clients.js';
 import { freePortSafely } from './gate-harness.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const CLI = join(ROOT, 'packages/server/dist/cli.js');
+const CLI = join(ROOT, 'server/dist/command/cli.js');
+const stateDir = mkdtempSync(join(tmpdir(), 'reticle-client-state-'));
+process.env.RETICLE_STATE_DIR = stateDir;
+process.env.RETICLE_PAIRING_TOKEN_DIR = stateDir;
 const PORT = Number(process.env.CLIENT_COMPAT_PORT ?? '4795');
 const ONLY = process.argv.includes('--only')
   ? process.argv[process.argv.indexOf('--only') + 1]
@@ -181,7 +184,8 @@ for (const spec of chosen) {
     record.checks.initialize = seen.initialize;
     record.checks.tools = seen.tools;
     record.verdict = seen.initialize && seen.tools > 0 ? 'runnable-unverified' : 'broken';
-    await freePortSafely(PORT);
+    const daemonPid = Number(readFileSync(join(stateDir, `daemon-${PORT}.pid`), 'utf8'));
+    await freePortSafely(PORT, { ownedPids: [daemonPid] });
   } else {
     record.verdict = 'broken';
   }

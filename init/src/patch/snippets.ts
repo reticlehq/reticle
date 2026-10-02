@@ -1,0 +1,966 @@
+/**
+ * Generated file contents and copy-paste snippets for `reticle init`. Kept as named constants/builders
+ * so the runner never inlines free strings.
+ */
+
+import {
+  RETICLE_DEFAULT_PORT,
+  bridgeWsUrl,
+  RETICLE_CLIENT_HOST,
+  RETICLE_WS_PATH,
+} from '@reticlehq/core';
+import { Framework, UiLibrary } from '@/detect/detect.js';
+import type { FoundStore } from '@/detect/capabilities.js';
+import { RETICLE_VERSION } from '@/version.js';
+import { VITE_ENV_DEV_DECLARATION } from './vite-env-types.js';
+import { posix } from 'node:path';
+
+/**
+ * The SDK as one import a plain page can actually resolve.
+ *
+ * `init` used to tell static-HTML users that a page with no build step could not load the SDK, and
+ * to go and stand up a bundler. That is true of a BARE specifier and false of a URL, and the
+ * difference was the whole road for every server-rendered app we hear from: FastAPI, Flask, Django,
+ * Streamlit, Rails. Proven end to end before this shipped, on a page served by `python3 -m
+ * http.server`: a session connected, a snapshot returned, and two act_and_wait calls came back
+ * `verified: "yes"`.
+ *
+ * jsDelivr rather than esm.sh, measured: a third of the requests and a third of the bytes for the
+ * same result. `/+esm` is what makes it work, and the bare package URL does NOT: every file in
+ * `dist` still carries bare workspace specifiers such as `@reticlehq/core`, so an unbundled entry
+ * point dies on the first import. That is also why adding `unpkg`/`jsdelivr` fields to package.json
+ * would not help.
+ *
+ * PINNED to this server's version on purpose. A floating import upgrades the page SDK underneath a
+ * daemon that did not move, which is `version_skew` arriving by a route nothing checks.
+ */
+/**
+ * Where a generated file sends someone to learn `registerStore`. A URL, not a path into
+ * `node_modules/@reticlehq/server`: the server is never installed into the app, so the path the
+ * generated files used to name did not exist in any project they were written into.
+ */
+export const STATE_DOCS_URL = 'https://docs.reticle.sh/state-management';
+
+export const CDN_SDK_URL = `https://cdn.jsdelivr.net/npm/@reticlehq/browser@${RETICLE_VERSION}/+esm`;
+
+/**
+ * The connect argument literal: a non-default port adds a `url`, and a projectId is always passed
+ * (so the app is identifiable across port changes). Empty string only when neither applies.
+ */
+export function connectArg(port: number | undefined, projectId?: string): string {
+  const parts: string[] = [];
+  if (port !== undefined && port !== RETICLE_DEFAULT_PORT) {
+    parts.push(`url: '${bridgeWsUrl(port)}'`);
+  }
+  if (projectId !== undefined && projectId.length > 0) parts.push(`projectId: '${projectId}'`);
+  return parts.length > 0 ? `{ ${parts.join(', ')} }` : '';
+}
+
+/**
+ * The same literal, with the pairing token folded in.
+ *
+ * The token belongs INSIDE the call the user pastes. Every other stack has a build step to inline
+ * it (the Vite plugin's `define`, Next's NEXT_PUBLIC_*, Astro's config, CRA's .env); the hand-wired
+ * paths have none, so `init` inlines the literal it already read. Without it the bridge closes the
+ * socket with AUTH_FAILED and no session ever appears: see Bridge's hello handler.
+ *
+ * An empty token is omitted rather than emitted as `token: ''`. A daemon that could not write to
+ * $HOME runs without auth and trusts loopback, and an empty string would fail the comparison against
+ * one that does hold a token.
+ */
+export function connectArgWithToken(
+  port: number | undefined,
+  projectId: string | undefined,
+  pairingToken: string | undefined,
+): string {
+  const base = connectArg(port, projectId);
+  if (pairingToken === undefined || 0 === pairingToken.length) return base;
+  const inner = base.length > 0 ? base.slice(1, -1).trim() : '';
+  return `{ ${[inner, `token: '${pairingToken}'`].filter((p) => p.length > 0).join(', ')} }`;
+}
+
+/**
+ * Does this codebase want the React kit, or the framework-neutral sensor? The ONE answer, read by
+ * both `frameworkPackages` (what is installed) and `sdkImport` (what generated code imports).
+ *
+ * The kit is what adds component identity — component names and stacks — and it is worth having
+ * wherever React or Preact is rendering (the adapter reaches Preact through `preact/compat`).
+ * Everywhere else it is a package named `@reticlehq/react`, carrying `react` in its peer
+ * dependencies, being installed into a codebase that has no React in it.
+ *
+ * UNKNOWN keeps the kit deliberately. Absence of evidence is not evidence of Vue, and guessing
+ * "sensor" on no information silently drops component identity from apps that should have it.
+ *
+ * Except where the absence IS the evidence: on these stacks nothing renders React but a `react` the
+ * app depends on itself, so no renderer found is a vanilla, Lit, Solid or Angular app.
+ */
+const RENDERER_IS_DECLARED: ReadonlySet<Framework | undefined> = new Set<Framework | undefined>([
+  Framework.VITE,
+  // A package.json with no UI library and no bundler Reticle recognises. It was handed
+  // `@reticlehq/react` and `react` — a React install into a page with no React in it.
+  Framework.HTML,
+  // Forge's Vite template is vanilla TypeScript; a React renderer declares `react` like any app.
+  Framework.ELECTRON_FORGE,
+  Framework.ANGULAR,
+]);
+
+export function usesReactKit(uiLibrary: UiLibrary, framework?: Framework): boolean {
+  if (UiLibrary.UNKNOWN === uiLibrary) return !RENDERER_IS_DECLARED.has(framework);
+  return uiLibrary !== UiLibrary.VUE && uiLibrary !== UiLibrary.SVELTE;
+}
+
+/**
+ * Which SDK package the GENERATED code should import, and whether `install()` applies.
+ *
+ * This has to agree with `frameworkPackages`, and it did not. That function was changed so a Vue or
+ * Svelte app installs `@reticlehq/browser` instead of the React adapter — correctly — while every
+ * generated connect snippet still said `import('@reticlehq/react')`. A SvelteKit app would have
+ * installed the sensor and then run a hook importing a package that is not there.
+ *
+ * `install()` is the React adapter's, not the sensor's: `@reticlehq/browser` exports `reticle` and no
+ * `install`, so swapping the specifier alone would trade a missing module for a missing export.
+ */
+export function sdkImport(
+  uiLibrary: UiLibrary,
+  framework?: Framework,
+): { specifier: string; usesInstall: boolean } {
+  return usesReactKit(uiLibrary, framework)
+    ? { specifier: '@reticlehq/react', usesInstall: true }
+    : { specifier: '@reticlehq/browser', usesInstall: false };
+}
+
+/**
+ * The framework plugin to show ALONGSIDE reticle() in the example, so the ordering is clear.
+ *
+ * It used to be `react()` unconditionally, which is what a Vue app was shown — a plugin it does not
+ * have, four lines after `init` had correctly detected Vue and said so. The example exists to show
+ * that `reticle()` goes last, not to tell anyone which UI framework they are using.
+ */
+function frameworkPluginExample(uiLibrary: UiLibrary): string {
+  switch (uiLibrary) {
+    case UiLibrary.VUE:
+      return 'vue()';
+    case UiLibrary.SVELTE:
+      return 'svelte()';
+    case UiLibrary.REACT:
+    case UiLibrary.PREACT:
+      return 'react()';
+    default:
+      // Nothing detected: name no plugin rather than invent one. The reader keeps whatever they have.
+      return '/* your existing plugins */';
+  }
+}
+
+/**
+ * The `defineConfig` import each printed config needs. The snippets call `defineConfig`, and one
+ * pasted as printed into an empty file used to die with `ReferenceError: defineConfig is not
+ * defined` because the import was left out.
+ */
+const DEFINE_CONFIG_IMPORT = {
+  VITE: "import { defineConfig } from 'vite';",
+  ELECTRON_VITE: "import { defineConfig } from 'electron-vite';",
+} as const;
+
+/** The Vite-config snippet printed when we can't safely auto-patch the config. */
+export function viteManual(
+  port: number | undefined,
+  uiLibrary: UiLibrary = UiLibrary.UNKNOWN,
+  inject = true,
+  sourceMapping = true,
+): string {
+  const options = [
+    ...(port === undefined ? [] : [`port: ${String(port)}`]),
+    ...(false === inject ? ['inject: false'] : []),
+    ...(sourceMapping ? [] : ['sourceMapping: false']),
+  ];
+  const call = 0 === options.length ? 'reticle()' : `reticle({ ${options.join(', ')} })`;
+  const note = sourceMapping
+    ? ''
+    : `\n\n\`sourceMapping: false\` because this app renders through a non-DOM React renderer, where a
+lowercase JSX tag is not an element. Stamping one crashes the app at commit time. You lose source
+pointers, not the app.`;
+  return `Add the Reticle plugin to your Vite config:
+
+  ${DEFINE_CONFIG_IMPORT.VITE}
+  import { reticle } from '@reticlehq/vite-plugin';
+
+  export default defineConfig({
+    plugins: [${call}, ${frameworkPluginExample(uiLibrary)}],
+  });
+
+The position in the array does not matter: the plugin declares \`enforce: 'pre'\`, so Vite runs it
+before every normal plugin wherever you put it. Shown first only because that is where \`init\`
+writes it when it patches the config for you. It applies during \`vite\` (dev) only — it is dropped
+from \`vite build\`.${note}`;
+}
+
+/**
+ * The electron-vite recipe: the plugin belongs in `renderer`, never in `main` or `preload`.
+ *
+ * `desktop: true` is load-bearing: it injects connect() into the entry module and passes
+ * `allowInProduction`, because a packaged renderer has no dev server and reports
+ * `NODE_ENV=production`, so without it the SDK's production backstop refuses to start. It does not
+ * instrument a release — a production-mode `electron-vite build` is stubbed like a web bundle — so
+ * a packaged renderer that should be driven is built with `--mode development`.
+ */
+export function electronViteManual(
+  port: number | undefined,
+  uiLibrary: UiLibrary = UiLibrary.UNKNOWN,
+): string {
+  const extras =
+    port === undefined
+      ? 'desktop: true, captureNetworkBodies: true'
+      : `desktop: true, port: ${String(port)}, captureNetworkBodies: true`;
+  return `Add the Reticle plugin to the \`renderer\` block of electron.vite.config, not \`main\`:
+
+  ${DEFINE_CONFIG_IMPORT.ELECTRON_VITE}
+  import { reticle } from '@reticlehq/vite-plugin';
+
+  export default defineConfig({
+    main: { /* unchanged */ },
+    preload: { /* unchanged */ },
+    renderer: {
+      plugins: [${frameworkPluginExample(uiLibrary)}, reticle({ ${extras} })],
+    },
+  });
+
+\`desktop: true\` is required: a packaged renderer has no dev server and reports production, and
+without it the SDK refuses to start there. A production-mode build still ships no Reticle code; to drive a
+packaged renderer with no dev server, build it with \`--mode development\`.
+
+Also add \`import '@reticlehq/electron/preload'\` as the first line of your preload, and
+\`installReticleCapture(win)\` in main after you construct the BrowserWindow.`;
+}
+
+/** Next.js config wrap — always printed (we never auto-rewrite next.config). */
+export function nextConfigManual(configFile: string, sourceMapping = true): string {
+  const options = sourceMapping ? '' : ', { sourceMapping: false }';
+  const note = sourceMapping
+    ? ''
+    : `\n\n\`sourceMapping: false\` because this app renders through a non-DOM React renderer, where a
+lowercase JSX tag is not an element. Stamping one crashes the app at commit time. You lose source
+pointers, not the app.`;
+  return `Wrap your ${configFile} export with withReticle (keeps SWC, dev-only):
+
+  import { withReticle } from '@reticlehq/next';
+
+  export default withReticle(nextConfig${options});${note}`;
+}
+
+/**
+ * The dev-only client component that connects Reticle after hydration.
+ *
+ * The token is not optional. The bridge requires a pairing token even on localhost, and unlike Vite
+ * (where the plugin injects it) a Next app has to carry it through `withReticle`, which publishes it
+ * as `NEXT_PUBLIC_RETICLE_TOKEN`. This file used to connect with only a projectId, so every Next
+ * setup ended at `bridge refused the connection: authentication failed` and no session ever appeared.
+ */
+export function nextReticleDevFile(
+  port: number | undefined,
+  projectId?: string,
+  testids: readonly string[] = [],
+  stores: readonly string[] = [],
+  found: readonly FoundStore[] = [],
+): string {
+  const base = connectArg(port, projectId);
+  const fields = '' === base ? '' : `${base.slice(1, -1).trim()}, `;
+  const ids = testids.map((t) => `'${t}'`).join(', ');
+  // Same rule as the Vite module: a store we found is registered outright, and the commented hint
+  // survives only for the libraries we can name but not wire.
+  const storeImports = found.map((s) => `import { ${s.ident} } from '${s.importPath}';`).join('\n');
+  // Eight spaces: nested inside useEffect → .then callback (see multiline shape below for #684).
+  const storeBlock =
+    found.length > 0
+      ? found.map((s) => `        registerStore('${s.key}', ${s.ident});`).join('\n')
+      : 0 === stores.length
+        ? `        // No state library detected. If you add one, register it here — see ${STATE_DOCS_URL}`
+        : stores.map((h) => `        // import your store, then: ${h}`).join('\n');
+  const registerNames = found.length > 0 ? ', registerStore' : '';
+  // Multiline connect + single blank after imports (#684): the one-line connect and the double blank
+  // both fail Prettier on a clean Next install.
+  return `'use client';
+import { useEffect } from 'react';
+${storeImports.length > 0 ? `${storeImports}\n` : ''}
+/** Dev-only: connect Reticle + install the React adapter, after hydration. */
+export function ReticleDev() {
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
+    void import('@reticlehq/react').then(
+      ({ reticle, install, registerCapabilities${registerNames} }) => {
+        install();
+        // Both provided by withReticle() in next.config. The bridge rejects a connect with no token;
+        // the root makes source paths repo-relative instead of absolute.
+        const token = process.env.NEXT_PUBLIC_RETICLE_TOKEN;
+        const root = process.env.NEXT_PUBLIC_RETICLE_ROOT;
+        // withReticle() finds the daemon serving this project on every dev-server start. It wins over
+        // any port written into this file at install time, so moving the daemon needs no edit here.
+        const url = process.env.NEXT_PUBLIC_RETICLE_URL;
+        // So a version-skewed pair names the SDK's version instead of "an unknown older wire".
+        const sdkVersion = process.env.NEXT_PUBLIC_RETICLE_SDK_VERSION;
+        reticle.connect({
+          ${fields}...(url ? { url } : {}),
+          ...(token ? { token } : {}),
+          ...(root ? { root } : {}),
+          ...(sdkVersion ? { sdkVersion } : {}),
+        });
+
+        // ── Start with ONE flow. ────────────────────────────────────────────────────────────────
+        // Registering a store is the highest-value line here: it lets the agent check what the app
+        // BELIEVES, not just what it rendered. Pass the STORE, not \`() => store.getState()\` — the
+        // store form wires \`subscribe\` too, so every mutation emits a diff; the getter form is
+        // read-only.
+${storeBlock}
+        registerCapabilities({
+          testids: [${ids}],${0 === testids.length ? ' // none found; add data-testid to your key elements' : ''}
+          signals: [], // names you pass to reticle.signal()
+          stores: [${found.map((s) => `'${s.key}'`).join(', ')}], // the keys you registered above
+        });
+      },
+    );
+  }, []);
+  return null;
+}
+`;
+}
+
+/**
+ * Astro connect instructions.
+ *
+ * Astro is Vite-based but SSRs its own HTML, so the plugin's index.html injection never fires, and
+ * `vite` is not a direct dependency — so this used to fall through to the generic HTML advice, which
+ * tells you to add a connect to an "entry module" Astro does not have, or to bundle the SDK with
+ * esbuild. Both are wrong for Astro, and following either gets you nothing.
+ *
+ * Astro bundles a page `<script>`, so the bare import resolves there. The token has to be inlined by
+ * the config because there is no plugin in the page's path to inject it, and `build.target` has to be
+ * raised or Astro down-levels the modern SDK bundle and dies on a destructuring transform.
+ */
+/**
+ * Name the file the connect <script> should go in — the layout when one exists, otherwise the page,
+ * because a project with no layout has nowhere else to put it and should not be told otherwise.
+ */
+function layoutHost(layoutPath: string | undefined): string {
+  return layoutPath === undefined
+    ? '2. This project has no layout, so put it in the page you want instrumented (e.g.\n   src/pages/index.astro) — every page you want a session from needs it — inside <body>:'
+    : `2. In ${layoutPath} (or any other page you want instrumented), inside <body>:`;
+}
+
+export function astroManual(
+  port: number | undefined,
+  projectId?: string,
+  /**
+   * A layout file that actually exists, when one does.
+   *
+   * Reported from the field: on `examples/framework-react` — which has no layout at all, only
+   * `src/pages/index.astro` — init printed thirty lines telling the user to paste into "your
+   * layout". Instructions that name a file the project does not have read as a mistake by the
+   * reader, and cost them the time it takes to go and confirm it is missing.
+   */
+  layoutPath?: string,
+): string {
+  const extra =
+    port !== undefined && port !== RETICLE_DEFAULT_PORT
+      ? `\n          url: '${bridgeWsUrl(port)}',`
+      : '';
+  const id =
+    projectId !== undefined && projectId.length > 0 ? `\n          projectId: '${projectId}',` : '';
+  // Astro owns its Vite instance, so the layout can resolve the daemon URL in frontmatter on every
+  // `astro dev` and put it on a <meta> the client script reads. The port above is written once at
+  // install time and goes stale the moment the daemon moves; this does not.
+  //
+  // Needs the projectId to know WHICH daemon is ours. Without one there is nothing to match on, and
+  // adopting a daemon serving another project would report its state as this app's, so the whole
+  // block is omitted rather than made to guess.
+  const canDiscover = projectId !== undefined && projectId.length > 0;
+  // Interpolated from core rather than typed into the template: this is the same wire string
+  // `bridgeWsUrl` builds, and a generator that spells it out by hand is exactly how the four call
+  // sites that constant exists to unify drifted apart in the first place.
+  const RETICLE_CLIENT_HOST_LITERAL = `ws://${RETICLE_CLIENT_HOST}:`;
+  const urlFrontmatter = canDiscover
+    ? `
+  function reticleUrl() {
+    const dir = process.env['RETICLE_PAIRING_TOKEN_DIR'] || join(homedir(), '.reticle');
+    let best;
+    try {
+      for (const file of readdirSync(dir)) {
+        if (!file.startsWith('daemon-') || !file.endsWith('.json')) continue;
+        let entry;
+        try { entry = JSON.parse(readFileSync(join(dir, file), 'utf8')); } catch { continue; }
+        if (entry.projectId !== '${projectId}') continue;
+        try { process.kill(entry.pid, 0); } catch { continue; }
+        if (best === undefined || entry.port < best) best = entry.port;
+      }
+    } catch { return ''; }
+    return best === undefined ? '' : '${RETICLE_CLIENT_HOST_LITERAL}' + best + '${RETICLE_WS_PATH}';
+  }
+  const pairingUrl = import.meta.env.DEV ? reticleUrl() : '';
+`
+    : '';
+  const urlMeta = canDiscover ? `\n  <meta name="reticle-pairing-url" content={pairingUrl} />` : '';
+  const urlRead = canDiscover
+    ? `\n  const url = document.querySelector('meta[name="reticle-pairing-url"]')?.getAttribute('content') ?? '';`
+    : '';
+  const urlSpread = canDiscover ? `\n    ...(url.length > 0 ? { url } : {}),` : '';
+  return `Astro renders its own HTML, so the connect goes in a local module the page statically imports. Do not put the pairing token through \`vite.define\`: on Astro 7.2+ that substitution never reaches the client, the identifier stays literal, and the bridge refuses the dial. Read the token in frontmatter and put it on a <meta> the module can query. Reading it per request also means a token written after the dev server started is picked up on the next load instead of needing a restart.
+
+1. In astro.config.mjs, raise the build target. The token does NOT belong here:
+
+  export default defineConfig({
+    vite: {
+      // Astro's default target down-levels the modern SDK bundle and fails on a destructuring transform.
+      build: { target: 'es2022' },
+      optimizeDeps: { include: ['@reticlehq/react'] },
+    },
+  });
+
+${layoutHost(layoutPath)}
+
+  ---
+  import { readFileSync${canDiscover ? ', readdirSync' : ''} } from 'node:fs';
+  import { homedir } from 'node:os';
+  import { join } from 'node:path';
+  const pairingToken = (() => {
+    if (!import.meta.env.DEV) return '';
+    const dir = process.env['RETICLE_PAIRING_TOKEN_DIR'] || join(homedir(), '.reticle');
+    try { return readFileSync(join(dir, 'pairing-token'), 'utf8').trim(); } catch { return ''; }
+  })();
+  const pairingRoot = import.meta.env.DEV ? process.cwd() : '';${urlFrontmatter}  ---
+  <meta name="reticle-pairing-token" content={pairingToken} />
+  <meta name="reticle-pairing-root" content={pairingRoot} />${urlMeta}
+  <script>
+    import connectReticle from '../components/ReticleDev';
+    if (import.meta.env.DEV) {
+      connectReticle();
+    }
+  </script>
+
+  The <script> tag must not sit inside a conditional. Astro hoists them statically, so
+  \`{isDev && (<script />)}\` is never hoisted and the module 404s.
+  The dev gate belongs in the imported module.
+
+3. Create src/components/ReticleDev.ts — Vite owns this file, so the SDK is a static import:
+
+  import { reticle, install } from '@reticlehq/react';
+  export default function connectReticle() {
+    const token = document.querySelector('meta[name="reticle-pairing-token"]')?.getAttribute('content') ?? '';
+    const root = document.querySelector('meta[name="reticle-pairing-root"]')?.getAttribute('content') ?? '';${urlRead}
+    if (token.length === 0) {
+      console.warn('[reticle] no pairing token was available when this page rendered, so the app will connect and be refused — you will see NO SESSION even though the SDK loads and the socket opens. The token is written by the Reticle daemon: start it and reload this page.');
+    }
+    install();
+    reticle.connect({${id}${extra}${urlSpread}
+      ...(token.length > 0 ? { token } : {}),
+      ...(root.length > 0 ? { root } : {}),
+    });
+  }
+
+4. In src/env.d.ts — declare the window names so \`astro check\` can see them (create-astro's
+   default build runs check first):
+
+  interface Window {
+    __RETICLE_TOKEN__?: string;
+    __RETICLE_ROOT__?: string;
+  }
+
+Start the daemon, then load the page. The token is read when the page renders, so a reload is enough
+once the token file exists — you do not have to restart \`astro dev\`.`;
+}
+
+/**
+ * The `registerCapabilities` call every generated connect carries.
+ *
+ * Only the Vite and Next generators emitted one, so an Astro, SvelteKit, Nuxt or CRA app connected
+ * and then reported `hasCapabilities: false` — `init` printing, about its own work, "is instrumented
+ * and connected — but NOT verified". The testids are the ones already scanned out of the app's
+ * source; an empty list still declares the block, because the comment on it is how somebody learns
+ * the file is theirs to extend.
+ *
+ * `indent` because the call lands at four different depths: top level in a Vite dev module, inside a
+ * `.then` in the Nuxt plugin, inside a `<script>` in an Astro layout.
+ */
+export function registerCapabilitiesCall(testids: readonly string[], indent: string): string {
+  const ids = testids.map((t) => `'${t}'`).join(', ');
+  const none = 0 === testids.length ? ' // none found; add data-testid to your key elements' : '';
+  return `${indent}registerCapabilities({
+${indent}  testids: [${ids}],${none}
+${indent}  signals: [], // names you pass to reticle.signal()
+${indent}  stores: [], // register a store above, then name its key here
+${indent}});`;
+}
+
+/**
+ * The app-side dev module the Vite plugin imports by convention.
+ *
+ * `registerCapabilities` tells the agent what it can drive without guessing; `registerStore` is the
+ * one that matters most and the one we cannot write for you — detecting that an app depends on
+ * zustand is easy, knowing which module exports the store instance is not, and a wrong import here
+ * breaks the module everything else hangs off. So the store lines are generated COMMENTED, naming
+ * the libraries actually found in package.json, with the exact call to uncomment.
+ */
+export function viteDevModuleFile(
+  testids: readonly string[],
+  stores: readonly string[],
+  found: readonly FoundStore[] = [],
+  uiLibrary: UiLibrary = UiLibrary.REACT,
+  framework?: Framework,
+): string {
+  // The specifier has to be the package `frameworkPackages` installed. This file is the Vite path —
+  // the commonest install there is — and it was hardcoded to `@reticlehq/react` while a Vue or
+  // Svelte app was being given `@reticlehq/browser`, so the generated file imported something that
+  // was not there. Caught by running `init` against a pristine Vue app, not by any gate.
+  //
+  // The sensor exports `registerCapabilities` and `registerStore` (and the store adapters) just as
+  // the React kit does; the only thing it lacks is `install()`, which this file never called.
+  const sdk = sdkImport(uiLibrary, framework);
+  const ids = testids.map((t) => `'${t}'`).join(', ');
+  // A store we FOUND is imported and registered outright — the whole point of the file. The hints
+  // stay only for the libraries we can name but not wire (they need an argument we cannot infer).
+  const storeImports = found.map((s) => `import { ${s.ident} } from '${s.importPath}';`).join('\n');
+  const storeBlock =
+    found.length > 0
+      ? found.map((s) => `  registerStore('${s.key}', ${s.ident});`).join('\n')
+      : 0 === stores.length
+        ? `  // No state library detected. If you add one, register it here — see ${STATE_DOCS_URL}`
+        : stores.map((h) => `  // import your store, then: ${h}`).join('\n');
+  const registerImport =
+    found.length > 0 ? 'registerCapabilities, registerStore' : 'registerCapabilities';
+  return `// Dev-only. Loaded for you after connect() — by @reticlehq/vite-plugin's injected connect, or by
+// the connect file init wrote for a framework that connects itself — so you do not import it.
+// Self-guards on import.meta.env.DEV, so it is a no-op in a production build.
+import { ${registerImport} } from '${sdk.specifier}';
+${storeImports.length > 0 ? `${storeImports}\n` : ''}
+if (import.meta.env.DEV) {
+  // ── Start with ONE flow. ─────────────────────────────────────────────────────────────────────
+  // You do not need to describe the whole app to get value, and trying to is the slow path. Register
+  // the store your most important flow reads, and list the testids that flow touches. Add more later,
+  // when a flow you actually replay needs them.
+  //
+  // Registering a store is the highest-value line in this file: it lets the agent check what the app
+  // BELIEVES, not just what it rendered — the class of bug a screenshot cannot see. Pass the STORE,
+  // not \`() => store.getState()\`: the store form wires \`subscribe\` too, so every mutation emits a
+  // state diff; the getter form is read-only and silently produces empty diffs.
+${storeBlock}
+
+  registerCapabilities({
+    testids: [${ids}],${0 === testids.length ? ' // none found; add data-testid to your key elements' : ''}
+    signals: [], // names you pass to reticle.signal()
+    stores: [${found.map((s) => `'${s.key}'`).join(', ')}], // the keys you registered above
+  });
+}
+
+${VITE_ENV_DEV_DECLARATION}`;
+}
+
+/** Where that module goes. Matches @reticlehq/vite-plugin's convention list. */
+export const VITE_DEV_MODULE_PATH = 'src/reticle-dev.ts';
+
+/**
+ * The dev module as a relative import from `fromFile` — for the frameworks that connect themselves
+ * and so have to load it themselves (see svelteKitHooksFile, tanstackStartConnectFile).
+ */
+export function devModuleSpecifier(fromFile: string): string {
+  const rel = posix.relative(posix.dirname(fromFile), VITE_DEV_MODULE_PATH.replace(/\.ts$/, ''));
+  return rel.startsWith('.') ? rel : `./${rel}`;
+}
+/**
+ * electron-vite's renderer Vite root is `src/renderer`, so the plugin looks for
+ * `src/renderer/src/reticle-dev.ts` — not the package-root path a plain Vite app uses.
+ */
+export const ELECTRON_VITE_DEV_MODULE_PATH = 'src/renderer/src/reticle-dev.ts';
+
+/** Default root-layout path, used when no layout was found on disk (reporting only). */
+export const NEXT_LAYOUT_PATH = 'app/layout.tsx';
+
+/** Mount instruction for the root layout. */
+export const NEXT_LAYOUT_MANUAL = `Mount <ReticleDev /> in your root layout (app/layout.tsx), dev-only:
+
+  import { ReticleDev } from './reticle-dev';
+  // inside <body>:
+  {process.env.NODE_ENV === 'development' ? <ReticleDev /> : null}`;
+
+/**
+ * Manual connect guidance for projects without a Vite/Next plugin. Most such projects still use a
+ * BUNDLER (CRA, webpack, Parcel, Vue/Svelte CLIs) — for those, the connect goes in the entry MODULE,
+ * where a bare `@reticlehq/react` import resolves. A bare import in a plain index.html does NOT resolve in
+ * the browser, so we never tell a bundled app to do that (the old advice silently failed for CRA).
+ */
+/**
+ * The whole install, for a page with no build step, as one block a person can paste.
+ *
+ * Extracted so the `no package.json` exit can print the SAME snippet `htmlManual` offers. That exit
+ * is the one every server-rendered app reaches (FastAPI, Flask, Django, Rails, Streamlit), it is
+ * where `init` stops, and until now it stopped with an explanation instead of an answer. A message
+ * that says "add the snippet below" and then prints no snippet is the same defect wearing the
+ * opposite sign, so the two share a builder rather than a copy.
+ */
+export function staticPageSnippet(connectArgLiteral: string): string {
+  return `      <script type="module">
+        import { reticle } from '${CDN_SDK_URL}';
+        reticle.connect(${connectArgLiteral});
+      </script>`;
+}
+
+/**
+ * Streamlit has no served HTML template, and `st.markdown` inserts script markup without executing
+ * it. Streamlit 1.63 added an explicit JavaScript boundary to `st.html`; use a classic script there
+ * so it can dynamically import the ESM SDK in the app document. A head marker makes reruns
+ * idempotent and is removed after an import failure so the next rerun can retry.
+ */
+export function streamlitPageSnippet(connectArgLiteral: string): string {
+  return `import streamlit as st
+
+st.html(
+    """
+    <script>
+      (() => {
+        if (document.getElementById('reticle-streamlit-connect')) return;
+        const marker = document.createElement('meta');
+        marker.id = 'reticle-streamlit-connect';
+        document.head.appendChild(marker);
+        void import('${CDN_SDK_URL}')
+          .then(({ reticle }) => reticle.connect(${connectArgLiteral}))
+          .catch((error) => {
+            marker.remove();
+            throw error;
+          });
+      })();
+    </script>
+    """,
+    unsafe_allow_javascript=True,
+)`;
+}
+
+/**
+ * DEBUG-only middleware that injects Reticle into every Django-rendered page.
+ *
+ * Django serves templates, so the generic script tag has no single home: an app has many templates
+ * and a base template it may not have. Middleware has exactly one, runs for every page, and is the
+ * idiomatic Django answer — a field reporter arrived at this same shape by hand after `init` printed
+ * a script tag and exited 1, and had to write the middleware and `.reticle.json` themselves.
+ *
+ * Guarded on `settings.DEBUG` so it can never reach production, and on the response being HTML so it
+ * does not corrupt a JSON API response or a file download. Injected before `</body>` rather than in
+ * `<head>`, so the SDK sees a parsed document.
+ */
+export function djangoMiddlewareSnippet(connectArgLiteral: string): string {
+  return `# reticle_dev.py: add to MIDDLEWARE while DEBUG is on:
+#   MIDDLEWARE = [..., "reticle_dev.ReticleDevMiddleware"]
+from django.conf import settings
+
+_SNIPPET = """<script type="module">
+  import { reticle } from '${CDN_SDK_URL}';
+  reticle.connect(${connectArgLiteral});
+</script>"""
+
+
+class ReticleDevMiddleware:
+    """Inject the Reticle SDK into HTML responses during development only."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        if not settings.DEBUG:
+            return response
+        if "text/html" not in response.get("Content-Type", ""):
+            return response
+        # Streaming responses have no .content to rewrite; leave them alone.
+        if getattr(response, "streaming", False):
+            return response
+        body = response.content.decode(response.charset)
+        if "</body>" not in body:
+            return response
+        response.content = body.replace("</body>", _SNIPPET + "</body>", 1).encode(
+            response.charset
+        )
+        if response.has_header("Content-Length"):
+            response["Content-Length"] = str(len(response.content))
+        return response
+`;
+}
+
+export function htmlManual(
+  port: number | undefined,
+  projectId?: string,
+  pairingToken?: string,
+  // Which SDK the bundled form imports must be the one init INSTALLED. A page with no UI library
+  // now gets the sensor, and a snippet still naming `@reticlehq/react` would import a package that
+  // is not there.
+  uiLibrary: UiLibrary = UiLibrary.UNKNOWN,
+): string {
+  const withToken = connectArgWithToken(port, projectId, pairingToken);
+  const sdk = sdkImport(uiLibrary, Framework.HTML);
+  const bundledImport = sdk.usesInstall
+    ? `void import('${sdk.specifier}').then(({ reticle, install }) => {
+          install();
+          reticle.connect(${withToken});
+        });`
+    : `void import('${sdk.specifier}').then(({ reticle }) => {
+          reticle.connect(${withToken});
+        });`;
+  const tokenNote =
+    pairingToken === undefined || 0 === pairingToken.length
+      ? ''
+      : `\n\n  The \`token\` is this machine's pairing token, read from ~/.reticle/pairing-token. Keep it: the
+  bridge REJECTS a connect without it ("authentication failed") and no session appears. It is
+  per-machine and local-only, so do not commit it — a teammate's daemon mints their own.`;
+  return `No Vite/Next plugin detected — wire the dev-only connect by hand. Pick the form for your setup:
+
+  • Bundled app (Create React App, webpack, Parcel, Vue/Svelte CLI, etc.) — add to your ENTRY module
+    (e.g. src/index.js or src/main.js), where '${sdk.specifier}' resolves through your bundler:
+
+      if (process.env.NODE_ENV !== 'production') {
+        ${bundledImport}
+      }${tokenNote}
+
+  • Plain HTML with NO build step (FastAPI, Flask, Django, Rails, Streamlit, a hand-written page) —
+    paste this into the page, in a template you only serve in development. There is nothing to
+    install: no npm, no bundler, no package.json.
+
+${staticPageSnippet(withToken)}
+
+  Serving the app on something other than localhost (a hosts-file alias, a LAN IP, a container, a
+  tunnel)? You need TWO things, not one: \`allowNonLocalhost: true\` AND a pairing token, passed as
+  \`token\` on the same connect. The flag alone is NOT sufficient — off localhost the SDK refuses
+  without a token as well, and that refusal is page-side, so the daemon sees only silence and every
+  \`reticle doctor\` check still passes. The token is the one in \`~/.reticle/pairing-token\` (the
+  build plugins read the same file). Without both, the SDK says so in the browser console only, so
+  from here it looks exactly like nothing happened.`;
+}
+
+export const NEXT_RETICLE_DEV_PATH = 'app/reticle-dev.tsx';
+export const SVELTEKIT_HOOKS_PATH = 'src/hooks.client.ts';
+
+/**
+ * Said out loud when the app does not render through React. The SDK is framework-agnostic — DOM,
+ * network, console and routing all still work — but `@reticlehq/react` is a React adapter, so
+ * component names and source mapping do not, and no CI gate covers this stack. Saying so beats
+ * reporting all-green.
+ */
+export function unverifiedUiLibraryNote(library: string, installGated = false): string {
+  // Preact is not in the same position as Vue or Svelte and must not be told it is. The React
+  // adapter reaches Preact through `preact/compat`, which is what `docs/frameworks.mdx` has always
+  // said, so telling a Preact reader they get no component identity contradicts our own docs and
+  // talks them out of a package that is the right one for them. It is still ungated, which is the
+  // honest caveat, and #129 is the issue for closing that.
+  const identity =
+    'preact' === library
+      ? 'React component identity — component names and stacks — comes from `@reticlehq/react`, which reaches Preact through `preact/compat`. That path is not covered by a CI gate here, so treat it as expected-to-work rather than proven.'
+      : 'What `@reticlehq/react` adds and you will NOT get is React component identity: component names and component stacks.';
+  return `Detected a ${library} app. Reticle's DOM, network, console and state tools work here. ${'vue' === library ? 'Source `file:line` does NOT come through: the build plugin stamps JSX and, separately, Svelte components, and a Vue single-file component is neither — measured, a Svelte counter reports `src/lib/Counter.svelte:5` and the same drive on Vue reports no source at all.' : 'Source `file:line` does too — the build plugin stamps it for this library (measured on preact and svelte).'} ${identity} ${installGated ? `The install gate scaffolds this ${library} stack from scratch on every change, so this SETUP is proven; no gate drives it to a verdict, so the drive is not.` : `No CI gate covers ${library}.`} Driven on every change: Vite + React, Next.js, Astro. If something doesn't work, please open an issue.`;
+}
+
+export const SVELTEKIT_SETUP_GATED_NOTE =
+  'The install gate scaffolds a SvelteKit app on every release and requires this hook to connect a session, so the wiring is proven; driving flows on SvelteKit to a verdict is not. If the hook does not register a session, please open an issue.';
+
+export const UNVERIFIED_TANSTACK_START_NOTE =
+  'Reticle has no TanStack Start app and no CI gate for one, so this wiring is untested — it may work, but nothing proves it and nothing will tell us if it breaks. Gated today: Vite (React, Vue), Next.js, Nuxt, React Router, Remix, Astro, SvelteKit, Create React App and Angular. If the client effect does not register a session, please open an issue.';
+
+/**
+ * Printed when init detects react-three-fiber. Reticle's model is DOM + store + network; a WebGL
+ * canvas is none of those. Without this line, init succeeds, sessions connect, and surrounding UI
+ * verdicts pass while the canvas — often the product — stays a blank rectangle (#880).
+ */
+export const WEBGL_CANVAS_LIMIT_NOTE =
+  'A WebGL / react-three-fiber subtree is not observable as a scene: reticle_query and ' +
+  'reticle_snapshot see a single <canvas>, and Reticle cannot pick faces or drive the camera ' +
+  'inside it. DOM, registered store state, and network around the canvas still work — verify ' +
+  'consequences there (import counts, mesh stats, solver results), not geometry under the pointer.';
+
+/**
+ * Dev-only client hook that connects Reticle in a SvelteKit app. SvelteKit renders through app.html and
+ * never triggers Vite's index.html injection (verified), so the standard plugin can't auto-connect —
+ * a client hook is the reliable path. SvelteKit runs src/hooks.client.ts on the client at startup.
+ */
+export function svelteKitHooksFile(
+  port: number | undefined,
+  projectId?: string,
+  uiLibrary: UiLibrary = UiLibrary.SVELTE,
+  testids: readonly string[] = [],
+): string {
+  // SvelteKit is Svelte, so this defaults to the sensor rather than the React adapter — and the
+  // import here MUST match what `frameworkPackages` installed, or the hook loads a package that is
+  // not in node_modules. See sdkImport.
+  const sdk = sdkImport(uiLibrary);
+  const base = connectArg(port, projectId);
+  const fields = '' === base ? '' : `${base.slice(1, -1).trim()}, `;
+  return `// Dev-only: connect Reticle on the client. SvelteKit renders via app.html, so the Vite-plugin
+// index.html injection doesn't fire — connect from this client hook instead.
+if (import.meta.env.DEV) {
+  void import('${sdk.specifier}').then(({ reticle${sdk.usesInstall ? ', install' : ''}, registerCapabilities }) => {
+    ${sdk.usesInstall ? 'install();' : '// No React adapter here: the sensor has no install() to call.'}
+    // The bridge requires the pairing token even on localhost. Nothing in a browser can read the
+    // file it lives in, so @reticlehq/vite-plugin inlines it here at build time. Without it the
+    // console reads "bridge refused the connection: authentication failed" and no session appears.
+    const token = typeof __RETICLE_TOKEN__ !== 'undefined' ? __RETICLE_TOKEN__ : '';
+    const root = typeof __RETICLE_ROOT__ !== 'undefined' ? __RETICLE_ROOT__ : '';
+    const sdkVersion = typeof __RETICLE_SDK_VERSION__ !== 'undefined' ? __RETICLE_SDK_VERSION__ : '';
+    reticle.connect({
+      ${fields}...(token.length > 0 ? { token } : {}),
+      ...(root.length > 0 ? { root } : {}),
+      ...(sdkVersion.length > 0 ? { sdkVersion } : {}),
+    });
+${registerCapabilitiesCall(testids, '    ')}
+    // Your stores and capabilities live in ${VITE_DEV_MODULE_PATH}. Only the plugin's injected
+    // connect imports that file, and SvelteKit never runs it, so this hook loads it instead.
+    void import('${devModuleSpecifier(SVELTEKIT_HOOKS_PATH)}');
+  });
+}
+
+declare const __RETICLE_TOKEN__: string | undefined;
+declare const __RETICLE_ROOT__: string | undefined;
+declare const __RETICLE_SDK_VERSION__: string | undefined;
+`;
+}
+
+/** The react-scripts major below which webpack cannot parse what @reticlehq/browser ships. */
+export const WEBPACK4_REACT_SCRIPTS_MAJOR = 5;
+
+/**
+ * What to do when the bundler cannot parse our SDK at all.
+ *
+ * `@reticlehq/browser` ships untranspiled optional chaining and logical assignment.
+ * react-scripts 4 runs webpack 4, whose parser predates both, AND excludes `node_modules` from
+ * Babel -- so the build dies inside our `dist/` with a syntax error pointing at a file the user did
+ * not write, before any session can exist (#680).
+ *
+ * Nothing else in `init` can catch this. Every check we run passes: the package installs, the entry
+ * import is written, the token is inlined. The app simply does not compile, and the error names
+ * `@reticlehq/browser/dist/index.js` rather than anything about Reticle.
+ *
+ * Two ways out, in the order a reader should consider them, because the second is the one that does
+ * not require editing a bundler config to run a dev-only tool.
+ */
+export function webpack4TranspileNote(reactScriptsMajor: number): string {
+  return `react-scripts ${String(reactScriptsMajor)} runs webpack 4, whose parser predates optional
+  chaining and logical assignment. @reticlehq/browser ships both untranspiled, and react-scripts
+  excludes node_modules from Babel — so \`npm start\` fails with a syntax error inside
+  @reticlehq/browser/dist/index.js and no session is ever possible. Nothing else in this report can
+  see that: the install, the import and the token are all correct.
+
+  Either upgrade to react-scripts 5 (webpack 5 parses both natively, and needs no change on your
+  side), or transpile this one package. With react-app-rewired or craco, add it to Babel's include:
+
+      // config-overrides.js (react-app-rewired)
+      const path = require('path');
+      module.exports = (config) => {
+        const rule = config.module.rules.find((r) => Array.isArray(r.oneOf))
+          .oneOf.find((r) => String(r.test).includes('js') && r.include);
+        rule.include = [rule.include, path.resolve('node_modules/@reticlehq/browser')];
+        return config;
+      };
+
+  Scope it to @reticlehq/browser and nothing else: widening Babel across node_modules costs every
+  rebuild in the project, for a dev-only dependency.`;
+}
+
+/** React Router's client-entry override point, in framework mode. */
+export const REACT_ROUTER_ENTRY_PATH = 'app/entry.client.tsx';
+
+/**
+ * The dev-only module @reticlehq/vite-plugin serves: connect() with the token already in it. Named
+ * without its leading slash, because that is the part both the current line and the old one carry.
+ */
+const RETICLE_CONNECT_MODULE = '@reticle-connect';
+
+/**
+ * The one line that puts Reticle in a React Router client entry — and in a Remix one.
+ *
+ * The specifier is BUILT, not written as a literal. `import('/@reticle-connect')` is a module only
+ * the Vite dev server can answer, so `tsc` cannot resolve it: a fresh framework-mode scaffold went
+ * red on `npm run typecheck` (`TS2307: Cannot find module '/@reticle-connect'`) the moment `init`
+ * wrote it. A computed specifier is typed `Promise<any>` and never resolved, so no declaration, no
+ * suppression comment and no tsconfig edit is needed. The browser still asks the dev server for the
+ * same URL, which the plugin serves; `BASE_URL` keeps it right under a non-root `base`. `@vite-ignore`
+ * is Vite's own marker for a dynamic import it should not try to analyse, not a lint suppression. In
+ * a production build `import.meta.env.DEV` is false and the whole line is dropped.
+ */
+export const REACT_ROUTER_CONNECT_LINE =
+  'if (import.meta.env.DEV) void import(/* @vite-ignore */ `${import.meta.env.BASE_URL}@reticle-connect`);';
+
+/** The line `init` used to write, which fails `tsc`; replaced in place on a re-run. */
+const REACT_ROUTER_CONNECT_LINE_UNTYPED =
+  "if (import.meta.env.DEV) void import('/@reticle-connect');";
+
+/**
+ * The client entry `init` writes when React Router framework mode has none.
+ *
+ * `app/entry.client.tsx` is an OVERRIDE: React Router supplies a default client entry, and the file
+ * only exists once an app opts out of it. So the generated one has to HYDRATE as well as connect —
+ * a file containing only our import would replace that default with one that never hydrates, an app
+ * that connects to Reticle and renders nothing. This is React Router v7's own default entry with one
+ * line added.
+ *
+ * The import is the module `@reticlehq/vite-plugin` serves. It already carries the port, the project
+ * id and this machine's pairing token, and it imports the app's `src/reticle-dev` dev module — which
+ * is where capabilities are registered. Nothing here needs filling in.
+ */
+export function reactRouterEntryFile(): string {
+  return `import { HydratedRouter } from 'react-router/dom';
+import { StrictMode, startTransition } from 'react';
+import { hydrateRoot } from 'react-dom/client';
+
+// Dev-only: React Router framework mode renders HTML through its own request handler, so the Vite
+// plugin's index.html injection never fires and the connect script never reaches the page. The
+// plugin is still doing the other half of the job — it stamps data-reticle-source, which is what
+// puts file:line on every verdict.
+${REACT_ROUTER_CONNECT_LINE}
+
+startTransition(() => {
+  hydrateRoot(
+    document,
+    <StrictMode>
+      <HydratedRouter />
+    </StrictMode>,
+  );
+});
+`;
+}
+
+/**
+ * Add the connect line to an entry the app already owns — or null when it is already there.
+ *
+ * After the LAST import, for the reason the CRA patch does the same: the entry's own imports must
+ * still be evaluated first, and this is a side-effect import.
+ */
+export function reactRouterEntryPatch(source: string): string | null {
+  if (source.includes(REACT_ROUTER_CONNECT_LINE_UNTYPED)) {
+    return source.replace(REACT_ROUTER_CONNECT_LINE_UNTYPED, REACT_ROUTER_CONNECT_LINE);
+  }
+  if (source.includes(RETICLE_CONNECT_MODULE)) return null;
+  const lines = source.split('\n');
+  let lastImport = -1;
+  for (const [index, line] of lines.entries()) {
+    if (/^\s*import\s/.test(line)) lastImport = index;
+  }
+  lines.splice(lastImport + 1, 0, REACT_ROUTER_CONNECT_LINE);
+  return lines.join('\n');
+}
+
+export { nuxtPluginPath, nuxtPluginFile, NUXT_PLUGIN_NOTICE, nuxtManual } from './nuxt-snippets.js';
+
+/**
+ * Root-level project config for Reticle. Written by `reticle init`; read by `reticle mcp` for the port
+ * and by tooling for the stable projectId (the app's identity across port changes).
+ */
+export function reticleConfigContent(
+  framework: string,
+  port: number | undefined,
+  projectId?: string,
+  installSource?: string,
+): string {
+  const fields: Record<string, unknown> = { framework };
+  if (projectId !== undefined && projectId.length > 0) fields['projectId'] = projectId;
+  if (port !== undefined && port !== RETICLE_DEFAULT_PORT) fields['port'] = port;
+  // How this install arrived, recorded HERE because this is the only moment anything knows it. It
+  // arrives as an environment variable set by whichever channel ran the install, and an environment
+  // variable is gone by the next command, so every later event reported `unknown`. Written once,
+  // read for the life of the project.
+  //
+  // A closed vocabulary, narrowed before it gets here, so this can never carry a path or a URL.
+  if (installSource !== undefined && installSource.length > 0) {
+    fields['installSource'] = installSource;
+  }
+  return `${JSON.stringify(fields, null, 2)}\n`;
+}

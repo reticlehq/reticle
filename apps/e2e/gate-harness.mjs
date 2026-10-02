@@ -12,10 +12,15 @@
 // Self-check: `node apps/e2e/gate-harness.mjs --self-check`
 import { spawn, execFileSync } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { pidOnPort } from './port-pid.mjs';
 
 /** Reticle's default bridge port — the one every doc, error message and config example names. */
 export const DEFAULT_BRIDGE_PORT = 4400;
+/** Tests default to their own bridge; fixtures and specs must use the same override. */
+export const TEST_BRIDGE_PORT = Number(process.env.RETICLE_PORT ?? 14400);
 
 /**
  * How often a gate-owned daemon says it is alive.
@@ -116,54 +121,30 @@ function commandOf(pid) {
   }
 }
 
-/**
- * Free a port without taking anybody's MCP link with it.
- *
- * Listeners first, because a listener is the thing that causes EADDRINUSE and is the only holder a
- * gate has any business killing. Only if the port is STILL held does this look at the rest — and it
- * names them rather than killing them blind, because a client socket on this port is almost always
- * somebody's agent.
- *
- * `run.mjs` deliberately omitted `-sTCP:LISTEN` for a real reason: a socket mid-teardown still holds
- * the port and still causes EADDRINUSE, and filtering to LISTEN missed it. Both concerns are true.
- * Ordering satisfies both — the teardown case is reached, but only after the listener is gone and
- * the port is demonstrably still held.
- */
-export async function freePortSafely(port, { onNote = () => {} } = {}) {
+/** Stop only listeners whose PIDs the caller recorded as belonging to this run. */
+export async function freePortSafely(port, { onNote = () => {}, ownedPids = [] } = {}) {
+  const owned = new Set(ownedPids.map(Number));
   for (let attempt = 0; attempt < FREE_PORT_ATTEMPTS; attempt += 1) {
-    const listeners = portHolders(port).filter((h) => h.listener);
-    if (listeners.length === 0) break;
-    kill(
-      listeners.map((h) => h.pid),
-      attempt >= FREE_PORT_SIGKILL_AFTER,
-    );
+    const listeners = portHolders(port).filter((holder) => holder.listener);
+    if (listeners.length === 0) return { freed: true, survivors: [] };
+    const foreign = listeners.filter((holder) => !owned.has(Number(holder.pid)));
+    if (foreign.length > 0) {
+      onNote(`port ${String(port)} belongs to another process; leaving it running: ` +
+        foreign.map((holder) => `pid ${holder.pid} (${holder.command})`).join(', '));
+      throw new Error(`Port ${String(port)} is occupied by another process; its owner was left running. Choose a different test port.`);
+    }
+    kill(listeners.map((holder) => holder.pid), attempt >= FREE_PORT_SIGKILL_AFTER);
     await sleep(FREE_PORT_SETTLE_MS);
   }
-
-  const rest = portHolders(port);
-  if (rest.length === 0) return { freed: true, survivors: [] };
-
-  // Everything here is a NON-listener: a socket in teardown, or somebody's live MCP proxy. Say which
-  // before doing anything about it — a gate that silently kills an agent's transport and then reports
-  // on that agent's behaviour is measuring its own interference.
-  onNote(
-    `port ${String(port)} still held after the listener was freed by: ` +
-      rest.map((h) => `pid ${h.pid} (${h.command})`).join(', '),
-  );
-  for (let attempt = 0; attempt < FREE_PORT_ATTEMPTS; attempt += 1) {
-    const held = portHolders(port);
-    if (held.length === 0) return { freed: true, survivors: rest };
-    kill(
-      held.map((h) => h.pid),
-      attempt >= FREE_PORT_SIGKILL_AFTER,
-    );
-    await sleep(FREE_PORT_SETTLE_MS);
-  }
-  return { freed: portHolders(port).length === 0, survivors: portHolders(port) };
+  const survivors = portHolders(port).filter((holder) => holder.listener);
+  return { freed: survivors.length === 0, survivors };
 }
 
 function kill(pids, hard) {
   for (const pid of pids) {
+    // A client socket this process holds on the port (a keep-alive fetch to the app it just
+    // polled) lists it as a holder, and signalling it ends the run as "Terminated" mid-cleanup.
+    if (Number(pid) === process.pid || Number(pid) === process.ppid) continue;
     try {
       if ('win32' === process.platform) {
         killTree(pid);
@@ -176,75 +157,37 @@ function kill(pids, hard) {
   }
 }
 
-/**
- * Processes a KILLED battery leaves behind, which then poison the next one.
- *
- * A battery that exits normally runs its trap and cleans up. One that is killed — a CI timeout, a
- * developer's Ctrl-C, an OOM — does not, and leaves a driven browser and an MCP proxy running. The
- * next run then competes with them for the bridge port and for memory.
- *
- * Measured: two killed runs left an orphaned `cli.js mcp --drive` proxy driving a headless browser,
- * and the following battery came back 17 of 31 with four specs SIGKILLed and failures interleaved
- * with passes. Every one of those failures was read as a product regression first. It took a process
- * listing to find out otherwise.
- *
- * `--drive` is the discriminator, and it is load-bearing: a bare `cli.js mcp` is somebody's AGENT,
- * and killing that is rule 1's whole subject. Only the battery starts a proxy with `--drive`.
- */
-const BATTERY_ORPHAN_PATTERNS = ['cli.js mcp --port 4400 --drive', 'cli.js mcp --drive'];
-
-/**
- * Kill what a killed battery left behind. NAME port holders; never free them.
- *
- * The asymmetry is the whole design, and it was learned the hard way twice in one hour. The first
- * version of this function also freed the ports it was given, and `run-ci.sh` starts api:8787,
- * bench-app:4310 and next-smoke:3100 BEFORE it runs `run.mjs` — so the "orphans" it found were the
- * fixtures the battery had just booted for itself. It killed all three and 19 specs failed.
- *
- * From inside the run there is no way to tell "an orphan from a killed run" from "the server this
- * run started three seconds ago": same command, same port, same user. A process PATTERN can be
- * decided (`--drive` is created only by the battery); a port cannot. So ports are reported and left
- * alone, and the bridge port is freed a moment later by `freePort`, which owns that decision and
- * applies rule 1 to it.
- *
- * See harness-rules.md rule 5 — including the part where writing the rule did not prevent breaking it.
- */
+/** Report occupied ports. A matching command line does not prove process ownership. */
 export async function sweepBatteryOrphans(ports = [], { onNote = () => {} } = {}) {
-  const killed = [];
-  for (const pattern of BATTERY_ORPHAN_PATTERNS) {
-    try {
-      const pids = execFileSync('pgrep', ['-f', pattern], { encoding: 'utf8' })
-        .split('\n')
-        .map((p) => p.trim())
-        .filter((p) => p !== '' && p !== String(process.pid));
-      for (const pid of pids) {
-        try {
-          process.kill(Number(pid), 'SIGKILL');
-          killed.push(`${pid} (${pattern})`);
-        } catch {
-          // Gone between the listing and the signal.
-        }
-      }
-    } catch {
-      // pgrep exits non-zero when nothing matches. That is the answer we wanted.
-    }
-  }
-  if (killed.length > 0) {
-    onNote(`swept ${String(killed.length)} orphan(s) from a previous run: ${killed.join(', ')}`);
-  }
-  // Reported, never freed — see the note above. A holder here is far more often this run's own
-  // fixture than a leftover, and the cost of guessing wrong is the whole battery.
   const held = [];
   for (const port of ports) {
-    const holders = portHolders(port).filter((h) => h.listener);
+    const holders = portHolders(port).filter((holder) => holder.listener);
     if (holders.length === 0) continue;
     held.push({ port, holders });
-    onNote(
-      `port ${String(port)} is held by ${holders.map((h) => `pid ${h.pid} (${h.command})`).join(', ')} ` +
-        `— NOT touching it; if this run then fails to bind, that pid is the reason`,
-    );
+    onNote(`port ${String(port)} is held by ` +
+      holders.map((holder) => `pid ${holder.pid} (${holder.command})`).join(', '));
   }
-  return { killed, held };
+  return { killed: [], held };
+}
+
+/** Reap a fixture wrapper and its descendants, without looking up or killing port owners. */
+export function stopProcessTree(pid) {
+  if (!Number.isInteger(Number(pid)) || Number(pid) <= 1) return;
+  if (process.platform === 'win32') { killTree(Number(pid)); return; }
+  let rows = [];
+  try {
+    rows = execFileSync('ps', ['-axo', 'pid=,ppid='], { encoding: 'utf8' })
+      .trim().split('\n').map(line => line.trim().split(/\s+/).map(Number));
+  } catch { /* the recorded wrapper can still be stopped */ }
+  const owned = new Set([Number(pid)]);
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const [child, parent] of rows) {
+      if (owned.has(parent) && !owned.has(child)) { owned.add(child); changed = true; }
+    }
+  }
+  kill([...owned].reverse(), false);
+  return [...owned];
 }
 
 /** True when something answers `/status` on this port — a real daemon, not merely an open socket. */
@@ -300,7 +243,11 @@ export async function startOwnedDaemon(port, { cliPath, cwd, env = {}, stdio = '
   });
   const deadline = Date.now() + DAEMON_BIND_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    if (await transportAlive(port)) return { child, port, stop: () => stopOwnedDaemon(port) };
+    if (await transportAlive(port)) {
+      const state = env.RETICLE_STATE_DIR ?? process.env.RETICLE_STATE_DIR ?? join(homedir(), '.reticle');
+      const daemonPid = Number(readFileSync(join(state, `daemon-${port}.pid`), 'utf8'));
+      return { child, port, stop: () => freePortSafely(port, { ownedPids: [daemonPid] }) };
+    }
     await sleep(DAEMON_POLL_MS);
   }
   const holders = portHolders(port);
@@ -312,10 +259,6 @@ export async function startOwnedDaemon(port, { cliPath, cwd, env = {}, stdio = '
           '.log.'
         : `Held by: ${holders.map((h) => `pid ${h.pid} (${h.command})`).join(', ')}`),
   );
-}
-
-export async function stopOwnedDaemon(port) {
-  await freePortSafely(port);
 }
 
 /**

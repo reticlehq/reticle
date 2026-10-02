@@ -41,10 +41,13 @@ describe('the suite is honest about its own weakness', () => {
    *
    * It asserts the CURRENT number deliberately. When quiet scenarios are added this test fails, and
    * whoever adds them updates it having read this note — which is the point.
+   *
+   * Three since `deploy-never-ships`, the first whose defect sits at the END of a journey. Three is
+   * still not a measurement; the note stands.
    */
-  it('has only two quiet scenarios, which is the reason this suite cannot yet settle the claim', () => {
+  it('has only three quiet scenarios, which is the reason this suite cannot yet settle the claim', () => {
     const quiet = Object.entries(LOUDNESS).filter(([, e]) => e.grade === Loudness.QUIET);
-    expect(quiet).toHaveLength(2);
+    expect(quiet).toHaveLength(3);
   });
 
   it('reports per class rather than averaging, which would hide exactly that', () => {

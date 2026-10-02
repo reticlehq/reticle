@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // HONESTY-CRITICAL: prove `reticle init` can wire an electron-vite app, against a REAL
 // electron-vite process (not a plain Vite + Electron pair).
 //
@@ -21,9 +22,17 @@ let session;
 try {
   session = await bootDesktopSession({
     spawnApp: (env) => spawnElectronVite(env),
-    urlIncludes: 'localhost',
+    // The PORT, not 'localhost'. Its two siblings pin one (':5174', 'tauri') and this did not, so it
+    // matched any localhost app on the bridge — and took the first FRESH one, which is not
+    // necessarily ours. A dev server belonging to another checkout reconnected mid-run, arrived
+    // before the renderer, and three checks then failed against an app that has no `send-ipc`
+    // testid because it is somebody else's application entirely.
+    //
+    // The harness already refuses a session that existed BEFORE the app was spawned; what it cannot
+    // know is which of two fresh ones is the app it started. That is what the URL is for.
+    urlIncludes: ':5173',
     timeoutMs: 90_000,
-    port: Number(process.env['RETICLE_PORT'] ?? 4400),
+    port: Number(TEST_BRIDGE_PORT),
   });
   const { tool, refOf, sessionId, log } = session;
 

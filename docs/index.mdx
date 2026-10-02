@@ -12,9 +12,27 @@ Reticle reads the program from **inside** your running app. Network, state, cons
 
 It answers the only question that matters: did the change actually work? On React it also tells your agent which file to open.
 
-## Install it: paste this into your coding agent
+## Install it
 
-You do not install Reticle by hand, and neither does your agent: it runs one command that does the whole thing. Copy the block below into Claude Code, Cursor, Copilot, Codex, Windsurf, OpenCode, or any MCP agent, and let it wire its own workspace. It ends with the only definition of "installed" that counts: one real flow driven, one real verdict returned.
+Two commands. The first goes in a terminal, before you open your coding agent:
+
+<CodeGroup>
+
+```bash macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh | sh
+```
+
+```powershell Windows
+irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex
+```
+
+</CodeGroup>
+
+That registers the MCP server with every coding agent it can reach, so the `reticle_*` tools are there the next time you open one. Then, in your project, `npx @reticlehq/server init` wires the app. The [quickstart](/quickstart) walks both.
+
+### Or hand the whole thing to your agent
+
+Copy the block below into Claude Code, Cursor, Copilot, Codex, Windsurf, OpenCode, or any MCP agent. It ends with the only definition of "installed" that counts: one real flow driven, one real verdict returned.
 
 ```text
 Reticle is the proof layer for AI coding agents. It runs a dev-only SDK inside my
@@ -30,14 +48,14 @@ silent 500.
 
 Install it now:
 
-  RETICLE_INSTALL_SOURCE=docs_site npx @reticlehq/server@latest init \
-    --flow "<pick the journey that matters in my app and name it here>"
+  RETICLE_INSTALL_SOURCE=docs_site npx @reticlehq/server@latest init
 
-That one command wires the project, starts the dev server, opens the app, waits
-for it to connect and drives that flow to a verdict. Do not walk it by hand: read
-what it prints, do anything it says is outstanding, and re-run it, which is safe.
-It exits non-zero until a verdict exists, and that, not a config file, is what
-"installed" means. Only if it could not run at all, follow
+That one command wires the project, starts the dev server, opens the app and
+waits for it to connect. Do not walk it by hand: read what it prints, do anything
+it says is outstanding, and re-run it, which is safe. It exits non-zero until the
+app connects, and that connection, not a config file, is what "installed" means.
+Then prove a flow, which is a separate call:
+reticle_verify { action: "explore", persona: "<who does what>" }. Only if it could not run at all, follow
 https://docs.reticle.sh/install-manual.md.
 
 Afterwards, use it whenever you change any user-facing behaviour.
@@ -55,12 +73,15 @@ Afterwards, use it whenever you change any user-facing behaviour.
   The four files it writes, the marks it prints, and how to read its report.
 </Card>
 
-<CardGroup cols={2}>
+<CardGroup cols={3}>
   <Card title="Quickstart" icon="rocket" href="/quickstart">
     Install, connect your agent, and get a real verdict. Five minutes.
   </Card>
   <Card title="Why Reticle" icon="lightbulb" href="/why-reticle">
     The false-green problem, and the evidence that this fixes it.
+  </Card>
+  <Card title="Use cases" icon="list-check" href="/use-cases">
+    Agent-built changes, security behaviour, accessibility, performance, SEO basics and personas.
   </Card>
 </CardGroup>
 
@@ -71,7 +92,7 @@ Afterwards, use it whenever you change any user-facing behaviour.
   <Card title="Install" icon="download" href="/install-agentic">
     Let your agent do it, or wire it by hand.
   </Card>
-  <Card title="Tools" icon="wrench" href="/tools-overview">
+  <Card title="Tools" icon="wrench" href="/tools/overview">
     Every tool, with a real request and a real response.
   </Card>
   <Card title="Run it in CI" icon="circle-check" href="/testing">
@@ -109,18 +130,25 @@ Reticle clicks, watches, and reports what actually happened. A verdict of `unkno
     single step.
   </Card>
   <Card title="Yours, locally" icon="lock">
-    Dev-only, localhost-only, offline. Your app's data never leaves the machine.
+    Dev-only and localhost-only. Your app's data stays on your machine; anonymous usage counts are
+    sent unless you [turn them off](/telemetry).
   </Card>
 </CardGroup>
 
+## What people use it for
+
+Beyond proving an agent's change, people use Reticle to check security behaviour (access control by role, calls that must never fire, CSP violations), accessibility and UX (roles, names, focus, keyboard), performance (request counts, long tasks, layout shift), SEO basics (titles, headings, links, redirects), and to drive the app as different users. [Use cases](/use-cases) has what each one checks and a call to run.
+
+It pairs well with a visual testing tool for pixel diffs, Playwright for sites you don't own, axe for full WCAG audits and a security scanner for vulnerability discovery.
+
 ## The evidence
 
-We publish the losses too. Reticle is not the right tool for driving a site you don't own, and it does not see pixels.
+Every number is measured by a committed harness, including the ties.
 
 ![One honest test, two apps: Reticle has the highest Verification Efficiency on the controlled app and the lowest observation cost on the real dashboard](/images/bench-two-apps.png)
 
 <Card title="Read the full benchmark" icon="chart-column" href="/benchmarks">
-  How every number was measured, what it means, and where Reticle comes second.
+  How every number was measured, what it means, and where the tools tie.
 </Card>
 
 ## Built for agents, readable by humans
@@ -133,7 +161,7 @@ Reticle is used by a coding agent far more often than by a person, so these docs
 
 ## Build with us
 
-Reticle is early, and the sharp edges get filed down fastest when someone tells us where they are.
+The roadmap moves on what people actually hit, so tell us.
 
 <CardGroup cols={2}>
   <Card title="Join the Discord" icon="discord" href="https://discord.gg/BwAbzv9ZRz">
@@ -145,4 +173,4 @@ Reticle is early, and the sharp edges get filed down fastest when someone tells 
   </Card>
 </CardGroup>
 
-Found a bug, or something you wished existed? `reticle_feedback` sends it in one call, from wherever you are. If Reticle could not tell you what happened, that is our defect and we want to know.
+Found a bug, or something you wished existed? `reticle_session { action: "feedback" }` sends it in one call from your agent, and `npx @reticlehq/server feedback "…"` from a terminal. If Reticle could not tell you what happened, that is our defect and we want to know.

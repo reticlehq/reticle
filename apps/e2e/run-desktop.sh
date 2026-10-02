@@ -26,6 +26,10 @@ export RETICLE_TELEMETRY=0
 # this exists for is a battery driven from a laptop or a cloud agent sandbox.
 export CI="${CI:-true}"
 
+export RETICLE_TEST_STATE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/reticle-desktop-e2e.XXXXXX")"
+export RETICLE_STATE_DIR="$RETICLE_TEST_STATE_DIR"
+export RETICLE_PAIRING_TOKEN_DIR="$RETICLE_TEST_STATE_DIR"
+
 TOKEN_DIR="${RETICLE_PAIRING_TOKEN_DIR:-$HOME/.reticle}"
 TOKEN_FILE="$TOKEN_DIR/pairing-token"
 if [ ! -s "$TOKEN_FILE" ]; then
@@ -33,11 +37,17 @@ if [ ! -s "$TOKEN_FILE" ]; then
   head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$TOKEN_FILE"
   chmod 600 "$TOKEN_FILE"
 fi
-export RETICLE_PORT=4400
+export RETICLE_PORT="${RETICLE_PORT:-14400}"
 export VITE_RETICLE_TOKEN="$(cat "$TOKEN_FILE")"
 
 echo "==> building the packaged Tauri smoke app (vite build, then cargo — that order matters)"
-pnpm --filter @reticlehq/tauri-smoke exec tauri build --no-bundle || {
+TAURI_TEST_CONFIG="$(node --input-type=module -e '
+  import { readFileSync } from "node:fs";
+  const config = JSON.parse(readFileSync("apps/tauri-smoke/src-tauri/tauri.conf.json", "utf8"));
+  const csp = config.app.security.csp.replaceAll(":4400", `:${process.env.RETICLE_PORT}`);
+  console.log(JSON.stringify({ app: { security: { csp } } }));
+')"
+pnpm --filter @reticlehq/tauri-smoke exec tauri build --no-bundle --config "$TAURI_TEST_CONFIG" || {
   # Report the FAILURE, then the usual causes, in that order and clearly separated.
   #
   # This used to assert one cause: "it needs a Rust toolchain, and on Linux webkit2gtk-4.1 +

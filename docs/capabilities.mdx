@@ -4,7 +4,7 @@ description: Coverage, storage, fake clocks, autonomous crawling, visual diffing
 icon: sparkles
 ---
 
-These are the Reticle tools that do something other than look, act, observe and assert: control coverage, client storage, a fake clock, autonomous crawling, semantic and visual baselines, network mocking, flow recording and replay, and the CI artifact. Reach for them when the verify loop is not the shape of the question. None of them live in the default advertised surface, so all of them are called through [`reticle_run`](/tools-tools-and-run).
+These are the Reticle tools that do something other than look, act, observe and assert: control coverage, client storage, a fake clock, autonomous crawling, semantic and visual baselines, network mocking, flow recording and replay, and the CI artifact. Reach for them when the verify loop is not the shape of the question. They are **not advertised on the default tool surface, but they are reachable from it**: `reticle_run({ tool, args })` dispatches to any registered tool by name, advertised or not, which is the spelling used on this page. To have them advertised outright instead, with their output schemas, start the daemon with `RETICLE_ADVERTISE_ALL_TOOLS=1` (read once at startup, so restart it) and call them by name.
 
 Most of the time you want the verify loop. Look, act, observe, assert. These are the tools for the times you want something else, and they are the ones people are most surprised exist.
 
@@ -55,7 +55,7 @@ Useful at the end of a drive, when the agent is about to report success. "I veri
 }
 ```
 
-Note the token redaction. Credential-shaped values are stripped here exactly as they are in [`reticle_network`](/tools-network), so reading storage never puts a session token in your context.
+Note the token redaction. Credential-shaped values are stripped here exactly as they are in [`reticle_observe { action: "network" }`](/tools/network), so reading storage never puts a session token in your context.
 
 localStorage, sessionStorage and readable cookies.
 
@@ -86,6 +86,24 @@ This is where the "logged in but nothing persisted" bug lives. A login can fire 
 Toasts that auto-dismiss, debounced search, polling, session timeouts, retry backoff. All of these are normally verified by sleeping, which is slow and flaky in equal measure.
 
 Freeze the clock, advance it by exactly the interval, assert the consequence. No sleeping, no guessing, and the same result on a fast laptop and a loaded CI runner.
+
+<Warning>
+Freeze the clock **before** the action that schedules the timer. Reticle replaces the page's
+`setTimeout` and `setInterval` when the clock is frozen, so timers that already exist keep running
+on the browser's real clock and are not fired by `advanceMs`.
+
+If a timer is created during page mount, freeze the clock first and then reload the page so the mount-time timer is created under the fake clock.
+
+</Warning>
+
+The clock virtualizes `Date.now()`, but not every time API. `new Date()` and `performance.now()` continue to use real time. `performance.now()` is intentionally left real because React's scheduler depends on it.
+
+The reliable pattern is:
+
+1. Freeze the clock.
+2. Perform the action that schedules the timer, or reload the page if the timer is created during mount.
+3. Advance by the required interval.
+4. Assert the consequence.
 
 ### Crawl: click everything, report anomalies
 
@@ -121,6 +139,19 @@ This is the tool for an app you did not write and do not understand yet.
 <Warning>
   It clicks **everything**, so point it at a dev environment. `maxSteps` bounds it, defaulting to
   25.
+</Warning>
+
+Controls Reticle judges destructive are blocked unless you pass `confirmDangerous: true`. That covers the controls on the page the crawl started on. A control one of its clicks revealed, such as the "Yes, delete" behind a "Delete", stays blocked, so one crawl cannot finish a deletion you did not look at.
+
+### Covering everything: `exhaustive`
+
+`{ "action": "crawl", "exhaustive": true }` goes past one page. It walks every state reachable from where you start, reaching each one by replaying the path that found it from a fresh load, so it never depends on "back" working. It fills text fields before it tries a form's buttons (from `RETICLE_SECRET_<FIELD>` when set, so it gets past a login, and only on the origin the crawl started on), and treats controls that differ only by a number, like table rows, as one. A control with the same name on a different screen is tried again there. Every write it finds is then driven again with the request failing. A write counts as **branched** only when the request was actually sent and broken. With the write failing, the app must not end up where it goes when the write succeeds; if it does, you get `failure-unhandled`. That part needs a browser Reticle drives (`reticle drive`).
+
+The run folds into the app-wide coverage ledger, which `reticle_verify { action: "coverage", app: true }` also reports. It has six levels, each with what is missing: routes **reached**, controls **touched**, controls **proved** (an `act_and_wait` came back `yes`), journeys **completed**, writes **branched** (failure path driven), and app functions **executed** (V8 coverage, driven browser only, collected from the first coverage request or exhaustive crawl onward, so an ordinary drive pays nothing for it). `frontier` is the number of states found and not yet explored. Zero means every state the explorer could tell apart was explored, not that every reachable state was: a state is its route plus the names of its controls, so two screens that differ only in field values, in how many of a control they show, or in what the same controls do count as one, and the second is never visited. `reticle gate` blocks when a level falls below the best it has reached, and when a changed file never ran. A changed file whose coverage was taken before the edit is reported as `coverageStale` instead, because its counts describe the old code. When a drop was intended, `reticle gate --accept-coverage` records today's levels as the new best.
+
+<Warning>
+  Exhaustive really does click everything, repeatedly, and submits forms. `maxSteps` bounds it,
+  defaulting to 400 actions.
 </Warning>
 
 ### Reconcile: what the API said versus what rendered
@@ -358,7 +389,7 @@ Stopping a recording used to return a very large payload, almost all of it the r
 }
 ```
 
-Each step's `args` is elided above because a recorded step is an anchor, not a call you make by hand: it resolves a testid at replay time rather than a `ref`, so copying it into [`reticle_act`](/tools-act) would not work.
+Each step's `args` is elided above because a recorded step is an anchor, not a call you make by hand: it resolves a testid at replay time rather than a `ref`, so copying it into [`reticle_act`](/tools/act) would not work.
 
 Nine hundred and fifty-three bytes for 445 recorded events. `timeline_omitted` hands you the exact `reticle_observe` call to make if you want them, so nothing is lost, it is only not charged for by default.
 
@@ -419,7 +450,7 @@ A replay against a drifted app names what moved and where. This is `reticle_veri
 
 Passing flows are counted, not described. Only failures carry detail, because the detail is the actionable part. `flaky` lists flows seen to both pass and fail on unchanged code, which is a bug in the flow rather than in the app.
 
-`reticle_flow_heal` proposes the rebind. It refuses when it is not confident:
+`reticle_verify { action: "heal" }` proposes the rebind. It refuses when it is not confident:
 
 ```json
 {

@@ -71,7 +71,7 @@ Why not compare to traditional test frameworks (Playwright the library, Cypress,
 
 There **is** a comparison against a Playwright script, and it answers a different question: not "what does it cost an agent to look" but "what can each tool structurally SEE, at all." That one is in Part 5a. It runs no model, so nothing about it depends on how well an agent drives, which is what makes it the more durable of the two results.
 
-Tool versions are pinned in `bench/raw/run-meta.json` so any run is reproducible.
+Tool versions are recorded by hand in `bench/README.md`, not generated: the file that used to pin them is no longer produced. Treat that table as the expiry date on every cross-tool number here, and re-derive before quoting rather than assuming a run from months ago still describes today's tools.
 
 ---
 

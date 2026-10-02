@@ -4,7 +4,7 @@ description: 'Record an interactive run once and replay it forever as a git-chec
 icon: repeat
 ---
 
-A **flow** is a recorded interactive run that Reticle stores as JSON under `.reticle/flows/` and replays forever with no AI model in the loop. Steps are anchored on **meaning** (a testid, a signal, or an auto-derived component + source location), never on a `eXX` ref or a coordinate, so they survive refactors; when an anchor does drift, `reticle_flow_replay` names what changed and `reticle_flow_heal` can rebind it.
+A **flow** is a recorded interactive run that Reticle stores as JSON under `.reticle/flows/` and replays forever with no AI model in the loop. Steps are anchored on **meaning** (a testid, a signal, or an auto-derived component + source location), never on a `eXX` ref or a coordinate, so they survive refactors; when an anchor does drift, `reticle_flow_replay` names what changed and `reticle_verify { action: "heal" }` can rebind it.
 
 Reticle turns an interactive run into a **git-checked, replayable program** stored under `.reticle/`. Flows are anchored on **meaning** (testid + signal), not volatile element refs or coordinates, so they survive refactors, and when an anchor does drift, Reticle tells you _why_ and can repair it. This is what makes Reticle "the project's living test suite a human seeds and an agent maintains."
 
@@ -87,6 +87,35 @@ reticle_flow {action:"load"}({ flowName: "create-task" })   // → the flow JSON
 reticle_flow_replay({ flowName: "create-task" }) // re-resolve each anchor against the LIVE DOM, run it
 ```
 
+### Resume from a step
+
+```jsonc
+reticle_flow_replay({ flowName: "create-task", from: 3 })          // by 0-based index
+reticle_flow_replay({ flowName: "create-task", from: "submit" })   // or by a step's `id`
+```
+
+There is no state to restore, so the steps before `from` run again quickly as setup: their actions run, their `expect`s are not checked, and they are not reported. Replay is then checked and reported from `from` on. If a setup step fails, it is reported, because the resume never reached the step you asked for. A setup step declared `"effect": "commits"` refuses the resume and the whole flow replays, so resuming never re-sends a payment or a message silently. A `from` that names no step is an error, not a full replay.
+
+## Flows saved from a drive
+
+Every session's driving is saved as a flow at teardown when it declared a consequence. These flows:
+
+- are named from the `intent` you pass to `reticle_act_and_wait` (`drive-close-an-issue`), and carry it as the flow's `intent`;
+- merge: another drive that starts on the same page and takes the same steps updates the existing file instead of adding a copy. The existing flow keeps its name and everything it already says; the new drive only fills gaps. Flows you named yourself are never merged;
+- record, on every step, the `page` it ran on and the `endPage` it led to;
+- declare `requires` (the start page) and `ensures` (the end page) as route claims, so `canFollow` can tell which flows chain. Replay treats a required start page as met by navigating there;
+- carry `author: { agent, person }`: the MCP client that drove it and the email of whoever ran `reticle login` on that machine. Either is left out when it is not known.
+
+## Delete a flow
+
+```jsonc
+reticle_flow {action:"delete"}({ flowName: "create-task" })  // → { deleted: true }
+```
+
+A renamed or obsolete flow otherwise lingers in `reticle_flow {action:"list"}` and in every `reticle_verify {action:"flows"}` suite run, where it fails forever against a screen nobody intends to keep.
+
+**Deleting a flow that is not there is an error, not a no-op.** It answers `{ error, code: "not_found" }` rather than `{ deleted: true }`, so a mistyped name cannot read as a completed cleanup while the real flow stays in the suite. Check the spelling against `reticle_flow {action:"list"}` and try again.
+
 **Watch it replay on the page.** When the presenter is on (`present: true`), a replay isn't silent. Each step drives the real page, so the synthetic cursor flies to the element, the focus ring lands, and the activity log streams the journey live. You (or a teammate) literally watch the saved journey re-walk itself on your app, then see the verdict land. It's the fastest way to _see_ that a flow still works, not just read a green checkmark.
 
 `reticle_flow_replay` returns a status:
@@ -95,7 +124,7 @@ reticle_flow_replay({ flowName: "create-task" }) // re-resolve each anchor again
 - `drift`: an anchor missed (a testid was renamed, or a signal never fired). The result is **legible**, never a blind failure: `{ step, anchor, drift: { reasonKind: "testid_not_found", nearest: "send-message" } }`. (This is the "whose fault is it" principle.)
 - `error`: the flow file is missing/invalid, or a resolved action failed. Runtime failures include the failed step and a top-level error envelope.
 
-A testid-_preserving_ refactor (you moved markup but kept the testids) still replays green. A step whose element has **no testid** is anchored on its component + source location (`{ kind: "component", component, source: { file, line } }`), an auto-derived stable anchor, so a flow records cleanly with zero hand-added testids and replay re-resolves it via `reticle_query by:'component'`.
+A testid-_preserving_ refactor (you moved markup but kept the testids) still replays green. A step whose element has **no testid** is anchored on its component + source location (`{ kind: "component", component, source: { file, line } }`), an auto-derived stable anchor, so a flow records cleanly with zero hand-added testids and replay re-resolves it via `reticle_look { action: "find" } by:'component'`.
 
 ### The decision envelope: what to do next, not just pass/fail
 
@@ -129,14 +158,14 @@ Passing flows are counted; only failures carry detail (token-cheap). Build → `
 
 ## Self-healing: the agent maintains the flow
 
-When a testid is renamed, the flow drifts. `reticle_flow_heal` proposes (and optionally applies) the nearest-match rebind, so flows don't rot:
+When a testid is renamed, the flow drifts. `reticle_verify { action: "heal" }` proposes (and optionally applies) the nearest-match rebind, so flows don't rot:
 
 ```jsonc
-reticle_flow_heal({ flowName: "create-task" })               // PROPOSE only, never writes
+reticle_verify({ action: "heal", flowName: "create-task" })               // PROPOSE only, never writes
 // → { status: "drift", applied: false,
 //     proposals: [{ step: 0, from: "add-tassk", to: "add-task", confidence: 0.8 }] }
 
-reticle_flow_heal({ flowName: "create-task", apply: true })  // rewrite the anchor on disk
+reticle_verify({ action: "heal", flowName: "create-task", apply: true })  // rewrite the anchor on disk
 // → { status: "healed", applied: true, proposals: [...] }
 ```
 
@@ -164,9 +193,10 @@ With `apply: false` the flow file is **never modified**; you get the proposed di
 | `reticle_flow_save_recorded` | `{ flowName? }` | persist a human-recorded (toolbar) flow |
 | `reticle_flow {action:"list"}` | `{}` | flows on disk |
 | `reticle_flow {action:"load"}` | `{ flowName }` | the flow JSON |
-| `reticle_flow_replay` | `{ flowName }` | `{ status, steps, decision? }` (decision on drift/fail) |
+| `reticle_flow {action:"delete"}` | `{ flowName }` | `{ deleted: true }`, or `{ error, code }` (`not_found` when no such flow) |
+| `reticle_flow_replay` | `{ flowName, from?, sweep? }` | `{ status, steps, decision? }` (decision on drift/fail); `from` resumes at a step |
 | `reticle_verify {action:"flows"}` | `{ names?, sessionId? }` | suite verdict `{ status, passed, failed, failures[] }` |
-| `reticle_flow_heal` | `{ flowName, apply? }` | propose / apply nearest-match rebind |
+| `reticle_verify { action: "heal" }` | `{ flowName, apply? }` | propose / apply nearest-match rebind |
 | `reticle_annotate` | `{ kind, … }` | compile a structured annotation into the flow |
 
 > Flow `name` must be a single safe path segment (no `/`, `\`, `..`, or leading dot).

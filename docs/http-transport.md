@@ -8,7 +8,7 @@ Most clients reach Reticle over stdio: they spawn `reticle mcp`, and the tools a
 
 The daemon also speaks MCP over HTTP, on the same port as everything else. Nothing has to reload for a client to reach it, so this is the transport for scripted runs, CI, a language with no MCP client library, and any editor that will not pick up tools mid-session.
 
-It is the same tool surface. Not a subset, not a simplified one. `reticle_snapshot`, `reticle_act_and_wait`, `reticle_assert` and the rest behave exactly as they do over stdio, because they are the same server behind a different transport.
+It is the same tool surface. Not a subset, not a simplified one. `reticle_look { action: "page" }`, `reticle_act_and_wait`, `reticle_assert` and the rest behave exactly as they do over stdio, because they are the same server behind a different transport.
 
 ## The two endpoints
 
@@ -136,7 +136,10 @@ async function start() {
   const listed = await send('tools/list', {});
   console.log(listed.result.tools.map((t) => t.name).join(', '));
 
-  const snapshot = await send('tools/call', { name: 'reticle_snapshot', arguments: {} });
+  const snapshot = await send('tools/call', {
+    name: 'reticle_look',
+    arguments: { action: 'page' },
+  });
   console.log(snapshot.result.content[0].text);
 }
 ```
@@ -159,6 +162,6 @@ The `202` comes back here; the tool list appears in the first shell.
 
 ## What this does not change
 
-The transport carries the tools. It does not replace the rest of the setup. The app still has to be instrumented and connected, and `reticle_sessions` is still what tells you whether a session is there to drive. A verdict reached over HTTP is a verdict reached the usual way: only `verified: "yes"` is a pass.
+The transport carries the tools. It does not replace the rest of the setup. The app still has to be instrumented and connected, and `reticle_session { action: "list" }` is still what tells you whether a session is there to drive. A verdict reached over HTTP is a verdict reached the usual way: only `verified: "yes"` is a pass.
 
-The endpoints, the handshake, the three status codes and the `202`-then-SSE shape are pinned by `packages/server/src/mcp-http-transport.test.ts`, which drives them over raw HTTP with no client library, so the contract this page describes fails the build if it changes.
+The endpoints, the handshake, the three status codes and the `202`-then-SSE shape are pinned by `server/src/mcp-http-transport.test.ts`, which drives them over raw HTTP with no client library, so the contract this page describes fails the build if it changes.

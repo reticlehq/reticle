@@ -1,0 +1,145 @@
+---
+title: reticle_observe
+description: The full timeline of everything the app did in a window. DOM, network, routing, console, animations and signals, with a summary.
+icon: timeline
+---
+
+`reticle_observe` returns the full timeline of everything the app did in a window: DOM, network, routing, console, animations and signals, in order, with a summary on top. Reach for it when you do not yet know what went wrong. It reads and diagnoses; it does not produce a verdict.
+
+It is the wide-angle lens. Where `reticle_network` and `reticle_console` answer one question each, `observe` returns everything.
+
+## Example
+
+```json
+{ "window_ms": 4000, "max_events": 4 }
+```
+
+Real response:
+
+```json
+{
+  "window_ms": 4000,
+  "events": [
+    {
+      "t": 69964,
+      "type": "page.health",
+      "seq": 544,
+      "data": {
+        "hidden": false,
+        "focused": true,
+        "runtime": "web",
+        "engine": "blink",
+        "brand": "other",
+        "reason": "heartbeat"
+      }
+    },
+    {
+      "t": 1282696,
+      "type": "net.detail",
+      "data": {
+        "url": "http://localhost:4310/",
+        "method": "GET",
+        "status": 200,
+        "resourceType": "document",
+        "pageUrl": "http://localhost:4310/"
+      }
+    }
+  ],
+  "summary": {
+    "total": 2,
+    "network": 0,
+    "domAdded": 0,
+    "domRemoved": 0,
+    "domChanged": 0,
+    "routeChanges": 0,
+    "consoleErrors": 0,
+    "animations": 0,
+    "signals": 0
+  },
+  "cost": { "events": 2, "bytes": 845 },
+  "buffer": {
+    "held": 536,
+    "dropped": 11,
+    "note": "event buffer evicted older events (age/size cap): a negative result here may be a false negative; the evidence may have expired. Grade sooner or widen the buffer."
+  }
+}
+```
+
+A quiet window, honestly reported as quiet. The `headers` block on that `net.detail` event is trimmed out for length.
+
+## Read the summary first
+
+The `summary` block is the cheap answer. `consoleErrors: 0` and `network: 0` tells you most of what you need without reading a single event. Pull the timeline only when the summary says something interesting happened.
+
+## Arguments
+
+| Argument          | What it does                                                       |
+| ----------------- | ------------------------------------------------------------------ |
+| `window_ms`       | How far back to look                                               |
+| `since` / `until` | Cursors from a prior act. The precise way to scope                 |
+| `actionId`        | Only events attributed to one action: "what did that click cause?" |
+| `filters`         | Event-type allowlist. The cheapest way to shrink a big timeline    |
+| `max_events`      | Cap the timeline to the most recent N                              |
+
+## Scope by cursor, not by clock
+
+Every `reticle_act` response includes a `since` cursor. Passing it to `observe` scopes the timeline to exactly what followed that action, with no guessing about how many milliseconds to look back:
+
+```json
+{ "since": 30224, "filters": ["signal", "net"] }
+```
+
+This is more precise than `window_ms` and it does not drift when the machine is slow. Which matters, because a timing-based window that works on your laptop and fails in CI is a flaky test waiting to happen.
+
+Every event scoped this way carries its `actionId` and `attribution`, so you can tell what the action caused from what merely happened alongside it:
+
+```json
+{
+  "events": [
+    {
+      "t": 30691,
+      "type": "signal",
+      "seq": 29,
+      "data": { "name": "auth:granted", "data": { "email": "admin@reticle.dev" } },
+      "actionId": "a1",
+      "attribution": "window"
+    }
+  ],
+  "summary": { "total": 3, "network": 1, "consoleErrors": 0, "signals": 1 },
+  "cost": { "events": 3, "bytes": 1457 }
+}
+```
+
+## `contradictions` is the field to read first
+
+When two channels disagree, `observe` says so without being asked:
+
+```json
+"contradictions": [
+  {
+    "kind": "response-ignored",
+    "claim": "1 write(s) succeeded on the server",
+    "counter": "nothing on the client changed, no DOM, store or route movement",
+    "detail": "POST http://localhost:8787/api/login 200"
+  }
+]
+```
+
+Punctuation in that block is lightly normalised for the docs; the field names and values are verbatim.
+
+A successful write that moved nothing on the client is the exact shape of a false green. Note that this one was a false alarm caused by a narrow filter: the same window's DOM and state did change, and the filtered read simply could not see it. Widen the window before you act on a contradiction.
+
+## When to use it
+
+Use `observe` when you do not yet know what went wrong. Use the narrow tools when you do.
+
+<CardGroup cols={2}>
+  <Card title="Good use" icon="circle-check">
+    "Something broke after that click, show me everything that happened."
+  </Card>
+  <Card title="Wasteful use" icon="circle-xmark">
+    "Did a POST fire?" [`reticle_network`](/tools/network) answers that far more cheaply.
+  </Card>
+</CardGroup>
+
+<Note>`observe` reads. It does not produce a verdict. It is for diagnosis, not proof.</Note>

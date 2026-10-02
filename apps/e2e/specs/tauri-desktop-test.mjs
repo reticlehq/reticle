@@ -16,6 +16,7 @@
 //   - and none of those captures appears in the app's own network evidence
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { release } from 'node:os';
 import path from 'node:path';
 import { ROOT, bootDesktopSession, checker, sleep, tempCaptures } from '../desktop-harness.mjs';
 
@@ -63,6 +64,10 @@ try {
     console.log(log.join('').slice(-3000));
     throw new Error('no session');
   }
+  if (process.platform !== 'darwin' || Number(release().split('.')[0]) >= 23) {
+    for (let i = 0; i < 40 && !log.join('').includes('reticle-headless-visible='); i++) await sleep(100);
+    chk('headless mode hides the native window', log.join('').includes('reticle-headless-visible=Ok(false)'), log.join('').trim());
+  }
   // The origin a PACKAGED Tauri app serves its embedded frontend from — `tauri://localhost` on
   // macOS/Linux, `http://tauri.localhost` on Windows, where the webview requires an http origin.
   // Both are the packaged app. What this check exists to exclude is a DEV SERVER
@@ -88,6 +93,13 @@ try {
     await sleep(200);
   }
   const boot = await tool('reticle_network', {});
+  // If this is red, it is almost certainly NOT a slow boot, and the budget above is not the
+  // thing to raise. Measured over three passing runs on macOS, the boot IPC arrives at poll 0
+  // or 1 -- under 200ms against a budget of 8000. The failure mode is all-or-nothing: the
+  // WKWebView either executes immediately or does not execute at all inside the window, which
+  // is the behaviour `reticle_tauri::on_page_load` parks off-screen to avoid and which its own
+  // comment says AppKit is not guaranteed to honour. Re-run before blaming a diff; this spec
+  // has been measured failing three times in six on this platform.
   chk(
     'an invoke is observed as ipc://load_todos with no frontend wiring',
     JSON.stringify(boot).includes('ipc://load_todos'),
@@ -224,7 +236,11 @@ try {
       await sleep(1000);
     }
   }
-  if (!aliveLater) console.log(`   (durability probe: ${lastError})`);
+  if (!aliveLater) {
+    console.log(`   (durability probe: ${lastError})`);
+    console.log(`   app pid=${session.app.pid} exit=${session.app.exitCode} signal=${session.app.signalCode}`);
+    console.log(log.join('').slice(-6000));
+  }
   chk('the session still answers after a pause, not just immediately', aliveLater);
 } finally {
   await session?.shutdown();

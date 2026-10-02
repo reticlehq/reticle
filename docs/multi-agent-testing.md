@@ -45,7 +45,7 @@ This is the design target, and it needs no special setup:
 - Flows can't bleed into each other: contexts are isolated and every session is scoped by `projectId`.
 - A single crashed page is reclaimed on its own, and if an agent crashes or hangs its lease stops being touched and the **lease reaper** reclaims the context after a TTL, freeing the slot. One dead agent never starves the others.
 
-`reticle_sessions` lists everything with `projectId` (group by app) and `leased` (pool context vs a human tab), so an orchestrator can see the whole fleet at a glance.
+`reticle_session { action: "list" }` lists everything with `projectId` (group by app) and `leased` (pool context vs a human tab), so an orchestrator can see the whole fleet at a glance.
 
 ## Knobs
 

@@ -31,6 +31,16 @@ No flags.
 
 The SDK sync is best effort and non-fatal on purpose. This command gets run from wherever the human happens to be standing, which is often not an app at all.
 
+## Stuck on an older Windows release
+
+Reticle 3.1.0 and older cannot apply this update on Windows and may fail with `spawn EINVAL`. Those releases run their own outdated updater, so retrying the command will not help. Run the installer directly from PowerShell instead:
+
+```powershell
+irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex
+```
+
+This installs the current server without going through the old updater.
+
 ## Exit codes
 
 | Code | Meaning                                                              |

@@ -38,12 +38,12 @@ You never install `@reticlehq/server`. Your agent runs it with `npx`.
 
 The package split is not cosmetic. Each boundary enforces something:
 
-| Package   | Runs in     | Hard rule                                              |
-| --------- | ----------- | ------------------------------------------------------ |
-| `core`    | both        | Depends only on `zod`. Sits at the bottom of the graph |
-| `browser` | the browser | Never imports a Node API                               |
-| `server`  | Node        | Never imports a DOM API                                |
-| `react`   | the browser | Optional. Core must work without it                    |
+| Package | Runs in | Hard rule |
+| --- | --- | --- |
+| `core` | both | Depends only on `zod` and `open-verification`. Sits at the bottom of the graph |
+| `browser` | the browser | Never imports a Node API |
+| `server` | Node | Never imports a DOM API |
+| `react` | the browser | Optional. Core must work without it |
 
 Those rules are why the browser SDK cannot accidentally pull in a filesystem call, and why the server cannot accidentally depend on `window`. They are enforced by the dependency graph, not by discipline.
 
@@ -72,7 +72,7 @@ Those rules are why the browser SDK cannot accidentally pull in a filesystem cal
 
 **Why it exists:** this is the part that makes Reticle different from a browser-automation tool. Because it runs _inside_ the app rather than driving it from outside, it can see a state mutation and a fired signal, not just a rendered pixel.
 
-**Depends on:** `@reticlehq/core`. [`reticle_query`](/tools-query) speaks role, label and testid rather than CSS selectors through its own local accessibility engine, so what a snapshot reports is exactly what a query matches.
+**Depends on:** `@reticlehq/core`. [`reticle_look { action: "find" }`](/tools/query) speaks role, label and testid rather than CSS selectors through its own local accessibility engine, so what a snapshot reports is exactly what a query matches.
 
 **Install it directly when** you are not on React, or you want `connect()` under your own control:
 
@@ -147,7 +147,7 @@ export default defineConfig({ plugins: [reticle(), react()] });
 
 **Stamps `data-reticle-source="file:line:col"` onto JSX host elements.**
 
-**Why it exists:** React 19 dropped `_debugSource`, which is what source mapping used to rely on. This plugin puts the information back, at build time, in dev only. Without it, `reticle_inspect` can still tell you the component name but not the file.
+**Why it exists:** React 19 dropped `_debugSource`, which is what source mapping used to rely on. This plugin puts the information back, at build time, in dev only. Without it, `reticle_look { action: "element" }` can still tell you the component name but not the file.
 
 **Depends on:** nothing. **Peer:** `@babel/core`.
 
@@ -172,6 +172,26 @@ module.exports = withReticle({/* your config */});
   This one is CommonJS on purpose. `next.config.js` is loaded by Node before any ESM transform, so
   an ESM-only helper would fail at the least helpful moment.
 </Note>
+
+---
+
+## open-verification
+
+**The specification, as a package.** The vocabulary a verification is described in (subject, channel, intent, claim, window, observation, evidence, coverage, verdict), plus `Realm`, the interface an implementation answers, and `adjudicate()`, the function that turns evidence into a verdict. It ships `SPEC.md`, a JSON Schema for every noun, and a conformance suite that scores an implementation against the rules.
+
+**Why it exists:** Reticle's rules about what may buy a green were real and were scattered. The independence rule lived in a channel table, the four verdict values in an enum, the blind-spot idea in a coverage type, and nothing said they were one contract that something other than Reticle could implement. You do not need this package to use Reticle. You need it to write something else that can be checked the same way, or to check what Reticle's verdicts actually mean.
+
+**Depends on:** `zod`, and nothing else. Deliberately: implementing the contract must not require installing the product.
+
+---
+
+## @reticlehq/engine
+
+**The rules that decide a verdict, with nothing attached.** Give it what happened in a running app (the clicks, the network calls, the state changes, the console) together with a statement about what should have followed, and it answers whether that statement held. No browser, no daemon, no command line, no storage.
+
+**Why it exists:** the decision and the machinery that feeds it are different jobs with different reasons to change. Carved out of `@reticlehq/server` so the part that judges can be read, tested and reused without starting anything.
+
+**Depends on:** `@reticlehq/core`, `zod`.
 
 ---
 
@@ -219,7 +239,7 @@ A lint rule makes the signal layer self-enforcing, which is the only way a conve
 
 ```toml
 [dependencies]
-reticle-tauri = "2.14"
+reticle-tauri = "3.5"
 ```
 
 <Warning>

@@ -27,7 +27,7 @@ import { connect } from './mcp-line-client.mjs';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const BASELINE = join(ROOT, 'bench', 'behaviour-baseline.json');
 const MANUAL = join(ROOT, 'docs', 'reticle-manual.md');
-const CLI = join(ROOT, 'packages', 'server', 'dist', 'cli.js');
+const CLI = join(ROOT, 'server', 'dist', 'command', 'cli.js');
 
 const argv = process.argv.slice(2);
 const flag = (n, d) => (argv.includes(n) ? argv[argv.indexOf(n) + 1] : d);
@@ -130,7 +130,10 @@ async function main() {
     throw new Error(`no session: ${leaseText.slice(0, 300)}`);
 
   const sessions = JSON.parse(
-    String((await client.call('reticle_sessions', {})).result?.content?.[0]?.text ?? '{}'),
+    // Merged name: the default nine are a closed surface, so `reticle_sessions` is unreachable.
+    String(
+      (await client.call('reticle_session', { action: 'list' })).result?.content?.[0]?.text ?? '{}',
+    ),
   );
   const sid = (sessions.sessions ?? [])[0]?.sessionId;
   if (sid === undefined) throw new Error('lease reported ready and no session was listed');

@@ -20,9 +20,9 @@ The first run compiles the Rust side and takes a few minutes.
 `src-tauri/src/main.rs` exposes three commands. `archive_todo` **always returns `Err`**, and the frontend's Archive button removes the row, writes "archived", and swallows the rejection. The UI, a screenshot, and a DOM assertion all agree the feature works:
 
 ```
-reticle_snapshot             → the row is gone, status reads "archived"
-reticle_network {status:500} → ipc://archive_todo  status 500
-                                "archive is not implemented in the backend"
+reticle_look { action: "page" }                     → the row is gone, status reads "archived"
+reticle_observe { action: "network", status: 500 } → ipc://archive_todo  status 500
+                                                     "archive is not implemented in the backend"
 ```
 
 See [docs/desktop.mdx](../../docs/desktop.mdx).

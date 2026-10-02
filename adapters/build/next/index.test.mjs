@@ -1,0 +1,513 @@
+import { describe, it, expect, afterEach, afterAll } from 'vitest';
+import { createRequire } from 'node:module';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const require = createRequire(import.meta.url);
+const {
+  withReticle,
+  readPairingToken,
+  discoverDaemonUrl,
+  knowsAllowedDevOrigins,
+} = require('./index.cjs');
+
+const TOKEN_ENV = 'RETICLE_PAIRING_TOKEN_DIR';
+
+// withReticle now mints; keep it out of the real ~/.reticle during tests that do not set the env.
+const defaultTokenDir = mkdtempSync(join(tmpdir(), 'reticle-next-default-token-'));
+const savedTokenDir = process.env[TOKEN_ENV];
+process.env[TOKEN_ENV] = defaultTokenDir;
+afterAll(() => {
+  if (savedTokenDir === undefined) delete process.env[TOKEN_ENV];
+  else process.env[TOKEN_ENV] = savedTokenDir;
+  rmSync(defaultTokenDir, { recursive: true, force: true });
+});
+
+describe('readPairingToken', () => {
+  const previous = process.env[TOKEN_ENV];
+  /** @type {string | undefined} */
+  let dir;
+
+  afterEach(() => {
+    if (previous === undefined) delete process.env[TOKEN_ENV];
+    else process.env[TOKEN_ENV] = previous;
+    if (dir !== undefined) rmSync(dir, { recursive: true, force: true });
+    dir = undefined;
+  });
+
+  it('reads the token from RETICLE_PAIRING_TOKEN_DIR when the daemon has written one', () => {
+    dir = mkdtempSync(join(tmpdir(), 'reticle-next-token-'));
+    writeFileSync(join(dir, 'pairing-token'), 'tok-from-daemon\n');
+    process.env[TOKEN_ENV] = dir;
+    expect(readPairingToken()).toBe('tok-from-daemon');
+  });
+
+  it('mints a token when the file is missing, so next dev before the daemon still authenticates', () => {
+    dir = mkdtempSync(join(tmpdir(), 'reticle-next-token-'));
+    process.env[TOKEN_ENV] = dir;
+    const token = readPairingToken();
+    expect(typeof token).toBe('string');
+    expect((token ?? '').length).toBeGreaterThan(0);
+    expect(readPairingToken()).toBe(token);
+  });
+});
+
+describe('withReticle', () => {
+  const previousEnv = process.env.NODE_ENV;
+
+  afterEach(() => {
+    process.env.NODE_ENV = previousEnv;
+  });
+
+  it('is a no-op in production, so a production Next config is byte-identical', () => {
+    process.env.NODE_ENV = 'production';
+    const input = { reactStrictMode: true };
+    expect(withReticle(input)).toBe(input);
+  });
+
+  it('installs the stamping loader as a webpack pre-loader in development', () => {
+    process.env.NODE_ENV = 'development';
+    const config = withReticle({});
+    expect(typeof config.webpack).toBe('function');
+    const webpackConfig = { module: { rules: [] } };
+    const out = config.webpack(webpackConfig, { dev: true });
+    const rule = out.module.rules.find(
+      (entry) =>
+        entry.enforce === 'pre' && String(entry.use?.[0]?.loader ?? '').endsWith('loader.cjs'),
+    );
+    expect(rule).toBeDefined();
+    expect(rule.test.test('src/Foo.tsx')).toBe(true);
+    expect(rule.test.test('src/Foo.jsx')).toBe(true);
+    // #1081: a JavaScript Next project writes its pages as .js.
+    expect(rule.test.test('app/page.js')).toBe(true);
+    expect(rule.test.test('src/util.ts')).toBe(false);
+  });
+
+  it('gives Turbopack a .js rule that skips foreign code, on the Next that accepts one', () => {
+    process.env.NODE_ENV = 'development';
+    const cwd = process.cwd();
+    try {
+      // The Next is read from the APP: next-smoke runs Next 16, where rules take a `condition`.
+      process.chdir(fileURLToPath(new URL('../../../apps/next-smoke/', import.meta.url)));
+      const rules = withReticle({}).turbopack?.rules ?? {};
+      expect(rules['*.js']?.condition).toEqual({ not: 'foreign' });
+      expect(rules['*.js']?.loaders?.length).toBe(1);
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it('withholds that rule from an older Turbopack that would reject the key', () => {
+    process.env.NODE_ENV = 'development';
+    // This package's own directory resolves Next 15, whose Turbopack has no rule conditions.
+    const rules = withReticle({}).turbopack?.rules ?? {};
+    expect(rules['*.js']).toBeUndefined();
+    expect(rules['*.tsx']).toBeDefined();
+  });
+
+  /**
+   * A react-three-fiber app has no way to keep the rest of Reticle and drop the stamp otherwise,
+   * and the stamp crashes it: R3F reads the dashed attribute as a pierced property path, walks
+   * `data` -> `reticle` on a three.js instance that has no `data`, and throws from the commit
+   * phase, unmounting the whole tree. The user's other webpack config must survive the opt-out.
+   */
+  it('installs no loader when sourceMapping is off, and keeps the user webpack hook', () => {
+    process.env.NODE_ENV = 'development';
+    let sawUserHook = false;
+    const config = withReticle(
+      {
+        webpack(c) {
+          sawUserHook = true;
+          return c;
+        },
+      },
+      { sourceMapping: false },
+    );
+    const out = config.webpack({ module: { rules: [] } }, { dev: true });
+    expect(out.module.rules).toHaveLength(0);
+    expect(sawUserHook).toBe(true);
+  });
+});
+
+/**
+ * The frozen-port defect.
+ *
+ * `reticle init` writes the daemon's port into the generated ReticleDev component at install time.
+ * The Vite plugin has always re-resolved it on every dev-server start; this package never did, so a
+ * Next app kept dialling whatever port init happened to see. Moving the daemon left the app dialling
+ * a port nothing listens on, with no error anywhere but a console warning in a browser nobody reads.
+ *
+ * core's `pickDaemonPort` documents this rule as shared by "both the vite and next plugins". These
+ * pin the next half against the same three cases.
+ */
+describe('discoverDaemonUrl', () => {
+  /** @type {string[]} */
+  const dirs = [];
+  const live = () => true;
+  const dead = () => false;
+
+  function project(projectId) {
+    const cwd = mkdtempSync(join(tmpdir(), 'reticle-next-cwd-'));
+    dirs.push(cwd);
+    if (projectId !== undefined) {
+      writeFileSync(join(cwd, '.reticle.json'), JSON.stringify({ projectId }));
+    }
+    return cwd;
+  }
+
+  function home(entries) {
+    const dir = mkdtempSync(join(tmpdir(), 'reticle-next-home-'));
+    dirs.push(dir);
+    for (const e of entries) {
+      writeFileSync(join(dir, `daemon-${e.port}.json`), JSON.stringify(e));
+    }
+    return dir;
+  }
+
+  afterEach(() => {
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+
+  it('honors RETICLE_PORT over an existing daemon and configured port', () => {
+    const cwd = project('shop-abc123');
+    writeFileSync(
+      join(cwd, '.reticle.json'),
+      JSON.stringify({ projectId: 'shop-abc123', port: 4400 }),
+    );
+    const dir = home([{ port: 4407, pid: 111, projectId: 'shop-abc123' }]);
+    expect(discoverDaemonUrl(cwd, dir, live, { RETICLE_PORT: '15400' })).toBe(
+      'ws://localhost:15400/reticle',
+    );
+  });
+
+  it('honors RETICLE_PORT before init has written a config', () => {
+    expect(discoverDaemonUrl(project(undefined), home([]), live, { RETICLE_PORT: '15400' })).toBe(
+      'ws://localhost:15400/reticle',
+    );
+  });
+
+  it.each(['', '0', '-1', '65536', '1.5', '14400oops', 'Infinity'])(
+    'ignores invalid RETICLE_PORT %s',
+    (port) => {
+      const cwd = project('shop-abc123');
+      const dir = home([{ port: 4407, pid: 111, projectId: 'shop-abc123' }]);
+      expect(discoverDaemonUrl(cwd, dir, live, { RETICLE_PORT: port })).toBe(
+        'ws://localhost:4407/reticle',
+      );
+    },
+  );
+
+  it('finds the live daemon serving THIS project, whatever port it moved to', () => {
+    const cwd = project('shop-abc123');
+    const dir = home([{ port: 4407, pid: 111, projectId: 'shop-abc123' }]);
+    expect(discoverDaemonUrl(cwd, dir, live)).toBe('ws://localhost:4407/reticle');
+  });
+
+  /** A wrong auto-connect reports another app's state as this one's, which is worse than no connect. */
+  it('never adopts a daemon serving a different project', () => {
+    const cwd = project('shop-abc123');
+    const dir = home([{ port: 4400, pid: 111, projectId: 'blog-def456' }]);
+    expect(discoverDaemonUrl(cwd, dir, live)).toBeUndefined();
+  });
+
+  it('ignores a stale entry whose process is gone', () => {
+    const cwd = project('shop-abc123');
+    const dir = home([{ port: 4407, pid: 111, projectId: 'shop-abc123' }]);
+    expect(discoverDaemonUrl(cwd, dir, dead)).toBeUndefined();
+  });
+
+  it('prefers the lowest port when one project has two live daemons', () => {
+    const cwd = project('shop-abc123');
+    const dir = home([
+      { port: 4409, pid: 111, projectId: 'shop-abc123' },
+      { port: 4402, pid: 222, projectId: 'shop-abc123' },
+    ]);
+    expect(discoverDaemonUrl(cwd, dir, live)).toBe('ws://localhost:4402/reticle');
+  });
+
+  it('says nothing for a project that has never been through init', () => {
+    const cwd = project(undefined);
+    const dir = home([{ port: 4400, pid: 111, projectId: 'shop-abc123' }]);
+    expect(discoverDaemonUrl(cwd, dir, live)).toBeUndefined();
+  });
+
+  it('survives a corrupt registry entry instead of throwing into the dev server', () => {
+    const cwd = project('shop-abc123');
+    const dir = home([{ port: 4407, pid: 111, projectId: 'shop-abc123' }]);
+    writeFileSync(join(dir, 'daemon-9999.json'), '{ not json');
+    expect(discoverDaemonUrl(cwd, dir, live)).toBe('ws://localhost:4407/reticle');
+  });
+
+  it('says nothing when ~/.reticle does not exist at all', () => {
+    const cwd = project('shop-abc123');
+    expect(discoverDaemonUrl(cwd, join(tmpdir(), 'reticle-absent-home-xyz'), live)).toBeUndefined();
+  });
+
+  /**
+   * The user edited `port` in .reticle.json. The daemon and the CLI follow the file; the page kept
+   * dialling the `url` literal init wrote into reticle-dev.tsx, because with no daemon registered yet
+   * nothing here spoke up and the literal was all that was left.
+   */
+  it('falls back to the port in .reticle.json when no daemon is registered for this project', () => {
+    const cwd = project('shop-abc123');
+    writeFileSync(
+      join(cwd, '.reticle.json'),
+      JSON.stringify({ projectId: 'shop-abc123', port: 4471 }),
+    );
+    const dir = home([{ port: 4400, pid: 111, projectId: 'blog-def456' }]);
+    expect(discoverDaemonUrl(cwd, dir, live)).toBe('ws://localhost:4471/reticle');
+  });
+
+  it('still prefers the live daemon for this project over the port written in the file', () => {
+    const cwd = project('shop-abc123');
+    writeFileSync(
+      join(cwd, '.reticle.json'),
+      JSON.stringify({ projectId: 'shop-abc123', port: 4471 }),
+    );
+    const dir = home([{ port: 4407, pid: 111, projectId: 'shop-abc123' }]);
+    expect(discoverDaemonUrl(cwd, dir, live)).toBe('ws://localhost:4407/reticle');
+  });
+
+  // `init --port 4471` over a project whose daemon was on 4407 left both alive and both this
+  // project's. Discovery took the lower one, so the page dialled the OLD daemon while init waited on
+  // the new one and exited 1. A live daemon on the configured port is the answer.
+  it('dials the configured port when a live daemon is registered there, over a lower one', () => {
+    const cwd = project('shop-abc123');
+    writeFileSync(
+      join(cwd, '.reticle.json'),
+      JSON.stringify({ projectId: 'shop-abc123', port: 4471 }),
+    );
+    const dir = home([
+      { port: 4407, pid: 111, projectId: 'shop-abc123' },
+      { port: 4471, pid: 222, projectId: 'shop-abc123' },
+    ]);
+    expect(discoverDaemonUrl(cwd, dir, live)).toBe('ws://localhost:4471/reticle');
+    expect(discoverDaemonUrl(cwd, dir, (pid) => 222 !== pid)).toBe('ws://localhost:4407/reticle');
+  });
+
+  it('never lets another project’s daemon on the configured port beat this project’s own', () => {
+    const cwd = project('shop-abc123');
+    writeFileSync(
+      join(cwd, '.reticle.json'),
+      JSON.stringify({ projectId: 'shop-abc123', port: 4471 }),
+    );
+    const dir = home([
+      { port: 4471, pid: 111, projectId: 'blog-def456' },
+      { port: 4407, pid: 222, projectId: 'shop-abc123' },
+    ]);
+    expect(discoverDaemonUrl(cwd, dir, live)).toBe('ws://localhost:4407/reticle');
+  });
+
+  it('ignores a port in the file that is not a TCP port', () => {
+    const cwd = project('shop-abc123');
+    writeFileSync(join(cwd, '.reticle.json'), JSON.stringify({ projectId: 'x', port: '4471' }));
+    expect(discoverDaemonUrl(cwd, home([]), live)).toBeUndefined();
+  });
+});
+
+/**
+ * Next 16 blocks its dev resources (`/_next/*`, HMR) for any origin not in `allowedDevOrigins`, and
+ * only `localhost` is allowed by default. A tab Reticle opened on 127.0.0.1 or [::1] therefore got
+ * the HTML and nothing else: no hydration, so the connect effect never ran and the SDK "never
+ * dialled the bridge".
+ */
+describe('allowedDevOrigins', () => {
+  const previousEnv = process.env.NODE_ENV;
+  afterEach(() => {
+    process.env.NODE_ENV = previousEnv;
+  });
+
+  it('adds the loopback hosts in development, keeping the ones the app already listed', () => {
+    process.env.NODE_ENV = 'development';
+    const out = withReticle({ allowedDevOrigins: ['my.dev', '127.0.0.1'] });
+    expect(out.allowedDevOrigins).toEqual(['my.dev', '127.0.0.1', '[::1]']);
+  });
+
+  it('knows the key only on the Next releases that accept it', () => {
+    // An unknown key is an "Invalid next.config.js options" warning on every boot of an older Next.
+    expect(knowsAllowedDevOrigins('15.1.7')).toBe(false);
+    expect(knowsAllowedDevOrigins('15.2.1')).toBe(false);
+    expect(knowsAllowedDevOrigins('15.2.2')).toBe(true);
+    expect(knowsAllowedDevOrigins('16.3.7')).toBe(true);
+    expect(knowsAllowedDevOrigins('14.2.29')).toBe(false);
+    expect(knowsAllowedDevOrigins('14.2.30')).toBe(true);
+    expect(knowsAllowedDevOrigins('13.5.6')).toBe(false);
+  });
+});
+
+/**
+ * The seam between discovery and the client bundle.
+ *
+ * `discoverDaemonUrl` being correct is worth nothing if `withReticle` does not forward the result:
+ * the port is computed and thrown away, and the app keeps dialling the frozen one with no error
+ * anywhere. This is also the only place the two halves of the fix meet, and they live in different
+ * packages joined by nothing but the NAME of an environment variable.
+ */
+describe('withReticle forwards the discovered daemon', () => {
+  const prevDir = process.env[TOKEN_ENV];
+  const prevState = process.env.RETICLE_STATE_DIR;
+  const prevCwd = process.cwd();
+  /** @type {string[]} */
+  const dirs = [];
+
+  afterEach(() => {
+    process.chdir(prevCwd);
+    if (prevState === undefined) delete process.env.RETICLE_STATE_DIR;
+    else process.env.RETICLE_STATE_DIR = prevState;
+    if (prevDir === undefined) delete process.env[TOKEN_ENV];
+    else process.env[TOKEN_ENV] = prevDir;
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+
+  function scenario(entry) {
+    const home = mkdtempSync(join(tmpdir(), 'reticle-home-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'reticle-proj-'));
+    dirs.push(home, cwd);
+    writeFileSync(join(cwd, '.reticle.json'), JSON.stringify({ projectId: 'shop-abc123' }));
+    if (entry !== undefined) {
+      writeFileSync(join(home, `daemon-${entry.port}.json`), JSON.stringify(entry));
+    }
+    process.env.RETICLE_STATE_DIR = home;
+    process.env[TOKEN_ENV] = defaultTokenDir;
+    process.chdir(cwd);
+    return withReticle({});
+  }
+
+  it('publishes the daemon it found, on whatever port it moved to', () => {
+    const config = scenario({ port: 4788, pid: process.pid, projectId: 'shop-abc123' });
+    expect(config.env.NEXT_PUBLIC_RETICLE_URL).toBe('ws://localhost:4788/reticle');
+  });
+
+  /** No daemon for this project: the app falls back to the default rather than adopting a stranger. */
+  it('publishes nothing when no daemon serves this project', () => {
+    const config = scenario(undefined);
+    expect(config.env.NEXT_PUBLIC_RETICLE_URL).toBeUndefined();
+  });
+
+  it('mints and publishes a pairing token when the daemon has not written one yet', () => {
+    const config = scenario(undefined);
+    expect(typeof config.env.NEXT_PUBLIC_RETICLE_TOKEN).toBe('string');
+    expect(config.env.NEXT_PUBLIC_RETICLE_TOKEN.length).toBeGreaterThan(0);
+  });
+
+  it('leaves production builds untouched', () => {
+    const prev = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const config = scenario({ port: 4788, pid: process.pid, projectId: 'shop-abc123' });
+      expect(config.env).toBeUndefined();
+    } finally {
+      process.env.NODE_ENV = prev;
+    }
+  });
+});
+
+/**
+ * This package is plain CJS with no dependency on core, so the wire values are duplicated here. A
+ * duplicate that drifts does not throw: it produces a URL nothing is listening on, which surfaces as
+ * a silent no-connect and reads to a user as "Reticle is broken". Pin them to core's.
+ */
+describe('the duplicated wire constants match core', () => {
+  /*
+   * A generous timeout, not the 5s default: this is the only test here that dynamically imports
+   * core's dist, and under `turbo test:unit` that import competes with every other package's
+   * compile. It resolves in ~20ms alone and blew 5s under parallel load — a statement about the
+   * machine, not about the constants, which is exactly the flake shape the house rules name.
+   */
+  it('builds the same bridge URL core does', { timeout: 30_000 }, async () => {
+    const { bridgeWsUrl } = await import('@reticlehq/core');
+    const home = mkdtempSync(join(tmpdir(), 'reticle-const-home-'));
+    const cwd = mkdtempSync(join(tmpdir(), 'reticle-const-proj-'));
+    try {
+      writeFileSync(join(cwd, '.reticle.json'), JSON.stringify({ projectId: 'p' }));
+      writeFileSync(
+        join(home, 'daemon-4400.json'),
+        JSON.stringify({ port: 4400, pid: process.pid, projectId: 'p' }),
+      );
+      expect(discoverDaemonUrl(cwd, home, () => true)).toBe(bridgeWsUrl(4400));
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+});
+
+/**
+ * `next dev` is a dev server whatever the shell says NODE_ENV is (#1069).
+ *
+ * Reported on 3.2.0: `withReticle` silently no-ops when the shell exports `NODE_ENV=production`,
+ * even under `next dev`. People do that to reproduce production behaviour locally, and the result is
+ * an app that looks instrumented, starts cleanly, and never connects - indistinguishable from a
+ * dozen other install failures, with no reason to suspect an env var set for something else.
+ *
+ * Two rules. `next dev` IS the dev signal, because the user ran a dev server and that is not
+ * ambiguous. And when it does disable itself, it says so once, naming the variable responsible -
+ * the issue's own acceptance line is "must either connect or print why it did not".
+ *
+ * A production BUILD stays untouched, which is what the gate was for in the first place.
+ */
+describe('the dev signal under a production NODE_ENV', () => {
+  const previousEnv = process.env.NODE_ENV;
+  const previousArgv = process.argv;
+
+  afterEach(() => {
+    process.env.NODE_ENV = previousEnv;
+    process.argv = previousArgv;
+  });
+
+  it('instruments under a production NODE_ENV when told to explicitly', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.RETICLE_DEV = '1';
+    const input = { reactStrictMode: true };
+    const out = withReticle(input);
+    expect(out, 'the override did nothing, so the user still has no way out').not.toBe(input);
+    expect(typeof out.webpack).toBe('function');
+    delete process.env.RETICLE_DEV;
+  });
+
+  it('still leaves a production build completely alone by default', () => {
+    process.env.NODE_ENV = 'production';
+    const input = { reactStrictMode: true };
+    expect(withReticle(input)).toBe(input);
+  });
+
+  /** What withReticle printed while evaluating the config once. */
+  const printed = () => {
+    const said = [];
+    const realLog = console.log;
+    console.log = (...args) => said.push(args.join(' '));
+    try {
+      withReticle({});
+    } finally {
+      console.log = realLog;
+    }
+    return said.join('\n');
+  };
+
+  it('says why it disabled itself on a dev server, naming the variable', () => {
+    process.env.NODE_ENV = 'production';
+    // Set by `next dev` on the server process it forks, and by nothing else.
+    process.env.NEXT_PRIVATE_WORKER = '1';
+    try {
+      const line = printed();
+      expect(line).toContain('NODE_ENV');
+      // And the way out, not just the diagnosis — the reader is stuck without it.
+      expect(line).toContain('RETICLE_DEV');
+      expect(line.toLowerCase()).toContain('reticle');
+    } finally {
+      delete process.env.NEXT_PRIVATE_WORKER;
+    }
+  });
+
+  /**
+   * `next build` and `next typegen` evaluate the config with NODE_ENV=production too, where being
+   * off is simply correct. Printing the dev-server explanation there read as something being wrong.
+   */
+  it('says nothing during a build or type generation, where production is correct', () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.NEXT_PRIVATE_WORKER;
+    expect(printed()).toBe('');
+  });
+});

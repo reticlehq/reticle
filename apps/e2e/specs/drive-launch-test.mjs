@@ -1,10 +1,11 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // HONESTY-CRITICAL: prove `reticle drive` LAUNCHES its own browser, navigates to the app, and drives
 // the hover-gated smart-sentence with inputMode:"real" — headless, no manual CDP flags.
 import { start, TOOLS, BaselineStore, RecordingStore, LaunchedRealInputProvider } from '@reticlehq/server';
 import { waitForSession } from '../wait-for-session.mjs';
 const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
 let pass=0,fail=0; const chk=(l,o,d='')=>{console.log(`   ${o?'✅':'❌'} ${l}${d?'  — '+d:''}`);o?pass++:fail++;};
-const server=await start({port:4400,mcp:false});
+const server=await start({port: TEST_BRIDGE_PORT,mcp:false});
 const provider=new LaunchedRealInputProvider({driveUrl:'http://localhost:3100/',headless:true});
 await provider.navigate(); // launches Chromium + goto → page SDK connects to the bridge
 const deps={sessions:server.bridge.sessions,baselines:new BaselineStore(),recordings:new RecordingStore(),realInput:provider};

@@ -4,7 +4,7 @@ description: 'Exercise local, unpublished Reticle changes in a real external app
 icon: box
 ---
 
-To test unpublished `@reticlehq/*` changes in a real external app, publish the workspace to a local Verdaccio with `bash scripts/local-registry.sh`, then point that app's `.npmrc` at `http://localhost:4873/` for the `@reticlehq` scope. That is the whole procedure; the rest of this page is the detail.
+To test unpublished `@reticlehq/*` changes in a real external app, publish the workspace to a local Verdaccio with `bash scripts/local-registry.sh`, then point that app's `.npmrc` at `http://localhost:4873/` as the **default** registry, not scoped to `@reticlehq`, for the reason in step 2. That is the whole procedure; the rest of this page is the detail.
 
 > **For normal use, Reticle is on public npm.** Just `npm i -D @reticlehq/react @reticlehq/vite-plugin` (see [Getting Started](getting-started.md)). You only need this guide to test **local, unpublished changes** to the Reticle packages in a real external app before they ship.
 
@@ -37,11 +37,22 @@ For a browser app, install `@reticlehq/react` plus the build plugin for your fra
 
 ## 2. Point your app at the local registry
 
-In your app's project root, add an `.npmrc`. The scope is **`@reticlehq`**, not `@reticle`: a scope typo here does not error, it silently resolves the PUBLISHED packages from npm, so you measure shipped code and think you tested your branch. Everything outside that scope still comes from npm:
+In your app's project root, add an `.npmrc` pointing the **default** registry at Verdaccio. Verdaccio proxies npm for everything it does not hold, so the rest of your dependencies still resolve normally:
 
 ```ini
-@reticlehq:registry=http://localhost:4873/
+registry=http://localhost:4873/
 ```
+
+**A scope-only line does not work, and fails in a way that reads as a Reticle bug.** `@reticlehq/core` depends on **`open-verification`**, the protocol package, which is deliberately _unscoped_ because the protocol is not ours to namespace. With `@reticlehq:registry=…` npm sends that one request to npmjs and the install dies:
+
+```
+npm error 404 Not Found - GET https://registry.npmjs.org/open-verification
+npm error 404  The requested resource 'open-verification@3.1.0' could not be found
+```
+
+`reticle init` then correctly reports `⚠ Install dependencies` and skips wiring the build plugin, so the app is left un-instrumented by a registry mistake two steps earlier.
+
+There is no scoped form that fixes this: npm's per-registry setting is `@scope:registry`, and an unscoped package has no scope to key on. The default-registry line above is the only thing that works. Point it back at npm (`npm config delete registry`, or delete the `.npmrc`) when you are done testing.
 
 ## 3. Install + wire it up
 
@@ -118,7 +129,7 @@ With neither set, Reticle stays synthetic (zero extra deps) and says so via `inp
 ## Write replayable specs + git-checked flows
 
 - **Specs:** with `@reticlehq/test`, turn checks into `reticleTest("…", async t => { await t.act(...); await t.expectSignal(...) })`. They are signal/testid-bound, `reticle_clock` for determinism, `t.expectInputModeReal()` to skip-with-reason when real input isn't active. Run them headless via `reticle drive` (the same path CI uses).
-- **Flows:** record a flow once and Reticle writes it to a git-checked `.reticle/flows/<name>.json` (anchored on testid/signal); `reticle_flow_replay` re-resolves anchors at run time and reports **legible drift** with a nearest-match; `reticle_flow_heal` proposes/applies the rebind. A fresh agent reads `.reticle/contract.json` to learn your testable surface without grepping source.
+- **Flows:** record a flow once and Reticle writes it to a git-checked `.reticle/flows/<name>.json` (anchored on testid/signal); `reticle_flow_replay` re-resolves anchors at run time and reports **legible drift** with a nearest-match; `reticle_verify { action: "heal" }` proposes/applies the rebind. A fresh agent reads `.reticle/contract.json` to learn your testable surface without grepping source.
 
 ## When you're ready for real npm
 

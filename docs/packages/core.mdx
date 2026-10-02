@@ -6,13 +6,13 @@ icon: cube
 
 `@reticlehq/core` is the shared wire contract at the bottom of Reticle's dependency graph. Every message that crosses a boundary, browser to bridge, bridge to agent, is defined here as a named constant plus a zod schema. **You almost certainly do not need to install it**: it arrives with whatever Reticle package you did install, and you only reach for it directly if you are building your own integration against the wire format.
 
-**Apache 2.0. Depends on `zod` and nothing else.**
+**Apache 2.0. Depends on `zod` and on [`open-verification`](/packages/open-verification), the protocol whose vocabulary the contract is written in.**
 
 ## Why it exists
 
 Without one shared definition the browser and the server drift. One side renames a field, the other keeps reading the old one, and the failure is silent: a verdict that quietly stops carrying its evidence. Core makes that a type error instead.
 
-The single dependency is the point. Everything can depend on core without cycles, and nothing core does can drag a filesystem call into the browser bundle.
+The narrow dependency list is the point. `open-verification` itself depends on `zod` alone, so the graph stays acyclic: everything can depend on core, and nothing core does can drag a filesystem call into the browser bundle. This page said "depends on `zod` and nothing else" until v3 extracted the protocol and nobody updated the sentence.
 
 ## Do you install it?
 

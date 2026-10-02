@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // The release smoke: drive the demo apps the way a user's agent does, and check the ANSWERS.
 //
 // The battery proves the pieces. This proves the product: open a real app, look, act, assert, and —
@@ -11,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { McpStdioClient } from '../../../bench/harness/mcp-client.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const PORT = process.env.RETICLE_PORT ?? '4400';
+const PORT = String(TEST_BRIDGE_PORT);
 const APP = process.env.SMOKE_APP ?? 'http://localhost:4310/';
 
 let pass = 0;
@@ -26,7 +27,7 @@ process.chdir(ROOT);
 
 const client = new McpStdioClient(
   'node',
-  ['packages/server/dist/cli.js', 'mcp', '--port', PORT, '--drive', APP],
+  ['server/dist/command/cli.js', 'mcp', '--port', PORT, '--drive', APP],
   { RETICLE_PORT: PORT, RETICLE_TELEMETRY: '0' },
 );
 await client.start();
@@ -47,13 +48,13 @@ const call = async (name, args = {}) => {
 // then every check below runs against somebody else's app.
 let sessionId;
 for (let i = 0; 60 > i && sessionId === undefined; i += 1) {
-  const listed = (await call('reticle_sessions')).sessions ?? [];
+  const listed = (await call('reticle_session')).sessions ?? [];
   sessionId = listed.find((s) => String(s.url ?? '').startsWith(APP.replace(/\/$/, '')))?.sessionId;
   if (sessionId === undefined) await new Promise((r) => setTimeout(r, 500));
 }
 chk('the app connects and Reticle can see it', sessionId !== undefined, sessionId ?? 'no session');
 
-const snapshot = await call('reticle_snapshot', { mode: 'interactive', sessionId });
+const snapshot = await call('reticle_look', { action: 'page',  mode: 'interactive', sessionId });
 const tree = JSON.stringify(snapshot);
 chk('a snapshot comes back with something to drive', /\(ref=/.test(tree), `${tree.length} bytes`);
 
@@ -112,7 +113,7 @@ chk('an action dispatches', true === acted.dispatched || true === acted.result?.
 
 // ── A tool that refuses must not blame Reticle for the caller's mistake ───────────────────────
 {
-  const bad = await call('reticle_query', { by: 'css', value: 'body', sessionId });
+  const bad = await call('reticle_look', { action: 'find',  by: 'css', value: 'body', sessionId });
   const body = JSON.stringify(bad);
   chk(
     'an unsupported query strategy is refused, not answered with zero matches',

@@ -14,7 +14,7 @@ Reticle has three moving parts: a dev-only **SDK** inside your page that instrum
 
 Your app, in dev, embeds a tiny **SDK** that instruments the page (DOM, network, console, routing, framework state) and opens a WebSocket to a local **bridge**. The bridge runs inside the Reticle **server**, which also exposes an **MCP server**, the standard protocol AI agents speak.
 
-Your coding agent calls MCP tools (`reticle_query`, `reticle_act`, `reticle_assert`, …); the server turns them into commands over the WebSocket; the SDK executes them in the page and streams back structured events. The agent thus **looks, acts, observes, and asserts** on the real running app, never on a screenshot.
+Your coding agent calls MCP tools (`reticle_look { action: "find" }`, `reticle_act`, `reticle_assert`, …); the server turns them into commands over the WebSocket; the SDK executes them in the page and streams back structured events. The agent thus **looks, acts, observes, and asserts** on the real running app, never on a screenshot.
 
 ```mermaid
 flowchart LR
@@ -23,7 +23,7 @@ flowchart LR
     B["@reticlehq/browser<br/>SDK in your app<br/>(the DOM)"]
     D[(".reticle/<br/>flows · baselines<br/>runs · contract")]
 
-    A -- "MCP (stdio/SSE)<br/>reticle_query / act / assert" --> S
+    A -- "MCP (stdio/SSE)<br/>reticle_look / act / assert" --> S
     S -- "tool results" --> A
     S <-- "WebSocket<br/>commands / events" --> B
     S <--> D
@@ -37,13 +37,13 @@ Reticle is a pnpm + Turborepo monorepo. The split is not cosmetic: each boundary
 
 | Package | Runs in | Responsibility | Hard rule |
 | --- | --- | --- | --- |
-| `@reticlehq/core` | both | The **wire contract**: every constant + zod schema crossing any boundary | Depends only on `zod` |
+| `@reticlehq/core` | both | The **wire contract**: every constant + zod schema crossing any boundary | Depends only on `zod` and `open-verification` |
 | `@reticlehq/browser` | the browser | Instrument the page; execute commands; emit events | Never imports Node APIs |
 | `@reticlehq/server` | Node | The bridge, the MCP server, the `reticle` CLI, flow/run storage | Never imports DOM APIs |
 | `@reticlehq/react` | the browser | The SDK **kit** you install in a browser app: re-exports the browser sensor (so one install gives both `reticle` and `install`) and maps a DOM node → React component → source `file:line` | Core works without the source-mapping half |
 | `@reticlehq/babel-plugin`, `@reticlehq/next`, `@reticlehq/vite-plugin` | build time | Stamp `data-reticle-source` for source mapping (and, for Vite, inject `connect()`) | Plain tooling |
 | `@reticlehq/electron` | Electron main process | Adapter for the desktop runtime: IPC observer, main-process capture | Desktop-only, outside the web gates |
-| `packages/tauri` (`reticle-tauri`) | Tauri (Rust) | Capture backend for the Tauri desktop runtime | Rust, outside every JS gate; compiled by CI's `rust`/`rust-macos` jobs |
+| `adapters/realm/tauri` (`reticle-tauri`) | Tauri (Rust) | Capture backend for the Tauri desktop runtime | Rust, outside every JS gate; compiled by CI's `rust`/`rust-macos` jobs |
 | `@reticlehq/test` | Node (dev dependency) | Spec runner + matchers used by CI's own test suites | Peer dependency on `vitest` |
 | `@reticlehq/eslint-plugin` | dev tooling | Repo-internal lint rule: a state change must fire a signal | Dev-only, never shipped in a user's bundle |
 
@@ -59,8 +59,8 @@ The browser and server both import it; neither can invent a message the other do
 
 1. **Connect.** In dev, your app calls `reticle.connect({ session })`. The SDK opens a WebSocket to the bridge (`ws://localhost:4400/reticle` by default) and sends a `HELLO` carrying the session id, protocol version, and (if configured) a pairing token. Each browser tab uses `SESSION_AUTO` (a unique id), so multiple apps/tabs never collide.
 2. **Capture.** The SDK installs observers: a `MutationObserver` for DOM changes, wrappers around `fetch`/`XHR` for network, a console hook, a history hook for routing, and registries the app opts into (`registerStore`, `registerCapabilities`, `reticle.signal`). Events flow into a bounded **ring buffer**, so recent history is always available and memory is capped.
-3. **Look / act.** The agent calls an MCP tool. `reticle_query` finds an element by role/text/testid/ component and returns a stable **ref**. `reticle_act` dispatches an action against that ref and returns an **effect** report (did it land, did the DOM mutate, did focus move…). The server sends the command over the WebSocket; the SDK runs it and replies.
-4. **Observe.** After an action, the agent reads what happened with `reticle_network`, `reticle_console`, `reticle_state`, or the reaction digest from `reticle_act_and_wait`. The server pulls the relevant slice of the ring buffer (scoped to a cursor so stale events can't leak in) and returns a compact summary.
+3. **Look / act.** The agent calls an MCP tool. `reticle_look { action: "find" }` finds an element by role/text/testid/ component and returns a stable **ref**. `reticle_act` dispatches an action against that ref and returns an **effect** report (did it land, did the DOM mutate, did focus move…). The server sends the command over the WebSocket; the SDK runs it and replies.
+4. **Observe.** After an action, the agent reads what happened with `reticle_observe { action: "network" }`, `reticle_observe { action: "console" }`, `reticle_look { action: "state" }`, or the reaction digest from `reticle_act_and_wait`. The server pulls the relevant slice of the ring buffer (scoped to a cursor so stale events can't leak in) and returns a compact summary.
 5. **Assert.** `reticle_assert` (and a flow's declared `success`) evaluates a **predicate** over program truth (a network call that returned 200, a store value, a `signal` the app emitted), not just "an element exists." This is the difference between "looks done" and "is done."
 
 ---
@@ -87,7 +87,7 @@ The same verification runs over and over, every commit, every CI run. Reticle re
 
 ### 4. Dev-only, localhost-only, your app data stays local
 
-The SDK is tree-shaken out of production builds and connects only to a local bridge. The bridge binds to loopback by default; exposing it beyond localhost _requires_ a pairing token (the server refuses to bind a non-loopback host without one). Every environment variable that gates a security control is a single named constant, so a typo can't silently disable auth. Nothing from the app under test ever leaves your machine: no DOM, network, console, state, or source. The CLI reports anonymous, opt-out usage metrics only (a random id + event names like `invoke`/`session_start`; no code, no PII; see [telemetry](telemetry.md)); opt out with `reticle telemetry disable`, `RETICLE_TELEMETRY=0`, or `DO_NOT_TRACK=1`. The one thing that carries free text is feedback you or your agent deliberately send (`reticle feedback` / `reticle_feedback`). It is never collected passively, it is redacted before sending, and it is disabled separately with `RETICLE_FEEDBACK=0`.
+The SDK is tree-shaken out of production builds and connects only to a local bridge. The bridge binds to loopback by default; exposing it beyond localhost _requires_ a pairing token (the server refuses to bind a non-loopback host without one). Every environment variable that gates a security control is a single named constant, so a typo can't silently disable auth. Nothing from the app under test ever leaves your machine: no DOM, network, console, state, or source. The CLI reports anonymous, opt-out usage metrics only (a random id + event names like `invoke`/`session_start`; no code, no PII; see [telemetry](telemetry.md)); opt out with `reticle telemetry disable`, `RETICLE_TELEMETRY=0`, or `DO_NOT_TRACK=1`. The one thing that carries free text is feedback you or your agent deliberately send (`reticle feedback` / `reticle_session { action: "feedback" }`). It is never collected passively, it is redacted before sending, and it is disabled separately with `RETICLE_FEEDBACK=0`.
 
 ---
 
@@ -114,7 +114,8 @@ This is plain, reviewable, version-controllable data, not a black box.
 
 ## Open-core licensing (what's free, what's protected)
 
-- The embeddable **SDK** (`-core`, `-browser`, `-react`) is **Apache-2.0**, safe to ship inside your own app.
+- The **protocol and the rules** (`open-verification`, `@reticlehq/core`, `@reticlehq/engine`) are **Apache-2.0**. The part that decides a verdict is the part a sceptical reader most wants to audit, so it is the part with no licence in the way.
+- The embeddable **SDK** (`@reticlehq/browser`, `@reticlehq/react` and the build adapters) is **Apache-2.0**, safe to ship inside your own app.
 - The **server / CLI** is under the **Functional Source License (FSL-1.1, Apache-2.0 future)**: source-available, converts to Apache-2.0 over time.
 - Enterprise-only features live behind a license gate and are clearly separated.
 

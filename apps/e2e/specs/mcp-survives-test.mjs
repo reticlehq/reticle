@@ -51,7 +51,7 @@ async function waitFor(predicate, timeoutMs, stepMs = 250) {
 console.log('\n=== MCP SURVIVES: the client keeps its tools when the daemon dies ===');
 
 process.chdir(ROOT);
-const client = new McpStdioClient('node', ['packages/server/dist/cli.js', 'mcp', '--port', PORT], {
+const client = new McpStdioClient('node', ['server/dist/command/cli.js', 'mcp', '--port', PORT], {
   RETICLE_PORT: PORT,
   RETICLE_TELEMETRY: '0',
 });
@@ -103,7 +103,7 @@ let called = null;
 try {
   const r = await client.request(
     'tools/call',
-    { name: 'reticle_sessions', arguments: {} },
+    { name: 'reticle_session', arguments: {} },
     30_000,
   );
   called = (r?.content ?? []).map((c) => c.text ?? '').join('\n');
@@ -148,7 +148,7 @@ await new Promise((r) => wedge.listen(Number(WEDGE_PORT), '127.0.0.1', r));
 
 const wedged = new McpStdioClient(
   'node',
-  ['packages/server/dist/cli.js', 'mcp', '--port', WEDGE_PORT],
+  ['server/dist/command/cli.js', 'mcp', '--port', WEDGE_PORT],
   { RETICLE_PORT: WEDGE_PORT, RETICLE_TELEMETRY: '0', RETICLE_RECONNECT_ATTEMPTS: '2' },
 );
 // The client rejects pending work when its process dies, and an exiting proxy is EXACTLY what this

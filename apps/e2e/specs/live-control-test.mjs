@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 import { chromium } from 'playwright';
 import { start, TOOLS, BaselineStore, RecordingStore } from '@reticlehq/server';
 import { waitForSession } from '../wait-for-session.mjs';
@@ -5,10 +6,18 @@ const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
 const deps={sessions:null,baselines:new BaselineStore(),recordings:new RecordingStore()};
 const T=(n,a={})=>TOOLS.find(t=>t.name===n).handler(deps,{sessionId:'next-smoke',...a});
 let pass=0,fail=0; const chk=(l,o,d='')=>{console.log(`   ${o?'✅':'❌'} ${l}${d?'  — '+d:''}`);o?pass++:fail++;};
-const server=await start({port:4400,mcp:false}); deps.sessions=server.bridge.sessions;
+const server=await start({port: TEST_BRIDGE_PORT,mcp:false}); deps.sessions=server.bridge.sessions;
 const b=await chromium.launch({headless:true}); const p=await b.newPage();
 await p.goto('http://localhost:3100/');
 await waitForSession(()=>server.bridge.sessions.list(), 'next-smoke');
+// Dismiss the first-run tour, exactly as the human this spec is impersonating would.
+//
+// This page is NOT one Reticle opened -- the point of the spec is a person's own tab, driven while
+// they watch -- so the tour correctly shows, and its scrim takes `pointer-events: auto` on purpose.
+// Every click below is aimed at the HUD underneath it. A fresh Playwright context has empty
+// localStorage, so unlike a real person this spec meets the tour on EVERY run.
+const skip = p.locator('[data-reticle-tour-target="skip"]');
+if (await skip.count()) { await skip.click(); await sleep(200); }
 const sess=server.bridge.sessions.resolve('next-smoke');
 const ref=(await T('reticle_query',{by:'testid',value:'add-task'})).elements[0].ref;
 console.log('\n=== live control: human pause + prompt + resume + agent end (real browser) ===');

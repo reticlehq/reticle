@@ -14,6 +14,9 @@ import { RETICLE_PORT } from './ports.mjs';
 
 const KEY = process.env.OPENAI_API_KEY;
 const MODEL = process.env.BENCH_OPENAI_MODEL ?? 'gpt-4o';
+// Any OpenAI-compatible endpoint (Together, vLLM, ...) — the loop only uses chat-completions
+// tool-calling, so an open-weights agent model is a drop-in arm. Default stays OpenAI.
+const BASE = (process.env.BENCH_OPENAI_BASE_URL ?? 'https://api.openai.com/v1').replace(/\/$/, '');
 const URL = process.env.BENCH_URL ?? 'http://localhost:4312/';
 const MAX_TURNS = Number(process.env.BENCH_MAX_TURNS ?? 14);
 
@@ -37,7 +40,7 @@ const SERVERS = {
   },
   reticle: {
     command: 'node',
-    args: ['packages/server/dist/cli.js', 'mcp', '--port', RETICLE_PORT, '--drive', URL],
+    args: ['server/dist/command/cli.js', 'mcp', '--port', RETICLE_PORT, '--drive', URL],
     env: {
       RETICLE_PORT,
       RETICLE_ADVERTISE_ALL_TOOLS: process.env.BENCH_RETICLE_ADVERTISE_ALL ?? '1',
@@ -98,12 +101,12 @@ function mcpToolsToOpenAI(tools) {
 }
 
 async function callOpenAI(messages, tools) {
-  const r = await fetch('https://api.openai.com/v1/chat/completions', {
+  const r = await fetch(`${BASE}/chat/completions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${KEY}` },
     body: JSON.stringify({ model: MODEL, messages, tools, tool_choice: 'auto', max_tokens: 1024 }),
   });
-  if (!r.ok) throw new Error(`openai ${r.status}: ${(await r.text()).slice(0, 300)}`);
+  if (!r.ok) throw new Error(`${MODEL} ${r.status}: ${(await r.text()).slice(0, 300)}`);
   return r.json();
 }
 
@@ -195,7 +198,7 @@ async function runCell(scenarioId, toolKey) {
         const { execFileSync } = await import('node:child_process');
         execFileSync(
           'node',
-          ['packages/server/dist/cli.js', 'stop', '--port', RETICLE_PORT, '--quiet'],
+          ['server/dist/command/cli.js', 'stop', '--port', RETICLE_PORT, '--quiet'],
           {
             stdio: 'ignore',
           },

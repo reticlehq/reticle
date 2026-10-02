@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 
 const RETICLE_CLI =
   process.env['RETICLE_CLI'] ??
-  new URL('../../packages/server/dist/cli.js', import.meta.url).pathname;
+  new URL('../../server/dist/command/cli.js', import.meta.url).pathname;
 const PW_MCP = process.env['PW_MCP_CLI'] ?? 'node_modules/@playwright/mcp/cli.js';
 
 // `--tauri` points the same task at the packaged Tauri smoke app (same planted false green: the

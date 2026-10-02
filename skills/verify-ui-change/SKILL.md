@@ -3,7 +3,7 @@ name: verify-ui-change
 description: Check that a change to a web app actually works in the running app before calling it done. Drives the real page and returns a pass/fail verdict with the request that fired, the state that moved, and the file:line to fix. Use after editing a component, a form, a route, or an API call; when you have said "fixed" but have not opened the app; when the user asks "does it actually work?"; or when a change looks right on screen and you cannot prove it.
 license: Apache-2.0
 metadata:
-  version: 2.14.0
+  version: 3.5.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -17,7 +17,7 @@ This uses **Reticle**, which embeds a dev-only SDK in the user's running app and
 ## 1. Are the tools here?
 
 ```
-reticle_sessions()
+reticle_session({ action: "list" })
 ```
 
 - **A session comes back** → go to step 2.
@@ -29,7 +29,7 @@ reticle_sessions()
 This is the whole method. An expectation written after you see the result can be talked into agreeing with whatever happened; one written before cannot.
 
 ```
-reticle_snapshot({ sessionId, mode: "interactive" })   // controls only, with refs
+reticle_look({ action: "page", sessionId, mode: "interactive" })   // controls only, with refs
 
 reticle_act_and_wait({ sessionId, ref, action: "click", until: { kind: "allOf", predicates: [
   { kind: "net",     method: "POST", urlContains: "/api/...", status: 200 },
@@ -38,9 +38,9 @@ reticle_act_and_wait({ sessionId, ref, action: "click", until: { kind: "allOf", 
 ]}})
 ```
 
-Multi-step journey? Drive it in one call with `reticle_act_sequence`, then assert the outcome once. Do not act → snapshot → act → snapshot: it proves the same thing at several times the cost.
+Multi-step journey? Drive it in one call with `reticle_act { steps: [...] }`, then assert the outcome once. Do not act → snapshot → act → snapshot: it proves the same thing at several times the cost.
 
-**Only `reticle_act_and_wait` and `reticle_assert` produce a verdict.** `reticle_act`, `snapshot`, `query`, `navigate`, `network` and `console` move or read the app and prove nothing. A drive that ends without one of the first two has no result, however many calls it made.
+**Verdicts come from `reticle_act_and_wait`, `reticle_assert`, and `reticle_act { steps }` when a step declares `expect`.** A bare `reticle_act`, `look`, `navigate` and `observe` move or read the app and prove nothing. A drive that ends without a verdict has no result, however many calls it made.
 
 ## 3. Read the verdict honestly
 
@@ -64,10 +64,10 @@ If `untouched` still holds controls your change affects, the drive is unfinished
 
 ## 5. Report
 
-State what you drove, what the verdict was, and the evidence: the request and status, the state that changed, the app's own signal. If something failed, `reticle_inspect({ sessionId, ref })` on the failing element gives the `file:line`: put it in the report.
+State what you drove, what the verdict was, and the evidence: the request and status, the state that changed, the app's own signal. If something failed, `reticle_look({ action: "element", sessionId, ref })` on the failing element gives the `file:line`: put it in the report.
 
 Then `reticle_session({ action: "yield", mode: "waiting" })` so the human's panel stops reading "live".
 
 ---
 
-More detail, fetchable one page at a time: `curl https://docs.reticle.sh/llms.txt` for the index, then the single page you need (`tools-act-and-wait.md`, `predicates.md`, `troubleshooting.md`). If Reticle itself misbehaves, file it with `reticle_feedback`: one call, then carry on.
+More detail, fetchable one page at a time: `curl https://docs.reticle.sh/llms.txt` for the index, then the single page you need (`https://docs.reticle.sh/tools/act-and-wait.md`, `https://docs.reticle.sh/predicates.md`, `https://docs.reticle.sh/troubleshooting.md`). If Reticle itself misbehaves, file it with `reticle_session { action: "feedback" }`: one call, then carry on.

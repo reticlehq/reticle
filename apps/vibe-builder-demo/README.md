@@ -80,7 +80,7 @@ OUTER Reticle (bridge :4433) ─drives─▶ Builder UI (instrumented, /builder.
                                        ▼
                           INNER Reticle (bridge :4422) ─drives─▶ preview sandbox → verdict
                                        │
-   OUTER Reticle reads the Builder UI's `builder` store (reticle_state) ◀── verdict surfaces in the UI
+   OUTER Reticle reads the Builder UI's `builder` store (reticle_look { action: "state" }) ◀── verdict surfaces in the UI
                                        ▼
                   asserts: blind green-lit · inner Reticle blocked the buggy build
 ```
@@ -137,4 +137,4 @@ escaped defects: blind 6, Reticle 0 · false positives (Reticle): 0
   catch the 1–2 visually-obvious classes (e.g. a literal `NaN` on screen), but it cannot see
   mock-data, double-submit, dead-delete, or a console throw — the silent majority.
 - The unit of scale is **one preview = one bridge + one headless browser**, co-located with the
-  preview pod. There is no central QA service to bottleneck (see `plan/v1.1.0/BUILDER-CTO-MEETING.md`).
+  preview pod. There is no central QA service to bottleneck.

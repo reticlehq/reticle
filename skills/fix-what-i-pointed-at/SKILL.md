@@ -3,7 +3,7 @@ name: fix-what-i-pointed-at
 description: Pick up the bugs a human flagged by pointing at them in the running app, each arriving with the element, the note they typed, and the source file and line. Use when the user says they marked or flagged something, when starting a session on an app someone has been clicking through, when a designer or PM has left feedback in the UI, or when the user describes a problem as "that button there" without saying which file.
 license: Apache-2.0
 metadata:
-  version: 2.14.0
+  version: 3.5.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -42,7 +42,7 @@ reticle_session({ action: "review", sessionId })
 1. **Read** the marks. Group them if several point at the same file: one edit often answers three.
 2. **Open** `source.file` at `source.line`. This is the whole point: no hunting for which component rendered that button.
 3. **Fix** what the `note` asks for. If the note is ambiguous, the element label and its source usually disambiguate it. Ask the human only when they genuinely do not.
-4. **Verify in the app**, do not eyeball it. Re-drive the affected control with `reticle_act_and_wait` and name the consequence, or `reticle_inspect` the element for a layout or theme complaint. A visual fix confirmed by looking at it is how the mark gets reopened.
+4. **Verify in the app**, do not eyeball it. Re-drive the affected control with `reticle_act_and_wait` and name the consequence, or `reticle_look { action: "element" }` on the element for a layout or theme complaint. A visual fix confirmed by looking at it is how the mark gets reopened.
 5. **Resolve** it:
 
 ```
@@ -61,4 +61,4 @@ They pointed at "that button". Report on "the Pay button on checkout", with what
 
 ---
 
-Everything else: `curl https://docs.reticle.sh/llms.txt`. If a mark arrived without a usable source pointer, that is worth a `reticle_feedback` with `kind: "gap"`.
+Everything else: `curl https://docs.reticle.sh/llms.txt`. If a mark arrived without a usable source pointer, that is worth a `reticle_session { action: "feedback" }` with `kind: "gap"`.

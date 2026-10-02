@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // A 401 the app recovered from is not two defects.
 //
 // This is the false-RED class, and it is the expensive direction. A field reporter's
@@ -41,7 +42,7 @@ const chk = (l, o, d = '') => {
 };
 
 const APP_URL = 'http://localhost:4310/';
-const server = await start({ port: 4400, mcp: false });
+const server = await start({ port: TEST_BRIDGE_PORT, mcp: false });
 const reticleRoot = path.join(os.tmpdir(), `reticle-auth-retry-${process.pid}`, '.reticle');
 const fsp = createNodeFileSystem();
 const now = () => Date.now();
@@ -63,7 +64,7 @@ const T = (n, a = {}) =>
 
 const b = await chromium.launch({ headless: true });
 const p = await b.newPage();
-await p.goto(APP_URL);
+await p.goto(APP_URL, { waitUntil: 'domcontentloaded' });
 await waitForSession(() => server.bridge.sessions.list(), isBench, {
   what: 'the bench-app session for the expiring-token fixture',
 });

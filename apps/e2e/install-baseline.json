@@ -33,7 +33,7 @@
   ],
   "vite-vue": [
     "– MCP server (global) → global (claude user scope)",
-    "ℹ vue is UNVERIFIED → package.json",
+    "ℹ vue setup verified, drive unverified → package.json",
     "✓ Install dependencies → package.json",
     "✓ Reticle config → .reticle.json",
     "✓ Vite plugin → vite.config.js",
@@ -43,19 +43,19 @@
     "– MCP server (global) → global (claude user scope)",
     "✓ Install dependencies → package.json",
     "✓ Reticle config → .reticle.json",
-    "✓ Astro config (token + build target) → astro.config.mjs",
+    "✓ Astro config (build target) → astro.config.mjs",
     "✓ Connect snippet (Astro) → src/pages/index.astro",
-    "✓ Astro env types (Vite defines) → src/env.d.ts"
+    "✓ Astro ReticleDev module → src/components/ReticleDev.ts",
+    "✓ Astro env types (window token) → src/env.d.ts"
   ],
   "sveltekit": [
     "– MCP server (global) → global (claude user scope)",
     "✓ Install dependencies → package.json",
     "✓ Reticle config → .reticle.json",
-    "ℹ SvelteKit is UNVERIFIED → src/hooks.client.ts",
+    "ℹ SvelteKit setup verified, drive unverified → src/hooks.client.ts",
     "✓ Reticle client hook → src/hooks.client.ts",
     "✓ Vite plugin → vite.config.ts",
-    "✓ Capabilities + store → src/reticle-dev.ts",
-    "ℹ AGENT: finish the capabilities file → src/reticle-dev.ts"
+    "✓ Capabilities + store → src/reticle-dev.ts"
   ],
   "cra": [
     "– MCP server (global) → global (claude user scope)",
@@ -68,7 +68,7 @@
   ],
   "nuxt": [
     "– MCP server (global) → global (claude user scope)",
-    "ℹ vue is UNVERIFIED → package.json",
+    "ℹ vue setup verified, drive unverified → package.json",
     "✓ Install dependencies → package.json",
     "✓ Reticle config → .reticle.json",
     "✓ Connect snippet (Nuxt) → app/plugins/reticle.client.ts",
@@ -82,5 +82,29 @@
     "✓ Connect snippet (React Router) → app/entry.client.tsx",
     "✓ Vite plugin → vite.config.ts",
     "✓ Capabilities + store → src/reticle-dev.ts"
+  ],
+  "vite-vanilla": [
+    "– MCP server (global) → global (claude user scope)",
+    "✓ Install dependencies → package.json",
+    "✓ Reticle config → .reticle.json",
+    "✓ Vite plugin → vite.config.ts",
+    "✓ Capabilities + store → src/reticle-dev.ts"
+  ],
+  "remix": [
+    "– MCP server (global) → global (claude user scope)",
+    "✓ Install dependencies → package.json",
+    "✓ Reticle config → .reticle.json",
+    "✓ Connect snippet (Remix) → app/entry.client.tsx",
+    "✓ Vite plugin → vite.config.ts",
+    "✓ Capabilities + store → src/reticle-dev.ts"
+  ],
+  "angular": [
+    "– MCP server (global) → global (claude user scope)",
+    "✓ Install dependencies → package.json",
+    "✓ Reticle config → .reticle.json",
+    "ℹ Angular setup verified, drive unverified → angular.json",
+    "✓ Connect snippet (Angular) → src/main.ts",
+    "✓ Angular dev-server token route → reticle.proxy.mjs",
+    "✓ Angular serve target (proxyConfig) → angular.json"
   ]
 }

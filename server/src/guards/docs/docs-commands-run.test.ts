@@ -1,0 +1,340 @@
+import { describe, expect, it } from 'vitest';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { parseCliArgs, knownCommand, UNKNOWN_COMMAND } from '@/command/cli/cli-parse.js';
+import { REPO_ROOT } from '@/machine/repo-root.js';
+import { publishedPackageDirs } from '@/workspace-packages.js';
+
+/**
+ * Every command the docs tell somebody to run is EXECUTED against the shipped parser, not read.
+ *
+ * The existing docs guards check names: that a `reticle_*` tool exists, that nobody is told to npx a
+ * package we do not own, that a shell block does not assume a bin on PATH. None of them can tell
+ * whether `reticle verify --timeout 60000` is still a thing the CLI accepts. A renamed flag, a
+ * retired subcommand or a moved argument leaves prose that renders perfectly, reviews cleanly, and
+ * fails the first time a reader pastes it.
+ *
+ * `parseCliArgs` is the real oracle for that. It is the same function `cli.ts` calls, it returns
+ * `{ kind: 'error' }` for an unknown command or an unknown argument, and it is pure, so every
+ * documented invocation can be run through it in milliseconds with no daemon, no network and no
+ * side effects. Running the binary in a subprocess would prove slightly more and cost a build plus a
+ * sandbox per command; the parser is where the failure this guards against actually lives.
+ *
+ * Scoped to RUNNABLE fences (bash/sh/shell/console). A usage block lists commands with placeholder
+ * syntax (`verify <url> [--headed]`) which is documentation of the shape, not an instruction, and
+ * feeding it to the parser would fail on the angle brackets rather than on anything real.
+ */
+const REPO = REPO_ROOT;
+const RUNNABLE_FENCES: ReadonlySet<string> = new Set(['bash', 'sh', 'shell', 'console']);
+
+/** The invocation prefix the docs use everywhere, optionally version-pinned. */
+const INVOCATION = /(?:^|\s)npx\s+(?:-y\s+|--yes\s+)?@reticlehq\/server(?:@[\w.-]+)?\s+(.+)$/;
+
+/** Files a reader can copy from: the docs site, the shipped READMEs, the paste-URL, the skills. */
+function textFiles(dir: string, out: string[] = []): string[] {
+  if (!existsSync(dir)) return out;
+  for (const entry of readdirSync(dir)) {
+    if ('node_modules' === entry || entry.startsWith('.')) continue;
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) textFiles(full, out);
+    else if (entry.endsWith('.md') || entry.endsWith('.mdx')) out.push(full);
+  }
+  return out;
+}
+
+/**
+ * The root documents, which were outside every docs guard until a release nearly shipped without
+ * them.
+ *
+ * `MIGRATION.md` told a 2.x upgrader to run `npx @reticlehq/server daemon` -- a command that does
+ * not exist, on the one page somebody reads when a major version has already broken them. The
+ * parser oracle below would have caught it for free on the day it was written; nothing was pointing
+ * at the file. Rule 13's "fix the ONE shared function" case: widen the input, do not write a
+ * second guard.
+ */
+const ROOT_DOCS = [
+  'README.md',
+  'SKILL.md',
+  'plugin/SKILL.md',
+  'MIGRATION.md',
+  'CONTRIBUTING.md',
+  'RELEASING.md',
+];
+
+function sources(): string[] {
+  const out = ROOT_DOCS.map((name) => join(REPO, name));
+  out.push(...textFiles(join(REPO, 'docs')), ...textFiles(join(REPO, 'skills')));
+  for (const dir of publishedPackageDirs()) {
+    const readme = join(dir, 'README.md');
+    if (existsSync(readme)) out.push(readme);
+  }
+  return out.filter(existsSync);
+}
+
+interface DocCommand {
+  file: string;
+  line: number;
+  raw: string;
+  argv: string[];
+}
+
+/**
+ * Split a documented command line into argv.
+ *
+ * Deliberately simple: quoted strings survive as single tokens, and anything containing placeholder
+ * syntax is dropped by the caller before it gets here. A shell-accurate tokenizer would be a
+ * dependency and a source of its own bugs, for lines that are by construction short and literal.
+ */
+function tokenize(rest: string): string[] {
+  return (rest.match(/"[^"]*"|'[^']*'|\S+/g) ?? []).map((t) => t.replace(/^["']|["']$/g, ''));
+}
+
+/** A template rather than an instruction: `<command>`, `[--flag]`, or a trailing shell comment. */
+function isTemplate(rest: string): boolean {
+  return rest.includes('<') || rest.includes('[');
+}
+
+/**
+ * The marker that says "this command is history, not instruction".
+ *
+ * A migration guide's job is to show the command that STOPPED working beside the one that replaced
+ * it, so a check that every documented command still parses is wrong about exactly that file unless
+ * it can tell the two apart. The prose already distinguishes them for a human reader -- a bolded
+ * **Before:** above the fence -- so the guard reads the same signal rather than inventing a second
+ * one nobody will remember to write.
+ *
+ * Deliberately narrow: it looks at the line immediately preceding the fence, so it cannot silently
+ * excuse a whole document.
+ */
+const HISTORICAL = /^\s*(?:\*\*)?(?:before|old|2\.x|previously)\b/i;
+
+function documentedCommands(): DocCommand[] {
+  const found: DocCommand[] = [];
+  for (const file of sources()) {
+    let fence: string | null = null;
+    let historical = false;
+    const lines = readFileSync(file, 'utf8').split('\n');
+    lines.forEach((line, i) => {
+      const open = /^\s*```(\w*)/.exec(line);
+      if (open) {
+        if (null === fence) {
+          // The nearest non-blank line above the fence decides whether what follows is an
+          // instruction or a record of what used to work.
+          const above = lines
+            .slice(0, i)
+            .reverse()
+            .find((prev) => 0 < prev.trim().length);
+          historical = above !== undefined && HISTORICAL.test(above);
+        }
+        fence = null === fence ? (open[1] ?? '') : null;
+        return;
+      }
+      if (null === fence || !RUNNABLE_FENCES.has(fence) || historical) return;
+      const m = INVOCATION.exec(line.replace(/\s+#.*$/, ''));
+      const rest = m?.[1];
+      if (rest === undefined || isTemplate(rest)) return;
+      found.push({
+        file: file.replace(REPO, ''),
+        line: i + 1,
+        raw: line.trim(),
+        argv: tokenize(rest),
+      });
+    });
+  }
+  return found;
+}
+
+describe('every command the docs tell a reader to run is one the CLI still accepts', () => {
+  const commands = documentedCommands();
+
+  /**
+   * A passing test over zero commands proves nothing, and this is the shape most likely to rot: a
+   * fence-language change or a rename of the invocation prefix would silently empty the corpus and
+   * leave a green check over no coverage at all.
+   */
+  it('finds documented commands to run', () => {
+    expect(commands.length).toBeGreaterThan(10);
+  });
+
+  /**
+   * The CLI has TWO dispatch paths, and a guard that knows about one is confidently wrong.
+   *
+   * `cli.ts` handles the cloud family (login / link / project / config / push / runs / regression /
+   * share / whoami) BEFORE reaching the typed parser, because they are async and share a client. So
+   * `parseCliArgs(['login'])` answers `unknown command 'login'` about a command that works perfectly,
+   * and the first run of this guard duly reported four healthy doc lines as broken.
+   *
+   * Told apart by the error itself rather than by a hardcoded list, so a command moving between the
+   * two paths does not need this file edited: `unknown command` for a name the CLI still recognises
+   * means "dispatched elsewhere"; `unknown command` for a name it does not means the docs are naming
+   * something that no longer exists; and `unknown argument` is a real failure on either path, because
+   * a flag the parser rejects is a flag the reader cannot use.
+   *
+   * The pair of conditions has to be read together, which is why this is ONE assertion rather than
+   * two. A first attempt also asserted separately that every documented subcommand is in the CLI's
+   * known-command list, and that flagged `--help`, `-h`, `--version` and `-v`: flags in the command
+   * position, which the parser accepts and a list of command NAMES cannot contain. The parser is the
+   * authority on what runs; the name list only explains why a rejection is not a defect.
+   */
+  it('parses every one without an unknown command or unknown argument', () => {
+    const rejected: string[] = [];
+    for (const c of commands) {
+      const result = parseCliArgs(c.argv, 4400);
+      if ('error' !== result.kind) continue;
+      const first = result.message.split('\n')[0] ?? '';
+      const name = c.argv[0] ?? '';
+      const dispatchedElsewhere =
+        first.startsWith('unknown command') && knownCommand(name) !== UNKNOWN_COMMAND;
+      if (dispatchedElsewhere) continue;
+      rejected.push(`${c.file}:${c.line}: ${c.raw}\n    → ${first}`);
+    }
+    expect(
+      rejected,
+      `these documented commands no longer parse. A reader pasting them gets an error:\n${rejected.join('\n')}`,
+    ).toEqual([]);
+  });
+});
+
+/**
+ * Flag *names*, including on template lines that `isTemplate` skips.
+ *
+ * #991 shipped because the skill told agents `init --flow "<the journey worth proving>"` and this
+ * file dropped the line for containing `<`. Placeholder values are irrelevant; the flag name is
+ * what gets renamed or retired. Every `--flag` token in a documented invocation, template or not,
+ * has to be a flag the parser still accepts for that command.
+ *
+ * A fence marked as the old form is history, the same way `documentedCommands` treats it. `MIGRATION.md`
+ * shows `init --flow` under **Before:** because that is the command that stopped working. Counting it
+ * here fails the guard on a line the migration guide is required to keep.
+ */
+const FLAG_NAME = /--[a-z0-9-]+/g;
+
+interface DocFlag {
+  file: string;
+  line: number;
+  raw: string;
+  command: string;
+  flag: string;
+}
+
+function documentedFlags(): DocFlag[] {
+  const found: DocFlag[] = [];
+  for (const file of sources()) {
+    let fence: string | null = null;
+    let historical = false;
+    const lines = readFileSync(file, 'utf8').split('\n');
+    lines.forEach((line, i) => {
+      const open = /^\s*```(\w*)/.exec(line);
+      if (open) {
+        if (null === fence) {
+          const above = lines
+            .slice(0, i)
+            .reverse()
+            .find((prev) => 0 < prev.trim().length);
+          historical = above !== undefined && HISTORICAL.test(above);
+        }
+        fence = null === fence ? (open[1] ?? '') : null;
+        return;
+      }
+      if (null === fence || !RUNNABLE_FENCES.has(fence) || historical) return;
+      const m = INVOCATION.exec(line.replace(/\s+#.*$/, ''));
+      const rest = m?.[1];
+      if (rest === undefined) return;
+      const command = tokenize(rest)[0] ?? '';
+      if (command.includes('<') || command.includes('[')) return;
+      for (const flag of rest.match(FLAG_NAME) ?? []) {
+        found.push({
+          file: file.replace(REPO, ''),
+          line: i + 1,
+          raw: line.trim(),
+          command,
+          flag,
+        });
+      }
+    });
+  }
+  return found;
+}
+
+describe('every --flag the docs name is one the CLI still accepts', () => {
+  const flags = documentedFlags();
+
+  it('finds documented flags to check', () => {
+    expect(flags.length).toBeGreaterThan(5);
+  });
+
+  it('rejects unknown or retired flag names, including on template lines', () => {
+    const rejected: string[] = [];
+    for (const f of flags) {
+      const result = parseCliArgs([f.command, f.flag], 4400);
+      if ('error' !== result.kind) continue;
+      const first = result.message.split('\n')[0] ?? '';
+      const namesTheFlag =
+        first === `unknown argument '${f.flag}'` || first.startsWith(`${f.flag} is no longer`);
+      if (!namesTheFlag) continue;
+      rejected.push(`${f.file}:${f.line}: ${f.raw}\n    → ${first}`);
+    }
+    expect(
+      rejected,
+      `these documented flags are unknown or retired. A reader pasting them gets an error:\n${rejected.join('\n')}`,
+    ).toEqual([]);
+  });
+});
+
+/**
+ * The same rule, applied to strings the PRODUCT prints.
+ *
+ * `lint:docs` reads markdown, and the worst instance of this defect was never in markdown: two
+ * strings in `init/cra.ts` told a CRA user to run `npx reticle init`, printed into a project where
+ * nothing of ours is installed. `npx reticle` resolves the npm package named `reticle`, which
+ * belongs to an unrelated author, so the product's own repair instruction fetched and ran a
+ * stranger's code. It shipped, and no guard could see it, because every guard pointed at docs.
+ *
+ * Scoped to `npx reticle` rather than to every mention of the bin: runtime messages legitimately
+ * name `reticle mcp` and `reticle init` as processes and steps, and the CLI knows its own bin name.
+ * The unrunnable, wrong-package form is the part that is never correct.
+ */
+describe('no shipped string tells a user to npx a package we do not own', () => {
+  // The source of every package we publish. It used to say `packages/`, which stopped being where
+  // they are; pointing it at the whole repository instead walks build output, a Rust target
+  // directory and whatever else is lying around, and takes long enough to be killed for running
+  // over time -- so the check went red for a reason that had nothing to do with what it checks.
+  const SOURCE_ROOTS = publishedPackageDirs();
+
+  function sourceFiles(dir: string, out: string[] = []): string[] {
+    for (const entry of readdirSync(dir)) {
+      if ('node_modules' === entry || 'dist' === entry) continue;
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) sourceFiles(full, out);
+      else if (entry.endsWith('.ts') && !entry.endsWith('.test.ts')) out.push(full);
+    }
+    return out;
+  }
+
+  /** Every non-test TypeScript file across the packages we publish. */
+  function shippedSources(): string[] {
+    return SOURCE_ROOTS.flatMap((dir) => sourceFiles(dir));
+  }
+
+  it('finds source files to check', () => {
+    expect(shippedSources().length).toBeGreaterThan(50);
+  });
+
+  it('never emits `npx reticle`', () => {
+    const bad: string[] = [];
+    for (const file of shippedSources()) {
+      readFileSync(file, 'utf8')
+        .split('\n')
+        .forEach((line, i) => {
+          // The docblock in cli-parse.ts explains this exact hazard and has to quote it to do so.
+          if (line.trimStart().startsWith('*')) return;
+          if (/npx\s+reticle(?![a-z@/-])/.test(line))
+            bad.push(`${file.replace(REPO, '')}:${i + 1}: ${line.trim()}`);
+        });
+    }
+    expect(
+      bad,
+      `these ship an instruction that runs somebody else's package:\n${bad.join('\n')}`,
+    ).toEqual([]);
+  });
+});

@@ -81,10 +81,61 @@ const meanReplay = measured.length
   : null;
 const summary = {
   layer: 'C (regression replay — deterministic, no LLM)',
+  /*
+   * The rise above the previous baseline was CHOSEN, and this is where that is said out loud.
+   *
+   * A replayed step now carries evidence instead of a pass/fail bit: a bounded `window`
+   * {since, until} (the address an agent hands straight to `reticle_observe`), a structured digest
+   * of what each step's window contained, per-step contradictions, and cross-step ones. Before it, a
+   * replay of an app with a console error reported `ok: true` — the path designed to run forever was
+   * the one that captured nothing.
+   *
+   * The route fat that came with it was measured field by field and cut: zero-valued digest counters
+   * (an absent counter IS zero), the per-step `tool` when it holds the default (137/137 corpus steps
+   * do), and `durationMs` (it was `window.until - window.since`, shipped alongside both operands).
+   * That took 604 -> 431 with detection unchanged at 3/3, 2/2, 1/1.
+   *
+   * What is left is evidence, not restatement, so it is declared rather than trimmed further. The
+   * next rise has to declare itself the same way.
+   */
+  cost: {
+    token_budget: {
+      extra_tokens: 180,
+      reason:
+        'per-step window + digest + contradictions (the deterministic effect record). Route fat ' +
+        'was cut first: 604 -> 431 via sparse digest counters, default-valued `tool`, and the ' +
+        'derived `durationMs`. Detection held at 3/3, 2/2, 1/1 across every cut.',
+    },
+  },
   per_run: {
     reticle_replay_mean_tokens: meanReplay,
     playwright_mcp_redrive_tokens: LLM_REDRIVE.playwright_mcp,
     chrome_devtools_mcp_redrive_tokens: LLM_REDRIVE.chrome_devtools_mcp,
+  },
+  /*
+   * The DENOMINATOR, recorded so the next comparison is possible at all.
+   *
+   * `reticle_replay_mean_tokens` is a mean over whichever flows this pass happened to replay, and
+   * the history row kept the mean and threw the denominator away. So when the gate reported 263 ->
+   * 463 there was no way to tell a per-step regression from a suite that simply grew longer flows:
+   * the earlier row records no flow names and no step counts, and the number cannot be reproduced
+   * from it. A benchmark whose baseline cannot be reproduced is a number, not a measurement.
+   *
+   * `per_step` is the figure that survives the suite changing shape, which is the comparison anybody
+   * reading a token regression actually wants.
+   */
+  measured: {
+    flows: rows.length,
+    steps: rows.reduce((sum, r) => sum + (r.stepCount ?? 0), 0),
+    flow_names: rows.map((r) => r.flow).sort(),
+    per_step:
+      rows.reduce((sum, r) => sum + (r.stepCount ?? 0), 0) > 0
+        ? Math.round(
+            (rows.reduce((sum, r) => sum + (r.replay_tokens ?? 0), 0) /
+              rows.reduce((sum, r) => sum + (r.stepCount ?? 0), 0)) *
+              10,
+          ) / 10
+        : null,
   },
   ratio_vs_playwright: meanReplay ? Math.round(LLM_REDRIVE.playwright_mcp / meanReplay) : null,
   note: 'Reticle replay is deterministic (no model). Competitors have no replay — an agent re-drives every run at the Layer B cost. Ratio compounds: over N runs Reticle pays ~author-once + N*replay; competitors pay N*re-drive.',
