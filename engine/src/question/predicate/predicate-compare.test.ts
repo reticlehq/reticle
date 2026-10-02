@@ -201,18 +201,10 @@ describe('what `as` means', () => {
   });
 
   it('does not mistake a hyphen separator in text for a negative sign', async () => {
-    const session = new PageSession([refundCall('{"amount":50}')], {
-      '#subtotal': 'Subtotal - $50.00',
+    const session = new PageSession([refundCall('{"refunded":50}')], {
+      '#refunded': 'Subtotal - $50.00',
     });
-    const r = await evaluatePredicate(
-      session,
-      PredicateSchema.parse({
-        kind: 'compare',
-        left: { from: 'text', scope: '#subtotal' },
-        right: { from: 'net', urlContains: '/api/refund', path: 'amount' },
-        as: 'number',
-      }),
-    );
+    const r = await evaluatePredicate(session, compare({ as: 'number' }));
     expect(r.pass).toBe(true);
   });
 
