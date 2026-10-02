@@ -200,6 +200,22 @@ describe('what `as` means', () => {
     expect((await evaluatePredicate(sessionSpace, compare({ as: 'number' }))).pass).toBe(true);
   });
 
+  it('does not mistake a hyphen separator in text for a negative sign', async () => {
+    const session = new PageSession([refundCall('{"amount":50}')], {
+      '#subtotal': 'Subtotal - $50.00',
+    });
+    const r = await evaluatePredicate(
+      session,
+      PredicateSchema.parse({
+        kind: 'compare',
+        left: { from: 'text', scope: '#subtotal' },
+        right: { from: 'net', urlContains: '/api/refund', path: 'amount' },
+        as: 'number',
+      }),
+    );
+    expect(r.pass).toBe(true);
+  });
+
   it('applies a tolerance', async () => {
     const session = new PageSession([refundCall('{"refunded":11.874}')], { '#refunded': '11.87' });
     expect((await evaluatePredicate(session, compare({ as: 'number' }))).pass).toBe(false);

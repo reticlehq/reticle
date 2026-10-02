@@ -227,7 +227,7 @@ function readSide(
  * (a decimal comma) reads as two numbers, not as 1187 — and two numbers are refused.
  */
 const NUMBER_TOKEN =
-  /(?:-(?:\s*[\p{Sc}]\s*)?|[\p{Sc}]\s*-?)?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?/gu;
+  /(?:-(?:[\p{Sc}]\s*)?|[\p{Sc}]\s*-?)?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?/gu;
 
 /** One number out of a reading, or why there is not exactly one. */
 function numberOf(value: Scalar): { n: number } | { why: string } {
@@ -244,7 +244,7 @@ function numberOf(value: Scalar): { n: number } | { why: string } {
   const isNegative = only.includes('-');
   const cleaned = only.replace(/,/g, '');
   const digits = cleaned.match(/(?:\d+(?:\.\d+)?)/);
-  if (digits === null) {
+  if (null === digits) {
     return { why: `could not parse a number from ${JSON.stringify(value)}` };
   }
   const parsed = Number(digits[0]);
