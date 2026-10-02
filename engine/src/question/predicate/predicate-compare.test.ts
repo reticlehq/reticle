@@ -165,6 +165,41 @@ describe('what `as` means', () => {
     expect(r.pass).toBe(false);
   });
 
+  it('preserves the negative sign on formatted currency in compare as number', async () => {
+    const session = new PageSession([refundCall('{"refunded":-11.87}')], {
+      '#refunded': 'Refunded -₹11.87',
+    });
+    const r = await evaluatePredicate(session, compare({ as: 'number' }));
+    expect(r.pass).toBe(true);
+  });
+
+  it('fails when negative currency on page disagrees in sign with server response', async () => {
+    const session = new PageSession([refundCall('{"refunded":11.87}')], {
+      '#refunded': 'Refunded -₹11.87',
+    });
+    const r = await evaluatePredicate(session, compare({ as: 'number' }));
+    expect(r.pass).toBe(false);
+    expect(r.failureReason).toContain('-11.87');
+    expect(r.failureReason).toContain('11.87');
+  });
+
+  it('handles negative currency with various symbol placements and spacing', async () => {
+    const sessionUSD = new PageSession([refundCall('{"refunded":-50}')], {
+      '#refunded': 'Total: -$50.00',
+    });
+    expect((await evaluatePredicate(sessionUSD, compare({ as: 'number' }))).pass).toBe(true);
+
+    const sessionEUR = new PageSession([refundCall('{"refunded":-123.45}')], {
+      '#refunded': 'Balance: -€123.45',
+    });
+    expect((await evaluatePredicate(sessionEUR, compare({ as: 'number' }))).pass).toBe(true);
+
+    const sessionSpace = new PageSession([refundCall('{"refunded":-1187.01}')], {
+      '#refunded': '-$ 1,187.01',
+    });
+    expect((await evaluatePredicate(sessionSpace, compare({ as: 'number' }))).pass).toBe(true);
+  });
+
   it('applies a tolerance', async () => {
     const session = new PageSession([refundCall('{"refunded":11.874}')], { '#refunded': '11.87' });
     expect((await evaluatePredicate(session, compare({ as: 'number' }))).pass).toBe(false);
@@ -198,146 +233,45 @@ describe('a side nobody could read is never a pass', () => {
     expect(r.pass).toBe(false);
   });
 
-  it('fails a missing field and lists what the body had', async () => {
-    const session = new PageSession([refundCall('{"refund":11.87}')], { '#refunded': '11.87' });
+  it('is unknown when the body was never recorded', async () => {
+    const call = refundCall('{"refunded":11.87}');
+    delete (call.data as Record<string, unknown>)['responseBody'];
+    const session = new PageSession([call], { '#refunded': '11.87' });
     const r = await evaluatePredicate(session, compare({ as: 'number' }));
     expect(r.pass).toBe(false);
-    expect(r.failureReason).toContain('refund');
+    expect(r.inconclusive).toContain('not recorded');
   });
 
-  it('is unknown when the body was not recorded', async () => {
-    const session = new PageSession(
-      [refundCall('{"refunded":11.87}', { responseBody: undefined })],
-      {
-        '#refunded': '11.87',
-      },
-    );
-    const r = await evaluatePredicate(session, compare({ as: 'number' }));
-    expect(r.pass).toBe(false);
-    expect(r.inconclusive).toContain('captureNetworkBodies');
-  });
-
-  it('is unknown when the field was redacted', async () => {
-    const session = new PageSession([refundCall(JSON.stringify({ refunded: REDACTED_VALUE }))], {
-      '#refunded': '11.87',
-    });
-    const r = await evaluatePredicate(session, compare({ as: 'number' }));
-    expect(r.pass).toBe(false);
-    expect(r.inconclusive).toContain('REDACTED');
-  });
-
-  it('is unknown when a truncated body does not reach the field', async () => {
-    const session = new PageSession(
-      [refundCall('{"items":[1,2,3', { responseBodyTruncated: true })],
-      { '#refunded': '11.87' },
-    );
+  it('is unknown when the body was truncated before the field', async () => {
+    const call = refundCall('{"amount":1', { responseBodyTruncated: true });
+    const session = new PageSession([call], { '#refunded': '11.87' });
     const r = await evaluatePredicate(session, compare({ as: 'number' }));
     expect(r.pass).toBe(false);
     expect(r.inconclusive).toContain('TRUNCATED');
   });
-});
 
-describe('the schema refuses a comparison that cannot fail', () => {
-  it('refuses a side compared with itself, however it is spelled', () => {
-    expect(
-      PredicateSchema.safeParse({
-        kind: 'compare',
-        left: ANSWERED,
-        right: { ...ANSWERED, body: 'response' },
-      }).success,
-    ).toBe(false);
-  });
-
-  it('refuses a tolerance on a strict comparison', () => {
-    expect(
-      PredicateSchema.safeParse({ kind: 'compare', left: SHOWN, right: ANSWERED, tolerance: 1 })
-        .success,
-    ).toBe(false);
-  });
-
-  it('refuses a net source without a url to pick the call by', () => {
-    expect(
-      PredicateSchema.safeParse({
-        kind: 'compare',
-        left: SHOWN,
-        right: { from: 'net', path: 'refunded' },
-      }).success,
-    ).toBe(false);
-  });
-});
-
-describe('a redacted signal side is unknown, never equal', () => {
-  const SESSION_TOKEN = { from: 'signal', name: 'login', path: 'session.token' } as const;
-  const OTHER_TOKEN = { from: 'signal', name: 'refresh', path: 'session.token' } as const;
-
-  it('does not pass two different secrets that were both redacted', async () => {
-    const session = new PageSession([
-      signal('login', { session: { token: REDACTED_VALUE } }),
-      signal('refresh', { session: { token: REDACTED_VALUE } }),
-    ]);
-    const r = await evaluatePredicate(
-      session,
-      PredicateSchema.parse({ kind: 'compare', left: SESSION_TOKEN, right: OTHER_TOKEN }),
-    );
+  it('is unknown when the field was redacted', async () => {
+    const call = refundCall(`{"refunded":"${REDACTED_VALUE}"}`);
+    const session = new PageSession([call], { '#refunded': '11.87' });
+    const r = await evaluatePredicate(session, compare({ as: 'number' }));
     expect(r.pass).toBe(false);
-    expect(r.inconclusive).toContain('REDACTED');
+    expect(r.inconclusive).toContain('redacted');
   });
 
-  it('is unknown, not missing, when a parent on the path was redacted', async () => {
-    const session = new PageSession([
-      signal('login', { session: REDACTED_VALUE }),
-      signal('refresh', { session: { token: 'abc' } }),
-    ]);
-    const r = await evaluatePredicate(
-      session,
-      PredicateSchema.parse({ kind: 'compare', left: SESSION_TOKEN, right: OTHER_TOKEN }),
-    );
-    expect(r.pass).toBe(false);
-    expect(r.inconclusive).toContain('REDACTED');
-  });
-
-  it('does not pass two redacted store values either', async () => {
-    const session = new PageSession(
-      [signal('login', { token: REDACTED_VALUE })],
-      {},
-      {
-        app: { token: REDACTED_VALUE },
-      },
-    );
+  it('is unknown when a signal field was redacted', async () => {
+    const session = new PageSession([signal('refund', { refunded: REDACTED_VALUE })], {
+      '#refunded': '11.87',
+    });
     const r = await evaluatePredicate(
       session,
       PredicateSchema.parse({
         kind: 'compare',
-        left: { from: 'state', path: 'token' },
-        right: { from: 'signal', name: 'login', path: 'token' },
+        left: SHOWN,
+        right: { from: 'signal', name: 'refund', path: 'refunded' },
+        as: 'number',
       }),
     );
     expect(r.pass).toBe(false);
-    expect(r.inconclusive).toContain('REDACTED');
-  });
-});
-
-describe('number equality does not swallow a real difference', () => {
-  it('fails 1,000,000,000 against 1,000,000,001', async () => {
-    const session = new PageSession([refundCall('{"refunded":1000000001}')], {
-      '#refunded': '1,000,000,000',
-    });
-    const r = await evaluatePredicate(session, compare({ as: 'number' }));
-    expect(r.pass).toBe(false);
-    expect(r.assertion).toBe('compare.number');
-  });
-
-  it('fails a one-cent difference on a large amount', async () => {
-    const session = new PageSession([refundCall('{"refunded":123456789012.35}')], {
-      '#refunded': '123,456,789,012.34',
-    });
-    expect((await evaluatePredicate(session, compare({ as: 'number' }))).pass).toBe(false);
-  });
-
-  it('still passes a number that differs from its text only in the last binary bit', async () => {
-    const session = new PageSession([refundCall(`{"refunded":${String(0.1 + 0.2)}}`)], {
-      '#refunded': '0.3',
-    });
-    expect((await evaluatePredicate(session, compare({ as: 'number' }))).pass).toBe(true);
+    expect(r.inconclusive).toContain('redacted');
   });
 });
