@@ -3,7 +3,7 @@ name: verify-optimistic-update
 description: 'Prove a UI that updates before the server answers puts things back and says so when the request fails, and keeps the change when it succeeds. Use when a like, toggle, rename, reorder, delete or add-to-cart updates instantly, when an optimistic update was added or changed, or when a user reports a change that "saved" but was gone after a reload.'
 license: Apache-2.0
 metadata:
-  version: 3.3.0
+  version: 3.5.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
