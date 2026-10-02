@@ -359,6 +359,57 @@ describe('reticle_flow_replay — a green that cannot go red (#341)', () => {
     })) as FlowReplayResult;
   }
 
+  it('a start page that never reconnects returns an unverifiable result before step 1', async () => {
+    const stored = await new FlowStore(fs, root, clock).save({
+      ...program('lost-start', [actStep('submit')]),
+      startPath: '/login',
+    });
+    if (!stored.ok) throw new Error(`save failed: ${stored.code}`);
+    let navigated = false;
+    let actions = 0;
+    const session: Partial<Session> = {
+      id: 'old',
+      url: 'http://localhost:3000/home',
+      elapsed: () => 0,
+      eventsSince: () => [],
+      command: (name: string): Promise<CommandResult> => {
+        if (name === ReticleCommand.QUERY)
+          return Promise.resolve({
+            kind: 'command_result',
+            id: 'q',
+            ok: true,
+            result: { elements: [] },
+          });
+        if (name === ReticleCommand.NAVIGATE) {
+          navigated = true;
+          return Promise.resolve({
+            kind: 'command_result',
+            id: 'n',
+            ok: true,
+            result: { ok: true },
+          });
+        }
+        if (name === ReticleCommand.ACT) actions += 1;
+        return Promise.resolve({ kind: 'command_result', id: 'a', ok: true, result: {} });
+      },
+    };
+    const deps = fakeDeps(fs, root, session);
+    deps.sessions = {
+      resolve: () => {
+        if (navigated) throw new Error('the old document disconnected');
+        return session as Session;
+      },
+    } as SessionManager;
+
+    const result = (await tool(ReticleTool.FLOW_REPLAY).handler(deps, {
+      flowName: 'lost-start',
+    })) as FlowReplayResult;
+    expect(result.status).toBe('unverifiable');
+    expect(result.steps).toEqual([]);
+    expect(result.unverifiable?.reason).toContain('no page was connected');
+    expect(actions).toBe(0);
+  }, 8_000);
+
   it('an assertion-free flow replays ok AND says it proved nothing', async () => {
     await save('asserts-nothing', [actStep('login-submit')]);
 

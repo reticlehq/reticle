@@ -307,7 +307,51 @@ describe('arriveAtStartPath — replay navigates to the flow start page before s
     expect(arrived.session).toBeUndefined();
     // The navigate WAS sent: the handle replay holds is gone, and continuing on it would time every
     // step out. Said, so replay can stop as unverifiable instead (#1129).
-    expect(arrived.lost).toContain('no page reconnected within 500ms');
+    expect(arrived.lost).toContain('no page was connected after 500ms');
+  });
+
+  it('uses a live successor on an auth redirect instead of calling the page lost', async () => {
+    const { session } = tab('http://localhost:3000/home');
+    const login = successor('http://localhost:3000/auth');
+    const arrived = await arriveAtStartPath(
+      manager([session, login]),
+      session,
+      flow('/checkout'),
+      300,
+      instantClock(100),
+    );
+    expect(arrived.session).toBe(login);
+    expect(arrived.lost).toBeUndefined();
+    expect(arrived.redirected).toContain('reconnected on /auth');
+  });
+
+  it('keeps waiting when a redirect later reaches the requested page', async () => {
+    const { session } = tab('http://localhost:3000/home');
+    const login = successor('http://localhost:3000/auth');
+    const checkout = successor('http://localhost:3000/checkout');
+    const arrived = await arriveAtStartPath(
+      manager([session, login, checkout]),
+      session,
+      flow('/checkout'),
+      500,
+      instantClock(100),
+    );
+    expect(arrived.session).toBe(checkout);
+    expect(arrived.redirected).toBeUndefined();
+  });
+
+  it('does not reuse a redirected handle that disconnected before the deadline', async () => {
+    const { session } = tab('http://localhost:3000/home');
+    const login = successor('http://localhost:3000/auth');
+    const arrived = await arriveAtStartPath(
+      manager([session, login, undefined]),
+      session,
+      flow('/checkout'),
+      300,
+      instantClock(100),
+    );
+    expect(arrived.session).toBeUndefined();
+    expect(arrived.lost).toContain('no page was connected');
   });
 
   it('keeps waiting through the teardown gap where the old id resolves to nothing yet', async () => {
