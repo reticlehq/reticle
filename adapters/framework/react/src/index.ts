@@ -309,6 +309,19 @@ export function hasHoverHandlers(el: Element): boolean {
   return HOVER_HANDLER_KEYS.some((k) => 'function' === typeof p[k]);
 }
 
+/**
+ * React's own click prop, the one the destructive-action guard needs to see.
+ *
+ * `onClick` is the prop name React documents and the one a JSX handler lands on. Read from the same
+ * fibre `hasHoverHandlers` uses, and answered only when a fibre was found — a React page with no
+ * fibre for this element is not evidence of a handlerless element, and the guard refuses on that.
+ */
+export function hasClickHandler(el: Element): boolean | undefined {
+  const props = getFiber(el)?.memoizedProps;
+  if (typeof props !== 'object' || null === props) return undefined;
+  return 'function' === typeof (props as Record<string, unknown>)['onClick'];
+}
+
 import { installRenderMeter } from './render-meter.js';
 
 let installed = false;
@@ -325,7 +338,7 @@ let installed = false;
 export function install(): void {
   if (installed) return;
   installed = true;
-  registerAdapter({ name: 'react', identify, readState, hasHoverHandlers });
+  registerAdapter({ name: 'react', identify, readState, hasHoverHandlers, hasClickHandler });
   installRenderMeter();
 }
 

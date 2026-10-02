@@ -23,7 +23,11 @@ import { isButton, isInput } from '@/dom/realm.js';
 import { hitTestOccluder } from '@/dom/occlusion.js';
 import { readStorage } from '@/observers/storage.js';
 import { captureDesktopWindow } from '@/dom/desktop-capture.js';
-import { identifyComponent, readComponentState } from '@/registry/stores/adapters.js';
+import {
+  identifyComponent,
+  readComponentState,
+  elementHandlesClick,
+} from '@/registry/stores/adapters.js';
 import { readStoresWithTruncation, readStoresRaw, storeNames } from '@/registry/stores.js';
 import { sanitizeWithReport } from '@/security/serialization.js';
 import { getCapabilities } from '@/registry/capabilities.js';
@@ -158,6 +162,17 @@ function inspect(ref: string): unknown {
     ...(sourceUnavailable !== undefined ? { sourceUnavailable } : {}),
     tag: el.tagName.toLowerCase(),
     href: el.getAttribute('href') ?? undefined,
+    /*
+     * The anchor facts the destructive guard needs and a plain descriptor cannot carry.
+     *
+     * `href` alone reads as destructive on a plain navigation link (`/billing/payment`), and the
+     * native path classifies this descriptor with no element in reach. `isAnchor` is the fact that
+     * the role cannot supply: `role="link"` is a free string, so a `<div>` tagged that way would
+     * otherwise be exempted. `hasClickHandler` folds in what the framework adapter reports.
+     */
+    isAnchor: el instanceof HTMLAnchorElement,
+    hasClickHandler: true === elementHandlesClick(el),
+    insideForm: el.closest('form') !== null,
     formAction:
       isButton(el) || isInput(el) ? (el.form?.getAttribute('action') ?? undefined) : undefined,
     formText: isButton(el) || isInput(el) ? (el.form?.textContent ?? undefined) : undefined,

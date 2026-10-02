@@ -18,6 +18,18 @@ export interface ReticleAdapter {
   readState?: (el: Element) => unknown;
   /** Best-effort: does the element declare framework enter/leave handlers synthetic hover may not fire? */
   hasHoverHandlers?: (el: Element) => boolean;
+  /**
+   * Best-effort: does the element declare a framework click handler?
+   *
+   * The destructive-action guard consults this before granting the plain-navigation exemption. An
+   * inline `onclick` is visible in the markup; a handler a framework attached in script is not, and
+   * the framework is the one place that knows.
+   *
+   * `undefined` means "this element has no framework props to read", which is NOT the same answer as
+   * `false`. A caller must treat it as unknown and refuse the exemption; only a definite `false`
+   * ("I read the props, there is no handler") may narrow the guard.
+   */
+  hasClickHandler?: (el: Element) => boolean | undefined;
 }
 
 // Persist on a global so the registry survives HMR module re-evaluation (otherwise the
@@ -69,6 +81,42 @@ export function elementHasHoverHandlers(el: Element): boolean {
     if (adapter.hasHoverHandlers(el)) return true;
   }
   return false;
+}
+
+/**
+ * Whether any installed adapter reports a click handler on the element.
+ *
+ * Three-valued on purpose. `true` as soon as one adapter says so, `false` when at least one adapter
+ * actually read the props and found none, and `undefined` when no adapter could answer at all —
+ * which is the case that must NOT be read as "no handler".
+ */
+export function elementHasClickHandler(el: Element): boolean | undefined {
+  let answered = false;
+  for (const adapter of adapters) {
+    if (adapter.hasClickHandler === undefined) continue;
+    const result = adapter.hasClickHandler(el);
+    if (result === undefined) continue;
+    answered = true;
+    if (result) return true;
+  }
+  return answered ? false : undefined;
+}
+
+/** A handler written into the markup rather than bound in script. */
+const INLINE_HANDLER_ATTR = 'onclick';
+
+/**
+ * Every click handler a page can state about this element, inline or framework-declared.
+ *
+ * An `onclick` written into the markup is visible on the element. A handler a FRAMEWORK attached is
+ * not — nothing in the DOM records it — so the adapters are asked, which is the only place that
+ * knows. `undefined` is "no adapter could read this element", and only a positive reading refuses
+ * the exemption: a handler bound with plain `addEventListener` on a page with no adapter leaves no
+ * trace at all, which is a named gap rather than a proof. See `isPlainNavigationLink` in core.
+ */
+export function elementHandlesClick(el: Element): boolean | undefined {
+  if (el.hasAttribute(INLINE_HANDLER_ATTR)) return true;
+  return elementHasClickHandler(el);
 }
 
 export function adapterNames(): string[] {

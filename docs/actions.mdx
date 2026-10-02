@@ -56,6 +56,8 @@ Reticle blocks a control that looks destructive before acting on it:
 
 A stale ref is refused the same way, with `"ref 'e303' no longer resolves to an element"` and a recovery note telling you to re-query. Both refusals cost a turn and prevent a false green, which is the trade.
 
+What is judged destructive is the ACT, not the wording. A same-origin `<a href>` with no handler and no form around it is a GET that changes nothing, so `Orders & invoices` pointing at `/billing/payment` is clicked without confirming. Only a real anchor qualifies, since a `role="link"` on a `div` does not, and the href must be http(s) or relative, so `javascript:` and `data:` are refused. A link with a handler, a link inside a form, every button, and the target end of a drag all keep their block.
+
 ## `fill` versus `type`
 
 `fill` replaces. `type` appends. Reaching for `type` when you meant `fill` is how a field ends up containing `hellohello`, and neither call will complain.
