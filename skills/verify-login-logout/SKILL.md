@@ -3,7 +3,7 @@ name: verify-login-logout
 description: 'Prove sign-in lands the user where they should be, sign-out really ends the session so a protected page sends them back to sign in, and an expired session asks to sign in again instead of breaking. Use when auth, a login form, a logout button, route guards or token refresh were added or changed, or when a user reports being logged out, or not logged out, unexpectedly.'
 license: Apache-2.0
 metadata:
-  version: 3.4.0
+  version: 3.5.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
