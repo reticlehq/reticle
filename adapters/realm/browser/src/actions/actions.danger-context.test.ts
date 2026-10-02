@@ -148,3 +148,47 @@ describe('a value picker is judged by what the choice feeds, not by the choice',
     await expect(executeAction(refTo('#d'), 'click')).rejects.toThrow(/confirmDangerous/);
   });
 });
+
+/**
+ * Enter in a textarea inserts a newline and submits nothing, but only a PLAIN Enter.
+ *
+ * A false positive from the field session behind #894: pressing Enter in a textarea was blocked
+ * while clicking the adjacent submit button -- same form, same handler, same effect -- was judged
+ * on its own terms. With a modifier held it is the other case: Ctrl/Cmd+Enter is the standard way
+ * to submit from a textarea, and chat-style fields submit on it from script. The guard errs towards
+ * blocking, so a held modifier, however it is spelled, keeps the textarea judged by its form.
+ */
+describe('Enter in a textarea submits nothing, so it triggers nothing', () => {
+  const FORM =
+    '<form><label for="n">Notes</label><textarea id="n"></textarea>' +
+    '<button type="submit" id="go">Delete account</button></form>';
+
+  beforeEach(() => {
+    document.body.innerHTML = FORM;
+  });
+
+  it("is not judged by the form's submit button", async () => {
+    // Enter here inserts a newline. Blocking it refuses the one keystroke on the page that does the
+    // least, beside a button whose click would be judged the same way and allowed.
+    await expect(executeAction(refTo('#n'), 'press', { text: 'Enter' })).resolves.toBeDefined();
+  });
+
+  it.each([['Control'], ['Meta'], ['Shift'], ['Alt']])(
+    'still blocks Enter with %s held, the shortcut that submits from a textarea',
+    async (modifier) => {
+      await expect(
+        executeAction(refTo('#n'), 'press', { key: 'Enter', modifiers: [modifier] }),
+      ).rejects.toThrow(/confirmDangerous/);
+    },
+  );
+
+  it('still blocks Cmd+Enter written as a chord rather than a modifier flag', async () => {
+    await expect(executeAction(refTo('#n'), 'press', { keys: ['Meta', 'Enter'] })).rejects.toThrow(
+      /confirmDangerous/,
+    );
+  });
+
+  it('still blocks a click on that submit button from the same form', async () => {
+    await expect(executeAction(refTo('#go'), 'click')).rejects.toThrow(/confirmDangerous/);
+  });
+});

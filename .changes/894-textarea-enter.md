@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/browser` — Enter in a textarea was refused as destructive because of the form's submit button.** A plain Enter in a `<textarea>` inserts a newline and submits nothing, but it was judged by the form's submit control, so a notes field next to a "Delete account" button needed `confirmDangerous: true` to type a line break. A plain Enter there is now allowed. With any modifier held (Ctrl/Cmd+Enter is the standard way to submit from a textarea, and chat-style fields do), and whether the modifier is passed as `modifiers` or as a `keys` chord, the textarea is still judged by its form and a destructive submit is still blocked. Part of [#894](https://github.com/reticlehq/reticle/issues/894).

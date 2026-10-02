@@ -34,6 +34,7 @@ import {
   pressKey,
   pressModifiers,
   pressKeys,
+  pressHoldsModifier,
   holdKey,
   pressCombo,
 } from './actions-press.js';
@@ -358,7 +359,9 @@ function assertActionAllowed(
   // Enter is judged by what it submits as well as by the field itself. Any OTHER key submits
   // nothing, so the form is none of its business.
   const submitter =
-    action === ActionType.PRESS && 'Enter' === pressKey(args) ? submitControlFor(el) : null;
+    action === ActionType.PRESS && 'Enter' === pressKey(args)
+      ? submitControlFor(el, { modified: pressHoldsModifier(args) })
+      : null;
   const sourceDangerous =
     requiresDangerousConfirmation(dangerousActionContext(el), getRole(el)) ||
     (submitter !== null &&
