@@ -407,8 +407,7 @@ function hiddenInsideClosedDetails(el: Element): boolean {
  * walk. The one ancestor reading is `hiddenInsideClosedDetails`, which consults only the nearest
  * `<details>` boundary; composing the chain is still isVisible's job.
  */
-function selfHidden(el: Element): boolean {
-  if ('true' === el.getAttribute('aria-hidden')) return true;
+function cssHidden(el: Element): boolean {
   if (isHtmlElement(el) && el.hidden) return true;
   if (hiddenInsideClosedDetails(el)) return true;
   const view = el.ownerDocument.defaultView;
@@ -424,6 +423,12 @@ function selfHidden(el: Element): boolean {
     if (0 === Number.parseFloat(style.opacity || '1')) return true;
   }
   return false;
+}
+
+/** Whether the element's OWN box hides it — one forced-style resolution, no ancestor walk. */
+function selfHidden(el: Element): boolean {
+  if ('true' === el.getAttribute('aria-hidden')) return true;
+  return cssHidden(el);
 }
 
 /**
@@ -502,6 +507,31 @@ export function isVisible(el: Element, memo?: Map<Element, boolean>): boolean {
   const result = !selfHidden(el) && (null === parent || isVisible(parent, memo));
   if (memo !== undefined) memo.set(el, result);
   return result;
+}
+
+/**
+ * True when the element is invisible SOLELY because `aria-hidden="true"` is set on it or an
+ * ancestor — no CSS `display:none`, `visibility:hidden`, `opacity:0`, or `[hidden]` attribute
+ * anywhere in the chain.
+ *
+ * Walks the ENTIRE ancestor chain: an `aria-hidden` found first does not short-circuit, because
+ * an ancestor further up may also be CSS-hidden (`<div style="display:none"><svg aria-hidden>`)
+ * and the element is not "drawn on screen" in that case.
+ *
+ * Precondition: `isVisible(el)` is `false`. Without that, the walk is wasted — the element is
+ * visible and the caller should not be asking why it is hidden. The function still returns a
+ * correct `false` in that case (it reaches the root without finding a hidden cause), but callers
+ * should guard the call.
+ */
+export function isHiddenByAriaOnly(el: Element): boolean {
+  let foundAriaHidden = false;
+  let current: Element | null = el;
+  while (current !== null) {
+    if ('true' === current.getAttribute('aria-hidden')) foundAriaHidden = true;
+    if (cssHidden(current)) return false;
+    current = parentAcrossShadowBoundary(current);
+  }
+  return foundAriaHidden;
 }
 
 const MAX_TEXT = 80;

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { runQuery } from './query.js';
+import { matchQuery, runQuery } from './query.js';
 import { refs } from './addressing/refs.js';
 
 /**
@@ -68,5 +68,57 @@ describe('splitText hint only speaks for visible text', () => {
     document.body.innerHTML = '<div id="row"><span>Move to </span><span>Repro Folder</span></div>';
     const r = runQuery({ text: 'Move to Repro Folder' });
     expect(r.hint?.splitText?.ref).toBeDefined();
+  });
+});
+
+/**
+ * Text inside an `aria-hidden` SVG is drawn on screen but removed from the accessibility tree.
+ * A plain "no match" sends an agent to debug an app that is working; the hint must name the
+ * exclusion so the agent knows WHY the text is invisible to the query.
+ */
+describe('ariaHiddenMatch hint names the accessibility exclusion (#1070)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('names the element when text exists only inside an aria-hidden subtree', () => {
+    document.body.innerHTML =
+      '<div data-slot="app-card-logo">' + '<svg aria-hidden="true"><text>F</text></svg>' + '</div>';
+    const r = matchQuery({ text: 'F' }, 'visible');
+    expect(r.hint?.ariaHiddenMatch).toBeDefined();
+    expect(r.hint?.ariaHiddenMatch?.text).toBe('F');
+  });
+
+  it('stays silent when the text is genuinely absent', () => {
+    document.body.innerHTML = '<div><p>Nothing here</p></div>';
+    const r = matchQuery({ text: 'F' }, 'visible');
+    expect(r.hint?.ariaHiddenMatch).toBeUndefined();
+  });
+
+  it('stays silent when the text is visible (not hidden at all)', () => {
+    document.body.innerHTML = '<div><span>F</span></div>';
+    const r = matchQuery({ text: 'F' }, 'visible');
+    expect(r.matched).toBe(true);
+    expect(r.hint).toBeUndefined();
+  });
+
+  it('stays silent when the text is hidden by display:none, not aria-hidden', () => {
+    document.body.innerHTML = '<div style="display: none"><span>F</span></div>';
+    const r = matchQuery({ text: 'F' }, 'visible');
+    expect(r.hint?.ariaHiddenMatch).toBeUndefined();
+  });
+
+  it('stays silent when CSS also hides an ancestor above the aria-hidden node', () => {
+    document.body.innerHTML =
+      '<div style="display: none"><svg aria-hidden="true"><text>F</text></svg></div>';
+    const r = matchQuery({ text: 'F' }, 'visible');
+    expect(r.hint?.ariaHiddenMatch).toBeUndefined();
+  });
+
+  it('stays silent when the state filter is not visibility-related', () => {
+    document.body.innerHTML =
+      '<div data-slot="app-card-logo">' + '<svg aria-hidden="true"><text>F</text></svg>' + '</div>';
+    const r = matchQuery({ text: 'F' }, 'checked');
+    expect(r.hint?.ariaHiddenMatch).toBeUndefined();
   });
 });

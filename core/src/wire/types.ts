@@ -208,6 +208,13 @@ export interface QueryEmptyHint {
    * stays exact; the miss answers.
    */
   nameNearMiss?: string[];
+  /**
+   * Present only when a TEXT search missed and a matching element exists inside an `aria-hidden`
+   * subtree — drawn on screen but removed from the accessibility tree. Reporting that as a plain
+   * "no match" sends an agent to debug an app that is working; naming the exclusion tells it why
+   * the text is invisible to the query.
+   */
+  ariaHiddenMatch?: ElementDescriptor;
 }
 
 /** Result of the QUERY command / reticle_query tool. `hint` present ONLY on zero matches. */

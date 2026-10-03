@@ -18,6 +18,7 @@ import {
   getRole,
   describe,
   getStates,
+  isHiddenByAriaOnly,
   isInViewport,
   isVisible,
 } from './a11y.js';
@@ -542,7 +543,7 @@ export function matchQuery(
     // PREDICATE uses, so without this a failed assertion was a dead end ("no element matched") while
     // the identical failure through reticle_query listed the testids that ARE present. Computed only
     // when there is nothing to report, so the hot path pays nothing.
-    ...(0 === filtered.length ? { hint: buildEmptyHint(query) } : {}),
+    ...(0 === filtered.length ? { hint: buildEmptyHint(query, state) } : {}),
   };
 }
 
@@ -699,7 +700,7 @@ function nameNearMisses(container: HTMLElement, query: ElementQuery): string[] {
 }
 
 /** Diagnostic hint for a zero-match query: what testids ARE present in the searched scope. */
-function buildEmptyHint(query: ElementQuery): QueryEmptyHint {
+function buildEmptyHint(query: ElementQuery, state?: ElementState): QueryEmptyHint {
   const container = resolveContainer(query.scope).container ?? document.body;
   const all = container.querySelectorAll(`[${TESTID_ATTR}]`);
   const present: string[] = [];
@@ -737,6 +738,15 @@ function buildEmptyHint(query: ElementQuery): QueryEmptyHint {
   }
   const near = nameNearMisses(container, query);
   if (near.length > 0) hint.nameNearMiss = near;
+  if (
+    wanted !== undefined &&
+    hint.splitText === undefined &&
+    (state === ElementState.VISIBLE || state === ElementState.IN_VIEWPORT)
+  ) {
+    const textCandidates = queryByText(container, wanted);
+    const ariaHidden = textCandidates.find((el) => !isVisible(el) && isHiddenByAriaOnly(el));
+    if (ariaHidden !== undefined) hint.ariaHiddenMatch = describe(ariaHidden);
+  }
   return hint;
 }
 
