@@ -339,11 +339,15 @@ describe('handing the dev server over', () => {
       const beat = join(dir, 'beat');
       writeFileSync(
         join(dir, 'chatty.cjs'),
-        `let i = 0;
+        `const fs = require('fs');
+         const beat = ${JSON.stringify(beat)};
+         let i = 0;
          setInterval(() => {
            i += 1;
            process.stdout.write('line ' + i + '\\n');
-           require('fs').writeFileSync(${JSON.stringify(beat)}, String(i));
+           // Publish a complete beat: a reader of writeFileSync's target can catch it truncated.
+           fs.writeFileSync(beat + '.next', String(i));
+           fs.renameSync(beat + '.next', beat);
          }, 20);`,
       );
       const script = `
