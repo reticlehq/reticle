@@ -25,6 +25,7 @@ import {
   CdpRealInputProvider,
 } from '@reticlehq/server';
 import { waitForSession } from '../wait-for-session.mjs';
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 
 const SID = 'next-smoke';
 const APP = process.env.PRESS_FOCUS_URL ?? 'http://localhost:3100/';
@@ -52,7 +53,11 @@ const freePort = () =>
 console.log('\n=== A document press moves focus, through the real keyboard ===');
 
 const cdpPort = await freePort();
-const server = await start({ port: 4400, mcp: false });
+// The battery's bridge port, NOT the product's 4400 default. run-ci.sh starts next-smoke with
+// RETICLE_PORT=14400, and the app dials THAT — so a server on 4400 waits forever for a session
+// that can never arrive. Measured in CI: this spec failed with "session 'next-smoke' never
+// connected" on both attempts, while the spec that ran right after it connected to the same app.
+const server = await start({ port: TEST_BRIDGE_PORT, mcp: false });
 // `--remote-debugging-port` so the SERVER's own CdpRealInputProvider can attach to this browser.
 // Playwright drives the same browser over its own pipe; the two channels do not conflict.
 const browser = await chromium.launch({
