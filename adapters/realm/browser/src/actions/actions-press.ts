@@ -27,6 +27,20 @@ export interface ModifierFlags {
 }
 
 /**
+ * Every flag `ModifierFlags` carries, spelled once.
+ *
+ * Read where a flag has to be found from the SHAPE of the interface rather than from a key or an
+ * alias — seeding the hold count from `args.modifiers`, below. A literal list there would silently
+ * miss a fifth flag the day one is added, and the symptom would be a flag that clears early.
+ */
+const MODIFIER_FLAG_KEYS: readonly (keyof ModifierFlags)[] = [
+  'metaKey',
+  'ctrlKey',
+  'shiftKey',
+  'altKey',
+];
+
+/**
  * Which flag a modifier NAME sets. One table for both spellings of "a modifier is down":
  * `args.modifiers`, which is a fixed set of flags for the whole press, and `args.keys`, which is a
  * SEQUENCE the flags change partway through. Two tables would let `Ctrl` mean one thing in
@@ -242,7 +256,7 @@ export async function pressCombo(
   };
 
   /*
-   * How many times `keys` has pressed each flag, so a flag clears only on its LAST release.
+   * How many times each flag has been pressed, so a flag clears only on its LAST release.
    *
    * Aliases make this necessary rather than tidy: `Control` and `Ctrl` are ONE flag, so
    * `{ keys: ['Control', 'k', 'Ctrl'] }` is that flag pressed twice. Releasing in reverse puts
@@ -250,8 +264,18 @@ export async function pressCombo(
    * every event after it reporting `ctrlKey: false`, which is a state no keyboard produces and an
    * app's keyup bookkeeping reads as "the modifier came up". Counting presses and clearing at zero
    * is what a real keyboard's own state machine does.
+   *
+   * The count starts at the flags `args.modifiers` already turned on, and that is the same rule
+   * rather than a special case. `modifiers` is the fixed set for the WHOLE press — nothing in this
+   * function ever releases it — so a flag it named is held from before the first keydown and stays
+   * held past the last keyup. Starting the count at zero made `{ modifiers: ['Shift'], keys:
+   * ['Shift', 'Tab'] }` clear Shift at its own keyup, contradicting the argument that had just
+   * declared it held for the gesture.
    */
   const presses = new Map<keyof ModifierFlags, number>();
+  for (const flag of MODIFIER_FLAG_KEYS) {
+    if (held[flag]) presses.set(flag, 1);
+  }
   const pressFlag = (flag: keyof ModifierFlags): void => {
     presses.set(flag, (presses.get(flag) ?? 0) + 1);
     held[flag] = true;

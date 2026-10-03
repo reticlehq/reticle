@@ -225,4 +225,33 @@ describe('a modifier named in keys sets its own flag (#1294)', () => {
       'Control ctrl=false shift=false',
     ]);
   });
+
+  /**
+   * The same modifier named in BOTH spellings at once, `modifiers` and `keys`.
+   *
+   * `modifiers` is the fixed set that stays true for the WHOLE press — its flags are never released,
+   * which the composing test above pins: Shift is still true on the very last keyup. Naming that same
+   * flag in `keys` therefore has to leave it true when the `keys` release arrives, or the release
+   * contradicts the argument that declared it for the whole gesture.
+   *
+   * Counting only the presses that came from `keys` made the first release drop the count to zero and
+   * clear a flag `modifiers` still held. `{ modifiers: ['Shift'], keys: ['Shift', 'Tab'] }` ended
+   * with `shiftKey: false` on Shift's own keyup — a state no keyboard produces, and the opposite of
+   * what the caller asked for.
+   */
+  it('does not let a keys release clear a flag args.modifiers declared for the whole press', async () => {
+    const { el, seen } = record();
+    await executeAction(refs.refFor(el), ActionType.PRESS, {
+      modifiers: ['Shift'],
+      keys: ['Shift', 'Tab'],
+    });
+    // Shift stays true throughout, its own keyup included: `modifiers` holds it for the gesture and
+    // `keys` merely names the same flag a second time.
+    expect(seen).toEqual([
+      'Shift ctrl=false shift=true',
+      'Tab ctrl=false shift=true',
+      'Tab ctrl=false shift=true',
+      'Shift ctrl=false shift=true',
+    ]);
+  });
 });
