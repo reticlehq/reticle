@@ -97,6 +97,16 @@ function answerAs(projectId: string | undefined, entries: readonly unknown[]): {
 /** The common case: the server answered about the project that was asked about. */
 const answering = (entries: readonly unknown[]): { urls: string[] } => answerAs(LINKED, entries);
 
+/** A server whose body is not the `{ projectId, entries }` envelope at all — a shape we do not know. */
+function answerWith(body: unknown): { urls: string[] } {
+  const urls: string[] = [];
+  vi.stubGlobal('fetch', (url: string) => {
+    urls.push(url);
+    return Promise.resolve({ status: 200, json: () => Promise.resolve(body) });
+  });
+  return { urls };
+}
+
 describe('which project a shared-memory read is about', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -210,5 +220,22 @@ describe('which project a shared-memory read is about', () => {
     );
 
     expect(result.ok && result.known.map((k) => k.statement)).toEqual(['readable']);
+  });
+
+  /**
+   * The envelope is this project's, and `entries` is not a list.
+   *
+   * That is NOT `UNREACHABLE`, which the reader used to answer here. The workspace was reached and
+   * it answered — and that reason's advice ("try again, or check the link") sends the agent to retry
+   * a response whose SHAPE will not change on the second attempt, and to doubt a link that is fine.
+   * Every reason in this union is the next thing to DO, so a shape we do not know needs its own.
+   */
+  it('reports a response it cannot read entries out of as unreadable, not unreachable', async () => {
+    answerWith({ projectId: LINKED, entries: 'not-a-list' });
+
+    const result = await readProjectMemory(linked(), APP_RETICLE, HOME, {}, { limit: 10 });
+
+    expect(result.ok).toBe(false);
+    expect(result.ok ? null : result.reason).toBe(MemoryUnavailable.UNREADABLE);
   });
 });

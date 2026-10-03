@@ -41,6 +41,16 @@ export const MemoryUnavailable = {
    * this is" is something it must not, and an empty list reports the first while meaning the second.
    */
   UNVERIFIED: 'unverified',
+  /**
+   * The server answered about THIS project, and the body is a shape this build cannot read entries
+   * out of — no `entries` field, or one that is not a list.
+   *
+   * Apart from `UNREACHABLE` on purpose. That reason's advice is "try again, or check the link", and
+   * neither applies: the workspace WAS reached, its answer IS this project's, and the shape will be
+   * the same on the second attempt. Sending an agent to retry it costs a round trip and teaches it
+   * to distrust a link that is fine, which is what a reason is for.
+   */
+  UNREADABLE: 'unreadable',
 } as const;
 export type MemoryUnavailable = (typeof MemoryUnavailable)[keyof typeof MemoryUnavailable];
 
@@ -127,7 +137,7 @@ export async function readProjectMemory(
       return {
         ok: false,
         reason: isReadableMemoryScope(scopeOfMemoryResponse(body, cloud.projectId))
-          ? MemoryUnavailable.UNREACHABLE // scoped fine, but no readable `entries` — a shape we do not know
+          ? MemoryUnavailable.UNREADABLE // scoped fine, but no readable `entries` — a shape we do not know
           : MemoryUnavailable.UNVERIFIED,
       };
     }
