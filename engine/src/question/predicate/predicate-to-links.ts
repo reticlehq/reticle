@@ -26,6 +26,7 @@ export function predicateToExpectedLinks(predicate: Predicate): ExpectedLink[] {
               kind: ConsequenceKind.NET,
               urlContains: predicate.urlContains,
               ...(predicate.status === undefined ? {} : { status: predicate.status }),
+              ...(predicate.method === undefined ? {} : { method: predicate.method }),
             },
           ];
     case PredicateKind.STATE: {

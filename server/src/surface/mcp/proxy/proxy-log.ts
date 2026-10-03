@@ -7,14 +7,13 @@
  */
 
 import { appendFileSync, mkdirSync, renameSync, statSync, truncateSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { ReticleDir } from '@reticlehq/core';
 import { log } from '@/log.js';
 import {
   MAX_DAEMON_LOG_BYTES,
   recoverOversizedLog,
   rotateDaemonLog,
+  reticleStateHome,
 } from '@/command/daemon/daemon.js';
 
 /**
@@ -103,7 +102,7 @@ export function setProxyLogPort(port: number): void {
 /** The proxy's own log file, so a silent drop leaves a readable trace the agent can go read. */
 export function proxyLogPath(port: number | undefined = logPort): string {
   const name = port === undefined ? 'mcp-proxy.log' : `proxy-${String(port)}.log`;
-  return join(homedir(), ReticleDir.ROOT, name);
+  return join(reticleStateHome(), name);
 }
 
 /**
@@ -121,7 +120,7 @@ export function proxyLogPath(port: number | undefined = logPort): string {
 export function proxyLog(event: string, fields: Record<string, unknown> = {}): void {
   log(event, fields);
   try {
-    const dir = join(homedir(), ReticleDir.ROOT);
+    const dir = reticleStateHome();
     mkdirSync(dir, { recursive: true });
     // WITH A TIMESTAMP. This file is the only record of an outage that survives the session, and
     // without one it cannot answer the two questions anyone brings to it: when did this happen, and

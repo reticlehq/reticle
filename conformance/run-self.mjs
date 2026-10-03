@@ -36,13 +36,15 @@
 // makes every implementation conformant by construction.
 
 import { chromium } from 'playwright';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { createConnection } from 'node:net';
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
 import { start, WebRealm, conformanceClient } from '@reticlehq/server';
 import { driveAll } from './drive.mjs';
-import { WEB_HANDOFF } from './handoff.mjs';
+import { writeWebHandoff } from './handoff.mjs';
 import { BENCH_APP_CHANNELS, BENCH_APP_SUBJECT, plantUrl } from './subjects/bench-app.mjs';
 import { Profile } from './scenarios/index.mjs';
 
@@ -54,7 +56,7 @@ import { Profile } from './scenarios/index.mjs';
  * but wait for somebody else's dev server to stop. The refusal below still applies to whatever
  * ports are chosen, so moving the run cannot quietly reintroduce the collision it is avoiding.
  */
-const PORT = Number(process.env['CONFORMANCE_BRIDGE_PORT'] ?? 4400);
+const PORT = Number(process.env['CONFORMANCE_BRIDGE_PORT'] ?? 15401);
 const APP_PORT = Number(process.env['CONFORMANCE_APP_PORT'] ?? 4318);
 const API_PORT = Number(process.env['CONFORMANCE_API_PORT'] ?? 8787);
 const APP = `http://localhost:${String(APP_PORT)}`;
@@ -204,6 +206,13 @@ function dishonestIfSelfTesting(client) {
 }
 
 async function main() {
+  const state = mkdtempSync(join(tmpdir(), 'reticle-web-conformance-'));
+  const token = randomBytes(24).toString('hex');
+  writeFileSync(join(state, 'pairing-token'), token, { mode: 0o600 });
+  process.env.RETICLE_STATE_DIR = state;
+  process.env.RETICLE_PAIRING_TOKEN_DIR = state;
+  process.env.VITE_RETICLE_TOKEN = token;
+  process.env.RETICLE_TELEMETRY = '0';
   // Declared out here and started INSIDE the try, so the finally can reach whatever got as far
   // as existing.
   //
@@ -381,8 +390,10 @@ async function main() {
   // two agree rather than only that each is internally fine. Written unconditionally and to a
   // temp path: it is a handoff between two processes in one `gate:conformance`, not an
   // artifact anybody keeps.
-  mkdirSync(dirname(WEB_HANDOFF), { recursive: true });
-  writeFileSync(WEB_HANDOFF, JSON.stringify({ at: Date.now(), outcomes: report.outcomes ?? {} }));
+  writeWebHandoff(
+    { at: Date.now(), outcomes: report.outcomes ?? {} },
+    process.argv.includes('--self-test'),
+  );
 
   const failed = report.failed.length;
   if (process.argv.includes('--self-test')) {

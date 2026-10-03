@@ -1,3 +1,4 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -13,4 +14,18 @@ import { join } from 'node:path';
  * is not writable by anybody who could not already edit the code being tested. Gitignored, because
  * the comment at the write site is still true — it is a handoff, not an artifact anybody keeps.
  */
-export const WEB_HANDOFF = join(import.meta.dirname, '.handoff', 'web.json');
+const DIRECTORY = join(import.meta.dirname, '.handoff');
+const handoffFile = (selfTest, directory) =>
+  join(directory, selfTest ? 'web-control.json' : 'web.json');
+
+// The self-test deliberately lies. Keeping it in the real run's file made a subsequent honest
+// desktop run report disagreements against the planted lies instead of the implementation.
+export function writeWebHandoff(report, selfTest, directory = DIRECTORY) {
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(handoffFile(selfTest, directory), JSON.stringify(report));
+}
+
+export function readWebHandoff(selfTest, directory = DIRECTORY) {
+  const file = handoffFile(selfTest, directory);
+  return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : undefined;
+}

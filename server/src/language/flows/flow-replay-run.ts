@@ -77,8 +77,11 @@ export function latestRecordedFlow(
 export { flowErrorMessage } from './flow-result.js';
 import { flowErrorMessage } from './flow-result.js';
 
+/** Replay statuses that represent an actual recorded run in project.json. */
+type RecordedReplayStatus = Exclude<ReplayStatus, typeof ReplayStatus.UNVERIFIABLE>;
+
 /** Map the wire ReplayStatus onto the persisted RunStatus (ok→pass). */
-function replayToRunStatus(status: ReplayStatus): RunStatus {
+function replayToRunStatus(status: RecordedReplayStatus): RunStatus {
   switch (status) {
     case ReplayStatus.OK:
       return RunStatus.PASS;
@@ -97,7 +100,7 @@ function replayToRunStatus(status: ReplayStatus): RunStatus {
 async function recordReplayRun(
   deps: ToolDeps,
   name: string,
-  status: ReplayStatus,
+  status: RecordedReplayStatus,
   driftSteps: number,
   durationMs: number,
   projectId: ProjectId | undefined,
@@ -225,8 +228,8 @@ async function consultProjectMemory(
  * anchor simply isn't on this page yet. Detect that so the decision says "navigate there first"
  * instead of a mystifying "a step no longer matches". Returns undefined when the routes agree or the
  * current route is unobservable — never a false alarm. Replay normally never gets here on a
- * wrong page (arriveAtStartPath navigates before step 1); this is the fallback for when that
- * navigation was refused or the SDK never reconnected in the window.
+ * wrong page (arriveAtStartPath navigates before step 1); this is the fallback when navigation
+ * was refused. A page that never reconnected is reported as unverifiable before step 1.
  */
 export function startPathMismatchHint(
   flow: FlowFile,
@@ -250,36 +253,28 @@ const REAL_ARRIVAL_CLOCK: ArrivalClock = {
 
 /**
  * The session `oldId` denotes right now — itself, or the tombstone successor `resolve` rebinds to
- * after a full-document navigation — but only once it actually sits on `target`. Undefined while
- * the tab is still travelling (or in the gap between teardown and the successor's HELLO, when
- * `resolve` throws). Keyed to the navigated tab's own identity on purpose: matching "any session at
- * the target page" would happily hand replay an unrelated tab that was already sitting there.
+ * after a full-document navigation. A different instance proves the SDK reconnected even when the
+ * app redirected to another route. Keyed to the navigated tab's own identity on purpose: matching
+ * "any session at the target page" could hand replay an unrelated tab already sitting there.
  */
 function arrivedSuccessor(
   sessions: SessionManager,
   oldId: string,
   target: string,
-  /** The handle that issued the navigation, when only a genuinely new one counts as arrival. */
-  mustReplace: object | undefined,
-): Session | undefined {
+  /** The handle that issued the navigation. */
+  issuedBy: object,
+  isReload: boolean,
+): { session: Session; matches: boolean } | undefined {
   try {
     const candidate = sessions.resolve(oldId);
-    /*
-     * A RELOAD lands on the path it left, so the path cannot tell the successor from the tab that
-     * is still tearing down — `resolve(oldId)` answers with the dying one while it is registered,
-     * which looks like instant arrival and hands replay a socket that will never answer again.
-     *
-     * The discriminator is the OBJECT, not the id. A leased tab carries its identity across a page
-     * load (that is what the identity params are for), so it reconnects under the SAME id — waiting
-     * for a new id there waits forever, and the first lease this was tried on timed out at step 1
-     * on a tab that was perfectly healthy. `SessionManager.add` replaces the instance on every
-     * reconnect, so a different instance is exactly "the socket came back".
-     *
-     * A navigation to a different route has the path as its discriminator and does not need this.
-     */
-    if (mustReplace !== undefined && candidate === mustReplace) return undefined;
+    // A reload can return the dying handle on the same path. Compare instances, not ids: a leased
+    // tab can reconnect under the same id. A redirect counts only on a new instance.
+    if (isReload && candidate === issuedBy) return undefined;
     const path = currentPathOf(candidate);
-    return path !== undefined && samePath(path, target) ? candidate : undefined;
+    if (path === undefined) return undefined;
+    const matches = samePath(path, target);
+    // A still-connected old tab on the wrong route is not a redirected successor.
+    return matches || candidate !== issuedBy ? { session: candidate, matches } : undefined;
   } catch {
     return undefined;
   }
@@ -322,6 +317,10 @@ export interface StartPathArrival {
   session?: Session;
   /** Set when the RESET itself is why step 1 cannot start — the reason a step-1 red is not drift. */
   resetCost?: string;
+  /** Set when the tab was sent away and nothing reconnected: the old handle will never answer (#1129). */
+  lost?: string;
+  /** A live successor arrived on a different route, so replay must not use the dead old handle. */
+  redirected?: string;
 }
 
 /**
@@ -341,10 +340,9 @@ export interface StartPathArrival {
  * A full-page load tears down the session socket, so the navigation must happen here — before any
  * step runs — and the replay continues on the session the SDK reconnects as (found via the same
  * tombstone rebind that lets `resolve(oldId)` answer after any navigation). Best-effort by design:
- * when the flow carries no startPath, the current route is unobservable, the navigation is refused,
- * or the SDK never reconnects in the window, replay proceeds on the connected session as before —
- * with startPathMismatchHint turning any resulting drift into an actionable next move rather than a
- * mystifying one.
+ * when the flow carries no startPath, the current route is unobservable, or navigation is refused,
+ * replay proceeds on the connected session. A missing successor stops before step 1; a redirect
+ * continues on the live successor with a route-specific hint.
  */
 export async function arriveAtStartPath(
   sessions: SessionManager,
@@ -382,7 +380,7 @@ export async function arriveAtStartPath(
   // gone after is the reload's doing, not the flow file's. Without this, an app holding its session
   // in memory comes back signed out and step 1 blames a component that is completely fine.
   const resolvedBefore = here && (await firstStepResolvesHere(session, flow));
-  const arrived = await navigateAndAwait(
+  const outcome = await navigateAndAwait(
     sessions,
     session,
     destination,
@@ -391,7 +389,23 @@ export async function arriveAtStartPath(
     clock,
     here,
   );
-  if (arrived === undefined) return {};
+  if ('lost' === outcome.kind) {
+    return {
+      lost:
+        `replay ${here ? 'reloaded' : 'navigated to'} ${target} before step 1 and no page was connected ` +
+        `after ${String(timeoutMs)}ms, so the session it was driving is gone and nothing ran. A slow ` +
+        `or backgrounded tab can take longer to come back: bring it to the front and replay`,
+    };
+  }
+  if ('refused' === outcome.kind) return {};
+  if ('redirected' === outcome.kind) {
+    const path = currentPathOf(outcome.session) ?? 'another route';
+    return {
+      session: outcome.session,
+      redirected: `replay ${here ? 'reloaded' : 'navigated to'} ${target} before step 1, but the tab reconnected on ${path}. Check the redirect or sign in before replaying`,
+    };
+  }
+  const arrived = outcome.session;
   if (!resolvedBefore || (await firstStepResolvesHere(arrived, flow))) return { session: arrived };
   return {
     session: arrived,
@@ -430,6 +444,13 @@ function resetCostHint(flow: FlowFile, target: string): string {
  * to move and this decides how, which is also why the deliberate short-circuits live up there and
  * not in here: a caller that has already decided it must move should not have to argue with them.
  */
+/** How a navigate ended: target, redirect, refusal (untouched tab), or no successor. */
+export type NavigateOutcome =
+  | { kind: 'arrived'; session: Session }
+  | { kind: 'redirected'; session: Session }
+  | { kind: 'refused' }
+  | { kind: 'lost' };
+
 export async function navigateAndAwait(
   sessions: SessionManager,
   session: {
@@ -444,29 +465,28 @@ export async function navigateAndAwait(
   clock: ArrivalClock = REAL_ARRIVAL_CLOCK,
   /** True when the destination is the page we are already on — see `arrivedSuccessor`. */
   isReload: boolean = false,
-): Promise<Session | undefined> {
+): Promise<NavigateOutcome> {
   // A leased tab is addressed by URL params, so navigating without them would strand the lease.
   const url = carryReticleIdentity(session.url, destination);
   try {
     const outcome = await session.command(ReticleCommand.NAVIGATE, { url });
-    if (!outcome.ok || true !== asRecord(outcome.result)['ok']) return undefined;
+    if (!outcome.ok || true !== asRecord(outcome.result)['ok']) return { kind: 'refused' };
   } catch (error: unknown) {
     // A navigation that unloads the page rejects the very command that asked for it — the transport
     // dies with the document. Reading that as "the navigate failed" skipped the arrival poll below
     // and left replay driving a handle that could never answer again, which is how a flow with a
     // startPath died at step 1 on an app that had loaded perfectly. Anything else is a real refusal.
-    if (!isDocumentGoneError(error)) return undefined;
+    if (!isDocumentGoneError(error)) return { kind: 'refused' };
   }
   const deadline = clock.now() + timeoutMs;
   for (;;) {
-    const arrived = arrivedSuccessor(
-      sessions,
-      session.id,
-      expectedPath,
-      isReload ? session : undefined,
-    );
-    if (arrived !== undefined) return arrived;
-    if (clock.now() >= deadline) return undefined;
+    const arrived = arrivedSuccessor(sessions, session.id, expectedPath, session, isReload);
+    if (true === arrived?.matches) return { kind: 'arrived', session: arrived.session };
+    // A live redirect is a different result from no SDK reconnection at all.
+    if (clock.now() >= deadline)
+      return arrived === undefined
+        ? { kind: 'lost' }
+        : { kind: 'redirected', session: arrived.session };
     await clock.sleep(START_PATH_POLL_MS);
   }
 }
@@ -561,7 +581,7 @@ async function firstUnmetPrecondition(
 export function lostDocumentResult(name: string, lost: DocumentLostDuringReplay): FlowReplayResult {
   return {
     name,
-    status: ReplayStatus.OK,
+    status: ReplayStatus.UNVERIFIABLE,
     steps: lost.steps,
     unverifiable: {
       reason:
@@ -628,10 +648,21 @@ export async function replayNamedFlow(
   // on the session the SDK reconnects as. When arrival can't be confirmed, replay proceeds on the
   // connected session — and the hint below turns the wrong-page drift into an actionable next move.
   const arrival = await arriveAtStartPath(deps.sessions, connected, loaded.value);
+  // Continuing on `connected` after the tab left timed every step out on a dead handle (#1129).
+  if (arrival.lost !== undefined) {
+    const reason = arrival.lost;
+    return {
+      name: loaded.value.name,
+      status: ReplayStatus.UNVERIFIABLE,
+      steps: [],
+      unverifiable: { reason },
+    };
+  }
   const session = arrival.session ?? connected;
   // The reset's own cost outranks the wrong-page hint: if the reload is why step 1 cannot start,
   // "navigate there and replay" is advice that would do the same thing again.
-  const startPathHint = arrival.resetCost ?? startPathMismatchHint(loaded.value, session);
+  const startPathHint =
+    arrival.redirected ?? arrival.resetCost ?? startPathMismatchHint(loaded.value, session);
   // Floor the success oracle at the start of THIS replay so a stale signal from a prior run
   // in the same session can't fake a pass.
   const replayFloor = session.elapsed();
@@ -677,7 +708,7 @@ export async function replayNamedFlow(
     const names = missing.map((each) => each.envKey).join(', ');
     return {
       name: replayable.name,
-      status: ReplayStatus.OK,
+      status: ReplayStatus.UNVERIFIABLE,
       steps: [],
       unverifiable: {
         reason:
@@ -698,7 +729,7 @@ export async function replayNamedFlow(
   if (unmet !== undefined) {
     return {
       name: replayable.name,
-      status: ReplayStatus.OK,
+      status: ReplayStatus.UNVERIFIABLE,
       steps: [],
       unverifiable: { reason: unmet },
     };

@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/engine` + `@reticlehq/server` — a `202 Accepted` decides a verdict only when it is the write the claim depends on.** A 202 anywhere in the window made every verdict `unknown`: an analytics beacon, a GET poll, or the claim's own accepted write. The filter now drops third-party and declared-background traffic and reads, and exempts a 202 that the claim's proven evidence asserts — read from `provenExpectedLinks`, so a 200 branch of an `anyOf` cannot exempt the 202 that also fired. A first-party mutating 202 on a text or state claim still grades `outcome_pending`. Closes [#1120](https://github.com/reticlehq/reticle/issues/1120).

@@ -128,7 +128,7 @@ describe('act_and_wait and assert see the same evidence', () => {
 
   it('act_and_wait still passes the action and its effect — prior is added, not swapped', () => {
     expect(act).toMatch(/findContradictions\([\s\S]{0,450}action: acted/);
-    expect(act).toMatch(/findContradictions\([\s\S]{0,450}session\.lastAct\.effect\(\)/);
+    expect(act).toMatch(/findContradictions\([\s\S]{0,550}session\.lastAct\.effect\(\)/);
   });
 
   /**
@@ -143,6 +143,12 @@ describe('act_and_wait and assert see the same evidence', () => {
       expect(file).toMatch(/renderProved:/);
       expect(file).toMatch(/namedNetIsInFlight\(/);
       expect(file).toMatch(/namedRequestInFlight:/);
+    }
+  });
+
+  it('both paths pass predicate-derived URLs to contradiction detection (#1235)', () => {
+    for (const file of [act, assert]) {
+      expect(file).toMatch(/findContradictions\([\s\S]*?namedNetUrls: declared\.netUrls/);
     }
   });
 

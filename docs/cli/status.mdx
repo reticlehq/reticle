@@ -45,7 +45,11 @@ A session's parenthesised notes are the ones that explain an answer you would ot
 
 ### `--json`
 
-The same facts as one event line on stderr, for a caller that parses rather than reads:
+The same facts as one JSON line on stdout, so a caller can pipe it to a parser:
+
+```bash
+npx @reticlehq/server status --json | jq '.running, .sessionCount'
+```
 
 ```json
 {

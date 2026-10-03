@@ -4,7 +4,7 @@ description: 'Exercise local, unpublished Reticle changes in a real external app
 icon: box
 ---
 
-To test unpublished `@reticlehq/*` changes in a real external app, publish the workspace to a local Verdaccio with `bash scripts/local-registry.sh`, then point that app's `.npmrc` at `http://localhost:4873/` as the **default** registry, not scoped to `@reticlehq`, for the reason in step 2. That is the whole procedure; the rest of this page is the detail.
+To test unpublished `@reticlehq/*` changes in a real external app, publish the workspace to a local Verdaccio with `bash scripts/local-registry.sh`, then point that app's `.npmrc` at `http://127.0.0.1:4873/` as the **default** registry, not scoped to `@reticlehq`, for the reason in step 2. That is the whole procedure; the rest of this page is the detail.
 
 > **For normal use, Reticle is on public npm.** Just `npm i -D @reticlehq/react @reticlehq/vite-plugin` (see [Getting Started](getting-started.md)). You only need this guide to test **local, unpublished changes** to the Reticle packages in a real external app before they ship.
 
@@ -18,7 +18,7 @@ From the Reticle repo:
 bash scripts/local-registry.sh
 ```
 
-This starts a **fresh** Verdaccio on `http://localhost:4873`, creates a user/token, and publishes all `@reticlehq/*` packages there at the current workspace version:
+This starts a **fresh** Verdaccio on `http://127.0.0.1:4873`, creates a user/token, and publishes all `@reticlehq/*` packages there at the current workspace version:
 
 | Package | What you install it for |
 | --- | --- |
@@ -40,7 +40,7 @@ For a browser app, install `@reticlehq/react` plus the build plugin for your fra
 In your app's project root, add an `.npmrc` pointing the **default** registry at Verdaccio. Verdaccio proxies npm for everything it does not hold, so the rest of your dependencies still resolve normally:
 
 ```ini
-registry=http://localhost:4873/
+registry=http://127.0.0.1:4873/
 ```
 
 **A scope-only line does not work, and fails in a way that reads as a Reticle bug.** `@reticlehq/core` depends on **`open-verification`**, the protocol package, which is deliberately _unscoped_ because the protocol is not ours to namespace. With `@reticlehq:registry=…` npm sends that one request to npmjs and the install dies:
@@ -80,7 +80,7 @@ Then follow [Getting Started](getting-started.md): embed `reticle.connect()` (de
   "mcpServers": {
     "reticle": {
       "command": "npx",
-      "args": ["--registry", "http://localhost:4873/", "@reticlehq/server", "mcp"],
+      "args": ["--registry", "http://127.0.0.1:4873/", "@reticlehq/server", "mcp"],
     },
   },
 }
@@ -106,7 +106,7 @@ Synthetic events can't trigger native `onMouseEnter`/pointer state (hover menus,
 - **Easiest (`reticle drive`):** Reticle launches its own scriptable, headless-capable browser at your app URL (no flags to juggle):
 
   ```bash
-  npx --registry http://localhost:4873/ @reticlehq/server drive http://localhost:4310   # add --headed to watch
+  npx --registry http://127.0.0.1:4873/ @reticlehq/server drive http://localhost:4310   # add --headed to watch
   ```
 
 - **Or attach to your own browser:** launch it with `--remote-debugging-port=9222`, then point the MCP server at it via `env`:
@@ -117,7 +117,7 @@ Synthetic events can't trigger native `onMouseEnter`/pointer state (hover menus,
     "mcpServers": {
       "reticle": {
         "command": "npx",
-        "args": ["--registry", "http://localhost:4873/", "@reticlehq/server", "mcp"],
+        "args": ["--registry", "http://127.0.0.1:4873/", "@reticlehq/server", "mcp"],
         "env": { "RETICLE_CDP_URL": "http://localhost:9222" },
       },
     },

@@ -3,7 +3,7 @@ name: verify-form-validation
 description: 'Check that a form actually rejects bad input: the error message renders, the submit button stays disabled, and no request goes out. Use when validation logic was written but never driven, when a "required" or pattern check looks right on screen but was never proven, or when a bug report says the form submitted invalid data anyway.'
 license: Apache-2.0
 metadata:
-  version: 3.4.0
+  version: 3.5.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---

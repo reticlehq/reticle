@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { Verified } from '@reticlehq/core';
+import { ContradictionKind, EventType, REQUEST_SHAPE_FIELD, Verified } from '@reticlehq/core';
 import { VERIFY_CHANGE_TOOLS } from './verify-change-tools.js';
 import { FLOW_TOOLS } from './flow-tools.js';
 import { ReticleTool } from '@reticlehq/core';
@@ -207,6 +207,41 @@ describe('reticle_verify_change — a green suite is not the end of the check', 
     expect(String(result['because'])).toContain('ui-advanced-request-failed');
     affectedSpy.mockRestore();
     contradictionSpy.mockRestore();
+  });
+
+  it('reports an unrelated duplicate POST without failing a passing replay', async () => {
+    const verify = FLOW_TOOLS.find((t) => t.name === ReticleTool.FLOW_VERIFY);
+    if (verify === undefined) throw new Error('flow_verify missing');
+    const verifySpy = vi.spyOn(verify, 'handler').mockResolvedValue(passingSuite);
+    const affectedSpy = vi
+      .spyOn(await import('./change/flow-sources.js'), 'affectedSavedFlows')
+      .mockReturnValue({ affected: ['checkout'], unknownProvenance: [] });
+    const events = [10, 50].map((t) => ({
+      type: EventType.NET_REQUEST,
+      t,
+      data: {
+        method: 'POST',
+        url: 'https://app.test/api/background',
+        status: 200,
+        ok: true,
+        [REQUEST_SHAPE_FIELD]: 'a1b2c3d4',
+      },
+    }));
+    events.push({ type: EventType.DOM_TEXT, t: 70, data: { text: 'Saved' } } as never);
+
+    const result = (await tool.handler(sessionWith(events, '', []), {
+      files: ['src/Checkout.tsx'],
+    })) as Record<string, unknown>;
+
+    expect(result['verified']).toBe(Verified.YES);
+    expect(result['measured']).toContain('contradictions');
+    expect(result['contradictions']).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: ContradictionKind.DUPLICATE_REQUEST_UNRELATED }),
+      ]),
+    );
+    affectedSpy.mockRestore();
+    verifySpy.mockRestore();
   });
 
   it('reports UNKNOWN when a contradiction appeared only in flows it cannot tie to the change', async () => {

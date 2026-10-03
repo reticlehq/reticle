@@ -479,7 +479,8 @@ describe('shipped docs never name a tool a reader cannot call', () => {
   });
 
   /**
-   * A runnable shell block must never assume the `reticle` bin is on the reader's PATH.
+   * A runnable shell block must never assume the `reticle` bin is on the reader's PATH, except
+   * in the README after its installer has explicitly installed the bin and checked that PATH.
    *
    * The reader of these pages installed nothing: they arrived from a paste-URL or a registry and
    * reach for `npx`. A bare `reticle telemetry disable` in a bash fence is a command that either
@@ -505,18 +506,24 @@ describe('shipped docs never name a tool a reader cannot call', () => {
       ...skillFiles(),
     ]) {
       let fence: string | null = null;
-      readFileSync(file, 'utf8')
-        .split('\n')
-        .forEach((line, i) => {
-          const open = /^\s*```(\w*)/.exec(line);
-          if (open) {
-            fence = null === fence ? (open[1] ?? '') : null;
-            return;
-          }
-          if (null === fence || !RUNNABLE.has(fence)) return;
-          if (/^\s*(\$ )?reticle\s+[a-z]/.test(line))
-            bare.push(`${file.replace(REPO, '')}:${i + 1}: ${line.trim()}`);
-        });
+      const lines = readFileSync(file, 'utf8').split('\n');
+      const readmeInstaller =
+        file === join(REPO, 'README.md')
+          ? lines.findIndex((line) => line.includes('install/install.sh | sh'))
+          : -1;
+      lines.forEach((line, i) => {
+        const open = /^\s*```(\w*)/.exec(line);
+        if (open) {
+          fence = null === fence ? (open[1] ?? '') : null;
+          return;
+        }
+        if (null === fence || !RUNNABLE.has(fence)) return;
+        if (
+          /^\s*(\$ )?reticle\s+[a-z]/.test(line) &&
+          !(readmeInstaller >= 0 && i > readmeInstaller)
+        )
+          bare.push(`${file.replace(REPO, '')}:${i + 1}: ${line.trim()}`);
+      });
     }
     expect(
       bare,

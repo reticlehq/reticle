@@ -206,11 +206,18 @@ const DIRECTORY_ARGUMENT = /^[A-Za-z0-9_@.][A-Za-z0-9_@.-]*(?:\/[A-Za-z0-9_@.-]+
 function workflowPathsIn(line: string): string[] {
   // A YAML comment is prose; it names things rhetorically and none of it is executed.
   if (line.trim().startsWith('#')) return [];
+  // Artifact/cache paths are created or restored during the job, not checked-in command inputs.
+  if (/^\s*path:/.test(line)) return [];
   const directories = line.split(/\s+/).filter((token) => DIRECTORY_ARGUMENT.test(token));
   return [...pathsNamedIn(line), ...directories];
 }
 
 describe('a path named in a CI workflow still exists', () => {
+  it('does not require artifact and cache outputs to exist before a job runs', () => {
+    expect(workflowPathsIn('          path: artifacts/install-packages/')).toEqual([]);
+    expect(workflowPathsIn('        run: pnpm exec vitest src/missing/')).toContain('src/missing/');
+  });
+
   it('finds workflows, so a passing run cannot mean it read nothing', () => {
     expect(workflows().length).toBeGreaterThan(0);
     const named = workflows().flatMap((rel) =>

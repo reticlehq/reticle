@@ -51,6 +51,7 @@ import {
 } from '@/memory/journal/journal-query.js';
 import { type AmbientCounts } from '@reticlehq/engine/window/ambient.js';
 import { ObservedState, controlLabelsOf } from './facts/observed-state.js';
+import { DepartureNote } from './facts/departure-note.js';
 import {
   recordBrowserLatency,
   recordHudUse,
@@ -179,6 +180,7 @@ export class Session implements HandshakeFacts {
    * A hot update advances it inside the same document. An unstamped event never clears it.
    */
   #editEpoch: number | undefined;
+  readonly #departureNote = new DepartureNote();
 
   constructor(hello: HelloMessage, socket: WebSocket, clock: Clock) {
     this.id = hello.sessionId;
@@ -201,6 +203,9 @@ export class Session implements HandshakeFacts {
     return this.#clock() - this.#startedAt;
   }
 
+  departedTo(): string | undefined {
+    return this.#departureNote.read(this.elapsed());
+  }
   /** Mark that the SDK was just heard from. Called on every inbound message. */
   touch(): void {
     this.#lastSeenAt = this.#clock();
@@ -387,6 +392,7 @@ export class Session implements HandshakeFacts {
       const to = event.data['to'];
       if ('string' === typeof to && to.length > 0) this.url = to;
     }
+    this.#departureNote.observe(event, this.elapsed());
     const t = this.elapsed();
     const stamped: ReticleEvent = { ...event, t, sessionId: this.id };
     // The recorder attributes the event to the in-flight action (if any) and journals it durably; the

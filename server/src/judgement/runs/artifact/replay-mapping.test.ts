@@ -20,10 +20,11 @@ const replay = (status: ReplayStatus, extra?: Partial<FlowReplayResult>): FlowRe
 });
 
 describe('runFlowStatusOf', () => {
-  it('OK → PASS, DRIFT and ERROR → FAIL', () => {
+  it('OK → PASS, DRIFT and ERROR → FAIL, UNVERIFIABLE → SKIPPED', () => {
     expect(runFlowStatusOf(ReplayStatus.OK)).toBe(RunFlowStatus.PASS);
     expect(runFlowStatusOf(ReplayStatus.DRIFT)).toBe(RunFlowStatus.FAIL);
     expect(runFlowStatusOf(ReplayStatus.ERROR)).toBe(RunFlowStatus.FAIL);
+    expect(runFlowStatusOf(ReplayStatus.UNVERIFIABLE)).toBe(RunFlowStatus.SKIPPED);
   });
 });
 
@@ -44,6 +45,17 @@ describe('mapReplayToFlowResult', () => {
     );
     expect(r.status).toBe(RunFlowStatus.SKIPPED);
     expect(r.failureReason).toBe('set RETICLE_SECRET_PASSWORD');
+  });
+
+  it('an unverifiable replay maps to SKIPPED with failureReason preserved', () => {
+    const r = mapReplayToFlowResult(
+      replay(ReplayStatus.UNVERIFIABLE, {
+        unverifiable: { reason: 'precondition unmet' },
+      }),
+      10,
+    );
+    expect(r.status).toBe(RunFlowStatus.SKIPPED);
+    expect(r.failureReason).toBe('precondition unmet');
   });
 
   it('a drift lifts whatChanged into failureReason', () => {

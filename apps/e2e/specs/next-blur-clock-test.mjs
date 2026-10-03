@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // Real-browser e2e proving the synthetic-blur commit (synthetic blur -> React onBlur commit) and #3 (fake
 // clock advances a time-gated toast) against the real Next.js app on :3100.
 import { chromium } from 'playwright';
@@ -22,7 +23,7 @@ const refOf = async (by, value) => {
   throw new Error(`not found ${by}=${value}`);
 };
 
-const server = await start({ port: 4400, mcp: false });
+const server = await start({ port: TEST_BRIDGE_PORT, mcp: false });
 deps.sessions = server.bridge.sessions;
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage();

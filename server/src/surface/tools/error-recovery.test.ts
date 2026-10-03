@@ -484,12 +484,7 @@ describe('no condition Reticle itself authored is reported as a possible Reticle
         'bridge 200ms ago — but it is not answering commands.',
       RECOVERY.COMMAND_TIMEOUT,
     ],
-    // act-danger.ts — the two destructive blocks the existing rule did not cover
-    [
-      'a blocked WebMCP tool',
-      'potentially destructive WebMCP tool blocked; retry with confirmDangerous=true',
-      RECOVERY.CONFIRM_DANGEROUS,
-    ],
+    // act-danger.ts — native destructive actions need the same confirmation guidance
     [
       'a blocked native action',
       'potentially destructive native action blocked; retry with args.confirmDangerous=true',

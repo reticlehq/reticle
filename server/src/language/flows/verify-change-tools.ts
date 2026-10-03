@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { sessionRoot, sessionProjectId } from '@/memory/project/session-root.js';
 import { verdictForSuite } from '@/judgement/outcome/verify-change-verdict.js';
 import { attributedFailures } from '@/judgement/outcome/attributed-failure.js';
-import { Verified } from '@reticlehq/core';
+import { Verified, isAdvisory } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from '@/surface/tools/tool-kit.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
@@ -79,7 +79,7 @@ export const VERIFY_CHANGE_TOOLS: ToolDef[] = [
         .array(z.unknown())
         .optional()
         .describe(
-          'Channels that disagreed DURING the replay. Any entry forces verified:"no" even when every flow passed — a suite that goes green over a failed write is the false green this exists to catch. OMITTED when clean; see `measured` when it could not be looked for.',
+          'Findings from channels inspected during replay. Advisory entries are reported without changing the verdict; verdict-deciding entries can turn a green suite into no or unknown. OMITTED when clean; see `measured` when it could not be looked for.',
         ),
       untouched: z
         .array(z.unknown())
@@ -225,8 +225,9 @@ export const VERIFY_CHANGE_TOOLS: ToolDef[] = [
       // The suite went green. That is exactly when the remaining two channels are worth reading:
       // a replay that passes while a write fails is the false green this whole product is about.
       const extra = await inspectAfterReplay(deps, args, cursor);
-      if (extra.contradictions.length > 0) {
-        const kinds = extra.contradictions.map((c) => c.kind).join(', ');
+      const decidingContradictions = extra.contradictions.filter((c) => !isAdvisory(c.kind));
+      if (decidingContradictions.length > 0) {
+        const kinds = decidingContradictions.map((c) => c.kind).join(', ');
         const earned = attributedFailures(affected, unknownProvenance).length > 0;
         return {
           verified: earned ? Verified.NO : Verified.UNKNOWN,
@@ -253,6 +254,7 @@ export const VERIFY_CHANGE_TOOLS: ToolDef[] = [
           flowsRun: affected,
           suite,
           unknownProvenance,
+          ...(0 === extra.contradictions.length ? {} : { contradictions: extra.contradictions }),
           measured: extra.measured,
         };
       }
@@ -264,6 +266,7 @@ export const VERIFY_CHANGE_TOOLS: ToolDef[] = [
         flowsRun: affected,
         suite,
         unknownProvenance,
+        ...(0 === extra.contradictions.length ? {} : { contradictions: extra.contradictions }),
         ...(extra.untouched === undefined ? {} : { untouched: extra.untouched }),
         measured: extra.measured,
       };
@@ -311,6 +314,7 @@ async function inspectAfterReplay(
       currentEditEpoch: session.currentEditEpoch,
       appOrigin: session.url,
       background: session.background,
+      namedNetUrls: [],
       // The replay is the action, and the cursor is where it started.
       actionSince: cursor,
     }) as { kind: string }[];

@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // HONESTY-CRITICAL: prove scroll-to-find against a REAL windowed list — next-smoke renders only
 // the visible window of 500 rows, so a plain reticle_query for an off-screen row finds nothing;
 // reticle_scroll_to must scroll the container until that row mounts, then return it.
@@ -12,7 +13,7 @@ const chk = (l, o, d = '') => {
   o ? pass++ : fail++;
 };
 
-const server = await start({ port: 4400, mcp: false });
+const server = await start({ port: TEST_BRIDGE_PORT, mcp: false });
 const deps = { sessions: server.bridge.sessions };
 const T = (n, a = {}) => TOOLS.find((t) => t.name === n).handler(deps, { sessionId: 'next-smoke', ...a });
 const b = await chromium.launch({ headless: true });

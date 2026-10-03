@@ -98,5 +98,12 @@ export function isPresenceKind(kind: string): boolean {
  */
 export type ExpectedLink =
   | { kind: typeof ConsequenceKind.SIGNAL; name: string }
-  | { kind: typeof ConsequenceKind.NET; urlContains: string; status?: number }
+  | {
+      kind: typeof ConsequenceKind.NET;
+      urlContains: string;
+      status?: number;
+      /** The method the clause named, when it named one — a claim about `GET /save` is not a claim
+       * about the `POST /save` that is still pending. */
+      method?: string;
+    }
   | { kind: typeof ConsequenceKind.STATE; name: string };

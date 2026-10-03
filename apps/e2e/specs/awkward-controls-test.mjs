@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // Three properties of real applications this repo had no fixture for.
 //
 // Each is here because a fix shipped against unit tests alone, or because a capability was reported
@@ -45,7 +46,7 @@ const projectRoot = path.resolve('apps/e2e');
 const reticleRoot = path.join(projectRoot, '.reticle');
 const fsp = createNodeFileSystem();
 const now = () => Date.now();
-const server = await start({ port: 4400, mcp: false });
+const server = await start({ port: TEST_BRIDGE_PORT, mcp: false });
 const deps = {
   sessions: server.bridge.sessions,
   baselines: new BaselineStore(),
@@ -64,7 +65,7 @@ const T = (n, a = {}) =>
 
 const b = await chromium.launch({ headless: true });
 const p = await b.newPage();
-await p.goto(APP_URL);
+await p.goto(APP_URL, { waitUntil: 'domcontentloaded' });
 await waitForSession(() => server.bridge.sessions.list(), isBench, {
   what: 'the bench-app session for the awkward-controls fixture',
 });

@@ -39,7 +39,50 @@ function appNamedByRootConfig(io: InitIo): string | undefined {
 }
 
 const AMBIGUOUS_HEADER =
-  'Several apps found in this workspace. Re-run `reticle init` inside the one you want:';
+  'Several apps found in this workspace. Re-run `reticle init` for the one you want:';
+
+const WORKSPACE_APP_COMMAND = 'reticle init --app';
+const POWERSHELL_ONLY_LABEL = 'PowerShell only:' as const;
+const PLAIN_SHELL_ARG = /^[A-Za-z0-9_./-]+$/;
+
+interface DisplayedWorkspaceAppCommand {
+  command: string;
+  label?: typeof POWERSHELL_ONLY_LABEL;
+}
+
+function posixShellArg(arg: string): string {
+  return `'${arg.replaceAll("'", "'\"'\"'")}'`;
+}
+
+function powerShellArg(arg: string): string {
+  return `'${arg.replaceAll("'", "''")}'`;
+}
+
+/**
+ * Render one discovered workspace app as a command the user can paste back into a shell.
+ *
+ * Plain paths need no quoting. Complex Windows paths are explicitly PowerShell-only because
+ * cmd.exe and PowerShell use different quoting grammars.
+ */
+export function displayedWorkspaceAppCommand(
+  app: string,
+  platform: NodeJS.Platform,
+): DisplayedWorkspaceAppCommand {
+  if (PLAIN_SHELL_ARG.test(app)) {
+    return { command: `${WORKSPACE_APP_COMMAND} ${app}` };
+  }
+
+  if ('win32' === platform) {
+    return {
+      label: POWERSHELL_ONLY_LABEL,
+      command: `${WORKSPACE_APP_COMMAND} ${powerShellArg(app)}`,
+    };
+  }
+
+  return {
+    command: `${WORKSPACE_APP_COMMAND} ${posixShellArg(app)}`,
+  };
+}
 
 /**
  * When the current directory is a workspace root with no app of its own, wire the app instead of the
@@ -105,9 +148,11 @@ export function redirectToWorkspaceApp(
   if (target === undefined) {
     if (0 === apps.length) return null; // not a workspace — fall through to the normal HTML plan
     io.print(AMBIGUOUS_HEADER);
-    for (const a of apps) io.print(`  ${a}`);
-    io.print('');
-    io.print(`Or name one without changing directory:  reticle init --app ${apps[0] ?? '<dir>'}`);
+    for (const a of apps) {
+      const displayed = displayedWorkspaceAppCommand(a, process.platform);
+      if (displayed.label !== undefined) io.print(`  ${displayed.label}`);
+      io.print(`  ${displayed.command}`);
+    }
     return { ok: false, applied: 0, manual: apps.length };
   }
   return enterApp(options, io, target, 'No app in this directory — wiring', runInit);

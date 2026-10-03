@@ -16,6 +16,7 @@ Wired into `package.json` or a package's build, and they happen whether or not y
 | `test-suffixes.mjs` | The one definition of what a test file is. `prepare-dist.mjs`, `orphan-scan.mjs` and `directory-reach.mjs` all read it; they each had their own rule, and the file the three disagreed about shipped to npm. |
 | `alias-dist.mjs` | After `tsc -b`, rewrites `@/…` back to relative paths for this package AND every package it references — `tsc -b` builds the whole reference graph, `tsc-alias` rewrites one of them. |
 | `pack-docs.mjs` | Copies the docs and the skill file into `@reticlehq/server` before it is packed, so they ship with it. |
+| `pack-install-gate.mjs` | Packs every publishable workspace package once for CI's install matrix, then records the commit and each tarball's SHA-256 digest so every cell tests the same verified artifacts. |
 | `stamp-issuer-key.mjs` | Puts the public half of the enterprise licence key into the built server. Runs during that package's build, and the order matters: `prepack` wipes `dist` first, so anything that edits `dist` earlier is erased. |
 | `assemble-changelog.mjs` | Folds the entry files in `.changes/` into the unreleased section of `CHANGELOG.md` at release time. |
 
@@ -27,6 +28,7 @@ Guards. Each one exists because something went wrong once and nobody noticed unt
 | --- | --- |
 | `check-boundaries.mjs` | A package importing across the browser/server line, or an untagged package sneaking in as "safe for everyone". It reads which packages exist from the pnpm workspace file, so a package that moves cannot fall out of its sight. Run `--self-test` to prove the checker itself still catches a bad graph. `check-boundaries.d.mts` beside it is just the type declaration for the one function other checks reuse; it has no other reason to exist. |
 | `check-lossy-transforms.mjs` | A read path that quietly drops part of what it was given. |
+| `check-js-audit.mjs` | High/critical JavaScript dependency advisories in CI. It accepts only two reviewed, unpatched development-tool paths documented in [repository settings](../.github/REPOSITORY-SETTINGS.md), and `--self-test` proves new findings or changed paths still fail. |
 | `directory-reach.mjs` | Computes which directory imports from which, inside one package. Not a check itself: it is the graph that `server/src/directory-reach.test.ts`, the browser's copy of that guard, and `safe-to-group.mjs` all read. One implementation on purpose, because a prediction that disagrees with the test it predicts is worse than no prediction. `directory-reach.d.mts` beside it is the type declaration the guards import. |
 | `orphan-scan.mjs` | Modules nothing imports. Every package's `orphan-modules.test.ts` calls this one scanner rather than each writing its own. `orphan-scan.d.mts` beside it is just its type declaration; it has no other reason to exist. |
 | `check-stale-issues.mjs` | An issue we already fixed still reading as available work, so somebody starts on it. |

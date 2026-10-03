@@ -227,6 +227,12 @@ describe('desktop mode', () => {
 describe('connect options the SDK supports are reachable from the plugin', () => {
   const ALLOW_ENV = 'VITE_RETICLE_ALLOW_NON_LOCALHOST';
 
+  it('forwards present only when explicitly disabled', () => {
+    expect(connectModuleSource({ present: false })).toContain('"present":false');
+    expect(connectModuleSource({})).not.toContain('present');
+    expect(connectModuleSource({ present: true })).not.toContain('present');
+  });
+
   it('forwards allowNonLocalhost, and omits it when unset', () => {
     expect(connectModuleSource({ allowNonLocalhost: true })).toContain('allowNonLocalhost');
     expect(connectModuleSource({})).not.toContain('allowNonLocalhost');

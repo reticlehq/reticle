@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { REPO_ROOT } from './machine/repo-root.js';
 
@@ -91,9 +92,12 @@ function routedPaths(workflow: string): string[] {
   return [...found].sort();
 }
 
-/** Every file git tracks, as one string per line, for cheap prefix matching. */
+/** Include new files when checking a working tree, before they have been staged. */
 function trackedFiles(): string[] {
-  return execFileSync('git', ['ls-files'], { cwd: REPO_ROOT, encoding: 'utf8' })
+  return execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], {
+    cwd: REPO_ROOT,
+    encoding: 'utf8',
+  })
     .split('\n')
     .filter((line) => line.length > 0);
 }
@@ -154,5 +158,72 @@ describe('the CI router only names paths that exist', () => {
     // the search find its own probe.
     const invented = ['packages/', 'not', '-a-real', '-package'].join('');
     expect(matchesSomething(invented)).toBe(false);
+  });
+});
+
+// Execute the actual Linux router, including pipefail. A large diff must not turn grep's early
+// success into a failed pipeline (SIGPIPE in echo), silently skipping the required product gates.
+describe.skipIf('win32' === process.platform)('CI routing decisions', () => {
+  const workflow = readFileSync(WORKFLOW, 'utf8');
+  const start = workflow.indexOf('          # What the e2e battery can see:');
+  const end = workflow.indexOf('      # WHICH install-gate cells', start);
+  const router = workflow.slice(start, end);
+  const route = (paths: string[]): Record<string, string> => {
+    expect(start).toBeGreaterThan(0);
+    expect(end).toBeGreaterThan(start);
+    const temporary = mkdtempSync(join(tmpdir(), 'reticle-ci-routing-'));
+    const outputPath = join(temporary, 'output');
+    try {
+      execFileSync('bash', ['-e', '-o', 'pipefail', '-c', `CHANGED="$(cat)"\n${router}`], {
+        input: paths.join('\n'),
+        encoding: 'utf8',
+        env: { ...process.env, GITHUB_OUTPUT: outputPath },
+      });
+      const flags: Record<string, string> = {};
+      for (const line of readFileSync(outputPath, 'utf8').trim().split('\n')) {
+        const [key, value] = line.split('=');
+        if (key === undefined || value === undefined)
+          throw new Error(`invalid routing output: ${line}`);
+        flags[key] = value;
+      }
+      return flags;
+    } finally {
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  };
+
+  it('keeps a docs-only change out of the product and Rust jobs', () => {
+    expect(route(['docs/usage.md'])).toMatchObject({
+      e2e: 'false',
+      install: 'false',
+      rust: 'false',
+    });
+  });
+
+  it.each([
+    'init/src/run.ts',
+    'server/src/command/cli/setup-mcp-cli.ts',
+    'scripts/pack-install-gate.mjs',
+  ])('%s exercises installation', (path) => {
+    expect(route([path]).install).toBe('true');
+  });
+
+  it('checks a change to the control itself', () => {
+    expect(route(['apps/e2e/install-control.mjs'])).toMatchObject({
+      gateself: 'true',
+      install: 'true',
+    });
+  });
+
+  it('runs Rust for the crate', () => {
+    expect(route(['adapters/realm/tauri/src/lib.rs']).rust).toBe('true');
+  });
+
+  it('does not lose a matching file at the start of a large merge-group diff', () => {
+    const paths = [
+      'core/src/index.ts',
+      ...Array.from({ length: 20000 }, (_, i) => `docs/changed-${String(i)}.md`),
+    ];
+    expect(route(paths)).toMatchObject({ e2e: 'true', install: 'true', bench: 'true' });
   });
 });

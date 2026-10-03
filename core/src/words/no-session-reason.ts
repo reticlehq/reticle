@@ -24,6 +24,13 @@ export const NoSessionReason = {
   /** Connected before; the tab was closed, navigated away, or hard-reloaded. */
   TAB_GONE: 'tab_gone',
   /**
+   * Connected before, and the SDK reported the page navigating away just before the socket
+   * closed (#1256). A load-time `location.assign` to an uninstrumented page used to read as
+   * TAB_GONE — the daemon only saw the socket close. This is the departure note outranking the
+   * hedge: the tab was not closed, it left for somewhere named.
+   */
+  NAVIGATED_AWAY: 'navigated_away',
+  /**
    * Connected before, and the route the tab was on answers 5xx right now. A server error tears the
    * page down and the SDK never reconnects, so it used to read as TAB_GONE — the URL was known, and
    * nothing asked it what it answers. This is the answer, and it outranks TAB_GONE because it is not

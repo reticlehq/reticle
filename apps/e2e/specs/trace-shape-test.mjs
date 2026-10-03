@@ -18,11 +18,11 @@ import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { McpStdioClient } from '../../../bench/harness/mcp-client.mjs';
 import { analyzeTrace, parseTrace, formatReport } from '../trace-shape.mjs';
-import { freePortSafely } from '../gate-harness.mjs';
+import { freePortSafely, startOwnedDaemon } from '../gate-harness.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const PORT = process.env.TRACE_SHAPE_PORT ?? '4743';
-const DAEMON_LOG = path.join(homedir(), '.reticle', `daemon-${PORT}.log`);
+const DAEMON_LOG = path.join(process.env.RETICLE_STATE_DIR ?? path.join(homedir(), '.reticle'), `daemon-${PORT}.log`);
 
 let pass = 0;
 let fail = 0;
@@ -59,6 +59,10 @@ console.log('\n=== TRACE SHAPE: the call tree the daemon emits is well formed ==
 process.chdir(ROOT);
 await freePortSafely(Number(PORT));
 const before = sizeOf(DAEMON_LOG);
+const daemon = await startOwnedDaemon(Number(PORT), {
+  cliPath: path.join(ROOT, 'server/dist/command/cli.js'), cwd: ROOT,
+  env: { RETICLE_TRACE: '1', RETICLE_ADVERTISE_ALL_TOOLS: '1' },
+});
 
 const client = new McpStdioClient('node', ['server/dist/command/cli.js', 'mcp', '--port', PORT], {
   RETICLE_PORT: PORT,
@@ -94,7 +98,7 @@ await drive('reticle_snapshot', {});
 await drive('reticle_inspect', { ref: 'e404' });
 
 await client.stop();
-await freePortSafely(Number(PORT));
+await daemon.stop();
 
 const appended = readFrom(DAEMON_LOG, before);
 const spans = parseTrace(appended);

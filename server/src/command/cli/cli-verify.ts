@@ -26,6 +26,8 @@ import {
 } from '@/portal/bridge/pairing-token.js';
 import { randomUUID } from 'node:crypto';
 import {
+  MCP_SSE_PATH,
+  MCP_MESSAGE_PATH,
   RETICLE_DEFAULT_PORT,
   ReticleEnv,
   bridgeWsUrl,
@@ -522,7 +524,10 @@ export function expectNeedsDaemonMessage(port: number, presence: PortPresence): 
     '  • Start a daemon on that port, pointed at the app, then re-run this command: ' +
     `npx @reticlehq/server serve --port ${String(port)} --drive <url>\n` +
     `  • Or drop ${EXPECT_FLAG}, and verify drives the url itself and replays your saved flows — ` +
-    'a different question, and it proves nothing about your predicate.'
+    'a different question, and it proves nothing about your predicate.\n\n' +
+    `  • Once that daemon is running, you can also drive its HTTP MCP transport for anything ` +
+    `${EXPECT_FLAG} cannot do — click, fill, press (${MCP_SSE_PATH}, then ${MCP_MESSAGE_PATH}). ` +
+    'See https://docs.reticle.sh/http-transport.md.'
   );
 }
 

@@ -46,6 +46,7 @@ export function computeVerdict(input: VerificationRunInput): RunVerdict {
   const fails =
     input.flows.filter((f) => f.status === RunFlowStatus.FAIL).length +
     input.checks.filter((c) => c.status === Verified.NO).length;
+  const skippedFlows = input.flows.filter((f) => f.status === RunFlowStatus.SKIPPED).length;
   const blockingRisks = input.risks.filter((r) => r.gated).length;
 
   const reasons: string[] = [];
@@ -56,6 +57,8 @@ export function computeVerdict(input: VerificationRunInput): RunVerdict {
           ? `flow ${f.name}: ${f.failureReason}`
           : `flow ${f.name} failed`,
       );
+    } else if (f.status === RunFlowStatus.SKIPPED && f.failureReason !== undefined) {
+      reasons.push(`flow ${f.name}: ${f.failureReason}`);
     }
   }
   for (const c of input.checks) {
@@ -69,6 +72,7 @@ export function computeVerdict(input: VerificationRunInput): RunVerdict {
   if (blockingRisks > 0) status = VerdictStatus.FAIL;
   else if (fails > 0 && passes > 0) status = VerdictStatus.PARTIAL;
   else if (fails > 0) status = VerdictStatus.FAIL;
+  else if (skippedFlows > 0 && passes > 0) status = VerdictStatus.PARTIAL;
   else if (0 === passes) {
     // Nothing passed and nothing failed, so nothing was proved -- an empty run, or one whose every
     // flow was skipped. Reporting that as PASS is the false green this whole file exists to prevent:

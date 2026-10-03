@@ -103,11 +103,13 @@ import {
   type InjectedConnect,
 } from './portal/pool/zero-install.js';
 
-/** A human-facing one-liner for a panel replay verdict — ✓ passed / ⚠ drifted / ✗ errored. */
-function replayVerdictLine(result: FlowReplayResult): string {
+/** A human-facing one-liner for a panel replay verdict — ✓ passed / ⚠ drifted / ✗ errored / ? unverifiable. */
+export function replayVerdictLine(result: FlowReplayResult): string {
   if (result.status === ReplayStatus.OK) return `✓ "${result.name}" passed`;
   if (result.status === ReplayStatus.DRIFT)
     return `⚠ "${result.name}" drifted — a step no longer matches`;
+  if (result.status === ReplayStatus.UNVERIFIABLE)
+    return `? "${result.name}" unverifiable — ${result.unverifiable?.reason ?? 'could not be graded'}`;
   return `✗ "${result.name}" failed — ${result.error?.message ?? 'could not replay'}`;
 }
 

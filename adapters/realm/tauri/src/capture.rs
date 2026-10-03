@@ -92,12 +92,14 @@ fn create_private_dir(base: &std::path::Path) -> std::io::Result<std::path::Path
             std::process::id(),
             nanos()
         ));
-        let mut builder = std::fs::DirBuilder::new();
+        let builder = std::fs::DirBuilder::new();
         #[cfg(unix)]
-        {
+        let builder = {
             use std::os::unix::fs::DirBuilderExt;
+            let mut builder = builder;
             builder.mode(0o700);
-        }
+            builder
+        };
         match builder.create(&candidate) {
             Ok(()) => return Ok(candidate),
             // Two captures on the same nanosecond tick, or a name an attacker guessed and squatted.

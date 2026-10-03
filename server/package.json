@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/server",
-  "version": "3.4.0",
+  "version": "3.5.0",
   "description": "Reticle CLI, bridge and MCP server: a coding agent drives your running web app from the inside and gets a verdict with evidence, for change verification, access control, accessibility, performance and SEO checks.",
   "type": "module",
   "main": "./dist/index.js",

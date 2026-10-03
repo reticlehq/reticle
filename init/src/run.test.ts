@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { FEEDBACK_HINT } from './diagnose/closing-hint.js';
 import { SILENT_HOST } from './host.js';
 import { runInit, resolveLockfiles, type InitIo, type InitOptions } from './run.js';
@@ -447,6 +447,29 @@ describe('runInit', () => {
     expect(io.execCalls).toHaveLength(0);
     expect(io.lines.join('\n')).toContain('dry run');
     expect(r.applied).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ['vite', VITE_FILES],
+    ['empty directory', {}],
+    ['Django', { 'manage.py': 'from django.core.management import execute_from_command_line' }],
+    ['Streamlit', { 'requirements.txt': 'streamlit', 'app.py': 'import streamlit as st' }],
+    ['malformed manifest', { 'package.json': '{ bad json' }],
+  ])('dry run has no provisioning or outcome side effects for %s', (_name, files) => {
+    const io = memoryIo(files);
+    const pairingToken = vi.fn(() => HOST_TOKEN);
+    const reportOutcome = vi.fn();
+    runInit(
+      { ...OPTS, dryRun: true },
+      {
+        ...io,
+        host: { ...io.host, pairingToken, reportOutcome },
+      },
+    );
+    expect(io.written).toEqual({});
+    expect(io.execCalls).toEqual([]);
+    expect(pairingToken).not.toHaveBeenCalled();
+    expect(reportOutcome).not.toHaveBeenCalled();
   });
 
   it('asks for feedback on EVERY exit, including the ones that never reach the report', () => {
@@ -1225,6 +1248,19 @@ describe('runInit honours --url on the package-manager preflight', () => {
     const io = memoryIo(PNPM_APP, noTooling);
     runInit({ ...OPTS, dryRun: true }, io);
     expect(io.lines.join('\n')).toContain('is not installed on this machine');
+  });
+
+  it('reports a preflight failure even when the caller defers the runtime outcome', () => {
+    const io = memoryIo(PNPM_APP, noTooling);
+    const reportOutcome = vi.fn();
+    runInit(
+      { ...OPTS, deferOutcome: true },
+      {
+        ...io,
+        host: { ...io.host, reportOutcome },
+      },
+    );
+    expect(reportOutcome).toHaveBeenCalledExactlyOnceWith({ ok: false, reason: 'preflight' });
   });
 
   it('does not refuse when the app is already served', () => {

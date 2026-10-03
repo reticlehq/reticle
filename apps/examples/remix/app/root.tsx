@@ -53,6 +53,7 @@ export default function App() {
       void import("@reticlehq/react").then(({ reticle, install }) => {
         install();
         reticle.connect({
+          url: __RETICLE_URL__,
           projectId: "example-remix",
           ...(token.length > 0 ? { token } : {}),
         });

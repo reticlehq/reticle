@@ -831,9 +831,9 @@ export const InitOutcomeSchema = z.object({
   /**
    * What `init` saw when it waited for an app to connect.
    *
-   * ABSENT means it never looked, which is the honest answer for every scripted run: `init` only
-   * waits when a human is at the terminal. Read an absent value as "not measured", never as a
-   * failure to connect, or the funnel reads scripted installs as losses.
+   * Default init reports CONNECTED after runtime success. Runtime failures carry a classified
+   * reason without guessing the watcher's daemon/page classification. Files-only init watches
+   * only in an interactive terminal. Absence alone is not evidence of a failed connection.
    */
   confirmation: z.nativeEnum(InitConfirmation).optional(),
 });

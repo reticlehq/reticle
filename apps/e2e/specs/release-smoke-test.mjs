@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // The release smoke: drive the demo apps the way a user's agent does, and check the ANSWERS.
 //
 // The battery proves the pieces. This proves the product: open a real app, look, act, assert, and —
@@ -11,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { McpStdioClient } from '../../../bench/harness/mcp-client.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const PORT = process.env.RETICLE_PORT ?? '4400';
+const PORT = String(TEST_BRIDGE_PORT);
 const APP = process.env.SMOKE_APP ?? 'http://localhost:4310/';
 
 let pass = 0;

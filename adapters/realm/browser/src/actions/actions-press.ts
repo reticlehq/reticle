@@ -196,6 +196,8 @@ export async function pressCombo(
       ),
     );
     if (!ok) prevented = true;
+    // The same default a single Escape gets: `keys: ["Escape"]` is the same key.
+    closeModalOnEscape(el, key, ok);
   }
   if (holdMs > 0) await sleep(holdMs);
   for (const key of [...keys].reverse()) {
@@ -205,4 +207,27 @@ export async function pressCombo(
     );
   }
   return prevented;
+}
+/**
+ * Emulate Escape's close request on the innermost open modal dialog around the target.
+ * Synthetic key events have no browser default action, so they do not close a dialog themselves.
+ */
+export function closeModalOnEscape(el: ActionTarget, key: string, keydownProceeded: boolean): void {
+  if ('Escape' !== key || !keydownProceeded) return;
+  for (
+    let dialog = el.closest('dialog');
+    null !== dialog;
+    dialog = dialog.parentElement?.closest('dialog') ?? null
+  ) {
+    // A nested non-modal dialog does not hide its modal ancestor. Without `:modal`, do not guess.
+    try {
+      if (!dialog.open || !dialog.matches(':modal')) continue;
+    } catch {
+      return;
+    }
+    // requestClose dispatches cancel and respects preventDefault; older engines need the fallback.
+    if ('function' === typeof dialog.requestClose) dialog.requestClose();
+    else if (dialog.dispatchEvent(new Event('cancel', { cancelable: true }))) dialog.close();
+    return;
+  }
 }

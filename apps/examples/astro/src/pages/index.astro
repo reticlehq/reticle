@@ -13,6 +13,7 @@ const pairingToken = (() => {
     return '';
   }
 })();
+const bridgeUrl = import.meta.env.DEV ? `ws://localhost:${process.env['RETICLE_PORT'] ?? 4400}/reticle` : '';
 const pairingRoot = import.meta.env.DEV ? process.cwd() : '';
 ---
 
@@ -21,6 +22,7 @@ const pairingRoot = import.meta.env.DEV ? process.cwd() : '';
     <meta charset="utf-8" />
     <title>Reticle × Astro</title>
     <meta name="reticle-pairing-token" content={pairingToken} />
+    <meta name="reticle-bridge-url" content={bridgeUrl} />
     <meta name="reticle-pairing-root" content={pairingRoot} />
   </head>
   <body>
@@ -40,7 +42,9 @@ const pairingRoot = import.meta.env.DEV ? process.cwd() : '';
           );
         }
         install();
+        const url = document.querySelector('meta[name="reticle-bridge-url"]')?.getAttribute('content');
         reticle.connect({
+          ...(url ? { url } : {}),
           projectId: 'example-astro',
           ...(0 < token.length ? { token } : {}),
           ...(0 < root.length ? { root } : {}),

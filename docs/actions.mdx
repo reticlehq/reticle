@@ -5,7 +5,7 @@ description: Every action reticle_act and reticle_act_and_wait can perform, with
 icon: hand-pointer
 ---
 
-Every action Reticle can perform takes the same shape: a `ref` from [`reticle_look { action: "page" }`](/tools/snapshot) or [`reticle_look { action: "find" }`](/tools/query), an `action` name, and an optional `args` object. The same seventeen actions are available on [`reticle_act`](/tools/act), which proves nothing, and on [`reticle_act_and_wait`](/tools/act-and-wait), which returns a verdict.
+Every action Reticle can perform takes the same shape: a `ref` from [`reticle_look { action: "page" }`](/tools/snapshot) or [`reticle_look { action: "find" }`](/tools/query), an `action` name, and an optional `args` object. The same actions are available on [`reticle_act`](/tools/act), which proves nothing, and on [`reticle_act_and_wait`](/tools/act-and-wait), which returns a verdict.
 
 ```json
 { "ref": "e104", "action": "fill", "args": { "value": "reticle" } }
@@ -26,7 +26,6 @@ Every action Reticle can perform takes the same shape: a `ref` from [`reticle_lo
 | `scrollIntoView` | none |  |
 | `upload` | `{ content?, name?, type?, path? }` | Sets a file on `<input type="file">`. Inline bytes default to `"reticle test file"` / `"file.txt"` / `"text/plain"`. `path` reads a file from disk, scoped to the project root plus any opt-in directories listed in `.reticle.json` as `"uploadRoots": ["~/Downloads", "/Volumes/fixtures"]`. A refusal names every allowed root. |
 | `drag` | `{ toRef }` | Pointer-based drag (dnd-kit, react-beautiful-dnd) plus HTML5 DnD. `target` is an alias |
-| `webmcp` | `{ tool, params }` | Calls a `navigator.modelContext` tool, if the site exposes one |
 
 ### Arguments that are not actions
 

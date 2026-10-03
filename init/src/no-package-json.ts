@@ -43,6 +43,7 @@ const SNIPPET_WRITTEN =
   'gitignored — keep it out of anything you publish, and let each teammate run `reticle init` ' +
   'for their own.';
 const SNIPPET_ALREADY = `${HTML_INDEX_PATH} already loads the Reticle SDK — nothing to change.`;
+const DRY_RUN_PAIRING_TOKEN = 'DRY_RUN_TOKEN_NOT_FOR_USE';
 
 /**
  * Write the snippet into `index.html`, and hand over to setup as a success.
@@ -101,6 +102,10 @@ export function initWithoutPackageJson(options: InitOptions, io: InitIo): InitRe
   // Written only when absent. A config a user or an earlier run already placed here is theirs.
   const nonJsProjectId = deriveProjectId(undefined, io.cwd());
   const writeConfig = (): void => {
+    if (options.dryRun) {
+      io.print('Dry run: no files written; the snippet uses a placeholder pairing token.');
+      return;
+    }
     // Except its port. A re-run with a new `--port` starts the daemon there, and a config still
     // naming the old one sends the agent to a daemon that is no longer running.
     const existingConfig = io.readFile(RETICLE_CONFIG_FILE);
@@ -117,10 +122,18 @@ export function initWithoutPackageJson(options: InitOptions, io: InitIo): InitRe
     rememberProjectOnDisk(io, nonJsProjectId, io.cwd(), Date.now());
     io.print(`Wrote ${RETICLE_CONFIG_FILE} (project "${nonJsProjectId}").`);
   };
-  const connect = connectArgWithToken(options.port, nonJsProjectId, io.host.pairingToken());
+  const connect = connectArgWithToken(
+    options.port,
+    nonJsProjectId,
+    options.dryRun ? DRY_RUN_PAIRING_TOKEN : io.host.pairingToken(),
+  );
   // One page at the root is a page we can see whole. Several, or none, is a choice that is not ours.
   if (!streamlit && !django && io.exists(HTML_INDEX_PATH)) {
     writeConfig();
+    if (options.dryRun) {
+      io.print(staticPageSnippet(connect));
+      return { ok: true, applied: 0, manual: 0 };
+    }
     // Without the token: the page is the deployable artifact, so the token goes beside it instead.
     return wireStaticPage(options, io, connectArg(options.port, nonJsProjectId));
   }
@@ -148,6 +161,6 @@ export function initWithoutPackageJson(options: InitOptions, io: InitIo): InitRe
   );
   // The onboarding funnel had NO instrumentation, so a setup that died here was indistinguishable
   // from someone who never ran the command — the two failure modes with the most different fixes.
-  io.host.reportOutcome({ ok: false, reason: InitFailure.NO_PACKAGE_JSON });
+  if (!options.dryRun) io.host.reportOutcome({ ok: false, reason: InitFailure.NO_PACKAGE_JSON });
   return { ok: false, applied: 0, manual: 0 };
 }

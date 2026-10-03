@@ -7,8 +7,8 @@
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { RETICLE_DEFAULT_PORT } from '@reticlehq/core';
-import { FEEDBACK_HINT, Framework, type InitResult } from '@reticlehq/init';
+import { InitConfirmation, RETICLE_DEFAULT_PORT } from '@reticlehq/core';
+import { FEEDBACK_HINT, Framework, InitFailure, type InitResult } from '@reticlehq/init';
 import { confirmInstall, nodeConfirmDeps } from '@/command/setup/terminal/confirm.js';
 import { writeLicenseKey } from '@/command/setup/license-key.js';
 import { registerOtherAgents, runSetupCommand } from '@/command/setup/setup-command.js';
@@ -24,6 +24,8 @@ import { probeDaemon } from '@/surface/mcp/proxy/proxy-daemon-probe.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { collectEnv, DEFAULT_PHASE_TIMEOUT_MS } from '@/command/setup/setup-options.js';
 import { staticPageDevCommand } from '@/command/setup/bringup/static-page-server.js';
+import { SetupPhase } from '@/command/setup/run-setup.js';
+import { reportInitOutcome } from '@/telemetry/init-telemetry.js';
 
 /** How often the runtime phases look again: fast enough not to be the wait, slow enough to be free. */
 const POLL_MS = 250;
@@ -107,9 +109,9 @@ export async function continueAfterInit(
 ): Promise<void> {
   const port = parsed.port ?? RETICLE_DEFAULT_PORT;
 
-  // Before anything else: the key belongs in .env whichever way this run ends, and the CLI folds a
-  // project-local .env into the environment on every invocation.
-  if (undefined !== parsed.licenseKey) {
+  // Real installs persist the key whichever way setup ends. A preview must leave .env and
+  // .gitignore untouched, just as it leaves project wiring and agent configuration untouched.
+  if (!parsed.dryRun && undefined !== parsed.licenseKey) {
     const written = writeLicenseKey(cwd, parsed.licenseKey, licenseIo);
     io.print(written.message);
   }
@@ -129,8 +131,11 @@ export async function continueAfterInit(
     // has: nothing reaches back into a machine that installed Reticle a version ago, so the
     // upgrade path is re-running init, and the light form of init has to be enough to carry it.
     // A dry run writes nothing anywhere, including here.
-    if (true === parsed.filesOnly && wantsAgents(parsed)) registerOtherAgents(io.print);
+    if (!parsed.dryRun && true === parsed.filesOnly && wantsAgents(parsed)) {
+      registerOtherAgents(io.print);
+    }
     return confirmInstall(result, io, nodeConfirmDeps(port)).then(() => {
+      if (true === parsed.json) process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
       if (!result.ok) process.exit(1);
     });
   }
@@ -144,8 +149,14 @@ export async function continueAfterInit(
   if (context === undefined) {
     // Nothing was established, so there is nothing to run against. init has already said why.
     ask();
+    if (true === parsed.json) process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     process.exit(1);
   }
+  const reportFailure = (reason: InitFailure): void => {
+    if (result.outcome !== undefined) {
+      reportInitOutcome({ ...result.outcome, ok: false, reason });
+    }
+  };
   // A PENDING connect step is not a reason to skip the runtime phase, and treating it as one made
   // `init` stop with "paste this snippet" while never looking at the app.
   //
@@ -163,12 +174,23 @@ export async function continueAfterInit(
   // so going ahead spends the entire budget and then reports what reads as an instrumentation
   // problem — the one place that is fine. See bridge-port.ts.
   const refusal = bridgeOccupied(
-    await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus }),
+    await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus }).catch(
+      (error: unknown) => {
+        reportFailure(InitFailure.RUNTIME_ERROR);
+        throw error;
+      },
+    ),
     port,
   );
   if (refusal !== undefined) {
+    reportFailure(InitFailure.BRIDGE_OCCUPIED);
     io.print(refusal);
     ask();
+    if (true === parsed.json) {
+      process.stdout.write(
+        `${JSON.stringify({ ok: false, reason: InitFailure.BRIDGE_OCCUPIED }, null, 2)}\n`,
+      );
+    }
     process.exit(1);
   }
 
@@ -191,7 +213,10 @@ export async function continueAfterInit(
       // keeps deciding, so nobody who passed nothing waits less than they used to.
       ...(undefined === parsed.timeoutSeconds
         ? {}
-        : { connectBudgetMs: parsed.timeoutSeconds * 1000 }),
+        : {
+            connectBudgetMs: parsed.timeoutSeconds * 1000,
+            startupBudgetMs: parsed.timeoutSeconds * 1000,
+          }),
       pollMs: POLL_MS,
       htmlCarriesSdk: HTML_CARRIES_SDK.has(context.framework),
       // A plain page with no dev script gets Reticle's own static server, so the page is actually
@@ -210,57 +235,83 @@ export async function continueAfterInit(
       ...(undefined === parsed.url ? {} : { suppliedUrl: parsed.url }),
     },
     (line) => io.print(line),
-  ).then((outcome) => {
-    // One object, so an agent reads a result instead of interpreting a report.
-    if (true === parsed.json) {
-      process.stdout.write(`${JSON.stringify(outcome, null, 2)}\n`);
-      if (!outcome.ok) process.exit(1);
-      return;
-    }
-    io.print('');
-    // The precondition for everything the closing asks for, printed on the path that could not say
-    // it. An agent client reads its MCP server list when it STARTS and never re-reads it, so on the
-    // run that first registers Reticle the `reticle_*` tools are not in the session that just asked
-    // for them -- and this path closes by telling that session to call `reticle_act_and_wait`.
-    // `restartHint` has said this for a long time and is printed only when init stops at the files.
-    if (true === result.mcpNewlyRegistered) {
-      io.print(
-        'Reticle was registered with your agent by this run, and an agent reads its tool list only ' +
-          'when it starts: the `reticle_*` tools are NOT in this session yet. Restart it first — ' +
-          '`npx @reticlehq/server init --relaunch` prints the exact resume command for Claude Code ' +
-          'and Codex. Once per machine.',
-      );
+  ).then(
+    (outcome) => {
+      if (result.outcome !== undefined) {
+        const init = {
+          ...result.outcome,
+          ok: outcome.ok,
+        };
+        if (outcome.ok) {
+          delete init.reason;
+          init.confirmation = InitConfirmation.CONNECTED;
+        } else {
+          // A failed startup does not establish whether a daemon or instrumented page exists.
+          // Keep the watcher's no_daemon/no_session/no_page classifications for observed facts.
+          delete init.confirmation;
+          init.reason =
+            outcome.reachedPhase === SetupPhase.DEV_SERVER
+              ? InitFailure.DEV_SERVER
+              : InitFailure.APP_CONNECTION;
+        }
+        reportInitOutcome(init);
+      }
+      // One object, so an agent reads a result instead of interpreting a report.
+      if (true === parsed.json) {
+        process.stdout.write(`${JSON.stringify(outcome, null, 2)}\n`);
+        if (!outcome.ok) process.exit(1);
+        return;
+      }
       io.print('');
-    }
-    if (outcome.ok && !outcome.flowSaved) {
-      // Success, and no flow. Saying "a flow was driven" here would replace a wrong exit code with
-      // a wrong sentence, which is the worse of the two: the exit code is read by CI and the
-      // sentence is read by a person deciding whether their app is verified. It is not.
-      // The connect already said "connected, nothing verified yet" and listed what to do next;
-      // repeating it here was the same sentence twice, three lines apart.
-      for (const [i, step] of outcome.fallback.entries()) io.print(`   ${String(i + 1)}. ${step}`);
-      // Already spaced by the blank line above when nothing was listed.
-      ask(0 < outcome.fallback.length);
-      return;
-    }
-    if (outcome.ok) {
-      io.print(
-        `✓ setup complete — ${outcome.url ?? 'the app'} is instrumented and a flow was driven.`,
-      );
-      // A passing flow shows the mechanism working. What the run SAW is the part nobody can get for
-      // themselves, and it deserves a line of its own rather than a paragraph that gets skimmed.
-      io.print(
-        '  Read the FINDINGS above before moving on: a flow can pass with a failed request or a ' +
-          'console error behind it, and that is the app, not the check.',
-      );
+      // The precondition for everything the closing asks for, printed on the path that could not say
+      // it. An agent client reads its MCP server list when it STARTS and never re-reads it, so on the
+      // run that first registers Reticle the `reticle_*` tools are not in the session that just asked
+      // for them -- and this path closes by telling that session to call `reticle_act_and_wait`.
+      // `restartHint` has said this for a long time and is printed only when init stops at the files.
+      if (true === result.mcpNewlyRegistered) {
+        io.print(
+          'Reticle was registered with your agent by this run, and an agent reads its tool list only ' +
+            'when it starts: the `reticle_*` tools are NOT in this session yet. Restart it first — ' +
+            '`npx @reticlehq/server init --relaunch` prints the exact resume command for Claude Code ' +
+            'and Codex. Once per machine.',
+        );
+        io.print('');
+      }
+      if (outcome.ok && !outcome.flowSaved) {
+        // Success, and no flow. Saying "a flow was driven" here would replace a wrong exit code with
+        // a wrong sentence, which is the worse of the two: the exit code is read by CI and the
+        // sentence is read by a person deciding whether their app is verified. It is not.
+        // The connect already said "connected, nothing verified yet" and listed what to do next;
+        // repeating it here was the same sentence twice, three lines apart.
+        for (const [i, step] of outcome.fallback.entries())
+          io.print(`   ${String(i + 1)}. ${step}`);
+        // Already spaced by the blank line above when nothing was listed.
+        ask(0 < outcome.fallback.length);
+        return;
+      }
+      if (outcome.ok) {
+        io.print(
+          `✓ setup complete — ${outcome.url ?? 'the app'} is instrumented and a flow was driven.`,
+        );
+        // A passing flow shows the mechanism working. What the run SAW is the part nobody can get for
+        // themselves, and it deserves a line of its own rather than a paragraph that gets skimmed.
+        io.print(
+          '  Read the FINDINGS above before moving on: a flow can pass with a failed request or a ' +
+            'console error behind it, and that is the app, not the check.',
+        );
+        ask();
+        return;
+      }
+      // A run that produced no verdict did not succeed, and the exit code is the one place a caller
+      // reads that without parsing anything.
+      io.print('⚠ setup did not finish. To carry on from here:');
+      for (const [i, step] of outcome.fallback.entries()) io.print(`   ${i + 1}. ${step}`);
       ask();
-      return;
-    }
-    // A run that produced no verdict did not succeed, and the exit code is the one place a caller
-    // reads that without parsing anything.
-    io.print('⚠ setup did not finish. To carry on from here:');
-    for (const [i, step] of outcome.fallback.entries()) io.print(`   ${i + 1}. ${step}`);
-    ask();
-    process.exit(1);
-  });
+      process.exit(1);
+    },
+    (error: unknown) => {
+      reportFailure(InitFailure.RUNTIME_ERROR);
+      throw error;
+    },
+  );
 }

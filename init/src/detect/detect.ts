@@ -253,6 +253,14 @@ function hasAnyConfig(files: ReadonlySet<string>, candidates: readonly string[])
 interface FrameworkSignals {
   /** `package.json` dependency names that name this framework outright. */
   readonly deps: readonly string[];
+  /**
+   * Dependencies that disprove this framework's dependency signal, without affecting an explicit
+   * config-file signal.
+   *
+   * Vinext carries `next` for API compatibility but builds through Vite, so treating `next` as
+   * conclusive there would install wiring that Vinext never evaluates.
+   */
+  readonly depsUnless?: readonly string[];
   /** Root config-file basenames that name it when the dependency is absent. */
   readonly configs: readonly string[];
   /**
@@ -287,7 +295,7 @@ const VITE_INDEX_HTML = 'index.html';
  * asserted in `framework-adapter.test.ts`.
  */
 export const FRAMEWORK_SIGNALS: Record<Framework, FrameworkSignals> = {
-  [Framework.NEXT]: { deps: ['next'], configs: NEXT_CONFIGS },
+  [Framework.NEXT]: { deps: ['next'], depsUnless: ['vinext'], configs: NEXT_CONFIGS },
   [Framework.NUXT]: { deps: ['nuxt'], configs: NUXT_CONFIGS },
   [Framework.SVELTEKIT]: {
     deps: ['@sveltejs/kit'],
@@ -324,7 +332,7 @@ export const FRAMEWORK_SIGNALS: Record<Framework, FrameworkSignals> = {
     deps: ['@tanstack/react-start', '@tanstack/start'],
     configs: [],
   },
-  [Framework.VITE]: { deps: ['vite'], configs: VITE_CONFIGS },
+  [Framework.VITE]: { deps: ['vite', 'vinext'], configs: VITE_CONFIGS },
   /** CRA has no config file at all, so the dependency is the only signal. */
   [Framework.CRA]: { deps: ['react-scripts'], configs: [] },
   /** Nothing identifies plain HTML; it is where the chain below ends. */
@@ -451,7 +459,14 @@ function declaredDependencies(pkg: PackageJsonLike): Readonly<Record<string, str
 function detectFramework(input: DetectInput): Framework {
   for (const framework of DETECTION_ORDER) {
     const signals = FRAMEWORK_SIGNALS[framework];
-    if (signals.deps.some((d) => depVersion(input.pkg, d) !== undefined)) return framework;
+    const hasDisqualifyingDependency =
+      true === signals.depsUnless?.some((d) => depVersion(input.pkg, d) !== undefined);
+    if (
+      signals.deps.some((d) => depVersion(input.pkg, d) !== undefined) &&
+      !hasDisqualifyingDependency
+    ) {
+      return framework;
+    }
     if (
       hasAnyConfig(input.configFiles, signals.configs) &&
       !hasAnyConfig(input.configFiles, signals.configsUnless ?? [])

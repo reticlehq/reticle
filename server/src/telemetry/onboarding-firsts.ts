@@ -17,7 +17,7 @@ import { reportOnboardingStep } from './onboarding-funnel.js';
  */
 const seen = { look: false, act: false, verdict: false, driven: false };
 
-/** A tool call the daemon just ran. Called from the dispatch chokepoint, which sees every one. */
+/** A successful page read. The dispatcher calls this after excluding refusals and pauses. */
 export function noteOnboardingFirst(toolName: string): void {
   if (!seen.look && LOOK_TOOLS.has(toolName)) {
     seen.look = true;
@@ -32,7 +32,7 @@ export function noteOnboardingFirst(toolName: string): void {
 /**
  * The first ACTION of this run, and the fact that this install has been driven at all.
  *
- * Called from the dispatch chokepoint's own action branch rather than matched on a tool name here.
+ * Called after the dispatcher observes a dispatched action, rather than on an attempted call.
  * The name test was `toolName === ReticleTool.ACT`, on the worry that `act_and_wait` would report
  * one call as two different firsts — and the worry was backwards: this server's instructions tell
  * every agent to PREFER `act_and_wait`, so the step measured the tool we ask agents not to use and

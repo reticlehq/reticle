@@ -4,7 +4,7 @@ description: 'Zero to your agent verifying your real app, step by step, with wor
 icon: rocket
 ---
 
-**To get started with Reticle: run the installer, open your coding agent, then run `npx @reticlehq/server init` in your project root.** Getting started is three stages. **Installation** is one command in a terminal, `curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh | sh` (or `irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex` on Windows): it puts the CLI on the machine and registers the MCP server with every agent it can reach, so the tools are there the next time you open your agent. **Onboarding** is `init`: it wires your project, starts your dev server, opens the app and waits for it to connect. **The first run** is what proves anything: `reticle_verify { action: "explore", persona: "<the journey worth proving>" }`, or from a terminal `npx @reticlehq/server verify <url> --explore --persona "<the journey worth proving>"`. A connected app is not a verified one. Reticle is a verification layer that embeds a dev-only SDK in your running web app so an AI coding agent can prove a change works instead of guessing. It needs Node 20 or newer, an app you run locally, and an agent that speaks MCP.
+**To get started with Reticle Cloud: run the installer, then `reticle connect --project "My App"` in your app directory before opening your coding agent.** The installer puts the CLI on the machine and registers its MCP tools with supported agents. `connect` wires your app, checks that a browser session connected, opens sign-in approval if needed, links the named cloud project, and syncs existing history. The first run is what proves anything: ask your agent to verify one journey in your app, or use `reticle_verify { action: "explore", persona: "<the journey worth proving>" }`. A connected app is not a verified one. For local-only verification without an account, use `reticle init` instead. You need Node 20.11 or newer, an app you run locally, and an agent that speaks MCP.
 
 > **Looking for the fast path?** [Quickstart](/quickstart) gets you to a real verdict in five minutes, and every response on it was captured live. [Agentic install](/install-agentic) and [Manual install](/install-manual) cover setup in detail, per agent and per framework.
 >
@@ -58,7 +58,17 @@ Everything is **dev-only** and **localhost-only**. It's tree-shaken out of produ
 
 ---
 
-## Fastest path: `reticle init`
+## Cloud setup: `reticle connect`
+
+After the one-time [installer](/quickstart), run this in your app directory:
+
+```bash
+npx @reticlehq/server connect --project "My App"
+```
+
+Approve the short browser code if Reticle asks you to sign in. The command then links this folder and sends any history already on the machine. Open or restart your coding agent and ask it to verify one real journey. For a new project, the dashboard has no result until that first run is recorded.
+
+## Local-only path: `reticle init`
 
 From your project root:
 

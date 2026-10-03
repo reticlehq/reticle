@@ -44,7 +44,10 @@ function isAtLeast(version: string, minimum: string): boolean {
 const ENABLE_IT =
   'Turn it on where your app calls connect(): `reticle.connect({ captureNetworkBodies: true })`, ' +
   'or for the Vite plugin `reticle({ captureNetworkBodies: true })` / VITE_RETICLE_CAPTURE_BODIES=1. ' +
-  'Then re-run the action.';
+  'Before bodies are kept, built-in rules redact keys such as `password`, `apiKey` and ' +
+  '`authorization`, selected token keys, and known secret shapes. Other credential fields may ' +
+  'remain; add their names with `redact.keys` and use staging. See ' +
+  'https://docs.reticle.sh/what-is-recorded for the limits. Then re-run the action.';
 
 /**
  * The remedy for this session, or the honest statement that there is none.

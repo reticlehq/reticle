@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // HONESTY-CRITICAL: pin the response-ignored detector against a real browser that produces the
 // actual shape — not a hand-written event timeline.
 //
@@ -42,7 +43,7 @@ const chk = (l, o, d = '') => {
 const reticleRoot = path.join(os.tmpdir(), `reticle-resp-ignored-${process.pid}`, '.reticle');
 const fsp = createNodeFileSystem();
 const now = () => Date.now();
-const server = await start({ port: 4400, mcp: false });
+const server = await start({ port: TEST_BRIDGE_PORT, mcp: false });
 const deps = {
   sessions: server.bridge.sessions,
   baselines: new BaselineStore(),

@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // HONESTY-CRITICAL: prove cross-run memory works through the FULL path — a real browser
 // session + real FlowStore/ProjectStore on real disk. Record a flow, replay it twice, and verify
 // .reticle/project.json accumulates flow_replay run records AND reticle_project returns a diff-vs-last.
@@ -12,7 +13,7 @@ const fsp=createNodeFileSystem();
 const now=()=>Date.now();
 const flows=new FlowStore(fsp,reticleRoot,{now});
 const project=new ProjectStore(fsp,reticleRoot,{now});
-const server=await start({port:4400,mcp:false});
+const server=await start({port: TEST_BRIDGE_PORT,mcp:false});
 const deps={sessions:server.bridge.sessions,baselines:new BaselineStore(),recordings:new RecordingStore(),flows,project,fs:fsp,reticleRoot,now,annotations:new AnnotationStore()};
 const T=(n,a={})=>TOOLS.find(t=>t.name===n).handler(deps,{sessionId:'next-smoke',...a});
 const b=await chromium.launch({headless:true}); const p=await b.newPage();

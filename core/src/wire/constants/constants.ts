@@ -805,7 +805,6 @@ export const ActionType = {
    * merely looks like zoom would report it caught while the layout viewport never changed.
    */
   ZOOM: 'zoom',
-  WEBMCP: 'webmcp',
 } as const;
 export type ActionType = (typeof ActionType)[keyof typeof ActionType];
 

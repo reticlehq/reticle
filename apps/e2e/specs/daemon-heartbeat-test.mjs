@@ -25,7 +25,7 @@ import { freePortSafely, startOwnedDaemon, transportAlive } from '../gate-harnes
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const CLI = path.join(ROOT, 'server/dist/command/cli.js');
 const PORT = Number(process.env.DAEMON_HEARTBEAT_PORT ?? '4745');
-const LOG = path.join(homedir(), '.reticle', `daemon-${String(PORT)}.log`);
+const LOG = path.join(process.env.RETICLE_STATE_DIR ?? path.join(homedir(), '.reticle'), `daemon-${String(PORT)}.log`);
 /** Fast enough for a spec; the product default is 30s. See ReticleEnv.HEARTBEAT. */
 const BEAT_MS = 300;
 

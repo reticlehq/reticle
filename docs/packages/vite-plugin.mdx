@@ -31,6 +31,8 @@ export default defineConfig({
   [`@reticlehq/server`](/packages/server).
 </Warning>
 
+Set `RETICLE_PORT` in the dev server or desktop build environment to use the same custom bridge port as the CLI. A valid value overrides discovery and `.reticle.json`; invalid values are ignored.
+
 ## Why it exists
 
 `apply: 'serve'` means it never reaches a production build. That is the guarantee that lets you leave it in the config permanently: there is no way to ship Reticle to your users by forgetting to remove a line.
@@ -59,18 +61,39 @@ Plus a dynamic import of your dev module if one exists. It looks for `src/reticl
 | `session` | `string` | Omitted, so the SDK generates one |
 | `projectId` | `string` | Derived from the package name plus the root path |
 | `token` | `string` | `readPairingToken()`, from `~/.reticle/pairing-token` |
+| `present` | `boolean` | `true`. Set `false` to hide Reticle's presenter while keeping the agent connection active |
 | `sourceMapping` | `boolean` | `true`. Set `false` to skip the Babel pass |
 | `inject` | `boolean` | `true`. Set `false` to call `connect()` yourself |
 | `desktop` | `boolean` | `false`. When `true` the connect passes `allowInProduction: true`, which an Electron or Tauri renderer needs, and a `vite build` in a non-production mode (`--mode development`) is instrumented too. A production-mode build is stubbed like a web build |
 | `captureNetworkBodies` | `boolean` | `false`. Also enabled by `VITE_RETICLE_CAPTURE_BODIES=1` |
 | `onWarn` | `(message: string) => void` | `console.warn` |
 
+`reticle({ present: false })` still lets the plugin create and configure the connection; it only hides Reticle's visible presenter. `reticle({ inject: false })` disables that generated connection, so your application must call `connect()` itself. In that manual call, pass the pairing token explicitly:
+
+```ts
+reticle.connect({
+  token: __RETICLE_TOKEN__,
+  root: __RETICLE_ROOT__,
+  sdkVersion: __RETICLE_SDK_VERSION__,
+});
+```
+
+Add ambient declarations for these identifiers to `src/vite-env.d.ts` (or another included `.d.ts`) in a TypeScript app:
+
+```ts
+declare const __RETICLE_TOKEN__: string;
+declare const __RETICLE_ROOT__: string;
+declare const __RETICLE_SDK_VERSION__: string;
+```
+
+Vite replaces these `define` identifiers in application source at build time; the declarations let TypeScript typecheck them and do not create runtime globals. The SDK does not discover the pairing token, so pass it explicitly in a hand-written connection:
+
 ## Other exports
 
 | Export | Type | What it is |
 | --- | --- | --- |
 | `RETICLE_VITE_PLUGIN_NAME` | `'reticle'` | The plugin name |
-| `RETICLE_TOKEN_GLOBAL` | `'__RETICLE_TOKEN__'` | The global the token is stamped onto |
+| `RETICLE_TOKEN_GLOBAL` | `'__RETICLE_TOKEN__'` | The Vite `define` identifier replaced with the pairing token |
 | `RETICLE_CONNECT_MODULE` | `'/@reticle-connect'` | The virtual module id |
 | `RENDER_PREHOOK_SOURCE` | `string` | The inline render prehook snippet |
 | `RETICLE_DEV_MODULE_CANDIDATES` | readonly tuple | The four dev-module paths it looks for |

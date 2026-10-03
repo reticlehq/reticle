@@ -65,6 +65,18 @@ describe('computeVerdict', () => {
     expect(v.reasons.some((r) => r.includes('flow b'))).toBe(true);
   });
 
+  it('mixed pass + skipped flow → PARTIAL, reasons name the skipped flow', () => {
+    const v = computeVerdict({
+      ...base,
+      flows: [
+        flow('a', RunFlowStatus.PASS, 'x'),
+        { ...flow('b', RunFlowStatus.SKIPPED), failureReason: 'precondition unmet' },
+      ],
+    });
+    expect(v.status).toBe(VerdictStatus.PARTIAL);
+    expect(v.reasons.some((r) => r.includes('flow b: precondition unmet'))).toBe(true);
+  });
+
   it('only failures → FAIL', () => {
     const v = computeVerdict({ ...base, flows: [flow('b', RunFlowStatus.FAIL)] });
     expect(v.status).toBe(VerdictStatus.FAIL);

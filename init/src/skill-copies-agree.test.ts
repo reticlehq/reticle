@@ -112,9 +112,9 @@ describe('the skill copies agree about the rules', () => {
    * distribution route into `unknown` — and `unknown` is already expected to be the largest bucket,
    * which is exactly what makes the loss unnoticeable.
    *
-   * `npx_skill` shipped without one. The command in skills/install-and-verify was correct and the
-   * channel still reported nothing, because correctness of the COMMAND and attribution of the
-   * CHANNEL are different properties and only one of them was being checked by anybody.
+   * `npx_skill` shipped without one. The README now leads with the short `reticle connect` command;
+   * making people type an attribution environment variable there would complicate the first-run
+   * path. Its invocations intentionally fall into `unknown` rather than claiming a false channel.
    *
    * The plugin is deliberately absent: it sets the marker in the `env` of the MCP server it
    * registers (plugin/.claude-plugin/plugin.json), not in prose an agent types.
@@ -122,7 +122,6 @@ describe('the skill copies agree about the rules', () => {
   it('carries the install-source marker in every channel that ships a command', () => {
     const channels = [
       ['SKILL.md', 'skill_file'],
-      ['README.md', 'readme'],
       ['skills/install-and-verify/SKILL.md', 'npx_skill'],
     ] as const;
     for (const [file, source] of channels) {

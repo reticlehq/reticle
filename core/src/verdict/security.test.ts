@@ -111,7 +111,7 @@ describe('consequential is not the same as destructive', () => {
    *
    * Measured, which is why this changed: three benchmark runs lost their whole budget to "New
    * deploy" being refused. Improving the refusal's wording did not rescue the last of them — the
-   * agent spent its remaining turns weighing a bug report about the block and hunting a webmcp
+   * agent spent its remaining turns weighing a bug report about the block and hunting a
    * workaround. A guard that costs a run on a control it was never written to catch is not
    * protecting anything; it is teaching agents to route around it.
    */

@@ -356,3 +356,48 @@ describe('the session hands its runtime to the recommendation', () => {
     expect(String(session.health().recommendation ?? '')).toContain('reticle_lease');
   });
 });
+
+/**
+ * Where the tab was seen heading (#1256). The SDK emits NET_PENDING with a NAVIGATION initiator
+ * while the old document is still alive; the session retains it so the tombstone can say where
+ * the tab went rather than lumping it with closed tabs.
+ */
+describe('a navigation departure is retained for the tombstone', () => {
+  const navigationPending = (url: string): ReticleEvent =>
+    ({
+      type: EventType.NET_PENDING,
+      data: { id: 'nav-1', method: 'GET', url, initiator: 'navigation' },
+    }) as unknown as ReticleEvent;
+
+  it('retains the target of a navigation-initiated pending', () => {
+    const { session } = makeSession();
+    expect(session.departedTo()).toBeUndefined();
+    session.pushEvent(navigationPending('http://localhost:5173/login'));
+    expect(session.departedTo()).toBe('http://localhost:5173/login');
+  });
+
+  it('ignores a pending that is in-flight work, not a departure', () => {
+    const { session } = makeSession();
+    session.pushEvent({
+      type: EventType.NET_PENDING,
+      data: { id: 'f-1', method: 'GET', url: 'http://localhost:5173/api/slow' },
+    } as unknown as ReticleEvent);
+    expect(session.departedTo()).toBeUndefined();
+  });
+
+  it('a stale note is not this departure — the document survived it', () => {
+    const { session, tick } = makeSession();
+    session.pushEvent(navigationPending('http://localhost:5173/login'));
+    // The document kept talking for well past the freshness window, then went away for some
+    // other reason: attributing that later disconnect to the old navigation would invent a story.
+    tick(60_000);
+    expect(session.departedTo()).toBeUndefined();
+  });
+
+  it('keeps the latest target when several navigations are reported', () => {
+    const { session } = makeSession();
+    session.pushEvent(navigationPending('http://localhost:5173/login'));
+    session.pushEvent(navigationPending('https://accounts.google.com/o/oauth2/v2/auth'));
+    expect(session.departedTo()).toBe('https://accounts.google.com/o/oauth2/v2/auth');
+  });
+});

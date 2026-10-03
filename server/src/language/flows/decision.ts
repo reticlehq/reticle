@@ -159,6 +159,39 @@ export function buildDecision(
             : 'the action ran and the expected consequence never appeared — check the handler behind it, or whether this flow needs a state it did not start in. The locator is not the problem.',
       };
     }
+    /*
+     * An anchor that matched SEVERAL elements is not an element that is gone, and the advice below
+     * says it is.
+     *
+     * `ANCHOR_AMBIGUOUS` carries `nearest: null` and `ambiguous: true`, so it fell through to the
+     * last line of this branch — "the anchored element is gone; rebind or update the flow" — for a
+     * locator that resolved several times over and lost nothing. Rebind TO WHAT is the question the
+     * drift just refused to answer; sending the reader looking for a replacement locator is the
+     * opposite of the fix, which is a NARROWER anchor on the one they already have.
+     *
+     * The same sentence was already wrong for a testid ambiguity (it is why `ambiguous: true` exists
+     * on that drift at all), and the role and component runners make it reachable for two more
+     * anchor kinds. The distinction this branch has to keep is the one it was written for: a
+     * CONSEQUENCE that never appeared has no anchor problem, an AMBIGUOUS anchor has nothing else.
+     */
+    if (DriftReason.ANCHOR_AMBIGUOUS === drift.reasonKind) {
+      return {
+        verdict: 'drift',
+        summary: withIntent(
+          `"${name}" drifted at step ${step.step} (${step.anchor}) — the anchor is ambiguous.`,
+          intentSaid,
+        ),
+        whatChanged: drift.reason,
+        // The step's OWN anchor is the thing at fault here, so its source file is the right place to
+        // look — unlike the consequence case above, where the recorded source belongs to the element
+        // that was acted on and the anchor is not what failed.
+        ...(where !== undefined ? { whereInSource: where } : {}),
+        nextAction:
+          'the anchor matched several elements, so which one the recording meant is not decidable. ' +
+          'Narrow the anchor on this step — a unique testid, or a role+name that only one control ' +
+          'has — rather than rebinding it; nothing here says the element was renamed or removed.',
+      };
+    }
     const fix =
       drift.nearest !== null && drift.ambiguous !== true
         ? `rebind the anchor to "${drift.nearest}" (closest survivor)`
@@ -256,6 +289,12 @@ export function buildSuiteVerdict(
   const unverifiable: { flow: string; reason: string }[] = [];
   let passed = 0;
   for (const { replay, flow } of runs) {
+    if (replay.status === ReplayStatus.UNVERIFIABLE) {
+      const reason =
+        replay.unverifiable?.reason ?? unverifiableReason(flow) ?? 'the flow could not be graded';
+      unverifiable.push({ flow: replay.name, reason });
+      continue;
+    }
     if (replay.status === ReplayStatus.OK) {
       /*
        * The REPLAY's own answer first, then the grader's.

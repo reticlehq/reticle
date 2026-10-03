@@ -2,11 +2,12 @@ import { formatStepAddress } from 'open-verification';
 import { assertsState, expectLabel, expectedElementTestid, withoutClauses } from '@reticlehq/core';
 import { span } from '@/trace.js';
 import {
+  ambiguityDrift,
   anchorLabel,
   expectElementDrift,
+  reresolved,
   resolveTestid,
   testidDrift,
-  ambiguousAnchorDrift,
 } from './flow-anchor.js';
 export { nearestIsAmbiguous, nearestTestid, resolveQuery } from './flow-anchor.js';
 import type { FlowReplaySession, WaitForSignal, Sleep } from './flow-replay-types.js';
@@ -164,17 +165,13 @@ export async function runTestidStep(
    * reads `drift` and `ok` and never reads a note, so "we guessed which element you meant" was
    * indistinguishable from "it did what it did before" -- the one claim a replay makes.
    *
-   * The action is NOT dispatched. Acting and then reporting drift would leave the app changed by
-   * a click nobody can attribute, which is worse than the ambiguity it reports.
+   * The record itself comes from `ambiguityDrift`, shared with the role and component runners: this
+   * anchor kind was the first to get the rule, and writing it inline is how the other two came to
+   * answer the same question differently.
    */
-  if (refs.length > 1) {
-    return {
-      step: index,
-      tool: step.tool,
-      anchor: value,
-      ok: false,
-      drift: ambiguousAnchorDrift(value, refs.length),
-    };
+  const ambiguous = ambiguityDrift(step.anchor, refs);
+  if (ambiguous !== null) {
+    return { step: index, tool: step.tool, anchor: value, ok: false, drift: ambiguous };
   }
   const ref = refs[0] ?? '';
   /*
@@ -186,7 +183,7 @@ export async function runTestidStep(
    * so the kind most likely to appear in a real flow was the kind without the cure.
    *
    * The re-resolve keeps the ambiguity rule above: more than one match is drift, never a guess, so
-   * it hands back a ref only when the locator still names exactly one element.
+   * it reports an `anchor_ambiguous` drift rather than handing back the first of the new matches.
    */
   const result = await actOnResolvedRef(
     session,
@@ -198,10 +195,7 @@ export async function runTestidStep(
     // The field this step types into — from the anchor, so a redacted fill can be supplied from
     // RETICLE_SECRET_<FIELD> without the flow carrying the secret.
     anchorFieldName(step.anchor),
-    async () => {
-      const again = await resolveTestid(session, value, sleep);
-      return 1 === again.refs.length ? again.refs[0] : undefined;
-    },
+    async () => reresolved(step.anchor, (await resolveTestid(session, value, sleep)).refs),
   );
   if (!result.ok) return result;
   // assert the step's expect.element testid is present AFTER the action —

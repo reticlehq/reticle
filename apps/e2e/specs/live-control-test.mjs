@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 import { chromium } from 'playwright';
 import { start, TOOLS, BaselineStore, RecordingStore } from '@reticlehq/server';
 import { waitForSession } from '../wait-for-session.mjs';
@@ -5,7 +6,7 @@ const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
 const deps={sessions:null,baselines:new BaselineStore(),recordings:new RecordingStore()};
 const T=(n,a={})=>TOOLS.find(t=>t.name===n).handler(deps,{sessionId:'next-smoke',...a});
 let pass=0,fail=0; const chk=(l,o,d='')=>{console.log(`   ${o?'✅':'❌'} ${l}${d?'  — '+d:''}`);o?pass++:fail++;};
-const server=await start({port:4400,mcp:false}); deps.sessions=server.bridge.sessions;
+const server=await start({port: TEST_BRIDGE_PORT,mcp:false}); deps.sessions=server.bridge.sessions;
 const b=await chromium.launch({headless:true}); const p=await b.newPage();
 await p.goto('http://localhost:3100/');
 await waitForSession(()=>server.bridge.sessions.list(), 'next-smoke');

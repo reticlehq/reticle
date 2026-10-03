@@ -132,12 +132,11 @@ jobs:
       # failure in a package nobody was editing.
       - run: pnpm lint:docs
       - run: pnpm typecheck
-      # Non-blocking: a newly-published advisory on an untouched transitive dep must not red an
-      # unrelated PR. It still runs and surfaces (warning) so the advisory is visible; act on it via
-      # a dependency bump / pnpm override, not by blocking the build.
-      - name: Security audit (advisory drift — non-blocking)
-        run: pnpm audit --audit-level high
-        continue-on-error: true
+      # High and critical dependency advisories fail verify and therefore the aggregate gate.
+      # The checker accepts only the two exact, reviewed, unpatched development-tool paths recorded
+      # in REPOSITORY-SETTINGS.md; any new path, patched release, or advisory fails.
+      - name: Security audit
+        run: node scripts/check-js-audit.mjs --self-test && node scripts/check-js-audit.mjs
       # format:check is its own job (format-check); running it here as well cost ~30s for nothing.
 
   # The unit suite, in parallel with verify's static checks rather than after them. It was ~4.5 of
@@ -307,6 +306,8 @@ jobs:
   # and Windows is cross-checked; macOS gets its own runner below.
   rust:
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -482,6 +483,43 @@ jobs:
           # Reported, never fatal: the verdict lives in the other repo's run either way.
           [ "$code" = "204" ] || echo "dispatch did not succeed — check the token's Actions:write scope"
 
+  # A bounded product check before the long batteries finish. No npm scaffolding or retries.
+  smoke:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.e2e == 'true'
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: .turbo
+          key: turbo-linux-smoke-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            turbo-linux-smoke-${{ hashFiles('pnpm-lock.yaml') }}-
+            turbo-linux-
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-Linux-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: playwright-Linux-
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:smoke
+      - name: Smoke evidence (including first failure)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: smoke-evidence
+          path: artifacts/smoke/
+          if-no-files-found: warn
+          retention-days: 7
+
   # Which tiers does this PR actually need?
   #
   # The install gate scaffolds and npm-installs three real apps. Running it on a docs-only PR costs
@@ -514,6 +552,15 @@ jobs:
           fetch-depth: 0
       - id: filter
         run: |
+          # Full qualification must also work when manually dispatched on a feature branch.
+          case "${{ github.event_name }}" in
+            schedule|workflow_dispatch)
+              for tier in install gateself desktop bench conformance rust e2e; do
+                echo "$tier=true" >> "$GITHUB_OUTPUT"
+              done
+              exit 0
+              ;;
+          esac
           # On a PR the base is the merge base with the target branch. On a PUSH TO MAIN there is no
           # base_ref, so this used to resolve to `origin/main` — which on main IS HEAD, so the diff
           # came back EMPTY, fell into the "no diff" branch below, and every merge to main paid the
@@ -525,6 +572,8 @@ jobs:
               ''|0000000000000000000000000000000000000000) BASE="HEAD~1" ;;
               *) BASE="$BEFORE" ;;
             esac
+          elif [ "${{ github.event_name }}" = "merge_group" ]; then
+            BASE="${{ github.event.merge_group.base_sha }}"
           else
             BASE="origin/${{ github.base_ref || 'main' }}"
           fi
@@ -555,7 +604,7 @@ jobs:
           echo "changed files:"; echo "$CHANGED" | sed 's/^/  /'
           # What the e2e battery can see: every package it boots or drives, and the apps it starts.
           # Docs, skills, the Rust crate and fixtures it never boots cannot change its answer.
-          if echo "$CHANGED" | grep -qE '^(core|engine|server|init|open-verification|spec-runner|adapters|apps/(e2e|api|bench-app|next-smoke|atlas|examples))/|^(package\.json|pnpm-lock\.yaml|turbo\.json|\.github/workflows/ci\.yml)$'; then
+          if grep -qE '^(core|engine|server|init|open-verification|spec-runner|adapters|apps/(e2e|api|bench-app|next-smoke|atlas|examples))/|^(package\.json|pnpm-lock\.yaml|turbo\.json|\.github/workflows/ci\.yml)$' <<< "$CHANGED"; then
             echo "e2e=true" >> "$GITHUB_OUTPUT"
           else
             echo "e2e=false" >> "$GITHUB_OUTPUT"
@@ -576,7 +625,7 @@ jobs:
           # Tauri change is Rust that no JS gate compiles at all. The build plugins do the wiring, the
           # browser realm is what dials, and `init` installs the framework adapter, so those three
           # stay. This restores the pre-move scope exactly; it is not a new judgement about coverage.
-          if echo "$CHANGED" | grep -qE '^((init|core)/|server/src/command/setup/|adapters/(build/|realm/browser/|framework/)|break/|install/|apps/e2e/(install-gate|gate-harness|install-baseline)|package\.json|pnpm-lock\.yaml|\.github/workflows/ci\.yml)'; then
+          if grep -qE '^((init|core)/|server/src/command/(cli|setup)/|adapters/(build/|realm/browser/|framework/)|break/|install/|apps/e2e/(install-gate|install-control|install-packages|smoke-checks|gate-harness|install-baseline)|scripts/pack-install-gate\.mjs|package\.json|pnpm-lock\.yaml|\.github/workflows/ci\.yml)' <<< "$CHANGED"; then
             echo "install=true" >> "$GITHUB_OUTPUT"
           else
             echo "install=false" >> "$GITHUB_OUTPUT"
@@ -584,7 +633,7 @@ jobs:
           # The gate's OWN machinery, which is a narrower question than "could the install break".
           # The self-test proves the gate can still FAIL. That ability changes when the gate, its
           # harness, or its recorded baseline changes -- not when somebody edits the browser SDK.
-          if echo "$CHANGED" | grep -qE '^(apps/e2e/(install-gate|gate-harness|install-baseline)|\.github/workflows/ci\.yml)'; then
+          if grep -qE '^(apps/e2e/(install-gate|install-control|install-packages|smoke-checks|gate-harness|install-baseline)|scripts/pack-install-gate\.mjs|\.github/workflows/ci\.yml)' <<< "$CHANGED"; then
             echo "gateself=true" >> "$GITHUB_OUTPUT"
           else
             echo "gateself=false" >> "$GITHUB_OUTPUT"
@@ -595,7 +644,7 @@ jobs:
           # by definition: the IPC observer, desktop capture, and the setup/doctor pair that shape
           # and diagnose a desktop install. Anything broader (all of adapters/realm/browser, say) would
           # route most PRs here and give the routing back for nothing.
-          if echo "$CHANGED" | grep -qE '^(adapters/realm/electron/|adapters/realm/tauri/|apps/(electron|tauri)-smoke/|adapters/realm/browser/src/observers/ipc\.ts|adapters/realm/browser/src/dom/desktop-capture\.ts|server/src/command/setup/desktop-shape\.ts|init/src/diagnose/desktop-doctor\.ts|\.github/workflows/ci\.yml)'; then
+          if grep -qE '^(adapters/realm/electron/|adapters/realm/tauri/|apps/(electron|tauri)-smoke/|adapters/realm/browser/src/observers/ipc\.ts|adapters/realm/browser/src/dom/desktop-capture\.ts|server/src/command/setup/desktop-shape\.ts|init/src/diagnose/desktop-doctor\.ts|\.github/workflows/ci\.yml)' <<< "$CHANGED"; then
             echo "desktop=true" >> "$GITHUB_OUTPUT"
           else
             echo "desktop=false" >> "$GITHUB_OUTPUT"
@@ -606,7 +655,7 @@ jobs:
           # SPI; the two functions in core that build a protocol subject; and the two fixture apps
           # the scenarios are planted into. Narrower than `desktop` in some places and wider in
           # others, so it gets its own filter rather than borrowing one.
-          if echo "$CHANGED" | grep -qE '^(open-verification/|conformance/|server/src/portal/realm/|core/src/realm/|core/src/verdict/verification-run\.ts|apps/bench-app/|apps/electron-smoke/|\.github/workflows/ci\.yml)'; then
+          if grep -qE '^(open-verification/|conformance/|server/src/portal/realm/|core/src/realm/|core/src/verdict/verification-run\.ts|apps/bench-app/|apps/electron-smoke/|\.github/workflows/ci\.yml)' <<< "$CHANGED"; then
             echo "conformance=true" >> "$GITHUB_OUTPUT"
           else
             echo "conformance=false" >> "$GITHUB_OUTPUT"
@@ -617,16 +666,14 @@ jobs:
           # The observation payloads (snapshot, query, the verdict reasons) sit in browser and events.
           # bench-app is the fixture the numbers are measured against, so changing it moves the
           # baseline whether or not any product code changed.
-          if echo "$CHANGED" | grep -qE '^(core/src/|adapters/realm/browser/src/|server/src/(surface/tools|portal/session)/|engine/src/(question|disagreement|window|evidence)/|apps/bench-app/|bench/|\.github/workflows/ci\.yml)'; then
+          if grep -qE '^(core/src/|adapters/realm/browser/src/|server/src/(surface/tools|portal/session)/|engine/src/(question|disagreement|window|evidence)/|apps/bench-app/|bench/|\.github/workflows/ci\.yml)' <<< "$CHANGED"; then
             echo "bench=true" >> "$GITHUB_OUTPUT"
           else
             echo "bench=false" >> "$GITHUB_OUTPUT"
           fi
-          # Only `rust-macos` reads this. The Linux `rust` job stays unconditional: it is an ubuntu
-          # runner at 1x, it cross-checks the Windows capture path, and it is the ONLY thing in CI
-          # that compiles adapters/realm/tauri at all — a skip there is a real hole, a skip on the second
-          # macOS opinion of the same crate is not.
-          if echo "$CHANGED" | grep -qE '^(adapters/realm/tauri/|apps/tauri-smoke/src-tauri/|\.github/workflows/ci\.yml)'; then
+          # Both Rust compile jobs run for crate changes. JS/docs cannot change this standalone
+          # Cargo tree; scheduled/manual runs still exercise it through the full-tier fallback.
+          if grep -qE '^(adapters/realm/tauri/|apps/tauri-smoke/src-tauri/|\.github/workflows/ci\.yml)' <<< "$CHANGED"; then
             echo "rust=true" >> "$GITHUB_OUTPUT"
           else
             echo "rust=false" >> "$GITHUB_OUTPUT"
@@ -751,31 +798,38 @@ jobs:
   # cap, i.e. the documented scaling cliff: adding a sixth framework was a change to how long every
   # PR takes. Fanned out, the slowest cell is one scaffold plus install and build, about seven
   # minutes, and a seventh framework costs a runner rather than a queue.
+  install-packages:
+    runs-on: ubuntu-latest
+    needs: [format-check, changes]
+    if: needs.changes.outputs.install == 'true'
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/pack-install-gate.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: install-packages-${{ github.sha }}
+          path: artifacts/install-packages/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
+
   install-gate:
     strategy:
       fail-fast: false
-      # Computed in `changes`, not listed here: a PULL REQUEST runs three Windows scaffolds and
-      # everything else runs ten. Ten windows-latest runners requested at once is more than the pool
-      # gives out -- on run 35297084015 the tenth cell waited 37 minutes for a machine, ran for 8,
-      # and ended a 56-minute build on its own. The scaffold list itself lives there too, so the two
-      # halves of the decision (which scaffolds exist, which run today) are not in separate files.
-      #
-      # astro, sveltekit and cra are the frameworks that own their own HTML (or have no bundler hook
-      # at all) and had no install coverage until 3.x -- the class where an all-green `init` produced
-      # zero sessions twice (#678, #741). Nuxt and React Router joined once `init` stopped handing
-      # them a MANUAL step; both are in the list above.
+      # The event-specific matrix lives in changes: PRs run four cells, queue entries eleven
+      # Linux cells, and nightly/manual runs all eleven scaffolds on Linux and Windows.
       matrix: ${{ fromJSON(needs.changes.outputs.install_matrix) }}
     runs-on: ${{ matrix.os }}
-    needs: [format-check, changes]
+    needs: [install-packages, changes]
     if: needs.changes.outputs.install == 'true'
-    # One scaffold, twice (negative control then the real run), plus the workspace install and build
-    # every cell pays.
-    #
-    # 45, not 30, and the old number was measured on the wrong platform. "~7 minutes" is UBUNTU;
-    # Windows runs the same cell in 8 to 28 (run 35297084015, `cra` at 28m). A 30-minute cap put the
-    # heaviest cell two minutes from the ceiling, and it did hit it -- GitHub reports a timed-out job
-    # as `cancelled`, which reads like somebody pressed stop rather than like a gate failing. A cap
-    # exists to stop a HANG, not to punish a slow runner, so it now sits clear of the real number.
+    # Retain the existing cap until artifact-based runs have been measured on Windows.
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -785,10 +839,20 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # No `pnpm build` here. The gate's first act is `pnpm -r publish`, whose prepack wipes each
-      # package's dist and rebuilds it with `tsc --force` in dependency order, so a separate build
-      # was done twice every cell (~1 min on Linux, ~1.5 on Windows). Verified by deleting every dist
-      # and running a scaffold end to end: all ten checks pass.
+      # Use one set of actual prepacked npm tarballs for this SHA on every OS. Consumers still
+      # install from Verdaccio through init; only redundant compilation has moved out of the cells.
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: install-packages-${{ github.sha }}
+          path: artifacts/install-packages/
+      - id: npm-cache
+        shell: bash
+        run: echo "path=$(npm config get cache)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: ${{ steps.npm-cache.outputs.path }}
+          key: npm-install-${{ runner.os }}-${{ matrix.scaffold }}-${{ hashFiles('pnpm-lock.yaml', 'apps/e2e/install-gate.mjs') }}
+          restore-keys: npm-install-${{ runner.os }}-${{ matrix.scaffold }}-
       # The browser download was never cached: ~20s on Linux and over five minutes on a Windows
       # install cell, every run. `install` is still run after a hit, so a newer Playwright fetches
       # its own revision and `--with-deps` still provisions the Linux system libraries.
@@ -805,33 +869,24 @@ jobs:
       - name: npm 11 for the Angular scaffold
         if: matrix.scaffold == 'angular'
         run: npm install -g npm@11
-      # The negative control FIRST. It mis-wires each scaffold's port so no session can appear and
-      # requires the gate to go red; if it passes, the gate proves nothing and the run below would be
-      # a green that means nothing. check-boundaries and check-lossy-transforms already self-test in
-      # CI for the same reason.
-      # Run the negative control when it can actually have broken, not on every PR.
-      #
-      # It costs 17.1 min on Windows and 8.3 on Ubuntu against 10.7 and 3.8 for the real gate, so it
-      # is 63% of this job -- and this job sets the whole pipeline's wall clock: `gate` finished two
-      # seconds after it, with everything else idle for twelve minutes.
-      #
-      # What it proves is that the gate can still FAIL, and that only changes when the gate itself
-      # changes. So: whenever the gate's own machinery is touched, and on every path that actually
-      # LANDS code (push to main, and the merge queue). A PR that broke detection without touching
-      # the gate is caught before it merges rather than at PR time -- later, but not never, and the
-      # real run below still covers every scaffold on every PR.
-      - name: Install-gate self-test (a guard that has never failed is not a guard)
-        if: >-
-          needs.changes.outputs.gateself == 'true' || github.event_name == 'push' || github.event_name == 'merge_group'
-        run: pnpm gate:install:self-test --only ${{ matrix.scaffold }}
-      - name: Install gate (scaffold, init, boot, open, assert a session)
-        run: pnpm gate:install --only ${{ matrix.scaffold }}
+      # Both phases share one registry publish/prepack. Recheck the control when its machinery
+      # changes, plus nightly/manual qualification; product changes always run the positive install.
+      - name: Install gate (with negative control when needed)
+        env:
+          INSTALL_GATE_PACKAGES: artifacts/install-packages
+          RUN_CONTROL: ${{ needs.changes.outputs.gateself == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+        shell: bash
+        run: |
+          args=(--only '${{ matrix.scaffold }}')
+          if [ "$RUN_CONTROL" = true ]; then args+=(--with-self-test); fi
+          set -o pipefail
+          pnpm gate:install "${args[@]}" 2>&1 | tee install-gate.log
       - name: Upload gate log on failure
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: install-gate-logs-${{ matrix.os }}-${{ matrix.scaffold }}
-          path: /tmp/reticle-verdaccio.log
+          path: install-gate.log
           if-no-files-found: ignore
 
   # Many agents, many projects, one machine. Unit tests pin the resolver's decisions; this starts real
@@ -1227,7 +1282,9 @@ jobs:
         format-check,
         verify,
         unit-tests,
+        smoke,
         e2e,
+        install-packages,
         install-gate,
         matrix-records,
         windows,

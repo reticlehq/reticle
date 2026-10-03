@@ -49,12 +49,43 @@ import { observeSafely, type Emit, type Teardown } from './types.js';
 /** Schemes that never take the browser anywhere: no departure, nothing to report. */
 const NON_NAVIGATING = /^(javascript|mailto|tel|sms|blob|data):/i;
 
+/**
+ * The sliver of the Navigation API we read. `window.navigation` is undefined in Firefox and
+ * older Chromiums, so the anchor-click path below stays the fallback — and TypeScript's DOM
+ * lib does not name these types everywhere this package compiles, hence the structural shape.
+ */
+interface NavigationDestinationLike {
+  readonly url: string;
+  /** True for in-page transitions (fragment, history pushState): the document survives. */
+  readonly sameDocument: boolean;
+}
+
+interface NavigateEventLike extends Event {
+  readonly destination: NavigationDestinationLike;
+  readonly defaultPrevented: boolean;
+}
+
+/** The Navigation API root, when the browser exposes it. */
+function navigationOf(): EventTarget | undefined {
+  if ('undefined' === typeof window) return undefined;
+  const nav = (window as Window & { navigation?: unknown }).navigation;
+  return nav instanceof EventTarget ? nav : undefined;
+}
+
 /** The anchor this event landed on, walking up through the nested markup a real link contains. */
 function anchorFor(target: EventTarget | null): HTMLAnchorElement | undefined {
   if (!(target instanceof Element)) return undefined;
   const anchor = target.closest('a');
   return anchor instanceof HTMLAnchorElement ? anchor : undefined;
 }
+
+/**
+ * How long a recorded departure suppresses a matching Navigation API event for the same URL.
+ *
+ * Following an anchor fires BOTH the click listener and `navigate`; without this, one departure
+ * is recorded as two unmatched NET_PENDINGs, which reads downstream as two in-flight requests.
+ */
+const DUPLICATE_WINDOW_MS = 1000;
 
 /** True when following this anchor leaves the page the SDK is instrumenting. */
 export function isDeparture(href: string, downloadAttr: boolean, here: string): boolean {
@@ -79,6 +110,27 @@ export function isDeparture(href: string, downloadAttr: boolean, here: string): 
 export function installDeparture(emit: Emit): Teardown {
   if ('undefined' === typeof document) return () => undefined;
   let seq = 0;
+  /** The most recent departure recorded, so a `navigate` for the same traversal is not a second. */
+  let lastRecorded: { url: string; at: number } | undefined;
+  const record = (url: string, download: boolean): void => {
+    const now = Date.now();
+    if (
+      lastRecorded !== undefined &&
+      lastRecorded.url === url &&
+      now - lastRecorded.at < DUPLICATE_WINDOW_MS
+    ) {
+      return;
+    }
+    lastRecorded = { url, at: now };
+    seq += 1;
+    emit(EventType.NET_PENDING, {
+      id: `nav-${String(seq)}`,
+      method: 'GET',
+      url,
+      initiator: NetInitiator.NAVIGATION,
+      ...(download ? { download: true } : {}),
+    });
+  };
   const onClick = (event: Event): void => {
     observeSafely(() => {
       const anchor = anchorFor(event.target);
@@ -94,18 +146,41 @@ export function installDeparture(emit: Emit): Teardown {
       queueMicrotask(() => {
         observeSafely(() => {
           if (event.defaultPrevented) return;
-          seq += 1;
-          emit(EventType.NET_PENDING, {
-            id: `nav-${String(seq)}`,
-            method: 'GET',
-            url,
-            initiator: NetInitiator.NAVIGATION,
-            ...(download ? { download: true } : {}),
-          });
+          record(url, download);
         });
       });
     });
   };
+  /**
+   * Programmatic navigations never produce a click: `location.assign('/login')` on mount leaves
+   * the daemon seeing only the socket close, and the reason lumped in with closed tabs (#1256).
+   *
+   * The Navigation API fires `navigate` on the OLD document while it is still alive, and
+   * `destination.url` is resolved by the browser — which `pagehide` cannot supply (`location.href`
+   * still names the departing page there). Same-document transitions keep this document, so they
+   * are not departures; a cancelled navigation never leaves either, and reporting one would plant
+   * a pending that cannot settle. The microtask reads `defaultPrevented` the way the click path
+   * does — decided at the end of dispatch, still before the browser acts.
+   */
+  const onNavigate = (event: Event): void => {
+    observeSafely(() => {
+      const destination = (event as NavigateEventLike).destination;
+      if (destination === undefined || destination.sameDocument) return;
+      const url = destination.url;
+      if (!isDeparture(url, false, document.location.href)) return;
+      queueMicrotask(() => {
+        observeSafely(() => {
+          if ((event as NavigateEventLike).defaultPrevented) return;
+          record(url, false);
+        });
+      });
+    });
+  };
+  const navigation = navigationOf();
+  if (navigation !== undefined) navigation.addEventListener('navigate', onNavigate);
   document.addEventListener('click', onClick, true);
-  return () => document.removeEventListener('click', onClick, true);
+  return () => {
+    document.removeEventListener('click', onClick, true);
+    if (navigation !== undefined) navigation.removeEventListener('navigate', onNavigate);
+  };
 }

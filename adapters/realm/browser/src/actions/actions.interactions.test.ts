@@ -1,6 +1,5 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { EventType } from '@reticlehq/core';
-import { createCommandRegistry } from '@/commands/commands.js';
 import { executeAction } from './actions.js';
 import { installScroll } from '@/observers/scroll.js';
 import { installOverlay } from '@/presenter/chrome/overlay.js';
@@ -121,42 +120,6 @@ describe('scroll observer', () => {
     const scrollEvents = emit.mock.calls.filter((c) => c[0] === EventType.SCROLL_POSITION);
     expect(scrollEvents.length).toBeGreaterThan(0);
     stop();
-  });
-});
-
-describe('webmcp passthrough', () => {
-  afterEach(() => {
-    delete (navigator as unknown as Record<string, unknown>)['modelContext'];
-  });
-
-  it('calls a navigator.modelContext tool via the act command', async () => {
-    const callTool = vi.fn((name: string) => Promise.resolve({ called: name }));
-    (navigator as unknown as Record<string, unknown>)['modelContext'] = { callTool };
-    const reg = createCommandRegistry();
-    const handler = reg.get('act');
-    if (handler === undefined) throw new Error('no act handler');
-    const result = await handler({
-      action: 'webmcp',
-      args: { tool: 'search', params: { q: 'x' } },
-    });
-    expect(callTool).toHaveBeenCalledWith('search', { q: 'x' });
-    expect(result).toEqual({ called: 'search' });
-  });
-
-  it('blocks dangerous tools without explicit confirmation', async () => {
-    const callTool = vi.fn(() => Promise.resolve({ ok: true }));
-    (navigator as unknown as Record<string, unknown>)['modelContext'] = { callTool };
-    const reg = createCommandRegistry();
-    const handler = reg.get('act');
-    if (handler === undefined) throw new Error('no act handler');
-    await expect(
-      handler({ action: 'webmcp', args: { tool: 'delete_account', params: {} } }),
-    ).rejects.toThrow(/confirmDangerous/);
-    await handler({
-      action: 'webmcp',
-      args: { tool: 'delete_account', params: {}, confirmDangerous: true },
-    });
-    expect(callTool).toHaveBeenCalledOnce();
   });
 });
 

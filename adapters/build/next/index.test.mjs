@@ -129,6 +129,24 @@ describe('withReticle', () => {
     expect(out.module.rules).toHaveLength(0);
     expect(sawUserHook).toBe(true);
   });
+
+  it('installs no Turbopack loader when sourceMapping is off (#1248)', () => {
+    process.env.NODE_ENV = 'development';
+    const config = withReticle({}, { sourceMapping: false });
+    expect(config).toHaveProperty('turbopack');
+    const rules = config.turbopack?.rules ?? {};
+    expect(rules['*.tsx']).toBeUndefined();
+    expect(rules['*.jsx']).toBeUndefined();
+  });
+
+  it('preserves user Turbopack config when sourceMapping is off (#1248)', () => {
+    process.env.NODE_ENV = 'development';
+    const config = withReticle(
+      { turbopack: { resolveAlias: { '@app': './src' } } },
+      { sourceMapping: false },
+    );
+    expect(config.turbopack?.resolveAlias).toEqual({ '@app': './src' });
+  });
 });
 
 /**
@@ -169,6 +187,35 @@ describe('discoverDaemonUrl', () => {
   afterEach(() => {
     for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
   });
+
+  it('honors RETICLE_PORT over an existing daemon and configured port', () => {
+    const cwd = project('shop-abc123');
+    writeFileSync(
+      join(cwd, '.reticle.json'),
+      JSON.stringify({ projectId: 'shop-abc123', port: 4400 }),
+    );
+    const dir = home([{ port: 4407, pid: 111, projectId: 'shop-abc123' }]);
+    expect(discoverDaemonUrl(cwd, dir, live, { RETICLE_PORT: '15400' })).toBe(
+      'ws://localhost:15400/reticle',
+    );
+  });
+
+  it('honors RETICLE_PORT before init has written a config', () => {
+    expect(discoverDaemonUrl(project(undefined), home([]), live, { RETICLE_PORT: '15400' })).toBe(
+      'ws://localhost:15400/reticle',
+    );
+  });
+
+  it.each(['', '0', '-1', '65536', '1.5', '14400oops', 'Infinity'])(
+    'ignores invalid RETICLE_PORT %s',
+    (port) => {
+      const cwd = project('shop-abc123');
+      const dir = home([{ port: 4407, pid: 111, projectId: 'shop-abc123' }]);
+      expect(discoverDaemonUrl(cwd, dir, live, { RETICLE_PORT: port })).toBe(
+        'ws://localhost:4407/reticle',
+      );
+    },
+  );
 
   it('finds the live daemon serving THIS project, whatever port it moved to', () => {
     const cwd = project('shop-abc123');
@@ -318,12 +365,15 @@ describe('allowedDevOrigins', () => {
  */
 describe('withReticle forwards the discovered daemon', () => {
   const prevDir = process.env[TOKEN_ENV];
+  const prevState = process.env.RETICLE_STATE_DIR;
   const prevCwd = process.cwd();
   /** @type {string[]} */
   const dirs = [];
 
   afterEach(() => {
     process.chdir(prevCwd);
+    if (prevState === undefined) delete process.env.RETICLE_STATE_DIR;
+    else process.env.RETICLE_STATE_DIR = prevState;
     if (prevDir === undefined) delete process.env[TOKEN_ENV];
     else process.env[TOKEN_ENV] = prevDir;
     for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
@@ -337,7 +387,8 @@ describe('withReticle forwards the discovered daemon', () => {
     if (entry !== undefined) {
       writeFileSync(join(home, `daemon-${entry.port}.json`), JSON.stringify(entry));
     }
-    process.env[TOKEN_ENV] = home;
+    process.env.RETICLE_STATE_DIR = home;
+    process.env[TOKEN_ENV] = defaultTokenDir;
     process.chdir(cwd);
     return withReticle({});
   }

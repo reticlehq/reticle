@@ -162,3 +162,7 @@ conformance/.handoff/
 # Local Verdaccio state (scripts/local-registry.sh). Beside its config so it resolves the same
 # on every OS; see the note in scripts/verdaccio.yaml.
 scripts/.local-registry/
+
+# Local product-smoke evidence; uploaded by CI.
+/artifacts/smoke/
+/artifacts/install-packages/

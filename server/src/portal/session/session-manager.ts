@@ -212,10 +212,13 @@ export class SessionManager {
           .map((s) => s.id),
       ),
     );
+    const departedTo = session.departedTo();
     this.#tombstones.set(session.id, {
       id: session.id,
       url: session.url,
       ...(session.projectId === undefined ? {} : { projectId: session.projectId }),
+      // Where the tab was seen heading, kept off `url`: successor matching needs the old origin.
+      ...(departedTo === undefined ? {} : { departedTo }),
     });
     while (this.#tombstones.size > MAX_TOMBSTONES) {
       const oldest = this.#tombstones.keys().next().value;

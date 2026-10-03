@@ -38,6 +38,7 @@ export async function recordSuiteFlakes(
 ): Promise<readonly string[]> {
   const flakes = new FlakeStore(fs, reticleRoot);
   for (const { replay } of runs) {
+    if (replay.status === ReplayStatus.UNVERIFIABLE) continue;
     await flakes.record(replay.name, ReplayStatus.OK === replay.status).catch(() => undefined);
   }
   return flakes.flakyFlows().catch(() => []);

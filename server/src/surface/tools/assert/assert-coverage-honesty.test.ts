@@ -237,7 +237,10 @@ describe('reticle_assert carries the verdict, not just pass', () => {
   // the write 1.2s later. The 202 machinery that exists to report this as `verified: "unknown"` lived
   // only in act_and_wait — the tool an agent actually calls never consulted it.
   /** A console-absence assertion over a window we control, so only the WRITE varies. */
-  const runAssert = async (events: ReticleEvent[]): Promise<unknown> => {
+  const runAssert = async (
+    events: ReticleEvent[],
+    args: Record<string, unknown> = absentConsole,
+  ): Promise<unknown> => {
     const session = createFakeSession({
       bufferHealth: () => ({ total: 5, dropped: 0 }),
       eventsSince: () => events,
@@ -250,7 +253,7 @@ describe('reticle_assert carries the verdict, not just pass', () => {
       sessions: sessions as SessionManager,
       recordings: new RecordingStore(),
     } as unknown as ToolDeps;
-    return tool(ReticleTool.ASSERT).handler(deps, absentConsole);
+    return tool(ReticleTool.ASSERT).handler(deps, args);
   };
 
   // The real shape: the row rendered "dispatched" optimistically AND the write came back 202. A 202
@@ -274,6 +277,50 @@ describe('reticle_assert carries the verdict, not just pass', () => {
   it('reports yes on a clean window', async () => {
     const result = (await runAssert([])) as Record<string, unknown>;
     expect(result['verified']).toBe(Verified.YES);
+  });
+
+  // #1120: the rule that protects the optimistic-UI case was deciding for the WHOLE window. Only
+  // the write the claim depends on may hold the verdict open; everything else that answered 202 is
+  // somebody else's outcome, a read's, or the claim's own.
+  it('grades yes when the only 202 is third-party traffic', async () => {
+    const result = (await runAssert([
+      {
+        type: EventType.NET_REQUEST,
+        sessionId: 's',
+        t: 10,
+        data: {
+          method: 'POST',
+          url: 'https://analytics.other.test/collect',
+          status: 202,
+          ok: true,
+        },
+      },
+    ])) as Record<string, unknown>;
+    expect(result['verified']).toBe(Verified.YES);
+  });
+
+  it('grades yes when the only 202 is a read', async () => {
+    const result = (await runAssert([
+      {
+        type: EventType.NET_REQUEST,
+        sessionId: 's',
+        t: 10,
+        data: { method: 'GET', url: '/api/status', status: 202, ok: true },
+      },
+    ])) as Record<string, unknown>;
+    expect(result['verified']).toBe(Verified.YES);
+  });
+
+  it('grades yes when the claim itself asserted the acceptance', async () => {
+    // A claim about acceptance: the POST returned 202 and the app accepted it. The proven link
+    // names this request with status 202, so the global rule does not override the claim's own.
+    const result = (await runAssert(acceptedWrite, {
+      predicate: { kind: 'net', method: 'POST', urlContains: '/api/dispatch', status: 202 },
+      timeout_ms: 0,
+    })) as Record<string, unknown>;
+    expect(result['pass']).toBe(true);
+    expect(result['verified']).toBe(Verified.YES);
+    expect(String(result['because'])).not.toContain('re-check');
   });
 });
 

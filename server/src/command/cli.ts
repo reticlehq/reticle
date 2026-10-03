@@ -161,7 +161,7 @@ async function handleInit(parsed: {
       presenceIsUsable(await probePresence(p, { tcpOpen: probeDaemon, status: fetchStatus })),
     pickPort: (p) => pickDaemonPortToBind(p),
   });
-  const io = buildNodeIo(cwd, serverInitHost());
+  const io = buildNodeIo(cwd, serverInitHost(), { stderr: true === parsed.json });
   const result = runInit(
     {
       cwd,
@@ -191,15 +191,18 @@ import { handleServe, handleStop, handleRestart } from './cli/lifecycle/daemon-l
 import { statusLines } from './cli/status/status-lines.js';
 
 /**
- * Log the status event AND print it for a person.
- *
- * Both, not either: the JSON line is documented and is what a log is for, and the block is for
- * whoever is reading the terminal — which, once an agent is running the command, is somebody who
- * did not type it and cannot be assumed to parse it.
+ * Report status to the terminal. `--json` writes one structured line to STDOUT so it can be piped
+ * into `jq`; the human-readable block goes to stdout too. `log()` stays on stderr (the MCP
+ * transport lives on stdout), so `--json` must not go through it.
  */
-function reportStatus(fields: Record<string, unknown>, json: boolean): void {
+export function reportStatus(fields: Record<string, unknown>, json: boolean): void {
   if (json) {
-    log('reticle_status', fields);
+    const line = JSON.stringify({
+      t: new Date().toISOString(),
+      event: 'reticle_status',
+      ...fields,
+    });
+    process.stdout.write(`${line}\n`);
     return;
   }
   process.stdout.write(`${statusLines(fields).join('\n')}\n`);
@@ -700,6 +703,24 @@ export function main(): void {
     // `fetch failed` with exit 1, to somebody who had asked what the command was for.
     if (argv.some((arg) => '--help' === arg || '-h' === arg)) {
       process.stdout.write(`${CLI_USAGE}\n`);
+      return;
+    }
+    if ('connect' === argv[0]) {
+      void (async () => {
+        // A fresh project gets the same install, dev-server handover and browser proof as `init`.
+        // Its failure exits non-zero before any cloud binding can claim this repo is ready.
+        if (readProjectId(process.cwd()) === undefined) {
+          await handleInit({ port: undefined, mcp: true, dryRun: false, install: true });
+        }
+        return runCloudCommand(argv);
+      })()
+        .then((code) => process.exit(code))
+        .catch((cause: unknown) => {
+          process.stderr.write(
+            `reticle connect: ${cause instanceof Error ? cause.message : String(cause)}\n`,
+          );
+          process.exit(1);
+        });
       return;
     }
     void runCloudCommand(argv).then((code) => process.exit(code));

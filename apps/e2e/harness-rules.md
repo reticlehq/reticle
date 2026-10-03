@@ -22,22 +22,18 @@ investigation each.
 
 ---
 
-## Rule 1 — kill the listener, never the clients
+## Rule 1 — stop only processes this run owns
 
-```bash
-lsof -ti tcp:4400 | xargs kill -9        # ✗ kills the daemon AND every attached MCP proxy
-lsof -nP -iTCP:4400 -sTCP:LISTEN -t | xargs kill -9   # ✓
-```
+A listener on a test port may be a developer's daemon. A connected socket may be the agent's
+MCP transport. Neither the port nor a matching command line establishes ownership.
 
-`reticle mcp` holds a **client** socket on the bridge port, so the unfiltered form lists it beside
-the daemon. Measured: listener pid 70244 and proxy pid 70245 both returned; the kill took the proxy,
-and every tool call after it hung unanswered with nothing in `~/.reticle/proxy-4400.log` — the
-process that writes that log was the one that died.
+`freePortSafely(port, { ownedPids })` only stops listeners whose PIDs the caller recorded when
+starting them. It refuses an unrelated listener and leaves connected clients alone. Without
+`ownedPids`, an occupied port is an error, not permission to kill its owner.
 
-Use `freePortSafely(port)`. It frees listeners first and only then looks at other holders, **naming
-them before touching them**. That ordering also preserves the reason `run.mjs` originally skipped
-`-sTCP:LISTEN`: a socket mid-teardown still holds the port and still causes `EADDRINUSE`, and it is
-still reached — just second, once the listener is demonstrably gone.
+The web and desktop batteries default to bridge port `14400`; set `RETICLE_PORT` to choose
+another test port. Each launcher creates private daemon state and a pairing token. The runner
+can reap its detached daemons from that run's PID files without touching the developer's daemon.
 
 ## Rule 2 — own the daemon for the whole run
 
@@ -85,42 +81,16 @@ This mirrors the rule the product itself follows — `decideVerified` returns `U
 observe would be its own false claim". The harness does not get an exemption from its own product's
 standard of honesty.
 
-## Rule 5 — sweep what the last run left behind
+## Rule 5 — clean up recorded children, report everything else
 
-```js
-await sweepBatteryOrphans(); // processes, by pattern. NOT ports.
-```
+Stop the process groups or trees created by the run, including fixture wrappers and their
+children. `stopProcessTree(pid)` walks only descendants of a recorded child PID. The runner
+cleans each spec's process group and its own detached daemon before continuing.
 
-A battery that exits normally runs its trap and cleans up. One that is **killed** — a CI timeout, a
-Ctrl-C, an OOM — does not, and leaves a driven browser and an MCP proxy running. The next run
-competes with them for the bridge port and for memory.
+`sweepBatteryOrphans(ports)` reports occupied ports. It never kills a process because its
+command resembles a test: a developer can run the same command. An interrupted run may leave
+a process behind; identify that process or choose another port rather than killing by pattern.
 
-Measured, on this repo, by the person who wrote the four rules above: two killed runs left an
-orphaned `cli.js mcp --drive` proxy driving a headless browser, the machine went to ~85MB free, and
-the next battery came back **17 of 31** with four specs `killed by SIGKILL` and failures interleaved
-with passes. Every one of those was read as a product regression first. After sweeping: **31 of 31**,
-same commit, same code.
-
-**Kill by process pattern; never by port.** `--drive` is the discriminator and it is load-bearing: a
-bare `cli.js mcp` is somebody's **agent**, and killing that is rule 1's entire subject, while only the
-battery starts a proxy with `--drive`. Ports get **named and left alone**.
-
-That asymmetry is not fastidiousness. The first version of this rule also freed the ports it was
-given — and `run-ci.sh` boots api:8787, bench-app:4310 and next-smoke:3100 **before** it runs
-`run.mjs`, so the "orphans" the sweep found were the fixtures the battery had just started for
-itself. It killed all three. **19 specs failed.**
-
-From inside a run there is no way to tell "an orphan from a killed run" from "the server this run
-started three seconds ago" — same command, same port, same user. A process *pattern* can be decided;
-a port cannot. So the port half reports, and says plainly that a later bind failure will be that pid's
-doing.
-
-> Rules 1–4 were written by the same person who then broke rule 5 twice in one hour: once by leaving
-> orphans behind, and once by writing a sweep that killed the run it was protecting. That is the
-> argument for putting every rule in `gate-harness.mjs` rather than in prose — a rule you have to
-> remember is a rule that gets skipped at exactly the moment you are busy chasing a failure. It is
-> also the argument for the shape of this one: **a cleanup that cannot tell what it is deleting must
-> report instead of delete.**
 
 ---
 

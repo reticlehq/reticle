@@ -13,6 +13,7 @@
  */
 
 import { NoSessionReason } from '@reticlehq/core/telemetry';
+import { redactUrl } from '@reticlehq/core';
 
 import { leaseCaveat, type LeaseBrowserState } from './presence/lease-availability.js';
 import { DEV_SERVER_PORTS } from '@/command/cli/ports/resolve/cli-port.js';
@@ -166,6 +167,13 @@ export interface NoSessionFacts {
    * or the ring has forgotten — inventing a URL is worse than the silence this exists to end.
    */
   lastKnownUrl?: string;
+  /**
+   * Where the departed tab was seen heading, when the SDK reported a navigation just before the
+   * socket closed (#1256). Separate from `lastKnownUrl` — the old origin — because the 5xx probe
+   * and successor matching need the page the tab was ON, while the diagnosis needs where it was
+   * GOING. Absent unless the departure note arrived fresh.
+   */
+  departedTo?: string;
   /**
    * What a plain GET of `lastKnownUrl` answered, done out of band by the watch after the session
    * went. The one fact that separates a server error from a closed tab and from an install
@@ -630,6 +638,24 @@ export function explainNoSession(facts: NoSessionFacts): {
           'tab and not an install problem. A route that throws server-side tears the page down and ' +
           'the SDK cannot reconnect to it. Fix the route, then reload the tab' +
           `${orOpenCommand(facts)}.${alreadyListeningClause(listening)} ${RETRY}`,
+      );
+    }
+    // Ranked above TAB_GONE because it is not a hedge: the SDK reported the departure while the
+    // old document was still alive, so this is where the tab WENT rather than one of several
+    // opposite situations. Ranked below ROUTE_SERVER_ERROR because that branch names a defect in
+    // the app itself. Only reached when the departure note arrived fresh — a stale note is no
+    // fact, and the tombstone already refused to carry one (#1256).
+    if (facts.departedTo !== undefined && '' !== facts.departedTo) {
+      return reason(
+        NoSessionReason.NAVIGATED_AWAY,
+        'no browser session connected, but one WAS connected to this daemon earlier, so the wiring ' +
+          // Redacted: a redirect target can carry credentials (OAuth callbacks, reset links), and
+          // this message is agent-facing. The raw value stays on the tombstone for matching.
+          `is correct. The page navigated away to ${redactUrl(facts.departedTo)} just before the ` +
+          'connection closed — that is where the tab went, not a closed tab and not an install ' +
+          `problem. Ask the human to go back to the app${orOpenCommand(facts)}, or reload the tab. ` +
+          `${leaseAdvice(SELF_SERVE, facts)} ${RETRY}`,
+        alreadyListeningClause(listening).trim(),
       );
     }
     return reason(

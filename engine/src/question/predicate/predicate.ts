@@ -334,7 +334,12 @@ async function evaluatePredicateRaw(
       const counts = session.ambientCounts?.();
       const settleEvents =
         counts === undefined ? events : events.filter((e) => !isAmbient(counts, ambientKeyOf(e)));
-      return evalSettled(settleEvents, predicate, session.elapsed());
+      // The same two facts the act settle-wait reads, so `settled` and `act_and_wait`'s own wait stop
+      // disagreeing about what is in flight — see `SettleScope`.
+      return evalSettled(settleEvents, predicate, session.elapsed(), {
+        appUrl: session.url,
+        background: session.background,
+      });
     }
     case PredicateKind.COMPARE:
       return evalCompare(session, events, predicate, diagnose);

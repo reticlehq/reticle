@@ -131,7 +131,13 @@ export interface CrawlReport {
   truncated: boolean;
   /** Present only when the snapshot itself was capped, i.e. controls exist that were never listed. */
   coverageNote?: string;
+  /** Controls whose silence could not be judged, present only when non-empty. */
+  notJudged?: { ref: string; desc: string; reason: string }[];
 }
+
+/** Why a silent control on a throttled page is not reported as dead. */
+const BACKGROUND_TAB_NOT_JUDGED =
+  'not judged: the page is throttled (its tab is in the background, or it has not been heard from recently), so a reaction may not show inside the sample window; bring the tab to the front and crawl again';
 
 export interface CrawlOptions {
   maxSteps?: number;
@@ -371,6 +377,7 @@ export async function crawl(
   const coverageCapped = true === snapshot.truncated;
 
   const anomalies: CrawlAnomaly[] = [];
+  const notJudged: NonNullable<CrawlReport['notJudged']> = [];
   const visited: string[] = [];
   const counts = { consoleErrors: 0, failedRequests: 0, deadControls: 0, contradictions: 0 };
   const seen = new Set<string>();
@@ -519,7 +526,10 @@ export async function crawl(
         //
         // A second click costs one round trip on the rare control that looked dead, and nothing at all
         // on every control that did not. A genuinely dead control is silent twice; the flake is not.
-        if (await stillSilent(session, item, settleMs, confirm, sleep)) {
+        // A throttled page may defer DOM observer flushes, so silence cannot prove a dead control.
+        if (true === session.throttled?.()) {
+          notJudged.push({ ref: item.ref, desc: item.desc, reason: BACKGROUND_TAB_NOT_JUDGED });
+        } else if (await stillSilent(session, item, settleMs, confirm, sleep)) {
           counts.deadControls += 1;
           anomalies.push({
             kind: CrawlAnomalyKind.DEAD_CONTROL,
@@ -555,6 +565,7 @@ export async function crawl(
     anomalies,
     counts,
     visited,
+    ...(0 === notJudged.length ? {} : { notJudged }),
     // True when coverage was bounded for EITHER reason: the step budget ran out, or the page was
     // bigger than one snapshot. Conflating "I stopped early" with "I saw everything" is what turns a
     // partial sweep into "all controls healthy".

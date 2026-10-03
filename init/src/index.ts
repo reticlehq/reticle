@@ -49,6 +49,7 @@ export {
 } from './detect/detect.js';
 export { findWorkspaceApps } from './detect/workspace-apps.js';
 export { desktopLaunch, type DesktopLaunch } from './detect/dev-script.js';
+export { detectNonJsEcosystem, noPackageJsonMessage } from './detect/non-js-project.js';
 export { deriveProjectId, packageName } from './project/project-id.js';
 export { refreshAgentRules } from './project/refresh-rules.js';
 export { diagnoseDesktop, isDesktopProject } from './diagnose/desktop-doctor.js';

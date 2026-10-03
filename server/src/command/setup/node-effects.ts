@@ -37,6 +37,8 @@ import type { PageProbe } from './probe/page-probe.js';
 import { isAddressMiss, loopbackProbeUrls } from './probe/loopback-probe-urls.js';
 
 const WINDOWS = 'win32' === process.platform;
+/** Astro otherwise daemonizes automatically when it detects an agent terminal. */
+const ASTRO_DEV_BACKGROUND_ENV = 'ASTRO_DEV_BACKGROUND';
 /** A page fetch that is slow is a page fetch that failed, for our purposes. */
 const PROBE_TIMEOUT_MS = 5_000;
 
@@ -82,7 +84,10 @@ export class OwnedDevServer {
         detached: !WINDOWS,
         // Nothing of ours: the supervisor holds the server's pipes, and init holds none of its.
         stdio: 'ignore',
-        env: { ...process.env, ...env },
+        // Reticle already provides the detached supervisor. Astro's agent auto-backgrounding
+        // would escape its process group and leave the recorded handover PID pointing at a dead
+        // launcher, so re-init and cleanup could no longer find or stop the actual server.
+        env: { ...process.env, ...env, [ASTRO_DEV_BACKGROUND_ENV]: '1' },
       },
     );
     this.log = log;
@@ -121,7 +126,8 @@ export class OwnedDevServer {
     } catch {
       /* not written yet */
     }
-    return Date.now() - lastOutputAt;
+    // Filesystem timestamps can include a fractional millisecond beyond Date.now()'s integer.
+    return Math.max(0, Date.now() - lastOutputAt);
   }
 
   /** Ports anything in this server's process tree is listening on. */

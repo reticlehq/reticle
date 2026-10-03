@@ -47,6 +47,7 @@ git switch main && git pull                     # 1. green main, nothing local
 
 pnpm format:check                               # 2. the gates. FIRST: it is the one CI enforces
 pnpm lint && pnpm typecheck && pnpm test:unit   #    that `pnpm lint` does not run
+pnpm test:smoke                                 #    real MCP/browser positive and negative verdicts
 pnpm test:e2e                                   #    required for every release, not just tool changes
 pnpm test:e2e:desktop                           #    Electron and a packaged Tauri binary; the web
                                                 #    battery boots no desktop runtime and is blind to both

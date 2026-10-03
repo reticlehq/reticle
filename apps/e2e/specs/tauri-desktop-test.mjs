@@ -16,6 +16,7 @@
 //   - and none of those captures appears in the app's own network evidence
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { release } from 'node:os';
 import path from 'node:path';
 import { ROOT, bootDesktopSession, checker, sleep, tempCaptures } from '../desktop-harness.mjs';
 
@@ -62,6 +63,10 @@ try {
   if (sessionId === undefined) {
     console.log(log.join('').slice(-3000));
     throw new Error('no session');
+  }
+  if (process.platform !== 'darwin' || Number(release().split('.')[0]) >= 23) {
+    for (let i = 0; i < 40 && !log.join('').includes('reticle-headless-visible='); i++) await sleep(100);
+    chk('headless mode hides the native window', log.join('').includes('reticle-headless-visible=Ok(false)'), log.join('').trim());
   }
   // The origin a PACKAGED Tauri app serves its embedded frontend from — `tauri://localhost` on
   // macOS/Linux, `http://tauri.localhost` on Windows, where the webview requires an http origin.
@@ -231,7 +236,11 @@ try {
       await sleep(1000);
     }
   }
-  if (!aliveLater) console.log(`   (durability probe: ${lastError})`);
+  if (!aliveLater) {
+    console.log(`   (durability probe: ${lastError})`);
+    console.log(`   app pid=${session.app.pid} exit=${session.app.exitCode} signal=${session.app.signalCode}`);
+    console.log(log.join('').slice(-6000));
+  }
   chk('the session still answers after a pause, not just immediately', aliveLater);
 } finally {
   await session?.shutdown();

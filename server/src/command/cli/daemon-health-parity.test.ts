@@ -27,15 +27,11 @@ it('doctor and status both report stopped when a live recorded pid has no daemon
   const stateHome = mkdtempSync(join(tmpdir(), 'reticle-health-parity-'));
   const previousStateHome = process.env[STATE_DIR_ENV];
   let doctorOutput = '';
-  let statusOutput = '';
   const stdout = vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown): boolean => {
     doctorOutput += String(chunk);
     return true;
   });
-  const stderr = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown): boolean => {
-    statusOutput += String(chunk);
-    return true;
-  });
+  const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
   try {
     process.env[STATE_DIR_ENV] = stateHome;
@@ -45,7 +41,7 @@ it('doctor and status both report stopped when a live recorded pid has no daemon
     // Then again in its default shape, which is what a person actually reads. Both, because the
     // parity that matters is no longer only between two payloads: doctor and status now print the
     // same daemon row, and a reader comparing them must not be told two different things.
-    const jsonOnly = statusOutput;
+    const jsonOnly = doctorOutput;
     await handleStatus(port);
     await handleDoctor(port);
 

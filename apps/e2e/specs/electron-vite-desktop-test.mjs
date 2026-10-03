@@ -1,3 +1,4 @@
+import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // HONESTY-CRITICAL: prove `reticle init` can wire an electron-vite app, against a REAL
 // electron-vite process (not a plain Vite + Electron pair).
 //
@@ -31,7 +32,7 @@ try {
     // know is which of two fresh ones is the app it started. That is what the URL is for.
     urlIncludes: ':5173',
     timeoutMs: 90_000,
-    port: Number(process.env['RETICLE_PORT'] ?? 4400),
+    port: Number(TEST_BRIDGE_PORT),
   });
   const { tool, refOf, sessionId, log } = session;
 

@@ -26,12 +26,15 @@ import { waitForReaction } from '@/surface/tools/act/react-grace.js';
 import { anchorFieldName } from './flows.js';
 import type { FlowReplaySession, Sleep } from './flow-replay-types.js';
 import {
+  ambiguityDrift,
   anchorLabel,
   componentLabel,
   componentQueryArgs,
   expectElementDrift,
+  reresolved,
   resolveQuery,
   testidDrift,
+  type Reresolved,
 } from './flow-anchor.js';
 import { nearestRoleName, type RoleCandidate } from './role-anchor-nearest.js';
 import { roleDriftReason } from '@/judgement/outcome/role-drift-reason.js';
@@ -97,6 +100,24 @@ export async function runRoleStep(
 ): Promise<FlowStepResult> {
   const label = `${anchor.role} "${String(anchor.name)}"`;
   const { refs } = await resolveQuery(session, roleQueryArgs(anchor), sleep);
+  /*
+   * More than one match is DRIFT, not a guess. This path took `refs[0]`, dispatched, and returned
+   * `ok: true`, so a flow recorded against "View result" on row 3 of a table replayed by clicking row
+   * 1 and PASSED whenever every row shared the consequence (the same GET returning 200). The verdict
+   * reads `drift` and `ok` and nothing else, so a green here is indistinguishable from a replay that
+   * did what it did before.
+   *
+   * A role+name anchor is MORE likely to land here than a testid is: `button "View result"` is
+   * user-visible text, and a table repeats it by nature, so several matches is the expected shape of
+   * a recorded row action rather than an accident.
+   *
+   * The check itself lives in `ambiguityDrift`, shared with the testid and component runners: written
+   * per-runner, this rule got applied to two anchor kinds and forgotten for the third.
+   */
+  const ambiguous = ambiguityDrift(anchor, refs);
+  if (ambiguous !== null) {
+    return { step: index, tool: step.tool, anchor: label, ok: false, drift: ambiguous };
+  }
   const ref = refs[0];
   if (ref === undefined) {
     // `nearest` used to be the literal null, so heal answered "no nearest match cleared the
@@ -127,8 +148,16 @@ export async function runRoleStep(
     ref,
     confirmDangerous,
     anchorFieldName(anchor),
-    // The retry's whole point: run the SAME locator against the DOM as it is now.
-    async () => (await resolveQuery(session, roleQueryArgs(anchor), sleep)).refs[0],
+    /*
+     * The retry's whole point: run the SAME locator against the DOM as it is now.
+     *
+     * It reports WHAT it found, not just a ref. A re-render can turn an unambiguous anchor into an
+     * ambiguous one between the two dispatches, and dispatching at the first of the new matches would
+     * re-make the guess the check above exists to refuse — one layer deeper, where the caller cannot
+     * see it. `reresolved` is the same rule as that check, so the two cannot disagree.
+     */
+    async () =>
+      reresolved(anchor, (await resolveQuery(session, roleQueryArgs(anchor), sleep)).refs),
   );
 }
 
@@ -183,8 +212,11 @@ export async function actOnResolvedRef(
    * found, and the retry below is worthless without it: re-dispatching the SAME dead ref fails
    * identically. What changed between the two attempts is the DOM, so the locator has to be run
    * against it again.
+   *
+   * It reports WHAT it found, not just a ref: see `Reresolved`. A re-render that turns one match into
+   * three is a drift, and the caller is the only layer that can say so with the right anchor in hand.
    */
-  reresolve?: () => Promise<string | undefined>,
+  reresolve?: () => Promise<Reresolved | undefined>,
 ): Promise<FlowStepResult> {
   const dispatch = async (at: string): Promise<{ ok: boolean; error?: string | undefined }> => {
     session.beginAction?.(ReticleTool.FLOW_REPLAY, { ref: at, action: step.action ?? '' });
@@ -220,7 +252,23 @@ export async function actOnResolvedRef(
       sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     });
     const fresh = await reresolve();
-    if (fresh !== undefined) act = await dispatch(fresh);
+    /*
+     * The re-render turned one match into SEVERAL, so there is nothing to dispatch at and the answer
+     * is a drift — the same `anchor_ambiguous` the first resolution would have given, reported for the
+     * same reason.
+     *
+     * The staleness this retry exists to absorb is a different diagnosis with a different fix, and
+     * this used to be the only one reported: the step came back as `{ok: false, error: "ref 'e-orig'
+     * no longer resolves to an element"}` — a sentence about an element that is GONE, sent for an
+     * element that is now three. An agent reading it goes hunting for a rename, or re-records the
+     * flow, when the actual fix is a narrower anchor. Telling the two apart is what `Reresolved` is
+     * for, and the reason `ANCHOR_AMBIGUOUS` exists as its own kind rather than folding into "not
+     * found".
+     */
+    if (fresh !== undefined && 'drift' in fresh) {
+      return { step: index, tool: step.tool, anchor: label, ok: false, drift: fresh.drift };
+    }
+    if (fresh !== undefined) act = await dispatch(fresh.ref);
   }
 
   const result: FlowStepResult = { step: index, tool: step.tool, anchor: label, ok: act.ok };
@@ -256,6 +304,20 @@ export async function runComponentStep(
       },
     };
   }
+  /*
+   * Several matches is DRIFT here too, and this runner is where the rule was MISSING.
+   *
+   * The other two runners check it (through `ambiguityDrift`); this one took `refs[0]`, dispatched and
+   * returned `ok: true`. `by: QueryBy.COMPONENT` matches by component NAME, and a component rendered
+   * once per row — a table's action button, a card's menu — matches as many times as there are rows.
+   * So the guessed-green shape is not an edge case for this anchor kind, it is its ordinary one, and
+   * it is the exact defect #1227 describes: a click on the wrong element reported as a pass because
+   * the verdict reads `drift` and `ok` and never reads which element was hit.
+   */
+  const ambiguous = ambiguityDrift(anchor, refs);
+  if (ambiguous !== null) {
+    return { step: index, tool: step.tool, anchor: label, ok: false, drift: ambiguous };
+  }
   const ref = refs[0] ?? '';
   // Shared with the role path so both get the same action window AND the same stale-ref retry —
   // this used to dispatch inline, which is how one anchor kind could gain a fix the other lacked.
@@ -267,7 +329,11 @@ export async function runComponentStep(
     ref,
     confirmDangerous,
     anchorFieldName(anchor),
-    async () => (await resolveQuery(session, componentQueryArgs(anchor), sleep)).refs[0],
+    // Same rule one layer deeper, same helper: a re-render that turns one match into three must not
+    // be dispatched at either, and it must say so as a drift rather than as a dead ref. This callback
+    // used to return `refs[0]` unconditionally.
+    async () =>
+      reresolved(anchor, (await resolveQuery(session, componentQueryArgs(anchor), sleep)).refs),
   );
 }
 

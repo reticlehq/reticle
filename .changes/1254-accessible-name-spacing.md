@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/browser`: adjacent inline text nodes no longer get spurious spaces in the accessible name.** `textWithoutHidden` joined every child piece with a space, so `<button>Complete All ({count})</button>` (three text nodes from JSX interpolation) was reported as `"Complete All ( 2 )"` instead of `"Complete All (2)"`. The name the agent read could not match the element it described. Space separators are now inserted only at element boundaries (images, wrappers) where they prevent token fusion, not between adjacent text nodes that the browser renders without any gap. Closes [#1254](https://github.com/reticlehq/reticle/issues/1254).

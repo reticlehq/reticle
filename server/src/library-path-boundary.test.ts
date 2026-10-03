@@ -72,6 +72,10 @@ const DECLARED_CROSSINGS: Record<string, string> = {
     'through its own CLI rather than its renderer’s `dev` script. init spawns that command, and ' +
     'the no-session next action hands an agent the same one; two copies of the rule disagreed, and ' +
     'the daemon handed Tauri users plain `vite`. No code path, only a string decision.',
+  'portal/session/no-session-next-action.ts':
+    'Reads the pure non-JS ecosystem marker detector when there is no package.json and no ' +
+    'session is running, so Flutter gets an accurate diagnosis. The rest of the initializer ' +
+    'is never invoked on this path.',
 };
 
 /** Every module in `reached` that imports the scaffolder package directly. */

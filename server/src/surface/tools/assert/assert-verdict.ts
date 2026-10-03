@@ -5,7 +5,10 @@ import { noteSessionGaps } from '@reticlehq/engine/evidence/gap-ledger.js';
 import { declaresState } from '@reticlehq/engine/question/predicate/predicate-asks.js';
 import { isStateUnwatched } from '@reticlehq/engine/evidence/blind-spots.js';
 import type { InstrumentationGap, JournalVerdictEffect } from '@reticlehq/core/artifacts';
-import type { Predicate } from '@reticlehq/engine/question/predicate/predicate.js';
+import {
+  provenExpectedLinks,
+  type Predicate,
+} from '@reticlehq/engine/question/predicate/predicate.js';
 import type { Session } from '@/portal/session/session.js';
 import {
   findContradictions,
@@ -26,7 +29,10 @@ import {
   transportGapNote,
 } from '@reticlehq/engine/evidence/blind-spots.js';
 import { buildHonestyBlock } from '@reticlehq/engine/evidence/honesty.js';
-import { acceptedWriteLabels } from '@reticlehq/engine/evidence/accepted-write.js';
+import {
+  acceptedWriteLabels,
+  hasAcceptedWrite,
+} from '@reticlehq/engine/evidence/accepted-write.js';
 import { unreadWriteLabels } from '@reticlehq/engine/evidence/unread-outcome.js';
 import { decideVerified } from '@reticlehq/engine/evidence/verified.js';
 import { describeWaitTarget, namedNetIsInFlight } from '@reticlehq/engine/evidence/unsettled.js';
@@ -156,7 +162,18 @@ export async function assertVerdict(
   const impeachingNotes = [impeaching.note, gap, ...crashedRuleNotes()].filter(
     (n): n is string => n !== undefined,
   );
-  const outcomePending = acceptedWriteLabels(windowEvents);
+  // Which 202s are still the claim's outcome to wait for (#1120). The proven links decide the
+  // exemption, so a 200 branch of an `anyOf` cannot exempt the 202 that also fired; and the walk
+  // only runs when a 202 is actually waiting, because that is the only case it can change.
+  const assertedAccepts =
+    pass && hasAcceptedWrite(windowEvents)
+      ? await provenExpectedLinks(session, predicate, since)
+      : [];
+  const outcomePending = acceptedWriteLabels(windowEvents, {
+    appUrl: session.url,
+    background: session.background,
+    asserted: assertedAccepts,
+  });
   const outcomeUnread = unreadWriteLabels(windowEvents);
   const stillInFlight = inFlightRequestLabels(windowEvents, session.url, session.background);
   const effectiveInconclusive =

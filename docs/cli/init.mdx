@@ -74,21 +74,19 @@ With `--no-mcp`, the whole MCP and rules group collapses into one skipped line:
       --no-mcp ... also skips the agent rule files (CLAUDE.md / AGENTS.md / .cursor) and the /reticle command
 ```
 
-Run from a workspace root with several apps, it refuses to guess, names them, and exits `1`:
+Run from a workspace root with several apps, it refuses to guess, prints a command for each one, and exits `1`:
 
 ```
-Several apps found in this workspace. Re-run `reticle init` inside the one you want:
-  adapters/build/next
-  adapters/build/vite
-  apps/atlas
-  apps/bench-app
-  apps/electron-smoke
-  apps/large-dom-bench
-  apps/next-smoke
-  apps/tauri-smoke
-  apps/vibe-builder-demo
-
-Or name one without changing directory:  reticle init --app apps/next-smoke
+Several apps found in this workspace. Re-run `reticle init` for the one you want:
+  reticle init --app adapters/build/next
+  reticle init --app adapters/build/vite
+  reticle init --app apps/atlas
+  reticle init --app apps/bench-app
+  reticle init --app apps/electron-smoke
+  reticle init --app apps/large-dom-bench
+  reticle init --app apps/next-smoke
+  reticle init --app apps/tauri-smoke
+  reticle init --app apps/vibe-builder-demo
 ```
 
 Given `--app`, it says which directory it moved to before printing the plan:

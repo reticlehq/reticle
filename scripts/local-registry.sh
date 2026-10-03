@@ -6,12 +6,12 @@
 #   bash scripts/local-registry.sh
 #
 # Then, in your app:
-#   echo '@reticlehq:registry=http://localhost:4873/' >> .npmrc
+#   echo '@reticlehq:registry=http://127.0.0.1:4873/' >> .npmrc
 #   npm i -D @reticlehq/browser @reticlehq/react @reticlehq/next
 #
 set -euo pipefail
 PORT=4873
-REG="http://localhost:${PORT}"
+REG="http://127.0.0.1:${PORT}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 echo "==> Starting a FRESH Verdaccio on ${REG} (reset so user/token + versions are clean)"
@@ -28,7 +28,7 @@ fi
 # and every run after the first died on "username is already registered".
 rm -rf "${ROOT}/scripts/.local-registry"
 sleep 1
-npx --yes verdaccio@latest --config "${ROOT}/scripts/verdaccio.yaml" >/tmp/reticle-verdaccio.log 2>&1 &
+pnpm --dir "${ROOT}/apps/e2e" exec verdaccio --config "${ROOT}/scripts/verdaccio.yaml" >/tmp/reticle-verdaccio.log 2>&1 &
 for _ in $(seq 1 30); do curl -s "${REG}/-/ping" >/dev/null 2>&1 && break; sleep 1; done
 curl -s "${REG}/-/ping" >/dev/null 2>&1 || { echo "Verdaccio did not start; see /tmp/reticle-verdaccio.log"; exit 1; }
 
@@ -43,9 +43,9 @@ TOKEN=$(printf '%s' "${USER_JSON}" | node -e "let d='';process.stdin.on('data',c
 
 echo "==> Publishing every publishable workspace package to ${REG}"
 # Inject the token for this host only, publish, then strip it back out.
-cleanup() { grep -v "localhost:${PORT}" "${HOME}/.npmrc" > "${HOME}/.npmrc.tmp" 2>/dev/null && mv "${HOME}/.npmrc.tmp" "${HOME}/.npmrc" || true; }
+cleanup() { grep -v "127.0.0.1:${PORT}" "${HOME}/.npmrc" > "${HOME}/.npmrc.tmp" 2>/dev/null && mv "${HOME}/.npmrc.tmp" "${HOME}/.npmrc" || true; }
 trap cleanup EXIT
-printf '\n//localhost:%s/:_authToken=%s\n' "${PORT}" "${TOKEN}" >> "${HOME}/.npmrc"
+printf '\n//127.0.0.1:%s/:_authToken=%s\n' "${PORT}" "${TOKEN}" >> "${HOME}/.npmrc"
 ( cd "${ROOT}" && pnpm -r publish --registry "${REG}" --no-git-checks )
 
 # Verify the publish, rather than trusting its exit code.

@@ -161,6 +161,8 @@ export interface ReticleVitePluginOptions {
   projectId?: string;
   /** Auth token forwarded to connect when the bridge requires one. */
   token?: string;
+  /** Show Reticle's presenter. Defaults to true; set false to keep the agent connection without the panel. */
+  present?: boolean;
   /** Stamp data-reticle-source for React 19 source mapping. Default true (harmless on React <=18). */
   sourceMapping?: boolean;
   /** Auto-inject the dev-gated reticle.connect call. Default true. */

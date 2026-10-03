@@ -76,14 +76,12 @@ export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticl
                        [--explore] [--persona <who>]   (no saved flows? let Reticle drive the app itself and record them)
                        [--select <label>]              (repeatable: verify only flows carrying these labels — no model, exit 0=pass)
                 [--expect '<json predicate>' | --expect-file <path>]   (one verdict, no saved
-                flows needed. --expect-file is the form no shell can mangle: cmd.exe keeps the
-                single quotes the docs show, and PowerShell strips the inner double quotes, and
-                a predicate that does not parse produces no verdict at all — asks the daemon that
-                is already running, so nothing is bound and nothing is stopped. It NEEDS that
-                daemon: with none on the port it refuses and names the flag, rather than reporting
-                on your saved flows instead. Cannot be combined with --storage-state, which this
-                path has nowhere to load. This is the path when your client never loaded the
-                reticle_* tools. exit 0 ONLY on verified:"yes" — "unknown" is not a pass)
+                flows needed. --expect-file avoids cmd.exe and PowerShell quote mangling. It
+                asks an existing daemon, never binds or stops one; with none, it refuses.
+                Cannot combine with --storage-state. Use when the client lacks reticle_*
+                tools. exit 0 ONLY on verified:"yes" — "unknown" is not a pass. For an
+                action --expect cannot do, drive the daemon's HTTP MCP transport instead — see
+                https://docs.reticle.sh/http-transport.md)
   reticle affected [--since <ref>] [file...]           (which saved flows must re-verify for the changed files)
   reticle gate [--since <ref>] [--accept-coverage] [file...]  (exit non-zero unless passing artifacts cover the affected flows)
   reticle report [--session <id>] [--hook]             (what the latest session claimed, and what held)
@@ -104,6 +102,8 @@ export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticl
                                                        (OPT-IN: tell us who you are, e.g. for support or an enterprise trial)
 
 Cloud (link this project to Reticle; runs/flows recorded on the dashboard):
+  reticle connect [--project <name|id>] [--url <cloud origin>]
+                                                       (wire this app if needed, sign in, link, send local history)
   reticle login [--url <u>] [--email <e>] [--code <c>] [--org <n>]
                                                        (browser device flow by default; --email mails a code)
   reticle logout [--url <u>]                           (sign out of ONE host; others stay signed in)
@@ -192,7 +192,7 @@ const KNOWN_COMMANDS: ReadonlySet<string> = new Set([
   FEEDBACK_COMMAND,
   IDENTIFY_COMMAND,
   DAEMON_INNER_COMMAND,
-  // Cloud subcommands dispatch before the local parser but are still commands a human ran.
+  'connect',
   'login',
   'logout',
   'whoami',

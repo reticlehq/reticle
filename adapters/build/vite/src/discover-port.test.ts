@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { daemonRegistryFileName, type DaemonRegistryEntry } from '@reticlehq/core';
-import { chooseDaemonPort, discoverDaemonPort } from './discover-port.js';
+import { chooseDaemonPort, discoverDaemonPort, resolveDaemonPort } from './discover-port.js';
 
 const alive = (): boolean => true;
 
@@ -51,6 +51,30 @@ describe('discoverDaemonPort — build-time daemon discovery by projectId', () =
   it('returns undefined when ~/.reticle does not exist', () => {
     expect(discoverDaemonPort('my-app', join(home, 'nope'), alive)).toBeUndefined();
   });
+
+  it('honours RETICLE_PORT like the CLI, even while an older daemon is registered', async () => {
+    await drop({ port: 4400, pid: process.pid, projectId: 'my-app' });
+    await writeFile(join(home, '.reticle.json'), JSON.stringify({ port: 4471 }));
+    expect(
+      resolveDaemonPort(4480, 'my-app', home, {
+        RETICLE_PORT: '15400',
+        RETICLE_STATE_DIR: home,
+      }).port,
+    ).toBe(15400);
+  });
+
+  it.each(['', '0', '-1', '65536', '2.5', ' 15400', 'invalid'])(
+    'ignores an invalid RETICLE_PORT value: %s',
+    async (value) => {
+      await writeFile(join(home, '.reticle.json'), JSON.stringify({ port: 4471 }));
+      expect(
+        resolveDaemonPort(undefined, 'my-app', home, {
+          RETICLE_PORT: value,
+          RETICLE_STATE_DIR: home,
+        }).port,
+      ).toBe(4471);
+    },
+  );
 });
 
 /**

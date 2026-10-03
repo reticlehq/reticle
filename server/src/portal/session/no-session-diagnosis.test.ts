@@ -402,6 +402,62 @@ describe('a vanished session names the last URL it was on', () => {
 });
 
 /**
+ * A load-time redirect used to read as a closed tab (#1256): the daemon only saw the socket
+ * close. When the SDK reported the navigation while the old document was still alive, the
+ * diagnosis names where the tab went.
+ */
+describe('a tab seen navigating away is not a closed tab', () => {
+  const navigated = diagnoseNoSession({
+    everConnected: true,
+    initialized: true,
+    listening: [3000],
+    port: 4400,
+    lastKnownUrl: 'http://localhost:3000/',
+    departedTo: 'http://localhost:3000/login',
+  });
+
+  it('says the page navigated away to the reported URL', () => {
+    expect(navigated).toMatch(/navigated away to http:\/\/localhost:3000\/login/i);
+  });
+
+  it('still says the wiring worked — the install is not in question', () => {
+    expect(navigated).toContain('one WAS connected to this daemon earlier');
+    expect(navigated).not.toMatch(/reticle init/);
+  });
+
+  it('does not fall back to the closed-tab hedge', () => {
+    expect(navigated).not.toMatch(/tab was closed, navigated away, or hard-reloaded/i);
+  });
+
+  it('stays on the closed-tab wording when no departure was reported', () => {
+    const plain = diagnoseNoSession({
+      everConnected: true,
+      initialized: true,
+      listening: [3000],
+      port: 4400,
+      lastKnownUrl: 'http://localhost:3000/',
+    });
+    expect(plain).not.toMatch(/navigated away to/i);
+    expect(plain).toMatch(/tab was closed, navigated away, or hard-reloaded/i);
+  });
+
+  it('redacts credentials in the reported destination', () => {
+    const msg = diagnoseNoSession({
+      everConnected: true,
+      initialized: true,
+      listening: [3000],
+      port: 4400,
+      lastKnownUrl: 'http://localhost:3000/',
+      departedTo: 'https://user:s3cret@example.com/oauth/callback?token=abc123',
+    });
+    expect(msg).toMatch(/navigated away to/i);
+    expect(msg, 'userinfo must not reach the agent transcript').not.toContain('s3cret');
+    expect(msg, 'token params must not reach the agent transcript').not.toContain('abc123');
+    expect(msg).toContain('example.com/oauth/callback');
+  });
+});
+
+/**
  * Nothing listening AND never instrumented is a TWO-step problem, and saying only one step is a
  * dead end that costs the reader a whole round trip.
  *

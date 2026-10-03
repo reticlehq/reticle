@@ -19,9 +19,11 @@ import {
 } from '@reticlehq/core';
 import { SUCCESS_STEP_TOOL } from '@/language/flows/flow-success.js';
 
-/** OK → PASS; DRIFT/ERROR → FAIL (a healed flow is produced by the heal path, not plain replay). */
+/** OK → PASS; UNVERIFIABLE → SKIPPED; DRIFT/ERROR → FAIL (a healed flow is produced by the heal path, not plain replay). */
 export function runFlowStatusOf(status: ReplayStatus): RunFlowStatus {
-  return status === ReplayStatus.OK ? RunFlowStatus.PASS : RunFlowStatus.FAIL;
+  if (status === ReplayStatus.OK) return RunFlowStatus.PASS;
+  if (status === ReplayStatus.UNVERIFIABLE) return RunFlowStatus.SKIPPED;
+  return RunFlowStatus.FAIL;
 }
 
 const clip = (text: string): string =>
@@ -61,10 +63,13 @@ export function mapReplayToFlowResult(
   durationMs: number,
   flow?: FlowFile,
 ): RunFlowResult {
-  // A replay that could not start returns OK with no steps. Nothing ran, so it is SKIPPED — which
-  // every reader of a run (the verdict, the gate) already refuses to count as a pass.
+  // A replay that could not start or complete returns UNVERIFIABLE (or carries an unverifiable caveat).
+  // Nothing was verified, so it is SKIPPED — which every reader of a run (the verdict, the gate)
+  // refuses to count as a pass.
   const status =
-    replay.unverifiable === undefined ? runFlowStatusOf(replay.status) : RunFlowStatus.SKIPPED;
+    replay.status === ReplayStatus.UNVERIFIABLE || replay.unverifiable !== undefined
+      ? RunFlowStatus.SKIPPED
+      : runFlowStatusOf(replay.status);
   const failureReason =
     replay.unverifiable !== undefined
       ? replay.unverifiable.reason
@@ -73,7 +78,9 @@ export function mapReplayToFlowResult(
           replay.decision?.summary ??
           replay.error?.message ??
           'flow failed')
-        : undefined;
+        : status === RunFlowStatus.SKIPPED
+          ? 'flow could not be graded'
+          : undefined;
   // A flow with a success oracle gets a synthetic 'success' step appended by replay; surface its label
   // as the run's `oracle` so the verdict counts this flow as consequence-backed (→ HIGH confidence),
   // not a bare smoke click. Without this, an oracle-backed pass reads as MEDIUM and undersells itself.

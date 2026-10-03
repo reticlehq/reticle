@@ -13,7 +13,9 @@
 import { probeRouteStatus } from './dev-server/route-status-probe.js';
 import { probeDevServers, probeDevServerStates } from './dev-server/dev-server-probe.js';
 import type { NoSessionReason } from '@reticlehq/core/telemetry';
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { registeredElsewhere } from '@/memory/recall/registered-projects.js';
 import { explainNoSession } from './no-session-diagnosis.js';
 import type { NoSessionFacts } from './no-session-diagnosis.js';
@@ -73,6 +75,11 @@ interface NoSessionWatchOptions {
   initialized: boolean;
   /** Where that was decided — this daemon's working directory unless a caller says otherwise. */
   directory?: string;
+  /**
+   * File-existence predicate for the project directory. Injected for tests; defaults to
+   * checking the directory on disk.
+   */
+  exists?: (file: string) => boolean;
   probe?: () => Promise<number[]>;
   /**
    * Well-known Reticle ports other than ours that currently accept a connection.
@@ -161,6 +168,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
   let attachFailure: string | undefined;
 
   const directory = options.directory ?? process.cwd();
+  const exists = options.exists ?? ((file: string) => existsSync(join(directory, file)));
   // The boot answer still counts (it is what the daemon scoped its sessions with), but `.reticle.json`
   // is routinely written by `init` AFTER this daemon started, so re-read rather than cache. See the
   // `initialized` comment below, which this shares.
@@ -392,6 +400,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
       initialized: scope.initialized,
       ...(scope.configsElsewhere === undefined ? {} : { configsElsewhere: scope.configsElsewhere }),
       previouslyConnected: connectedBefore(),
+      exists,
       // Read when asked, like every other fact here: a page can dial at any moment, and a daemon
       // that cached "nothing has been refused" at boot would keep saying so.
       authRefused: lastCloseWasAuthFailure(),
@@ -405,7 +414,11 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
       // command and the sentence beside it name the same page.
       ...(() => {
         const known = options.sessions.lastKnown?.();
-        return known === undefined ? {} : { lastKnownUrl: known.url };
+        if (known === undefined) return {};
+        return {
+          lastKnownUrl: known.url,
+          ...(known.departedTo === undefined ? {} : { departedTo: known.departedTo }),
+        };
       })(),
       // Read when asked, like everything else here: a `package.json` can gain a dev script, and a
       // daemon that cached "there is none" at boot would keep saying so for the rest of the day.
@@ -475,7 +488,13 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
           lastKnownStatus !== undefined && lastKnownStatus.url === known.url
             ? { lastKnownStatus: lastKnownStatus.status }
             : {};
-        return { lastKnownUrl: known.url, ...status };
+        // Where the tab was seen heading, when the SDK reported it fresh. Kept separate from
+        // lastKnownUrl: the 5xx probe needs the page the tab was ON.
+        const departed =
+          known.departedTo === undefined || '' === known.departedTo
+            ? {}
+            : { departedTo: known.departedTo };
+        return { lastKnownUrl: known.url, ...status, ...departed };
       })(),
       // How long this daemon has been waiting with no app. The diagnosis uses it to surface
       // "install never finished" — the same condition telemetry already knows about.

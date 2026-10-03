@@ -9,7 +9,13 @@
 
 import { describe, it, expect } from 'vitest';
 import type { WebSocket } from 'ws';
-import { RETICLE_PROTOCOL_VERSION, MessageKind, type HelloMessage } from '@reticlehq/core';
+import {
+  RETICLE_PROTOCOL_VERSION,
+  MessageKind,
+  EventType,
+  type HelloMessage,
+  type ReticleEvent,
+} from '@reticlehq/core';
 import { Session } from './session.js';
 import { SessionManager } from './session-manager.js';
 
@@ -161,5 +167,57 @@ describe('lastKnown remembers the departed tab', () => {
     mgr.add(old);
     mgr.remove(old);
     expect(() => mgr.resolve('torn')).toThrow(/orders\/explode/);
+  });
+
+  it('carries the navigation target the SDK reported before the socket closed', () => {
+    const mgr = new SessionManager();
+    const old = session('torn', 'http://localhost:3000/', 'shop');
+    mgr.add(old);
+    old.pushEvent({
+      type: EventType.NET_PENDING,
+      data: {
+        id: 'nav-1',
+        method: 'GET',
+        url: 'http://localhost:3000/login',
+        initiator: 'navigation',
+      },
+    } as unknown as ReticleEvent);
+    mgr.remove(old);
+    // url stays the page the tab was ON — successor matching must not follow the target.
+    expect(mgr.lastKnown()).toEqual({
+      id: 'torn',
+      url: 'http://localhost:3000/',
+      projectId: 'shop',
+      departedTo: 'http://localhost:3000/login',
+    });
+  });
+
+  it('drops a stale departure note — the document survived that navigation', () => {
+    const clock = { t: 0 };
+    const mgr = new SessionManager();
+    const old = new Session(
+      hello('torn', 'http://localhost:3000/', 'shop'),
+      fakeSocket,
+      () => clock.t,
+    );
+    mgr.add(old);
+    old.pushEvent({
+      type: EventType.NET_PENDING,
+      data: {
+        id: 'nav-1',
+        method: 'GET',
+        url: 'http://localhost:3000/login',
+        initiator: 'navigation',
+      },
+    } as unknown as ReticleEvent);
+    // The tab kept living for two minutes after the note, then went away for another reason:
+    // blaming that later disconnect on the old navigation would invent a story.
+    clock.t = 120_000;
+    mgr.remove(old);
+    expect(mgr.lastKnown()).toEqual({
+      id: 'torn',
+      url: 'http://localhost:3000/',
+      projectId: 'shop',
+    });
   });
 });

@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/engine`: the body-capture remedy omitted the redaction step and its limits.** When an assertion needed a response body and capture was off, agents could leave it off because they expected credentials to be stored, and then got `outcome_unread`. The remedy now explains that built-in key rules and known secret shapes are redacted before retention, points to `redact.keys` for app-specific fields, and links [What is recorded](https://docs.reticle.sh/what-is-recorded). It avoids promising that every credential is masked. Closes [#1268](https://github.com/reticlehq/reticle/issues/1268).

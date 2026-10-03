@@ -182,3 +182,90 @@ describe('the departure rule itself', () => {
     expect(isDeparture(href, download, HERE)).toBe(expected);
   });
 });
+
+/**
+ * Programmatic navigations never produce a click (#1256). jsdom does not implement
+ * `window.navigation`, so the tests stub the sliver `installDeparture` reads: an EventTarget
+ * dispatching `navigate` with a `destination` of `{ url, sameDocument }`.
+ */
+describe('the Navigation API (programmatic navigation)', () => {
+  let navigation: EventTarget;
+
+  function dispatchNavigate(
+    url: string,
+    opts?: { sameDocument?: boolean; cancel?: boolean },
+  ): void {
+    const event = new Event('navigate', { cancelable: true });
+    (event as unknown as Record<string, unknown>)['destination'] = {
+      url,
+      sameDocument: opts?.sameDocument ?? false,
+    };
+    if (true === opts?.cancel) {
+      // An app intercepting and cancelling the traversal, mid-dispatch.
+      navigation.addEventListener('navigate', (e) => e.preventDefault(), { once: true });
+    }
+    navigation.dispatchEvent(event);
+  }
+
+  beforeEach(() => {
+    // The outer install saw no Navigation API; reinstall with the stub present.
+    teardown();
+    navigation = new EventTarget();
+    Object.defineProperty(window, 'navigation', {
+      value: navigation,
+      configurable: true,
+      writable: true,
+    });
+    events = [];
+    teardown = installDeparture((type, data) => events.push({ type, data }));
+  });
+
+  afterEach(() => {
+    delete (window as unknown as Record<string, unknown>)['navigation'];
+  });
+
+  it('records a mount-time location.assign to another origin', async () => {
+    dispatchNavigate('https://accounts.google.com/o/oauth2/v2/auth?client_id=abc');
+    const [event] = await settle();
+    expect(event?.type).toBe(EventType.NET_PENDING);
+    expect(event?.data['url']).toContain('accounts.google.com/o/oauth2/v2/auth');
+    expect(event?.data['initiator']).toBe(NetInitiator.NAVIGATION);
+  });
+
+  it('records a same-origin location.assign — the #1256 case', async () => {
+    dispatchNavigate('http://localhost:5173/login');
+    const [event] = await settle();
+    expect(event?.type).toBe(EventType.NET_PENDING);
+    expect(event?.data['url']).toBe('http://localhost:5173/login');
+    expect(event?.data['initiator']).toBe(NetInitiator.NAVIGATION);
+  });
+
+  it('records an anchor click and its navigate event only once', async () => {
+    // Following a link fires the click listener AND the Navigation API. One departure, one
+    // pending — two would read downstream as two requests still in flight.
+    await clickAnchor({ href: 'https://example.com/page' });
+    dispatchNavigate('https://example.com/page');
+    const all = await settle();
+    expect(all).toHaveLength(1);
+    expect(all[0]?.data['initiator']).toBe(NetInitiator.NAVIGATION);
+  });
+
+  it('says nothing for a same-document transition', async () => {
+    dispatchNavigate('http://localhost:5173/dashboard#section-2', { sameDocument: true });
+    expect(await settle()).toHaveLength(0);
+  });
+
+  it('says nothing when the navigation is cancelled', async () => {
+    dispatchNavigate('http://localhost:5173/login', { cancel: true });
+    expect(
+      await settle(),
+      'a cancelled traversal never leaves the document, so it must not plant a pending',
+    ).toHaveLength(0);
+  });
+
+  it('stops listening for navigations after teardown', async () => {
+    teardown();
+    dispatchNavigate('http://localhost:5173/login');
+    expect(await settle()).toHaveLength(0);
+  });
+});

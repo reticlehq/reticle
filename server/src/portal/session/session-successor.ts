@@ -17,6 +17,11 @@ export interface SessionIdentity {
   id: string;
   url: string;
   projectId?: string;
+  /**
+   * Where the tab was seen heading just before it went away (#1256). Separate from `url` — the
+   * old origin — because successor matching must match on where the tab WAS.
+   */
+  departedTo?: string;
 }
 
 export interface SuccessorClock {

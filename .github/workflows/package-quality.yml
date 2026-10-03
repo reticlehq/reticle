@@ -4,7 +4,9 @@ name: Package quality
 #   publint  — package.json correctness (exports conditions, types-first ordering, files hygiene)
 #   attw     — "are the types wrong": resolves the .d.ts in node10/node16(CJS+ESM)/bundler modes
 #   size     — the embedded browser SDK's own packed dist stays under budget
-# publint/attw already pass locally; this stops them from silently regressing.
+# Tool versions are explicit so a new upstream release cannot silently change the gate.
+# Move these tools into the workspace lockfile when registry access is available;
+# exact versions here still leave their transitive dependencies resolved at install time.
 
 on:
   push:
@@ -48,7 +50,7 @@ jobs:
             [ -z "$name" ] && continue
             checked=$((checked+1))
             echo "::group::publint $name"
-            (cd "$dir" && npx --yes publint --strict)
+            (cd "$dir" && npx --yes publint@0.3.21 --strict)
             echo "::endgroup::"
           done
           echo "publint checked $checked package(s)"
@@ -71,7 +73,7 @@ jobs:
             echo "::group::attw $name"
             # Two justified ignores: cjs-resolves-to-esm (packages are ESM-first, no CJS entry by design) and
             # no-resolution (the legacy node10 resolver doesn't read exports maps — modern packages skip it).
-            (cd "$dir" && npx --yes @arethetypeswrong/cli --pack --ignore-rules cjs-resolves-to-esm no-resolution)
+            (cd "$dir" && npx --yes @arethetypeswrong/cli@0.18.5 --pack --ignore-rules cjs-resolves-to-esm no-resolution)
             echo "::endgroup::"
           done
           echo "attw checked $checked package(s)"

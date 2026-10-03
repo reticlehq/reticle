@@ -419,16 +419,15 @@ export const FLOW_TOOLS: ToolDef[] = [
     name: ReticleTool.FLOW_REPLAY,
     description:
       "Replay a git-checked flow from .reticle/flows/<name>.json. RE-RESOLVES each step's semantic " +
-      'anchor (testid via reticle_query; signal via predicate) against the LIVE DOM — never reuses a ' +
-      'stale ref. On an anchor MISS returns legible DRIFT { step, anchor, drift:{ reasonKind, reason, ' +
-      'nearest } } (the closest surviving testid) and stops — the "whose fault is it" contract. ' +
-      'Returns { name, status: ok|drift|error, steps:[...] }; missing/malformed files and action ' +
-      'failures are status:error with a structured code (distinct from contract-changed drift). ' +
-      'An ok replay of a flow that asserts no consequence also carries unverifiable:{reason} — it ' +
-      'would read ok even if the feature were broken, so do NOT treat that ok as proof. ' +
-      'A run that stops early carries halted:{atStep, notAttempted}: `steps` is SHORTER than the ' +
-      'flow because replay stopped, not because a step was skipped — do not read a missing step as ' +
-      'an action that failed to dispatch.',
+      'anchor (testid via reticle_query; signal via predicate) against LIVE DOM. On anchor MISS returns ' +
+      'DRIFT { step, anchor, drift:{ reasonKind, reason, nearest } } and stops. ' +
+      'Returns { name, status: ok|drift|error|unverifiable, steps:[...] }. ' +
+      'Action failures are status:error. ' +
+      'Status unverifiable means flow could not be graded (missing secrets, unmet preconditions, lost ' +
+      'document) — neither pass nor fail, treat as UNKNOWN. ' +
+      'An ok replay of a flow asserting no consequence also carries unverifiable:{reason} — do not ' +
+      'treat as proof. ' +
+      'Early halt carries halted:{atStep, notAttempted}: `steps` is shorter because replay stopped.',
     inputSchema: {
       flow: z
         .string()
@@ -473,7 +472,7 @@ export const FLOW_TOOLS: ToolDef[] = [
       // The flow's name — always present in FlowReplayResult (the description promises `{ name, … }`),
       // but omitted here, so a validating profile stripped it and a replay result arrived anonymous.
       name: z.string(),
-      status: z.string().describe('ok | drift | error'),
+      status: z.string().describe('ok | drift | error | unverifiable'),
       steps: z.array(z.unknown()),
       proposals: z.array(z.unknown()).optional(),
       deviation: z

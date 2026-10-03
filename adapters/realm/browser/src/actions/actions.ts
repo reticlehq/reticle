@@ -36,6 +36,7 @@ import {
   pressKeys,
   holdKey,
   pressCombo,
+  closeModalOnEscape,
 } from './actions-press.js';
 
 /**
@@ -698,6 +699,7 @@ async function dispatchOther(
           new KeyboardEvent('keydown', { key, code, bubbles: true, cancelable: true, ...mods }),
         ),
       );
+      closeModalOnEscape(el, key, down); // on keydown, as a browser does, before any hold
       // A HELD key, with the auto-repeat a browser sends while it is down.
       //
       // The mouse has had `holdMs` since hold-to-confirm; the keyboard did not, so a key that has to
@@ -917,26 +919,6 @@ export async function executeAction(
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => nativeSetTimeout(r, ms));
-
-/** Best-effort WebMCP passthrough: call a navigator.modelContext tool if the site exposes one. */
-export async function dispatchWebMcp(
-  tool: string,
-  params: Record<string, unknown>,
-  confirmDangerous = false,
-): Promise<unknown> {
-  if (requiresDangerousConfirmation(tool) && !confirmDangerous) {
-    throw new Error(
-      `potentially destructive WebMCP tool blocked; retry with ${DANGEROUS_ACTION_CONFIRM_ARG}=true`,
-    );
-  }
-  const mc = (
-    navigator as unknown as { modelContext?: { callTool?: (n: string, p: unknown) => unknown } }
-  ).modelContext;
-  if (mc === undefined || typeof mc.callTool !== 'function') {
-    throw new Error('WebMCP (navigator.modelContext) not available on this page');
-  }
-  return await mc.callTool(tool, params);
-}
 
 export interface ActionStep {
   ref: string;

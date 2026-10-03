@@ -63,6 +63,7 @@ import { diskSink, diskSource, readCloudIssues, readCloudState } from '@/memory/
  */
 const CLOUD_COMMANDS: ReadonlySet<string> = new Set([
   'login',
+  'connect',
   'logout',
   'whoami',
   'link',
@@ -507,6 +508,61 @@ const cmdLink = async (argv: readonly string[]): Promise<number> => {
   return 0;
 };
 
+/**
+ * `reticle connect` finishes the cloud half of first-run setup in one invocation. The CLI entry
+ * initializes an unwired app before calling this verb. A saved login is checked against this exact
+ * host before reuse; an expired one opens the normal browser approval flow. Login does not auto-link
+ * here because this command links once, to the project the caller named, then sends local history.
+ */
+const cmdConnect = async (argv: readonly string[]): Promise<number> => {
+  for (let i = 0; i < argv.length; i += 2) {
+    const flag = argv[i];
+    const value = argv[i + 1];
+    if (
+      (flag !== '--project' && flag !== '--url') ||
+      value === undefined ||
+      0 === value.length ||
+      value.startsWith('--')
+    ) {
+      err('usage: reticle connect [--project <name|id>] [--url <cloud origin>]');
+      return 2;
+    }
+  }
+  if (!(await createNodeFileSystem().exists(join(process.cwd(), RETICLE_CONFIG_BASENAME)))) {
+    err('this app is not wired yet — run `reticle init` in its directory, then `reticle connect`');
+    return 2;
+  }
+  const f = flags(argv);
+  const url = baseUrl(null, f['url']);
+  if (undefined === apiKeyFrom(process.env)) {
+    const session = await readSessionFor(url);
+    let signedIn = false;
+    if (session !== null) {
+      try {
+        await api('GET', `${url}/v1/me`, session.token);
+        signedIn = true;
+      } catch {
+        hint('saved sign-in needs renewal — opening browser approval');
+      }
+    }
+    if (!signedIn) {
+      const code = await cmdLogin(['--url', url], cmdLink, false);
+      if (code !== 0) return code;
+    }
+  }
+  const linkArgs = [
+    '--url',
+    url,
+    ...(f['project'] === undefined ? [] : ['--project', f['project']]),
+  ];
+  const linked = await cmdLink(linkArgs);
+  if (linked !== 0) return linked;
+  const pushed = await cmdPush();
+  if (pushed !== 0) return pushed;
+  hint('Connected. Open your coding agent and ask it to verify one flow in your app.');
+  return 0;
+};
+
 /** `reticle config [--runs on|off] [--memory on|off] [--flows on|off] [--verify local|server]`. */
 const cmdConfig = async (argv: readonly string[]): Promise<number> => {
   const f = flags(argv);
@@ -795,6 +851,8 @@ export const runCloudCommand = async (argv: readonly string[]): Promise<number> 
         // The linker is passed in rather than imported by cloud-login: login ends by linking and
         // link needs a session, so the cycle is broken at this one call site.
         return await cmdLogin(rest, cmdLink);
+      case 'connect':
+        return await cmdConnect(rest);
       case 'logout':
         return await cmdLogout(rest);
       case 'whoami':

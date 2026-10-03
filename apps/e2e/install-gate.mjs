@@ -1,5 +1,5 @@
 // Tier 1: install Reticle into apps that have never seen it, and check a session actually appears
-// AND can answer a state question (`hasCapabilities`). Connected is not verifiable.
+// AND answers true/false assertions and an action over MCP. A HELLO is not a working install.
 //
 // Every gate in this repo is blind to the install. `apps/bench-app`, `apps/next-smoke` and the rest
 // are ALREADY instrumented, so re-running `init` over one reports `·` (already wired) for every step
@@ -24,7 +24,12 @@
 //   pnpm gate:install                 # all scaffolds
 //   node apps/e2e/install-gate.mjs --only next-pages-router [--keep]
 //   pnpm gate:install:self-test       # negative control: every scaffold must go RED
-import { execFileSync, spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
+import { randomUUID } from 'node:crypto';
+import { evaluateInstallControl, SESSION_CHECK, sessionMatchesPage } from './install-control.mjs';
+import { requireAssertion, requireVerdict } from './smoke-checks.mjs';
+import { restoreInstallPackages } from './install-packages.mjs';
 
 // ── Never phone home from the gate ───────────────────────────────────────────────────────────────
 //
@@ -77,7 +82,7 @@ import {
   writeFileSync,
   rmSync,
 } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -85,6 +90,7 @@ import {
   freePortSafely,
   portHolders,
   killTree,
+  stopProcessTree,
   startOwnedDaemon,
   watchTransport,
   attributeOutcome,
@@ -125,22 +131,17 @@ function pm(cmd, args = []) {
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const CLI = join(ROOT, 'server/dist/command/cli.js');
-/** Private ports, so this never fights the battery or a developer's own daemon. */
-/**
- * Separate port ranges for the self-test, which runs FIRST in CI and in the same job.
- *
- * The self-test deliberately points each scaffold's init one port off its daemon, so its own init
- * daemons land on exactly the ports the real run is about to use. On Windows, where a process's
- * teardown outlives the kill, the real run's monorepo init then found its port taken, moved up one,
- * and registered this run's projectId on a port the harness was not watching. Discovery did the
- * right thing with the wrong daemon and the gate reported "no session ever appeared".
- *
- * Ranges that cannot overlap are cheaper than reasoning about how long a Windows handle lives.
- */
+// All records here belong to this invocation, including servers handed over by init.
+const GATE_STATE_DIR = mkdtempSync(join(tmpdir(), 'reticle-install-state-'));
+process.env.RETICLE_STATE_DIR = GATE_STATE_DIR;
+process.env.RETICLE_PAIRING_TOKEN_DIR = GATE_STATE_DIR;
+
+const PACKAGE_DIRECTORY = process.env.INSTALL_GATE_PACKAGES;
+// Validation/restoration precedes any live registry, so a corrupt artifact cannot be tested.
+const PREBUILT_PACKAGES = PACKAGE_DIRECTORY === undefined ? undefined : restoreInstallPackages(PACKAGE_DIRECTORY, ROOT);
+/** Separate ranges keep a control's teardown out of the positive run. */
 const SELF_TEST_PORT_OFFSET = 60;
-const BRIDGE_PORT_BASE =
-  Number(process.env.INSTALL_GATE_PORT ?? '4788') +
-  (process.argv.includes('--self-test') ? SELF_TEST_PORT_OFFSET : 0);
+const BRIDGE_PORT_BASE = Number(process.env.INSTALL_GATE_PORT ?? '4788');
 /**
  * How long init's handed-over dev server gets to answer once init has exited. Short, because init
  * only reports success after a session connected through that very server: it was answering a
@@ -168,16 +169,11 @@ const KEEP = process.argv.includes('--keep');
  */
 const INSTALL_PROBE_TESTID = 'reticle-install-probe';
 const INSTALL_PROBE_FILE = 'reticle-install-probe.ts';
-/**
- * Negative control: wire the app to a port the daemon is NOT on, so no session can appear, and
- * require the gate to FAIL.
- *
- * `check-boundaries.mjs --self-test` and `check-lossy-transforms.mjs --self-test` already run this
- * way in CI, for the reason this repo keeps rediscovering: a guard that has never failed is not a
- * guard. The session check (connected AND verifiable) is the assertion that proves the install
- * WORKS, so it is the one that most needs to be shown capable of going red.
- */
-const SELF_TEST = process.argv.includes('--self-test');
+/** Block the real SDK socket and require exactly the session check to fail. */
+const CONTROL_ONLY = process.argv.includes('--self-test');
+const WITH_CONTROL = process.argv.includes('--with-self-test');
+let SELF_TEST = CONTROL_ONLY;
+if (CONTROL_ONLY && WITH_CONTROL) throw new Error('choose --self-test or --with-self-test');
 /** Re-record the baseline instead of asserting against it. The diff is then reviewed in the PR. */
 const UPDATE_BASELINE = process.argv.includes('--update-baseline');
 /**
@@ -217,7 +213,7 @@ const ONLY = process.argv.includes('--only')
  * step the gate previously had to skip and then excuse.
  */
 const REGISTRY_PORT = Number(process.env.INSTALL_GATE_REGISTRY_PORT ?? '4873');
-const REGISTRY = `http://localhost:${String(REGISTRY_PORT)}`;
+const REGISTRY = `http://127.0.0.1:${String(REGISTRY_PORT)}`;
 
 /**
  * The registry the gate publishes into — INSTALLED, not fetched at gate time.
@@ -239,30 +235,17 @@ const VERDACCIO_BIN = join(ROOT, 'apps/e2e/node_modules/verdaccio/bin/verdaccio'
 
 async function startLocalRegistry() {
   await freePortSafely(REGISTRY_PORT);
-  // The paths scripts/verdaccio.yaml actually uses. Resetting BOTH matters: leave the htpasswd file
-  // behind and the second run's user-create returns no token (the user already exists), which
-  // presents as "no token from verdaccio" and looks like a registry fault rather than stale state.
-  const storage = join(tmpdir(), 'reticle-verdaccio-storage');
-  const htpasswd = join(tmpdir(), 'reticle-verdaccio-htpasswd');
-  // `force` swallows ENOENT and nothing else. Windows raises EPERM/EBUSY while any handle on the
-  // tree is still open — a verdaccio from a previous run being torn down is exactly that — and an
-  // unretried delete there fails the gate before it has started, with an errno instead of a reason.
-  const winSafe = { recursive: true, force: true, maxRetries: 8, retryDelay: 250 };
-  rmSync(storage, winSafe);
-  rmSync(htpasswd, winSafe);
-  // The checked-in config names POSIX paths, and `/tmp` on Windows resolves to whatever the current
-  // drive happens to be. Rather than keep a second Windows copy that drifts from the first, the one
-  // config is read and its two paths repointed at this machine's real temp directory.
+  // Storage and htpasswd are relative to the config. A fresh config directory isolates both
+  // without deleting state another registry may own. Override listen explicitly: the checked-in
+  // default must not silently ignore INSTALL_GATE_REGISTRY_PORT.
   const config = join(mkdtempSync(join(tmpdir(), 'reticle-gate-verdaccio-')), 'verdaccio.yaml');
   writeFileSync(
     config,
     readFileSync(join(ROOT, 'scripts/verdaccio.yaml'), 'utf8')
-      .replace('/tmp/reticle-verdaccio-storage', storage.split('\\').join('/'))
-      .replace('/tmp/reticle-verdaccio-htpasswd', htpasswd.split('\\').join('/'))
       // The config file pins 4873. Without this, INSTALL_GATE_REGISTRY_PORT moved every URL the gate
       // uses and not the port Verdaccio binds, so a second registry on the machine made the gate die
       // with EADDRINUSE before a single scaffold ran.
-      .replace('listen: 0.0.0.0:4873', `listen: 0.0.0.0:${String(REGISTRY_PORT)}`),
+      .replace('listen: 127.0.0.1:4873', `listen: 127.0.0.1:${String(REGISTRY_PORT)}`),
   );
   const proc = spawn(process.execPath, [VERDACCIO_BIN, '--config', config], {
     cwd: ROOT,
@@ -357,16 +340,21 @@ async function publishInto(proc) {
   const npmrc = join(mkdtempSync(join(tmpdir(), 'reticle-gate-npmrc-')), '.npmrc');
   writeFileSync(
     npmrc,
-    `registry=${REGISTRY}\n//localhost:${String(REGISTRY_PORT)}/:_authToken=${token}\n`,
+    `registry=${REGISTRY}\n//127.0.0.1:${String(REGISTRY_PORT)}/:_authToken=${token}\n`,
   );
   const auth = { npm_config_userconfig: npmrc, NPM_CONFIG_USERCONFIG: npmrc };
-  run(
-    'pnpm',
-    ['-r', 'publish', '--registry', REGISTRY, '--no-git-checks'],
-    ROOT,
-    auth,
-    PUBLISH_TIMEOUT_MS,
-  );
+  if (PREBUILT_PACKAGES !== undefined) {
+    for (const tarball of PREBUILT_PACKAGES) {
+      await run('npm', ['publish', tarball, '--registry', REGISTRY, '--ignore-scripts', '--provenance=false'], ROOT, auth);
+    }
+  } else {
+    // The protocol has its own version. On a patch release pnpm sees its unchanged version on
+    // public npm and skips it, leaving the temporary registry without a dependency that the
+    // freshly published server and core still require. Publish it here first so every scaffold
+    // installs the entire candidate from this registry.
+    await run('npm', ['publish', '--registry', REGISTRY, '--provenance=false'], join(ROOT, 'open-verification'), auth);
+    await run('pnpm', ['-r', 'publish', '--registry', REGISTRY, '--no-git-checks'], ROOT, auth, PUBLISH_TIMEOUT_MS);
+  }
   return { proc, auth, stop: () => killTree(proc.pid) };
 }
 
@@ -678,7 +666,9 @@ const SCAFFOLDS = [
     id: 'sveltekit',
     what: 'SvelteKit — Vite underneath, but SSR renders the document, and Svelte is not React',
     initDevPorts: INIT_DEV_PORTS.vite,
-    create: ['npx', ['--yes', 'sv', 'create', 'app', '--template', 'minimal', '--types', 'ts', '--no-add-ons', '--no-install']],
+    // Newer sv releases pull a runtime: dependency that npm 10.9 cannot resolve on our supported
+    // Node 22.14 floor. Keep this generator at the last version this gate has exercised there.
+    create: ['npx', ['--yes', 'sv@0.17.1', 'create', 'app', '--template', 'minimal', '--types', 'ts', '--no-add-ons', '--no-install']],
     files: PROBE_MARKUP.sveltekit,
   },
   {
@@ -728,6 +718,10 @@ const SCAFFOLDS = [
     // Raise the pin when the repo's own Node floor moves past 22's.
     what: 'Angular 17+ (no SSR) — isDevMode() connect in the entry, the token over an ng-serve proxy',
     initDevPorts: INIT_DEV_PORTS.angular,
+    // npm 10.9.2 crashes in Arborist's peer-set builder on the current Angular 21/Vitest
+    // scaffold before Reticle is installed. Resolve that scaffold once; the resulting lockfile
+    // lets init exercise its normal npm install path against the local registry.
+    installArgs: ['--legacy-peer-deps'],
     create: [
       'npx',
       [
@@ -790,7 +784,7 @@ function dumpEvidence(consoleLines, bridgePort, failedResponses = [], wsAttempts
   say('websocket attempts', wsAttempts.join('\n'));
   // Which daemon claims which project. Discovery is registry-first, so when a page dials a port the
   // harness is not watching, this is the file that says why it chose that one.
-  const stateHome = join(homedir(), '.reticle');
+  const stateHome = GATE_STATE_DIR;
   try {
     const claims = readdirSync(stateHome)
       .filter((f) => f.startsWith('connected-'))
@@ -799,7 +793,7 @@ function dumpEvidence(consoleLines, bridgePort, failedResponses = [], wsAttempts
   } catch {
     say('daemon registry', `not readable in ${stateHome}`);
   }
-  const daemonLog = join(homedir(), '.reticle', `daemon-${String(bridgePort)}.log`);
+  const daemonLog = join(GATE_STATE_DIR, `daemon-${String(bridgePort)}.log`);
   try {
     say(`daemon log (${daemonLog})`, readFileSync(daemonLog, 'utf8'));
   } catch {
@@ -807,10 +801,14 @@ function dumpEvidence(consoleLines, bridgePort, failedResponses = [], wsAttempts
   }
 }
 
-const run = (cmd, args, cwd, extraEnv = {}, timeoutMs = 600_000) => {
+const execFileAsync = promisify(execFile);
+// Keep consuming the registry/dev-server pipes while npm runs. A synchronous child blocks
+// those readers, eventually backing up a noisy registry and hanging its own npm install.
+const runCaptured = async (cmd, args, cwd, extraEnv = {}, timeoutMs = 600_000) => {
   const it = pm(cmd, args);
-  return execFileSync(it.cmd, it.args, {
+  return execFileAsync(it.cmd, it.args, {
     cwd,
+    maxBuffer: 16 * 1024 * 1024,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, ...extraEnv },
@@ -818,6 +816,7 @@ const run = (cmd, args, cwd, extraEnv = {}, timeoutMs = 600_000) => {
     ...it.shellOpts,
   });
 };
+const run = async (...args) => (await runCaptured(...args)).stdout;
 
 /**
  * The workspace publish gets its own, much larger budget.
@@ -1004,43 +1003,29 @@ function stepsOf(report) {
  */
 const fingerprint = (steps) => steps.map((s) => `${s.mark} ${s.title} → ${s.target}`);
 
-/**
- * Free the framework's default dev ports — but only where nothing of the user's can be listening.
- *
- * These are 3000 and 5173, the two most-used ports on any web developer's machine, and this gate is
- * runnable locally. Everywhere else it takes deliberately private ports "so this never fights the
- * battery or a developer's own daemon"; killing whatever answers on :3000 would be the one place it
- * broke that promise, and it would do it to the app somebody was working on.
- *
- * So: kill on a CI runner, where the only thing that can be holding these is a leftover of ours.
- * Locally, SAY what is there and leave it alone — a named warning is a fair trade for not killing a
- * developer's dev server, and it names the exact condition that makes the run untrustworthy.
- *
- * `GITHUB_ACTIONS`, not `CI`: this file SETS `CI=true` near the top (so its own telemetry is not
- * counted as a user's), which makes `CI` true on a laptop too — exactly the machine this guard
- * exists to protect.
- */
+/** Refuse occupied fixture ports before init can accidentally adopt someone else's app. */
 async function clearInitDevPorts(scaffold, note, exceptPort) {
   for (const port of scaffold.initDevPorts ?? []) {
-    if (port === exceptPort) continue;
-    if ('true' !== process.env.GITHUB_ACTIONS) {
-      const held = portHolders(port).filter((h) => h.listener);
-      if (held.length > 0) {
-        note(
-          `:${String(port)} is already listening (${held.map((h) => `pid ${h.pid} ${h.command}`).join(', ')}) — ` +
-            'left alone because this is not CI. `init` may watch it instead of the app it starts, ' +
-            'which reads as "the SDK IS in the page and never dialled the bridge".',
-        );
-      }
-      continue;
-    }
-    const { freed, survivors } = await freePortSafely(port, { onNote: note });
-    if (!freed) {
-      note(
-        `could not free :${String(port)} — still held by ` +
-          `${survivors.map((h) => `pid ${h.pid} (${h.command})`).join(', ')}`,
-      );
-    }
+    if (port !== exceptPort) await freePortSafely(port, { onNote: note });
+  }
+}
+
+async function stopGateDaemon(port) {
+  let ownedPids = [];
+  try {
+    ownedPids = [Number(readFileSync(join(GATE_STATE_DIR, `daemon-${port}.pid`), 'utf8'))];
+  } catch { /* init may have refused before starting a daemon */ }
+  await freePortSafely(port, { ownedPids });
+}
+
+async function stopGateApp(app) {
+  for (const file of readdirSync(GATE_STATE_DIR)) {
+    if (!/^dev-server-.*\.json$/.test(file)) continue;
+    const record = JSON.parse(readFileSync(join(GATE_STATE_DIR, file), 'utf8'));
+    if (record.appDir !== app) continue;
+    const ownedPids = stopProcessTree(record.pid) ?? [];
+    const port = portOf(record.url);
+    if (port !== undefined) await freePortSafely(port, { ownedPids });
   }
 }
 
@@ -1062,10 +1047,9 @@ async function driveScaffold(scaffold, index) {
 
   // A port pair per scaffold. Sequential runs would be fine sharing one, but a scaffold that leaves
   // a dev server behind must not be able to make the NEXT scaffold look broken.
-  const bridgePort = BRIDGE_PORT_BASE + index * 2;
-  // The port init is told to use. One off in the self-test, so the app is wired to a bridge the
-  // gate's own daemon is not on and no session can appear.
-  const initPort = SELF_TEST ? bridgePort + 1 : bridgePort;
+  const offset = SELF_TEST ? SELF_TEST_PORT_OFFSET : 0;
+  const bridgePort = BRIDGE_PORT_BASE + offset + index * 2;
+  const initPort = bridgePort;
 
   console.log(`\n──────── ${scaffold.id} ────────`);
   note(scaffold.what);
@@ -1092,6 +1076,9 @@ async function driveScaffold(scaffold, index) {
   let daemon;
   /** The app url init reported in `--json`, whose dev server the gate keeps and must stop after. */
   let appUrl;
+  let browser;
+  let transport;
+  let client;
   /**
    * Ports init said it was using, captured where `report` is in scope.
    *
@@ -1104,7 +1091,7 @@ async function driveScaffold(scaffold, index) {
   try {
     // ── 1. a surface that has never seen Reticle ──────────────────────────────────────────────
     note('scaffolding…');
-    if (scaffold.create !== undefined) run(scaffold.create[0], scaffold.create[1], workdir);
+    if (scaffold.create !== undefined) await run(scaffold.create[0], scaffold.create[1], workdir);
     // Files that ARE the scaffold, for a framework with no generator left to run (see CRA_FILES).
     // Before the probe stamp, which needs the app directory to exist.
     for (const [rel, content] of Object.entries(scaffold.files ?? {})) {
@@ -1138,7 +1125,7 @@ async function driveScaffold(scaffold, index) {
     // until a moment ago — matches nothing, so npm silently falls through to the public registry and
     // the gate would measure the published SDK while reporting on local changes.
     writeFileSync(join(app, '.npmrc'), `@reticlehq:registry=${REGISTRY}\n`);
-    run('npm', ['install', '--no-audit', '--no-fund'], app);
+    await run('npm', ['install', '--no-audit', '--no-fund', ...(scaffold.installArgs ?? [])], app);
     // The lockfile npm just wrote is the reason the inherited-lockfile trap was unreachable here.
     // `resolveLockfiles` returns the moment it sees a LOCAL lockfile — "local is authoritative" — so
     // an ancestor `pnpm-lock.yaml` is never consulted and a scaffold that seeds one passes whether
@@ -1167,7 +1154,7 @@ async function driveScaffold(scaffold, index) {
     let initStderr = '';
     let initExit = 0;
     try {
-      report = run(
+      const output = await runCaptured(
         'node',
         // `--json`, so the app url is init's own answer rather than one this gate composes. See the
         // hand-over section below for why that matters.
@@ -1178,6 +1165,8 @@ async function driveScaffold(scaffold, index) {
           ...(true === scaffold.hidePnpm ? { PATH: pathWithoutPnpm(workdir) } : {}),
         },
       );
+      report = output.stdout;
+      initStderr = output.stderr;
     } catch (err) {
       initExit = err.status ?? 1;
       report = err.stdout ?? '';
@@ -1290,8 +1279,8 @@ async function driveScaffold(scaffold, index) {
     })();
     chk(
       '  and it came from the LOCAL registry, not public npm',
-      lock.includes(`localhost:${String(REGISTRY_PORT)}`),
-      lock.includes(`localhost:${String(REGISTRY_PORT)}`)
+      lock.includes(`127.0.0.1:${String(REGISTRY_PORT)}`),
+      lock.includes(`127.0.0.1:${String(REGISTRY_PORT)}`)
         ? 'resolved against the local registry'
         : 'package-lock does not reference the local registry — this measured PUBLISHED code',
     );
@@ -1348,7 +1337,7 @@ async function driveScaffold(scaffold, index) {
     // init's DAEMON is not kept: the gate owns the daemon (step 5). Everything else init mentioned
     // is freed too, except the one server this gate is about to drive.
     for (const port of new Set([...handedOverPorts, initPort])) {
-      if (port !== appPort) await freePortSafely(port);
+      if (port !== appPort) await stopGateDaemon(port);
     }
     await clearInitDevPorts(scaffold, note, appPort);
     handedOverPorts = [];
@@ -1368,7 +1357,7 @@ async function driveScaffold(scaffold, index) {
     // that, and `daemonCwd` below is asserted empty after the drive.
     mkdirSync(daemonCwd, { recursive: true });
     daemon = await startOwnedDaemon(bridgePort, { cliPath: CLI, cwd: daemonCwd });
-    const transport = watchTransport(bridgePort);
+    transport = watchTransport(bridgePort);
 
     // ── 6. the handed-over server, after init has exited, in a real browser ─────────────────────
     chk(
@@ -1378,8 +1367,18 @@ async function driveScaffold(scaffold, index) {
     );
 
     const { chromium } = await import('playwright');
-    const browser = await chromium.launch();
+    browser = await chromium.launch();
     const page = await browser.newPage();
+    // Block only Reticle's socket. Port mis-wiring can be repaired by project discovery, which
+    // made the monorepo control pass and required a waiver. Intercepting the actual connection
+    // proves the failure detector without changing init's input or breaking framework HMR.
+    let blockedConnections = 0;
+    if (SELF_TEST) {
+      await page.routeWebSocket((url) => url.pathname === '/reticle', async (route) => {
+        blockedConnections += 1;
+        await route.close();
+      });
+    }
     const consoleLines = [];
     page.on('console', (m) => consoleLines.push(`${m.type()}: ${m.text()}`));
     // WHAT was refused, not just that something was. A console line reading "Failed to load
@@ -1397,9 +1396,13 @@ async function driveScaffold(scaffold, index) {
       wsAttempts.push(`opened ${ws.url()}`);
       ws.on('socketerror', (e) => wsAttempts.push(`FAILED ${ws.url()} — ${String(e)}`));
     });
+    let probeUrl;
     try {
       if (appUrl === undefined) throw new Error('init reported no app url to open');
-      await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+      const probe = new URL(appUrl);
+      probe.searchParams.set('reticle-install-run', randomUUID());
+      probeUrl = probe.href;
+      await page.goto(probeUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     } catch (err) {
       consoleLines.push(`goto failed: ${String(err).slice(0, 120)}`);
     }
@@ -1419,8 +1422,7 @@ async function driveScaffold(scaffold, index) {
     // from a different framework. That is the exact failure this whole file exists to prevent, one
     // level up. The browser above was pointed at init's url, so that is the only session that can
     // answer for what was installed here.
-    const isOurs = (s) =>
-      appPort !== undefined && String(s?.url ?? '').includes(`:${String(appPort)}`);
+    const isOurs = (s) => sessionMatchesPage(s, probeUrl);
     const connectDeadline = Date.now() + CONNECT_TIMEOUT_MS;
     let sessions = [];
     while (Date.now() < connectDeadline) {
@@ -1446,11 +1448,11 @@ async function driveScaffold(scaffold, index) {
       // Neither a pass nor a clean fail. A scaffold that never had a bridge was never tested, and
       // reporting that as an install failure is how a correct SvelteKit install became a bug report.
       console.log(`   ⚠️  INCONCLUSIVE — ${verdict.because}`);
-      fail += 1;
+      chk('transport stayed available', false, verdict.because);
     } else {
       const passed = verdict.outcome === Attribution.PASS;
       chk(
-        'a session appears and can answer a state question',
+        SESSION_CHECK,
         passed,
         passed
           ? (sessions[0]?.url ?? '')
@@ -1464,6 +1466,44 @@ async function driveScaffold(scaffold, index) {
       if (!passed) dumpEvidence(consoleLines, bridgePort, failedResponses, wsAttempts);
     }
 
+    // HELLO's hasCapabilities is a declaration, not proof that any command answers. Exercise
+    // the installed SDK through stdio MCP, without injecting or reconnecting a replacement SDK.
+    if (!SELF_TEST && verdict.outcome === Attribution.PASS) {
+      const { McpStdioClient } = await import('../../bench/harness/mcp-client.mjs');
+      client = new McpStdioClient('node', [CLI, 'mcp', '--port', String(bridgePort)],
+        { RETICLE_PORT: String(bridgePort), RETICLE_TELEMETRY: '0' }, { cwd: app });
+      await client.start();
+      const sessionId = sessions.find((session) => session.hasCapabilities)?.sessionId;
+      if (typeof sessionId !== 'string') throw new Error('connected session has no id');
+      await page.evaluate((testid) => {
+        const button = document.createElement('button');
+        button.dataset.testid = testid;
+        button.textContent = 'Reticle install probe ready';
+        button.addEventListener('click', () => { button.textContent = 'Reticle install probe clicked'; });
+        document.body.append(button);
+      }, INSTALL_PROBE_TESTID);
+      const call = async (name, args) => {
+        const raw = await client.request('tools/call', { name, arguments: args }, 15_000);
+        if (raw?.isError === true) throw new Error(JSON.stringify(raw));
+        return JSON.parse((raw?.content ?? []).filter((item) => item.type === 'text').map((item) => item.text).join('\n'));
+      };
+      requireAssertion(await call('reticle_assert', {
+        sessionId, predicate: { kind: 'element', query: { by: 'testid', value: INSTALL_PROBE_TESTID } },
+        timeout_ms: 5000,
+      }), true);
+      chk('the installed SDK answers a true assertion over MCP', true);
+      requireVerdict(await call('reticle_act_and_wait', {
+        sessionId, action: 'click', target: { testid: INSTALL_PROBE_TESTID },
+        until: { kind: 'text', contains: 'Reticle install probe clicked' }, timeout_ms: 5000,
+      }), true);
+      chk('an MCP action changes the installed page',
+        await page.getByTestId(INSTALL_PROBE_TESTID).textContent() === 'Reticle install probe clicked');
+      requireAssertion(await call('reticle_assert', {
+        sessionId, predicate: { kind: 'element', query: { by: 'testid', value: `${INSTALL_PROBE_TESTID}-absent` } },
+        timeout_ms: 250,
+      }), false);
+      chk('the installed SDK refuses a false assertion', true);
+    }
     // ── 7. a source edit, which is a log line, and the handed-over server must survive it ──────
     const logBefore = devLog().length;
     const edited = editSourceAfterHandover(app);
@@ -1498,11 +1538,16 @@ async function driveScaffold(scaffold, index) {
       strays.length === 0 ? '' : `left behind: ${strays.join(', ')}`,
     );
 
-    await browser.close();
+    if (SELF_TEST) chk('the negative control intercepted a Reticle socket', blockedConnections > 0);
   } catch (err) {
     chk('the scaffold ran to completion', false, String(err).slice(0, 300));
   } finally {
+    transport?.stop();
+    await client?.stop();
+    await browser?.close();
     if (daemon !== undefined) await daemon.stop();
+    await stopGateApp(app);
+    await stopGateDaemon(initPort);
     // The server init handed over, which the gate drove instead of starting its own.
     const handedOverAppPort = portOf(appUrl);
     if (handedOverAppPort !== undefined) await freePortSafely(handedOverAppPort);
@@ -1513,7 +1558,7 @@ async function driveScaffold(scaffold, index) {
     // vite squatting the port the NEXT scaffold's init would ask for, and the run degraded down the
     // list while the first scaffold looked fine. Three "the app boots" failures, none of them about
     // booting.
-    for (const port of handedOverPorts) await freePortSafely(port);
+    for (const port of handedOverPorts) await stopGateDaemon(port);
     if (KEEP) note(`kept: ${workdir}`);
     // A dev server that has just been signalled is still flushing `.next` into this directory, so
     // the first rmdir loses a race it does not have to lose.
@@ -1539,11 +1584,11 @@ async function driveScaffold(scaffold, index) {
   // scaffold seconds later.
   const which = 0 === failedChecks.length ? '' : ` (${failedChecks.join('; ')})`;
   console.log(`   ${fail === 0 ? '✓' : '✗'} ${scaffold.id}: ${pass} passed, ${fail} failed${which}`);
-  return { id: scaffold.id, pass, fail };
+  return { id: scaffold.id, pass, fail, failedChecks };
 }
 
 console.log('\n=== INSTALL GATE: pristine apps, installed into, opened, and asked to connect ===');
-if (SELF_TEST) console.log('   (self-test: every scaffold is mis-wired and MUST fail)');
+if (SELF_TEST) console.log('   (self-test: Reticle sockets are blocked; only the session check MUST fail)');
 await sweepBatteryOrphans([], { onNote: (n) => console.log(`   · ${n}`) });
 
 // Free ports used by either the real run or a preceding self-test (which runs first in CI in the
@@ -1569,6 +1614,7 @@ if (chosen.length === 0) {
 
 let registry;
 const results = [];
+const controlResults = [];
 try {
   console.log('   · publishing @reticlehq/* to a local registry…');
   registry = await startLocalRegistry();
@@ -1579,6 +1625,12 @@ try {
     // then an EBUSY on a temp directory ended the run and four scaffolds were never attempted.
     // A crash is that scaffold's failure to report, not a reason to stop asking the question.
     try {
+      if (WITH_CONTROL) {
+        SELF_TEST = true;
+        console.log('   · negative control');
+        controlResults.push(await driveScaffold(scaffold, index));
+        SELF_TEST = false;
+      }
       results.push(await driveScaffold(scaffold, index));
     } catch (err) {
       console.log(`   ✗ ${scaffold.id} crashed: ${String(err).slice(0, 300)}`);
@@ -1586,7 +1638,7 @@ try {
     }
   }
 } catch (err) {
-  // The reason, not the banner. execFileSync's message begins with the command and then its STDOUT,
+  // The reason, not the banner. execFile's message begins with the command and then its STDOUT,
   // so a truncation of it shows npm's package listing and never the error — which is precisely how
   // this failure arrived from CI unreadable.
   const detail = [err?.stderr, err?.stdout, String(err)]
@@ -1597,7 +1649,7 @@ try {
   results.push({ id: 'setup', pass: 0, fail: 1 });
 } finally {
   if (registry !== undefined) registry.stop();
-  await freePortSafely(REGISTRY_PORT);
+  await freePortSafely(REGISTRY_PORT, { ownedPids: registry === undefined ? [] : [registry.proc.pid] });
 }
 
 if (UPDATE_BASELINE) {
@@ -1610,50 +1662,15 @@ for (const r of results) {
   console.log(`   ${r.fail === 0 ? '✅' : '❌'} ${r.id.padEnd(20)} ${r.pass} passed, ${r.fail} failed`);
 }
 
-/**
- * Scaffolds whose negative control is KNOWN not to fail, and the honest reason.
- *
- * A waiver here does NOT excuse the scaffold's real run — that still has to pass every assertion
- * like any other. It excuses only the CONTROL: the claim that mis-wiring this scaffold would be
- * detected. For anything listed, that claim is currently unproven, and the install-gate green for
- * it means "nothing failed", not "a failure would have been caught".
- */
-const CONTROL_CANNOT_FAIL = new Map([]);
-
-if (SELF_TEST) {
-  // Inverted, and per scaffold. A green here would mean the session check passes regardless of
-  // reality, which is the only way this whole script could be worthless while looking fine.
-  const undetected = results.filter((r) => r.fail === 0).map((r) => r.id);
-  const waived = undetected.filter((id) => CONTROL_CANNOT_FAIL.has(id));
-  const unexpected = undetected.filter((id) => !CONTROL_CANNOT_FAIL.has(id));
-
-  // A waiver that has outlived its reason is worse than no waiver: it hides a control that started
-  // working again, and nobody re-reads a line that never speaks. So a waived scaffold that WAS
-  // detected says so, loudly, and names itself for deletion.
-  const stale = results
-    .filter((r) => r.fail > 0 && CONTROL_CANNOT_FAIL.has(r.id))
-    .map((r) => r.id);
-  for (const id of stale) {
-    console.log(
-      `\n   ⚠️  ${id} IS now detected — its entry in CONTROL_CANNOT_FAIL is stale and should be deleted.`,
-    );
-  }
-  for (const id of waived) {
-    console.log(`\n   ⚠️  ${id} went undetected, WAIVED — ${String(CONTROL_CANNOT_FAIL.get(id))}`);
-    console.log(`       its real run still has to pass; what is unproven is that a break would be caught.`);
-  }
-
-  const ok = unexpected.length === 0;
-  console.log(
-    `\n${ok ? '✅ SELF-TEST PASSED' : '❌ SELF-TEST FAILED'} — ` +
-      (ok
-        ? `every mis-wired install was correctly reported as a failure` +
-          (waived.length > 0
-            ? ` (${String(waived.length)} waived: ${waived.join(', ')} — control unproven there)`
-            : '')
-        : `these went UNDETECTED and so prove nothing: ${unexpected.join(', ')}`),
-  );
-  process.exit(ok ? 0 : 1);
+let controlPassed = true;
+if (CONTROL_ONLY || WITH_CONTROL) {
+  const { ok, problems } = evaluateInstallControl(
+    CONTROL_ONLY ? results : controlResults, chosen.map((s) => s.id));
+  controlPassed = ok;
+  for (const problem of problems) console.error(`   ✗ ${problem}`);
+  console.log(`\n${ok ? '✅ SELF-TEST PASSED' : '❌ SELF-TEST FAILED'} — ` +
+    'each scaffold must fail only its session check; setup errors and missing evidence fail the control');
+  if (CONTROL_ONLY) process.exit(ok ? 0 : 1);
 }
 
 const failed = results.filter((r) => r.fail > 0);
@@ -1661,4 +1678,4 @@ console.log(
   `\n${failed.length === 0 ? '✅ INSTALL GATE PASSED' : '❌ INSTALL GATE FAILED'} ` +
     `(${String(results.length - failed.length)}/${String(results.length)} scaffolds)`,
 );
-process.exit(failed.length === 0 ? 0 : 1);
+process.exit(failed.length === 0 && controlPassed ? 0 : 1);

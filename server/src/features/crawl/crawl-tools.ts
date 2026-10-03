@@ -108,6 +108,12 @@ export const CRAWL_TOOLS: ToolDef[] = [
           'Present only when the page exceeded one snapshot, so controls past the cap were never listed. When present, a zero-anomaly result does NOT mean the app is clean.',
         ),
       truncated: z.boolean(),
+      notJudged: z
+        .array(z.object({ ref: z.string(), desc: z.string(), reason: z.string() }))
+        .optional()
+        .describe(
+          'Controls clicked whose silence could not be judged, e.g. on a background tab. They are NOT reported as dead, and they are not known to work either.',
+        ),
       // Only on `exhaustive` — see features/exhaust/exhaust-run.ts. Loose: it carries the levels.
       exhaustive: z.record(z.unknown()).optional(),
     },

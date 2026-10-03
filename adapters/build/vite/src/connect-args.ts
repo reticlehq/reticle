@@ -10,6 +10,8 @@ import { RETICLE_DEFAULT_PORT, bridgeWsUrl } from '@reticlehq/core';
 
 import type { ReticleVitePluginOptions } from './index.js';
 
+const PRESENT_OPTION = 'present';
+
 /** Build the `reticle.connect` argument literal — only includes keys the user set. */
 export function connectArgs(options: ReticleVitePluginOptions): string {
   const args: Record<string, string | number | boolean> = {};
@@ -18,6 +20,8 @@ export function connectArgs(options: ReticleVitePluginOptions): string {
   if (options.session !== undefined) args['session'] = options.session;
   if (options.projectId !== undefined) args['projectId'] = options.projectId;
   if (options.token !== undefined) args['token'] = options.token;
+  // Only the opt-out is needed; the SDK defaults to showing its presenter.
+  if (false === options.present) args[PRESENT_OPTION] = false;
   // Passed as connect ARGUMENTS, not as a `define`. A define substitutes a bare identifier in the
   // source it transforms; the SDK reads these as `globalThis[NAME]`, a dynamic lookup no define can
   // ever reach — so defining them looked right, shipped, and did nothing. Baking them into the

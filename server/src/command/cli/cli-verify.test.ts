@@ -12,12 +12,15 @@ import {
   type VerificationRunInput,
 } from '@/judgement/runs/artifact/build-verification-run.js';
 import {
+  expectNeedsDaemonMessage,
   portBusyMessage,
   runVerify,
   urlParts,
   type VerifyConnection,
   type VerifyPorts,
 } from './cli-verify.js';
+import { PortPresence } from '../daemon/binding/port-presence.js';
+import { CLI_USAGE } from './cli-parse.js';
 
 const NOW = 1_700_000_000_000;
 
@@ -336,7 +339,6 @@ describe('verifying a subset', () => {
     expect(rec.exit).toEqual([0]);
   });
 });
-
 /**
  * `reticle verify` read the platform credential from the environment only, so a repo that had
  * run `reticle link` and exported nothing never had its run pushed. It now asks the same resolver
@@ -362,5 +364,12 @@ describe('the run is pushed with the linked credential', () => {
       url: 'https://cloud.test/v1/runs',
       auth: 'Bearer rk_live_stored',
     });
+  });
+});
+
+describe('the HTTP transport is named wherever --expect refuses', () => {
+  it('CLI_USAGE and the daemon-needed refusal both point at http-transport', () => {
+    expect(CLI_USAGE).toContain('http-transport');
+    expect(expectNeedsDaemonMessage(4400, PortPresence.FOREIGN)).toContain('http-transport');
   });
 });

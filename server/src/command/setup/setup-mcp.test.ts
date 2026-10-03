@@ -112,6 +112,30 @@ describe('a client that owns its own registration is still a client', () => {
 });
 
 describe('the funnel reports what actually happened', () => {
+  it('reports failed when Claude is present but refuses registration', () => {
+    const { io, steps } = machine();
+    io.runCli = (_command, args) => args.includes('--version');
+    const result = setupMcp(io);
+    expect(result.registered).toEqual([]);
+    expect(result).toMatchObject({ failed: ['claude-code'] });
+    expect(stepStatus(steps, 'mcp_registered')).toBe('failed');
+  });
+
+  it('continues registering other agents after a config write fails', () => {
+    const { io, steps } = machine({
+      files: { '.cursor/mcp.json': '{}', '.codeium/windsurf/mcp_config.json': '{}' },
+    });
+    const write = io.writeFile.bind(io);
+    io.writeFile = (path, content) => {
+      if (path.includes('.cursor')) throw new Error('permission denied');
+      write(path, content);
+    };
+    const result = setupMcp(io);
+    expect(result).toMatchObject({ failed: ['cursor'] });
+    expect(result.registered).toContain('windsurf');
+    expect(stepStatus(steps, 'mcp_registered')).toBe('completed');
+  });
+
   it('counts a machine with Claude Code as registered, not skipped', () => {
     const { io, steps } = machine({ claudeInstalled: true });
     setupMcp(io);

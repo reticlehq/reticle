@@ -141,6 +141,9 @@ describe('the crawl output schema declares everything crawl returns', () => {
     visited: ['button "Save"'],
     truncated: false,
     coverageNote: CAPPED_SNAPSHOT_NOTE,
+    notJudged: [
+      { ref: 'e2', desc: 'button "Load"', reason: 'not judged: the tab is in the background' },
+    ],
   };
 
   /**
@@ -174,6 +177,17 @@ describe('the crawl output schema declares everything crawl returns', () => {
       unknown
     >[];
     for (const key of Object.keys(report.anomalies[0] ?? {})) {
+      expect(Object.keys(roundTripped[0] ?? {})).toContain(key);
+    }
+  });
+
+  it('declares every field of a not-judged entry', () => {
+    const notJudgedSchema = (tool().outputSchema ?? {})['notJudged'];
+    const roundTripped = (notJudgedSchema as z.ZodType).parse(report.notJudged) as Record<
+      string,
+      unknown
+    >[];
+    for (const key of Object.keys(report.notJudged[0] ?? {})) {
       expect(Object.keys(roundTripped[0] ?? {})).toContain(key);
     }
   });

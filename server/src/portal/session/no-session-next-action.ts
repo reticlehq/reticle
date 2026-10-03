@@ -13,7 +13,8 @@
  * Pure. The facts arrive from the watch; nothing here touches the disk or the clock.
  */
 
-import { NoSessionAction, RETICLE_URL_PARAM, ReticleEnv } from '@reticlehq/core';
+import { NoSessionAction, RETICLE_URL_PARAM, ReticleEnv, redactUrl } from '@reticlehq/core';
+import { detectNonJsEcosystem, noPackageJsonMessage } from '@reticlehq/init';
 import type { DevCommand } from './dev-server/dev-command.js';
 
 /** The executable half of the no-session payload. */
@@ -32,6 +33,11 @@ interface NextActionFacts {
   initialized: boolean;
   listening: readonly number[];
   dev: DevCommand | undefined;
+  /**
+   * File-existence predicate for the project root, pure for testing.
+   * Used to recognize non-JS ecosystems (e.g. Flutter) when no dev script exists.
+   */
+  exists?: (file: string) => boolean;
   /** Configs found in other workspace directories: positive evidence of a scope mismatch. */
   configsElsewhere?: readonly { directory: string; projectId?: string }[];
   /**
@@ -82,6 +88,12 @@ interface NextActionFacts {
    * its one hit is as likely to be another repo's dev server as this one's.
    */
   lastKnownUrl?: string;
+  /**
+   * Where the departed tab was seen heading, when the SDK reported it fresh (#1256). The
+   * next-action reason must agree with the diagnosis: when this is present the tab was not
+   * closed, it navigated away.
+   */
+  departedTo?: string;
 }
 
 /**
@@ -162,13 +174,20 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
         : only === undefined
           ? {}
           : { command: `${OPEN_COMMAND} ${LOCALHOST}:${String(only)}`, port: only };
+    // Where the tab was seen heading, when the SDK reported it fresh — the next action must
+    // tell the same story as the diagnosis (#1256).
+    const departedTo = facts.departedTo;
     return {
       action: NoSessionAction.REOPEN_APP,
       ...target,
       reason:
-        'a session was connected to this daemon earlier, so the wiring is correct — the tab was ' +
-        'closed, reloaded, or the lease aged out. Reopen the app, or take one you own with ' +
-        'reticle_lease {action:"acquire", url}.' +
+        'a session was connected to this daemon earlier, so the wiring is correct — ' +
+        // Agrees with the diagnosis: when the SDK saw the page leave, "the tab was closed" is
+        // the wrong story. Redacted like the diagnosis — this reason is agent-facing too.
+        (departedTo === undefined || '' === departedTo
+          ? 'the tab was closed, reloaded, or the lease aged out. '
+          : `the page navigated away to ${redactUrl(departedTo)}. `) +
+        'Reopen the app, or take one you own with reticle_lease {action:"acquire", url}.' +
         bound,
     };
   }
@@ -202,6 +221,21 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
   if (0 === facts.listening.length) {
     const dev = facts.dev;
     if (dev === undefined) {
+      if (facts.exists !== undefined && !facts.exists('package.json')) {
+        const ecosystem = detectNonJsEcosystem(facts.exists);
+        if (ecosystem !== undefined) {
+          return {
+            action: NoSessionAction.START_DEV_SERVER,
+            reason:
+              'Flutter' === ecosystem
+                ? noPackageJsonMessage(facts.exists)
+                : `This looks like a ${ecosystem} project, with no package.json in this directory. ` +
+                  'There is no dev command to hand you. Ask the human how the app starts and which ' +
+                  'URL it serves. If the web app has its own package.json in another directory, ' +
+                  'run Reticle from that app directory instead.',
+          };
+        }
+      }
       return {
         action: NoSessionAction.START_DEV_SERVER,
         reason:

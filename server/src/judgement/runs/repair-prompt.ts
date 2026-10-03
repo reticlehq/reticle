@@ -58,7 +58,8 @@ function deviationHeadline(deviation: unknown): string | undefined {
 }
 
 export function buildRepairPacket(replay: FlowReplayResult): RepairPacket | undefined {
-  if (replay.status === ReplayStatus.OK) return undefined;
+  if (replay.status === ReplayStatus.OK || replay.status === ReplayStatus.UNVERIFIABLE)
+    return undefined;
 
   const decision = replay.decision;
   const baseActual = decision?.whatChanged ?? replay.error?.message ?? 'the flow failed';

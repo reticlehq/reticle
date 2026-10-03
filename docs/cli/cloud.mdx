@@ -1,16 +1,18 @@
 ---
 title: reticle cloud commands
-description: Sign in, link a repository, and read runs and regressions from Reticle Cloud.
+description: Connect a project in one command, then read runs and regressions from Reticle Cloud.
 icon: cloud
 ---
 
-Ten subcommands bind this repository to Reticle Cloud so runs and flows land on a dashboard. They dispatch before the local parser, so `reticle login` is one tool, not a second binary.
+From your app directory, `reticle connect --project "My App"` wires the app, opens browser sign-in approval if needed, links the named cloud project, and syncs the local history already on this machine. Run the [installer](/quickstart) once on the machine first. The commands below remain available when you need to sign in or link separately.
 
 ```bash
-npx @reticlehq/server <login|logout|whoami|link|project|config|push|runs|regression|share>
+npx @reticlehq/server connect --project "My App"
 ```
 
-These are thin clients over the `/v1` API. The logic is server-side; these verbs surface it.
+Use `--url https://your-cloud-origin` for a self-hosted cloud. `connect` checks a saved sign-in against that exact host before reuse; if it has expired, the browser approval opens again. It mints or reuses a project-scoped key, so there is no key to paste. A newly wired app may have no run to sync yet: ask your agent to verify one flow and the linked daemon will sync the result. Run `reticle whoami` to check the binding and `reticle push` to send anything still pending.
+
+The other cloud commands are thin clients over the `/v1` API. Their logic is server-side.
 
 ## Where credentials live
 

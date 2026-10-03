@@ -110,8 +110,8 @@ import { readAlreadyTrue } from './act/already-true.js';
 /**
  * The action vocabulary, derived from ActionType — never retyped.
  *
- * The description used to list thirteen actions while ActionType had seventeen: blur, upload, drag
- * and webmcp were real, callable, and undocumented, because a hand-copied list drifts the moment
+ * The description used to omit callable actions such as blur, upload and drag,
+ * because a hand-copied list drifts the moment
  * someone adds an arm. Deriving both the schema and the prose from the enum makes that impossible.
  *
  * The handler already refused an unknown action with a good message; the schema now refuses it
@@ -743,6 +743,7 @@ export const ACT_TOOLS: ToolDef[] = [
           prior,
           actionSince: since,
           expectedFailures: declared.netFailures,
+          namedNetUrls: declared.netUrls,
           // A consequence that was already true before the action proves nothing about it, so it is
           // not evidence the destination rendered either — `alreadyTrue` decides that, once.
           renderProved: verdict.pass && !alreadyTrue && declared.rendersContent,
@@ -754,7 +755,14 @@ export const ACT_TOOLS: ToolDef[] = [
         });
         // The single field an agent reads. Everything below it is the evidence it was derived from;
         // this is the only one that has to be interpreted, and now it interprets itself.
-        const outcomePending = acceptedWriteLabels(windowEvents);
+        // Same routing as the assert path (#1120), fed by the links this verdict PROVED. On red,
+        // `gradedLinks` is the declared surface (every anyOf branch), which must not exempt a 202
+        // the verdict never rested on — so only a green passes it through.
+        const outcomePending = acceptedWriteLabels(windowEvents, {
+          appUrl: session.url,
+          background: session.background,
+          asserted: verdict.pass ? gradedLinks : [],
+        });
         const outcomeUnread = unreadWriteLabels(windowEvents);
         const stillInFlight = inFlightRequestLabels(windowEvents, session.url, session.background);
         const { decision, durable } = await withDurability(

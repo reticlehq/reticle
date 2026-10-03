@@ -33,6 +33,16 @@ export interface PredicateSession {
    */
   url?: string;
   /**
+   * Same-origin endpoints the project DECLARED the app fires on its own — `.reticle.json`
+   * `background`, matched the way `urlContains` is.
+   *
+   * The settle oracle asks "has the app finished its work", and a declared telemetry endpoint that
+   * keeps firing answers that question with a permanent no. Excluded only when declared, because
+   * nothing in a URL separates the app's own telemetry from the app's work. Optional: a fake that
+   * omits it excludes nothing, and same-origin traffic is never guessed at.
+   */
+  background?: readonly string[] | undefined;
+  /**
    * The document currently under observation, as the session derived it from its own event stream.
    *
    * Every oracle below that reads the window asks "what happened here", and a window is scoped by

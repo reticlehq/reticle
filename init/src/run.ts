@@ -49,6 +49,8 @@ import { installedViteMajor } from './patch/vite-owning-config.js';
 
 /** CRA's bundled entry, in the order create-react-app itself generates them. */
 const CRA_ENTRY_CANDIDATES = ['src/index.tsx', 'src/index.jsx', 'src/index.ts', 'src/index.js'];
+/** Preview snippets must not mint a real machine credential or imply this token is usable. */
+const DRY_RUN_PAIRING_TOKEN = 'DRY_RUN_TOKEN_NOT_FOR_USE';
 
 function craEntryOf(io: InitIo): { path: string; source: string } | null {
   for (const path of CRA_ENTRY_CANDIDATES) {
@@ -459,7 +461,7 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
       : {}),
     craEntry: craEntryOf(io),
     craEnv: io.readFile(CRA_ENV_PATH),
-    pairingToken: io.host.pairingToken(),
+    pairingToken: options.dryRun ? DRY_RUN_PAIRING_TOKEN : io.host.pairingToken(),
     installSource: io.host.installSource(),
     reticleConfigExists: io.exists(RETICLE_CONFIG_FILE),
     // The CONTENT, so a config that exists can be checked rather than trusted — a `"port"` set to
@@ -837,7 +839,8 @@ function runInitSteps(options: InitOptions, io: InitIo): InitResult {
         'framework, the dev script and the package manager from it, and will not guess at any of ' +
         'them from a file it cannot read.',
     );
-    io.host.reportOutcome({ ok: false, reason: InitFailure.MALFORMED_PACKAGE_JSON });
+    if (!options.dryRun)
+      io.host.reportOutcome({ ok: false, reason: InitFailure.MALFORMED_PACKAGE_JSON });
     return { ok: false, applied: 0, manual: 0 };
   }
   const pkgRaw = manifest.pkg;
@@ -877,6 +880,7 @@ function runInitSteps(options: InitOptions, io: InitIo): InitResult {
   });
   if (resolved.refusal !== undefined) {
     io.print(resolved.refusal);
+    if (!options.dryRun) io.host.reportOutcome({ ok: false, reason: InitFailure.PREFLIGHT });
     return { ok: false, applied: 0, manual: 1 };
   }
   // The prefix that can actually run it on THIS machine — `pnpm`, or `corepack pnpm` where preflight

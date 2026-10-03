@@ -115,6 +115,50 @@ describe('buildDecision — the autonomy envelope', () => {
     expect(d.suggestedFix).toContain('ambiguous');
   });
 
+  /**
+   * An ANCHOR_AMBIGUOUS drift is not a missing element, and the shared last line of the drift branch
+   * said it was.
+   *
+   * `nearest` is null and `ambiguous` is true on this drift, so `fix` came out undefined and the
+   * next action read "the anchored element is gone; rebind or update the flow" — for a locator that
+   * matched several elements and lost none. The advice is not merely unhelpful, it is backwards:
+   * rebinding is what the ambiguous drift exists to refuse, and the actual fix is a NARROWER anchor
+   * on the locator the step already has.
+   */
+  it('drift from an ambiguous anchor → says to narrow it, never that the element is gone', () => {
+    const result: FlowReplayResult = {
+      name: 'verify',
+      status: ReplayStatus.DRIFT,
+      steps: [
+        {
+          step: 0,
+          tool: ReticleTool.ACT,
+          anchor: 'button "View result"',
+          ok: false,
+          drift: {
+            reasonKind: DriftReason.ANCHOR_AMBIGUOUS,
+            reason: 'role anchor button "View result" matched 3 live elements',
+            anchor: 'button "View result"',
+            nearest: null,
+            ambiguous: true,
+          },
+        },
+      ],
+    };
+    const d = buildDecision(result, flow());
+    expect(d.verdict).toBe('drift');
+    expect(d.nextAction).toContain('Narrow the anchor');
+    // The exact advice this branch used to give, and the whole point of the fix: it is a statement
+    // about a locator that lost nothing. (The message DOES say "rather than rebinding it" — naming
+    // the wrong fix in order to forbid it is not the same as proposing it, so the assertion is on
+    // the old sentence, not on the word.)
+    expect(d.nextAction).not.toContain('is gone');
+    expect(d.nextAction).not.toContain('rebind or update the flow');
+    // No rebind is PROPOSED either — there is no nearest to propose, and proposing one would
+    // re-make the pick this reason exists to refuse.
+    expect(d.suggestedFix).toBeUndefined();
+  });
+
   it('error on the success oracle → verdict fail, check the handler (not the locator)', () => {
     const result: FlowReplayResult = {
       name: 'verify-500',
@@ -278,6 +322,25 @@ describe('buildSuiteVerdict — a flow that cannot fail is not a pass', () => {
     expect(v.status).not.toBe('pass');
     expect(v.summary).not.toContain('all 1 flow pass');
     expect(v.unverifiable?.[0]?.flow).toBe('empty');
+  });
+
+  it('handles ReplayStatus.UNVERIFIABLE: not passed, not failed, placed in unverifiable bucket', () => {
+    const v = buildSuiteVerdict([
+      {
+        replay: {
+          name: 'missing-secrets',
+          status: ReplayStatus.UNVERIFIABLE,
+          steps: [],
+          unverifiable: { reason: 'missing secret RETICLE_SECRET_LOGIN_PASSWORD' },
+        },
+      },
+    ]);
+    expect(v.passed).toBe(0);
+    expect(v.failed).toBe(0);
+    expect(v.status).toBe('unverifiable');
+    expect(v.unverifiable).toEqual([
+      { flow: 'missing-secrets', reason: 'missing secret RETICLE_SECRET_LOGIN_PASSWORD' },
+    ]);
   });
 
   it('names WHY it could not be verified, so the fix is obvious', () => {

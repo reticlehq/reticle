@@ -1,8 +1,10 @@
 import {
   EventType,
+  NetInitiator,
   PredicateKind,
   StreamDirection,
   isDevToolingUrl,
+  isForeignTraffic,
   urlForMatch,
   REDACTED_VALUE,
   type ReticleEvent,
@@ -766,6 +768,39 @@ const NET_TYPES: ReadonlySet<EventType> = new Set([
 const DEFAULT_QUIET_MS = 500;
 
 /**
+ * Did the browser LEAVE for this record, rather than make a request whose result we will see?
+ *
+ * `NetInitiator.NAVIGATION` is emitted as a `NET_PENDING` — because that is exactly what it is — but
+ * its completion goes to a document this session does not live into, so no `NET_REQUEST` can ever
+ * match it. Counting it as outstanding means the first click on any outbound link or download button
+ * wedges settle on that page for the rest of the session.
+ *
+ * The act wait (`server/src/surface/tools/act/settle-in-flight.ts`) has always excluded it and
+ * `core/src/wire/net.ts` says it must be; this predicate counted it, so `act_and_wait { until:
+ * settled }` after a plain `<a href>` never passed and agents dropped `settled` from their `until`.
+ * Spelled against the shared constant rather than the string, so the two settle decisions cannot
+ * drift onto two vocabularies.
+ */
+const isDeparture = (data: Record<string, unknown>): boolean =>
+  data['initiator'] === NetInitiator.NAVIGATION;
+
+/**
+ * What the caller knows about whose traffic this is.
+ *
+ * Both members are OPTIONAL and both fail OPEN. `settled` used to answer "has the app finished?" over
+ * whatever bytes were in the buffer, so a request that no other settle decision counts could hold it
+ * open forever — and an assertion that can never pass is one agents delete from their `until`, which
+ * costs them the honesty the predicate exists to provide. The fix is to ask the same two questions
+ * the act wait asks; the caller who cannot answer them gets exactly the behaviour this had before.
+ */
+export interface SettleScope {
+  /** The page under test — what makes a request third-party. Absent: nothing is foreign. */
+  appUrl?: string | undefined;
+  /** Same-origin endpoints the project declared as background. Absent: nothing is excluded. */
+  background?: readonly string[] | undefined;
+}
+
+/**
  * "The page has gone quiet": no network/DOM/animation activity for at least `quietMs`. Needs the
  * wall-clock `now` (in the buffer's time base) because "no activity in the last N ms" is relative to
  * now, not to any buffered event — so `now` is injected (CLAUDE.md rule 7), and the wait loop's
@@ -775,22 +810,64 @@ export function evalSettled(
   allEvents: ReticleEvent[],
   p: Extract<Predicate, { kind: typeof PredicateKind.SETTLED }>,
   now: number,
+  scope?: SettleScope,
 ): EvalResult {
   const quietMs = p.quietMs ?? DEFAULT_QUIET_MS;
 
-  // Dev-tooling traffic is the framework talking about ITSELF (see DevToolingChannel) and says
-  // nothing about whether the app finished its work — but it was holding settle open. Dropped from
-  // both halves of the calculation below (in-flight AND the quiet timer) and DISCLOSED on the
-  // evidence, never silently swallowed.
+  // Three kinds of traffic say nothing about whether the APP finished its work, and all three are
+  // dropped from BOTH halves of the calculation below (in-flight AND the quiet timer) and DISCLOSED
+  // on the evidence, never silently swallowed:
+  //
+  //   - dev tooling, the framework talking about ITSELF (see DevToolingChannel);
+  //   - a departure, which by construction can never complete (see `NetInitiator.NAVIGATION`);
+  //   - somebody else's host, or a same-origin endpoint the project declared (`isForeignTraffic`).
+  //
+  // The last two were counted here while `settle-in-flight.ts` and the contradiction pass dropped
+  // them, so the product held two answers to one question. The predicate's answer was the wrong one:
+  // after a plain `<a href>` click it reported "1 request(s) still in flight" forever, and a vendor
+  // beacon made every assertion on such an app return `unknown / outcome_pending`.
+  //
+  // A departure is kept APART from foreign traffic all the way into the disclosure. The two are one
+  // CLASSIFICATION and two EXPLANATIONS — both drop out of the count, but "the page left for another
+  // document" and "somebody else's host answered" send a reader to different next steps, and one
+  // list holding both makes the second the only thing the first can be read as.
   const ignoredDevTooling: string[] = [];
+  const ignoredForeign: string[] = [];
+  const ignoredDepartures: string[] = [];
   const events = allEvents.filter((e) => {
     if (!NET_TYPES.has(e.type)) return true;
-    const url = str(e.data['url']);
-    if (!isDevToolingUrl(url)) return true;
-    if (url !== undefined && !ignoredDevTooling.includes(url)) ignoredDevTooling.push(url);
-    return false;
+    // Classified by `urlForMatch`, DISCLOSED by `url`: redaction rewrites sensitive path segments at
+    // emit time (`/auth/token/refresh-context` -> `/auth/token/[REDACTED]`), and a declared
+    // `background` pattern is matched with `String.includes` — so classifying on the displayed URL
+    // would let a redacted segment put the endpoint back in the in-flight count, which is the defect
+    // this whole branch exists to fix. The haystack is the raw request; the transcript gets the
+    // displayed one. Same division of labour `urlContains` uses at the top of this file.
+    const matchUrl = urlForMatch(e.data);
+    const shown = str(e.data['url']);
+    if (isDevToolingUrl(matchUrl)) {
+      if (shown !== undefined && !ignoredDevTooling.includes(shown)) ignoredDevTooling.push(shown);
+      return false;
+    }
+    // Departure first: a departure to the app's own origin is still a request whose result nobody
+    // will see, and reporting it as somebody else's host would be the wrong explanation.
+    if (isDeparture(e.data)) {
+      if (shown !== undefined && !ignoredDepartures.includes(shown)) ignoredDepartures.push(shown);
+      return false;
+    }
+    if (isForeignTraffic(matchUrl, scope?.appUrl, scope?.background ?? [])) {
+      if (shown !== undefined && !ignoredForeign.includes(shown)) ignoredForeign.push(shown);
+      return false;
+    }
+    return true;
   });
-  const disclosure = 0 === ignoredDevTooling.length ? {} : { ignoredDevTooling };
+  // Three separate lists rather than one: "the framework talking about itself", "the page left", and
+  // "somebody else's host" are three different facts about a window, and a reader told only one of
+  // them has to guess which it was.
+  const disclosure = {
+    ...(0 === ignoredDevTooling.length ? {} : { ignoredDevTooling }),
+    ...(0 === ignoredForeign.length ? {} : { ignoredForeign }),
+    ...(0 === ignoredDepartures.length ? {} : { ignoredDepartures }),
+  };
 
   // A request that STARTED (NET_PENDING) but never completed (NET_REQUEST with the same id) is
   // still in flight — the page is NOT settled no matter how quiet the DOM has gone. Without this,

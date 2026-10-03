@@ -1,7 +1,7 @@
 /**
  * Framework integration — Reticle connects in each React framework example app.
  *
- * For each app in apps/example-*, boots its real dev server, starts an Reticle bridge on the default
+ * For each app in apps/example-*, boots its real dev server, starts a Reticle bridge on an isolated test
  * port, points a headless browser at the app, and asserts a session registers. This is the committed
  * proof that the integration paths actually work per framework:
  *   - Vite + React        → the reticle() vite plugin (auto projectId + connect injection)
@@ -23,7 +23,7 @@ import { chromium } from 'playwright';
 import { start } from '@reticlehq/server';
 
 const ROOT = process.cwd();
-const BRIDGE_PORT = 4400;
+const BRIDGE_PORT = Number(process.env['RETICLE_INTEGRATION_PORT'] ?? 15400);
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 // Ensure the pairing token exists BEFORE any page renders. Next/Remix still read it at config load;
@@ -68,6 +68,7 @@ const RUNNER_ONLY_ENV = [
 function devServerEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
+    RETICLE_PORT: String(BRIDGE_PORT),
     // Astro 7.2+ daemonises `astro dev` when `am-i-vibing` detects an agentic environment, which makes
     // the server escape our process group and squat the port across runs. This marker is the in-code
     // escape hatch back to a foreground server, so a contributor running the suite from an agent-backed
@@ -130,11 +131,9 @@ async function waitForApp(port: number, timeoutMs: number): Promise<number | nul
  * Reap each dev server after its test by killing its process GROUP — `detached:true` makes the spawned
  * `pid` a group leader, so `-pid` takes the real server with it. IMPORTANT: only native `process.kill`
  * is used here. Spawning ANY subprocess from a vitest worker (even detached) intermittently closes the
- * worker's IPC channel (ERR_IPC_CHANNEL_CLOSED). A grandchild that ESCAPES the group (remix, and astro
- * too unless it is pinned to the foreground the way `assertConnects` does) is therefore freed by PORT
- * in the MAIN process instead — see `globalSetup` in vitest.integration.config.ts,
- * which clears these fixed ports both before the run (interrupted-run leftovers) and after (this run's
- * escapees). Between its test and that teardown an escapee is harmless: every app uses a distinct port.
+ * worker's IPC channel (ERR_IPC_CHANNEL_CLOSED). Each fixture stays in the foreground, so its
+ * recorded process group can be reaped without terminating unrelated port holders. Global setup
+ * checks availability before the run and never kills another process.
  */
 const spawned = new Set<number>();
 
@@ -175,8 +174,8 @@ async function assertConnects(pkg: string, port: number): Promise<void> {
   ).toBe(true);
 
   const server = await start({ port: BRIDGE_PORT, mcp: false });
+  const browser = await chromium.launch({ headless: true });
   try {
-    const browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
     const pageErrors: string[] = [];
     page.on('pageerror', (err) => {
@@ -210,8 +209,8 @@ async function assertConnects(pkg: string, port: number): Promise<void> {
       connected,
       `${pkg} never connected an Reticle session.${seen}\ndev server output:\n${tailDevLog(pkg)}`,
     ).toBe(true);
-    await browser.close();
   } finally {
+    await browser.close();
     await server.close();
   }
 }
