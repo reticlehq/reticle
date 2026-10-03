@@ -3,7 +3,10 @@
  * development tools. An exception matches an advisory's exact version and sole dependency path;
  * another path, a patched release, or a new advisory still fails the gate.
  *
- * Remove each exception when its dependency can be updated. See .github/REPOSITORY-SETTINGS.md.
+ * Incident: #1307 and #1311 had required CI verify jobs fail on unchanged-main lockfile paths
+ * (runs 37089554301 and 37090675948). This guard preserves the high/critical gate while those
+ * upstream packages have no fix. Remove each exception when its dependency can be updated.
+ * See .github/REPOSITORY-SETTINGS.md.
  */
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';

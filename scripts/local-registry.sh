@@ -43,9 +43,9 @@ TOKEN=$(printf '%s' "${USER_JSON}" | node -e "let d='';process.stdin.on('data',c
 
 echo "==> Publishing every publishable workspace package to ${REG}"
 # Inject the token for this host only, publish, then strip it back out.
-cleanup() { grep -v "localhost:${PORT}" "${HOME}/.npmrc" > "${HOME}/.npmrc.tmp" 2>/dev/null && mv "${HOME}/.npmrc.tmp" "${HOME}/.npmrc" || true; }
+cleanup() { grep -v "127.0.0.1:${PORT}" "${HOME}/.npmrc" > "${HOME}/.npmrc.tmp" 2>/dev/null && mv "${HOME}/.npmrc.tmp" "${HOME}/.npmrc" || true; }
 trap cleanup EXIT
-printf '\n//localhost:%s/:_authToken=%s\n' "${PORT}" "${TOKEN}" >> "${HOME}/.npmrc"
+printf '\n//127.0.0.1:%s/:_authToken=%s\n' "${PORT}" "${TOKEN}" >> "${HOME}/.npmrc"
 ( cd "${ROOT}" && pnpm -r publish --registry "${REG}" --no-git-checks )
 
 # Verify the publish, rather than trusting its exit code.
