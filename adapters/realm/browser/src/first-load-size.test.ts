@@ -263,13 +263,30 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * that let a Pinia or Svelte mutation diff: together 245,705 B measured on main with both, over the
  * old ceiling by 5. Raised by 1,000 over the measurement, per the note above.
  *
- * `press` reaching a real keyboard (a document key through the driver's keyboard) landed inside that
- * headroom and did NOT move this number: 246,182 -> 246,331 B, re-measured after this branch was
- * rebased onto current main rather than carried over from its old base. The +149 is attributed by
- * rebundling, not guessed: every byte of it is `core/dist/wire/global-press.js`, 328 -> 477, which
- * now carries the readers the server uses to decide what a press needs (`pressKeysFromArgs`, and the
- * `keys` branch of `isGlobalPress`). It is written down because two plausible ways to avoid even that
- * were tried and both were wrong:
+ * `press` reaching a real keyboard (a document key through the driver's keyboard) is the first
+ * change to spend that headroom, and it spends more than there is. This paragraph first read
+ * 246,182 -> 246,331 B and "did NOT move this number"; re-measured on current main it is
+ * 246,669 -> 246,917, over the 246,700 ceiling by 217. The stale pair is called out rather than
+ * quietly replaced, because carrying a measurement across a rebase is how a ceiling note stops
+ * describing the tree it is supposed to describe.
+ *
+ * So the raise is HERE, in the commit that first goes over, and not in the branches stacked above
+ * it: a stacked branch cannot raise a ceiling its own commit does not carry, and CI reads each one
+ * on its own. Measured ref by ref, by building each and rerunning this same bundler: main 246,669;
+ * this commit 246,917; the held key and the physical `code` 246,924; the modifier flags, the release
+ * cleanup and the reported hold 247,238.
+ *
+ * Attributed by rebundling, not guessed. Across the whole stack: `actions-press.js` 2,080 -> 2,372
+ * (+292), `core/wire/global-press.js` 328 -> 576 (+248), the new `core/wire/hold.js` (+86), and
+ * `actions.js` 8,725 -> 8,629 (-96) as the press branches move out of it. The remaining +125 is
+ * chunk-splitting overhead rather than an input: the per-input column sums to 4,107 B short of the
+ * total on this tree, up from 4,068.
+ *
+ * `global-press.js` is on the path because the page asks `pressKeysFromArgs` whether a press named
+ * `keys`, which is what routes a multi-key press to the dispatcher that can spell it. That reader
+ * and the server's are the same function on purpose; the alternative is the page and the daemon
+ * disagreeing about what `keys` means. Two plausible ways to avoid even that were tried and both
+ * were wrong:
  *
  * Moving `MODIFIER_ALIASES` into its own module changed the bundle by ZERO bytes — the table is only
  * referenced from `pressModifiersFromArgs`, which no page code calls, so esbuild already drops it. A
@@ -280,8 +297,14 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * And routing the page's `pressCode` through core's `explicitCodeFromArgs` — a symbol only the daemon
  * needs — cost 77 B of every page load for a string check the page already did. Sharing is not free
  * when only one side needs the shared thing.
+ *
+ * `hold.js` arrives in the branches above because `actions.ts` calls `clampHoldMs` for the synthetic
+ * hold too. A shared helper that lives on only one side is exactly how the same `holdMs` ends up
+ * holding for longer through one route than the other, which is the defect the clamp exists to stop.
+ *
+ * Raised by 1,000 over the measurement (247,238), rounded down to the hundred, per the note above.
  */
-const MAX_FIRST_LOAD_BYTES = 246_700;
+const MAX_FIRST_LOAD_BYTES = 248_200;
 /*
  * Raised a fifth time, 233_300 -> 233_400, for a route to be assertable in a SAVED flow. 57 B.
  *
