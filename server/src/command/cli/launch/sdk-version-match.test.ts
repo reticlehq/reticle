@@ -209,6 +209,7 @@ describe('the re-run carries the MCP stdio stream untouched', () => {
       `reexecAtVersion('2.14.0', ['mcp'], process.env, {`,
       `  spawn: (_f, _a, o) => asReexecChild(spawn(process.execPath, ['-e', ${JSON.stringify(echo)}], o)),`,
       `  exit: (c) => process.exit(c),`,
+      `  platform: 'linux',`,
       `});`,
     ].join('\n');
     const payload = Buffer.from(

@@ -30,19 +30,37 @@ function bridgeOrigins(port: number): string[] {
 /**
  * The `connect-src` directive's source list, or undefined when the text declares none.
  *
- * Matches to the end of the directive (`;`) or the end of the enclosing quoted string, which is how
- * these are written in both a Next `headers()` value and a `<meta content="...">`.
+ * Matches every occurrence to the end of the directive (`;`) or the end of the enclosing quoted
+ * string, which is how these are written in both a Next `headers()` value and a `<meta content="...">`.
  */
-function directiveSources(text: string, directive: string): string[] | undefined {
+interface DirectiveSourceList {
+  readonly sources: readonly string[];
+  /** True only when source text shows this occurrence is the other branch of one ternary. */
+  readonly alternativeWithPrevious: boolean;
+}
+
+const TERNARY_GAP = /^"\s*:\s*"$/;
+const EXPRESSION_EDGE = /^["'`})\]]+|["'`})\]]+$/g;
+
+function directiveSources(text: string, directive: string): DirectiveSourceList[] | undefined {
   // Stops at the directive separator or the closing double quote of the enclosing string. Single
   // quotes are NOT terminators: `'self'` is a source, not the end of the list.
-  const match = new RegExp(`${directive}([^;"]*)`, 'i').exec(text);
-  const list = match?.[1];
-  if (list === undefined) return undefined;
-  return list
-    .split(/\s+/)
-    .map((source) => source.trim())
-    .filter((source) => source.length > 0);
+  const matches = [...text.matchAll(new RegExp(`${directive}([^;"]*)`, 'gi'))];
+  if (0 === matches.length) return undefined;
+  return matches.map((match, index) => {
+    const previous = matches[index - 1];
+    const previousEnd =
+      previous === undefined ? undefined : (previous.index ?? 0) + previous[0].length;
+    return {
+      sources: (match[1] ?? '')
+        .split(/\s+/)
+        .map((source) => source.trim())
+        .filter((source) => source.length > 0),
+      alternativeWithPrevious:
+        previousEnd !== undefined &&
+        TERNARY_GAP.test(text.slice(previousEnd, match.index ?? previousEnd)),
+    };
+  });
 }
 
 /**
@@ -57,8 +75,12 @@ function directiveSources(text: string, directive: string): string[] | undefined
  *
  * Still undefined when NEITHER is present — a policy that constrains neither is not blocking us.
  */
-function connectSrcSources(text: string): string[] | undefined {
-  return directiveSources(text, 'connect-src') ?? directiveSources(text, 'default-src');
+function connectSrcSources(text: string): DirectiveSourceList[] | undefined {
+  const sources = directiveSources(text, 'connect-src') ?? directiveSources(text, 'default-src');
+  return sources?.map(({ sources: sourceList, alternativeWithPrevious }) => ({
+    sources: sourceList.map((source) => source.replace(EXPRESSION_EDGE, '')),
+    alternativeWithPrevious,
+  }));
 }
 
 /**
@@ -70,13 +92,26 @@ function connectSrcSources(text: string): string[] | undefined {
 export function cspConnectSrcProblem(text: string, port: number): string | undefined {
   const sources = connectSrcSources(text);
   if (sources === undefined || 0 === sources.length) return undefined;
-  if (sources.some((source) => WILDCARDS.includes(source))) return undefined;
   const wanted = bridgeOrigins(port);
+  // Separate CSP policies are all enforced, so every group must admit the bridge. Two occurrences
+  // that are alternate branches of one source-level ternary are not enforced together: either
+  // branch admitting the bridge is enough for that group.
+  const policiesThatAdmitBridge: boolean[] = [];
+  for (const { sources: sourceList, alternativeWithPrevious } of sources) {
+    const admitsBridge =
+      sourceList.some((source) => WILDCARDS.includes(source)) ||
+      wanted.every((origin) => sourceList.includes(origin));
+    if (alternativeWithPrevious) {
+      policiesThatAdmitBridge[policiesThatAdmitBridge.length - 1] ||= admitsBridge;
+    } else {
+      policiesThatAdmitBridge.push(admitsBridge);
+    }
+  }
   // BOTH, not either: the SDK picks its host from how the page was served, and a policy that admits
   // one is a coin flip. A coin flip that fails is indistinguishable from every other silent
   // non-connect, which is the whole cost being avoided here.
-  if (wanted.every((origin) => sources.includes(origin))) return undefined;
-  const missing = wanted.filter((origin) => !sources.includes(origin));
+  if (policiesThatAdmitBridge.every(Boolean)) return undefined;
+  const missing = wanted;
   return (
     `this app declares a Content-Security-Policy whose \`connect-src\` does not admit the Reticle ` +
     `bridge: ${missing.join(' and ')} ${1 === missing.length ? 'is' : 'are'} missing. The browser ` +
@@ -91,7 +126,7 @@ export function cspConnectSrcProblem(text: string, port: number): string | undef
  * Same fallback and same reason as {@link connectSrcSources}: every fetch-directive falls back to
  * `default-src`, which is why an author writing `default-src 'self'` does not repeat themselves.
  */
-function scriptSrcSources(text: string): string[] | undefined {
+function scriptSrcSources(text: string): DirectiveSourceList[] | undefined {
   return directiveSources(text, 'script-src') ?? directiveSources(text, 'default-src');
 }
 
@@ -132,7 +167,18 @@ function blocksInlineScript(sources: readonly string[]): boolean {
 export function cspInlineScriptProblem(text: string, port: number): string | undefined {
   const sources = scriptSrcSources(text);
   if (sources === undefined || 0 === sources.length) return undefined;
-  if (!blocksInlineScript(sources)) return undefined;
+  // The same CSP composition rule applies here: any independent blocking policy wins, while a
+  // source-level conditional is safe when either of its mutually exclusive branches permits inline.
+  const policiesThatBlockInlineScript: boolean[] = [];
+  for (const { sources: sourceList, alternativeWithPrevious } of sources) {
+    const blocksInline = blocksInlineScript(sourceList);
+    if (alternativeWithPrevious) {
+      policiesThatBlockInlineScript[policiesThatBlockInlineScript.length - 1] &&= blocksInline;
+    } else {
+      policiesThatBlockInlineScript.push(blocksInline);
+    }
+  }
+  if (!policiesThatBlockInlineScript.some(Boolean)) return undefined;
   return (
     `this app declares a Content-Security-Policy whose \`script-src\` does not admit an inline ` +
     `script, so the connect snippet never executes. Nothing on the Reticle side can see this: with ` +
@@ -206,7 +252,7 @@ function withBridgeOrigins(policy: string, port: number): string {
   }
   // No connect-src: the socket falls back to default-src, so the new directive starts from what
   // default-src already allowed — adding it bare would take 'self' away from every fetch the app does.
-  const fallback = directiveSources(policy, 'default-src') ?? [];
+  const fallback: readonly string[] = directiveSources(policy, 'default-src')?.[0]?.sources ?? [];
   const added = ` connect-src ${[...fallback, ...origins].join(' ')}`;
   const trimmed = policy.trimEnd();
   return trimmed.endsWith(';') ? `${trimmed}${added};` : `${trimmed};${added}`;

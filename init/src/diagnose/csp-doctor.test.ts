@@ -53,6 +53,27 @@ describe('diagnoseWebCsp', () => {
     expect(diagnoseWebCsp(files({ 'next.config.js': source }), PORT)).toEqual([]);
   });
 
+  it('does not predict a block when an interpolated branch admits the bridge', () => {
+    const source = `
+      const csp = \`connect-src 'self' \${dev && 'ws://localhost:4400 ws://127.0.0.1:4400'}\`;
+    `;
+
+    expect(diagnoseWebCsp(files({ 'next.config.mjs': source }), PORT)).toEqual([]);
+  });
+
+  it('predicts a block when any independently enforced policy excludes the bridge', () => {
+    const source = `
+      headers: [
+        { key: 'Content-Security-Policy', value: "connect-src 'self'" },
+        { key: 'Content-Security-Policy', value: "connect-src 'self' ws://localhost:4400 ws://127.0.0.1:4400" },
+      ],
+    `;
+    const findings = diagnoseWebCsp(files({ 'next.config.mjs': source }), PORT);
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.basis).toBe('predicted');
+  });
+
   it('reports each offending file once, not each directive', () => {
     const source = `"connect-src 'self'"`;
     const findings = diagnoseWebCsp(

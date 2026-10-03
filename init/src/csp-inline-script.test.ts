@@ -38,6 +38,27 @@ describe('cspInlineScriptProblem', () => {
     expect(problem(`"script-src 'self' 'unsafe-inline'"`)).toBeUndefined();
   });
 
+  it('still blocks when a separate enforced policy disallows inline scripts', () => {
+    const source = `
+      headers: [
+        { value: "script-src 'self'" },
+        { value: "script-src 'self' 'unsafe-inline'" },
+      ];
+    `;
+
+    expect(problem(source)).toBeDefined();
+  });
+
+  it('accepts inline scripts when either conditional policy branch permits them', () => {
+    const source = `
+      const csp = production
+        ? "script-src 'self'"
+        : "script-src 'self' 'unsafe-inline'";
+    `;
+
+    expect(problem(source)).toBeUndefined();
+  });
+
   it('stays quiet when there is no policy at all', () => {
     expect(problem('export default { reactStrictMode: true }')).toBeUndefined();
   });
