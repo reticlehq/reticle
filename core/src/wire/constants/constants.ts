@@ -695,6 +695,16 @@ export const InputModeReason = {
   // Clicks default to the occlusion-honest synthetic path ("don't click, run the code") even with a
   // provider configured; pass action arg native:true to force a trusted native click when needed.
   SYNTHETIC_CLICK_PREFERRED: 'synthetic-click-preferred',
+  /** A `press` that NAMED an element stays synthetic: dispatching at that element reaches it
+   * exactly, while a real keyboard sends the key to whatever holds focus. */
+  SYNTHETIC_ELEMENT_PRESS_PREFERRED: 'synthetic-element-press-preferred',
+  /** A `press` that named `keys` — several keys held down TOGETHER — stays synthetic: only the
+   * in-page dispatcher implements the down-in-order / up-in-reverse sequence. */
+  SYNTHETIC_MULTI_KEY_PRESS_PREFERRED: 'synthetic-multi-key-press-preferred',
+  /** A `press` that named an explicit `code` stays synthetic: the real driver presses by KEY name and
+   * cannot send a physical `code` that disagrees with it (`text:'z', code:'KeyY'` on a non-US
+   * layout), so a real chord would strike a different key than the one asked for. */
+  SYNTHETIC_KEY_CODE_PRESS_PREFERRED: 'synthetic-key-code-press-preferred',
   PAGE_NOT_CORRELATED: 'page-not-correlated-to-a-cdp-target', // no CDP page matches session.url
   ELEMENT_NOT_LOCATABLE: 'element-not-locatable', // INSPECT returned no box (off-screen/stale ref)
   DRAG_TARGET_UNRESOLVED: 'drag-target-unresolved', // drag toRef missing or not locatable

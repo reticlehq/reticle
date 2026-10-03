@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { LastAct } from '@/portal/session/last-act.js';
-import { ActionWarning, InputMode, InputModeReason, SessionState } from '@reticlehq/core';
+import {
+  ActionType,
+  ActionWarning,
+  InputMode,
+  InputModeReason,
+  SessionState,
+} from '@reticlehq/core';
 import type { CommandResult } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from '@/surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
@@ -28,6 +34,8 @@ interface FakeSessionState {
   staleRef?: string;
   /** When set, INSPECT returns a zero-area box for this ref. */
   zeroAreaRef?: string;
+  /** When set, the session is under version skew (the page and daemon disagree on protocol). */
+  versionSkew?: string;
 }
 
 function fakeSession(state: FakeSessionState): Session {
@@ -79,6 +87,9 @@ function fakeSession(state: FakeSessionState): Session {
     getState: () => SessionState.ACTIVE,
     drainInbox: () => [],
     inboxSize: () => 0,
+    // Spread rather than assigned: `exactOptionalPropertyTypes` rejects an explicit `undefined`
+    // for an optional field, and an absent skew is exactly what every other case wants.
+    ...(state.versionSkew === undefined ? {} : { versionSkew: state.versionSkew }),
   };
   return stub as Session;
 }
@@ -109,6 +120,7 @@ interface RecordingProvider extends RealInputProvider {
     box: ElementBox;
     center: { cx: number; cy: number };
     toBox?: ElementBox;
+    args: Record<string, unknown>;
   }[];
 }
 
@@ -120,10 +132,15 @@ function makeProvider(available: boolean, options: { throws?: boolean } = {}): R
     perform: (_url, action, box, args) => {
       if (true === options.throws) return Promise.reject(new Error('cdp gone'));
       const center = boxCenter(box);
-      const call: RecordingProvider['calls'][number] = { action, box, center };
+      const call: RecordingProvider['calls'][number] = {
+        action,
+        box,
+        center,
+        args: { ...args },
+      };
       if (args.toBox !== undefined) call.toBox = args.toBox;
       calls.push(call);
-      return Promise.resolve({ performed: true, center });
+      return Promise.resolve({ performed: true, center, inputMode: InputMode.REAL });
     },
   };
 }
@@ -419,5 +436,167 @@ describe('reticle_act real-input routing', () => {
     await runAct(fakeDeps(provider, state), { ref: 'e1', action: 'click', args: { native: true } });
 
     expect(provider.calls[0]?.center).toEqual(boxCenter(provider.calls[0]?.box ?? SOURCE_BOX));
+  });
+});
+
+/**
+ * A document key — `press` with no ref — through real input.
+ *
+ * A synthetic `KeyboardEvent` does not move focus, so Tab order cannot be verified through the
+ * synthetic path however faithfully the events are dispatched. This is the case the routing
+ * exists for, and it is also the one that must NOT resolve a box: Tab addresses whatever holds
+ * focus, and INSPECT on an empty ref is the wrong question to ask.
+ */
+describe('reticle_act routes a document press through real input', () => {
+  it('drives Tab through the provider without inspecting anything', async () => {
+    const provider = makeProvider(true);
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    const res = await runAct(fakeDeps(provider, state), { action: 'press', args: { text: 'Tab' } });
+
+    expect(res.inputMode).toBe(InputMode.REAL);
+    expect(provider.calls).toHaveLength(1);
+    expect(provider.calls[0]?.action).toBe(ActionType.PRESS);
+    // No center is published: a key addresses focus, and the placeholder box's zero happened
+    // nowhere. The provider's own reading is absent for the same reason.
+    expect(res.result).toEqual({ performed: true, action: ActionType.PRESS, inputMode: 'real' });
+    // A key press has no element to resolve, so nothing was inspected and no synthetic ACT ran.
+    expect(state.inspectRefs).toEqual([]);
+    expect(state.actCalls).toBe(0);
+  });
+
+  it('forwards the key and its modifiers to the provider', async () => {
+    const provider = makeProvider(true);
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    await runAct(fakeDeps(provider, state), {
+      action: 'press',
+      args: { text: 'k', modifiers: ['Meta'] },
+    });
+
+    expect(provider.calls[0]?.args).toEqual({ text: 'k', modifiers: ['Meta'] });
+  });
+
+  it('forwards holdMs, so a held key holds through the driver too', async () => {
+    // Without this the real path is the WEAKER one: the synthetic dispatcher has held a key for
+    // `holdMs` all along, and a hold-to-confirm control driven through the driver would see an
+    // instant tap reported as a success. Escape because a document key is the only press that
+    // reaches the driver at all — a named element stays synthetic by design.
+    const provider = makeProvider(true);
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    await runAct(fakeDeps(provider, state), {
+      action: 'press',
+      args: { text: 'Escape', holdMs: 1200 },
+    });
+
+    expect(provider.calls[0]?.args).toEqual({ text: 'Escape', holdMs: 1200 });
+  });
+
+  it('routes an explicit code away BEFORE inspecting, naming the key-level reason', async () => {
+    // The driver presses by KEY name; `code` is the caller saying the physical key differs. A ref is
+    // given here so both candidates apply — `code` names the KEY and wins, because "you passed a
+    // ref" would hide the request that actually could not be honoured.
+    const provider = makeProvider(true);
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    const res = await runAct(fakeDeps(provider, state), {
+      ref: 'e1',
+      action: 'press',
+      args: { text: 'z', code: 'KeyY' },
+    });
+
+    expect(res.inputMode).toBe(InputMode.SYNTHETIC);
+    expect(res.inputModeReason).toBe(InputModeReason.SYNTHETIC_KEY_CODE_PRESS_PREFERRED);
+    expect(state.inspectRefs).toEqual([]);
+    expect(provider.calls).toHaveLength(0);
+    expect(state.actCalls).toBe(1);
+  });
+
+  it('routes a multi-key press with no ref at all — it never reaches INSPECT', async () => {
+    // `keys` counts as a document press, so no ref is demanded; the router then hands it to the
+    // synthetic dispatcher because only the page can hold several keys down at once.
+    const provider = makeProvider(true);
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    const res = await runAct(fakeDeps(provider, state), {
+      action: 'press',
+      args: { keys: ['Control', 'k'] },
+    });
+
+    expect(res.inputMode).toBe(InputMode.SYNTHETIC);
+    expect(res.inputModeReason).toBe(InputModeReason.SYNTHETIC_MULTI_KEY_PRESS_PREFERRED);
+    expect(state.inspectRefs).toEqual([]);
+    expect(provider.calls).toHaveLength(0);
+    expect(state.actCalls).toBe(1);
+  });
+
+  it('still drives a document key under version skew, instead of taking the action away', async () => {
+    // Skew means CDP is unusable, and for every POINTER action that is a refusal (the code below
+    // throws the skew sentence). A document key is dispatched in the page and never needed CDP, so
+    // throwing here would turn a press that has always worked into a hard failure.
+    const provider = makeProvider(true);
+    const state: FakeSessionState = {
+      actCalls: 0,
+      inspectRefs: [],
+      versionSkew: 'page 2.14.0 / daemon 3.2.0',
+    };
+    const res = await runAct(fakeDeps(provider, state), { action: 'press', args: { text: 'Tab' } });
+
+    expect(res.inputMode).toBe(InputMode.REAL);
+    expect(provider.calls).toHaveLength(1);
+  });
+
+  it('falls back to synthetic when the driver throws under skew, rather than re-throwing', async () => {
+    // The pointer path re-throws the skew sentence because it has nowhere else to go. This action
+    // does: the synthetic route is right there, so the fallback is the honest answer.
+    const provider = makeProvider(true, { throws: true });
+    const state: FakeSessionState = {
+      actCalls: 0,
+      inspectRefs: [],
+      versionSkew: 'page 2.14.0 / daemon 3.2.0',
+    };
+    const res = await runAct(fakeDeps(provider, state), { action: 'press', args: { text: 'Tab' } });
+
+    expect(res.inputMode).toBe(InputMode.SYNTHETIC);
+    expect(res.inputModeReason).toBe(InputModeReason.PROVIDER_ERROR);
+    expect(state.actCalls).toBe(1);
+  });
+
+  it('keeps a press WITH a ref on the synthetic path — a real keyboard cannot address an element', async () => {
+    const provider = makeProvider(true);
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    const res = await runAct(fakeDeps(provider, state), {
+      ref: 'e1',
+      action: 'press',
+      args: { text: 'Enter' },
+    });
+
+    expect(res.inputMode).toBe(InputMode.SYNTHETIC);
+    expect(provider.calls).toHaveLength(0);
+    expect(state.actCalls).toBe(1);
+  });
+
+  it('falls back to synthetic when no provider is configured', async () => {
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    const res = await runAct(fakeDeps(undefined, state), {
+      action: 'press',
+      args: { text: 'Tab' },
+    });
+
+    expect(res.inputMode).toBe(InputMode.SYNTHETIC);
+    expect(state.actCalls).toBe(1);
+  });
+
+  it('reports a declined press as provider-declined rather than a silent synthetic success', async () => {
+    const provider = makeProvider(true);
+    provider.perform = () =>
+      Promise.resolve({
+        performed: false,
+        inputMode: InputMode.SYNTHETIC,
+      });
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    const res = await runAct(fakeDeps(provider, state), {
+      action: 'press',
+      args: { text: 'Tab' },
+    });
+
+    expect(res.inputMode).toBe(InputMode.SYNTHETIC);
+    expect(res.inputModeReason).toBe(InputModeReason.PROVIDER_DECLINED);
   });
 });

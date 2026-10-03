@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DriveErrorCode } from '@reticlehq/core';
+import { DriveErrorCode, InputMode } from '@reticlehq/core';
 import { DriveError, LaunchedRealInputProvider, boxCenter, type ElementBox } from './real-input.js';
 
 const DRIVE_URL = 'http://localhost:3000/app';
@@ -279,7 +279,7 @@ describe('LaunchedRealInputProvider', () => {
 
     const res = await provider.perform(DRIVE_URL, 'hover', SOURCE_BOX, {});
     const center = boxCenter(SOURCE_BOX);
-    expect(res).toEqual({ performed: true, center });
+    expect(res).toEqual({ performed: true, center, inputMode: InputMode.REAL });
     expect(spy.state.page.mouse.some((m) => 'move' === m.kind && m.x === center.cx)).toBe(true);
   });
 

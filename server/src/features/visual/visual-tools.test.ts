@@ -4,7 +4,7 @@ import { mkdtemp, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PNG } from 'pngjs';
-import { VisualReason } from '@reticlehq/core';
+import { InputMode, VisualReason } from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from '@/surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '@/memory/project/baselines.js';
@@ -35,7 +35,8 @@ function solidPng(rgb: [number, number, number]): Uint8Array {
 function fakeProvider(png: Uint8Array): RealInputProvider {
   return {
     isAvailableFor: () => Promise.resolve(true),
-    perform: () => Promise.resolve({ performed: false, center: { cx: 0, cy: 0 } }),
+    perform: () =>
+      Promise.resolve({ performed: false, center: { cx: 0, cy: 0 }, inputMode: InputMode.REAL }),
     screenshot: () => Promise.resolve(png),
   };
 }

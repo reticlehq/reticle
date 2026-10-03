@@ -48,6 +48,10 @@ const ORDER = [
   'next-blur-clock-test',
   'status-honesty-test',
   'drive-launch-test',
+  // The other half of `press`: a document key through the REAL keyboard, asserting focus actually
+  // moved. The unit tests record `keyboard.press('Tab')` against a fake Page, so they prove the
+  // routing and say nothing about focus — which is the whole of #1176. Needs next-smoke's tab order.
+  'press-real-focus-test',
   // The other half of drive: what it does when it CANNOT have the port. A daemon on :4400 is the
   // normal state once an agent has connected, and drive used to die there on a raw EADDRINUSE —
   // reported twice from the field, both times against the command Reticle itself recommends.
@@ -169,7 +173,7 @@ if (specs.length === 0) {
 // So the size is recorded, and shrinking the battery costs a deliberate edit to a number a
 // reviewer can see. Growing it costs the same edit, which is the point: both directions are a
 // decision. Measured 2026-09-11.
-const EXPECTED_SPECS = desktop ? 3 : 39;
+const EXPECTED_SPECS = desktop ? 3 : 40;
 // The WHOLE battery is counted, not this shard's slice of it: a shard is a third of the list by
 // design, and the question here is whether the list itself shrank.
 if (listed.length !== EXPECTED_SPECS) {

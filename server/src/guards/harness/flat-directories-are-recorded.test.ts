@@ -100,7 +100,12 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * cross-layer reach out of the server and left the file count as the only cost.
    */
   'core/src/verdict': 16,
-  'core/src/wire': 16,
+  // 17 since `hold.ts`: `clampHoldMs` is the bound BOTH input paths clamp `holdMs` with, so it
+  // belongs to the contract rather than to either caller. The reason it is a file of its own rather
+  // than a line in `global-press.ts` is the one recorded below: `core/src/wire`'s filenames are
+  // published API, and a page that only presses a key should not pull in the reader for a list of
+  // them. Recorded rather than grouped, by the same rule as the note underneath.
+  'core/src/wire': 17,
   // 16 since `snapshot-tree.ts`. The snapshot tree is a format the BROWSER writes and several
   // things on the Node side read back, and its parser was living beside the MCP tool handlers — so
   // every other reader imported from the tool surface to parse a string the tool surface does not
