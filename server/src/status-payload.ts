@@ -15,6 +15,7 @@ interface StatusPayload {
   version: string;
   /** The wire contract this daemon speaks — what another process compares against, not the version. */
   contract: string;
+  pid: number;
   sessionCount: number;
   sessions: SessionInfo[];
   /**
@@ -43,11 +44,13 @@ export function statusPayload(
   verifyPort?: number,
   /** The short rendering of the same diagnosis. Absent on a daemon that has no provider wired. */
   whyLead?: string,
+  pid: number = process.pid,
 ): StatusPayload {
   return {
     running: true,
     version: SERVER_VERSION,
     contract: CONTRACT_FINGERPRINT,
+    pid,
     sessionCount,
     sessions,
     // Only when there is nothing to explain away: a diagnosis printed beside a live session would

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parsePortHolder, describeForeignHolder } from './port-holder.js';
+import { parseNetstatPortHolder, parsePortHolder, describeForeignHolder } from './port-holder.js';
 
 /**
  * Naming the process that holds the port.
@@ -43,6 +43,44 @@ describe('parsePortHolder', () => {
   it('returns null when lsof reported a pid but no command', () => {
     // Half an answer is not an answer: "(pid 90502, undefined)" is worse than saying nothing.
     expect(parsePortHolder('p90502\n')).toBeNull();
+  });
+});
+
+describe('parseNetstatPortHolder', () => {
+  it('reads the pid of a TCP listener for the requested port', () => {
+    const stdout = '  TCP    127.0.0.1:4400    0.0.0.0:0    LISTENING    90502\n';
+
+    expect(parseNetstatPortHolder(stdout, 4400)).toEqual({
+      pid: 90502,
+      command: 'unknown',
+    });
+  });
+
+  it('matches IPv6 listeners', () => {
+    const stdout = '  TCP    [::1]:4400       [::]:0       LISTENING    90777\n';
+
+    expect(parseNetstatPortHolder(stdout, 4400)).toEqual({
+      pid: 90777,
+      command: 'unknown',
+    });
+  });
+
+  it('ignores listeners on other ports', () => {
+    const stdout = '  TCP    127.0.0.1:4500    0.0.0.0:0    LISTENING    90502\n';
+
+    expect(parseNetstatPortHolder(stdout, 4400)).toBeNull();
+  });
+
+  it('ignores non-listening connections', () => {
+    const stdout = '  TCP    127.0.0.1:4400    127.0.0.1:5500    ESTABLISHED    90502\n';
+
+    expect(parseNetstatPortHolder(stdout, 4400)).toBeNull();
+  });
+
+  it('returns null when the listener pid is invalid', () => {
+    const stdout = '  TCP    127.0.0.1:4400    0.0.0.0:0    LISTENING    not-a-pid\n';
+
+    expect(parseNetstatPortHolder(stdout, 4400)).toBeNull();
   });
 });
 
