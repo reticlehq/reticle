@@ -165,6 +165,45 @@ describe('absenceBlindSpotNote', () => {
     expect(absenceBlindSpotNote(pred, virtualizedSpot)).toBeUndefined();
   });
 
+  it('a dialog absence is not threatened by a virtualized list elsewhere on the page (#1236)', () => {
+    const pred: AbsencePred = { kind: 'element', absent: true, query: { role: 'dialog' } };
+    expect(absenceBlindSpotNote(pred, virtualizedSpot)).toBeUndefined();
+  });
+
+  it('an alertdialog absence is equally immune to unrelated virtualization (#1236)', () => {
+    const pred: AbsencePred = { kind: 'element', absent: true, query: { role: 'alertdialog' } };
+    expect(absenceBlindSpotNote(pred, virtualizedSpot)).toBeUndefined();
+  });
+
+  it('a landmark absence (navigation) cannot be a virtualized row (#1236)', () => {
+    const pred: AbsencePred = { kind: 'element', absent: true, query: { role: 'navigation' } };
+    expect(absenceBlindSpotNote(pred, virtualizedSpot)).toBeUndefined();
+  });
+
+  it('an absence with no role is still threatened by virtualization', () => {
+    const pred: AbsencePred = { kind: 'element', absent: true, query: {} };
+    expect(absenceBlindSpotNote(pred, virtualizedSpot)).toContain('cannot prove absence');
+  });
+
+  it('a role that COULD be a list row still gets the blind-spot note', () => {
+    const pred: AbsencePred = { kind: 'element', absent: true, query: { role: 'row' } };
+    expect(absenceBlindSpotNote(pred, virtualizedSpot)).toContain('cannot prove absence');
+  });
+
+  it('not(element { role: dialog }) unwraps and still skips the virtualized spot (#1236)', () => {
+    const pred: AbsencePred = {
+      kind: 'not',
+      predicate: { kind: 'element', query: { role: 'dialog' } },
+    };
+    expect(absenceBlindSpotNote(pred, virtualizedSpot)).toBeUndefined();
+  });
+
+  it('closed shadow root still applies to a dialog absence — the dialog could be inside it', () => {
+    const pred: AbsencePred = { kind: 'element', absent: true, query: { role: 'dialog' } };
+    const shadowSpot = [{ kind: BlindSpotKind.CLOSED_SHADOW_ROOT, count: 1 }];
+    expect(absenceBlindSpotNote(pred, shadowSpot)).toContain('cannot prove absence');
+  });
+
   it('both spellings produce the identical note, not merely a non-empty one', () => {
     const direct: AbsencePred = { kind: 'element', absent: true };
     const wrapped: AbsencePred = { kind: 'not', predicate: { kind: 'element' } };

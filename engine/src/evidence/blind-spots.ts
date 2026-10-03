@@ -222,9 +222,25 @@ function droppedByTransport(events: readonly ReticleEvent[]): number {
 interface AbsencePredicate {
   kind: string;
   absent?: boolean;
-  query?: { scope?: unknown };
+  query?: { scope?: unknown; role?: string | undefined };
   predicate?: AbsencePredicate;
 }
+
+/**
+ * Roles that are structurally page-level and can never be a virtualized list row. A dialog is
+ * always a top-level overlay; a landmark is a page-structural element. Absence of one of these
+ * is not threatened by rows a virtualizer unmounted off-screen (#1236).
+ */
+const NEVER_VIRTUALIZED_ROLES: ReadonlySet<string> = new Set([
+  'dialog',
+  'alertdialog',
+  'banner',
+  'contentinfo',
+  'complementary',
+  'main',
+  'navigation',
+  'region',
+]);
 
 /**
  * When an absence assertion targets a page with regions Reticle cannot observe, "the element is
@@ -233,7 +249,8 @@ interface AbsencePredicate {
  *
  * Fires on three blind-spot kinds:
  *   - CROSS_ORIGIN_IFRAME (only when the predicate is scoped to a frame region)
- *   - VIRTUALIZED_UNMOUNTED — a row that was never rendered could hold the element
+ *   - VIRTUALIZED_UNMOUNTED — a row that was never rendered could hold the element (scoped:
+ *     skipped when the queried role is structurally page-level, like dialog or a landmark)
  *   - CLOSED_SHADOW_ROOT — a subtree Reticle cannot see into
  */
 export function absenceBlindSpotNote(
@@ -253,13 +270,15 @@ export function absenceBlindSpotNote(
   }
   if (PredicateKind.ELEMENT !== predicate.kind || true !== predicate.absent) return undefined;
 
+  const role = predicate.query?.role;
   const relevant = spots.filter(
     (spot) =>
       spot.count > 0 &&
       (spot.kind === BlindSpotKind.CROSS_ORIGIN_IFRAME
         ? undefined !== predicate.query?.scope
-        : spot.kind === BlindSpotKind.VIRTUALIZED_UNMOUNTED ||
-          spot.kind === BlindSpotKind.CLOSED_SHADOW_ROOT),
+        : spot.kind === BlindSpotKind.VIRTUALIZED_UNMOUNTED
+          ? undefined === role || !NEVER_VIRTUALIZED_ROLES.has(role)
+          : spot.kind === BlindSpotKind.CLOSED_SHADOW_ROOT),
   );
   if (0 === relevant.length) return undefined;
 
