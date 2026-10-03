@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { CDP_NO_PROVIDER_REASON, CDP_NO_PROVIDER_RECOMMENDATION } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
-import { sessionIdShape } from '@/surface/tools/tool-kit.js';
+import { sessionIdShape } from '../../surface/tools/tool-kit.js';
 import {
   MAX_VIEWPORT_PX,
   MIN_VIEWPORT_PX,

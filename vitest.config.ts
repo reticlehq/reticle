@@ -1,5 +1,6 @@
 import { defineConfig, configDefaults } from 'vitest/config';
-import { sharedTestOptions } from './vitest.shared.js';
+import { sharedTestOptions } from './vitest.shared.ts';
+import { fileURLToPath } from 'node:url';
 
 /**
  * Agent git worktrees are full copies of the tree. A root `vitest run` that does not
@@ -9,6 +10,12 @@ import { sharedTestOptions } from './vitest.shared.js';
 export const AGENT_WORKTREE_GLOBS = ['**/.claude/worktrees/**', '**/.cursor/worktrees/**'] as const;
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./server/src', import.meta.url)),
+    },
+  },
+
   test: {
     exclude: [...configDefaults.exclude, ...AGENT_WORKTREE_GLOBS],
     // Reaches the packages that have NO config of their own — `next` and `babel-plugin` — because
