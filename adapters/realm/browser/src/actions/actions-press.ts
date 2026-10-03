@@ -208,50 +208,26 @@ export async function pressCombo(
   }
   return prevented;
 }
-/** Is this dialog open as MODAL? `:modal` is read in a try: an engine without it cannot say. */
-function isOpenModal(dialog: HTMLDialogElement): boolean {
-  if (!dialog.open) return false;
-  try {
-    return dialog.matches(':modal');
-  } catch {
-    // Without `:modal` a modal and a non-modal open dialog look identical from here, and Escape
-    // closes only the first. Guessing would close a dialog a keyboard leaves open.
-    return false;
-  }
-}
-
 /**
- * The innermost open MODAL `<dialog>` around the target. Walks past a non-modal dialog nested
- * inside one, because Escape there still closes the modal the browser's top layer holds.
+ * Emulate Escape's close request on the innermost open modal dialog around the target.
+ * Synthetic key events have no browser default action, so they do not close a dialog themselves.
  */
-function openModalDialog(el: ActionTarget): HTMLDialogElement | null {
+export function closeModalOnEscape(el: ActionTarget, key: string, keydownProceeded: boolean): void {
+  if ('Escape' !== key || !keydownProceeded) return;
   for (
     let dialog = el.closest('dialog');
     null !== dialog;
     dialog = dialog.parentElement?.closest('dialog') ?? null
   ) {
-    if (isOpenModal(dialog)) return dialog;
-  }
-  return null;
-}
-
-/**
- * The browser's default action for Escape in a modal dialog, which a dispatched key never gets.
- *
- * A synthetic `KeyboardEvent` is untrusted, and untrusted key events do not make the close request
- * a real Escape does. So `press Escape` inside a `showModal()` dialog fired no `cancel`, and an app
- * that closes through `onCancel` (or relies on the default close) read as broken while a keyboard
- * closes it (#1123). Emulated the way Enter's form submit is: only when the keydown was not
- * prevented, and through `requestClose()` where the engine has it, which fires `cancel` and then
- * `close`. Elsewhere a cancelable `cancel` is dispatched and `close()` runs only if nobody cancelled it.
- */
-export function closeModalOnEscape(el: ActionTarget, key: string, keydownProceeded: boolean): void {
-  if ('Escape' !== key || !keydownProceeded) return;
-  const dialog = openModalDialog(el);
-  if (null === dialog) return;
-  if ('function' === typeof dialog.requestClose) {
-    dialog.requestClose();
+    // A nested non-modal dialog does not hide its modal ancestor. Without `:modal`, do not guess.
+    try {
+      if (!dialog.open || !dialog.matches(':modal')) continue;
+    } catch {
+      return;
+    }
+    // requestClose dispatches cancel and respects preventDefault; older engines need the fallback.
+    if ('function' === typeof dialog.requestClose) dialog.requestClose();
+    else if (dialog.dispatchEvent(new Event('cancel', { cancelable: true }))) dialog.close();
     return;
   }
-  if (dialog.dispatchEvent(new Event('cancel', { cancelable: true }))) dialog.close();
 }
