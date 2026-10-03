@@ -26,6 +26,7 @@ const EXCEPTIONS = new Map([
     },
   ],
 ]);
+const SEVERITIES = new Set(['info', 'low', 'moderate', 'high', 'critical']);
 
 function reviewDevelopmentRoots(root, e2e) {
   const failures = [];
@@ -62,6 +63,10 @@ function reviewAudit(report) {
   for (const advisory of Object.values(report.advisories)) {
     if (advisory === null || typeof advisory !== 'object') {
       failures.push('audit output contains an invalid advisory');
+      continue;
+    }
+    if (!SEVERITIES.has(advisory.severity)) {
+      failures.push('audit output contains an unknown advisory severity');
       continue;
     }
     if (advisory.severity !== 'high' && advisory.severity !== 'critical') continue;
@@ -124,6 +129,10 @@ function selfTest() {
   const newAdvisory = clone();
   newAdvisory.advisories.extra = { severity: 'critical', github_advisory_id: 'GHSA-new' };
   if (reviewAudit(newAdvisory).failures.length === 0) throw new Error('new advisory passed');
+  const unknownSeverity = clone();
+  unknownSeverity.advisories.extra = { severity: 'severe', github_advisory_id: 'GHSA-new' };
+  if (reviewAudit(unknownSeverity).failures.length === 0)
+    throw new Error('unknown severity passed');
   const newPath = clone();
   newPath.advisories['GHSA-vfj7-8cjw-p6xm'].findings[0].paths.push('.>other>braces');
   if (reviewAudit(newPath).failures.length === 0) throw new Error('new path passed');
