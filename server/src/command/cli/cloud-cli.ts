@@ -13,7 +13,13 @@ import { basename, join } from 'node:path';
 import { z } from 'zod';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { CLOUD_LINK_FILE, resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
-import { memoryReadUrl, scopeMemoryResponse } from '@/memory/cloud/memory-scope.js';
+import {
+  isReadableMemoryScope,
+  memoryReadUrl,
+  MemoryResponseScope,
+  scopeMemoryResponse,
+  scopeOfMemoryResponse,
+} from '@/memory/cloud/memory-scope.js';
 import { applyCredential, findCredential } from './auth/cloud-keystore.js';
 import { defaultProjectFor } from './project-name.js';
 import { RETICLE_CONFIG_BASENAME } from './ports/resolve/cli-port.js';
@@ -730,12 +736,28 @@ const cmdMemory = async (argv: readonly string[]): Promise<number> => {
     return 2;
   }
   // Scoped to the LINKED project, on the way out AND on the way back. Without the parameter
-  // this printed whatever the key covered; without the filter it still would, for as long as the
-  // platform ignores a parameter it does not know yet — which is exactly the window this ships in.
-  // This is the command whose whole job is "what does THIS project know", so a sibling's answer
+  // this printed whatever the key covered; without checking the response it still would, for as long
+  // as the platform ignores a parameter it does not know yet — which is exactly the window this ships
+  // in. This is the command whose whole job is "what does THIS project know", so a sibling's answer
   // arriving under this heading is the one output nobody can tell from a correct one.
+  //
+  // The check is on the ENVELOPE and it REFUSES rather than printing. Printing an empty list would
+  // report "this project knows nothing", which is a different fact from "this response could not be
+  // shown to be about this project" and the one a person is likelier to act on. Nothing goes to
+  // stdout in that case: a caller piping this into an agent gets an error on stderr and a non-zero
+  // exit, never a plausible-looking empty answer.
   const scope = { projectId, subject };
-  emit(scopeMemoryResponse(await api('GET', memoryReadUrl(url, scope), apiKey), projectId));
+  const body = await api('GET', memoryReadUrl(url, scope), apiKey);
+  const verdict = scopeOfMemoryResponse(body, projectId);
+  if (!isReadableMemoryScope(verdict)) {
+    err(
+      MemoryResponseScope.OTHER === verdict
+        ? `the server answered about a different project than this repo is linked to — refusing to print another project's knowledge as this one's. Check the link with \`reticle status\`.`
+        : `the server's response does not say which project it is about, so there is no way to tell whether this is this project's knowledge. Refusing to print it; check the link with \`reticle status\`.`,
+    );
+    return 1;
+  }
+  emit(scopeMemoryResponse(body, projectId));
   return 0;
 };
 

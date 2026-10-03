@@ -36,6 +36,8 @@ const ADVICE: Record<MemoryUnavailable, string> = {
     'this project is linked but memory sync is turned off in .reticle/cloud.json, so nothing is being shared. Enable `sync.memory` to use it.',
   [MemoryUnavailable.UNREACHABLE]:
     'the workspace could not be reached, or refused the key. Nothing is wrong with this project — try again, or check the link with `reticle status`.',
+  [MemoryUnavailable.UNVERIFIED]:
+    'the server answered, but the answer could not be shown to be about THIS project, so none of it is being reported. This is not an empty corpus: do NOT conclude this project knows nothing. Check the link with `reticle status`, and retry once the workspace is reachable.',
 };
 
 export const MEMORY_TOOLS: ToolDef[] = [

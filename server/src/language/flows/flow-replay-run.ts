@@ -54,7 +54,7 @@ import type { DeviationReport } from '@/memory/journal/deviation-report.js';
 import { homedir } from 'node:os';
 import { cloudFetch, syncRunRecordToCloud, SyncOutcome } from '@/memory/cloud/cloud-sync.js';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
-import { keepOwnProject, memoryReadUrl } from '@/memory/cloud/memory-scope.js';
+import { memoryReadUrl, scopedMemoryEntries } from '@/memory/cloud/memory-scope.js';
 import { consultSubjectFor, selectConsulted, type ConsultedMemory } from './flow-memory-consult.js';
 import { log } from '@/log.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
@@ -202,12 +202,15 @@ async function consultProjectMemory(
     // property yields the function itself, `.entries` on it is undefined, and the whole feature
     // fails silently to "the project knows nothing" — which is indistinguishable from the honest
     // empty case and is why this took a live drive to notice at all.
-    const body = (await res.json()) as { entries?: unknown } | undefined;
-    const entries = body?.entries;
-    if (!Array.isArray(entries)) return undefined;
-    // Dropped here too, for as long as the platform does not filter on the parameter above.
-    const own = keepOwnProject(entries, cloud.projectId);
-    const picked = selectConsulted(own as { statement?: unknown; status?: unknown }[]);
+    const body: unknown = await res.json();
+    // The envelope is the check that works: the platform names the project on the RESPONSE and not
+    // on each entry, so the entry-level filter alone kept a whole sibling workspace while looking
+    // like it did something. `undefined` means the response could not be shown to be this project's
+    // — nothing is attached, because a verdict carrying another repo's "established knowledge" is
+    // worse than one carrying none. See `memory-scope.ts`.
+    const entries = scopedMemoryEntries(body, cloud.projectId);
+    if (entries === undefined) return undefined;
+    const picked = selectConsulted(entries as { statement?: unknown; status?: unknown }[]);
     return 0 === picked.length ? undefined : picked;
   } catch {
     // See the note above: never the reason a verdict fails to return.

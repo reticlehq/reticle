@@ -8,7 +8,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
 import { createMemoryFs } from '@/memory/project/memory-fs.js';
-import { rankKnown, readProjectMemory, type KnownThing } from './project-memory.js';
+import {
+  rankKnown,
+  readProjectMemory,
+  MemoryUnavailable,
+  type KnownThing,
+} from './project-memory.js';
 
 const thing = (statement: string, status: string): KnownThing => ({
   statement,
@@ -68,18 +73,29 @@ function linked(projectId = LINKED) {
   return fs;
 }
 
-/** A server that answers with the entries it is given, and records the URL it was asked at. */
-function answering(entries: readonly unknown[]): { urls: string[] } {
+/**
+ * A server that answers the way the PLATFORM does: the project id on the envelope, the entries
+ * carrying none of their own.
+ *
+ * The shape matters more than the helper. The first cut of this fix filtered the ENTRIES and was
+ * tested against entries that carried a `projectId` — a shape the platform never sends — so the
+ * filter matched nothing, kept everything, and every test passed. `answerAs` lets a test say which
+ * project the server ANSWERED about, which is the thing under test.
+ */
+function answerAs(projectId: string | undefined, entries: readonly unknown[]): { urls: string[] } {
   const urls: string[] = [];
   vi.stubGlobal('fetch', (url: string) => {
     urls.push(url);
     return Promise.resolve({
       status: 200,
-      json: () => Promise.resolve({ entries }),
+      json: () => Promise.resolve({ ...(projectId === undefined ? {} : { projectId }), entries }),
     });
   });
   return { urls };
 }
+
+/** The common case: the server answered about the project that was asked about. */
+const answering = (entries: readonly unknown[]): { urls: string[] } => answerAs(LINKED, entries);
 
 describe('which project a shared-memory read is about', () => {
   afterEach(() => {
@@ -110,11 +126,59 @@ describe('which project a shared-memory read is about', () => {
   });
 
   /**
-   * The client half, for as long as the platform does not filter on the parameter. `total` is
-   * counted after the drop, so a truncated list still tells the truth about THIS project's corpus
-   * rather than about the workspace's.
+   * The regression for the shape this was actually broken against, and the reason the entry-level
+   * test below could not catch it.
+   *
+   * The platform answers with `{ projectId, entries }` — the entries carry no project of their own.
+   * A reader that only filtered entries saw nothing to compare, kept the whole list, and returned a
+   * sibling project's knowledge under this project's heading with every test still green.
    */
-  it('drops a statement that says it belongs to another project, and does not count it', async () => {
+  it('refuses a response whose ENVELOPE names another project, as unverified', async () => {
+    answerAs(SIBLING, [
+      { statement: 'theirs', status: 'proved' },
+      { statement: 'also theirs', status: 'agreed' },
+    ]);
+
+    const result = await readProjectMemory(linked(), APP_RETICLE, HOME, {}, { limit: 10 });
+
+    // NOT `ok: true` with an empty list. "This project knows nothing" is a fact an agent acts on;
+    // the honest answer here is that nothing could be established, which is a different thing.
+    expect(result.ok).toBe(false);
+    expect(result.ok ? null : result.reason).toBe(MemoryUnavailable.UNVERIFIED);
+  });
+
+  /**
+   * A server that never says which project it answered about — an older one, or the platform before
+   * it learned the parameter. Unverifiable, and reported as such rather than as an empty corpus.
+   */
+  it('refuses a response whose envelope names no project, as unverified', async () => {
+    answerAs(undefined, [{ statement: 'whose?', status: 'proved' }]);
+
+    const result = await readProjectMemory(linked(), APP_RETICLE, HOME, {}, { limit: 10 });
+
+    expect(result.ok).toBe(false);
+    expect(result.ok ? null : result.reason).toBe(MemoryUnavailable.UNVERIFIED);
+  });
+
+  /**
+   * An entry that says nothing is KEPT, once the envelope has vouched for the response: dropping it
+   * would blank the corpus against every server that labels the envelope and not the entries, which
+   * is the server this actually talks to.
+   */
+  it('keeps an entry that does not say which project it belongs to', async () => {
+    answering([{ statement: 'unsaid', status: 'agreed' }]);
+
+    const result = await readProjectMemory(linked(), APP_RETICLE, HOME, {}, { limit: 10 });
+
+    expect(result.ok && result.known.map((k) => k.statement)).toEqual(['unsaid']);
+  });
+
+  /**
+   * The second pass, for a server that labels ENTRIES instead of the envelope — not the platform's
+   * shape, and the filter is still worth having for one that is. `total` is counted after the drop,
+   * so a truncated list tells the truth about THIS project's corpus rather than the workspace's.
+   */
+  it('drops an entry that says it belongs to another project, and does not count it', async () => {
     answering([
       { statement: 'theirs', status: 'proved', projectId: SIBLING },
       { statement: 'ours', status: 'proved', projectId: LINKED },
@@ -127,15 +191,24 @@ describe('which project a shared-memory read is about', () => {
   });
 
   /**
-   * An entry that does not say is KEPT. Dropping those would blank the corpus against every server
-   * that does not send the field — a leak between two repos traded for every project reading as
-   * empty, and empty is the answer that looks like a fact rather than a failure.
+   * The unlinked case, and the one place a refusal would be wrong: with no `cloud.json` there is no
+   * project to contradict, so an answer about anything is read the way it always was. CI is this
+   * path, and refusing here would break every single-project install to fix a leak that needs two.
    */
-  it('keeps an entry that does not say which project it belongs to', async () => {
-    answering([{ statement: 'unsaid', status: 'agreed' }]);
+  it('reads a response normally when this project is not linked', async () => {
+    answerAs('some-other-project', [{ statement: 'readable', status: 'proved' }]);
+    // No `cloud.json`: the env-credential path, which is the whole of CI. With no link file there
+    // is no linked id for the envelope to contradict, so the read happens the way it always did.
+    const { fs } = createMemoryFs();
 
-    const result = await readProjectMemory(linked(), APP_RETICLE, HOME, {}, { limit: 10 });
+    const result = await readProjectMemory(
+      fs,
+      APP_RETICLE,
+      HOME,
+      { RETICLE_API_KEY: 'rk_live_x' },
+      { limit: 10 },
+    );
 
-    expect(result.ok && result.known.map((k) => k.statement)).toEqual(['unsaid']);
+    expect(result.ok && result.known.map((k) => k.statement)).toEqual(['readable']);
   });
 });

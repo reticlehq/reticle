@@ -10,26 +10,28 @@
  * The link file has always known the answer — `resolveProjectCloud` returns it as `projectId`, and
  * every reader simply did not pass it on.
  *
- * ## Why the filter as well as the parameter
+ * ## Why the envelope, and not the entries
  *
  * Sending `projectId` is the fix, and it only works once the platform filters on it. Against a server
  * that does not know the parameter yet, the client would go on being handed the whole workspace and
  * would report it as this project's knowledge — the same lie, now with a parameter in the URL that
- * makes it look handled. So the response is filtered here too, and the limit is stated plainly: this
- * can only drop an entry that SAYS it belongs elsewhere.
+ * makes it look handled. So the response is checked here too, and WHERE it is checked is the lesson:
+ * the platform puts the project id on the response ENVELOPE — `{ projectId, entries }` — and not on
+ * each entry. An entry-level filter therefore matched nothing, kept everything, and read as a fix
+ * while being none. `scopeOfMemoryResponse` reads the envelope and refuses the whole response when
+ * it names another project, or names none.
  *
- * An entry with no project field is kept. Dropping those would blank the whole corpus against every
- * server that does not send the field, trading a leak between two repos for every project reading as
- * empty — and empty is the answer that looks like a fact rather than a failure. Kept, the unfiltered
- * case is exactly the behaviour that shipped before this file existed.
+ * The entry-level filter stays as a second pass. It is redundant against the platform's real shape,
+ * and it is the right answer against a server that labels entries instead — cheap to keep, and
+ * nothing here rests on it.
  *
  * ## Every reader, and that word is load-bearing
  *
  * Three callers read this endpoint: the `reticle_memory` tool, flow replay's automatic consultation,
- * and `reticle memory` at a terminal. The first two consume a LIST and filter it; the third prints
- * the server's JSON verbatim, and so needs the filter applied to a whole envelope — `scopeMemoryResponse`
- * below. The CLI was left unfiltered in the first cut of this change while a comment claimed all three
- * were covered, which is the one failure mode a shared helper is supposed to make impossible.
+ * and `reticle memory` at a terminal. The first cut gave the first two an entry-level filter and the
+ * third the parameter alone, while a comment claimed all three were covered — and none of the three
+ * was, because the project id arrives on the envelope. They now share `scopedMemoryEntries`, so a
+ * fourth reader cannot get a different answer than the other three.
  *
  * Lives beside `cloud-sync.ts` rather than in `recall/` because that is where the other platform path
  * constants live, and because both readers already reach this directory: a home under `recall/` would
@@ -129,16 +131,86 @@ export function keepOwnProject(
 }
 
 /**
+ * Whether a memory response can be read as THIS project's knowledge.
+ *
+ * The platform puts the project id on the response ENVELOPE, not on each entry (see the module note).
+ * Reading it there is the only check that works against the real shape: an entry-level filter sees no
+ * project field at all and keeps everything, so a server that ignores the request parameter — or
+ * resolves the key to a different project — hands back a whole workspace under this project's
+ * heading with nothing to distinguish it.
+ */
+export const MemoryResponseScope = {
+  /** The envelope names the project this read asked about. Its entries may be read. */
+  OWN: 'own',
+  /** The envelope names a DIFFERENT project. Nothing in it belongs to this one. */
+  OTHER: 'other',
+  /**
+   * The envelope does not say which project it is about — an older server, or a shape we do not
+   * know. Unverifiable, which is NOT the same as empty and must not be shown as though it were.
+   */
+  UNSCOPED: 'unscoped',
+  /**
+   * This read named no project to begin with, so there is nothing for the envelope to contradict.
+   * The env-credential path with no `cloud.json`: CI, and a single-project setup that never linked.
+   */
+  NOT_ASKED: 'not-asked',
+} as const;
+export type MemoryResponseScope = (typeof MemoryResponseScope)[keyof typeof MemoryResponseScope];
+
+/** The two verdicts that permit reading the entries. Named so no caller re-derives the pair. */
+export const isReadableMemoryScope = (scope: MemoryResponseScope): boolean =>
+  MemoryResponseScope.OWN === scope || MemoryResponseScope.NOT_ASKED === scope;
+
+/**
+ * What the envelope says about which project this response is about.
+ *
+ * A missing or non-string field is `UNSCOPED` rather than a mismatch: the wire is somebody else's
+ * server, and "this response never said" is a different fact from "this response named a rival".
+ * Both refuse; only the message a reader shows differs.
+ */
+export function scopeOfMemoryResponse(
+  body: unknown,
+  projectId: string | null | undefined,
+): MemoryResponseScope {
+  const mine = projectToName(projectId);
+  if (mine === undefined) return MemoryResponseScope.NOT_ASKED;
+  if (null === body || 'object' !== typeof body) return MemoryResponseScope.UNSCOPED;
+  const stated = (body as Record<string, unknown>)[MemoryScopeField.PROJECT_ID];
+  if ('string' !== typeof stated || 0 === stated.length) return MemoryResponseScope.UNSCOPED;
+  return stated === mine ? MemoryResponseScope.OWN : MemoryResponseScope.OTHER;
+}
+
+/**
+ * The entries a reader may treat as this project's, or `undefined` when the response cannot be read
+ * that way at all.
+ *
+ * `undefined` is the point of the return type. Three callers need three different sentences and none
+ * of them is a list: the tool reports `UNVERIFIED`, the CLI refuses out loud, and replay attaches
+ * nothing. "This project knows nothing" and "the server answered about something else" are different
+ * facts, and only the first is safe to act on.
+ */
+export function scopedMemoryEntries(
+  body: unknown,
+  projectId: string | null | undefined,
+): unknown[] | undefined {
+  if (!isReadableMemoryScope(scopeOfMemoryResponse(body, projectId))) return undefined;
+  if (null === body || 'object' !== typeof body) return undefined;
+  const entries = (body as Record<string, unknown>)['entries'];
+  if (!Array.isArray(entries)) return undefined;
+  return keepOwnProject(entries, projectId);
+}
+
+/**
  * The same filter, for a caller that prints the server's envelope rather than reading a list.
  *
  * `reticle memory` writes the response to stdout as JSON, so filtering has to preserve every other
- * field the server sent and replace only `entries`. A body that is not an object, or carries no
- * `entries` array, is handed back untouched: this is somebody else's server, and guessing at its
- * shape is how a diagnostic command starts dropping the thing it was asked to print.
+ * field the server sent and replace only `entries`.
  *
- * That restraint is the difference between a filtered read and a blind one. `readProjectMemory`
- * degrades to `UNREACHABLE` when the shape is wrong because a tool has to answer something; the CLI
- * has no such duty and shows the caller exactly what arrived.
+ * ONLY call this once `scopeOfMemoryResponse` has said the envelope is readable — it filters entries
+ * and cannot refuse a response, so on an unverified body it would print the very thing that must not
+ * be printed. A body whose `entries` is not an array is handed back untouched: at that point the
+ * envelope has already been accepted, and guessing further is how a diagnostic command starts
+ * dropping the thing it was asked to print.
  */
 export function scopeMemoryResponse(body: unknown, projectId: string | null | undefined): unknown {
   if (null === body || 'object' !== typeof body) return body;

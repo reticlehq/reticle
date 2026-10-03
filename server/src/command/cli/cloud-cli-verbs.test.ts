@@ -863,4 +863,66 @@ describe('cloud-cli verb contracts (#555)', () => {
     expect(requests[0]?.authorization).toBe(`Bearer ${TEST_KEY}`);
     expect(lastJsonOutput()).toEqual({ shareUrl: 'https://cloud.test/s/abc' });
   });
+
+  /**
+   * `reticle memory` — the one reader whose whole job is "what does THIS project know".
+   *
+   * The platform names the project on the response ENVELOPE, not on each entry, and this command
+   * used to print the body verbatim. A workspace key that resolved to a sibling project therefore
+   * printed that sibling's established knowledge under this project's heading, and a person reading
+   * it had nothing to tell the two apart. The three cases below are the platform's real
+   * `{ projectId, entries }` shape, which is the shape the entry-level filter could not see.
+   */
+  describe('memory refuses an answer it cannot show to be about this project', () => {
+    const linkedHere = async (): Promise<void> => {
+      await writeRepoFile(
+        [CLOUD_LINK_FILE],
+        JSON.stringify({ projectId: 'proj_1', projectName: 'Proj', url: TEST_URL }),
+      );
+      await writeHomeFile([CREDENTIALS_FILE], JSON.stringify({ proj_1: TEST_KEY }));
+    };
+
+    it('names the linked project on the wire and prints what comes back', async () => {
+      await linkedHere();
+      const entries = [{ statement: 'ours', status: 'proved' }];
+      responder = () => ({ body: { projectId: 'proj_1', entries } });
+
+      const code = await runCloudCommand(['memory']);
+
+      expect(code).toBe(0);
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.url).toBe(`${TEST_URL}/v1/memory?projectId=proj_1`);
+      expect(lastJsonOutput()).toEqual({ projectId: 'proj_1', entries });
+    });
+
+    /**
+     * The refusal has to be LOUD and it has to be EMPTY. Printing an empty list would report "this
+     * project knows nothing", which is a different fact from "this response could not be shown to be
+     * about this project" and the one a person is likelier to act on — and a caller piping this into
+     * an agent would hand it a confident no-answer.
+     */
+    it('prints NOTHING and exits non-zero when the envelope names another project', async () => {
+      await linkedHere();
+      responder = () => ({
+        body: { projectId: 'proj_sibling', entries: [{ statement: 'theirs', status: 'proved' }] },
+      });
+
+      const code = await runCloudCommand(['memory']);
+
+      expect(code).toBe(1);
+      expect(stdoutBuf.trim()).toBe('');
+      expect(stderrBuf).toContain('different project');
+    });
+
+    it('prints NOTHING and exits non-zero when the envelope names no project at all', async () => {
+      await linkedHere();
+      responder = () => ({ body: { entries: [{ statement: 'whose?', status: 'proved' }] } });
+
+      const code = await runCloudCommand(['memory']);
+
+      expect(code).toBe(1);
+      expect(stdoutBuf.trim()).toBe('');
+      expect(stderrBuf).toContain('does not say which project');
+    });
+  });
 });
