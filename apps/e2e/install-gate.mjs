@@ -213,7 +213,7 @@ const ONLY = process.argv.includes('--only')
  * step the gate previously had to skip and then excuse.
  */
 const REGISTRY_PORT = Number(process.env.INSTALL_GATE_REGISTRY_PORT ?? '4873');
-const REGISTRY = `http://localhost:${String(REGISTRY_PORT)}`;
+const REGISTRY = `http://127.0.0.1:${String(REGISTRY_PORT)}`;
 
 /**
  * The registry the gate publishes into — INSTALLED, not fetched at gate time.
@@ -245,7 +245,7 @@ async function startLocalRegistry() {
       // The config file pins 4873. Without this, INSTALL_GATE_REGISTRY_PORT moved every URL the gate
       // uses and not the port Verdaccio binds, so a second registry on the machine made the gate die
       // with EADDRINUSE before a single scaffold ran.
-      .replace('listen: 0.0.0.0:4873', `listen: 0.0.0.0:${String(REGISTRY_PORT)}`),
+      .replace('listen: 127.0.0.1:4873', `listen: 127.0.0.1:${String(REGISTRY_PORT)}`),
   );
   const proc = spawn(process.execPath, [VERDACCIO_BIN, '--config', config], {
     cwd: ROOT,
@@ -340,7 +340,7 @@ async function publishInto(proc) {
   const npmrc = join(mkdtempSync(join(tmpdir(), 'reticle-gate-npmrc-')), '.npmrc');
   writeFileSync(
     npmrc,
-    `registry=${REGISTRY}\n//localhost:${String(REGISTRY_PORT)}/:_authToken=${token}\n`,
+    `registry=${REGISTRY}\n//127.0.0.1:${String(REGISTRY_PORT)}/:_authToken=${token}\n`,
   );
   const auth = { npm_config_userconfig: npmrc, NPM_CONFIG_USERCONFIG: npmrc };
   if (PREBUILT_PACKAGES !== undefined) {
@@ -1279,8 +1279,8 @@ async function driveScaffold(scaffold, index) {
     })();
     chk(
       '  and it came from the LOCAL registry, not public npm',
-      lock.includes(`localhost:${String(REGISTRY_PORT)}`),
-      lock.includes(`localhost:${String(REGISTRY_PORT)}`)
+      lock.includes(`127.0.0.1:${String(REGISTRY_PORT)}`),
+      lock.includes(`127.0.0.1:${String(REGISTRY_PORT)}`)
         ? 'resolved against the local registry'
         : 'package-lock does not reference the local registry — this measured PUBLISHED code',
     );

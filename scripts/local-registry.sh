@@ -6,12 +6,12 @@
 #   bash scripts/local-registry.sh
 #
 # Then, in your app:
-#   echo '@reticlehq:registry=http://localhost:4873/' >> .npmrc
+#   echo '@reticlehq:registry=http://127.0.0.1:4873/' >> .npmrc
 #   npm i -D @reticlehq/browser @reticlehq/react @reticlehq/next
 #
 set -euo pipefail
 PORT=4873
-REG="http://localhost:${PORT}"
+REG="http://127.0.0.1:${PORT}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 echo "==> Starting a FRESH Verdaccio on ${REG} (reset so user/token + versions are clean)"

@@ -133,9 +133,10 @@ jobs:
       - run: pnpm lint:docs
       - run: pnpm typecheck
       # High and critical dependency advisories fail verify and therefore the aggregate gate.
-      # Fix the dependency or document a narrowly scoped, reviewed exception before merging.
+      # The checker accepts only the two exact, reviewed, unpatched development-tool paths recorded
+      # in REPOSITORY-SETTINGS.md; any new path, patched release, or advisory fails.
       - name: Security audit
-        run: pnpm audit --audit-level high
+        run: node scripts/check-js-audit.mjs --self-test && node scripts/check-js-audit.mjs
       # format:check is its own job (format-check); running it here as well cost ~30s for nothing.
 
   # The unit suite, in parallel with verify's static checks rather than after them. It was ~4.5 of

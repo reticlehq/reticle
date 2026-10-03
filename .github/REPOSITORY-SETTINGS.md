@@ -53,6 +53,13 @@ Signed tags and signed commits are useful separate controls. They do not substit
 - [ ] Keep the high/critical JavaScript audit and Rust audits passing in CI. High/critical JavaScript advisories now fail `verify`, which is included in `gate`.
 - [ ] Where a vulnerability genuinely does not apply, document a narrowly scoped exception with evidence and review it when dependencies change.
 
+### Reviewed JavaScript audit exceptions (2026-10-03)
+
+`scripts/check-js-audit.mjs` keeps high/critical advisories fatal except for the exact lockfile paths below. It also checks that both direct dependencies stay in private development-tool manifests. Its self-test proves that a new advisory, changed path, available patch, stale exception, muted finding, or move into production dependencies fails CI. Remove an exception as soon as a patched release can be installed; dependency-path changes also require a new review.
+
+- `GHSA-ch52-4w7c-c8xp`: `http-cache-semantics@4.2.0` is reached only through `apps/e2e`'s `verdaccio@6.10.4` test-registry dependency. The install gate now binds that ephemeral registry to `127.0.0.1`; it stores test packages and an ephemeral test user, not production sessions or cross-user cached responses. The advisory concerns max-stale exposure of another user's cached session response. There is no upstream patch yet, so this exact development path is excepted. If this package reaches a shipped runtime or another path, the guard fails.
+- `GHSA-vfj7-8cjw-p6xm`: `braces@3.0.3` is reached only through the root build tool `tsc-alias > chokidar`. Reticle invokes `tsc-alias` to rewrite its own compiled output, without watch mode or untrusted brace patterns. The advisory concerns stack exhaustion from a deeply nested attacker-supplied pattern. There is no upstream patch yet, so this exact build path is excepted. If this package reaches another path, the guard fails.
+
 ## 4. Keep build tools pinned and tokens restricted
 
 - [ ] Keep Actions pinned to commit SHAs and let Dependabot update them. The SLSA reusable generator retains its supported version-tag reference.
