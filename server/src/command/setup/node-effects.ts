@@ -126,7 +126,8 @@ export class OwnedDevServer {
     } catch {
       /* not written yet */
     }
-    return Date.now() - lastOutputAt;
+    // Filesystem timestamps can include a fractional millisecond beyond Date.now()'s integer.
+    return Math.max(0, Date.now() - lastOutputAt);
   }
 
   /** Ports anything in this server's process tree is listening on. */

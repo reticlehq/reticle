@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import http from 'node:http';
 import net from 'node:net';
-import { mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+  rmSync,
+  utimesSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -136,6 +144,15 @@ describe('the dev server this process owns', () => {
     while (!server.output().includes('http://localhost:1234')) await sleep(50);
     expect(server.output()).toContain('http://localhost:1234');
     expect(server.quietForMs()).toBeGreaterThanOrEqual(0);
+    const log = server.logPath();
+    expect(log).toBeDefined();
+    if (log !== undefined) {
+      // Some filesystems record sub-millisecond mtimes ahead of Date.now()'s integer clock.
+      // A future timestamp makes the bound deterministic on every runner.
+      const future = new Date(Date.now() + 1_000);
+      utimesSync(log, future, future);
+      expect(server.quietForMs()).toBe(0);
+    }
     server.stop();
   }, 10_000);
 
