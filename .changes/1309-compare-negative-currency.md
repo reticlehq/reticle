@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/engine` — `compare { as: "number" }` dropped the negative sign on formatted currency.** `NUMBER_TOKEN` required the minus sign to be directly adjacent to digits, so currency strings formatted by `Intl.NumberFormat` (such as `-₹1,187.01`, `-$50.00`, or `-€123.45`) had their negative sign stripped and were parsed as positive numbers. This caused false negatives when compared against negative server values, and false greens when compared against positive ones. `numberOf` now recognises negative signs preceding or following currency symbols and parses the numeric value with the correct sign, without mistaking hyphen label separators for negative numbers. Closes [#1309](https://github.com/reticlehq/reticle/issues/1309).
