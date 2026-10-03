@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CDP_NO_PROVIDER_REASON } from '@reticlehq/core';
+import { CDP_NO_PROVIDER_REASON, InputMode } from '@reticlehq/core';
 import { VIEWPORT_TOOLS } from './viewport-tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import type { RealInputProvider } from './real-input.js';
@@ -44,7 +44,8 @@ describe('reticle_viewport tool', () => {
     let captured: { url: string; size: { width: number; height: number } } | undefined;
     const provider = {
       isAvailableFor: () => Promise.resolve(true),
-      perform: () => Promise.resolve({ performed: true, center: { cx: 0, cy: 0 } }),
+      perform: () =>
+        Promise.resolve({ performed: true, center: { cx: 0, cy: 0 }, inputMode: InputMode.REAL }),
       setViewport: (url: string, size: { width: number; height: number }) => {
         captured = { url, size };
         return Promise.resolve(true);
@@ -64,7 +65,8 @@ describe('reticle_viewport tool', () => {
     let captured: { width: number; height: number } | undefined;
     const provider = {
       isAvailableFor: () => Promise.resolve(true),
-      perform: () => Promise.resolve({ performed: true, center: { cx: 0, cy: 0 } }),
+      perform: () =>
+        Promise.resolve({ performed: true, center: { cx: 0, cy: 0 }, inputMode: InputMode.REAL }),
       setViewport: (_url: string, size: { width: number; height: number }) => {
         captured = size;
         return Promise.resolve(true);

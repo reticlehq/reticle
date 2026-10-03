@@ -19,13 +19,24 @@
  * the base64 4/3 inflation factor applied, so the encoded payload always fits in one WebSocket
  * frame.
  */
-import { ActionType, InputModeReason, ReticleCommand, TRANSPORT_LIMITS } from '@reticlehq/core';
+import {
+  ActionType,
+  DriveErrorCode,
+  InputModeReason,
+  ReticleCommand,
+  TRANSPORT_LIMITS,
+} from '@reticlehq/core';
 import type { Session } from '@/portal/session/session.js';
 import type { ElementBox, RealInputArgs } from '@/portal/input/real-input.js';
-import { boxCenter, isPointerAction } from '@/portal/input/real-input.js';
+import {
+  boxCenter,
+  DriveError,
+  isRealInputAction,
+  unspellablePressReason,
+} from '@/portal/input/real-input.js';
 import { assertDragNotDestructive, assertNotDestructive } from './act/act-danger.js';
 import { NATIVE_INPUT_ARG } from '@reticlehq/core';
-import { asRecord, asString } from '@reticlehq/core';
+import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { type ToolDeps, commandOrThrow } from './tool-kit.js';
 import { asBox } from './act/act-helpers.js';
 import { isAbsolute, join, relative, extname, basename, resolve } from 'node:path';
@@ -282,6 +293,14 @@ function synthetic(reason?: InputModeReason): RealActResult {
 }
 
 /**
+ * Filler for the provider signature, which demands a box on every action.
+ *
+ * No coordinate is derived from it and none is reported back: `performGesture` returns before it
+ * reads the box on a press, because a key addresses focus rather than a point.
+ */
+const PRESS_HAS_NO_BOX: ElementBox = { x: 0, y: 0, width: 0, height: 0 };
+
+/**
  * Hover without a native pointer is a false success: synthetic mouseover reports dispatched and
  * settled while CSS `:hover` never applies. Same refusal shape as contenteditable — name the gap
  * rather than pretend the action ran.
@@ -322,7 +341,9 @@ async function hoverForReal(
   if (providerReady && provider !== undefined) {
     try {
       const performed = await provider.perform(session.url, ActionType.HOVER, box, {});
-      if (performed.performed) return hoverSucceeded(performed.center);
+      // Hover always has a resolved box, so there is always a center to report: the provider's own
+      // reading, or the box's if it reported none. Both are the same point, not a fabricated one.
+      if (performed.performed) return hoverSucceeded(performed.center ?? boxCenter(box));
     } catch {
       // A provider error used to fall back to synthetic dispatch. For hover that is a lie.
     }
@@ -366,7 +387,14 @@ export async function tryRealInput(
     // real debugging time, because the tool description promises a reason is "never silent".
     return askedForNative ? synthetic(InputModeReason.NOT_CONFIGURED) : synthetic();
   }
-  if (!isPointerAction(action)) return synthetic(InputModeReason.NOT_POINTER); // fill/type stay synthetic
+  // Two `press`es this module will NOT drive, and neither is a fallback — the reason says which
+  // one was asked for, instead of a different gesture being sent. See `unspellablePressReason`.
+  if (action === ActionType.PRESS) {
+    const unspellable = unspellablePressReason(ref, inner);
+    if (unspellable !== undefined) return synthetic(unspellable);
+  }
+
+  if (!isRealInputAction(action)) return synthetic(InputModeReason.NOT_POINTER); // fill/type stay synthetic
 
   // "Don't click, run the code": a click/dblclick runs the occlusion-honest SYNTHETIC path by default
   // even with a provider configured — no coordinate gesture to be intercepted by the HUD or missed
@@ -379,12 +407,82 @@ export async function tryRealInput(
   // Under version skew CDP is unusable while DOM tools still work (#688). Surface the skew sentence
   // rather than "page not correlated" / a silent provider-error fallback — those send the agent
   // hunting a dead context that is not dead.
-  if (session.versionSkew !== undefined) {
+  //
+  // `press` is exempt, and it is the one action where throwing would take something away: a
+  // document key is dispatched entirely in the page, so it does not need CDP at all and has always
+  // worked under skew. Routing it into real input made it reach this line for the first time, and
+  // throwing here would turn a working synthetic press into a hard failure. It falls through to
+  // `isAvailableFor` instead, and a driver that really is dead answers PROVIDER_ERROR with the
+  // usual `fellBack` — still a signal, just not a refusal.
+  if (action !== ActionType.PRESS && session.versionSkew !== undefined) {
     throw new Error(session.versionSkew);
   }
 
   if (!(await provider.isAvailableFor(session.url)))
     return synthetic(InputModeReason.PAGE_NOT_CORRELATED);
+
+  const performArgs: RealInputArgs = {};
+  const value = asString(inner['value']);
+  if (value !== undefined) performArgs.value = value;
+  const text = asString(inner['text']);
+  if (text !== undefined) performArgs.text = text;
+  const key = asString(inner['key']);
+  if (key !== undefined) performArgs.key = key;
+  const modifiers = inner['modifiers'];
+  if (Array.isArray(modifiers)) {
+    performArgs.modifiers = modifiers.filter((m): m is string => 'string' === typeof m);
+  }
+  // A held key is the whole point of a hold-to-confirm control, and the synthetic path has honoured
+  // `holdMs` all along. Not forwarding it made the real keyboard the WEAKER of the two paths: it
+  // drove the key instantly and reported a hold that never held.
+  const holdMs = asNumber(inner['holdMs']);
+  if (holdMs !== undefined) performArgs.holdMs = holdMs;
+  // `keys` and `code` are read but not forwarded: both are routed away above — a multi-key sequence
+  // and an explicit physical code have no driver spelling — so carrying them into the provider would
+  // only invite it to guess at a gesture the caller did not ask for.
+
+  // A document key has no element of its own: skip INSPECT and the box entirely.
+  if (action === ActionType.PRESS) {
+    try {
+      const performed = await provider.perform(session.url, action, PRESS_HAS_NO_BOX, performArgs);
+      if (!performed.performed) return synthetic(InputModeReason.PROVIDER_DECLINED);
+      // No `center`: a key addresses focus, not a point. The placeholder's zero happened nowhere.
+      //
+      // `heldMs` IS forwarded, and it is the whole reason this object is not just the three fields
+      // above: `reticle_act`'s description promises `effect.heldMs` reports the hold actually
+      // achieved, and on the real path the act result IS the `effect` block. Dropping it here made
+      // that promise true on the synthetic path and silently false on the one this release added
+      // `holdMs` to — an agent checking for an armed hold-to-confirm control read `undefined`.
+      return {
+        result: {
+          performed: true,
+          action,
+          inputMode: performed.inputMode,
+          ...(performed.heldMs !== undefined ? { heldMs: performed.heldMs } : {}),
+        },
+        settled: true,
+      };
+    } catch (error) {
+      // The ONE failure that must not fall back. Every other throw means the gesture did not
+      // happen, and the synthetic path is the honest answer. A release that failed means the
+      // gesture DID happen and the key may still be down — replaying it synthetically presses the
+      // same key a second time on top of a keyboard that is already holding something, which is
+      // the corruption the release exists to prevent. Refusing is the only answer that cannot
+      // make it worse.
+      if (error instanceof DriveError && error.code === DriveErrorCode.RELEASE_FAILED) {
+        throw error;
+      }
+      // No skew re-throw here, unlike the pointer path below: this action has a working synthetic
+      // route (see the skew check above), so the honest answer to a driver that threw is the
+      // fallback, not a refusal.
+      return {
+        result: undefined,
+        settled: false,
+        fellBack: true,
+        reason: InputModeReason.PROVIDER_ERROR,
+      };
+    }
+  }
 
   const inspected = await commandOrThrow(deps, session.id, ReticleCommand.INSPECT, { ref });
   assertNotDestructive(action, inner, inspected);
@@ -405,11 +503,6 @@ export async function tryRealInput(
     if (toBox === undefined) return synthetic(InputModeReason.DRAG_TARGET_UNRESOLVED);
   }
 
-  const performArgs: RealInputArgs = {};
-  const value = asString(inner['value']);
-  if (value !== undefined) performArgs.value = value;
-  const text = asString(inner['text']);
-  if (text !== undefined) performArgs.text = text;
   if (toBox !== undefined) performArgs.toBox = toBox;
 
   try {

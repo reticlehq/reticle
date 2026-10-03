@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { CDP_NO_PROVIDER_REASON } from '@reticlehq/core';
+import { CDP_NO_PROVIDER_REASON, InputMode } from '@reticlehq/core';
 import { NETWORK_MOCK_TOOLS } from './network-mock-tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import type { MockRule } from './network-mock.js';
@@ -71,7 +71,8 @@ describe('reticle_network_mock tool', () => {
     };
     const provider = {
       isAvailableFor: () => Promise.resolve(true),
-      perform: () => Promise.resolve({ performed: true, center: { cx: 0, cy: 0 } }),
+      perform: () =>
+        Promise.resolve({ performed: true, center: { cx: 0, cy: 0 }, inputMode: InputMode.REAL }),
       setMocks: () => Promise.resolve(true),
     } as unknown as RealInputProvider;
     const res = (await tool().handler(depsWith(provider, { setMocksLease }), {
@@ -84,7 +85,8 @@ describe('reticle_network_mock tool', () => {
     let leased = false;
     const provider = {
       isAvailableFor: () => Promise.resolve(true),
-      perform: () => Promise.resolve({ performed: true, center: { cx: 0, cy: 0 } }),
+      perform: () =>
+        Promise.resolve({ performed: true, center: { cx: 0, cy: 0 }, inputMode: InputMode.REAL }),
       setMocks: () => Promise.resolve(false),
     } as unknown as RealInputProvider;
     const res = (await tool().handler(
@@ -105,7 +107,8 @@ describe('reticle_network_mock tool', () => {
     let captured: { url: string; rules: MockRule[] } | undefined;
     const provider = {
       isAvailableFor: () => Promise.resolve(true),
-      perform: () => Promise.resolve({ performed: true, center: { cx: 0, cy: 0 } }),
+      perform: () =>
+        Promise.resolve({ performed: true, center: { cx: 0, cy: 0 }, inputMode: InputMode.REAL }),
       setMocks: (url: string, rules: MockRule[]) => {
         captured = { url, rules };
         return Promise.resolve(true);
@@ -126,7 +129,8 @@ describe('reticle_network_mock tool', () => {
     let captured: MockRule[] | undefined;
     const provider = {
       isAvailableFor: () => Promise.resolve(true),
-      perform: () => Promise.resolve({ performed: true, center: { cx: 0, cy: 0 } }),
+      perform: () =>
+        Promise.resolve({ performed: true, center: { cx: 0, cy: 0 }, inputMode: InputMode.REAL }),
       setMocks: (_url: string, rules: MockRule[]) => {
         captured = rules;
         return Promise.resolve(true);

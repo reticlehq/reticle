@@ -17,7 +17,18 @@ import { chromiumLaunchHint, gotoOptions } from '@/portal/pool/playwright-launch
 import { BrowserLaunchKind } from '@reticlehq/core/telemetry';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import { classifyConnectFailure } from '@/telemetry/connect-failure.js';
-import { ActionType, DriveErrorCode, DRIVE_PLAYWRIGHT_MISSING_MSG } from '@reticlehq/core';
+import {
+  ActionType,
+  clampHoldMs,
+  DriveErrorCode,
+  DRIVE_PLAYWRIGHT_MISSING_MSG,
+  explicitCodeFromArgs,
+  InputMode,
+  InputModeReason,
+  pressKeyFromArgs,
+  pressKeysFromArgs,
+  pressModifiersFromArgs,
+} from '@reticlehq/core';
 import { installNetworkMocks, type MockRule } from './network-mock.js';
 import { attachNetworkDetail, type NetworkDetail } from './network-detail.js';
 import { injectedConnectArgs } from '@/portal/pool/zero-install.js';
@@ -30,20 +41,59 @@ export interface ElementBox {
   height: number;
 }
 
-/** Args forwarded from reticle_act (fill value, type text, drag drop-target box). */
-export interface RealInputArgs {
+/**
+ * Args forwarded from reticle_act (fill value, type text, press key, drag drop-target box).
+ *
+ * A `type`, not an `interface`: only the alias form gets an implicit index signature, so the core
+ * arg readers take it as a plain record without a cast at every call site.
+ */
+export type RealInputArgs = {
   value?: string;
   text?: string;
+  /** For press: the key name, e.g. Escape or Tab. `text` also carries it; `key` is the fallback. */
+  key?: string;
+  /** For press: modifier names (Meta/Control/Shift/Alt; aliases like `cmd` accepted). */
+  modifiers?: string[];
+  /**
+   * For press: several keys held down TOGETHER, pressed in order and released in reverse. Read but
+   * never forwarded — a chord with a non-modifier key has no `page.keyboard.press` spelling, so the
+   * caller routes such a press to the synthetic dispatcher before it reaches here.
+   */
+  keys?: string[];
+  /**
+   * For press: how long to keep the key down between keydown and keyup. The same argument the
+   * synthetic path has always honoured, so a hold-to-confirm key driven through the driver holds
+   * for exactly as long as one driven in the page.
+   */
+  holdMs?: number;
   /** For drag: the resolved box of the drop-target ref (toRef). */
   toBox?: ElementBox;
   steps?: number;
-}
+};
 
-interface RealInputResult {
+/** What a provider reports for one driven gesture. Exported so a fake can build it by name. */
+export interface RealInputResult {
   /** True if a native gesture was actually driven. */
   performed: boolean;
-  /** Center used, for diagnostics/tests. */
-  center: { cx: number; cy: number };
+  /** Center used, for diagnostics/tests. ABSENT for a key press: see `undriven`. */
+  center?: { cx: number; cy: number };
+  /**
+   * Which path this result came from. `real` whenever a gesture was actually driven, so a caller
+   * reading it on a `performed: true` result learns nothing it did not already know — it is here
+   * for the `performed: false` case, where the caller is about to take the synthetic path and
+   * saying `real` would describe a gesture that never ran.
+   */
+  inputMode: InputMode;
+  /**
+   * How long the key was ACTUALLY held, for a real press that was asked to hold. Absent for every
+   * other gesture, and for a press with no `holdMs` — the same rule the synthetic path uses, where
+   * an absent `heldMs` means "this action does not hold" rather than "it held for no time".
+   *
+   * Measured rather than echoed back: `holdMs: 1200` against a 1200ms animation is a race by
+   * construction, and a throttled tab stretches the wait. A caller needs to tell "held 1200" from
+   * "held 1204", and can only do that with the achieved number.
+   */
+  heldMs?: number;
 }
 
 /** Options for a page screenshot — full-page scroll capture and/or a clip box. */
@@ -135,8 +185,8 @@ export function boxCenter(box: ElementBox): { cx: number; cy: number } {
 }
 
 /**
- * Which actions are driven by native pointer input. fill/type stay synthetic unless a
- * provider explicitly runs them.
+ * Which actions are driven by a native pointer. `press` is excluded on purpose — a key has no
+ * pointer, and widening this would change what every existing caller of it means.
  */
 export function isPointerAction(action: ActionType): boolean {
   return (
@@ -145,6 +195,24 @@ export function isPointerAction(action: ActionType): boolean {
     action === ActionType.DBLCLICK ||
     action === ActionType.DRAG
   );
+}
+
+/**
+ * The routing question `tryRealInput` asks: does this action have a real-input path at all? Wider
+ * than `isPointerAction` by `press`, which needs no coordinates.
+ */
+export function isRealInputAction(action: ActionType): boolean {
+  return isPointerAction(action) || action === ActionType.PRESS;
+}
+
+/**
+ * A gesture that was NOT driven. No center for a key press — a zero would read as a real point.
+ *
+ * `inputMode` is SYNTHETIC: no real gesture ran, so this is the path the caller is about to take.
+ */
+function undriven(action: ActionType, box: ElementBox): RealInputResult {
+  const base: RealInputResult = { performed: false, inputMode: InputMode.SYNTHETIC };
+  return action === ActionType.PRESS ? base : { ...base, center: boxCenter(box) };
 }
 
 /** Settle delay after a native gesture so the reaction can begin to flush (named, not free). */
@@ -156,6 +224,162 @@ type SleepFn = (ms: number) => Promise<void>;
 type ConnectFn = (url: string) => Promise<Browser>;
 
 /**
+ * Drive a `press` with a real keyboard — coordinate-free; the key goes to whatever holds focus.
+ * Key and modifiers come from the same core helpers the synthetic dispatcher uses, so the two paths
+ * cannot read the same args differently.
+ *
+ * A `holdMs` splits the chord into down / wait / up, the same shape the page uses for a held key.
+ * `keyboard.press` would send it instantly instead, reporting a hold-to-confirm that never held.
+ * The one thing this cannot reproduce is the auto-repeat a held key emits: the driver sends a single
+ * keydown, where the in-page path sends the repeats a browser would. Named rather than papered over
+ * — an app that counts repeats needs the synthetic path, and a caller that sees a held key do
+ * nothing now has a reason to try it.
+ */
+async function pressViaKeyboard(
+  page: Page,
+  args: RealInputArgs,
+  sleep: SleepFn,
+  now: () => number,
+): Promise<number> {
+  const key = pressKeyFromArgs(args);
+  const modifiers = pressModifiersFromArgs(args);
+  const chord = 0 < modifiers.length ? `${modifiers.join('+')}+${key}` : key;
+  const holdMs = clampHoldMs(args.holdMs);
+  if (0 === holdMs) {
+    // `press` DOES take a chord string ("Control+k"), so the tap path needs no splitting.
+    await page.keyboard.press(chord);
+    return 0;
+  }
+  /*
+   * `down`/`up` take ONE key each, unlike `press`: `down('Control+k')` throws
+   * `Unknown key: "Control+k"` — measured on a real Chromium, not assumed. The chord string the
+   * tap path uses therefore cannot express a hold, so the chord is split here: modifiers down in
+   * chord order, the key last, and released in reverse (key first, modifiers reversed), which is
+   * what a hand does and what an app's keyup bookkeeping expects.
+   *
+   * Without the split a held shortcut threw before a single key moved, the caller fell back to
+   * the synthetic path, and a real hold was impossible for any press with modifiers — the exact
+   * gesture `holdMs` exists for.
+   *
+   * ## Why every key that went down is tracked, and every exit path cleans up
+   *
+   * The down calls are the ones that MOVE the keyboard, and they can fail partway: `Control` goes
+   * down, the key after it rejects, and the driver's copy of `Control` is still held. That path
+   * used to fall straight to the caller's synthetic replay — which presses the same chord again on
+   * a keyboard that is already holding a modifier. Tracking what actually went down is what makes
+   * the cleanup below able to release the right keys, and only those: releasing a key that never
+   * went down is its own lie, and it would turn a clean failure into an unnecessary refusal.
+   */
+  const pressed: string[] = [];
+  const pressDown = async (k: string): Promise<void> => {
+    await page.keyboard.down(k);
+    pressed.push(k);
+  };
+  try {
+    for (const modifier of modifiers) await pressDown(modifier);
+    await pressDown(key);
+  } catch (error) {
+    // The chord is PARTIALLY down. Release what is held before reporting the failure; if that
+    // cannot be proved, `releaseKeys` throws RELEASE_FAILED and the caller refuses the replay —
+    // the same rule as a failed release on the ordinary path, for the same reason. Only when the
+    // cleanup DOES succeed is the original error safe to hand back.
+    await releaseKeys(page, pressed);
+    throw error;
+  }
+  const startedAt = now();
+  try {
+    await sleep(holdMs);
+  } catch (error) {
+    // The wait failed, and the caller is about to run the synthetic path — which presses this SAME
+    // key a second time. If the driver's copy stays down, a held modifier then colours every later
+    // action for the rest of the run. Best-effort on purpose: whatever went wrong with the wait is
+    // the error worth reporting. A cleanup that cannot be proved is the exception — that one is a
+    // stuck key, and it must reach the caller as a refusal rather than be swallowed.
+    try {
+      await releaseKeys(page, pressed);
+    } catch {
+      throw new DriveError(
+        DriveErrorCode.RELEASE_FAILED,
+        'the wait failed and the keys it pressed could not be released, so they may still be held',
+      );
+    }
+    throw error;
+  }
+  // NOT best-effort: on the ordinary path a failed release is a real failure the caller must hear
+  // about, and swallowing it would report a press whose key is still down.
+  await releaseKeys(page, pressed);
+  return now() - startedAt;
+}
+
+/**
+ * Release the given keys, in reverse press order, and report a failure as one that leaves the
+ * keyboard UNKNOWN rather than as an ordinary provider error.
+ *
+ * Every release is attempted even after one fails: a stuck `Control` is worse than a stuck letter,
+ * so a failure on one key must not skip the rest. The first failure is what is thrown, since it is
+ * the one that happened first, and it is wrapped in `DriveError` so the caller can tell "this
+ * gesture failed" from "this gesture may have left a key down" — the difference between a safe
+ * synthetic replay and an unsafe one.
+ */
+async function releaseKeys(page: Page, pressed: readonly string[]): Promise<void> {
+  let failure: unknown;
+  for (const k of [...pressed].reverse()) {
+    try {
+      await page.keyboard.up(k);
+    } catch (error) {
+      failure ??= error;
+    }
+  }
+  if (failure !== undefined) {
+    throw new DriveError(
+      DriveErrorCode.RELEASE_FAILED,
+      `the key was pressed but could not be released, so it may still be held: ${describeFailure(failure)}`,
+    );
+  }
+}
+
+/**
+ * A thrown value as a line a reader can act on.
+ *
+ * Not `String(error)`: a non-Error thrown value (a rejected plain object, an SDK that throws a
+ * record) stringifies to `[object Object]`, which names nothing and hides the one fact the message
+ * exists to carry. Anything that is neither an Error nor a string says so rather than pretending.
+ */
+function describeFailure(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return 'string' === typeof error ? error : 'an unknown error';
+}
+
+/**
+ * The `press`es this module will NOT drive: a chord that only the in-page dispatcher can express.
+ *
+ * `args.keys` asks for several keys held down TOGETHER, pressed in order and released in reverse.
+ * That is not a `page.keyboard.press` chord — a non-modifier key cannot appear before the last `+`
+ * — and a real keyboard cannot aim a key at a named element. `args.code` is the third: the driver
+ * presses by KEY name and offers no way to send a physical `code` that disagrees with it, so
+ * `{ text: 'z', code: 'KeyY' }` would strike a different key than the one asked for. All three are
+ * routed to the synthetic path by the caller, which reports the reason rather than pretending a
+ * different gesture happened.
+ *
+ * Ordered by how specifically the caller asked: `keys` then `code` name the KEY, `ref` names only
+ * the target. Two can apply at once, and the earlier one is the more unusual request — the reason
+ * should name that, not the generic "you passed a ref".
+ */
+export function unspellablePressReason(
+  ref: string,
+  args: Record<string, unknown>,
+): InputModeReason | undefined {
+  if (0 < pressKeysFromArgs(args).length) {
+    return InputModeReason.SYNTHETIC_MULTI_KEY_PRESS_PREFERRED;
+  }
+  if (explicitCodeFromArgs(args) !== undefined) {
+    return InputModeReason.SYNTHETIC_KEY_CODE_PRESS_PREFERRED;
+  }
+  if (0 < ref.length) return InputModeReason.SYNTHETIC_ELEMENT_PRESS_PREFERRED;
+  return undefined;
+}
+
+/**
  * Shared gesture executor: drive a native gesture on an already-resolved Page. Used by both the
  * CDP-attached and the launched (drive) providers so the pointer logic lives in one place.
  */
@@ -165,29 +389,49 @@ export async function performGesture(
   box: ElementBox,
   args: RealInputArgs,
   sleep: SleepFn,
+  /** Injected so a test can assert the achieved hold deterministically; defaults to the real clock. */
+  now: () => number = Date.now,
 ): Promise<RealInputResult> {
+  // Ahead of the box, not after it: a press addresses focus rather than a point, and the
+  // placeholder box its caller passes would otherwise be turned into a (0,0) that reads like a real
+  // location. The result reports NO `center` for the same reason.
+  if (action === ActionType.PRESS) {
+    const heldMs = await pressViaKeyboard(page, args, sleep, now);
+    return {
+      performed: true,
+      inputMode: InputMode.REAL,
+      // Omitted rather than 0 when there was no hold — see `RealInputResult.heldMs`.
+      ...(heldMs > 0 ? { heldMs } : {}),
+    };
+  }
+
   const center = boxCenter(box);
   const { cx, cy } = center;
+  const real = (performed: boolean): RealInputResult => ({
+    performed,
+    center,
+    inputMode: InputMode.REAL,
+  });
 
   if (action === ActionType.HOVER) {
     await page.mouse.move(cx, cy);
     await page.mouse.move(cx + 1, cy);
     await page.mouse.move(cx, cy);
     await sleep(REAL_INPUT_SETTLE_MS);
-    return { performed: true, center };
+    return real(true);
   }
   if (action === ActionType.CLICK) {
     await page.mouse.move(cx, cy);
     await page.mouse.click(cx, cy);
-    return { performed: true, center };
+    return real(true);
   }
   if (action === ActionType.DBLCLICK) {
     await page.mouse.move(cx, cy);
     await page.mouse.dblclick(cx, cy);
-    return { performed: true, center };
+    return real(true);
   }
   if (action === ActionType.DRAG) {
-    if (args.toBox === undefined) return { performed: false, center };
+    if (args.toBox === undefined) return real(false);
     const dst = boxCenter(args.toBox);
     const steps = args.steps ?? DEFAULT_DRAG_STEPS;
     await page.mouse.move(cx, cy);
@@ -198,14 +442,14 @@ export async function performGesture(
       await page.mouse.move(px, py, { steps: 1 });
     }
     await page.mouse.up();
-    return { performed: true, center };
+    return real(true);
   }
   if (action === ActionType.FILL || action === ActionType.TYPE) {
     await page.mouse.click(cx, cy);
     await page.keyboard.type(args.value ?? args.text ?? '');
-    return { performed: true, center };
+    return real(true);
   }
-  return { performed: false, center };
+  return real(false);
 }
 
 /**
@@ -237,6 +481,8 @@ interface CdpProviderOptions {
   cdpUrl: string;
   /** Injected so the settle delay is deterministic in tests; defaults to a real Node timer. */
   sleep?: SleepFn;
+  /** Injected so a measured hold is deterministic in tests; defaults to the real clock. */
+  now?: () => number;
   /** Injected connector so unit tests can stub Playwright without import. */
   connect?: ConnectFn;
   /**
@@ -276,6 +522,7 @@ const cdpConnect: ConnectFn = async (url) => {
 export class CdpRealInputProvider implements RealInputProvider {
   readonly #cdpUrl: string;
   readonly #sleep: SleepFn;
+  readonly #now: () => number;
   readonly #connect: ConnectFn;
   readonly #onNetworkDetail: ((detail: NetworkDetail) => void) | undefined;
   /** Pages already listening. #pageFor resolves on EVERY call, so without this each action would add
@@ -288,6 +535,7 @@ export class CdpRealInputProvider implements RealInputProvider {
   constructor(options: CdpProviderOptions) {
     this.#cdpUrl = options.cdpUrl;
     this.#sleep = options.sleep ?? nodeSleep;
+    this.#now = options.now ?? Date.now;
     this.#connect = options.connect ?? cdpConnect;
     this.#onNetworkDetail = options.onNetworkDetail;
   }
@@ -351,8 +599,8 @@ export class CdpRealInputProvider implements RealInputProvider {
     args: RealInputArgs,
   ): Promise<RealInputResult> {
     const page = await this.#pageFor(sessionUrl);
-    if (page === undefined) return { performed: false, center: boxCenter(box) };
-    return performGesture(page, action, box, args, this.#sleep);
+    if (page === undefined) return undriven(action, box);
+    return performGesture(page, action, box, args, this.#sleep, this.#now);
   }
 
   /** PNG of the correlated page, or undefined if none matches. */
@@ -445,6 +693,8 @@ export interface LaunchedProviderOptions {
   headless: boolean;
   /** Injected so the settle delay is deterministic in tests; defaults to a real Node timer. */
   sleep?: SleepFn;
+  /** Injected so a measured hold is deterministic in tests; defaults to the real clock. */
+  now?: () => number;
   /** Injected launcher so unit tests can stub Playwright; defaults to dynamic import('playwright'). */
   launch?: LaunchFn;
   /** When set, re-invoke the page's reticle.connect with these after load (drive-a-hosted-preview). */
@@ -489,6 +739,7 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
   readonly #driveUrl: string;
   readonly #headless: boolean;
   readonly #sleep: SleepFn;
+  readonly #now: () => number;
   readonly #launch: LaunchFn;
   readonly #injectConnect: InjectConnectOptions | undefined;
   readonly #storageState: string | undefined;
@@ -502,6 +753,7 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
     this.#driveUrl = options.driveUrl;
     this.#headless = options.headless;
     this.#sleep = options.sleep ?? nodeSleep;
+    this.#now = options.now ?? Date.now;
     this.#launch = options.launch ?? launchedChromium;
     this.#injectConnect = options.injectConnect;
     this.#storageState = options.storageState;
@@ -627,8 +879,8 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
     args: RealInputArgs,
   ): Promise<RealInputResult> {
     const page = this.#livePage();
-    if (page === undefined) return Promise.resolve({ performed: false, center: boxCenter(box) });
-    return performGesture(page, action, box, args, this.#sleep);
+    if (page === undefined) return Promise.resolve(undriven(action, box));
+    return performGesture(page, action, box, args, this.#sleep, this.#now);
   }
 
   /** PNG of the owned page, or undefined before navigate / after dispose. */

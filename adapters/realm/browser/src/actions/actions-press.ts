@@ -1,4 +1,4 @@
-import { ActionType, isGlobalPress, pressKeyFromArgs } from '@reticlehq/core';
+import { ActionType, isGlobalPress, pressKeyFromArgs, pressKeysFromArgs } from '@reticlehq/core';
 import { asSyntheticInput } from './synthetic/synthetic-input.js';
 import { nativeSetTimeout } from '@/timers/native/native-timers.js';
 
@@ -18,27 +18,71 @@ export function pressKey(args: Record<string, unknown>): string {
   return pressKeyFromArgs(args);
 }
 
+/** The four modifier flags a KeyboardEvent carries. */
+export interface ModifierFlags {
+  metaKey: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+}
+
+/**
+ * Every flag `ModifierFlags` carries, spelled once.
+ *
+ * Read where a flag has to be found from the SHAPE of the interface rather than from a key or an
+ * alias — seeding the hold count from `args.modifiers`, below. A literal list there would silently
+ * miss a fifth flag the day one is added, and the symptom would be a flag that clears early.
+ */
+const MODIFIER_FLAG_KEYS: readonly (keyof ModifierFlags)[] = [
+  'metaKey',
+  'ctrlKey',
+  'shiftKey',
+  'altKey',
+];
+
+/**
+ * Which flag a modifier NAME sets. One table for both spellings of "a modifier is down":
+ * `args.modifiers`, which is a fixed set of flags for the whole press, and `args.keys`, which is a
+ * SEQUENCE the flags change partway through. Two tables would let `Ctrl` mean one thing in
+ * `modifiers` and another in `keys`.
+ */
+const MODIFIER_FLAG_ALIASES: Readonly<Record<string, keyof ModifierFlags>> = {
+  meta: 'metaKey',
+  cmd: 'metaKey',
+  command: 'metaKey',
+  super: 'metaKey',
+  win: 'metaKey',
+  control: 'ctrlKey',
+  ctrl: 'ctrlKey',
+  shift: 'shiftKey',
+  alt: 'altKey',
+  option: 'altKey',
+  opt: 'altKey',
+};
+
 /**
  * Modifier flags for a `press`, from `args.modifiers`: an array of Meta / Control / Shift / Alt
  * (case-insensitive, with the usual aliases). Without them a Cmd+K / Ctrl+Shift shortcut receives a
  * keydown with every modifier false, so the app's own `event.metaKey` check never matches and
  * nothing observable happens -- a false negative Reticle reports as no error. (#393)
  */
-export function pressModifiers(args: Record<string, unknown>): {
-  metaKey: boolean;
-  ctrlKey: boolean;
-  shiftKey: boolean;
-  altKey: boolean;
-} {
+export function pressModifiers(args: Record<string, unknown>): ModifierFlags {
   const raw = args['modifiers'];
   const names = Array.isArray(raw) ? raw.map((m) => asString(m).toLowerCase()) : [];
-  const has = (...aliases: string[]): boolean => aliases.some((a) => names.includes(a));
-  return {
-    metaKey: has('meta', 'cmd', 'command', 'super', 'win'),
-    ctrlKey: has('control', 'ctrl'),
-    shiftKey: has('shift'),
-    altKey: has('alt', 'option', 'opt'),
-  };
+  const flags: ModifierFlags = { metaKey: false, ctrlKey: false, shiftKey: false, altKey: false };
+  for (const name of names) {
+    const flag = MODIFIER_FLAG_ALIASES[name];
+    if (flag !== undefined) flags[flag] = true;
+  }
+  return flags;
+}
+
+/**
+ * The flag a key NAMED IN `keys` holds down while the sequence continues, or undefined for a key
+ * that is not a modifier.
+ */
+function modifierFlagFor(key: string): keyof ModifierFlags | undefined {
+  return MODIFIER_FLAG_ALIASES[key.toLowerCase()];
 }
 
 /**
@@ -137,9 +181,7 @@ export function isReflessDocumentPress(
  * case changes.
  */
 export function pressKeys(args: Record<string, unknown>): string[] {
-  const raw = args['keys'];
-  if (!Array.isArray(raw)) return [];
-  return raw.map((k) => asString(k)).filter((k) => k.length > 0);
+  return pressKeysFromArgs(args);
 }
 
 /** How often a held key repeats. Browsers land near 30-35ms after the initial delay; this is that. */
@@ -158,7 +200,7 @@ export async function holdKey(
   el: ActionTarget,
   key: string,
   code: string,
-  mods: Record<string, boolean>,
+  mods: ModifierFlags,
   ms: number,
 ): Promise<void> {
   const started = Date.now();
@@ -180,31 +222,84 @@ export async function holdKey(
   }
 }
 
-/** Press several keys together and release them in reverse, optionally holding at full depth. */
+/**
+ * Press several keys together and release them in reverse, optionally holding at full depth.
+ *
+ * A modifier NAMED IN `keys` sets its own flag for the rest of the sequence, which is what makes
+ * `{ keys: ['Control', 'k'] }` reach a handler that checks `event.ctrlKey`. `mods` alone cannot:
+ * it is the fixed set from `args.modifiers`, and the whole reason `keys` exists is the shape those
+ * flags cannot express. Without this the Control keydown arrived, the `k` keydown followed, and the
+ * `k` carried `ctrlKey: false` while the action reported success — a false negative in the
+ * expensive direction, the same one #393 fixed for `modifiers`.
+ *
+ * The flag timing is the browser's own, read off a real Chromium rather than assumed: a modifier's
+ * OWN keydown carries its flag already true, its OWN keyup carries it already false, and every
+ * event in between carries the state as it stands. Setting the flag after the dispatch, or clearing
+ * it after the release, would each put one event out by one step.
+ */
 export async function pressCombo(
   el: ActionTarget,
   keys: readonly string[],
-  mods: Record<string, boolean>,
+  mods: ModifierFlags,
   holdMs: number,
 ): Promise<boolean> {
-  let prevented = false;
-  for (const key of keys) {
+  // Starts as the caller's `args.modifiers` and grows as `keys` names modifiers, so the two
+  // spellings compose: `{ modifiers: ['Shift'], keys: ['Control', 'k'] }` is a Shift+Ctrl+K.
+  const held: ModifierFlags = { ...mods };
+  const dispatch = (type: string, key: string): boolean => {
     const code = pressCode({}, key);
-    const ok = asSyntheticInput(() =>
+    return asSyntheticInput(() =>
       el.dispatchEvent(
-        new KeyboardEvent('keydown', { key, code, bubbles: true, cancelable: true, ...mods }),
+        new KeyboardEvent(type, { key, code, bubbles: true, cancelable: true, ...held }),
       ),
     );
+  };
+
+  /*
+   * How many times each flag has been pressed, so a flag clears only on its LAST release.
+   *
+   * Aliases make this necessary rather than tidy: `Control` and `Ctrl` are ONE flag, so
+   * `{ keys: ['Control', 'k', 'Ctrl'] }` is that flag pressed twice. Releasing in reverse puts
+   * `Ctrl` first, and clearing the flag there turned it off while `Control` was still down —
+   * every event after it reporting `ctrlKey: false`, which is a state no keyboard produces and an
+   * app's keyup bookkeeping reads as "the modifier came up". Counting presses and clearing at zero
+   * is what a real keyboard's own state machine does.
+   *
+   * The count starts at the flags `args.modifiers` already turned on, and that is the same rule
+   * rather than a special case. `modifiers` is the fixed set for the WHOLE press — nothing in this
+   * function ever releases it — so a flag it named is held from before the first keydown and stays
+   * held past the last keyup. Starting the count at zero made `{ modifiers: ['Shift'], keys:
+   * ['Shift', 'Tab'] }` clear Shift at its own keyup, contradicting the argument that had just
+   * declared it held for the gesture.
+   */
+  const presses = new Map<keyof ModifierFlags, number>();
+  for (const flag of MODIFIER_FLAG_KEYS) {
+    if (held[flag]) presses.set(flag, 1);
+  }
+  const pressFlag = (flag: keyof ModifierFlags): void => {
+    presses.set(flag, (presses.get(flag) ?? 0) + 1);
+    held[flag] = true;
+  };
+  const releaseFlag = (flag: keyof ModifierFlags): void => {
+    const left = (presses.get(flag) ?? 1) - 1;
+    presses.set(flag, left);
+    if (left <= 0) held[flag] = false;
+  };
+
+  let prevented = false;
+  for (const key of keys) {
+    const flag = modifierFlagFor(key);
+    if (flag !== undefined) pressFlag(flag);
+    const ok = dispatch('keydown', key);
     if (!ok) prevented = true;
     // The same default a single Escape gets: `keys: ["Escape"]` is the same key.
     closeModalOnEscape(el, key, ok);
   }
   if (holdMs > 0) await sleep(holdMs);
   for (const key of [...keys].reverse()) {
-    const code = pressCode({}, key);
-    asSyntheticInput(() =>
-      el.dispatchEvent(new KeyboardEvent('keyup', { key, code, bubbles: true, ...mods })),
-    );
+    const flag = modifierFlagFor(key);
+    if (flag !== undefined) releaseFlag(flag);
+    dispatch('keyup', key);
   }
   return prevented;
 }
