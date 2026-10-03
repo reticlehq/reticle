@@ -54,11 +54,13 @@ import type { DeviationReport } from '@/memory/journal/deviation-report.js';
 import { homedir } from 'node:os';
 import { cloudFetch, syncRunRecordToCloud, SyncOutcome } from '@/memory/cloud/cloud-sync.js';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
+import { memoryReadUrl, scopedMemoryEntries } from '@/memory/cloud/memory-scope.js';
 import { consultSubjectFor, selectConsulted, type ConsultedMemory } from './flow-memory-consult.js';
 import { log } from '@/log.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { flowsForSession } from './flow-store-for-session.js';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
+import { CROSS_STEP_INDEX, crossStepOnly } from './flow-cross-step.js';
 
 export function latestRecordedFlow(
   events: ReticleEvent[],
@@ -191,7 +193,10 @@ async function consultProjectMemory(
     // session, and it is invisible: the feature simply never appears.
     const cloud = await resolveProjectCloud(deps.fs, root, homedir(), process.env);
     if (null === cloud.config || !cloud.policy.memory) return undefined;
-    const url = `${cloud.config.url}/v1/memory?subject=${encodeURIComponent(subject)}`;
+    // Scoped to the linked project. The key covers a whole workspace, so a read that named no
+    // project could be answered with ANOTHER repo's knowledge and this replay would carry it into a
+    // verdict as if it were this app's — see `memory-scope.ts` for the whole shape.
+    const url = memoryReadUrl(cloud.config.url, { projectId: cloud.projectId, subject });
     const res = await cloudFetch(url, {
       method: 'GET',
       headers: { authorization: `Bearer ${cloud.config.apiKey}` },
@@ -201,9 +206,14 @@ async function consultProjectMemory(
     // property yields the function itself, `.entries` on it is undefined, and the whole feature
     // fails silently to "the project knows nothing" — which is indistinguishable from the honest
     // empty case and is why this took a live drive to notice at all.
-    const body = (await res.json()) as { entries?: unknown } | undefined;
-    const entries = body?.entries;
-    if (!Array.isArray(entries)) return undefined;
+    const body: unknown = await res.json();
+    // The envelope is the check that works: the platform names the project on the RESPONSE and not
+    // on each entry, so the entry-level filter alone kept a whole sibling workspace while looking
+    // like it did something. `undefined` means the response could not be shown to be this project's
+    // — nothing is attached, because a verdict carrying another repo's "established knowledge" is
+    // worse than one carrying none. See `memory-scope.ts`.
+    const entries = scopedMemoryEntries(body, cloud.projectId);
+    if (entries === undefined) return undefined;
     const picked = selectConsulted(entries as { statement?: unknown; status?: unknown }[]);
     return 0 === picked.length ? undefined : picked;
   } catch {
@@ -838,8 +848,9 @@ export async function replayNamedFlow(
    * moment somebody needs to know what this feature is supposed to do and who established it. A
    * knowledge base you only see when everything is already fine is decoration.
    */
-  // No projectId argument: the API key is already bound to one project server-side, so passing a
-  // second opinion about which project this is would only create a way for the two to disagree.
+  // The scope comes from the link file, inside `consultProjectMemory`. It is NOT the API key's
+  // job: a key covers a whole workspace and a workspace holds more than one repo, so "bound to one
+  // project server-side" was an assumption that handed this replay another app's knowledge.
   const knows = await consultProjectMemory(deps, loaded.value, replayRoot);
   const failed = steps.find((step) => !step.ok && step.drift === undefined);
   if (failed !== undefined) {
@@ -924,33 +935,6 @@ export async function replayNamedFlow(
    * so a clean replay of a flow with nothing to learn does not rewrite a file for no reason.
    */
   return result;
-}
-
-/** A contradiction's identity for de-duplication: the rule that fired, and the evidence it fired on. */
-function contradictionId(found: Contradiction): string {
-  return `${found.kind}|${found.detail}`;
-}
-
-/**
- * The contradictions the whole-span pass found that no individual step could.
- *
- * A step's window closes when the step ends, so a request fired at step 2 and still unanswered at
- * step 5 is invisible to every per-step window: step 2's closed before the answer came and step 5
- * never saw it start. Re-running the detectors over the whole replay span finds those — and re-finds
- * everything the steps already reported, which is what the subtraction is for. Reporting a finding
- * twice teaches a reader that the count is noise.
- *
- * Exported for its own test: the subtraction is the whole rule, and it is pure.
- */
-/** Cross-step findings belong to no single step; -1 is the address the suite verdict already uses. */
-const CROSS_STEP_INDEX = -1;
-
-export function crossStepOnly(
-  whole: readonly Contradiction[],
-  steps: readonly FlowStepResult[],
-): Contradiction[] {
-  const seen = new Set(steps.flatMap((step) => (step.contradictions ?? []).map(contradictionId)));
-  return whole.filter((found) => !seen.has(contradictionId(found)));
 }
 
 /**

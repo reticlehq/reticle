@@ -13,6 +13,12 @@ import { basename, join } from 'node:path';
 import { z } from 'zod';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { CLOUD_LINK_FILE, resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
+import {
+  memoryReadUrl,
+  MemoryResponseScope,
+  scopeMemoryResponse,
+  scopeOfMemoryResponse,
+} from '@/memory/cloud/memory-scope.js';
 import { applyCredential, findCredential } from './auth/cloud-keystore.js';
 import { defaultProjectFor } from './project-name.js';
 import { RETICLE_CONFIG_BASENAME } from './ports/resolve/cli-port.js';
@@ -670,8 +676,25 @@ const cmdSync = async (argv: readonly string[]): Promise<number> => {
 /** `reticle push` — the name people already type. One cycle, same as `reticle sync`. */
 const cmdPush = async (): Promise<number> => cmdSync([]);
 
-/** Resolve THIS repo's linked cloud (url + project-scoped key). Throws a friendly error if not attached. */
-const repoCloud = async (): Promise<{ url: string; apiKey: string }> => {
+/**
+ * The linked project: its cloud, and the ID the link declares. Throws a friendly error when not
+ * attached.
+ *
+ * The id rides along for `reticle memory`, whose entire job is "what does THIS project know" and
+ * which was asking with nothing but the API key. A key covers a workspace, not a repo, so on a
+ * workspace with two repos it could print a sibling's established knowledge under this project's
+ * heading with no way for the reader to tell. See `memory-scope.ts`.
+ *
+ * The other `repoCloud()` callers below still read with the key alone. That is not an oversight
+ * being papered over: this change is scoped to the memory read, and the rest each need their own
+ * look at what the platform filters on.
+ */
+const repoCloud = async (): Promise<{
+  url: string;
+  apiKey: string;
+  /** `null` when the link declared none — `resolveProjectCloud`'s own spelling, passed through. */
+  projectId: string | null;
+}> => {
   const fs = createNodeFileSystem();
   const cloud = await resolveProjectCloud(
     fs,
@@ -683,7 +706,7 @@ const repoCloud = async (): Promise<{ url: string; apiKey: string }> => {
     throw new Error(
       cloud.reason ?? 'cloud not attached here: run `reticle link`, or set RETICLE_API_KEY',
     );
-  return cloud.config;
+  return { ...cloud.config, projectId: cloud.projectId };
 };
 
 /** `reticle runs` — the linked project's recent run artifacts (the key scopes it server-side). */
@@ -760,15 +783,41 @@ const cmdIssues = async (argv: readonly string[]): Promise<number> => {
  * whole corpus to answer one question is the cost the sharded store was built to avoid.
  */
 const cmdMemory = async (argv: readonly string[]): Promise<number> => {
-  const { url, apiKey } = await repoCloud();
+  const { url, apiKey, projectId } = await repoCloud();
   const at = argv.indexOf('--subject');
   const subject = -1 === at ? undefined : argv[at + 1];
   if (-1 !== at && subject === undefined) {
     err('usage: reticle memory [--subject <name>]');
     return 2;
   }
-  const query = subject === undefined ? '' : `?subject=${encodeURIComponent(subject)}`;
-  emit(await api('GET', `${url}/v1/memory${query}`, apiKey));
+  // Scoped to the LINKED project, on the way out AND on the way back. Without the parameter
+  // this printed whatever the key covered; without checking the response it still would, for as long
+  // as the platform ignores a parameter it does not know yet — which is exactly the window this ships
+  // in. This is the command whose whole job is "what does THIS project know", so a sibling's answer
+  // arriving under this heading is the one output nobody can tell from a correct one.
+  //
+  // The check is on the ENVELOPE and it REFUSES rather than printing. Printing an empty list would
+  // report "this project knows nothing", which is a different fact from "this response could not be
+  // shown to be about this project" and the one a person is likelier to act on. Nothing goes to
+  // stdout in that case: a caller piping this into an agent gets an error on stderr and a non-zero
+  // exit, never a plausible-looking empty answer.
+  //
+  // The refusal is the PRINTER's own, not a second check here: `scopeMemoryResponse` answers
+  // `undefined` for anything it cannot show to be this project's, so there is no ordering a future
+  // edit can get wrong — the body it must not print is one it was never handed. The verdict is read
+  // only to say WHICH refusal this is.
+  const scope = { projectId, subject };
+  const body = await api('GET', memoryReadUrl(url, scope), apiKey);
+  const printable = scopeMemoryResponse(body, projectId);
+  if (printable === undefined) {
+    err(
+      MemoryResponseScope.OTHER === scopeOfMemoryResponse(body, projectId)
+        ? `the server answered about a different project than this repo is linked to — refusing to print another project's knowledge as this one's. Check the link with \`reticle status\`.`
+        : `the server's response does not say which project it is about, so there is no way to tell whether this is this project's knowledge. Refusing to print it; check the link with \`reticle status\`.`,
+    );
+    return 1;
+  }
+  emit(printable);
   return 0;
 };
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ContradictionKind, type Contradiction, type FlowStepResult } from '@reticlehq/core';
-import { crossStepOnly } from './flow-replay-run.js';
+import { crossStepOnly } from './flow-cross-step.js';
 
 /**
  * The contradictions no per-step window can see, by construction.

@@ -904,4 +904,92 @@ describe('cloud-cli verb contracts (#555)', () => {
     expect(requests[0]?.authorization).toBe(`Bearer ${TEST_KEY}`);
     expect(lastJsonOutput()).toEqual({ shareUrl: 'https://cloud.test/s/abc' });
   });
+
+  /**
+   * `reticle memory` — the one reader whose whole job is "what does THIS project know".
+   *
+   * The platform names the project on the response ENVELOPE, not on each entry, and this command
+   * used to print the body verbatim. A workspace key that resolved to a sibling project therefore
+   * printed that sibling's established knowledge under this project's heading, and a person reading
+   * it had nothing to tell the two apart. The three cases below are the platform's real
+   * `{ projectId, entries }` shape, which is the shape the entry-level filter could not see.
+   */
+  describe('memory refuses an answer it cannot show to be about this project', () => {
+    const linkedHere = async (): Promise<void> => {
+      await writeRepoFile(
+        [CLOUD_LINK_FILE],
+        JSON.stringify({ projectId: 'proj_1', projectName: 'Proj', url: TEST_URL }),
+      );
+      await writeHomeFile([CREDENTIALS_FILE], JSON.stringify({ proj_1: TEST_KEY }));
+    };
+
+    it('names the linked project on the wire and prints what comes back', async () => {
+      await linkedHere();
+      const entries = [{ statement: 'ours', status: 'proved' }];
+      responder = () => ({ body: { projectId: 'proj_1', entries } });
+
+      const code = await runCloudCommand(['memory']);
+
+      expect(code).toBe(0);
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.url).toBe(`${TEST_URL}/v1/memory?projectId=proj_1`);
+      expect(lastJsonOutput()).toEqual({ projectId: 'proj_1', entries });
+    });
+
+    /**
+     * The refusal has to be LOUD and it has to be EMPTY. Printing an empty list would report "this
+     * project knows nothing", which is a different fact from "this response could not be shown to be
+     * about this project" and the one a person is likelier to act on — and a caller piping this into
+     * an agent would hand it a confident no-answer.
+     */
+    it('prints NOTHING and exits non-zero when the envelope names another project', async () => {
+      await linkedHere();
+      responder = () => ({
+        body: { projectId: 'proj_sibling', entries: [{ statement: 'theirs', status: 'proved' }] },
+      });
+
+      const code = await runCloudCommand(['memory']);
+
+      expect(code).toBe(1);
+      expect(stdoutBuf.trim()).toBe('');
+      expect(stderrBuf).toContain('different project');
+    });
+
+    it('prints NOTHING and exits non-zero when the envelope names no project at all', async () => {
+      await linkedHere();
+      responder = () => ({ body: { entries: [{ statement: 'whose?', status: 'proved' }] } });
+
+      const code = await runCloudCommand(['memory']);
+
+      expect(code).toBe(1);
+      expect(stdoutBuf.trim()).toBe('');
+      expect(stderrBuf).toContain('does not say which project');
+    });
+
+    /**
+     * The unlinked path, and the one case where refusing would be WRONG.
+     *
+     * CI is this path: `RETICLE_API_KEY` in the environment, no `cloud.json` on the runner, so the
+     * read names no project and there is nothing for the envelope to contradict. Refusing here to
+     * close a leak that needs two repos would break every single-project install — which is why
+     * `NOT_ASKED` is its own verdict rather than folded into `UNSCOPED`. It is also the branch no
+     * test covered: every case above writes a `cloud.json`, so the guard could have been inverted
+     * with all of them still green.
+     */
+    it('reads and prints normally when this repo is not linked and the key comes from the env', async () => {
+      process.env['RETICLE_CLOUD_URL'] = TEST_URL;
+      process.env['RETICLE_CLOUD_KEY'] = TEST_KEY;
+      const entries = [{ statement: 'readable', status: 'proved' }];
+      // The server answers about SOME project, and with no link there is nothing to disagree with.
+      responder = () => ({ body: { projectId: 'some-other-project', entries } });
+
+      const code = await runCloudCommand(['memory']);
+
+      expect(code).toBe(0);
+      // No `projectId=` in the query: there is no linked id to send, and inventing one would scope
+      // the read to a project the server has never heard of.
+      expect(requests[0]?.url).toBe(`${TEST_URL}/v1/memory`);
+      expect(lastJsonOutput()).toEqual({ projectId: 'some-other-project', entries });
+    });
+  });
 });
