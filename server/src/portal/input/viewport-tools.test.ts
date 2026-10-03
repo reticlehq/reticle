@@ -12,11 +12,15 @@ function tool() {
   return t;
 }
 
-function depsWith(realInput: RealInputProvider | undefined): ToolDeps {
+function depsWith(realInput: RealInputProvider | undefined, pool?: ToolDeps['pool']): ToolDeps {
   const sessions: Partial<SessionManager> = {
     resolve: () => ({ url: 'http://localhost:5173/app' }) as never,
   };
-  return { sessions: sessions as SessionManager, realInput } as unknown as ToolDeps;
+  return {
+    sessions: sessions as SessionManager,
+    realInput,
+    pool,
+  } as unknown as ToolDeps;
 }
 
 interface ViewportResult {
@@ -38,6 +42,37 @@ describe('reticle_viewport tool', () => {
     // NOT the visual code: this tool mocks requests / resizes windows, and an agent gating on
     // "no-visual-provider" here would be matching on a false statement about what it asked for.
     expect(res.reason).toBe(CDP_NO_PROVIDER_REASON);
+  });
+  it('uses the lease when no CDP provider is available', async () => {
+    let captured:
+      | {
+          sessionId: string;
+          size: { width: number; height: number };
+        }
+      | undefined;
+
+    const pool = {
+      setViewportLease: (sessionId: string, size: { width: number; height: number }) => {
+        captured = { sessionId, size };
+        return Promise.resolve(true);
+      },
+    } as ToolDeps['pool'];
+
+    const res = (await tool().handler(depsWith(undefined, pool), {
+      width: 390,
+      height: 844,
+    })) as ViewportResult;
+
+    expect(res).toMatchObject({
+      applied: true,
+      width: 390,
+      height: 844,
+    });
+
+    expect(captured?.size).toEqual({
+      width: 390,
+      height: 844,
+    });
   });
 
   it('pins the viewport on the driven page and echoes the size', async () => {
