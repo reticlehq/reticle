@@ -27,7 +27,7 @@ Everything lands in `.reticle/` in your project, and it is yours. Three kinds of
 
 So: **drive staging.** Not because the risk is large, but because it is real and avoiding it is free.
 
-Network bodies are **not** captured by default. When you turn body capture on (`captureNetworkBodies: true`, or `VITE_RETICLE_CAPTURE_BODIES=1`), each body is redacted by key **before it is kept**: values under names like `apiKey`, `secret`, `credential`, `authorization` or any `*token` are masked, and high-confidence secret shapes (a JWT, or an `sk_live_…` key) are redacted no matter what the field is called. Page content that reaches a verdict is the element text and attributes the assertion needed, not a copy of the DOM.
+Network bodies are **not** captured by default. When you turn body capture on (`captureNetworkBodies: true`, or `VITE_RETICLE_CAPTURE_BODIES=1`), redaction runs **before each body is kept**. Built-in rules mask keys such as `password`, `apiKey` and `authorization`, selected token keys, and high-confidence secret shapes such as JWTs and `sk_live_…` keys. Other credential values can remain under names or in formats those rules do not recognize; add app-specific field names with `redact.keys` and use staging. Page content that reaches a verdict is the element text and attributes the assertion needed, not a copy of the DOM.
 
 ## What leaves, only if you ask
 
