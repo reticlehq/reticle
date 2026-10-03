@@ -959,6 +959,128 @@ describe('a throttled tab timeout is not a missing render', () => {
     expect(result.failureReason).toContain('split across the children');
   });
 
+  /**
+   * Unrelated testids on a partially rendered page do not prove the TARGET rendered. A static shell
+   * or another part of the page can carry testids while the requested element remains starved.
+   */
+  it('unrelated testids do not prove the target rendered — the miss stays inconclusive', async () => {
+    const session = new ThrottledSession([], () => ({
+      matched: false,
+      count: 0,
+      elements: [],
+      hint: {
+        route: '/',
+        presentTestids: ['submit-btn', 'email-input'],
+        presentRegions: [],
+        knownEmptyState: false,
+      },
+    }));
+    const result = await evaluatePredicate(session, {
+      kind: 'element',
+      query: { text: 'Checkout' },
+    });
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toBe(THROTTLED_STARVED_NOTE);
+  });
+
+  /**
+   * A role-only near-miss (right role, wrong name) does not prove the named target rendered. The
+   * same role may come from a static shell or another part of a partially rendered page.
+   */
+  it('a role-only near-miss does not prove the named target rendered — stays inconclusive', async () => {
+    let call = 0;
+    const session = new (class extends ThrottledSession {
+      override command(name: string, _args: Record<string, unknown> = {}): Promise<CommandResult> {
+        if (ReticleCommand.MATCH !== name) {
+          return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result: {} });
+        }
+        call += 1;
+        if (1 === call) {
+          return Promise.resolve({
+            kind: 'command_result',
+            id: 'x',
+            ok: true,
+            result: { matched: false, count: 0, elements: [] },
+          });
+        }
+        return Promise.resolve({
+          kind: 'command_result',
+          id: 'x',
+          ok: true,
+          result: {
+            matched: true,
+            count: 1,
+            elements: [
+              {
+                ref: asRef('e1'),
+                role: 'button',
+                name: 'Checkout (2 items)',
+                states: ['present', 'visible', 'enabled'],
+                visible: true,
+              },
+            ],
+          },
+        });
+      }
+    })([]);
+    const result = await evaluatePredicate(session, {
+      kind: 'element',
+      query: { role: 'button', name: 'Checkout' },
+    });
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toBe(THROTTLED_STARVED_NOTE);
+  });
+
+  /**
+   * A state near-miss means the TARGET element exists but in the wrong state. The DOM painted the
+   * element itself — starvation cannot explain that, so the miss is real.
+   */
+  it('a state near-miss (element found, wrong state) proves the page rendered', async () => {
+    let call = 0;
+    const session = new (class extends ThrottledSession {
+      override command(name: string, _args: Record<string, unknown> = {}): Promise<CommandResult> {
+        if (ReticleCommand.MATCH !== name) {
+          return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result: {} });
+        }
+        call += 1;
+        if (1 === call) {
+          return Promise.resolve({
+            kind: 'command_result',
+            id: 'x',
+            ok: true,
+            result: { matched: false, count: 0, elements: [] },
+          });
+        }
+        return Promise.resolve({
+          kind: 'command_result',
+          id: 'x',
+          ok: true,
+          result: {
+            matched: true,
+            count: 1,
+            elements: [
+              {
+                ref: asRef('e1'),
+                role: 'button',
+                name: 'Submit',
+                states: ['present', 'visible'],
+                visible: true,
+              },
+            ],
+          },
+        });
+      }
+    })([]);
+    const result = await evaluatePredicate(session, {
+      kind: 'element',
+      query: { role: 'button', name: 'Submit' },
+      state: 'enabled',
+    });
+    expect(result.pass).toBe(false);
+    expect(result.assertion).toBe('element.state');
+    expect(result.inconclusive).toBeUndefined();
+  });
+
   it('an unthrottled timeout still looks like a near-miss, not a starved tab', async () => {
     const session = new FakeSession([]);
     const result = await waitForPredicate(

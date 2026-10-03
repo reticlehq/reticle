@@ -99,22 +99,33 @@ function annotateThrottledMiss(
   if (true !== session.throttled?.()) return result;
   if (decidedByAnAlreadyAnnotatedClause(predicate)) return result;
   if (failureRestsOnSeeing(predicate)) return result;
-  if (foundTextSplitAcrossChildren(result)) return result;
+  if (evidenceProvesPageRendered(result)) return result;
   return { ...result, inconclusive: THROTTLED_STARVED_NOTE };
 }
 
 /**
- * Did the miss come with proof that the page rendered the very string it was looking for?
+ * Did the miss come with proof that the page rendered?
  *
- * The starved-tab caveat is for a page that may not have painted. A text miss that carries a
- * split-text owner is the browser saying the string IS in the rendered page, split across one
- * container's children — so the tab ran, and the failure is the locator's. Reported from Next's
- * template: the throttle note led a response whose own near-miss named the heading holding the text,
- * and the agent was sent to wait out a starvation that had not happened.
+ * The starved-tab caveat is for a page that may not have painted. Evidence that the page IS alive
+ * means the miss is real, not an artefact of throttling.
+ *
+ * - `splitText`: the browser found the requested string in the rendered page, split across
+ *   children. Target-specific — the text IS the thing that was asked for.
+ * - `nearMiss` from `element.state`: the target element exists but in the wrong state. The DOM
+ *   painted the element itself, so starvation is not the explanation.
+ *
+ * Excluded:
+ * - `nearMiss` from `element.role+name`: a role-only match on a partially rendered page does not
+ *   prove the named target rendered. The same role may come from a static shell.
+ * - `presentTestids`: testids can come from a static shell or another part of a partially rendered
+ *   page while the requested target remains starved.
  */
-function foundTextSplitAcrossChildren(result: EvalResult): boolean {
+function evidenceProvesPageRendered(result: EvalResult): boolean {
   const evidence = result.evidence;
-  return 'object' === typeof evidence && null !== evidence && 'splitText' in evidence;
+  if ('object' !== typeof evidence || null === evidence) return false;
+  if ('splitText' in evidence) return true;
+  if ('nearMiss' in evidence && 'element.state' === result.assertion) return true;
+  return false;
 }
 
 /**
