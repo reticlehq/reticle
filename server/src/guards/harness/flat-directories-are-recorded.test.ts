@@ -243,7 +243,11 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // claims) and `flow-author.ts` (who made a flow). Both are read by the store and by replay here,
   // and a subdirectory of their own would be a new reach for each of those. 34 once a dead flow
   // helper was deleted.
-  'server/src/language/flows': 34,
+  // 35 with `flow-cross-step.ts`: the whole-span contradiction subtraction, moved out of
+  // `flow-replay-run.ts` when the merged file crossed the 1000-line cap. It belongs in this
+  // directory rather than a subdirectory because `flow-cross-step.test.ts` sits here too and the
+  // pair is the whole rule.
+  'server/src/language/flows': 35,
   // 12 since `drive-flow.ts`: the rule that turns a session's ambient tape into a flow per journey,
   // and the gate that refuses to save one asserting nothing. It sits beside `session-end.ts` because
   // teardown is the only caller and the tape is data by then — the reach guard already refused the
