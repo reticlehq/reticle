@@ -14,7 +14,6 @@ import { z } from 'zod';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { CLOUD_LINK_FILE, resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
 import {
-  isReadableMemoryScope,
   memoryReadUrl,
   MemoryResponseScope,
   scopeMemoryResponse,
@@ -746,18 +745,23 @@ const cmdMemory = async (argv: readonly string[]): Promise<number> => {
   // shown to be about this project" and the one a person is likelier to act on. Nothing goes to
   // stdout in that case: a caller piping this into an agent gets an error on stderr and a non-zero
   // exit, never a plausible-looking empty answer.
+  //
+  // The refusal is the PRINTER's own, not a second check here: `scopeMemoryResponse` answers
+  // `undefined` for anything it cannot show to be this project's, so there is no ordering a future
+  // edit can get wrong — the body it must not print is one it was never handed. The verdict is read
+  // only to say WHICH refusal this is.
   const scope = { projectId, subject };
   const body = await api('GET', memoryReadUrl(url, scope), apiKey);
-  const verdict = scopeOfMemoryResponse(body, projectId);
-  if (!isReadableMemoryScope(verdict)) {
+  const printable = scopeMemoryResponse(body, projectId);
+  if (printable === undefined) {
     err(
-      MemoryResponseScope.OTHER === verdict
+      MemoryResponseScope.OTHER === scopeOfMemoryResponse(body, projectId)
         ? `the server answered about a different project than this repo is linked to — refusing to print another project's knowledge as this one's. Check the link with \`reticle status\`.`
         : `the server's response does not say which project it is about, so there is no way to tell whether this is this project's knowledge. Refusing to print it; check the link with \`reticle status\`.`,
     );
     return 1;
   }
-  emit(scopeMemoryResponse(body, projectId));
+  emit(printable);
   return 0;
 };
 

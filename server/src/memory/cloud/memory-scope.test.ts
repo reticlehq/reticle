@@ -14,6 +14,7 @@ import {
   MemoryResponseScope,
   MemoryScopeField,
   scopedMemoryEntries,
+  scopeMemoryResponse,
   scopeOfMemoryResponse,
 } from './memory-scope.js';
 
@@ -194,5 +195,65 @@ describe('the entries a reader is allowed to see', () => {
   it('hands back NOTHING when the accepted envelope carries no entries array', () => {
     expect(scopedMemoryEntries({ projectId: 'repo-b' }, 'repo-b')).toBe(undefined);
     expect(scopedMemoryEntries({ projectId: 'repo-b', entries: 'x' }, 'repo-b')).toBe(undefined);
+  });
+});
+
+/**
+ * The envelope-shaped reader refuses on its own, which is the whole point of it returning a union.
+ *
+ * It used to hand back whatever it was given and rely on a JSDoc line telling callers to check the
+ * envelope first. That is the failure this module exists to document — a fix whose coverage is
+ * asserted in a comment and nowhere else — written one function below the lesson. A reader that
+ * hands a body back cannot refuse it, so on the day somebody calls it first, it prints a sibling
+ * project's knowledge with nothing to stop it. It now answers `undefined` for anything it cannot
+ * show to be this project's, so the unsafe call is not expressible.
+ */
+describe('printing a response, when it can be shown to be this project', () => {
+  const own = { statement: 'ours', status: 'proved' };
+
+  it('hands back the envelope with its entries filtered', () => {
+    expect(scopeMemoryResponse({ projectId: 'repo-b', entries: [own] }, 'repo-b')).toEqual({
+      projectId: 'repo-b',
+      entries: [own],
+    });
+  });
+
+  /** Preserved, not rebuilt: a diagnostic command shows what arrived, minus the other project's. */
+  it('keeps every other field the server sent', () => {
+    expect(
+      scopeMemoryResponse({ projectId: 'repo-b', cursor: '9:3', entries: [own] }, 'repo-b'),
+    ).toEqual({ projectId: 'repo-b', cursor: '9:3', entries: [own] });
+  });
+
+  /**
+   * The refusal, and it is the same one the other three readers make. `undefined` rather than the
+   * body: a caller cannot print what it was not handed, which is the property a comment could not
+   * give it.
+   */
+  it('hands back NOTHING for an envelope that names another project', () => {
+    expect(scopeMemoryResponse({ projectId: 'repo-a', entries: [own] }, 'repo-b')).toBe(undefined);
+  });
+
+  it('hands back NOTHING for an envelope that names no project', () => {
+    expect(scopeMemoryResponse({ entries: [own] }, 'repo-b')).toBe(undefined);
+  });
+
+  it('hands back NOTHING for a body it cannot read an envelope out of', () => {
+    for (const body of [null, 'nonsense', 7, []]) {
+      expect(scopeMemoryResponse(body, 'repo-b')).toBe(undefined);
+    }
+  });
+
+  /** Unlinked, but still not an envelope — there is nothing here to print as one. */
+  it('hands back NOTHING for a non-object body even when no project was named', () => {
+    expect(scopeMemoryResponse(null, undefined)).toBe(undefined);
+  });
+
+  /** Accepted, and the shape is odd: handed back as it arrived, same as the other reader. */
+  it('hands back an accepted envelope whose entries is not an array', () => {
+    expect(scopeMemoryResponse({ projectId: 'repo-b', entries: 'x' }, 'repo-b')).toEqual({
+      projectId: 'repo-b',
+      entries: 'x',
+    });
   });
 });

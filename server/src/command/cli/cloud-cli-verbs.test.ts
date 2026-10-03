@@ -924,5 +924,31 @@ describe('cloud-cli verb contracts (#555)', () => {
       expect(stdoutBuf.trim()).toBe('');
       expect(stderrBuf).toContain('does not say which project');
     });
+
+    /**
+     * The unlinked path, and the one case where refusing would be WRONG.
+     *
+     * CI is this path: `RETICLE_API_KEY` in the environment, no `cloud.json` on the runner, so the
+     * read names no project and there is nothing for the envelope to contradict. Refusing here to
+     * close a leak that needs two repos would break every single-project install — which is why
+     * `NOT_ASKED` is its own verdict rather than folded into `UNSCOPED`. It is also the branch no
+     * test covered: every case above writes a `cloud.json`, so the guard could have been inverted
+     * with all of them still green.
+     */
+    it('reads and prints normally when this repo is not linked and the key comes from the env', async () => {
+      process.env['RETICLE_CLOUD_URL'] = TEST_URL;
+      process.env['RETICLE_CLOUD_KEY'] = TEST_KEY;
+      const entries = [{ statement: 'readable', status: 'proved' }];
+      // The server answers about SOME project, and with no link there is nothing to disagree with.
+      responder = () => ({ body: { projectId: 'some-other-project', entries } });
+
+      const code = await runCloudCommand(['memory']);
+
+      expect(code).toBe(0);
+      // No `projectId=` in the query: there is no linked id to send, and inventing one would scope
+      // the read to a project the server has never heard of.
+      expect(requests[0]?.url).toBe(`${TEST_URL}/v1/memory`);
+      expect(lastJsonOutput()).toEqual({ projectId: 'some-other-project', entries });
+    });
   });
 });

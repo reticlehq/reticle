@@ -204,16 +204,23 @@ export function scopedMemoryEntries(
  * The same filter, for a caller that prints the server's envelope rather than reading a list.
  *
  * `reticle memory` writes the response to stdout as JSON, so filtering has to preserve every other
- * field the server sent and replace only `entries`.
+ * field the server sent and replace only `entries`. A body whose `entries` is not an array is handed
+ * back as it arrived: at that point the envelope has already been accepted, and guessing further is
+ * how a diagnostic command starts dropping the thing it was asked to print.
  *
- * ONLY call this once `scopeOfMemoryResponse` has said the envelope is readable — it filters entries
- * and cannot refuse a response, so on an unverified body it would print the very thing that must not
- * be printed. A body whose `entries` is not an array is handed back untouched: at that point the
- * envelope has already been accepted, and guessing further is how a diagnostic command starts
- * dropping the thing it was asked to print.
+ * It REFUSES on its own, answering `undefined` for a body it cannot show to be this project's. It
+ * used to hand the body back and leave the check to a JSDoc line telling callers to run
+ * `scopeOfMemoryResponse` first — which is the exact failure this module documents, written one
+ * function below the lesson. A reader that hands a body back cannot refuse it: the day somebody
+ * calls this first, a sibling project's knowledge goes to stdout with nothing to stop it. The
+ * `undefined` is what makes the unsafe call unexpressible rather than merely discouraged — a caller
+ * cannot print what it was not handed.
+ *
+ * The caller therefore checks for `undefined` and refuses out loud, instead of asking twice.
  */
 export function scopeMemoryResponse(body: unknown, projectId: string | null | undefined): unknown {
-  if (null === body || 'object' !== typeof body) return body;
+  if (!isReadableMemoryScope(scopeOfMemoryResponse(body, projectId))) return undefined;
+  if (null === body || 'object' !== typeof body) return undefined;
   const envelope = body as Record<string, unknown>;
   const entries = envelope['entries'];
   if (!Array.isArray(entries)) return body;
