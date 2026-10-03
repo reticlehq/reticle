@@ -371,6 +371,87 @@ describe('performGesture drives press through the real keyboard', () => {
     expect(released).toEqual(['k', 'Control']);
   });
 
+  it('releases the keys already down when a LATER down fails', async () => {
+    // #1294. `down()` calls used to run before the `try`, so a modifier that went down and a key
+    // that then rejected left the modifier held with nothing attempting to release it.
+    const calls: string[] = [];
+    const page = {
+      keyboard: {
+        press: () => Promise.resolve(),
+        down: (key: string) => {
+          calls.push(`down:${key}`);
+          return 'k' === key
+            ? Promise.reject(new Error('driver died mid-chord'))
+            : Promise.resolve();
+        },
+        up: (key: string) => {
+          calls.push(`up:${key}`);
+          return Promise.resolve();
+        },
+      },
+    } as unknown as Page;
+
+    // The ORIGINAL error, and that is right: the cleanup proved the keyboard is clean, so an
+    // ordinary drive error is exactly what happened and the caller's synthetic replay is safe.
+    await expect(
+      performGesture(
+        page,
+        ActionType.PRESS,
+        NO_BOX,
+        { key: 'k', modifiers: ['Control'], holdMs: 50 },
+        noSleep,
+      ),
+    ).rejects.toThrow('driver died mid-chord');
+
+    // Only what actually went down is released — `k` never did, and releasing it would be its own
+    // lie. `Control` did, so it is.
+    expect(calls).toEqual(['down:Control', 'down:k', 'up:Control']);
+  });
+
+  it('refuses the replay when that cleanup cannot release what went down', async () => {
+    // The exception to the rule above: cleanup that cannot prove the keys are up leaves the
+    // keyboard unknown, and the caller must be told so rather than handed an ordinary drive error
+    // it would answer with a synthetic replay over a held modifier.
+    const page = {
+      keyboard: {
+        press: () => Promise.resolve(),
+        down: (key: string) =>
+          'k' === key ? Promise.reject(new Error('driver died mid-chord')) : Promise.resolve(),
+        up: () => Promise.reject(new Error('and the release failed too')),
+      },
+    } as unknown as Page;
+
+    await expect(
+      performGesture(
+        page,
+        ActionType.PRESS,
+        NO_BOX,
+        { key: 'k', modifiers: ['Control'], holdMs: 50 },
+        noSleep,
+      ),
+    ).rejects.toMatchObject({ code: 'release_failed' });
+  });
+
+  it('refuses the replay when the wait AND the release both fail', async () => {
+    // The wait's error used to be rethrown after a best-effort release whose own failure was
+    // swallowed, so an unreleasable chord reached the caller as an ordinary drive error — the one
+    // shape that must never fall back. The cleanup failure is the fact worth reporting.
+    const boom = new Error('the page went away mid-hold');
+    const page = {
+      keyboard: {
+        press: () => Promise.resolve(),
+        down: () => Promise.resolve(),
+        up: () => Promise.reject(new Error('release failed too')),
+      },
+    } as unknown as Page;
+
+    await expect(
+      performGesture(page, ActionType.PRESS, NO_BOX, { key: 'k', holdMs: 50 }, () =>
+        Promise.reject(boom),
+      ),
+    ).rejects.toMatchObject({ code: 'release_failed' });
+  });
+
   it('keeps mouse actions reporting real mode too, so the field is not press-only', async () => {
     const moves: string[] = [];
     const page = {

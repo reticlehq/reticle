@@ -1,4 +1,4 @@
-import { ActionType, isGlobalPress, pressKeyFromArgs } from '@reticlehq/core';
+import { ActionType, isGlobalPress, pressKeyFromArgs, pressKeysFromArgs } from '@reticlehq/core';
 import { asSyntheticInput } from './synthetic/synthetic-input.js';
 import { nativeSetTimeout } from '@/timers/native/native-timers.js';
 
@@ -167,9 +167,7 @@ export function isReflessDocumentPress(
  * case changes.
  */
 export function pressKeys(args: Record<string, unknown>): string[] {
-  const raw = args['keys'];
-  if (!Array.isArray(raw)) return [];
-  return raw.map((k) => asString(k)).filter((k) => k.length > 0);
+  return pressKeysFromArgs(args);
 }
 
 /** How often a held key repeats. Browsers land near 30-35ms after the initial delay; this is that. */
@@ -243,10 +241,31 @@ export async function pressCombo(
     );
   };
 
+  /*
+   * How many times `keys` has pressed each flag, so a flag clears only on its LAST release.
+   *
+   * Aliases make this necessary rather than tidy: `Control` and `Ctrl` are ONE flag, so
+   * `{ keys: ['Control', 'k', 'Ctrl'] }` is that flag pressed twice. Releasing in reverse puts
+   * `Ctrl` first, and clearing the flag there turned it off while `Control` was still down —
+   * every event after it reporting `ctrlKey: false`, which is a state no keyboard produces and an
+   * app's keyup bookkeeping reads as "the modifier came up". Counting presses and clearing at zero
+   * is what a real keyboard's own state machine does.
+   */
+  const presses = new Map<keyof ModifierFlags, number>();
+  const pressFlag = (flag: keyof ModifierFlags): void => {
+    presses.set(flag, (presses.get(flag) ?? 0) + 1);
+    held[flag] = true;
+  };
+  const releaseFlag = (flag: keyof ModifierFlags): void => {
+    const left = (presses.get(flag) ?? 1) - 1;
+    presses.set(flag, left);
+    if (left <= 0) held[flag] = false;
+  };
+
   let prevented = false;
   for (const key of keys) {
     const flag = modifierFlagFor(key);
-    if (flag !== undefined) held[flag] = true;
+    if (flag !== undefined) pressFlag(flag);
     const ok = dispatch('keydown', key);
     if (!ok) prevented = true;
     // The same default a single Escape gets: `keys: ["Escape"]` is the same key.
@@ -255,7 +274,7 @@ export async function pressCombo(
   if (holdMs > 0) await sleep(holdMs);
   for (const key of [...keys].reverse()) {
     const flag = modifierFlagFor(key);
-    if (flag !== undefined) held[flag] = false;
+    if (flag !== undefined) releaseFlag(flag);
     dispatch('keyup', key);
   }
   return prevented;

@@ -177,4 +177,52 @@ describe('a modifier named in keys sets its own flag (#1294)', () => {
       'a ctrl=false shift=false',
     ]);
   });
+
+  /**
+   * The same modifier under two spellings is ONE key, and releasing either spelling must not clear
+   * a flag the other still holds.
+   *
+   * `keys: ['Control', 'k', 'Ctrl']` releases in reverse, so `Ctrl` comes up first — and `Ctrl` and
+   * `Control` are the same flag in `MODIFIER_FLAG_ALIASES`. Clearing it there left the `k` keyup
+   * reporting `ctrlKey: false` while `Control` had not been released yet, which is a state no
+   * keyboard produces and an app's keyup bookkeeping reads as "the modifier came up".
+   */
+  it('does not clear a modifier flag while another spelling of it is still held', async () => {
+    const { el, seen } = record();
+    await executeAction(refs.refFor(el), ActionType.PRESS, { keys: ['Control', 'k', 'Ctrl'] });
+    // `Ctrl` and `Control` are ONE flag (`MODIFIER_FLAG_ALIASES`), pressed twice and released in
+    // reverse — so `Ctrl`'s own keyup is the event that used to clear the flag while `Control` was
+    // still down, leaving every event after it reporting `ctrlKey: false`. Only the LAST release of
+    // a flag turns it off, which is what the `Control` keyup at the end does.
+    expect(seen).toEqual([
+      'Control ctrl=true shift=false',
+      'k ctrl=true shift=false',
+      'Ctrl ctrl=true shift=false',
+      'Ctrl ctrl=true shift=false',
+      'k ctrl=true shift=false',
+      'Control ctrl=false shift=false',
+    ]);
+  });
+
+  /**
+   * A non-string entry in `keys` must be DROPPED, not dispatched and not thrown on.
+   *
+   * `keys` crosses the bridge as JSON, so a caller can put anything in the array — and the routing
+   * half (`pressKeysFromArgs`, in core) already drops non-strings when it decides whether a ref is
+   * required. If the dispatcher read the array differently it would either send a key the router
+   * never counted or throw on the way, and the two halves disagreeing about the same argument is
+   * the failure this pins.
+   */
+  it('drops a non-string entry in keys instead of throwing on it', async () => {
+    const { el, seen } = record();
+    const args: Record<string, unknown> = { keys: ['Control', 'k', null, 7, undefined] };
+    await executeAction(refs.refFor(el), ActionType.PRESS, args);
+    // The usable keys ran, in order, with the modifier held — the junk is simply not there.
+    expect(seen).toEqual([
+      'Control ctrl=true shift=false',
+      'k ctrl=true shift=false',
+      'k ctrl=true shift=false',
+      'Control ctrl=false shift=false',
+    ]);
+  });
 });

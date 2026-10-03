@@ -260,46 +260,72 @@ async function pressViaKeyboard(
    * Without the split a held shortcut threw before a single key moved, the caller fell back to
    * the synthetic path, and a real hold was impossible for any press with modifiers — the exact
    * gesture `holdMs` exists for.
+   *
+   * ## Why every key that went down is tracked, and every exit path cleans up
+   *
+   * The down calls are the ones that MOVE the keyboard, and they can fail partway: `Control` goes
+   * down, the key after it rejects, and the driver's copy of `Control` is still held. That path
+   * used to fall straight to the caller's synthetic replay — which presses the same chord again on
+   * a keyboard that is already holding a modifier. Tracking what actually went down is what makes
+   * the cleanup below able to release the right keys, and only those: releasing a key that never
+   * went down is its own lie, and it would turn a clean failure into an unnecessary refusal.
    */
-  for (const modifier of modifiers) await page.keyboard.down(modifier);
-  await page.keyboard.down(key);
+  const pressed: string[] = [];
+  const pressDown = async (k: string): Promise<void> => {
+    await page.keyboard.down(k);
+    pressed.push(k);
+  };
+  try {
+    for (const modifier of modifiers) await pressDown(modifier);
+    await pressDown(key);
+  } catch (error) {
+    // The chord is PARTIALLY down. Release what is held before reporting the failure; if that
+    // cannot be proved, `releaseKeys` throws RELEASE_FAILED and the caller refuses the replay —
+    // the same rule as a failed release on the ordinary path, for the same reason. Only when the
+    // cleanup DOES succeed is the original error safe to hand back.
+    await releaseKeys(page, pressed);
+    throw error;
+  }
   const startedAt = now();
   try {
     await sleep(holdMs);
   } catch (error) {
     // The wait failed, and the caller is about to run the synthetic path — which presses this SAME
     // key a second time. If the driver's copy stays down, a held modifier then colours every later
-    // action for the rest of the run. Releasing here is best-effort on purpose: whatever went wrong
-    // with the wait is the error worth reporting, and a throw from `up` would replace it.
-    await releaseChord(page, key, modifiers).catch(() => undefined);
+    // action for the rest of the run. Best-effort on purpose: whatever went wrong with the wait is
+    // the error worth reporting. A cleanup that cannot be proved is the exception — that one is a
+    // stuck key, and it must reach the caller as a refusal rather than be swallowed.
+    try {
+      await releaseKeys(page, pressed);
+    } catch {
+      throw new DriveError(
+        DriveErrorCode.RELEASE_FAILED,
+        'the wait failed and the keys it pressed could not be released, so they may still be held',
+      );
+    }
     throw error;
   }
   // NOT best-effort: on the ordinary path a failed release is a real failure the caller must hear
   // about, and swallowing it would report a press whose key is still down.
-  await releaseChord(page, key, modifiers);
+  await releaseKeys(page, pressed);
   return now() - startedAt;
 }
 
 /**
- * Release a held chord, key first and modifiers in reverse, and report a failure as one that
- * leaves the keyboard UNKNOWN rather than as an ordinary provider error.
+ * Release the given keys, in reverse press order, and report a failure as one that leaves the
+ * keyboard UNKNOWN rather than as an ordinary provider error.
  *
  * Every release is attempted even after one fails: a stuck `Control` is worse than a stuck letter,
- * so a failure on the key must not skip the modifiers. The first failure is what is thrown, since
- * it is the one that happened first, and it is wrapped in `DriveError` so the caller can tell
- * "this gesture failed" from "this gesture may have left a key down" — the difference between a
- * safe synthetic replay and an unsafe one.
+ * so a failure on one key must not skip the rest. The first failure is what is thrown, since it is
+ * the one that happened first, and it is wrapped in `DriveError` so the caller can tell "this
+ * gesture failed" from "this gesture may have left a key down" — the difference between a safe
+ * synthetic replay and an unsafe one.
  */
-async function releaseChord(page: Page, key: string, modifiers: readonly string[]): Promise<void> {
+async function releaseKeys(page: Page, pressed: readonly string[]): Promise<void> {
   let failure: unknown;
-  try {
-    await page.keyboard.up(key);
-  } catch (error) {
-    failure = error;
-  }
-  for (const modifier of [...modifiers].reverse()) {
+  for (const k of [...pressed].reverse()) {
     try {
-      await page.keyboard.up(modifier);
+      await page.keyboard.up(k);
     } catch (error) {
       failure ??= error;
     }
