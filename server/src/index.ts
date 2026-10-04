@@ -741,7 +741,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     const runner = new ReticleRunner(createRunnerPort(effectiveDeps));
     const token = options.httpVerifyToken ?? process.env[ReticleEnv.VERIFY_TOKEN] ?? '';
     verifyHttp = await startVerifyServer(
-      { runner, token, persist: (run) => runStore.write(run).catch(console.error) },
+      { runner, token, persist: (run) => runStore.write(run) },
       options.httpVerifyPort ?? RETICLE_VERIFY_DEFAULT_PORT,
     );
     log('reticle_verify_http_started', { port: verifyHttp.port, tokenRequired: token.length > 0 });

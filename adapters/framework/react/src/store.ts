@@ -38,6 +38,6 @@ export function useReticleStore(name: string, value: unknown): void {
   // for a value the DOM has not shown yet, and an agent comparing store against screen at that moment
   // would see a desync that does not exist — a false positive manufactured by the instrumentation.
   useEffect(() => {
-    handle.current?.push(value);
-  }, [value]);
+    handle?.push(value);
+  }, [value, handle]);
 }

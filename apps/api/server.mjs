@@ -22,24 +22,27 @@ const VALID = {
   password: process.env.DEMO_ADMIN_PASSWORD || (isTest ? 'password' : '') 
 };
 const TOKEN = process.env.DEMO_TOKEN || (isTest ? 'reticle-demo-token' : '');
+const SYSTEM_PROMPT = "You write short scripts.";
 
 // 1000 seed items + a place for eventually-consistent additions.
 const items = Array.from({ length: 1000 }, (_, i) => ({ id: i + 1, name: `Item ${i + 1}` }));
 let nextId = 1001;
 
 function requireAuth(req, res, next) {
-  if (req.headers.authorization === `Bearer ${TOKEN}`) return next();
+  // If TOKEN is empty, we must not authenticate empty bearers.
+  if (TOKEN && req.headers.authorization === `Bearer ${TOKEN}`) return next();
   return res.status(401).json({ error: 'unauthorized' });
 }
 
 // --- Auth -----------------------------------------------------------------
 app.post('/api/login', (req, res) => {
   const { email, password } = req.body ?? {};
-  if (email === VALID.email && password === VALID.password) {
+  if (VALID.email && VALID.password && email === VALID.email && password === VALID.password) {
     return res.json({ token: TOKEN, user: { email } });
   }
   return res.status(401).json({ error: 'invalid email or password' });
 });
+
 
 // --- Expiring access token: 401 → refresh → retry once ---------------------
 //
@@ -138,7 +141,7 @@ app.post('/api/generate-script', requireAuth, async (req, res) => {
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
           max_tokens: 400,
-          system: "You write short scripts.",
+          system: SYSTEM_PROMPT,
           messages: [{ role: 'user', content: prompt }],
         }),
       });
