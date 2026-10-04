@@ -295,7 +295,28 @@ export function spawn(command, args, options = {}) {
   // window never exists. CI does not set the var; stripping it is a no-op there.
   const env = { ...(options.env ?? process.env) };
   delete env['ELECTRON_RUN_AS_NODE'];
-  const child = nodeSpawn(command, args, { detached: true, shell: windows, ...options, env });
+  
+  let finalArgs = args;
+  let finalCommand = command;
+  if (windows) {
+    const quote = (arg) => {
+      if (0 === arg.length) return '""';
+      if (!/[\s"&|<>^()!%,;=]/.test(arg)) return arg;
+      let out = '"';
+      let backslashes = 0;
+      for (const ch of arg) {
+        if ('\\' === ch) { backslashes++; continue; }
+        if ('"' === ch) { out += '\\'.repeat(2 * backslashes + 1) + '"'; backslashes = 0; continue; }
+        out += '\\'.repeat(backslashes) + ch;
+        backslashes = 0;
+      }
+      return `${out}${'\\'.repeat(2 * backslashes)}"`;
+    };
+    finalArgs = [`/c`, quote(command), ...args.map(quote)];
+    finalCommand = 'cmd.exe';
+  }
+
+  const child = nodeSpawn(finalCommand, finalArgs, { detached: true, shell: false, ...options, env });
   const killOne = child.kill.bind(child);
   child.kill = (signal = 'SIGTERM') => {
     try {

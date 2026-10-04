@@ -25,6 +25,7 @@ const WINDOWS = 'win32' === process.platform;
 
 /** The pid listening on `port`, or null. Never throws — "cannot tell" is reported as null. */
 export function pidOnPort(port) {
+  if (!Number.isInteger(Number(port))) throw new Error("Invalid port");
   try {
     if (WINDOWS) {
       const out = execSync(`netstat -ano -p TCP | findstr LISTENING | findstr :${port}`, {

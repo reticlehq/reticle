@@ -68,7 +68,7 @@ export function Hostile(): React.ReactElement {
 
       {/* A large list: only a window is mounted, so unmounted rows are a real blind spot. */}
       <div data-testid="hostile-grid" style={{ maxHeight: 240, overflow: 'auto' }}>
-        {Array.from({ length: 60 }, (_, i) => (
+        {Array.from({ length: ROW_COUNT }, (_, i) => (
           <div key={i} data-testid={`hostile-row-${String(i)}`}>
             row {i} of {ROW_COUNT}
           </div>

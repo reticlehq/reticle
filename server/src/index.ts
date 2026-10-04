@@ -245,28 +245,16 @@ function createBrowserPool(headless: boolean, reader: InjectedConnect): BrowserP
  * session. Shared by both entry points: `startDaemon` previously omitted it entirely, so on the path
  * users actually take, CDP network detail was collected and then dropped on the floor.
  */
-function makeNetworkDetailRouter(bridge: Bridge, driveUrl: string | undefined) {
-  const driveOrigin = originOf(driveUrl ?? '');
+function makeNetworkDetailRouter(bridge: Bridge) {
   return (detail: NetworkDetail): void => {
-    // Route by the DOCUMENT that issued the request, not by the request's own origin.
+    // Route by the exact DOCUMENT URL that issued the request, not by origin.
     //
-    // Matching the request's origin only works for same-origin calls. An app on one origin calling an
-    // API on another — most API calls — produced a detail matching no session, and it was dropped
-    // without a trace. The drive-URL fallback papered over it on the launched path and did nothing on
-    // the CDP-attach path, where driveUrl is undefined and the fallback compares against ''.
-    const pageOrigin = originOf(detail.pageUrl ?? '');
-    const requestOrigin = originOf(detail.url);
+    // Routing by origin incorrectly broadcast events to EVERY tab sharing that origin
+    // and broke when an app called an API on a different origin. By matching the
+    // exact page URL, we avoid broadcasting across origins and isolate traffic to
+    // the specific page session.
     for (const session of bridge.sessions.all()) {
-      const origin = originOf(session.url);
-      // originOf returns `string | undefined`, NEVER '' — so the old `!== ''` guards were dead, and a
-      // bare `origin === requestOrigin` matched `undefined === undefined` when BOTH the session URL and
-      // the detail URL were unparseable. That routed a NET_DETAIL (with its response headers, incl.
-      // set-cookie) onto an unrelated session. Require a DEFINED origin; undefined operands then simply
-      // fail to match any of the three candidates.
-      const matches =
-        origin !== undefined &&
-        (origin === pageOrigin || origin === requestOrigin || origin === driveOrigin);
-      if (matches) {
+      if (session.url === detail.pageUrl) {
         session.pushEvent({
           t: 0,
           type: EventType.NET_DETAIL,
@@ -427,7 +415,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
   let leaseReaper: LeaseReaper | undefined;
   // Route CDP-authoritative network detail (drive path only) onto the driven session's journal: the
   // page and the SDK session share an origin, so a NET_DETAIL is pushed to the matching connected session.
-  const routeNetworkDetail = makeNetworkDetailRouter(bridge, options.driveUrl);
+  const routeNetworkDetail = makeNetworkDetailRouter(bridge);
   const { realInput, owned } = await resolveRealInput(
     options,
     () => bridge.close(),
@@ -607,7 +595,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   const { realInput, owned } = await resolveRealInput(
     options,
     () => shared.close(),
-    makeNetworkDetailRouter(bridge, options.driveUrl),
+    makeNetworkDetailRouter(bridge),
   );
 
   const fs = createNodeFileSystem();
@@ -753,7 +741,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     const runner = new ReticleRunner(createRunnerPort(effectiveDeps));
     const token = options.httpVerifyToken ?? process.env[ReticleEnv.VERIFY_TOKEN] ?? '';
     verifyHttp = await startVerifyServer(
-      { runner, token, persist: (run) => runStore.write(run) },
+      { runner, token, persist: (run) => runStore.write(run).catch(console.error) },
       options.httpVerifyPort ?? RETICLE_VERIFY_DEFAULT_PORT,
     );
     log('reticle_verify_http_started', { port: verifyHttp.port, tokenRequired: token.length > 0 });

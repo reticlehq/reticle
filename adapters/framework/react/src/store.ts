@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { pushStore, registerStore, unregisterStore } from '@reticlehq/browser';
 
 /**
@@ -26,13 +26,11 @@ import { pushStore, registerStore, unregisterStore } from '@reticlehq/browser';
 export function useReticleStore(name: string, value: unknown): void {
   // Created once and kept in a ref: a store rebuilt each render would hand every listener a dead
   // closure, so STATE_CHANGE would fire against a store nothing is subscribed to any more.
-  const handle = useRef<ReturnType<typeof pushStore> | null>(null);
-  handle.current ??= pushStore(value);
+  const [handle] = useState(() => pushStore(value));
 
   useEffect(() => {
-    const current = handle.current;
-    if (null === current) return;
-    registerStore(name, current.store);
+    if (null === handle) return;
+    registerStore(name, handle.store);
     return () => unregisterStore(name);
   }, [name]);
 

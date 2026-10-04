@@ -16,8 +16,12 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
-const VALID = { email: 'admin@reticle.dev', password: 'password' };
-const TOKEN = 'reticle-demo-token';
+const isTest = process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development';
+const VALID = { 
+  email: process.env.DEMO_ADMIN_EMAIL || (isTest ? 'admin@reticle.dev' : ''),
+  password: process.env.DEMO_ADMIN_PASSWORD || (isTest ? 'password' : '') 
+};
+const TOKEN = process.env.DEMO_TOKEN || (isTest ? 'reticle-demo-token' : '');
 
 // 1000 seed items + a place for eventually-consistent additions.
 const items = Array.from({ length: 1000 }, (_, i) => ({ id: i + 1, name: `Item ${i + 1}` }));
@@ -134,7 +138,8 @@ app.post('/api/generate-script', requireAuth, async (req, res) => {
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
           max_tokens: 400,
-          messages: [{ role: 'user', content: `Write a short script for: ${prompt}` }],
+          system: "You write short scripts.",
+          messages: [{ role: 'user', content: prompt }],
         }),
       });
       const data = await r.json();

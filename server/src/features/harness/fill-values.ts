@@ -97,13 +97,14 @@ export function needsGeneration(label: string): boolean {
   return heuristicFillValue(label) === heuristicFillValue('');
 }
 
-const PROMPT = (label: string, context: string): string =>
+const SYSTEM_PROMPT =
   `A test harness is filling in a form field on a web application so it can check what the app does with the input.\n\n` +
-  `The field is labelled: "${label}"\n` +
-  `${context}\n\n` +
   `Reply with ONLY the value to type. No quotes, no explanation, no markdown. It must be something a ` +
   `real user would plausibly enter, and short. If the field wants an identifier or a code, invent a ` +
   `well-formed one.`;
+
+const USER_PROMPT = (label: string, context: string): string =>
+  `The field is labelled: "${label}"\n${context}`;
 
 /**
  * A model's one-line answer as a field value, or nothing. A model asked for one value occasionally
@@ -131,7 +132,10 @@ async function generateWithOpenAi(
         model: options.model ?? DEFAULT_OPENAI_MODEL,
         max_completion_tokens: MAX_TOKENS,
         reasoning_effort: OPENAI_REASONING_EFFORT,
-        messages: [{ role: 'user', content: PROMPT(label, context) }],
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: USER_PROMPT(label, context) }
+        ],
       }),
     });
     if (!res.ok) return undefined;
@@ -163,7 +167,8 @@ async function generateOne(
       body: JSON.stringify({
         model: options.model ?? 'claude-sonnet-5',
         max_tokens: MAX_TOKENS,
-        messages: [{ role: 'user', content: PROMPT(label, context) }],
+        system: SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: USER_PROMPT(label, context) }],
       }),
     });
     if (!res.ok) return undefined;
