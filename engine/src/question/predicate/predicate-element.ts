@@ -293,6 +293,24 @@ export async function evalElement(
     fullText,
   );
   const subject = JSON.stringify(query);
+  // Full text was asked for to JUDGE it, so a reading that is not the full text is not graded.
+  if (fullText && !absent && match.matched) {
+    // A page too old to know the argument ignores it and answers with the 80-character display form,
+    // which looks exactly like a short text. It cannot say so, which is why the page echoes the ask.
+    if (true !== match.fullText) {
+      const reason =
+        `the page's SDK did not return the whole text of ${subject}, so a property of it was not ` +
+        `decided. Update the page's @reticlehq packages`;
+      return { pass: false, failureReason: reason, inconclusive: reason };
+    }
+    // `elements` is only the described prefix, and a text property is judged on all that matched.
+    if (match.count > match.elements.length) {
+      const reason =
+        `${String(match.count)} elements matched ${subject} and only ${String(match.elements.length)} ` +
+        `were read in full, so a property of their text was not decided on all of it. Narrow the locator`;
+      return { pass: false, failureReason: reason, inconclusive: reason };
+    }
+  }
   // A residual narrows the SET; `count` is every match while `elements` is only the described prefix,
   // so a locator broad enough to be truncated cannot be narrowed honestly. Say so instead of guessing.
   if (residual.checks.length > 0 && match.count > match.elements.length) {

@@ -636,7 +636,12 @@ export function matchQuery(
   const filtered =
     state === undefined ? elements : elements.filter((el) => inState(el, state, visMemo));
   const attrs = query.attrs;
-  const described = filtered.slice(0, Math.max(0, Math.min(limit, MAX_DESCRIBED)));
+  // Full text is bounded by how MANY elements carry it, so the response stays inside the transport's
+  // character budget; `count` still says how many matched.
+  const cap = fullText
+    ? Math.min(MAX_DESCRIBED, TRANSPORT_LIMITS.MAX_FULL_TEXT_ELEMENTS)
+    : MAX_DESCRIBED;
+  const described = filtered.slice(0, Math.max(0, Math.min(limit, cap)));
   // Stamp `inViewport` when more than one match is described (ambiguity ranking, #886) OR when the
   // caller explicitly filtered by that state (so the evidence proves the verdict, #1279). Omitted
   // from unfiltered single-match and snapshot-wide describes to avoid bloat (#398).
@@ -659,6 +664,7 @@ export function matchQuery(
     matched: filtered.length > 0,
     count: filtered.length,
     elements: descriptors,
+    ...(fullText ? { fullText: true as const } : {}),
     ...(scopeMissing ? { scopeMissing: true } : {}),
     ...(covered === undefined ? {} : { coveredBy: covered }),
     // On a MISS, carry the same diagnosis `runQuery` has always returned. MATCH is the command every

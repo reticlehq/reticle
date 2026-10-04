@@ -238,25 +238,21 @@ export const TRANSPORT_LIMITS = {
   MAX_STACK_LENGTH: 4000,
   MAX_SERIALIZE_DEPTH: 8,
   MAX_COLLECTION_ITEMS: 200,
-  /**
-   * How much of an element's text a descriptor carries for an agent to READ: the first 80
-   * characters and an ellipsis. Bounded because a descriptor is output, and a verbose node would
-   * otherwise dominate it.
-   */
+  /** What a descriptor carries of an element's text for an agent to READ: 80 characters and an ellipsis. */
   MAX_DESCRIBED_TEXT: 80,
   /**
-   * How much of an element's text a descriptor carries when a verdict has to JUDGE it (a `text`
-   * predicate's `satisfies`, `MatchArg.FULL_TEXT`). A property graded against the 80-character
-   * display form fails an exact `oneOf` and an end-anchored `matchesPattern` on any text longer
-   * than that. Not unbounded: one MATCH describes up to `MAX_COLLECTION_ITEMS` elements, and 200 of
-   * these must still fit one `MAX_MESSAGE_BYTES` message, or the command fails and the predicate
-   * reads a transport error as "nothing matched".
-   *
-   * Text cut at this bound is the first `MAX_FULL_TEXT` characters plus an ellipsis, so a text of
-   * MORE than `MAX_FULL_TEXT` characters is always one that was cut, and no legitimate text can
-   * look like one - which is how a consumer tells a partial reading from a whole one.
+   * What a descriptor carries when a verdict has to JUDGE the text (`MatchArg.FULL_TEXT`): the
+   * 80-character form fails an exact `oneOf` or an end-anchored pattern on anything longer. Bounded,
+   * because the transport spends ONE budget of `MAX_MESSAGE_BYTES / 4` characters per response and
+   * silently replaces the overflow. A cut text is this many characters plus an ellipsis, so a text
+   * MORE than this long was always cut.
    */
   MAX_FULL_TEXT: 4000,
+  /**
+   * Elements a MATCH describes in full-text mode: 32 of `MAX_FULL_TEXT` is about half the transport's
+   * character budget, leaving the rest for every other descriptor field. `count` still reports all.
+   */
+  MAX_FULL_TEXT_ELEMENTS: 32,
   MAX_OBJECT_KEYS: 200,
   MAX_STRING_LENGTH: 64 * 1024,
   /** Human review marks: the note the human types when flagging a mistake on the page. */

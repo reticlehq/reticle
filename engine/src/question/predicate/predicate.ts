@@ -345,7 +345,9 @@ async function evaluatePredicateRaw(
         true === predicate.visible ? ElementState.VISIBLE : undefined,
         predicate.absent ?? false,
         diagnose,
-        undefined !== predicate.satisfies,
+        // A property is judged on the whole text. An absence check judges nothing, and a failed
+        // absence returns the matches as evidence, which would otherwise carry the full text out.
+        undefined !== predicate.satisfies && !(predicate.absent ?? false),
       );
       if (undefined === predicate.satisfies) return found;
       return withTextProperty(

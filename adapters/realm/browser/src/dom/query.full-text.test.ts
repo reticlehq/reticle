@@ -59,4 +59,41 @@ suite('matchQuery with fullText describes the whole text', () => {
       atBound,
     );
   });
+
+  it('keeps a fieldset legend that is the same text as the fieldset’s name', () => {
+    // A fieldset's accessible name IS its legend. The descriptor leaves `text` out when it only
+    // repeats the name, and a caller judging the text would read the missing field as empty.
+    document.body.innerHTML = `<fieldset data-testid="legend"><legend>${LEGEND}</legend></fieldset>`;
+    const described = matchQuery(SCOPED, undefined, undefined, true).elements[0];
+    expect(described?.name).toBe(LEGEND);
+    expect(described?.text).toBe(LEGEND);
+  });
+});
+
+suite('matchQuery says whether it honoured fullText, and how many it read', () => {
+  const ROWS = TRANSPORT_LIMITS.MAX_FULL_TEXT_ELEMENTS + 8;
+  const rows = (): void => {
+    document.body.innerHTML = Array.from(
+      { length: ROWS },
+      (_v, i) => `<p data-testid="row">row ${String(i)} ${'w'.repeat(200)}</p>`,
+    ).join('');
+  };
+
+  it('echoes the request, so a page that ignored it can be told from one that did not', () => {
+    render(LEGEND);
+    expect(matchQuery(SCOPED, undefined, undefined, true).fullText).toBe(true);
+    expect(matchQuery(SCOPED).fullText).toBeUndefined();
+  });
+
+  it('reads at most MAX_FULL_TEXT_ELEMENTS in full, and count still says how many matched', () => {
+    rows();
+    const full = matchQuery({ by: 'testid', value: 'row' }, undefined, undefined, true);
+    expect(full.count).toBe(ROWS);
+    expect(full.elements).toHaveLength(TRANSPORT_LIMITS.MAX_FULL_TEXT_ELEMENTS);
+  });
+
+  it('describes every match, as before, when full text was not asked for', () => {
+    rows();
+    expect(matchQuery({ by: 'testid', value: 'row' }).elements).toHaveLength(ROWS);
+  });
 });

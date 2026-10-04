@@ -9,7 +9,7 @@
  * asked for all of it, and even then stops at the full-text bound.
  */
 import { describe, it, expect } from 'vitest';
-import { ReticleCommand, TRANSPORT_LIMITS, type CommandResult } from '@reticlehq/core';
+import { MatchArg, ReticleCommand, TRANSPORT_LIMITS, type CommandResult } from '@reticlehq/core';
 import { evaluatePredicate, type PredicateSession } from './predicate/predicate.js';
 import { parsePredicate } from './predicate/predicate-parse.js';
 import { captureBaselines } from '../evidence/baseline.js';
@@ -22,9 +22,19 @@ const LEGEND =
 
 const SCOPE = '[data-testid="consent-legend"]';
 
+interface Page {
+  /** A page too old to know `fullText` ignores it and never echoes it. */
+  readonly oldSdk?: boolean;
+  /** How many elements matched, when more than were described. */
+  readonly matchedTotal?: number;
+}
+
 class BoundedBrowser implements PredicateSession {
   readonly asked: Array<Record<string, unknown>> = [];
-  constructor(public text: string) {}
+  constructor(
+    public text: string,
+    private readonly page: Page = {},
+  ) {}
 
   elapsed = (): number => 0;
   eventsSince = (): never[] => [];
@@ -35,7 +45,8 @@ class BoundedBrowser implements PredicateSession {
       return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result: {} });
     }
     this.asked.push(args);
-    const cap = true === args['fullText'] ? TRANSPORT_LIMITS.MAX_FULL_TEXT : DISPLAY_CAP;
+    const honoured = true === args[MatchArg.FULL_TEXT] && true !== this.page.oldSdk;
+    const cap = honoured ? TRANSPORT_LIMITS.MAX_FULL_TEXT : DISPLAY_CAP;
     const shown = this.text.length <= cap ? this.text : `${this.text.slice(0, cap)}…`;
     return Promise.resolve({
       kind: 'command_result',
@@ -43,8 +54,9 @@ class BoundedBrowser implements PredicateSession {
       ok: true,
       result: {
         matched: true,
-        count: 1,
+        count: this.page.matchedTotal ?? 1,
         elements: [{ ref: 'e1', role: 'group', name: '', text: shown, states: [], visible: true }],
+        ...(honoured ? { fullText: true } : {}),
       },
     } as CommandResult);
   }
@@ -116,8 +128,8 @@ describe('text { satisfies } reads the complete text, not the display-bounded on
   });
 });
 
-describe('a text longer than the full-text bound is declared, not guessed at', () => {
-  it('is not graded, and says why', async () => {
+describe('a reading that is not the whole text is declared, not guessed at', () => {
+  it('a text cut at the full-text bound is not graded, and says why', async () => {
     const tooLong = `${'x'.repeat(TRANSPORT_LIMITS.MAX_FULL_TEXT)}END`;
     // A pattern that would PASS on the part that was read: grading it would be a verdict on a guess.
     const result = await evaluatePredicate(
@@ -140,6 +152,30 @@ describe('a text longer than the full-text bound is declared, not guessed at', (
     );
     expect(result.pass).toBe(true);
   });
+
+  it('a page whose SDK predates the argument is not graded on the short text it sent back', async () => {
+    // It ignored `fullText` and answered with 80 characters: a pattern that holds for those 80
+    // would pass, and the same pattern on the real text might not.
+    const result = await evaluatePredicate(
+      new BoundedBrowser(LEGEND, { oldSdk: true }),
+      textSatisfies({ property: 'matchesPattern', pattern: '^I agree' }),
+      0,
+      false,
+    );
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toContain('SDK');
+  });
+
+  it('more elements matched than were read in full is not graded on the ones that were', async () => {
+    const result = await evaluatePredicate(
+      new BoundedBrowser(LEGEND, { matchedTotal: 80 }),
+      textSatisfies({ property: 'matchesPattern', pattern: '^I agree' }),
+      0,
+      false,
+    );
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toContain('80 elements matched');
+  });
 });
 
 describe('only the readers that judge text ask for all of it', () => {
@@ -152,7 +188,26 @@ describe('only the readers that judge text ask for all of it', () => {
       false,
     );
     expect(page.asked.length).toBeGreaterThan(0);
-    expect(page.asked.every((args) => args['fullText'] === undefined)).toBe(true);
+    expect(page.asked.every((args) => args[MatchArg.FULL_TEXT] === undefined)).toBe(true);
+  });
+
+  it('an absence check does not ask for full text, so a failed one cannot carry it out', async () => {
+    const page = new BoundedBrowser(LEGEND);
+    const result = await evaluatePredicate(
+      page,
+      parsePredicate({
+        kind: 'text',
+        scope: SCOPE,
+        self: true,
+        absent: true,
+        satisfies: { property: 'nonEmpty' },
+      }),
+      0,
+      false,
+    );
+    expect(page.asked.every((args) => args[MatchArg.FULL_TEXT] === undefined)).toBe(true);
+    const shown = JSON.stringify(result.evidence ?? []);
+    expect(shown).not.toContain('END-OF-LEGEND');
   });
 
   it('a failing property verdict quotes a bounded slice of a very long text', async () => {
