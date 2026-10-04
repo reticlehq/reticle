@@ -238,6 +238,25 @@ export const TRANSPORT_LIMITS = {
   MAX_STACK_LENGTH: 4000,
   MAX_SERIALIZE_DEPTH: 8,
   MAX_COLLECTION_ITEMS: 200,
+  /**
+   * How much of an element's text a descriptor carries for an agent to READ: the first 80
+   * characters and an ellipsis. Bounded because a descriptor is output, and a verbose node would
+   * otherwise dominate it.
+   */
+  MAX_DESCRIBED_TEXT: 80,
+  /**
+   * How much of an element's text a descriptor carries when a verdict has to JUDGE it (a `text`
+   * predicate's `satisfies`, `MatchArg.FULL_TEXT`). A property graded against the 80-character
+   * display form fails an exact `oneOf` and an end-anchored `matchesPattern` on any text longer
+   * than that. Not unbounded: one MATCH describes up to `MAX_COLLECTION_ITEMS` elements, and 200 of
+   * these must still fit one `MAX_MESSAGE_BYTES` message, or the command fails and the predicate
+   * reads a transport error as "nothing matched".
+   *
+   * Text cut at this bound is the first `MAX_FULL_TEXT` characters plus an ellipsis, so a text of
+   * MORE than `MAX_FULL_TEXT` characters is always one that was cut, and no legitimate text can
+   * look like one - which is how a consumer tells a partial reading from a whole one.
+   */
+  MAX_FULL_TEXT: 4000,
   MAX_OBJECT_KEYS: 200,
   MAX_STRING_LENGTH: 64 * 1024,
   /** Human review marks: the note the human types when flagging a mistake on the page. */
@@ -788,6 +807,12 @@ export const QueryBy = {
   COMPONENT: 'component',
 } as const;
 export type QueryBy = (typeof QueryBy)[keyof typeof QueryBy];
+
+/** Arguments of the `match` command beyond its `query` and `state`. */
+export const MatchArg = {
+  /** `true` describes each match with up to `TRANSPORT_LIMITS.MAX_FULL_TEXT` characters of text, not the display-sized 80. */
+  FULL_TEXT: 'fullText',
+} as const;
 
 /** Commands the bridge sends to the browser SDK (the `name` field of a CommandMessage). */
 export const ReticleCommand = {

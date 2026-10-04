@@ -3,6 +3,7 @@ import {
   DEFAULT_TESTID_ATTR,
   ElementState,
   REDACTED_VALUE,
+  TRANSPORT_LIMITS,
   type ElementDescriptor,
 } from '@reticlehq/core';
 import {
@@ -911,18 +912,23 @@ export function isVisible(el: Element, memo?: Map<Element, boolean>): boolean {
   return result;
 }
 
-const MAX_TEXT = 80;
-
-function getVisibleText(el: Element): string {
+function getVisibleText(el: Element, fullText: boolean): string {
   const text = collapse(el.textContent ?? '');
-  return text.length > MAX_TEXT ? `${text.slice(0, MAX_TEXT)}…` : text;
+  const max = fullText ? TRANSPORT_LIMITS.MAX_FULL_TEXT : TRANSPORT_LIMITS.MAX_DESCRIBED_TEXT;
+  return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
 /** Build the compact descriptor surfaced to the agent. `memo` (optional) shares the per-call
- * visibility cache with the query's state filter so ancestors aren't re-walked per element. */
-export function describe(el: Element, memo?: Map<Element, boolean>): ElementDescriptor {
+ * visibility cache with the query's state filter so ancestors aren't re-walked per element.
+ * `fullText` is for a verdict that has to JUDGE the text rather than show it: the descriptor carries
+ * up to `TRANSPORT_LIMITS.MAX_FULL_TEXT` characters instead of the display-sized 80. */
+export function describe(
+  el: Element,
+  memo?: Map<Element, boolean>,
+  fullText = false,
+): ElementDescriptor {
   const value = getValue(el);
-  const text = getVisibleText(el);
+  const text = getVisibleText(el, fullText);
   const name = getAccessibleName(el);
   const visible = isVisible(el, memo); // O(depth) style walk — computed ONCE and reused by getStates
   const base: ElementDescriptor = {

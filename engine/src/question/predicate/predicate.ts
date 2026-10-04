@@ -345,6 +345,7 @@ async function evaluatePredicateRaw(
         true === predicate.visible ? ElementState.VISIBLE : undefined,
         predicate.absent ?? false,
         diagnose,
+        undefined !== predicate.satisfies,
       );
       if (undefined === predicate.satisfies) return found;
       return withTextProperty(
