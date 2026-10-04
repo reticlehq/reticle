@@ -14,8 +14,13 @@
  * however correct its verdict.
  */
 
-import { describe, expect, it } from 'vitest';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterAll, describe, expect, it } from 'vitest';
 import {
+  ChromiumPathProblem,
+  chromiumPathProblem,
   chromiumHint,
   chromiumInstallCommand,
   chromiumInstallDepsCommand,
@@ -207,5 +212,59 @@ describe('a Chromium named by RETICLE_CHROMIUM_PATH', () => {
     expect(line).toContain(CUSTOM);
     expect(line).toContain('RETICLE_CHROMIUM_PATH');
     expect(line).not.toContain('install');
+  });
+
+  it('says a directory or a file it cannot execute is not usable, rather than missing', () => {
+    for (const [problem, says] of [
+      [ChromiumPathProblem.NOT_A_FILE, 'which is not a file'],
+      [ChromiumPathProblem.NOT_EXECUTABLE, 'which is not executable'],
+    ] as const) {
+      const line = chromiumHint({
+        executablePath: CUSTOM,
+        exists: false,
+        configured: true,
+        problem,
+      });
+      expect(line).toMatch(/^✗/);
+      expect(line).toContain(`${CUSTOM}, ${says}`);
+      expect(line).not.toContain('install');
+    }
+  });
+});
+
+/** Read off a real filesystem, since what Playwright can start is a fact about the disk. */
+describe('what stops a RETICLE_CHROMIUM_PATH from launching', () => {
+  const root = mkdtempSync(join(tmpdir(), 'reticle-chromium-path-'));
+  const directory = join(root, 'chrome-dir');
+  mkdirSync(directory);
+  const plain = join(root, 'chrome-plain');
+  writeFileSync(plain, '');
+  chmodSync(plain, 0o644);
+  const runnable = join(root, 'chrome');
+  writeFileSync(runnable, '');
+  chmodSync(runnable, 0o755);
+  afterAll(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('finds nothing wrong with an executable file', () => {
+    expect(chromiumPathProblem(runnable, process.platform)).toBeUndefined();
+  });
+
+  it('tells a missing path from a directory', () => {
+    expect(chromiumPathProblem(join(root, 'nope'), process.platform)).toBe(
+      ChromiumPathProblem.MISSING,
+    );
+    expect(chromiumPathProblem(directory, process.platform)).toBe(ChromiumPathProblem.NOT_A_FILE);
+  });
+
+  // chmod does not clear an executable bit on Windows, so there is no such file to make there.
+  it.skipIf('win32' === process.platform)('refuses a file without the executable bit', () => {
+    expect(chromiumPathProblem(plain, process.platform)).toBe(ChromiumPathProblem.NOT_EXECUTABLE);
+  });
+
+  it('does not ask for an executable bit on Windows, which has none', () => {
+    expect(chromiumPathProblem(plain, 'win32')).toBeUndefined();
+    expect(chromiumPathProblem(directory, 'win32')).toBe(ChromiumPathProblem.NOT_A_FILE);
   });
 });

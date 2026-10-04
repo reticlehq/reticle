@@ -21,7 +21,7 @@
  * rather than by a table of roots this file would have to keep in step with Playwright's.
  */
 
-import { existsSync, readdirSync } from 'node:fs';
+import { accessSync, constants as fsConstants, existsSync, readdirSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { ReticleEnv } from '@reticlehq/core';
 
@@ -55,6 +55,43 @@ export interface ChromiumProbe {
   fallback?: string | undefined;
   /** `executablePath` came from RETICLE_CHROMIUM_PATH, so the bundled build is not in play at all. */
   configured?: boolean | undefined;
+  /** Why that configured executable cannot be launched. Present only when `exists` is false. */
+  problem?: ChromiumPathProblem | undefined;
+}
+
+/** What stops the executable RETICLE_CHROMIUM_PATH names from being launched. */
+export const ChromiumPathProblem = {
+  MISSING: 'missing',
+  NOT_A_FILE: 'not-a-file',
+  NOT_EXECUTABLE: 'not-executable',
+} as const;
+export type ChromiumPathProblem = (typeof ChromiumPathProblem)[keyof typeof ChromiumPathProblem];
+
+/**
+ * What stops the file at `path` from being launched, or undefined when nothing does.
+ *
+ * Existing is not enough: Playwright cannot start a directory or a file without the executable bit,
+ * and its error for that reads like a missing install. Windows has no executable bit, so only the
+ * file check applies there.
+ */
+export function chromiumPathProblem(
+  path: string,
+  platform: NodeJS.Platform,
+): ChromiumPathProblem | undefined {
+  let isFile: boolean;
+  try {
+    isFile = statSync(path).isFile();
+  } catch {
+    return ChromiumPathProblem.MISSING;
+  }
+  if (!isFile) return ChromiumPathProblem.NOT_A_FILE;
+  if ('win32' === platform) return undefined;
+  try {
+    accessSync(path, fsConstants.X_OK);
+    return undefined;
+  } catch {
+    return ChromiumPathProblem.NOT_EXECUTABLE;
+  }
 }
 
 /** The Chromium RETICLE_CHROMIUM_PATH names, or undefined when it is unset or blank. */
@@ -70,22 +107,45 @@ export function configuredChromiumPath(env: NodeJS.ProcessEnv): string | undefin
  */
 export function configuredChromiumProbe(
   env: NodeJS.ProcessEnv,
-  exists: (path: string) => boolean,
+  pathProblem: (path: string) => ChromiumPathProblem | undefined,
 ): ChromiumProbe | undefined {
   const path = configuredChromiumPath(env);
   if (path === undefined) return undefined;
-  return { executablePath: path, exists: exists(path), configured: true };
+  const problem = pathProblem(path);
+  return {
+    executablePath: path,
+    exists: problem === undefined,
+    configured: true,
+    ...(problem === undefined ? {} : { problem }),
+  };
 }
 
 /**
- * A RETICLE_CHROMIUM_PATH that names nothing. Worded apart from the missing-browser hint on purpose:
- * that one sends the reader to install Playwright's build, which does nothing for a path typed wrong.
+ * How every RETICLE_CHROMIUM_PATH refusal begins. Error recovery keys on it, so the variable's name
+ * is read as configuration rather than as a `reticle_*` tool the call got wrong.
  */
-export function configuredChromiumMissing(path: string): string {
-  return (
-    `${ReticleEnv.CHROMIUM_PATH} points at ${path}, which does not exist; fix the path, or unset ` +
-    "it to use Playwright's own Chromium"
-  );
+export const CHROMIUM_PATH_REFUSAL_PREFIX = `${ReticleEnv.CHROMIUM_PATH} points at `;
+
+/** What each problem reads as, after the path. */
+const CHROMIUM_PATH_PROBLEM_TEXT: Record<ChromiumPathProblem, string> = {
+  [ChromiumPathProblem.MISSING]: 'which does not exist',
+  [ChromiumPathProblem.NOT_A_FILE]: 'which is not a file',
+  [ChromiumPathProblem.NOT_EXECUTABLE]: 'which is not executable',
+};
+
+const CHROMIUM_PATH_FIX = "fix the path, or unset it to use Playwright's own Chromium";
+
+/** The doctor verdict for a RETICLE_CHROMIUM_PATH that can be launched. */
+const CHROMIUM_PATH_IN_USE = (path: string): string =>
+  `✓ using ${path} (${ReticleEnv.CHROMIUM_PATH})`;
+
+/**
+ * A RETICLE_CHROMIUM_PATH that cannot be launched. Worded apart from the missing-browser hint on
+ * purpose: that one sends the reader to install Playwright's build, which does nothing for a path
+ * typed wrong.
+ */
+export function configuredChromiumRefusal(path: string, problem: ChromiumPathProblem): string {
+  return `${CHROMIUM_PATH_REFUSAL_PREFIX}${path}, ${CHROMIUM_PATH_PROBLEM_TEXT[problem]}; ${CHROMIUM_PATH_FIX}`;
 }
 
 /**
@@ -236,13 +296,16 @@ export function bundledPlaywrightVersion(): string | undefined {
  * Why the lease preflight refuses, or undefined when a launch can go ahead.
  *
  * "Chromium is not installed" is kept in the usual message because error-recovery routes it to the
- * install fix. A RETICLE_CHROMIUM_PATH that names nothing is a wrong path, not a missing install, so
- * it says only that and the install fix is never attached.
+ * install fix. A RETICLE_CHROMIUM_PATH that cannot be launched is a wrong path, not a missing
+ * install, so it says only that and the install fix is never attached.
  */
 export function chromiumPreflightRefusal(probe: ChromiumProbe): string | undefined {
   if (probe.exists) return undefined;
   if (true === probe.configured && probe.executablePath !== undefined) {
-    return configuredChromiumMissing(probe.executablePath);
+    return configuredChromiumRefusal(
+      probe.executablePath,
+      probe.problem ?? ChromiumPathProblem.MISSING,
+    );
   }
   return `Chromium is not installed for Playwright — ${chromiumHint(probe)}`;
 }
@@ -251,8 +314,8 @@ export function chromiumPreflightRefusal(probe: ChromiumProbe): string | undefin
 export function chromiumHint(probe: ChromiumProbe): string {
   if (true === probe.configured && probe.executablePath !== undefined) {
     return probe.exists
-      ? `✓ using ${probe.executablePath} (${ReticleEnv.CHROMIUM_PATH})`
-      : `✗ ${configuredChromiumMissing(probe.executablePath)}`;
+      ? CHROMIUM_PATH_IN_USE(probe.executablePath)
+      : `✗ ${configuredChromiumRefusal(probe.executablePath, probe.problem ?? ChromiumPathProblem.MISSING)}`;
   }
   if (probe.exists) {
     // Naming the revision on the happy line too: it is the number the mismatch line talks about, and

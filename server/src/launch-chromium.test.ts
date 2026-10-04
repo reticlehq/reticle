@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ReticleEnv } from '@reticlehq/core';
 import type { ChromiumLaunchOptions } from './chromium-launch-options.js';
+import { ChromiumPathProblem } from './command/cli/doctor/browser/chromium-hint.js';
 import { chromiumLaunchHint } from './portal/pool/playwright-launcher.js';
 import {
   announceOnce,
@@ -17,10 +18,17 @@ const BUNDLED = '/cache/ms-playwright/chromium-1223/chrome';
 const MAC_CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const MAC_EDGE = '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge';
 
-/** A fake machine: `present` is the set of files that exist; `install` adds the bundled build. */
+/**
+ * A fake machine: `present` is the set of files that exist; `install` adds the bundled build.
+ * `unusable` marks a present path that still cannot be launched, such as a directory.
+ */
 function machine(
   present: string[],
-  opts: { installSucceeds?: boolean; env?: NodeJS.ProcessEnv } = {},
+  opts: {
+    installSucceeds?: boolean;
+    env?: NodeJS.ProcessEnv;
+    unusable?: Record<string, ChromiumPathProblem>;
+  } = {},
 ) {
   const files = new Set(present);
   const announced: string[] = [];
@@ -28,6 +36,7 @@ function machine(
   const deps: ChromiumTargetDeps = {
     executablePath: () => BUNDLED,
     exists: (p) => files.has(p),
+    pathProblem: (p) => (files.has(p) ? opts.unusable?.[p] : ChromiumPathProblem.MISSING),
     platform: 'darwin',
     env: opts.env ?? {},
     install: () => {
@@ -230,23 +239,53 @@ describe(`a Chromium named by ${ReticleEnv.CHROMIUM_PATH}`, () => {
     expect(m.installs()).toBe(0);
   });
 
+  /** Existing is not enough: Playwright cannot start either, and says so as a missing install. */
+  it.each([
+    [ChromiumPathProblem.NOT_A_FILE, 'which is not a file'],
+    [ChromiumPathProblem.NOT_EXECUTABLE, 'which is not executable'],
+  ])('refuses a path that is %s, saying so, and never falls back', async (problem, says) => {
+    const m = machine([CUSTOM, BUNDLED, MAC_CHROME], { env, unusable: { [CUSTOM]: problem } });
+    const launched: ChromiumLaunchOptions[] = [];
+    const attempt = launchChromium(
+      {
+        executablePath: () => BUNDLED,
+        launch: (opts: ChromiumLaunchOptions) => {
+          launched.push(opts);
+          return Promise.resolve('browser');
+        },
+      },
+      true,
+      m.deps,
+    );
+    const message = await attempt.catch((err: unknown) => (err as Error).message);
+    expect(message).toContain(`${CUSTOM}, ${says}`);
+    expect(launched).toEqual([]);
+    expect(m.installs()).toBe(0);
+  });
+
   it('is ignored when blank', async () => {
     const m = machine([BUNDLED], { env: { [ReticleEnv.CHROMIUM_PATH]: '  ' } });
     expect(await resolveChromiumTarget(m.deps)).toEqual({ found: true });
   });
 
   it('is what doctor and the lease preflight report on', async () => {
-    const present = { env, exists: (p: string) => CUSTOM === p };
+    const present = { env, exists: (p: string) => CUSTOM === p, pathProblem: () => undefined };
+    const directory = {
+      env,
+      exists: (p: string) => CUSTOM === p,
+      pathProblem: () => ChromiumPathProblem.NOT_A_FILE,
+    };
     for (const probe of [probeChromiumWithFallback, probeLaunchableChromium]) {
       expect(await probe(present)).toEqual({
         executablePath: CUSTOM,
         exists: true,
         configured: true,
       });
-      expect(await probe({ env, exists: () => false })).toMatchObject({
+      expect(await probe(directory)).toEqual({
         executablePath: CUSTOM,
         exists: false,
         configured: true,
+        problem: ChromiumPathProblem.NOT_A_FILE,
       });
     }
   });

@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { TRANSPORT_LIMITS } from '@reticlehq/core';
-import { FEEDBACK_ASK, RECOVERY, buildErrorPayload, recoveryFor } from './error-recovery.js';
+import { RefusalReason, TRANSPORT_LIMITS } from '@reticlehq/core';
+import {
+  FEEDBACK_ASK,
+  RECOVERY,
+  buildErrorPayload,
+  recoveryFor,
+  refusalReasonFor,
+} from './error-recovery.js';
+import {
+  ChromiumPathProblem,
+  chromiumPreflightRefusal,
+} from '@/command/cli/doctor/browser/chromium-hint.js';
 import { TOOLS } from './tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { diagnoseNoSession } from '@/portal/session/no-session-diagnosis.js';
@@ -769,5 +779,31 @@ describe('the destructive-control refusal names the argument it wants', () => {
    */
   it('names a trigger word that is not destruction', () => {
     expect(recoveryFor(blocked) ?? '').toMatch(/deploy|publish/);
+  });
+});
+
+/**
+ * The lease preflight's refusal for a RETICLE_CHROMIUM_PATH it cannot launch. The variable's name
+ * looks like a `reticle_*` tool to the catch-all rule, which told the agent its call had failed the
+ * schema and to retry it. Nothing about the call was wrong, and no retry can change the daemon's
+ * environment.
+ */
+describe('a RETICLE_CHROMIUM_PATH the daemon cannot launch', () => {
+  const refusal = (path: string, problem: ChromiumPathProblem): string =>
+    chromiumPreflightRefusal({ executablePath: path, exists: false, configured: true, problem }) ??
+    '';
+
+  it.each(Object.values(ChromiumPathProblem))('gets configuration advice when %s', (problem) => {
+    const payload = buildErrorPayload(refusal('/opt/nope/chrome', problem));
+    expect(payload.recovery).toBe(RECOVERY.CHROMIUM_PATH);
+    expect(payload.recovery).not.toBe(RECOVERY.BAD_ARGUMENTS);
+    expect(payload.feedback).toBeUndefined();
+    expect(refusalReasonFor(refusal('/opt/nope/chrome', problem))).toBe(RefusalReason.NOT_READY);
+  });
+
+  /** The path is the user's, so it can hold any word another rule keys on. */
+  it('wins over a rule that a word in the path would otherwise match', () => {
+    const message = refusal('/srv/throttled/reticle_lease/chrome', ChromiumPathProblem.MISSING);
+    expect(buildErrorPayload(message).recovery).toBe(RECOVERY.CHROMIUM_PATH);
   });
 });

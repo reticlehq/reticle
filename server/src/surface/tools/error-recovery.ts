@@ -9,9 +9,10 @@
  * baseline stores). No clock, no IO — unit-testable in isolation.
  */
 
-import { RefusalReason, TRANSPORT_LIMITS } from '@reticlehq/core';
+import { RefusalReason, ReticleEnv, TRANSPORT_LIMITS } from '@reticlehq/core';
 import { SELF_RECOVERING_MARKER } from '@/portal/session/no-session-diagnosis.js';
 import {
+  CHROMIUM_PATH_REFUSAL_PREFIX,
   chromiumInstallCommand,
   bundledPlaywrightVersion,
 } from '@/command/cli/doctor/browser/chromium-hint.js';
@@ -230,6 +231,18 @@ export const RECOVERY = {
     '` if that is what is missing. Meanwhile drive ' +
     'a tab the human already has open — reticle_sessions lists them.',
   /**
+   * RETICLE_CHROMIUM_PATH names a browser the daemon cannot launch. The call was fine and so is the
+   * Playwright install, so neither a retry nor the install command can help: only the daemon's own
+   * environment can, and a running daemon keeps the values it started with.
+   */
+  CHROMIUM_PATH:
+    `Reticle cannot launch the browser ${ReticleEnv.CHROMIUM_PATH} names (the message above says ` +
+    'what is wrong with the path). The call itself was fine, so retrying it will not help, and ' +
+    'neither will installing Chromium. Ask the human to fix that path, or unset it to use ' +
+    "Playwright's own Chromium, in the environment the daemon starts from, then run " +
+    '`npx @reticlehq/server restart`. Meanwhile drive a tab the human already has open, which ' +
+    'reticle_sessions lists. This is configuration, not a Reticle defect: there is nothing to report.',
+  /**
    * The two ways a platform answer can refuse a drive. Neither is a fault, and both were telling the
    * agent that a perfectly understood refusal might be a defect in Reticle — which is how a person
    * who deliberately switched the harness off gets a bug report filed about their own decision.
@@ -259,6 +272,7 @@ const REASON_OF: Record<keyof typeof RECOVERY, RefusalReason> = {
   THROTTLED: RefusalReason.NOT_READY,
   COMMAND_TIMEOUT: RefusalReason.NOT_READY,
   NO_POOL: RefusalReason.NOT_READY,
+  CHROMIUM_PATH: RefusalReason.NOT_READY,
   TOKEN_REQUIRED: RefusalReason.NOT_READY,
   MISSING_BASELINE: RefusalReason.NO_MATCH,
   MISSING_RECORDING: RefusalReason.NO_MATCH,
@@ -288,6 +302,11 @@ const REASON_BY_HINT: ReadonlyMap<string, RefusalReason> = new Map(
 
 /** Ordered match rules; the first hit wins. Substrings track the thrown messages they recover. */
 const RULES: readonly { readonly match: RegExp; readonly hint: string }[] = [
+  // First, because the message carries a path the user chose, and a path can hold any word a later
+  // rule keys on. Without it the variable's name read as a `reticle_*` tool and the agent was told
+  // its call failed the schema. Not anchored, so a launch error that wraps it is still caught. The
+  // prefix has no regex metacharacters, so it is used as is.
+  { match: new RegExp(CHROMIUM_PATH_REFUSAL_PREFIX), hint: RECOVERY.CHROMIUM_PATH },
   { match: /no browser session connected/i, hint: RECOVERY.NO_SESSION },
   { match: /multiple sessions connected/i, hint: RECOVERY.MULTIPLE_SESSIONS },
   { match: /no connected session with id/i, hint: RECOVERY.UNKNOWN_SESSION },

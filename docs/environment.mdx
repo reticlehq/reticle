@@ -33,7 +33,7 @@ Reticle works with none of these set. Each one changes a single behaviour, and m
 | Variable | Read by | What it does |
 | --- | --- | --- |
 | `RETICLE_CDP_URL` | daemon | Attach to a browser that is already running, over CDP, instead of launching one. |
-| `RETICLE_CHROMIUM_PATH` | daemon, `drive`, `verify`, `doctor` | The Chromium executable to launch, for a machine where Playwright's own build is missing and cannot be installed and there is no Chrome or Edge in the usual place. When set, nothing else is tried: no Playwright build, no Chrome or Edge, no install. A path that does not exist is refused with a message naming it. `doctor` reports on this path instead of the bundled build. |
+| `RETICLE_CHROMIUM_PATH` | daemon, `drive`, `verify`, `doctor` | The Chromium executable to launch, for a machine where Playwright's own build is missing and cannot be installed and there is no Chrome or Edge in the usual place. When set, nothing else is tried: no Playwright build, no Chrome or Edge, no install. A path that does not exist, is not a file, or is not executable is refused with a message naming it and saying which. `doctor` reports on this path instead of the bundled build. |
 | `RETICLE_MAX_CONTEXTS` | daemon | The most leased headless browser contexts the pool runs at once. |
 | `RETICLE_MAX_MESSAGES_PER_SECOND` | daemon | Events per second a page may send before the bridge starts sampling them. It never disconnects. Raise it for a legitimately busy app, such as a streaming dashboard. |
 
