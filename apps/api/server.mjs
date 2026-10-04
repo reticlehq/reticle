@@ -16,12 +16,11 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
-const isTest = process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development';
 const VALID = {
-  email: process.env.DEMO_ADMIN_EMAIL || (isTest ? 'admin@reticle.dev' : ''),
-  password: process.env.DEMO_ADMIN_PASSWORD || (isTest ? 'password' : ''),
+  email: process.env.DEMO_ADMIN_EMAIL || 'admin@reticle.dev',
+  password: process.env.DEMO_ADMIN_PASSWORD || 'password',
 };
-const TOKEN = process.env.DEMO_TOKEN || (isTest ? 'reticle-demo-token' : '');
+const TOKEN = process.env.DEMO_TOKEN || 'reticle-demo-token';
 const SYSTEM_PROMPT = 'You write short scripts.';
 
 // 1000 seed items + a place for eventually-consistent additions.
