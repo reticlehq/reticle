@@ -134,7 +134,7 @@ async function generateWithOpenAi(
         reasoning_effort: OPENAI_REASONING_EFFORT,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: USER_PROMPT(label, context) }
+          { role: 'user', content: USER_PROMPT(label, context) },
         ],
       }),
     });

@@ -49,7 +49,10 @@ export const openBrowser = (target: string): void => {
         ? 'cmd'
         : 'xdg-open';
   const escapedTarget = target.replace(/"/g, '""');
-  const args = NodePlatform.WINDOWS === process.platform ? ['/c', 'start', '""', `"${escapedTarget}"`] : [target];
+  const args =
+    NodePlatform.WINDOWS === process.platform
+      ? ['/c', 'start', '""', `"${escapedTarget}"`]
+      : [target];
   try {
     const child = spawn(cmd, args, { stdio: 'ignore', detached: true });
     child.on('error', () => undefined);

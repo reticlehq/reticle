@@ -17,12 +17,12 @@ app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
 const isTest = process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development';
-const VALID = { 
+const VALID = {
   email: process.env.DEMO_ADMIN_EMAIL || (isTest ? 'admin@reticle.dev' : ''),
-  password: process.env.DEMO_ADMIN_PASSWORD || (isTest ? 'password' : '') 
+  password: process.env.DEMO_ADMIN_PASSWORD || (isTest ? 'password' : ''),
 };
 const TOKEN = process.env.DEMO_TOKEN || (isTest ? 'reticle-demo-token' : '');
-const SYSTEM_PROMPT = "You write short scripts.";
+const SYSTEM_PROMPT = 'You write short scripts.';
 
 // 1000 seed items + a place for eventually-consistent additions.
 const items = Array.from({ length: 1000 }, (_, i) => ({ id: i + 1, name: `Item ${i + 1}` }));
@@ -42,7 +42,6 @@ app.post('/api/login', (req, res) => {
   }
   return res.status(401).json({ error: 'invalid email or password' });
 });
-
 
 // --- Expiring access token: 401 → refresh → retry once ---------------------
 //
