@@ -31,7 +31,6 @@ import {
   EventType,
 } from '@reticlehq/core';
 import type { FlowReplayResult } from '@reticlehq/core';
-import { originOf } from './portal/session/session-manager.js';
 import { setBrowserMode, BrowserMode } from './telemetry/browser-mode.js';
 import type { NetworkDetail } from './portal/input/network-detail.js';
 import { replayAndLearn } from './language/flows/flow-learning.js';
