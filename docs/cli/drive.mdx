@@ -53,10 +53,16 @@ A daemon on `:4400` is the normal state the moment any agent connects, and `driv
 
 ```bash
 $ npx @reticlehq/server drive http://localhost:5173
-{"event":"reticle_drive_attached","port":4400,"url":"http://localhost:5173","sessionId":"lease-9f2b…","ready":true}
+{"event":"reticle_drive_attached","port":4400,"url":"http://localhost:5173","sessionId":"lease-9f2b…","ready":true,"projectId":"web","title":"Web"}
 ```
 
-A plain-text line follows it naming the same session, how long it survives untouched (any tool call against it resets that), and, if the page never dialled the bridge, why.
+A plain-text line follows it naming the same session, the app it belongs to (the `projectId` and title the page reported), how long it survives untouched (any tool call against it resets that), and, if the page never dialled the bridge, why.
+
+In a monorepo the port you meant for one app can be held by another. When the current directory's `.reticle.json` names a different project from the one the page reported, the line ends with a warning saying so, and the JSON carries both as `projectId` and `expectedProjectId`. Real capture, with app `admin` on the port, `drive` run from app `web`, and the sentence break shown as `...`:
+
+```
+attached to the Reticle daemon on :4497 ... it is driving http://localhost:5177/?__reticle_project=admin (project "admin", "Admin console") as session lease-74bf5522-8eee-4ea2-b66d-4c056c7dad3a, which every Reticle tool can address. It is released after 300s untouched; any tool call against it resets that. Warning: this directory's .reticle.json is project "web", but the page at http://localhost:5177/?__reticle_project=admin is project "admin", so another app is probably serving that port. Check which dev server is on it before trusting anything this session reports.
+```
 
 That session lives in the daemon, so the tools your agent already has open can address it by id. You do **not** need `reticle stop` first, and should not use it: the MCP proxy respawns a daemon as soon as the next tool call arrives, which is a race a manual `stop` loses.
 

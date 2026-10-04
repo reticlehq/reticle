@@ -853,7 +853,7 @@ export function main(): void {
       handleOpen(parsed.port, parsed.url);
       break;
     case 'drive':
-      handleDrive(parsed);
+      handleDrive(parsed, readProjectId(process.cwd()));
       break;
     case 'verify':
       handleVerify(parsed);

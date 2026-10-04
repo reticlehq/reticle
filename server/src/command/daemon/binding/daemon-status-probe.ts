@@ -88,6 +88,8 @@ interface StatusSession {
   sessionId: string;
   url: string;
   projectId?: string;
+  /** The page's own title. Absent when the page has none, or on a daemon too old to send it. */
+  title?: string;
   throttled: boolean;
   /**
    * The tab is backgrounded. Reported by the daemon on every session; `false` on one too old to say,
@@ -135,6 +137,7 @@ export function summarizeStatus(payload: unknown): {
         ...('string' === typeof r['projectId'] && 0 < r['projectId'].length
           ? { projectId: r['projectId'] }
           : {}),
+        ...('string' === typeof r['title'] && 0 < r['title'].length ? { title: r['title'] } : {}),
         throttled: true === r['throttled'],
         hidden: true === r['hidden'],
         stale: true === r['stale'],

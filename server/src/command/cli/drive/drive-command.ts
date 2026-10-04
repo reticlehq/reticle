@@ -16,6 +16,7 @@ import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { captureLookup, findPortHolder } from '@/command/cli/ports/port-holder.js';
 import {
   DriveMode,
+  attachedApp,
   decideDriveMode,
   describeAttached,
   driveForeignHolder,
@@ -24,8 +25,12 @@ import {
   requestDriveSession,
 } from './drive-attach.js';
 
-export function handleDrive(parsed: { port: number; driveUrl: string; headless: boolean }): void {
-  void driveWithHonestConflict(parsed);
+/** `projectId` is the one in this directory's `.reticle.json`, read by the caller. */
+export function handleDrive(
+  parsed: { port: number; driveUrl: string; headless: boolean },
+  projectId?: string,
+): void {
+  void driveWithHonestConflict(parsed, projectId);
 }
 
 /**
@@ -40,11 +45,14 @@ export function handleDrive(parsed: { port: number; driveUrl: string; headless: 
  * because the MCP proxy respawns a daemon into the gap. So a healthy daemon is now ATTACHED to —
  * see cli/drive/drive-attach.ts.
  */
-async function driveWithHonestConflict(parsed: {
-  port: number;
-  driveUrl: string;
-  headless: boolean;
-}): Promise<void> {
+async function driveWithHonestConflict(
+  parsed: {
+    port: number;
+    driveUrl: string;
+    headless: boolean;
+  },
+  projectId: string | undefined,
+): Promise<void> {
   const presence = await probePresence(parsed.port, { tcpOpen: probeDaemon, status: fetchStatus });
   const mode = decideDriveMode(presence);
   if (DriveMode.REFUSE === mode) {
@@ -60,7 +68,7 @@ async function driveWithHonestConflict(parsed: {
     return;
   }
   if (DriveMode.ATTACH === mode) {
-    await attachToRunningDaemon(parsed.port, parsed.driveUrl, parsed.headless);
+    await attachToRunningDaemon(parsed.port, parsed.driveUrl, parsed.headless, projectId);
     return;
   }
   // The probe cannot close the race: something can take the port between here and the bind, and the
@@ -97,7 +105,12 @@ async function driveWithHonestConflict(parsed: {
  * against it renews its lease), and a foreground hold here could only keep it alive by faking tool
  * calls at it.
  */
-async function attachToRunningDaemon(port: number, url: string, headless: boolean): Promise<void> {
+async function attachToRunningDaemon(
+  port: number,
+  url: string,
+  headless: boolean,
+  projectId: string | undefined,
+): Promise<void> {
   const result = await requestDriveSession(port, url);
   if (!result.ok) {
     log('reticle_drive_attach_failed', { port, url, reason: result.reason });
@@ -105,13 +118,18 @@ async function attachToRunningDaemon(port: number, url: string, headless: boolea
     process.exit(1);
     return;
   }
+  // Only a page that connected has reported its project; one that never dialled in is not listed.
+  const app = result.session.ready
+    ? attachedApp(await fetchStatus(port), result.session.sessionId, projectId)
+    : {};
   log('reticle_drive_attached', {
     port,
     url,
     sessionId: result.session.sessionId,
     ready: result.session.ready,
+    ...app,
   });
-  process.stderr.write(`${describeAttached(port, url, result.session)}\n`);
+  process.stderr.write(`${describeAttached(port, url, result.session, app)}\n`);
   // The command's own default is headed, and this path cannot deliver that. Said out loud rather
   // than left for the user to discover by watching a window that never opens.
   if (!headless) process.stderr.write(`${driveHeadlessOnAttach(port, url)}\n`);

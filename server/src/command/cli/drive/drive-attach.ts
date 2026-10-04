@@ -32,6 +32,7 @@
 import * as http from 'node:http';
 import { DRIVE_PATH, LOOPBACK_HOST } from '@reticlehq/core';
 import { PortPresence } from '@/command/daemon/binding/port-presence.js';
+import { summarizeStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 
 /** What `drive` should do about the port, given what is on it. */
 export const DriveMode = {
@@ -59,7 +60,7 @@ export function decideDriveMode(presence: PortPresence): DriveMode {
 /** A driveable session the daemon opened on our behalf. */
 interface DriveSession {
   sessionId: string;
-  /** Whether the tab's SDK actually registered — false ⇒ the app may not embed @reticlehq/core. */
+  /** Whether the tab's SDK actually registered — false ⇒ the app may not embed @reticlehq/browser. */
   ready: boolean;
   /** How long the session survives untouched. Absent from a daemon that does not report it. */
   expiresInMs?: number;
@@ -173,8 +174,86 @@ export async function requestDriveSession(
   return readAttachResponse(port, url, res);
 }
 
+/** Which app the attached page says it is, beside the project this directory names. */
+export interface AttachedApp {
+  /** The project the page reported when it connected. */
+  projectId?: string;
+  title?: string;
+  /** The `projectId` in this directory's `.reticle.json`, when there is one. */
+  expectedProjectId?: string;
+}
+
+/**
+ * Control characters, and the 0x80 to 0x9f range some terminals also obey. Built with
+ * `fromCharCode` to keep them out of a regex literal (no-control-regex).
+ */
+const TERMINAL_CONTROLS = new RegExp(
+  `[${String.fromCharCode(0)}-${String.fromCharCode(0x1f)}${String.fromCharCode(0x7f)}-${String.fromCharCode(0x9f)}]`,
+  'g',
+);
+
+/**
+ * A value the page chose, safe to print. The project id and title come from the page and are
+ * written straight to the terminal (and into the JSON line beside it), so a page could otherwise
+ * move the cursor or retitle the window. Each control character becomes U+FFFD, so the reader can
+ * still see that something was there.
+ */
+function printable(value: string): string {
+  return value.replace(TERMINAL_CONTROLS, '\uFFFD');
+}
+
+/**
+ * Pick the attached session out of a `/status` payload. Pure.
+ *
+ * The drive answer is a lease result, which carries no project: the page reports that itself when
+ * it connects, and `/status` is where it is already listed.
+ */
+export function attachedApp(
+  status: unknown,
+  sessionId: string,
+  expectedProjectId: string | undefined,
+): AttachedApp {
+  const row = summarizeStatus(status).sessions.find((s) => s.sessionId === sessionId);
+  return {
+    ...(row?.projectId === undefined ? {} : { projectId: printable(row.projectId) }),
+    ...(row?.title === undefined ? {} : { title: printable(row.title) }),
+    ...(expectedProjectId === undefined ? {} : { expectedProjectId }),
+  };
+}
+
+/**
+ * The project and title, and a warning when this directory names a different project.
+ *
+ * In a monorepo the port you meant for one app is easily held by another, and the port, url and
+ * session id read the same either way. Only warned when both sides are known: a page with no
+ * project id proves nothing, and neither does a directory without a `.reticle.json`.
+ */
+function describeApp(url: string, app: AttachedApp): { label: string; warning: string } {
+  const named = [
+    ...(app.projectId === undefined ? [] : [`project ${JSON.stringify(app.projectId)}`]),
+    ...(app.title === undefined ? [] : [JSON.stringify(app.title)]),
+  ];
+  const label = 0 === named.length ? '' : ` (${named.join(', ')})`;
+  const differs =
+    app.projectId !== undefined &&
+    app.expectedProjectId !== undefined &&
+    app.projectId !== app.expectedProjectId;
+  const warning = differs
+    ? ` Warning: this directory's .reticle.json is project ${JSON.stringify(String(app.expectedProjectId))}, ` +
+      `but the page at ${url} is project ${JSON.stringify(String(app.projectId))}, so another app is ` +
+      'probably serving that port. Check which dev server is on it before trusting anything this ' +
+      'session reports.'
+    : '';
+  return { label, warning };
+}
+
 /** The success line. Names the session, because that is the handle everything downstream needs. */
-export function describeAttached(port: number, url: string, session: DriveSession): string {
+export function describeAttached(
+  port: number,
+  url: string,
+  session: DriveSession,
+  app: AttachedApp = {},
+): string {
   const life =
     session.expiresInMs === undefined
       ? ''
@@ -183,12 +262,13 @@ export function describeAttached(port: number, url: string, session: DriveSessio
   if (!session.ready) {
     return (
       `the Reticle daemon on :${String(port)} opened ${url} as session ${session.sessionId}, but ` +
-      `the page did not connect to the bridge. ${session.hint ?? 'Check that the app embeds @reticlehq/core.'}`
+      `the page did not connect to the bridge. ${session.hint ?? 'Check that the app embeds @reticlehq/browser.'}`
     );
   }
+  const { label, warning } = describeApp(url, app);
   return (
-    `attached to the Reticle daemon on :${String(port)} — it is driving ${url} as session ` +
-    `${session.sessionId}, which every Reticle tool can address.${life}`
+    `attached to the Reticle daemon on :${String(port)} — it is driving ${url}${label} as session ` +
+    `${session.sessionId}, which every Reticle tool can address.${life}${warning}`
   );
 }
 
