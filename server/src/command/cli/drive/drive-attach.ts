@@ -176,12 +176,23 @@ export async function requestDriveSession(
 
 /** Which app the attached page says it is, beside the project this directory names. */
 export interface AttachedApp {
-  /** The project the page reported when it connected. */
-  projectId?: string;
-  title?: string;
-  /** The `projectId` in this directory's `.reticle.json`, when there is one. */
-  expectedProjectId?: string;
+  /** What the JSON line carries. Every value is printable, see `printable`. */
+  fields: {
+    /** The project the page reported when it connected. */
+    projectId?: string;
+    title?: string;
+    /** The `projectId` in this directory's `.reticle.json`, when there is one. */
+    expectedProjectId?: string;
+  };
+  /**
+   * The two project ids differ. Decided on the raw values, before either is made printable, so two
+   * ids that differ only in a control character still count as different.
+   */
+  mismatch: boolean;
 }
+
+/** Nothing known about the app, as for a page that never connected. */
+export const NO_ATTACHED_APP: AttachedApp = { fields: {}, mismatch: false };
 
 /**
  * Control characters, and the 0x80 to 0x9f range some terminals also obey. Built with
@@ -193,10 +204,10 @@ const TERMINAL_CONTROLS = new RegExp(
 );
 
 /**
- * A value the page chose, safe to print. The project id and title come from the page and are
- * written straight to the terminal (and into the JSON line beside it), so a page could otherwise
- * move the cursor or retitle the window. Each control character becomes U+FFFD, so the reader can
- * still see that something was there.
+ * A value safe to print. The project id and title come from the page, and the expected project id
+ * from a `.reticle.json` anyone can commit. All three are written straight to the terminal (and into
+ * the JSON line beside it), so they could otherwise move the cursor or retitle the window. Each
+ * control character becomes U+FFFD, so the reader can still see that something was there.
  */
 function printable(value: string): string {
   return value.replace(TERMINAL_CONTROLS, '\uFFFD');
@@ -215,35 +226,51 @@ export function attachedApp(
 ): AttachedApp {
   const row = summarizeStatus(status).sessions.find((s) => s.sessionId === sessionId);
   return {
-    ...(row?.projectId === undefined ? {} : { projectId: printable(row.projectId) }),
-    ...(row?.title === undefined ? {} : { title: printable(row.title) }),
-    ...(expectedProjectId === undefined ? {} : { expectedProjectId }),
+    fields: {
+      ...(row?.projectId === undefined ? {} : { projectId: printable(row.projectId) }),
+      ...(row?.title === undefined ? {} : { title: printable(row.title) }),
+      ...(expectedProjectId === undefined
+        ? {}
+        : { expectedProjectId: printable(expectedProjectId) }),
+    },
+    // Only warned when both sides are known: a page with no project id proves nothing, and neither
+    // does a directory without a `.reticle.json`.
+    mismatch:
+      row?.projectId !== undefined &&
+      expectedProjectId !== undefined &&
+      row.projectId !== expectedProjectId,
   };
 }
+
+/** The fallback when the daemon sent no hint for a page that did not connect. */
+const MSG_NOT_READY_HINT = 'Check that the app embeds @reticlehq/browser.';
+
+/** How the attach line names the page's project. */
+const PROJECT_LABEL = (projectId: string): string => `project ${JSON.stringify(projectId)}`;
+
+/** The page is a different project from the one this directory's `.reticle.json` names. */
+const MSG_PROJECT_MISMATCH = (url: string, expected: string, actual: string): string =>
+  `Warning: this directory's .reticle.json is ${PROJECT_LABEL(expected)}, but the page at ${url} ` +
+  `is ${PROJECT_LABEL(actual)}, so another app is probably serving that port. Check which dev ` +
+  'server is on it before trusting anything this session reports.';
 
 /**
  * The project and title, and a warning when this directory names a different project.
  *
  * In a monorepo the port you meant for one app is easily held by another, and the port, url and
- * session id read the same either way. Only warned when both sides are known: a page with no
- * project id proves nothing, and neither does a directory without a `.reticle.json`.
+ * session id read the same either way.
  */
 function describeApp(url: string, app: AttachedApp): { label: string; warning: string } {
+  const { projectId, title, expectedProjectId } = app.fields;
   const named = [
-    ...(app.projectId === undefined ? [] : [`project ${JSON.stringify(app.projectId)}`]),
-    ...(app.title === undefined ? [] : [JSON.stringify(app.title)]),
+    ...(projectId === undefined ? [] : [PROJECT_LABEL(projectId)]),
+    ...(title === undefined ? [] : [JSON.stringify(title)]),
   ];
   const label = 0 === named.length ? '' : ` (${named.join(', ')})`;
-  const differs =
-    app.projectId !== undefined &&
-    app.expectedProjectId !== undefined &&
-    app.projectId !== app.expectedProjectId;
-  const warning = differs
-    ? ` Warning: this directory's .reticle.json is project ${JSON.stringify(String(app.expectedProjectId))}, ` +
-      `but the page at ${url} is project ${JSON.stringify(String(app.projectId))}, so another app is ` +
-      'probably serving that port. Check which dev server is on it before trusting anything this ' +
-      'session reports.'
-    : '';
+  const warning =
+    app.mismatch && projectId !== undefined && expectedProjectId !== undefined
+      ? ` ${MSG_PROJECT_MISMATCH(url, expectedProjectId, projectId)}`
+      : '';
   return { label, warning };
 }
 
@@ -252,7 +279,7 @@ export function describeAttached(
   port: number,
   url: string,
   session: DriveSession,
-  app: AttachedApp = {},
+  app: AttachedApp = NO_ATTACHED_APP,
 ): string {
   const life =
     session.expiresInMs === undefined
@@ -262,7 +289,7 @@ export function describeAttached(
   if (!session.ready) {
     return (
       `the Reticle daemon on :${String(port)} opened ${url} as session ${session.sessionId}, but ` +
-      `the page did not connect to the bridge. ${session.hint ?? 'Check that the app embeds @reticlehq/browser.'}`
+      `the page did not connect to the bridge. ${session.hint ?? MSG_NOT_READY_HINT}`
     );
   }
   const { label, warning } = describeApp(url, app);

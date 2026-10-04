@@ -16,6 +16,7 @@ import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { captureLookup, findPortHolder } from '@/command/cli/ports/port-holder.js';
 import {
   DriveMode,
+  NO_ATTACHED_APP,
   attachedApp,
   decideDriveMode,
   describeAttached,
@@ -121,13 +122,13 @@ async function attachToRunningDaemon(
   // Only a page that connected has reported its project; one that never dialled in is not listed.
   const app = result.session.ready
     ? attachedApp(await fetchStatus(port), result.session.sessionId, projectId)
-    : {};
+    : NO_ATTACHED_APP;
   log('reticle_drive_attached', {
     port,
     url,
     sessionId: result.session.sessionId,
     ready: result.session.ready,
-    ...app,
+    ...app.fields,
   });
   process.stderr.write(`${describeAttached(port, url, result.session, app)}\n`);
   // The command's own default is headed, and this path cannot deliver that. Said out loud rather
