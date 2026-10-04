@@ -164,6 +164,23 @@ describe('reticle_lease_acquire preflights the browser (#400)', () => {
     expect(acquired).toHaveLength(0);
   });
 
+  /** The user named a browser and the name is wrong. Nothing is missing from Playwright. */
+  it('names a wrong RETICLE_CHROMIUM_PATH without claiming Chromium is not installed', async () => {
+    const { pool, acquired } = fakePool();
+    const attempt = tool(ReticleTool.LEASE_ACQUIRE)(
+      {
+        ...baseDeps,
+        pool,
+        browserProbe: () =>
+          Promise.resolve({ exists: false, executablePath: '/opt/nope/chrome', configured: true }),
+      },
+      { url: 'http://localhost:3000/' },
+    );
+    await expect(attempt).rejects.toThrow(/RETICLE_CHROMIUM_PATH points at \/opt\/nope\/chrome/);
+    await expect(attempt).rejects.not.toThrow(/not installed/);
+    expect(acquired).toHaveLength(0);
+  });
+
   it('proceeds normally when the probe says Chromium is present', async () => {
     const { pool, acquired } = fakePool();
     const result = (await tool(ReticleTool.LEASE_ACQUIRE)(

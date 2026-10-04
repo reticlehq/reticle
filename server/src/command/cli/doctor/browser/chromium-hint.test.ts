@@ -184,3 +184,28 @@ describe('the playwright-absent verdict says where it looked', () => {
     expect(chromiumHint({ exists: false })).not.toContain('looked in');
   });
 });
+
+describe('a Chromium named by RETICLE_CHROMIUM_PATH', () => {
+  const CUSTOM = '/opt/sandbox/chromium/chrome';
+
+  it('reads as installed, naming the path and where it came from', () => {
+    const line = chromiumHint({ executablePath: CUSTOM, exists: true, configured: true });
+    expect(line).toMatch(/^✓/);
+    expect(line).toContain(CUSTOM);
+    expect(line).toContain('RETICLE_CHROMIUM_PATH');
+  });
+
+  /** The install command fixes nothing here: the user pointed at a path, and the path is wrong. */
+  it('says the path is wrong rather than sending the reader to install', () => {
+    const line = chromiumHint({
+      executablePath: CUSTOM,
+      exists: false,
+      configured: true,
+      playwrightVersion: PLAYWRIGHT_VERSION,
+    });
+    expect(line).toMatch(/^✗/);
+    expect(line).toContain(CUSTOM);
+    expect(line).toContain('RETICLE_CHROMIUM_PATH');
+    expect(line).not.toContain('install');
+  });
+});

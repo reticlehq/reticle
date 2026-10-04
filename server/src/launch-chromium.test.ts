@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import { ReticleEnv } from '@reticlehq/core';
 import type { ChromiumLaunchOptions } from './chromium-launch-options.js';
+import { chromiumLaunchHint } from './portal/pool/playwright-launcher.js';
 import {
   announceOnce,
   ChromiumChannel,
   channelExecutableCandidates,
   launchChromium,
+  probeChromiumWithFallback,
+  probeLaunchableChromium,
   resolveChromiumTarget,
   type ChromiumTargetDeps,
 } from './launch-chromium.js';
@@ -14,7 +18,10 @@ const MAC_CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome
 const MAC_EDGE = '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge';
 
 /** A fake machine: `present` is the set of files that exist; `install` adds the bundled build. */
-function machine(present: string[], opts: { installSucceeds?: boolean } = {}) {
+function machine(
+  present: string[],
+  opts: { installSucceeds?: boolean; env?: NodeJS.ProcessEnv } = {},
+) {
   const files = new Set(present);
   const announced: string[] = [];
   let installs = 0;
@@ -22,7 +29,7 @@ function machine(present: string[], opts: { installSucceeds?: boolean } = {}) {
     executablePath: () => BUNDLED,
     exists: (p) => files.has(p),
     platform: 'darwin',
-    env: {},
+    env: opts.env ?? {},
     install: () => {
       installs += 1;
       if (false !== opts.installSucceeds) files.add(BUNDLED);
@@ -157,5 +164,90 @@ describe('the fallback notice', () => {
     announce('using Chrome\n');
     announce('installing\n');
     expect(written).toEqual(['using Chrome\n', 'installing\n']);
+  });
+});
+
+/**
+ * A machine with a Chromium somewhere Reticle would never look: a Linux sandbox with one at a custom
+ * path and `playwright install` not allowed, or a macOS too old for Playwright's pinned build.
+ * RETICLE_CHROMIUM_PATH names it, and nothing else is consulted.
+ */
+describe(`a Chromium named by ${ReticleEnv.CHROMIUM_PATH}`, () => {
+  const CUSTOM = '/opt/sandbox/chromium/chrome';
+  const env = { [ReticleEnv.CHROMIUM_PATH]: CUSTOM };
+
+  it('is used as is, without probing the bundled build, a channel, or installing', async () => {
+    const m = machine([CUSTOM, MAC_CHROME], { env });
+    m.deps.executablePath = () => {
+      throw new Error('the bundled revision was probed');
+    };
+    expect(await resolveChromiumTarget(m.deps)).toEqual({ found: true, executablePath: CUSTOM });
+    expect(m.installs()).toBe(0);
+    expect(m.announced).toEqual([]);
+  });
+
+  it('reaches chromium.launch as executablePath', async () => {
+    const m = machine([CUSTOM], { env });
+    const calls: ChromiumLaunchOptions[] = [];
+    await launchChromium(
+      {
+        executablePath: () => BUNDLED,
+        launch: (opts: ChromiumLaunchOptions) => {
+          calls.push(opts);
+          return Promise.resolve('browser');
+        },
+      },
+      true,
+      m.deps,
+    );
+    expect(calls[0]).toMatchObject({ headless: true, executablePath: CUSTOM });
+    expect(calls[0]).not.toHaveProperty('channel');
+  });
+
+  /**
+   * Playwright's own error for a missing executable is the one chromiumLaunchHint turns into
+   * "install chromium", which does nothing for a path the user typed wrong.
+   */
+  it('refuses a path that does not exist, naming it, and never falls back or installs', async () => {
+    const m = machine([BUNDLED, MAC_CHROME], { env });
+    const launched: ChromiumLaunchOptions[] = [];
+    const attempt = launchChromium(
+      {
+        executablePath: () => BUNDLED,
+        launch: (opts: ChromiumLaunchOptions) => {
+          launched.push(opts);
+          return Promise.resolve('browser');
+        },
+      },
+      true,
+      m.deps,
+    );
+    await expect(attempt).rejects.toThrow(CUSTOM);
+    const message = await attempt.catch((err: unknown) => (err as Error).message);
+    expect(message).toContain(ReticleEnv.CHROMIUM_PATH);
+    expect(chromiumLaunchHint(message)).toBeUndefined();
+    expect(launched).toEqual([]);
+    expect(m.installs()).toBe(0);
+  });
+
+  it('is ignored when blank', async () => {
+    const m = machine([BUNDLED], { env: { [ReticleEnv.CHROMIUM_PATH]: '  ' } });
+    expect(await resolveChromiumTarget(m.deps)).toEqual({ found: true });
+  });
+
+  it('is what doctor and the lease preflight report on', async () => {
+    const present = { env, exists: (p: string) => CUSTOM === p };
+    for (const probe of [probeChromiumWithFallback, probeLaunchableChromium]) {
+      expect(await probe(present)).toEqual({
+        executablePath: CUSTOM,
+        exists: true,
+        configured: true,
+      });
+      expect(await probe({ env, exists: () => false })).toMatchObject({
+        executablePath: CUSTOM,
+        exists: false,
+        configured: true,
+      });
+    }
   });
 });

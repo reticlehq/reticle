@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/server` — `RETICLE_CHROMIUM_PATH` names the Chromium Reticle launches.** Some machines have neither Playwright's build nor a Chrome or Edge in the usual place: a Linux sandbox with Chromium at a custom path where `playwright install` is not allowed, or an older macOS where the pinned build will not install. Set `RETICLE_CHROMIUM_PATH` to the executable and the lease pool, `drive` and `verify` launch it directly, with no bundled-revision probe, no channel fallback and no download. `doctor` reports on that path, and a path that does not exist is refused with a message naming it rather than an install command that cannot help. Closes [#1270](https://github.com/reticlehq/reticle/issues/1270).

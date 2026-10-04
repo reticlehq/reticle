@@ -23,6 +23,7 @@
 
 import { existsSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { ReticleEnv } from '@reticlehq/core';
 
 /** What the check found, gathered by the caller so this stays pure and testable. */
 export interface ChromiumProbe {
@@ -52,6 +53,39 @@ export interface ChromiumProbe {
    * `Microsoft Edge`) — see launch-chromium. Present only when `exists` is false and one was found.
    */
   fallback?: string | undefined;
+  /** `executablePath` came from RETICLE_CHROMIUM_PATH, so the bundled build is not in play at all. */
+  configured?: boolean | undefined;
+}
+
+/** The Chromium RETICLE_CHROMIUM_PATH names, or undefined when it is unset or blank. */
+export function configuredChromiumPath(env: NodeJS.ProcessEnv): string | undefined {
+  const path = env[ReticleEnv.CHROMIUM_PATH]?.trim();
+  return path === undefined || 0 === path.length ? undefined : path;
+}
+
+/**
+ * What the probes report when RETICLE_CHROMIUM_PATH is set, or undefined when it is not. The user
+ * named the browser, so the bundled revision, the installed channels and the browsers root say
+ * nothing about whether a launch will work. Only the named file does.
+ */
+export function configuredChromiumProbe(
+  env: NodeJS.ProcessEnv,
+  exists: (path: string) => boolean,
+): ChromiumProbe | undefined {
+  const path = configuredChromiumPath(env);
+  if (path === undefined) return undefined;
+  return { executablePath: path, exists: exists(path), configured: true };
+}
+
+/**
+ * A RETICLE_CHROMIUM_PATH that names nothing. Worded apart from the missing-browser hint on purpose:
+ * that one sends the reader to install Playwright's build, which does nothing for a path typed wrong.
+ */
+export function configuredChromiumMissing(path: string): string {
+  return (
+    `${ReticleEnv.CHROMIUM_PATH} points at ${path}, which does not exist; fix the path, or unset ` +
+    "it to use Playwright's own Chromium"
+  );
 }
 
 /**
@@ -198,8 +232,28 @@ export function bundledPlaywrightVersion(): string | undefined {
   return undefined;
 }
 
+/**
+ * Why the lease preflight refuses, or undefined when a launch can go ahead.
+ *
+ * "Chromium is not installed" is kept in the usual message because error-recovery routes it to the
+ * install fix. A RETICLE_CHROMIUM_PATH that names nothing is a wrong path, not a missing install, so
+ * it says only that and the install fix is never attached.
+ */
+export function chromiumPreflightRefusal(probe: ChromiumProbe): string | undefined {
+  if (probe.exists) return undefined;
+  if (true === probe.configured && probe.executablePath !== undefined) {
+    return configuredChromiumMissing(probe.executablePath);
+  }
+  return `Chromium is not installed for Playwright — ${chromiumHint(probe)}`;
+}
+
 /** The doctor line for the Chromium check — verdict, what was probed, and how to satisfy it. */
 export function chromiumHint(probe: ChromiumProbe): string {
+  if (true === probe.configured && probe.executablePath !== undefined) {
+    return probe.exists
+      ? `✓ using ${probe.executablePath} (${ReticleEnv.CHROMIUM_PATH})`
+      : `✗ ${configuredChromiumMissing(probe.executablePath)}`;
+  }
   if (probe.exists) {
     // Naming the revision on the happy line too: it is the number the mismatch line talks about, and
     // a reader comparing two machines has nothing to compare without it.

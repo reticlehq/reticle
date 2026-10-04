@@ -74,6 +74,12 @@ All three captures below are real, taken by pointing `PLAYWRIGHT_BROWSERS_PATH` 
 
 **`✓ using the installed Google Chrome`** (or Microsoft Edge) means the pinned build is absent and Reticle drives the browser you already have instead, through Playwright's channel. Nothing to do: the line also names the command that adds Playwright's own build, if you want it.
 
+**`✓ using <path> (RETICLE_CHROMIUM_PATH)`** means you named the browser with [`RETICLE_CHROMIUM_PATH`](/environment), so the bundled revision is not checked at all. If the path does not exist, the line says so instead, and offers no install command, because installing would not fix a wrong path:
+
+```
+  chromium     ✗ RETICLE_CHROMIUM_PATH points at /opt/nope/chrome, which does not exist; fix the path, or unset it to use Playwright's own Chromium
+```
+
 When neither is there, Reticle does not refuse. The first command that needs a browser (a lease, `verify`, a drive) runs the bundled Playwright's own pinned install for you, announced on stderr so `reticle mcp`'s stdout stays clean. The two `✗` lines below are what you see when that has not happened yet, or failed.
 
 **`✗ wrong revision`** means builds are installed and none of them is the wanted one. One pinned download away. The line names the revision Playwright wants, then every revision the root actually holds, then the exact command:

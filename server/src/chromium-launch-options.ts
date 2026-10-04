@@ -28,16 +28,23 @@ export interface ChromiumLaunchOptions {
   args: string[];
   /** An installed Chrome/Edge to drive instead of Playwright's own build; absent = the bundled one. */
   channel?: string;
+  /** A Chromium executable to launch directly, from RETICLE_CHROMIUM_PATH. */
+  executablePath?: string;
 }
 
 /**
  * Build the launch options for a headless or headed Chromium. Pure; returns a fresh mutable array
  * each call so no caller can mutate the constant behind everyone else's back.
  */
-export function chromiumLaunchOptions(headless: boolean, channel?: string): ChromiumLaunchOptions {
+export function chromiumLaunchOptions(
+  headless: boolean,
+  channel?: string,
+  executablePath?: string,
+): ChromiumLaunchOptions {
   return {
     headless,
     args: [...CHROMIUM_ANTI_THROTTLING_ARGS],
     ...(channel === undefined ? {} : { channel }),
+    ...(executablePath === undefined ? {} : { executablePath }),
   };
 }

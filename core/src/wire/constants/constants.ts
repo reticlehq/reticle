@@ -129,6 +129,8 @@ export const ReticleEnv = {
   STATE_DIR: 'RETICLE_STATE_DIR',
   /** Attach to an already-running browser over CDP instead of launching one. */
   CDP_URL: 'RETICLE_CDP_URL',
+  /** The Chromium executable to launch, in place of Playwright's own build or an installed Chrome. */
+  CHROMIUM_PATH: 'RETICLE_CHROMIUM_PATH',
   /** Max simultaneous leased headless contexts in the browser pool (resource cap). */
   MAX_CONTEXTS: 'RETICLE_MAX_CONTEXTS',
   /**

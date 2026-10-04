@@ -44,7 +44,7 @@ import {
 import { ReticleTool, SESSION_HEALTH } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
 import { asString } from '@reticlehq/core';
-import { chromiumHint } from '@/command/cli/doctor/browser/chromium-hint.js';
+import { chromiumPreflightRefusal } from '@/command/cli/doctor/browser/chromium-hint.js';
 
 /**
  * Everything the daemon already knows about why a leased tab might not have dialled in.
@@ -609,10 +609,8 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     // fine. Say the real thing at the first refusal instead. The phrasing carries "Chromium is not
     // installed" so error-recovery routes it to the NO_POOL fix (install + drive a human tab).
     if (deps.browserProbe !== undefined) {
-      const probe = await deps.browserProbe();
-      if (!probe.exists) {
-        throw new Error(`Chromium is not installed for Playwright — ${chromiumHint(probe)}`);
-      }
+      const refusal = chromiumPreflightRefusal(await deps.browserProbe());
+      if (refusal !== undefined) throw new Error(refusal);
     }
     const projectId = asString(args['projectId']);
     const seedStorageArg = args['seedStorage'];
