@@ -15,14 +15,28 @@
  * and the refusal being asserted never happened.
  */
 import { describe, expect, it } from 'vitest';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { asProjectId, ReticleDir } from '@reticlehq/core';
 import type { ProjectCandidate } from '@reticlehq/core/artifacts';
 import { ArtifactRootReason, UNMATCHED_SUBDIR } from './artifact-root.js';
 import { artifactRootResolver } from './artifact-root-resolver.js';
 
-const MAIN = '/repo/main';
-const CLONE = '/repo/clone';
+/**
+ * Built by the platform's own path module, not spelled as POSIX literals.
+ *
+ * The daemon-id lookup is one exact string comparison — `dirname(daemonRoot) === candidate.directory`
+ * — and `dirname(join(x, ReticleDir.ROOT))` returns `x` only when both sides went through the same
+ * path implementation. A literal `'/repo/main'` against a `join`-ed daemon root is equal on POSIX
+ * and never on Windows (`'\repo\main'` vs `'/repo/main'`), so the AMBIGUOUS spec below — the one
+ * place that lookup's answer is observable — found no candidate and resolved to the unmatched
+ * bucket for the FIXTURE's reason, failing the Windows merge-queue job. The resolver was right.
+ *
+ * Production is safe from this by construction: the daemon root, `process.cwd()`, what `init` wrote
+ * into the registry and what discovery walks all come from one platform's `path`.
+ */
+const MAIN = join(sep, 'repo', 'main');
+const CLONE = join(sep, 'repo', 'clone');
+const BACKEND = join(sep, 'repo', 'backend');
 const MAIN_ID = 'main-repo-1a2b';
 const WORKTREE_ID = 'worktree-b-3c4d';
 
@@ -79,12 +93,12 @@ describe('a daemon that cannot place the project it was asked about', () => {
 
   /** A daemon that is only a guest never writes into the tree it happens to be started in. */
   it('keeps out of a directory that never asked for Reticle', () => {
-    const resolved = artifactRootResolver(join('/repo/backend', ReticleDir.ROOT), {
+    const resolved = artifactRootResolver(join(BACKEND, ReticleDir.ROOT), {
       candidates: onlyMain,
       daemonIsProject: () => false,
     })(asProjectId(WORKTREE_ID));
 
-    expect(resolved.root).not.toBe(join('/repo/backend', ReticleDir.ROOT));
+    expect(resolved.root).not.toBe(join(BACKEND, ReticleDir.ROOT));
     expect(inUnmatched(resolved.root, WORKTREE_ID)).toBe(true);
   });
 });
@@ -122,7 +136,7 @@ describe('a project two checkouts both declare', () => {
    * about, so the artifacts go to the unmatched bucket rather than into whatever tree it sits in.
    */
   it('declines when the daemon’s checkout is not among them', () => {
-    const resolved = artifactRootResolver(join('/repo/backend', ReticleDir.ROOT), {
+    const resolved = artifactRootResolver(join(BACKEND, ReticleDir.ROOT), {
       candidates: () => [
         { projectId: MAIN_ID, directory: MAIN },
         { projectId: MAIN_ID, directory: CLONE },
@@ -130,7 +144,7 @@ describe('a project two checkouts both declare', () => {
       daemonIsProject: () => true,
     })(asProjectId(MAIN_ID));
 
-    expect(resolved.root).not.toBe(join('/repo/backend', ReticleDir.ROOT));
+    expect(resolved.root).not.toBe(join(BACKEND, ReticleDir.ROOT));
     expect(inUnmatched(resolved.root, MAIN_ID)).toBe(true);
   });
 });
