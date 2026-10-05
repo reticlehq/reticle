@@ -17,7 +17,7 @@ categories = ["development-tools::testing", "gui"]
 exclude = ["target/", "Cargo.lock"]
 
 [dependencies]
-tauri = "2"
+tauri = "2.12"
 
 [target."cfg(target_os = \"macos\")".dependencies]
 block2 = "0.6"
@@ -32,8 +32,10 @@ objc2-foundation = { version = "0.3", features = [
 objc2-web-kit = { version = "0.3", features = ["WKWebView", "WKSnapshotConfiguration"] }
 
 [target."cfg(windows)".dependencies]
-webview2-com = "0.38"
-windows = { version = "0.61", features = [
+# Must be the versions tauri's own wry resolves: `with_webview` hands back ITS webview2 types, and a
+# second copy of webview2-com/windows makes those types foreign to this crate (tauri 2.12 -> wry 0.57).
+webview2-com = "0.39"
+windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_System_Com",
   "Win32_UI_Shell",
