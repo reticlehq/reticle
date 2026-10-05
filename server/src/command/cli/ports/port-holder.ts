@@ -129,6 +129,38 @@ export function describeForeignHolder(
   );
 }
 
+/** Parse the first TCP listener for a port from `netstat -ano` output. */
+export function parseNetstatPortHolder(stdout: string, port: number): PortHolder | null {
+  for (const raw of stdout.split('\n')) {
+    const fields = raw.trim().split(/\s+/);
+    const protocol = fields[0];
+    const localAddress = fields[1];
+    const state = fields[3];
+    const pidValue = fields[4];
+
+    if (
+      undefined === protocol ||
+      undefined === localAddress ||
+      undefined === state ||
+      undefined === pidValue
+    ) {
+      continue;
+    }
+
+    if ('TCP' !== protocol.toUpperCase() || 'LISTENING' !== state.toUpperCase()) continue;
+
+    const portSuffix = `:${String(port)}`;
+    if (!localAddress.endsWith(portSuffix)) continue;
+
+    const pid = Number(pidValue);
+    if (!Number.isInteger(pid) || pid <= 0) return null;
+
+    return { pid, command: 'unknown' };
+  }
+
+  return null;
+}
+
 /** The lookup itself. `exec` is injected so the shelling out never runs in a unit test. */
 export function findPortHolder(
   port: number,
@@ -138,5 +170,10 @@ export function findPortHolder(
   // that matters: without it this also reports the agent's own MCP proxy, which is a client of the
   // port, not its owner.
   const out = exec('lsof', ['-nP', `-iTCP:${String(port)}`, '-sTCP:LISTEN', '-F', 'pc']);
-  return null === out ? null : parsePortHolder(out);
+  if (null !== out) return parsePortHolder(out);
+
+  // Windows does not normally have lsof. netstat is built into Windows and reports the owning PID
+  // for listening TCP sockets, giving kill a process identity tied to the actual port owner.
+  const netstat = exec('netstat', ['-ano', '-p', 'tcp']);
+  return null === netstat ? null : parseNetstatPortHolder(netstat, port);
 }

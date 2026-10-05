@@ -28,6 +28,11 @@ describe('the status payload', () => {
     expect(out.why).toBe('run `reticle init` in the app directory');
   });
 
+  it('includes the daemon pid', () => {
+    const out = statusPayload(0, []);
+    expect(out.pid).toBe(process.pid);
+  });
+
   it('omits it when a session IS connected — it would contradict the session', () => {
     expect(statusPayload(1, [session], 'no app is running').why).toBeUndefined();
   });
