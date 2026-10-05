@@ -64,6 +64,7 @@ import { RECONCILE_TOOLS } from './reconcile-tools.js';
 import { READ_TOOLS } from './read-tools.js';
 import { LEASE_TOOLS } from './lease-tools.js';
 import { FEEDBACK_TOOLS } from './feedback-tools.js';
+import { withMergedSessionMembers } from './merged-session-plan.js';
 
 // Re-exported so tool modules that import these from './tools.js' keep working after the kit move.
 export type { ToolDef, ToolDeps } from './tool-kit.js';
@@ -928,38 +929,18 @@ export const SURFACE_MERGE_PLANS: MergePlan[] = [
 ];
 
 /**
- * The `merged` surface's table. Built from the SAME raw tools and the same handlers — a merge can
- * change the advertised shape and nothing else, which is what makes the two surfaces comparable.
- */
-/**
  * Every merge the `merged` surface applies, as ONE list.
  *
  * Named rather than inlined into `applyMerges`' argument because a second reader needs it:
  * `mergedNameRedirect` builds its tombstones from these plans. A member injected inline instead gets
  * no tombstone, and the merged name answers "not found" on the surface where it stopped existing —
  * which is what happened to `reticle_sessions`, the first call most agents make.
+ *
+ * `list`/`feedback` join `reticle_session` here, not in `MERGE_PLANS`, so the harness toolset keeps
+ * excluding `reticle_feedback` by name.
  */
 export const MERGED_SURFACE_PLANS: MergePlan[] = [
-  ...MERGE_PLANS.map((plan) =>
-    plan.name === ReticleTool.SESSION
-      ? {
-          ...plan,
-          // `list` and `feedback` join the session family HERE and not in MERGE_PLANS, so the
-          // harness toolset — which builds from TOOLS — keeps excluding `reticle_feedback` by
-          // name. A model driving in a loop reports its own confusion as a product defect.
-          members: {
-            ...plan.members,
-            list: ReticleTool.SESSIONS,
-            feedback: ReticleTool.FEEDBACK,
-          },
-          // A bare `reticle_session` is "what is connected?" — the FIRST call an agent makes, and
-          // the one `reticle_sessions` answered before it was folded in here. Only on this
-          // surface: on the default one `reticle_sessions` still exists and this tool is purely
-          // lifecycle, where no member is the obvious bare meaning.
-          defaultAction: 'list',
-        }
-      : plan,
-  ),
+  ...MERGE_PLANS.map(withMergedSessionMembers),
   ...SURFACE_MERGE_PLANS,
 ];
 

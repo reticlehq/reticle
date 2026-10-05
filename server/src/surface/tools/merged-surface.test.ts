@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/core';
 import { TOOL_SURFACE, EXTENDED_TOOL_NAMES } from './tool-surface.js';
-import { advertisedTools } from '@/surface/mcp/mcp.js';
+import { advertisedConfig, advertisedTools } from '@/surface/mcp/mcp.js';
+import { FeedbackKind } from '@reticlehq/core/telemetry';
 import { SURFACE_MERGE_PLANS, MERGED_TOOLS, TOOLS } from './tools.js';
 
 /**
@@ -157,5 +158,23 @@ describe('a bare call means the obvious thing', () => {
       result.error,
       'a default here would pick between reading the app and DRIVING it, and a wrong guess drives',
     ).toMatch(/unknown action/);
+  });
+});
+
+describe('reticle_session on merged advertises feedback', () => {
+  it('names the kind enum and carries a feedback example', () => {
+    const merged = advertisedTools(TOOL_SURFACE.MERGED);
+    const session = merged.find((tool) => tool.name === ReticleTool.SESSION);
+    if (session === undefined) {
+      throw new Error('reticle_session must be advertised on merged');
+    }
+    const shown = advertisedConfig(session, merged, TOOL_SURFACE.MERGED).description;
+    expect(shown).toContain('feedback');
+    expect(shown).toContain(FeedbackKind.BUG);
+    expect(session?.example).toEqual({
+      action: 'feedback',
+      kind: FeedbackKind.BUG,
+      text: 'The merged session tool never showed that feedback needs a kind.',
+    });
   });
 });
