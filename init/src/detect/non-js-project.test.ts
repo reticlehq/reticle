@@ -11,6 +11,8 @@ import { describe, expect, it } from 'vitest';
 import {
   detectNonJsEcosystem,
   detectStreamlitProject,
+  NoPackageJsonCase,
+  noPackageJsonAnswer,
   noPackageJsonMessage,
   streamlitSetupMessage,
 } from './non-js-project.js';
@@ -115,6 +117,22 @@ describe('the message', () => {
     const message = noPackageJsonMessage(withFiles('manage.py'));
     expect(message).toContain('--app');
     expect(message).toMatch(/frontend/);
+  });
+});
+
+describe('which case it picked', () => {
+  // `init` writes nothing on the wrong-directory case, so the case and the message have to come from
+  // the same decision. These pin each case to the message that goes with it.
+  it.each([
+    ['an empty directory', withFiles(), [], NoPackageJsonCase.WRONG_DIRECTORY],
+    ['a lone index.html', withFiles('index.html'), [], NoPackageJsonCase.STATIC_PAGE],
+    ['a top-level HTML file', withFiles(), ['about.html'], NoPackageJsonCase.STATIC_PAGE],
+    ['a pubspec', withFiles('pubspec.yaml'), [], NoPackageJsonCase.FLUTTER],
+    ['a Python project', withFiles('requirements.txt'), [], NoPackageJsonCase.NON_JS],
+  ])('answers %s with its own case', (_name, exists, rootFiles, kind) => {
+    const answer = noPackageJsonAnswer(exists, rootFiles);
+    expect(answer.kind).toBe(kind);
+    expect(answer.message).toBe(noPackageJsonMessage(exists, rootFiles));
   });
 });
 

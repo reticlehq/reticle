@@ -225,7 +225,7 @@ describe('runInit', () => {
     const r = runInit(OPTS, io);
     expect(r.ok).toBe(false);
     expect(io.lines.join('\n')).toContain('No package.json');
-    expect(io.written['.reticle.json']).toBeUndefined();
+    expect(Object.keys(io.written)).toHaveLength(0);
     expect(io.lines.join('\n')).not.toContain('reticle.connect(');
   });
 

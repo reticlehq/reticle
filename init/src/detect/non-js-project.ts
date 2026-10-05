@@ -112,23 +112,22 @@ export function detectNonJsEcosystem(exists: (file: string) => boolean): string 
   return undefined;
 }
 
-/** Whether there is a page here the static-page snippet could go into. */
-function hasStaticPage(exists: (file: string) => boolean, rootFiles: readonly string[]): boolean {
-  return exists('index.html') || rootFiles.some((name) => name.endsWith('.html'));
-}
+/** Which answer `init` gives when there is no package.json. */
+export const NoPackageJsonCase = {
+  /** No ecosystem marker and no page: the only honest answer is "run `init` somewhere else". */
+  WRONG_DIRECTORY: 'wrong_directory',
+  /** A page with no build step, which takes the script-tag snippet. */
+  STATIC_PAGE: 'static_page',
+  /** Flutter web paints into a canvas, so there is nothing to instrument. */
+  FLUTTER: 'flutter',
+  /** A recognised non-JS ecosystem, which can load the SDK from a URL. */
+  NON_JS: 'non_js',
+} as const;
+export type NoPackageJsonCase = (typeof NoPackageJsonCase)[keyof typeof NoPackageJsonCase];
 
-/**
- * Whether the only honest answer is "run `init` somewhere else".
- *
- * No ecosystem marker and no page: nothing here is wired, so nothing should be written here either.
- * A `.reticle.json` left behind scopes any daemon later started in this directory to a project that
- * is not there.
- */
-export function isWrongDirectory(
-  exists: (file: string) => boolean,
-  rootFiles: readonly string[] = [],
-): boolean {
-  return detectNonJsEcosystem(exists) === undefined && !hasStaticPage(exists, rootFiles);
+export interface NoPackageJsonAnswer {
+  kind: NoPackageJsonCase;
+  message: string;
 }
 
 /**
@@ -142,46 +141,67 @@ export function noPackageJsonMessage(
   exists: (file: string) => boolean,
   rootFiles: readonly string[] = [],
 ): string {
+  return noPackageJsonAnswer(exists, rootFiles).message;
+}
+
+/**
+ * {@link noPackageJsonMessage}, plus which case it picked.
+ *
+ * `init` acts on the case (it writes nothing for {@link NoPackageJsonCase.WRONG_DIRECTORY}), so the
+ * choice is made here once rather than re-derived beside the message and kept in sync by hand.
+ */
+export function noPackageJsonAnswer(
+  exists: (file: string) => boolean,
+  rootFiles: readonly string[] = [],
+): NoPackageJsonAnswer {
   const ecosystem = detectNonJsEcosystem(exists);
   if (ecosystem === undefined) {
-    if (hasStaticPage(exists, rootFiles)) {
-      return (
-        'This is a static page with no build step, so there is nothing for `reticle init` to wire. ' +
-        'Add the script-tag snippet below to the page while you develop, then reload it. Remove the ' +
-        'snippet before publishing: a static file has no development build to keep it out of production.'
-      );
+    if (exists('index.html') || rootFiles.some((name) => name.endsWith('.html'))) {
+      return {
+        kind: NoPackageJsonCase.STATIC_PAGE,
+        message:
+          'This is a static page with no build step, so there is nothing for `reticle init` to wire. ' +
+          'Add the script-tag snippet below to the page while you develop, then reload it. Remove the ' +
+          'snippet before publishing: a static file has no development build to keep it out of production.',
+      };
     }
-    return (
-      'No package.json found here, and no app directory beneath it either. Run `reticle init` from ' +
-      "your app's directory, or from a repo root that contains it."
-    );
+    return {
+      kind: NoPackageJsonCase.WRONG_DIRECTORY,
+      message:
+        'No package.json found here, and no app directory beneath it either. Run `reticle init` from ' +
+        "your app's directory, or from a repo root that contains it.",
+    };
   }
   if (ecosystem === FLUTTER) {
     // An agent on a Flutter workspace asked us to "support Flutter, or clearly identify it as
     // unsupported during init". The second is the truthful one, and saying it by name in one line
     // is the difference between an agent that stops and an agent that spends an hour looking for
     // the package.json we told it was missing.
-    return (
-      'This is a Flutter project. Reticle cannot instrument it, and no directory or flag will ' +
-      'change that: Reticle reads the DOM of a running page, and Flutter web paints its entire UI ' +
-      'into a single canvas element with no DOM behind it. Nothing here is missing or misconfigured. ' +
-      'If this repo also contains an ordinary web app with its own package.json, run `reticle init` ' +
-      'inside that directory instead.'
-    );
+    return {
+      kind: NoPackageJsonCase.FLUTTER,
+      message:
+        'This is a Flutter project. Reticle cannot instrument it, and no directory or flag will ' +
+        'change that: Reticle reads the DOM of a running page, and Flutter web paints its entire UI ' +
+        'into a single canvas element with no DOM behind it. Nothing here is missing or misconfigured. ' +
+        'If this repo also contains an ordinary web app with its own package.json, run `reticle init` ' +
+        'inside that directory instead.',
+    };
   }
-  return (
-    `This looks like a ${ecosystem} project, and there is no package.json here or in any app ` +
-    'directory beneath it. That is not a blocker: Reticle needs its SDK loaded by the page, not ' +
-    'built by npm, and a page with no build step can load it from a URL. ' +
-    // The old message ended at "there is no directory you could run this from that would change
-    // that", which read as a refusal and was acted on as one — agents went looking for a bundler,
-    // or for a standalone build to inject by hand, or gave up and used a different tool. The
-    // capability was there the whole time; only the sentence was missing. Proven end to end on a
-    // page served by `python3 -m http.server` before this line was written.
-    'Add the script-tag snippet below to a template you only serve in development, then reload the ' +
-    'page. ' +
-    'If this project ALSO has a JS front end (a `frontend/`, `client/` or `assets/` directory with ' +
-    'its own package.json), running `reticle init` there instead gives you source mapping and ' +
-    'framework state as well: point at it with `--app <dir>`.'
-  );
+  return {
+    kind: NoPackageJsonCase.NON_JS,
+    message:
+      `This looks like a ${ecosystem} project, and there is no package.json here or in any app ` +
+      'directory beneath it. That is not a blocker: Reticle needs its SDK loaded by the page, not ' +
+      'built by npm, and a page with no build step can load it from a URL. ' +
+      // The old message ended at "there is no directory you could run this from that would change
+      // that", which read as a refusal and was acted on as one — agents went looking for a bundler,
+      // or for a standalone build to inject by hand, or gave up and used a different tool. The
+      // capability was there the whole time; only the sentence was missing. Proven end to end on a
+      // page served by `python3 -m http.server` before this line was written.
+      'Add the script-tag snippet below to a template you only serve in development, then reload the ' +
+      'page. ' +
+      'If this project ALSO has a JS front end (a `frontend/`, `client/` or `assets/` directory with ' +
+      'its own package.json), running `reticle init` there instead gives you source mapping and ' +
+      'framework state as well: point at it with `--app <dir>`.',
+  };
 }

@@ -12,8 +12,8 @@ import {
   detectDjangoProject,
   detectStreamlitProject,
   djangoSetupMessage,
-  isWrongDirectory,
-  noPackageJsonMessage,
+  NoPackageJsonCase,
+  noPackageJsonAnswer,
   streamlitSetupMessage,
 } from './detect/non-js-project.js';
 import { InitFailure } from './diagnose/init-failure.js';
@@ -96,8 +96,9 @@ export function initWithoutPackageJson(options: InitOptions, io: InitIo): InitRe
   // "Run init from your app's directory" is the whole answer, so stop at it. This used to fall
   // through to the shared tail below: it wrote `.reticle.json` into the directory it had just called
   // wrong, then printed a script-tag snippet under a message that asks for none (#1366).
-  if (!streamlit && !django && isWrongDirectory(existsHere, io.rootFiles())) {
-    io.print(noPackageJsonMessage(existsHere, io.rootFiles()));
+  const answer = noPackageJsonAnswer(existsHere, io.rootFiles());
+  if (!streamlit && !django && answer.kind === NoPackageJsonCase.WRONG_DIRECTORY) {
+    io.print(answer.message);
     if (!options.dryRun) io.host.reportOutcome({ ok: false, reason: InitFailure.NO_PACKAGE_JSON });
     return { ok: false, applied: 0, manual: 0 };
   }
@@ -154,11 +155,7 @@ export function initWithoutPackageJson(options: InitOptions, io: InitIo): InitRe
     // a path problem and goes looking for a directory that cannot exist — reported from a
     // Streamlit app, where the search continued into hunting for a browser bundle to inject by
     // hand before the real answer surfaced.
-    streamlit
-      ? streamlitSetupMessage()
-      : django
-        ? djangoSetupMessage()
-        : noPackageJsonMessage(existsHere, io.rootFiles()),
+    streamlit ? streamlitSetupMessage() : django ? djangoSetupMessage() : answer.message,
   );
   writeConfig();
   // The message says "add the snippet below". Print the snippet, or the message is the same broken
