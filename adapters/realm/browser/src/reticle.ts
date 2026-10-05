@@ -4,6 +4,7 @@ import {
   RETICLE_DEFAULT_PORT,
   RETICLE_PROTOCOL_VERSION,
   RETICLE_URL_PARAM,
+  RETICLE_WS_PATH,
   bridgeWsUrl,
   ReticleCommand,
   MessageKind,
@@ -82,6 +83,28 @@ export function shouldBlockProduction(
   allowInProduction: boolean,
 ): boolean {
   return 'production' === nodeEnv && !allowInProduction;
+}
+
+/**
+ * The daemon only upgrades WebSocket connections on `RETICLE_WS_PATH`, so a hand-written bridge URL
+ * with no path (`ws://localhost:4400`) would be answered with a silent 400. Give a pathless ws(s)
+ * URL the bridge path; anything with an explicit path (a reverse proxy mount) is left alone.
+ */
+export function withBridgePath(bridgeUrl: string): { url: string; adjusted: boolean } {
+  let parsed: URL;
+  try {
+    parsed = new URL(bridgeUrl);
+  } catch {
+    return { url: bridgeUrl, adjusted: false };
+  }
+  if (
+    (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') ||
+    (parsed.pathname !== '' && parsed.pathname !== '/')
+  ) {
+    return { url: bridgeUrl, adjusted: false };
+  }
+  parsed.pathname = RETICLE_WS_PATH;
+  return { url: parsed.toString(), adjusted: true };
 }
 
 export function connectionPolicy(
@@ -299,7 +322,13 @@ export class Reticle {
     // reload permanently pollutes the URL the app and the agent see.
     stripReloadCacheBustParam();
 
-    const url = options.url ?? bridgeWsUrl(RETICLE_DEFAULT_PORT);
+    const bridge = withBridgePath(options.url ?? bridgeWsUrl(RETICLE_DEFAULT_PORT));
+    const url = bridge.url;
+    if (bridge.adjusted) {
+      globalThis.console.warn(
+        `[Reticle] bridge URL has no path; using ${url} (the bridge only accepts WebSocket upgrades on ${RETICLE_WS_PATH}).`,
+      );
+    }
     const policy = connectionPolicy(
       window.location.hostname,
       url,

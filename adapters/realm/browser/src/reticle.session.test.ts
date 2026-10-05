@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { SESSION_AUTO, TRANSPORT_LIMITS } from '@reticlehq/core';
-import { connectionPolicy, resolveSessionLabel, shouldBlockProduction } from './reticle.js';
+import {
+  connectionPolicy,
+  resolveSessionLabel,
+  shouldBlockProduction,
+  withBridgePath,
+} from './reticle.js';
 
 describe('resolveSessionLabel', () => {
   const gen = (): string => 'unique-123';
@@ -128,5 +133,41 @@ describe('shouldBlockProduction', () => {
 
   it('honors the explicit allowInProduction override', () => {
     expect(shouldBlockProduction('production', true)).toBe(false);
+  });
+});
+
+describe('withBridgePath', () => {
+  it('adds the bridge path to a pathless ws URL', () => {
+    expect(withBridgePath('ws://localhost:4400')).toEqual({
+      url: 'ws://localhost:4400/reticle',
+      adjusted: true,
+    });
+    expect(withBridgePath('ws://localhost:4400/')).toEqual({
+      url: 'ws://localhost:4400/reticle',
+      adjusted: true,
+    });
+  });
+
+  it('keeps a wss host, port and query when adding the path', () => {
+    expect(withBridgePath('wss://bridge.example:8443?x=1')).toEqual({
+      url: 'wss://bridge.example:8443/reticle?x=1',
+      adjusted: true,
+    });
+  });
+
+  it('leaves a URL that already has a path alone', () => {
+    expect(withBridgePath('ws://127.0.0.1:4400/reticle')).toEqual({
+      url: 'ws://127.0.0.1:4400/reticle',
+      adjusted: false,
+    });
+    expect(withBridgePath('wss://proxy.example/mount/reticle')).toEqual({
+      url: 'wss://proxy.example/mount/reticle',
+      adjusted: false,
+    });
+  });
+
+  it('passes through non-ws and unparseable values for connectionPolicy to reject', () => {
+    expect(withBridgePath('javascript:alert(1)').adjusted).toBe(false);
+    expect(withBridgePath('not a url')).toEqual({ url: 'not a url', adjusted: false });
   });
 });
