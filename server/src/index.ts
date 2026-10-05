@@ -502,7 +502,6 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     const server = createMcpServer(
       realInput !== undefined ? { ...deps, realInput } : deps,
       profile,
-      // A live session outweighs empty/stale durable memory (#1138); see instructionStateAt.
       instructionStateAt(port, bridge.sessions.count()),
     );
     // When the agent (the MCP client) disconnects cleanly, end every active session at once so the

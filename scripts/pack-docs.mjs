@@ -49,6 +49,8 @@ export const PRUNED_FILES = [
   'gates.md',
   'gate-plan.md',
   'fixtures.md',
+  // How to publish THIS repo to a local registry to test unpublished changes: a contributor task.
+  'local-registry.md',
   // Both are about ADDING telemetry to Reticle rather than about using it. `telemetry-contract.md`
   // opens "read this before adding a tool, an event, a finding kind, or a failure path", and
   // `telemetry-events.mdx` documents where each event is emitted FROM. Somebody who installed the

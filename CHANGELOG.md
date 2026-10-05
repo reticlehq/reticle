@@ -4,11 +4,6 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
-### Fixed
-
-- **`@reticlehq/server` + Claude Code plugin: an agent with Reticle's tools now tells you when your app is not wired.** Registering the MCP server and wiring the app are two separate steps, and the second was only ever suggested to an agent already doing Reticle work, so an agent that was never asked to verify anything never mentioned it. When the MCP server starts in a directory holding a web app that has never connected, its instructions now ask the agent to say so in its first reply and offer to run `init`, only with your yes, and not again if you decline. This reaches every client that reads MCP server instructions. The Claude Code plugin adds a session-start hook that does the same once per project. Directories with no web app are not affected.
-- **Docs: `reticle init` is the first step again.** The README, quickstart and getting-started pages led with `reticle connect`, which needs a cloud sign-in. They now lead with `init`, which needs no account, and present `connect` as the optional dashboard step.
-
 ## [3.5.0] — 2026-10-01
 
 ### Added

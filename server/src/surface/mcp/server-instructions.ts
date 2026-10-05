@@ -101,29 +101,13 @@ const firstMoveFor = (
 
 Fix that before anything else: run \`npx @reticlehq/server init\` in the project. It starts the dev server and opens the app itself; only if a dev server was ALREADY running without Reticle, restart it and reload the tab. Confirm with ${v.sessions} — a session listed there is the proof, and until one appears no other tool can tell you anything about this app.${appHere ? TELL_THE_USER : ''}`;
 
-/** Where the nudge sits: the end of the unwired lead, which a wired project never carries. */
 const UNWIRED_LEAD_END = 'can tell you anything about this app.';
 
-/**
- * Said only where a web app was found in this directory, because only there is it a step the person
- * is missing rather than noise about a repo Reticle has nothing to do with.
- *
- * "Fix that before anything else" reached only an agent already doing Reticle work, and most agents
- * with Reticle attached never call a tool: nobody asked them to verify anything, so the step was
- * never put to the one person who could take it. This string is read by every MCP client, so it is
- * the nudge that reaches Cursor, Codex, Claude Desktop and the rest, not only Claude Code.
- */
+// An agent never asked to verify anything never reads "fix that first"; this makes it raise init.
 const TELL_THE_USER =
   ' This directory holds a web app that is not wired yet: in your first reply, even if their request is unrelated, tell the user in one line and offer to run it. Run it only if they agree; if they decline, do not raise it again.';
 
-/**
- * The same briefing, with the nudge set for the directory the AGENT is in.
- *
- * One daemon serves every directory on its port, so the briefing it builds describes wherever the
- * daemon started. The proxy runs in the agent's own directory and calls this on the handshake reply,
- * so an agent in a web app is told about it even when the daemon was started from an empty folder,
- * and an agent in an empty folder is not told about somebody else's app.
- */
+/** The nudge set for the AGENT's directory: a shared daemon briefs from where IT started. */
 export function localizeInstructions(instructions: string, appHere: boolean): string {
   const without = instructions.replace(TELL_THE_USER, '');
   if (!appHere || !without.includes(UNWIRED_LEAD_END)) return without;
@@ -190,7 +174,6 @@ export interface InstructionState {
    * is whether this install has EVER worked, not whether it is working this second.
    */
   previouslyConnected: boolean;
-  /** Is there a web app in this directory (or one of its workspaces) for `init` to wire? */
   appHere?: boolean;
 }
 

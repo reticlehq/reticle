@@ -595,7 +595,6 @@ export function createMcpServer(
   getSessionMetrics().recordSurface(profile);
   const server = new McpServer(SERVER_INFO, {
     instructions: buildServerInstructions({
-      // A bare boolean is the original shape; the object also says whether a web app is here.
       ...('boolean' === typeof previouslyConnected ? { previouslyConnected } : previouslyConnected),
       // The surface this server is about to serve. Without it the briefing describes the tools this
       // package SHIPS rather than the ones this daemon advertises, and on any trimmed surface that

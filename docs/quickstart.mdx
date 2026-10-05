@@ -68,12 +68,9 @@ Step 1 is once per machine. This step is once per project. **Skipping it is the 
 Want a cloud dashboard too? Run `npx @reticlehq/server connect --project "My App"` instead of, or after, `init`. It does everything `init` does, then opens browser sign-in approval, links this folder to the named cloud project, and sends existing local history. Approve the short code shown in the browser and terminal; the command resumes by itself.
 
 <Note>
-  **Registered the tools but skipped this step?** Your agent will tell you. When it starts in a web
-  app that has never connected to Reticle, the Reticle MCP server asks the agent to say so in its
-  first reply and offer to run `init` for you. It runs only if you say yes, and if you say no it
-  will not ask again in that conversation. This works in any agent that reads the instructions an
-  MCP server sends when it connects (Claude Code, Codex, Cursor and most others); the Claude Code
-  plugin also checks at the start of each session. Folders with no web app are never nagged.
+  **Skipped this step?** In a web app Reticle has never connected to, your agent's first reply
+  offers to run `init`, and runs it only if you say yes. This works in Claude Code, Codex, Cursor
+  and other agents that read MCP server instructions.
 </Note>
 
 Prefer to install the skill and let the agent run setup itself? On Claude Code the plugin registers the MCP server and the skill in one step:

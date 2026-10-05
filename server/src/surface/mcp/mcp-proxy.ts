@@ -352,14 +352,7 @@ function proxyInstructions(port: number): string {
   }
 }
 
-/**
- * What the briefing needs to know about the directory this process serves, read the same way by
- * the proxy and the daemon so the two never tell an agent different things.
- *
- * A live session outweighs the durable memory, which can be empty or stale for a project wired
- * without writing `.reticle.json` (#1138). `appHere` decides whether the agent is asked to raise
- * an unwired app with the user unprompted: only where `init` has an app to wire.
- */
+/** The briefing's facts about this directory; a live session outweighs stale memory (#1138). */
 export function instructionStateAt(
   port: number,
   liveSessions = 0,
@@ -372,12 +365,7 @@ export function instructionStateAt(
   };
 }
 
-/**
- * An `initialize` reply with its briefing set for the AGENT's directory, any other line untouched.
- *
- * The daemon is shared across directories and briefs from wherever it started; see
- * localizeInstructions. Cheap on every other line: nothing without `"instructions"` is parsed.
- */
+/** An `initialize` reply re-briefed for the AGENT's directory; see localizeInstructions. */
 function withLocalBriefing(line: string, appHere: boolean): string {
   if (!line.includes('"instructions"')) return line;
   try {
@@ -493,7 +481,6 @@ export function startMcpProxy(
       queueTimer.unref();
     };
     const replay = new HandshakeReplay();
-    // Read once: the agent's directory does not change for the life of this proxy.
     const appHere = detectStack(process.cwd()).stack !== undefined;
     const pending = new PendingRequests();
     const quit = (code: number): void => {
