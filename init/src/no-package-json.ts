@@ -7,12 +7,12 @@
  * Django, several pages) and stops.
  */
 
-import { join } from 'node:path';
 import { PackageManager, Framework } from './detect/detect.js';
 import {
   detectDjangoProject,
   detectStreamlitProject,
   djangoSetupMessage,
+  isWrongDirectory,
   noPackageJsonMessage,
   streamlitSetupMessage,
 } from './detect/non-js-project.js';
@@ -86,10 +86,21 @@ function wireStaticPage(options: InitOptions, io: InitIo, connect: string): Init
 }
 
 export function initWithoutPackageJson(options: InitOptions, io: InitIo): InitResult {
+  // Relative to the IO's own root, like every other read here (`readFile` below, `HTML_INDEX_PATH`).
+  // The real IO resolves it to the same file; joining `options.cwd` onto it only made these checks
+  // miss in the in-memory IO the tests use, so no test could tell the branches below apart.
+  const existsHere = (file: string): boolean => io.exists(file);
   const streamlit = detectStreamlitProject((file) => io.readFile(file), io.rootFiles());
   // Asked only when Streamlit already said no, so the two can never both claim the page.
-  const django =
-    !streamlit && detectDjangoProject((file) => io.exists(join(options.cwd, file)), io.rootFiles());
+  const django = !streamlit && detectDjangoProject(existsHere, io.rootFiles());
+  // "Run init from your app's directory" is the whole answer, so stop at it. This used to fall
+  // through to the shared tail below: it wrote `.reticle.json` into the directory it had just called
+  // wrong, then printed a script-tag snippet under a message that asks for none (#1366).
+  if (!streamlit && !django && isWrongDirectory(existsHere, io.rootFiles())) {
+    io.print(noPackageJsonMessage(existsHere, io.rootFiles()));
+    if (!options.dryRun) io.host.reportOutcome({ ok: false, reason: InitFailure.NO_PACKAGE_JSON });
+    return { ok: false, applied: 0, manual: 0 };
+  }
   // Scope the project on disk before anything else, so the daemon can serve this page.
   //
   // This path used to print and exit, leaving no `.reticle.json` at all — and the reporter who
@@ -147,7 +158,7 @@ export function initWithoutPackageJson(options: InitOptions, io: InitIo): InitRe
       ? streamlitSetupMessage()
       : django
         ? djangoSetupMessage()
-        : noPackageJsonMessage((file) => io.exists(join(options.cwd, file)), io.rootFiles()),
+        : noPackageJsonMessage(existsHere, io.rootFiles()),
   );
   writeConfig();
   // The message says "add the snippet below". Print the snippet, or the message is the same broken

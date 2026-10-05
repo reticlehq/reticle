@@ -112,6 +112,25 @@ export function detectNonJsEcosystem(exists: (file: string) => boolean): string 
   return undefined;
 }
 
+/** Whether there is a page here the static-page snippet could go into. */
+function hasStaticPage(exists: (file: string) => boolean, rootFiles: readonly string[]): boolean {
+  return exists('index.html') || rootFiles.some((name) => name.endsWith('.html'));
+}
+
+/**
+ * Whether the only honest answer is "run `init` somewhere else".
+ *
+ * No ecosystem marker and no page: nothing here is wired, so nothing should be written here either.
+ * A `.reticle.json` left behind scopes any daemon later started in this directory to a project that
+ * is not there.
+ */
+export function isWrongDirectory(
+  exists: (file: string) => boolean,
+  rootFiles: readonly string[] = [],
+): boolean {
+  return detectNonJsEcosystem(exists) === undefined && !hasStaticPage(exists, rootFiles);
+}
+
 /**
  * What `init` should say when there is no package.json.
  *
@@ -125,7 +144,7 @@ export function noPackageJsonMessage(
 ): string {
   const ecosystem = detectNonJsEcosystem(exists);
   if (ecosystem === undefined) {
-    if (exists('index.html') || rootFiles.some((name) => name.endsWith('.html'))) {
+    if (hasStaticPage(exists, rootFiles)) {
       return (
         'This is a static page with no build step, so there is nothing for `reticle init` to wire. ' +
         'Add the script-tag snippet below to the page while you develop, then reload it. Remove the ' +

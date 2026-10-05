@@ -218,6 +218,28 @@ describe('runInit', () => {
     expect(io.lines.join('\n')).toContain('No package.json');
   });
 
+  it('writes nothing when it says to run init from another directory', () => {
+    // It used to write `.reticle.json` here anyway and print a snippet under a message asking for
+    // none, so a daemon later started in this directory scoped itself to a project that is not here.
+    const io = memoryIo({});
+    const r = runInit(OPTS, io);
+    expect(r.ok).toBe(false);
+    expect(io.lines.join('\n')).toContain('No package.json');
+    expect(io.written['.reticle.json']).toBeUndefined();
+    expect(io.lines.join('\n')).not.toContain('reticle.connect(');
+  });
+
+  it.each([
+    ['Django', { 'manage.py': 'x', 'settings.py': 'DEBUG = True' }],
+    ['Streamlit', { 'requirements.txt': 'streamlit\n', 'app.py': 'import streamlit as st' }],
+    ['a static page', { 'index.html': '<html><body></body></html>' }],
+    ['a non-JS ecosystem', { 'requirements.txt': 'fastapi\n', 'app.py': 'x' }],
+  ])('still writes .reticle.json for %s, where it wires something', (_name, files) => {
+    const io = memoryIo(files);
+    runInit(OPTS, io);
+    expect(io.written['.reticle.json']).toBeDefined();
+  });
+
   it('hands a non-JS project the script-tag snippet, not just a diagnosis', () => {
     // This exit is where every server-rendered app lands: FastAPI, Flask, Django, Rails, Streamlit.
     // It used to end at an explanation, and readers acted on the explanation as a refusal. The
