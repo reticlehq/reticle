@@ -96,9 +96,39 @@ const replayFirst = (v: SurfaceVocabulary): string => {
  */
 const firstMoveFor = (
   v: SurfaceVocabulary,
+  appHere: boolean,
 ): string => `FIRST: no app has ever connected to Reticle in this project, so nothing here can be verified yet. Having these tools is not the same as being set up — the tools reach a daemon, and the daemon has nothing to look at until the app itself is instrumented.
 
-Fix that before anything else: run \`npx @reticlehq/server init\` in the project. It starts the dev server and opens the app itself; only if a dev server was ALREADY running without Reticle, restart it and reload the tab. Confirm with ${v.sessions} — a session listed there is the proof, and until one appears no other tool can tell you anything about this app.`;
+Fix that before anything else: run \`npx @reticlehq/server init\` in the project. It starts the dev server and opens the app itself; only if a dev server was ALREADY running without Reticle, restart it and reload the tab. Confirm with ${v.sessions} — a session listed there is the proof, and until one appears no other tool can tell you anything about this app.${appHere ? TELL_THE_USER : ''}`;
+
+/** Where the nudge sits: the end of the unwired lead, which a wired project never carries. */
+const UNWIRED_LEAD_END = 'can tell you anything about this app.';
+
+/**
+ * Said only where a web app was found in this directory, because only there is it a step the person
+ * is missing rather than noise about a repo Reticle has nothing to do with.
+ *
+ * "Fix that before anything else" reached only an agent already doing Reticle work, and most agents
+ * with Reticle attached never call a tool: nobody asked them to verify anything, so the step was
+ * never put to the one person who could take it. This string is read by every MCP client, so it is
+ * the nudge that reaches Cursor, Codex, Claude Desktop and the rest, not only Claude Code.
+ */
+const TELL_THE_USER =
+  ' This directory holds a web app that is not wired yet: in your first reply, even if their request is unrelated, tell the user in one line and offer to run it. Run it only if they agree; if they decline, do not raise it again.';
+
+/**
+ * The same briefing, with the nudge set for the directory the AGENT is in.
+ *
+ * One daemon serves every directory on its port, so the briefing it builds describes wherever the
+ * daemon started. The proxy runs in the agent's own directory and calls this on the handshake reply,
+ * so an agent in a web app is told about it even when the daemon was started from an empty folder,
+ * and an agent in an empty folder is not told about somebody else's app.
+ */
+export function localizeInstructions(instructions: string, appHere: boolean): string {
+  const without = instructions.replace(TELL_THE_USER, '');
+  if (!appHere || !without.includes(UNWIRED_LEAD_END)) return without;
+  return without.replace(UNWIRED_LEAD_END, `${UNWIRED_LEAD_END}${TELL_THE_USER}`);
+}
 
 /**
  * When to reach for the tools that are advertised but never explained, and how to reach the two
@@ -143,7 +173,7 @@ const feedbackAsk = (
 
 Nothing is too minor, and a report costs one call. If the tools are unreachable (setup unfinished, daemon down), file the same report from the shell instead: \`reticle feedback --agent --kind <one of those kinds> "what happened"\`. Report defects in RETICLE — a bug you find in the app under test is Reticle working, and belongs in your answer to the user.`;
 
-interface InstructionState {
+export interface InstructionState {
   /**
    * The names this surface actually advertises. Every tool the prose mentions is resolved from it.
    *
@@ -160,6 +190,8 @@ interface InstructionState {
    * is whether this install has EVER worked, not whether it is working this second.
    */
   previouslyConnected: boolean;
+  /** Is there a web app in this directory (or one of its workspaces) for `init` to wire? */
+  appHere?: boolean;
 }
 
 /** The instructions this daemon should advertise, given what it knows about the project. */
@@ -178,7 +210,7 @@ export function buildServerInstructions(state: InstructionState): string {
   // passing a surface, so a stale fallback here is what every agent reaching Reticle through
   // `reticle mcp` reads — naming tools the surface it is being served does not have.
   const v = surfaceVocabulary(state.advertised ?? defaultAdvertisedNames());
-  const firstMove = firstMoveFor(v);
+  const firstMove = firstMoveFor(v, true === state.appHere);
   /*
    * Said in BOTH states, and gated only on whether the surface can reach replay.
    *

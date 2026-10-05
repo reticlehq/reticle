@@ -20,7 +20,7 @@ import { buildErrorPayload } from '@/surface/tools/error-recovery.js';
 import { takeVersionSkewOnto } from '@/command/version/version-nudge.js';
 import { resultIsError } from './faults/mcp-is-error.js';
 import { consumerVerdictRefusal, reservedVerdictKeysIn } from './consumer-verdict-guard.js';
-import { buildServerInstructions } from './server-instructions.js';
+import { buildServerInstructions, type InstructionState } from './server-instructions.js';
 import { unadvertisedToolHelp } from '@/surface/tools/unadvertised-help.js';
 import { mergedNameRedirect } from '@/surface/tools/merged-name-redirect.js';
 import { liveCallText, liveCallValues } from '@/surface/tools/live-call-text.js';
@@ -566,7 +566,7 @@ export function createMcpServer(
    * told to instrument a project that is already wired loses a paragraph, while an agent not told
    * loses the entire install — and the second is what the field overwhelmingly shows.
    */
-  previouslyConnected = false,
+  previouslyConnected: boolean | Omit<InstructionState, 'advertised'> = false,
   /**
    * The full tool table this server serves. Defaults to what this package ships.
    *
@@ -595,7 +595,8 @@ export function createMcpServer(
   getSessionMetrics().recordSurface(profile);
   const server = new McpServer(SERVER_INFO, {
     instructions: buildServerInstructions({
-      previouslyConnected,
+      // A bare boolean is the original shape; the object also says whether a web app is here.
+      ...('boolean' === typeof previouslyConnected ? { previouslyConnected } : previouslyConnected),
       // The surface this server is about to serve. Without it the briefing describes the tools this
       // package SHIPS rather than the ones this daemon advertises, and on any trimmed surface that
       // is a briefing for a different product — measured cost: an agent that stopped driving.

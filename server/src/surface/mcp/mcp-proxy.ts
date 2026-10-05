@@ -21,7 +21,7 @@ export { SseFrameParser, type SseFrame } from './sse-frame-parser.js';
 export { probeDaemon, waitForDaemon, waitForDaemonBind } from './proxy/proxy-daemon-probe.js';
 import { probeDaemon } from './proxy/proxy-daemon-probe.js';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
-import { buildServerInstructions } from './server-instructions.js';
+import { buildServerInstructions, localizeInstructions } from './server-instructions.js';
 import { hasAnyProjectConnectedBefore } from '@/memory/recall/prior/connection-memory.js';
 import { reticleStateHome } from '@/command/daemon/daemon.js';
 import { projectIdsAt } from '@/command/cli/ports/resolve/cli-port.js';
@@ -36,6 +36,7 @@ import {
 } from './proxy/proxy-lifecycle.js';
 import { describePresence, probePresence } from '@/command/daemon/binding/port-presence.js';
 import { flushProxySessionMetrics } from '@/telemetry/proxy-telemetry.js';
+import { detectStack } from '@/telemetry/feedback-context.js';
 /**
  * The same `/status` probe `doctor`, `status` and `kill` ask with. Reused rather than re-written:
  * the whole defect this import closes was the proxy answering a DIFFERENT question from every other
@@ -345,15 +346,52 @@ export function buildSessionUrl(rawData: string, port: number): string | null {
  */
 function proxyInstructions(port: number): string {
   try {
-    return buildServerInstructions({
-      previouslyConnected: hasAnyProjectConnectedBefore(
-        reticleStateHome(),
-        port,
-        projectIdsAt(process.cwd()),
-      ),
-    });
+    return buildServerInstructions(instructionStateAt(port));
   } catch {
     return buildServerInstructions({ previouslyConnected: false });
+  }
+}
+
+/**
+ * What the briefing needs to know about the directory this process serves, read the same way by
+ * the proxy and the daemon so the two never tell an agent different things.
+ *
+ * A live session outweighs the durable memory, which can be empty or stale for a project wired
+ * without writing `.reticle.json` (#1138). `appHere` decides whether the agent is asked to raise
+ * an unwired app with the user unprompted: only where `init` has an app to wire.
+ */
+export function instructionStateAt(
+  port: number,
+  liveSessions = 0,
+): { previouslyConnected: boolean; appHere: boolean } {
+  const cwd = process.cwd();
+  return {
+    previouslyConnected:
+      liveSessions > 0 || hasAnyProjectConnectedBefore(reticleStateHome(), port, projectIdsAt(cwd)),
+    appHere: detectStack(cwd).stack !== undefined,
+  };
+}
+
+/**
+ * An `initialize` reply with its briefing set for the AGENT's directory, any other line untouched.
+ *
+ * The daemon is shared across directories and briefs from wherever it started; see
+ * localizeInstructions. Cheap on every other line: nothing without `"instructions"` is parsed.
+ */
+function withLocalBriefing(line: string, appHere: boolean): string {
+  if (!line.includes('"instructions"')) return line;
+  try {
+    const msg: unknown = JSON.parse(line);
+    if (null === msg || 'object' !== typeof msg || !('result' in msg)) return line;
+    const result: unknown = msg.result;
+    if (null === result || 'object' !== typeof result || !('instructions' in result)) return line;
+    const { instructions } = result;
+    if ('string' !== typeof instructions) return line;
+    const localized = localizeInstructions(instructions, appHere);
+    if (localized === instructions) return line;
+    return JSON.stringify({ ...msg, result: { ...result, instructions: localized } });
+  } catch {
+    return line;
   }
 }
 
@@ -455,6 +493,8 @@ export function startMcpProxy(
       queueTimer.unref();
     };
     const replay = new HandshakeReplay();
+    // Read once: the agent's directory does not change for the life of this proxy.
+    const appHere = detectStack(process.cwd()).stack !== undefined;
     const pending = new PendingRequests();
     const quit = (code: number): void => {
       if (stopped) return;
@@ -480,7 +520,7 @@ export function startMcpProxy(
     const emit = (line: string): void => {
       idleExit.noteTraffic();
       pending.observeInbound(line);
-      process.stdout.write(`${line}\n`);
+      process.stdout.write(`${withLocalBriefing(line, appHere)}\n`);
     };
     let attempts = 0;
     /** The daemon announced a planned shutdown; the next drop is that, not a fault. */

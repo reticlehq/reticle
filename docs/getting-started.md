@@ -4,7 +4,7 @@ description: 'Zero to your agent verifying your real app, step by step, with wor
 icon: rocket
 ---
 
-**To get started with Reticle Cloud: run the installer, then `reticle connect --project "My App"` in your app directory before opening your coding agent.** The installer puts the CLI on the machine and registers its MCP tools with supported agents. `connect` wires your app, checks that a browser session connected, opens sign-in approval if needed, links the named cloud project, and syncs existing history. The first run is what proves anything: ask your agent to verify one journey in your app, or use `reticle_verify { action: "explore", persona: "<the journey worth proving>" }`. A connected app is not a verified one. For local-only verification without an account, use `reticle init` instead. You need Node 20.11 or newer, an app you run locally, and an agent that speaks MCP.
+**To get started: run the installer, then `reticle init` in your app directory before opening your coding agent.** The installer puts the CLI on the machine and registers its MCP tools with supported agents. `init` wires your app and checks that a browser session connected; without it the agent has the tools and nothing to point them at. For a cloud dashboard, use `reticle connect --project "My App"`, which does the same and also links a cloud project and syncs history. The first run is what proves anything: ask your agent to verify one journey in your app, or use `reticle_verify { action: "explore", persona: "<the journey worth proving>" }`. A connected app is not a verified one. You need Node 20.11 or newer, an app you run locally, and an agent that speaks MCP.
 
 > **Looking for the fast path?** [Quickstart](/quickstart) gets you to a real verdict in five minutes, and every response on it was captured live. [Agentic install](/install-agentic) and [Manual install](/install-manual) cover setup in detail, per agent and per framework.
 >
@@ -58,17 +58,7 @@ Everything is **dev-only** and **localhost-only**. It's tree-shaken out of produ
 
 ---
 
-## Cloud setup: `reticle connect`
-
-After the one-time [installer](/quickstart), run this in your app directory:
-
-```bash
-npx @reticlehq/server connect --project "My App"
-```
-
-Approve the short browser code if Reticle asks you to sign in. The command then links this folder and sends any history already on the machine. Open or restart your coding agent and ask it to verify one real journey. For a new project, the dashboard has no result until that first run is recorded.
-
-## Local-only path: `reticle init`
+## Wire your app: `reticle init`
 
 From your project root:
 
@@ -103,6 +93,16 @@ The rest are dials: `--license <key>` (writes it to `.env` and keeps `.env` out 
 If you ran `--files-only` with a dev server already running, restart it, then skip to [Step 4](#step-4-run-it-and-verify-the-connection). The manual steps below explain what `init` sets up, if you prefer to wire it yourself.
 
 ---
+
+## Add a cloud dashboard: `reticle connect`
+
+Optional. Instead of, or after, `init`, run this in your app directory:
+
+```bash
+npx @reticlehq/server connect --project "My App"
+```
+
+Approve the short browser code if Reticle asks you to sign in. The command then links this folder and sends any history already on the machine. Open or restart your coding agent and ask it to verify one real journey. For a new project, the dashboard has no result until that first run is recorded.
 
 ## Step 1: Connect your coding agent (MCP), once
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ReticleTool } from '@reticlehq/core';
 import { CORE_TOOL_NAMES } from '@/surface/tools/tool-surface.js';
-import { buildServerInstructions } from './server-instructions.js';
+import { buildServerInstructions, localizeInstructions } from './server-instructions.js';
 
 /**
  * The instructions string is the only channel that reaches an agent with no skill file, no restart
@@ -47,6 +47,41 @@ describe('buildServerInstructions', () => {
       expect(text).toContain(ReticleTool.ACT_AND_WAIT);
       // Feedback is an action on the session tool wherever the family is merged.
       expect(text).toMatch(/reticle_feedback|reticle_session \{action:"feedback"\}/);
+    });
+  });
+
+  /*
+   * "Fix that before anything else" only reached an agent already doing Reticle work, and most
+   * agents with Reticle attached never call a tool: nobody asked them to verify anything, so the
+   * step was never mentioned to the person who could take it. Every client reads this string, which
+   * makes it the one nudge that reaches Cursor, Codex, Claude Desktop and the rest, not only the
+   * Claude Code plugin's session hook.
+   */
+  describe('when an unwired web app is in this directory', () => {
+    const text = buildServerInstructions({ previouslyConnected: false, appHere: true });
+
+    it('tells the agent to raise it with the user unprompted, and to ask first', () => {
+      expect(text.slice(0, 900)).toMatch(/first reply/);
+      expect(text).toMatch(/even if .*unrelated/);
+      expect(text).toMatch(/only if they agree/);
+    });
+
+    it('does not say so where no app was found', () => {
+      for (const state of [
+        { previouslyConnected: false, appHere: false },
+        { previouslyConnected: false },
+      ]) {
+        expect(buildServerInstructions(state)).not.toMatch(/first reply/);
+      }
+    });
+
+    it('never says so once an app has connected', () => {
+      const wired = buildServerInstructions({ previouslyConnected: true, appHere: true });
+      expect(wired).not.toMatch(/first reply/);
+    });
+
+    it('stays under the instruction budget', () => {
+      expect(text.length).toBeLessThan(4200);
     });
   });
 
@@ -268,5 +303,33 @@ describe('the briefing tells an agent to replay before it drives', () => {
     const text = buildServerInstructions({ previouslyConnected: true, advertised: withoutVerify });
     expect(text).not.toMatch(/replay before you drive/i);
     expect(text).not.toContain(ReticleTool.VERIFY);
+  });
+});
+
+/*
+ * One daemon serves every directory on its port, so the briefing it builds describes wherever the
+ * daemon happened to start. Driving it showed the cost: an agent opened in a web app after one opened
+ * in an empty folder was never told its app was unwired. The proxy runs in the agent's own directory
+ * and corrects that one sentence on the way through.
+ */
+describe('localizeInstructions', () => {
+  const unwiredHere = buildServerInstructions({ previouslyConnected: false, appHere: true });
+  const unwiredElsewhere = buildServerInstructions({ previouslyConnected: false, appHere: false });
+  const wired = buildServerInstructions({ previouslyConnected: true });
+
+  it('adds the nudge for an agent in a web app, whatever directory the daemon started in', () => {
+    expect(localizeInstructions(unwiredElsewhere, true)).toBe(unwiredHere);
+  });
+
+  it('removes it for an agent in a directory with no app', () => {
+    expect(localizeInstructions(unwiredHere, false)).toBe(unwiredElsewhere);
+  });
+
+  it('is idempotent', () => {
+    expect(localizeInstructions(unwiredHere, true)).toBe(unwiredHere);
+  });
+
+  it('never adds it to a project that has connected', () => {
+    expect(localizeInstructions(wired, true)).toBe(wired);
   });
 });
