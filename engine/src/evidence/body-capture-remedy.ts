@@ -88,6 +88,18 @@ function asksAboutBody(predicate: unknown): boolean {
 }
 
 /**
+ * The invariant opening of the refusal below, named so the error envelope can recognise it.
+ *
+ * The refusal's TAIL is the remedy, and there are two of those — switch the setting on, or upgrade
+ * an SDK too old to have it — so the opening is the only text both shapes share. The envelope's
+ * self-recovering table keys on phrasing, and a reword here with the phrasing retyped over there
+ * would silently unmap the refusal and put the "may be a defect in Reticle" ask back on a message
+ * that already names the fix.
+ */
+export const BODY_CLAUSE_REFUSAL_OPENING =
+  'this assertion reads a request/response BODY, and this session is not recording them';
+
+/**
  * Refuse a body clause the session cannot answer, BEFORE the action is spent.
  *
  * Reported: an `act_and_wait` matched the right call and returned `verified: "no"` with "a matching
@@ -108,7 +120,7 @@ export function bodyClauseRefusal(
   if (false !== session.captureBodies) return undefined;
   if (!asksAboutBody(predicate)) return undefined;
   return (
-    'this assertion reads a request/response BODY, and this session is not recording them — it ' +
+    `${BODY_CLAUSE_REFUSAL_OPENING} — it ` +
     `would fail whatever the app did. Nothing ran, so no action was spent. ${bodyCaptureRemedy(session.sdkVersion)}`
   );
 }

@@ -11,6 +11,7 @@
 
 import { RefusalReason, ReticleEnv, TRANSPORT_LIMITS } from '@reticlehq/core';
 import { SELF_RECOVERING_MARKER } from '@/portal/session/no-session-diagnosis.js';
+import { BODY_CLAUSE_REFUSAL_OPENING } from '@reticlehq/engine/evidence/body-capture-remedy.js';
 import {
   CHROMIUM_PATH_REFUSAL_PREFIX,
   chromiumInstallCommand,
@@ -41,10 +42,21 @@ function capMessage(message: string): string {
 }
 
 /**
+ * A fixed phrase as a pattern for the table below, which matches on phrasing.
+ *
+ * The phrase comes from the module that throws it rather than being retyped here, and a constant is
+ * still text: escaped so a future reword containing `(` or `?` cannot turn into a pattern that means
+ * something else — or fails to compile at import time, taking the whole surface with it.
+ */
+function literally(phrase: string): RegExp {
+  return new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+}
+
+/**
  * Messages that already spell out the exact retry, so any hint we add can only argue with them.
  *
  * The no-session diagnosis is one (it inspected the machine and named the cause). The native-input
- * refusal is the other: it names the tool, the argument and the follow-up call to make instead — and
+ * refusal is another: it names the tool, the argument and the follow-up call to make instead — and
  * it was still collecting the defect ask, inviting a bug report about a refusal that had just told
  * the agent precisely what to do.
  */
@@ -54,6 +66,11 @@ const SELF_RECOVERING: readonly { readonly match: RegExp; readonly reason: Refus
   // the current ids" to a message that just named them contradicts the shorter path it offers, and
   // a contradicted instruction is how one agent came to retry a dead id twelve times.
   { match: /Connected right now:/i, reason: RefusalReason.NO_SESSION },
+  // The body-clause pre-flight: nothing ran, no action was spent, and the message names the setting
+  // to switch on — or says the page's SDK predates it, which is a limit and not a defect either. It
+  // was collecting the defect ask on top of its own remedy, so the envelope contradicted itself and
+  // asked for a bug report about somebody's connect() options.
+  { match: literally(BODY_CLAUSE_REFUSAL_OPENING), reason: RefusalReason.UNSUPPORTED },
 ];
 
 /** A message that already carries its own concrete next action, so nothing should be appended. */

@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — a refused `bodyContains` clause also asked you to file a Reticle bug.** `reticle_assert` and `act_and_wait` refuse a `bodyContains` / `bodyMatches` clause when the session is not recording bodies, and the refusal names the fix — `captureNetworkBodies`, or an SDK upgrade when the page's version predates the setting. The envelope then appended "this error is not one Reticle recognizes … may be a defect in Reticle", contradicting the remedy it was attached to and inviting a report about a `connect()` option. The refusal is now treated as self-recovering, so it arrives on its own and is reported as `unsupported` rather than `other`. Closes [#1373](https://github.com/reticlehq/reticle/issues/1373).
