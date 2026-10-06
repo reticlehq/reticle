@@ -250,3 +250,17 @@ export class RefRegistry {
 
 /** Process-wide registry shared by snapshot, query, and the action executor. */
 export const refs = new RefRegistry();
+
+/**
+ * The registry on a global, so something OUTSIDE the page can resolve a ref to the exact node.
+ *
+ * The native input driver needs the element a ref names, not the element that happens to sit at a
+ * point: a box centre is re-hit-tested and can land on an overlay, or on a different node after a
+ * layout change between the inspect and the act. `globalThis.__reticleRefs.resolve(ref)` gives the
+ * driver the same element the SDK resolved, so a fact read about it is a fact about the control.
+ *
+ * Persisted like the other globals (see reticle-singleton.ts / adapters.ts) so HMR module
+ * re-evaluation reuses the same registry instead of minting a second set of refs.
+ */
+const globalStore = globalThis as unknown as { __reticleRefs?: RefRegistry };
+export const exposedRefs: RefRegistry = (globalStore.__reticleRefs ??= refs);

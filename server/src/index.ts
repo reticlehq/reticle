@@ -875,6 +875,7 @@ export {
 export type { ContradictionFold } from '@reticlehq/engine/disagreement/contradiction-folds.js';
 export { MCP_SSE_PATH, MCP_MESSAGE_PATH } from '@reticlehq/core';
 export { BrowserPool, DEFAULT_LEASE_TTL_MS } from './portal/pool/browser-pool.js';
+export { clickListenersOnRef } from './portal/input/click-listeners.js';
 export type { Lease, Launcher, PooledBrowser } from './portal/pool/browser-pool.js';
 export { playwrightLauncher, resolveMaxContexts } from './portal/pool/playwright-launcher.js';
 export { appendReticleParams } from './surface/tools/lease-tools.js';

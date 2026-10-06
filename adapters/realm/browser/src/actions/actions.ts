@@ -10,11 +10,7 @@ import {
 } from '@reticlehq/core';
 import { asSyntheticInput } from './synthetic/synthetic-input.js';
 import { echoRef, refs } from '@/dom/addressing/refs.js';
-import {
-  dangerousActionContext,
-  requiresDangerousConfirmation,
-  submitControlFor,
-} from './danger-context.js';
+import { requiresDangerousConfirmation, submitControlFor } from './danger-context.js';
 import { assertEditable, assertNotRichText, setNativeValue } from './value-input.js';
 import { getAccessibleName, getRole, isVisible, getStates } from '@/dom/a11y.js';
 import { elementHasHoverHandlers, identifyComponent } from '@/registry/stores/adapters.js';
@@ -363,12 +359,12 @@ function assertActionAllowed(
   const submitter =
     action === ActionType.PRESS && 'Enter' === pressKey(args) ? submitControlFor(el) : null;
   const sourceDangerous =
-    requiresDangerousConfirmation(dangerousActionContext(el), getRole(el)) ||
-    (submitter !== null &&
-      requiresDangerousConfirmation(dangerousActionContext(submitter), getRole(submitter)));
+    requiresDangerousConfirmation(el) ||
+    (submitter !== null && requiresDangerousConfirmation(submitter));
+  // A drag END is not navigation however much it looks like a link, so it is classified on its text
+  // alone. Dropping a row onto "Pay" is destructive even when the drop target is a plain anchor.
   const targetDangerous =
-    isActionTarget(dragTarget) &&
-    requiresDangerousConfirmation(dangerousActionContext(dragTarget), getRole(dragTarget));
+    isActionTarget(dragTarget) && requiresDangerousConfirmation(dragTarget, false);
   if (
     canTrigger &&
     (sourceDangerous || targetDangerous) &&

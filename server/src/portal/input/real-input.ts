@@ -10,6 +10,7 @@
  * pay for it; the type-only import is elided by `tsc`, so the build stays green without it.
  */
 import { takeJsCoverage, type ScriptCoverage } from './js-coverage.js';
+import { clickListenersOnRef } from './click-listeners.js';
 import type { Browser, Page } from 'playwright';
 import { stampedDriveUrl } from './drive-url-stamp.js';
 import { launchChromium } from '@/launch-chromium.js';
@@ -156,6 +157,24 @@ export interface RealInputProvider {
    * and the frozen clock). Returns true when a page matched, false otherwise. Optional.
    */
   setViewport?(sessionUrl: string, size: { width: number; height: number }): Promise<boolean>;
+  /**
+   * Whether a click on the element a `ref` names would run a listener it, a composed ancestor (a
+   * shadow host included), the document or the window holds, read through CDP.
+   *
+   * This is the only reading in the system that may return `false`. A page cannot prove a handler
+   * ABSENT, because `addEventListener` leaves nothing in the DOM and nothing in any framework's
+   * props, but `DOMDebugger.getEventListeners` reports real listeners, so a driver holding a session
+   * can. `true` keeps the destructive-action guard's block, `false` is a proven handlerless element,
+   * and `undefined` is "no session, or the element could not be resolved", which keeps the block too.
+   *
+   * Read by REF, not by the element's box: a box centre is re-hit-tested and can land on an overlay
+   * or on a different element after a layout change, and a fact about the wrong node would exempt
+   * the wrong control.
+   *
+   * Optional, and Chromium-only because `DOMDebugger` is: a provider with no CDP session omits it,
+   * and the guard then never sees the reading and stays conservative.
+   */
+  clickListenersOn?(sessionUrl: string, ref: string): Promise<boolean | undefined>;
 }
 
 /**
@@ -667,6 +686,13 @@ export class CdpRealInputProvider implements RealInputProvider {
     return true;
   }
 
+  /** A handlerless reading is only available over CDP; undefined when no page matches. */
+  async clickListenersOn(sessionUrl: string, ref: string): Promise<boolean | undefined> {
+    const page = await this.#pageFor(sessionUrl);
+    if (page === undefined) return undefined;
+    return clickListenersOnRef(page, ref);
+  }
+
   /** Best-effort cleanup; idempotent. */
   async dispose(): Promise<void> {
     const browser = this.#browser;
@@ -906,6 +932,13 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
     if (page === undefined) return false;
     await page.setViewportSize({ width: size.width, height: size.height });
     return true;
+  }
+
+  /** The launched browser owns a CDP session, so it can answer the handlerless question too. */
+  async clickListenersOn(_sessionUrl: string, ref: string): Promise<boolean | undefined> {
+    const page = this.#livePage();
+    if (page === undefined) return undefined;
+    return clickListenersOnRef(page, ref);
   }
 
   takeCodeCoverage(_sessionUrl: string): Promise<ScriptCoverage[] | undefined> {

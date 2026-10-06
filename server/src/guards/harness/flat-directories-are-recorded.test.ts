@@ -232,7 +232,10 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // first-run tour over a page nobody is looking at -- a rule split across two packages is worth
   // one file that names it.
   // +1: js-coverage.ts, the browser engine's code coverage beside the other driven-page capabilities.
-  'server/src/portal/input': 12,
+  // +1: click-listeners.ts, the CDP reading of real click listeners, which is the only source that
+  // can prove a link handlerless and therefore the only one that can exempt a plain navigation link.
+  // It sits with the other driven-page capabilities for the same reason js-coverage.ts does.
+  'server/src/portal/input': 13,
   // 22 since `session-verdict-facts.ts` was extracted (the count is source files, not tests): both
   // verdict-producing tools were threading the same session facts into `decideVerified` with the
   // same conditional-spread idiom, and a third fact would have been a third copy. Raised on

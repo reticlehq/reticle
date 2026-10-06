@@ -56,6 +56,8 @@ Reticle blocks a control that looks destructive before acting on it:
 
 A stale ref is refused the same way, with `"ref 'e303' no longer resolves to an element"` and a recovery note telling you to re-query. Both refusals cost a turn and prevent a false green, which is the trade.
 
+What is judged destructive is the ACT, not the wording. An `<a href>` that fetches a document, carries no handler and sits outside any form is a GET that changes nothing, so its address is not read as a label. That exemption needs a reading that a link has NO handler: a page can prove a handler exists but never that none does, since a listener bound with plain `addEventListener` leaves no trace. The reading therefore comes from the driver, over CDP, which lists real listeners; it applies only when native input drives the tab, and no CDP session means no reading, so the block stays. A real anchor is required (`role="link"` on a `div` does not count), the href must be http(s) or relative (`javascript:` and `data:` are refused), the href's origin is not compared against the page's, and an anchor marked for a framework-rewritten non-GET request (`data-method`, `data-turbo-method`, htmx verbs) keeps its block.
+
 ## `fill` versus `type`
 
 `fill` replaces. `type` appends. Reaching for `type` when you meant `fill` is how a field ends up containing `hellohello`, and neither call will complain.

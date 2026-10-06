@@ -18,6 +18,20 @@ export interface ReticleAdapter {
   readState?: (el: Element) => unknown;
   /** Best-effort: does the element declare framework enter/leave handlers synthetic hover may not fire? */
   hasHoverHandlers?: (el: Element) => boolean;
+  /**
+   * Best-effort: does the element declare a framework click handler?
+   *
+   * The destructive-action guard consults this, and it can only ever ADD caution: `true` keeps the
+   * block. There is deliberately no "no handler" answer here. A framework probe reads the
+   * framework's own props, and a listener bound outside them (`ref.addEventListener`, or one on
+   * `document` that delegation carries) is invisible to it and runs on the click all the same, so an
+   * absence from this probe is not an absence anyone observed.
+   *
+   * A handlerless reading exists, but it does not come from here: it comes from a driver holding a
+   * CDP session, which can list real listeners with `DOMDebugger.getEventListeners`. See
+   * `clickListenersOn` on `RealInputProvider`.
+   */
+  hasClickHandler?: (el: Element) => boolean;
 }
 
 // Persist on a global so the registry survives HMR module re-evaluation (otherwise the
@@ -69,6 +83,44 @@ export function elementHasHoverHandlers(el: Element): boolean {
     if (adapter.hasHoverHandlers(el)) return true;
   }
   return false;
+}
+
+/**
+ * Whether any installed adapter reports a click handler on the element.
+ *
+ * `true` as soon as one adapter says so. There is deliberately NO `false`: an adapter reads the
+ * framework's own props, and a listener bound outside them is invisible to it, so an absence it
+ * reports is one it never observed. Returning `false` here would hand the guard an absence nobody
+ * checked.
+ */
+export function elementHasClickHandler(el: Element): boolean | undefined {
+  for (const adapter of adapters) {
+    if (adapter.hasClickHandler === undefined) continue;
+    if (adapter.hasClickHandler(el)) return true;
+  }
+  return undefined;
+}
+
+/** A handler written into the markup rather than bound in script. */
+const INLINE_HANDLER_ATTR = 'onclick';
+
+/**
+ * The click handlers a PAGE can prove for this element: an inline `onclick`, or a framework's own
+ * props. Anything else is `undefined`.
+ *
+ * `undefined` is the common answer and the honest one. A listener bound with `addEventListener`
+ * leaves nothing in the DOM and nothing in any framework's props, so no in-page reading can rule one
+ * out, and this must not pretend otherwise. The one in-page fact that IS provable is the markup
+ * attribute.
+ *
+ * The complement comes from outside the page: a driver holding a CDP session can ask
+ * `DOMDebugger.getEventListeners`, which reports real listeners including `addEventListener` ones,
+ * and THAT is the only thing allowed to answer `false` to `isPlainNavigationLink`. See
+ * `clickListenersOn` on `RealInputProvider`.
+ */
+export function elementHandlesClick(el: Element): boolean | undefined {
+  if (el.hasAttribute(INLINE_HANDLER_ATTR)) return true;
+  return elementHasClickHandler(el);
 }
 
 export function adapterNames(): string[] {

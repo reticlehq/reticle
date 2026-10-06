@@ -297,6 +297,32 @@ const HOVER_HANDLER_KEYS = [
 ] as const;
 
 /**
+ * Every React prop whose presence means "this element, or one wrapping it, runs code on a click".
+ *
+ * The set is deliberately wider than `onClick`. React apps attach destructive behaviour through
+ * `ref.addEventListener`, `onMouseDown`/`onPointerDown` (a mousedown opens a menu or fires an action
+ * before any click), and through the delegated parent `onClick` that event bubbling carries. Reading
+ * `onClick` alone answers `false` for a link the app does in fact wire up, and `false` is the value
+ * the guard treats as proven-handlerless.
+ */
+const CLICK_HANDLER_KEYS = [
+  'onClick',
+  'onMouseDown',
+  'onMouseUp',
+  'onPointerDown',
+  'onPointerUp',
+] as const;
+
+/**
+ * Depth the ancestor walk is allowed to reach before it stops claiming to know.
+ *
+ * A delegated handler is normally one or two hosts up. A page whose tree is deeper than this is one
+ * where a handler could sit above the reach of the walk, so the walk gives up and answers `undefined`
+ * rather than `false`.
+ */
+const MAX_HANDLER_WALK = 64;
+
+/**
  * True if the element's host fiber declares React enter/leave handlers. Synthetic dispatchEvent
  * does not reliably trigger React's native enter/leave synthesis (no hit-testing), so callers warn.
  * Fail soft: an unexpected fiber shape returns false.
@@ -307,6 +333,40 @@ export function hasHoverHandlers(el: Element): boolean {
   if (typeof props !== 'object' || null === props) return false;
   const p = props as Record<string, unknown>;
   return HOVER_HANDLER_KEYS.some((k) => 'function' === typeof p[k]);
+}
+
+/**
+ * Whether a click on this element (or one wrapping it) is declared by React props.
+ *
+ * Walks the element's own host fibre and then its ancestors', because a handler attached to a parent
+ * element runs on a bubbling click just the same as one on the anchor itself. Answering only for the
+ * element's own `onClick` reads a delegated handler as absent.
+ *
+ * `true` is a positive reading and the only one the guard acts on. `false` says only that no React
+ * PROP declared a handler, which is not the same as "nothing handles this click": a listener bound
+ * outside props (`ref.addEventListener('click', …)`, or one on `document` that delegation carries)
+ * leaves no trace here and runs all the same. The guard never reads this `false` as a handlerless
+ * link; a handlerless reading comes from a driver holding a CDP session, not from here.
+ */
+export function hasClickHandler(el: Element): boolean {
+  let fiber = getFiber(el);
+  if (null === fiber) return false;
+
+  let depth = 0;
+  while (null !== fiber) {
+    if (depth >= MAX_HANDLER_WALK) return false;
+    depth += 1;
+
+    const props = fiber.memoizedProps;
+    if ('object' === typeof props && null !== props) {
+      const p = props as Record<string, unknown>;
+      if (CLICK_HANDLER_KEYS.some((k) => 'function' === typeof p[k])) return true;
+    }
+
+    fiber = fiber.return;
+  }
+
+  return false;
 }
 
 import { installRenderMeter } from './render-meter.js';
@@ -325,7 +385,7 @@ let installed = false;
 export function install(): void {
   if (installed) return;
   installed = true;
-  registerAdapter({ name: 'react', identify, readState, hasHoverHandlers });
+  registerAdapter({ name: 'react', identify, readState, hasHoverHandlers, hasClickHandler });
   installRenderMeter();
 }
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   ComponentStateReason,
   ReticleCommand,
@@ -8,7 +8,7 @@ import {
 import { createCommandRegistry, resolveNavigationUrl } from './commands.js';
 import { refs } from '@/dom/addressing/refs.js';
 import { registerStore, unregisterStore } from '@/registry/stores.js';
-import { registerAdapter } from '@/registry/stores/adapters.js';
+import { registerAdapter, type ReticleAdapter } from '@/registry/stores/adapters.js';
 import { registerCapabilities } from '@/registry/capabilities.js';
 
 interface StateResult {
@@ -18,6 +18,18 @@ interface StateResult {
 }
 
 const reg = createCommandRegistry();
+
+const adapters = ((
+  globalThis as unknown as { __reticleAdapters?: ReticleAdapter[] }
+).__reticleAdapters ??= []);
+
+// Drop only the probe this file adds: other cases register their adapters once at load time (the
+// `scoped_state` reader below), and clearing the whole registry would strand them.
+afterEach(() => {
+  const kept = adapters.filter((a) => 'plain-link-probe' !== a.name);
+  adapters.length = 0;
+  adapters.push(...kept);
+});
 
 function run(name: string, args: Record<string, unknown> = {}): unknown {
   const handler = reg.get(name);
@@ -72,6 +84,83 @@ describe('command registry (driven by the bridge)', () => {
     const result = run(ReticleCommand.INSPECT, { ref }) as { role: string; tag: string };
     expect(result.role).toBe('link');
     expect(result.tag).toBe('a');
+  });
+
+  /**
+   * The descriptor is what the SERVER-side destructive guard sees, and it has no element there.
+   *
+   * So the facts that make an anchor not a plain navigation have to travel on the descriptor, or
+   * the native path exempts a link the page wired up in the markup. `hasClickHandler` is present
+   * only when a reading was actually taken, and a reading here can only ever be `true`: a page can
+   * prove a handler PRESENT, never that one is ABSENT, so a handlerless fact is never on the
+   * descriptor. That reading comes from CDP.
+   */
+  it('INSPECT reports the plain-navigation facts it could read', () => {
+    registerAdapter({
+      name: 'plain-link-probe',
+      identify: () => null,
+      hasClickHandler: (el) => el instanceof HTMLAnchorElement && '#wired' === el.id,
+    });
+    document.body.innerHTML =
+      '<a id="plain" href="/billing/payment">Orders</a>' +
+      '<a id="wired" href="/purchase/confirm" onclick="void 0">Purchase</a>' +
+      '<div id="fake" role="link">Delete account</div>' +
+      '<form action="/api/refund"><a id="inform" href="/help">Help</a></form>';
+    const read = (selector: string): Record<string, unknown> => {
+      const el = document.querySelector(selector);
+      if (!(el instanceof HTMLElement)) throw new Error(`no element for ${selector}`);
+      return run(ReticleCommand.INSPECT, { ref: refs.refFor(el) }) as Record<string, unknown>;
+    };
+    // The probe answered `false` for `#plain`, and the descriptor still carries no handler fact:
+    // a framework's props are not where every listener lives, so this reading cannot be trusted as
+    // an absence.
+    expect(read('#plain')).toMatchObject({ isAnchor: true, insideForm: false });
+    expect('hasClickHandler' in read('#plain')).toBe(false);
+    expect(read('#wired')).toMatchObject({ isAnchor: true, hasClickHandler: true });
+    expect(read('#fake')).toMatchObject({ isAnchor: false });
+    expect(read('#inform')).toMatchObject({ isAnchor: true, insideForm: true });
+  });
+
+  /**
+   * The unreadable case, pinned: no adapter can inspect anything, so the descriptor must NOT claim
+   * a handler reading it never took. An anchor wired up with `addEventListener` is exactly this
+   * shape, and the guard refuses the absent fact.
+   */
+  it('INSPECT omits the handler fact when nothing could read the element', () => {
+    document.body.innerHTML = '<a id="orders" href="/billing/payment">Orders</a>';
+    const el = document.querySelector('#orders');
+    if (!(el instanceof HTMLElement)) throw new Error('fixture element missing');
+    const read = run(ReticleCommand.INSPECT, { ref: refs.refFor(el) }) as Record<string, unknown>;
+    expect(read).toMatchObject({ isAnchor: true });
+    expect('hasClickHandler' in read).toBe(false);
+  });
+
+  /**
+   * A non-GET marker must survive INSPECT, or the server-side guard is blind to it.
+   *
+   * `assertNotDestructive` classifies the DESCRIPTOR with no element in reach, so a marker the
+   * descriptor does not carry is a marker that guard cannot act on. `data-turbo-method="delete"` on
+   * an otherwise plain `<a href>` is the exact shape: the href reads as a GET and no handler is
+   * visible, so without the field on the descriptor the link is exempted and the click destroys.
+   *
+   * The end-to-end half (descriptor -> `assertNotDestructive`) lives in
+   * `server/src/surface/tools/act/act-danger.test.ts`; the browser package cannot import the server.
+   */
+  it('INSPECT carries the non-GET marker on the descriptor', () => {
+    document.body.innerHTML =
+      '<a id="turbo" href="/account" data-turbo-method="delete">Delete account</a>';
+    const el = document.querySelector('#turbo');
+    if (!(el instanceof HTMLElement)) throw new Error('fixture element missing');
+    const read = run(ReticleCommand.INSPECT, { ref: refs.refFor(el) }) as Record<string, unknown>;
+    expect(read).toMatchObject({ isAnchor: true, nonGetMarker: true });
+  });
+
+  it('INSPECT omits the non-GET marker for a link that has none', () => {
+    document.body.innerHTML = '<a id="plain" href="/billing/payment">Orders</a>';
+    const el = document.querySelector('#plain');
+    if (!(el instanceof HTMLElement)) throw new Error('fixture element missing');
+    const read = run(ReticleCommand.INSPECT, { ref: refs.refFor(el) }) as Record<string, unknown>;
+    expect('nonGetMarker' in read).toBe(false);
   });
 
   it('INSPECT returns scroll metrics for a ref', () => {

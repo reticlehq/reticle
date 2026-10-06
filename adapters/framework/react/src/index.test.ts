@@ -1,8 +1,8 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { act, createElement, useState } from 'react';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
+import { act, createElement, useEffect, useRef, useState, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ComponentStateReason, type ComponentStateResult } from '@reticlehq/core';
-import { identify, readState, hasHoverHandlers } from './index.js';
+import { identify, readState, hasHoverHandlers, hasClickHandler } from './index.js';
 
 function PayButton(): null {
   return null;
@@ -216,6 +216,157 @@ describe('react adapter hasHoverHandlers', () => {
 
   it('returns false when a hover key is present but not a function', () => {
     expect(hasHoverHandlers(withProps({ onMouseEnter: 'nope' }))).toBe(false);
+  });
+});
+
+describe('react adapter hasClickHandler', () => {
+  /**
+   * Real React renders, not hand-built fibres.
+   *
+   * A synthetic `__reactFiber$` object is a model of what React's tree looks like, and a model that
+   * drifts from the real thing tests the model. These render with `createRoot` so the fibre this
+   * walks is the one React actually built, and the `ref.addEventListener` cases below are only
+   * meaningful against a real tree: the point of them is that React's props do NOT contain the
+   * listener, which a hand-built fibre cannot demonstrate.
+   */
+  let container: HTMLDivElement;
+  let reactRoot: ReturnType<typeof createRoot> | null = null;
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+  });
+  afterEach(() => {
+    // Unmount before dropping the container: a root left mounted keeps its hooks and effects alive
+    // for the rest of the run, and an effect that registered a `document` listener would fire into
+    // later tests.
+    act(() => reactRoot?.unmount());
+    reactRoot = null;
+    container.remove();
+  });
+
+  const root = (node: ReactElement): HTMLElement => {
+    reactRoot = createRoot(container);
+    act(() => reactRoot?.render(node));
+    return container;
+  };
+
+  it('returns false when no fiber can be read at all', () => {
+    expect(hasClickHandler(document.createElement('a'))).toBe(false);
+  });
+
+  it('returns false for a rendered link with no React onClick anywhere', () => {
+    root(createElement('a', { href: '/billing', id: 'plain' }, 'Orders'));
+    const el = container.querySelector('#plain');
+    expect(el).not.toBeNull();
+    if (null === el) return;
+    // This says only that no React PROP declared a handler. It is NOT a claim that nothing handles
+    // the click: a listener bound outside props leaves no trace here, and the guard never reads this
+    // `false` as a handlerless link. That reading comes from CDP.
+    expect(hasClickHandler(el)).toBe(false);
+  });
+
+  it('returns true for the element own onClick', () => {
+    root(createElement('a', { href: '/x', id: 'own', onClick: () => undefined }, 'Delete account'));
+    const el = container.querySelector('#own');
+    if (null === el) throw new Error('fixture missing');
+    expect(hasClickHandler(el)).toBe(true);
+  });
+
+  it('returns true for a PARENT onClick, the event-delegation shape most React apps use', () => {
+    root(
+      createElement(
+        'div',
+        { onClick: () => undefined },
+        createElement('a', { href: '/delete-account', id: 'delegated' }, 'Delete account'),
+      ),
+    );
+    const el = container.querySelector('#delegated');
+    if (null === el) throw new Error('fixture missing');
+    expect(hasClickHandler(el)).toBe(true);
+  });
+
+  it('returns true for a click handler on an ancestor further up than the first', () => {
+    root(
+      createElement(
+        'div',
+        { onClick: () => undefined },
+        createElement(
+          'div',
+          null,
+          createElement('a', { href: '/x', id: 'deep' }, 'Delete account'),
+        ),
+      ),
+    );
+    const el = container.querySelector('#deep');
+    if (null === el) throw new Error('fixture missing');
+    expect(hasClickHandler(el)).toBe(true);
+  });
+
+  for (const key of ['onMouseDown', 'onMouseUp', 'onPointerDown', 'onPointerUp'] as const) {
+    it(`returns true when the element declares ${key}`, () => {
+      root(createElement('a', { href: '/x', id: 'own', [key]: () => undefined }, 'Delete account'));
+      const el = container.querySelector('#own');
+      if (null === el) throw new Error('fixture missing');
+      expect(hasClickHandler(el)).toBe(true);
+    });
+
+    it(`returns true when a parent declares ${key}`, () => {
+      root(
+        createElement(
+          'div',
+          { [key]: () => undefined },
+          createElement('a', { href: '/x', id: 'child' }, 'Delete account'),
+        ),
+      );
+      const el = container.querySelector('#child');
+      if (null === el) throw new Error('fixture missing');
+      expect(hasClickHandler(el)).toBe(true);
+    });
+  }
+
+  it('returns false for a listener bound with ref.addEventListener, which lives outside props', () => {
+    function Wired(): ReturnType<typeof createElement> {
+      const ref = useRef<HTMLAnchorElement>(null);
+      useEffect(() => {
+        ref.current?.addEventListener('click', (e) => e.preventDefault());
+      }, []);
+      return createElement('a', { href: '/delete-account', id: 'wired', ref }, 'Delete account');
+    }
+    root(createElement(Wired));
+    const el = container.querySelector('#wired');
+    if (null === el) throw new Error('fixture missing');
+    // The listener exists and runs on a click, but props do not carry it, so this says only "no React
+    // onClick". The guard does not read it as handlerless: the CDP reading sees the real listener and
+    // keeps the block. This test is here to pin that props alone would have said `false`.
+    expect(hasClickHandler(el)).toBe(false);
+  });
+
+  it('returns false for a document-level delegated listener', () => {
+    function DocumentWired(): ReturnType<typeof createElement> {
+      useEffect(() => {
+        const onDoc = (e: Event): void => e.preventDefault();
+        document.addEventListener('click', onDoc);
+        return () => document.removeEventListener('click', onDoc);
+      }, []);
+      return createElement('a', { href: '/delete-account', id: 'doc' }, 'Delete account');
+    }
+    root(createElement(DocumentWired));
+    const el = container.querySelector('#doc');
+    if (null === el) throw new Error('fixture missing');
+    expect(hasClickHandler(el)).toBe(false);
+  });
+
+  it('returns false for a non-function handler prop', () => {
+    root(
+      createElement(
+        'a',
+        { href: '/x', id: 'nonfn', onClick: 'nope' } as Record<string, unknown>,
+        'X',
+      ),
+    );
+    const el = container.querySelector('#nonfn');
+    if (null === el) throw new Error('fixture missing');
+    expect(hasClickHandler(el)).toBe(false);
   });
 });
 

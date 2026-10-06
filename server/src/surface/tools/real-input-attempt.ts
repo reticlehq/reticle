@@ -34,7 +34,11 @@ import {
   isRealInputAction,
   unspellablePressReason,
 } from '@/portal/input/real-input.js';
-import { assertDragNotDestructive, assertNotDestructive } from './act/act-danger.js';
+import {
+  assertDragNotDestructive,
+  assertNotDestructive,
+  couldListenerReadingExempt,
+} from './act/act-danger.js';
 import { NATIVE_INPUT_ARG } from '@reticlehq/core';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { type ToolDeps, commandOrThrow } from './tool-kit.js';
@@ -367,6 +371,35 @@ async function hoverForReal(
  * `dispatchEvent`, so a synthetic success is the defect. The call either drives a real pointer
  * or throws.
  */
+/**
+ * The driver's real click-handler reading for this element, or `undefined` when it cannot be taken.
+ *
+ * Only the CDP path can answer this. `hasClickHandler` on a framework adapter reads props, and props
+ * cannot prove a listener absent, so the page's own reading never yields the `false` the guard needs
+ * to exempt a plain navigation link. Taken only when the descriptor would otherwise be blocked AND
+ * looks like a plain-navigation candidate, so an ordinary button costs nothing.
+ *
+ * Read by ref rather than by the element's box: the guard acts on the ref, so the fact has to be
+ * about the same element. A box centre is re-hit-tested and can land on an overlay.
+ */
+async function clickListenerReading(
+  deps: ToolDeps,
+  session: Session,
+  inspected: unknown,
+  ref: string,
+): Promise<boolean | undefined> {
+  const provider = deps.realInput;
+  if (provider?.clickListenersOn === undefined) return undefined;
+  if (!couldListenerReadingExempt(inspected)) return undefined;
+  try {
+    return await provider.clickListenersOn(session.url, ref);
+  } catch {
+    // A provider that throws has answered nothing. `undefined` keeps the block, which is the safe
+    // direction, and matches what an absent provider gives.
+    return undefined;
+  }
+}
+
 export async function tryRealInput(
   deps: ToolDeps,
   session: Session,
@@ -485,7 +518,15 @@ export async function tryRealInput(
   }
 
   const inspected = await commandOrThrow(deps, session.id, ReticleCommand.INSPECT, { ref });
-  assertNotDestructive(action, inner, inspected);
+  /*
+   * Ask the driver for a real click-handler reading, but only when it could change the outcome. The
+   * reading is the one thing a page cannot take for itself: `addEventListener` leaves nothing in the
+   * DOM and nothing in any framework's props, so only a CDP session can prove a link is handlerless.
+   * It can only ever NARROW the block, never widen it, so a descriptor that is already not a
+   * plain-navigation candidate skips the round-trips entirely.
+   */
+  const clickListeners = await clickListenerReading(deps, session, inspected, ref);
+  assertNotDestructive(action, inner, inspected, clickListeners);
   const box = asBox(inspected);
   if (box === undefined) return synthetic(InputModeReason.ELEMENT_NOT_LOCATABLE);
 
