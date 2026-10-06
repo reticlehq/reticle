@@ -304,6 +304,30 @@ describe('the chat panel survives clicks on the page', () => {
     expect(overlay?.getAttribute('data-reticle-chat'), 'Escape is a way out').toBeNull();
     p.destroy();
   });
+
+  // Closing the chat by its own minimise button used to hide a region that still had focus, which
+  // Chrome rejects ("Blocked aria-hidden ... descendant retained focus") and which left keyboard
+  // users inside an invisible region. Focus must leave the panel before it is hidden, and the
+  // closed panel must not accept focus back.
+  it('moves focus to the chat toggle when the panel is closed from inside', () => {
+    document.body.innerHTML = '';
+    const p = new Presenter({});
+    p.mount();
+    p.sessionStart();
+    click(document.querySelector('[data-reticle-fab]'));
+    const overlay = document.querySelector('div[data-reticle-overlay]');
+    expect(overlay?.getAttribute('data-reticle-chat')).toBe('1');
+    const panel = document.querySelector('[data-reticle-chat-panel]');
+    const minimise = document.querySelector<HTMLElement>('[data-reticle-chat-min]');
+    const toggle = document.querySelector('[data-reticle-chat-toggle]');
+    minimise?.focus();
+    expect(document.activeElement, 'the minimise button is inside the panel').toBe(minimise);
+    click(minimise);
+    expect(overlay?.getAttribute('data-reticle-chat'), 'the chat is minimised').toBeNull();
+    expect(document.activeElement, 'focus moves to the chat toggle').toBe(toggle);
+    expect(panel?.hasAttribute('inert'), 'the closed panel is inert').toBe(true);
+    p.destroy();
+  });
 });
 
 /**

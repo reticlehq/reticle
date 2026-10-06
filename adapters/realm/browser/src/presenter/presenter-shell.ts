@@ -500,6 +500,7 @@ export class HudShell {
     const log = this.#root.querySelector<HTMLElement>('[data-reticle-log]');
     if (log !== null) settleLogAtLatest(log);
     this.#chatPanel?.setAttribute('aria-hidden', 'false');
+    this.#chatPanel?.removeAttribute('inert');
     this.#chatToggle?.setAttribute('data-active', '1');
     this.#chatToggle?.setAttribute('aria-pressed', 'true');
     this.#callbacks.onChatOpen?.();
@@ -507,10 +508,21 @@ export class HudShell {
   }
   closeChat(): void {
     if (this.#root === undefined || !this.isChatOpen()) return;
+    const panel = this.#chatPanel;
+    const toggle = this.#chatToggle;
+    // Hiding a region that still holds focus trips Chrome's "Blocked aria-hidden" warning and
+    // strands keyboard and screen-reader users inside an invisible region. Move focus out to the
+    // chat toggle first, then hide and mark the panel inert so focus cannot re-enter it.
+    if (panel !== undefined && toggle !== undefined) {
+      const root = panel.getRootNode() as Document | ShadowRoot;
+      const active = root.activeElement;
+      if (active !== null && panel.contains(active)) toggle.focus();
+    }
     this.#root.removeAttribute(CHAT_ATTR);
-    this.#chatPanel?.setAttribute('aria-hidden', 'true');
-    this.#chatToggle?.setAttribute('data-active', '0');
-    this.#chatToggle?.setAttribute('aria-pressed', 'false');
+    panel?.setAttribute('aria-hidden', 'true');
+    panel?.setAttribute('inert', '');
+    toggle?.setAttribute('data-active', '0');
+    toggle?.setAttribute('aria-pressed', 'false');
     this.#callbacks.onChatClose?.();
     if (this.#dock !== undefined) scheduleSyncDockLayout(this.#dock, this.#root);
   }
