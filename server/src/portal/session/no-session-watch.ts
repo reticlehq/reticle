@@ -11,7 +11,7 @@
  */
 
 import { probeRouteStatus } from './dev-server/route-status-probe.js';
-import { probeDevServers, probeDevServerStates } from './dev-server/dev-server-probe.js';
+import { probeDevServerStates } from './dev-server/dev-server-probe.js';
 import type { NoSessionReason } from '@reticlehq/core/telemetry';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -23,6 +23,7 @@ import { detectDevCommandInProject } from './dev-server/dev-command.js';
 import { nextActionFor, renderNextAction } from './no-session-next-action.js';
 import type { NoSessionNextAction } from './no-session-next-action.js';
 import {
+  DEV_SERVER_PORTS,
   readProjectFramework,
   readProjectId,
   readProjectIsDesktop,
@@ -68,6 +69,18 @@ function attachFailureClause(port: number, reason: string): string {
   );
 }
 
+/** The port a tombstone URL names, when it names one — anything unparseable names no port. */
+function portOfUrl(url: string): number | undefined {
+  try {
+    const raw = new URL(url).port;
+    if ('' === raw) return undefined;
+    const port = Number(raw);
+    return Number.isSafeInteger(port) && port > 0 ? port : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 interface NoSessionWatchOptions {
   sessions: SessionManager;
   port: number;
@@ -80,7 +93,15 @@ interface NoSessionWatchOptions {
    * checking the directory on disk.
    */
   exists?: (file: string) => boolean;
-  probe?: () => Promise<number[]>;
+  /**
+   * The background port scan. Injected for tests; production probes each port on both loopback
+   * families.
+   *
+   * Receives the candidate list — the well-known ports plus the ones that name THIS project
+   * (#1367) — so a test can pin the observation without opening a socket. A test that injects it
+   * owns the scan.
+   */
+  probe?: (ports: readonly number[]) => Promise<number[]>;
   /**
    * Well-known Reticle ports other than ours that currently accept a connection.
    *
@@ -140,7 +161,6 @@ interface NoSessionWatchOptions {
  * through `wireSessionScope`.
  */
 export function startNoSessionWatch(options: NoSessionWatchOptions): () => void {
-  const probe = options.probe ?? (() => probeDevServers());
   let listening: readonly number[] = [];
   /**
    * Ports that accepted a connection and then answered nothing in time.
@@ -279,6 +299,27 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
       }).map((entry) => entry.port));
 
   /**
+   * The ports the background scan must cover: the well-known list plus the facts that name THIS
+   * repo's port without guessing it (#1367).
+   *
+   * The scan is machine-wide, so it knows 3000/5173/8080… and nothing about this checkout: with a
+   * Next app already running on :3005 (`next dev -p 3005`) the diagnosis said nothing was listening
+   * and named a command that would have started a duplicate. Three facts name the port instead —
+   * the project's own dev script pins it in its own text, the build plugins announced theirs
+   * (already trusted for auto-attach), and the last session was on one.
+   */
+  const scanPorts = (): readonly number[] => {
+    const ports = new Set<number>(DEV_SERVER_PORTS);
+    for (const port of ownDevServerPorts()) ports.add(port);
+    const pinned = detectDevCommandInProject(directory)?.port;
+    if (pinned !== undefined) ports.add(pinned);
+    const known = options.sessions.lastKnown?.();
+    const knownPort = known === undefined ? undefined : portOfUrl(known.url);
+    if (knownPort !== undefined) ports.add(knownPort);
+    return [...ports];
+  };
+
+  /**
    * Is `port` demonstrably this project's app? Either its dev server announced it, or this
    * project's own last session was on it. Anything else is a guess, and a guess that opens a
    * browser is worse than the sentence the diagnosis already writes about the ports it saw.
@@ -320,13 +361,14 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
     // Nothing to diagnose while a session is live, and no reason to scan.
     if (running || options.sessions.count() > 0) return;
     running = true;
+    const candidates = scanPorts();
     void (
       options.probe === undefined
-        ? probeDevServerStates().then((states) => {
+        ? probeDevServerStates(candidates).then((states) => {
             slowListeners = states.slow;
             return states.serving;
           })
-        : probe()
+        : options.probe(candidates)
     )
       .then(async (ports) => {
         listening = ports;

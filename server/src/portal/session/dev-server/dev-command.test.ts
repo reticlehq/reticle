@@ -101,6 +101,16 @@ describe('detectDevCommand', () => {
     expect(detectDevCommand(DIR, reader(files))?.port).toBe(3001);
   });
 
+  it('reports the port when the script pins one with the short -p flag', () => {
+    const files = { [PKG]: JSON.stringify({ scripts: { dev: 'next dev -p 3005' } }) };
+    expect(detectDevCommand(DIR, reader(files))?.port).toBe(3005);
+  });
+
+  it('does not read a port out of the -p inside a longer flag', () => {
+    const files = { [PKG]: JSON.stringify({ scripts: { dev: 'vite --pretty 2' } }) };
+    expect(detectDevCommand(DIR, reader(files))?.port).toBeUndefined();
+  });
+
   it('reports the port from a PORT= env prefix', () => {
     const files = { [PKG]: JSON.stringify({ scripts: { dev: 'PORT=8080 remix dev' } }) };
     expect(detectDevCommand(DIR, reader(files))?.port).toBe(8080);
