@@ -40,6 +40,24 @@ export {
   type EvalResult,
 } from './predicate-eval-kit.js';
 
+/** The oracle a net body clause reports, so an agent can branch on which one decided. */
+const NetBodyAssertion = {
+  CONTAINS: 'net.bodyContains',
+  MATCHES: 'net.bodyMatches',
+} as const;
+type NetBodyClause = (typeof NetBodyAssertion)[keyof typeof NetBodyAssertion];
+
+/** A truncated body missed a `bodyContains`: the kept prefix can still answer a substring. */
+const TRUNCATED_PREFIX_REMEDY =
+  "Raise it past this response's size and re-run, or assert on something inside the recorded prefix";
+
+/**
+ * A truncated body missed a `bodyMatches`. That clause parses the whole body and a JSON prefix never
+ * parses, so "assert inside the prefix" changes nothing for it (#1417): name what can work instead.
+ */
+const TRUNCATED_MATCHES_REMEDY =
+  "Raise it past this response's size and re-run. `bodyMatches` parses the whole body, and a JSON prefix never parses, so it cannot be judged on the kept part: to assert on what was kept, use `bodyContains` with a substring from it";
+
 // The predicate SHAPE — the discriminated union, its aliases and its zod schema — lives in
 // predicate-schema.ts, and is re-exported here: the two halves are ONE public surface.
 export * from './predicate-schema.js';
@@ -400,6 +418,8 @@ export function evalNet(
    * a truncated one cannot (#614).
    */
   let truncatedBody: string | undefined;
+  // Which clause the truncated body missed: a predicate can carry both, and the remedy for each differs.
+  let truncatedClause: NetBodyClause | undefined;
   /**
    * A `bodyContains` needle that was FOUND, and found only inside a key name (#987).
    *
@@ -447,13 +467,15 @@ export function evalNet(
       // there (#614). Grading it `pass: false` with "the response value is what differed" is the
       // inversion the honesty rules exist to prevent — an unknown reported as decided, against a
       // response that was very likely correct.
-      const missed = (): false => {
-        if (true === d['responseBodyTruncated']) truncatedBody ??= response;
-        else bodyMismatch ??= response;
+      const missed = (clause: NetBodyClause): false => {
+        if (true === d['responseBodyTruncated']) {
+          truncatedBody ??= response;
+          truncatedClause ??= clause;
+        } else bodyMismatch ??= response;
         return false;
       };
       if (p.bodyContains !== undefined) {
-        if (!response.includes(p.bodyContains)) return missed();
+        if (!response.includes(p.bodyContains)) return missed(NetBodyAssertion.CONTAINS);
         const fragment = keyFragmentOnly(response, p.bodyContains);
         if (fragment !== undefined) {
           keyFragment ??= { key: fragment, body: response };
@@ -462,7 +484,7 @@ export function evalNet(
       }
       if (p.bodyMatches !== undefined) {
         const verdict = matchJsonBody(response, p.bodyMatches);
-        if ('mismatch' === verdict) return missed();
+        if ('mismatch' === verdict) return missed(NetBodyAssertion.MATCHES);
         if ('match' !== verdict) {
           redactedResponseField ??= verdict.redacted;
           return false;
@@ -490,7 +512,7 @@ export function evalNet(
       failureReason: `a call matched but its body was not recorded, so \`bodyContains\` could not be checked — enable it where the app calls connect(): reticle({ captureNetworkBodies: true })`,
       observed: 'a matching call with no recorded body',
       expected: `a body carrying ${wantedBody(p)}`,
-      assertion: 'net.bodyContains',
+      assertion: NetBodyAssertion.CONTAINS,
     };
   }
   if (keyFragment !== undefined && 0 === matches.length) {
@@ -500,7 +522,7 @@ export function evalNet(
       inconclusive: `a call matching ${describeNetFilter(p)} was answered with a body where ${JSON.stringify(p.bodyContains)} appears ONLY inside the key name ${JSON.stringify(keyFragment.key)} — no value in the response contains it, so this substring proves nothing about what any field holds. Assert the field itself: \`bodyMatches: { "<field>": <value> }\``,
       observed: `response body ${JSON.stringify(clipBody(keyFragment.body))}`,
       expected: `a response body carrying ${JSON.stringify(p.bodyContains)} as a value, or as a whole key`,
-      assertion: 'net.bodyContains',
+      assertion: NetBodyAssertion.CONTAINS,
     };
   }
   if (redactedResponseField !== undefined && 0 === matches.length) {
@@ -510,7 +532,7 @@ export function evalNet(
       inconclusive: `a call matching ${describeNetFilter(p)} was answered, but its ${field} was REDACTED before the body was recorded, so this clause cannot be judged — a redacted field is unknown, not different. Assert on a non-sensitive key, or on the effect the value had`,
       observed: `a matching response whose ${field} is ${REDACTED_VALUE}`,
       expected: `a response body matching ${JSON.stringify(p.bodyMatches)}`,
-      assertion: 'net.bodyMatches',
+      assertion: NetBodyAssertion.MATCHES,
     };
   }
   const requestVerdict = requestBodyVerdict(requestState, p, matches.length);
@@ -524,16 +546,14 @@ export function evalNet(
     // same unknown. Name what can work for the clause that was actually asked (#1417). The grade
     // stays inconclusive either way: a partial parse must not decide it, since a later duplicate key
     // could overturn whatever the prefix seemed to say.
-    const asksMatch = p.bodyMatches !== undefined;
-    const remedy = asksMatch
-      ? "Raise it past this response's size and re-run. `bodyMatches` parses the whole body, and a JSON prefix never parses, so it cannot be judged on the kept part: to assert on what was kept, use `bodyContains` with a substring from it"
-      : "Raise it past this response's size and re-run, or assert on something inside the recorded prefix";
+    const missedMatch = NetBodyAssertion.MATCHES === truncatedClause;
+    const remedy = missedMatch ? TRUNCATED_MATCHES_REMEDY : TRUNCATED_PREFIX_REMEDY;
     return {
       pass: false,
       inconclusive: `a call matching ${describeNetFilter(p)} was answered with a body that was TRUNCATED before it was recorded, and ${wantedBody(p)} is not in the part that was kept — so this is undecidable, not a failure. The cap is per-body and set where the app calls connect(): \`reticle.connect({ captureNetworkBodies: true, networkBodyMaxChars: 65536 })\`, or for the Vite plugin \`reticle({ networkBodyMaxChars: 65536 })\` / VITE_RETICLE_BODY_MAX_CHARS=65536 (default 8192, max 262144). An SDK older than this daemon ignores the option; a version skew on the session says so. ${remedy}`,
       observed: `the first ${String(truncatedBody.length)} characters of a truncated response body ${JSON.stringify(clipBody(truncatedBody))}`,
       expected: `a response body carrying ${wantedBody(p)}`,
-      assertion: asksMatch ? 'net.bodyMatches' : 'net.bodyContains',
+      assertion: truncatedClause ?? NetBodyAssertion.CONTAINS,
     };
   }
   if (bodyMismatch !== undefined && 0 === matches.length) {
@@ -548,7 +568,7 @@ export function evalNet(
       failureReason: `a call matching ${describeNetFilter(p)} was made and answered ${JSON.stringify(clipBody(bodyMismatch))}, which does not carry ${wantedBody(p)}${because} — the request fired, the response value is what differed`,
       observed: `response body ${JSON.stringify(clipBody(bodyMismatch))}${because}`,
       expected: `a response body carrying ${wantedBody(p)}`,
-      assertion: 'net.bodyContains',
+      assertion: NetBodyAssertion.CONTAINS,
     };
   }
   // `count` (exact) turns presence into a cardinality assertion — catches the double-submit /

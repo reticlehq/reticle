@@ -68,6 +68,22 @@ describe('bodyMatches on a truncated body', () => {
   });
 });
 
+describe('a predicate carrying both clauses', () => {
+  // The clause the truncated body actually missed decides the advice: `bodyContains` is checked first,
+  // so a miss there must not be reported as a `bodyMatches` miss telling the caller to use what it used.
+  it('reports the bodyContains miss as a bodyContains miss', async () => {
+    const r = await judge({ bodyContains: 'not-in-the-prefix', bodyMatches: { status: 'ok' } });
+    expect(r.assertion).toBe('net.bodyContains');
+    expect(r.inconclusive).toContain('assert on something inside the recorded prefix');
+  });
+
+  it('reports a bodyMatches miss when bodyContains was found in the prefix', async () => {
+    const r = await judge({ bodyContains: '"status":"ok"', bodyMatches: { status: 'ok' } });
+    expect(r.assertion).toBe('net.bodyMatches');
+    expect(r.inconclusive).toContain('`bodyContains`');
+  });
+});
+
 describe('bodyContains on a truncated body is unchanged', () => {
   it('keeps the prefix advice and its own label', async () => {
     const r = await judge({ bodyContains: 'not-in-the-prefix' });
