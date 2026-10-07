@@ -8,6 +8,7 @@
  */
 
 import {
+  QueryBy,
   ReticleCommand,
   type ElementDescriptor,
   type ElementQuery,
@@ -28,6 +29,7 @@ import type { PredicateSession } from './predicate-session.js';
 import { describeTestidMiss } from './testid-near-miss.js';
 import { describeSplitTextMiss } from './split-text-miss.js';
 import { satisfiesProperty, type Baseline, type PropertyAssertion } from './property.js';
+import { describeNameNearMiss } from './name-near-miss.js';
 
 /**
  * The caveat for a present-testid list that was cut at its cap, or nothing when it was whole.
@@ -321,7 +323,16 @@ export async function evalElement(
   // element that never rendered. Naming the container is the difference between a retry and a bug
   // report against working code. See split-text-miss.ts.
   const splitText = describeSplitTextMiss(match.hint?.splitText, query.text);
-  const clause = splitText ?? (alsoHere === undefined || '' === alsoHere ? undefined : alsoHere);
+  // Same asymmetry one field over: an exact role+name miss reads like an element that never
+  // rendered, while the identical failure through reticle_query lists the labels that role really
+  // has. The browser computed them on its way to reporting zero. See name-near-miss.ts.
+  // Scoped by role in both spellings, as `query.ts` resolves it: `{ by: 'role', value, name }` carries
+  // the role in `value`, and without this the sentence said "the page has" for a list the browser had
+  // already limited to that role.
+  const nearMissRole = QueryBy.ROLE === query.by ? query.value : query.role;
+  const nearMiss = describeNameNearMiss(match.hint?.nameNearMiss, query.name, nearMissRole);
+  const clause =
+    splitText ?? nearMiss ?? (alsoHere === undefined || '' === alsoHere ? undefined : alsoHere);
   const suffix = clause === undefined ? '' : ` — ${clause}`;
   // The evidence list is capped in document order, so a region low on the page is exactly what it
   // drops. Handed back with no marker it reads as the whole page, and the field report this came
