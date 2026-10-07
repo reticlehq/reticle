@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`: `reticle_session { action: "yield" }` without a `sessionId` works with several projects connected.** Yield only hands the tab back to the human, but an id-less call got the same "which session?" refusal as a destructive action, so an agent that had just finished driving one tab had to look its id up in order to let go of it. When the ordinary resolution refuses, an id-less yield now releases the one connected session that has been driven. With no driven session, or more than one, it still asks, and a named `sessionId` is never overridden. Closes [#1258](https://github.com/reticlehq/reticle/issues/1258).

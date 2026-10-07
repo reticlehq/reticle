@@ -11,9 +11,34 @@ import { ReticleTool } from '@reticlehq/core';
 import { sessionIdShape } from '@/surface/tools/tool-kit.js';
 import { asString } from '@reticlehq/core';
 import type { ToolDef } from '@/surface/tools/tool-kit.js';
+import type { Session } from './session.js';
+import type { SessionManager } from './session-manager.js';
 import { gapReportLines } from '@/judgement/runs/artifact/gap-report.js';
 import { gapSummary } from '@/judgement/runs/artifact/gap-summary.js';
 import { DiscoveryInvite } from '@reticlehq/core';
+
+/**
+ * The session an id-less yield hands back.
+ *
+ * Yield is non-destructive: it only gives the tab back to the human. With several projects connected,
+ * an id-less call hit the same "which session?" refusal a destructive action gets, so an agent that
+ * had just finished driving one tab had to look its id up in order to let go of it (#1258). When the
+ * ordinary resolution refuses, the one connected session this caller has DRIVEN (it holds a
+ * remembered act) is the clear candidate. None, or more than one, and the refusal stands: guessing
+ * which of two driven tabs to release is still a guess.
+ */
+function resolveYieldTarget(sessions: SessionManager, requested: string | undefined): Session {
+  if (requested !== undefined) return sessions.resolve(requested);
+  try {
+    return sessions.resolve();
+  } catch (refusal) {
+    const driven = sessions.all().filter((s) => s.lastAct.cursor() !== undefined);
+    const [only] = driven;
+    if (1 !== driven.length || only === undefined) throw refusal;
+    only.markAgentActivity();
+    return only;
+  }
+}
 
 /**
  * Is this a turn ending with nothing attached, rather than a call about a specific tab?
@@ -153,7 +178,7 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
           note: YIELD_WITHOUT_SESSION_NOTE,
         });
       }
-      const session = deps.sessions.resolve(requested);
+      const session = resolveYieldTarget(deps.sessions, requested);
       const note = asString(args['note']);
       const tone = ask ? PresenterTone.ASK : PresenterTone.WAITING;
       const text =
