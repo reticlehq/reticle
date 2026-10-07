@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ReticleEnv } from '@reticlehq/core';
 import {
   NO_OWN_TAB,
@@ -240,7 +240,8 @@ describe('the live picture of a drive the chat asked for', () => {
         }),
     });
     const ticking = remote.tick();
-    await new Promise((resolve) => setTimeout(resolve, 60));
+    // Until the shots run out, not for a fixed time: Windows' timer resolution fit one 5ms tick in 60ms.
+    await vi.waitFor(() => expect(shots).toHaveLength(0), { timeout: 10_000 });
     release();
     await ticking;
     const sent = p.calls.filter((c) => c.url.endsWith('/ld_5/frames'));
@@ -344,7 +345,7 @@ describe('which tab a chat-requested drive uses', () => {
       },
     });
     const ticking = remote.tick();
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await vi.waitFor(() => expect(filmed.length).toBeGreaterThan(0), { timeout: 10_000 });
     release();
     await ticking;
     expect(driven).toEqual(['tab-2']);
