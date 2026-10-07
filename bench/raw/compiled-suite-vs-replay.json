@@ -4,7 +4,7 @@
   "playwright": {
     "harness": "playwright-compiled-script",
     "passed": 4,
-    "end_to_end_ms": 3249,
+    "end_to_end_ms": 3384,
     "llm_tokens": 0,
     "report_bytes": 14,
     "report_tokens": 5
@@ -12,13 +12,13 @@
   "reticle": {
     "harness": "reticle_flow_verify",
     "passed": 4,
-    "end_to_end_ms": 6542,
-    "startup_ms": 4781,
-    "login_ms": 755,
-    "verify_call_ms": 1006,
+    "end_to_end_ms": 6733,
+    "startup_ms": 4807,
+    "login_ms": 817,
+    "verify_call_ms": 1109,
     "llm_tokens": 0,
-    "report_bytes": 1603,
-    "report_tokens": 424
+    "report_bytes": 2301,
+    "report_tokens": 604
   },
-  "finding": "Both cost ZERO LLM tokens, so the token-efficiency argument does not apply to a compiled suite at all — it applies to an agent re-driving the browser. Verdicts: playwright 4/4, replay 4/4. End to end, the compiled script was faster this run (3249ms vs 6542ms, 2.0x); replay's verify call alone was 1006ms, under the compiled script's whole run, and the rest is browser+SDK handshake the adapter pads. What is NOT derivable from these numbers, and is the actual difference: what each check can see. Replay expectations cover signal, state, network cardinality and console, which a DOM assertion cannot reach, and the flow was recorded by driving rather than hand-written."
+  "finding": "Both cost ZERO LLM tokens, so the token-efficiency argument does not apply to a compiled suite at all — it applies to an agent re-driving the browser. Verdicts: playwright 4/4, replay 4/4. End to end, the compiled script was faster this run (3384ms vs 6733ms, 2.0x); replay's verify call alone was 1109ms, under the compiled script's whole run, and the rest is browser+SDK handshake the adapter pads. What is NOT derivable from these numbers, and is the actual difference: what each check can see. Replay expectations cover signal, state, network cardinality and console, which a DOM assertion cannot reach, and the flow was recorded by driving rather than hand-written."
 }

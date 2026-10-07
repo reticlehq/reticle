@@ -4,14 +4,15 @@
   "points": [
     {
       "flows": 2,
-      "reticle_verify_tokens": 365,
+      "reticle_verify_tokens": 646,
       "status": "unverifiable",
       "verdict": {
+        "next": "Record what the user asked, once per task, verbatim: reticle_run { tool: \"reticle_intent\", args: { action: \"declare\", request: \"<their words>\" } }. It travels with every run.",
         "status": "unverifiable",
         "total": 2,
         "passed": 2,
         "failed": 0,
-        "summary": "all 2 flows pass — only 0 of 10 steps declared a consequence; the rest were driven, not verified — 1 known route(s) never opened: /compose — 1 contradiction(s): a channel disagrees with what the app showed, on suite-500 — these flows shared one session and ran in order, so a pass here may rest on state an earlier flow left behind; replay with `parallel` to give each its own context",
+        "summary": "all 2 flows pass — only 0 of 10 steps declared a consequence; the rest were driven, not verified — 1 known route(s) never opened: /compose — 5 contradiction(s): a channel disagrees with what the app showed, on suite-500, suite-shape — these flows shared one session and ran in order, so a pass here may rest on state an earlier flow left behind; replay with `parallel` to give each its own context",
         "failures": [],
         "isolation": "shared-session",
         "coverage": {
@@ -24,11 +25,43 @@
         "contradictions": [
           {
             "flow": "suite-500",
+            "step": 2,
+            "kind": "request-never-settled",
+            "claim": "the UI moved forward and the action reported done",
+            "counter": "1 request(s) were still in flight",
+            "detail": "POST http://localhost:8787/api/login"
+          },
+          {
+            "flow": "suite-500",
             "step": 3,
             "kind": "request-never-settled",
             "claim": "the UI moved forward and the action reported done",
             "counter": "1 request(s) were still in flight",
             "detail": "GET http://localhost:8787/api/items?limit=1"
+          },
+          {
+            "flow": "suite-500",
+            "step": 4,
+            "kind": "request-never-settled",
+            "claim": "the UI moved forward and the action reported done",
+            "counter": "1 request(s) were still in flight",
+            "detail": "GET http://localhost:8787/api/broken/500"
+          },
+          {
+            "flow": "suite-shape",
+            "step": 3,
+            "kind": "request-never-settled",
+            "claim": "the UI moved forward and the action reported done",
+            "counter": "1 request(s) were still in flight",
+            "detail": "GET http://localhost:8787/api/items?limit=1"
+          },
+          {
+            "flow": "suite-shape",
+            "step": 4,
+            "kind": "request-never-settled",
+            "claim": "the UI moved forward and the action reported done",
+            "counter": "1 request(s) were still in flight",
+            "detail": "GET http://localhost:8787/api/broken/wrong-data"
           }
         ],
         "feedback_prompt": {
@@ -36,25 +69,26 @@
           "command": "reticle feedback"
         },
         "session_lease": {
-          "sessionId": "s77ed0829-6964-4734-881a-cb9d0ef5eb72",
-          "opened_at": 1791262610167,
+          "sessionId": "sec0c1743-23fa-49f3-9763-0c41aa616127",
+          "opened_at": 1791361923885,
           "IMPORTANT": "When you stop driving, call reticle_session {action:\"yield\", mode:\"waiting\"|\"ask\"}. The panel reads \"live\" until you do. {action:\"end\"} when the task is done; it revives on your next action."
         }
       },
       "passed": 2,
       "competitor_redrive_tokens": 60498,
-      "suite_rre_ratio": 166
+      "suite_rre_ratio": 94
     },
     {
       "flows": 4,
-      "reticle_verify_tokens": 483,
+      "reticle_verify_tokens": 709,
       "status": "unverifiable",
       "verdict": {
+        "next": "Record what the user asked, once per task, verbatim: reticle_run { tool: \"reticle_intent\", args: { action: \"declare\", request: \"<their words>\" } }. It travels with every run.",
         "status": "unverifiable",
         "total": 4,
         "passed": 4,
         "failed": 0,
-        "summary": "all 4 flows pass — only 0 of 19 steps declared a consequence; the rest were driven, not verified — 1 known route(s) never opened: /compose — 3 contradiction(s): a channel disagrees with what the app showed, on suite-404, suite-shape — these flows shared one session and ran in order, so a pass here may rest on state an earlier flow left behind; replay with `parallel` to give each its own context",
+        "summary": "all 4 flows pass — only 0 of 19 steps declared a consequence; the rest were driven, not verified — 1 known route(s) never opened: /compose — 6 contradiction(s): a channel disagrees with what the app showed, on suite-404, suite-500, suite-shape — these flows shared one session and ran in order, so a pass here may rest on state an earlier flow left behind; replay with `parallel` to give each its own context",
         "failures": [],
         "isolation": "shared-session",
         "coverage": {
@@ -67,6 +101,14 @@
         "contradictions": [
           {
             "flow": "suite-404",
+            "step": 2,
+            "kind": "request-never-settled",
+            "claim": "the UI moved forward and the action reported done",
+            "counter": "1 request(s) were still in flight",
+            "detail": "POST http://localhost:8787/api/login"
+          },
+          {
+            "flow": "suite-404",
             "step": 3,
             "kind": "request-never-settled",
             "claim": "the UI moved forward and the action reported done",
@@ -74,12 +116,20 @@
             "detail": "GET http://localhost:8787/api/items?limit=1"
           },
           {
-            "flow": "suite-404",
+            "flow": "suite-500",
+            "step": 3,
+            "kind": "request-never-settled",
+            "claim": "the UI moved forward and the action reported done",
+            "counter": "1 request(s) were still in flight",
+            "detail": "GET http://localhost:8787/api/items?limit=1"
+          },
+          {
+            "flow": "suite-500",
             "step": 4,
             "kind": "request-never-settled",
             "claim": "the UI moved forward and the action reported done",
             "counter": "1 request(s) were still in flight",
-            "detail": "GET http://localhost:8787/api/broken/404"
+            "detail": "GET http://localhost:8787/api/broken/500"
           },
           {
             "flow": "suite-shape",
@@ -88,6 +138,14 @@
             "claim": "the UI moved forward and the action reported done",
             "counter": "1 request(s) were still in flight",
             "detail": "GET http://localhost:8787/api/items?limit=1"
+          },
+          {
+            "flow": "suite-shape",
+            "step": 4,
+            "kind": "request-never-settled",
+            "claim": "the UI moved forward and the action reported done",
+            "counter": "1 request(s) were still in flight",
+            "detail": "GET http://localhost:8787/api/broken/wrong-data"
           }
         ],
         "feedback_prompt": {
@@ -95,14 +153,14 @@
           "command": "reticle feedback"
         },
         "session_lease": {
-          "sessionId": "s7bd5bf3f-4601-4275-ab68-e98a55ecaedb",
-          "opened_at": 1791262617078,
+          "sessionId": "sc59c5b67-7fd0-41c8-aad4-64806939bd72",
+          "opened_at": 1791361931196,
           "IMPORTANT": "When you stop driving, call reticle_session {action:\"yield\", mode:\"waiting\"|\"ask\"}. The panel reads \"live\" until you do. {action:\"end\"} when the task is done; it revives on your next action."
         }
       },
       "passed": 4,
       "competitor_redrive_tokens": 120996,
-      "suite_rre_ratio": 251
+      "suite_rre_ratio": 171
     }
   ],
   "note": "reticle_flow_verify returns ONE verdict for the whole suite (passing flows counted, only failures detailed) → read-cost ~constant in K. Competitors re-drive each flow with the LLM (~30,249 tok/flow) → cost is K*per-flow. The ratio therefore GROWS with suite size: the chased RRE metric compounds."
