@@ -26,7 +26,11 @@ import { findDock, scheduleSyncDockLayout } from './presenter-dock-layout.js';
 import { SETTINGS_CSS } from './presenter-settings-styles.js';
 import type { AccountState } from '@reticlehq/core';
 import { DISCOVERY_CALL_URL, FOUNDER_EMAIL, FOUNDER_MAILTO } from '@reticlehq/core';
-import { accountControlHtml, type AccountDetails } from '@/presenter/presenter-account.js';
+import {
+  ACCOUNT_TEXT,
+  accountControlHtml,
+  type AccountDetails,
+} from '@/presenter/presenter-account.js';
 
 export { SETTINGS_CSS };
 
@@ -262,8 +266,8 @@ export function creditsLeft(credits: { used: number; limit: number } | undefined
     ? `All ${String(credits.limit)} Harness credits used this month`
     : `${String(left)} of ${String(credits.limit)} Harness credits left this month`;
 }
-const ACCOUNT_HELP =
-  'Whether this machine is signed in to a Reticle workspace. Signing in happens in your terminal.';
+/** Sign-in is a device flow the HUD opens in the browser; the terminal is only the fallback. */
+const ACCOUNT_HELP = `Whether this machine is signed in to a Reticle workspace. Press ${ACCOUNT_TEXT.SIGNED_OUT} to sign in through your browser.`;
 
 /**
  * Show the harness switch, or hide the row entirely.
