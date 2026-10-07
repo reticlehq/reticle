@@ -294,7 +294,10 @@ describe('advertised surface cost', () => {
 // output schemas, so this costs nothing there.
 // 149_200 -> 149_500 for `to` and `at` on reticle_flow_replay (149,437 B): replaying up to a point
 // and continuing from it is how a drive plan branches without re-driving the shared steps.
-const ALL_SURFACE_BYTE_BUDGET = 149_500;
+// 149_500 -> 149_700 for `window` and `documentStatus` on reticle_sessions and `disconnected` on
+// session end (149,593 B): two windows of one desktop app share a url, and a validating client strips
+// an undeclared field, so the label that tells them apart has to be in the schema.
+const ALL_SURFACE_BYTE_BUDGET = 149_700;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {

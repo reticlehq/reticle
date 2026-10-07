@@ -94,19 +94,69 @@ function detectBrand(): BrowserBrand {
   return BrowserBrand.OTHER;
 }
 
+/**
+ * The page's own fetch, bound when this module loads — before the network observer wraps it — so the
+ * status probe below never shows up as a request the app made.
+ */
+const pageFetch: typeof fetch | undefined =
+  'undefined' !== typeof window && 'function' === typeof window.fetch
+    ? window.fetch.bind(window)
+    : undefined;
+
+/** Tauri's own name for the window this page is in (`main`, `setup`…); undefined anywhere else. */
+function tauriWindowLabel(): string | undefined {
+  const internals = (window as unknown as Record<string, unknown>)['__TAURI_INTERNALS__'] as
+    { metadata?: { currentWindow?: { label?: unknown } } } | undefined;
+  const label = internals?.metadata?.currentWindow?.label;
+  return 'string' === typeof label && label.length > 0 ? label : undefined;
+}
+
+/**
+ * The HTTP status this document was served with, so a 404 page is never mistaken for the app.
+ *
+ * Reported from a Tauri app whose two hidden windows loaded a dev server's 404 page — which still
+ * mounted the SDK — and were the only sessions listed. The browser's navigation entry says the
+ * status where it can; WKWebView never does, so a desktop page asks once with a HEAD.
+ */
+function navigationStatus(): number | undefined {
+  try {
+    const [entry] = performance.getEntriesByType('navigation') as { responseStatus?: number }[];
+    const known = entry?.responseStatus;
+    return 'number' === typeof known && known > 0 ? known : undefined;
+  } catch {
+    return undefined; // no navigation timing here: fall through to asking
+  }
+}
+
+async function documentStatus(runtime: string): Promise<number | undefined> {
+  const known = navigationStatus();
+  if (known !== undefined) return known;
+  try {
+    if ('web' === runtime || pageFetch === undefined || !/^https?:$/.test(location.protocol)) {
+      return undefined;
+    }
+    return (await pageFetch(location.href, { method: 'HEAD', cache: 'no-store' })).status;
+  } catch {
+    return undefined; // a status we cannot read is simply not reported
+  }
+}
+
 function snapshotHealth(): {
   hidden: boolean;
   focused: boolean;
   runtime: string;
   engine: string;
   brand: BrowserBrand;
+  windowLabel?: string;
 } {
+  const windowLabel = tauriWindowLabel();
   return {
     hidden: 'hidden' === document.visibilityState,
     focused: document.hasFocus(),
     runtime: detectRuntime(),
     engine: detectEngine(),
     brand: detectBrand(),
+    ...(windowLabel === undefined ? {} : { windowLabel }),
   };
 }
 
@@ -119,8 +169,13 @@ export function installHealth(emit: Emit): Teardown {
   const ac = new AbortController();
   const { signal } = ac;
 
+  let status: number | undefined;
   const report = (reason: HealthReason): void => {
-    emit(EventType.PAGE_HEALTH, { ...snapshotHealth(), reason });
+    emit(EventType.PAGE_HEALTH, {
+      ...snapshotHealth(),
+      ...(status === undefined ? {} : { documentStatus: status }),
+      reason,
+    });
   };
 
   document.addEventListener('visibilitychange', () => report(HealthReason.VISIBILITY), { signal });
@@ -128,6 +183,11 @@ export function installHealth(emit: Emit): Teardown {
   window.addEventListener('blur', () => report(HealthReason.BLUR), { signal });
 
   report(HealthReason.INITIAL); // baseline so the server knows state before the first change
+  void documentStatus(detectRuntime()).then((known) => {
+    if (known === undefined || signal.aborted) return;
+    status = known;
+    report(HealthReason.HEARTBEAT); // now, not a heartbeat later: selection reads it on connect
+  });
   const stopHeartbeat = nativeSetInterval(
     () => report(HealthReason.HEARTBEAT),
     SESSION_HEALTH.HEARTBEAT_MS,
