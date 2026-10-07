@@ -30,7 +30,7 @@ const HARNESS_PLAN_PATH = '/settings?group=billing';
  * The platform the daemon talks to: the one this config came from, else the host this machine
  * signed in to, else the hosted service. A self-hosted or local platform was sent to the hosted one.
  */
-function platformBase(config: HarnessConfig | undefined, account: AccountState): string {
+export function platformBase(config: HarnessConfig | undefined, account: AccountState): string {
   const base = [config?.platformUrl, account.host].find(
     (url): url is string => url !== undefined && isSafeDashboardUrl(url),
   );

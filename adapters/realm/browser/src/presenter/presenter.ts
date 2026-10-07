@@ -95,7 +95,12 @@ import { Annotator, type AnnotatorChrome } from '@/review/annotator.js';
 import { shouldAutoOpenChat } from './presenter-shell.js';
 import { installHudTelemetry } from './hud-telemetry.js';
 import { PLAN_HTML, PlanBoard, parsePlanView } from './presenter-plan.js';
-import { readRememberedLog, rememberLog, type RememberedRow } from './chrome/log-memory.js';
+import {
+  claimLog,
+  readRememberedLog,
+  rememberLog,
+  type RememberedRow,
+} from './chrome/log-memory.js';
 
 /** How long the copy button shows it worked. */
 const COPIED_FLASH_MS = 1600;
@@ -261,6 +266,8 @@ export class Presenter {
         // Same snapshot, same moment: the switch cannot disagree with the card above it.
         this.#shell.paintHarness(snapshot.harnessConfig);
         this.#shell.paintImpact(snapshot.project.counts.verdicts);
+        const owner = true === snapshot.account?.signedIn ? snapshot.account.email : undefined;
+        if (claimLog(owner)) this.#clearRunLog();
         this.#shell.paintAccount(snapshot.account, snapshot.dashboardUrl, {
           projectName: snapshot.projectName,
           dashboardUrl: snapshot.dashboardUrl,

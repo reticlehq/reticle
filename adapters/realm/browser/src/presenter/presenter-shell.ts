@@ -40,6 +40,7 @@ import {
   CHAT_VIEWS_NAV_HTML,
   ANNOTATIONS_HTML,
   FLOWS_PAGE_HTML,
+  platformBase,
   type ChatView,
 } from './presenter-chat-views.js';
 import type { AnnotationItem } from '@/review/annotator.js';
@@ -60,6 +61,7 @@ function paintPromo(
   root: HTMLElement,
   offer: OfferState | undefined,
   notices: readonly unknown[] = [],
+  base?: string,
 ): void {
   const target = root.querySelector<HTMLElement>(`[${RAIL_PROMO_ATTR}]`);
   if (null === target) return;
@@ -75,7 +77,7 @@ function paintPromo(
   } catch {
     storage = undefined;
   }
-  paintCarousel(target, panelSlides(offer, dismissed, notices), storage);
+  paintCarousel(target, panelSlides(offer, dismissed, notices, base), storage);
 }
 
 interface HudShellCallbacks {
@@ -161,6 +163,9 @@ export class HudShell {
     | undefined;
   #pushedOffer: OfferState | undefined;
   #pushedNotices: readonly unknown[] = [];
+  #pushedHarness: HarnessConfig | undefined;
+  /** The platform the rail's links point at; repainted only when it moves, so slides keep turning. */
+  #promoBase: string | undefined;
   /** Torn down with the shell: the delegated listeners for every account menu under the root. */
   #accountTeardown: (() => void) | undefined;
 
@@ -172,8 +177,21 @@ export class HudShell {
    * panel may not be mounted yet, and the shell is the layer that knows.
    */
   paintHarness(config: HarnessConfig | undefined): void {
+    this.#pushedHarness = config;
     this.#settings.paintHarness(config);
     this.#chatViews.paintHarness(config);
+    this.#repaintPromoIfMoved();
+  }
+
+  #promoLinks(): string {
+    return platformBase(this.#pushedHarness, this.#pushedAccount?.account ?? { signedIn: false });
+  }
+
+  #repaintPromoIfMoved(): void {
+    const base = this.#promoLinks();
+    if (this.#root === undefined || base === this.#promoBase) return;
+    this.#promoBase = base;
+    paintPromo(this.#root, this.#pushedOffer, this.#pushedNotices, base);
   }
 
   paintImpact(verdicts: number): void {
@@ -207,6 +225,7 @@ export class HudShell {
     paintSettingsAccount(this.#root, account, dashboardUrl, details);
     paintRail(this.#root, account);
     this.#chatViews.paintAccount(account);
+    this.#repaintPromoIfMoved();
   }
   /**
    * Keep the rail's offer and notices current. Replayed at mount, as the account is: the daemon
@@ -216,7 +235,8 @@ export class HudShell {
   paintOffer(offer: OfferState | undefined, notices: readonly unknown[] = []): void {
     this.#pushedOffer = offer;
     this.#pushedNotices = notices;
-    if (this.#root !== undefined) paintPromo(this.#root, offer, notices);
+    this.#promoBase = this.#promoLinks();
+    if (this.#root !== undefined) paintPromo(this.#root, offer, notices, this.#promoBase);
   }
 
   constructor(callbacks: HudShellCallbacks = {}) {
@@ -402,7 +422,8 @@ export class HudShell {
     this.#settings.mount(root);
     this.#report.mount(root);
     this.#chatViews.mount(root);
-    paintPromo(root, this.#pushedOffer, this.#pushedNotices);
+    this.#promoBase = this.#promoLinks();
+    paintPromo(root, this.#pushedOffer, this.#pushedNotices, this.#promoBase);
     // The toolbar's lit state FOLLOWS the panels, rather than being set by whoever was clicked.
     // Set at click time, a button stayed lit after its panel was closed by the panel that replaced
     // it - two icons active, one panel open. The observer is the only place that can be right for

@@ -7,23 +7,27 @@ import { offerHtml, type OfferState } from './offer-card.js';
 import type { Slide } from './carousel.js';
 import { HudNoticeSchema, type HudNotice } from '@reticlehq/core/hud';
 import { esc } from '../chrome/presenter-safe-html.js';
+import { DEFAULT_PLATFORM_URL } from '@reticlehq/core';
 
-/** Credits and plans live on the Plan screen; the console has no /harness page (it redirected home). */
-const HARNESS_URL = 'https://app.reticle.sh/settings?group=billing';
+/**
+ * Credits and plans live on the Plan screen; the console has no /harness page (it redirected home).
+ * On the platform the daemon uses, which `base` names already escaped.
+ */
+const HARNESS_PATH = '/settings?group=billing';
 export const SLIDE_ID = {
   HARNESS: 'harness-journeys',
   REPLAY: 'replay-confidence',
   OFFER: 'harness-offer',
 } as const;
 
-const VALUE_SLIDES: readonly Slide[] = [
+const valueSlides = (base: string): readonly Slide[] => [
   {
     id: SLIDE_ID.HARNESS,
-    html: `<div class="reticle-promo-copy"><span class="reticle-promo-kicker">RETICLE HARNESS</span><strong class="reticle-promo-title">Let Reticle drive your app for you</strong><span class="reticle-promo-detail">Describe a user; it drives the journey and saves it to replay.</span><a data-reticle-promo-link class="reticle-promo-link" href="${HARNESS_URL}" target="_blank" rel="noopener noreferrer">Explore →</a></div>`,
+    html: `<div class="reticle-promo-copy"><span class="reticle-promo-kicker">RETICLE HARNESS</span><strong class="reticle-promo-title">Let Reticle drive your app for you</strong><span class="reticle-promo-detail">Describe a user; it drives the journey and saves it to replay.</span><a data-reticle-promo-link class="reticle-promo-link" href="${base}${HARNESS_PATH}" target="_blank" rel="noopener noreferrer">Explore →</a></div>`,
   },
   {
     id: SLIDE_ID.REPLAY,
-    html: `<div class="reticle-promo-copy"><span class="reticle-promo-kicker">FROM RUN TO REGRESSION</span><strong class="reticle-promo-title">Keep every journey replayable</strong><span class="reticle-promo-detail">Catch what changes before users do.</span><a data-reticle-promo-link class="reticle-promo-link" href="${HARNESS_URL}" target="_blank" rel="noopener noreferrer">See how →</a></div>`,
+    html: `<div class="reticle-promo-copy"><span class="reticle-promo-kicker">FROM RUN TO REGRESSION</span><strong class="reticle-promo-title">Keep every journey replayable</strong><span class="reticle-promo-detail">Catch what changes before users do.</span><a data-reticle-promo-link class="reticle-promo-link" href="${base}${HARNESS_PATH}" target="_blank" rel="noopener noreferrer">See how →</a></div>`,
   },
 ];
 
@@ -58,6 +62,7 @@ export function panelSlides(
   offer: OfferState | undefined,
   offerDeclined: boolean,
   notices: readonly unknown[] = [],
+  base: string = DEFAULT_PLATFORM_URL,
 ): Slide[] {
   const harnessOffer = offerHtml(offer, offerDeclined);
   // Validated here, in the lazy panel, with the full schema: the snapshot carries them loosely so
@@ -68,6 +73,6 @@ export function panelSlides(
   });
   return [
     ...('' === harnessOffer ? [] : [{ id: SLIDE_ID.OFFER, html: harnessOffer }]),
-    ...(0 < valid.length ? valid.map(noticeSlide) : VALUE_SLIDES),
+    ...(0 < valid.length ? valid.map(noticeSlide) : valueSlides(base)),
   ];
 }

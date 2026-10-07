@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { ReticleEnv } from '@reticlehq/core';
 import {
+  NO_OWN_TAB,
   REMOTE_DRIVE_ENDED,
   driveVerdict,
   endDrivenTab,
   pickDriveSession,
+  pickOwnDriveSession,
   startRemoteDrives,
   type RemoteDriveDeps,
   type RemoteDrives,
@@ -102,6 +104,39 @@ describe('drives the platform chat asked for', () => {
     endDrivenTab(tab, { ok: false, summary: '' });
     endDrivenTab(undefined, { ok: true, summary: '' });
     expect(said).toEqual([REMOTE_DRIVE_ENDED.PROVED, REMOTE_DRIVE_ENDED.NOT_PROVED]);
+  });
+
+  it('drives only a tab of the project whose credential claimed the drive', async () => {
+    const tabs = [
+      { sessionId: 'b', url: 'http://localhost:5174/', lastSeenMs: 0, hidden: false },
+      { sessionId: 'a', url: 'http://localhost:5173/', lastSeenMs: 1, hidden: false },
+    ];
+    const keyOf = (id: string): Promise<string | undefined> =>
+      Promise.resolve({ a: 'key-a', b: 'key-b' }[id]);
+    expect(await pickOwnDriveSession(tabs, 'drive it', 'key-a', keyOf)).toBe('a');
+    // Even a request naming B's address is not run in B with A's credential.
+    expect(await pickOwnDriveSession(tabs, 'on http://localhost:5174', 'key-a', keyOf)).toBe('a');
+    expect(await pickOwnDriveSession(tabs, 'drive it', 'key-c', keyOf)).toBeNull();
+  });
+
+  it('refuses a drive no tab of its project can take, without driving another', async () => {
+    const p = platform({ id: 'ld_o', goal: 'x' });
+    const drove: string[] = [];
+    await start({
+      fetch: p.fetch,
+      pick: () => Promise.resolve(null),
+      drive: (goal) => {
+        drove.push(goal);
+        return Promise.resolve({ ok: true, summary: 'proved' });
+      },
+    }).tick();
+    expect(drove).toEqual([]);
+    expect(p.calls[1]?.body).toEqual({
+      ok: false,
+      summary: NO_OWN_TAB,
+      verdict: 'unknown',
+      filmed: false,
+    });
   });
 
   it('does not ask while no app is connected, so the chat can say so', async () => {
@@ -304,20 +339,17 @@ describe('the verdict a chat-requested drive reports', () => {
     ).toBe('yes');
   });
 
-  it('reads a quoted text missing from the final page as not proved, never as refuted', () => {
+  it('refutes a goal on its quoted texts only when none of them is on the final page', () => {
     // "goes from "Count is 0" to "Count is 1"": the drive ends on "Count is 1", so the start state is
-    // rightly gone. The quoted texts are only looked for on the LAST page, so a miss cannot say which
-    // state the person meant, and it marked a working counter "Failed". It still blocks a yes.
+    // rightly gone. It marked a working counter "Failed"; the goal's own judgement decides instead.
     const counter = [{ verified: 'no' }, { verified: 'yes' }];
-    expect(
-      driveVerdict({
-        goalMet: true,
-        proved: true,
-        goals: counter,
-        checks: { held: 1, failed: 0, undecided: 0 },
-      }),
-    ).toBe('unknown');
-    expect(driveVerdict({ goalMet: true, proved: true, goals: counter })).toBe('unknown');
+    const held = { held: 1, failed: 0, undecided: 0 };
+    expect(driveVerdict({ goalMet: true, proved: true, goals: counter, checks: held })).toBe('yes');
+    expect(driveVerdict({ proved: true, goals: counter, checks: held })).toBe('unknown');
+    expect(driveVerdict({ proved: true, goals: [{ verified: 'no' }], checks: held })).toBe('no');
+    expect(driveVerdict({ proved: true, goals: [{ verified: 'unknown' }], checks: held })).toBe(
+      'unknown',
+    );
   });
 
   it('is never yes over a check that failed, whatever the model said of the goal', () => {

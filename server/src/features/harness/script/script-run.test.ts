@@ -256,3 +256,42 @@ describe('an open journey whose goal was not reached', () => {
     expect(run.lines[0]).toContain('the goal was not reached');
   });
 });
+
+/** Lanes run side by side: one lane's missed goal must never be told as another journey's. */
+describe('a journey failing beside a lane that missed its goal', () => {
+  it('fails on its own reason, not the other lane goal', async () => {
+    const fake = fakePorts({ failing: ['broken'] });
+    const ports: ScriptPorts = {
+      ...fake.ports,
+      async drive(toolset, goal, maxSteps) {
+        const drive = await fake.ports.drive(toolset, goal, maxSteps);
+        // A's drive lands while B is still driving, as two real lanes do.
+        await new Promise((r) => setTimeout(r, 'reach b' === goal ? 60 : 20));
+        return { ...drive, goalMet: 'reach b' === goal };
+      },
+    };
+    const run = await runScript(
+      script({
+        version: 1,
+        source: 'platform',
+        journeys: [
+          { id: 'a', title: 'Lane A', steps: [{ kind: 'act', goal: 'reach a' }] },
+          {
+            id: 'b',
+            title: 'Lane B',
+            steps: [{ kind: 'act', goal: 'reach b' }, replay('broken')],
+          },
+        ],
+        lanes: [
+          { id: 'A', journeys: ['a'] },
+          { id: 'B', journeys: ['b'] },
+        ],
+      }),
+      ports,
+    );
+    const laneB = run.lines.find((line) => line.includes('Lane B')) ?? '';
+    expect(laneB).toContain('Lane B');
+    expect(laneB).not.toContain('the goal was not reached');
+    expect(run.lines.find((line) => line.includes('Lane A'))).toContain('the goal was not reached');
+  });
+});

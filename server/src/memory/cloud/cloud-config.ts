@@ -250,6 +250,15 @@ export const linkedCloudPort =
     (await resolveProjectCloud(fs, reticleRoot, homeDir, env)).config;
 
 /**
+ * The API key a tab's own project resolves to, so a credential is only ever used for its own tabs.
+ * A tab whose project cannot be resolved has no key.
+ */
+export const sessionApiKeyPort =
+  (fs: FileSystemPort, homeDir: string, env: NodeJS.ProcessEnv, rootOf: (id: string) => string) =>
+  async (sessionId: string): Promise<string | undefined> =>
+    (await resolveProjectCloud(fs, rootOf(sessionId), homeDir, env)).config?.apiKey;
+
+/**
  * The credential for pushing RUNS, or null when this project opted out with `sync.runs: false`.
  * `reticle verify` used the port above and pushed its run and progress regardless of the opt-out.
  */
