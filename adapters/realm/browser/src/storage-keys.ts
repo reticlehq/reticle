@@ -14,6 +14,7 @@ export const ReticleStorageKey = {
   SESSION: '__reticle_session',
   REF_BASE: '__reticle_ref_base',
   PRESENTER_LOG: 'reticle-presenter-log',
+  PRESENTER_LOG_OWNER: 'reticle-presenter-log-owner',
   PRESENTER_SETTINGS: 'reticle-presenter-settings',
   PRESENTER_MINIMISED: 'reticle-presenter-minimised',
   CAROUSEL_DISMISSED: 'reticle.carousel.dismissed',

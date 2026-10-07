@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { LOG_KIND, LOG_RESULT } from './presenter-log.js';
 import { Presenter } from '../presenter.js';
+import { claimLog, readRememberedLog, rememberLog } from './log-memory.js';
 
 /**
  * Found watching the Harness replay saved flows on the merchant dashboard: each replay reloads the
@@ -32,5 +33,27 @@ describe('the Agent Log across a reload', () => {
     expect(shown).toContain('Clicking button "Refund now"');
     expect(document.querySelector('[data-reticle-log] [data-state="fail"]')).not.toBeNull();
     after.destroy();
+  });
+});
+
+/** The log holds what was driven and the notes a person wrote: never shown to the next account. */
+describe('the Agent Log when the account on the tab changes', () => {
+  afterEach(() => sessionStorage.clear());
+  const row = { kind: LOG_KIND.HUMAN, text: 'my private note', ts: '10:00', at: 0 };
+
+  it('is forgotten when somebody else signs in, and kept for the same account', () => {
+    expect(claimLog('ada@example.com')).toBe(false);
+    rememberLog([row]);
+    expect(claimLog('ada@example.com')).toBe(false);
+    expect(readRememberedLog()).toHaveLength(1);
+    expect(claimLog('grace@example.com')).toBe(true);
+    expect(readRememberedLog()).toEqual([]);
+  });
+
+  it('is forgotten on sign-out', () => {
+    claimLog('ada@example.com');
+    rememberLog([row]);
+    expect(claimLog(undefined)).toBe(true);
+    expect(readRememberedLog()).toEqual([]);
   });
 });
