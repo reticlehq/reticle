@@ -588,6 +588,30 @@ function wasCutAtFullBound(element: unknown): boolean {
   return textOf(element).length > TRANSPORT_LIMITS.MAX_FULL_TEXT;
 }
 
+/**
+ * The whole text of a passing match read in full (see `evalElement`'s `fullText`), or the result that
+ * says it was cut short.
+ *
+ * Whatever judges the text on a reading that stopped short could pass or fail on the part not read,
+ * so it is not judged: the same refusal a truncated state value gets. `undecided` names what was
+ * left undecided, so the caller's own question is the one the message answers.
+ */
+export function wholeTextOf(
+  evidence: unknown,
+  subject: string,
+  undecided: string,
+): { text: string } | { result: EvalResult } {
+  const matched = Array.isArray(evidence) ? evidence : [];
+  if (matched.some(wasCutAtFullBound)) {
+    const reason =
+      `the text of ${subject} is longer than the ${String(TRANSPORT_LIMITS.MAX_FULL_TEXT)} characters ` +
+      `Reticle reads to judge it, so ${undecided} was not decided on all of it. ` +
+      `Scope the predicate to a smaller element`;
+    return { result: { pass: false, failureReason: reason, inconclusive: reason } };
+  }
+  return { text: joinedText(matched) };
+}
+
 export function withTextProperty(
   base: EvalResult,
   assertion: PropertyAssertion,
@@ -596,16 +620,9 @@ export function withTextProperty(
 ): EvalResult {
   if (!base.pass) return base;
   const matched = Array.isArray(base.evidence) ? base.evidence : [];
-  // A property graded on a reading that stopped short could pass or fail on the part not read, so it
-  // is not graded: the same refusal a truncated state value gets.
-  if (matched.some(wasCutAtFullBound)) {
-    const reason =
-      `the text of ${subject} is longer than the ${String(TRANSPORT_LIMITS.MAX_FULL_TEXT)} characters ` +
-      `Reticle reads to judge a property, so ${assertion.property} was not decided on all of it. ` +
-      `Scope the predicate to a smaller element`;
-    return { pass: false, failureReason: reason, inconclusive: reason };
-  }
-  const text = joinedText(matched);
+  const whole = wholeTextOf(matched, subject, assertion.property);
+  if ('result' in whole) return whole.result;
+  const { text } = whole;
   const described = matched.map(shownBounded);
   const result = satisfiesProperty(text, assertion, baseline);
   // Nothing was compared — a relative property with no before-reading. See the twin in `evalState`.

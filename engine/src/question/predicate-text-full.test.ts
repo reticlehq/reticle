@@ -27,6 +27,8 @@ interface Page {
   readonly oldSdk?: boolean;
   /** How many elements matched, when more than were described. */
   readonly matchedTotal?: number;
+  /** The text under each scope, for a predicate that reads two of them. Other scopes get `text`. */
+  readonly byScope?: Readonly<Record<string, string>>;
 }
 
 class BoundedBrowser implements PredicateSession {
@@ -47,7 +49,9 @@ class BoundedBrowser implements PredicateSession {
     this.asked.push(args);
     const honoured = true === args[MatchArg.FULL_TEXT] && true !== this.page.oldSdk;
     const cap = honoured ? TRANSPORT_LIMITS.MAX_FULL_TEXT : DISPLAY_CAP;
-    const shown = this.text.length <= cap ? this.text : `${this.text.slice(0, cap)}…`;
+    const scope = (args['query'] as { scope?: string } | undefined)?.scope ?? '';
+    const text = this.page.byScope?.[scope] ?? this.text;
+    const shown = text.length <= cap ? text : `${text.slice(0, cap)}…`;
     return Promise.resolve({
       kind: 'command_result',
       id: 'x',
@@ -221,5 +225,101 @@ describe('only the readers that judge text ask for all of it', () => {
     expect(result.pass).toBe(false);
     expect(result.observed?.length ?? 0).toBeLessThan(600);
     expect(result.failureReason?.length ?? 0).toBeLessThan(600);
+  });
+});
+
+describe('compare reads a text side whole, not the display-bounded form', () => {
+  const LEFT = '[data-testid="shown"]';
+  const RIGHT = '[data-testid="answered"]';
+  const OPENING =
+    'The refund was issued to the original payment method and should appear on the statement ' +
+    'within five to ten business days, ';
+
+  const compareTexts = (as?: 'number'): ReturnType<typeof parsePredicate> =>
+    parsePredicate({
+      kind: 'compare',
+      left: { from: 'text', scope: LEFT },
+      right: { from: 'text', scope: RIGHT },
+      ...(undefined === as ? {} : { as }),
+    });
+
+  const page = (left: string, right: string, extra: Page = {}): BoundedBrowser =>
+    new BoundedBrowser('', { ...extra, byScope: { [LEFT]: left, [RIGHT]: right } });
+
+  it('the opening really is longer than the display bound', () => {
+    expect(OPENING.length).toBeGreaterThan(DISPLAY_CAP);
+  });
+
+  it('two texts that differ only after the display bound are different', async () => {
+    const browser = page(`${OPENING}11.87`, `${OPENING}1187.01`);
+    const result = await evaluatePredicate(browser, compareTexts(), 0, false);
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toBeUndefined();
+    expect(result.assertion).toBe('compare.value');
+    expect(browser.asked.every((args) => true === args[MatchArg.FULL_TEXT])).toBe(true);
+  });
+
+  it('two long texts that are the same still agree', async () => {
+    const result = await evaluatePredicate(
+      page(`${OPENING}11.87`, `${OPENING}11.87`),
+      compareTexts(),
+      0,
+      false,
+    );
+    expect(result.pass).toBe(true);
+  });
+
+  it('a number past the display bound is the number compared', async () => {
+    const differ = await evaluatePredicate(
+      page(`${OPENING}11.87`, `${OPENING}1187.01`),
+      compareTexts('number'),
+      0,
+      false,
+    );
+    expect(differ.pass).toBe(false);
+    expect(differ.inconclusive).toBeUndefined();
+    expect(differ.assertion).toBe('compare.number');
+
+    const agree = await evaluatePredicate(
+      page(`${OPENING}11.87`, `${OPENING}11.87`),
+      compareTexts('number'),
+      0,
+      false,
+    );
+    expect(agree.pass).toBe(true);
+  });
+
+  it('a side cut at the full-text bound is not compared, and says why', async () => {
+    // Both read the same 4000 characters and differ only in what was not read: equal would be a guess.
+    const head = 'x'.repeat(TRANSPORT_LIMITS.MAX_FULL_TEXT);
+    const result = await evaluatePredicate(page(`${head}A`, `${head}B`), compareTexts(), 0, false);
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toContain(String(TRANSPORT_LIMITS.MAX_FULL_TEXT));
+  });
+
+  it('a page whose SDK predates the argument is not compared on the short text it sent back', async () => {
+    const result = await evaluatePredicate(
+      page(`${OPENING}11.87`, `${OPENING}1187.01`, { oldSdk: true }),
+      compareTexts(),
+      0,
+      false,
+    );
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toContain('SDK');
+  });
+
+  it('a failing comparison quotes a bounded slice of each text, and says when the slices agree', async () => {
+    const long = 'lorem ipsum '.repeat(300);
+    const result = await evaluatePredicate(
+      page(`${long}END-A`, `${long}END-B`),
+      compareTexts(),
+      0,
+      false,
+    );
+    expect(result.pass).toBe(false);
+    expect(result.failureReason).toContain('differ further on');
+    expect(result.failureReason?.length ?? 0).toBeLessThan(700);
+    expect(result.observed?.length ?? 0).toBeLessThan(700);
+    expect(JSON.stringify(result.evidence ?? {}).length).toBeLessThan(1000);
   });
 });

@@ -240,18 +240,9 @@ export const TRANSPORT_LIMITS = {
   MAX_COLLECTION_ITEMS: 200,
   /** What a descriptor carries of an element's text for an agent to READ: 80 characters and an ellipsis. */
   MAX_DESCRIBED_TEXT: 80,
-  /**
-   * What a descriptor carries when a verdict has to JUDGE the text (`MatchArg.FULL_TEXT`): the
-   * 80-character form fails an exact `oneOf` or an end-anchored pattern on anything longer. Bounded,
-   * because the transport spends ONE budget of `MAX_MESSAGE_BYTES / 4` characters per response and
-   * silently replaces the overflow. A cut text is this many characters plus an ellipsis, so a text
-   * MORE than this long was always cut.
-   */
+  /** What a descriptor carries when a verdict has to JUDGE the text (`MatchArg.FULL_TEXT`); a text MORE than this long was cut. */
   MAX_FULL_TEXT: 4000,
-  /**
-   * Elements a MATCH describes in full-text mode: 32 of `MAX_FULL_TEXT` is about half the transport's
-   * character budget, leaving the rest for every other descriptor field. `count` still reports all.
-   */
+  /** Elements a MATCH describes in full-text mode, about half the transport's character budget; `count` still reports all. */
   MAX_FULL_TEXT_ELEMENTS: 32,
   MAX_OBJECT_KEYS: 200,
   MAX_STRING_LENGTH: 64 * 1024,
@@ -803,12 +794,6 @@ export const QueryBy = {
   COMPONENT: 'component',
 } as const;
 export type QueryBy = (typeof QueryBy)[keyof typeof QueryBy];
-
-/** Arguments of the `match` command beyond its `query` and `state`. */
-export const MatchArg = {
-  /** `true` describes each match with up to `TRANSPORT_LIMITS.MAX_FULL_TEXT` characters of text, not the display-sized 80. */
-  FULL_TEXT: 'fullText',
-} as const;
 
 /** Commands the bridge sends to the browser SDK (the `name` field of a CommandMessage). */
 export const ReticleCommand = {
