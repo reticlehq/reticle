@@ -63,14 +63,14 @@ describe('drives the platform chat asked for', () => {
     expect(p.calls[1]).toMatchObject({
       url: 'https://p.test/v1/harness/local-drives/ld_1',
       method: 'POST',
-      body: { ok: true, summary: '1 of 1 proved' },
+      body: { ok: true, summary: '1 of 1 proved', filmed: false },
     });
   });
 
   it('reports a drive that threw as failed, in its own words', async () => {
     const p = platform({ id: 'ld_2', goal: 'x' });
     await start({ fetch: p.fetch, drive: () => Promise.reject(new Error('not entitled')) }).tick();
-    expect(p.calls[1]?.body).toEqual({ ok: false, summary: 'not entitled' });
+    expect(p.calls[1]?.body).toEqual({ ok: false, summary: 'not entitled', filmed: false });
   });
 
   it('settles the driven tab once the drive is over, even when it threw', async () => {
@@ -180,6 +180,30 @@ describe('the live picture of a drive the chat asked for', () => {
     const after = p.calls.length;
     await new Promise((resolve) => setTimeout(resolve, 30));
     expect(p.calls.length).toBe(after);
+    expect(p.calls.find((c) => c.url.endsWith('/ld_5'))?.body).toMatchObject({ filmed: true });
+  });
+
+  /*
+   * The person's own tab, which the SDK reaches and no camera does, gives no picture at all. The
+   * result says so, so the chat can tell them why there is no video instead of showing an empty one.
+   */
+  it('says the drive was not filmed when the tab had no camera', async () => {
+    const p = platform({ id: 'ld_7', goal: 'x' });
+    let release: () => void = () => undefined;
+    const remote = start({
+      fetch: p.fetch,
+      frameIntervalMs: 5,
+      frame: () => Promise.resolve(undefined),
+      drive: () =>
+        new Promise((resolve) => {
+          release = () => resolve({ ok: true, summary: '' });
+        }),
+    });
+    const ticking = remote.tick();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    release();
+    await ticking;
+    expect(p.calls.find((c) => c.url.endsWith('/ld_7'))?.body).toMatchObject({ filmed: false });
   });
 
   it('sends no picture when the drive asked not to be recorded', async () => {

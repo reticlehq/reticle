@@ -62,6 +62,12 @@ export interface RemoteDriveOutcome {
   url?: string;
   /** The runs this drive syncs as, so the platform shows the drive once. */
   runIds?: readonly string[];
+  /**
+   * Whether any picture of the drive reached the platform. False for a drive in the person's own
+   * tab, which only the SDK reaches and no camera does, so the chat can say why there is no video.
+   * Set by `startRemoteDrives`, never by the drive.
+   */
+  filmed?: boolean;
 }
 
 export type DriveVerdict = 'yes' | 'no' | 'unknown';
@@ -148,18 +154,19 @@ export function startRemoteDrives(deps: RemoteDriveDeps): RemoteDrives {
                 }),
             );
       let outcome: RemoteDriveOutcome;
+      let framesSent = 0;
       try {
         outcome = await deps.drive(drive.goal, sessionId);
       } catch (error) {
         outcome = { ok: false, summary: error instanceof Error ? error.message : String(error) };
       } finally {
-        await filming?.stop();
+        framesSent = (await filming?.stop()) ?? 0;
       }
       deps.settle?.(sessionId, outcome);
       await doFetch(driveUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify(outcome),
+        body: JSON.stringify({ ...outcome, filmed: 0 < framesSent }),
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
     } catch {
@@ -184,13 +191,15 @@ export function startRemoteDrives(deps: RemoteDriveDeps): RemoteDrives {
  * Take a picture every `everyMs` and send it, until stopped. One capture at a time, and a picture
  * identical to the last one sent is skipped: a page standing still is not worth a request a second.
  * A failed capture or send is skipped too, never fatal: the drive matters, the picture of it less.
+ * `stop` answers how many pictures were sent.
  */
 function film(
   frame: () => Promise<Uint8Array | undefined>,
   everyMs: number,
-  send: (jpeg: string) => Promise<unknown>,
-): { stop: () => Promise<void> } {
+  send: (jpeg: string) => Promise<{ ok: boolean }>,
+): { stop: () => Promise<number> } {
   let last: string | undefined;
+  let sent = 0;
   let busy: Promise<void> | undefined;
   const shoot = async (): Promise<void> => {
     try {
@@ -199,7 +208,8 @@ function film(
       const jpeg = Buffer.from(shot).toString('base64');
       if (jpeg === last) return;
       last = jpeg;
-      await send(jpeg);
+      // Counted only once the platform took it: a refused picture is not a filmed drive.
+      if ((await send(jpeg)).ok) sent += 1;
     } catch {
       // The next tick tries again.
     }
@@ -212,6 +222,7 @@ function film(
     stop: async () => {
       clearInterval(timer);
       await busy;
+      return sent;
     },
   };
 }
