@@ -18,6 +18,7 @@
  */
 import { describe, expect, it, beforeEach } from 'vitest';
 import { executeAction } from './actions.js';
+import { submitControlFor } from './danger-context.js';
 import { refs } from '@/dom/addressing/refs.js';
 
 const refTo = (selector: string): string => {
@@ -146,5 +147,45 @@ describe('a value picker is judged by what the choice feeds, not by the choice',
   it('still blocks a menuitem, because a menu item labelled Delete IS one', async () => {
     document.body.innerHTML = '<button role="menuitem" id="d">Delete project</button>';
     await expect(executeAction(refTo('#d'), 'click')).rejects.toThrow(/confirmDangerous/);
+  });
+});
+
+describe('submitControlFor across realms', () => {
+  const DESTRUCTIVE_SUBMIT_LABEL = 'Delete account';
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  const iframeField = (): Element => {
+    const iframe = document.createElement('iframe');
+    document.body.appendChild(iframe);
+    const iframeDoc = iframe.contentDocument;
+    if (!iframeDoc) throw new Error('no iframe document');
+    iframeDoc.body.innerHTML = `<form><input type="text" id="q"><button type="submit">${DESTRUCTIVE_SUBMIT_LABEL}</button></form>`;
+    const field = iframeDoc.querySelector('#q');
+    if (!field) throw new Error('no field');
+    return field;
+  };
+
+  it('finds a submit button inside a same-origin iframe', () => {
+    // The button lives in the iframe's realm, so the ambient
+    // `instanceof HTMLElement` check this replaced would miss it, and the
+    // Enter destructive-guard would never see the submit button.
+    const field = iframeField();
+    const button = field.ownerDocument.querySelector('button');
+    if (!button) throw new Error('no button');
+    // Documents the old failure: the ambient realm cannot see the iframe button.
+    expect(button instanceof HTMLElement).toBe(false);
+    expect(submitControlFor(field as HTMLElement)).toBe(button);
+  });
+
+  it('blocks Enter in a same-origin iframe when the form it submits is destructive', async () => {
+    // End to end through the press path: the guard must see the iframe's
+    // submit button, not just submitControlFor in isolation.
+    const field = iframeField();
+    await expect(executeAction(refs.refFor(field), 'press', { text: 'Enter' })).rejects.toThrow(
+      /confirmDangerous/,
+    );
   });
 });

@@ -179,7 +179,7 @@ describe('the pushed impact record reaches the panel', () => {
         },
       },
     });
-    const btn = document.querySelector('[data-reticle-report-btn]');
+    const btn = document.querySelector('[data-reticle-chat-impact]');
     (btn as HTMLElement | null)?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     const body = document.querySelector('[data-reticle-report-body]');
     expect(body?.textContent, 'the pushed record is what the panel shows').toContain(
@@ -203,7 +203,7 @@ describe('the report survives agent activity', () => {
     p.mount();
     p.sessionStart();
     const overlay = document.querySelector('div[data-reticle-overlay]');
-    const btn = document.querySelector('[data-reticle-report-btn]');
+    const btn = document.querySelector('[data-reticle-chat-impact]');
     (btn as HTMLElement | null)?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(overlay?.getAttribute('data-reticle-report'), 'the report is open').toBe('1');
     // The agent drives: a log row, a status, another session start - none of it is a dismissal.
@@ -234,12 +234,12 @@ describe('the slot above the toolbar holds one panel', () => {
     const overlay = document.querySelector('div[data-reticle-overlay]');
     const click = (sel: string): void =>
       void document.querySelector(sel)?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    click('[data-reticle-report-btn]');
+    click('[data-reticle-chat-impact]');
     expect(overlay?.getAttribute('data-reticle-report')).toBe('1');
     click('[data-reticle-settings-btn]');
     expect(overlay?.getAttribute('data-reticle-settings'), 'settings opened').toBe('1');
     expect(overlay?.getAttribute('data-reticle-report'), 'settings closed the report').toBe('0');
-    click('[data-reticle-report-btn]');
+    click('[data-reticle-chat-impact]');
     expect(overlay?.getAttribute('data-reticle-report'), 'the report opened again').toBe('1');
     expect(overlay?.getAttribute('data-reticle-settings'), 'the report closed settings').toBe('0');
     click('[data-reticle-chat-toggle]');
@@ -268,13 +268,13 @@ describe('the toolbar shows which panel is open', () => {
     // The toolbar only exists once the HUD is expanded, which is how a person reaches these.
     click('[data-reticle-fab]');
     click('[data-reticle-chat-min]');
-    click('[data-reticle-report-btn]');
+    click('[data-reticle-chat-impact]');
     await Promise.resolve();
-    expect(active('[data-reticle-report-btn]'), 'the report is lit').toBe('1');
+    expect(active('[data-reticle-chat-impact]'), 'the report is lit').toBe('1');
     click('[data-reticle-settings-btn]');
     await Promise.resolve();
     expect(active('[data-reticle-settings-btn]'), 'settings is lit').toBe('1');
-    expect(active('[data-reticle-report-btn]'), 'the report is not').toBe('0');
+    expect(active('[data-reticle-chat-impact]'), 'the report is not').toBe('0');
     click('[data-reticle-chat-toggle]');
     await Promise.resolve();
     const overlay = document.querySelector('div[data-reticle-overlay]');
@@ -282,31 +282,6 @@ describe('the toolbar shows which panel is open', () => {
     expect(active('[data-reticle-chat-toggle]'), 'the chat is lit').toBe('1');
     expect(active('[data-reticle-settings-btn]'), 'settings is not').toBe('0');
     p.destroy();
-  });
-});
-
-/**
- * The toolbar has a fixed number of slots.
- *
- * Copy and Export arrive when a session ends, and the bar was already full - so the last icon
- * rendered outside the pill. They take the slots Pause and End vacate, since neither can act on a
- * session that has already ended.
- */
-describe('the toolbar keeps its width when a session ends', () => {
-  it('gives copy and export the slots that pause and end vacate', async () => {
-    const { SHELL_CSS } = await import('./presenter-shell-styles.js');
-    // jsdom applies no stylesheet, so the rule itself is the contract: on `ended`, the two controls
-    // that can no longer act are hidden and the two run-artifact controls take their places. Without
-    // this the bar carries eleven icons in a pill sized for nine and the last renders outside it.
-    expect(SHELL_CSS).toContain(
-      '[data-reticle-state="ended"] [data-reticle-hud] [data-reticle-pause]',
-    );
-    expect(SHELL_CSS).toContain(
-      '[data-reticle-state="ended"] [data-reticle-hud] [data-reticle-end]',
-    );
-    expect(SHELL_CSS).toMatch(
-      /\[data-reticle-state="ended"\][^{]*reticle-tb-btn--export\{display:inline-flex/,
-    );
   });
 });
 
@@ -496,6 +471,20 @@ describe('a snapshot from the daemon, painted', () => {
     expect(wrap?.querySelector(`[${SYNC_BTN_ATTR}]`)).toBeNull();
   });
 
+  it('shows ten bugs at most, and offers the rest through sign-up when the project is not linked', () => {
+    const many = Array.from({ length: 14 }, (_, i) => ({ at: i, title: `bug ${String(i)}` }));
+    const box = document.createElement('div');
+    box.innerHTML = reportBodyHtml(scope({ calls: 30, failed: 14 }, many));
+    expect(box.querySelectorAll('.reticle-report-defect')).toHaveLength(10);
+    const all = box.querySelector('[data-reticle-defects-all]');
+    expect(all?.textContent).toContain('See all on the dashboard (14)');
+    // The same press as Sign in: it signs up, links this project and syncs what it caught.
+    expect(all?.hasAttribute('data-reticle-account-signin')).toBe(true);
+    // Ten caught, ten shown: nothing more to offer, so nothing is offered.
+    box.innerHTML = reportBodyHtml(scope({ calls: 30, failed: 10 }, many.slice(0, 10)));
+    expect(box.querySelector('[data-reticle-defects-all]')).toBeNull();
+  });
+
   it('escapes app-derived text on the way into the live DOM, not just in the string', () => {
     const { root, report } = mountPanel();
     report.setSnapshot(snapshotWith([{ at: 1, title: '<img src=x onerror=alert(1)>' }]));
@@ -523,12 +512,81 @@ describe('a snapshot from the daemon, painted', () => {
     expect(body).toContain('second');
   });
 
+  it('shows the scope as two choices, with the current one marked', () => {
+    const { root, report } = mountPanel();
+    report.setSnapshot(snapshotWith([{ at: 1, title: 'Sign in' }]));
+    report.open();
+    const choice = (v: string): HTMLButtonElement | null =>
+      root.querySelector<HTMLButtonElement>(`[data-reticle-report-scope="${v}"]`);
+    // A single pill that rewrote its own label read as a tag, not a control: nobody could tell it
+    // switched anything, or what the other choice was.
+    expect(choice('project')?.textContent).toBe('This project');
+    expect(choice('machine')?.textContent).toBe('All projects');
+    expect(choice('project')?.getAttribute('aria-pressed')).toBe('true');
+    choice('machine')?.click();
+    expect(choice('machine')?.getAttribute('aria-pressed')).toBe('true');
+    expect(choice('project')?.getAttribute('aria-pressed')).toBe('false');
+    expect(choice('machine')?.textContent, 'labels never change').toBe('All projects');
+    choice('project')?.click();
+    expect(choice('project')?.getAttribute('aria-pressed')).toBe('true');
+  });
+
   it('switches to the machine-wide scope when the toggle is pressed', () => {
     const { root, report } = mountPanel();
     report.setSnapshot(snapshotWith([{ at: 1, title: 'Sign in' }]));
     report.open();
-    root.querySelector<HTMLButtonElement>('[data-reticle-report-scope]')?.click();
+    root.querySelector<HTMLButtonElement>('[data-reticle-report-scope="machine"]')?.click();
     const body = root.querySelector('[data-reticle-report-body]')?.textContent ?? '';
     expect(body).toContain('Sign in');
+  });
+});
+
+// Reticle Coverage on the Impact page: numbers from the project's ledger, never text from it.
+describe('Reticle Coverage on the Impact page', () => {
+  const COVERAGE_SCOPE = scope({ calls: 3, verdicts: 2, passed: 2 });
+  it('leads with controls proved and lists the measured levels', () => {
+    const html = reportBodyHtml(COVERAGE_SCOPE, undefined, undefined, undefined, {
+      reached: 80,
+      proved: 41.6,
+      executed: 12,
+    });
+    expect(html).toContain('Reticle Coverage');
+    expect(html).toContain('<span class="reticle-report-coverage-value">42%</span>');
+    expect(html).toContain('80% routes reached');
+    expect(html).toContain('12% code executed');
+  });
+
+  it('renders nothing for an unmeasured project, and never a key it does not know', () => {
+    expect(reportBodyHtml(COVERAGE_SCOPE)).not.toContain('Reticle Coverage');
+    const html = reportBodyHtml(COVERAGE_SCOPE, undefined, undefined, undefined, {
+      '<img src=x>': 5,
+    });
+    expect(html).not.toContain('<img');
+    expect(html).not.toContain('Reticle Coverage');
+  });
+});
+
+describe('the sync status beside Sync now', () => {
+  const SCOPE = scope({ calls: 3, verdicts: 2, passed: 2 });
+  const at = (sync: Record<string, unknown>) =>
+    reportBodyHtml(
+      SCOPE,
+      'https://app.reticle.sh/projects/x',
+      { signedIn: true },
+      'x',
+      undefined,
+      sync,
+    );
+
+  it('says synced, waiting or refused, with the daemon sentence on hover', () => {
+    expect(at({ status: 'on-platform', onPlatform: 12, said: 'all up' })).toContain('Synced · 12');
+    expect(at({ status: 'pending', pending: 2 })).toContain('2 waiting');
+    const refused = at({ status: 'refused', refused: 1, said: 'r1: <b>bad</b>' });
+    expect(refused).toContain('1 refused');
+    expect(refused).not.toContain('<b>bad</b>');
+  });
+
+  it('shows nothing for a status it does not know', () => {
+    expect(at({ status: '<script>' })).not.toContain('reticle-sync-status');
   });
 });

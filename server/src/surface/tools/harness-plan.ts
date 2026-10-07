@@ -23,6 +23,7 @@
  */
 
 import type { DomainModel } from '@/judgement/domain/domain-model.js';
+import { ReticleTool } from '@reticlehq/core';
 
 export const PlanStepKind = {
   /** Already recorded: replay it deterministically instead of paying a model to rediscover it. */
@@ -203,4 +204,41 @@ export function planAsText(plan: HarnessPlan): string {
     (step, index) => ` ${String(index + 1)}. [${step.kind}] ${step.target} — ${step.why}`,
   );
   return `PLAN (from .reticle, not from the source):\n${lines.join('\n')}`;
+}
+
+/**
+ * The plan a model drives from: the gaps only. Saved flows are replayed by the plan's own lanes, or
+ * not at all when a person named the journey; a model handed them replayed every one, unrelated to
+ * the journey it was asked for, and spent most of its drive there.
+ */
+export function withoutReplays(plan: HarnessPlan): HarnessPlan {
+  return { ...plan, steps: plan.steps.filter((step) => PlanStepKind.DRIVE === step.kind) };
+}
+
+/** How much of the live page the planner reads. Enough for a dashboard's nav and main controls. */
+const MAX_ABOUT_SNAPSHOT = 6_000;
+
+/**
+ * What the planner is told about the product: the plan from `.reticle`, then the app's own controls
+ * as they are on screen now. With only the plan, an empty project read "PLAN: none" and the planner
+ * proposed generic people (an admin, a sign-in journey) for an app that has neither.
+ */
+export async function aboutTheApp(
+  planText: string,
+  invoke: (name: string, args: Record<string, unknown>) => Promise<unknown>,
+  seenBefore: readonly string[] = [],
+): Promise<string> {
+  const seen =
+    0 === seenBefore.length
+      ? ''
+      : `\n\nCONTROLS SEEN ACROSS THE WHOLE APP LAST TIME, BY PAGE (not only this page):\n${seenBefore.join('\n')}`;
+  try {
+    const snap = await invoke(ReticleTool.SNAPSHOT, { mode: 'interactive' });
+    const tree =
+      'object' === typeof snap && null !== snap ? (snap as { tree?: unknown }).tree : undefined;
+    if ('string' !== typeof tree || 0 === tree.length) return `${planText}${seen}`;
+    return `${planText}\n\nTHE APP AS IT IS ON SCREEN NOW (its own controls, in its own words):\n${tree.slice(0, MAX_ABOUT_SNAPSHOT)}${seen}`;
+  } catch {
+    return `${planText}${seen}`;
+  }
 }

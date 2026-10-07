@@ -18,6 +18,8 @@ export const DEFAULT_DIFF_RETENTION = 10;
  * for the one case where delivery was refused and somebody has to file the report by hand.
  */
 export const DEFAULT_FEEDBACK_RETENTION = 20;
+/** Harness plans kept on disk: the platform keeps every one, this machine the recent ones. */
+export const DEFAULT_PLAN_RETENTION = 50;
 
 const DIFF_SUFFIX = '.diff.png';
 const PNG_SUFFIX = '.png';
@@ -351,6 +353,14 @@ export async function pruneEvidenceBudget(
  * Capped from here rather than from the writer, which lives in an area this file does not own. A
  * retention rule is the same rule whether the directory holds journals, diffs or reports.
  */
+export async function prunePlans(
+  fs: FileSystemPort,
+  root: string,
+  retention: number = DEFAULT_PLAN_RETENTION,
+): Promise<void> {
+  await pruneByRecency(fs, join(root, ReticleDir.PLANS_SUBDIR), retention);
+}
+
 export async function pruneFeedback(
   fs: FileSystemPort,
   root: string,

@@ -73,6 +73,35 @@ const cycle = async (
 };
 
 describe('a server that answers with nonsense', () => {
+  /**
+   * Any run the server did not explicitly reject was recorded as delivered, so a 200 that said
+   * nothing about runs (a proxy's HTML page, an empty object) marked every run sent: they never
+   * reached the dashboard and were never sent again, while the cycle reported ok.
+   */
+  it('does not count runs as delivered when the server never confirmed them', async () => {
+    for (const sync of ['<html>200 from a proxy</html>', {}]) {
+      const { report, written } = await cycle(
+        { sync },
+        {},
+        source({ runs: () => [{ runId: 'r1', payload: { runId: 'r1' } }] }),
+      );
+      expect(report.ok, JSON.stringify(sync)).toBe(false);
+      expect(report.runsSent).toBe(0);
+      expect(written.state?.sentRunIds ?? []).not.toContain('r1');
+    }
+  });
+
+  it('still counts runs the server did confirm', async () => {
+    const { report, written } = await cycle(
+      { sync: { runs: { accepted: 1, rejected: [] } } },
+      {},
+      source({ runs: () => [{ runId: 'r1', payload: { runId: 'r1' } }] }),
+    );
+    expect(report.ok).toBe(true);
+    expect(report.runsSent).toBe(1);
+    expect(written.state?.sentRunIds).toContain('r1');
+  });
+
   it('survives 200 with a body that is not JSON', async () => {
     const { report } = await cycle({ status: '<html>502 Bad Gateway</html>' });
     expect(report.ok).toBe(true);

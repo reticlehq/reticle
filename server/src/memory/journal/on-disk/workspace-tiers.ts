@@ -59,6 +59,8 @@ export const WORKSPACE_TIERS: Readonly<Record<string, WorkspaceTier>> = {
   [ReticleDir.VISUAL_SUBDIR]: localDir,
   // Write-only: a local copy of what was already sent. The outbox is the record.
   [ReticleDir.FEEDBACK_SUBDIR]: localDir,
+  // What the Harness planned on this machine, and how it went. The platform keeps the team's copy.
+  [ReticleDir.PLANS_SUBDIR]: localDir,
   [ReticleDir.PROJECT_FILE]: localFile,
   [ReticleDir.AMBIENT_FILE]: localFile,
   [ReticleDir.ENVELOPES_FILE]: localFile,
@@ -66,6 +68,11 @@ export const WORKSPACE_TIERS: Readonly<Record<string, WorkspaceTier>> = {
   // What THIS machine's drives covered, and the best each level reached — the gate's ratchet.
   [ReticleDir.COVERAGE_FILE]: localFile,
   [ReticleDir.TIERS_FILE]: localFile,
+  // The user's request in their own words: it leaves only with `shareRequests`, never by git push.
+  [ReticleDir.REQUEST_FILE]: localFile,
+  [ReticleDir.PLATFORM_MOMENTS_FILE]: localFile,
+  // Notes a human pinned in the HUD: free text about the page. The team reads them on the platform.
+  [ReticleDir.NOTES_FILE]: localFile,
   // The user's own record of what Reticle did for them, on THIS machine.
   [ReticleDir.IMPACT_FILE]: localFile,
   // This machine's conversation with the server. Its own doc comment says why committing it is
@@ -86,10 +93,6 @@ export const WORKSPACE_TIERS: Readonly<Record<string, WorkspaceTier>> = {
   // credential, so it is safe to commit — the same reasoning that puts `cloud.json` here while its
   // API key stays in ~/.reticle.
   [ReticleDir.HOOKS_FILE]: sharedFile,
-  // What a drive types into each labelled field. Committed for two reasons: a replay must send
-  // exactly what the recording sent or it is not a replay, and a value a model wrote once should be
-  // reviewable and editable by the team rather than regenerated differently on every machine.
-  [ReticleDir.FILL_VALUES_FILE]: sharedFile,
 };
 
 function namesWhere(match: (tier: WorkspaceTier) => boolean): readonly string[] {

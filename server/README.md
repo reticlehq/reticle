@@ -27,4 +27,4 @@ See the [main README](https://github.com/reticlehq/reticle).
 
 ## License
 
-[FSL-1.1-ALv2](./LICENSE) (source-available: free for any use except reselling Reticle itself; converts to Apache-2.0 after two years). Files under `dist/ee/` are enterprise features covered by the [Reticle Enterprise License](./LICENSE-ENTERPRISE) — free for development, testing, and evaluation; a license key activates them in production.
+[FSL-1.1-ALv2](./LICENSE) (source-available: free for any use except reselling Reticle itself; converts to Apache-2.0 after two years). Files under `dist/features/ee/` are enterprise features covered by the [Reticle Enterprise License](./LICENSE-ENTERPRISE) — free for development, testing, and evaluation; a license key activates them in production.

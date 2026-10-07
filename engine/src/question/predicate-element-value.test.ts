@@ -142,6 +142,15 @@ describe('element predicate: fields the locator never reads', () => {
     expect(result.pass).toBe(false);
   });
 
+  it('checks `role` with searchbox/textbox compatibility when testid locator swallows role (#1361)', async () => {
+    const session = new MatchingSession([el({ role: 'searchbox', name: 'Search' })]);
+    const result = await evaluatePredicate(session, {
+      kind: 'element',
+      query: { by: QueryBy.TESTID, value: 'q', role: 'textbox' },
+    });
+    expect(result.pass, 'a searchbox input must satisfy a residual textbox role check').toBe(true);
+  });
+
   it('refuses, rather than ignores, a field it cannot check itself', async () => {
     // `testid` is not on the descriptor, so when the locator resolves by role there is nothing on the
     // server side to compare it against. A refusal costs one turn; a silent pass costs a wrong green.

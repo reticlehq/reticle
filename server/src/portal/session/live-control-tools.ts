@@ -69,19 +69,34 @@ function endingTurnWithNothingAttached(deps: { sessions: { count(): number } }, 
  * PRESENTER commands. No clock is read here — inbox stamps were assigned by the session's injected
  * elapsed clock at enqueue time.
  */
+const DISCONNECT_NEEDS_SESSION_ID =
+  '`disconnect: true` needs the `sessionId` of the page to detach — list them with ' +
+  'reticle_session{action:"list"}; it is never picked for you, because detaching the wrong window ' +
+  'cuts you off from the app.';
+
 export const LIVE_CONTROL_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.END_SESSION,
     description:
       'End this session for good — use ONLY when the whole task is complete. Sets state "ended" ' +
       '(calm, terminal) and shows the optional `summary` on the panel. If you are just finishing a ' +
-      'turn or waiting on the human, call reticle_session{action:"yield"} instead (revivable). Idempotent.',
-    inputSchema: { summary: z.string().optional(), ...sessionIdShape },
+      'turn or waiting on the human, call reticle_session{action:"yield"} instead (revivable). Idempotent. ' +
+      "With `disconnect: true` and a `sessionId` it also closes that page's connection and refuses it " +
+      'until the daemon restarts — for a stray window (a hidden desktop webview, a 404 page) that keeps coming back.',
+    inputSchema: {
+      summary: z.string().optional(),
+      disconnect: z
+        .boolean()
+        .optional()
+        .describe('Also detach this page for good (needs sessionId). Reloads stay detached.'),
+      ...sessionIdShape,
+    },
     // `sessionId` is optional because there may genuinely not be one — see the no-op below. An
     // empty string would read as a real id in a log, which is worse than its absence.
     outputSchema: {
       ended: z.boolean(),
       sessionId: z.string().optional(),
+      disconnected: z.boolean().optional(),
       note: z.string().optional(),
       talk_to_us: z
         .string()
@@ -98,6 +113,9 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
     },
     handler: (deps, args) => {
       const requested = asString(args['sessionId']);
+      const detach = true === args['disconnect'];
+      // Named, never auto-picked: detaching the wrong window cuts the agent off from the app.
+      if (detach && requested === undefined) throw new Error(DISCONNECT_NEEDS_SESSION_ID);
       if (endingTurnWithNothingAttached(deps, requested)) {
         return Promise.resolve({ ended: true, note: YIELD_WITHOUT_SESSION_NOTE });
       }
@@ -140,7 +158,14 @@ export const LIVE_CONTROL_TOOLS: ToolDef[] = [
         const panel = [summary, gap[0]].filter((line): line is string => line !== undefined);
         // One PRESENTER push for the transition; the summary and the gap headline ride together.
         session.setState(SessionState.ENDED, 0 === panel.length ? undefined : panel.join('\n'));
-        return { ended: true, sessionId: session.id, gap, talk_to_us: DiscoveryInvite.AGENT };
+        if (detach) deps.sessions.park(session);
+        return {
+          ended: true,
+          sessionId: session.id,
+          ...(detach ? { disconnected: true } : {}),
+          gap,
+          talk_to_us: DiscoveryInvite.AGENT,
+        };
       });
     },
   },

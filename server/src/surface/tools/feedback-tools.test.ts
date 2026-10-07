@@ -1,3 +1,6 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { FeedbackKind, FEEDBACK_RATING_MAX, FEEDBACK_RATING_MIN } from '@reticlehq/core/telemetry';
@@ -34,7 +37,10 @@ describe('reticle_feedback', () => {
   });
 
   it('files a report with no session connected — "nothing ever connects" is the report we most need', async () => {
+    const project = mkdtempSync(join(tmpdir(), 'feedback-'));
     const deps = {
+      // Into a scratch project: written relative to the test's cwd, these landed in the checkout.
+      reticleRoot: join(project, '.reticle'),
       sessions: {
         resolve: () => {
           throw new Error('no browser session connected');

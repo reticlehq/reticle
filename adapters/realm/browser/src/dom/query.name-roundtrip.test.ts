@@ -34,14 +34,14 @@ function roundTrip(role: string): { reported: string; refound: number } {
 describe('a reported name is a usable name', () => {
   it("round-trips a placeholder-derived name with Reticle's own role", () => {
     document.body.innerHTML = '<input type="search" placeholder="Search User" />';
-    const first = runQuery({ by: QueryBy.ROLE, value: 'textbox' });
+    const first = runQuery({ by: QueryBy.ROLE, value: 'searchbox' });
     const role = first.elements[0]?.role ?? '';
     const name = first.elements[0]?.name ?? '';
-    expect({ role, name }).toEqual({ role: 'textbox', name: 'Search User' });
+    expect({ role, name }).toEqual({ role: 'searchbox', name: 'Search User' });
     // The pair the recorder would write to disk, re-resolved the way replay re-resolves it.
     expect(runQuery({ by: QueryBy.ROLE, value: role, name }).count).toBe(1);
-    // Reticle reports this input as `textbox`, so the former second-library role is no longer a match.
-    expect(runQuery({ by: QueryBy.ROLE, value: 'searchbox', name }).count).toBe(0);
+    // Backward compatibility: textbox queries also continue to match searchbox inputs.
+    expect(runQuery({ by: QueryBy.ROLE, value: 'textbox', name }).count).toBe(1);
   });
 
   it('round-trips a label-derived name', () => {

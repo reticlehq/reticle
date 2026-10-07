@@ -1,4 +1,9 @@
 import { healthEnvelope } from '@/portal/session/session-health.js';
+import { logToolCall, toolLogPath } from '@/hooks/tool-log.js';
+import { nextStep } from './next-step.js';
+import { currentDrivenBy } from '@/hooks/driven-by.js';
+import { sessionRoot } from '@/memory/project/session-root.js';
+import { takePlatformMoment } from './platform-moment.js';
 import { verifyNextBaton, SUPPRESS_VERIFY_NEXT_ENV } from './verify-next-baton.js';
 import {
   type BrowserBrand,
@@ -384,6 +389,25 @@ export async function runTool<Ext>(
   deps: ToolDeps<Ext>,
   args: Record<string, unknown>,
 ): Promise<unknown> {
+  const logPath = toolLogPath();
+  if (logPath === undefined) return dispatchTool(tool, deps, args);
+  const at = deps.now();
+  try {
+    const result = await dispatchTool(tool, deps, args);
+    logToolCall(logPath, { tool: tool.name, args, at, ms: deps.now() - at, result });
+    return result;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logToolCall(logPath, { tool: tool.name, args, at, ms: deps.now() - at, error: message });
+    throw error;
+  }
+}
+
+async function dispatchTool<Ext>(
+  tool: ToolDef<Ext>,
+  deps: ToolDeps<Ext>,
+  args: Record<string, unknown>,
+): Promise<unknown> {
   // Both dispatch paths (MCP + programmatic) pass through here — the one place "which tool is mostly
   // used" can be counted. This used to EMIT an event per call; it now increments an in-process counter
   // that leaves once, with the session summary. A verification loop is 50–200 calls, and PostHog bills
@@ -651,14 +675,35 @@ export async function runTool<Ext>(
   // RETURN an error. So the denominator was counting a small, unrepresentative slice of the
   // invitations and reading near-empty, which looks identical to a nudge that never fires.
   const friction = frictionInviteFor(tool.name, raw);
+  // Once per project, on a proved verdict, when the runs live only on this machine.
+  const platform = isPlainObject(raw)
+    ? await takePlatformMoment(deps, raw, () => sessionRoot(deps, rawSessionId))
+    : undefined;
+  // What the agent should do next, on every client that reads results. Not for the Harness, whose
+  // runs the daemon syncs itself and which cannot relay the user's words, and not on `reticle_run`'s
+  // outer result: the inner call already carried one.
+  const next =
+    isPlainObject(raw) && ReticleTool.RUN !== tool.name && currentDrivenBy() === undefined
+      ? nextStep({
+          tool: tool.name,
+          verdict: 'verified' in raw,
+          root: safeRoot(() => sessionRoot(deps, rawSessionId)),
+          // A partial deps (tests, the demo) may carry no clock; the line is advice, never a reason to fail.
+          now: 'function' === typeof deps.now ? deps.now() : Date.now(),
+        })
+      : undefined;
   const result =
     prompt === undefined &&
     update === undefined &&
     skew === undefined &&
     undelivered === undefined &&
-    friction === undefined
+    friction === undefined &&
+    platform === undefined &&
+    next === undefined
       ? raw
       : {
+          // First, so a model that truncates a long result still reads it.
+          ...(next !== undefined ? { [EnvelopeKey.NEXT]: next } : {}),
           ...(raw as object),
           ...(friction !== undefined
             ? {
@@ -670,6 +715,7 @@ export async function runTool<Ext>(
           ...(prompt !== undefined ? { [EnvelopeKey.FEEDBACK_PROMPT]: prompt } : {}),
           ...(update !== undefined ? { [EnvelopeKey.UPDATE_AVAILABLE]: update } : {}),
           ...(skew !== undefined ? { [EnvelopeKey.VERSION_SKEW]: skew } : {}),
+          ...(platform !== undefined ? { [EnvelopeKey.PLATFORM]: platform } : {}),
           ...(undelivered !== undefined
             ? {
                 [EnvelopeKey.FEEDBACK_UNDELIVERED]: `your earlier report did NOT send: ${undelivered}. Tell the human what you found so it is not lost.`,
@@ -728,4 +774,13 @@ export async function runTool<Ext>(
       resolved.lastAct?.effect() ?? {},
     );
   return Object.keys(envelope).length > 0 ? { ...result, ...envelope } : result;
+}
+
+/** A root, or undefined when none can be resolved: a missing root is never a reason to throw. */
+function safeRoot(get: () => string): string | undefined {
+  try {
+    return get();
+  } catch {
+    return undefined;
+  }
 }

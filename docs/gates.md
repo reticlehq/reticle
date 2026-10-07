@@ -85,7 +85,7 @@ Which means a gate skipped locally can also be skipped in CI, if what you change
 | `smoke` | product changes on PRs; always in the queue and on main, nightly, and manual runs |
 | `e2e` | a pull request that touches a package or app the battery boots; always in the merge queue and on main. Split into three parallel shards (`E2E_SHARD=k/3`); the integration suite and the soak run in shard 1 |
 | `rust` (Linux) and `rust-macos` | changes to the standalone Cargo tree or CI workflow; full runs nightly and on demand |
-| `install-packages` and `install-gate` | installation paths, CLI setup, build adapters, browser SDK, dependency graph, or gate machinery. A PR runs three Linux scaffolds and vite-react on Windows; the queue runs all eleven on Linux; nightly/manual runs all eleven on both OSes. One prepack produces the same tarballs for all cells |
+| `install-packages` and `install-gate` | installation paths, CLI setup, build adapters, browser SDK, dependency graph, or gate machinery. A PR runs three Linux scaffolds and vite-react on Windows; the queue runs all thirteen on Linux; nightly/manual runs all thirteen on both OSes. One prepack produces the same tarballs for all cells |
 | the install gate's self-test | gate machinery changes, nightly, and manual runs. `--with-self-test` shares one registry publish across the control and positive phases |
 | `desktop-e2e` | only when desktop code changed |
 | `bench` | after merge: on a push to main when something that could move the numbers changed, nightly, and on demand. It is ~19 minutes, a contributor cannot act on a token regression, and a red main run names the commit before any release |

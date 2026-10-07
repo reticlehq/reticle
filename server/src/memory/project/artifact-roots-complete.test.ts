@@ -50,6 +50,10 @@ const DELIBERATE: Readonly<Record<string, { uses: number; why: string }>> = {
     uses: 3,
     why: 'The daemon wiring itself: it builds the resolver from its own root and prunes its own tree. Per-session routing happens inside the handlers it registers. Lowered from 5 when the three inline prune calls became one workspace sweep — the daemon now names its own root once for maintenance instead of three times, which is the direction this roster exists to push. Split out of `index.ts` when the composition root reached the 1000-line backstop; the uses moved with the code and none were added.',
   },
+  'surface/tools/empty-session-list.ts': {
+    uses: 1,
+    why: 'Reads, never writes: with no session there is no session root, so the project the first run may wire is the one the daemon itself was started in. A daemon outside any project answers run_init instead of guessing.',
+  },
   'memory/project/session-root.ts': {
     uses: 1,
     why: 'The resolver. Its whole job is to answer with the daemon root when no project can be named.',

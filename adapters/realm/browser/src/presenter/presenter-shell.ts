@@ -9,7 +9,6 @@ import {
   CHAT_MIN_ATTR,
   CHAT_PILL_ATTR,
   REPORT_ATTR,
-  REPORT_BTN_ATTR,
   ANNOTATE_BTN_ATTR,
   CHAT_ATTR,
   CHAT_TOGGLE_ATTR,
@@ -24,8 +23,9 @@ import {
 import { offerDismissed, type OfferState } from './carousel/offer-card.js';
 import { paintCarousel } from './carousel/carousel.js';
 import { panelSlides } from './carousel/panel-slides.js';
-import { BRAND_NAME, FAB_TOGGLE_HTML, MARK_SVG } from './chrome/presenter-brand.js';
-import { DATA_RETICLE_LOG, settleLogAtLatest } from './chrome/presenter-log.js';
+import { paintRail, RAIL_HTML, RAIL_PROMO_ATTR } from './presenter-frame.js';
+import { FAB_TOGGLE_HTML, MARK_SVG } from './chrome/presenter-brand.js';
+import { settleLogAtLatest } from './chrome/presenter-log.js';
 import { installHudDragHandles, installHudPositionGuards } from './presenter-drag.js';
 import { scheduleSyncDockLayout } from './presenter-dock-layout.js';
 import {
@@ -35,7 +35,15 @@ import {
   PresenterIcon,
 } from './icons/presenter-icons.js';
 import { HUD_SURFACE_CLASS, HUD_LOG_WELL_CLASS } from './chrome/presenter-hud-chrome.js';
-import { CONTROLS_TOOLBAR_HTML } from './presenter-controls.js';
+import {
+  ChatViews,
+  CHAT_VIEWS_NAV_HTML,
+  ANNOTATIONS_HTML,
+  FLOWS_PAGE_HTML,
+  platformBase,
+  type ChatView,
+} from './presenter-chat-views.js';
+import type { AnnotationItem } from '@/review/annotator.js';
 import {
   PresenterSettingsPanel,
   settingsPanelHtml,
@@ -43,14 +51,34 @@ import {
 } from './presenter-settings.js';
 const DRAG_HANDLE_CLASS = 'reticle-toolbar-drag';
 const TRANSITION_LOCK_MS = 120;
-const ANNOTATE_LABEL = 'Annotate';
 const CHAT_MIN_LABEL = 'Minimise chat';
 /** The minimised chat capsule's label - it reopens the panel. */
 const CHAT_PILL_LABEL = 'Open agent chat';
-/** The toolbar entry to the impact report. */
-const REPORT_LABEL = 'Impact';
 const SETTINGS_LABEL = 'Settings';
+const AGENT_LOG_TITLE = 'Reticle';
 const EXIT_LABEL = 'Exit';
+function paintPromo(
+  root: HTMLElement,
+  offer: OfferState | undefined,
+  notices: readonly unknown[] = [],
+  base?: string,
+): void {
+  const target = root.querySelector<HTMLElement>(`[${RAIL_PROMO_ATTR}]`);
+  if (null === target) return;
+  let dismissed = false;
+  try {
+    dismissed = offerDismissed(window.localStorage);
+  } catch {
+    /* A blocked local store should not hide the value cards. */
+  }
+  let storage: Storage | undefined;
+  try {
+    storage = window.sessionStorage;
+  } catch {
+    storage = undefined;
+  }
+  paintCarousel(target, panelSlides(offer, dismissed, notices, base), storage);
+}
 
 interface HudShellCallbacks {
   onChatOpen?: () => void;
@@ -61,6 +89,9 @@ interface HudShellCallbacks {
   onCollapse?: () => void;
   /** The report panel's sync button. The shell owns the socket; the panel only knows it was asked. */
   onSyncNow?: () => void;
+  onHarness?: (enabled: boolean) => void;
+  /** Any Sign in button. The daemon owns the credential, so it starts the browser sign-in. */
+  onSignIn?: () => void;
   settings?: SettingsHost;
 }
 /**
@@ -72,9 +103,9 @@ export class HudShell {
   #dock: HTMLElement | undefined;
   #fab: HTMLButtonElement | undefined;
   #chatPanel: HTMLElement | undefined;
-  #chatToggle: HTMLElement | undefined;
   #collapseBtn: HTMLButtonElement | undefined;
   #settings: PresenterSettingsPanel;
+  #chatViews: ChatViews;
   #dragTeardown: (() => void) | undefined;
   #layoutTeardown: (() => void) | undefined;
   #transitionLock = false;
@@ -130,6 +161,11 @@ export class HudShell {
         details: AccountDetails;
       }
     | undefined;
+  #pushedOffer: OfferState | undefined;
+  #pushedNotices: readonly unknown[] = [];
+  #pushedHarness: HarnessConfig | undefined;
+  /** The platform the rail's links point at; repainted only when it moves, so slides keep turning. */
+  #promoBase: string | undefined;
   /** Torn down with the shell: the delegated listeners for every account menu under the root. */
   #accountTeardown: (() => void) | undefined;
 
@@ -141,7 +177,38 @@ export class HudShell {
    * panel may not be mounted yet, and the shell is the layer that knows.
    */
   paintHarness(config: HarnessConfig | undefined): void {
+    this.#pushedHarness = config;
     this.#settings.paintHarness(config);
+    this.#chatViews.paintHarness(config);
+    this.#repaintPromoIfMoved();
+  }
+
+  #promoLinks(): string {
+    return platformBase(this.#pushedHarness, this.#pushedAccount?.account ?? { signedIn: false });
+  }
+
+  #repaintPromoIfMoved(): void {
+    const base = this.#promoLinks();
+    if (this.#root === undefined || base === this.#promoBase) return;
+    this.#promoBase = base;
+    paintPromo(this.#root, this.#pushedOffer, this.#pushedNotices, base);
+  }
+
+  paintImpact(verdicts: number): void {
+    this.#chatViews.paintImpact(verdicts);
+  }
+  paintAnnotations(items: readonly AnnotationItem[]): void {
+    this.#chatViews.paintAnnotations(items);
+  }
+  openView(view: ChatView): void {
+    if ('activity' === view) this.showChat();
+    else {
+      if (this.isCollapsed()) this.expand();
+      this.closeChat();
+      this.#settings.close();
+      this.#report.close();
+    }
+    this.#chatViews.open(view);
   }
 
   paintAccount(
@@ -156,58 +223,51 @@ export class HudShell {
     // never disagree about whether this machine is signed in. The report panel paints itself from
     // the same snapshot through `setSnapshot`.
     paintSettingsAccount(this.#root, account, dashboardUrl, details);
+    paintRail(this.#root, account);
+    this.#chatViews.paintAccount(account);
+    this.#repaintPromoIfMoved();
   }
   /**
-   * The last offer push, replayed at mount for the same reason the account one is: the daemon pushes
-   * the impact snapshot on connect, which races this shell's mount, and on an idle page the next
-   * snapshot never comes.
+   * Keep the rail's offer and notices current. Replayed at mount, as the account is: the daemon
+   * pushes the impact snapshot on connect, which races this shell's mount, and on an idle page the
+   * next snapshot never comes.
    */
-  #pushedOffer: OfferState | undefined;
-
-  /** Take the harness offer from a push, and repaint the carousel it is one slide of. */
-  paintOffer(offer: OfferState | undefined): void {
+  paintOffer(offer: OfferState | undefined, notices: readonly unknown[] = []): void {
     this.#pushedOffer = offer;
-    this.#paintCarousel();
-  }
-
-  /**
-   * The chat panel's top carousel, as the log's first child: it takes no height from the panel, and
-   * new rows push it up. The harness offer when it applies, then the founder invitation.
-   */
-  #paintCarousel(): void {
-    const log = this.#root?.querySelector(`[${DATA_RETICLE_LOG}]`);
-    if (!(log instanceof HTMLElement)) return;
-    // A "not now" given to the harness offer before the carousel existed still answers it.
-    const declined = offerDismissed(this.#storage());
-    paintCarousel(log, panelSlides(this.#pushedOffer, declined), this.#sessionStorage());
-  }
-
-  /** Session storage: "not now" on the founder card lasts this tab, not forever. */
-  #sessionStorage(): Pick<Storage, 'getItem' | 'setItem'> | undefined {
-    try {
-      return globalThis.sessionStorage;
-    } catch {
-      return undefined;
-    }
-  }
-
-  /** Local storage, or nothing when the page refuses it. Read through a getter so a test can't race it. */
-  #storage(): Pick<Storage, 'getItem' | 'setItem'> | undefined {
-    try {
-      return globalThis.localStorage;
-    } catch {
-      return undefined;
-    }
+    this.#pushedNotices = notices;
+    this.#promoBase = this.#promoLinks();
+    if (this.#root !== undefined) paintPromo(this.#root, offer, notices, this.#promoBase);
   }
 
   constructor(callbacks: HudShellCallbacks = {}) {
     this.#callbacks = callbacks;
+    this.#chatViews = new ChatViews(
+      (enabled) => callbacks.onHarness?.(enabled),
+      () => {
+        this.#chatViews.closePage();
+        this.closeChat();
+        this.#report.open();
+      },
+      (view) => {
+        // A tab selects its page; it never closes it. Closing is the page's ×, the caret, or Exit.
+        if ('activity' === view) {
+          this.#chatViews.open(view);
+          this.showChat();
+          return;
+        }
+        if (this.isCollapsed()) this.expand();
+        this.closeChat();
+        this.#settings.close();
+        this.#report.close();
+      },
+    );
     this.#settings = new PresenterSettingsPanel({
       ...callbacks.settings,
       onBeforeOpen: () => {
         // Settings takes the slot from BOTH neighbours. Closing only the chat left the report
         // sitting behind the settings card - two glass panels stacked in one anchor.
         this.closeChat();
+        this.#chatViews.closePage();
         this.#report.close();
         callbacks.settings?.onBeforeOpen?.();
       },
@@ -221,24 +281,26 @@ export class HudShell {
     flowsHtml: string,
     footHtml: string,
   ): string {
-    const annotate = hiToggleIconHtml(PresenterIcon.ANNOTATE, PRESENTER_ICON_SIZE.TOOLBAR);
-    const chart = hiToggleIconHtml(PresenterIcon.CHART, PRESENTER_ICON_SIZE.TOOLBAR);
     const gear = hiToggleIconHtml(PresenterIcon.GEAR, PRESENTER_ICON_SIZE.TOOLBAR);
     const exit = hiIconHtml(PresenterIcon.REMOVE, PRESENTER_ICON_SIZE.TOOLBAR);
-    return `<div ${DOCK_ATTR}>
-      <div ${CHAT_PANEL_ATTR} class="reticle-chat-panel ${HUD_SURFACE_CLASS}" role="region" aria-label="Reticle session" aria-hidden="true">
+    return `<div ${DOCK_ATTR} role="complementary" aria-label="Reticle">
+      <div ${CHAT_PANEL_ATTR} class="reticle-chat-panel ${HUD_SURFACE_CLASS}" role="region" aria-label="Agent Log" aria-hidden="true">
         <div class="reticle-chat-head">
-          <span class="reticle-chat-brand">${MARK_SVG}<span class="reticle-chat-brandname">${BRAND_NAME}</span></span>
+          <span class="reticle-chat-brand">${MARK_SVG}<span class="reticle-chat-brandname">${AGENT_LOG_TITLE}</span></span>
           <span ${TOOLBAR_ACCOUNT_ATTR} class="reticle-head-account"></span>
         </div>
         <button type="button" ${CHAT_MIN_ATTR} class="reticle-chat-min" title="${CHAT_MIN_LABEL}" aria-label="${CHAT_MIN_LABEL}">${hiIconHtml(PresenterIcon.CARET_DOWN, PRESENTER_ICON_SIZE.TOOLBAR)}</button>
         ${actStripHtml}
         <span class="reticle-tally" data-reticle-tally hidden></span>
-        ${bannerHtml}
-        <div class="${HUD_LOG_WELL_CLASS}"><div ${logAttr}></div></div>
-        ${flowsHtml}
+        <section class="reticle-chat-view" role="region" aria-label="Agent Log">
+          ${bannerHtml}
+          <div class="${HUD_LOG_WELL_CLASS}"><div ${logAttr}></div></div>
+          ${flowsHtml}
+        </section>
         ${footHtml}
       </div>
+      ${FLOWS_PAGE_HTML}
+      ${ANNOTATIONS_HTML}
       <button type="button" ${CHAT_PILL_ATTR} class="reticle-chat-pill" title="${CHAT_PILL_LABEL}" aria-label="${CHAT_PILL_LABEL}">
         ${MARK_SVG}
         <span class="reticle-chat-pill-text" data-reticle-chat-pill-text></span>
@@ -247,21 +309,13 @@ export class HudShell {
       </button>
       ${settingsPanelHtml()}
       ${reportPanelHtml()}
+      ${RAIL_HTML}
       <div data-reticle-hud>
         <div class="reticle-hud-deco" aria-hidden="true"></div>
         ${FAB_TOGGLE_HTML}
         <div class="reticle-toolbar ${DRAG_HANDLE_CLASS}" role="toolbar" aria-label="Reticle controls">
-          <div class="reticle-toolbar-actions">${CONTROLS_TOOLBAR_HTML}</div>
-          <span class="reticle-tb-sep" aria-hidden="true"></span>
           <div class="reticle-toolbar-chrome">
-            <div class="reticle-tb-wrap">
-              <button type="button" ${ANNOTATE_BTN_ATTR} class="reticle-tb-btn reticle-tb-btn--toggle" title="${ANNOTATE_LABEL}" aria-label="${ANNOTATE_LABEL}" aria-pressed="false" data-active="0">${annotate}</button>
-              <span class="reticle-tb-tip">${ANNOTATE_LABEL}</span>
-            </div>
-            <div class="reticle-tb-wrap">
-              <button type="button" ${REPORT_BTN_ATTR} class="reticle-tb-btn reticle-tb-btn--toggle" title="${REPORT_LABEL}" aria-label="${REPORT_LABEL}" aria-pressed="false" data-active="0">${chart}</button>
-              <span class="reticle-tb-tip">${REPORT_LABEL}</span>
-            </div>
+            ${CHAT_VIEWS_NAV_HTML}
             <div class="reticle-tb-wrap">
               <button type="button" ${SETTINGS_BTN_ATTR} class="reticle-tb-btn reticle-tb-btn--toggle" title="${SETTINGS_LABEL}" aria-label="${SETTINGS_LABEL}" aria-pressed="false" data-active="0">${gear}</button>
               <span class="reticle-tb-tip">${SETTINGS_LABEL}</span>
@@ -291,7 +345,13 @@ export class HudShell {
     };
     lit(CHAT_TOGGLE_ATTR, '1' === root.getAttribute(CHAT_ATTR));
     lit(SETTINGS_BTN_ATTR, '1' === root.getAttribute(SETTINGS_ATTR));
-    lit(REPORT_BTN_ATTR, '1' === root.getAttribute(REPORT_ATTR));
+    const impact = root.querySelector('[data-reticle-chat-impact]');
+    if (impact !== null) {
+      const on = '1' === root.getAttribute(REPORT_ATTR);
+      impact.setAttribute('data-active', on ? '1' : '0');
+      if (on) impact.setAttribute('aria-current', 'page');
+      else impact.removeAttribute('aria-current');
+    }
   }
 
   /** Does the user currently want to annotate? */
@@ -303,6 +363,14 @@ export class HudShell {
     this.#annotateOn = on;
     this.#annotateBtn?.setAttribute('aria-pressed', on ? 'true' : 'false');
     this.#annotateBtn?.setAttribute('data-active', on ? '1' : '0');
+    this.#annotateBtn?.setAttribute('aria-label', on ? 'Stop adding notes' : 'Add notes');
+    this.#annotateBtn?.setAttribute('title', on ? 'Stop adding notes' : 'Add notes');
+    const label = this.#annotateBtn?.querySelector('[data-reticle-notes-toggle-label]');
+    if (label !== null && label !== undefined)
+      label.textContent = on ? 'Stop adding notes' : 'Add notes';
+    this.#root
+      ?.querySelector('[data-reticle-chat-view-btn="annotations"]')
+      ?.setAttribute('data-capture', on ? '1' : '0');
   }
   mount(root: HTMLElement): void {
     this.#listeners = new AbortController();
@@ -313,10 +381,9 @@ export class HudShell {
     this.#fab = fabEl instanceof HTMLButtonElement ? fabEl : undefined;
     const chatPanelEl = root.querySelector(`[${CHAT_PANEL_ATTR}]`);
     this.#chatPanel = chatPanelEl instanceof HTMLElement ? chatPanelEl : undefined;
-    const chatToggleEl = root.querySelector(`[${CHAT_TOGGLE_ATTR}]`);
-    this.#chatToggle = chatToggleEl instanceof HTMLElement ? chatToggleEl : undefined;
     const annotateEl = root.querySelector(`[${ANNOTATE_BTN_ATTR}]`);
     this.#annotateBtn = annotateEl instanceof HTMLButtonElement ? annotateEl : undefined;
+    this.setAnnotateOn(this.#annotateOn);
     this.#annotateBtn?.addEventListener(
       'click',
       (e) => {
@@ -354,6 +421,9 @@ export class HudShell {
     root.removeAttribute(CHAT_ATTR);
     this.#settings.mount(root);
     this.#report.mount(root);
+    this.#chatViews.mount(root);
+    this.#promoBase = this.#promoLinks();
+    paintPromo(root, this.#pushedOffer, this.#pushedNotices, this.#promoBase);
     // The toolbar's lit state FOLLOWS the panels, rather than being set by whoever was clicked.
     // Set at click time, a button stayed lit after its panel was closed by the panel that replaced
     // it - two icons active, one panel open. The observer is the only place that can be right for
@@ -364,15 +434,6 @@ export class HudShell {
       attributeFilter: [CHAT_ATTR, SETTINGS_ATTR, REPORT_ATTR],
     });
     this.#syncToolbarToggles();
-    root.querySelector(`[${REPORT_BTN_ATTR}]`)?.addEventListener(
-      'click',
-      (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        this.#report.toggle();
-      },
-      { signal },
-    );
     this.#fab?.addEventListener(
       'click',
       (e) => {
@@ -393,14 +454,6 @@ export class HudShell {
       },
       { signal },
     );
-    this.#chatToggle?.addEventListener(
-      'click',
-      (e) => {
-        e.stopPropagation();
-        this.toggleChat();
-      },
-      { signal },
-    );
     const toolbarDrag = root.querySelector(`.${DRAG_HANDLE_CLASS}`);
     const dragHandles = [this.#fab, toolbarDrag].filter(
       (el): el is HTMLElement => el instanceof HTMLElement,
@@ -410,8 +463,10 @@ export class HudShell {
         onDragMove: () => {
           this.#suppressFabClick = true;
         },
+        // Only a drag of the BUBBLE ends in a click on it that must be ignored. Set by any drag and
+        // never cleared, a toolbar drag swallowed the next real click on the bubble.
         onDragEnd: (moved) => {
-          if (moved && this.isCollapsed()) this.#suppressFabClick = true;
+          this.#suppressFabClick = moved && this.isCollapsed();
         },
       });
       this.#layoutTeardown = installHudPositionGuards(this.#dock, root);
@@ -420,14 +475,12 @@ export class HudShell {
     document.addEventListener('keydown', this.#onKeyDown, { signal });
     // One delegated listener set for every account menu under this root, including the ones the
     // panels re-render on each push.
-    this.#accountTeardown = mountAccountControl(root);
+    this.#accountTeardown = mountAccountControl(root, () => this.#callbacks.onSignIn?.());
     // Replay a push that arrived before this mount. Last, so every element it paints into exists.
     if (this.#pushedAccount !== undefined) {
       const pushed = this.#pushedAccount;
       this.paintAccount(pushed.account, pushed.dashboardUrl, pushed.details);
     }
-    // Painted on mount whether or not an offer has arrived: the founder slide needs no daemon state.
-    this.#paintCarousel();
   }
   teardown(): void {
     this.#accountTeardown?.();
@@ -446,11 +499,11 @@ export class HudShell {
     this.#layoutTeardown?.();
     this.#layoutTeardown = undefined;
     this.#settings.teardown();
+    this.#chatViews.teardown();
     this.#root = undefined;
     this.#dock = undefined;
     this.#fab = undefined;
     this.#chatPanel = undefined;
-    this.#chatToggle = undefined;
     this.#collapseBtn = undefined;
   }
   isCollapsed(): boolean {
@@ -493,6 +546,8 @@ export class HudShell {
     if (this.#root === undefined) return;
     if (this.isCollapsed()) this.expand();
     this.#settings.close();
+    this.#chatViews.closePage();
+    this.#chatViews.open('activity');
     if (this.isChatOpen()) return;
     this.#root.setAttribute(CHAT_ATTR, '1');
     // The panel had no layout while it was closed, so its feed could not follow the newest row.
@@ -500,8 +555,6 @@ export class HudShell {
     const log = this.#root.querySelector<HTMLElement>('[data-reticle-log]');
     if (log !== null) settleLogAtLatest(log);
     this.#chatPanel?.setAttribute('aria-hidden', 'false');
-    this.#chatToggle?.setAttribute('data-active', '1');
-    this.#chatToggle?.setAttribute('aria-pressed', 'true');
     this.#callbacks.onChatOpen?.();
     if (this.#dock !== undefined) scheduleSyncDockLayout(this.#dock, this.#root);
   }
@@ -509,8 +562,6 @@ export class HudShell {
     if (this.#root === undefined || !this.isChatOpen()) return;
     this.#root.removeAttribute(CHAT_ATTR);
     this.#chatPanel?.setAttribute('aria-hidden', 'true');
-    this.#chatToggle?.setAttribute('data-active', '0');
-    this.#chatToggle?.setAttribute('aria-pressed', 'false');
     this.#callbacks.onChatClose?.();
     if (this.#dock !== undefined) scheduleSyncDockLayout(this.#dock, this.#root);
   }

@@ -87,6 +87,8 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
    * and this message is addressed to the proxy rather than to the client behind it.
    */
   const sseStreams = new Map<string, http.ServerResponse>();
+  /** The version each attached agent's MCP server announced, by SSE session. */
+  const peerVersions = new Map<string, string>();
   const token = options.token;
 
   // The agent control plane (MCP transport) and /status carry the same trust as the browser WS: a
@@ -143,7 +145,13 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
     if ('GET' === req.method && path === STATUS_PATH) {
       // A setup run waiting on this daemon says so on its polls; see daemon-usefulness.
       const held = url.searchParams.has(STATUS_HOLD_QUERY);
-      const body = JSON.stringify(statusProvider?.(held) ?? { running: true });
+      const status: unknown = statusProvider?.(held) ?? { running: true };
+      // The attached agents' MCP versions, so `restart` can say whom it is about to strand (#812).
+      const body = JSON.stringify(
+        'object' === typeof status && null !== status && 0 < peerVersions.size
+          ? { ...status, mcpPeers: [...peerVersions.values()] }
+          : status,
+      );
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(body);
       return;
@@ -226,10 +234,13 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
       const sid = transport.sessionId;
       transports.set(sid, transport);
       sseStreams.set(sid, res);
+      const peerVersion = url.searchParams.get(PEER_VERSION_PARAM);
+      if (null !== peerVersion && 0 < peerVersion.length) peerVersions.set(sid, peerVersion);
       if (1 === transports.size) agentPresence?.(true); // first agent attached
       res.on('close', () => {
         transports.delete(sid);
         sseStreams.delete(sid);
+        peerVersions.delete(sid);
         transport.close().catch(() => undefined);
         mcpServer.close().catch(() => undefined);
         log('mcp_client_disconnected', { sessionId: sid });

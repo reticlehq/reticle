@@ -20,16 +20,6 @@ export interface ReviewMark {
   status: MarkStatus;
 }
 
-/**
- * Per-session store of human review marks (the "annotate the bug where you see it" inbox). A mark is
- * added when a HUMAN_MARK event arrives, listed by the agent via reticle_review, and retired with
- * resolve when the agent claims the fix — distinct from the live-control inbox, which is drained
- * (delivered-once) on read. Marks persist (read does not consume) so the agent can list, fix, and
- * THEN resolve, and a fix can be verified against the same mark.
- *
- * Pure in-memory state: no IO, no clock. The id is a monotonic counter (m1, m2, …) so it is
- * deterministic and never depends on Math.random/Date.now; the timestamp is passed in by the caller.
- */
 /** Prefix on review-mark ids (m1, m2, …) — distinguishes them from command ids. */
 const MARK_ID_PREFIX = 'm';
 
@@ -61,8 +51,26 @@ interface ResolveOutcome {
   note?: string;
 }
 
+/**
+ * Per-session store of human review marks (the "annotate the bug where you see it" inbox). A mark is
+ * added when a HUMAN_MARK event arrives, listed by the agent via reticle_review, and retired with
+ * resolve when the agent claims the fix — distinct from the live-control inbox, which is drained
+ * (delivered-once) on read. Marks persist (read does not consume) so the agent can list, fix, and
+ * THEN resolve, and a fix can be verified against the same mark.
+ *
+ * No IO of its own and no clock: `onChange` is how a caller keeps it on disk (see notes-ledger.ts).
+ * The id is a monotonic counter (m1, m2, …) so it is deterministic and never depends on
+ * Math.random/Date.now; the timestamp is passed in by the caller.
+ */
 export class ReviewStore {
   readonly #marks: ReviewMark[] = [];
+
+  /** Told the full history after every add and resolve, so a caller can keep it on disk. */
+  readonly #onChange: ((marks: ReviewMark[]) => void) | undefined;
+
+  constructor(onChange?: (marks: ReviewMark[]) => void) {
+    this.#onChange = onChange;
+  }
 
   /** Store a new mark (status pending) stamped with the caller-supplied session-relative time. */
   add(data: HumanMarkData, at: number): ReviewMark {
@@ -79,6 +87,7 @@ export class ReviewStore {
     if (data.source !== undefined) mark.source = data.source;
     if (data.route !== undefined) mark.route = data.route;
     this.#marks.push(mark);
+    this.#onChange?.(this.all());
     return mark;
   }
 
@@ -118,6 +127,7 @@ export class ReviewStore {
     const mark = this.#marks.find((m) => m.id === id);
     if (mark === undefined || mark.status === MarkStatus.RESOLVED) return { resolved: false, id };
     mark.status = MarkStatus.RESOLVED;
+    this.#onChange?.(this.all());
     return { resolved: true, id, note: mark.note };
   }
 }

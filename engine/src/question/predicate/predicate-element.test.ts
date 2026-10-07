@@ -66,3 +66,88 @@ it('asks the page when its SDK knows the state, or when no version was reported'
     expect(asked).toBe(true);
   }
 });
+
+/**
+ * `absent` means removed from the DOM, so an element the app hid but kept mounted fails it, and
+ * should. The reason used to say only "found 1", next to `visible: false` evidence, which reads as a
+ * stuck UI; when every match is hidden it now names `state: "hidden"` (#1360).
+ */
+function matching(matches: { visible: boolean }[], count = matches.length): PredicateSession {
+  const elements = matches.map((m, i) => ({
+    ref: `e${String(i)}`,
+    role: 'dialog',
+    name: 'Settings',
+    states: [],
+    visible: m.visible,
+  }));
+  return {
+    ...session,
+    command: () =>
+      Promise.resolve({
+        kind: 'command_result',
+        ok: true,
+        id: 'stub',
+        result: { matched: true, count, elements },
+      }),
+  };
+}
+
+it('points an absent check on a hidden-only match at state: "hidden", and still fails', async () => {
+  const one = await evalElement(
+    matching([{ visible: false }]),
+    { testid: 'x' },
+    undefined,
+    true,
+    true,
+  );
+  expect(one.pass).toBe(false);
+  expect(one.failureReason).toBe(
+    'expected element to be absent but found 1, but it is hidden — `absent` means removed from ' +
+      'the DOM; to assert it isn\'t shown, use `state: "hidden"`',
+  );
+
+  const two = await evalElement(
+    matching([{ visible: false }, { visible: false }]),
+    { testid: 'x' },
+    undefined,
+    true,
+    true,
+  );
+  expect(two.pass).toBe(false);
+  expect(two.failureReason).toContain('found 2, but every one is hidden');
+});
+
+it('keeps the plain absent reason when a match is visible, a state is named, or not every match was described', async () => {
+  const plain = 'expected element to be absent but found 2';
+  const mixed = await evalElement(
+    matching([{ visible: false }, { visible: true }]),
+    { testid: 'x' },
+    undefined,
+    true,
+    true,
+  );
+  expect(mixed.failureReason).toBe(plain);
+
+  // The check already names a state: `hidden` would make the advice repeat the check, and any other
+  // state would make it ask the caller to drop the condition they wrote.
+  for (const state of [ElementState.HIDDEN, ElementState.CHECKED]) {
+    const stated = await evalElement(
+      matching([{ visible: false }, { visible: false }]),
+      { testid: 'x' },
+      state,
+      true,
+      true,
+    );
+    expect(stated.failureReason).toBe(plain);
+  }
+
+  // Two matches, one described: the undescribed one may be visible, so no hidden hint.
+  const truncated = await evalElement(
+    matching([{ visible: false }], 2),
+    { testid: 'x' },
+    undefined,
+    true,
+    true,
+  );
+  expect(truncated.failureReason).toBe(plain);
+});

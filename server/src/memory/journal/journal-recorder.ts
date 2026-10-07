@@ -1,11 +1,13 @@
 import {
   EventAttribution,
   JOURNAL_FILE_VERSION,
+  type DrivenBy,
   type JournalAction,
   type JournalWriteLoss,
   type ReticleEvent,
 } from '@reticlehq/core';
 import { isSelfObservation } from './self-observation.js';
+import { currentDrivenBy } from '@/hooks/driven-by.js';
 import { log } from '@/log.js';
 
 /**
@@ -114,6 +116,8 @@ interface ActiveAction {
   tool: string;
   args: Record<string, unknown>;
   tStart: number;
+  /** Read at dispatch, where the Harness's context is still on the stack. */
+  drivenBy: DrivenBy | undefined;
   seqFrom?: number;
   seqTo?: number;
 }
@@ -172,7 +176,7 @@ export class JournalRecorder {
 
   /** Open an attribution window. One action is active at a time (the agent drives sequentially). */
   beginAction(actionId: string, tool: string, args: Record<string, unknown>): void {
-    this.#active = { actionId, tool, args, tStart: this.#now() };
+    this.#active = { actionId, tool, args, tStart: this.#now(), drivenBy: currentDrivenBy() };
   }
 
   /** Close the active window: persist its buffered events, then the action record. No-op if none active. */
@@ -194,6 +198,7 @@ export class JournalRecorder {
           : { from: active.seqFrom, to: active.seqTo },
       tRange: { from: active.tStart, to: this.#now() },
       at: active.tStart,
+      ...(active.drivenBy === undefined ? {} : { drivenBy: active.drivenBy }),
     };
     this.#enqueueFlush();
     this.#chain = this.#chain
@@ -237,6 +242,10 @@ export class JournalRecorder {
       // of zero, which is exactly how much time this action attributed events over.
       tRange: { from: at, to: at },
       at,
+      ...((): { drivenBy?: DrivenBy } => {
+        const by = currentDrivenBy();
+        return by === undefined ? {} : { drivenBy: by };
+      })(),
     };
     this.#enqueueFlush();
     this.#chain = this.#chain

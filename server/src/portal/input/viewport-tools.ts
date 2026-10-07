@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CDP_NO_PROVIDER_REASON, CDP_NO_PROVIDER_RECOMMENDATION } from '@reticlehq/core';
+import { CDP_NO_PROVIDER_REASON, VIEWPORT_NO_PROVIDER_RECOMMENDATION } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { sessionIdShape } from '@/surface/tools/tool-kit.js';
 import {
@@ -31,7 +31,7 @@ export const VIEWPORT_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.VIEWPORT,
     description:
-      'Pin the DRIVEN page (needs `reticle drive`) to a fixed viewport size so a screenshot baseline is ' +
+      'Pin the DRIVEN or LEASED page (needs `reticle drive`, or `reticle_lease` acquire when there is no CDP provider) to a fixed viewport size so a screenshot baseline is ' +
       'reproducible across machines — the missing piece of CI-stable visual regression, alongside ' +
       'reticle_visual_diff `masks` and a frozen clock (reticle_clock). Set it once before reticle_screenshot / ' +
       'reticle_visual_diff. Returns { applied, width, height } or the no-provider recommendation.',
@@ -73,7 +73,7 @@ export const VIEWPORT_TOOLS: ToolDef[] = [
         height: 0,
         ok: false,
         reason: CDP_NO_PROVIDER_REASON,
-        recommendation: CDP_NO_PROVIDER_RECOMMENDATION,
+        recommendation: VIEWPORT_NO_PROVIDER_RECOMMENDATION,
       };
     },
   },

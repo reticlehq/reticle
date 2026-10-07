@@ -11,6 +11,9 @@ import {
   CAROUSEL_CLOSE_ATTR,
   CAROUSEL_DISMISSED_KEY,
   CAROUSEL_DOT_ATTR,
+  CAROUSEL_NEXT_ATTR,
+  CAROUSEL_POSITION_ATTR,
+  CAROUSEL_PREV_ATTR,
   CAROUSEL_SLIDE_ATTR,
   ROTATE_MS,
   carouselHtml,
@@ -43,6 +46,8 @@ describe('carouselHtml', () => {
     host.innerHTML = carouselHtml(SLIDES, 0);
     expect(visible(host)).toEqual(['harness']);
     expect(host.querySelectorAll(`[${CAROUSEL_DOT_ATTR}]`)).toHaveLength(2);
+    expect(host.querySelector(`[${CAROUSEL_PREV_ATTR}]`)).not.toBeNull();
+    expect(host.querySelector(`[${CAROUSEL_NEXT_ATTR}]`)).not.toBeNull();
     expect(host.querySelector(`[${CAROUSEL_CLOSE_ATTR}]`)).not.toBeNull();
   });
 
@@ -72,6 +77,20 @@ describe('paintCarousel', () => {
     (log.querySelectorAll(`[${CAROUSEL_DOT_ATTR}]`)[1] as HTMLElement).click();
     expect(visible(log)).toEqual(['founders']);
     paintCarousel(log, SLIDES, storage);
+    expect(visible(log)).toEqual(['founders']);
+  });
+
+  it('moves with visible previous/next buttons and shows the current position', () => {
+    paintCarousel(log, SLIDES, memoryStorage());
+    const next = log.querySelector<HTMLButtonElement>(`[${CAROUSEL_NEXT_ATTR}]`);
+    const previous = log.querySelector<HTMLButtonElement>(`[${CAROUSEL_PREV_ATTR}]`);
+    if (null === next || null === previous) throw new Error('Carousel arrows are missing');
+    next.click();
+    expect(visible(log)).toEqual(['founders']);
+    expect(log.querySelector(`[${CAROUSEL_POSITION_ATTR}]`)?.textContent).toBe('2 / 2');
+    next.click();
+    expect(visible(log)).toEqual(['harness']);
+    previous.click();
     expect(visible(log)).toEqual(['founders']);
   });
 

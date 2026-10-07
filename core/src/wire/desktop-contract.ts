@@ -25,6 +25,9 @@ export const RETICLE_IPC_GLOBAL = '__reticleIpc';
 /** The ipcMain channel the capture helper answers, invoked by the preload on the SDK's behalf. */
 export const RETICLE_CAPTURE_CHANNEL = '__reticle:capture';
 
+/** The ipcMain channel that answers which window asked: the label the app registered it under. */
+export const RETICLE_WINDOW_CHANNEL = '__reticle:window';
+
 /**
  * Filename prefix for a screenshot the main process writes to the OS temp directory.
  *
@@ -70,6 +73,7 @@ export const RETICLE_NOT_COMPOSITED: string = VisualReason.NOT_COMPOSITED;
 export const DESKTOP_CONTRACT = {
   RETICLE_IPC_GLOBAL,
   RETICLE_CAPTURE_CHANNEL,
+  RETICLE_WINDOW_CHANNEL,
   RETICLE_CAPTURE_FILE_PREFIX,
   RETICLE_TAURI_CAPTURE_COMMAND,
   RETICLE_FULL_PAGE_UNSUPPORTED,

@@ -63,13 +63,8 @@ Reticle works with none of these set. Each one changes a single behaviour, and m
 | `RETICLE_CLOUD_KEY` | CLI, daemon | The key's earlier name. Still honoured. |
 | `RETICLE_CLOUD_URL`, `RETICLE_URL` | CLI, daemon | The platform host. `RETICLE_CLOUD_URL` wins when both are set. |
 | `RETICLE_SYNC_INTERVAL_MS` | `reticle sync --watch` | How often the watching sync runs. Every 60 seconds by default. |
-| `ANTHROPIC_API_KEY` | autonomous drive | The key the drive's model uses when no coding agent is in the loop. Without it, the drive is unavailable and everything else is unaffected. |
-| `RETICLE_HARNESS_MODEL` | autonomous drive | The model the drive uses. A small one by default. |
-| `RETICLE_HARNESS_BASE_URL` | autonomous drive | A proxy or gateway in front of the model API. |
-| `RETICLE_HARNESS_MAX_STEPS` | autonomous drive | A hard ceiling on model turns in one drive. It bounds cost. |
-| `RETICLE_HARNESS_DRIVER` | autonomous drive | Which model drives: `anthropic` (the default) or `jev`. |
-| `JEV_API_KEY`, `RETICLE_HARNESS_JEV_URL` | autonomous drive | A direct key and base URL for the `jev` driver. The usual path is `RETICLE_API_KEY` through the platform. |
-| `OPENAI_API_KEY`, `RETICLE_HARNESS_OPENAI_MODEL` | autonomous drive | A direct key and model for the OpenAI driver. |
+| `RETICLE_HARNESS_MAX_STEPS` | autonomous drive | A hard ceiling on steps in one drive. It bounds cost. The drive itself runs on the platform and needs a linked project; every plan, Free included, has monthly Harness credits. |
+| `RETICLE_SECRET_<FIELD>` | autonomous drive, replay | The value of a secret field, typed in on this machine. Only the field's name goes to the platform. |
 
 ## Licensing
 

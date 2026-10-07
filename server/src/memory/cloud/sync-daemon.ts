@@ -21,6 +21,7 @@
  * laptop on a train would otherwise fill the log with the same line four hundred times and teach
  * everyone to ignore it.
  */
+import { syncRequest } from './cloud-sync.js';
 import { log } from '@/log.js';
 import { emitSyncHook } from '@/hooks/hook-emit.js';
 import { describeSync, runSyncCycle, type SyncReport } from './sync-cycle.js';
@@ -134,13 +135,10 @@ const movedAnything = (report: SyncReport): boolean =>
   report.derivedSent.length > 0 ||
   report.pulled > 0;
 
-const defaultRequest = async (
+const defaultRequest = (
   url: string,
   init: { method: string; headers: Record<string, string>; body?: string },
-): Promise<{ status: number; text: string }> => {
-  const res = await fetch(url, init);
-  return { status: res.status, text: await res.text() };
-};
+): Promise<{ status: number; text: string }> => syncRequest(url, init);
 
 /**
  * Start the loop. Safe to call for an UNLINKED project: it resolves the link on every tick and does
@@ -214,7 +212,11 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
       if (root === deps.reticleRoot) continue;
       try {
         const cloud = await cloudFor(root);
-        if (null === cloud.config) continue;
+        // Linked HERE, by its own link file. An unlinked root resolves to the environment's key,
+        // which is the right answer for the root this daemon stands in and somebody else's project
+        // for every other one: a daemon started with RETICLE_API_KEY pushed every project this
+        // machine had seen into that one, a status and a pull per root on every cycle.
+        if (null === cloud.config || null === cloud.projectId) continue;
         const report = await pushRoot(root, cloud);
         if (report === undefined) continue;
         if (report.error !== undefined) {

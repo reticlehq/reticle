@@ -25,7 +25,7 @@ import type { ArrivalClock } from '@/surface/tools/act/navigation/navigate-arriv
 import { carryReticleIdentity } from '@/surface/tools/lease-tools.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { Session } from '@/portal/session/session.js';
-import { replayFlow } from './flow-replay.js';
+import { partialStatus, replayFlow, replayWindow, type ReplayFromOptions } from './flow-replay.js';
 import { anchorPrecondition, anchorQueryArgs, staleTargetResult } from './flow-step-runners.js';
 import { queryRefs } from './replay.js';
 import { assertSuccess, dynamicTestids, successLabel, SUCCESS_STEP_TOOL } from './flow-success.js';
@@ -647,7 +647,10 @@ export async function replayNamedFlow(
   // The FlowFile contract: replay navigates to the flow's startPath before step 1, and the steps run
   // on the session the SDK reconnects as. When arrival can't be confirmed, replay proceeds on the
   // connected session — and the hint below turns the wrong-page drift into an actionable next move.
-  const arrival = await arriveAtStartPath(deps.sessions, connected, loaded.value);
+  // Continuing at a step means the page is already there; going to the start would undo it.
+  const { to, at: continueAt } = replayWindow(args);
+  const arrival =
+    continueAt === undefined ? await arriveAtStartPath(deps.sessions, connected, loaded.value) : {};
   // Continuing on `connected` after the tab left timed every step out on a dead handle (#1129).
   if (arrival.lost !== undefined) {
     const reason = arrival.lost;
@@ -754,12 +757,22 @@ export async function replayNamedFlow(
         // not hold, so one flow reports one verdict per step instead of stopping at the first defect.
         sweep: true === args['sweep'],
         ...(from === undefined ? {} : { from }),
+        ...(to === undefined ? {} : { to }),
+        ...(continueAt === undefined ? {} : { at: continueAt }),
+        // The HUD's replay chip, when the human pressed ▶. In-process only: an agent's arguments
+        // arrive as JSON and can never carry a function.
+        ...('function' === typeof args['onStep']
+          ? { onStep: args['onStep'] as NonNullable<ReplayFromOptions['onStep']> }
+          : {}),
       },
     );
   } catch (error: unknown) {
     if (!(error instanceof DocumentLostDuringReplay)) throw error;
     return lostDocumentResult(name, error);
   }
+  // Only part of the journey was driven here: its steps were checked, nothing about the whole flow.
+  if (continueAt !== undefined || (to !== undefined && to < loaded.value.steps.length))
+    return { name, status: partialStatus(steps), steps };
   // Computed HERE, before the synthetic success row is appended below: once that row is pushed,
   // `steps.length` no longer counts only the flow's own steps and the arithmetic is wrong.
   const halted = haltedFrom(steps, loaded.value.steps.length);

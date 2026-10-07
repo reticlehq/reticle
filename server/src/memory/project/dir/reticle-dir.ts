@@ -29,8 +29,6 @@ export interface ReticleDirPaths {
   impact: string;
   /**.../.reticle/intent.json — the LEGACY single ledger, read until the first write migrates it into .reticle/intent/ */
   intent: string;
-  /**.../.reticle/fill-values.json (what a drive types into each labelled field — git-checked) */
-  fillValues: string;
   /**.../.reticle/visual (PNG baselines + diffs) */
   visual: string;
   /**.../.reticle/runs (verification-run artifacts) */
@@ -49,6 +47,10 @@ export interface ReticleDirPaths {
   coverage: string;
   /**.../.reticle/assertion-tiers.json (last-passing assertion tiers; anti-reward-hacking baseline) */
   tiers: string;
+  /**.../.reticle/request.json (the user's latest request, relayed by the agent, classified) */
+  request: string;
+  /** .reticle/plans/ — every Harness drive plan made here, and how it went. */
+  plans: string;
 }
 
 export function reticleDirPaths(root: string): ReticleDirPaths {
@@ -60,7 +62,6 @@ export function reticleDirPaths(root: string): ReticleDirPaths {
     project: join(root, ReticleDir.PROJECT_FILE),
     impact: join(root, ReticleDir.IMPACT_FILE),
     intent: join(root, ReticleDir.INTENT_FILE),
-    fillValues: join(root, ReticleDir.FILL_VALUES_FILE),
     visual: join(root, ReticleDir.VISUAL_SUBDIR),
     runs: join(root, ReticleDir.RUNS_SUBDIR),
     sessions: join(root, ReticleDir.SESSIONS_SUBDIR),
@@ -70,6 +71,9 @@ export function reticleDirPaths(root: string): ReticleDirPaths {
     flake: join(root, ReticleDir.FLAKE_FILE),
     coverage: join(root, ReticleDir.COVERAGE_FILE),
     tiers: join(root, ReticleDir.TIERS_FILE),
+    // Beside `intent/`, not in it: `intent/` is committed, and this is the user's own words.
+    request: join(root, ReticleDir.REQUEST_FILE),
+    plans: join(root, ReticleDir.PLANS_SUBDIR),
   };
 }
 

@@ -50,6 +50,13 @@ try {
     console.log(log.join('').slice(-3000));
     throw new Error('no session');
   }
+  // Electron has no window names; the app gives one where it registers the window for capture.
+  let named;
+  for (let i = 0; i < 40 && named === undefined; i++) {
+    named = session.server.bridge.sessions.list().find((s) => s.sessionId === sessionId)?.window;
+    if (named === undefined) await sleep(100);
+  }
+  chk('the session names its Electron window', named === 'main', String(named));
   // The app loads its todos over IPC on mount; wait for that round trip rather than a fixed sleep.
   for (let i = 0; i < 40; i++) {
     if (JSON.stringify(await tool('reticle_network', {})).includes('ipc://todos:load')) break;

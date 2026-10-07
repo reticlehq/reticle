@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ReticleEnv } from '@reticlehq/core';
 import {
+  configuredPairingToken,
   defaultPairingTokenDir,
   pairingTokenPath,
   readOrCreatePairingToken,
@@ -91,5 +92,19 @@ describe('readOrCreatePairingTokenSync — the same mint, for init and Next', ()
       if (prev === undefined) delete process.env[ReticleEnv.PAIRING_TOKEN_DIR];
       else process.env[ReticleEnv.PAIRING_TOKEN_DIR] = prev;
     }
+  });
+});
+
+// #1251: in a container the app bakes the directory token in, and `verify` minted its own.
+describe('configuredPairingToken', () => {
+  it('is RETICLE_TOKEN, else the token in RETICLE_PAIRING_TOKEN_DIR, else nothing', async () => {
+    const { deps } = memDeps({ [pairingTokenPath('/mnt/tok')]: 'dir-token' });
+    expect(await configuredPairingToken({ [ReticleEnv.TOKEN]: 'env-token' }, deps)).toBe(
+      'env-token',
+    );
+    expect(await configuredPairingToken({ [ReticleEnv.PAIRING_TOKEN_DIR]: '/mnt/tok' }, deps)).toBe(
+      'dir-token',
+    );
+    expect(await configuredPairingToken({}, deps)).toBeUndefined();
   });
 });

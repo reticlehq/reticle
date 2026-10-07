@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/tauri-smoke",
-  "version": "3.5.0",
+  "version": "3.6.0",
   "private": true,
   "description": "A real Tauri v2 app (Vite + React frontend, Rust commands over invoke) to smoke-test Reticle on Tauri.",
   "type": "module",
@@ -11,7 +11,7 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.2.0",
+    "@tauri-apps/api": "^2.12.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "zustand": "^5.0.15"
@@ -20,7 +20,7 @@
     "@reticlehq/browser": "workspace:*",
     "@reticlehq/react": "workspace:*",
     "@reticlehq/vite-plugin": "workspace:*",
-    "@tauri-apps/cli": "^2.11.5",
+    "@tauri-apps/cli": "^2.12.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
