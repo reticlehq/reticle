@@ -8,6 +8,7 @@
 
 import type { Browser } from 'playwright';
 import { BrowserLaunchKind } from '@reticlehq/core/telemetry';
+import { HIDE_RETICLE_CHROME_CSS } from '@reticlehq/core';
 import { launchChromium } from '@/launch-chromium.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import { classifyConnectFailure } from '@/telemetry/connect-failure.js';
@@ -42,6 +43,28 @@ export function gotoOptions(timeoutMs: number | undefined): {
   };
 }
 
+/**
+ * Reticle paints its own UI (presenter HUD, glow, annotator marks, tour) into the page. It is
+ * time-varying, since the activity log and border state change with every command, so capturing it
+ * makes a fresh screenshot of an unchanged page differ from its baseline. Playwright applies `style`
+ * for the shot only and then reverts it, so the page under test is never changed. Disabling animations
+ * settles any remaining transitions. Shared by every capture path, driven and leased, so both hide
+ * the same set: core's `RETICLE_OVERLAY_SELECTOR`.
+ */
+export const SCREENSHOT_DETERMINISM = {
+  style: HIDE_RETICLE_CHROME_CSS,
+  animations: 'disabled',
+} as const;
+
+/** The options a lease screenshot is taken with. */
+export function leaseScreenshotOptions(opts?: { fullPage?: boolean }): {
+  fullPage: boolean;
+  style: string;
+  animations: 'disabled';
+} {
+  return { ...SCREENSHOT_DETERMINISM, fullPage: true === opts?.fullPage };
+}
+
 function wrapBrowser(browser: Browser): PooledBrowser {
   return {
     isConnected: () => browser.isConnected(),
@@ -55,8 +78,10 @@ function wrapBrowser(browser: Browser): PooledBrowser {
             close: () => page.close(),
             evaluate: (script) => page.evaluate(script),
             // Playwright returns a Buffer; Uint8Array is what the visual store and differ take.
+            // Same determinism as the driven path's capturePage: without it a lease baseline caught
+            // the HUD, its activity log and the toolbar, and a HUD change read as a regression (#1355).
             screenshot: async (opts) =>
-              new Uint8Array(await page.screenshot({ fullPage: true === opts?.fullPage })),
+              new Uint8Array(await page.screenshot(leaseScreenshotOptions(opts))),
             // Three moves, same as performGesture: a single move to the center can be a no-op if
             // the pointer was already there, and CSS :hover needs a native hit-test to apply.
             hover: async (x, y) => {

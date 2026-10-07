@@ -1,3 +1,5 @@
+import { RETICLE_OVERLAY_SELECTOR } from '@reticlehq/core';
+
 /**
  * Selectors for Reticle's own presenter overlay (cursor, HUD, glow) + the annotator's
  * UI (`data-reticle-mark`) - never observed/snapshotted. The annotator mounts by DEFAULT with the
@@ -10,9 +12,11 @@
  * named it in `visibleDialogs`, and every act came back `occluded: true` against a 1440x900 div at
  * 0,0 that resolved to the tour's own scrim. The occlusion detector was right; the thing in the way
  * was us, described to the agent as part of the app it was sent to verify.
+ *
+ * The list itself lives in core (`RETICLE_OVERLAY_SELECTOR`), because the daemon hides the same set
+ * from its screenshots (#1355).
  */
-export const RETICLE_OVERLAY: string =
-  '[data-reticle-overlay],[data-reticle-cursor],[data-reticle-hud],[data-reticle-glow],[data-reticle-mark],[data-reticle-blocker],[data-reticle-tour]';
+export const RETICLE_OVERLAY: string = RETICLE_OVERLAY_SELECTOR;
 
 /** Known third-party dev overlays to keep out of snapshots (Agentation, Next dev UI). */
 const DEV_OVERLAYS =

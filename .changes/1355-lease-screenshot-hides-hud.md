@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`: lease screenshots and visual baselines no longer include Reticle's own HUD.** A screenshot of a leased tab captured the Reticle panel, its activity log and the toolbar, so `reticle_visual_diff` compared Reticle's UI as well as the app's, and a HUD change or a new activity line read as an app regression. Every capture now hides Reticle's own elements for the shot only, with animations disabled, and the page under test is not changed. The selector list moved into `@reticlehq/core` (`RETICLE_OVERLAY_SELECTOR`), so the SDK, the driven capture path and the lease path hide the same set. The driven path had hidden only `[data-reticle-overlay]`. Closes [#1355](https://github.com/reticlehq/reticle/issues/1355).
