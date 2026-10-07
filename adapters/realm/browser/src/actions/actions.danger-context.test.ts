@@ -148,3 +148,51 @@ describe('a value picker is judged by what the choice feeds, not by the choice',
     await expect(executeAction(refTo('#d'), 'click')).rejects.toThrow(/confirmDangerous/);
   });
 });
+
+/**
+ * A same-origin `<a href>` with no click handler is a plain GET navigation: clicking it cannot
+ * destroy anything or move money, so it is not an action the destructive guard may block.
+ *
+ * Reported from a field session: `<a href="/billing/payments">Orders & invoices</a>` was blocked as
+ * "potentially destructive" because the href matched `\bpayment\b` in the destructive-label pattern,
+ * even though the link's own text was innocent. A GET navigation does nothing by itself; only a
+ * click handler (or a `download`) lets a link do something besides navigate, so those keep today's
+ * behaviour.
+ */
+describe('a same-origin navigation link is not a destructive action', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('does not block a plain link whose href contains "payment"', async () => {
+    document.body.innerHTML = '<a id="l" href="/billing/payment">Orders & invoices</a>';
+    await expect(executeAction(refTo('#l'), 'click')).resolves.toBeDefined();
+  });
+
+  it('does not block a link whose TEXT reads destructive when it only navigates', async () => {
+    document.body.innerHTML = '<a id="l" href="/account/settings">Payment history</a>';
+    await expect(executeAction(refTo('#l'), 'click')).resolves.toBeDefined();
+  });
+
+  it('still blocks a link with an onclick handler — it can do anything', async () => {
+    document.body.innerHTML =
+      '<a id="l" href="/billing/payment" onclick="window.__linkClicked = true">Orders & invoices</a>';
+    await expect(executeAction(refTo('#l'), 'click')).rejects.toThrow(/confirmDangerous/);
+  });
+
+  it('still blocks a link with a download attribute — it saves a file, not navigates', async () => {
+    document.body.innerHTML =
+      '<a id="l" href="/billing/payment/invoice.pdf" download>Download invoice</a>';
+    await expect(executeAction(refTo('#l'), 'click')).rejects.toThrow(/confirmDangerous/);
+  });
+
+  it('does not exempt an off-origin link — it leaves the page', async () => {
+    document.body.innerHTML = '<a id="l" href="https://stripe.com/checkout/payment">Pay now</a>';
+    await expect(executeAction(refTo('#l'), 'click')).rejects.toThrow(/confirmDangerous/);
+  });
+
+  it('still blocks a destructive button — it is not a navigation link', async () => {
+    document.body.innerHTML = '<button id="b">Delete account</button>';
+    await expect(executeAction(refTo('#b'), 'click')).rejects.toThrow(/confirmDangerous/);
+  });
+});

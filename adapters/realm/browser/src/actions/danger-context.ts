@@ -79,3 +79,28 @@ export function submitControlFor(el: ActionTarget): HTMLElement | null {
 export function requiresDangerousConfirmation(text: string, role?: string): boolean {
   return isDangerousActionText(text, role);
 }
+
+/**
+ * A same-origin `<a href>` with no click handler is a plain GET navigation: clicking it cannot
+ * destroy anything or move money, so the destructive-action guard has no business with it.
+ *
+ * The link's `href` still feeds `dangerousActionContext` — `<a href="/billing/payments">` trips
+ * `\bpayment\b` through its URL even when its text says "Orders & invoices" — but the element can
+ * only navigate, so the guard must not block it. A link with an `onclick` handler can do anything,
+ * and one with `download` saves a file rather than navigating, so both keep today's behaviour. A
+ * `javascript:`/`mailto:`/off-origin href resolves to a different origin and is likewise not exempt.
+ */
+export function isPlainNavigationLink(el: ActionTarget): boolean {
+  if (!(el instanceof HTMLAnchorElement)) return false;
+  const href = el.getAttribute('href');
+  if (null === href || '' === href) return false;
+  if (el.hasAttribute('onclick') || 'function' === typeof el.onclick) return false;
+  if (el.hasAttribute('download')) return false;
+  try {
+    const doc = el.ownerDocument;
+    const view = doc.defaultView;
+    return new URL(href, doc.baseURI).origin === view?.location.origin;
+  } catch {
+    return false;
+  }
+}
