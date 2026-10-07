@@ -29,29 +29,53 @@ export function goalsIn(persona: string | undefined): string[] {
   return [...new Set(found.filter((g) => 0 < g.length))].slice(0, MAX_GOALS);
 }
 
-/** Assert each goal on the page the drive ended on. A check that cannot run is `unknown`, never skipped. */
+/**
+ * Check each goal on the page the drive ended on, recording ONE assert for the drive.
+ *
+ * Each quote used to be its own assert, and every assert is a check in the drive's run, so a goal
+ * that quotes where it starts ("from "Count is 0" to "Count is 1"") recorded a "no" for the start
+ * text a working app had rightly replaced, and the run synced as a failing flow. The page is read
+ * once to answer each quote; the one recorded assert covers the quotes shown, or all of them when
+ * none is, so a goal the page never reached still leaves a failed check behind. A check that cannot
+ * run is `unknown`, never skipped.
+ */
 export async function checkGoals(
   invoke: (name: string, args: Record<string, unknown>) => Promise<unknown>,
   goals: readonly string[],
 ): Promise<GoalCheck[]> {
-  const checks: GoalCheck[] = [];
-  for (const raw of goals.slice(0, MAX_GOALS)) {
-    const text = raw.trim().slice(0, MAX_GOAL_LENGTH);
-    if (0 === text.length) continue;
-    let verified: string = Verified.UNKNOWN;
-    try {
-      const result = asRecord(
-        await invoke(ReticleTool.ASSERT, {
-          predicate: { kind: PredicateKind.TEXT, contains: text },
-        }),
-      );
-      if ('string' === typeof result['verified']) verified = result['verified'];
-    } catch {
-      /* stays unknown: the goal was not proved */
-    }
-    checks.push({ text, verified });
+  const texts = [
+    ...new Set(goals.slice(0, MAX_GOALS).map((g) => g.trim().slice(0, MAX_GOAL_LENGTH))),
+  ].filter((t) => 0 < t.length);
+  if (0 === texts.length) return [];
+  let page: string | undefined;
+  try {
+    const tree = asRecord(await invoke(ReticleTool.SNAPSHOT, { mode: SNAPSHOT_FULL }))['tree'];
+    if ('string' === typeof tree) page = tree;
+  } catch {
+    /* unread: every quote rests on the assert below */
   }
-  return checks;
+  const shown = texts.filter((t) => true === page?.includes(t));
+  const recorded = 0 < shown.length ? shown : texts;
+  let verified: string = Verified.UNKNOWN;
+  try {
+    const result = asRecord(await invoke(ReticleTool.ASSERT, { predicate: allOf(recorded) }));
+    if ('string' === typeof result['verified']) verified = result['verified'];
+  } catch {
+    /* stays unknown: the goal was not proved */
+  }
+  // A quote the page read did not show is a "no" only beside one it did: with none shown, every
+  // quote rests on the recorded assert.
+  return texts.map((text) => ({
+    text,
+    verified: 0 === shown.length || shown.includes(text) ? verified : Verified.NO,
+  }));
+}
+
+const SNAPSHOT_FULL = 'full';
+
+function allOf(texts: readonly string[]): Record<string, unknown> {
+  const each = texts.map((contains) => ({ kind: PredicateKind.TEXT, contains }));
+  return 1 === each.length ? (each[0] ?? {}) : { kind: PredicateKind.ALL_OF, predicates: each };
 }
 
 /** One line naming the goals the drive did not prove, or undefined when it proved them all. */

@@ -11,24 +11,48 @@ describe('the goals a drive was asked to prove (#1316)', () => {
     expect(goalsIn(undefined)).toEqual([]);
   });
 
-  it('are each checked with an assert, and a drive that saw neither proves neither', async () => {
-    const asked: unknown[] = [];
-    const checks = await checkGoals(
-      (name, args) => {
-        asked.push([name, args]);
-        return Promise.resolve({ verified: 'Ada Lovelace' === textOf(args) ? 'yes' : 'no' });
-      },
-      ['Ada Lovelace', 'Grace Hopper'],
-    );
-    expect(asked[0]).toEqual([
-      ReticleTool.ASSERT,
-      { predicate: { kind: 'text', contains: 'Ada Lovelace' } },
-    ]);
+  const page = (tree: string, assertSays: string) => {
+    const asked: [string, Record<string, unknown>][] = [];
+    const invoke = (name: string, args: Record<string, unknown>): Promise<unknown> => {
+      asked.push([name, args]);
+      return Promise.resolve(ReticleTool.SNAPSHOT === name ? { tree } : { verified: assertSays });
+    };
+    return { asked, invoke };
+  };
+  const asserts = (asked: [string, Record<string, unknown>][]) =>
+    asked.filter(([name]) => ReticleTool.ASSERT === name).map(([, args]) => args['predicate']);
+
+  it('records one assert over the quotes the page shows, and reads the rest as not shown', async () => {
+    const p = page('heading "Ada Lovelace"', 'yes');
+    const checks = await checkGoals(p.invoke, ['Ada Lovelace', 'Grace Hopper']);
+    expect(asserts(p.asked)).toEqual([{ kind: 'text', contains: 'Ada Lovelace' }]);
     expect(checks).toEqual([
       { text: 'Ada Lovelace', verified: 'yes' },
       { text: 'Grace Hopper', verified: 'no' },
     ]);
     expect(unprovedGoals(checks)).toContain('"Grace Hopper" (no)');
+  });
+
+  it('records a failed check when the page shows none of them', async () => {
+    const p = page('heading "Dashboard"', 'no');
+    const checks = await checkGoals(p.invoke, ['Ada Lovelace', 'Grace Hopper']);
+    expect(asserts(p.asked)).toEqual([
+      {
+        kind: 'allOf',
+        predicates: [
+          { kind: 'text', contains: 'Ada Lovelace' },
+          { kind: 'text', contains: 'Grace Hopper' },
+        ],
+      },
+    ]);
+    expect(checks.map((c) => c.verified)).toEqual(['no', 'no']);
+  });
+
+  it('never records a "no" for the start state a working app replaced', async () => {
+    // "goes from "Count is 0" to "Count is 1"": one assert, on the end state, and it held.
+    const p = page('button "Count is 1"', 'yes');
+    await checkGoals(p.invoke, ['Count is 0', 'Count is 1']);
+    expect(asserts(p.asked)).toEqual([{ kind: 'text', contains: 'Count is 1' }]);
   });
 
   it('counts a check that could not run as not proved', async () => {
@@ -37,7 +61,3 @@ describe('the goals a drive was asked to prove (#1316)', () => {
     expect(unprovedGoals([{ text: 'Ada', verified: 'yes' }])).toBeUndefined();
   });
 });
-
-function textOf(args: Record<string, unknown>): unknown {
-  return (args['predicate'] as { contains?: unknown }).contains;
-}
