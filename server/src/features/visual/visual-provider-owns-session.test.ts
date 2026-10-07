@@ -47,7 +47,8 @@ const OTHER_TAB_PIXELS = solidPng([0, 0, 255]);
 /** A launched provider: it owns the driven page and nothing else. */
 function drivenProvider(shots: string[]): RealInputProvider {
   return {
-    isAvailableFor: (url) => Promise.resolve(url === DRIVEN_URL),
+    // The launched provider's rule: the query and hash are ignored.
+    isAvailableFor: (url) => Promise.resolve(url.split(/[?#]/)[0] === DRIVEN_URL),
     perform: () =>
       Promise.resolve({ performed: false, center: { cx: 0, cy: 0 }, inputMode: InputMode.REAL }),
     screenshot: (url) => {
@@ -72,9 +73,12 @@ describe('a screenshot is taken only by a provider that owns the named session',
     await removeTempDir(join(root, '..'));
   });
 
-  function deps(sessionUrl: string, lease?: Uint8Array): ToolDeps {
+  function deps(sessionUrl: string, lease?: Uint8Array, others: Session[] = []): ToolDeps {
     const session = { id: 'tab-b', url: sessionUrl } as Session;
-    const sessions: Partial<SessionManager> = { resolve: () => session };
+    const sessions: Partial<SessionManager> = {
+      resolve: () => session,
+      all: () => [session, ...others],
+    };
     return {
       sessions: sessions as SessionManager,
       baselines: new BaselineStore(),
@@ -128,6 +132,16 @@ describe('a screenshot is taken only by a provider that owns the named session',
 
     expect(r.matched).toBe(true);
     expect(r.changedPixels).toBe(0);
+    expect(shots).toEqual([]);
+  });
+
+  // `isAvailableFor` ignores the query and hash, so a human tab on the driven page's url matches
+  // too. Two sessions the provider would both answer for is ambiguity, refused rather than guessed.
+  it("refuses a same-url tab rather than saving the driven page's pixels for it", async () => {
+    const drivenTab = { id: 'driven', url: `${DRIVEN_URL}?__reticle_opened=1` } as Session;
+    const r = await screenshot(deps(`${DRIVEN_URL}#top`, OTHER_TAB_PIXELS, [drivenTab]));
+
+    expect(new Uint8Array(await readFile(r.path ?? ''))).toEqual(OTHER_TAB_PIXELS);
     expect(shots).toEqual([]);
   });
 

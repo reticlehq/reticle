@@ -181,6 +181,28 @@ function runtimeOf(deps: ToolDeps, sessionId: string | undefined): string | unde
 }
 
 /**
+ * Whether `provider` drives `session`'s page, and no OTHER connected session's.
+ *
+ * `isAvailableFor` matches by url, ignoring the query and hash, so a human's tab on the same page as
+ * the driven one matches too, and the provider would photograph its own page for either (#1407).
+ * Ambiguity is refused rather than resolved by a guess, as the CDP provider's page lookup already
+ * does: a picture of the wrong tab saved under this session is the defect, and refusing costs only
+ * a fall-through to the desktop and lease routes.
+ */
+async function providerOwnsOnly(
+  provider: ScreenshotCapable,
+  session: { id: string; url: string },
+  connected: readonly { id: string; url: string }[],
+): Promise<boolean> {
+  const owns = (url: string): Promise<boolean> => provider.isAvailableFor(url).catch(() => false);
+  if (!(await owns(session.url))) return false;
+  for (const other of connected) {
+    if (other.id !== session.id && (await owns(other.url))) return false;
+  }
+  return true;
+}
+
+/**
  * Get pixels for a session, by whichever route exists.
  *
  * A driven/attached browser is captured through CDP — exact, and the only route that can do
@@ -211,7 +233,7 @@ async function capture(
   const owns =
     provider !== undefined &&
     session !== undefined &&
-    (await provider.isAvailableFor(session.url).catch(() => false));
+    (await providerOwnsOnly(provider, session, deps.sessions.all()));
   if (provider !== undefined && session !== undefined && owns) {
     const png = await provider.screenshot(session.url, await buildOpts(deps, sessionId, args));
     // A driven browser renders the session's URL in a BROWSER — so the pixels are web even when the

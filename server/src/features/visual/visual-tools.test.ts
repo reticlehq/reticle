@@ -67,7 +67,7 @@ describe('visual tools — temp dir, never touches the repo', () => {
 
   function deps(provider?: RealInputProvider, sessionRuntime?: string): ToolDeps {
     const session = fakeSession(sessionRuntime);
-    const sessions: Partial<SessionManager> = { resolve: () => session };
+    const sessions: Partial<SessionManager> = { resolve: () => session, all: () => [session] };
     const base: ToolDeps = {
       sessions: sessions as SessionManager,
       baselines: new BaselineStore(),
