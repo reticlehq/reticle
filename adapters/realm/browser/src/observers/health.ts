@@ -141,7 +141,23 @@ async function documentStatus(runtime: string): Promise<number | undefined> {
   }
 }
 
-function snapshotHealth(): {
+/**
+ * An Electron window's label: Electron has no name for a window, so the app gives one where it
+ * registers the window for capture (`installReticleCapture(win, { label })`) and the preload asks.
+ */
+async function electronWindowLabel(): Promise<string | undefined> {
+  const channel = (window as unknown as Record<string, unknown>)[RETICLE_IPC_GLOBAL] as
+    { windowLabel?: () => Promise<unknown> } | undefined;
+  if ('function' !== typeof channel?.windowLabel) return undefined;
+  try {
+    const label = await channel.windowLabel();
+    return 'string' === typeof label && label.length > 0 ? label : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function snapshotHealth(windowLabel: string | undefined): {
   hidden: boolean;
   focused: boolean;
   runtime: string;
@@ -149,7 +165,6 @@ function snapshotHealth(): {
   brand: BrowserBrand;
   windowLabel?: string;
 } {
-  const windowLabel = tauriWindowLabel();
   return {
     hidden: 'hidden' === document.visibilityState,
     focused: document.hasFocus(),
@@ -170,9 +185,10 @@ export function installHealth(emit: Emit): Teardown {
   const { signal } = ac;
 
   let status: number | undefined;
+  let label = tauriWindowLabel();
   const report = (reason: HealthReason): void => {
     emit(EventType.PAGE_HEALTH, {
-      ...snapshotHealth(),
+      ...snapshotHealth(label),
       ...(status === undefined ? {} : { documentStatus: status }),
       reason,
     });
@@ -183,10 +199,15 @@ export function installHealth(emit: Emit): Teardown {
   window.addEventListener('blur', () => report(HealthReason.BLUR), { signal });
 
   report(HealthReason.INITIAL); // baseline so the server knows state before the first change
-  void documentStatus(detectRuntime()).then((known) => {
-    if (known === undefined || signal.aborted) return;
+  // Both asked once, and reported as soon as they are known: selection reads them on connect.
+  void Promise.all([
+    documentStatus(detectRuntime()),
+    label === undefined ? electronWindowLabel() : Promise.resolve(label),
+  ]).then(([known, named]) => {
+    if (signal.aborted || (known === undefined && named === label)) return;
     status = known;
-    report(HealthReason.HEARTBEAT); // now, not a heartbeat later: selection reads it on connect
+    label = named;
+    report(HealthReason.HEARTBEAT);
   });
   const stopHeartbeat = nativeSetInterval(
     () => report(HealthReason.HEARTBEAT),

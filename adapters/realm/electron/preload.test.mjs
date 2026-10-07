@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createRequire } from 'node:module';
 import Module from 'node:module';
-import { RETICLE_CAPTURE_CHANNEL, RETICLE_IPC_GLOBAL } from '@reticlehq/core';
+import {
+  RETICLE_CAPTURE_CHANNEL,
+  RETICLE_IPC_GLOBAL,
+  RETICLE_WINDOW_CHANNEL,
+} from '@reticlehq/core';
 
 const require = createRequire(import.meta.url);
 
@@ -304,5 +308,61 @@ describe('IPC that happened before the SDK was watching', () => {
     exposed.api.subscribe((record) => records.push(record));
     expect(records.length).toBeLessThanOrEqual(200);
     expect(records.length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Two windows of one Electron app share a url as often as not, and the listing could not tell them
+ * apart: Tauri names its windows, Electron does not. The app names each one where it already
+ * registers it for capture, and the page asks over Reticle's own channel.
+ */
+describe('which Electron window a page is', () => {
+  it('asks the main process over the original invoke, so the question is not an app IPC call', async () => {
+    const calls = [];
+    const { exposed } = loadPreload({
+      invoke: async (channel) => {
+        calls.push(channel);
+        return channel === RETICLE_WINDOW_CHANNEL ? 'settings' : null;
+      },
+    });
+    expect(await exposed.api.windowLabel()).toBe('settings');
+    expect(calls).toEqual([RETICLE_WINDOW_CHANNEL]);
+  });
+
+  it('is undefined, never an error, when the main helper predates the channel', async () => {
+    const { exposed } = loadPreload({
+      invoke: async () => {
+        throw new Error("No handler registered for '__reticle:window'");
+      },
+    });
+    expect(await exposed.api.windowLabel()).toBeUndefined();
+  });
+
+  it('the main helper answers each window with the label it was registered under', async () => {
+    const handlers = new Map();
+    const electron = { ipcMain: { handle: (channel, fn) => handlers.set(channel, fn) } };
+    const originalLoad = Module._load;
+    Module._load = function load(request, parent, isMain) {
+      if (request === 'electron') return electron;
+      return originalLoad.call(this, request, parent, isMain);
+    };
+    const mainId = require.resolve('./main.cjs');
+    delete require.cache[mainId];
+    let main;
+    try {
+      main = require('./main.cjs');
+    } finally {
+      Module._load = originalLoad;
+    }
+    const contents = (name) => ({ name, isDestroyed: () => false });
+    const win = (name) => ({ webContents: contents(name), on: () => undefined });
+    const settings = win('settings');
+    const plain = win('plain');
+    main.installReticleCapture(settings, { label: 'settings' });
+    main.installReticleCapture(plain);
+    const answer = handlers.get(RETICLE_WINDOW_CHANNEL);
+    expect(await answer({ sender: settings.webContents })).toBe('settings');
+    // Unnamed means unnamed: no guessed label stands in for one the app never gave.
+    expect(await answer({ sender: plain.webContents })).toBeNull();
   });
 });

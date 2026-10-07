@@ -259,4 +259,18 @@ describe('installHealth — which desktop window, and what it was served', () =>
     teardown();
     vi.unstubAllGlobals();
   });
+
+  it('names an Electron window by the label the app registered it under', async () => {
+    (window as unknown as Record<string, unknown>)['__reticleIpc'] = {
+      windowLabel: () => Promise.resolve('settings'),
+    };
+    const { installHealth } = await import('./health.js');
+    const emit = vi.fn();
+    const teardown = installHealth(emit);
+    await vi.waitFor(() =>
+      expect(healthData(emit).some((d) => 'settings' === d['windowLabel'])).toBe(true),
+    );
+    teardown();
+    delete (window as unknown as Record<string, unknown>)['__reticleIpc'];
+  });
 });
