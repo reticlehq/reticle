@@ -141,6 +141,24 @@ describe('installPerf', () => {
       expect(selectors).toEqual(['[data-testid="price"]', 'p.note']);
     });
 
+    it('escapes values, so the selector matches the element it names', () => {
+      document.body.innerHTML =
+        '<span data-testid=\'a"b\'></span><div id="1:main"></div><p class="w-1/2"></p>';
+      const t = install();
+      for (const el of [...document.body.children]) {
+        byType('layout-shift')?.fire([shift([{ node: el, currentRect: rect(10, 10) }])]);
+      }
+      t();
+
+      const selectors = clsEvents(t).map(
+        (d) => (d['shifted'] as { selector: string } | undefined)?.selector ?? '',
+      );
+      expect(selectors).toHaveLength(3);
+      [...document.body.children].forEach((el, i) => {
+        expect(document.querySelector(selectors[i] ?? ''), selectors[i]).toBe(el);
+      });
+    });
+
     it("never names Reticle's own overlay, and omits the field when nothing can be named", () => {
       document.body.innerHTML = '<div data-reticle-hud></div>';
       const t = install();

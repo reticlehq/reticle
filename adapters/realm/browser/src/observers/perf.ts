@@ -28,14 +28,34 @@ interface ShiftedElement {
 const areaOf = (r: DOMRectReadOnly | undefined): number =>
   r === undefined ? 0 : Math.max(0, r.width) * Math.max(0, r.height);
 
-/** `[data-testid="x"]`, `#id`, or `tag.first-class`: enough to recognise, short enough to stay small. */
+/** An identifier for a CSS selector: `CSS.escape` where the page has it, an equivalent otherwise. */
+function cssIdent(value: string): string {
+  const css = (globalThis as { CSS?: { escape?: (v: string) => string } }).CSS;
+  if ('function' === typeof css?.escape) return css.escape(value);
+  // The CSSOM serialisation rules, for the characters an id or class can carry: a digit that would
+  // start the identifier becomes a hex escape, anything outside [\w-] is backslash-escaped.
+  let out = '';
+  for (const [i, ch] of [...value].entries()) {
+    const startsWithDigit = /\d/.test(ch) && (0 === i || (1 === i && value.startsWith('-')));
+    if (startsWithDigit) out += `\\${ch.charCodeAt(0).toString(16)} `;
+    else if (/[\w-]/.test(ch)) out += ch;
+    else out += `\\${ch}`;
+  }
+  return out;
+}
+
+/**
+ * `[data-testid="x"]`, `tag#id`, or `tag.first-class`: enough to recognise, short enough to stay
+ * small. Every value is escaped, so an id or class with CSS-significant characters, or a test id with
+ * a quote in it, still yields a selector that matches the element it names.
+ */
 function shortSelector(el: Element): string {
   const testid = readTestId(el);
-  if (testid !== null) return `[${getTestIdAttr()}="${testid}"]`;
+  if (null !== testid) return `[${getTestIdAttr()}="${testid.replace(/["\\]/g, '\\$&')}"]`;
   const tag = el.tagName.toLowerCase();
-  if (0 < el.id.length) return `${tag}#${el.id}`;
+  if (0 < el.id.length) return `${tag}#${cssIdent(el.id)}`;
   const cls = el.classList.item(0);
-  return null === cls ? tag : `${tag}.${cls}`;
+  return null === cls ? tag : `${tag}.${cssIdent(cls)}`;
 }
 
 /**
