@@ -142,7 +142,7 @@ export function startChatDrives(
     // A platform drive: Reticle's own tools on the driven tab, and nothing else.
     session: (sessionId) => {
       const tools = reticleToolset(deps, sessionId === undefined ? {} : { sessionId });
-      return { invoke: (tool, args) => tools.invoke(tool, args) };
+      return { tools: tools.tools, invoke: (tool, args) => tools.invoke(tool, args) };
     },
     drive: async (goal, sessionId) => {
       const url = sessions.list().find((tab) => tab.sessionId === sessionId)?.url;

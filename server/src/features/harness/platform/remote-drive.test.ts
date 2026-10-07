@@ -488,6 +488,7 @@ describe('a drive with a spec', () => {
           ignored: [],
         }),
       session: () => ({
+        tools: [{ name: 'reticle_look', description: 'read the page', inputSchema: {} }],
         invoke: (tool, args) => {
           invoked.push([tool, args]);
           return 'reticle_nope' === tool
@@ -511,6 +512,8 @@ describe('a drive with a spec', () => {
       expect.objectContaining({
         results: [],
         applied: { target: 'tab', mode: 'platform', sessionId: 'tab-1' },
+        // What this daemon can run, so the platform's loop offers its model exactly those tools.
+        tools: [{ name: 'reticle_look', description: 'read the page', inputSchema: {} }],
       }),
       expect.objectContaining({
         results: [{ seq: 1, ok: true, result: { tree: 'button "Pay"' }, ms: 0 }],

@@ -129,6 +129,8 @@ export interface RemoteDriveDeps {
    * drive is refused, and this daemon does not report the tool-session capability.
    */
   session?: (sessionId: string | undefined) => {
+    /** What it can run, as the model is shown each tool: sent once, on the first ask. */
+    tools?: readonly { name: string; description: string; inputSchema: Record<string, unknown> }[];
     invoke: (tool: string, args: Record<string, unknown>) => Promise<unknown>;
   };
   /** The clock for how long each session call took. */
@@ -257,6 +259,7 @@ export function startRemoteDrives(deps: RemoteDriveDeps): RemoteDrives {
       const session = deps.session;
       if (DriveMode.PLATFORM === prepared.applied.mode && session !== undefined) {
         try {
+          const tools = session(sessionId);
           await runToolSession(
             (body) =>
               doFetch(`${platform.url}${LinkPath.driveSession(driveId)}`, {
@@ -265,8 +268,12 @@ export function startRemoteDrives(deps: RemoteDriveDeps): RemoteDrives {
                 body: JSON.stringify(body),
                 signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
               }),
-            session(sessionId),
-            { applied: prepared.applied, ignored },
+            tools,
+            {
+              applied: prepared.applied,
+              ignored,
+              ...(tools.tools === undefined ? {} : { tools: tools.tools }),
+            },
             deps.now ?? (() => Date.now()),
           );
         } finally {
@@ -322,7 +329,7 @@ export function startRemoteDrives(deps: RemoteDriveDeps): RemoteDrives {
 async function runToolSession(
   post: (body: unknown) => Promise<Response>,
   tools: { invoke: (tool: string, args: Record<string, unknown>) => Promise<unknown> },
-  first: { applied: DriveApplied; ignored: SpecIgnored[] },
+  first: { applied: DriveApplied; ignored: SpecIgnored[]; tools?: readonly unknown[] },
   now: () => number,
 ): Promise<void> {
   let results: ToolSessionResult[] = [];
