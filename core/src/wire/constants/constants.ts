@@ -104,6 +104,12 @@ export const RETICLE_URL_PARAM = {
    * needs (nobody is sitting in front of it) without touching identity.
    */
   OPENED: '__reticle_opened',
+  /**
+   * How the HUD starts on a page Reticle opened: `shown`, `hidden` or `removed` (`HudVisibility`).
+   * On the URL rather than a command because a command sent before the HUD mounts is lost, and a
+   * headless drive should never paint a HUD it was asked not to.
+   */
+  HUD: '__reticle_hud',
 } as const;
 
 /** The loopback bind address. The daemon/bridge bind here by default — never expose Reticle off-host. */

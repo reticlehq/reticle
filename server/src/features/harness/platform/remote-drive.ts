@@ -10,7 +10,20 @@
  * the person can fix in ten seconds (open the app), and leaving it unclaimed lets the chat tell them
  * exactly that. One drive at a time: a second request waits for the first to finish.
  */
-import { PresenterTone } from '@reticlehq/core';
+import {
+  DriveMode,
+  DriveTarget,
+  LinkPath,
+  PLATFORM_LINK_VERSION,
+  PresenterTone,
+  TOOL_SESSION_LIMITS,
+  parseDriveSpec,
+  parseToolSessionReply,
+  type DriveApplied,
+  type DriveSpec,
+  type SpecIgnored,
+  type ToolSessionResult,
+} from '@reticlehq/core';
 import { serverOptionsFromEnv } from './server-driver.js';
 
 /** The app the chat attached a drive to: `local-apps.ts`'s key, and where it was last open. */
@@ -19,8 +32,6 @@ export interface AttachedApp {
   url: string | null;
 }
 
-const NEXT_PATH = '/v1/harness/local-drives/next';
-const RESULT_PATH = '/v1/harness/local-drives';
 /**
  * How often to ask while an app is connected.
  *
@@ -95,6 +106,33 @@ export interface RemoteDriveDeps {
     apiKey: string,
     app?: AttachedApp,
   ) => Promise<string | null | undefined> | string | undefined;
+  /**
+   * Make ready the tab a drive with a spec runs in: the person's own (as `pick` would choose it) or
+   * one opened for it, headless or in a window, with the HUD as the spec asks. Answers what it applied
+   * and what it could not. A null `sessionId` refuses the drive, as a null from `pick` does.
+   * Absent: `pick` chooses, and the spec's other fields are reported as unavailable.
+   */
+  prepare?: (drive: {
+    goal: string;
+    apiKey: string;
+    app?: AttachedApp;
+    spec: DriveSpec;
+  }) => Promise<{
+    sessionId: string | null | undefined;
+    applied: DriveApplied;
+    ignored: SpecIgnored[];
+    /** Why the drive cannot run, said to the person instead of the no-tab refusal. */
+    refusal?: string;
+  }>;
+  /**
+   * Reticle's tools on the driven tab, for a drive the platform orchestrates. Absent: a platform
+   * drive is refused, and this daemon does not report the tool-session capability.
+   */
+  session?: (sessionId: string | undefined) => {
+    invoke: (tool: string, args: Record<string, unknown>) => Promise<unknown>;
+  };
+  /** The clock for how long each session call took. */
+  now?: () => number;
   /** Drive the app toward `goal`, in `sessionId`. A throw is reported as a failed drive, in its own words. */
   drive: (goal: string, sessionId: string | undefined) => Promise<RemoteDriveOutcome>;
   /**
@@ -138,7 +176,7 @@ export function startRemoteDrives(deps: RemoteDriveDeps): RemoteDrives {
     };
     busy = true;
     try {
-      const res = await doFetch(`${platform.url}${NEXT_PATH}`, {
+      const res = await doFetch(`${platform.url}${LinkPath.NEXT_DRIVE}`, {
         method: 'GET',
         headers,
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -152,27 +190,47 @@ export function startRemoteDrives(deps: RemoteDriveDeps): RemoteDrives {
             record?: unknown;
             appKey?: unknown;
             appUrl?: unknown;
+            spec?: unknown;
           } | null;
         }
       ).drive;
       if (null === drive || undefined === drive) return;
       if ('string' !== typeof drive.id || 'string' !== typeof drive.goal) return;
       deps.log?.(`reticle: driving a request from the platform chat: ${drive.goal}`);
-      const driveUrl = `${platform.url}${RESULT_PATH}/${encodeURIComponent(drive.id)}`;
+      const driveId = drive.id;
+      const driveUrl = `${platform.url}${LinkPath.driveResult(driveId)}`;
       const app: AttachedApp | undefined =
         'string' === typeof drive.appKey
           ? { key: drive.appKey, url: 'string' === typeof drive.appUrl ? drive.appUrl : null }
           : undefined;
-      const picked = await deps.pick?.(drive.goal, platform.apiKey, app);
+      // Read field by field: a spec from a newer platform still drives, minus what is unknown here.
+      const parsed = parseDriveSpec(drive.spec);
+      const prepared =
+        deps.prepare === undefined
+          ? {
+              sessionId: await deps.pick?.(drive.goal, platform.apiKey, app),
+              applied: { target: DriveTarget.TAB, mode: DriveMode.LOCAL },
+              ignored: [],
+            }
+          : await deps.prepare({
+              goal: drive.goal,
+              apiKey: platform.apiKey,
+              ...(app === undefined ? {} : { app }),
+              spec: parsed.spec,
+            });
+      const ignored = [...parsed.ignored, ...prepared.ignored];
+      const picked = prepared.sessionId;
       if (null === picked) {
         await doFetch(driveUrl, {
           method: 'POST',
           headers,
           body: JSON.stringify({
             ok: false,
-            summary: NO_OWN_TAB,
+            summary: ('refusal' in prepared ? prepared.refusal : undefined) ?? NO_OWN_TAB,
             verdict: 'unknown',
             filmed: false,
+            applied: prepared.applied,
+            ignored,
           }),
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         });
@@ -188,13 +246,35 @@ export function startRemoteDrives(deps: RemoteDriveDeps): RemoteDrives {
               () => frame(sessionId),
               deps.frameIntervalMs ?? REMOTE_DRIVE_FRAME_MS,
               (jpeg) =>
-                doFetch(`${driveUrl}/frames`, {
+                doFetch(`${platform.url}${LinkPath.driveFrames(driveId)}`, {
                   method: 'POST',
                   headers,
                   body: JSON.stringify({ jpeg }),
                   signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
                 }),
             );
+      // The platform decides every step; this daemon only runs the tools it is told to.
+      const session = deps.session;
+      if (DriveMode.PLATFORM === prepared.applied.mode && session !== undefined) {
+        try {
+          await runToolSession(
+            (body) =>
+              doFetch(`${platform.url}${LinkPath.driveSession(driveId)}`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(body),
+                signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+              }),
+            session(sessionId),
+            { applied: prepared.applied, ignored },
+            deps.now ?? (() => Date.now()),
+          );
+        } finally {
+          await filming?.stop();
+          deps.settle?.(sessionId, { ok: true, summary: '' });
+        }
+        return;
+      }
       let outcome: RemoteDriveOutcome;
       let framesSent = 0;
       try {
@@ -208,7 +288,12 @@ export function startRemoteDrives(deps: RemoteDriveDeps): RemoteDrives {
       await doFetch(driveUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ ...outcome, filmed: 0 < framesSent }),
+        body: JSON.stringify({
+          ...outcome,
+          filmed: 0 < framesSent,
+          applied: prepared.applied,
+          ignored,
+        }),
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
     } catch {
@@ -227,6 +312,45 @@ export function startRemoteDrives(deps: RemoteDriveDeps): RemoteDrives {
       clearInterval(timer);
     },
   };
+}
+
+/**
+ * A drive the platform orchestrates: post what the last calls did, run the next batch, until the
+ * platform says the drive is over, stops answering, or the drive reaches its call budget. Every call
+ * is answered, failed ones included: the platform decides what a failure means.
+ */
+async function runToolSession(
+  post: (body: unknown) => Promise<Response>,
+  tools: { invoke: (tool: string, args: Record<string, unknown>) => Promise<unknown> },
+  first: { applied: DriveApplied; ignored: SpecIgnored[] },
+  now: () => number,
+): Promise<void> {
+  let results: ToolSessionResult[] = [];
+  let made = 0;
+  for (;;) {
+    const res = await post({
+      protocol: PLATFORM_LINK_VERSION,
+      results,
+      ...(0 === made ? first : {}),
+    });
+    // A drive the platform no longer knows, or an answer it could not give: stop, never guess.
+    if (!res.ok) return;
+    const reply = parseToolSessionReply(await res.json());
+    if (reply.done) return;
+    results = [];
+    for (const call of reply.calls) {
+      if (made >= TOOL_SESSION_LIMITS.MAX_CALLS) return;
+      made += 1;
+      const at = now();
+      try {
+        const result = await tools.invoke(call.tool, call.args);
+        results.push({ seq: call.seq, ok: true, result, ms: now() - at });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        results.push({ seq: call.seq, ok: false, error: message, ms: now() - at });
+      }
+    }
+  }
 }
 
 /**

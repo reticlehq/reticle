@@ -189,14 +189,33 @@ function stripReloadCacheBustParam(): void {
  * Extract Reticle identity overrides from a `location.search` string. Pure (takes the string, not the
  * window) so it's testable without a DOM. Explicit connect options still win over these.
  */
-export function reticleParamsFromSearch(search: string): { session?: string; projectId?: string } {
+export function reticleParamsFromSearch(search: string): {
+  session?: string;
+  projectId?: string;
+  hud?: HudVisibility;
+} {
   const params = new URLSearchParams(search);
-  const out: { session?: string; projectId?: string } = {};
+  const out: { session?: string; projectId?: string; hud?: HudVisibility } = {};
   const session = params.get(RETICLE_URL_PARAM.SESSION);
   const projectId = params.get(RETICLE_URL_PARAM.PROJECT);
+  const hud = oneOf(HudVisibility, params.get(RETICLE_URL_PARAM.HUD));
   if (session !== null && session.length > 0) out.session = session;
   if (projectId !== null && projectId.length > 0) out.projectId = projectId;
+  if (hud !== undefined) out.hud = hud;
   return out;
+}
+
+/**
+ * A HUD asked for while no panel is mounted. Hidden and removed already hold, so they are answered
+ * as placed; shown is not true until the panel mounts. Each is remembered and applied on mount, so a
+ * request that arrives first is not lost (a drive's daemon asks as soon as the page connects).
+ */
+export function hudWithoutPanel(hud: HudVisibility | undefined): {
+  remember?: HudVisibility;
+  placed: HudVisibility[];
+} {
+  if (hud === undefined) return { placed: [] };
+  return { remember: hud, placed: HudVisibility.SHOWN === hud ? [] : [hud] };
 }
 
 /**
@@ -275,6 +294,8 @@ export class Reticle {
   #presenter: Presenter | undefined;
   /** Presenter pushes that arrived before the presenter existed, replayed on construction. */
   readonly #pendingPushes = new Map<string, { name: string; args: Record<string, unknown> }>();
+  /** The HUD asked for (by the page's address, or a command) before the panel mounted. */
+  #pendingHud: HudVisibility | undefined;
   /**
    * Reading the panel's settings, once the panel has arrived.
    *
@@ -457,7 +478,10 @@ export class Reticle {
       this.#overlay.update({ connected: true, events: 0 });
     }
 
-    if (options.present !== false) this.#fetchAndShowPanel(options);
+    // A page Reticle opened for a drive may say the HUD starts hidden, or not at all.
+    this.#pendingHud = reticleParamsFromSearch(window.location.search).hud;
+    if (options.present !== false && HudVisibility.REMOVED !== this.#pendingHud)
+      this.#fetchAndShowPanel(options);
 
     if (true === options.recorder) {
       this.#recorder = installRecorder({ emit, now: () => Date.now() });
@@ -551,6 +575,8 @@ export class Reticle {
         // there; the presenter's own painters no-op on a missing element rather than throwing.
         for (const buffered of this.#pendingPushes.values()) panel.handlePush(buffered);
         this.#pendingPushes.clear();
+        if (this.#pendingHud !== undefined) panel.placeHud(this.#pendingHud, undefined);
+        this.#pendingHud = undefined;
         /*
          * The first-run tour, once, over the app the person just wired up.
          *
@@ -775,7 +801,14 @@ export class Reticle {
       if ('number' === typeof idleEndMs) this.#presenter?.setIdleEndMs(idleEndMs);
       const hud = oneOf(HudVisibility, command.args['hud']);
       const corner = oneOf(HudCorner, command.args['corner']);
-      const placed = this.#presenter?.placeHud(hud, corner) ?? [];
+      const presenter = this.#presenter;
+      let placed: string[];
+      if (presenter !== undefined) placed = presenter.placeHud(hud, corner);
+      else {
+        const early = hudWithoutPanel(hud);
+        if (early.remember !== undefined) this.#pendingHud = early.remember;
+        placed = early.placed;
+      }
       return {
         ok: true,
         result: {

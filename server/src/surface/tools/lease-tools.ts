@@ -33,15 +33,13 @@ import {
 import { reticleStateHome } from '@/command/daemon/daemon.js';
 import {
   LeaseNotReadyReason,
-  REDACTED_VALUE,
   RETICLE_URL_PARAM,
   RETICLE_DEFAULT_PORT,
   ReticleCommand,
   SeedStorageSchema,
-  scrubKnownSecrets,
   type SeedStorage,
 } from '@reticlehq/core';
-import { ReticleTool, SESSION_HEALTH } from '@reticlehq/core';
+import { HudVisibility, ReticleTool, SESSION_HEALTH } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
 import { asString } from '@reticlehq/core';
 import { chromiumPreflightRefusal } from '@/command/cli/doctor/browser/chromium-hint.js';
@@ -129,13 +127,19 @@ function alreadyHeldHint(sessionId: string, origin: string): string {
  * Append Reticle identity params (__reticle_session, optional __reticle_project) to a URL so the app's own SDK
  * adopts them on connect. Pure; falls back to plain concatenation if the URL can't be parsed.
  */
-export function appendReticleParams(url: string, session: string, projectId?: string): string {
+export function appendReticleParams(
+  url: string,
+  session: string,
+  projectId?: string,
+  hud?: HudVisibility,
+): string {
   try {
     const u = new URL(url);
     u.searchParams.set(RETICLE_URL_PARAM.SESSION, session);
     if (projectId !== undefined && projectId.length > 0) {
       u.searchParams.set(RETICLE_URL_PARAM.PROJECT, projectId);
     }
+    if (hud !== undefined) u.searchParams.set(RETICLE_URL_PARAM.HUD, hud);
     return u.toString();
   } catch {
     const sep = url.includes('?') ? '&' : '?';
@@ -147,139 +151,13 @@ export function appendReticleParams(url: string, session: string, projectId?: st
   }
 }
 
-function redactExactValue(text: string, value: string): string {
-  if (0 === value.length) return text;
-  const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return text.replace(
-    new RegExp(`(^|[^a-zA-Z0-9])${escaped}(?=$|[^a-zA-Z0-9])`, 'g'),
-    `$1${REDACTED_VALUE}`,
-  );
-}
-
-/**
- * Scrub known secret shapes and raw seedStorage values (cookies, localStorage, sessionStorage)
- * from an error string before it reaches daemon logs, metrics, or MCP error responses.
- */
-export function scrubSeedFromError(text: string, seed?: unknown): string {
-  let out = scrubKnownSecrets(text);
-  if (undefined !== seed && null !== seed && 'object' === typeof seed) {
-    const s = seed as Record<string, unknown>;
-    const cookies = s['cookies'];
-    if (undefined !== cookies && null !== cookies) {
-      if (Array.isArray(cookies)) {
-        for (const c of cookies) {
-          if (undefined !== c && null !== c && 'object' === typeof c) {
-            const val = (c as Record<string, unknown>)['value'];
-            if (undefined !== val && 'string' === typeof val) {
-              out = redactExactValue(out, val);
-            }
-          }
-        }
-      } else if ('object' === typeof cookies) {
-        for (const v of Object.values(cookies as Record<string, unknown>)) {
-          if ('string' === typeof v) {
-            out = redactExactValue(out, v);
-          }
-        }
-      }
-    }
-    const local = s['local'];
-    if (undefined !== local && null !== local && 'object' === typeof local) {
-      for (const v of Object.values(local as Record<string, unknown>)) {
-        if ('string' === typeof v) {
-          out = redactExactValue(out, v);
-        }
-      }
-    }
-    const session = s['session'];
-    if (undefined !== session && null !== session && 'object' === typeof session) {
-      for (const v of Object.values(session as Record<string, unknown>)) {
-        if ('string' === typeof v) {
-          out = redactExactValue(out, v);
-        }
-      }
-    }
-  }
-  return out;
-}
-
-/** True for a Playwright `storageState()` export (`{ origins: [...] }`), not our seed shape. */
-function looksLikeStorageStateExport(seed: unknown): boolean {
-  return Array.isArray((seed as { origins?: unknown } | null)?.origins);
-}
-
-/**
- * Turn a raw navigation failure (Playwright's `page.goto: net::ERR_… at <url>\nCall log:…`, often
- * with ANSI codes) into a short, clean reason — so the agent/user sees "is the app running?" instead
- * of an internals-leaking wall of text.
- */
-export function cleanNavError(err: unknown, seed?: SeedStorage): string {
-  const rawMsg = err instanceof Error ? err.message : String(err);
-  const msg = scrubSeedFromError(rawMsg, seed);
-  // Strip ANSI color codes (ESC[…m) Playwright emits — built via fromCharCode to keep the
-  // control character out of a regex literal (no-control-regex).
-  const ansi = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
-  const firstLine = (msg.split('\n')[0] ?? msg).replace(ansi, '');
-  const netCode = /net::[A-Z_]+/.exec(firstLine);
-  if (netCode !== null) return netCode[0];
-  if (/timeout/i.test(firstLine)) return 'navigation timed out';
-  return firstLine
-    .replace(/^page\.goto:\s*/, '')
-    .replace(/\s+at\s+https?:\/\/\S+.*$/, '')
-    .trim()
-    .slice(0, 100);
-}
-
-/**
- * Determine if a required seedStorage application precondition failed.
- *
- * Checks strong signals:
- * 1. HTTP 401/403 status on the initial navigation.
- * 2. Cross-origin redirect when localStorage or sessionStorage was requested (skipped by origin-scoping).
- * 3. Clear redirect to an authentication/login endpoint when the requested URL was not a login page.
- *
- * Normal app redirects (e.g. / → /dashboard) are valid and return undefined.
- */
-export function evaluateSeedPrecondition(
-  requestedUrl: string,
-  actualUrl: string | undefined,
-  seed: SeedStorage,
-  navStatus?: number,
-): string | undefined {
-  if (401 === navStatus || 403 === navStatus) {
-    return `HTTP ${navStatus} returned on initial seeded navigation to ${requestedUrl}`;
-  }
-  if (actualUrl === undefined || '' === actualUrl.trim()) return undefined;
-
-  let reqParsed: URL | undefined;
-  let actParsed: URL | undefined;
-  try {
-    reqParsed = new URL(requestedUrl);
-    actParsed = new URL(actualUrl);
-  } catch {
-    return undefined;
-  }
-
-  // Cross-origin redirect when local or session storage was requested
-  const hasStorage =
-    (undefined !== seed.local && 0 < Object.keys(seed.local).length) ||
-    (undefined !== seed.session && 0 < Object.keys(seed.session).length);
-  if (hasStorage && reqParsed.origin !== actParsed.origin) {
-    return `seeded storage precondition not established: cross-origin redirect from ${reqParsed.origin} to ${actParsed.origin} skipped origin-scoped storage injection`;
-  }
-
-  // Clear redirect to an authentication/login endpoint when the requested URL was not a login page
-  const isAuthPath = (pathname: string): boolean =>
-    /(?:^|\/)(?:login|signin|sign-in|auth\/login|auth\/signin|session\/new)(?:$|\/)/i.test(
-      pathname,
-    );
-
-  if (!isAuthPath(reqParsed.pathname) && isAuthPath(actParsed.pathname)) {
-    return `seeded authentication precondition not established: redirected from ${reqParsed.pathname} to login page (${actParsed.pathname})`;
-  }
-
-  return undefined;
-}
+export { cleanNavError, evaluateSeedPrecondition, scrubSeedFromError } from './lease-seed.js';
+import {
+  cleanNavError,
+  evaluateSeedPrecondition,
+  looksLikeStorageStateExport,
+  scrubSeedFromError,
+} from './lease-seed.js';
 
 /** A fresh, collision-resistant lease id. Uses crypto at the I/O boundary (not pure logic). */
 function newLeaseId(): string {
@@ -547,6 +425,14 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     seedStorage: SeedStorageSchema.optional().describe(
       'Initial storage state (local, session and cookies) to seed before the first navigation (e.g. `seedStorage: { local: { token: "..." } }` to start already authenticated).',
     ),
+    headed: z
+      .boolean()
+      .optional()
+      .describe('Open it in a browser window somebody can watch, instead of headless.'),
+    hud: z
+      .enum([HudVisibility.SHOWN, HudVisibility.HIDDEN, HudVisibility.REMOVED])
+      .optional()
+      .describe('How the HUD starts on the page: shown (default), hidden, or removed.'),
   },
   outputSchema: {
     sessionId: z.string(),
@@ -613,6 +499,8 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       if (refusal !== undefined) throw new Error(refusal);
     }
     const projectId = asString(args['projectId']);
+    const headed = true === args['headed'];
+    const hud = Object.values(HudVisibility).find((v) => v === args['hud']);
     const seedStorageArg = args['seedStorage'];
     let validatedSeed: SeedStorage | undefined;
     if (seedStorageArg !== undefined) {
@@ -650,8 +538,9 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     }
     try {
       // Only a lease THIS caller took: another agent's tab is never reused or released (#1226).
-      const existing =
-        origin === undefined ? undefined : pool.leaseIdOnOrigin(origin, deps.attachId);
+      // A window asked for is never answered with the headless tab on that origin, nor the reverse.
+      const held = origin === undefined ? undefined : pool.leaseIdOnOrigin(origin, deps.attachId);
+      const existing = held !== undefined && pool.isHeaded(held) === headed ? held : undefined;
       if (validatedSeed !== undefined && existing !== undefined) {
         // Seeding asked for: release its own context so the new lease starts with the given state.
         await pool.release(existing);
@@ -697,11 +586,12 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
         await pool.release(existing);
       }
       const sessionId = newLeaseId();
-      const navUrl = appendReticleParams(url, sessionId, projectId);
+      const navUrl = appendReticleParams(url, sessionId, projectId, hud);
       let lease;
       try {
         lease = await pool.acquire(navUrl, {
           sessionId,
+          ...(headed ? { headed } : {}),
           ...(deps.attachId === undefined ? {} : { owner: deps.attachId }),
           ...(validatedSeed !== undefined ? { seedStorage: validatedSeed } : {}),
         });

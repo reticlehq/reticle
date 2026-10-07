@@ -11,10 +11,14 @@
  * waiting, which is how a daemon with nothing open hears about one without polling every few seconds.
  */
 import { createHash } from 'node:crypto';
-import { RETICLE_URL_PARAM } from '@reticlehq/core';
+import {
+  LinkPath,
+  PLATFORM_LINK_VERSION,
+  RETICLE_URL_PARAM,
+  type LinkCapability,
+} from '@reticlehq/core';
 import { pickDriveSession, type DriveCandidate } from './remote-drive.js';
 
-const REPORT_PATH = '/v1/harness/local-apps';
 /** How often apps are reported. The platform counts an app live for two and a half of these. */
 export const LOCAL_APPS_REPORT_MS = 10_000;
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -134,6 +138,8 @@ type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 export interface AppReportDeps {
   machine: Machine;
   version: string;
+  /** What this daemon can do for the platform: it offers a person only what is here. */
+  capabilities: readonly LinkCapability[];
   apps: () => Promise<{ platform: Platform; apps: ReportedApp[] }[]>;
   /** Open an app so it connects: one somebody asked to bring back. A throw is logged, never fatal. */
   open: (url: string) => Promise<void>;
@@ -158,13 +164,19 @@ export function startAppReports(deps: AppReportDeps): AppReports {
     try {
       for (const { platform, apps } of await deps.apps()) {
         try {
-          const res = await doFetch(`${platform.url}${REPORT_PATH}`, {
+          const res = await doFetch(`${platform.url}${LinkPath.APPS}`, {
             method: 'POST',
             headers: {
               'content-type': 'application/json',
               authorization: `Bearer ${platform.apiKey}`,
             },
-            body: JSON.stringify({ machine: deps.machine, reticleVersion: deps.version, apps }),
+            body: JSON.stringify({
+              machine: deps.machine,
+              reticleVersion: deps.version,
+              protocol: PLATFORM_LINK_VERSION,
+              capabilities: deps.capabilities,
+              apps,
+            }),
             signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
           });
           if (!res.ok) continue;

@@ -224,6 +224,7 @@ function createBrowserPool(headless: boolean, reader: InjectedConnect): BrowserP
     maxContexts,
     genSessionId,
     zeroInstallScript,
+    launchHeaded: playwrightLauncher({ headless: false }),
   });
 }
 

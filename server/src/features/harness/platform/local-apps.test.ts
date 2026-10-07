@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { LinkCapability, PLATFORM_LINK_VERSION } from '@reticlehq/core';
 import {
   appKeyOf,
   appsByPlatform,
@@ -166,6 +167,7 @@ describe('reporting', () => {
     running = startAppReports({
       machine: MACHINE,
       version: '3.6.1',
+      capabilities: [LinkCapability.DRIVE_SPEC],
       apps: () => Promise.resolve([{ platform: A, apps: [shop] }]),
       open: (url) => {
         opened.push(url);
@@ -178,7 +180,13 @@ describe('reporting', () => {
     await running.tick();
     expect(p.calls[0]).toEqual({
       url: 'https://p.test/v1/harness/local-apps',
-      body: { machine: MACHINE, reticleVersion: '3.6.1', apps: [shop] },
+      body: {
+        machine: MACHINE,
+        reticleVersion: '3.6.1',
+        protocol: PLATFORM_LINK_VERSION,
+        capabilities: [LinkCapability.DRIVE_SPEC],
+        apps: [shop],
+      },
       auth: 'Bearer key-a',
     });
     expect(opened).toEqual(['http://localhost:4000/']);
@@ -191,6 +199,7 @@ describe('reporting', () => {
     running = startAppReports({
       machine: MACHINE,
       version: '3.6.1',
+      capabilities: [LinkCapability.DRIVE_SPEC],
       apps: () => Promise.resolve([{ platform: A, apps: [shop] }]),
       open: (url) => {
         opened.push(url);
@@ -209,6 +218,7 @@ describe('reporting', () => {
     running = startAppReports({
       machine: MACHINE,
       version: '3.6.1',
+      capabilities: [LinkCapability.DRIVE_SPEC],
       apps: () => Promise.resolve([{ platform: A, apps: [] }]),
       open: () => Promise.resolve(),
       drivePending: () => undefined,

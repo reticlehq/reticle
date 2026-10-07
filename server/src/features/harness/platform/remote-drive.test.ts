@@ -72,7 +72,7 @@ describe('drives the platform chat asked for', () => {
   it('reports a drive that threw as failed, in its own words', async () => {
     const p = platform({ id: 'ld_2', goal: 'x' });
     await start({ fetch: p.fetch, drive: () => Promise.reject(new Error('not entitled')) }).tick();
-    expect(p.calls[1]?.body).toEqual({ ok: false, summary: 'not entitled', filmed: false });
+    expect(p.calls[1]?.body).toMatchObject({ ok: false, summary: 'not entitled', filmed: false });
   });
 
   it('settles the driven tab once the drive is over, even when it threw', async () => {
@@ -131,7 +131,7 @@ describe('drives the platform chat asked for', () => {
       },
     }).tick();
     expect(drove).toEqual([]);
-    expect(p.calls[1]?.body).toEqual({
+    expect(p.calls[1]?.body).toMatchObject({
       ok: false,
       summary: NO_OWN_TAB,
       verdict: 'unknown',
@@ -411,5 +411,115 @@ describe('the verdict a chat-requested drive reports', () => {
     expect(driveVerdict({ goalMet: true, proved: true, error: 'browser died' })).toBe('unknown');
     expect(driveVerdict({ proved: true })).toBe('unknown');
     expect(driveVerdict({ goalMet: true, proved: false })).toBe('unknown');
+  });
+});
+
+/**
+ * A drive request carries a spec the platform may grow without this daemon changing: what it can
+ * apply it applies, and it says what it applied and what it ignored. A drive the platform
+ * orchestrates is a tool session: this daemon runs the calls it is given and returns their results.
+ */
+describe('a drive with a spec', () => {
+  const routed = (answers: Record<string, unknown[]>) => {
+    const calls: { url: string; body?: Record<string, unknown> }[] = [];
+    const fetch = (url: string, init: RequestInit): Promise<Response> => {
+      const body =
+        'string' === typeof init.body
+          ? (JSON.parse(init.body) as Record<string, unknown>)
+          : undefined;
+      calls.push({ url, ...(body === undefined ? {} : { body }) });
+      const key = Object.keys(answers).find((path) => url.endsWith(path));
+      const queue = key === undefined ? undefined : answers[key];
+      const answer = queue !== undefined && 1 < queue.length ? queue.shift() : queue?.[0];
+      return Promise.resolve(new Response(JSON.stringify(answer ?? {}), { status: 200 }));
+    };
+    return { calls, fetch };
+  };
+
+  it('prepares the target it asks for, and reports what it applied and what it ignored', async () => {
+    const p = routed({
+      '/next': [
+        {
+          drive: { id: 'ld_s', goal: 'pay', spec: { target: 'headless', hud: 'hidden', zoom: 2 } },
+        },
+      ],
+    });
+    const prepared: unknown[] = [];
+    await start({
+      fetch: p.fetch,
+      prepare: (drive) => {
+        prepared.push(drive.spec);
+        return Promise.resolve({
+          sessionId: 'lease-1',
+          applied: { target: 'headless', mode: 'local', hud: 'hidden', sessionId: 'lease-1' },
+          ignored: [{ field: 'hud', reason: 'unavailable' }],
+        });
+      },
+    }).tick();
+    expect(prepared).toEqual([{ target: 'headless', hud: 'hidden' }]);
+    const result = p.calls.find((c) => c.url.endsWith('/ld_s'))?.body;
+    expect(result).toMatchObject({
+      ok: true,
+      applied: { target: 'headless', sessionId: 'lease-1' },
+      ignored: [
+        { field: 'zoom', reason: 'unknown' },
+        { field: 'hud', reason: 'unavailable' },
+      ],
+    });
+  });
+
+  it('runs a drive the platform orchestrates as a tool session, never its own Harness', async () => {
+    const p = routed({
+      '/next': [{ drive: { id: 'ld_p', goal: 'pay', spec: { mode: 'platform' } } }],
+      '/session': [
+        { calls: [{ seq: 1, tool: 'reticle_look', args: { action: 'page' } }] },
+        { calls: [{ seq: 2, tool: 'reticle_nope', args: {} }] },
+        { done: true },
+      ],
+    });
+    const invoked: [string, unknown][] = [];
+    let drove = false;
+    await start({
+      fetch: p.fetch,
+      prepare: () =>
+        Promise.resolve({
+          sessionId: 'tab-1',
+          applied: { target: 'tab', mode: 'platform', sessionId: 'tab-1' },
+          ignored: [],
+        }),
+      session: () => ({
+        invoke: (tool, args) => {
+          invoked.push([tool, args]);
+          return 'reticle_nope' === tool
+            ? Promise.reject(new Error('unknown reticle tool'))
+            : Promise.resolve({ tree: 'button "Pay"' });
+        },
+      }),
+      drive: () => {
+        drove = true;
+        return Promise.resolve({ ok: true, summary: '' });
+      },
+      now: () => 0,
+    }).tick();
+    expect(drove).toBe(false);
+    expect(invoked).toEqual([
+      ['reticle_look', { action: 'page' }],
+      ['reticle_nope', {}],
+    ]);
+    const asks = p.calls.filter((c) => c.url.endsWith('/session')).map((c) => c.body);
+    expect(asks).toEqual([
+      expect.objectContaining({
+        results: [],
+        applied: { target: 'tab', mode: 'platform', sessionId: 'tab-1' },
+      }),
+      expect.objectContaining({
+        results: [{ seq: 1, ok: true, result: { tree: 'button "Pay"' }, ms: 0 }],
+      }),
+      expect.objectContaining({
+        results: [{ seq: 2, ok: false, error: 'unknown reticle tool', ms: 0 }],
+      }),
+    ]);
+    // The platform decided the drive, so it keeps the result; the daemon posts none of its own.
+    expect(p.calls.some((c) => c.url.endsWith('/ld_p'))).toBe(false);
   });
 });

@@ -9,7 +9,10 @@
 import { basename, join } from 'node:path';
 import { homedir, hostname } from 'node:os';
 import type { SessionInfo } from '../../portal/session/session-info.js';
-import type { PresenterTone } from '@reticlehq/core';
+import { LinkCapability, ReticleTool, asRecord, type PresenterTone } from '@reticlehq/core';
+import { prepareDrive } from '../../features/harness/platform/drive-target.js';
+import { reticleToolset } from './harness-toolset.js';
+import type { AttachedApp } from '../../features/harness/platform/remote-drive.js';
 import type { ToolDeps } from './tool-kit.js';
 import type { FileSystemPort } from '../../memory/project/fs/fs-port.js';
 import { projectDirFor } from '../../memory/project/session-root.js';
@@ -33,6 +36,17 @@ import { serverOptionsFromEnv } from '../../features/harness/platform/server-dri
 import { driveForChat } from './explore-tools.js';
 import { withLinkedCredential } from './harness-explore.js';
 import { runTool } from './invoke-tool.js';
+
+/** What this daemon does for the platform's chat. Each one is listed only once it is built. */
+export const CHAT_CAPABILITIES: readonly LinkCapability[] = [
+  LinkCapability.DRIVE_SPEC,
+  LinkCapability.TARGET_TAB,
+  LinkCapability.TARGET_HEADLESS,
+  LinkCapability.TARGET_HEADED,
+  LinkCapability.HUD,
+  LinkCapability.TOOL_SESSION,
+  LinkCapability.FRAMES,
+];
 
 /** The slice of the session manager this needs. */
 export interface ChatDriveSessions {
@@ -92,13 +106,44 @@ export function startChatDrives(
     await runTool(LEASE_ACQUIRE_TOOL, deps, { url });
   };
 
+  const pick = (
+    goal: string,
+    key: string,
+    app: AttachedApp | undefined,
+  ): Promise<string | null | undefined> =>
+    undefined === app
+      ? pickOwnDriveSession(sessions.list(), goal, key, sessionKey)
+      : pickAppTab(app, goal, () => sessions.list(), appOf, open);
   const drives = startRemoteDrives({
     env: () => withLinkedCredential(deps, env),
     connected: () => 0 < sessions.count(),
-    pick: (goal, key, app) =>
-      undefined === app
-        ? pickOwnDriveSession(sessions.list(), goal, key, sessionKey)
-        : pickAppTab(app, goal, () => sessions.list(), appOf, open),
+    pick,
+    // The spec's target and HUD, applied through the same counted tools an agent would call.
+    prepare: ({ goal, apiKey, app, spec }) =>
+      prepareDrive(spec, app?.url ?? undefined, {
+        pickTab: () => pick(goal, apiKey, app),
+        open: async (url, headed, hud) => {
+          const lease = asRecord(
+            await runTool(LEASE_ACQUIRE_TOOL, deps, {
+              url,
+              ...(headed ? { headed } : {}),
+              ...(hud === undefined ? {} : { hud }),
+            }),
+          );
+          const id = lease['sessionId'];
+          if ('string' !== typeof id) throw new Error(`could not open ${url}`);
+          return id;
+        },
+        tuneHud: async (sessionId, hud) => {
+          await reticleToolset(deps, { sessionId }).invoke(ReticleTool.SESSION_TUNE, { hud });
+        },
+        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      }),
+    // A platform drive: Reticle's own tools on the driven tab, and nothing else.
+    session: (sessionId) => {
+      const tools = reticleToolset(deps, sessionId === undefined ? {} : { sessionId });
+      return { invoke: (tool, args) => tools.invoke(tool, args) };
+    },
     drive: async (goal, sessionId) => {
       const url = sessions.list().find((tab) => tab.sessionId === sessionId)?.url;
       const outcome = await driveForChat(deps, goal, sessionId);
@@ -116,6 +161,7 @@ export function startChatDrives(
   const reports = startAppReports({
     machine,
     version: cloud.version,
+    capabilities: CHAT_CAPABILITIES,
     apps: async () =>
       appsByPlatform(
         sessions.list(),

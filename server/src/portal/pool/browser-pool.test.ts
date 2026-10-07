@@ -780,3 +780,56 @@ describe('BrowserPool', () => {
     });
   });
 });
+
+/**
+ * The platform chat can ask for a drive the person watches in a window, beside the headless ones it
+ * already runs. One pool, two browsers: a headed one launched only when first asked for.
+ */
+describe('a headed lease', () => {
+  it('opens in a browser of its own, launched only when first asked for', async () => {
+    const headless = fakeLauncher();
+    const headed = fakeLauncher();
+    const pool = new BrowserPool(headless.launch, {
+      maxContexts: 4,
+      genSessionId: counterIds(),
+      launchHeaded: headed.launch,
+    });
+    await pool.acquire('http://localhost:3000/');
+    expect([headless.browsers.length, headed.browsers.length]).toEqual([1, 0]);
+    const lease = await pool.acquire('http://localhost:3000/cart', { headed: true });
+    expect([headless.browsers.length, headed.browsers.length]).toEqual([1, 1]);
+    expect(headed.browsers[0]?.contexts[0]?.pages[0]?.gotoUrls).toEqual([
+      'http://localhost:3000/cart',
+    ]);
+    expect(pool.isHeaded(lease.sessionId)).toBe(true);
+  });
+
+  it('drops only its own leases when the headed browser dies', async () => {
+    const headless = fakeLauncher();
+    const headed = fakeLauncher();
+    const pool = new BrowserPool(headless.launch, {
+      maxContexts: 4,
+      genSessionId: counterIds(),
+      launchHeaded: headed.launch,
+    });
+    const kept = await pool.acquire('http://localhost:3000/');
+    await pool.acquire('http://localhost:3000/', { headed: true });
+    headed.browsers[0]?.crash();
+    expect(pool.activeCount()).toBe(1);
+    expect(pool.isHeaded(kept.sessionId)).toBe(false);
+    // The next headed lease relaunches it.
+    await pool.acquire('http://localhost:3000/', { headed: true });
+    expect(headed.browsers).toHaveLength(2);
+  });
+
+  it('is refused where no headed browser can be launched', async () => {
+    const pool = new BrowserPool(fakeLauncher().launch, {
+      maxContexts: 4,
+      genSessionId: counterIds(),
+    });
+    await expect(pool.acquire('http://localhost:3000/', { headed: true })).rejects.toThrow(
+      /no headed browser/,
+    );
+    expect(pool.activeCount()).toBe(0);
+  });
+});

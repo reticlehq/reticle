@@ -109,7 +109,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // than a line in `global-press.ts` is the one recorded below: `core/src/wire`'s filenames are
   // published API, and a page that only presses a key should not pull in the reader for a list of
   // them. Recorded rather than grouped, by the same rule as the note underneath.
-  'core/src/wire': 17,
+  'core/src/wire': 18,
   // 16 since `snapshot-tree.ts`. The snapshot tree is a format the BROWSER writes and several
   // things on the Node side read back, and its parser was living beside the MCP tool handlers — so
   // every other reader imported from the tool surface to parse a string the tool surface does not
@@ -215,7 +215,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // read where the envelope is assembled, in `invoke-tool.ts`, beside the other envelope sources.
   // 43 with `harness-script.ts`: the planned drive, split from `harness-explore.ts` at its line cap.
   // It binds the plan's ports to the tool surface, which is why it sits here and not in `script/`.
-  'server/src/surface/tools': 44,
+  'server/src/surface/tools': 45,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it

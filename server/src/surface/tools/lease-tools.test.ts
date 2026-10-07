@@ -45,12 +45,23 @@ function tool(name: string): (deps: ToolDeps, args: Record<string, unknown>) => 
 /** A pool stub that records acquire calls and tracks active count. */
 function fakePool(): {
   pool: BrowserPool;
-  acquired: { url: string; sessionId: string | undefined; seedStorage?: unknown }[];
+  acquired: {
+    url: string;
+    sessionId: string | undefined;
+    seedStorage?: unknown;
+    headed?: boolean;
+  }[];
   /** Every (registeredId, leaseId) pair the lease told the pool about. */
   aliased: [string, string][];
   released: string[];
 } {
-  const acquired: { url: string; sessionId: string | undefined; seedStorage?: unknown }[] = [];
+  const acquired: {
+    url: string;
+    sessionId: string | undefined;
+    seedStorage?: unknown;
+    headed?: boolean;
+  }[] = [];
+  const headedIds = new Set<string>();
   let active = 0;
   const released: string[] = [];
   const aliased: [string, string][] = [];
@@ -66,9 +77,15 @@ function fakePool(): {
   const pool = {
     acquire(
       url: string,
-      opts: { sessionId?: string; seedStorage?: unknown; owner?: string } = {},
+      opts: { sessionId?: string; seedStorage?: unknown; owner?: string; headed?: boolean } = {},
     ): Promise<Lease> {
-      acquired.push({ url, sessionId: opts.sessionId, seedStorage: opts.seedStorage });
+      acquired.push({
+        url,
+        sessionId: opts.sessionId,
+        seedStorage: opts.seedStorage,
+        ...(opts.headed === undefined ? {} : { headed: opts.headed }),
+      });
+      if (true === opts.headed && opts.sessionId !== undefined) headedIds.add(opts.sessionId);
       active += 1;
       const sessionId = opts.sessionId ?? 'gen';
       owners.set(sessionId, opts.owner);
@@ -94,6 +111,7 @@ function fakePool(): {
       return id !== undefined && owner !== undefined && owners.get(id) === owner ? id : undefined;
     },
     touch: () => undefined,
+    isHeaded: (id: string) => headedIds.has(id),
     alias: (registeredId: string, leaseId: string) => {
       aliased.push([registeredId, leaseId]);
     },
@@ -123,6 +141,36 @@ describe('appendReticleParams', () => {
     expect(u.searchParams.get('tab')).toBe('2');
     expect(u.searchParams.get(RETICLE_URL_PARAM.SESSION)).toBe('lease-9');
     expect(u.searchParams.has(RETICLE_URL_PARAM.PROJECT)).toBe(false);
+  });
+});
+
+describe('a lease the platform opens for a drive', () => {
+  it('says on its address how the HUD starts, so it never paints one it was asked not to', () => {
+    const u = new URL(
+      appendReticleParams('http://localhost:3000/', 'lease-1', undefined, 'hidden'),
+    );
+    expect(u.searchParams.get(RETICLE_URL_PARAM.HUD)).toBe('hidden');
+    expect(
+      new URL(appendReticleParams('http://localhost:3000/', 'l')).searchParams.has(
+        RETICLE_URL_PARAM.HUD,
+      ),
+    ).toBe(false);
+  });
+
+  it('opens a window when asked, and never hands back the headless tab on the same origin', async () => {
+    const { pool, acquired } = fakePool();
+    const headless = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/' },
+    )) as { sessionId: string };
+    const headed = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/', headed: true, hud: 'removed' },
+    )) as { sessionId: string; reused?: boolean };
+    expect(headed.sessionId).not.toBe(headless.sessionId);
+    expect(headed.reused).toBeUndefined();
+    expect(acquired.map((a) => a.headed)).toEqual([undefined, true]);
+    expect(new URL(acquired[1]?.url ?? '').searchParams.get(RETICLE_URL_PARAM.HUD)).toBe('removed');
   });
 });
 
