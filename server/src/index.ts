@@ -6,7 +6,11 @@ import { watchAccountFiles } from './memory/impact/account-watch.js';
 import { SESSION_FILE } from './command/cli/cloud-kit.js';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { linkedCloudPort, platformEnvPort } from './memory/cloud/cloud-config.js';
+import {
+  linkedCloudPort,
+  platformEnvPort,
+  sessionApiKeyPort,
+} from './memory/cloud/cloud-config.js';
 import { attachCloudSync } from './memory/cloud/sync-daemon.js';
 import { wireHooks } from './hooks/hook-commands.js';
 import { currentDrivenBy } from './hooks/driven-by.js';
@@ -51,6 +55,7 @@ import { buildFlowChips } from './language/flows/flow-scope.js';
 import { ProjectStore } from './memory/project/project-store.js';
 import { projectStoreResolver } from './memory/project/project-for-root.js';
 import { attachRouteLearning } from './memory/project/learned-routes.js';
+import { sessionRoot } from './memory/project/session-root.js';
 import { AnnotationStore } from './language/flows/stores/annotation-store.js';
 import { createNodeFileSystem } from './memory/project/fs/fs-port.js';
 import { cleanupCaptureDirectories } from './features/visual/capture-cleanup.js';
@@ -65,7 +70,7 @@ import { LEASE_ACQUIRE_TOOL } from './surface/tools/lease-tools.js';
 import {
   REMOTE_DRIVE_JPEG_QUALITY,
   endDrivenTab,
-  pickDriveSession,
+  pickOwnDriveSession,
   startRemoteDrives,
 } from './features/harness/platform/remote-drive.js';
 import { driveForChat } from './surface/tools/explore-tools.js';
@@ -728,17 +733,16 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
       instructionStateAt(port, bridge.sessions.count()),
     ),
   );
-  // `reticle drive <url>` when this daemon already owns the port: it asks HERE instead of trying to
-  // bind a port we are holding, and gets the same pooled context an agent's reticle_lease returns —
-  // through runTool, so it is counted and reported like any other call rather than being a second,
-  // invisible dispatch path. See cli/drive/drive-attach.ts for why attaching beats refereeing the race.
+  // `reticle drive <url>` against this daemon's port, through runTool. See cli/drive/drive-attach.ts.
   shared.attachDrive((url) => runTool(LEASE_ACQUIRE_TOOL, effectiveDeps, { url }));
-  // A drive somebody asked for in the platform's chat, run on this machine: the daemon asks the
-  // platform, never the other way round. See remote-drive.ts.
+  // A drive asked for in the platform's chat, run here, in a tab of that project. See remote-drive.ts.
+  const sessionKey = sessionApiKeyPort(fs, homedir(), process.env, (id) =>
+    sessionRoot(effectiveDeps, id),
+  );
   const remoteDrives = startRemoteDrives({
     env: () => withLinkedCredential(effectiveDeps, process.env),
     connected: () => 0 < bridge.sessions.count(),
-    pick: (goal) => pickDriveSession(bridge.sessions.list(), goal),
+    pick: (goal, key) => pickOwnDriveSession(bridge.sessions.list(), goal, key, sessionKey),
     drive: async (goal, sessionId) => {
       const url = bridge.sessions.list().find((tab) => tab.sessionId === sessionId)?.url;
       const outcome = await driveForChat(effectiveDeps, goal, sessionId);
@@ -863,12 +867,8 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   };
 }
 
-// The OpenVerification binding, exported so a conformance run can be driven from outside this package.
-//
-// It was written and then not reachable: `conformanceClient` takes a `WebRealm`, a `WebRealm`
-// takes a live `Session`, and a `Session` exists only inside a running daemon. A runner that
-// cannot import it cannot score anything, which would have made the whole conformance chain
-// complete and unusable.
+// The OpenVerification binding, exported so a conformance run can be driven from outside this
+// package: a `WebRealm` needs a live `Session`, which exists only inside a running daemon.
 export { WebRealm, type WebRealmDeps } from './portal/realm/web-realm.js';
 export { conformanceClient, type ConformanceClient } from './portal/realm/conformance-client.js';
 

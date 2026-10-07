@@ -81,8 +81,9 @@ export interface RemoteDriveDeps {
    * The tab to drive for `goal`, or undefined to let the drive choose. One tab, picked once and used
    * for the whole drive and its pictures: with two tabs open, a drive that names none is refused on
    * every call ("multiple sessions connected"), and the pictures would be of whichever tab was asked.
+   * Null: no connected tab belongs to the project `apiKey` is for, so the drive is refused.
    */
-  pick?: (goal: string) => string | undefined;
+  pick?: (goal: string, apiKey: string) => Promise<string | null | undefined> | string | undefined;
   /** Drive the app toward `goal`, in `sessionId`. A throw is reported as a failed drive, in its own words. */
   drive: (goal: string, sessionId: string | undefined) => Promise<RemoteDriveOutcome>;
   /**
@@ -136,7 +137,22 @@ export function startRemoteDrives(deps: RemoteDriveDeps): RemoteDrives {
       if ('string' !== typeof drive.id || 'string' !== typeof drive.goal) return;
       deps.log?.(`reticle: driving a request from the platform chat: ${drive.goal}`);
       const driveUrl = `${platform.url}${RESULT_PATH}/${encodeURIComponent(drive.id)}`;
-      const sessionId = deps.pick?.(drive.goal);
+      const picked = await deps.pick?.(drive.goal, platform.apiKey);
+      if (null === picked) {
+        await doFetch(driveUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            ok: false,
+            summary: NO_OWN_TAB,
+            verdict: 'unknown',
+            filmed: false,
+          }),
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        });
+        return;
+      }
+      const sessionId = picked;
       const frame = deps.frame;
       // Only when the person asked to watch: a picture of their app leaves this machine for it.
       const filming =
@@ -228,6 +244,29 @@ function film(
 }
 
 /** What a connected tab says about itself, as far as picking one goes. */
+/** The refusal a drive gets when every connected tab belongs to some other project. */
+export const NO_OWN_TAB =
+  "No tab of this project is connected to Reticle on this machine, and a request is never run in another project's app. Open this project's app, then ask again.";
+
+/**
+ * `pickDriveSession` over the tabs of the project `apiKey` is for, or null when there are none. One
+ * daemon serves every project on the machine but polls with ONE credential, so without this a
+ * request made in project A drove project B's tab and sent pictures of it to A's chat.
+ */
+export async function pickOwnDriveSession(
+  tabs: readonly DriveCandidate[],
+  goal: string,
+  apiKey: string,
+  keyOf: (sessionId: string) => Promise<string | undefined>,
+): Promise<string | null> {
+  const own: DriveCandidate[] = [];
+  for (const tab of tabs) {
+    const key = await keyOf(tab.sessionId).catch(() => undefined);
+    if (key === apiKey) own.push(tab);
+  }
+  return pickDriveSession(own, goal) ?? null;
+}
+
 export interface DriveCandidate {
   sessionId: string;
   url: string;
@@ -289,11 +328,12 @@ export function driveVerdict(out: {
   // A goal judged unmet, or a check that came back "no", is a failed drive whatever else held.
   if (false === out.goalMet) return 'no';
   if (0 < (out.checks?.failed ?? 0)) return 'no';
-  // A quoted text is only looked for on the page the drive ENDED on, so a miss cannot refute: a
-  // goal that quotes the state it starts from ("from "Count is 0" to "Count is 1"") misses it by
-  // working. It blocks a yes and decides nothing else.
+  // The quoted texts are looked for on the page the drive ENDED on. None there refutes the goal;
+  // some missing does not, because a goal that quotes where it starts ("from "Count is 0" to
+  // "Count is 1"") loses that text by working. Then the goal's own judgement decides, as below.
   const goals = out.goals ?? [];
-  if (goals.some((g) => 'yes' !== g.verified)) return 'unknown';
+  if (0 < goals.length && goals.every((g) => 'no' === g.verified)) return 'no';
+  if (0 < goals.length && !goals.some((g) => 'yes' === g.verified)) return 'unknown';
   // A yes needs a check that held behind it: the model saying the goal was met is not evidence.
   if (!out.proved || 0 === (out.checks?.held ?? 0)) return 'unknown';
   if (true === out.goalMet) return 'yes';
