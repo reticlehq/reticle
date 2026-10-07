@@ -10,6 +10,7 @@
  * the person can fix in ten seconds (open the app), and leaving it unclaimed lets the chat tell them
  * exactly that. One drive at a time: a second request waits for the first to finish.
  */
+import { PresenterTone } from '@reticlehq/core';
 import { serverOptionsFromEnv } from './server-driver.js';
 
 const NEXT_PATH = '/v1/harness/local-drives/next';
@@ -30,6 +31,26 @@ export const REMOTE_DRIVE_FRAME_MS = 1_000;
 /** The same JPEG quality the platform's own checks film at: about 40 KB a picture. */
 export const REMOTE_DRIVE_JPEG_QUALITY = 50;
 
+/** What the driven tab's HUD says once a chat-requested drive is over. */
+export const REMOTE_DRIVE_ENDED = {
+  PROVED: 'Harness drive finished: proved',
+  NOT_PROVED: 'Harness drive finished: not proved',
+} as const;
+
+/**
+ * End the driven tab's session once its drive is over, so its HUD stops counting "planning next
+ * action" for an agent that is not there. Auto-ended, not ended: the next agent or drive revives it.
+ */
+export function endDrivenTab(
+  tab: { autoEnd(text: string, tone: PresenterTone): void } | undefined,
+  outcome: RemoteDriveOutcome,
+): void {
+  tab?.autoEnd(
+    outcome.ok ? REMOTE_DRIVE_ENDED.PROVED : REMOTE_DRIVE_ENDED.NOT_PROVED,
+    outcome.ok ? PresenterTone.CALM : PresenterTone.WARN,
+  );
+}
+
 type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
 export interface RemoteDriveOutcome {
@@ -41,6 +62,12 @@ export interface RemoteDriveOutcome {
   url?: string;
   /** The runs this drive syncs as, so the platform shows the drive once. */
   runIds?: readonly string[];
+  /**
+   * Whether any picture of the drive reached the platform. False for a drive in the person's own
+   * tab, which only the SDK reaches and no camera does, so the chat can say why there is no video.
+   * Set by `startRemoteDrives`, never by the drive.
+   */
+  filmed?: boolean;
 }
 
 export type DriveVerdict = 'yes' | 'no' | 'unknown';
@@ -64,6 +91,11 @@ export interface RemoteDriveDeps {
    */
   frame?: (sessionId: string | undefined) => Promise<Uint8Array | undefined>;
   frameIntervalMs?: number;
+  /**
+   * Called once the drive is over, however it ended, so the driven tab's HUD stops reading
+   * "planning next action". Nothing else tells it: the drive has no agent to end its session.
+   */
+  settle?: (sessionId: string | undefined, outcome: RemoteDriveOutcome) => void;
   fetch?: FetchLike;
   intervalMs?: number;
   /** A line for the daemon log. */
@@ -122,17 +154,19 @@ export function startRemoteDrives(deps: RemoteDriveDeps): RemoteDrives {
                 }),
             );
       let outcome: RemoteDriveOutcome;
+      let framesSent = 0;
       try {
         outcome = await deps.drive(drive.goal, sessionId);
       } catch (error) {
         outcome = { ok: false, summary: error instanceof Error ? error.message : String(error) };
       } finally {
-        await filming?.stop();
+        framesSent = (await filming?.stop()) ?? 0;
       }
+      deps.settle?.(sessionId, outcome);
       await doFetch(driveUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify(outcome),
+        body: JSON.stringify({ ...outcome, filmed: 0 < framesSent }),
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
     } catch {
@@ -157,13 +191,15 @@ export function startRemoteDrives(deps: RemoteDriveDeps): RemoteDrives {
  * Take a picture every `everyMs` and send it, until stopped. One capture at a time, and a picture
  * identical to the last one sent is skipped: a page standing still is not worth a request a second.
  * A failed capture or send is skipped too, never fatal: the drive matters, the picture of it less.
+ * `stop` answers how many pictures were sent.
  */
 function film(
   frame: () => Promise<Uint8Array | undefined>,
   everyMs: number,
-  send: (jpeg: string) => Promise<unknown>,
-): { stop: () => Promise<void> } {
+  send: (jpeg: string) => Promise<{ ok: boolean }>,
+): { stop: () => Promise<number> } {
   let last: string | undefined;
+  let sent = 0;
   let busy: Promise<void> | undefined;
   const shoot = async (): Promise<void> => {
     try {
@@ -172,7 +208,8 @@ function film(
       const jpeg = Buffer.from(shot).toString('base64');
       if (jpeg === last) return;
       last = jpeg;
-      await send(jpeg);
+      // Counted only once the platform took it: a refused picture is not a filmed drive.
+      if ((await send(jpeg)).ok) sent += 1;
     } catch {
       // The next tick tries again.
     }
@@ -185,6 +222,7 @@ function film(
     stop: async () => {
       clearInterval(timer);
       await busy;
+      return sent;
     },
   };
 }
@@ -251,8 +289,11 @@ export function driveVerdict(out: {
   // A goal judged unmet, or a check that came back "no", is a failed drive whatever else held.
   if (false === out.goalMet) return 'no';
   if (0 < (out.checks?.failed ?? 0)) return 'no';
+  // A quoted text is only looked for on the page the drive ENDED on, so a miss cannot refute: a
+  // goal that quotes the state it starts from ("from "Count is 0" to "Count is 1"") misses it by
+  // working. It blocks a yes and decides nothing else.
   const goals = out.goals ?? [];
-  if (goals.some((g) => 'no' === g.verified)) return 'no';
+  if (goals.some((g) => 'yes' !== g.verified)) return 'unknown';
   // A yes needs a check that held behind it: the model saying the goal was met is not evidence.
   if (!out.proved || 0 === (out.checks?.held ?? 0)) return 'unknown';
   if (true === out.goalMet) return 'yes';

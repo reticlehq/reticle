@@ -56,6 +56,8 @@ export interface PlatformModelConfig {
   providerReady: boolean;
   /** Harness credits used and held this 30 days. Absent when the plan is unbounded or the API is older. */
   credits?: { used: number; limit: number };
+  /** The platform that answered, no trailing slash: where the HUD's settings and plan links go. */
+  platformUrl?: string;
 }
 
 /** A GET, narrowed to what this file uses, so a test can answer it without a network. */
@@ -131,13 +133,15 @@ export async function fetchPlatformConfig(
     controller.abort();
   }, timeoutMs);
   try {
-    const res = await doFetch(`${host.replace(/\/+$/, '')}${CONFIG_PATH}`, {
+    const base = host.replace(/\/+$/, '');
+    const res = await doFetch(`${base}${CONFIG_PATH}`, {
       method: 'GET',
       headers: { authorization: `Bearer ${key}` },
       signal: controller.signal,
     });
     if (!res.ok) return undefined;
-    return parse(await res.text());
+    const config = parse(await res.text());
+    return config === undefined ? undefined : { ...config, platformUrl: base };
   } catch {
     return undefined;
   } finally {

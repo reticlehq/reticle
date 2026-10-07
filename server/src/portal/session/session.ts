@@ -151,6 +151,8 @@ export class Session implements HandshakeFacts {
   /** Which browser the page said it is (chrome/edge/arc/…). Undefined on an SDK too old to report one. */
   #brand: BrowserBrand | undefined;
   #focused = true;
+  /** The desktop window this is and its document's HTTP status, merged from every PAGE_HEALTH. */
+  readonly page: ReturnType<typeof readHealthEvent>['page'] = {};
   /** Liveness: wall-clock of the last AGENT command (distinct from browser chatter / lastSeen). */
   #lastAgentActivityAt: number;
   /** Server-side mirror of the agent-tuned idle window, so the reaper honors reticle_session. */
@@ -295,6 +297,7 @@ export class Session implements HandshakeFacts {
       runtime: this.#runtime,
       versionSkew: this.versionSkew,
       hidden: this.#hidden,
+      page: this.page,
       health: () => this.health(),
       staleMs: () => this.staleMs(),
       pendingMarkCount: () => this.#review.pendingCount(),
@@ -357,6 +360,7 @@ export class Session implements HandshakeFacts {
     if (event.editEpoch !== undefined) this.#editEpoch = event.editEpoch;
     if (event.type === EventType.PAGE_HEALTH) {
       const r = readHealthEvent(event.data);
+      Object.assign(this.page, r.page);
       this.applyHealth(
         r.hidden ?? this.#hidden,
         r.focused ?? this.#focused,

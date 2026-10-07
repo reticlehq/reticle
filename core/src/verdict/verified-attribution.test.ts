@@ -49,6 +49,7 @@ describe('the owner of an unverified verdict', () => {
     expect(verdictAttributionOf(VerifiedReason.NOTHING_DECLARED)).toBe(VerdictAttribution.HARNESS);
     expect(verdictAttributionOf(VerifiedReason.VACUOUS_GRADE)).toBe(VerdictAttribution.HARNESS);
     expect(verdictAttributionOf(VerifiedReason.ALREADY_TRUE)).toBe(VerdictAttribution.HARNESS);
+    expect(verdictAttributionOf(VerifiedReason.HIDDEN_MATCH)).toBe(VerdictAttribution.HARNESS);
   });
 
   it('separates "I could not see" from every other kind of not-knowing', () => {

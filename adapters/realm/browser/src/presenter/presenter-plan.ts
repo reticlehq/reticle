@@ -29,7 +29,7 @@ const GLYPH: Record<ScriptStatus, string> = {
   [ScriptStatus.NOT_TAKEN]: '–',
 };
 
-export const PLAN_CSS = `
+export const PLAN_CSS: string = `
 [data-reticle-chat-panel] .reticle-plan{flex:none;margin:0 10px 8px;padding:8px 10px;border:1px solid var(--reticle-hud-border);border-radius:10px;background:rgba(255,255,255,.03);}
 [data-reticle-chat-panel] .reticle-plan[hidden]{display:none;}
 [data-reticle-chat-panel] .reticle-plan-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:var(--reticle-hud-size-xs);color:var(--reticle-hud-text-muted);}

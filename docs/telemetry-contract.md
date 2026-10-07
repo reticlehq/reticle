@@ -152,7 +152,7 @@ Two questions get asked of `verification_completed` constantly and both have exa
 
 **"A large share of verdicts come back `unknown`."** `verified` has FOUR values (`yes`, `no`, `unknown`, `no-fault`) and the rule that produces it has eleven clauses, so `unknown` on its own is seven different situations belonging to three different owners. **Always break `unknown` down by `verification.reason`** before treating it as a quality number:
 
-- `inconclusive`, `nothing_declared`, `vacuous_grade` -- the agent's own call. Teach the agent; the product worked.
+- `inconclusive`, `nothing_declared`, `vacuous_grade`, `hidden_match` -- the agent's own call. Teach the agent; the product worked.
 - `outcome_pending`, `outcome_unread`, `unsettled`, `evidence_incomplete`, `window_closed_early` -- the app had not finished. Wait and re-check; often a budget that ended early.
 - `observation_lost`, `unclean_capture`, `absence_blind_spot` -- **ours**. Ship a fix. `uncleanLoss` names which of the three owners inside that one.
 

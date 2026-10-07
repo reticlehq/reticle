@@ -218,3 +218,59 @@ describe('brand detection in the health report', () => {
     );
   });
 });
+
+describe('installHealth — which desktop window, and what it was served', () => {
+  const healthData = (emit: ReturnType<typeof vi.fn>): Record<string, unknown>[] =>
+    emit.mock.calls.map((c) => c[1] as Record<string, unknown>);
+
+  afterEach(() => {
+    delete (window as unknown as Record<string, unknown>)['__TAURI_INTERNALS__'];
+  });
+
+  it('names the Tauri window and reports a 404 document, so a stray error page is not the app', async () => {
+    (window as unknown as Record<string, unknown>)['__TAURI_INTERNALS__'] = {
+      metadata: { currentWindow: { label: 'setup' } },
+    };
+    const head = vi.fn(() => Promise.resolve({ status: 404 } as Response));
+    vi.stubGlobal('fetch', head);
+    const { installHealth } = await import('./health.js');
+    const emit = vi.fn();
+    const teardown = installHealth(emit);
+    await vi.waitFor(() =>
+      expect(healthData(emit).some((d) => 404 === d['documentStatus'])).toBe(true),
+    );
+    expect(healthData(emit)[0]?.['windowLabel']).toBe('setup');
+    expect(head).toHaveBeenCalledWith(location.href, { method: 'HEAD', cache: 'no-store' });
+    teardown();
+    vi.unstubAllGlobals();
+  });
+
+  it('sends no request on a plain web page, and names no window', async () => {
+    const head = vi.fn(() => Promise.resolve({ status: 200 } as Response));
+    vi.stubGlobal('fetch', head);
+    const { installHealth } = await import('./health.js');
+    const emit = vi.fn();
+    const teardown = installHealth(emit);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(head).not.toHaveBeenCalled();
+    expect(healthData(emit).every((d) => !('windowLabel' in d) && !('documentStatus' in d))).toBe(
+      true,
+    );
+    teardown();
+    vi.unstubAllGlobals();
+  });
+
+  it('names an Electron window by the label the app registered it under', async () => {
+    (window as unknown as Record<string, unknown>)['__reticleIpc'] = {
+      windowLabel: () => Promise.resolve('settings'),
+    };
+    const { installHealth } = await import('./health.js');
+    const emit = vi.fn();
+    const teardown = installHealth(emit);
+    await vi.waitFor(() =>
+      expect(healthData(emit).some((d) => 'settings' === d['windowLabel'])).toBe(true),
+    );
+    teardown();
+    delete (window as unknown as Record<string, unknown>)['__reticleIpc'];
+  });
+});

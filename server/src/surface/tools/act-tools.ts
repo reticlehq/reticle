@@ -48,6 +48,7 @@ import {
 } from '@/memory/intent/inline-intent.js';
 import { declaresState } from '@reticlehq/engine/question/predicate/predicate-asks.js';
 import { isStateUnwatched } from '@reticlehq/engine/evidence/blind-spots.js';
+import { hiddenMatchNote } from '@reticlehq/engine/evidence/already-true.js';
 import { inFlightRequestLabels, repeatedRequestLabels } from './act/settle-in-flight.js';
 import { finishAfterMatch } from './act/after-match.js';
 import { noteProved } from './act/proved-controls.js';
@@ -658,6 +659,8 @@ export const ACT_TOOLS: ToolDef[] = [
         const spots = blindSpotsFromState(session.blindSpots(), session.runtime);
         const coverage = buildCoverageStatement(spots);
         const absenceBlindSpot = absenceBlindSpotNote(until, spots);
+        // A green resting on hidden matches says the node exists, not that it shows (#1408).
+        const hiddenMatch = hiddenMatchNote(until, verdict.evidence);
         // Nothing subscribed ⇒ the state channel is dark, and the summary must say so rather than
         // report an empty diff list that reads like a fact about the app. See CausalSummary.
         const stateUnwatched = isStateUnwatched(spots);
@@ -794,6 +797,7 @@ export const ACT_TOOLS: ToolDef[] = [
               ? { observationLost: true, lastUrl: session.url }
               : {}),
             ...(absenceBlindSpot === undefined ? {} : { absenceBlindSpot }),
+            ...(hiddenMatch === undefined ? {} : { hiddenMatch }),
             honesty,
             contradictions,
             ...(0 === outcomePending.length ? {} : { outcomePending }),

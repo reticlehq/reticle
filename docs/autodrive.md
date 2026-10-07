@@ -6,7 +6,7 @@ icon: steering-wheel
 
 Driving an app is the expensive part of verifying one. Every snapshot, every act result and every observation lands in your agent's context and is re-read on every turn after, and none of it is kept: the next run starts from nothing and pays again.
 
-`reticle_verify { action: "explore" }` moves the driving into the daemon. A model there drives your app through the same tool surface your agent uses, records what it drove as saved flows, and hands back a few lines.
+`reticle_verify { action: "explore" }` hands the driving to the Reticle Harness. It decides on the Reticle platform, and the daemon on your machine executes each step through the same tool surface your agent uses, records what it drove as saved flows, and hands back a few lines. It needs a linked project (`reticle connect`).
 
 ```jsonc
 reticle_verify {

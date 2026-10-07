@@ -1,4 +1,5 @@
 import type { LogActor, LogKind, LogResult } from './presenter-log.js';
+import { ReticleStorageKey } from '@/storage-keys.js';
 
 /**
  * The Agent Log's rows, kept for this tab across the reloads a drive causes.
@@ -7,7 +8,7 @@ import type { LogActor, LogKind, LogResult } from './presenter-log.js';
  * in the DOM, so a person watching the Harness replay saved flows saw it empty itself every few
  * seconds and never saw what had been driven. `sessionStorage`: the tab, and nothing longer.
  */
-const LOG_STORAGE_KEY = 'reticle-presenter-log';
+const LOG_STORAGE_KEY = ReticleStorageKey.PRESENTER_LOG;
 
 export interface RememberedRow {
   kind: LogKind;

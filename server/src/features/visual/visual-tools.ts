@@ -132,6 +132,28 @@ async function desktopCapture(
 }
 
 /**
+ * One picture of the tab a chat-requested drive is driving, or undefined when there is none to take.
+ *
+ * The leased browser first, when this daemon launched the tab; then the desktop window's own capture,
+ * the same route `reticle_screenshot` takes. Without the second, a drive of a desktop app sent its
+ * steps to the chat and never a picture. Never throws: a frame is a courtesy, and a tab that has
+ * gone mid-drive must not break the drive.
+ */
+export async function driveFrame(
+  deps: ToolDeps,
+  sessionId: string,
+  jpegQuality: number,
+): Promise<Uint8Array | undefined> {
+  try {
+    const leased = await deps.pool?.screenshotLease(sessionId, { jpegQuality });
+    if (leased !== undefined) return leased;
+    return (await desktopCapture(deps, sessionId, false)).png;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Only read a capture the shell wrote. The path arrives from the PAGE, and the daemon must not
  * become a file-read oracle for whatever a compromised renderer names.
  *

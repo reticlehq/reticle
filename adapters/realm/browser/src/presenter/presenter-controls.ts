@@ -14,6 +14,7 @@ import { getPresenterSettings } from './presenter-settings.js';
 import { mountWorkspaceSelector, workspaceRowHtml } from './presenter-workspace.js';
 import { CHAT_VIEWS_HTML } from './presenter-chat-views.js';
 import type { HeroIconBodyKey } from './icons/presenter-heroicons-data.js';
+import { ReticleStorageKey } from '@/storage-keys.js';
 // Live-control panel: the two-way control surface inside the floating HUD - Pause/Resume + End
 // (header), a message input + Send (footer), and the data-reticle-state visual machine.
 // All nodes carry data-reticle-* attrs so they're excluded from snapshots (see dom-ignore.ts). The
@@ -68,7 +69,7 @@ const RUN_FILENAME = 'reticle-run.json';
 export const ENDED_FADE_MS = 4000;
 
 /** Where the panel remembers which saved flows were replayed last, to list them first. */
-const RECENT_PLAYS_KEY = 'reticle.flow.recent.v1';
+const RECENT_PLAYS_KEY = ReticleStorageKey.RECENT_PLAYS;
 
 const FLOW_TEXT = {
   REPLAYABLE: 'Replay without an agent',
@@ -224,7 +225,7 @@ export const CONTROLS_BANNER_HTML = `<div data-reticle-banner class="reticle-ban
  */
 export const CONTROLS_MARKS_HTML = `<div ${MARKS_ROW_ATTR} class="reticle-marks-row" hidden><span data-reticle-marks-text class="reticle-marks-text"></span><button type="button" ${COPY_MARKS_ATTR} class="reticle-marks-copy" title="${COPY_MARKS_LABEL}">${hiIconHtml(PresenterIcon.COPY, PRESENTER_ICON_SIZE.HELP)}<span>${COPY_MARKS_LABEL}</span></button></div>`;
 /** Replay-a-flow row (between log and footer); buttons are filled in by setFlows once flows arrive. */
-export const CONTROLS_FLOWS_HTML = `<div data-reticle-flows class="reticle-flows"><div class="reticle-flows-head"><span class="reticle-flows-cap">${FLOWS_LABEL}</span><span class="reticle-flows-links"><button type="button" data-reticle-see-logs class="reticle-flows-all" hidden>${SEE_LOGS_LABEL} →</button><button type="button" data-reticle-flows-all class="reticle-flows-all">${FLOWS_ALL_LABEL} →</button></span></div><div data-reticle-flow-strip class="reticle-flow-strip"></div></div>`;
+export const CONTROLS_FLOWS_HTML: string = `<div data-reticle-flows class="reticle-flows"><div class="reticle-flows-head"><span class="reticle-flows-cap">${FLOWS_LABEL}</span><span class="reticle-flows-links"><button type="button" data-reticle-see-logs class="reticle-flows-all" hidden>${SEE_LOGS_LABEL} →</button><button type="button" data-reticle-flows-all class="reticle-flows-all">${FLOWS_ALL_LABEL} →</button></span></div><div data-reticle-flow-strip class="reticle-flow-strip"></div></div>`;
 /**
  * Footer markup: the workspace row.
  *

@@ -20,9 +20,13 @@ import { splitBrainFields, withNextAction } from './cli/status-fields.js';
 import { reticleStateHome } from './daemon/daemon.js';
 import { handleMcp } from './cli/mcp-command.js';
 import { handleReport } from './cli/report-command.js';
-import { daemonProjectAt, resolveDaemonForProject } from './daemon/daemon-resolve.js';
+import {
+  daemonProjectAt,
+  readDaemonRegistry,
+  resolveDaemonForProject,
+} from './daemon/daemon-resolve.js';
 import { pickDaemonPortToBind } from './daemon/binding/free-port.js';
-import { portForInit, portFromEnv } from './setup/init/init-port.js';
+import { isSameOrAbove, portForInit, portFromEnv } from './setup/init/init-port.js';
 import { daemonStartOptions } from './cli/daemon-start-options.js';
 import {
   handleWatch,
@@ -161,6 +165,10 @@ async function handleInit(parsed: {
     daemonPresent: async (p) =>
       presenceIsUsable(await probePresence(p, { tcpOpen: probeDaemon, status: fetchStatus })),
     pickPort: (p) => pickDaemonPortToBind(p),
+    daemonStartedHere: (p) => {
+      const started = readDaemonRegistry(reticleStateHome()).find((e) => e.port === p)?.cwd;
+      return started !== undefined && isSameOrAbove(started, cwd);
+    },
   });
   const io = buildNodeIo(cwd, serverInitHost(), { stderr: true === parsed.json });
   const result = runInit(

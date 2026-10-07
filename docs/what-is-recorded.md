@@ -43,6 +43,8 @@ npx @reticlehq/server config --runs on|off --flows on|off --memory on|off
 
 The Harness runs on the platform, so the platform sees what it drives: each step's result goes there so it can choose the next one. A secret field is sent by name only; its value is typed in on your machine.
 
+**Drives asked for from the platform's chat.** While a linked project has an app connected, the daemon asks the platform every few seconds whether someone in your workspace asked its chat to drive this app. When they did, the daemon drives it here, on your machine, and sends back each step's result and how the drive ended, which the platform keeps as a check you can open in Runs. Unless the request said not to record, it also sends a picture of the tab it is driving, a JPEG about once a second, so the chat can show the drive live and replay it afterwards. The pictures are of the app as it looked, with Reticle's own panel left out; they are kept with that check (at most a few minutes' worth per drive) and deleted with the project. Only a tab the daemon opened itself can be pictured; a tab in your own browser sends steps only. Unlinking the project stops all of it.
+
 ## Telemetry, which is separate from all of the above
 
 The CLI sends anonymous usage events: event names and a random installation id. No code, no page content, no URLs from your app. It is how we know which parts of the product are reached at all.

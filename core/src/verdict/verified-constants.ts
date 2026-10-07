@@ -107,6 +107,11 @@ export const VerifiedReason = {
   CONTRADICTED: 'contradicted',
   /** The consequence was already true beforehand, so it proves nothing about the action. */
   ALREADY_TRUE: 'already_true',
+  /**
+   * The consequence held, but only on elements that are hidden: a `text` or stateless `element`
+   * check matches DOM presence, so a success template still hidden in the DOM passed it.
+   */
+  HIDDEN_MATCH: 'hidden_match',
   /** The capture was not clean, so a green would only describe what happened to be observed. */
   UNCLEAN_CAPTURE: 'unclean_capture',
   /**

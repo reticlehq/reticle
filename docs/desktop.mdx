@@ -210,6 +210,8 @@ installReticleCapture(win);
 
 That is all: no CDP flag, no extra packages, and it works on a packaged `file://` renderer. `reticle_screenshot` and `reticle_visual_diff` then work on your app.
 
+In a multi-window app, name each window: `installReticleCapture(win, { label: 'settings' })`. The session list then shows `window: "settings"`. Electron windows have no name of their own, and two of them often share a url.
+
 Alternatively, since an Electron renderer _is_ Chromium, `--remote-debugging-port=9222` plus `RETICLE_CDP_URL=http://127.0.0.1:9222` also works and additionally enables `fullPage` (the main-process route captures the window as composited, so it cannot scroll-stitch).
 
 **Tauri: one Rust command.** The crate is versioned independently of the npm packages:
@@ -343,6 +345,8 @@ Playwright MCP is faster. It is also structurally unable to see an IPC failure, 
 **IPC calls do not appear, but the app works.** On Electron the shim's `require` must run _before_ your preload captures its own reference to `ipcRenderer`, so put it on the first line. On Tauri, `invoke` imported from `@tauri-apps/api/core` is observed; a hand-rolled `postMessage` protocol is not, and neither is Tauri's `postMessage` transport fallback on platforms where the `ipc://` custom protocol is unavailable.
 
 **`reticle open` says there is nothing to open.** That is correct for a desktop app. There is no URL, and there is no `reticle drive` for desktop either. Both launch a browser, which is not what you are testing.
+
+**Several windows, and the wrong one gets driven.** Every window that loads the SDK is its own session, and `reticle_session { action: "list" }` names each (`window: "main"`: Tauri's label, or the `label` you gave `installReticleCapture` on Electron) with whether it is `hidden`. A page served as an error (a dev server's 404 for a static page, say) carries `documentStatus` and is never auto-selected ahead of a working one. To drive a specific window, pass its `sessionId`. To get rid of a stray hidden window for good, call `reticle_session { action: "end", sessionId, disconnect: true }`. It stays detached across its own reloads until the daemon restarts.
 
 **A screenshot came back partly blank.** The window is occluded or minimized, so it is only partially composited. Bring it forward and capture again.
 

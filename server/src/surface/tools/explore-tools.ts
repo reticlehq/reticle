@@ -32,7 +32,7 @@ export const EXPLORE_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.VERIFY_EXPLORE,
     description:
-      'Drive the app yourself? Do not — call this instead. A model inside the daemon drives it through this same tool surface, records what it drove as saved flows, and answers in a few lines, so the whole drive costs you one tool call instead of a context full of snapshots. Pass `persona` to say who to be or what to accomplish ("a returning customer checking out", "an admin revoking a seat") and it completes that whole journey rather than clicking at random. Returns { stopReason, steps, savedFlows, summary, usage }. The saved flows are the point: from the next run on, reticle_verify { action: "flows" } replays them deterministically with NO model in the loop. DESTRUCTIVE — it really drives the app, and it spends model budget. ' +
+      'Drive the app yourself? Do not — call this instead. The Reticle Harness drives it through this same tool surface (it decides on the Reticle platform, this daemon executes each step), records what it drove as saved flows, and answers in a few lines, so the whole drive costs you one tool call instead of a context full of snapshots. Pass `persona` to say who to be or what to accomplish ("a returning customer checking out", "an admin revoking a seat") and it completes that whole journey rather than clicking at random. Returns { stopReason, steps, savedFlows, summary, usage }. The saved flows are the point: from the next run on, reticle_verify { action: "flows" } replays them deterministically with NO model in the loop. DESTRUCTIVE — it really drives the app, and it spends Harness credits. ' +
       EXPLORE_NEEDS,
     inputSchema: {
       persona: z

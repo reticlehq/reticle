@@ -389,6 +389,12 @@ export interface FlowStepResult {
    * reader to skim past it, and the whole value here is that its presence is the signal.
    */
   contradictions?: Contradiction[];
+  /**
+   * The console errors and uncaught exceptions this step's window saw, the first few only; `digest`
+   * still counts every one. A run artifact's `evidence.consoleErrors` is built from these, so it
+   * reports what replay observed instead of claiming a clean console. Omitted when there were none.
+   */
+  consoleErrors?: { level: string; message: string; at: number }[];
   ok: boolean;
   error?: string;
   note?: string;

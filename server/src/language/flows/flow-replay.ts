@@ -13,6 +13,7 @@ export { nearestIsAmbiguous, nearestTestid, resolveQuery } from './flow-anchor.j
 import type { FlowReplaySession, WaitForSignal, Sleep } from './flow-replay-types.js';
 export type { FlowReplaySession, WaitForSignal, Sleep } from './flow-replay-types.js';
 import { routeOfEvent, routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route.js';
+import { evalConsole } from '@reticlehq/engine/question/predicate/predicate-console.js';
 import { stepEffect } from '@reticlehq/engine/evidence/step-effect.js';
 import {
   AnchorKind,
@@ -132,11 +133,54 @@ function summarizeConsequence(events: ReticleEvent[]): string | undefined {
     const status = 'number' === typeof data['status'] ? ` ${data['status']}` : '';
     parts.push(`${method} ${path}${status}`.trim());
   }
-  const errors = events.filter(
-    (e) => e.type === EventType.CONSOLE_ERROR || e.type === EventType.ERROR_UNCAUGHT,
-  ).length;
+  const errors = events.filter(isConsoleError).length;
   if (errors > 0) parts.push(`${errors} console error${errors > 1 ? 's' : ''}`);
   return parts.length > 0 ? parts.join('; ') : undefined;
+}
+
+const isConsoleError = (e: ReticleEvent): boolean =>
+  e.type === EventType.CONSOLE_ERROR || e.type === EventType.ERROR_UNCAUGHT;
+
+/** At most this many console errors travel on one step; its `digest` still counts them all. */
+const CONSOLE_ERRORS_PER_STEP = 5;
+
+/** The console errors a step's window saw, for the run artifact's evidence. See FlowStepResult. */
+function consoleErrorsIn(events: ReticleEvent[]): FlowStepResult['consoleErrors'] {
+  const errors = events
+    .filter(isConsoleError)
+    .slice(0, CONSOLE_ERRORS_PER_STEP)
+    .map((e) => ({ level: e.type, message: asString(e.data['message']) ?? '', at: e.t }));
+  return errors.length > 0 ? errors : undefined;
+}
+
+type StepExpect = NonNullable<FlowStep['expect']>;
+type ConsoleClause = Extract<StepExpect, { kind: typeof PredicateKind.CONSOLE }>;
+
+/** The console-absent clauses an expect cannot pass without: itself, or any `allOf` member. */
+function requiredConsoleAbsences(expect: StepExpect): ConsoleClause[] {
+  if (PredicateKind.ALL_OF === expect.kind)
+    return expect.predicates.flatMap(requiredConsoleAbsences);
+  return PredicateKind.CONSOLE === expect.kind && true === expect.absent ? [expect] : [];
+}
+
+/**
+ * A console-absent expect, read again over the step's WHOLE window.
+ *
+ * The wait that graded the expect ends before the window does, so an error landing between the two
+ * was counted by the step's consequence and missed by its verdict (#1344). The window wins.
+ */
+function lateConsoleDrift(expect: StepExpect, events: ReticleEvent[]): Drift | undefined {
+  for (const clause of requiredConsoleAbsences(expect)) {
+    const read = evalConsole(events, clause);
+    if (read.pass) continue;
+    return {
+      reasonKind: DriftReason.SIGNAL_NOT_OBSERVED,
+      reason: read.failureReason ?? "the step's declared consequence did not hold",
+      anchor: expectLabel(expect),
+      nearest: null,
+    };
+  }
+  return undefined;
 }
 
 /** Run one testid-anchored step: re-resolve via QUERY, then ACT on the live ref, else drift. */
@@ -689,6 +733,16 @@ export async function replayFlow(
       const windowEvents = session.eventsSince(cursorBefore).filter((e) => e.t >= cursorBefore);
       const consequence = summarizeConsequence(windowEvents);
       if (consequence !== undefined) result.consequence = consequence;
+      const consoleErrors = consoleErrorsIn(windowEvents);
+      if (consoleErrors !== undefined) result.consoleErrors = consoleErrors;
+      for (const expectation of checked) {
+        if (!result.ok || result.drift !== undefined) break;
+        const late = lateConsoleDrift(expectation, windowEvents);
+        if (late !== undefined) {
+          result.ok = false;
+          result.drift = late;
+        }
+      }
       // Per-step wall time is NOT shipped: it is `window.until - window.since`, computed from two numbers
       // the next line already puts in the same object, under the same emission condition. A step used to
       // carry the subtraction AND both operands, on every step of every replay.

@@ -107,6 +107,11 @@ export interface DaemonReason {
 export interface OwnedBrowser {
   readonly sessionId: string;
   readonly release: () => Promise<void>;
+  /**
+   * The page never dialled in, so the lease injected Reticle's own reader. That session proves the
+   * reader, not this install, and must never end onboarding as "connected".
+   */
+  readonly zeroInstall?: boolean;
 }
 
 /** Hand a lease back. Best-effort: a lease that already expired is already gone. */
@@ -340,11 +345,15 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
           // Says BOTH were checked. A server that prints nothing but IS listening is the CRA case and
           // must not be failed, so a reader has to be able to tell "we looked at the log" from "we
           // looked at the log AND the ports".
+          const within =
+            input.startupBudgetMs !== undefined && fx.now() - startedAt >= input.startupBudgetMs
+              ? ` within ${String(input.startupBudgetMs)}ms`
+              : undefined;
           note(
-            (input.startupBudgetMs !== undefined && fx.now() - startedAt >= input.startupBudgetMs
-              ? `The dev server did not become ready within ${String(input.startupBudgetMs)}ms. `
-              : undefined === watching
-                ? 'The dev server neither printed a URL nor bound a port, so setup has nothing to open. '
+            (undefined === watching
+              ? `The dev server neither printed a URL nor bound a port${within ?? ''}, so setup has nothing to open. `
+              : undefined !== within
+                ? `The dev server did not become ready${within}. `
                 : `The dev server stopped making progress before ${watching} became ready. `) +
               'Check its log, increase --timeout for a slow build, or pass --url with the address it serves.',
           );
@@ -389,6 +398,24 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
   // dialled the bridge" over a correct install. With a lease to fall back on it is entered too, and
   // only the system browser is skipped.
   const canLease = undefined !== fx.openLease;
+  const injected = new Set<string>();
+  /**
+   * The lease to keep, or undefined. A lease whose page only connected through Reticle's injected
+   * reader is handed straight back and its session excluded: it would otherwise be picked below and
+   * report a plain server with no SDK as an instrumented app.
+   */
+  const keepLease = async (
+    owned: OwnedBrowser | { readonly failed: string },
+  ): Promise<OwnedBrowser | undefined> => {
+    if ('failed' in owned) {
+      note(`Could not open ${url} in a Reticle-owned browser either: ${owned.failed}`);
+      return undefined;
+    }
+    if (true !== owned.zeroInstall) return owned;
+    injected.add(owned.sessionId);
+    await releaseLease(owned);
+    return undefined;
+  };
   if (null === alreadyConnected && policy.openBrowser && (input.openBrowser || canLease)) {
     // SERVED is the precondition, not SDK_PRESENT: a url that answers nothing is the only state
     // where a window is certainly useless. Whether the SDK is in the served HTML is a DIFFERENT
@@ -424,13 +451,8 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
       const launcherFailed = input.openBrowser ? await fx.openBrowser(url) : undefined;
       openedBrowser = input.openBrowser;
       if (undefined !== fx.openLease && (!input.openBrowser || undefined !== launcherFailed)) {
-        const owned = await fx.openLease(url);
-        if ('failed' in owned) {
-          note(`Could not open ${url} in a Reticle-owned browser either: ${owned.failed}`);
-        } else {
-          lease = owned;
-          openedBrowser = true;
-        }
+        lease = await keepLease(await fx.openLease(url));
+        if (undefined !== lease) openedBrowser = true;
       }
     }
   }
@@ -452,7 +474,8 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
   while (null === session) {
     // On a desktop app, only the desktop window counts. AppShape and the runtime a page reports use
     // the same three names, so the shape IS the requirement — see session-pick.
-    session = pickSession(await fx.listSessions(), url, before, requiredRuntime);
+    const listedNow = (await fx.listSessions()).filter((s) => !injected.has(s.sessionId));
+    session = pickSession(listedNow, url, before, requiredRuntime);
     if (null !== session) break;
     if (deadline <= fx.now()) break;
     if (
@@ -465,12 +488,7 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
       fx.now() - waitStartedAt >= SYSTEM_BROWSER_GRACE_MS
     ) {
       leaseFallbackTried = true;
-      const owned = await fx.openLease(url);
-      if ('failed' in owned) {
-        note(`Could not open ${url} in a Reticle-owned browser either: ${owned.failed}`);
-      } else {
-        lease = owned;
-      }
+      lease = await keepLease(await fx.openLease(url));
       continue;
     }
     // Not in silence: a desktop run used to print one line and then nothing for ten minutes.

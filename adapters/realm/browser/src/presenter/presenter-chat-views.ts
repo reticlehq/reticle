@@ -1,4 +1,4 @@
-import type { AccountState, HarnessConfig } from '@reticlehq/core';
+import { DEFAULT_PLATFORM_URL, type AccountState, type HarnessConfig } from '@reticlehq/core';
 import type { AnnotationItem } from '@/review/annotator.js';
 import { marksForAgent } from '@/review/marks-for-agent.js';
 import {
@@ -15,14 +15,27 @@ import {
 } from './icons/presenter-icons.js';
 import { HUD_GLASS_PAINT } from './chrome/presenter-hud-chrome.js';
 import { creditsLeft } from './presenter-settings.js';
+import { esc, isSafeDashboardUrl } from './chrome/presenter-safe-html.js';
+import { ReticleStorageKey } from '@/storage-keys.js';
 
 export type ChatView = 'activity' | 'flows' | 'annotations';
-const HISTORY_KEY = 'reticle.annotations.history.v1';
+const HISTORY_KEY = ReticleStorageKey.ANNOTATION_HISTORY;
 const HISTORY_LIMIT = 200;
 /** Settings → Projects → Verification: the console's Harness switch. There is no /harness page. */
-const HARNESS_SETUP_URL = 'https://app.reticle.sh/settings?group=project#model';
+const HARNESS_SETUP_PATH = '/settings?group=project#model';
 /** Credits and plans live on the Plan screen, the way in for a workspace that cannot drive. */
-const HARNESS_PLAN_URL = 'https://app.reticle.sh/settings?group=billing';
+const HARNESS_PLAN_PATH = '/settings?group=billing';
+
+/**
+ * The platform the daemon talks to: the one this config came from, else the host this machine
+ * signed in to, else the hosted service. A self-hosted or local platform was sent to the hosted one.
+ */
+function platformBase(config: HarnessConfig | undefined, account: AccountState): string {
+  const base = [config?.platformUrl, account.host].find(
+    (url): url is string => url !== undefined && isSafeDashboardUrl(url),
+  );
+  return esc((base ?? DEFAULT_PLATFORM_URL).replace(/\/+$/, ''));
+}
 
 interface HistoricalAnnotation extends AnnotationItem {
   pageUrl: string;
@@ -63,7 +76,7 @@ function saveHistory(items: HistoricalAnnotation[]): void {
 export const CHAT_VIEWS_HTML = `
   <div data-reticle-harness-spot class="reticle-harness-spot" hidden></div>`;
 
-export const FLOWS_PAGE_HTML = `<section data-reticle-page-panel="flows" class="reticle-page-panel reticle-flows-view" role="region" aria-label="Saved Flows" hidden>
+export const FLOWS_PAGE_HTML: string = `<section data-reticle-page-panel="flows" class="reticle-page-panel reticle-flows-view" role="region" aria-label="Saved Flows" hidden>
   <div class="reticle-page-heading"><span class="reticle-page-titles"><strong>Saved flows</strong><span class="reticle-page-subtitle">Journeys your agent verified, replayable here</span></span><button type="button" data-reticle-page-close aria-label="Close Saved Flows" title="Close">×</button></div>
   <div data-reticle-all-flows class="reticle-all-flows"></div>
 </section>`;
@@ -353,14 +366,17 @@ export class ChatViews {
       return;
     }
     spot.hidden = false;
+    const base = platformBase(config, account);
+    const setupUrl = `${base}${HARNESS_SETUP_PATH}`;
+    const planUrl = `${base}${HARNESS_PLAN_PATH}`;
     if (config === undefined) {
-      spot.innerHTML = `<div class="reticle-harness-row"><div class="reticle-harness-copy"><strong>Reticle Harness</strong><span>Link project to enable driving</span></div><button type="button" role="switch" data-reticle-harness-switch class="reticle-harness-switch" aria-label="Reticle Harness autonomous driving" aria-checked="false" aria-disabled="true" disabled></button><a class="reticle-harness-link" href="${HARNESS_SETUP_URL}" target="_blank" rel="noopener noreferrer">Set up ↗</a></div>`;
+      spot.innerHTML = `<div class="reticle-harness-row"><div class="reticle-harness-copy"><strong>Reticle Harness</strong><span>Link project to enable driving</span></div><button type="button" role="switch" data-reticle-harness-switch class="reticle-harness-switch" aria-label="Reticle Harness autonomous driving" aria-checked="false" aria-disabled="true" disabled></button><a class="reticle-harness-link" href="${setupUrl}" target="_blank" rel="noopener noreferrer">Set up ↗</a></div>`;
     } else if (!config.harnessEntitled) {
-      spot.innerHTML = `<div class="reticle-harness-row"><div class="reticle-harness-copy"><strong>Reticle Harness</strong><span>Describe a user and Reticle drives the whole journey for you</span></div><a class="reticle-harness-link" href="${HARNESS_PLAN_URL}" target="_blank" rel="noopener noreferrer">See plans ↗</a></div>`;
+      spot.innerHTML = `<div class="reticle-harness-row"><div class="reticle-harness-copy"><strong>Reticle Harness</strong><span>Describe a user and Reticle drives the whole journey for you</span></div><a class="reticle-harness-link" href="${planUrl}" target="_blank" rel="noopener noreferrer">See plans ↗</a></div>`;
     } else if (config.credits !== undefined && config.credits.used >= config.credits.limit) {
-      spot.innerHTML = `<div class="reticle-harness-row"><div class="reticle-harness-copy"><strong>Reticle Harness</strong><span>${creditsLeft(config.credits)}. They renew over 30 days.</span></div><a class="reticle-harness-link" href="${HARNESS_PLAN_URL}" target="_blank" rel="noopener noreferrer">Get more with Pro ↗</a></div>`;
+      spot.innerHTML = `<div class="reticle-harness-row"><div class="reticle-harness-copy"><strong>Reticle Harness</strong><span>${creditsLeft(config.credits)}. They renew over 30 days.</span></div><a class="reticle-harness-link" href="${planUrl}" target="_blank" rel="noopener noreferrer">Get more with Pro ↗</a></div>`;
     } else if (false === config.providerReady) {
-      spot.innerHTML = `<div class="reticle-harness-row"><div class="reticle-harness-copy"><strong>Reticle Harness</strong><span>Choose a model provider to start driving</span></div><a class="reticle-harness-link" href="${HARNESS_SETUP_URL}" target="_blank" rel="noopener noreferrer">Set up ↗</a></div>`;
+      spot.innerHTML = `<div class="reticle-harness-row"><div class="reticle-harness-copy"><strong>Reticle Harness</strong><span>Choose a model provider to start driving</span></div><a class="reticle-harness-link" href="${setupUrl}" target="_blank" rel="noopener noreferrer">Set up ↗</a></div>`;
     } else {
       spot.innerHTML = `<div class="reticle-harness-row"><div class="reticle-harness-copy"><strong>Reticle Harness</strong><span>${config.credits === undefined ? 'Autonomous checks' : creditsLeft(config.credits)}</span></div><button type="button" role="switch" data-reticle-harness-switch class="reticle-harness-switch" aria-label="Reticle Harness autonomous driving" aria-checked="${String(this.#pendingHarness ?? config.harnessEnabled)}" ${this.#pendingHarness === undefined ? '' : 'disabled'}></button></div>`;
     }

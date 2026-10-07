@@ -47,7 +47,7 @@ export const CLI_USAGE = `usage:  npx @reticlehq/server <command>   (or \`reticl
                 init is ONBOARDING: it wires the project, boots the app and proves a session
                 connected. It does not drive. The FIRST RUN is the stage that proves a flow:
                 an agent drives one journey with reticle_act_and_wait and an \`until\` on its last
-                step; with a model configured, reticle_verify { action: "explore", persona: "…" }
+                step; with a linked project, reticle_verify { action: "explore", persona: "…" }
                 (or reticle verify <url> --explore --persona "…") drives it instead
                 --app picks WHICH app in a monorepo, when several are found
                 --env is what the app needs to reach a usable state: the key from

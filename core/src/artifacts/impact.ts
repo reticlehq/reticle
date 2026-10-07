@@ -220,6 +220,8 @@ export const HarnessConfigSchema = z.object({
   providerReady: z.boolean().optional(),
   /** Harness credits used and held this 30 days; one is one Harness decision. Absent: unbounded or unknown. */
   credits: z.object({ used: z.number().int().min(0), limit: z.number().int().min(0) }).optional(),
+  /** The platform this answer came from, so the HUD's links go there and not to the hosted one. */
+  platformUrl: z.string().optional(),
 });
 export type HarnessConfig = z.infer<typeof HarnessConfigSchema>;
 

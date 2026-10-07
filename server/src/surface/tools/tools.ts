@@ -96,6 +96,13 @@ export const RAW_TOOLS: ToolDef[] = [
               .describe(
                 "Present only when this page's SDK version differs from the daemon's. A skewed pair connects and then disagrees about tool behaviour — usually surfacing as a bare -32000. Fix it before trusting any verdict from this session.",
               ),
+            window: z.string().optional().describe('Desktop window label (Tauri: main, setup…).'),
+            documentStatus: z
+              .number()
+              .optional()
+              .describe(
+                'Set only for an error page (4xx/5xx): not the app, never auto-selected first.',
+              ),
             lastSeenMs: z.number(),
             throttled: z.boolean(),
             focused: z.boolean(),

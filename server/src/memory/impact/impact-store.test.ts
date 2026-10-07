@@ -231,6 +231,22 @@ describe('the dashboard link', () => {
     );
   });
 
+  /*
+   * The daemon builds one store per project and keeps it for its whole life, while `reticle link`
+   * runs in another terminal. Read once at construction, a project linked after the daemon started
+   * said "Not linked" on every snapshot, reloads included, until the daemon was restarted.
+   */
+  it('is read per snapshot, so a link made while the daemon runs shows without a restart', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'impact-late-link-'));
+    const store = new ImpactStore({ reticleRoot: dir, notices: { read: () => [] } });
+    expect(store.snapshot().dashboardUrl).toBeUndefined();
+    writeFileSync(
+      join(dir, 'cloud.json'),
+      JSON.stringify({ dashboardUrl: 'https://c.test/p/web' }),
+    );
+    expect(store.snapshot().dashboardUrl).toBe('https://c.test/p/web');
+  });
+
   it('is absent — not crashed — when the link file is malformed', () => {
     const dir = mkdtempSync(join(tmpdir(), 'impact-bad-'));
     writeFileSync(join(dir, 'cloud.json'), '{not json', 'utf8');

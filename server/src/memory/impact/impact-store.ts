@@ -39,9 +39,6 @@ import {
 /** Writes are debounced: a verification loop is 50-200 calls, and each one is a counter bump. */
 const WRITE_DEBOUNCE_MS = 800;
 
-/** The project's cloud binding, written by `reticle link`. Absent for an unlinked project. */
-const CLOUD_LINK_FILE = 'cloud.json';
-
 interface ImpactPaths {
   project: string;
   global: string;
@@ -72,7 +69,9 @@ function impactPaths(reticleRoot: string, globalRoot: string): ImpactPaths {
  */
 function readDashboardUrl(reticleRoot: string): string | undefined {
   try {
-    const raw: unknown = JSON.parse(readFileSync(join(reticleRoot, CLOUD_LINK_FILE), 'utf8'));
+    const raw: unknown = JSON.parse(
+      readFileSync(join(reticleRoot, ReticleDir.CLOUD_LINK_FILE), 'utf8'),
+    );
     if ('object' !== typeof raw || null === raw) return undefined;
     const value = (raw as Record<string, unknown>)['dashboardUrl'];
     return 'string' === typeof value && value.length > 0 ? value : undefined;
@@ -286,7 +285,7 @@ export class ImpactStore {
   #sync: { at: number; value: Record<string, unknown> } | undefined;
   readonly #now: () => number;
   readonly #projectName: string | undefined;
-  readonly #dashboardUrl: string | undefined;
+  #dashboardUrl: string | undefined;
   #project: ImpactScope;
   #global: ImpactScope;
   /**
@@ -393,6 +392,9 @@ export class ImpactStore {
       global: atLeastProject(this.#global, this.#project),
     };
     if (this.#projectName !== undefined) snap.projectName = this.#projectName;
+    // Re-read, like the account: `reticle link` runs in another terminal while this store lives as
+    // long as the daemon, so a construction-time read said "Not linked" until a restart.
+    this.#dashboardUrl = readDashboardUrl(this.#root);
     if (this.#dashboardUrl !== undefined) snap.dashboardUrl = this.#dashboardUrl;
     snap.account = this.#account();
     const cfgForOffer = this.#config.read();

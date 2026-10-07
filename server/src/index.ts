@@ -2,6 +2,8 @@ import { applyHarnessSwitch, harnessConfigsByRoot } from '@/memory/cloud/harness
 import { coveragePercents } from './features/exhaust/ledger.js';
 import { firstRunWiring } from './portal/session/first-run-wiring.js';
 import { fetchPlatformConfig } from '@/features/harness/platform-config.js';
+import { watchAccountFiles } from './memory/impact/account-watch.js';
+import { SESSION_FILE } from './command/cli/cloud-kit.js';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { linkedCloudPort, platformEnvPort } from './memory/cloud/cloud-config.js';
@@ -52,6 +54,7 @@ import { attachRouteLearning } from './memory/project/learned-routes.js';
 import { AnnotationStore } from './language/flows/stores/annotation-store.js';
 import { createNodeFileSystem } from './memory/project/fs/fs-port.js';
 import { cleanupCaptureDirectories } from './features/visual/capture-cleanup.js';
+import { driveFrame } from './features/visual/visual-tools.js';
 import { ReticleRunner } from './judgement/runs/reticle-runner.js';
 import { createRunnerPort } from './judgement/runs/runner-port.js';
 import { RunStore } from './judgement/runs/artifact/run-store.js';
@@ -61,6 +64,7 @@ import { instructionStateAt } from './surface/mcp/mcp-proxy.js';
 import { LEASE_ACQUIRE_TOOL } from './surface/tools/lease-tools.js';
 import {
   REMOTE_DRIVE_JPEG_QUALITY,
+  endDrivenTab,
   pickDriveSession,
   startRemoteDrives,
 } from './features/harness/platform/remote-drive.js';
@@ -658,6 +662,12 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   // The panel's harness switch, written through to the platform so console and panel cannot disagree.
   if (options.hudSignIn !== undefined)
     bridge.attachSigninRequest(options.hudSignIn(() => repaint()));
+  // logout and link run in another process: repaint when their files change. See account-watch.ts.
+  const accountFiles = watchAccountFiles(() => repaint());
+  accountFiles.watch(join(homedir(), ReticleDir.ROOT, SESSION_FILE));
+  bridge.attachSessionReady((s) =>
+    accountFiles.watch(join(s.artifactRoot ?? reticleRoot, ReticleDir.CLOUD_LINK_FILE)),
+  );
   bridge.attachHarnessRequest((on, s) => {
     const root = s.artifactRoot ?? reticleRoot;
     applyHarnessSwitch(configForRoot, root, on, platformEnvFor(root));
@@ -734,11 +744,13 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
       const outcome = await driveForChat(effectiveDeps, goal, sessionId);
       return url === undefined ? outcome : { ...outcome, url };
     },
-    // The tab being driven, when this daemon launched it. A tab only the SDK reaches has no camera.
+    // The leased tab, or a desktop window's own capture. A web tab only the SDK reaches has no camera.
     frame: (sessionId) =>
       sessionId === undefined
         ? Promise.resolve(undefined)
-        : pool.screenshotLease(sessionId, { jpegQuality: REMOTE_DRIVE_JPEG_QUALITY }),
+        : driveFrame(effectiveDeps, sessionId, REMOTE_DRIVE_JPEG_QUALITY),
+    settle: (id, outcome) =>
+      endDrivenTab(id === undefined ? undefined : bridge.sessions.get(id), outcome),
     log,
   });
 
@@ -840,6 +852,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
       if (vh !== undefined) await new Promise<void>((resolve) => vh.server.close(() => resolve()));
       leaseReaper.stop();
       remoteDrives.stop();
+      accountFiles.close();
       await cloudSync.flush(); // not stop(): the last run written is the one nobody has yet
       await loopbackAlias.close?.();
       await pool.shutdown();

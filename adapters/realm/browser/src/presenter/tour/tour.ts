@@ -35,9 +35,10 @@ import {
 import { TourAnchor } from '@reticlehq/core/tour';
 import { RETICLE_URL_PARAM } from '@reticlehq/core';
 import { appModalOpen } from '@/dom/dom-ignore.js';
+import { TOUR_SEEN_KEY_PREFIX } from '@/storage-keys.js';
 
 /** Where "they have seen it" is remembered. Per project, so a second app still gets its tour. */
-export const TOUR_SEEN_KEY_PREFIX = 'reticle.tour.seen.';
+export { TOUR_SEEN_KEY_PREFIX };
 
 /**
  * Where the app's own content lives, in preference order.

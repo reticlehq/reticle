@@ -13,7 +13,8 @@ import {
   pickDocumentSuccessor,
   type SessionIdentity,
 } from './session-successor.js';
-import { SESSION_DISCONNECTED_REASON } from './facts/session-replaced.js';
+import { SESSION_DISCONNECTED_REASON, SESSION_PARKED_REASON } from './facts/session-replaced.js';
+import { isErrorDocument } from './session-info.js';
 
 /**
  * The agent's active project, used to scope auto-selection. `projectId` is the stable build-stamped
@@ -203,6 +204,27 @@ export class SessionManager {
       driven.projectId === undefined ? { url: driven.url } : { projectId: driven.projectId };
     return scopeSessions([...this.#sessions.values()], scope).filter((s) => s !== driven);
   }
+
+  /**
+   * Close a window's connection and refuse its id until the daemon restarts.
+   *
+   * Reported from a Tauri app whose hidden windows kept reconnecting: ending the session only ended
+   * the presenter, so the window came straight back. A reload keeps its id (sessionStorage), so the
+   * id is what stays parked; the 1008 close tells the SDK not to retry. Its tombstone goes too, so a
+   * call naming it is refused rather than handed a sibling window.
+   */
+  park(session: Session): void {
+    this.#parked.add(session.id);
+    session.disconnect(SESSION_PARKED_REASON);
+    this.remove(session);
+    this.#tombstones.delete(session.id);
+  }
+
+  isParked(sessionId: string): boolean {
+    return this.#parked.has(sessionId);
+  }
+
+  readonly #parked = new Set<string>();
 
   remove(session: Session): boolean {
     if (this.#sessions.get(session.id) !== session) return false;
@@ -595,7 +617,9 @@ export class SessionManager {
     // every call auto-targeted the one tab guaranteed to time out.
     const scored = all.map((s) => ({
       s,
-      score: s.unresponsive() ? 2 : s.throttled() ? 1 : 0,
+      // An error document (a dev server's 404 that still mounted the SDK) ranks below any working
+      // page, hidden or not: it is never the app the agent was asked about.
+      score: s.unresponsive() ? 3 : isErrorDocument(s.page) ? 2 : s.throttled() ? 1 : 0,
       ms: s.lastSeenMs(),
     }));
     const bestScore = Math.min(...scored.map((x) => x.score));

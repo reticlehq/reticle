@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { EventType } from '@reticlehq/core';
 import { installStorage } from './storage.js';
+import { ReticleStorageKey, TOUR_SEEN_KEY_PREFIX } from '@/storage-keys.js';
 
 interface Captured {
   type: EventType;
@@ -34,6 +35,27 @@ describe('installStorage — storage write events', () => {
       old: '2-items',
       new: '3-items',
     });
+  });
+
+  /*
+   * The HUD's own writes are not the app's. `reticle-presenter-log` showed up in a verdict's
+   * `storageKeysChanged` as if the app had changed it, and so would every other key the SDK keeps.
+   */
+  it("never reports Reticle's own keys as the app's storage changes", () => {
+    for (const key of Object.values(ReticleStorageKey)) {
+      sessionStorage.setItem(key, '1');
+      localStorage.setItem(key, '1');
+      localStorage.removeItem(key);
+    }
+    localStorage.setItem(`${TOUR_SEEN_KEY_PREFIX}web`, '1');
+    sessionStorage.clear();
+    localStorage.setItem('reticle.bench.authToken', 'app-owned');
+    const keys = events
+      .filter((e) => e.type === EventType.STORAGE_CHANGE)
+      .map((e) => e.data['key']);
+    expect(keys, "an app key that merely starts with reticle. is still the app's").toEqual([
+      'reticle.bench.authToken',
+    ]);
   });
 
   it('redacts the value of a credential-bearing key', () => {

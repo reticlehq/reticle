@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { hudNoticesSource, type NoticesLoad } from './hud-notices-source.js';
+import {
+  hudNoticesSource,
+  MAX_NOTICES_BODY_BYTES,
+  type NoticesLoad,
+} from './hud-notices-source.js';
 
 const FILE = { version: 1, notices: [{ id: 'harness-personas', title: 'Let Reticle drive' }] };
 const HOUR = 3_600_000;
@@ -76,5 +80,49 @@ describe('the HUD notices the daemon keeps', () => {
     source.read();
     await flush();
     expect(calls).toBe(1);
+  });
+
+  it('persists only the entries that validated, never the raw body', async () => {
+    const cache = cachePath();
+    const hostile = {
+      version: 1,
+      notices: [
+        { id: 'harness-personas', title: 'Let Reticle drive', smuggled: 'x'.repeat(100) },
+        { id: 'BAD ID', title: 'dropped' },
+      ],
+      extra: { anything: true },
+    };
+    const source = hudNoticesSource({
+      cacheFile: cache,
+      now: () => 0,
+      load: () => Promise.resolve({ status: 200, etag: '"v3"', body: JSON.stringify(hostile) }),
+    });
+    source.read();
+    await flush();
+    const written = readFileSync(cache, 'utf8');
+    expect(written).not.toContain('smuggled');
+    expect(written).not.toContain('BAD ID');
+    expect(written).not.toContain('anything');
+    // And what was written still reads back as the same notices on the next start.
+    const again = hudNoticesSource({
+      cacheFile: cache,
+      now: () => 0,
+      load: () => new Promise(() => undefined),
+    });
+    expect(again.read().map((n) => n.id)).toEqual(['harness-personas']);
+  });
+
+  it('refuses an oversized body before parsing or writing anything', async () => {
+    const cache = cachePath();
+    const huge = JSON.stringify({ ...FILE, pad: 'x'.repeat(MAX_NOTICES_BODY_BYTES) });
+    const source = hudNoticesSource({
+      cacheFile: cache,
+      now: () => 0,
+      load: () => Promise.resolve({ status: 200, body: huge }),
+    });
+    source.read();
+    await flush();
+    expect(source.read()).toEqual([]);
+    expect(existsSync(cache)).toBe(false);
   });
 });

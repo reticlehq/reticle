@@ -55,7 +55,7 @@ waits for it to connect. Do not walk it by hand: read what it prints, do anythin
 it says is outstanding, and re-run it, which is safe. It exits non-zero until the
 app connects, and that connection, not a config file, is what "installed" means.
 Then prove a flow, which is a separate call: drive the journey with
-reticle_act_and_wait and an `until` on its last step (or, with a model configured,
+reticle_act_and_wait and an `until` on its last step (or, with a linked project,
 reticle_verify { action: "explore", persona: "<who does what>" }). Only if it could not run at all, follow
 https://docs.reticle.sh/install-manual.md.
 

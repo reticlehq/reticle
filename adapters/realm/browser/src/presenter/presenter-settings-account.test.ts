@@ -57,4 +57,10 @@ describe('the settings panel says whether this machine is signed in', () => {
       ACCOUNT_SIGNIN_ATTR,
     );
   });
+
+  it('says sign-in starts here, in the browser, not in a terminal', () => {
+    const help = panel().innerHTML;
+    expect(help, 'the panel signs in through the browser now').not.toContain('in your terminal');
+    expect(help).toContain(ACCOUNT_TEXT.SIGNED_OUT);
+  });
 });

@@ -12,7 +12,7 @@ import { z } from 'zod';
 
 /** Where the daemon reads the notices from. Overridable for self-hosting and tests. */
 export const HUD_NOTICES_URL = 'https://reticle.sh/hud/notices.v1.json';
-const NOTICES_FILE_VERSION = 1;
+export const NOTICES_FILE_VERSION = 1;
 /** More than this and the rail stops being a rail. */
 const MAX_SHOWN = 5;
 

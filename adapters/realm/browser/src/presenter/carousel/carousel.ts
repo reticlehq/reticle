@@ -10,6 +10,8 @@
  * at every qualifying moment by choice, and "not now" is not "never".
  */
 
+import { ReticleStorageKey } from '@/storage-keys.js';
+
 /** Root of the carousel — the one element the log keeps above its rows. */
 export const CAROUSEL_ATTR = 'data-reticle-carousel';
 /** Each slide, carrying its id. */
@@ -22,7 +24,7 @@ export const CAROUSEL_PREV_ATTR = 'data-reticle-carousel-prev';
 export const CAROUSEL_NEXT_ATTR = 'data-reticle-carousel-next';
 export const CAROUSEL_POSITION_ATTR = 'data-reticle-carousel-position';
 /** Where "close" is remembered — session storage, so it lasts this tab and no longer. */
-export const CAROUSEL_DISMISSED_KEY = 'reticle.carousel.dismissed';
+export const CAROUSEL_DISMISSED_KEY = ReticleStorageKey.CAROUSEL_DISMISSED;
 
 const CLOSE_LABEL = 'Close';
 
@@ -196,7 +198,7 @@ function startRotation(log: HTMLElement, root: HTMLElement, count: number): void
  * Styles. The track's fixed height is what keeps a slide change from moving the log; the cards
  * inside lose their own frame so the carousel draws one.
  */
-export const CAROUSEL_CSS = `
+export const CAROUSEL_CSS: string = `
 .reticle-carousel{position:relative;margin:8px 10px;padding:10px 12px 8px;border:1px solid var(--reticle-line,#2a2f3a);border-radius:10px;background:var(--reticle-surface-inset,rgba(255,255,255,.03));}
 .reticle-carousel-track{height:100px;overflow:hidden;}
 .reticle-carousel-slide .reticle-offer,.reticle-carousel-slide .reticle-talk{margin:0;padding:0;border:0;background:none;}

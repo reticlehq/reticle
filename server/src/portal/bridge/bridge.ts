@@ -31,7 +31,10 @@ import { tokensMatch } from './token-auth.js';
 import { pairingTokenSource } from './pairing-token.js';
 import { log } from '@/log.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
-import { sessionReplacedReason } from '@/portal/session/facts/session-replaced.js';
+import {
+  SESSION_PARKED_REASON,
+  sessionReplacedReason,
+} from '@/portal/session/facts/session-replaced.js';
 import { describeSkew, sdkFix, SkewPair } from '@/command/version/version-skew.js';
 import { noteVersionSkew } from '@/command/version/version-nudge.js';
 import { protocolSkewReason } from './protocol-skew.js';
@@ -615,6 +618,11 @@ export class Bridge {
               ...(parsed.projectId === undefined ? {} : { projectId: parsed.projectId }),
             });
             socket.close(WS_CLOSE.AUTH_FAILED[0], reason);
+            return;
+          }
+          // A window the agent detached stays detached across its own reloads. See SessionManager.park.
+          if (this.sessions.isParked(parsed.sessionId)) {
+            socket.close(1008, SESSION_PARKED_REASON);
             return;
           }
           const existing = this.sessions.get(parsed.sessionId);
