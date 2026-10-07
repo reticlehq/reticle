@@ -715,6 +715,21 @@ describe('a throttled tab timeout is not a missing render', () => {
   });
 
   /**
+   * Reported from a chat-requested drive of a Tauri app whose window was behind the browser: every
+   * action came back `unknown` with advice to acquire a browser lease, which opens a context with
+   * none of the app's IPC. A desktop window is brought to the front; it is never leased.
+   */
+  it('a starved miss is told to bring the window forward, and never to lease a desktop app', async () => {
+    const result = await evaluatePredicate(new ThrottledSession([]), {
+      kind: 'element',
+      query: { text: 'Configuration' },
+    });
+    expect(result.inconclusive).toBe(THROTTLED_STARVED_NOTE);
+    expect(result.inconclusive).toMatch(/Bring its window to the front/);
+    expect(result.inconclusive).toMatch(/Never for a desktop app/);
+  });
+
+  /**
    * The polarity the starved-tab rule was missing.
    *
    * Throttling makes a NEGATIVE observation untrustworthy — "I did not find it" may mean "I could

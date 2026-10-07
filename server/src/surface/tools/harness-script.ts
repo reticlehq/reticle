@@ -107,15 +107,14 @@ export async function exploreScript(
   // A platform that cannot plan leaves the caller to drive the journey through it unplanned.
   const platform = serverOptionsFromEnv(env);
   if (platform === undefined) return undefined;
-  // No `about` for a named journey: the platform proposes personas only when it is given one.
-  const about =
-    focus === undefined
-      ? await aboutTheApp(
-          planAsText(plan),
-          (name, args) => reticleToolset(deps, pinned(options)).invoke(name, args),
-          await controlsSeenBefore(deps, options.sessionId),
-        )
-      : '';
+  // What the screen offers, for a named journey too. The platform splits a broad request ("test my
+  // app, make a plan") into journeys through these controls and leaves a narrow one whole; without
+  // them, a chat-requested drive of a desktop app planned one step that restated the request.
+  const about = await aboutTheApp(
+    planAsText(plan),
+    (name, args) => reticleToolset(deps, pinned(options)).invoke(name, args),
+    await controlsSeenBefore(deps, options.sessionId),
+  );
   const personas = focus === undefined ? personasIn(flows) : [];
   const proposed = await proposeScript(platform, {
     about,

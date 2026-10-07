@@ -328,6 +328,42 @@ describe('a daemon syncs EVERY linked repo on the machine, not only its own', ()
     d.stop();
   });
 
+  it('never pushes a sibling that is not linked itself, whatever key the environment holds', async () => {
+    /*
+     * Reported while driving a linked desktop app: a daemon started with RETICLE_API_KEY pushed every
+     * project this machine had ever seen into that ONE project, a status and a pull per root, around
+     * ninety requests a second. An unlinked root resolves to the environment's key — right for the
+     * root the daemon stands in, and somebody else's project for every other one.
+     */
+    const sibling = mkdtempSync(join(tmpdir(), 'reticle-unlinked-'));
+    const seen: string[] = [];
+    const request = (url: string): Promise<{ status: number; text: string }> => {
+      seen.push(url);
+      const body = url.includes('/pull') ? { triage: [], cursor: '0:' } : {};
+      return Promise.resolve({ status: 200, text: JSON.stringify(body) });
+    };
+    const fromEnvOnly: ProjectCloud = { ...LINKED, projectId: null };
+    const pushedRoots: string[] = [];
+    const d = startSyncDaemon({
+      reticleRoot: root,
+      cloud: () => Promise.resolve(LINKED),
+      otherRoots: () => Promise.resolve([sibling]),
+      cloudFor: (r) => {
+        pushedRoots.push(r);
+        return Promise.resolve(fromEnvOnly);
+      },
+      request,
+      intervalMs: 1000,
+    });
+    await vi.advanceTimersByTimeAsync(6_000);
+    const cycles = seen.filter((u) => u.includes('/v1/sync/status')).length;
+    // Only the daemon's own root syncs: one status call per cycle, never two.
+    expect(pushedRoots).toContain(sibling);
+    expect(cycles).toBe(seen.filter((u) => u.includes('/v1/sync/pull')).length);
+    expect(cycles).toBeLessThanOrEqual(2);
+    d.stop();
+  });
+
   it('never resolves its OWN root twice', async () => {
     // The enumerator is machine-wide, so the daemon's own directory appears in it. Pushing it once
     // as a sibling and again as itself would double every count it reports.

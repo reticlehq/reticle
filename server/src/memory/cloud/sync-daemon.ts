@@ -212,7 +212,11 @@ export function startSyncDaemon(deps: SyncDaemonDeps): SyncDaemon {
       if (root === deps.reticleRoot) continue;
       try {
         const cloud = await cloudFor(root);
-        if (null === cloud.config) continue;
+        // Linked HERE, by its own link file. An unlinked root resolves to the environment's key,
+        // which is the right answer for the root this daemon stands in and somebody else's project
+        // for every other one: a daemon started with RETICLE_API_KEY pushed every project this
+        // machine had seen into that one, a status and a pull per root on every cycle.
+        if (null === cloud.config || null === cloud.projectId) continue;
         const report = await pushRoot(root, cloud);
         if (report === undefined) continue;
         if (report.error !== undefined) {

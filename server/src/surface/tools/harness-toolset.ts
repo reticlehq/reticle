@@ -10,7 +10,13 @@
 
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { ReticleTool, type DrivenBy } from '@reticlehq/core';
+import {
+  AppRuntime,
+  ConsequenceKind,
+  NetInitiator,
+  ReticleTool,
+  type DrivenBy,
+} from '@reticlehq/core';
 import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
 import { runTool } from './invoke-tool.js';
 import { TOOL_SURFACE, filterTools } from './tool-surface.js';
@@ -143,7 +149,10 @@ export function reticleToolset(
         // list, and this is the same recovery the MCP surface gives an agent that does the same.
         return { error: `unknown tool ${target ?? name}`, available: [...byName.keys()] };
       }
-      const scoped = pinSession(targetArgs, options.sessionId);
+      const pinned = pinSession(targetArgs, options.sessionId);
+      const scoped = isDesktopSession(deps, pinned['sessionId'])
+        ? desktopBackendClaims(pinned)
+        : pinned;
       const drivenBy = options.drivenBy;
       return withTimeout(
         drivenBy === undefined
@@ -171,6 +180,47 @@ export function pinSession(
 ): Record<string, unknown> {
   if (sessionId === undefined || 'sessionId' in args) return args;
   return { ...args, sessionId };
+}
+
+/** The HTTP methods a "saves" or "updates" claim names: a write to the app's backend. */
+const MUTATING_METHODS: ReadonlySet<string> = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+function isDesktopSession(deps: ToolDeps, sessionId: unknown): boolean {
+  try {
+    const runtime = deps.sessions.resolve(
+      'string' === typeof sessionId ? sessionId : undefined,
+    ).runtime;
+    return AppRuntime.ELECTRON === runtime || AppRuntime.TAURI === runtime;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A desktop app's backend is its IPC: a claim that the app writes to its backend means that call.
+ *
+ * Reported from a chat-requested drive of a Tauri app: the platform claimed a POST for Add, the app
+ * made the same write as `ipc://add_todo` (200), and the step was graded `no`. Only a MUTATING method
+ * is read this way; a read, an unbound request and every other kind keep their meaning.
+ */
+export function desktopBackendClaims(args: Record<string, unknown>): Record<string, unknown> {
+  const rewrite = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(rewrite);
+    if ('object' !== typeof value || null === value) return value;
+    const record = value as Record<string, unknown>;
+    const method = record['method'];
+    const ipc =
+      ConsequenceKind.NET === record['kind'] &&
+      'string' === typeof method &&
+      MUTATING_METHODS.has(method.toUpperCase());
+    return Object.fromEntries(
+      Object.entries(record).map(([key, inner]) => [
+        key,
+        ipc && 'method' === key ? NetInitiator.IPC : rewrite(inner),
+      ]),
+    );
+  };
+  return rewrite(args) as Record<string, unknown>;
 }
 
 function asName(value: unknown): string | undefined {

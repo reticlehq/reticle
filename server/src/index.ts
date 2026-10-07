@@ -52,6 +52,7 @@ import { attachRouteLearning } from './memory/project/learned-routes.js';
 import { AnnotationStore } from './language/flows/stores/annotation-store.js';
 import { createNodeFileSystem } from './memory/project/fs/fs-port.js';
 import { cleanupCaptureDirectories } from './features/visual/capture-cleanup.js';
+import { driveFrame } from './features/visual/visual-tools.js';
 import { ReticleRunner } from './judgement/runs/reticle-runner.js';
 import { createRunnerPort } from './judgement/runs/runner-port.js';
 import { RunStore } from './judgement/runs/artifact/run-store.js';
@@ -734,11 +735,11 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
       const outcome = await driveForChat(effectiveDeps, goal, sessionId);
       return url === undefined ? outcome : { ...outcome, url };
     },
-    // The tab being driven, when this daemon launched it. A tab only the SDK reaches has no camera.
+    // The leased tab, or a desktop window's own capture. A web tab only the SDK reaches has no camera.
     frame: (sessionId) =>
       sessionId === undefined
         ? Promise.resolve(undefined)
-        : pool.screenshotLease(sessionId, { jpegQuality: REMOTE_DRIVE_JPEG_QUALITY }),
+        : driveFrame(effectiveDeps, sessionId, REMOTE_DRIVE_JPEG_QUALITY),
     log,
   });
 
