@@ -9,6 +9,7 @@
  * are started in order, so whatever is waited on has already started.
  */
 import {
+  PredicateKind,
   ReplayStatus,
   ReticleTool,
   ScriptStatus,
@@ -26,6 +27,7 @@ import {
   type ScriptStep,
 } from '@reticlehq/core/artifacts';
 import { checkTally } from '../drive-report.js';
+import { goalsIn } from '../goals.js';
 import {
   DEFAULT_MAX_STEPS,
   StopReason,
@@ -277,8 +279,14 @@ async function runLeaf(
         // Passed means its checks held, not that it ran one: a refund journey whose two checks both
         // failed was marked passed because a check had run.
         const tally = checkTally(drive.toolCalls);
-        // Its checks holding is not its goal reached: a goal judged unmet does not pass.
-        return 0 < tally.held && 0 === tally.failed && false !== drive.goalMet;
+        if (0 < tally.failed || false === drive.goalMet) return false;
+        // A goal that quotes where it ends is judged there, by an assert kept as the run's check:
+        // the model clicked a counter with no `until` and the journey failed on a counter that worked.
+        // ponytail: the LAST quote is the end state ("from "count: 0" to "count: 1""); a goal that
+        // quotes its end first needs the planner to say which quote is the end.
+        const end = goalsIn(step.goal).at(-1);
+        if (end !== undefined) return holds(tools, { kind: PredicateKind.TEXT, contains: end });
+        return 0 < tally.held;
       }
       const result = await call(tools, ReticleTool.ACT_AND_WAIT, {
         ...(step.target === undefined ? {} : { target: step.target }),

@@ -408,6 +408,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     routeNetworkDetail,
   );
 
+  let chatDrives: { stop: () => void } | undefined;
   if (options.mcp !== false) {
     // cwd/Date.now are confined to start — never inside reticle-dir.ts's pure logic (rule 7).
     const fs = createNodeFileSystem();
@@ -475,8 +476,22 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       ...(activeProjectId === undefined ? {} : { projectId: activeProjectId }),
     };
     const profile = resolveToolSurface(options.toolProfile);
+    const toolDeps = realInput !== undefined ? { ...deps, realInput } : deps;
+    // The platform chat sees this app too: `reticle drive` in a window runs here, not in a daemon.
+    chatDrives = startChatDrives(
+      toolDeps,
+      bridge.sessions,
+      fs,
+      {
+        sessionCloud: sessionCloudPort(fs, homedir(), process.env, (id) =>
+          sessionRoot(toolDeps, id),
+        ),
+        version: SERVER_VERSION,
+      },
+      log,
+    );
     const server = createMcpServer(
-      realInput !== undefined ? { ...deps, realInput } : deps,
+      toolDeps,
       profile,
       instructionStateAt(port, bridge.sessions.count()),
     );
@@ -499,6 +514,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       uninstallHooks();
       await cleanupCaptureDirectories();
       leaseReaper?.stop();
+      chatDrives?.stop();
       await pool?.shutdown();
       await owned?.dispose();
       await bridge.close();

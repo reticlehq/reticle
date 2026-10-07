@@ -295,3 +295,64 @@ describe('a journey failing beside a lane that missed its goal', () => {
     expect(run.lines.find((line) => line.includes('Lane A'))).toContain('the goal was not reached');
   });
 });
+
+/**
+ * Found driving the platform chat: "Open the page, see the button reading "count: 0", click it once,
+ * and confirm the button now reads "count: 1"" was clicked with no `until`, so the journey held no
+ * check and failed on a counter that worked. The end state it quotes is what judges it.
+ */
+describe('an open goal that quotes where it ends', () => {
+  const COUNTER = 'Click the button reading "count: 0" once and confirm it now reads "count: 1".';
+  const counter = script({
+    version: 1,
+    source: 'platform',
+    journeys: [{ id: 'count', title: 'Count', steps: [{ kind: 'act', goal: COUNTER }] }],
+    lanes: [{ id: 'A', journeys: ['count'] }],
+  });
+  const onPage = (page: string): ScriptPorts => ({
+    parallel: 1,
+    stopped: () => false,
+    lease: () => Promise.resolve({ release: () => Promise.resolve() }),
+    toolset: (): HarnessToolset => ({
+      tools: [],
+      invoke(name, args) {
+        if (ReticleTool.ASSERT !== name) return Promise.resolve({});
+        const contains = String((args['predicate'] as { contains?: unknown }).contains);
+        const shown = page.includes(contains);
+        return Promise.resolve({ pass: shown, verified: shown ? Verified.YES : Verified.NO });
+      },
+    }),
+    // The model clicked and declared nothing: a step, not a check.
+    drive: () =>
+      Promise.resolve({
+        stopReason: StopReason.FINISHED,
+        summary: '',
+        steps: 1,
+        toolCalls: [
+          {
+            id: 'c',
+            name: ReticleTool.ACT_AND_WAIT,
+            args: { ref: 'e6', action: 'click' },
+            result: { verified: 'no-fault' },
+            isError: false,
+          },
+        ],
+        usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        proved: false,
+      }),
+  });
+
+  it('passes on the text it ends on, and keeps that assert as the run’s check', async () => {
+    const run = await runScript(counter, onPage('button "count: 1"'));
+    expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.PASSED);
+    const asserted = run.toolCalls.filter((c) => ReticleTool.ASSERT === c.name);
+    expect(asserted.map((c) => (c.result as { verified?: unknown }).verified)).toEqual([
+      Verified.YES,
+    ]);
+  });
+
+  it('fails when the page still shows where it started', async () => {
+    const run = await runScript(counter, onPage('button "count: 0"'));
+    expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.FAILED);
+  });
+});
