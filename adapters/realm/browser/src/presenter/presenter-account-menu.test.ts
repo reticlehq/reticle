@@ -153,6 +153,79 @@ describe('opening and closing the menu', () => {
     const { root, teardown } = mounted(accountControlHtml(SIGNED_IN, { dashboardUrl: DASHBOARD }));
     const out = root.querySelector(`[${ACCOUNT_SIGNOUT_ATTR}]`);
     expect(out?.getAttribute('data-reticle-copy')).toBe(ACCOUNT_TEXT.SIGNOUT_COMMAND);
+    expect(out?.textContent).toContain('Copy sign-out command');
+    teardown();
+    root.remove();
+  });
+
+  it('confirms when the sign-out command reaches the clipboard', async () => {
+    const prior = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: (text: string) => {
+          expect(text).toBe(ACCOUNT_TEXT.SIGNOUT_COMMAND);
+          return Promise.resolve();
+        },
+      },
+    });
+    const { root, teardown } = mounted(accountControlHtml(SIGNED_IN, {}));
+    const out = root.querySelector<HTMLElement>(`[${ACCOUNT_SIGNOUT_ATTR}]`);
+    out?.click();
+    await Promise.resolve();
+    expect(out?.textContent).toBe(ACCOUNT_TEXT.COPIED);
+    teardown();
+    root.remove();
+    if (prior === undefined) Reflect.deleteProperty(navigator, 'clipboard');
+    else Object.defineProperty(navigator, 'clipboard', prior);
+  });
+
+  it('explains the terminal command if the clipboard is unavailable', async () => {
+    const prior = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+    const { root, teardown } = mounted(accountControlHtml(SIGNED_IN, {}));
+    const out = root.querySelector<HTMLElement>(`[${ACCOUNT_SIGNOUT_ATTR}]`);
+    out?.click();
+    await Promise.resolve();
+    expect(out?.textContent).toBe(ACCOUNT_TEXT.SIGNOUT_COPY_FAILED);
+    teardown();
+    root.remove();
+    if (prior === undefined) Reflect.deleteProperty(navigator, 'clipboard');
+    else Object.defineProperty(navigator, 'clipboard', prior);
+  });
+});
+
+/**
+ * Sign in used to copy `reticle login` and stop: a dead end for anybody who does not live in a
+ * terminal. It now asks the daemon to open the browser approval, and still copies the command as
+ * the fallback for an older daemon that does not answer.
+ */
+describe('signing in from the HUD', () => {
+  it('asks the daemon to start the browser sign-in', () => {
+    const root = document.createElement('div');
+    root.innerHTML = accountControlHtml({ signedIn: false }, {}, true);
+    document.body.appendChild(root);
+    let asked = 0;
+    const teardown = mountAccountControl(root, () => {
+      asked += 1;
+    });
+    root.querySelector<HTMLElement>('[data-reticle-account-signin]')?.click();
+    expect(asked).toBe(1);
+    teardown();
+    root.remove();
+  });
+
+  it('does not treat the copy-a-command hints as a sign-in', () => {
+    const root = document.createElement('div');
+    root.innerHTML =
+      '<button data-reticle-account-signin data-reticle-copy="reticle link">link</button>';
+    document.body.appendChild(root);
+    let asked = 0;
+    const teardown = mountAccountControl(root, () => {
+      asked += 1;
+    });
+    root.querySelector<HTMLElement>('button')?.click();
+    expect(asked).toBe(0);
     teardown();
     root.remove();
   });

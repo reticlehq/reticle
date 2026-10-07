@@ -54,6 +54,10 @@ export const FlowAnchorSchema = z.discriminatedUnion('kind', [
     kind: z.literal(AnchorKind.ROLE),
     role: z.string().min(1),
     name: z.string().optional(),
+    // Which of several same-named controls was recorded, in page order, and how many there were.
+    // Honoured only while the page still has exactly `of` of them; otherwise the step is ambiguous.
+    nth: z.number().int().min(0).optional(),
+    of: z.number().int().min(2).optional(),
   }),
   z.object({ kind: z.literal(AnchorKind.SIGNAL), name: z.string().min(1) }),
   // Auto-anchor: re-find an element by component identity / source location when it has no testid.
@@ -385,6 +389,12 @@ export interface FlowStepResult {
    * reader to skim past it, and the whole value here is that its presence is the signal.
    */
   contradictions?: Contradiction[];
+  /**
+   * The console errors and uncaught exceptions this step's window saw, the first few only; `digest`
+   * still counts every one. A run artifact's `evidence.consoleErrors` is built from these, so it
+   * reports what replay observed instead of claiming a clean console. Omitted when there were none.
+   */
+  consoleErrors?: { level: string; message: string; at: number }[];
   ok: boolean;
   error?: string;
   note?: string;
@@ -661,6 +671,12 @@ export const FlowFileSchema = z.object({
    * the on-disk version stays FLOW_FILE_VERSION 1.
    */
   startPath: z.string().optional(),
+  /**
+   * The saved flow this one was generated from, with different parameters (a fixture's customer,
+   * a seeded id). A suite that writes runtime copies of a template and deletes them after replay
+   * proved the template, and a strict pass of a copy counts toward it in the gate (#1321).
+   */
+  template: z.string().min(1).optional(),
   // FUTURE: fixtures/preconditions — schema slot reserved, unpopulated this cut. The recorder
   // never writes it and no fixture runner exists.
   fixture: z.string().optional(),
@@ -893,6 +909,8 @@ export interface FlowChip {
   name: string;
   /** The testid the flow's first step anchors to, when it has one — the panel hides chips that cannot start on the current page. */
   start?: string;
+  /** Saved time, used to put recent flows first in the HUD. Older flow stores may omit it. */
+  createdAt?: number;
 }
 
 /** One recorded known bug, as stored on a flow. */

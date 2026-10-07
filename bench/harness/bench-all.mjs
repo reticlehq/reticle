@@ -14,15 +14,20 @@
 // own bench/raw/*.json; gate.mjs reads those. (Raw JSON keys keep the A/B/C codes for data continuity.)
 import { execFileSync, spawn } from 'node:child_process';
 import { connect } from 'node:net';
-import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import * as PORTS from './ports.mjs';
 import { verifyAnchors } from './inject.mjs';
 import { measurementVerdict } from './pass-artifact.mjs';
 const FULL = process.argv.includes('--full');
 const NO_BOOT = process.argv.includes('--no-boot');
+
+// Every pass's daemon starts in ONE empty directory, shared so a pass can replay what an earlier one
+// saved. Started in the checkout, they read the flows its developer had saved there: the suite
+// verdict listed routes from other apps, and the measured tokens counted them.
+process.env.BENCH_RETICLE_CWD ??= mkdtempSync(join(tmpdir(), 'reticle-bench-'));
 // Ports live in one module — see the note there on why disagreeing about them silently
 // invalidated the benchmark twice.
 const { RETICLE_PORT, API_PORT, DEMO_PORT, BENCH_URL } = PORTS;

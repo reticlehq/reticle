@@ -94,12 +94,76 @@ function detectBrand(): BrowserBrand {
   return BrowserBrand.OTHER;
 }
 
-function snapshotHealth(): {
+/**
+ * The page's own fetch, bound when this module loads — before the network observer wraps it — so the
+ * status probe below never shows up as a request the app made.
+ */
+const pageFetch: typeof fetch | undefined =
+  'undefined' !== typeof window && 'function' === typeof window.fetch
+    ? window.fetch.bind(window)
+    : undefined;
+
+/** Tauri's own name for the window this page is in (`main`, `setup`…); undefined anywhere else. */
+function tauriWindowLabel(): string | undefined {
+  const internals = (window as unknown as Record<string, unknown>)['__TAURI_INTERNALS__'] as
+    { metadata?: { currentWindow?: { label?: unknown } } } | undefined;
+  const label = internals?.metadata?.currentWindow?.label;
+  return 'string' === typeof label && label.length > 0 ? label : undefined;
+}
+
+/**
+ * The HTTP status this document was served with, so a 404 page is never mistaken for the app.
+ *
+ * Reported from a Tauri app whose two hidden windows loaded a dev server's 404 page — which still
+ * mounted the SDK — and were the only sessions listed. The browser's navigation entry says the
+ * status where it can; WKWebView never does, so a desktop page asks once with a HEAD.
+ */
+function navigationStatus(): number | undefined {
+  try {
+    const [entry] = performance.getEntriesByType('navigation') as { responseStatus?: number }[];
+    const known = entry?.responseStatus;
+    return 'number' === typeof known && known > 0 ? known : undefined;
+  } catch {
+    return undefined; // no navigation timing here: fall through to asking
+  }
+}
+
+async function documentStatus(runtime: string): Promise<number | undefined> {
+  const known = navigationStatus();
+  if (known !== undefined) return known;
+  try {
+    if ('web' === runtime || pageFetch === undefined || !/^https?:$/.test(location.protocol)) {
+      return undefined;
+    }
+    return (await pageFetch(location.href, { method: 'HEAD', cache: 'no-store' })).status;
+  } catch {
+    return undefined; // a status we cannot read is simply not reported
+  }
+}
+
+/**
+ * An Electron window's label: Electron has no name for a window, so the app gives one where it
+ * registers the window for capture (`installReticleCapture(win, { label })`) and the preload asks.
+ */
+async function electronWindowLabel(): Promise<string | undefined> {
+  const channel = (window as unknown as Record<string, unknown>)[RETICLE_IPC_GLOBAL] as
+    { windowLabel?: () => Promise<unknown> } | undefined;
+  if ('function' !== typeof channel?.windowLabel) return undefined;
+  try {
+    const label = await channel.windowLabel();
+    return 'string' === typeof label && label.length > 0 ? label : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function snapshotHealth(windowLabel: string | undefined): {
   hidden: boolean;
   focused: boolean;
   runtime: string;
   engine: string;
   brand: BrowserBrand;
+  windowLabel?: string;
 } {
   return {
     hidden: 'hidden' === document.visibilityState,
@@ -107,6 +171,7 @@ function snapshotHealth(): {
     runtime: detectRuntime(),
     engine: detectEngine(),
     brand: detectBrand(),
+    ...(windowLabel === undefined ? {} : { windowLabel }),
   };
 }
 
@@ -119,8 +184,14 @@ export function installHealth(emit: Emit): Teardown {
   const ac = new AbortController();
   const { signal } = ac;
 
+  let status: number | undefined;
+  let label = tauriWindowLabel();
   const report = (reason: HealthReason): void => {
-    emit(EventType.PAGE_HEALTH, { ...snapshotHealth(), reason });
+    emit(EventType.PAGE_HEALTH, {
+      ...snapshotHealth(label),
+      ...(status === undefined ? {} : { documentStatus: status }),
+      reason,
+    });
   };
 
   document.addEventListener('visibilitychange', () => report(HealthReason.VISIBILITY), { signal });
@@ -128,6 +199,16 @@ export function installHealth(emit: Emit): Teardown {
   window.addEventListener('blur', () => report(HealthReason.BLUR), { signal });
 
   report(HealthReason.INITIAL); // baseline so the server knows state before the first change
+  // Both asked once, and reported as soon as they are known: selection reads them on connect.
+  void Promise.all([
+    documentStatus(detectRuntime()),
+    label === undefined ? electronWindowLabel() : Promise.resolve(label),
+  ]).then(([known, named]) => {
+    if (signal.aborted || (known === undefined && named === label)) return;
+    status = known;
+    label = named;
+    report(HealthReason.HEARTBEAT);
+  });
   const stopHeartbeat = nativeSetInterval(
     () => report(HealthReason.HEARTBEAT),
     SESSION_HEALTH.HEARTBEAT_MS,

@@ -828,6 +828,11 @@ describe('runInit — a failed install must not leave the app half-wired', () =>
     const io = memoryIo(
       {
         ...NEXT_FILES,
+        // An upgrade: the manifest declares an older pin and `pnpm add` of the new one refused.
+        'package.json': JSON.stringify({
+          dependencies: { next: '15', react: '^19' },
+          devDependencies: { '@reticlehq/react': '2.0.0', '@reticlehq/next': '2.0.0' },
+        }),
         'node_modules/@reticlehq/react/package.json': '{"name":"@reticlehq/react"}',
         'node_modules/@reticlehq/next/package.json': '{"name":"@reticlehq/next"}',
       },
@@ -837,6 +842,28 @@ describe('runInit — a failed install must not leave the app half-wired', () =>
     const report = io.lines.join('\n');
     expect(report).toContain('[✓] Install dependencies');
     expect(report).not.toContain('step failed');
+  });
+
+  /**
+   * Reported from a Tauri + Next app: `pnpm add` failed with ERR_PNPM_UNEXPECTED_STORE, init printed
+   * success because the packages happened to resolve, and package.json never gained them — the next
+   * clean install drops them and the app stops booting. On disk is not installed until it is declared.
+   */
+  it('reports the install step as failed when the packages resolve but package.json never got them', () => {
+    const io = memoryIo(
+      {
+        ...NEXT_FILES,
+        'node_modules/@reticlehq/react/package.json': '{"name":"@reticlehq/react"}',
+        'node_modules/@reticlehq/next/package.json': '{"name":"@reticlehq/next"}',
+      },
+      { execOk: false, mcpExists: true },
+    );
+    runInit({ ...OPTS, install: true }, io);
+    const report = io.lines.join('\n');
+    expect(report).toContain('[⚠] Install dependencies');
+    expect(report).toContain('step failed');
+    // The wiring still lands: the import resolves today, which is what that guard protects.
+    expect(io.written['next.config.mjs']).toContain('withReticle');
   });
 
   it('config that does not import anything is still written — it has no dependency to miss', () => {

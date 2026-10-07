@@ -25,10 +25,9 @@ MCP is **pull-based**: the agent only receives data when it calls a tool. Reticl
 The floating panel (bottom-center, `present: true`) gives you:
 
 - **Pause / Resume**: one toggle. Paused turns the panel + page border **amber** with a `PAUSED` badge.
-- **Message box + send.** Type a correction ("check the error state first"), hit Send (or Enter). Your message shows as a `🧑 you:` bubble in the transcript **and** is delivered to the agent.
 - **End** ends the session: panel turns **emerald**, shows `Session ended · <summary>`, then fades away.
 - **Minimise (▾)** collapses the panel to a bar that streams only the live line; click the bar to restore.
-- **Flag a bug**, the button in the corner. Toggle it on, click the element that looks wrong, type what's wrong (⌘/Ctrl+Enter to send, Esc to back out). Reticle pins a numbered marker, logs your flag in the panel, and hands the agent a structured mark.
+- **Flag a bug**, the button in the corner. Toggle it on, click the element that looks wrong, type what's wrong (⌘/Ctrl+Enter to send, Esc to back out). Reticle pins a numbered marker, logs your flag in the panel, and hands the agent a structured mark. Notes are kept in `.reticle/notes.json` (pending and resolved), so a reload or a daemon restart does not lose them, and a linked project syncs them to the dashboard.
 
 ## Flag a bug: annotate the mistake where you see it
 

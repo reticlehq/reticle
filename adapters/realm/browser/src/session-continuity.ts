@@ -15,8 +15,10 @@
  * leased tab that reloads rejoins its own lease.
  */
 
+import { ReticleStorageKey } from '@/storage-keys.js';
+
 /** Where the id lives. Namespaced like the URL param it mirrors. */
-const STORAGE_KEY = '__reticle_session';
+const STORAGE_KEY = ReticleStorageKey.SESSION;
 
 export function rememberSessionLabel(
   explicit: string | undefined,

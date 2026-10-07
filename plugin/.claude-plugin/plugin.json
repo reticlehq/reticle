@@ -1,7 +1,7 @@
 {
   "name": "reticle",
   "displayName": "Reticle",
-  "version": "3.5.0",
+  "version": "3.6.0",
   "description": "Verify a running web app from the inside. Installs the Reticle skill and registers the Reticle MCP server so the agent can look, act, observe and assert against the real app.",
   "author": {
     "name": "Reticle contributors",
@@ -15,7 +15,7 @@
   "mcpServers": {
     "reticle": {
       "command": "npx",
-      "args": ["-y", "@reticlehq/server@3.5.0", "mcp"],
+      "args": ["-y", "@reticlehq/server@3.6.0", "mcp"],
       "env": { "RETICLE_INSTALL_SOURCE": "plugin" }
     }
   }

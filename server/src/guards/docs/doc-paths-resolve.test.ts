@@ -20,6 +20,8 @@ import { REPO_ROOT } from '@/machine/repo-root.js';
  *   - CHANGELOG.md, which is a record of what was true at the time. Repointing an old entry
  *     at a path invented later would make the history less accurate, not more.
  *   - docs/matrix/, which is a dated capture of a past release.
+ *   - bench/JEV-SCORECARD.md, the record of a measurement whose runner and drivers moved to the
+ *     platform; it names the files it measured, as they were.
  *   - anything under plan/, which is gitignored.
  *
  * The exclusion list is the interesting part of this guard and the part most likely to rot, so
@@ -28,7 +30,7 @@ import { REPO_ROOT } from '@/machine/repo-root.js';
 
 const NOT_OUR_TREE = [/^src\//, /^app\//, /^pages\//, /^specs\//, /^reticle-fixtures\//, /^dist\//];
 
-const DOCUMENTS_THAT_RECORD_THE_PAST = ['CHANGELOG.md'];
+const DOCUMENTS_THAT_RECORD_THE_PAST = ['CHANGELOG.md', 'bench/JEV-SCORECARD.md'];
 
 /**
  * Two documents with the same defect, excluded rather than fixed.

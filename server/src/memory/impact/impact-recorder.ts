@@ -31,7 +31,15 @@ const stores = new Map<string, ImpactStore>();
 /** The daemon's own root — used when a call cannot say which project it was for. */
 let defaultRoot: string | undefined;
 /** Held so a per-root store is built with the same clock and project name as the default. */
-let storeOpts: { projectName?: string; now?: () => number; config?: ConfigSource } = {};
+let storeOpts: {
+  projectName?: string;
+  now?: () => number;
+  config?: ConfigSource;
+  configForRoot?: (root: string) => ConfigSource;
+  coverageForRoot?: (root: string) => () => Record<string, number> | undefined;
+  globalRoot?: string;
+  sdkVersion?: string;
+} = {};
 
 /** Get-or-create the store for one root. */
 function storeFor(root: string | undefined): ImpactStore | undefined {
@@ -39,7 +47,13 @@ function storeFor(root: string | undefined): ImpactStore | undefined {
   if (key === undefined || 0 === key.length) return undefined;
   let found = stores.get(key);
   if (found === undefined) {
-    found = new ImpactStore({ ...storeOpts, reticleRoot: key });
+    const { configForRoot, coverageForRoot, ...opts } = storeOpts;
+    found = new ImpactStore({
+      ...opts,
+      ...(configForRoot === undefined ? {} : { config: configForRoot(key) }),
+      ...(coverageForRoot === undefined ? {} : { coverage: coverageForRoot(key) }),
+      reticleRoot: key,
+    });
     stores.set(key, found);
   }
   return found;
@@ -60,20 +74,33 @@ export function initImpact(opts: {
    * directory may not reach for it. The daemon owns both sides.
    */
   config?: ConfigSource;
+  /** Resolve credentials per project when one daemon serves multiple linked apps. */
+  configForRoot?: (root: string) => ConfigSource;
+  /** Reticle Coverage for a project root, supplied by the daemon (the ledger is a feature's). */
+  coverageForRoot?: (root: string) => () => Record<string, number> | undefined;
   reticleRoot: string | undefined;
   projectName?: string;
   now?: () => number;
+  /** Where the machine-wide `~/.reticle` lives. Tests pass a temp dir so they never write the real one. */
+  globalRoot?: string;
+  /** This build's version, for HUD notices that need a newer SDK. */
+  sdkVersion?: string;
 }): ImpactStore | undefined {
   // No root, no record. Programmatic callers and test doubles build their own deps and are not
   // obliged to carry one, and a courtesy counter must never be the reason a tool call throws.
   if (opts.reticleRoot === undefined || 0 === opts.reticleRoot.length) return storeFor(undefined);
   if (defaultRoot === undefined) {
     defaultRoot = opts.reticleRoot;
-    const { projectName, now, config } = opts;
+    const { projectName, now, config, configForRoot, coverageForRoot, globalRoot, sdkVersion } =
+      opts;
     storeOpts = {
       ...(projectName === undefined ? {} : { projectName }),
       ...(now === undefined ? {} : { now }),
+      ...(globalRoot === undefined ? {} : { globalRoot }),
+      ...(sdkVersion === undefined ? {} : { sdkVersion }),
       ...(config === undefined ? {} : { config }),
+      ...(configForRoot === undefined ? {} : { configForRoot }),
+      ...(coverageForRoot === undefined ? {} : { coverageForRoot }),
     };
   }
   return storeFor(opts.reticleRoot);

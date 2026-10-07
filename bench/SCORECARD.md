@@ -8,13 +8,13 @@ Numbers in this file are left **exactly as they were measured**, which is the ri
 
 **1. The replay numbers were re-measured on 2026-08-11 and they went UP.**
 
-| Metric | In the tables below (2026-06/07) | Re-measured 2026-08-11 | Why |
-| --- | --- | --- | --- |
-| Replay, per run | ~175 tok (128–184×) | **239 tok (127×)** | verdict payload grew |
-| Suite verify, K=2 | 47 tok (1287×) | **68 tok (890×)** | each flow now carries a success oracle, and the verdict reports per-flow |
-| Suite verify, K=4 | 47 tok (2574×) | **68 tok (1779×)** | same; still **constant in K**, which is the actual claim |
+| Metric | In the tables below (2026-06/07) | Re-measured 2026-08-11 | Re-measured 2026-10-06 | Why |
+| --- | --- | --- | --- | --- |
+| Replay, per run | ~175 tok (128–184×) | 239 tok (127×) | see `raw/replay-bench.json` | verdict payload grew |
+| Suite verify, K=2 | 47 tok (1287×) | 68 tok (890×) | **365 tok (166×)** | the verdict now names unreached routes, contradictions and shared-session isolation |
+| Suite verify, K=4 | 47 tok (2574×) | 68 tok (1779×) | **483 tok (251×)** | same; about 60 tok per added flow, so **sub-linear in K**, not constant |
 
-The shape of the claim survives — suite read-cost is flat in K, so the ratio still compounds with suite size — but **1779× is the current 4-flow figure, not 2574×**. `47` was never reproducible from the committed raw either: `raw/suite-rre.json` held `29` before this re-measurement, so three different numbers were in circulation for one metric. Quote the re-measured column.
+**Quote the 2026-10-06 column.** Read-cost is no longer flat in K: the verdict now reports per-flow contradictions and what the suite never reached, which is what makes it worth reading, and it costs about 60 tokens a flow. Against re-driving each flow with an LLM (~30k a flow) the ratio still grows with suite size, but it is 251× at four flows, not 1779× or 2574×. An earlier run of this re-measurement read 626 tokens at K=2 because the bench daemon started in the checkout and listed routes from other apps' flows saved there; `bench-all` now starts every pass in one empty directory. These ratios are against an LLM re-drive, not against a compiled Playwright suite, which costs no tokens at all.
 
 **2. Every Playwright / DevTools column is historical.** The cross-tool passes last ran **2026-06-22**, against `@playwright/mcp@0.0.76` and `chrome-devtools-mcp@1.3.0`. Both have shipped since (0.0.79 and **1.7.0**), and Reticle has moved 0.8.0 → 2.5.0. Nobody should quote a competitive delta from this file without re-running `pnpm bench:full` first. See [`README.md`](README.md#versions-the-competitive-numbers-were-measured-against--read-before-quoting).
 
@@ -85,7 +85,7 @@ Full walkthrough + the from-scratch explainer: [`docs/benchmarks.md`](../docs/be
 
 **Reticle ties on anything a user can see in the DOM (with a real, growing cost/ergonomic advantage), and wins outright where the bug requires seeing the program itself — its state, and the same flow run again deterministically.** Not "Reticle sees pixels better"; "Reticle sees the program, and over repeated runs it is two orders of magnitude cheaper."
 
-- **Decisive wins:** (1) **regression-run cost** — 128–184× per run, compounding to 2574× at suite scale; (2) **0% flake** — a deterministic, model-free verdict where competitors re-drive with a sampled LLM every run; and (3) a **declared-consequence family** that catches bugs whose truth never reaches the DOM. A flow's `success` end-condition compiles to a real, post-settle predicate over `signal | state | net{count} | console | state{hold}` — so one cheap replay catches a UI-vs-store **desync**, a dead-handler **state oracle**, a **double-submit** (net cardinality), a silent **console error**, and an action's unintended **blast-radius** mutation. None of these can be faked by a healed-to-wrong-element locator, and the last three are invisible to any out-of-page tool. These fuse with RRE: the catch runs **deterministically in the cheap replay loop**, not as a one-off manual read-and-compare.
+- **Decisive wins:** (1) **regression-run cost** — 128–184× per run, 251× for a four-flow suite (re-measured 2026-10-06, against an LLM re-drive); (2) **0% flake** — a deterministic, model-free verdict where competitors re-drive with a sampled LLM every run; and (3) a **declared-consequence family** that catches bugs whose truth never reaches the DOM. A flow's `success` end-condition compiles to a real, post-settle predicate over `signal | state | net{count} | console | state{hold}` — so one cheap replay catches a UI-vs-store **desync**, a dead-handler **state oracle**, a **double-submit** (net cardinality), a silent **console error**, and an action's unintended **blast-radius** mutation. None of these can be faked by a healed-to-wrong-element locator, and the last three are invisible to any out-of-page tool. These fuse with RRE: the catch runs **deterministically in the cheap replay loop**, not as a one-off manual read-and-compare.
 - **Ties (honest):** every visually-observable bug — computed style, geometry, occlusion, color, theme — is reachable by any tool with a JS-`evaluate`. Reticle is more ergonomic (one native call, no JS authoring), not more capable.
 - **Within-field 100× is real only on RRE** (repeated regression runs), not on single-shot detection (you can't catch 100× more than ~10 bugs). Stated so it can't be misread. (`METRIC.md`)
 
@@ -99,12 +99,12 @@ Reticle gives a coding agent four verbs against a running app it owns — **look
 | **Verify loop on a large DOM** | query → act_and_wait → assert against the success signal, on a non-virtualized N-row grid (`apps/large-dom-bench`) | **~279 tok loop vs a 3,636-tok full snapshot — 13× wedge, flat from 800 to 5,000 rows**; vs a screenshot agent (1,365 image-tok/look × N, blind to the signal) the gap is far larger (`measure-large-dom.mjs`) |
 | **Assert (consequence)** | a flow's success compiles to a real predicate: `signal \| state \| net{count} \| console \| state{hold}` | one assertion, **post-settle**, un-fakeable by a healed-to-wrong-element locator |
 | **Replay (the moat)** | re-run a recorded flow with **no LLM**, re-resolve anchors, assert the consequence | **~175 tok/run, 128–184× cheaper** than an LLM re-drive; **0% flake** over 8 identical runs |
-| **Suite replay** | `reticle_flow_verify` — one consolidated verdict over K flows | **~47 tok at K=2 and K=4 (constant in K)** → **1287× at 2 flows, 2574× at 4**, grows with K |
+| **Suite replay** | `reticle_flow_verify` — one consolidated verdict over K flows | **365 tok at K=2, 483 at K=4 (2026-10-06)** → **166× at 2 flows, 251× at 4**, grows with K |
 | **Program-state truth** | read the store/React state the DOM never showed (desync, dead-handler oracle, blast-radius) | **5/5 Reticle-only catches**; competitors score **0** (no store access) at **~47–472 tok** |
 | **Time control** | freeze/advance the app clock to verify a time-gated flow | **~202 ms** vs a real ≥2,600 ms wait; **scales with the timer** (a 5-min timeout → ~1000×) |
 | **Source localization** | fiber → component → `file:line` so the agent edits the right file | **stack 4/4, source 4/4** in one call (component stack is fiber-only → Reticle-only) |
 
-**The one number to chase is RRE** (Regression-Run Efficiency): a test suite's job is the SAME verification over and over. Reticle pays ~author-once + N×(~47–175 tok); a screenshot/DOM agent pays N×(~30k LLM re-drive). At a 4-flow suite that is already **2574×**, and the gap grows with every flow and every run — this is the only place a within-field 100× is physically real.
+**The one number to chase is RRE** (Regression-Run Efficiency): a test suite's job is the SAME verification over and over. Reticle pays ~author-once + N×(a few hundred tok); a screenshot/DOM agent pays N×(~30k LLM re-drive). At a 4-flow suite that is **251×** (2026-10-06), and the gap grows with every flow and every run — this is the only place a within-field 100× is physically real.
 
 ## Where Playwright / DevTools win (the honest "vice versa")
 
@@ -127,7 +127,7 @@ Reticle is not a Playwright replacement; it is the **inner-loop verification lay
 | Persona / situation | Use | Why |
 | --- | --- | --- |
 | **Coding agent (Claude Code) building a React/Next app you own** — verify each edit | **Reticle** | In-loop, ~100 tok/check, sees program state + source `file:line`, refuses destructive clicks. The loop it's built for. |
-| **Regression suite you re-run on every commit / in CI** | **Reticle** | Deterministic replay: 0% flake, ~47–175 tok/run, 128–2574× cheaper than re-driving with an LLM. This is the decisive win. |
+| **Regression suite you re-run on every commit / in CI** | **Reticle** | Deterministic replay: 0% flake, a few hundred tok/run, 127–251× cheaper than re-driving with an LLM (2026-10-06). This is the decisive win. |
 | **Bug whose truth is in state, not the DOM** (UI-vs-store desync, double-submit, an action's side-effect, a silent console error, a wasted-render storm) | **Reticle** | No out-of-page tool can see these at all — they live in the program, not the rendered page. |
 | **Testing a third-party site you don't own / can't modify** | **Playwright** | Reticle must embed a dev-only SDK; it can't instrument code you don't ship. |
 | **Cross-browser matrix** (WebKit, Firefox, Chromium) | **Playwright** | Reticle runs on whatever engine the app runs; it doesn't drive multiple engines. |

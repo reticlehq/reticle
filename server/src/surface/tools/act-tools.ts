@@ -48,6 +48,7 @@ import {
 } from '@/memory/intent/inline-intent.js';
 import { declaresState } from '@reticlehq/engine/question/predicate/predicate-asks.js';
 import { isStateUnwatched } from '@reticlehq/engine/evidence/blind-spots.js';
+import { hiddenMatchNote } from '@reticlehq/engine/evidence/already-true.js';
 import { inFlightRequestLabels, repeatedRequestLabels } from './act/settle-in-flight.js';
 import { finishAfterMatch } from './act/after-match.js';
 import { noteProved } from './act/proved-controls.js';
@@ -263,7 +264,7 @@ export const ACT_TOOLS: ToolDef[] = [
         // drive native pointer input when a provider is available; otherwise fall back.
         const real = await tryRealInput(deps, session, ref, action, args);
         if (real.result !== undefined) {
-          captureAct(deps.recordings, args, real.result, routeBefore);
+          captureAct(deps.recordings, args, real.result, routeBefore, session.id);
           settledOutcome = real.settled ?? undefined;
           // Native input reports no synthetic effect block, so nothing measured in-target: undefined
           // (the weaker empty-window test), never a fabricated zero.
@@ -287,7 +288,7 @@ export const ACT_TOOLS: ToolDef[] = [
           args: args['args'] ?? {},
         });
         if (!result.ok) throw new Error(result.error ?? 'act failed');
-        captureAct(deps.recordings, args, result.result, routeBefore);
+        captureAct(deps.recordings, args, result.result, routeBefore, session.id);
         // lift dispatch/settle status to the envelope (a settle timeout is NOT a failure).
         const r = asRecord(result.result);
         if ('boolean' === typeof r['settled']) settledOutcome = r['settled'];
@@ -308,7 +309,7 @@ export const ACT_TOOLS: ToolDef[] = [
           ...healthEnvelope(session),
         });
       } finally {
-        deps.recordings.markEnded(pathOf(session.url));
+        deps.recordings.markEnded(pathOf(session.url), session.id);
         // Close the window on every exit (settle or throw), recording the action + settle outcome.
         session.finishAction(
           undefined,
@@ -658,6 +659,8 @@ export const ACT_TOOLS: ToolDef[] = [
         const spots = blindSpotsFromState(session.blindSpots(), session.runtime);
         const coverage = buildCoverageStatement(spots);
         const absenceBlindSpot = absenceBlindSpotNote(until, spots);
+        // A green resting on hidden matches says the node exists, not that it shows (#1408).
+        const hiddenMatch = hiddenMatchNote(until, verdict.evidence);
         // Nothing subscribed ⇒ the state channel is dark, and the summary must say so rather than
         // report an empty diff list that reads like a fact about the app. See CausalSummary.
         const stateUnwatched = isStateUnwatched(spots);
@@ -705,6 +708,9 @@ export const ACT_TOOLS: ToolDef[] = [
           ...(0 === impeachingNotes.length ? {} : { blindSpots: impeachingNotes }),
           losses,
         });
+        // A refuted expectation must not ride into a regression flow cut from the ambient tape; it is
+        // kept as the capsule below instead. See RecordingStore.unassertLast.
+        if (!verdict.pass && actResult !== null) deps.recordings.unassertLast();
         const capsuleSaved = await saveFailedAssertCapsule({
           deps,
           verdict,
@@ -791,6 +797,7 @@ export const ACT_TOOLS: ToolDef[] = [
               ? { observationLost: true, lastUrl: session.url }
               : {}),
             ...(absenceBlindSpot === undefined ? {} : { absenceBlindSpot }),
+            ...(hiddenMatch === undefined ? {} : { hiddenMatch }),
             honesty,
             contradictions,
             ...(0 === outcomePending.length ? {} : { outcomePending }),
@@ -971,8 +978,9 @@ export const ACT_TOOLS: ToolDef[] = [
             dispatched.result,
             routeBeforeWait,
             recordedVerdict,
+            session.id,
           );
-        deps.recordings.markEnded(pathOf(currentOf(deps.sessions, session).url));
+        deps.recordings.markEnded(pathOf(currentOf(deps.sessions, session).url), session.id);
         acted.finishAction(
           verdictEffect,
           settledOutcome,

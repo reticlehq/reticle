@@ -47,6 +47,9 @@ describe('buildFlowChips', () => {
       [flow('has-start', 'app', 'task-input'), flow('no-start', 'app')],
       'app',
     );
-    expect(chips).toEqual([{ name: 'has-start', start: 'task-input' }, { name: 'no-start' }]);
+    expect(chips).toEqual([
+      { name: 'has-start', start: 'task-input', createdAt: 1 },
+      { name: 'no-start', createdAt: 1 },
+    ]);
   });
 });

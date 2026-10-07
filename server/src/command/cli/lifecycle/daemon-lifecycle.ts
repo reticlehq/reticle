@@ -17,7 +17,7 @@
 
 import { log } from '@/log.js';
 import { RETICLE_VERIFY_DEFAULT_PORT } from '@/index.js';
-import { verifyEndpointMismatch } from '@/status-payload.js';
+import { strandedClientsNote, verifyEndpointMismatch } from '@/status-payload.js';
 import { probeDaemon, waitForDaemonBind } from '@/surface/mcp/mcp-proxy.js';
 import { stateDirProblem } from '@/command/daemon/state-dir.js';
 import {
@@ -200,6 +200,8 @@ export function handleStop(port: number, quiet: boolean): void {
  * anything at all, and a single `ok: false` cannot tell them which happened.
  */
 export async function handleRestart(port: number, force: boolean): Promise<void> {
+  const stranded = strandedClientsNote(await fetchStatus(port));
+  if (stranded !== undefined) process.stderr.write(`${stranded}\n`);
   const freed = await runKill(port, force);
   if (!freed) {
     log('reticle_restart_aborted', {

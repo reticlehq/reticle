@@ -85,6 +85,18 @@ describe('an empty error container is not a failure', () => {
     expect(findBodyFailures([call(200, { data: { id: 1 }, errors: {} }, 'GET')])).toEqual([]);
   });
 
+  // #984: a body whose error list was empty, one level down, was read as a failure.
+  it('stays silent on an error envelope whose every part is empty', () => {
+    const empty = [
+      { data: { id: 1 }, errors: { fieldErrors: {}, formErrors: [] } },
+      { data: { id: 1 }, error: { code: 0, message: '' } },
+    ];
+    for (const body of empty) expect(findBodyFailures([call(200, body, 'GET')])).toEqual([]);
+    expect(
+      findBodyFailures([call(200, { errors: { formErrors: ['taken'] } }, 'GET')]),
+    ).toHaveLength(1);
+  });
+
   it('stays silent on an empty error object under the singular key', () => {
     expect(findBodyFailures([call(200, { data: { id: 1 }, error: {} }, 'GET')])).toEqual([]);
   });

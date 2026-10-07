@@ -225,6 +225,69 @@ describe('the watch asks the route the tab died on what it answers now', () => {
   });
 });
 
+/**
+ * The scan must cover THIS project's port, not only the well-known list.
+ *
+ * Reported: with a Next app already running on :3005 (`next dev -p 3005`), the diagnosis said
+ * nothing was listening and suggested starting the dev server again — a duplicate (reticle#1367).
+ * The port is named in the project's own text, so the scan can read it rather than guess.
+ */
+describe('the ports the background scan covers', () => {
+  /** A manager whose one departed session was on `url`, like the route-status cases above. */
+  function stubWithLastKnown(url: string): ReturnType<typeof stubSessions> {
+    const stub = stubSessions();
+    const m = stub.manager as unknown as Record<string, unknown>;
+    m['everConnected'] = () => true;
+    m['lastKnown'] = () => ({ id: 's-gone', url });
+    return stub;
+  }
+
+  it('probes the port the project dev script pins, so a running app is found', async () => {
+    const dir = projectDir(undefined);
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({ scripts: { dev: 'next dev -p 3005' } }),
+      'utf8',
+    );
+    const { manager, hint } = stubSessions();
+    const stop = startNoSessionWatch({
+      sessions: manager,
+      port: 4400,
+      initialized: false,
+      directory: dir,
+      // Answers as the real scan would: only a scanned port can come back serving.
+      probe: (ports) => Promise.resolve(ports.includes(3005) ? [3005] : []),
+    });
+    // One macrotask turn lets the whole background refresh chain settle.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const message = hint();
+    stop();
+    expect(message).not.toMatch(/nothing is listening/i);
+  });
+
+  it('also scans the project’s announced ports and the port the last session was on', async () => {
+    const dir = projectDir(undefined);
+    const seen: (readonly number[])[] = [];
+    const { manager } = stubWithLastKnown('http://localhost:4311/orders');
+    const stop = startNoSessionWatch({
+      sessions: manager,
+      port: 4400,
+      initialized: false,
+      directory: dir,
+      ownDevServerPorts: () => [4173],
+      probe: (ports) => {
+        seen.push(ports);
+        return Promise.resolve([]);
+      },
+      routeStatus: () => Promise.resolve(undefined),
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    stop();
+    expect(seen[0]).toContain(4173);
+    expect(seen[0]).toContain(4311);
+  });
+});
+
 describe('the watch detects non-JS projects when no dev script is found', () => {
   it('names Flutter in nextAction when pubspec.yaml is present in the project directory', async () => {
     const dir = projectDir(undefined);

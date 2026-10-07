@@ -82,6 +82,35 @@ function differsOnlyByEnumeration(first: string, second: string): boolean {
   return differed;
 }
 
+/**
+ * Parameters that NAME a resource. Two reads differing in one of these fetch two different things
+ * (a tile grid's `?id=1` and `?id=2`), and neither answer can overwrite the other's view.
+ */
+const IDENTITY_PARAMS = new Set(['id', 'ids', 'uuid', 'slug', 'key']);
+
+/**
+ * Issued this close together, two requests came from one task (a `Promise.all`, two effects in one
+ * commit), so no later intent superseded the first: they are a fan-out, not a race (#1225).
+ * ponytail: a time bound stands in for "same task", which the event stream does not carry. A slow
+ * commit can space its effects wider than this; carry an issuing-task id if that shows up.
+ */
+const SAME_TASK_MS = 2;
+
+/**
+ * Whether the second read could have made the first obsolete. Not when they ask for differently
+ * shaped answers (the key sets differ: a page of rows beside a count), not when they name different
+ * resources, and not when only enumeration changed.
+ */
+function couldSupersede(first: string, second: string): boolean {
+  const a = new URLSearchParams(first);
+  const b = new URLSearchParams(second);
+  const keysA = [...new Set(a.keys())].sort().join('&');
+  const keysB = [...new Set(b.keys())].sort().join('&');
+  if (keysA !== keysB) return false;
+  for (const key of IDENTITY_PARAMS) if (a.get(key) !== b.get(key)) return false;
+  return !differsOnlyByEnumeration(first, second);
+}
+
 /** Pair NET_PENDING with its NET_REQUEST by the id both carry. Unpaired events are still in flight. */
 function flights(events: readonly ReticleEvent[]): Flight[] {
   const issued = new Map<string, { url: string; method: string; at: number }>();
@@ -202,8 +231,8 @@ function raceIn(
       if (second.issuedAt >= first.settledAt) continue; // sequential, not overlapping
       if (second.settledAt >= first.settledAt) continue; // settled in order — no race
       if (queryOf(first.url) === queryOf(second.url)) continue; // a retry, not a superseding query
-      // Parallel pagination is not a race — see differsOnlyByEnumeration.
-      if (differsOnlyByEnumeration(queryOf(first.url), queryOf(second.url))) continue;
+      if (second.issuedAt - first.issuedAt < SAME_TASK_MS) continue; // one task's fan-out
+      if (!couldSupersede(queryOf(first.url), queryOf(second.url))) continue;
       // The race happened. Whether it MATTERS is whether the app acted on the loser — an app that
       // drops superseded responses races just as visibly and is not broken.
       if (!appliedAfter(events, first.settledAt)) continue;

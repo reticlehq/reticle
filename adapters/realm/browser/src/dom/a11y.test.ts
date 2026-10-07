@@ -476,3 +476,40 @@ describe('fieldset named by its legend', () => {
     expect(getAccessibleName(fieldset)).toBe('Override');
   });
 });
+
+/**
+ * #793: on a hidden tab the browser stalls animations, so a fade-in sits at opacity 0 and every
+ * surface that asked "visible?" disagreed about a node that was rendered. Opacity 0 mid-animation on
+ * a hidden tab is a stalled fade, not a hidden element; at rest it is still hidden.
+ */
+describe('a fade-in stalled by a hidden tab', () => {
+  const faded = (animating: boolean): HTMLElement => {
+    const el = document.createElement('div');
+    el.style.opacity = '0';
+    el.textContent = 'Total: 42';
+    (
+      el as unknown as { getAnimations: () => { playState: string; pending: boolean }[] }
+    ).getAnimations = () => (animating ? [{ playState: 'running', pending: false }] : []);
+    document.body.appendChild(el);
+    return el;
+  };
+  const hide = (hidden: boolean): void => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+  };
+  afterEach(() => {
+    hide(false);
+    document.body.innerHTML = '';
+  });
+
+  it('reads visible while its animation is stalled on a hidden tab', () => {
+    hide(true);
+    expect(isVisible(faded(true))).toBe(true);
+  });
+
+  it('still reads hidden at rest, or on a tab that is running its animations', () => {
+    hide(true);
+    expect(isVisible(faded(false))).toBe(false);
+    hide(false);
+    expect(isVisible(faded(true))).toBe(false);
+  });
+});

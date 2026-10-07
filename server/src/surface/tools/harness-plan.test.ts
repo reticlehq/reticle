@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildHarnessPlan, planAsText, PlanStepKind } from './harness-plan.js';
+import { aboutTheApp, buildHarnessPlan, planAsText, PlanStepKind } from './harness-plan.js';
 import type { DomainModel } from '@/judgement/domain/domain-model.js';
 
 /**
@@ -221,5 +221,35 @@ describe('the vocabulary a drive is given to claim with', () => {
 
   it('is empty, rather than absent, for a project that knows nothing yet', () => {
     expect(buildHarnessPlan(model()).vocabulary).toEqual([]);
+  });
+});
+
+/** From a recorded whole-app drive: an empty project gave the planner "PLAN: none" and nothing else. */
+describe('what the planner is told about the app', () => {
+  it("carries the app's own controls, as they are on screen", async () => {
+    const about = await aboutTheApp('PLAN: none', () =>
+      Promise.resolve({ tree: '- link "Transactions" (ref=e1)\n- button "Refund" (ref=e2)' }),
+    );
+    expect(about).toContain('PLAN: none');
+    expect(about).toContain('link "Transactions"');
+  });
+
+  it('is the plan alone when the page cannot be read', async () => {
+    expect(await aboutTheApp('PLAN: x', () => Promise.reject(new Error('no session')))).toBe(
+      'PLAN: x',
+    );
+  });
+});
+
+/** From the merchant drives: the planner saw the start page only and never planned a refund. */
+describe('what the planner is told the app holds beyond this page', () => {
+  it('carries the controls the last crawl found across the app', async () => {
+    const about = await aboutTheApp(
+      'PLAN: none',
+      () => Promise.resolve({ tree: '- link "Transactions" (ref=e1)' }),
+      ['- button "Refund"', '- switch "Auto-refund failed payments"'],
+    );
+    expect(about).toContain('CONTROLS SEEN ACROSS THE WHOLE APP');
+    expect(about).toContain('button "Refund"');
   });
 });

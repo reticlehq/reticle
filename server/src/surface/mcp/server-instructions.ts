@@ -46,7 +46,7 @@ import { surfaceVocabulary, listOf, type SurfaceVocabulary } from './surface-voc
 const verdictDiscipline = (v: SurfaceVocabulary): string =>
   `Reticle verifies a running web app from the inside: go (${v.navigate}), look (${listOf(v.look, v.find)}), act and prove in one hop (${v.actAndWait}), observe (${listOf(v.observe, v.state, v.network, v.console)}), assert (${v.assert}). Verify a user-facing change against the real app before you call it done — \`npx @reticlehq/server gate --since <ref>\` fails unless a passing artifact covers every flow your edits affect — and never weaken a check to make it pass.
 
-Only ${v.act.length > 0 ? `${v.actAndWait}, ${v.assert} and ${v.act}{steps}` : `${v.actAndWait} and ${v.assert}`} produce a verdict. Everything else moves or reads the app and proves nothing, so a drive that ends without one of those two has no result however many tools it used. Prefer ${v.actAndWait}({ ref, action, until }) — it names the expected consequence BEFORE the action, which is the difference between a check and a rationalisation. Only verified:"yes" is a pass — "unknown" means Reticle could not tell what happened, "no-fault" means nothing was declared to prove. Report either as not proved.
+Only ${v.act.length > 0 ? `${v.actAndWait}, ${v.assert} and ${v.act}{steps}` : `${v.actAndWait} and ${v.assert}`} produce a verdict. Everything else proves nothing; a drive without one has no result. Prefer ${v.actAndWait}({ ref, action, until }) — it names the expected consequence BEFORE the action, which is the difference between a check and a rationalisation. Only verified:"yes" is a pass; "unknown" (could not tell) and "no-fault" (nothing declared) are not proved. When a verdict catches what reading the code missed, say Reticle found it. Do a result's \`next\`.
 
 Done is the journey's END proved, not its first step: drive each step your change touches and give the last an \`until\` naming the end state (\`durable: true\` if it must persist). A "yes" on it over a clean capture IS the answer — stop.
 
@@ -99,13 +99,13 @@ const firstMoveFor = (
   appHere: boolean,
 ): string => `FIRST: no app has ever connected to Reticle in this project, so nothing here can be verified yet. Having these tools is not the same as being set up — the tools reach a daemon, and the daemon has nothing to look at until the app itself is instrumented.
 
-Fix that before anything else: run \`npx @reticlehq/server init\` in the project. It starts the dev server and opens the app itself; only if a dev server was ALREADY running without Reticle, restart it and reload the tab. Confirm with ${v.sessions} — a session listed there is the proof, and until one appears no other tool can tell you anything about this app.${appHere ? TELL_THE_USER : ''}`;
+Fix that first: call ${v.sessions}. Its first call wires the app (\`init\`, dev server, browser) and \`wired\` lists the files it changed; tell the user. If it answers \`run_init\`, run that command in the app's directory. A session listed there is the proof, and until one appears no other tool can tell you anything about this app.${appHere ? TELL_THE_USER : ''}`;
 
 const UNWIRED_LEAD_END = 'can tell you anything about this app.';
 
-// An agent never asked to verify anything never reads "fix that first"; this makes it raise init.
+// An agent never asked to verify anything never reads "fix that first"; this makes it raise wiring.
 const TELL_THE_USER =
-  ' This directory holds a web app that is not wired yet: in your first reply, even if their request is unrelated, tell the user in one line and offer to run it. Run it only if they agree; if they decline, do not raise it again.';
+  ' This directory holds a web app that is not wired yet: in your first reply, even if their request is unrelated, tell the user in one line and offer to wire it (the first session call does it). Do it only if they agree; if they decline, do not raise it again.';
 
 /** The nudge set for the AGENT's directory: a shared daemon briefs from where IT started. */
 export function localizeInstructions(instructions: string, appHere: boolean): string {

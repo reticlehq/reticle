@@ -35,11 +35,20 @@ describe('a call-level argument written inside the predicate', () => {
   });
 
   it('names the other arguments that get nested by the same mistake', () => {
-    for (const field of ['sessionId', 'ref', 'intent']) {
+    for (const field of ['sessionId', 'intent']) {
       expect(messageFor({ kind: 'element', query: { role: 'button' }, [field]: 'x' })).toContain(
         field,
       );
     }
+  });
+
+  it('answers a `ref` with the locator clause instead of naming it a call argument', () => {
+    // `ref` is the one field where the move-beside-`until` answer is wrong, so asserting it inside
+    // the loop above passed on the word appearing anywhere — the locator clause contains "ref" too,
+    // and the assertion would stay green even if the clause degraded to echoing the name back.
+    const message = messageFor({ kind: 'element', query: { role: 'button' }, ref: 'e1' });
+    expect(message).toContain('ref');
+    expect(message).not.toMatch(/argument of the CALL/i);
   });
 
   it('still says what the kind DOES accept — the clause is added, not swapped', () => {
