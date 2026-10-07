@@ -85,11 +85,7 @@ import {
   openInBrowser,
   openCommand,
 } from './cli/launch/cli-launch.js';
-import { navigateLeftTab } from './cli/launch/open-navigate.js';
-import {
-  defaultPairingTokenDir,
-  readOrCreatePairingTokenSync,
-} from '@/portal/bridge/pairing-token.js';
+import { navigateLeftTab } from './cli/open-navigate.js';
 import { fetchStatus } from './daemon/binding/daemon-status-probe.js';
 import { handleDrive } from './cli/drive/drive-command.js';
 import { handleVerify } from './cli/cli-verify.js';
@@ -507,12 +503,10 @@ function handleOpen(requestedPort: number, url: string | undefined, navigate = f
       // run) but never reported as done: `reusing` here read as "your url is open" for a page nobody
       // had opened.
       if ('left-as-is' === decision.action && navigate && decision.sessionId !== undefined) {
-        const token = readOrCreatePairingTokenSync(defaultPairingTokenDir());
         const moved = await navigateLeftTab({
           port,
           sessionId: decision.sessionId,
           url: decision.requested,
-          ...(token === undefined || 0 === token.length ? {} : { token }),
         });
         log('reticle_open', { port, ...moved });
         // A loop or CI step reads the exit code, so a failed move must not exit 0.

@@ -7,9 +7,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/core';
-import type { ToolCaller } from '@/command/cli/adhoc-verdict.js';
-import { parseCliArgs } from '@/command/cli/cli-parse.js';
-import { decideOpen } from './cli-launch.js';
+import type { ToolCaller } from './adhoc-verdict.js';
+import { parseCliArgs } from './cli-parse.js';
+import { decideOpen } from './launch/cli-launch.js';
 import { NAVIGATE_UNCONFIRMED_NOTE, navigateLeftTab } from './open-navigate.js';
 
 function fakeDaemon(answer: Record<string, unknown>): {

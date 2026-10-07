@@ -1,5 +1,9 @@
 import { ReticleTool } from '@reticlehq/core';
-import { connectOverSse, endpointFor, type ToolCaller } from '@/command/cli/adhoc-verdict.js';
+import { connectOverSse, endpointFor, type ToolCaller } from './adhoc-verdict.js';
+import {
+  readOrCreatePairingTokenSync,
+  defaultPairingTokenDir,
+} from '@/portal/bridge/pairing-token.js';
 
 /**
  * `reticle open <url> --navigate`: move the tab that is already on this origin to `url`.
@@ -14,6 +18,10 @@ export interface OpenNavigateOptions {
   port: number;
   sessionId: string;
   url: string;
+  /**
+   * The daemon's pairing token. Omitted, it is read here, the way `verify --expect` reads it, so the
+   * CLI entry point does not reach into the bridge itself. A test that injects `connect` gets none.
+   */
   token?: string;
   /** Injected so a test does not need a live daemon. */
   connect?: (endpoint: URL) => Promise<ToolCaller>;
@@ -61,7 +69,12 @@ export async function navigateLeftTab(
   const connect = options.connect ?? connectOverSse;
   let caller: ToolCaller;
   try {
-    caller = await connect(endpointFor(options.port, options.token));
+    const token =
+      options.token ??
+      (options.connect === undefined
+        ? readOrCreatePairingTokenSync(defaultPairingTokenDir())
+        : undefined);
+    caller = await connect(endpointFor(options.port, token));
   } catch (error) {
     return {
       error: `${DAEMON_UNREACHABLE}: ${error instanceof Error ? error.message : String(error)}`,

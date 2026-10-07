@@ -93,7 +93,13 @@ function sameOrigin(a: string, b: string): boolean {
  * is a bigger surprise than being told where the tab actually is.
  */
 export function decideOpen(
-  all: { url: string; sessionId?: string; unresponsive?: boolean; hidden?: boolean; lastSeenMs?: number }[],
+  all: {
+    url: string;
+    sessionId?: string;
+    unresponsive?: boolean;
+    hidden?: boolean;
+    lastSeenMs?: number;
+  }[],
   url: string | undefined,
 ): OpenDecision {
   // A tab that has stopped answering is not a tab you can be handed. `open` is the command a caller
