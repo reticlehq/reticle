@@ -28,16 +28,23 @@ function evidenceSource(evidence: unknown): string | undefined {
 }
 
 /**
- * Any `data-reticle-source` stamp anywhere in an assertion's evidence, near misses included.
+ * Any `data-reticle-source` stamp on an ELEMENT anywhere in an assertion's evidence, near misses
+ * included.
  *
  * Not a pointer to report: `assertSource` decides that, and it refuses a near miss because that is
  * a different element. This answers a narrower question, the one the `no-source-mapping` gap asks:
  * does this build stamp its elements at all? A near miss that carries `source` proves it does, so a
  * failure whose only located element is a near miss must not tell the agent to install a plugin
- * that is already working (#1422). Bounded depth, because evidence is page-supplied.
+ * that is already working (#1422).
+ *
+ * Only element descriptors count (they carry a `ref` or a `tag`): a console error's `source` is the
+ * browser's script URL and says nothing about build stamps. The depth bound is generous enough for
+ * nested `allOf`/`anyOf` evidence and exists only because evidence is page-supplied.
  */
 export function stampedSourceIn(evidence: unknown, depth = 0): string | undefined {
-  if (depth > 4 || 'object' !== typeof evidence || null === evidence) return undefined;
+  if (depth > MAX_EVIDENCE_DEPTH || 'object' !== typeof evidence || null === evidence) {
+    return undefined;
+  }
   if (Array.isArray(evidence)) {
     for (const entry of evidence) {
       const found = stampedSourceIn(entry, depth + 1);
@@ -45,14 +52,20 @@ export function stampedSourceIn(evidence: unknown, depth = 0): string | undefine
     }
     return undefined;
   }
-  const own = (evidence as { source?: unknown }).source;
-  if ('string' === typeof own && 0 < own.length) return own;
+  const entry = evidence as { source?: unknown; ref?: unknown; tag?: unknown };
+  const isElement = 'string' === typeof entry.ref || 'string' === typeof entry.tag;
+  if (isElement && 'string' === typeof entry.source && 0 < entry.source.length) {
+    return entry.source;
+  }
   for (const value of Object.values(evidence)) {
     const found = stampedSourceIn(value, depth + 1);
     if (found !== undefined) return found;
   }
   return undefined;
 }
+
+/** How deep `stampedSourceIn` follows nested evidence: combinators nest, a page could nest forever. */
+const MAX_EVIDENCE_DEPTH = 16;
 
 /**
  * The `file:line` an ASSERTION is entitled to report — its own evidence, or nothing.

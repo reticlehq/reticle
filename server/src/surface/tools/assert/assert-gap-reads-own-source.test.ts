@@ -112,9 +112,26 @@ describe('stampedSourceIn', () => {
     expect(stampedSourceIn('src/a.tsx:1')).toBeUndefined();
   });
 
+  it('finds a stamp under nested combinator evidence', () => {
+    const nested = {
+      members: [{ members: [{ evidence: { nearMiss: [button('Save', 'a.tsx:3')] } }] }],
+    };
+    expect(stampedSourceIn(nested)).toBe('a.tsx:3');
+  });
+
+  it("does not read a console error's script URL as a build stamp", () => {
+    const consoleError = {
+      type: 'console.error',
+      message: 'boom',
+      source: 'http://localhost:3000/main.js',
+    };
+    expect(stampedSourceIn([consoleError])).toBeUndefined();
+    expect(stampedSourceIn({ matched: [consoleError] })).toBeUndefined();
+  });
+
   it('stops at a bounded depth', () => {
-    let deep: unknown = { source: 'deep.tsx:1' };
-    for (let i = 0; i < 10; i += 1) deep = { next: deep };
+    let deep: unknown = button('Save', 'deep.tsx:1');
+    for (let i = 0; i < 40; i += 1) deep = { next: deep };
     expect(stampedSourceIn(deep)).toBeUndefined();
   });
 });
