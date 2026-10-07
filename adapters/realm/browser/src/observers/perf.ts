@@ -1,10 +1,65 @@
 import { EventType, PerfMetric } from '@reticlehq/core';
+import { refs } from '@/dom/addressing/refs.js';
+import { getTestIdAttr, readTestId } from '@/dom/addressing/testid-attr.js';
+import { isReticleOverlay } from '@/dom/dom-ignore.js';
+import { isElement } from '@/dom/realm.js';
 import type { Emit, Teardown } from './types.js';
+
+/** One element a layout shift moved, with where it was and where it went. */
+interface LayoutShiftSource {
+  node?: Node | null;
+  previousRect?: DOMRectReadOnly;
+  currentRect?: DOMRectReadOnly;
+}
 
 /** A layout-shift entry carries the shift value + whether it followed recent input (excluded from CLS). */
 interface LayoutShiftEntry extends PerformanceEntry {
   value?: number;
   hadRecentInput?: boolean;
+  sources?: readonly LayoutShiftSource[];
+}
+
+/** The element a CLS event names: a ref to act on, and a short selector a person can read. */
+interface ShiftedElement {
+  ref: string;
+  selector: string;
+}
+
+const areaOf = (r: DOMRectReadOnly | undefined): number =>
+  r === undefined ? 0 : Math.max(0, r.width) * Math.max(0, r.height);
+
+/** `[data-testid="x"]`, `#id`, or `tag.first-class`: enough to recognise, short enough to stay small. */
+function shortSelector(el: Element): string {
+  const testid = readTestId(el);
+  if (testid !== null) return `[${getTestIdAttr()}="${testid}"]`;
+  const tag = el.tagName.toLowerCase();
+  if (0 < el.id.length) return `${tag}#${el.id}`;
+  const cls = el.classList.item(0);
+  return null === cls ? tag : `${tag}.${cls}`;
+}
+
+/**
+ * The element that moved most in this shift, or undefined when none can be named.
+ *
+ * The running CLS value says THAT the page shifted and nothing about what moved, so an agent could
+ * see the regression and had nowhere to look (#1266). Only the largest source is named, by the area
+ * it covered before or after, so the event stays small. A text node is named by its parent; Reticle's
+ * own overlay is never named, since it is not the app.
+ */
+function largestShifted(
+  sources: readonly LayoutShiftSource[] | undefined,
+): ShiftedElement | undefined {
+  let best: { el: Element; area: number } | undefined;
+  for (const source of sources ?? []) {
+    const node = source.node ?? null;
+    const el = null === node ? null : isElement(node) ? node : node.parentElement;
+    if (null === el || isReticleOverlay(el)) continue;
+    const area = Math.max(areaOf(source.previousRect), areaOf(source.currentRect));
+    if (best === undefined || area > best.area) best = { el, area };
+  }
+  return best === undefined
+    ? undefined
+    : { ref: refs.refFor(best.el), selector: shortSelector(best.el) };
 }
 
 /**
@@ -50,7 +105,13 @@ export function installPerf(emit: Emit): Teardown {
     // Shifts within 500ms of a user input are expected (not CLS) — the spec's hadRecentInput flag.
     if (true === ls.hadRecentInput) return;
     cls += ls.value ?? 0;
-    emit(EventType.PERF, { metric: PerfMetric.CLS, value: cls, at: Math.round(e.startTime) });
+    const shifted = largestShifted(ls.sources);
+    emit(EventType.PERF, {
+      metric: PerfMetric.CLS,
+      value: cls,
+      at: Math.round(e.startTime),
+      ...(shifted === undefined ? {} : { shifted }),
+    });
   });
   observe('longtask', (e) => {
     emit(EventType.PERF, {
