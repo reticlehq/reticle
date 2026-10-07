@@ -529,7 +529,7 @@ function findWindowContradictions(
       kind: ContradictionKind.UI_ADVANCED_REQUEST_FAILED,
       claim: 'the UI moved forward (DOM/store/route changed)',
       counter: `${String(unexpectedWrites.length)} request(s) in the same window failed`,
-      detail: unexpectedWrites.map(describe).join('; '),
+      detail: `${unexpectedWrites.map(describe).join('; ')}. ${declareFailureHint(unexpectedWrites)}`,
     });
   }
 
@@ -799,4 +799,41 @@ function findWindowContradictions(
   // Consumer rules run LAST and over the same app-only window, so a service embedding this engine
   // adds to the verdict rather than forking the file that produces it.
   return [...found, ...runRegisteredFolds(events, options)];
+}
+
+/**
+ * The `net` clause that declares each of these failures, worded as a condition.
+ *
+ * A designed error path (a 402 paywall, a 429, a 428 confirmation) asserted through the UI it renders
+ * gets `ui-advanced-request-failed`, and declaring the failing call in the oracle is what exempts it
+ * (`matchesDeclaredFailure`). Nothing in the finding said so, so agents dropped the check or
+ * weakened it until it proved nothing (#1418). The clause is built from the call itself, so it is
+ * exactly what would match, and it is conditional: the finding is still a finding, and a clause
+ * pasted to make a red go away would be the same false green with extra steps.
+ */
+function declareFailureHint(
+  calls: readonly { method: string; url: string; matchUrl?: string; status: number | undefined }[],
+): string {
+  const clauses = calls.map((c) => {
+    const haystack = c.matchUrl ?? c.url;
+    let path = haystack;
+    try {
+      const parsed = new URL(haystack, 'http://reticle.invalid').pathname;
+      // Only when it is literally in the url: `urlContains` is a substring test, and a pathname
+      // the parser re-encoded would declare something that never matches.
+      if (haystack.includes(parsed)) path = parsed;
+    } catch {
+      // An unparseable url is declared as recorded.
+    }
+    const clause = {
+      kind: 'net',
+      method: c.method.toUpperCase(),
+      urlContains: path,
+      ...(c.status === undefined || 0 === c.status ? { ok: false } : { status: c.status }),
+    };
+    return JSON.stringify(clause);
+  });
+  const subject =
+    1 === clauses.length ? 'this failure is the outcome' : 'these failures are the outcome';
+  return `If ${subject} you expect, declare it in the predicate: ${clauses.join(', ')}`;
 }
