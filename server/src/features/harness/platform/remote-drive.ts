@@ -10,6 +10,7 @@
  * the person can fix in ten seconds (open the app), and leaving it unclaimed lets the chat tell them
  * exactly that. One drive at a time: a second request waits for the first to finish.
  */
+import { PresenterTone } from '@reticlehq/core';
 import { serverOptionsFromEnv } from './server-driver.js';
 
 const NEXT_PATH = '/v1/harness/local-drives/next';
@@ -29,6 +30,26 @@ const REQUEST_TIMEOUT_MS = 10_000;
 export const REMOTE_DRIVE_FRAME_MS = 1_000;
 /** The same JPEG quality the platform's own checks film at: about 40 KB a picture. */
 export const REMOTE_DRIVE_JPEG_QUALITY = 50;
+
+/** What the driven tab's HUD says once a chat-requested drive is over. */
+export const REMOTE_DRIVE_ENDED = {
+  PROVED: 'Harness drive finished: proved',
+  NOT_PROVED: 'Harness drive finished: not proved',
+} as const;
+
+/**
+ * End the driven tab's session once its drive is over, so its HUD stops counting "planning next
+ * action" for an agent that is not there. Auto-ended, not ended: the next agent or drive revives it.
+ */
+export function endDrivenTab(
+  tab: { autoEnd(text: string, tone: PresenterTone): void } | undefined,
+  outcome: RemoteDriveOutcome,
+): void {
+  tab?.autoEnd(
+    outcome.ok ? REMOTE_DRIVE_ENDED.PROVED : REMOTE_DRIVE_ENDED.NOT_PROVED,
+    outcome.ok ? PresenterTone.CALM : PresenterTone.WARN,
+  );
+}
 
 type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -64,6 +85,11 @@ export interface RemoteDriveDeps {
    */
   frame?: (sessionId: string | undefined) => Promise<Uint8Array | undefined>;
   frameIntervalMs?: number;
+  /**
+   * Called once the drive is over, however it ended, so the driven tab's HUD stops reading
+   * "planning next action". Nothing else tells it: the drive has no agent to end its session.
+   */
+  settle?: (sessionId: string | undefined, outcome: RemoteDriveOutcome) => void;
   fetch?: FetchLike;
   intervalMs?: number;
   /** A line for the daemon log. */
@@ -129,6 +155,7 @@ export function startRemoteDrives(deps: RemoteDriveDeps): RemoteDrives {
       } finally {
         await filming?.stop();
       }
+      deps.settle?.(sessionId, outcome);
       await doFetch(driveUrl, {
         method: 'POST',
         headers,

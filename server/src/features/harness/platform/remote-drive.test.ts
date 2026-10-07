@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { ReticleEnv } from '@reticlehq/core';
 import {
+  REMOTE_DRIVE_ENDED,
   driveVerdict,
+  endDrivenTab,
   pickDriveSession,
   startRemoteDrives,
   type RemoteDriveDeps,
@@ -69,6 +71,37 @@ describe('drives the platform chat asked for', () => {
     const p = platform({ id: 'ld_2', goal: 'x' });
     await start({ fetch: p.fetch, drive: () => Promise.reject(new Error('not entitled')) }).tick();
     expect(p.calls[1]?.body).toEqual({ ok: false, summary: 'not entitled' });
+  });
+
+  it('settles the driven tab once the drive is over, even when it threw', async () => {
+    const settled: { sessionId: string | undefined; ok: boolean }[] = [];
+    const settle: RemoteDriveDeps['settle'] = (sessionId, outcome) =>
+      settled.push({ sessionId, ok: outcome.ok });
+    await start({
+      fetch: platform({ id: 'ld_s', goal: 'x' }).fetch,
+      pick: () => 'tab-1',
+      settle,
+    }).tick();
+    running?.stop();
+    await start({
+      fetch: platform({ id: 'ld_t', goal: 'x' }).fetch,
+      pick: () => 'tab-2',
+      drive: () => Promise.reject(new Error('boom')),
+      settle,
+    }).tick();
+    expect(settled).toEqual([
+      { sessionId: 'tab-1', ok: true },
+      { sessionId: 'tab-2', ok: false },
+    ]);
+  });
+
+  it('ends the driven tab with a line saying whether the drive proved anything', () => {
+    const said: string[] = [];
+    const tab = { autoEnd: (text: string) => void said.push(text) };
+    endDrivenTab(tab, { ok: true, summary: '' });
+    endDrivenTab(tab, { ok: false, summary: '' });
+    endDrivenTab(undefined, { ok: true, summary: '' });
+    expect(said).toEqual([REMOTE_DRIVE_ENDED.PROVED, REMOTE_DRIVE_ENDED.NOT_PROVED]);
   });
 
   it('does not ask while no app is connected, so the chat can say so', async () => {

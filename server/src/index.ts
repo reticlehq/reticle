@@ -64,6 +64,7 @@ import { instructionStateAt } from './surface/mcp/mcp-proxy.js';
 import { LEASE_ACQUIRE_TOOL } from './surface/tools/lease-tools.js';
 import {
   REMOTE_DRIVE_JPEG_QUALITY,
+  endDrivenTab,
   pickDriveSession,
   startRemoteDrives,
 } from './features/harness/platform/remote-drive.js';
@@ -661,12 +662,9 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   // The panel's harness switch, written through to the platform so console and panel cannot disagree.
   if (options.hudSignIn !== undefined)
     bridge.attachSigninRequest(options.hudSignIn(() => repaint()));
-  // Sign-out and linking happen in another process, so nothing here pushed them: watch the two
-  // files they write and repaint, the way the HUD's own Sign in already does. See account-watch.ts.
+  // logout and link run in another process: repaint when their files change. See account-watch.ts.
   const accountFiles = watchAccountFiles(() => repaint());
   accountFiles.watch(join(homedir(), ReticleDir.ROOT, SESSION_FILE));
-  accountFiles.watch(join(reticleRoot, ReticleDir.CLOUD_LINK_FILE));
-  // On ready, not create: the session's project root is stamped by a create handler of its own.
   bridge.attachSessionReady((s) =>
     accountFiles.watch(join(s.artifactRoot ?? reticleRoot, ReticleDir.CLOUD_LINK_FILE)),
   );
@@ -751,6 +749,8 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
       sessionId === undefined
         ? Promise.resolve(undefined)
         : driveFrame(effectiveDeps, sessionId, REMOTE_DRIVE_JPEG_QUALITY),
+    settle: (id, outcome) =>
+      endDrivenTab(id === undefined ? undefined : bridge.sessions.get(id), outcome),
     log,
   });
 
