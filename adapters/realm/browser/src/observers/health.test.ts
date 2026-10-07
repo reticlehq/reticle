@@ -264,6 +264,12 @@ describe('installHealth — which desktop window, and what it was served', () =>
     (window as unknown as Record<string, unknown>)['__reticleIpc'] = {
       windowLabel: () => Promise.resolve('settings'),
     };
+    // A desktop page also HEADs its own URL. Unstubbed, that is a refused connection to localhost,
+    // which Windows takes ~2s to refuse: longer than waitFor's budget, so the label never landed.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve({ status: 200 } as Response)),
+    );
     const { installHealth } = await import('./health.js');
     const emit = vi.fn();
     const teardown = installHealth(emit);
@@ -271,6 +277,7 @@ describe('installHealth — which desktop window, and what it was served', () =>
       expect(healthData(emit).some((d) => 'settings' === d['windowLabel'])).toBe(true),
     );
     teardown();
+    vi.unstubAllGlobals();
     delete (window as unknown as Record<string, unknown>)['__reticleIpc'];
   });
 });
