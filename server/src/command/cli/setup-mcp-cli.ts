@@ -60,14 +60,18 @@ export function handleSetupMcp(reportStep: StepReporter, standalone = true): voi
 
   if (0 === result.detected.length) {
     // Even with no file-backed client, the broader set may still have somewhere to write.
-    registerOtherAgents((line) => {
+    const preRegistered = registerOtherAgents((line) => {
       io.print(line);
     });
     // Named rather than a bare "none found". A person whose agent IS installed needs to know
     // whether we looked for it at all, and the list is the difference between "we did not find
-    // yours" and "we do not support yours".
-    io.print(`No coding agent config found. Looked for: ${knownClientLabels().join(', ')}.`);
-    io.print('Install one, then run `reticle setup mcp` again.');
+    // yours" and "we do not support yours". When the broader set was written, saying "none found"
+    // right under its tick read as a contradiction: those agents are pre-registered, not found.
+    io.print(
+      0 < preRegistered
+        ? `None of ${knownClientLabels().join(', ')} is installed here yet. The agents above are pre-registered and have Reticle's tools once installed; install one of the others, then run \`reticle setup mcp\` again.`
+        : `No coding agent config found. Looked for: ${knownClientLabels().join(', ')}. Install one, then run \`reticle setup mcp\` again.`,
+    );
     return;
   }
   for (const id of result.registered) io.print(`  ✓ ${id}`);

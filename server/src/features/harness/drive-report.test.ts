@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeDrive, drivenSteps } from './drive-report.js';
+import { checkTally, describeDrive, drivenSteps } from './drive-report.js';
 import type { ToolOutcome } from './harness.js';
 
 /**
@@ -70,6 +70,17 @@ describe('the account an agent reads', () => {
     expect(summary).toContain('4 action(s): 2 proved, 1 failed, 1 not decided');
   });
 
+  it('says which saved flows check nothing, instead of offering them as replays', () => {
+    const summary = describeDrive(
+      [acted('a', 'unknown')],
+      ['harness-drive-home', 'login'],
+      ['harness-drive-home'],
+    );
+    expect(summary).toContain('harness-drive-home checks nothing');
+    expect(summary).toContain('saved login');
+    expect(summary).not.toContain('saved harness-drive-home, login');
+  });
+
   it('calls a failure a finding', () => {
     const summary = describeDrive([acted('a', 'no', 'the button stayed disabled')], []);
     expect(summary).toContain('FAILED');
@@ -108,6 +119,17 @@ describe('the account an agent reads', () => {
     const summary = describeDrive(many, []);
     expect(summary).toContain('20 action(s): 20 proved');
     expect(summary).toContain('and 8 more');
+  });
+
+  /** From a recorded whole-app run: its failures sat in "… and 58 more", unreadable. */
+  it('lists every failure first, however long the run', () => {
+    const steps = [
+      ...Array.from({ length: 20 }, (_, i) => acted(`ok ${String(i)}`, 'yes')),
+      ...Array.from({ length: 15 }, (_, i) => acted(`bad ${String(i)}`, 'no')),
+    ];
+    const summary = describeDrive(steps, []);
+    for (let i = 0; i < 15; i += 1) expect(summary).toContain(`bad ${String(i)}`);
+    expect(summary).toContain('and 20 more, none of them failed');
   });
 
   it('names a navigation by where it went', () => {
@@ -273,5 +295,166 @@ describe('the report says how far into the app the drive got', () => {
   it('says so plainly when the drive never left its first page', () => {
     const report = describeDrive([looked('/home'), acted('Save', 'yes')], []);
     expect(report).toContain('Reached 1 page(s): /home');
+  });
+});
+
+/**
+ * Found driving the merchant dashboard: the Harness's own act result named a refund sent at 1/100th
+ * of its amount, fired twice, and a settings save refused with a 422. Its report kept the verdict
+ * word and dropped all three, then ended "proved its checks", and the caller reported no defect.
+ */
+describe('the evidence travels with the verdict', () => {
+  const refund = call(
+    'reticle_act_and_wait',
+    { ref: 'e523', action: 'click', until: { kind: 'net', method: 'POST' } },
+    {
+      element: 'button "Refund now"',
+      verified: 'no',
+      because: 'channels disagree about this action (unit-mismatch)',
+      contradictions: [
+        {
+          kind: 'unit-mismatch',
+          counter: 'the value sent is 100x SMALLER',
+          detail: '/api/v1/payments/pay_1/refund',
+        },
+        { kind: 'duplicate-request', counter: 'the same write fired 2 times', detail: 'POST ×2' },
+      ],
+    },
+  );
+  const save = call(
+    'reticle_act_and_wait',
+    { ref: 'e539', action: 'check', until: { kind: 'net', method: 'PATCH' } },
+    {
+      verified: 'no',
+      verdict: {
+        pass: true,
+        evidence: {
+          method: 'PATCH',
+          url: '/api/v1/settings',
+          status: 422,
+          responseBody: '{"error":"requires KYC level 2"}',
+        },
+      },
+    },
+  );
+  const navigated = call(
+    'reticle_act_and_wait',
+    { ref: 'e85', action: 'click', until: { kind: 'route', contains: 'settings' } },
+    { verified: 'yes' },
+  );
+
+  it('names each disagreement and each failed write under the step', () => {
+    const summary = describeDrive([refund, save, navigated], []);
+    expect(summary).toContain('unit-mismatch: the value sent is 100x SMALLER');
+    expect(summary).toContain('duplicate-request: the same write fired 2 times');
+    expect(summary).toContain('PATCH /api/v1/settings → 422 {"error":"requires KYC level 2"}');
+  });
+
+  it('leads with NOT PROVED when one check passed and two failed', () => {
+    const summary = describeDrive([refund, save, navigated], []);
+    expect(summary.split('\n')[0]).toBe(
+      'NOT PROVED — 1 of 3 check(s) held, 2 failed, 0 undecided. The failures below are findings.',
+    );
+  });
+
+  it('does not call a replay stopped at a destructive step a regression', () => {
+    const guarded = call(
+      'reticle_flow_replay',
+      { flowName: 'refund-flow' },
+      {
+        status: 'error',
+        error: {
+          message: 'potentially destructive action blocked; retry with args.confirmDangerous=true',
+        },
+      },
+    );
+    const summary = describeDrive([guarded], []);
+    expect(summary).toContain('NOT RUN: refund-flow');
+    expect(summary).not.toContain('regressions');
+  });
+});
+
+describe('a destructive click the gate refused, then the drive confirmed', () => {
+  it('lists the click once, and says it really ran', () => {
+    const refused = call(
+      'reticle_act_and_wait',
+      { ref: 'e119', action: 'click' },
+      { error: 'potentially destructive action blocked; retry with args.confirmDangerous=true' },
+      true,
+    );
+    const ran = call(
+      'reticle_act_and_wait',
+      {
+        ref: 'e119',
+        action: 'click',
+        args: { confirmDangerous: true },
+        until: { kind: 'net', method: 'POST' },
+      },
+      { element: 'button "Refund now"', verified: 'no' },
+    );
+    const summary = describeDrive([refused, ran], []);
+    expect(summary).not.toContain('potentially destructive action blocked');
+    expect(summary).toContain('1 destructive action(s) were confirmed and REALLY RAN');
+    expect(summary).toContain('Drove 1 action(s)');
+  });
+});
+
+describe('a click that opened a confirmation instead of sending', () => {
+  it('says the claim was likely wrong, not the app', () => {
+    const summary = describeDrive(
+      [
+        call(
+          'reticle_act_and_wait',
+          { ref: 'e83', action: 'click', until: { kind: 'net', method: 'POST' } },
+          { element: 'button "Refund"', verified: 'no' },
+        ),
+        call(
+          'reticle_snapshot',
+          {},
+          { status: { route: '/#/t', visibleDialogs: ['(unnamed dialog)'] } },
+        ),
+      ],
+      [],
+    );
+    expect(summary).toContain('it opened a dialog instead');
+  });
+});
+
+describe('the pages a drive reached', () => {
+  it('names the page, not the leased tab it was reached in', () => {
+    const shot = (route: string) => call('reticle_snapshot', {}, { status: { route } });
+    const summary = describeDrive(
+      [
+        shot('/?__reticle_session=lease-1&__reticle_project=p'),
+        shot('/?__reticle_session=lease-1&__reticle_project=p#/settings'),
+        call('reticle_act_and_wait', { ref: 'e1', action: 'click' }, { verified: 'yes' }),
+      ],
+      [],
+    );
+    expect(summary).toContain('Reached 2 page(s): / → /#/settings.');
+    expect(summary).not.toContain('__reticle_');
+  });
+});
+
+/** A false green from a live drive: one "Sign in" pressed fifteen times read as fifteen proofs. */
+describe('the same check made again', () => {
+  it('counts once, at its worst', () => {
+    const press = (verified: string) => ({
+      id: 'x',
+      name: 'reticle_act_and_wait',
+      args: { ref: 'e3', action: 'click', until: { kind: 'net', method: 'POST' } },
+      result: { verified, effect: { role: 'button', name: 'Sign in' } },
+      isError: false,
+    });
+    expect(checkTally(Array.from({ length: 15 }, () => press('yes')))).toEqual({
+      held: 1,
+      failed: 0,
+      undecided: 0,
+    });
+    expect(checkTally([press('yes'), press('no'), press('yes')])).toEqual({
+      held: 0,
+      failed: 1,
+      undecided: 0,
+    });
   });
 });

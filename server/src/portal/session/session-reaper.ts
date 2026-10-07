@@ -110,7 +110,10 @@ export function endAllSessions(sessions: SessionManager, reason: string): string
   const ended: string[] = [];
   for (const session of sessions.all()) {
     if (session.isEnded()) continue;
-    endWithUndelivered(session, reason, PresenterTone.WARN);
+    // WAITING, not WARN: a dropped MCP connection is far more often an agent that finished its turn
+    // than one that crashed, and the daemon cannot tell them apart. Red at the end of every
+    // completed Harness or agent run read as an error the run never had.
+    endWithUndelivered(session, reason, PresenterTone.WAITING);
     ended.push(session.id);
   }
   if (ended.length > 0) log('sessions_ended', { reason, sessions: ended });

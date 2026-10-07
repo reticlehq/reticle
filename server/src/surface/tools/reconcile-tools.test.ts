@@ -53,7 +53,9 @@ function reconcileTool() {
 describe('reconcile refuses to call a page clean it could not read', () => {
   it('reports a clean comparison over a page that was read whole', async () => {
     const r = (await reconcileTool().handler(
-      reconcileDeps({ '': { tree: '- text "on hold"\n- text "paid"', truncated: false } }),
+      reconcileDeps({
+        '': { tree: '- text "stl_1 on hold"\n- text "stl_2 paid"', truncated: false },
+      }),
       {},
     )) as { mismatches: unknown[]; note?: string };
     expect(r.mismatches).toEqual([]);
@@ -64,8 +66,8 @@ describe('reconcile refuses to call a page clean it could not read', () => {
     const r = (await reconcileTool().handler(
       reconcileDeps({
         // Cut BEFORE the row that agrees: read alone, this prefix reports a mismatch that is not real.
-        '': { tree: '- text "paid"', truncated: true, unread: ['e2'] },
-        e2: { tree: '- text "on hold"', truncated: false },
+        '': { tree: '- text "stl_2 paid"', truncated: true, unread: ['e2'] },
+        e2: { tree: '- text "stl_1 on hold"', truncated: false },
       }),
       {},
     )) as { mismatches: unknown[]; note?: string };
@@ -92,8 +94,9 @@ describe('reconcile refuses to call a page clean it could not read', () => {
   it('still reports a mismatch it FOUND in a page it could not finish', async () => {
     const r = (await reconcileTool().handler(
       reconcileDeps({
+        // Both rows named on the page, and the on-hold one rendered "paid": the misrendering.
         '': {
-          tree: '- text "paid"',
+          tree: '- text "stl_1 paid"\n- text "stl_2 paid"',
           truncated: true,
           unread: ['e2'],
           unreadOverflow: true,

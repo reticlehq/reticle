@@ -9,6 +9,12 @@ import type { OwnedRealInputProvider } from './portal/input/real-input.js';
 import type { InjectConnectOptions } from './portal/input/real-input.js';
 
 export interface StartOptions {
+  /**
+   * The panel's Sign in, supplied by the CLI door, which owns install-time code: given a repaint, it
+   * answers the handler the bridge runs on each press. An embedder of the library leaves it out, and
+   * its panel falls back to copying `reticle login`.
+   */
+  hudSignIn?: (repaint: () => void) => () => void;
   port?: number;
   /** Bind address. Non-loopback hosts require a token. Defaults to RETICLE_HOST or localhost. */
   host?: string;

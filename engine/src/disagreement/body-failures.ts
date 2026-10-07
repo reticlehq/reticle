@@ -55,7 +55,8 @@ function carriesError(value: unknown): boolean {
   if ('string' === typeof value) return value.trim().length > 0;
   if ('boolean' === typeof value) return value;
   if ('number' === typeof value) return 0 !== value;
-  if (isRecord(value)) return Object.keys(value).length > 0;
+  // An envelope carries an error only if something inside it does: `{ fieldErrors: {}, formErrors: [] }` is none.
+  if (isRecord(value)) return Object.values(value).some(carriesError);
   return true;
 }
 

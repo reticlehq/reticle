@@ -52,6 +52,8 @@ const PINNED_VERSIONS: Record<string, string> = {
   'core/src/registry/project-registry.ts': '1',
   'core/src/verdict/verification-run.ts': 'z.literal(RUN_FILE_VERSION',
   'core/src/artifacts/impact.ts': '.int().positive()',
+  // A Harness drive plan: built in memory today, and the shape the platform will send one in.
+  'core/src/artifacts/drive-script.ts': '1',
   'core/src/wire/messages.ts':
     '.int().min(RETICLE_MIN_PROTOCOL_VERSION).max(RETICLE_PROTOCOL_VERSION)',
   'core/src/wire/types.ts': 'CONTRACT_FILE_VERSION,PROJECT_FILE_VERSION',

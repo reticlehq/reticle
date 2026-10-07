@@ -91,6 +91,27 @@ export function portBusyMessage(output: string): string | undefined {
   );
 }
 
+/** How many of the dev server's last lines a failure quotes. Enough for a stack's first frames. */
+const DIED_TAIL_LINES = 6;
+
+/**
+ * The dev server died before serving: say so, and quote the end of what it printed.
+ *
+ * Without the tail the reason was invisible: a missing `vite` binary printed `vite: command not
+ * found` to its own log, setup said only "exited without serving anything", and its first remedy
+ * ("start the dev server yourself") failed the same way.
+ */
+export function devServerDiedMessage(output: string): string {
+  const tail = output
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter((line) => 0 < line.trim().length)
+    .slice(-DIED_TAIL_LINES);
+  return 0 === tail.length
+    ? 'The dev server exited without serving anything, and printed nothing.'
+    : `The dev server exited without serving anything. The last it printed:\n${tail.map((line) => `    ${line}`).join('\n')}`;
+}
+
 /** A url the dev server announced, if it has announced one. Never composed, only read. */
 const URL_IN_OUTPUT = /https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]):\d+/;
 

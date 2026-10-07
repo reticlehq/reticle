@@ -24,6 +24,7 @@ const { join } = require('node:path');
 // daemon agree by construction rather than by three people copying the same string.
 const {
   RETICLE_CAPTURE_CHANNEL,
+  RETICLE_WINDOW_CHANNEL,
   RETICLE_CAPTURE_FILE_PREFIX,
   RETICLE_FULL_PAGE_UNSUPPORTED,
   RETICLE_NOT_COMPOSITED,
@@ -34,6 +35,11 @@ let captureSeq = 0;
 let registered = false;
 /** Windows this app registered, so a capture survives its requester being destroyed. */
 const windows = new Set();
+/**
+ * The name each window was registered under, keyed by its webContents (what an IPC `sender` is).
+ * Electron windows have no name of their own, and two of one app often share a url.
+ */
+const labels = new WeakMap();
 
 /**
  * The webContents to photograph: the requester if it is alive, else the ONE remaining window.
@@ -115,9 +121,15 @@ async function sweepOldCaptures(dir, keepFile) {
 /**
  * Let Reticle screenshot this window. Safe to call for several windows; the handler is registered
  * once and answers for whichever window asked, so a multi-window app needs no extra wiring.
+ *
+ * `{ label }` names the window in `reticle_session { action: "list" }` (`window: "settings"`), the
+ * way a Tauri window's label does. Without it the window is listed by url and title alone.
  */
-function installReticleCapture(win) {
+function installReticleCapture(win, options) {
   if (win === null || win === undefined) return;
+  const label = options && typeof options.label === 'string' ? options.label : undefined;
+  if (label !== undefined && label.length > 0 && win.webContents)
+    labels.set(win.webContents, label);
   // Remembered so a capture can still resolve if the requesting webContents has gone (a window
   // closing mid-command), rather than returning null and reporting an unexplained capture failure.
   windows.add(win);
@@ -167,6 +179,8 @@ function installReticleCapture(win) {
         throw error instanceof Error ? error : new Error(String(error));
       }
     });
+    // Null, never a guess, for a window the app did not name.
+    ipcMain.handle(RETICLE_WINDOW_CHANNEL, (event) => labels.get(event.sender) ?? null);
     registered = true;
   }
 }

@@ -4,6 +4,7 @@ import { gapsForAction } from '@reticlehq/engine/evidence/instrumentation-gaps.j
 import { noteSessionGaps } from '@reticlehq/engine/evidence/gap-ledger.js';
 import { declaresState } from '@reticlehq/engine/question/predicate/predicate-asks.js';
 import { isStateUnwatched } from '@reticlehq/engine/evidence/blind-spots.js';
+import { hiddenMatchNote } from '@reticlehq/engine/evidence/already-true.js';
 import type { InstrumentationGap, JournalVerdictEffect } from '@reticlehq/core/artifacts';
 import {
   provenExpectedLinks,
@@ -101,6 +102,8 @@ export async function assertVerdict(
   const spots = blindSpotsFromState(session.blindSpots(), session.runtime);
   const statement = buildCoverageStatement(spots);
   const absenceBlindSpot = absenceBlindSpotNote(predicate, spots);
+  // A green resting on hidden matches says the node exists, not that it shows (#1408).
+  const hiddenMatch = hiddenMatchNote(predicate, evidence);
   // Omitted entirely when coverage is full, so an intact page pays nothing and the field's PRESENCE
   // is the warning.
   const coverage =
@@ -219,6 +222,7 @@ export async function assertVerdict(
     ...(effectiveInconclusive === undefined ? {} : { inconclusive: effectiveInconclusive }),
     ...(true === observationLost ? { observationLost: true, lastUrl: session.url } : {}),
     ...(absenceBlindSpot === undefined ? {} : { absenceBlindSpot }),
+    ...(hiddenMatch === undefined ? {} : { hiddenMatch }),
     ...(namedNetIsInFlight(predicate, stillInFlight) ? { namedRequestInFlight: true } : {}),
     honesty: buildHonestyBlock({
       grade: gradeOfPredicate(predicate),

@@ -26,6 +26,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 const {
   RETICLE_IPC_GLOBAL,
   RETICLE_CAPTURE_CHANNEL,
+  RETICLE_WINDOW_CHANNEL,
   RETICLE_FULL_PAGE_UNSUPPORTED,
 } = require('@reticlehq/core/desktop-contract');
 
@@ -252,6 +253,17 @@ contextBridge.exposeInMainWorld(RETICLE_IPC_GLOBAL, {
    * Uses the ORIGINAL invoke: this is Reticle's own plumbing, and recording it as an app IPC call
    * would put `ipc://__reticle:capture` in the agent's own network evidence.
    */
+  /**
+   * The label the app registered this window under (`installReticleCapture(win, { label })`), or
+   * undefined. Original invoke for the same reason as `capture`; an older main helper has no handler,
+   * and that is "unnamed", not an error.
+   */
+  windowLabel() {
+    return originalInvoke(RETICLE_WINDOW_CHANNEL).then(
+      (label) => (typeof label === 'string' && label.length > 0 ? label : undefined),
+      () => undefined,
+    );
+  },
   capture(fullPage) {
     return originalInvoke(RETICLE_CAPTURE_CHANNEL, { fullPage: fullPage === true }).catch(
       (error) => {

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { createRequire } from 'node:module';
-import { sdkGraph, demoPageHtml, DemoTestId, DEMO_SIGNAL } from './demo-page.js';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { sdkGraph, demoPageHtml, serveDemoPage, DemoTestId, DEMO_SIGNAL } from './demo-page.js';
 
 /**
  * The resolver these tests run on, and why it is not the production one.
@@ -67,5 +70,28 @@ describe('the demo page can load the real SDK', () => {
     // `unknown` on a demo that worked.
     expect(html).toContain(DEMO_SIGNAL);
     expect(html).toContain(graph.entry);
+  });
+});
+
+describe('the demo page server', () => {
+  it('serves a mounted file and answers 404 for a directory, a missing file or a climb out', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'demo-mount-'));
+    writeFileSync(join(dir, 'a.js'), 'export {};');
+    mkdirSync(join(dir, 'sub'));
+    const served = await serveDemoPage('<p>hi</p>', {
+      imports: {},
+      entry: '/m/a.js',
+      mounts: [{ prefix: '/m/', dir }],
+    });
+    try {
+      const status = async (path: string): Promise<number> =>
+        (await fetch(new URL(path, served.url))).status;
+      expect(await (await fetch(new URL('/m/a.js', served.url))).text()).toBe('export {};');
+      expect(await status('/m/sub')).toBe(404);
+      expect(await status('/m/missing.js')).toBe(404);
+      expect(await status('/m/%2e%2e/%2e%2e/etc/hosts')).toBe(404);
+    } finally {
+      await served.close();
+    }
   });
 });

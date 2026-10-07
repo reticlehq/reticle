@@ -17,7 +17,31 @@ import {
   bundledPlaywrightVersion,
 } from '@/command/cli/doctor/browser/chromium-hint.js';
 import type { Launcher, PooledBrowser, PooledContext, PooledPage } from './browser-pool.js';
+import type { ScreenshotOptions } from './pool-contract.js';
 import { installNetworkMocks } from '@/portal/input/network-mock.js';
+
+/** Reticle's own panel, kept out of a picture of the app: it is ours, not what the app shows. */
+export const HIDE_RETICLE_CHROME_CSS = '[data-reticle-overlay]{display:none !important}';
+
+/**
+ * How Playwright captures a leased tab. A live picture (JPEG) leaves Reticle's panel out, as the
+ * visual captures do; a plain PNG capture is unchanged, so no existing baseline moves.
+ */
+export function screenshotOptions(opts: ScreenshotOptions): {
+  fullPage: boolean;
+  type?: 'jpeg';
+  quality?: number;
+  style?: string;
+} {
+  return opts.jpegQuality === undefined
+    ? { fullPage: true === opts.fullPage }
+    : {
+        fullPage: true === opts.fullPage,
+        type: 'jpeg',
+        quality: opts.jpegQuality,
+        style: HIDE_RETICLE_CHROME_CSS,
+      };
+}
 
 /**
  * How a leased tab navigates. Pure, and exported, because the decision in it is worth a test while
@@ -56,7 +80,7 @@ function wrapBrowser(browser: Browser): PooledBrowser {
             evaluate: (script) => page.evaluate(script),
             // Playwright returns a Buffer; Uint8Array is what the visual store and differ take.
             screenshot: async (opts) =>
-              new Uint8Array(await page.screenshot({ fullPage: true === opts?.fullPage })),
+              new Uint8Array(await page.screenshot(screenshotOptions(opts ?? {}))),
             // Three moves, same as performGesture: a single move to the center can be a no-op if
             // the pointer was already there, and CSS :hover needs a native hit-test to apply.
             hover: async (x, y) => {

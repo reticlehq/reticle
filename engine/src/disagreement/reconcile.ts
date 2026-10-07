@@ -147,6 +147,12 @@ function shows(text: string, value: string): boolean {
   return renderedForms(value).some((form) => haystack.includes(form.toLowerCase()));
 }
 
+/** Whether the page shows this record at all: its id appears in the page's text. */
+function onPage(entity: Record<string, unknown>, pageText: string): boolean {
+  const id = entity['id'];
+  return ('string' === typeof id || 'number' === typeof id) && pageText.includes(String(id));
+}
+
 /**
  * Compare entities against the page's rendered text.
  *
@@ -161,8 +167,13 @@ export function reconcile(bodies: readonly unknown[], pageText: string): Mismatc
   // Every value each state field took across the response set — used to tell "this value is simply
   // not rendered anywhere" (uninteresting) from "a DIFFERENT value of this same field is rendered"
   // (a mapping bug). Without that distinction the check would flag any field a UI chooses not to show.
+  //
+  // Built only from records the page shows. From every response in the session it mixed record
+  // types and pages: on a disputes page, a payment's "captured" made each dispute's status look
+  // misrendered, and twenty bogus findings led the report.
   const vocabulary = new Map<string, Set<string>>();
   for (const entity of entities) {
+    if (!onPage(entity, pageText)) continue;
     for (const [field, value] of Object.entries(entity)) {
       if (!STATE_FIELDS.has(field) || typeof value !== 'string') continue;
       const values = vocabulary.get(field) ?? new Set<string>();
@@ -204,6 +215,9 @@ export function reconcile(bodies: readonly unknown[], pageText: string): Mismatc
       }
     }
 
+    // A record the page does not show cannot be shown wrongly: a filtered list, or another page's
+    // data still in the session, is not a misrendering.
+    if (!onPage(entity, pageText)) continue;
     for (const [field, value] of Object.entries(entity)) {
       if (!STATE_FIELDS.has(field) || typeof value !== 'string') continue;
       if (shows(pageText, value)) continue;

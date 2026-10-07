@@ -104,6 +104,12 @@ export const RETICLE_URL_PARAM = {
    * needs (nobody is sitting in front of it) without touching identity.
    */
   OPENED: '__reticle_opened',
+  /**
+   * How the HUD starts on a page Reticle opened: `shown`, `hidden` or `removed` (`HudVisibility`).
+   * On the URL rather than a command because a command sent before the HUD mounts is lost, and a
+   * headless drive should never paint a HUD it was asked not to.
+   */
+  HUD: '__reticle_hud',
 } as const;
 
 /** The loopback bind address. The daemon/bridge bind here by default — never expose Reticle off-host. */
@@ -115,6 +121,9 @@ export const LOOPBACK_HOST = '127.0.0.1';
  * here and nowhere else. The values are the literal process.env keys.
  */
 export const ReticleEnv = {
+  /** "0"/"false"/"off" turns off telemetry and every optional outbound call; DO_NOT_TRACK too. */
+  TELEMETRY: 'RETICLE_TELEMETRY',
+  DO_NOT_TRACK: 'DO_NOT_TRACK',
   /** Shared-secret the browser SDK must present in HELLO; absent ⇒ loopback-trust only. */
   TOKEN: 'RETICLE_TOKEN',
   /** Bridge bind host. Defaults to loopback; setting anything else is opt-in remote exposure. */
@@ -396,8 +405,9 @@ export const ReticleDir = {
   /**
    * the user's own record of what Reticle has done for them — .reticle/impact.json.
    *
-   * Local only, never uploaded, and deliberately NOT part of telemetry: telemetry answers questions
-   * about the product; this answers the user's question about their own work.
+   * NOT telemetry: telemetry answers questions about the product; this answers the user's question
+   * about their own work. A linked project's copy syncs to the user's own dashboard (the sync cycle's
+   * `impact` kind); the machine-wide copy in `~/.reticle` never leaves the machine.
    */
   IMPACT_FILE: 'impact.json',
   /** what changes were SUPPOSED to make true —.reticle/intent.json (git-checked, reviewed) */
@@ -412,14 +422,6 @@ export const ReticleDir = {
    * classified nor ignored.
    */
   INTENT_SUBDIR: 'intent',
-  /**
-   * what a drive types into a field, keyed by the field's label —.reticle/fill-values.json.
-   *
-   * Git-checked on purpose. A generated value is paid for once and then belongs to the project: the
-   * next drive reuses it for free, a replay sends exactly what the recording sent, and a human who
-   * dislikes one can edit the file rather than argue with a model.
-   */
-  FILL_VALUES_FILE: 'fill-values.json',
   /** opt-in pixel baselines —.reticle/visual/<name>.png + <name>.diff.png. */
   VISUAL_SUBDIR: 'visual',
   /** verification-run artifacts —.reticle/runs/<runId>.json (the OEM/CI-consumable verdict). */
@@ -434,6 +436,8 @@ export const ReticleDir = {
    * in three separate files, so the guard could not see it and nobody was ever asked.
    */
   FEEDBACK_SUBDIR: 'feedback',
+  /** Every Harness drive plan, and how each journey went — .reticle/plans/<when>-<planId>.json. */
+  PLANS_SUBDIR: 'plans',
   /** durable causal journal —.reticle/sessions/<id>/{events,actions}.jsonl (the substrate). */
   SESSIONS_SUBDIR: 'sessions',
   /** append-only event ledger inside a session dir (one ReticleEvent per line). */
@@ -457,6 +461,11 @@ export const ReticleDir = {
   FLAKE_FILE: 'flake.json',
   /** The app-wide coverage ledger — see server features/exhaust/ledger.ts. */
   COVERAGE_FILE: 'coverage.json',
+  /** Human review marks (HUD notes), pending and resolved — see server portal/session/human. */
+  NOTES_FILE: 'notes.json',
+  /** The user's latest request, as the agent relayed it. Local: it is the user's own words. */
+  REQUEST_FILE: 'request.json',
+  PLATFORM_MOMENTS_FILE: 'platform-moments.json', // moments already said, so each is said once
   /**
    * the project's cloud binding — .reticle/cloud.json, written by `reticle link`. Git-checked and
    * non-secret: the project id, the API origin, and where its dashboard lives. The KEY lives in
@@ -939,12 +948,12 @@ export const ReticleCommand = {
   NAVIGATE: 'navigate',
   /** Reload the page. `args: { hard?: boolean }` — hard clears the cache via location replace trick. */
   REFRESH: 'refresh',
-  /**
-   * Bridge → browser: the saved flows the human can replay from the panel.
-   * `args: { flows: [{ name, start? }] }` — `start` is the first step's testid anchor, a page hint the
-   * HUD uses to show a flow only where it can begin. Absent when the first step isn't testid-anchored.
-   */
+  /** Bridge → browser: replayable flows, `{ flows: [{ name, start? }] }`; `start` = first testid. */
   FLOWS: 'flows',
+  /** Bridge → browser: a HUD replay's progress, `{ name, done, total, status }`. */
+  FLOW_PROGRESS: 'flow.progress',
+  /** Bridge → browser: the Harness's drive plan and each part's status, a `PlanView`. */
+  PLAN: 'plan',
 } as const;
 export type ReticleCommand = (typeof ReticleCommand)[keyof typeof ReticleCommand];
 

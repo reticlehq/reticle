@@ -11,7 +11,12 @@
  * person has done one of those two things for every remaining issue. A release that cannot see the
  * list fails closed: skipping the check is how the last release shipped the lie.
  *
+ * `--label-earned <issue>` is the other end of the same rule, run when somebody APPLIES the label
+ * (#980): it keeps the label only when a commit citing the issue is on `main` or a `v*` release
+ * branch, and otherwise takes it off and says why. An open pull request is not a fix on a branch.
+ *
  * Usage: node scripts/check-pending-release.mjs
+ *        node scripts/check-pending-release.mjs --label-earned 875
  *        node scripts/check-pending-release.mjs --self-test
  */
 
@@ -41,7 +46,55 @@ export function pendingReleaseBlockers(issues) {
   return blockers;
 }
 
+/** Branches the label's promise is about: `main` and the release branches, on the remote. */
+export function releaseRefs(remoteBranches) {
+  return remoteBranches
+    .map((name) => name.trim())
+    .filter((name) => 'origin/main' === name || /^origin\/v\d+\.\d+\.\d+$/.test(name));
+}
+
+/** A commit message that cites the issue by its number, and not a longer number that starts with it. */
+export function citesIssue(message, number) {
+  return new RegExp(`#${String(number)}(?!\\d)`).test(message);
+}
+
+function labelEarned(number) {
+  const branches = releaseRefs(
+    execFileSync('git', ['branch', '-r', '--format=%(refname:short)'], { encoding: 'utf8' }).split(
+      '\n',
+    ),
+  );
+  if (0 === branches.length) fail('label check FAILED: no main or release branch is fetched.');
+  const log = execFileSync(
+    'git',
+    ['log', '--format=%H %s%n%b%x00', '--grep', `#${String(number)}`, ...branches],
+    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+  );
+  if (log.split('\0').some((entry) => citesIssue(entry, number))) {
+    console.log(
+      `#${String(number)}: a commit citing it is on ${branches.join(', ')}; the label stays.`,
+    );
+    return;
+  }
+  const gh = (args) =>
+    execFileSync('gh', [...args, '--repo', 'reticlehq/reticle'], { encoding: 'utf8' });
+  gh(['issue', 'edit', String(number), '--remove-label', LABEL]);
+  gh([
+    'issue',
+    'comment',
+    String(number),
+    '--body',
+    `Removed \`${LABEL}\`: no commit citing #${String(number)} is on \`main\` or a release branch yet. The label goes on when the fix is merged, not when a pull request opens, so nobody skips work that is not done.`,
+  ]);
+  console.log(`#${String(number)}: no fix on a release branch; label removed.`);
+}
+
 function selfTest() {
+  const refs = releaseRefs(['origin/main', 'origin/v3.6.0', 'origin/feat/x', 'origin/v3.6.0-rc']);
+  if (2 !== refs.length || !citesIssue('fix: x (#980)', 980) || citesIssue('fix (#9801)', 980)) {
+    console.error('pending-release label self-test FAILED');
+    process.exit(1);
+  }
   const blocked = pendingReleaseBlockers([
     { number: 875, state: 'open', labels: ['bug', LABEL] },
     { number: 1, state: 'closed', labels: [LABEL] },
@@ -68,8 +121,13 @@ function fail(message) {
   process.exit(1);
 }
 
+const earnedAt = process.argv.indexOf('--label-earned');
 if (process.argv.includes('--self-test')) {
   selfTest();
+} else if (-1 !== earnedAt) {
+  const number = Number(process.argv[earnedAt + 1]);
+  if (!Number.isInteger(number) || number <= 0) fail('usage: --label-earned <issue number>');
+  labelEarned(number);
 } else {
   let raw;
   try {

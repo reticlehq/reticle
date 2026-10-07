@@ -122,3 +122,26 @@ it('preserves a null view for an element in a detached document', async () => {
   expect(events).toHaveLength(CLICK_EVENTS.length);
   for (const event of events) expect(event.view).toBeNull();
 });
+
+// #1003: a canvas or SVG app hit-tests from clientX/Y and reads pointerId/isPrimary; a click at
+// (0,0) with no pointer id landed on nothing.
+describe('a synthetic click says where it is and which pointer', () => {
+  it('carries the target centre, a primary pointer id and the held button', async () => {
+    const canvas = document.createElement('canvas');
+    document.body.append(canvas);
+    canvas.getBoundingClientRect = () => new DOMRect(10, 20, 100, 40);
+    const events = capture(canvas, CLICK_EVENTS);
+    await fireClickSequence(canvas);
+    for (const event of events) expect([event.clientX, event.clientY]).toEqual([60, 40]);
+    expect(events.find((e) => 'mousedown' === e.type)?.buttons).toBe(1);
+    expect(events.find((e) => 'mouseup' === e.type)?.buttons).toBe(0);
+    const down = events.find((e) => 'pointerdown' === e.type) as MouseEvent & {
+      pointerId?: number;
+      isPrimary?: boolean;
+    };
+    if ('function' === typeof PointerEvent) {
+      expect(down.pointerId).toBe(1);
+      expect(down.isPrimary).toBe(true);
+    }
+  });
+});

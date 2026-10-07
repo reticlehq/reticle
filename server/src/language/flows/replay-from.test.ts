@@ -265,3 +265,35 @@ describe('the page a replayed step ran on', () => {
     expect(results[0]?.page).toBe('/issues/7');
   });
 });
+
+describe('replaying part of a flow, for a drive plan that branches', () => {
+  it('`to` drives up to a step and no further', async () => {
+    const session = new FakeSession(ALL);
+    const results = await replayFlow(
+      session,
+      flow(['one', 'two', 'three', 'four']),
+      waitForPredicate,
+      FAST,
+      false,
+      undefined,
+      { to: 2 },
+    );
+    expect(session.acted).toEqual(['e-one', 'e-two']);
+    expect(results.map((r) => r.step)).toEqual([0, 1]);
+  });
+
+  it('`at` continues on the page as it is, driving nothing before the step', async () => {
+    const session = new FakeSession(ALL);
+    const results = await replayFlow(
+      session,
+      flow(['one', 'two', 'three', 'four']),
+      waitForPredicate,
+      FAST,
+      false,
+      undefined,
+      { at: 2 },
+    );
+    expect(session.acted).toEqual(['e-three', 'e-four']);
+    expect(results.map((r) => r.step)).toEqual([2, 3]);
+  });
+});

@@ -31,7 +31,10 @@ import { tokensMatch } from './token-auth.js';
 import { pairingTokenSource } from './pairing-token.js';
 import { log } from '@/log.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
-import { sessionReplacedReason } from '@/portal/session/facts/session-replaced.js';
+import {
+  SESSION_PARKED_REASON,
+  sessionReplacedReason,
+} from '@/portal/session/facts/session-replaced.js';
 import { describeSkew, sdkFix, SkewPair } from '@/command/version/version-skew.js';
 import { noteVersionSkew } from '@/command/version/version-nudge.js';
 import { protocolSkewReason } from './protocol-skew.js';
@@ -179,6 +182,11 @@ function harnessRequest(event: {
   if ('on' === want) return true;
   if ('off' === want) return false;
   return undefined;
+}
+
+/** True when this event is the panel's Sign in. Pure boundary narrowing, like the above. */
+function isSigninRequest(event: { type: string; data: Record<string, unknown> }): boolean {
+  return event.type === EventType.HUMAN_CONTROL && event.data['kind'] === HumanControlKind.SIGNIN;
 }
 
 /** True when this event is the panel's "sync now" button. Pure boundary narrowing, like the above. */
@@ -331,7 +339,8 @@ export class Bridge {
   #onSessionEnd: ((session: Session) => Promise<void>) | undefined;
   /** Wired by the daemon: push to the dashboard now, because somebody asked in the panel. */
   #onSyncRequest: (() => void) | undefined;
-  #onHarnessRequest: ((enabled: boolean) => void) | undefined;
+  #onHarnessRequest: ((enabled: boolean, session: Session) => void) | undefined;
+  #onSigninRequest: (() => void) | undefined;
 
   constructor(options: BridgeOptions) {
     const host = options.host ?? LOOPBACK_HOST;
@@ -611,6 +620,11 @@ export class Bridge {
             socket.close(WS_CLOSE.AUTH_FAILED[0], reason);
             return;
           }
+          // A window the agent detached stays detached across its own reloads. See SessionManager.park.
+          if (this.sessions.isParked(parsed.sessionId)) {
+            socket.close(1008, SESSION_PARKED_REASON);
+            return;
+          }
           const existing = this.sessions.get(parsed.sessionId);
           if (existing === undefined && this.sessions.count() >= this.#maxSessions) {
             socket.close(...WS_CLOSE.SESSION_LIMIT);
@@ -759,7 +773,9 @@ export class Bridge {
           else if (isSyncRequest(parsed.event)) this.#onSyncRequest?.();
           // The switch is written through to the platform by the daemon, for the same reason: the
           // Session has no cloud credential and should not grow one.
-          else if (harness !== undefined) this.#onHarnessRequest?.(harness);
+          else if (harness !== undefined) this.#onHarnessRequest?.(harness, session);
+          // Signing in writes `~/.reticle`, which only the daemon may do; the panel only asks.
+          else if (isSigninRequest(parsed.event)) this.#onSigninRequest?.();
           // Pass the raw frame's byte length so the buffer doesn't re-serialize every event for accounting.
           else session.pushEvent(parsed.event, Buffer.byteLength(text, 'utf8'));
         } else if (parsed.kind === MessageKind.COMMAND_RESULT) {
@@ -900,8 +916,13 @@ export class Bridge {
    * Register a handler for the panel's harness switch. Optional for the same reason as the above: a
    * bridge built without one ignores the request rather than refusing it.
    */
-  attachHarnessRequest(handler: (enabled: boolean) => void): void {
+  attachHarnessRequest(handler: (enabled: boolean, session: Session) => void): void {
     this.#onHarnessRequest = handler;
+  }
+
+  /** Register a handler for the panel's Sign in. Optional, like the above: without one it is ignored. */
+  attachSigninRequest(handler: () => void): void {
+    this.#onSigninRequest = handler;
   }
 
   /** Register a handler to run when a session connects. Additive — every handler runs. */

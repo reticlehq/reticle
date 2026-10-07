@@ -22,7 +22,14 @@ import {
   withInlineCode,
   TOUR_CSS,
 } from './tour-view.js';
-import { mountTour, tourAlreadySeen, tourSeenKey, type TourStorage } from './tour.js';
+import {
+  HUD_CONTROL_SELECTORS,
+  mountTour,
+  tourAlreadySeen,
+  tourSeenKey,
+  type TourStorage,
+} from './tour.js';
+import { Presenter } from '../presenter.js';
 
 /**
  * Where a slide with this anchor SITS, which is not where its step sits.
@@ -67,11 +74,12 @@ describe('the tour is the same tour the CLI prints', () => {
 
   // The six somebody actually sees, named. A slide quietly appearing or vanishing is the kind of
   // change that is invisible in a diff of prose and obvious to the person reading the carousel.
-  it('is six cards: connected, the four panel controls, then the prompts', () => {
+  it('is seven cards: connected, the five panel controls, then the prompts', () => {
     expect(tourSlides().map((s) => s.title)).toEqual([
       'Yayyy! It is connected',
-      'Activity Panel',
-      'Annotate',
+      'Agent Log',
+      'Saved flows',
+      'Notes',
       "What's the impact?",
       'Make it yours',
       'Get Started',
@@ -415,15 +423,15 @@ describe('the tour explains the panel it just put on the page', () => {
     const hud = document.createElement('div');
     hud.setAttribute('data-reticle-hud', '');
     hud.getBoundingClientRect = () => ({ left: 10, top: 20, width: 300, height: 40 }) as DOMRect;
-    const controls = [
-      'data-reticle-chat-toggle',
-      'data-reticle-annotate-btn',
-      'data-reticle-report-btn',
-      'data-reticle-settings-btn',
-    ];
-    controls.forEach((attr, i) => {
+    // Built from the tour's own selectors. A list of attributes written out here kept passing after
+    // the HUD renamed two of them; that the selectors match the REAL HUD is the test at the end.
+    const controls = Object.values(HUD_CONTROL_SELECTORS).map((selector) => {
+      const [, attr = '', value = ''] = /^\[([\w-]+)(?:="([^"]*)")?\]$/.exec(selector) ?? [];
+      return [attr, value] as const;
+    });
+    controls.forEach(([attr, value], i) => {
       const button = document.createElement('button');
-      button.setAttribute(attr, '');
+      button.setAttribute(attr, value);
       button.getBoundingClientRect = () =>
         ({ left: 20 + i * 30, top: 25, width: 24, height: 24 }) as DOMRect;
       hud.appendChild(button);
@@ -447,6 +455,7 @@ describe('the tour explains the panel it just put on the page', () => {
     const anchors = tourSlides().map((s) => s.anchor);
     for (const anchor of [
       TourAnchor.HUD_CHAT,
+      TourAnchor.HUD_FLOWS,
       TourAnchor.HUD_ANNOTATE,
       TourAnchor.HUD_IMPACT,
       TourAnchor.HUD_SETTINGS,
@@ -785,5 +794,26 @@ describe('the HUD highlight covers the whole of what the slide calls the panel',
       height: '56px',
     });
     handle?.destroy();
+  });
+});
+
+/**
+ * Every control a tour card rings exists on the HUD the panel actually renders.
+ *
+ * The HUD redesign renamed the Impact button and moved the pin control into the Notes page, and two
+ * cards went on ringing nothing: the tour still ran, still asked "Take a look.", and pointed at empty
+ * page. Nothing failed, because nothing compared the tour's targets with the HUD.
+ */
+describe('the tour points at controls the HUD has', () => {
+  it('finds every card target in the rendered HUD', () => {
+    document.body.innerHTML = '';
+    const presenter = new Presenter({});
+    presenter.mount();
+    const missing = TOUR_HUD_STEPS.map((step) => step.anchor ?? TourAnchor.NONE)
+      .map((anchor) => [anchor, HUD_CONTROL_SELECTORS[anchor]] as const)
+      .filter(([, selector]) => selector === undefined || null === document.querySelector(selector))
+      .map(([anchor]) => anchor);
+    expect(missing).toEqual([]);
+    presenter.destroy();
   });
 });

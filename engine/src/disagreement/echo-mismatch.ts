@@ -30,8 +30,10 @@ import type { OwnContradiction } from './contradiction-types.js';
  *    that share a field name were never expected to match. Both used to fire on every healthy POST;
  *  - only keys the request actually SENT are considered;
  *  - only scalars, since deep structural diffing is where the false positives live;
- *  - values are compared NORMALISED (trimmed, case-folded, numbers as numbers), so `FR` vs `fr` and
- *    `1` vs `1.0` stay silent while `fr` vs `en` speaks;
+ *  - values are compared NORMALISED (trimmed, case-folded, numbers as numbers, ISO-8601 instants
+ *    as instants), so `FR` vs `fr`, `1` vs `1.0` and `.000Z` vs `Z` stay silent while `fr` vs `en`
+ *    speaks;
+ *  - server-stamped audit columns (`updated_at` and its spellings) are not compared;
  *  - if the key appears anywhere in the response carrying the requested value, it is treated as
  *    applied — an envelope that echoes both the old and the new value is not a dropped write;
  *  - the response must look like a restatement of the request before any key is compared. Reported
@@ -68,9 +70,29 @@ function parse(raw: unknown): unknown {
   }
 }
 
+/**
+ * An ISO-8601 date-time that names one instant: it carries a time AND a zone (`Z` or `±hh:mm`).
+ * A bare date or a zone-less local time is not an instant and is compared as text.
+ */
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/i;
+
+/**
+ * Two spellings of one instant — `…:00.000Z`, `…:00Z`, `…+05:30` — are the same value. Servers
+ * re-serialise timestamps through their own date type, so precision and zone spelling are
+ * formatting, not a dropped write.
+ */
+function normalizeString(value: string): string {
+  const trimmed = value.trim();
+  if (ISO_INSTANT.test(trimmed)) {
+    const instant = Date.parse(trimmed);
+    if (Number.isFinite(instant)) return new Date(instant).toISOString().toLowerCase();
+  }
+  return trimmed.toLowerCase();
+}
+
 /** Comparable form of a scalar. Non-scalars return undefined and are never compared. */
 function normalize(value: unknown): string | undefined {
-  if ('string' === typeof value) return value.trim().toLowerCase();
+  if ('string' === typeof value) return normalizeString(value);
   if ('number' === typeof value) return Number.isFinite(value) ? String(value) : undefined;
   if ('boolean' === typeof value) return String(value);
   return undefined;
@@ -110,6 +132,24 @@ function isVersionKey(key: string): boolean {
     'rev' === lower ||
     'revision' === lower
   );
+}
+
+/**
+ * Audit columns the server stamps with its own clock on every write. A client that sends one back
+ * (a PATCH of the whole record it read) is not asking for that value to be kept, and the changed
+ * value in the response is the proof the write applied — the same reasoning as a version token.
+ */
+const AUDIT_TIMESTAMP_KEYS: ReadonlySet<string> = new Set([
+  'updated_at',
+  'updatedat',
+  'modified_at',
+  'modifiedat',
+  'last_modified',
+  'lastmodified',
+]);
+
+function isAuditTimestampKey(key: string): boolean {
+  return AUDIT_TIMESTAMP_KEYS.has(key.toLowerCase());
 }
 
 /**
@@ -299,6 +339,7 @@ export function findEchoMismatches(
       if (wanted.size !== 1) continue;
       if (isIdentityKey(key)) continue;
       if (isVersionKey(key)) continue;
+      if (isAuditTimestampKey(key)) continue;
       const values = echoed.get(key);
       // Not echoed at all = no evidence either way. Only a key the server chose to report back can
       // contradict the request, and silence is not a contradiction.

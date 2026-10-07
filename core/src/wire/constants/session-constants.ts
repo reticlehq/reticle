@@ -44,6 +44,14 @@ export const HumanControlKind = {
    */
   SYNC: 'sync',
   /**
+   * Human pressed Sign in in the panel. Carries nothing.
+   *
+   * A page cannot write `~/.reticle`, so the panel used to copy `reticle login` and stop there: a
+   * dead end for anybody who does not live in a terminal. The daemon owns the credential, so it
+   * starts the same browser approval flow `reticle login` does and the panel repaints when it lands.
+   */
+  SIGNIN: 'signin',
+  /**
    * Human flipped the harness switch in the panel. `text` carries `on` or `off`.
    *
    * The panel does NOT keep this state. It emits the intent and the daemon writes it to the

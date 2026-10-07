@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/browser`, `@reticlehq/server` — a page that redirects on load no longer reports as "no browser session connected".** A route calling `window.location.assign("/login")` on mount, pointing at an uninstrumented page, left the agent with the generic no-session message: the daemon only saw the socket close and lumped the reason in with closed tabs. The SDK now captures Navigation API `navigate` events while the old document is alive and emits the departure as `NET_PENDING`; the session retains the target as a `departedTo` tombstone fact, and the diagnosis says the page navigated away to `<url>`. Closes [#1256](https://github.com/reticlehq/reticle/issues/1256).

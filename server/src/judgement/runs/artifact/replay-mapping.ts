@@ -87,6 +87,7 @@ export function mapReplayToFlowResult(
   const oracle = replay.steps.find((s) => s.tool === SUCCESS_STEP_TOOL)?.anchor;
   return {
     name: replay.name,
+    ...(flow?.template === undefined ? {} : { template: flow.template }),
     status,
     steps: replay.steps.length,
     durationMs,

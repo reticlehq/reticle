@@ -61,6 +61,25 @@ export function pairingTokenSource(input: {
   return 'default';
 }
 
+/**
+ * The pairing token this machine was told to use, or undefined when it was told nothing.
+ *
+ * `RETICLE_TOKEN` first, then the token file in `RETICLE_PAIRING_TOKEN_DIR`, the precedence
+ * `pairingTokenSource` names. A command that mints its own one-shot token for a hosted preview asks
+ * this first: in a container the app's plugin bakes the directory token in, and a fresh token made
+ * the daemon refuse the only app it was started to verify (#1251).
+ */
+export async function configuredPairingToken(
+  env: NodeJS.ProcessEnv,
+  deps: PairingTokenDeps,
+): Promise<string | undefined> {
+  const token = env[ReticleEnv.TOKEN]?.trim();
+  if (token !== undefined && 0 < token.length) return token;
+  const dir = env[PAIRING_TOKEN_DIR_ENV];
+  if (dir === undefined || 0 === dir.length) return undefined;
+  return readOrCreatePairingToken(dir, deps);
+}
+
 export function pairingTokenPath(dir: string): string {
   return join(dir, ReticleDir.PAIRING_TOKEN_FILE);
 }

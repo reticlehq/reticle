@@ -152,3 +152,51 @@ describe('reticle_sessions names the last known page when the list is empty', ()
     expect(result.lastKnown).toBeUndefined();
   });
 });
+
+// Installing Reticle wires no app; the agent's first use in an unwired project does, and says what.
+describe('the first session call wires an unwired project', () => {
+  const runInit: NoSessionNextAction = {
+    action: NoSessionAction.RUN_INIT,
+    command: 'reticle init',
+    reason: 'no .reticle.json',
+  };
+  const wired = { ok: true, directory: '/w/shop', steps: [], url: 'http://localhost:5173/' };
+
+  it('runs the wiring in its own project and returns the session it brought up', async () => {
+    const list: unknown[] = [];
+    const asked: string[] = [];
+    const deps = {
+      ...depsWith(list, 'prose', runInit),
+      reticleRoot: '/w/shop/.reticle',
+      firstRun: {
+        projectDirectory: (dir: string) => dir,
+        wire: (dir: string) => {
+          asked.push(dir);
+          list.push({ sessionId: 's1' });
+          return Promise.resolve({ ...wired, directory: dir });
+        },
+      },
+    } as unknown as ToolDeps;
+    const result = (await sessionsTool?.handler(deps, {})) as {
+      sessions: unknown[];
+      wired?: { directory: string };
+    };
+    expect(asked).toEqual(['/w/shop']);
+    expect(result.sessions).toHaveLength(1);
+    expect(result.wired?.directory).toBe('/w/shop');
+  });
+
+  it('asks instead of guessing when it cannot tell which project', async () => {
+    const deps = {
+      ...depsWith([], 'prose', runInit),
+      reticleRoot: '/home/u/.reticle',
+      firstRun: { projectDirectory: () => undefined, wire: () => Promise.reject(new Error('no')) },
+    } as unknown as ToolDeps;
+    const result = (await sessionsTool?.handler(deps, {})) as {
+      next_action?: NoSessionNextAction;
+      wired?: unknown;
+    };
+    expect(result.wired).toBeUndefined();
+    expect(result.next_action?.action).toBe(NoSessionAction.RUN_INIT);
+  });
+});
