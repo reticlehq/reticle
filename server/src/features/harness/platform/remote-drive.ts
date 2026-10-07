@@ -19,6 +19,7 @@ import {
   TOOL_SESSION_LIMITS,
   parseDriveSpec,
   parseToolSessionReply,
+  sessionAskRetryable,
   type DriveApplied,
   type DriveSpec,
   type SpecIgnored,
@@ -135,6 +136,8 @@ export interface RemoteDriveDeps {
   };
   /** The clock for how long each session call took. */
   now?: () => number;
+  /** How a session ask waits before it is sent again. */
+  sleep?: (ms: number) => Promise<void>;
   /** Drive the app toward `goal`, in `sessionId`. A throw is reported as a failed drive, in its own words. */
   drive: (goal: string, sessionId: string | undefined) => Promise<RemoteDriveOutcome>;
   /**
@@ -275,6 +278,7 @@ export function startRemoteDrives(deps: RemoteDriveDeps): RemoteDrives {
               ...(tools.tools === undefined ? {} : { tools: tools.tools }),
             },
             deps.now ?? (() => Date.now()),
+            deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
           );
         } finally {
           await filming?.stop();
@@ -331,17 +335,21 @@ async function runToolSession(
   tools: { invoke: (tool: string, args: Record<string, unknown>) => Promise<unknown> },
   first: { applied: DriveApplied; ignored: SpecIgnored[]; tools?: readonly unknown[] },
   now: () => number,
+  sleep: (ms: number) => Promise<void>,
 ): Promise<void> {
   let results: ToolSessionResult[] = [];
   let made = 0;
-  for (;;) {
-    const res = await post({
+  // Numbered, so an ask sent again after a failure is the SAME ask: the platform answers it once.
+  for (let ask = 0; ; ask += 1) {
+    const body = {
       protocol: PLATFORM_LINK_VERSION,
+      ask,
       results,
-      ...(0 === made ? first : {}),
-    });
-    // A drive the platform no longer knows, or an answer it could not give: stop, never guess.
-    if (!res.ok) return;
+      ...(0 === ask ? first : {}),
+    };
+    const res = await askWithRetries(() => post(body), sleep);
+    // Refused, or still failing after every retry: stop. The platform ends a drive that stops asking.
+    if (res === undefined || !res.ok) return;
     const reply = parseToolSessionReply(await res.json());
     if (reply.done) return;
     results = [];
@@ -357,6 +365,28 @@ async function runToolSession(
         results.push({ seq: call.seq, ok: false, error: message, ms: now() - at });
       }
     }
+  }
+}
+
+/**
+ * One ask, sent again while the network or the platform fails it (a dropped connection, a 5xx, a
+ * 429), waiting longer each time. A refusal is the platform's answer and is returned as it is.
+ * Undefined when every attempt failed to get any answer at all.
+ */
+async function askWithRetries(
+  send: () => Promise<Response>,
+  sleep: (ms: number) => Promise<void>,
+): Promise<Response | undefined> {
+  for (let attempt = 0; ; attempt += 1) {
+    let res: Response | undefined;
+    try {
+      res = await send();
+    } catch {
+      res = undefined;
+    }
+    if (res !== undefined && !sessionAskRetryable(res.status)) return res;
+    if (attempt >= TOOL_SESSION_LIMITS.RETRIES) return res;
+    await sleep(TOOL_SESSION_LIMITS.RETRY_BASE_MS * 2 ** attempt);
   }
 }
 

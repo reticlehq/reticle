@@ -4,8 +4,12 @@ import {
   DriveTarget,
   SpecIgnoredReason,
   TOOL_SESSION_LIMITS,
+  LINK_NOTICE_MAX,
+  LINK_NOTICE_TEXT_MAX,
   parseDriveSpec,
+  parseLinkNotices,
   parseToolSessionReply,
+  sessionAskRetryable,
 } from './platform-link.js';
 import { HudVisibility } from './constants/hud-use.js';
 
@@ -89,5 +93,47 @@ describe("the platform's answer to a tool session", () => {
       args: {},
     }));
     expect(parseToolSessionReply({ calls }).calls).toHaveLength(TOOL_SESSION_LIMITS.MAX_BATCH);
+  });
+});
+
+describe('what the platform tells a daemon', () => {
+  it('reads a notice it can show, and drops one it cannot', () => {
+    expect(
+      parseLinkNotices([
+        {
+          level: 'update',
+          text: 'Run reticle update to drive with every option.',
+          url: 'https://reticle.sh/update',
+        },
+        { level: 'shout', text: 'x' },
+        { level: 'info', text: '' },
+        { level: 'warn', text: 'Harness credits are low.', url: 'javascript:alert(1)' },
+      ]),
+    ).toEqual([
+      {
+        level: 'update',
+        text: 'Run reticle update to drive with every option.',
+        url: 'https://reticle.sh/update',
+      },
+      { level: 'warn', text: 'Harness credits are low.' },
+    ]);
+    expect(parseLinkNotices('nope')).toEqual([]);
+  });
+
+  it('keeps a notice short and the list small, whatever the platform sends', () => {
+    const many = Array.from({ length: 10 }, (_, i) => ({
+      level: 'info',
+      text: `${String(i)} ${'x'.repeat(900)}`,
+    }));
+    const read = parseLinkNotices(many);
+    expect(read).toHaveLength(LINK_NOTICE_MAX);
+    expect(read[0]?.text.length).toBeLessThanOrEqual(LINK_NOTICE_TEXT_MAX);
+  });
+});
+
+describe('a session ask that did not get through', () => {
+  it('is worth asking again only when the platform or the network failed, never when refused', () => {
+    expect([500, 502, 503, 504, 429, 408].every(sessionAskRetryable)).toBe(true);
+    expect([400, 401, 403, 404, 409].some(sessionAskRetryable)).toBe(false);
   });
 });

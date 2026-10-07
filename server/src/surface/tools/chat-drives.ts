@@ -57,7 +57,11 @@ export const CHAT_CAPABILITIES: readonly LinkCapability[] = [
 export interface ChatDriveSessions {
   list(): SessionInfo[];
   count(): number;
-  get(id: string): { autoEnd(text: string, tone: PresenterTone): void } | undefined;
+  get(
+    id: string,
+  ):
+    | { autoEnd(text: string, tone: PresenterTone): void; pushNarration(text: string): void }
+    | undefined;
 }
 
 /** A project's own name: its package's, else its id's, else its folder's. */
@@ -203,6 +207,18 @@ export function startChatDrives(
       ),
     open,
     drivePending: (platform) => void drives.tick(platform),
+    // What the platform wants the person told: in the daemon's log, and on the HUD of each open tab
+    // of that project, so somebody who never reads the log still sees "update Reticle".
+    notify: (notice, platform) => {
+      const line = `${notice.text}${notice.url === undefined ? '' : ` ${notice.url}`}`;
+      log(`reticle: from the platform: ${line}`);
+      void (async () => {
+        for (const tab of sessions.list()) {
+          const key = await sessionKey(tab.sessionId).catch(() => undefined);
+          if (key === platform.apiKey) sessions.get(tab.sessionId)?.pushNarration(line);
+        }
+      })();
+    },
     log,
   });
   // Once now, so the chat sees this machine's apps as soon as the daemon is up.

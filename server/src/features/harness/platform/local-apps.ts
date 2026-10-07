@@ -15,7 +15,9 @@ import {
   LinkPath,
   PLATFORM_LINK_VERSION,
   RETICLE_URL_PARAM,
+  parseLinkNotices,
   type LinkCapability,
+  type LinkNotice,
 } from '@reticlehq/core';
 import { pickDriveSession, type DriveCandidate } from './remote-drive.js';
 
@@ -173,6 +175,11 @@ export interface AppReportDeps {
   open: (url: string) => Promise<void>;
   /** A drive is waiting for the project this credential is for. */
   drivePending: (platform: Platform) => void;
+  /**
+   * Something the platform wants the person told ("update Reticle"), for the project this credential
+   * is for. Called once per notice for the daemon's life, however often the platform repeats it.
+   */
+  notify?: (notice: LinkNotice, platform: Platform) => void;
   fetch?: FetchLike;
   intervalMs?: number;
   log?: (line: string) => void;
@@ -186,6 +193,8 @@ export interface AppReports {
 export function startAppReports(deps: AppReportDeps): AppReports {
   const doFetch: FetchLike = deps.fetch ?? ((url, init) => fetch(url, init));
   let busy = false;
+  /** Notices already shown, by what they say: the platform repeats them on every report. */
+  const told = new Set<string>();
   const tick = async (): Promise<void> => {
     if (busy) return;
     busy = true;
@@ -208,7 +217,17 @@ export function startAppReports(deps: AppReportDeps): AppReports {
             signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
           });
           if (!res.ok) continue;
-          const answer = (await res.json()) as { wake?: unknown; pendingDrive?: unknown };
+          const answer = (await res.json()) as {
+            wake?: unknown;
+            pendingDrive?: unknown;
+            notices?: unknown;
+          };
+          for (const notice of parseLinkNotices(answer.notices)) {
+            const key = `${platform.apiKey}\u0000${notice.text}`;
+            if (told.has(key)) continue;
+            told.add(key);
+            deps.notify?.(notice, platform);
+          }
           const open = new Set(apps.map((app) => app.key));
           for (const wake of Array.isArray(answer.wake) ? answer.wake : []) {
             const { key, url } = (wake ?? {}) as { key?: unknown; url?: unknown };

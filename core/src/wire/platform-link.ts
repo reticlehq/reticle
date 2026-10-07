@@ -169,7 +169,21 @@ export const TOOL_SESSION_LIMITS = {
   MAX_CALLS: 1_000,
   /** Calls taken from one answer; the rest are not run. */
   MAX_BATCH: 25,
+  /**
+   * Times one ask is sent again after the network or the platform failed it. The SAME ask, under
+   * the same `ask` number, so the platform answers it once: a resend never advances the drive twice.
+   */
+  RETRIES: 4,
+  /** The first wait before asking again; it doubles each time (0.5s, 1s, 2s, 4s). */
+  RETRY_BASE_MS: 500,
 } as const;
+
+/**
+ * Whether an ask that came back with this status is worth sending again: the platform or the network
+ * failed it (5xx, 429, 408). A refusal (4xx) is the platform's answer, and asking again changes nothing.
+ */
+export const sessionAskRetryable = (status: number): boolean =>
+  500 <= status || 429 === status || 408 === status;
 
 const SessionCallSchema = z.object({
   seq: z.number().int().nonnegative(),
@@ -192,6 +206,51 @@ export function parseToolSessionReply(raw: unknown): ToolSessionReply {
       return parsed.success ? [parsed.data] : [];
     });
   return { calls, done: true === record.done || 0 === calls.length };
+}
+
+/** How much a platform notice matters to the person reading it. */
+export const LinkNoticeLevel = {
+  INFO: 'info',
+  WARN: 'warn',
+  /** Their Reticle is older than what the platform can use: what to run to update it. */
+  UPDATE: 'update',
+} as const;
+export type LinkNoticeLevel = (typeof LinkNoticeLevel)[keyof typeof LinkNoticeLevel];
+
+/**
+ * Something the platform tells the person through their daemon: "update Reticle to drive with every
+ * option". The one way a platform reaches a daemon it cannot change, so it is kept to a sentence.
+ */
+export interface LinkNotice {
+  level: LinkNoticeLevel;
+  text: string;
+  url?: string;
+}
+
+export const LINK_NOTICE_MAX = 3;
+export const LINK_NOTICE_TEXT_MAX = 300;
+
+/** Read the platform's notices; one that does not read is dropped, never shown half-read. */
+export function parseLinkNotices(raw: unknown): LinkNotice[] {
+  const levels = new Set<string>(Object.values(LinkNoticeLevel));
+  return (Array.isArray(raw) ? raw : [])
+    .flatMap((entry): LinkNotice[] => {
+      if ('object' !== typeof entry || null === entry) return [];
+      const notice = entry as { level?: unknown; text?: unknown; url?: unknown };
+      const text = 'string' === typeof notice.text ? notice.text.trim() : '';
+      if ('string' !== typeof notice.level || !levels.has(notice.level) || 0 === text.length)
+        return [];
+      const url =
+        'string' === typeof notice.url && /^https?:\/\//i.test(notice.url) ? notice.url : undefined;
+      return [
+        {
+          level: notice.level as LinkNoticeLevel,
+          text: text.slice(0, LINK_NOTICE_TEXT_MAX),
+          ...(url === undefined ? {} : { url }),
+        },
+      ];
+    })
+    .slice(0, LINK_NOTICE_MAX);
 }
 
 /** The platform's paths the daemon calls, all with its machine key. */

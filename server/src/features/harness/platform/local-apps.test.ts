@@ -292,3 +292,28 @@ describe('an address the platform asks this machine to open', () => {
     expect(mayOpen('not a url', open)).toBe(false);
   });
 });
+
+describe('what the platform tells the person', () => {
+  it('shows each notice once, however often the platform repeats it', async () => {
+    const notice = { level: 'update', text: 'Run reticle update to drive with every option.' };
+    const fetch = (): Promise<Response> =>
+      Promise.resolve(
+        new Response(JSON.stringify({ wake: [], notices: [notice, { level: 'x' }] })),
+      );
+    const shown: unknown[] = [];
+    running = startAppReports({
+      machine: MACHINE,
+      version: '3.6.1',
+      capabilities: [],
+      apps: () => Promise.resolve([{ platform: A, apps: [] }]),
+      open: () => Promise.resolve(),
+      drivePending: () => undefined,
+      notify: (n, to) => shown.push([n, to.apiKey]),
+      fetch,
+      intervalMs: 60_000,
+    });
+    await running.tick();
+    await running.tick();
+    expect(shown).toEqual([[notice, 'key-a']]);
+  });
+});

@@ -526,3 +526,73 @@ describe('a drive with a spec', () => {
     expect(p.calls.some((c) => c.url.endsWith('/ld_p'))).toBe(false);
   });
 });
+
+/**
+ * A network blip in the middle of a platform drive ended it on the daemon, and the platform showed it
+ * "driving" for half an hour. An ask that failed is sent again, the SAME ask under the same number, so
+ * the platform answers it once; a refusal stops the drive at once.
+ */
+describe('a tool session over a network that fails', () => {
+  const session = (statuses: (number | 'drop')[], replies: unknown[]) => {
+    const asks: { ask: unknown; results: unknown }[] = [];
+    const fetch = (url: string, init: RequestInit): Promise<Response> => {
+      if (url.endsWith('/next'))
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ drive: { id: 'ld_r', goal: 'pay', spec: { mode: 'platform' } } }),
+          ),
+        );
+      const body = JSON.parse('string' === typeof init.body ? init.body : '{}') as {
+        ask: unknown;
+        results: unknown;
+      };
+      asks.push({ ask: body.ask, results: body.results });
+      const status = statuses.shift() ?? 200;
+      if ('drop' === status) return Promise.reject(new Error('socket hang up'));
+      return Promise.resolve(
+        new Response(JSON.stringify(200 === status ? replies.shift() : {}), { status }),
+      );
+    };
+    return { asks, fetch };
+  };
+  const run = (fetch: (url: string, init: RequestInit) => Promise<Response>, slept: number[]) =>
+    start({
+      fetch,
+      prepare: () =>
+        Promise.resolve({
+          sessionId: 'tab-1',
+          applied: { target: 'tab', mode: 'platform', sessionId: 'tab-1' },
+          ignored: [],
+        }),
+      session: () => ({ invoke: () => Promise.resolve({ ok: true }) }),
+      sleep: (ms) => {
+        slept.push(ms);
+        return Promise.resolve();
+      },
+      now: () => 0,
+    }).tick();
+
+  it('asks again, the same ask, after a dropped connection and a 503, then carries on', async () => {
+    const s = session(
+      [200, 'drop', 503, 200],
+      [{ calls: [{ seq: 1, tool: 'reticle_look', args: {} }] }, { done: true }],
+    );
+    const slept: number[] = [];
+    await run(s.fetch, slept);
+    expect(s.asks.map((a) => a.ask)).toEqual([0, 1, 1, 1]);
+    // The resend carried the same results: the platform answers the ask once.
+    expect(s.asks[1]?.results).toEqual(s.asks[3]?.results);
+    expect(slept).toEqual([500, 1000]);
+  });
+
+  it('stops at once when the platform refuses the ask, and gives up after its retries', async () => {
+    const refused = session([409], []);
+    await run(refused.fetch, []);
+    expect(refused.asks).toHaveLength(1);
+    const down = session(['drop', 'drop', 'drop', 'drop', 'drop'], []);
+    const slept: number[] = [];
+    await run(down.fetch, slept);
+    expect(down.asks).toHaveLength(5);
+    expect(slept).toEqual([500, 1000, 2000, 4000]);
+  });
+});
