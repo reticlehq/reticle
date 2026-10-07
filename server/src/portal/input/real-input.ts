@@ -883,10 +883,14 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
     return performGesture(page, action, box, args, this.#sleep, this.#now);
   }
 
-  /** PNG of the owned page, or undefined before navigate / after dispose. */
-  screenshot(_sessionUrl: string, opts: ScreenshotOpts): Promise<Uint8Array | undefined> {
+  /**
+   * PNG of the owned page, or undefined before navigate / after dispose, or when `sessionUrl` is not
+   * the page this provider owns. It owns ONE page, and photographing it for whatever url was asked
+   * saved a different tab's pixels under the caller's session (#1407). Same rule as `isAvailableFor`.
+   */
+  async screenshot(sessionUrl: string, opts: ScreenshotOpts): Promise<Uint8Array | undefined> {
     const page = this.#livePage();
-    if (page === undefined) return Promise.resolve(undefined);
+    if (page === undefined || !(await this.isAvailableFor(sessionUrl))) return undefined;
     return capturePage(page, opts);
   }
 

@@ -203,8 +203,16 @@ async function capture(
   args: Record<string, unknown>,
 ): Promise<{ png?: Uint8Array; reason?: string; runtime?: string | undefined }> {
   const provider = screenshotProvider(deps);
-  if (provider !== undefined) {
-    const session = deps.sessions.resolve(sessionId);
+  // Only a provider DRIVING this session's page may photograph it. A launched provider owns one page
+  // and ignored the url it was handed, so while `reticle drive` was alive a screenshot or diff named
+  // for another tab saved the driven page's pixels and answered `saved: true` (#1407). The same
+  // check gates every real-input gesture; the capture path never asked it.
+  const session = provider === undefined ? undefined : deps.sessions.resolve(sessionId);
+  const owns =
+    provider !== undefined &&
+    session !== undefined &&
+    (await provider.isAvailableFor(session.url).catch(() => false));
+  if (provider !== undefined && session !== undefined && owns) {
     const png = await provider.screenshot(session.url, await buildOpts(deps, sessionId, args));
     // A driven browser renders the session's URL in a BROWSER — so the pixels are web even when the
     // session named is a desktop window. Scoping those under the desktop runtime would corrupt that
@@ -230,8 +238,9 @@ async function capture(
       : await deps.pool?.screenshotLease(sessionId, { fullPage: true === args['fullPage'] });
   // A leased page is a real browser page, whatever the session is.
   if (leased !== undefined) return { png: leased, runtime: AppRuntime.WEB };
+  // A provider that does not own this session is, for this session, no provider at all.
   return {
-    reason: provider === undefined ? VisualReason.NO_PROVIDER : VisualReason.CAPTURE_FAILED,
+    reason: owns ? VisualReason.CAPTURE_FAILED : VisualReason.NO_PROVIDER,
   };
 }
 
