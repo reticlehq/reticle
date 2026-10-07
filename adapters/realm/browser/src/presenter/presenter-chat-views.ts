@@ -63,7 +63,7 @@ function saveHistory(items: HistoricalAnnotation[]): void {
 export const CHAT_VIEWS_HTML = `
   <div data-reticle-harness-spot class="reticle-harness-spot" hidden></div>`;
 
-export const FLOWS_PAGE_HTML = `<section data-reticle-page-panel="flows" class="reticle-page-panel reticle-flows-view" role="region" aria-label="Saved Flows" hidden>
+export const FLOWS_PAGE_HTML: string = `<section data-reticle-page-panel="flows" class="reticle-page-panel reticle-flows-view" role="region" aria-label="Saved Flows" hidden>
   <div class="reticle-page-heading"><span class="reticle-page-titles"><strong>Saved flows</strong><span class="reticle-page-subtitle">Journeys your agent verified, replayable here</span></span><button type="button" data-reticle-page-close aria-label="Close Saved Flows" title="Close">×</button></div>
   <div data-reticle-all-flows class="reticle-all-flows"></div>
 </section>`;

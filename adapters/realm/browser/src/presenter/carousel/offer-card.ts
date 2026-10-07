@@ -129,7 +129,7 @@ export function offerHtml(offer: OfferState | undefined, dismissed: boolean): st
 }
 
 /** Styles, kept beside the markup they dress so a change to one is a change to both. */
-export const OFFER_CSS = `
+export const OFFER_CSS: string = `
 .reticle-offer{margin:8px 10px;padding:10px 12px;border:1px solid var(--reticle-line,#2a2f3a);border-radius:10px;background:var(--reticle-surface-inset,rgba(255,255,255,.03));}
 .reticle-offer-title{display:block;font-weight:600;font-size:12px;padding-right:18px;}
 .reticle-offer-body{margin:6px 0 8px;font-size:11px;line-height:1.45;opacity:.8;}

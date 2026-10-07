@@ -4,7 +4,7 @@
  * a compact type scale and a separate session-state accent because it must fit beside the app and
  * still communicate running/paused/ended at a glance.
  */
-export const PRESENTER_DESIGN_TOKENS_CSS = `
+export const PRESENTER_DESIGN_TOKENS_CSS: string = `
 [data-reticle-overlay]{
   --reticle-hud-space-0:0px;
   --reticle-hud-space-1:4px;

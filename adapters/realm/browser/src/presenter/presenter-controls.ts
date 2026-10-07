@@ -224,7 +224,7 @@ export const CONTROLS_BANNER_HTML = `<div data-reticle-banner class="reticle-ban
  */
 export const CONTROLS_MARKS_HTML = `<div ${MARKS_ROW_ATTR} class="reticle-marks-row" hidden><span data-reticle-marks-text class="reticle-marks-text"></span><button type="button" ${COPY_MARKS_ATTR} class="reticle-marks-copy" title="${COPY_MARKS_LABEL}">${hiIconHtml(PresenterIcon.COPY, PRESENTER_ICON_SIZE.HELP)}<span>${COPY_MARKS_LABEL}</span></button></div>`;
 /** Replay-a-flow row (between log and footer); buttons are filled in by setFlows once flows arrive. */
-export const CONTROLS_FLOWS_HTML = `<div data-reticle-flows class="reticle-flows"><div class="reticle-flows-head"><span class="reticle-flows-cap">${FLOWS_LABEL}</span><span class="reticle-flows-links"><button type="button" data-reticle-see-logs class="reticle-flows-all" hidden>${SEE_LOGS_LABEL} →</button><button type="button" data-reticle-flows-all class="reticle-flows-all">${FLOWS_ALL_LABEL} →</button></span></div><div data-reticle-flow-strip class="reticle-flow-strip"></div></div>`;
+export const CONTROLS_FLOWS_HTML: string = `<div data-reticle-flows class="reticle-flows"><div class="reticle-flows-head"><span class="reticle-flows-cap">${FLOWS_LABEL}</span><span class="reticle-flows-links"><button type="button" data-reticle-see-logs class="reticle-flows-all" hidden>${SEE_LOGS_LABEL} →</button><button type="button" data-reticle-flows-all class="reticle-flows-all">${FLOWS_ALL_LABEL} →</button></span></div><div data-reticle-flow-strip class="reticle-flow-strip"></div></div>`;
 /**
  * Footer markup: the workspace row.
  *

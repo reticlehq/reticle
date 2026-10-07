@@ -196,7 +196,7 @@ function startRotation(log: HTMLElement, root: HTMLElement, count: number): void
  * Styles. The track's fixed height is what keeps a slide change from moving the log; the cards
  * inside lose their own frame so the carousel draws one.
  */
-export const CAROUSEL_CSS = `
+export const CAROUSEL_CSS: string = `
 .reticle-carousel{position:relative;margin:8px 10px;padding:10px 12px 8px;border:1px solid var(--reticle-line,#2a2f3a);border-radius:10px;background:var(--reticle-surface-inset,rgba(255,255,255,.03));}
 .reticle-carousel-track{height:100px;overflow:hidden;}
 .reticle-carousel-slide .reticle-offer,.reticle-carousel-slide .reticle-talk{margin:0;padding:0;border:0;background:none;}
