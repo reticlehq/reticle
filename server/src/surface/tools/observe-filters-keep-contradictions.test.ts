@@ -72,9 +72,19 @@ describe('observe concludes from the whole window, whatever it returns', () => {
     );
   });
 
-  it('is not changed by max_events either', async () => {
-    const events = renderedNavigation();
-    expect(await kinds(events, { max_events: 1 })).toEqual(await kinds(events, {}));
+  // A positive case: the finding rests on the route change, which max_events: 1 drops from the
+  // returned timeline (it keeps the most recent event). It must still be reported.
+  it('keeps a finding whose evidence max_events dropped from the timeline', async () => {
+    const events = [...blankNavigation(), ev(EventType.SIGNAL, { name: 'analytics:ping' })];
+    const out = (await TOOLS.find((t) => t.name === ReticleTool.OBSERVE)?.handler(deps(events), {
+      since: 0,
+      max_events: 1,
+    })) as { events: { type: string }[]; contradictions?: { kind: string }[] };
+
+    expect(out.events.map((e) => e.type)).not.toContain(EventType.ROUTE_CHANGE);
+    expect((out.contradictions ?? []).map((c) => c.kind)).toContain(
+      ContradictionKind.ROUTE_RENDERED_NOTHING,
+    );
   });
 
   it('still reports a navigation that rendered nothing, filtered or not', async () => {
