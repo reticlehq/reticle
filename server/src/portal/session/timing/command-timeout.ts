@@ -75,10 +75,13 @@ const HIDDEN_TAB_ADVICE =
   `network fault. Bring the tab to the front, or drive a tab Reticle owns: ${ReticleTool.LEASE} ` +
   '{ action: "acquire", url: "%URL%" }.';
 
-/** True when the page runs in an ordinary browser tab, as the SDK reported or the URL shows. */
+/**
+ * True only when the SDK REPORTED an ordinary browser tab. Not guessed from the URL: a Tauri or
+ * Electron dev server is http://localhost too, and an older SDK that omits the runtime would turn a
+ * hidden desktop window into "bring the tab forward", which addresses nothing there.
+ */
 function isWebTab(context: TimeoutContext): boolean {
-  if (context.runtime !== undefined) return AppRuntime.WEB === context.runtime;
-  return /^https?:/.test(context.url);
+  return AppRuntime.WEB === context.runtime;
 }
 
 /** True when this session is a WebKit desktop shell — the only runtime that suffers this. */

@@ -179,9 +179,11 @@ describe('commandTimeoutMessage — an 8s timeout should say what to DO', () => 
       expect(message).not.toMatch(/OUT and not back IN|bridge→page/);
     });
 
-    it('says the same before the first health report names the runtime', () => {
-      const message = commandTimeoutMessage('match', 8000, { url: WEB, hidden: true });
-      expect(message).toMatch(/background tab/);
+    // A URL cannot tell a browser tab from a desktop dev server: both are http://localhost. With no
+    // reported runtime the message must not send a hidden desktop window to "bring the tab forward".
+    it('does not guess a browser tab from an http URL when the runtime is unreported', () => {
+      const message = commandTimeoutMessage('match', 8000, { url: TAURI, hidden: true });
+      expect(message).not.toMatch(/background tab|reticle_lease/);
     });
 
     it('keeps the one-way advice for a visible page that was heard recently', () => {
