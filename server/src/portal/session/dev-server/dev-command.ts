@@ -45,6 +45,12 @@ const PACKAGE_JSON = 'package.json';
 
 /** `--port 4311` / `--port=4311`, the flag every dev server in this list accepts. */
 const PORT_FLAG = /--port[= ]\s*(\d+)/;
+/**
+ * `-p 3005`, the short form Next, Nuxt and Astro accept (reticle#1367).
+ *
+ * Anchored to a start or a whitespace so the `-p` inside a longer flag (`--pretty`) is not a port.
+ */
+const PORT_SHORT_FLAG = /(?:^|\s)-p\s*(\d+)/;
 /** `PORT=8080 remix dev` — the other half of how a project pins its port. */
 const PORT_ENV = /(?:^|\s)PORT=(\d+)/;
 
@@ -59,7 +65,7 @@ function readTextFile(path: string): string | undefined {
 
 /** The port the script pins, when it pins one at all. */
 function pinnedPort(script: string): number | undefined {
-  const match = PORT_FLAG.exec(script) ?? PORT_ENV.exec(script);
+  const match = PORT_FLAG.exec(script) ?? PORT_SHORT_FLAG.exec(script) ?? PORT_ENV.exec(script);
   const digits = match?.[1];
   if (digits === undefined) return undefined;
   const port = Number.parseInt(digits, 10);
