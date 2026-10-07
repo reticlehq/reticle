@@ -545,6 +545,22 @@ export class Bridge {
             log('hello_invalid', { ...refused });
             this.sessions.noteClosure(WS_CLOSE_REASON.INVALID_HELLO, this.#clock(), refused);
           }
+          // On a LIVE session a frame that fails the schema is dropped, not answered with a close.
+          // The SDK reads every 1008 as permanent and stops reconnecting, so one event kind from a
+          // newer SDK ended the session for good, mid-drive, until a manual reload (#1413). What was
+          // thrown away is evidence, so it is recorded as a transport gap in this window: a verdict
+          // over it is downgraded rather than graded over an event nobody read. Only before hello is
+          // a bad frame still a terminal refusal.
+          if (undefined !== session) {
+            log('invalid_frame_dropped', { sessionId: session.id, ...peekFrameKind(text) });
+            session.pushEvent({
+              t: session.elapsed(),
+              type: EventType.TRANSPORT_OVERFLOW,
+              sessionId: session.id,
+              data: { dropped: 1 },
+            });
+            return;
+          }
           socket.close(...WS_CLOSE.INVALID_MESSAGE);
           return;
         }
@@ -918,3 +934,26 @@ export class Bridge {
     });
   }
 }
+
+/**
+ * The `kind` and event `type` of a frame that failed the schema, for the log: never its payload,
+ * which can carry anything the page sent. Each is a bounded string or absent.
+ */
+function peekFrameKind(text: string): { kind?: string; eventType?: string } {
+  const short = (v: unknown): string | undefined =>
+    'string' === typeof v ? v.slice(0, MAX_LOGGED_FRAME_FIELD) : undefined;
+  try {
+    const json = JSON.parse(text) as { kind?: unknown; event?: { type?: unknown } } | null;
+    const kind = short(json?.kind);
+    const eventType = short(json?.event?.type);
+    return {
+      ...(kind === undefined ? {} : { kind }),
+      ...(eventType === undefined ? {} : { eventType }),
+    };
+  } catch {
+    return {};
+  }
+}
+
+/** How much of a frame's `kind` or event `type` the drop log keeps. */
+const MAX_LOGGED_FRAME_FIELD = 64;
