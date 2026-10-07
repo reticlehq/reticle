@@ -19,7 +19,7 @@ import { join } from 'node:path';
 import { registeredElsewhere } from '@/memory/recall/registered-projects.js';
 import { explainNoSession } from './no-session-diagnosis.js';
 import type { NoSessionFacts } from './no-session-diagnosis.js';
-import { detectDevCommand } from './dev-server/dev-command.js';
+import { detectDevCommandInProject } from './dev-server/dev-command.js';
 import { nextActionFor, renderNextAction } from './no-session-next-action.js';
 import type { NoSessionNextAction } from './no-session-next-action.js';
 import {
@@ -433,7 +433,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
       })(),
       // Read when asked, like everything else here: a `package.json` can gain a dev script, and a
       // daemon that cached "there is none" at boot would keep saying so for the rest of the day.
-      dev: detectDevCommand(directory),
+      dev: detectDevCommandInProject(directory),
     });
   };
 

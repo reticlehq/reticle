@@ -47,7 +47,7 @@ export {
   parseMajor,
   PackageManager,
 } from './detect/detect.js';
-export { findWorkspaceApps, isWebApp } from './detect/workspace-apps.js';
+export { findWorkspaceApps, isWebApp, workspacePackageDirs } from './detect/workspace-apps.js';
 export { desktopLaunch, type DesktopLaunch } from './detect/dev-script.js';
 export { detectNonJsEcosystem, noPackageJsonMessage } from './detect/non-js-project.js';
 export { deriveProjectId, packageName } from './project/project-id.js';

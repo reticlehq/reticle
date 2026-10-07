@@ -9,9 +9,9 @@
  * Pure apart from one injected reader, so every case is a unit test rather than a temp directory.
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { desktopLaunch } from '@reticlehq/init';
+import { desktopLaunch, workspacePackageDirs } from '@reticlehq/init';
 
 /** A dev script, as something an agent can actually run. */
 export interface DevCommand {
@@ -21,6 +21,8 @@ export interface DevCommand {
   script?: string;
   /** The port the script PINS, when it pins one. Absent means the tool picks — never a guess. */
   port?: number;
+  /** The app's directory, when it is not the project root. The caller must run the command there. */
+  directory?: string;
 }
 
 /**
@@ -82,21 +84,22 @@ function scriptsOf(manifest: unknown): Record<string, unknown> {
   return scripts as Record<string, unknown>;
 }
 
-/**
- * The dev command for the project in `directory`, or undefined when there is not one to be sure of.
- *
- * `read` is injected so the whole decision is testable without a filesystem; the daemon uses the
- * default disk reader.
- */
-export function detectDevCommand(
+/** The package manager the lockfiles under `directory` identify. Anything else is npm. */
+function packageManager(directory: string, read: (path: string) => string | undefined): string {
+  return (
+    LOCKFILES.find(({ file }) => read(join(directory, file)) !== undefined)?.manager ??
+    DEFAULT_PACKAGE_MANAGER
+  );
+}
+
+/** The dev command for the package in `directory`, with the manager chosen by the caller. */
+function devCommandFor(
   directory: string,
-  read: (path: string) => string | undefined = readTextFile,
+  manager: string,
+  read: (path: string) => string | undefined,
 ): DevCommand | undefined {
   const manifest = readManifest(read(join(directory, PACKAGE_JSON)));
   const scripts = scriptsOf(manifest);
-  const manager =
-    LOCKFILES.find(({ file }) => read(join(directory, file)) !== undefined)?.manager ??
-    DEFAULT_PACKAGE_MANAGER;
   // A desktop shell's `dev` is its renderer's dev server, which no window ever opens onto. init's
   // rule decides which launcher it is, so the command the daemon hands an agent and the one init
   // spawns are the same.
@@ -118,6 +121,58 @@ export function detectDevCommand(
       script,
       ...(port === undefined ? {} : { port }),
     };
+  }
+  return undefined;
+}
+
+/** Directory names under `path`, or none when it cannot be read. */
+function readDirNames(path: string): readonly string[] {
+  try {
+    return readdirSync(path, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The dev command for the project in `directory`, or undefined when there is not one to be sure of.
+ *
+ * `read` is injected so the whole decision is testable without a filesystem; the daemon uses the
+ * default disk reader.
+ */
+export function detectDevCommand(
+  directory: string,
+  read: (path: string) => string | undefined = readTextFile,
+): DevCommand | undefined {
+  return devCommandFor(directory, packageManager(directory, read), read);
+}
+
+/**
+ * The dev command for the project, looking one level down when the root has none.
+ *
+ * `reticle init` is run at the repo root, and in a monorepo the app is a directory down — so the
+ * daemon's "this project declares no dev script" was false for a root whose `frontend/package.json`
+ * held `"dev": "vite"`, and the agent asked a human for a command that was on disk (reticle#1368).
+ * init's own workspace listing answers which directories to consider; the root's lockfile picks the
+ * package manager, because a workspace package usually has no lockfile of its own.
+ */
+export function detectDevCommandInProject(
+  directory: string,
+  read: (path: string) => string | undefined = readTextFile,
+  listDirs: (path: string) => readonly string[] = readDirNames,
+): DevCommand | undefined {
+  const manager = packageManager(directory, read);
+  const here = devCommandFor(directory, manager, read);
+  if (here !== undefined) return here;
+  const packages = workspacePackageDirs({
+    readFile: (path) => read(join(directory, path)) ?? null,
+    listDirs: (path) => listDirs(join(directory, path)),
+  });
+  for (const sub of packages) {
+    const found = devCommandFor(join(directory, sub), manager, read);
+    if (found !== undefined) return { ...found, directory: sub };
   }
   return undefined;
 }
