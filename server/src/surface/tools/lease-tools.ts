@@ -43,6 +43,14 @@ import { HudVisibility, ReticleTool, SESSION_HEALTH } from '@reticlehq/core';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
 import { asString } from '@reticlehq/core';
 import { chromiumPreflightRefusal } from '@/command/cli/doctor/browser/chromium-hint.js';
+import {
+  LEASE_PERMISSIONS_ARG,
+  hintOf,
+  notificationReadBack,
+  parseLeasePermissions,
+  permissionRefusal,
+  refuseRegrant,
+} from './lease-permissions.js';
 
 /**
  * Everything the daemon already knows about why a leased tab might not have dialled in.
@@ -433,6 +441,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       .enum([HudVisibility.SHOWN, HudVisibility.HIDDEN, HudVisibility.REMOVED])
       .optional()
       .describe('How the HUD starts on the page: shown (default), hidden, or removed.'),
+    permissions: LEASE_PERMISSIONS_ARG,
   },
   outputSchema: {
     sessionId: z.string(),
@@ -501,6 +510,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     const projectId = asString(args['projectId']);
     const headed = true === args['headed'];
     const hud = Object.values(HudVisibility).find((v) => v === args['hud']);
+    const permissions = parseLeasePermissions(args['permissions']);
     const seedStorageArg = args['seedStorage'];
     let validatedSeed: SeedStorage | undefined;
     if (seedStorageArg !== undefined) {
@@ -558,6 +568,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
           // A no-op when the id resolved to itself; load-bearing when it did not, because every later
           // touch and release arrives under the id being handed back here.
           pool.alias(resolved, existing);
+          refuseRegrant(pool, existing, permissions);
           pool.touch(existing);
           // Probed only HERE, never on the mint path below. There, the readiness wait resolved
           // moments ago and IS the liveness evidence; on reuse the last evidence may be minutes
@@ -594,8 +605,11 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
           ...(headed ? { headed } : {}),
           ...(deps.attachId === undefined ? {} : { owner: deps.attachId }),
           ...(validatedSeed !== undefined ? { seedStorage: validatedSeed } : {}),
+          ...(permissions !== undefined ? { permissions } : {}),
         });
       } catch (err) {
+        const refusal = permissionRefusal(err);
+        if (refusal !== undefined) throw refusal;
         if (err instanceof Error && err.message.startsWith('Storage seeding failed')) {
           throw new Error(scrubSeedFromError(err.message, validatedSeed));
         }
@@ -658,9 +672,12 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
               },
             }),
         ...(versionSkew === undefined ? {} : { versionSkew }),
-        ...(ready
-          ? {}
-          : { hint: await notConnectedHint(deps, url, pool.dialFailureUrl?.(lease.sessionId)) }),
+        ...hintOf(
+          ready
+            ? undefined
+            : await notConnectedHint(deps, url, pool.dialFailureUrl?.(lease.sessionId)),
+          ready ? await notificationReadBack(pool, lease.sessionId, permissions) : undefined,
+        ),
       };
     } finally {
       releaseLock?.();
