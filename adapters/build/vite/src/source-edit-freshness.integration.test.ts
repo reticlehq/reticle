@@ -59,8 +59,10 @@ function ctaSource(cta: string): string {
 }
 
 function appRoot(): string {
-  // realpath: macOS's tmpdir is a symlink into /private, and a real project root is not one.
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'reticle-freshness-app-')));
+  // realpath: macOS's tmpdir is a symlink into /private, and a real project root is not one. The
+  // native one also expands Windows' 8.3 tmpdir (RUNNER~1), which the JS one keeps: Vite serves the
+  // long path, so a short-named root put every module outside `fs.allow` and answered 403.
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'reticle-freshness-app-')));
   dirs.push(root);
   mkdirSync(join(root, 'src'), { recursive: true });
   writeFileSync(
