@@ -28,6 +28,33 @@ function evidenceSource(evidence: unknown): string | undefined {
 }
 
 /**
+ * Any `data-reticle-source` stamp anywhere in an assertion's evidence, near misses included.
+ *
+ * Not a pointer to report: `assertSource` decides that, and it refuses a near miss because that is
+ * a different element. This answers a narrower question, the one the `no-source-mapping` gap asks:
+ * does this build stamp its elements at all? A near miss that carries `source` proves it does, so a
+ * failure whose only located element is a near miss must not tell the agent to install a plugin
+ * that is already working (#1422). Bounded depth, because evidence is page-supplied.
+ */
+export function stampedSourceIn(evidence: unknown, depth = 0): string | undefined {
+  if (depth > 4 || 'object' !== typeof evidence || null === evidence) return undefined;
+  if (Array.isArray(evidence)) {
+    for (const entry of evidence) {
+      const found = stampedSourceIn(entry, depth + 1);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+  const own = (evidence as { source?: unknown }).source;
+  if ('string' === typeof own && 0 < own.length) return own;
+  for (const value of Object.values(evidence)) {
+    const found = stampedSourceIn(value, depth + 1);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
+/**
  * The `file:line` an ASSERTION is entitled to report — its own evidence, or nothing.
  *
  * `reticle_assert` and `reticle_wait_for` drive nothing, so the last act's source is whatever
