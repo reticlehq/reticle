@@ -42,6 +42,8 @@ const CHANNELS_OF: Record<PredicateKind, readonly ChannelId[]> = {
   [PredicateKind.STATE]: [ChannelId.STATE],
   [PredicateKind.ROUTE]: [ChannelId.ROUTE],
   [PredicateKind.CONSOLE]: [ChannelId.LOG],
+  // Read off the live document, like an element. Nothing else in the window is consulted.
+  [PredicateKind.HEAD]: [ChannelId.UI],
   // An animation is a thing on screen, observed over time. Both, because a realm that renders but
   // cannot tell you when something settled cannot answer this either.
   [PredicateKind.ANIMATION]: [ChannelId.UI, ChannelId.TIME],

@@ -905,6 +905,9 @@ export const QueryBy = {
 } as const;
 export type QueryBy = (typeof QueryBy)[keyof typeof QueryBy];
 
+/** At most this many `<head>` tags cross the bridge per HEAD_READ; past it the answer says `truncated`. */
+export const HEAD_READ_MAX_TAGS = 200;
+
 /** Commands the bridge sends to the browser SDK (the `name` field of a CommandMessage). */
 export const ReticleCommand = {
   SNAPSHOT: 'snapshot',
@@ -920,6 +923,8 @@ export const ReticleCommand = {
   STATE_READ: 'state_read',
   /** Read localStorage / sessionStorage / readable cookies (sensitive keys redacted). */
   STORAGE_READ: 'storage_read',
+  /** Read the live `<head>`: its `<link rel>` and `<meta>` tags (sensitive values redacted). */
+  HEAD_READ: 'head_read',
   /** scroll a ref's nearest scrollable container by ~a viewport (virtualized lists). */
   SCROLL: 'scroll',
   /** Session lifecycle: agent tunes the presenter session (e.g. idle-end timeout) for the app's needs. */

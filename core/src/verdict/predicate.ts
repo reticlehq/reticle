@@ -27,6 +27,9 @@ import {
 import { PredicateKind } from '@/verdict/consequence.js';
 import { propertyAssertionSchema, type PropertyAssertion } from './property-assertion.js';
 
+/** What a head tag's `href` or `content` must hold: a substring, or the whole value. */
+export type HeadValue = { contains: string } | { equals: string };
+
 export type Predicate =
   | {
       kind: typeof PredicateKind.ELEMENT;
@@ -117,6 +120,19 @@ export type Predicate =
       satisfies?: PropertyAssertion;
     }
   | { kind: typeof PredicateKind.SETTLED; quietMs?: number }
+  | {
+      kind: typeof PredicateKind.HEAD;
+      /** A `<link>` whose `rel` holds this token: `icon`, `canonical`, `manifest`, … */
+      link?: { rel: string };
+      /** A `<meta>` by `name` (`description`) or by `property` (Open Graph: `og:image`). */
+      meta?: { name?: string; property?: string };
+      /** What the link's `href` must hold. Only with `link`. */
+      href?: HeadValue;
+      /** What the meta's `content` must hold. Only with `meta`. */
+      content?: HeadValue;
+      /** No matching tag may be in the head. */
+      absent?: boolean;
+    }
   | {
       kind: typeof PredicateKind.COMPARE;
       left: CompareSource;
@@ -455,8 +471,33 @@ function predicateUnion() {
       })
       .strict(),
     z.object({ kind: z.literal(PredicateKind.NOT), predicate: PredicateSchema }).strict(),
+    z
+      .object({
+        kind: z.literal(PredicateKind.HEAD),
+        link: z
+          .object({ rel: z.string().min(1) })
+          .strict()
+          .optional(),
+        meta: z
+          .object({ name: z.string().min(1).optional(), property: z.string().min(1).optional() })
+          .strict()
+          .optional(),
+        href: HEAD_VALUE.optional(),
+        content: HEAD_VALUE.optional(),
+        absent: z.boolean().optional(),
+      })
+      .strict(),
   ]);
 }
+
+/**
+ * `contains` or `equals`. One object rather than a union of two: every tool that takes a predicate
+ * carries this schema, so the union's second branch was paid once per tool. "Exactly one" is a
+ * cross-field rule, so it lives in `checkHeadShape` with the others.
+ */
+const HEAD_VALUE = z
+  .object({ contains: z.string().optional(), equals: z.string().optional() })
+  .strict();
 
 /*
  * Cross-field rules, applied to every predicate INCLUDING the ones nested in a composite.
@@ -476,6 +517,10 @@ function checkPredicateShape(predicate: unknown, ctx: z.RefinementCtx): void {
     satisfies?: unknown;
     scope?: unknown;
   };
+  if (PredicateKind.HEAD === p.kind) {
+    checkHeadShape(predicate as Extract<Predicate, { kind: typeof PredicateKind.HEAD }>, ctx);
+    return;
+  }
   if (PredicateKind.COMPARE === p.kind) {
     checkCompareShape(predicate as Extract<Predicate, { kind: typeof PredicateKind.COMPARE }>, ctx);
     return;
@@ -498,6 +543,42 @@ function checkPredicateShape(predicate: unknown, ctx: z.RefinementCtx): void {
         'either, the locator is every element on the page and the property would run against ' +
         'whichever one happened to match first',
     });
+  }
+}
+
+/**
+ * The head predicate names ONE tag, and checks only a value that tag has.
+ *
+ * A value check on the wrong tag is the case worth refusing: `content` on a link, or `href` on a meta,
+ * reads a value the tag never has, so it could only ever fail — or, under `absent`, only ever pass.
+ */
+function checkHeadShape(
+  p: Extract<Predicate, { kind: typeof PredicateKind.HEAD }>,
+  ctx: z.RefinementCtx,
+): void {
+  const issue = (message: string): void => ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+  if ((p.link === undefined) === (p.meta === undefined)) {
+    issue(
+      'a head predicate names exactly one of `link` or `meta`: `link: { rel: "icon" }` for a ' +
+        '`<link>`, `meta: { name: "description" }` for a `<meta>`',
+    );
+  }
+  if (p.meta !== undefined && (p.meta.name === undefined) === (p.meta.property === undefined)) {
+    issue(
+      'a `meta` names exactly one of `name` or `property`: `name` for `description`, `property` ' +
+        'for Open Graph tags such as `og:image`',
+    );
+  }
+  if (p.href !== undefined && p.link === undefined) {
+    issue('`href` belongs to a `link`: a `<meta>` has no href, so this could never hold');
+  }
+  if (p.content !== undefined && p.meta === undefined) {
+    issue('`content` belongs to a `meta`: a `<link>` has no content, so this could never hold');
+  }
+  for (const value of [p.href, p.content]) {
+    if (value !== undefined && 'contains' in value === 'equals' in value) {
+      issue('`href` and `content` take exactly one of `contains` or `equals`');
+    }
   }
 }
 

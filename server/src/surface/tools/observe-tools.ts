@@ -406,7 +406,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
           '{ net, urlContains|method|status|count|bodyMatches|bodyContains|requestBodyContains|requestBodyMatches } ' +
           '{ state, path|equals } { route, pathname (exact) | contains (path+query+hash) } ' +
           '{ element, testid|role|text } { text } { console, level|contains|absent } { animation, name } ' +
-          '{ settled } { compare, left, right } — combine with { allOf | anyOf | not }. Prefer a signal/net/state consequence ' +
+          '{ settled } { compare, left, right } { head, link|meta, href|content } — combine with { allOf | anyOf | not }. Prefer a signal/net/state consequence ' +
           'over element/text presence.',
       ),
       until: PredicateSchema.optional().describe("Alias for `predicate` (act_and_wait's name)."),

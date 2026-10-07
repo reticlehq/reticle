@@ -65,6 +65,7 @@ export const SERVED_COMMANDS: readonly string[] = [
   ReticleCommand.CAPABILITIES,
   ReticleCommand.STATE_READ,
   ReticleCommand.STORAGE_READ,
+  ReticleCommand.HEAD_READ,
   ReticleCommand.SCROLL,
   ReticleCommand.SESSION_CONFIG,
   ReticleCommand.PRESENTER,

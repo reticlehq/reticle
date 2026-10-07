@@ -141,6 +141,11 @@ const PAGE_CAPABILITIES: readonly Capability[] = [
   },
   { name: ReticleCommand.ANIMATIONS, meaning: 'read what is currently moving', mutating: false },
   {
+    name: ReticleCommand.HEAD_READ,
+    meaning: "read the links and meta tags in the page's head",
+    mutating: false,
+  },
+  {
     name: ReticleCommand.CAPABILITIES,
     meaning: 'read what this application declared about itself',
     mutating: false,

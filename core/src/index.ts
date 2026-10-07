@@ -98,6 +98,7 @@ export * from './telemetry.js';
 export * from './words/no-session-reason.js';
 export * from './telemetry-refusal.js';
 export * from './wire/narrow.js';
+export * from './wire/head.js'; // HeadSnapshot — what HEAD_READ answers, for the head predicate
 export * from './wire/tool-names.js';
 export * from './wire/snapshot-tree.js'; // parseInteractive — the browser writes this format, Node reads it
 export * from './wire/platform.js';

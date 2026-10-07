@@ -26,6 +26,7 @@ export const REBINDABLE_COMMANDS: ReadonlySet<string> = new Set<string>([
   ReticleCommand.INSPECT,
   ReticleCommand.STATE_READ,
   ReticleCommand.STORAGE_READ,
+  ReticleCommand.HEAD_READ,
   ReticleCommand.CAPABILITIES,
   ReticleCommand.ANIMATIONS,
 ]);

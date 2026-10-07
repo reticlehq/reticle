@@ -345,6 +345,9 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
     readState(str(args['ref']), str(args['store']), str(args['path']), num(args['depth'])),
   );
   reg.set(ReticleCommand.STORAGE_READ, (args) => readStorage(str(args['area'])));
+  // Loaded when first asked for, not with the page: every developer pays the first-load bytes on
+  // every page load, and a head check is asked for rarely. See first-load-size.test.ts.
+  reg.set(ReticleCommand.HEAD_READ, async () => (await import('./head-read.js')).readHead());
   reg.set(ReticleCommand.CAPABILITIES, () => getCapabilities());
   reg.set(ReticleCommand.CAPTURE, (args) => captureDesktopWindow(true === args['fullPage']));
   reg.set(ReticleCommand.SCROLL, (args) => {
