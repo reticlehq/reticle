@@ -56,6 +56,35 @@ const HARNESS_EXTRA_TOOLS: readonly string[] = [
 const HARNESS_EXCLUDED: ReadonlySet<string> = new Set([ReticleTool.FEEDBACK]);
 
 /**
+ * All a locked (remote) drive may run: reading and driving the one tab it was given, and keeping or
+ * replaying what it drove there. Nothing that lists other tabs, opens a browser, spends the local
+ * model, deletes saved work or sends a picture the person did not ask to send.
+ */
+const REMOTE_TOOLS: ReadonlySet<string> = new Set([
+  ReticleTool.LOOK,
+  ReticleTool.SNAPSHOT,
+  ReticleTool.QUERY,
+  ReticleTool.INSPECT,
+  ReticleTool.NAVIGATE,
+  ReticleTool.REFRESH,
+  ReticleTool.ACT,
+  ReticleTool.ACT_AND_WAIT,
+  ReticleTool.ACT_SEQUENCE,
+  ReticleTool.OBSERVE,
+  ReticleTool.WAIT_FOR,
+  ReticleTool.WAIT_READY,
+  ReticleTool.SCROLL_TO,
+  ReticleTool.ASSERT,
+  ReticleTool.NETWORK,
+  ReticleTool.CONSOLE,
+  ReticleTool.STATE,
+  ReticleTool.RECORD,
+  ReticleTool.FLOW_SAVE,
+  ReticleTool.FLOW_REPLAY,
+  ReticleTool.RUN,
+]);
+
+/**
  * Parameters the model is never asked for, because the harness supplies them.
  *
  * `sessionId` is pinned by the run: `invoke` stamps it on every call so a drive that leased one tab
@@ -110,6 +139,8 @@ export interface ReticleToolsetOptions {
   only?: readonly string[];
   /** Stamped on every action this drive journals, so its verdicts fold into a run of their own. */
   drivenBy?: DrivenBy;
+  /** The pinned session wins over any a call names: a remote caller never reaches another tab. */
+  locked?: boolean;
 }
 
 /**
@@ -123,7 +154,10 @@ export function reticleToolset(
   deps: ToolDeps,
   options: ReticleToolsetOptions = {},
 ): HarnessToolset {
-  const usable = TOOLS.filter((tool) => !HARNESS_EXCLUDED.has(tool.name));
+  const usable = TOOLS.filter(
+    (tool) =>
+      !HARNESS_EXCLUDED.has(tool.name) && (true !== options.locked || REMOTE_TOOLS.has(tool.name)),
+  );
   /**
    * Everything callable, whether or not it is advertised. `reticle_run` dispatches against this, so
    * trimming the ADVERTISED list never trims what a drive can reach.
@@ -149,7 +183,7 @@ export function reticleToolset(
         // list, and this is the same recovery the MCP surface gives an agent that does the same.
         return { error: `unknown tool ${target ?? name}`, available: [...byName.keys()] };
       }
-      const pinned = pinSession(targetArgs, options.sessionId);
+      const pinned = pinSession(targetArgs, options.sessionId, true === options.locked);
       const scoped = isDesktopSession(deps, pinned['sessionId'])
         ? desktopBackendClaims(pinned)
         : pinned;
@@ -177,8 +211,9 @@ export function reticleToolset(
 export function pinSession(
   args: Record<string, unknown>,
   sessionId: string | undefined,
+  locked = false,
 ): Record<string, unknown> {
-  if (sessionId === undefined || 'sessionId' in args) return args;
+  if (sessionId === undefined || (!locked && 'sessionId' in args)) return args;
   return { ...args, sessionId };
 }
 

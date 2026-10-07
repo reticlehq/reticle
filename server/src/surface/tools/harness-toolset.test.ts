@@ -56,6 +56,25 @@ describe('the surface the harness drives', () => {
   });
 });
 
+describe('a locked drive, run for the platform', () => {
+  it('reaches only the tab it was given', async () => {
+    const locked = reticleToolset(NO_DEPS, { sessionId: 'tab-1', locked: true });
+    expect(locked.tools.map((tool) => tool.name)).toContain(ReticleTool.ACT_AND_WAIT);
+    for (const name of [
+      ReticleTool.SESSIONS,
+      ReticleTool.LEASE_ACQUIRE,
+      ReticleTool.FLOW_DELETE,
+      ReticleTool.VERIFY,
+      ReticleTool.SCREENSHOT,
+    ]) {
+      expect(await locked.invoke(name, {})).toMatchObject({ error: `unknown tool ${name}` });
+      expect(await locked.invoke(ReticleTool.RUN, { tool: name, args: {} })).toMatchObject({
+        error: `unknown tool ${name}`,
+      });
+    }
+  });
+});
+
 describe('pinning the drive to its own tab', () => {
   it('stamps the session the drive opened onto every call', () => {
     expect(pinSession({ ref: 'e1' }, 'tab-1')).toEqual({ ref: 'e1', sessionId: 'tab-1' });
@@ -63,6 +82,10 @@ describe('pinning the drive to its own tab', () => {
 
   it('leaves a deliberate cross-tab call alone', () => {
     expect(pinSession({ sessionId: 'other' }, 'tab-1')).toEqual({ sessionId: 'other' });
+  });
+
+  it('overrides a named tab when locked, so a remote caller cannot reach another one', () => {
+    expect(pinSession({ sessionId: 'other' }, 'tab-1', true)).toEqual({ sessionId: 'tab-1' });
   });
 
   it('changes nothing when the drive pinned no session', () => {

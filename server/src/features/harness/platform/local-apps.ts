@@ -74,6 +74,34 @@ export const appKeyOf = (
   projectId: string | undefined,
 ): string => hash(`${machineId}\u0000${projectDir}\u0000${projectId ?? ''}`);
 
+const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/** What a refused open is told. */
+export const NOT_AN_APP_ADDRESS =
+  'Reticle only opens a web address on this machine or one of the apps already open here.';
+
+/**
+ * Whether the daemon may open an address the platform named: a web page on this machine, or one on
+ * an origin a connected tab already has. Never a file, and never anywhere else on the network.
+ */
+export function mayOpen(url: string, openUrls: readonly string[]): boolean {
+  let target: URL;
+  try {
+    target = new URL(url);
+  } catch {
+    return false;
+  }
+  if ('http:' !== target.protocol && 'https:' !== target.protocol) return false;
+  if (LOOPBACK_HOSTS.has(target.hostname) || target.hostname.endsWith('.localhost')) return true;
+  return openUrls.some((open) => {
+    try {
+      return new URL(open).origin === target.origin;
+    } catch {
+      return false;
+    }
+  });
+}
+
 /** A project id as a name: the SDK stamps `<package>-<8 hex>`, and the hash means nothing to a person. */
 export const nameFromProjectId = (projectId: string): string =>
   projectId.replace(/-[0-9a-f]{8}$/, '');

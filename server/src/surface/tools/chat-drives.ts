@@ -28,6 +28,8 @@ import {
   appKeyOf,
   appsByPlatform,
   machineOf,
+  mayOpen,
+  NOT_AN_APP_ADDRESS,
   nameFromProjectId,
   pickAppTab,
   startAppReports,
@@ -36,6 +38,9 @@ import { serverOptionsFromEnv } from '../../features/harness/platform/server-dri
 import { driveForChat } from './explore-tools.js';
 import { withLinkedCredential } from './harness-explore.js';
 import { runTool } from './invoke-tool.js';
+
+/** Why a platform drive with no tab of its own runs no tool. */
+const NO_DRIVEN_TAB = 'No tab was picked for this drive, so no tool runs.';
 
 /** What this daemon does for the platform's chat. Each one is listed only once it is built. */
 export const CHAT_CAPABILITIES: readonly LinkCapability[] = [
@@ -102,7 +107,17 @@ export function startChatDrives(
     }
   };
   // Opened headless, like `reticle drive <url>`, through runTool so it is counted like any call.
+  const openable = (url: string): void => {
+    if (
+      !mayOpen(
+        url,
+        sessions.list().map((tab) => tab.url),
+      )
+    )
+      throw new Error(NOT_AN_APP_ADDRESS);
+  };
   const open = async (url: string): Promise<void> => {
+    openable(url);
     await runTool(LEASE_ACQUIRE_TOOL, deps, { url });
   };
 
@@ -113,7 +128,10 @@ export function startChatDrives(
   ): Promise<string | null | undefined> =>
     undefined === app
       ? pickOwnDriveSession(sessions.list(), goal, key, sessionKey)
-      : pickAppTab(app, goal, () => sessions.list(), appOf, open);
+      : pickAppTab(app, goal, () => sessions.list(), appOf, open).then(async (id) =>
+          // The app the platform named must be one this credential's project owns.
+          'string' === typeof id && (await sessionKey(id)) !== key ? null : id,
+        );
   const drives = startRemoteDrives({
     env: () => withLinkedCredential(deps, env),
     connected: () => 0 < sessions.count(),
@@ -123,6 +141,7 @@ export function startChatDrives(
       prepareDrive(spec, app?.url ?? undefined, {
         pickTab: () => pick(goal, apiKey, app),
         open: async (url, headed, hud) => {
+          openable(url);
           const lease = asRecord(
             await runTool(LEASE_ACQUIRE_TOOL, deps, {
               url,
@@ -139,9 +158,12 @@ export function startChatDrives(
         },
         sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
       }),
-    // A platform drive: Reticle's own tools on the driven tab, and nothing else.
+    // A platform drive: Reticle's own tools on the driven tab, and nothing else. Locked, so a call
+    // naming another tab still lands on this one; with no tab picked, nothing runs at all.
     session: (sessionId) => {
-      const tools = reticleToolset(deps, sessionId === undefined ? {} : { sessionId });
+      if (sessionId === undefined)
+        return { invoke: () => Promise.reject(new Error(NO_DRIVEN_TAB)) };
+      const tools = reticleToolset(deps, { sessionId, locked: true });
       return { tools: tools.tools, invoke: (tool, args) => tools.invoke(tool, args) };
     },
     drive: async (goal, sessionId) => {

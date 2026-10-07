@@ -9,6 +9,7 @@ import {
   startAppReports,
   type AppReports,
   type AppTab,
+  mayOpen,
 } from './local-apps.js';
 
 const A = { url: 'https://p.test', apiKey: 'key-a' };
@@ -276,5 +277,18 @@ describe('the tab a drive attached to an app uses', () => {
         0,
       ),
     ).toBeNull();
+  });
+});
+
+describe('an address the platform asks this machine to open', () => {
+  it('is a web page here, or on an app already open, and nothing else', () => {
+    const open = ['https://staging.example.com/cart'];
+    expect(mayOpen('http://localhost:5173/', [])).toBe(true);
+    expect(mayOpen('http://127.0.0.1:3000/a', [])).toBe(true);
+    expect(mayOpen('https://staging.example.com/login', open)).toBe(true);
+    expect(mayOpen('file:///etc/passwd', open)).toBe(false);
+    expect(mayOpen('http://10.0.0.5/admin', open)).toBe(false);
+    expect(mayOpen('https://evil.example.com/', open)).toBe(false);
+    expect(mayOpen('not a url', open)).toBe(false);
   });
 });
