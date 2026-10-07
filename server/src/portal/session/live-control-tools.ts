@@ -32,7 +32,8 @@ function resolveYieldTarget(sessions: SessionManager, requested: string | undefi
   try {
     return sessions.resolve();
   } catch (refusal) {
-    const driven = sessions.all().filter((s) => s.lastAct.cursor() !== undefined);
+    // In scope only: a tab the project scope refuses to hand over is not this caller's to release.
+    const driven = sessions.inScope().filter((s) => s.lastAct.cursor() !== undefined);
     const [only] = driven;
     if (1 !== driven.length || only === undefined) throw refusal;
     only.markAgentActivity();
