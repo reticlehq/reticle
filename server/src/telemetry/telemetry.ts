@@ -177,16 +177,45 @@ const isDisabled = (env: NodeJS.ProcessEnv, cwd: string = process.cwd()): boolea
 const onlyBlockedBySourceCheckout = (env: NodeJS.ProcessEnv, cwd: string): boolean =>
   isDisabled(env, cwd) && !isDisabled(env, '/');
 
-/** Read (or mint-and-persist) the anonymous machine id. `firstRun` is true the run that created it. */
-const resolveIdentity = (): { anonymousId: string; firstRun: boolean } => {
+/** Node's code for "the file is already there" — what an exclusive create answers when it lost. */
+const EEXIST = 'EEXIST';
+const isAlreadyThere = (error: unknown): boolean =>
+  'object' === typeof error && null !== error && EEXIST === (error as { code?: unknown }).code;
+
+const readIdFile = (file: string): string | undefined => {
   try {
-    if (existsSync(ID_FILE)) {
-      const id = readFileSync(ID_FILE, 'utf8').trim();
-      if (id.length > 0) return { anonymousId: id, firstRun: false };
-    }
+    const id = readFileSync(file, 'utf8').trim();
+    return id.length > 0 ? id : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * Read (or mint-and-persist) the anonymous machine id. `firstRun` is true the run that created it.
+ *
+ * Read first and create exclusively (`wx`), rather than asking `existsSync` and then writing: two
+ * processes starting together used to both see no file, both mint, and the second write replaced
+ * the first id, so one machine reported as two first runs. The loser of the exclusive create now
+ * reads the winner's id instead.
+ */
+export const resolveIdentity = (
+  file: string = ID_FILE,
+): { anonymousId: string; firstRun: boolean } => {
+  try {
+    const existing = readIdFile(file);
+    if (existing !== undefined) return { anonymousId: existing, firstRun: false };
     const id = randomUUID();
-    mkdirSync(RETICLE_DIR, { recursive: true });
-    writeFileSync(ID_FILE, id, 'utf8');
+    mkdirSync(dirname(file), { recursive: true });
+    try {
+      writeFileSync(file, id, { encoding: 'utf8', flag: 'wx' });
+    } catch (error) {
+      if (!isAlreadyThere(error)) throw error;
+      const raced = readIdFile(file);
+      if (raced !== undefined) return { anonymousId: raced, firstRun: false };
+      // An empty file left by a crash: replace it, as the old code did.
+      writeFileSync(file, id, 'utf8');
+    }
     return { anonymousId: id, firstRun: true };
   } catch {
     // Can't persist (read-only home, sandbox): still report, just as a fresh ephemeral id each time.
@@ -246,9 +275,10 @@ const packageRoot = (cwd: string): string | null => {
 /** Print the opt-out notice exactly once per machine (honest disclosure, the OSS-trust bar). */
 const showNoticeOnce = (): void => {
   try {
-    if (existsSync(NOTICE_FILE)) return;
     mkdirSync(RETICLE_DIR, { recursive: true });
-    writeFileSync(NOTICE_FILE, '1', 'utf8');
+    // Exclusive create IS the "once": it throws when the file is already there, so the check and
+    // the write cannot be split by a second process printing the notice too.
+    writeFileSync(NOTICE_FILE, '1', { encoding: 'utf8', flag: 'wx' });
     process.stderr.write(
       'reticle: anonymous usage telemetry helps improve reticle — no code, no PII, ' +
         `and your app's data never leaves your machine (${POLICY_URL}). ` +

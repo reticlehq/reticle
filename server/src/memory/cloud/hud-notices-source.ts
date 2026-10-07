@@ -9,11 +9,21 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { ReticleEnv } from '@reticlehq/core';
-import { HUD_NOTICES_URL, parseHudNotices, type HudNoticeEntry } from '@reticlehq/core/hud';
+import {
+  HUD_NOTICES_URL,
+  NOTICES_FILE_VERSION,
+  parseHudNotices,
+  type HudNoticeEntry,
+} from '@reticlehq/core/hud';
 
 /** How long a copy is trusted before it is revalidated. Notices change over days, not minutes. */
 const FRESH_MS = 6 * 60 * 60 * 1_000;
 const TIMEOUT_MS = 5_000;
+/**
+ * The largest body the daemon will read or keep. The real file is a few hundred bytes; anything near
+ * this is not a notices file, and the cache on disk must not grow with whatever the network sends.
+ */
+export const MAX_NOTICES_BODY_BYTES = 64 * 1_024;
 /** Overrides the notices URL: self-hosting, staging, tests. */
 const NOTICES_URL_ENV = 'RETICLE_HUD_NOTICES_URL';
 
@@ -109,6 +119,7 @@ export function hudNoticesSource(opts: {
           return;
         }
         if (200 !== answer.status || answer.body === undefined) return;
+        if (MAX_NOTICES_BODY_BYTES < Buffer.byteLength(answer.body)) return;
         let file: unknown;
         try {
           file = JSON.parse(answer.body);
@@ -119,7 +130,13 @@ export function hudNoticesSource(opts: {
         const parsed = parseHudNotices(file);
         if (0 === parsed.length && 0 < entries.length) return;
         entries = parsed;
-        cached = { etag: answer.etag, fetchedAt: now(), file };
+        // The cache holds what VALIDATED, rebuilt from the schema's output, never the body itself:
+        // unknown fields and rejected entries in a network answer do not reach the disk.
+        cached = {
+          etag: answer.etag,
+          fetchedAt: now(),
+          file: { version: NOTICES_FILE_VERSION, notices: parsed },
+        };
         writeCache(opts.cacheFile, cached);
       })
       .catch(() => undefined)
