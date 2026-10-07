@@ -197,6 +197,25 @@ export const CDP_NO_PROVIDER_RECOMMENDATION =
   'this needs a Reticle-driven browser (it is applied through CDP, which the always-on SDK cannot do) — start with `reticle drive <url>` or set RETICLE_CDP_URL';
 
 /**
+ * What `reticle_viewport` answers when nothing can resize the page (#1273).
+ *
+ * On an SDK-only tab — the one the person opened themselves — the refusal is inherent: a page cannot
+ * resize its own window. But a LEASED tab is a Playwright-owned page and CAN be resized, and the
+ * tool already takes that route when there is one. The generic recommendation above named only the
+ * routes that need a human (`reticle drive`, `RETICLE_CDP_URL`), so an agent that was refused had
+ * no way to learn that one call of its own would have worked.
+ *
+ * Neither `reticle_lease` nor `reticle_viewport` is on the default advertised surface, so the lease
+ * is named the way a caller can actually reach it: through `reticle_run`. The human routes stay,
+ * second, for the agent that wants to drive the person's own tab.
+ */
+export const VIEWPORT_NO_PROVIDER_RECOMMENDATION =
+  'a page cannot resize its own window, but a leased tab can be resized — acquire one with ' +
+  'reticle_run { tool: "reticle_lease", args: { action: "acquire", url } }, then call reticle_viewport ' +
+  'again with the sessionId it returns. To resize the tab you already have open instead, start with ' +
+  '`reticle drive <url>` or set RETICLE_CDP_URL';
+
+/**
  * A region the SDK cannot see into — surfaced (never hidden) so a result's coverage reads honestly.
  * Crosses the wire in a BLIND_SPOT event's `kind`, so it lives in core (the contract), not the server.
  */
