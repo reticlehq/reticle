@@ -38,6 +38,8 @@ function deps(options: {
   lease?: Uint8Array;
   capture?: () => Promise<unknown>;
   gone?: boolean;
+  /** The browser `reticle drive` launched in a window: its own page, and the options it was asked for. */
+  window?: { shot: Uint8Array; asked: unknown[] };
 }): ToolDeps {
   const session = {
     id: 's1',
@@ -53,9 +55,21 @@ function deps(options: {
       return session;
     },
   };
+  const window = options.window;
   return {
     sessions: sessions as SessionManager,
     pool: { screenshotLease: () => Promise.resolve(options.lease) },
+    ...(window === undefined
+      ? {}
+      : {
+          realInput: {
+            isAvailableFor: (url: string) => Promise.resolve(url === session.url),
+            screenshot: (_url: string, opts: unknown) => {
+              window.asked.push(opts);
+              return Promise.resolve(window.shot);
+            },
+          },
+        }),
   } as unknown as ToolDeps;
 }
 
@@ -74,6 +88,17 @@ describe('the picture of a chat-requested drive', () => {
       50,
     );
     expect(frame).toEqual(shot);
+  });
+
+  /**
+   * Found driving the chat from a headed window: `reticle drive` launched the browser itself, which
+   * is neither a pool lease nor a desktop shell, so the chat said "not filmed" beside a window the
+   * daemon could see all along. A live picture asks for a plain JPEG, so the window does not flicker.
+   */
+  it('films the window `reticle drive` opened, as a plain JPEG', async () => {
+    const window = { shot: png(), asked: [] as unknown[] };
+    expect(await driveFrame(deps({ window }), 's1', 50)).toBe(window.shot);
+    expect(window.asked).toEqual([{ jpegQuality: 50 }]);
   });
 
   it('is undefined for a web tab with no camera, and never throws for one that left', async () => {

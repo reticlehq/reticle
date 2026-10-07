@@ -147,6 +147,12 @@ export async function driveFrame(
   try {
     const leased = await deps.pool?.screenshotLease(sessionId, { jpegQuality });
     if (leased !== undefined) return leased;
+    // The window `reticle drive` opened: neither a lease nor a desktop shell, but its page is ours.
+    const url = deps.sessions.resolve(sessionId).url;
+    if (true === (await deps.realInput?.isAvailableFor(url))) {
+      const shot = await deps.realInput?.screenshot?.(url, { jpegQuality });
+      if (shot !== undefined) return shot;
+    }
     return (await desktopCapture(deps, sessionId, false)).png;
   } catch {
     return undefined;
