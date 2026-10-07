@@ -6,11 +6,8 @@ import { watchAccountFiles } from './memory/impact/account-watch.js';
 import { SESSION_FILE } from './command/cli/cloud-kit.js';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import {
-  linkedCloudPort,
-  platformEnvPort,
-  sessionApiKeyPort,
-} from './memory/cloud/cloud-config.js';
+import { linkedCloudPort, platformEnvPort, sessionCloudPort } from './memory/cloud/cloud-config.js';
+import { sessionRoot } from './memory/project/session-root.js';
 import { attachCloudSync } from './memory/cloud/sync-daemon.js';
 import { wireHooks } from './hooks/hook-commands.js';
 import { currentDrivenBy } from './hooks/driven-by.js';
@@ -55,11 +52,9 @@ import { buildFlowChips } from './language/flows/flow-scope.js';
 import { ProjectStore } from './memory/project/project-store.js';
 import { projectStoreResolver } from './memory/project/project-for-root.js';
 import { attachRouteLearning } from './memory/project/learned-routes.js';
-import { sessionRoot } from './memory/project/session-root.js';
 import { AnnotationStore } from './language/flows/stores/annotation-store.js';
 import { createNodeFileSystem } from './memory/project/fs/fs-port.js';
 import { cleanupCaptureDirectories } from './features/visual/capture-cleanup.js';
-import { driveFrame } from './features/visual/visual-tools.js';
 import { ReticleRunner } from './judgement/runs/reticle-runner.js';
 import { createRunnerPort } from './judgement/runs/runner-port.js';
 import { RunStore } from './judgement/runs/artifact/run-store.js';
@@ -67,14 +62,7 @@ import { startVerifyServer } from './judgement/runs/verify-server.js';
 import { createMcpServer } from './surface/mcp/mcp.js';
 import { instructionStateAt } from './surface/mcp/mcp-proxy.js';
 import { LEASE_ACQUIRE_TOOL } from './surface/tools/lease-tools.js';
-import {
-  REMOTE_DRIVE_JPEG_QUALITY,
-  endDrivenTab,
-  pickOwnDriveSession,
-  startRemoteDrives,
-} from './features/harness/platform/remote-drive.js';
-import { driveForChat } from './surface/tools/explore-tools.js';
-import { withLinkedCredential } from './surface/tools/harness-explore.js';
+import { startChatDrives } from './surface/tools/chat-drives.js';
 import { runTool } from './surface/tools/invoke-tool.js';
 import {
   SessionReaper,
@@ -735,28 +723,19 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   );
   // `reticle drive <url>` against this daemon's port, through runTool. See cli/drive/drive-attach.ts.
   shared.attachDrive((url) => runTool(LEASE_ACQUIRE_TOOL, effectiveDeps, { url }));
-  // A drive asked for in the platform's chat, run here, in a tab of that project. See remote-drive.ts.
-  const sessionKey = sessionApiKeyPort(fs, homedir(), process.env, (id) =>
-    sessionRoot(effectiveDeps, id),
-  );
-  const remoteDrives = startRemoteDrives({
-    env: () => withLinkedCredential(effectiveDeps, process.env),
-    connected: () => 0 < bridge.sessions.count(),
-    pick: (goal, key) => pickOwnDriveSession(bridge.sessions.list(), goal, key, sessionKey),
-    drive: async (goal, sessionId) => {
-      const url = bridge.sessions.list().find((tab) => tab.sessionId === sessionId)?.url;
-      const outcome = await driveForChat(effectiveDeps, goal, sessionId);
-      return url === undefined ? outcome : { ...outcome, url };
+  // The platform chat's apps and drives, run here. See chat-drives.ts.
+  const chatDrives = startChatDrives(
+    effectiveDeps,
+    bridge.sessions,
+    fs,
+    {
+      sessionCloud: sessionCloudPort(fs, homedir(), process.env, (id) =>
+        sessionRoot(effectiveDeps, id),
+      ),
+      version: SERVER_VERSION,
     },
-    // The leased tab, or a desktop window's own capture. A web tab only the SDK reaches has no camera.
-    frame: (sessionId) =>
-      sessionId === undefined
-        ? Promise.resolve(undefined)
-        : driveFrame(effectiveDeps, sessionId, REMOTE_DRIVE_JPEG_QUALITY),
-    settle: (id, outcome) =>
-      endDrivenTab(id === undefined ? undefined : bridge.sessions.get(id), outcome),
     log,
-  });
+  );
 
   // Optional OEM/CI verify endpoint: a host platform POSTs to /verify and gets an ReticleVerificationRun,
   // driving the same flow-replay machinery the agent uses — no MCP stdio, no human. Each verdict is
@@ -855,7 +834,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
       const vh = verifyHttp;
       if (vh !== undefined) await new Promise<void>((resolve) => vh.server.close(() => resolve()));
       leaseReaper.stop();
-      remoteDrives.stop();
+      chatDrives.stop();
       accountFiles.close();
       await cloudSync.flush(); // not stop(): the last run written is the one nobody has yet
       await loopbackAlias.close?.();

@@ -145,6 +145,42 @@ describe('drives the platform chat asked for', () => {
     expect(p.calls).toHaveLength(0);
   });
 
+  it("asks with another project's credential when told a drive is waiting, even with nothing open", async () => {
+    const p = platform({ id: 'ld_9', goal: 'pay' });
+    const goals: string[] = [];
+    await start({
+      fetch: p.fetch,
+      connected: () => false,
+      drive: (goal) => {
+        goals.push(goal);
+        return Promise.resolve({ ok: true, summary: 'proved' });
+      },
+    }).tick({ url: 'https://other.test', apiKey: 'key-b' });
+    expect(goals).toEqual(['pay']);
+    expect(p.calls[0]).toMatchObject({
+      url: 'https://other.test/v1/harness/local-drives/next',
+      auth: 'Bearer key-b',
+    });
+  });
+
+  it('hands the tab picker the app the chat attached the drive to', async () => {
+    const p = platform({
+      id: 'ld_8',
+      goal: 'pay',
+      appKey: 'k_shop',
+      appUrl: 'http://localhost:3000/',
+    });
+    const asked: unknown[] = [];
+    await start({
+      fetch: p.fetch,
+      pick: (_goal, _key, app) => {
+        asked.push(app);
+        return 'tab-1';
+      },
+    }).tick();
+    expect(asked).toEqual([{ key: 'k_shop', url: 'http://localhost:3000/' }]);
+  });
+
   it('does not ask when this machine is not linked', async () => {
     const p = platform(null);
     await start({ fetch: p.fetch, env: () => Promise.resolve({}) }).tick();

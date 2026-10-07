@@ -215,7 +215,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // read where the envelope is assembled, in `invoke-tool.ts`, beside the other envelope sources.
   // 43 with `harness-script.ts`: the planned drive, split from `harness-explore.ts` at its line cap.
   // It binds the plan's ports to the tool surface, which is why it sits here and not in `script/`.
-  'server/src/surface/tools': 43,
+  'server/src/surface/tools': 44,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it

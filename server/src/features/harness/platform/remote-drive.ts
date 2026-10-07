@@ -13,6 +13,12 @@
 import { PresenterTone } from '@reticlehq/core';
 import { serverOptionsFromEnv } from './server-driver.js';
 
+/** The app the chat attached a drive to: `local-apps.ts`'s key, and where it was last open. */
+export interface AttachedApp {
+  key: string;
+  url: string | null;
+}
+
 const NEXT_PATH = '/v1/harness/local-drives/next';
 const RESULT_PATH = '/v1/harness/local-drives';
 /**
@@ -82,8 +88,13 @@ export interface RemoteDriveDeps {
    * for the whole drive and its pictures: with two tabs open, a drive that names none is refused on
    * every call ("multiple sessions connected"), and the pictures would be of whichever tab was asked.
    * Null: no connected tab belongs to the project `apiKey` is for, so the drive is refused.
+   * `app`: the app the chat attached the drive to, when it named one; only its tabs may be driven.
    */
-  pick?: (goal: string, apiKey: string) => Promise<string | null | undefined> | string | undefined;
+  pick?: (
+    goal: string,
+    apiKey: string,
+    app?: AttachedApp,
+  ) => Promise<string | null | undefined> | string | undefined;
   /** Drive the app toward `goal`, in `sessionId`. A throw is reported as a failed drive, in its own words. */
   drive: (goal: string, sessionId: string | undefined) => Promise<RemoteDriveOutcome>;
   /**
@@ -104,8 +115,11 @@ export interface RemoteDriveDeps {
 }
 
 export interface RemoteDrives {
-  /** One ask, now. Resolves once any drive it took has been reported. */
-  tick: () => Promise<void>;
+  /**
+   * One ask, now. Resolves once any drive it took has been reported. With `platform`, ask with that
+   * credential whether or not an app is connected: the platform said a drive is waiting for it.
+   */
+  tick: (platform?: { url: string; apiKey: string }) => Promise<void>;
   stop: () => void;
 }
 
@@ -114,9 +128,9 @@ export function startRemoteDrives(deps: RemoteDriveDeps): RemoteDrives {
   let busy = false;
   let stopped = false;
 
-  const tick = async (): Promise<void> => {
-    if (busy || stopped || !deps.connected()) return;
-    const platform = serverOptionsFromEnv(await deps.env());
+  const tick = async (told?: { url: string; apiKey: string }): Promise<void> => {
+    if (busy || stopped || (undefined === told && !deps.connected())) return;
+    const platform = told ?? serverOptionsFromEnv(await deps.env());
     if (platform === undefined) return;
     const headers = {
       'content-type': 'application/json',
@@ -131,13 +145,25 @@ export function startRemoteDrives(deps: RemoteDriveDeps): RemoteDrives {
       });
       if (!res.ok) return;
       const drive = (
-        (await res.json()) as { drive?: { id?: unknown; goal?: unknown; record?: unknown } | null }
+        (await res.json()) as {
+          drive?: {
+            id?: unknown;
+            goal?: unknown;
+            record?: unknown;
+            appKey?: unknown;
+            appUrl?: unknown;
+          } | null;
+        }
       ).drive;
       if (null === drive || undefined === drive) return;
       if ('string' !== typeof drive.id || 'string' !== typeof drive.goal) return;
       deps.log?.(`reticle: driving a request from the platform chat: ${drive.goal}`);
       const driveUrl = `${platform.url}${RESULT_PATH}/${encodeURIComponent(drive.id)}`;
-      const picked = await deps.pick?.(drive.goal, platform.apiKey);
+      const app: AttachedApp | undefined =
+        'string' === typeof drive.appKey
+          ? { key: drive.appKey, url: 'string' === typeof drive.appUrl ? drive.appUrl : null }
+          : undefined;
+      const picked = await deps.pick?.(drive.goal, platform.apiKey, app);
       if (null === picked) {
         await doFetch(driveUrl, {
           method: 'POST',

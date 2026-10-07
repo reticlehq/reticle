@@ -256,7 +256,13 @@ export const linkedCloudPort =
 export const sessionApiKeyPort =
   (fs: FileSystemPort, homeDir: string, env: NodeJS.ProcessEnv, rootOf: (id: string) => string) =>
   async (sessionId: string): Promise<string | undefined> =>
-    (await resolveProjectCloud(fs, rootOf(sessionId), homeDir, env)).config?.apiKey;
+    (await sessionCloudPort(fs, homeDir, env, rootOf)(sessionId))?.apiKey;
+
+/** The platform and key a tab's own project resolves to, or undefined when it is not linked. */
+export const sessionCloudPort =
+  (fs: FileSystemPort, homeDir: string, env: NodeJS.ProcessEnv, rootOf: (id: string) => string) =>
+  async (sessionId: string): Promise<CloudConfig | undefined> =>
+    (await resolveProjectCloud(fs, rootOf(sessionId), homeDir, env)).config ?? undefined;
 
 /**
  * The credential for pushing RUNS, or null when this project opted out with `sync.runs: false`.
