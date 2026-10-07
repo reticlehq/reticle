@@ -221,6 +221,19 @@ function findByComponent(container: HTMLElement, query: ElementQuery): HTMLEleme
 }
 
 /**
+ * Does an element whose computed role is `actual` satisfy a query for `queried`?
+ *
+ * `searchbox` is an ARIA sub-role of `textbox`. A standard search input computes as `searchbox`
+ * (per HTML-AAM), which matches `{ role: "searchbox" }`. A `{ role: "textbox" }` query must
+ * keep matching it as well, so existing flows and recorded steps using `textbox` continue to match.
+ */
+function matchesRole(actual: string, queried: string): boolean {
+  if (actual === queried) return true;
+  if ('textbox' === queried && 'searchbox' === actual) return true;
+  return false;
+}
+
+/**
  * Role + name, matched with the same local accessibility engine used to describe results.
  *
  * This intentionally makes Reticle's reported role and name the source of truth. If an element is
@@ -234,7 +247,8 @@ function queryByRoleAndName(
 ): HTMLElement[] {
   return elementsUnder(container).filter(
     (el) =>
-      getRole(el) === role && (name === undefined || exactVisibleText(getAccessibleName(el), name)),
+      matchesRole(getRole(el), role) &&
+      (name === undefined || exactVisibleText(getAccessibleName(el), name)),
   );
 }
 
