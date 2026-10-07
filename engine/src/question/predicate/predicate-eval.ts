@@ -519,12 +519,21 @@ export function evalNet(
   // the honest verdict is the undecidable one. Deciding on the full body would report a failure
   // the truncated call may well contradict.
   if (truncatedBody !== undefined && 0 === matches.length) {
+    // `bodyMatches` parses the whole body, and a JSON prefix never parses, so "assert on something
+    // inside the recorded prefix" changes nothing for it: the same clause on the same prefix is the
+    // same unknown. Name what can work for the clause that was actually asked (#1417). The grade
+    // stays inconclusive either way: a partial parse must not decide it, since a later duplicate key
+    // could overturn whatever the prefix seemed to say.
+    const asksMatch = p.bodyMatches !== undefined;
+    const remedy = asksMatch
+      ? "Raise it past this response's size and re-run. `bodyMatches` parses the whole body, and a JSON prefix never parses, so it cannot be judged on the kept part: to assert on what was kept, use `bodyContains` with a substring from it"
+      : "Raise it past this response's size and re-run, or assert on something inside the recorded prefix";
     return {
       pass: false,
-      inconclusive: `a call matching ${describeNetFilter(p)} was answered with a body that was TRUNCATED before it was recorded, and ${wantedBody(p)} is not in the part that was kept — so this is undecidable, not a failure. The cap is per-body and set where the app calls connect(): \`reticle.connect({ captureNetworkBodies: true, networkBodyMaxChars: 65536 })\`, or for the Vite plugin \`reticle({ networkBodyMaxChars: 65536 })\` / VITE_RETICLE_BODY_MAX_CHARS=65536 (default 8192, max 262144). An SDK older than this daemon ignores the option; a version skew on the session says so. Raise it past this response's size and re-run, or assert on something inside the recorded prefix`,
+      inconclusive: `a call matching ${describeNetFilter(p)} was answered with a body that was TRUNCATED before it was recorded, and ${wantedBody(p)} is not in the part that was kept — so this is undecidable, not a failure. The cap is per-body and set where the app calls connect(): \`reticle.connect({ captureNetworkBodies: true, networkBodyMaxChars: 65536 })\`, or for the Vite plugin \`reticle({ networkBodyMaxChars: 65536 })\` / VITE_RETICLE_BODY_MAX_CHARS=65536 (default 8192, max 262144). An SDK older than this daemon ignores the option; a version skew on the session says so. ${remedy}`,
       observed: `the first ${String(truncatedBody.length)} characters of a truncated response body ${JSON.stringify(clipBody(truncatedBody))}`,
       expected: `a response body carrying ${wantedBody(p)}`,
-      assertion: 'net.bodyContains',
+      assertion: asksMatch ? 'net.bodyMatches' : 'net.bodyContains',
     };
   }
   if (bodyMismatch !== undefined && 0 === matches.length) {
