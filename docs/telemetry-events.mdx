@@ -105,7 +105,7 @@ Fires on the first ever run on a machine. Carries `installSource`.
 
 ## daemon_started
 
-**Wire name:** `daemon_started`. **Emitted from:** `server/src/telemetry/daemon-telemetry.ts:75`. **Session-scoped:** yes. **Payload block:** none.
+**Wire name:** `daemon_started`. **Emitted from:** `server/src/telemetry/daemon-telemetry.ts`. **Session-scoped:** yes. **Payload block:** none.
 
 **The question it answers:** how many active daemon runs are there? This is the numerator of daily, weekly and monthly actives, and the first step of the install funnel.
 
@@ -113,7 +113,7 @@ Fires on the first ever run on a machine. Carries `installSource`.
 
 ## daemon_stopped
 
-**Wire name:** `daemon_stopped`. **Emitted from:** `server/src/telemetry/daemon-telemetry.ts:138`. **Session-scoped:** yes. **Payload block:** `session`, a `SessionSummary` with `final: true`.
+**Wire name:** `daemon_stopped`. **Emitted from:** `server/src/telemetry/daemon-telemetry.ts`. **Session-scoped:** yes. **Payload block:** `session`, a `SessionSummary` with `final: true`.
 
 The rich one. One event carries the entire session rolled up, replacing the hundreds a per-tool-call event would send. PostHog bills per ingested event and a single verification loop is a great many tool calls, so aggregation here is a design decision, not an optimisation.
 
@@ -153,6 +153,10 @@ The rich one. One event carries the entire session rolled up, replacing the hund
 | `feedbackPrompted` | int, optional | How often Reticle invited feedback. The denominator for `feedback_submitted` |
 | `errorClasses` | record of string to int | Errors bucketed as `schema`, `state`, `refusal` or `other`. Only `schema` is fixable by writing better descriptions |
 | `errorsRecovered` / `errorsRepeated` | int, optional | Whether the agent's next call succeeded. The best measure of an error message is what happens next |
+| `hudControls` | record of string to int, optional | Presses per HUD control, by the control's name from a closed list Reticle authored; a toggle as `name:on` / `name:off` |
+| `hudViewMs` / `hudPanelMs` | record of string to int, optional | How long the HUD sat as a bubble, collapsed or open, and how long each page was showing |
+| `hudSlides` | record of string to int, optional | How often each rail slide was shown, by its id |
+| `hudJourney` / `hudJourneyCut` | list of string (max 60) / `true`, optional | The window's presses and view changes in order; `hudJourneyCut` when it was cut at 60 |
 | `final` | boolean | `true` here, `false` on a progress flush |
 | `exit` | `idle` \| `signal` \| `unknown` | Why the process ended. Absent on a flush |
 
@@ -162,7 +166,7 @@ The rich one. One event carries the entire session rolled up, replacing the hund
 
 ## session_progress
 
-**Wire name:** `session_progress`. **Emitted from:** `server/src/telemetry/daemon-telemetry.ts:116`. **Session-scoped:** yes. **Payload block:** `session`, the same `SessionSummary` shape with `final: false` and no `exit`.
+**Wire name:** `session_progress`. **Emitted from:** `server/src/telemetry/daemon-telemetry.ts`. **Session-scoped:** yes. **Payload block:** `session`, the same `SessionSummary` shape with `final: false` and no `exit`.
 
 A periodic roll-up from a daemon that is still running.
 
@@ -201,7 +205,7 @@ A periodic roll-up from a daemon that is still running.
 
 ## project_profiled
 
-**Wire name:** `project_profiled`. **Emitted from:** `server/src/telemetry/daemon-telemetry.ts:91`. **Session-scoped:** yes. **Payload block:** `project`. Once per daemon start, so it is cheap.
+**Wire name:** `project_profiled`. **Emitted from:** `server/src/telemetry/daemon-telemetry.ts`. **Session-scoped:** yes. **Payload block:** `project`. Once per daemon start, so it is cheap.
 
 ### `ProjectProfileSchema`
 

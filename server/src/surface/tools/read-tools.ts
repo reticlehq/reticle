@@ -2,6 +2,7 @@
  * Read / record / replay tools — baselines + diff, recordings + replay, narrate, clock, state,
  * explore. Split out of tools.ts; assembled back via...READ_TOOLS.
  */
+import { UNKEPT_EXPECT } from '@/language/flows/replay.js';
 import { resolveAnnotateTarget } from '@/language/flows/annotate-notes/annotate-target.js';
 import { z } from 'zod';
 import {
@@ -187,7 +188,7 @@ export const READ_TOOLS: ToolDef[] = [
       // Where the journey begins, so a saved flow can navigate here before step 1 instead of
       // replaying from wherever the page happens to be. Pathname only: a host or port belongs to
       // the machine that recorded it, not to the journey.
-      deps.recordings.start(name, cursor, pathnameOf(session.url));
+      deps.recordings.start(name, cursor, pathnameOf(session.url), session.id);
       return Promise.resolve({ recordingName: name, since: cursor });
     },
   },
@@ -255,8 +256,16 @@ export const READ_TOOLS: ToolDef[] = [
             }
           : {};
       const unanchored = 0 < unstable ? unanchoredWarning(unstable) : undefined;
+      // A check that held and could not be saved, said rather than lost (#988).
+      const unkept = rec.steps.filter((st) => st.unkeptExpect !== undefined).length;
+      const lostChecks =
+        0 < unkept
+          ? `${String(unkept)} step(s) proved a consequence this flow does not keep: ${UNKEPT_EXPECT}.`
+          : undefined;
       const backtrack = recordingBacktrackWarning(routes);
-      const warning = [unanchored, backtrack].filter((part): part is string => part !== undefined);
+      const warning = [unanchored, backtrack, lostChecks].filter(
+        (part): part is string => part !== undefined,
+      );
       const body = {
         recordingName: name,
         program,

@@ -8,7 +8,7 @@ import {
   SessionState,
   type HelloMessage,
 } from '@reticlehq/core';
-import { UNDELIVERED_NOTES_LABEL } from '@reticlehq/core';
+import { PresenterTone, UNDELIVERED_NOTES_LABEL } from '@reticlehq/core';
 import { Session } from './session.js';
 import { SessionManager } from './session-manager.js';
 import {
@@ -106,6 +106,14 @@ describe('endAllSessions', () => {
 
     expect(ended).toEqual(['a']);
     expect(a.isEnded()).toBe(true);
+  });
+
+  it('shows it as your turn, not as a fault', () => {
+    const { mgr, add } = makeManager();
+    const a = add('a');
+    const autoEnd = vi.spyOn(a, 'autoEnd');
+    endAllSessions(mgr, 'Agent stopped');
+    expect(autoEnd).toHaveBeenCalledWith('Agent stopped', PresenterTone.WAITING);
   });
 });
 

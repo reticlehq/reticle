@@ -27,7 +27,7 @@ import { type ProjectId, subjectOf, type JournalAction } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { pruneWorkspace, type PruneWorkspaceOptions } from './on-disk/startup-maintenance.js';
 import { buildVerificationRun } from '@/judgement/runs/artifact/build-verification-run.js';
-import { driveRunFrom, driveRunId } from '@/judgement/runs/drive-run.js';
+import { driveRunId, driveRunsFrom } from '@/judgement/runs/drive-run.js';
 import { RunStore } from '@/judgement/runs/artifact/run-store.js';
 
 /**
@@ -300,7 +300,7 @@ export async function recordDriveRun(
   // real Session's reader closes over the journal it was constructed with.
   if (session.readJournalActions === undefined) return;
   const actions = await session.readJournalActions();
-  const input = driveRunFrom(actions, {
+  const inputs = driveRunsFrom(actions, {
     // Derived from the session, NOT random. Teardown fires on every socket close, and a reconnecting
     // tab keeps its session id and appends to the same ledger — so a drive across two page reloads
     // would fold the whole ledger twice and publish two overlapping rows, the second a superset of
@@ -309,7 +309,7 @@ export async function recordDriveRun(
     runId: driveRunId(session.id),
     ...(session.projectId === undefined ? {} : { projectId: session.projectId }),
   });
-  if (input === undefined) return;
+  if (0 === inputs.length) return;
   // The protocol reaching the artifact a person actually reads. Only when the session could say
   // where it was: a subject with no locator is not a weaker subject, it is a guess, and the
   // schema makes the field optional so that absence can be told from invention.
@@ -331,12 +331,14 @@ export async function recordDriveRun(
     // on disk until a timer noticed — which, for the last session of the day, could be never.
     deps.onRunPersisted === undefined ? undefined : { onWrote: deps.onRunPersisted },
   );
-  await store.write(
-    buildVerificationRun(
-      { ...input, ...(subject === undefined ? {} : { subject }) },
-      deps.now ?? ((): number => Date.now()),
-    ),
-  );
+  for (const input of inputs) {
+    await store.write(
+      buildVerificationRun(
+        { ...input, ...(subject === undefined ? {} : { subject }) },
+        deps.now ?? ((): number => Date.now()),
+      ),
+    );
+  }
 }
 
 /** Persist what this session drove as a replayable flow, when it declared anything provable. */

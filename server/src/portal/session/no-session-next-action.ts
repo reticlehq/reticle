@@ -245,9 +245,12 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
           'started, and for the URL it serves on.',
       };
     }
+    // The app can live one directory down; the command has to be runnable from where the daemon
+    // stands, so it carries its own `cd` (reticle#1368).
+    const inApp = dev.directory === undefined ? '' : `cd ${dev.directory} && `;
     return {
       action: NoSessionAction.START_DEV_SERVER,
-      command: dev.command,
+      command: `${inApp}${dev.command}`,
       ...(dev.port === undefined ? {} : { port: dev.port }),
       // "Probably", to match the branch above it and the paragraph beside it.
       //
@@ -266,6 +269,7 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
         'though that scan is narrow, so if it IS up on another port, ask for its URL instead of ' +
         `starting a second one. This is the project's own ` +
         (undefined === dev.script ? 'launcher' : `\`${dev.script}\` script`) +
+        (dev.directory === undefined ? '' : `, in \`${dev.directory}\``) +
         ` — run it in the ` +
         'background, tell the human it is running, then call reticle_sessions again.',
     };

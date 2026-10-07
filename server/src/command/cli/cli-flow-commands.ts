@@ -11,7 +11,7 @@ import { gateHookMessage, GATE_SKIP_ENV } from './answers/gate-hook-message.js';
 import { readProjectId } from './ports/resolve/cli-port.js';
 import { changedFilesSince, type ChangedFiles } from '@/language/flows/change/git-changed.js';
 import { join } from 'node:path';
-import { type ProjectId, ReticleDir, RunFlowStatus } from '@reticlehq/core';
+import { type ProjectId, ReticleDir } from '@reticlehq/core';
 import { FlowStore } from '@/language/flows/flows.js';
 import { RunStore } from '@/judgement/runs/artifact/run-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '@/memory/project/fs/fs-port.js';
@@ -27,7 +27,7 @@ import {
   staleChanged,
   unexecutedChanged,
 } from '@/features/exhaust/ledger.js';
-import { gateDecision } from '@/language/flows/change/gate.js';
+import { gateDecision, passingFlowNames } from '@/language/flows/change/gate.js';
 import { FlakeStore } from '@/language/flows/stores/flake-store.js';
 import { formatBuddyStatus } from '@/language/flows/buddy-status.js';
 import { CapsuleStore } from '@/judgement/capsule/capsule-store.js';
@@ -96,11 +96,7 @@ async function emitBuddyStatus(
 ): Promise<void> {
   try {
     const latest = await new RunStore(fs, reticleRoot).latest();
-    const passingNames = new Set(
-      (latest?.flows ?? [])
-        .filter((f) => f.status === RunFlowStatus.PASS || f.status === RunFlowStatus.HEALED)
-        .map((f) => f.name),
-    );
+    const passingNames = new Set(passingFlowNames(latest?.flows ?? []));
     const quarantined = await new FlakeStore(fs, reticleRoot).flakyFlows();
     const flaky = new Set(quarantined);
     // A deviation is an at-risk flow with no passing artifact — and a quarantined flake is not a deviation.
@@ -235,9 +231,7 @@ export async function handleGate(
     const allFlows = await loadNamedFlows(fs, reticleRoot, readProjectId(process.cwd()));
     const affected = affectedSavedFlows(allFlows, changed).affected;
     const latest = await new RunStore(fs, reticleRoot).latest();
-    const passing = (latest?.flows ?? [])
-      .filter((f) => f.status === RunFlowStatus.PASS || f.status === RunFlowStatus.HEALED)
-      .map((f) => f.name);
+    const passing = passingFlowNames(latest?.flows ?? []);
     const flaky = await new FlakeStore(fs, reticleRoot).flakyFlows();
     // Anti-reward-hacking: diff each flow's CURRENT assertions against what it asserted the last
     // time it passed. A mustHold that dropped from a real consequence to a fakeable presence check is a

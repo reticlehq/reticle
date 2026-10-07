@@ -44,6 +44,13 @@ export function isSessionReplacedError(error: unknown): boolean {
 export const SESSION_DISCONNECTED_REASON = 'session disconnected';
 
 /**
+ * The close an agent's `reticle_session { action: "end", disconnect: true }` sends. The page's SDK
+ * prints it and stops retrying, so it says how to undo it. A close reason is capped at 123 bytes.
+ */
+export const SESSION_PARKED_REASON =
+  'detached by the agent (session end, disconnect) — restart the daemon to attach this window again';
+
+/**
  * Is this failure the page's transport going away, rather than an answer from the page?
  *
  * True for both shapes the same event takes: the reconnect that claimed the id back, and the close

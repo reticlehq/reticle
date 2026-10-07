@@ -77,8 +77,10 @@ export const THROTTLED_WARNING =
  */
 export const THROTTLED_STARVED_NOTE =
   'this tab is throttled and has not rendered; a miss here is not evidence the UI is absent. ' +
-  'acquire a scriptable context with reticle_run { tool: "reticle_lease", args: { action: "acquire", url } } ' +
-  '(the human can run `reticle drive <url>` if they have a shell)';
+  'Bring its window to the front and retry. A web tab can instead be driven in a scriptable context: ' +
+  'reticle_run { tool: "reticle_lease", args: { action: "acquire", url } } ' +
+  '(the human can run `reticle drive <url>` if they have a shell). Never for a desktop app: a lease ' +
+  "is a browser, with none of the app's IPC.";
 
 /**
  * Carried by a `console absent` pass whose window starts where the SDK attached.

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { hudSignIn } from './cli/cloud-login.js';
 import { handleSetupMcp, handleSetupInstall } from './cli/setup-mcp-cli.js';
 import { reportStepFromCli, reportTutorialShown } from './cli-onboarding.js';
 import { runDemoTour } from './cli/demo/demo-run.js';
@@ -19,9 +20,13 @@ import { splitBrainFields, withNextAction } from './cli/status-fields.js';
 import { reticleStateHome } from './daemon/daemon.js';
 import { handleMcp } from './cli/mcp-command.js';
 import { handleReport } from './cli/report-command.js';
-import { daemonProjectAt, resolveDaemonForProject } from './daemon/daemon-resolve.js';
+import {
+  daemonProjectAt,
+  readDaemonRegistry,
+  resolveDaemonForProject,
+} from './daemon/daemon-resolve.js';
 import { pickDaemonPortToBind } from './daemon/binding/free-port.js';
-import { portForInit, portFromEnv } from './setup/init/init-port.js';
+import { isSameOrAbove, portForInit, portFromEnv } from './setup/init/init-port.js';
 import { daemonStartOptions } from './cli/daemon-start-options.js';
 import {
   handleWatch,
@@ -160,6 +165,10 @@ async function handleInit(parsed: {
     daemonPresent: async (p) =>
       presenceIsUsable(await probePresence(p, { tcpOpen: probeDaemon, status: fetchStatus })),
     pickPort: (p) => pickDaemonPortToBind(p),
+    daemonStartedHere: (p) => {
+      const started = readDaemonRegistry(reticleStateHome()).find((e) => e.port === p)?.cwd;
+      return started !== undefined && isSameOrAbove(started, cwd);
+    },
   });
   const io = buildNodeIo(cwd, serverInitHost(), { stderr: true === parsed.json });
   const result = runInit(
@@ -316,14 +325,13 @@ export async function handleStatus(port: number, json = false): Promise<void> {
   });
 }
 
-/** Print the running package version (resolved once in server-version.ts). */
+/**
+ * Print the running package version (resolved once in server-version.ts), and nothing else.
+ *
+ * Bare on stdout so `V=$(reticle version)` works. It also wrote a JSON event to stderr, which a
+ * terminal shows: the first thing a new user typed after installing answered with a log line.
+ */
 function handleVersion(): void {
-  log('reticle_version', { version: SERVER_VERSION });
-  // Also on stdout, bare, because every diagnostic here starts by asking which build is running and
-  // that answer has to be copyable. The event alone looked fine in a terminal -- stderr is on the
-  // screen too -- but `V=$(reticle version)` came back empty, which is exactly the shape somebody
-  // reaches for when writing an issue template or a CI check. The event stays; machine-readable
-  // events all go to stderr and that consistency is worth keeping.
   process.stdout.write(`${SERVER_VERSION}\n`);
 }
 
@@ -548,7 +556,8 @@ function handleDaemonInner(parsed: {
   httpPort?: number;
   httpToken?: string;
 }): void {
-  const options: StartOptions = daemonStartOptions(parsed);
+  // The daemon the CLI starts is the one that can sign in for the panel: it owns ~/.reticle.
+  const options: StartOptions = { ...daemonStartOptions(parsed), hudSignIn };
 
   startDaemon(options)
     .then((server) => {

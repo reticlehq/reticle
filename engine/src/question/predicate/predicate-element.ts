@@ -8,10 +8,11 @@
  */
 
 import {
+  QueryBy,
   ReticleCommand,
   type ElementDescriptor,
   type ElementQuery,
-  type ElementState,
+  ElementState,
   type MatchResult,
 } from '@reticlehq/core';
 import {
@@ -28,6 +29,7 @@ import type { PredicateSession } from './predicate-session.js';
 import { describeTestidMiss } from './testid-near-miss.js';
 import { describeSplitTextMiss } from './split-text-miss.js';
 import { satisfiesProperty, type Baseline, type PropertyAssertion } from './property.js';
+import { describeNameNearMiss } from './name-near-miss.js';
 
 /**
  * The caveat for a present-testid list that was cut at its cap, or nothing when it was whole.
@@ -39,6 +41,30 @@ import { satisfiesProperty, type Baseline, type PropertyAssertion } from './prop
 function describePresentTestidsCut(shown: number, total: number | undefined): string {
   if (total === undefined || total <= shown) return '';
   return ` (the present-testid list shows the first ${String(shown)} of ${String(total)} in document order — absence from it proves nothing)`;
+}
+
+/**
+ * Why an `absent` check failed. `absent` means removed from the DOM, so an element the app hid but
+ * kept mounted still fails it, correctly. But "found 1" beside `visible: false` evidence reads as a
+ * stuck UI, so when every match is hidden the reason says so and names `state: "hidden"`, the
+ * predicate for "no longer shown" (#1360). Only when every match was described: with a truncated
+ * list a visible one may be among the rest, and the hint would then be wrong. And only when the
+ * check names no state: with `state: "hidden"` the advice would repeat the check itself, and with any
+ * other state it would ask the caller to drop the condition they actually wrote.
+ */
+function describeAbsentMiss(match: MatchResult, state: ElementState | undefined): string {
+  const found = `expected element to be absent but found ${String(match.count)}`;
+  const allDescribedHidden =
+    undefined === state &&
+    match.elements.length > 0 &&
+    match.elements.length === match.count &&
+    match.elements.every((element) => !element.visible);
+  if (!allDescribedHidden) return found;
+  const which = 1 === match.count ? 'it is' : 'every one is';
+  return (
+    `${found}, but ${which} hidden — \`absent\` means removed from the DOM; ` +
+    `to assert it isn't shown, use \`state: "${ElementState.HIDDEN}"\``
+  );
 }
 
 async function matchOnce(
@@ -198,7 +224,7 @@ export async function evalElement(
     return match.matched
       ? {
           pass: false,
-          failureReason: `expected element to be absent but found ${String(match.count)}`,
+          failureReason: describeAbsentMiss(match, state),
           observed: `${String(match.count)} element(s) matching ${subject}`,
           expected: `no element matching ${subject}`,
           assertion: 'element.absent',
@@ -297,7 +323,16 @@ export async function evalElement(
   // element that never rendered. Naming the container is the difference between a retry and a bug
   // report against working code. See split-text-miss.ts.
   const splitText = describeSplitTextMiss(match.hint?.splitText, query.text);
-  const clause = splitText ?? (alsoHere === undefined || '' === alsoHere ? undefined : alsoHere);
+  // Same asymmetry one field over: an exact role+name miss reads like an element that never
+  // rendered, while the identical failure through reticle_query lists the labels that role really
+  // has. The browser computed them on its way to reporting zero. See name-near-miss.ts.
+  // Scoped by role in both spellings, as `query.ts` resolves it: `{ by: 'role', value, name }` carries
+  // the role in `value`, and without this the sentence said "the page has" for a list the browser had
+  // already limited to that role.
+  const nearMissRole = QueryBy.ROLE === query.by ? query.value : query.role;
+  const nearMiss = describeNameNearMiss(match.hint?.nameNearMiss, query.name, nearMissRole);
+  const clause =
+    splitText ?? nearMiss ?? (alsoHere === undefined || '' === alsoHere ? undefined : alsoHere);
   const suffix = clause === undefined ? '' : ` — ${clause}`;
   // The evidence list is capped in document order, so a region low on the page is exactly what it
   // drops. Handed back with no marker it reads as the whole page, and the field report this came

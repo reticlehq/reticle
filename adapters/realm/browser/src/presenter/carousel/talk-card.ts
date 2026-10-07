@@ -30,7 +30,7 @@ export function talkCardHtml(): string {
 }
 
 /** Styles, beside the markup they dress. Reuses the panel's tokens, as the harness card does. */
-export const TALK_CSS = `
+export const TALK_CSS: string = `
 .reticle-talk-title{display:block;font-weight:600;font-size:12px;padding-right:18px;}
 .reticle-talk-body{margin:6px 0 8px;font-size:11px;line-height:1.45;opacity:.8;}
 .reticle-talk-book{display:inline-block;font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;background:var(--reticle-accent,#4f7cff);color:#fff;text-decoration:none;}

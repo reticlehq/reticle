@@ -89,6 +89,20 @@ describe('implicit roles for structural markup', () => {
     expect(getRole(byTag('summary'))).toBe('button');
     expect(runQuery({ by: QueryBy.ROLE, value: 'button', name: 'More' }).count).toBe(1);
   });
+
+  it('input[type=search] maps to searchbox and remains findable as textbox (#1361)', () => {
+    document.body.innerHTML = '<input type="search" aria-label="Search" />';
+    expect(getRole(byTag('input'))).toBe('searchbox');
+    expect(runQuery({ by: QueryBy.ROLE, value: 'searchbox' }).count).toBe(1);
+    expect(runQuery({ by: QueryBy.ROLE, value: 'textbox' }).count).toBe(1);
+  });
+
+  it('input[type=search] with list attribute maps to searchbox and remains findable as textbox (#1361)', () => {
+    document.body.innerHTML = '<input type="search" list="opts" aria-label="Search" />';
+    expect(getRole(byTag('input'))).toBe('searchbox');
+    expect(runQuery({ by: QueryBy.ROLE, value: 'searchbox' }).count).toBe(1);
+    expect(runQuery({ by: QueryBy.ROLE, value: 'textbox' }).count).toBe(1);
+  });
 });
 
 describe('conditional implicit roles', () => {

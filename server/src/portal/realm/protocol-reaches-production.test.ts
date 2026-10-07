@@ -57,8 +57,7 @@ describe('how much of the protocol the shipping product uses', () => {
     expect(
       builders,
       'a product file now constructs a realm. That is the protocol entering the shipping ' +
-        'path, which is a real change and a good one — update the claim in this file, and in ' +
-        'plan/future/v3.0.0/progress.md, in the same commit.',
+        'path, which is a real change and a good one — update the claim in this file in the same commit.',
     ).toEqual([]);
   });
 

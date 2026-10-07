@@ -25,6 +25,18 @@ describe('nextActionFor', () => {
     expect(next.command).toBe('pnpm run dev');
   });
 
+  it('nothing listening: an app one directory down is handed over with its cd', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: true,
+      listening: [],
+      dev: { command: 'npm run dev', script: 'dev', directory: 'frontend' },
+    });
+    expect(next.action).toBe(NoSessionAction.START_DEV_SERVER);
+    expect(next.command).toBe('cd frontend && npm run dev');
+    expect(next.reason).toContain('frontend');
+  });
+
   it('nothing listening and no dev script: says so, and returns NO command', () => {
     const next = nextActionFor({
       everConnected: false,

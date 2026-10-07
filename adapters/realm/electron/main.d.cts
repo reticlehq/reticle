@@ -30,4 +30,8 @@ export type ReticleCapturableWindow = object;
  * rather than throwing — a renderer that never opened is not an error worth crashing a main process
  * over.
  */
-export function installReticleCapture(win: ReticleCapturableWindow | null | undefined): void;
+export function installReticleCapture(
+  win: ReticleCapturableWindow | null | undefined,
+  /** `label` names the window in Reticle's session list, as a Tauri window label does. */
+  options?: { label?: string },
+): void;

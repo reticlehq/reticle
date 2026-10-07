@@ -18,10 +18,14 @@ import {
   exploreApp,
   harnessAvailable,
   MSG_NO_HARNESS_KEY,
+  withLinkedCredential,
 } from '@/surface/tools/harness-explore.js';
+import { linkedCloudPort } from '@/memory/cloud/cloud-config.js';
 import { resolveSuiteSelection } from '@/language/flows/suite-selection.js';
 import { projectOnly } from '@/memory/project/session-root.js';
 import {
+  configuredPairingToken,
+  nodePairingTokenDeps,
   readOrCreatePairingTokenSync,
   defaultPairingTokenDir,
 } from '@/portal/bridge/pairing-token.js';
@@ -59,7 +63,7 @@ import {
   SyncOutcome,
   type CloudConfig,
 } from '@/memory/cloud/cloud-sync.js';
-import { linkedCloudPort } from '@/memory/cloud/cloud-config.js';
+import { linkedRunsCloudPort } from '@/memory/cloud/cloud-config.js';
 import { homedir } from 'node:os';
 import { ReticleRunner, type VerifyProgressListener } from '@/judgement/runs/reticle-runner.js';
 import { createRunnerPort } from '@/judgement/runs/runner-port.js';
@@ -350,6 +354,9 @@ export function buildVerifyDeps(
     fs,
     reticleRoot,
     now,
+    // The key `reticle connect` filed. Without it a connected machine that never exported
+    // RETICLE_API_KEY was told to run `reticle connect` when asking the Harness to drive.
+    linkedCloud: linkedCloudPort(fs, reticleRoot, homedir(), process.env),
   };
   if (running.realInput !== undefined) deps.realInput = running.realInput;
   return deps;
@@ -390,17 +397,19 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
   const envPort = Number(process.env[ReticleEnv.PORT]);
   const port = Number.isFinite(envPort) && envPort > 0 ? envPort : opts.port;
   const { origin, loopback } = urlParts(opts.url);
-  const pairing = loopback
-    ? {}
-    : (() => {
-        const token = randomUUID();
-        const bridgeUrl = bridgeWsUrl(port);
-        return {
+  // The configured token when there is one: an app in a container presents the one in the shared
+  // token directory, and a fresh one-shot token refused it (#1251).
+  const token = loopback
+    ? undefined
+    : ((await configuredPairingToken(process.env, nodePairingTokenDeps())) ?? randomUUID());
+  const pairing =
+    token === undefined
+      ? {}
+      : {
           token,
-          injectConnect: { token, url: bridgeUrl },
+          injectConnect: { token, url: bridgeWsUrl(port) },
           ...(origin !== undefined ? { allowedOrigins: [origin] } : {}),
         };
-      })();
   const running = await start({
     port,
     driveUrl: opts.url,
@@ -412,6 +421,7 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
     ...(opts.storageState !== undefined ? { storageState: opts.storageState } : {}),
   });
   const deps = buildVerifyDeps(running, opts.reticleRoot, opts.now);
+  const harnessEnv = await withLinkedCredential(deps, process.env);
   const runner = new ReticleRunner(createRunnerPort(deps, opts.sessionId));
   return {
     sessionReady: (timeoutMs) => waitForSession(deps.sessions, timeoutMs, opts.now),
@@ -421,10 +431,10 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
         : (await resolveSuiteSelection(deps, projectOnly(undefined), { labels: [...select] })).run,
     // Absent, not throwing, when no model is configured: the CLI reads its absence as "unavailable"
     // and prints the one sentence that makes it available.
-    ...(harnessAvailable(process.env)
+    ...(harnessAvailable(harnessEnv)
       ? {
           explore: async (focus?: string) => {
-            const result = await exploreApp(deps, process.env, {
+            const result = await exploreApp(deps, harnessEnv, {
               ...(focus === undefined ? {} : { focus }),
               ...(opts.sessionId === undefined ? {} : { sessionId: opts.sessionId }),
             });
@@ -533,14 +543,14 @@ export function expectNeedsDaemonMessage(port: number, presence: PortPresence): 
 }
 
 /**
- * The model key is set here but not in the daemon, which is where the drive runs. The daemon is
+ * The platform key is set here but not in the daemon, which is what asks the platform. The daemon is
  * usually the one `init` or the agent's MCP client started, from an environment without the key.
  */
 export function daemonLacksKeyMessage(port: number): string {
   return (
-    `${ReticleEnv.HARNESS_KEY} is set in this shell, but the daemon on port ${String(port)} was ` +
-    'started without it, and the drive runs inside the daemon. Restart it from this shell so it ' +
-    `inherits the key: npx @reticlehq/server restart --port ${String(port)}`
+    `${ReticleEnv.API_KEY} is set in this shell, but the daemon on port ${String(port)} was ` +
+    'started without it, and the daemon is what asks the platform to drive. Restart it from this ' +
+    `shell so it inherits the key: npx @reticlehq/server restart --port ${String(port)}`
   );
 }
 
@@ -674,7 +684,7 @@ export function handleVerify(parsed: {
     out: (line) => process.stdout.write(`${line}\n`),
     fail: (line) => process.stderr.write(`${line}\n`),
     exit: (code) => process.exit(code),
-    cloud: linkedCloudPort(createNodeFileSystem(), reticleRoot, homedir(), process.env),
+    cloud: linkedRunsCloudPort(createNodeFileSystem(), reticleRoot, homedir(), process.env),
   };
   // Asked BEFORE anything binds. The listen failure arrives asynchronously on the server object,
   // long after `start` has resolved, so no `.catch` on that promise can ever see it — which is why
@@ -749,8 +759,8 @@ export function handleVerify(parsed: {
         });
         for (const line of explored.lines) ports.out(line);
         // The drive runs INSIDE the daemon, so the key has to be in ITS environment. A reader who
-        // exported it in this shell and got "set ANTHROPIC_API_KEY" back has been told to do the
-        // thing they just did; say where the key is actually missing.
+        // exported it in this shell and was told to link has been told to do the thing they just
+        // did; say where the key is actually missing.
         if (0 !== explored.code && harnessAvailable(process.env)) {
           const refusedForKey = explored.lines.some((line) => line.includes(MSG_NO_HARNESS_KEY));
           if (refusedForKey) ports.fail(daemonLacksKeyMessage(port));

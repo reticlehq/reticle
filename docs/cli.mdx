@@ -38,7 +38,7 @@ For a self-hosted cloud, add `--url <cloud origin>`. If the app was already wire
 
 ### `reticle init`
 
-Wires Reticle into the project in the current directory, then boots the app and proves a session connected. It exits non-zero if nothing connected, and prints what is left to do. It does not drive: proving a flow is the FIRST RUN, `reticle verify <url> --explore --persona "<who does what>"`.
+Wires Reticle into the project in the current directory, then boots the app and proves a session connected. It exits non-zero if nothing connected, and prints what is left to do. It does not drive: proving a flow is the FIRST RUN, which your agent drives with `reticle_act_and_wait` and an `until` on its last step, or, with a linked project, `reticle verify <url> --explore --persona "<who does what>"`.
 
 ```
 reticle init  [--env KEY=VALUE]... [--app <dir>] [--license <key>]

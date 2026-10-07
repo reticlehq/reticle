@@ -23,6 +23,9 @@ import {
   newDocumentId,
   NO_EDITS_OBSERVED,
   PresenterMode,
+  CommandActor,
+  HudCorner,
+  HudVisibility,
   type CommandMessage,
   type HelloMessage,
   type RedactionConfig,
@@ -60,7 +63,7 @@ import type {
   ControlIntent,
 } from './presenter/presenter.js';
 // Values, from a leaf file that pulls nothing in behind it. See log-kinds.ts.
-import { LOG_KIND, LOG_RESULT } from './presenter/chrome/log-kinds.js';
+import { LOG_ACTOR, LOG_KIND, LOG_RESULT } from './presenter/chrome/log-kinds.js';
 import { actionVerb } from './presenter/chrome/presenter-verbs.js';
 import { str, refLabel, modeForCommand, presentStatus } from './reticle-presenter-helpers.js';
 import { resetClock } from './timers/clock.js';
@@ -150,6 +153,10 @@ export function connectionPolicy(
   return { allowed: true };
 }
 
+/** Console line after the HUD's Kill Reticle, so the way back is written down somewhere. */
+const KILLED_MESSAGE =
+  '[Reticle] killed for this page. Restart your dev server or reload the page to bring it back.';
+
 /** HUD summary when the SDK self-ends a session because the bridge (server/agent) became unreachable. */
 const BRIDGE_LOST_SUMMARY =
   'Session ended - lost connection to Reticle (the agent is no longer running).';
@@ -182,14 +189,33 @@ function stripReloadCacheBustParam(): void {
  * Extract Reticle identity overrides from a `location.search` string. Pure (takes the string, not the
  * window) so it's testable without a DOM. Explicit connect options still win over these.
  */
-export function reticleParamsFromSearch(search: string): { session?: string; projectId?: string } {
+export function reticleParamsFromSearch(search: string): {
+  session?: string;
+  projectId?: string;
+  hud?: HudVisibility;
+} {
   const params = new URLSearchParams(search);
-  const out: { session?: string; projectId?: string } = {};
+  const out: { session?: string; projectId?: string; hud?: HudVisibility } = {};
   const session = params.get(RETICLE_URL_PARAM.SESSION);
   const projectId = params.get(RETICLE_URL_PARAM.PROJECT);
+  const hud = oneOf(HudVisibility, params.get(RETICLE_URL_PARAM.HUD));
   if (session !== null && session.length > 0) out.session = session;
   if (projectId !== null && projectId.length > 0) out.projectId = projectId;
+  if (hud !== undefined) out.hud = hud;
   return out;
+}
+
+/**
+ * A HUD asked for while no panel is mounted. Hidden and removed already hold, so they are answered
+ * as placed; shown is not true until the panel mounts. Each is remembered and applied on mount, so a
+ * request that arrives first is not lost (a drive's daemon asks as soon as the page connects).
+ */
+export function hudWithoutPanel(hud: HudVisibility | undefined): {
+  remember?: HudVisibility;
+  placed: HudVisibility[];
+} {
+  if (hud === undefined) return { placed: [] };
+  return { remember: hud, placed: HudVisibility.SHOWN === hud ? [] : [hud] };
 }
 
 /**
@@ -268,6 +294,8 @@ export class Reticle {
   #presenter: Presenter | undefined;
   /** Presenter pushes that arrived before the presenter existed, replayed on construction. */
   readonly #pendingPushes = new Map<string, { name: string; args: Record<string, unknown> }>();
+  /** The HUD asked for (by the page's address, or a command) before the panel mounted. */
+  #pendingHud: HudVisibility | undefined;
   /**
    * Reading the panel's settings, once the panel has arrived.
    *
@@ -450,7 +478,10 @@ export class Reticle {
       this.#overlay.update({ connected: true, events: 0 });
     }
 
-    if (options.present !== false) this.#fetchAndShowPanel(options);
+    // A page Reticle opened for a drive may say the HUD starts hidden, or not at all.
+    this.#pendingHud = reticleParamsFromSearch(window.location.search).hud;
+    if (options.present !== false && HudVisibility.REMOVED !== this.#pendingHud)
+      this.#fetchAndShowPanel(options);
 
     if (true === options.recorder) {
       this.#recorder = installRecorder({ emit, now: () => Date.now() });
@@ -467,7 +498,7 @@ export class Reticle {
         onMark: (mark) =>
           this.#presenter?.log(
             LOG_KIND.HUMAN,
-            `🚩 #${String(mark.index)} ${mark.anchor}${mark.source !== undefined ? ` · ${mark.source}` : ''} — ${mark.note}`,
+            `🚩 #${String(mark.index)} ${mark.label}${mark.source !== undefined ? ` · ${mark.source}` : ''} — ${mark.note}`,
           ),
         // The panel may not have arrived yet. `true` is what the panel's own settings start at,
         // so the answer does not change when it does.
@@ -531,6 +562,12 @@ export class Reticle {
         // How the person uses the HUD, as control names. Taken off the wire by the daemon before the
         // event buffer, so it is telemetry and never evidence.
         panelOptions.onHudUse = (use) => this.#emit(EventType.HUD_USED, { ...use });
+        // Kill Reticle: the whole SDK leaves the page. Nothing persists it, so a dev-server restart
+        // (or a reload) brings Reticle back - which is exactly what the button's warning promises.
+        panelOptions.onKill = () => {
+          this.disconnect();
+          nativeWarn(KILLED_MESSAGE);
+        };
         const panel = new Presenter(panelOptions);
         this.#presenter = panel;
         panel.mount();
@@ -538,6 +575,8 @@ export class Reticle {
         // there; the presenter's own painters no-op on a missing element rather than throwing.
         for (const buffered of this.#pendingPushes.values()) panel.handlePush(buffered);
         this.#pendingPushes.clear();
+        if (this.#pendingHud !== undefined) panel.placeHud(this.#pendingHud, undefined);
+        this.#pendingHud = undefined;
         /*
          * The first-run tour, once, over the app the person just wired up.
          *
@@ -760,7 +799,24 @@ export class Reticle {
     if (command.name === ReticleCommand.SESSION_CONFIG) {
       const idleEndMs = command.args['idleEndMs'];
       if ('number' === typeof idleEndMs) this.#presenter?.setIdleEndMs(idleEndMs);
-      return { ok: true, result: { applied: this.#presenter !== undefined, idleEndMs } };
+      const hud = oneOf(HudVisibility, command.args['hud']);
+      const corner = oneOf(HudCorner, command.args['corner']);
+      const presenter = this.#presenter;
+      let placed: string[];
+      if (presenter !== undefined) placed = presenter.placeHud(hud, corner);
+      else {
+        const early = hudWithoutPanel(hud);
+        if (early.remember !== undefined) this.#pendingHud = early.remember;
+        placed = early.placed;
+      }
+      return {
+        ok: true,
+        result: {
+          applied: this.#presenter !== undefined,
+          idleEndMs,
+          ...(0 < placed.length ? { hud: placed } : {}),
+        },
+      };
     }
 
     // Bridge → browser presenter pushes (PRESENTER state echo / FLOWS replay list). The presenter owns
@@ -769,6 +825,8 @@ export class Reticle {
     if (
       command.name === ReticleCommand.PRESENTER ||
       command.name === ReticleCommand.FLOWS ||
+      command.name === ReticleCommand.FLOW_PROGRESS ||
+      command.name === ReticleCommand.PLAN ||
       command.name === ReticleCommand.IMPACT
     ) {
       if (this.#presenter === undefined) {
@@ -810,10 +868,16 @@ export class Reticle {
     if (p === undefined) return;
     p.setMode(modeForCommand(command.name)); // paint reading vs acting intent first
     this.#actHandle = undefined;
+    const actor = CommandActor.HARNESS === command.by ? LOG_ACTOR.HARNESS : LOG_ACTOR.AGENT;
     if (command.name === ReticleCommand.ACT) {
       const ref = str(command.args['ref']);
       const label = refLabel(ref);
-      this.#actHandle = p.log(LOG_KIND.ACT, `${actionVerb(str(command.args['action']))} ${label}`);
+      this.#actHandle = p.log(
+        LOG_KIND.ACT,
+        `${actionVerb(str(command.args['action']))} ${label}`,
+        undefined,
+        actor,
+      );
       await p.beforeAct(ref, str(command.args['action']), label);
     } else if (command.name === ReticleCommand.ACT_SEQUENCE) {
       const steps = Array.isArray(command.args['steps']) ? command.args['steps'] : [];
@@ -822,13 +886,23 @@ export class Reticle {
         const ref = str(s.ref);
         const label = refLabel(ref);
         // one log row per step; the last handle carries the sequence outcome glyph
-        this.#actHandle = p.log(LOG_KIND.ACT, `${actionVerb(str(s.action))} ${label}`);
+        this.#actHandle = p.log(
+          LOG_KIND.ACT,
+          `${actionVerb(str(s.action))} ${label}`,
+          undefined,
+          actor,
+        );
         await p.beforeAct(ref, str(s.action), label);
       }
     } else {
       const label = presentStatus(command.name, command.args);
       p.status(label);
-      p.log(LOG_KIND.READ, label);
+      p.log(LOG_KIND.READ, label, undefined, actor);
     }
   }
+}
+
+/** The value when it is one of the enum's, else undefined: a page never trusts a free string. */
+function oneOf<T extends Record<string, string>>(values: T, raw: unknown): T[keyof T] | undefined {
+  return (Object.values(values) as unknown[]).includes(raw) ? (raw as T[keyof T]) : undefined;
 }

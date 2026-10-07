@@ -13,7 +13,7 @@
  * editor.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { runAdhocVerdict, type ToolCaller } from './adhoc-verdict.js';
+import { acquireLease, runAdhocVerdict, type ToolCaller } from './adhoc-verdict.js';
 import { ReticleTool } from '@reticlehq/core';
 
 /** A fake daemon: records what was asked, answers with the verdict it was given. */
@@ -324,5 +324,24 @@ describe('a url with no connected tab', () => {
     expect(result.code).toBe(1);
     expect(result.lines.join('\n')).toMatch(/Chromium is not installed/);
     expect(c.calls.map((x) => x.name)).not.toContain(ReticleTool.ASSERT);
+  });
+});
+
+// `init` must not count a lease that only connected through Reticle's injected reader as the
+// install connecting, and it can only tell from the flag carried here.
+describe('a lease that had to supply its own reader', () => {
+  const answering = (report: Record<string, unknown>): ToolCaller => ({
+    call: () => Promise.resolve({ structuredContent: report }),
+    close: () => Promise.resolve(),
+  });
+
+  it('says so', async () => {
+    const got = await acquireLease(answering({ sessionId: 's', zeroInstall: true }), 'http://x/');
+    expect(got).toEqual({ leased: 's', zeroInstall: true });
+  });
+
+  it('is not one when the app dialled in itself', async () => {
+    const got = await acquireLease(answering({ sessionId: 's' }), 'http://x/');
+    expect(got).toEqual({ leased: 's', zeroInstall: false });
   });
 });

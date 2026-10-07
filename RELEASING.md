@@ -55,6 +55,8 @@ pnpm gate:conformance                           #    this implementation still a
                                                 #    specification correctly, on a browser AND a shell
 pnpm gate:install                               #    ~15 min, and the only thing that can see what a
                                                 #    user runs BEFORE their first session
+pnpm gate:install-sandbox                       #    ~10 min, Docker: the published curl|sh installer on clean
+                                                #    Linux machines (full, slim, Alpine, too-old Node, no Node, with a browser)
 pnpm lint:docs                                  #    every documented command still parses; see below
 claude plugin validate ./plugin                 #    the published Claude Code plugin still resolves
 npx skills add reticlehq/reticle -l             #    the published skills are all still discoverable

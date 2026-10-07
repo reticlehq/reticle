@@ -121,7 +121,8 @@ function hasElectronDependency(dir: string): boolean {
 /** `agent`, `agents`. */
 const agentWord = (n: number): string => (1 === n ? 'agent' : 'agents');
 
-export function registerOtherAgents(print: (line: string) => void): void {
+/** Returns how many agents it wrote a config for, so a caller does not then say "none found". */
+export function registerOtherAgents(print: (line: string) => void): number {
   const platform = process.platform as keyof PlatformPaths;
   const home = homedir();
   const results = applyAgentPlan(
@@ -167,6 +168,7 @@ export function registerOtherAgents(print: (line: string) => void): void {
   for (const noted of approvals.filter((a) => undefined !== a.warn)) {
     print(`  ⚠ ${noted.name}: ${String(noted.warn)}`);
   }
+  return wrote.length;
 }
 
 type SetupCommandResult = SetupOutcome;

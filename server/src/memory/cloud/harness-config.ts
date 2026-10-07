@@ -18,6 +18,8 @@
  * guard refuses — correctly, and for the same reason it refused the tool surface reaching the other
  * way. Whoever wires the daemon owns both sides and can hand one to the other.
  */
+import { writeHarnessSwitch } from './harness-switch.js';
+
 /** How long a cached answer is trusted. A person who just changed it expects the panel to notice. */
 const FRESH_MS = 30 * 1_000;
 
@@ -28,37 +30,67 @@ export interface HarnessConfigView {
   harnessEntitled: boolean;
   /** Whether the platform holds a key for `provider`. Entitlement is not readiness — see the offer. */
   providerReady: boolean;
+  credits?: { used: number; limit: number };
 }
 
 export interface ConfigSource {
   read(): HarnessConfigView | undefined;
 }
 
+export interface MutableConfigSource extends ConfigSource {
+  applyWrite(enabled: boolean): void;
+  recheck(): void;
+  subscribe(listener: () => void): () => void;
+  /** Re-read in the background, telling listeners only when the answer changed. */
+  poll(): void;
+}
+
 export function harnessConfigSource(
   load: () => Promise<HarnessConfigView | undefined>,
   now: () => number = () => Date.now(),
-): ConfigSource {
+): MutableConfigSource {
   let cached: HarnessConfigView | undefined;
   // `undefined` rather than 0: "never asked" is a different state from "asked at the epoch", and
   // conflating them made a source with an injected clock never take its first read.
   let fetchedAt: number | undefined;
   let inFlight = false;
+  let queuedRefresh = false;
+  let revision = 0;
+  /** Set for a background poll, so an unchanged answer does not repaint every HUD. */
+  let quiet = false;
+  const listeners = new Set<() => void>();
+  const notify = (): void => {
+    for (const listener of listeners) listener();
+  };
 
   const refresh = (): void => {
     if (inFlight) return;
     inFlight = true;
+    const startedAtRevision = revision;
     void load()
       .then((cfg) => {
         // A failed read keeps the LAST good answer rather than blanking the control mid-session:
         // one dropped request is not evidence that somebody changed their mind.
-        if (cfg !== undefined) cached = cfg;
-        fetchedAt = now();
+        const before = JSON.stringify(cached);
+        if (startedAtRevision === revision) {
+          if (cfg !== undefined) cached = cfg;
+          fetchedAt = now();
+        }
+        // A poll that learned nothing new repaints nothing; anything else is said at once.
+        if (!quiet || before !== JSON.stringify(cached)) notify();
+        quiet = false;
       })
       .catch(() => {
-        fetchedAt = now();
+        if (startedAtRevision === revision) fetchedAt = now();
+        quiet = false;
+        notify();
       })
       .finally(() => {
         inFlight = false;
+        if (queuedRefresh) {
+          queuedRefresh = false;
+          refresh();
+        }
       });
   };
 
@@ -71,5 +103,79 @@ export function harnessConfigSource(
       if (fetchedAt === undefined || FRESH_MS <= now() - fetchedAt) refresh();
       return cached;
     },
+    applyWrite(enabled: boolean): void {
+      revision += 1;
+      if (cached !== undefined) cached = { ...cached, harnessEnabled: enabled };
+      fetchedAt = now();
+      notify();
+      if (cached === undefined) {
+        if (inFlight) queuedRefresh = true;
+        else refresh();
+      }
+    },
+    recheck(): void {
+      notify(); // Roll back an optimistic HUD switch immediately, even if the GET is slow.
+      if (inFlight) queuedRefresh = true;
+      else refresh();
+    },
+    subscribe(listener: () => void): () => void {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    poll(): void {
+      if (inFlight) return;
+      quiet = true;
+      refresh();
+    },
   };
+}
+
+export type ConfigsByRoot = (root: string) => MutableConfigSource;
+
+/**
+ * One live config source per project root, created on first ask; `onChange` hears every update.
+ *
+ * The platform read arrives as `load`, so this cache never reaches for the harness feature that
+ * performs it: the daemon, which owns both, joins them. It sat inline in `start` and `startDaemon`.
+ */
+export function harnessConfigsByRoot(
+  load: (root: string) => Promise<HarnessConfigView | undefined>,
+  onChange?: (root: string) => void,
+): ConfigsByRoot {
+  const sources = new Map<string, MutableConfigSource>();
+  return (root) => {
+    let source = sources.get(root);
+    if (source === undefined) {
+      source = harnessConfigSource(() => load(root));
+      if (onChange !== undefined) {
+        source.subscribe(() => onChange(root));
+        // The switch can be flipped anywhere: the console, another tab, the API. A HUD that only
+        // learned of it on its next tool call showed Harness ON over a drive that had stopped.
+        const live = source;
+        setInterval(() => live.poll(), FRESH_MS).unref();
+      }
+      sources.set(root, source);
+    }
+    return source;
+  };
+}
+
+/**
+ * The HUD's harness switch, written to the platform with this project's credential. Nothing is
+ * awaited: an accepted write updates the cache at once, and a refused or failed one re-reads the
+ * platform so the switch springs back to the truth rather than staying where the user left it.
+ */
+export function applyHarnessSwitch(
+  configs: ConfigsByRoot,
+  root: string,
+  enabled: boolean,
+  envFor: () => Promise<Record<string, string | undefined>>,
+): void {
+  void envFor()
+    .then((env) => writeHarnessSwitch(env, enabled))
+    .then((saved) => {
+      if (saved) configs(root).applyWrite(enabled);
+      else configs(root).recheck();
+    })
+    .catch(() => configs(root).recheck());
 }

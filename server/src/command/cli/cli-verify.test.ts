@@ -285,13 +285,13 @@ describe('exploring an app that has no saved flows', () => {
     expect(rec.fail.join('\n')).toContain('Nothing was proved');
   });
 
-  it('says how to make exploring available when no model is configured', async () => {
+  it('says how to make exploring available when the project is not on the platform', async () => {
     const { ports, rec } = harness({ listFlows: () => Promise.resolve([]) });
 
     await runVerify(EXPLORING, ports);
 
     expect(rec.exit).toEqual([1]);
-    expect(rec.fail.join('\n')).toContain('ANTHROPIC_API_KEY');
+    expect(rec.fail.join('\n')).toContain('reticle connect');
   });
 
   it('drives as the persona it was given', async () => {

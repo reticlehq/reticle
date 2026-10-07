@@ -102,6 +102,8 @@ const humanControlEvents = (): ReticleEvent[] =>
 
 beforeEach(() => {
   document.body.innerHTML = '';
+  // A fresh tab: the Agent Log keeps its rows in sessionStorage across a reload.
+  sessionStorage.clear();
   captured.handleCommand = undefined;
   sentEvents.length = 0;
 });
