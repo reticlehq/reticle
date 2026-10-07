@@ -16,9 +16,10 @@ import {
 import { HUD_GLASS_PAINT } from './chrome/presenter-hud-chrome.js';
 import { creditsLeft } from './presenter-settings.js';
 import { esc, isSafeDashboardUrl } from './chrome/presenter-safe-html.js';
+import { ReticleStorageKey } from '@/storage-keys.js';
 
 export type ChatView = 'activity' | 'flows' | 'annotations';
-const HISTORY_KEY = 'reticle.annotations.history.v1';
+const HISTORY_KEY = ReticleStorageKey.ANNOTATION_HISTORY;
 const HISTORY_LIMIT = 200;
 /** Settings → Projects → Verification: the console's Harness switch. There is no /harness page. */
 const HARNESS_SETUP_PATH = '/settings?group=project#model';

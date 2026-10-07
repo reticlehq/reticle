@@ -1,4 +1,5 @@
 import type { HudUseData, HumanControlKind } from '@reticlehq/core';
+import { ReticleStorageKey } from '@/storage-keys.js';
 
 /**
  * Presenter tunables + option surface: pure declarations (interfaces + named constants), no
@@ -199,7 +200,7 @@ export const SETTINGS_BTN_ATTR = 'data-reticle-settings-btn';
 export const SETTINGS_PANEL_ATTR = 'data-reticle-settings-panel';
 export const SETTINGS_CLOSE_ATTR = 'data-reticle-settings-close';
 export const SETTING_KEY_ATTR = 'data-reticle-setting';
-export const SETTINGS_STORAGE_KEY = 'reticle-presenter-settings';
+export const SETTINGS_STORAGE_KEY = ReticleStorageKey.PRESENTER_SETTINGS;
 /**
  * Per-TAB memory that the HUD was minimised by hand — not a saved preference.
  *
@@ -207,7 +208,7 @@ export const SETTINGS_STORAGE_KEY = 'reticle-presenter-settings';
  * to reach one control underneath it is not a decision about every future session, which is what
  * `autoOpenChat` in the settings profile is for.
  */
-export const MINIMISED_STORAGE_KEY = 'reticle-presenter-minimised';
+export const MINIMISED_STORAGE_KEY = ReticleStorageKey.PRESENTER_MINIMISED;
 /** Accent swatch applied to the dock chrome. */
 /** Overlay flag: is the page-edge glow wanted at all (user setting). */
 export const AMBIENT_GLOW_ATTR = 'data-reticle-ambient-glow';

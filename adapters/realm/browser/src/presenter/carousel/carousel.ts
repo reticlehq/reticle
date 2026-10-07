@@ -10,6 +10,8 @@
  * at every qualifying moment by choice, and "not now" is not "never".
  */
 
+import { ReticleStorageKey } from '@/storage-keys.js';
+
 /** Root of the carousel — the one element the log keeps above its rows. */
 export const CAROUSEL_ATTR = 'data-reticle-carousel';
 /** Each slide, carrying its id. */
@@ -22,7 +24,7 @@ export const CAROUSEL_PREV_ATTR = 'data-reticle-carousel-prev';
 export const CAROUSEL_NEXT_ATTR = 'data-reticle-carousel-next';
 export const CAROUSEL_POSITION_ATTR = 'data-reticle-carousel-position';
 /** Where "close" is remembered — session storage, so it lasts this tab and no longer. */
-export const CAROUSEL_DISMISSED_KEY = 'reticle.carousel.dismissed';
+export const CAROUSEL_DISMISSED_KEY = ReticleStorageKey.CAROUSEL_DISMISSED;
 
 const CLOSE_LABEL = 'Close';
 

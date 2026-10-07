@@ -1,5 +1,6 @@
 import { EventType, REDACTED_VALUE, StorageArea } from '@reticlehq/core';
 import { isSensitiveKey, scrubKnownSecrets } from '@/security/serialization.js';
+import { isReticleStorageKey } from '@/storage-keys.js';
 import { observeSafely, observeValue, type Emit, type Teardown } from './types.js';
 
 /** The three readable client-side storage areas. httpOnly cookies are invisible to JS by design. */
@@ -131,6 +132,8 @@ export function installStorage(emit: Emit): Teardown {
     // wire. Dropped HERE rather than at the verdict, because the cost is the buffer slot, not the
     // rendering — and a diff whose `old` equals its `new` carries nothing to render either way.
     if (old === value) return;
+    // The HUD's own bookkeeping is not the app changing its storage; see storage-keys.ts.
+    if (isReticleStorageKey(key)) return;
     observeSafely(() => {
       emit(EventType.STORAGE_CHANGE, {
         area: areaOf(this),
@@ -145,6 +148,7 @@ export function installStorage(emit: Emit): Teardown {
   const patchedRemoveItem = function (this: Storage, key: string): void {
     const old = observeValue(() => readOld(this, key)) ?? null;
     origRemove.call(this, key);
+    if (isReticleStorageKey(key)) return;
     observeSafely(() => {
       // No `new` field ⇒ the key was removed.
       emit(EventType.STORAGE_CHANGE, {
@@ -165,7 +169,8 @@ export function installStorage(emit: Emit): Teardown {
     try {
       for (let i = 0; i < this.length; i += 1) {
         const key = this.key(i);
-        if (key !== null) removed.push({ key, old: readOld(this, key) });
+        if (key !== null && !isReticleStorageKey(key))
+          removed.push({ key, old: readOld(this, key) });
       }
     } catch {
       // Enumerating keys can throw in a locked-down context; clear anyway, just without the diff.

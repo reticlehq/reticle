@@ -314,8 +314,10 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * Raised to 251,800 when page health started naming the desktop window (Tauri's label) and the
  * status its document was served with, so a hidden 404 webview is never taken for the app: 77 B,
  * 250,752 -> 250,829 measured on this tree.
+ * Raised to 253,000 (252,035 measured) when the storage observer began skipping the SDK's own
+ * keys: the list has to be on the page for the observer to read it, not only in the lazy HUD.
  */
-const MAX_FIRST_LOAD_BYTES = 251_800;
+const MAX_FIRST_LOAD_BYTES = 253_000;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The

@@ -14,6 +14,7 @@ import { getPresenterSettings } from './presenter-settings.js';
 import { mountWorkspaceSelector, workspaceRowHtml } from './presenter-workspace.js';
 import { CHAT_VIEWS_HTML } from './presenter-chat-views.js';
 import type { HeroIconBodyKey } from './icons/presenter-heroicons-data.js';
+import { ReticleStorageKey } from '@/storage-keys.js';
 // Live-control panel: the two-way control surface inside the floating HUD - Pause/Resume + End
 // (header), a message input + Send (footer), and the data-reticle-state visual machine.
 // All nodes carry data-reticle-* attrs so they're excluded from snapshots (see dom-ignore.ts). The
@@ -68,7 +69,7 @@ const RUN_FILENAME = 'reticle-run.json';
 export const ENDED_FADE_MS = 4000;
 
 /** Where the panel remembers which saved flows were replayed last, to list them first. */
-const RECENT_PLAYS_KEY = 'reticle.flow.recent.v1';
+const RECENT_PLAYS_KEY = ReticleStorageKey.RECENT_PLAYS;
 
 const FLOW_TEXT = {
   REPLAYABLE: 'Replay without an agent',
