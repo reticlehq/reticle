@@ -128,13 +128,15 @@ export async function runScript(
         const tools = recording(ports.toolset(lease.sessionId, journey.persona), toolCalls);
         card.status = ScriptStatus.RUNNING;
         tell();
-        const drivesBefore = drives.length;
-        const ok = await runJourney(journey, card.steps, tools, ports, drives, tell, () => {
+        // This journey's own drives: lanes run side by side, so a slice of the shared list after the
+        // await could hold another lane's missed goal and blame it on this journey.
+        const own: HarnessResult[] = [];
+        const ok = await runJourney(journey, card.steps, tools, ports, own, tell, () => {
           stopped = true;
         });
         card.status = ok ? ScriptStatus.PASSED : ScriptStatus.FAILED;
-        if (!ok && drives.slice(drivesBefore).some((d) => false === d.goalMet))
-          goalMissed.add(card);
+        drives.push(...own);
+        if (!ok && own.some((d) => false === d.goalMet)) goalMissed.add(card);
         blocked = !ok;
         settleOwned(id, ok);
         tell();
