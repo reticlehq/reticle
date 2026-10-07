@@ -64,3 +64,14 @@ describe('remote notices', () => {
     );
   });
 });
+
+/** A self-hosted or local platform: its value cards linked to the hosted one. */
+describe('the value cards on a platform that is not the hosted one', () => {
+  it('link to the platform the daemon uses', () => {
+    const html = panelSlides(undefined, false, [], 'http://localhost:18340')
+      .map((slide) => slide.html)
+      .join('');
+    expect(html).toContain('href="http://localhost:18340/settings?group=billing"');
+    expect(html).not.toContain('app.reticle.sh');
+  });
+});
