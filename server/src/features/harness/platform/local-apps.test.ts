@@ -3,6 +3,7 @@ import {
   appKeyOf,
   appsByPlatform,
   machineOf,
+  nameFromProjectId,
   pickAppTab,
   startAppReports,
   type AppReports,
@@ -26,14 +27,21 @@ let running: AppReports | undefined;
 afterEach(() => running?.stop());
 
 describe('which app is which', () => {
+  it("names an app by its project's id, without the hash, when nothing better is known", () => {
+    expect(nameFromProjectId('reticlehq-example-react-fba80ab0')).toBe('reticlehq-example-react');
+    expect(nameFromProjectId('plain')).toBe('plain');
+  });
+
   it('names the machine without its .local suffix, and keeps its id stable', () => {
     expect(MACHINE.name).toBe('devs-mbp');
     expect(machineOf('devs-mbp.local', '/Users/dev').id).toBe(MACHINE.id);
   });
 
   it('gives two projects on the same port two keys, and one project the same key on any port', () => {
-    expect(appKeyOf(MACHINE.id, '/code/shop')).not.toBe(appKeyOf(MACHINE.id, '/code/admin'));
-    expect(appKeyOf(MACHINE.id, '/code/shop')).toBe(appKeyOf(MACHINE.id, '/code/shop'));
+    expect(appKeyOf(MACHINE.id, '/code/shop', 'p')).not.toBe(
+      appKeyOf(MACHINE.id, '/code/admin', 'p'),
+    );
+    expect(appKeyOf(MACHINE.id, '/code/shop', 'p')).toBe(appKeyOf(MACHINE.id, '/code/shop', 'p'));
   });
 });
 
@@ -62,7 +70,7 @@ describe('the apps reported to each platform', () => {
         platform: A,
         apps: [
           {
-            key: appKeyOf(MACHINE.id, '/code/shop'),
+            key: appKeyOf(MACHINE.id, '/code/shop', undefined),
             name: 'shop',
             url: 'http://localhost:3000/cart',
             title: 'Shop',
@@ -74,7 +82,7 @@ describe('the apps reported to each platform', () => {
         platform: B,
         apps: [
           {
-            key: appKeyOf(MACHINE.id, '/code/admin'),
+            key: appKeyOf(MACHINE.id, '/code/admin', undefined),
             name: 'admin',
             url: 'http://localhost:3000/',
             stack: ['vue', 'electron'],
@@ -82,6 +90,39 @@ describe('the apps reported to each platform', () => {
         ],
       },
     ]);
+  });
+
+  /**
+   * Found driving it: a daemon that cannot map a project to its checkout files it under one shared
+   * `~/.reticle/unmatched` directory, so keyed by directory alone every such project was one app.
+   */
+  it('keeps two projects apart even when neither could be mapped to its checkout', async () => {
+    const unmatched = (t: AppTab) =>
+      Promise.resolve({
+        platform: A,
+        dir: '/home/.reticle/unmatched',
+        name: `${t.projectId ?? ''}`,
+      });
+    const groups = await appsByPlatform(
+      [
+        tab('s1', 'http://localhost:3000/', { projectId: 'shop-1a2b3c4d' }),
+        tab('s2', 'http://localhost:3000/', { projectId: 'admin-5e6f7a8b' }),
+      ],
+      undefined,
+      MACHINE.id,
+      unmatched,
+    );
+    expect(new Set(groups[0]?.apps.map((a) => a.key)).size).toBe(2);
+  });
+
+  it("reports an app's address without the marks Reticle put on it", async () => {
+    const groups = await appsByPlatform(
+      [tab('s1', 'http://localhost:5301/cart?q=1&__reticle_session=lease-1&__reticle_project=p')],
+      undefined,
+      MACHINE.id,
+      describeTab,
+    );
+    expect(groups[0]?.apps[0]?.url).toBe('http://localhost:5301/cart?q=1');
   });
 
   it('still reports to the linked platform with no app open, so the chat knows the machine is there', async () => {

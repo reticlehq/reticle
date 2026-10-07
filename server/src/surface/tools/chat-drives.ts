@@ -25,6 +25,7 @@ import {
   appKeyOf,
   appsByPlatform,
   machineOf,
+  nameFromProjectId,
   pickAppTab,
   startAppReports,
 } from '../../features/harness/platform/local-apps.js';
@@ -40,8 +41,12 @@ export interface ChatDriveSessions {
   get(id: string): { autoEnd(text: string, tone: PresenterTone): void } | undefined;
 }
 
-/** A project's own name: its package's, else its folder's. */
-const nameOf = async (fs: FileSystemPort, dir: string): Promise<string> => {
+/** A project's own name: its package's, else its id's, else its folder's. */
+const nameOf = async (
+  fs: FileSystemPort,
+  dir: string,
+  projectId: string | undefined,
+): Promise<string> => {
   try {
     const name = (JSON.parse(await fs.readFile(join(dir, 'package.json'))) as { name?: unknown })
       .name;
@@ -49,6 +54,8 @@ const nameOf = async (fs: FileSystemPort, dir: string): Promise<string> => {
   } catch {
     // No package, or not JSON: the folder names it.
   }
+  // Not mapped to a checkout (the daemon's shared `unmatched` directory): the id the SDK stamped.
+  if (undefined !== projectId) return nameFromProjectId(projectId);
   return basename(dir) || dir;
 };
 
@@ -74,7 +81,8 @@ export function startChatDrives(
   // does for flows and runs; a per-tab "unresolved" app is the upgrade if that ever misleads.
   const appOf = (id: string): string | undefined => {
     try {
-      return appKeyOf(machine.id, projectDirFor(deps, id));
+      const projectId = sessions.list().find((tab) => tab.sessionId === id)?.projectId;
+      return appKeyOf(machine.id, projectDirFor(deps, id), projectId);
     } catch {
       return undefined;
     }
@@ -118,7 +126,7 @@ export function startChatDrives(
           const platform = await sessionCloud(tab.sessionId);
           return {
             dir,
-            name: await nameOf(fs, dir),
+            name: await nameOf(fs, dir, tab.projectId),
             ...(undefined === platform
               ? {}
               : { platform: { url: platform.url.replace(/\/+$/, ''), apiKey: platform.apiKey } }),

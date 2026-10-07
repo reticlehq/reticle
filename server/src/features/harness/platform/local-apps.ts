@@ -11,6 +11,7 @@
  * waiting, which is how a daemon with nothing open hears about one without polling every few seconds.
  */
 import { createHash } from 'node:crypto';
+import { RETICLE_URL_PARAM } from '@reticlehq/core';
 import { pickDriveSession, type DriveCandidate } from './remote-drive.js';
 
 const REPORT_PATH = '/v1/harness/local-apps';
@@ -37,6 +38,7 @@ export interface Machine {
 /** One connected tab, as far as reporting and picking go. */
 export interface AppTab extends DriveCandidate {
   title?: string;
+  projectId?: string;
   adapters: string[];
   runtime?: string;
 }
@@ -58,9 +60,33 @@ export const machineOf = (hostname: string, home: string): Machine => ({
   name: hostname.replace(/\.local$/i, ''),
 });
 
-/** One project checkout on one machine. Its port is not part of it. */
-export const appKeyOf = (machineId: string, projectDir: string): string =>
-  hash(`${machineId}\u0000${projectDir}`);
+/**
+ * One project checkout on one machine. Its port is not part of it. The tab's projectId is: a daemon
+ * that cannot map a project to its checkout files every such project under one shared directory.
+ */
+export const appKeyOf = (
+  machineId: string,
+  projectDir: string,
+  projectId: string | undefined,
+): string => hash(`${machineId}\u0000${projectDir}\u0000${projectId ?? ''}`);
+
+/** A project id as a name: the SDK stamps `<package>-<8 hex>`, and the hash means nothing to a person. */
+export const nameFromProjectId = (projectId: string): string =>
+  projectId.replace(/-[0-9a-f]{8}$/, '');
+
+const RETICLE_MARKS = new Set<string>(Object.values(RETICLE_URL_PARAM));
+
+/** The address as the app knows it: the params Reticle put on it to adopt a tab are not the app's. */
+const withoutMarks = (raw: string): string => {
+  try {
+    const url = new URL(raw);
+    for (const mark of [...url.searchParams.keys()])
+      if (RETICLE_MARKS.has(mark)) url.searchParams.delete(mark);
+    return url.href;
+  } catch {
+    return raw;
+  }
+};
 
 /**
  * The apps to report, grouped by the platform credential each one's project is linked with. The
@@ -86,7 +112,7 @@ export async function appsByPlatform(
   for (const tab of ordered) {
     const about = await describe(tab).catch(() => undefined);
     if (undefined === about?.platform) continue;
-    const key = appKeyOf(machineId, about.dir);
+    const key = appKeyOf(machineId, about.dir, tab.projectId);
     const apps = group(about.platform).apps;
     if (apps.has(key)) continue;
     const stack = [
@@ -95,7 +121,7 @@ export async function appsByPlatform(
     apps.set(key, {
       key,
       name: about.name,
-      url: tab.url,
+      url: withoutMarks(tab.url),
       ...(tab.title === undefined ? {} : { title: tab.title }),
       stack,
     });
