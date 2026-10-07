@@ -236,7 +236,7 @@ describe('the verdict a chat-requested drive reports', () => {
 
   it('falls back to the goals the harness checked itself', () => {
     expect(driveVerdict({ proved: true, goals: [{ verified: 'yes' }, { verified: 'no' }] })).toBe(
-      'no',
+      'unknown',
     );
     expect(
       driveVerdict({
@@ -245,6 +245,22 @@ describe('the verdict a chat-requested drive reports', () => {
         checks: { held: 1, failed: 0, undecided: 0 },
       }),
     ).toBe('yes');
+  });
+
+  it('reads a quoted text missing from the final page as not proved, never as refuted', () => {
+    // "goes from "Count is 0" to "Count is 1"": the drive ends on "Count is 1", so the start state is
+    // rightly gone. The quoted texts are only looked for on the LAST page, so a miss cannot say which
+    // state the person meant, and it marked a working counter "Failed". It still blocks a yes.
+    const counter = [{ verified: 'no' }, { verified: 'yes' }];
+    expect(
+      driveVerdict({
+        goalMet: true,
+        proved: true,
+        goals: counter,
+        checks: { held: 1, failed: 0, undecided: 0 },
+      }),
+    ).toBe('unknown');
+    expect(driveVerdict({ goalMet: true, proved: true, goals: counter })).toBe('unknown');
   });
 
   it('is never yes over a check that failed, whatever the model said of the goal', () => {

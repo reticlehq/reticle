@@ -251,8 +251,11 @@ export function driveVerdict(out: {
   // A goal judged unmet, or a check that came back "no", is a failed drive whatever else held.
   if (false === out.goalMet) return 'no';
   if (0 < (out.checks?.failed ?? 0)) return 'no';
+  // A quoted text is only looked for on the page the drive ENDED on, so a miss cannot refute: a
+  // goal that quotes the state it starts from ("from "Count is 0" to "Count is 1"") misses it by
+  // working. It blocks a yes and decides nothing else.
   const goals = out.goals ?? [];
-  if (goals.some((g) => 'no' === g.verified)) return 'no';
+  if (goals.some((g) => 'yes' !== g.verified)) return 'unknown';
   // A yes needs a check that held behind it: the model saying the goal was met is not evidence.
   if (!out.proved || 0 === (out.checks?.held ?? 0)) return 'unknown';
   if (true === out.goalMet) return 'yes';
