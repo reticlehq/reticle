@@ -77,6 +77,32 @@ describe('the hint on ui-advanced-request-failed', () => {
     expect(detail).toContain('"method":"DELETE","urlContains":"/api/session","status":429');
   });
 
+  // Built from the redacted display url, never the raw one: the detail is copied into crawl
+  // anomalies, and the hint must not put back a token the description took out.
+  it('does not put a redacted token back into the detail', () => {
+    const redacted = ev(EventType.NET_REQUEST, {
+      id: 'n-redacted',
+      method: 'POST',
+      url: '/api/login?token=[redacted]',
+      urlRaw: '/api/login?token=s3cr3t-value',
+      status: 401,
+      ok: false,
+    });
+    const detail = finding([domChanged(), redacted])?.detail ?? '';
+
+    expect(detail).toContain('"urlContains":"/api/login","status":401');
+    expect(detail).not.toContain('s3cr3t-value');
+  });
+
+  // A bare `/` is a substring of every url: declaring it would exempt unrelated failures too.
+  it('offers no clause for a write to the root path', () => {
+    const detail =
+      finding([domChanged(), failedCall('POST', 'http://localhost:3000/', 500)])?.detail ?? '';
+
+    expect(detail).not.toContain('declare it in the predicate');
+    expect(detail).not.toContain('"urlContains":"/"');
+  });
+
   it('does not appear on a finding of another kind', () => {
     const others = findContradictions(paywall(), { actionSince: 0 }).filter(
       (c) => ContradictionKind.UI_ADVANCED_REQUEST_FAILED !== c.kind,

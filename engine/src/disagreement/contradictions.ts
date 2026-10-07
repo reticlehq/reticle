@@ -529,7 +529,7 @@ function findWindowContradictions(
       kind: ContradictionKind.UI_ADVANCED_REQUEST_FAILED,
       claim: 'the UI moved forward (DOM/store/route changed)',
       counter: `${String(unexpectedWrites.length)} request(s) in the same window failed`,
-      detail: `${unexpectedWrites.map(describe).join('; ')}. ${declareFailureHint(unexpectedWrites)}`,
+      detail: `${unexpectedWrites.map(describe).join('; ')}${declareFailureHint(unexpectedWrites)}`,
     });
   }
 
@@ -810,30 +810,45 @@ function findWindowContradictions(
  * weakened it until it proved nothing (#1418). The clause is built from the call itself, so it is
  * exactly what would match, and it is conditional: the finding is still a finding, and a clause
  * pasted to make a red go away would be the same false green with extra steps.
+ *
+ * Built from the DISPLAY url, which is redacted, never from `matchUrl`, which is not: the detail is
+ * copied into crawl anomalies, and a hint must not put back a token the description took out. A
+ * call whose path cannot be named exactly and narrowly gets no clause rather than a loose one: a
+ * bare `/` is a substring of every url and would exempt unrelated failures with the same method.
  */
 function declareFailureHint(
   calls: readonly { method: string; url: string; matchUrl?: string; status: number | undefined }[],
 ): string {
-  const clauses = calls.map((c) => {
-    const haystack = c.matchUrl ?? c.url;
-    let path = haystack;
-    try {
-      const parsed = new URL(haystack, 'http://reticle.invalid').pathname;
-      // Only when it is literally in the url: `urlContains` is a substring test, and a pathname
-      // the parser re-encoded would declare something that never matches.
-      if (haystack.includes(parsed)) path = parsed;
-    } catch {
-      // An unparseable url is declared as recorded.
-    }
+  const clauses = calls.flatMap((c) => {
+    const urlContains = narrowPathOf(c);
+    if (urlContains === undefined) return [];
     const clause = {
       kind: 'net',
       method: c.method.toUpperCase(),
-      urlContains: path,
+      urlContains,
       ...(c.status === undefined || 0 === c.status ? { ok: false } : { status: c.status }),
     };
-    return JSON.stringify(clause);
+    return [JSON.stringify(clause)];
   });
-  const subject =
-    1 === clauses.length ? 'this failure is the outcome' : 'these failures are the outcome';
-  return `If ${subject} you expect, declare it in the predicate: ${clauses.join(', ')}`;
+  if (0 === clauses.length) return '';
+  const subject = 1 === clauses.length ? 'this failure is' : 'these failures are';
+  return `. If ${subject} the outcome you expect, declare it in the predicate: ${clauses.join(', ')}`;
+}
+
+/**
+ * The display url's path, when it is both safe to show and narrow enough to declare one call.
+ *
+ * Only when it is literally in the url the declaration is matched against: `urlContains` is a
+ * substring test, so a path the parser re-encoded, or one the redaction changed, would never match.
+ */
+function narrowPathOf(call: { url: string; matchUrl?: string }): string | undefined {
+  let path: string;
+  try {
+    path = new URL(call.url, 'http://reticle.invalid').pathname;
+  } catch {
+    return undefined;
+  }
+  if (0 === path.replace(/\/+$/, '').length) return undefined;
+  if (!call.url.includes(path) || !(call.matchUrl ?? call.url).includes(path)) return undefined;
+  return path;
 }
