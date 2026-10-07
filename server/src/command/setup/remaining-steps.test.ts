@@ -55,14 +55,14 @@ describe('picking up where setup stopped', () => {
    * proof, and must be given a route that WORKS. Both are named because `explore` needs a key, and
    * naming only that one is a dead end on a machine without one.
    */
-  it('hands over the first run, naming a route that needs no key and one that does', () => {
+  it('hands over the first run, naming a route that needs no platform and one that does', () => {
     const drive = remainingSteps(
       at({ initDone: true, devServerUp: true, sessionConnected: true }),
     ).join(' ');
     expect(drive).toContain('reticle_act_and_wait');
     expect(drive).toContain('reticle_verify { action: "explore"');
-    expect(drive, 'the key requirement must be stated, or explore is a dead end').toContain(
-      'ANTHROPIC_API_KEY',
+    expect(drive, 'the platform requirement must be stated, or explore is a dead end').toContain(
+      'reticle connect',
     );
   });
 

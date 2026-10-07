@@ -73,7 +73,10 @@ const SUBMIT_CONTROL_SELECTOR =
 
 export function submitControlFor(el: ActionTarget): HTMLElement | null {
   const found = el.closest('form')?.querySelector(SUBMIT_CONTROL_SELECTOR);
-  return found instanceof HTMLElement ? found : null;
+  // Realm-aware: isHtmlElement resolves constructors from the element's own
+  // document, so a submit button inside a same-origin iframe is found. The
+  // ambient instanceof would miss it and skip the destructive-action guard.
+  return isHtmlElement(found) ? found : null;
 }
 
 export function requiresDangerousConfirmation(text: string, role?: string): boolean {

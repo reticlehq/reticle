@@ -5,6 +5,7 @@
 // the agent would receive; the physical locator used to drive the click does not
 // change those payloads.
 import { execFile } from 'node:child_process';
+import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { McpStdioClient } from './mcp-client.mjs';
 import { measure } from './tokenizer.mjs';
@@ -245,19 +246,26 @@ const BENCH_APP_RETICLE_PORT = Number(RETICLE_PORT);
 const RETICLE_CLI = process.env.BENCH_RETICLE_CLI ?? 'server/dist/command/cli.js';
 
 export class ReticleAdapter {
-  constructor(url, port = BENCH_APP_RETICLE_PORT) {
+  /**
+   * `options.cwd` (or `BENCH_RETICLE_CWD`, which `bench-all` sets for every pass) starts the daemon
+   * in that directory. Started in the checkout, it read whatever flows its developer had saved
+   * there, and the suite verdict listed every route they started on, counted in the measurement.
+   */
+  constructor(url, port = BENCH_APP_RETICLE_PORT, options = {}) {
     this.url = url;
     this.port = String(port);
     this.name = 'reticle';
+    this.cwd = options.cwd ?? process.env.BENCH_RETICLE_CWD;
   }
   async start() {
     this.c = new McpStdioClient(
       'node',
-      [RETICLE_CLI, 'mcp', '--port', this.port, '--drive', this.url],
+      [resolve(RETICLE_CLI), 'mcp', '--port', this.port, '--drive', this.url],
       // The default `hybrid` profile advertises only the core verify tools directly and reaches the
       // rest through 2 meta-tools. This deterministic client calls tools BY NAME (record_start,
       // flow_save, flow_replay…), so it needs them advertised directly — opt into the full profile.
       { RETICLE_PORT: this.port, RETICLE_ADVERTISE_ALL_TOOLS: '1' },
+      this.cwd === undefined ? {} : { cwd: this.cwd },
     );
     await this.c.start();
     await sleep(RETICLE_READY_MS); // driven browser load + SDK connect (BENCH_RETICLE_READY_MS to tune)

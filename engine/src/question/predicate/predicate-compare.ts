@@ -222,10 +222,11 @@ function readSide(
 }
 
 /**
- * A thousands-grouped number or a plain one. A comma counts as a separator only in groups of three,
- * so `11,87` (a decimal comma) reads as two numbers, not as 1187 — and two numbers are refused.
+ * A thousands-grouped number or a plain one, optionally preceded by a minus sign and/or a currency
+ * symbol (`-$100`, `-₹1,187.01`). A comma counts as a separator only in groups of three, so `11,87`
+ * (a decimal comma) reads as two numbers, not as 1187 — and two numbers are refused.
  */
-const NUMBER_TOKEN = /-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?/g;
+const NUMBER_TOKEN = /(?:-(?:[\p{Sc}]\s*)?|[\p{Sc}]\s*-?)?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?/gu;
 
 /** One number out of a reading, or why there is not exactly one. */
 function numberOf(value: Scalar): { n: number } | { why: string } {
@@ -239,7 +240,15 @@ function numberOf(value: Scalar): { n: number } | { why: string } {
       why: `holds ${String(tokens.length)} numbers in ${JSON.stringify(value)}, so which one was meant is a guess — narrow the scope to one value`,
     };
   }
-  return { n: Number(only.replace(/,/g, '')) };
+  const isNegative = only.includes('-');
+  const cleaned = only.replace(/,/g, '');
+  const digits = cleaned.match(/(?:\d+(?:\.\d+)?)/);
+  if (null === digits) {
+    return { why: `could not parse a number from ${JSON.stringify(value)}` };
+  }
+  const parsed = Number(digits[0]);
+  const n = isNegative && 0 !== parsed ? -parsed : parsed;
+  return { n };
 }
 
 /**

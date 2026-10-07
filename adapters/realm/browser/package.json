@@ -1,9 +1,10 @@
 {
   "name": "@reticlehq/browser",
-  "version": "3.5.0",
+  "version": "3.6.0",
   "description": "Reticle browser SDK \u2014 installs observers, builds semantic snapshots, executes actions, talks to the bridge.",
   "type": "module",
   "main": "./dist/index.js",
+  "module": "./dist/reticle-inject.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {

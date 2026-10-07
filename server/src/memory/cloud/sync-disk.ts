@@ -10,6 +10,7 @@
  * one unsynced record, not a crashed sync. There is no state here worth defending against a parse
  * error — the file will be rewritten on the next tool call anyway.
  */
+import { shareableRun } from '@reticlehq/core/artifacts';
 import {
   existsSync,
   mkdirSync,
@@ -20,7 +21,13 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { IntentDir, ReticleDir } from '@reticlehq/core';
-import type { CloudSyncState, PulledIssues, SyncSink, SyncSource } from './sync-cycle.js';
+import {
+  DERIVED_RECORDS,
+  type CloudSyncState,
+  type PulledIssues,
+  type SyncSink,
+  type SyncSource,
+} from './sync-cycle.js';
 import { subjectFor } from '@/memory/intent/intent-subject.js';
 
 const JSON_SUFFIX = '.json';
@@ -85,13 +92,9 @@ function readFlows(root: string): unknown[] {
   }
 }
 
-const DERIVED_FILE = {
-  impact: ReticleDir.IMPACT_FILE,
-  flake: ReticleDir.FLAKE_FILE,
-  intent: ReticleDir.INTENT_FILE,
-  envelopes: ReticleDir.ENVELOPES_FILE,
-  'assertion-tiers': ReticleDir.TIERS_FILE,
-} as const;
+const DERIVED_FILE = Object.fromEntries(
+  DERIVED_RECORDS.map((record) => [record.kind, record.file]),
+) as Record<(typeof DERIVED_RECORDS)[number]['kind'], string>;
 
 /** The directory the sharded intent store writes into, beside the legacy flat file. */
 const INTENT_SUBDIR = ReticleDir.INTENT_SUBDIR;
@@ -177,7 +180,8 @@ export function diskSource(reticleRoot: string): SyncSource {
       readJsonDir(join(reticleRoot, ReticleDir.RUNS_SUBDIR))
         .map((payload) => {
           const id = (payload as { runId?: unknown } | null)?.runId;
-          return 'string' === typeof id ? { runId: id, payload } : undefined;
+          // The prompt context leaves the machine only when the project opted in.
+          return 'string' === typeof id ? { runId: id, payload: shareableRun(payload) } : undefined;
         })
         // A run artifact with no id cannot be diffed against the server's list, so sending it would
         // mean re-sending it every cycle forever. Dropped rather than uploaded repeatedly.

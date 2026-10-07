@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { gateDecision } from './gate.js';
+import { RunFlowStatus, type RunFlowResult } from '@reticlehq/core';
+import { gateDecision, passingFlowNames } from './gate.js';
 
 describe('gateDecision', () => {
   it('passes when every affected flow has a passing artifact', () => {
@@ -98,5 +99,34 @@ describe('gate — coverage that fell, or changed code that never ran, BLOCKS', 
     const r = gateDecision({ affected: [], passing: [], unexecuted: ['src/Refund.tsx'] });
     expect(r.pass).toBe(false);
     expect(r.unexecuted).toEqual(['src/Refund.tsx']);
+  });
+});
+
+// #1321: a suite replays runtime copies of a template with fixture parameters and deletes them,
+// so the copies' names match no saved flow and the gate counted nothing.
+describe('what a run lets the gate count as passing', () => {
+  const run = (over: Partial<RunFlowResult>): RunFlowResult => ({
+    name: 'checkout--fixture-7',
+    template: 'checkout',
+    status: RunFlowStatus.PASS,
+    steps: 3,
+    durationMs: 10,
+    stepResults: [{ step: 0, anchor: 'Pay', ok: true, consequence: 'net POST /orders' }],
+    ...over,
+  });
+
+  it('credits the template for a strict pass that proved a consequence', () => {
+    expect(passingFlowNames([run({})]).sort()).toEqual(['checkout', 'checkout--fixture-7']);
+  });
+
+  it('credits nothing to the template for a healed, failed, skipped or assertion-free copy', () => {
+    for (const copy of [
+      run({ status: RunFlowStatus.HEALED }),
+      run({ status: RunFlowStatus.FAIL }),
+      run({ status: RunFlowStatus.SKIPPED }),
+      run({ stepResults: [{ step: 0, anchor: 'Pay', ok: true }] }),
+    ]) {
+      expect(passingFlowNames([copy])).not.toContain('checkout');
+    }
   });
 });

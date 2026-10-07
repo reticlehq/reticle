@@ -20,10 +20,10 @@ import { ReticleTool } from '@reticlehq/core';
  *    whose entire job is telling CI whether the app works.
  */
 
-function depsWithSessionUrl(url: string | undefined): ToolDeps {
+function depsWithSessionUrl(url: string | undefined, runtime?: string): ToolDeps {
   const resolve = (): Session => {
     if (url === undefined) throw new Error('no connected session');
-    return { url } as unknown as Session;
+    return { url, runtime } as unknown as Session;
   };
   return { sessions: { resolve } as unknown as SessionManager } as unknown as ToolDeps;
 }
@@ -46,6 +46,19 @@ describe('leasableAppUrl — gates the parallel path', () => {
 
   it('treats an empty URL as no URL — an empty origin would be a silently broken lease target', () => {
     expect(leasableAppUrl(depsWithSessionUrl(''), 's1')).toBeUndefined();
+  });
+
+  it('never leases a desktop app — a browser context has none of its IPC', () => {
+    // A Tauri or Electron renderer has a dev-server origin, so a lease "works" and then drives the
+    // web build in Chromium, where every invoke fails and the harness reports the app as broken.
+    for (const runtime of ['tauri', 'electron']) {
+      expect(
+        leasableAppUrl(depsWithSessionUrl('http://127.0.0.1:3100/', runtime), 's1'),
+      ).toBeUndefined();
+    }
+    expect(leasableAppUrl(depsWithSessionUrl('http://127.0.0.1:3100/', 'web'), 's1')).toBe(
+      'http://127.0.0.1:3100',
+    );
   });
 });
 

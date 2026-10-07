@@ -34,8 +34,13 @@ const SHARE_VIA_HANDLE = '';
 
 export const REPORT_TEXT = {
   TITLE: 'Impact',
+  COVERAGE: 'Reticle Coverage',
+  COVERAGE_HELP:
+    'How much of this app Reticle has reached, touched and proved, from the coverage ledger in .reticle',
   PROJECT: 'This project',
-  GLOBAL: 'Everything on this machine',
+  GLOBAL: 'All projects',
+  GLOBAL_TITLE: 'Every project on this computer',
+  SCOPE_LABEL: 'Show impact for',
   /**
    * What `counts.failed` actually is: a verdict whose declared consequence did not hold.
    *
@@ -66,6 +71,9 @@ export const REPORT_TEXT = {
   CHART: 'Verdicts, last 30 days',
   DEFECTS: 'What broke',
   DEFECTS_MORE: 'Manage all of them on the dashboard — triage, assign, and push to GitHub',
+  /** The way to every bug past the ten shown here, for a project not yet on the dashboard. */
+  DEFECTS_SEE_ALL: 'See all on the dashboard',
+  DEFECTS_SEE_ALL_TITLE: 'Sign up free, link this project, and see every bug Reticle caught',
   /**
    * The row link's accessible name and tooltip.
    *
@@ -176,3 +184,12 @@ export function parseImpactSnapshot(value: unknown): ImpactSnapshot | undefined 
   const parsed = ImpactSnapshotSchema.safeParse(value);
   return parsed.success ? parsed.data : undefined;
 }
+
+/** Reticle Coverage's levels, in the order they are earned, with what each one counts. */
+export const COVERAGE_LEVELS: readonly { key: string; label: string }[] = [
+  { key: 'reached', label: 'routes reached' },
+  { key: 'touched', label: 'controls touched' },
+  { key: 'proved', label: 'controls proved' },
+  { key: 'branched', label: 'write failures driven' },
+  { key: 'executed', label: 'code executed' },
+];

@@ -42,12 +42,17 @@ const HEADLESS_ENV: &str = "RETICLE_HEADLESS";
 #[cfg(target_os = "macos")]
 const OFFSCREEN_PX: i32 = -32_000;
 
-/// Hide the window after its first page load when `RETICLE_HEADLESS=1`.
+/// Keep the window drivable behind other windows, and hide it when `RETICLE_HEADLESS=1`.
 ///
-/// Loading must finish before hiding: a webview that has never been presented may not load.
-/// On macOS 14+, disable WebKit background throttling before hiding so commands and captures keep
-/// working while idle. Older macOS versions retain the offscreen fallback; AppKit may constrain
-/// that position back onto a display. Linux and Windows hide the loaded window directly.
+/// macOS throttles an occluded WKWebView: its timers and rendering stop, so every check a drive
+/// makes while the window is behind another comes back "has not rendered". Reported from a drive the
+/// platform's chat asked for, which proved nothing until the window was brought forward by hand. On
+/// macOS 14+ WebKit can be told to keep scheduling while inactive, and this crate is dev-only, so it
+/// is done for every window it is installed in.
+///
+/// Headless mode then hides the window, after its first load: a webview that has never been
+/// presented may not load. Older macOS has no scheduling control, so headless falls back to an
+/// offscreen position (AppKit may constrain it back onto a display). Linux and Windows hide directly.
 pub fn on_page_load<R: Runtime>(
     webview: &Webview<R>,
     payload: &tauri::webview::PageLoadPayload<'_>,
@@ -55,21 +60,21 @@ pub fn on_page_load<R: Runtime>(
     if payload.event() != tauri::webview::PageLoadEvent::Finished {
         return;
     }
-    if std::env::var(HEADLESS_ENV).as_deref() != Ok("1") {
-        return;
-    }
+    let headless = std::env::var(HEADLESS_ENV).as_deref() == Ok("1");
     #[cfg(target_os = "macos")]
     {
-        hide_macos(webview);
+        awake_macos(webview, headless);
     }
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = webview.window().hide();
+        if headless {
+            let _ = webview.window().hide();
+        }
     }
 }
 
 #[cfg(target_os = "macos")]
-fn hide_macos<R: Runtime>(webview: &Webview<R>) {
+fn awake_macos<R: Runtime>(webview: &Webview<R>, headless: bool) {
     use objc2::{runtime::NSObjectProtocol, sel};
     use objc2_web_kit::{WKInactiveSchedulingPolicy, WKWebView};
 
@@ -78,10 +83,16 @@ fn hide_macos<R: Runtime>(webview: &Webview<R>) {
         // SAFETY: Tauri supplies the live WKWebView and executes this closure on the main thread.
         let wk: &WKWebView = unsafe { &*(inner.inner() as *const WKWebView) };
         let preferences = unsafe { wk.configuration().preferences() };
-        if preferences.respondsToSelector(sel!(setInactiveSchedulingPolicy:)) {
+        let awake = preferences.respondsToSelector(sel!(setInactiveSchedulingPolicy:));
+        if awake {
             // SAFETY: this public selector is available on macOS 14+, checked above. Changing the
-            // live view's preferences keeps its task scheduling active after the window is hidden.
+            // live view's preferences keeps its task scheduling active while it is not in front.
             unsafe { preferences.setInactiveSchedulingPolicy(WKInactiveSchedulingPolicy::None) };
+        }
+        if !headless {
+            return;
+        }
+        if awake {
             let _ = window.hide();
         } else {
             let _ = window.set_position(tauri::PhysicalPosition::new(OFFSCREEN_PX, OFFSCREEN_PX));

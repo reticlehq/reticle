@@ -81,3 +81,16 @@ export const CONTRACT_PARTS: {
   events: Object.values(EventType),
   actions: Object.values(ActionType),
 };
+
+/**
+ * Wire names that were once in the contract and have been removed.
+ *
+ * An older peer still announces them, and the daemon never sends them, so knowing one changes
+ * nothing about whether the two can talk. Skew ignores them. Without this list, removing a name
+ * reports every page on an older SDK as skewed, and every verdict on it comes back `unknown` (#1343).
+ * A name leaves `ActionType`, `EventType` or `ReticleCommand` only by being added here.
+ */
+export const RETIRED_WIRE_NAMES: readonly string[] = [
+  // The `webmcp` action, removed in 3.5. SDKs 3.1 to 3.4 still list it.
+  'webmcp',
+];

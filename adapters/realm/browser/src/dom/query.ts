@@ -221,6 +221,19 @@ function findByComponent(container: HTMLElement, query: ElementQuery): HTMLEleme
 }
 
 /**
+ * Does an element whose computed role is `actual` satisfy a query for `queried`?
+ *
+ * `searchbox` is an ARIA sub-role of `textbox`. A standard search input computes as `searchbox`
+ * (per HTML-AAM), which matches `{ role: "searchbox" }`. A `{ role: "textbox" }` query must
+ * keep matching it as well, so existing flows and recorded steps using `textbox` continue to match.
+ */
+function matchesRole(actual: string, queried: string): boolean {
+  if (actual === queried) return true;
+  if ('textbox' === queried && 'searchbox' === actual) return true;
+  return false;
+}
+
+/**
  * Role + name, matched with the same local accessibility engine used to describe results.
  *
  * This intentionally makes Reticle's reported role and name the source of truth. If an element is
@@ -234,7 +247,8 @@ function queryByRoleAndName(
 ): HTMLElement[] {
   return elementsUnder(container).filter(
     (el) =>
-      getRole(el) === role && (name === undefined || exactVisibleText(getAccessibleName(el), name)),
+      matchesRole(getRole(el), role) &&
+      (name === undefined || exactVisibleText(getAccessibleName(el), name)),
   );
 }
 
@@ -683,7 +697,11 @@ const MAX_NAME_NEAR_MISSES = 5;
  * keeping the match exact was meant to avoid.
  */
 function nameNearMisses(container: HTMLElement, query: ElementQuery): string[] {
-  const role = QueryBy.ROLE === query.by ? query.value : undefined;
+  // BOTH spellings of the same query. `findIn` resolves `{ by: 'role', value, name }` and
+  // `{ role, name }` through one function, and its comment says the two forms must not disagree
+  // about what is findable -- but the hint read only the first, so the structured spelling missed
+  // in silence while the by/value spelling explained itself. Same query, same page, two answers.
+  const role = QueryBy.ROLE === query.by ? query.value : query.role;
   const wanted = query.name;
   if (role === undefined || wanted === undefined || 0 === wanted.length) return [];
   const target = normaliseVisibleText(wanted).toLowerCase();
@@ -762,6 +780,11 @@ function buildEmptyHint(query: ElementQuery): QueryEmptyHint {
   const elsewhere = testidFoundUnder(container, query);
   if (elsewhere !== undefined) hint.testidFoundUnder = elsewhere;
   return hint;
+}
+
+/** Every element a query matches, in the order a `query` reports them. */
+export function elementsMatching(query: ElementQuery): HTMLElement[] {
+  return findCandidates(query).candidates;
 }
 
 /**

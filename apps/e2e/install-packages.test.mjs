@@ -71,9 +71,9 @@ it('restores packed builds, removes stale emitted files, and preserves checkout 
     writeFileSync(join(root, 'core/dist/stale.js'), 'stale build');
     writeFileSync(join(packed, 'package/dist/index.js'), 'packed build');
     writeFileSync(join(packed, 'package/source.js'), 'packed source');
-    execFileSync('git', ['init', '--quiet'], { cwd: root });
-    execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', '-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '--quiet', '-m', 'fixture'], { cwd: root });
-    const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+    execFileSync('git', ['init', '--quiet'], { cwd: root, env: scratchGitEnv });
+    execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', '-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '--quiet', '-m', 'fixture'], { cwd: root, env: scratchGitEnv });
+    const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8', env: scratchGitEnv }).trim();
     const packages = publishablePackages(root);
     const archive = execFileSync('tar', ['-czf', '-', 'package'], { cwd: packed });
     writeFileSync(join(artifacts, packages[0].filename), archive);
@@ -88,6 +88,15 @@ it('restores packed builds, removes stale emitted files, and preserves checkout 
     rmSync(scratch, { recursive: true, force: true });
   }
 }));
+
+/**
+ * Git for the scratch repo only. Run from a pre-commit hook, the outer commit's GIT_INDEX_FILE (a
+ * temporary index for `git commit <paths>`) and GIT_DIR are inherited, and the scratch repo tried to
+ * build its tree from this repository's index: "invalid object … Error building trees".
+ */
+const scratchGitEnv = Object.fromEntries(
+  Object.entries(process.env).filter(([name]) => !/^GIT_(DIR|INDEX_FILE|WORK_TREE|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|COMMON_DIR|PREFIX)$/.test(name)),
+);
 
 describe('the install matrix consumes only complete artifacts from its own commit', () => {
   const expected = [

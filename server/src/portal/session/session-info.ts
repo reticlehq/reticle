@@ -6,7 +6,12 @@
  * it, and separating them keeps the wire-facing shape reviewable on its own.
  */
 import { SESSION_LEASE } from '@reticlehq/core';
-import type { SessionHealth } from './session-health.js';
+import type { PageIdentity, SessionHealth } from './session-health.js';
+
+/** A document served as 4xx/5xx — a dev server's 404 page that still mounted the SDK, say. */
+export function isErrorDocument(page: PageIdentity | undefined): boolean {
+  return (page?.documentStatus ?? 0) >= 400;
+}
 
 export interface SessionInfo {
   sessionId: string;
@@ -26,6 +31,10 @@ export interface SessionInfo {
    * not render like it.
    */
   runtime?: string;
+  /** The desktop window's own name (Tauri's label: `main`, `setup`) — absent on a web page. */
+  window?: string;
+  /** Present only when the document was served as an error (4xx/5xx): a 404 page is not the app. */
+  documentStatus?: number;
   /** Present only when the page's SDK version differs from the daemon's — see version-skew.ts. */
   versionSkew?: string;
   /** ms since the SDK last reported anything (silence ⇒ likely throttled). */
@@ -79,6 +88,7 @@ interface SessionView {
   runtime: string | undefined;
   versionSkew: string | undefined;
   hidden: boolean;
+  page?: PageIdentity;
   health: () => SessionHealth;
   staleMs: () => number;
   pendingMarkCount: () => number;
@@ -106,6 +116,8 @@ export function buildSessionInfo(session: SessionView): SessionInfo {
     hasCapabilities: session.hasCapabilities,
     // Omitted when the page never said, so absence stays readable as "unknown" rather than "web".
     ...(session.runtime === undefined ? {} : { runtime: session.runtime }),
+    ...(session.page?.windowLabel === undefined ? {} : { window: session.page.windowLabel }),
+    ...(isErrorDocument(session.page) ? { documentStatus: session.page?.documentStatus ?? 0 } : {}),
     // On every listing, not buried in a log — skew explains failures that read as app bugs.
     ...(session.versionSkew === undefined ? {} : { versionSkew: session.versionSkew }),
     hidden: session.hidden,

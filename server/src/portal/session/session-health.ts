@@ -243,6 +243,14 @@ interface HealthReport {
    * closed list is that an unbounded string can never reach telemetry through it.
    */
   brand: BrowserBrand | undefined;
+  /** Only the keys the page reported, so merging it never erases one an earlier report set. */
+  page: PageIdentity;
+}
+
+/** Which desktop window a session is, and what its document was served with. */
+export interface PageIdentity {
+  windowLabel?: string;
+  documentStatus?: number;
 }
 
 /**
@@ -257,6 +265,12 @@ export function readHealthEvent(data: Record<string, unknown>): HealthReport {
     runtime: 'string' === typeof data['runtime'] ? data['runtime'] : undefined,
     engine: 'string' === typeof data['engine'] ? data['engine'] : undefined,
     brand: Object.values(BrowserBrand).find((known) => known === data['brand']),
+    page: {
+      ...('string' === typeof data['windowLabel'] ? { windowLabel: data['windowLabel'] } : {}),
+      ...(Number.isInteger(data['documentStatus'])
+        ? { documentStatus: data['documentStatus'] as number }
+        : {}),
+    },
   };
 }
 

@@ -59,6 +59,11 @@ export const REPORT_CSS = `
   font-size:34px;font-weight:700;line-height:1;letter-spacing:-.02em;color:var(--reticle-c-active);}
 [${REPORT_PANEL_ATTR}] .reticle-report-hero-label{color:var(--reticle-muted);font-size:11.5px;}
 [${REPORT_PANEL_ATTR}] .reticle-report-verdicts{display:flex;gap:6px;margin-bottom:12px;}
+[${REPORT_PANEL_ATTR}] .reticle-sync-status{font-size:11px;color:var(--reticle-faint);font-variant-numeric:tabular-nums;white-space:nowrap;}
+[${REPORT_PANEL_ATTR}] .reticle-sync-status[data-reticle-sync-status="refused"]{color:var(--reticle-c-error,#f87171);}
+[${REPORT_PANEL_ATTR}] .reticle-report-coverage{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin-bottom:12px;padding:8px 10px;border:1px solid var(--reticle-hud-border);border-radius:var(--reticle-hud-radius-sm,8px);}
+[${REPORT_PANEL_ATTR}] .reticle-report-coverage-value{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--reticle-hud-text);}
+[${REPORT_PANEL_ATTR}] .reticle-report-coverage-levels{display:flex;flex-wrap:wrap;gap:4px 10px;width:100%;font-size:11px;color:var(--reticle-faint);font-variant-numeric:tabular-nums;}
 [${REPORT_PANEL_ATTR}] .reticle-report-verdict{
   flex:1;padding:5px 8px;border-radius:8px;font-size:10.5px;text-align:center;
   background:rgba(255,255,255,.05);color:var(--reticle-muted);}
@@ -104,6 +109,8 @@ export const REPORT_CSS = `
   display:inline-block;margin-top:8px;font-size:10px;color:var(--reticle-c-active);
   text-decoration:none;}
 [${REPORT_PANEL_ATTR}] .reticle-report-defects-more:hover{text-decoration:underline;}
+[${REPORT_PANEL_ATTR}] .reticle-report-defects-all{display:inline-block;margin-top:8px;border:0;padding:0;background:none;cursor:pointer;font:inherit;font-size:10.5px;font-weight:500;color:var(--reticle-c-active);}
+[${REPORT_PANEL_ATTR}] .reticle-report-defects-all:hover{text-decoration:underline;}
 [${REPORT_PANEL_ATTR}] .reticle-report-local-only{
   margin:14px 0 0;padding-top:10px;border-top:1px solid var(--reticle-line);
   color:var(--reticle-faint);font-size:10px;line-height:1.45;}

@@ -3,7 +3,7 @@ name: install-and-verify
 description: Verify that a web app change actually works by driving the running app from the inside (DOM, network, routing, console, framework state) instead of screenshots or guessing. Use after any user-facing change, when a fix is claimed but unproven, when a test passes but the UI is broken, or when you need a real verdict rather than "looks right". Also use to install and wire up Reticle in a project that does not have it yet.
 license: Apache-2.0
 metadata:
-  version: 3.5.0
+  version: 3.6.0
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -86,10 +86,10 @@ It detects the framework and package manager, wires the build config, installs t
 **Then prove a flow. That is the FIRST RUN, and it is a separate call:**
 
 ```
-reticle_verify { action: "explore", persona: "<who does what>" }
+reticle_act_and_wait { ref, action, until }
 ```
 
-It drives the app with a model inside the daemon and RECORDS what it drove, so every later check replays that flow with no model in the loop.
+Drive the journey that matters and put the verdict on its LAST step: `until` names the end state before the action fires. What you drive is saved as a flow, so later runs replay it with no model. On a linked project (`reticle connect`; every plan, Free included, has monthly Harness credits), `reticle_verify { action: "explore", persona: "<who does what>" }` has the Reticle Harness drive the whole journey for you instead. Before driving anything, replay what is already saved: `reticle_verify { action: "flows" }` costs no model at all.
 
 ## What YOU decide, and pass in
 

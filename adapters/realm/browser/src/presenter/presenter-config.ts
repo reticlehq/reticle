@@ -1,4 +1,5 @@
 import type { HudUseData, HumanControlKind } from '@reticlehq/core';
+import { ReticleStorageKey } from '@/storage-keys.js';
 
 /**
  * Presenter tunables + option surface: pure declarations (interfaces + named constants), no
@@ -19,6 +20,8 @@ export const BUSY_OFF = '0';
 
 export interface PresenterOptions {
   paceMs?: number;
+  /** Settings' Kill Reticle was confirmed. The SDK disconnects itself from the page. */
+  onKill?: () => void;
   /** Injected monotonic clock for the glow state machine (tests drive transitions). */
   now?: () => number;
   /** Quiet window before busy -> fading. Overridable so tests run fast. */
@@ -197,7 +200,7 @@ export const SETTINGS_BTN_ATTR = 'data-reticle-settings-btn';
 export const SETTINGS_PANEL_ATTR = 'data-reticle-settings-panel';
 export const SETTINGS_CLOSE_ATTR = 'data-reticle-settings-close';
 export const SETTING_KEY_ATTR = 'data-reticle-setting';
-export const SETTINGS_STORAGE_KEY = 'reticle-presenter-settings';
+export const SETTINGS_STORAGE_KEY = ReticleStorageKey.PRESENTER_SETTINGS;
 /**
  * Per-TAB memory that the HUD was minimised by hand — not a saved preference.
  *
@@ -205,7 +208,7 @@ export const SETTINGS_STORAGE_KEY = 'reticle-presenter-settings';
  * to reach one control underneath it is not a decision about every future session, which is what
  * `autoOpenChat` in the settings profile is for.
  */
-export const MINIMISED_STORAGE_KEY = 'reticle-presenter-minimised';
+export const MINIMISED_STORAGE_KEY = ReticleStorageKey.PRESENTER_MINIMISED;
 /** Accent swatch applied to the dock chrome. */
 /** Overlay flag: is the page-edge glow wanted at all (user setting). */
 export const AMBIENT_GLOW_ATTR = 'data-reticle-ambient-glow';
@@ -234,7 +237,7 @@ export const HUD_DRAG_THRESHOLD_PX = 4;
 export const HUD_DOCK_MARGIN_PX = 8;
 /** Interactive nodes inside the drag handle that must not start a drag (not the FAB itself). */
 export const HUD_DRAG_IGNORE_SEL: string =
-  '[data-reticle-pause], [data-reticle-annotate-btn], [data-reticle-markers-btn], [data-reticle-clear-marks], [data-reticle-copy-marks], [data-reticle-end], [data-reticle-min-btn], [data-reticle-settings-btn], [data-reticle-settings-panel], [data-reticle-report-btn], [data-reticle-report-panel], [data-reticle-chat-panel], [data-reticle-chat-toggle], [data-reticle-workspace-btn], [data-reticle-workspace-menu], [data-reticle-copy], [data-reticle-export], input, textarea, select, a, .reticle-head-ctl, [data-reticle-tally], .reticle-maxhint';
+  '[data-reticle-pause], [data-reticle-annotate-btn], [data-reticle-markers-btn], [data-reticle-clear-marks], [data-reticle-copy-marks], [data-reticle-end], [data-reticle-min-btn], [data-reticle-settings-btn], [data-reticle-settings-panel], [data-reticle-report-btn], [data-reticle-report-panel], [data-reticle-chat-panel], [data-reticle-chat-toggle], [data-reticle-workspace-btn], [data-reticle-workspace-menu], [data-reticle-copy], [data-reticle-export], .reticle-toolbar-chrome button, .reticle-toolbar-actions button, input, textarea, select, a, .reticle-head-ctl, [data-reticle-tally], .reticle-maxhint';
 export const THROTTLED_ATTR = 'data-reticle-throttled';
 
 /**

@@ -290,6 +290,22 @@ describe('Bridge security boundary', () => {
     await waitUntil(() => 1 === bridge.sessions.resolve('same-id').eventsSince(0).length);
   });
 
+  it('refuses a parked window that reconnects, so a detached hidden webview stays gone', async () => {
+    const { bridge, port } = await makeBridge();
+    const first = await openSocket(port);
+    const parkedClose = waitForClose(first);
+    first.send(JSON.stringify(hello('coach')));
+    await waitUntil(() => 1 === bridge.sessions.count());
+    bridge.sessions.park(bridge.sessions.resolve('coach'));
+    expect(await parkedClose).toBe(1008); // the code the SDK never retries
+    // A reload of that window: same id from sessionStorage, refused again.
+    const again = await openSocket(port);
+    const refused = waitForClose(again);
+    again.send(JSON.stringify(hello('coach')));
+    expect(await refused).toBe(1008);
+    expect(bridge.sessions.count()).toBe(0);
+  });
+
   it('caps concurrent sessions', async () => {
     const limitedSessions = await makeBridge({ maxSessions: 1 });
     const first = await openSocket(limitedSessions.port);

@@ -35,7 +35,11 @@ export function buildFlowChips(
       first !== undefined && first.anchor.kind === AnchorKind.TESTID
         ? first.anchor.value
         : undefined;
-    chips.push(start === undefined ? { name: flow.name } : { name: flow.name, start });
+    chips.push({
+      name: flow.name,
+      createdAt: flow.createdAt,
+      ...(start === undefined ? {} : { start }),
+    });
   }
   return chips;
 }

@@ -37,6 +37,7 @@ export * from './verdict/verdict-attribution.js';
 export * from './verdict/verify-progress.js'; // VerifyPhase — what a run is doing while it is still doing it
 export * from './wire/constants/session-constants.js';
 export * from './wire/constants/hud-use.js'; // where the HUD sits, for HUD_USED events
+export * from './wire/platform-link.js'; // daemon <-> platform: capabilities, drive spec, tool session
 export * from './wire/constants/discovery.js'; // the call-the-founder invitation, one link for every surface
 export * from './identity/document-identity.js'; // which document an observation belongs to
 export * from './identity/edit-epoch.js'; // which round of source edits an observation belongs to
@@ -119,6 +120,7 @@ export * from './artifacts/impact-savings.js'; // the savings model - one file, 
 export {
   CONTRACT_FINGERPRINT,
   CONTRACT_PARTS,
+  RETIRED_WIRE_NAMES,
   fnv1a,
   fingerprintOf,
 } from './identity/contract-fingerprint.js';

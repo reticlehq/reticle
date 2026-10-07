@@ -18,6 +18,7 @@
  * leaving a verdict of `unknown` to be read as a pass.
  */
 
+import { appFindings } from './app-findings.js';
 import { asRecord, asString, ReticleTool, Verified } from '@reticlehq/core';
 import type { ToolOutcome } from './harness.js';
 
@@ -40,10 +41,89 @@ export interface DrivenStep {
    * noise, and the report is read every drive.
    */
   claimed: string | undefined;
+  /**
+   * What the engine saw that decided it: each channel that disagreed, and any write the app sent
+   * that failed. The act's own result carries all of it; a report that kept only the verdict word
+   * handed the caller "unit-mismatch" and left it unable to say what was wrong.
+   */
+  evidence: string[];
 }
+
+function refusedAsDestructive(call: ToolOutcome): boolean {
+  const error = asString(asRecord(call.result)['error']) ?? '';
+  return call.isError && error.includes(DESTRUCTIVE_REFUSAL);
+}
+
+/** Driving calls that ran with the destructive-action permission: these really changed the app. */
+export function confirmedDestructive(toolCalls: readonly ToolOutcome[]): number {
+  return toolCalls.filter(
+    (call) =>
+      DRIVING_TOOLS.has(call.name) &&
+      !call.isError &&
+      true === asRecord(asRecord(call.args)['args'])[DESTRUCTIVE_REFUSAL],
+  ).length;
+}
+
+/**
+ * A failed claim whose page then showed a dialog: the control opens a confirmation, and the drive
+ * guessed it would send the request itself. Reported as a defect, a row's "Refund" button that opens
+ * the "Refund now" dialog sent the caller looking for a dead control.
+ */
+function openedADialog(result: Record<string, unknown>, after: readonly ToolOutcome[]): string[] {
+  if (Verified.NO !== result['verified']) return [];
+  const next = after.find((call) => ReticleTool.SNAPSHOT === call.name);
+  const dialogs = asRecord(asRecord(next?.result)['status'])['visibleDialogs'];
+  return Array.isArray(dialogs) && 0 < dialogs.length
+    ? [
+        'it opened a dialog instead: likely the drive guessed the consequence wrong, not an app defect',
+      ]
+    : [];
+}
+
+/** Characters of a response body quoted in the evidence: enough for an error message. */
+const MAX_BODY_CHARS = 200;
+/** Contradictions quoted per step. */
+const MAX_EVIDENCE = 3;
+
+/** The deciding evidence an act result carries, as short lines. */
+function evidenceOf(result: Record<string, unknown>): string[] {
+  const lines: string[] = [];
+  const contradictions = result['contradictions'];
+  if (Array.isArray(contradictions)) {
+    for (const raw of contradictions.slice(0, MAX_EVIDENCE)) {
+      const c = asRecord(raw);
+      const parts = [asString(c['counter']), asString(c['detail'])].filter(
+        (part): part is string => part !== undefined && 0 < part.length,
+      );
+      lines.push(`${asString(c['kind']) ?? 'contradiction'}: ${parts.join(' — ')}`);
+    }
+  }
+  const verdict = asRecord(result['verdict']);
+  const seen = asRecord(verdict['evidence']);
+  const status = seen['status'];
+  if ('number' === typeof status && 400 <= status) {
+    const body = asString(seen['responseBody']);
+    lines.push(
+      `${asString(seen['method']) ?? ''} ${asString(seen['url']) ?? ''} → ${String(status)}` +
+        (body === undefined ? '' : ` ${body.slice(0, MAX_BODY_CHARS)}`),
+    );
+  }
+  const observed = asString(verdict['observed']);
+  if (false === verdict['pass'] && observed !== undefined) lines.push(`observed: ${observed}`);
+  return lines;
+}
+
+/** The permission a destructive action needs, named in the gate's refusal and carried on a retry. */
+const DESTRUCTIVE_REFUSAL = 'confirmDangerous';
 
 /** How many steps are listed before the account starts counting instead of naming. */
 const MAX_LISTED = 12;
+/**
+ * Failures are listed first, and up to this many of them however long the run. Listed in drive
+ * order, a whole-app run named 12 of 70 actions and left its failures in "… and 58 more", so the
+ * agent reading it could not say what any of them was.
+ */
+const MAX_FAILED = 40;
 
 /** Actions that change the app. Reads are not part of the story of what was driven. */
 const DRIVING_TOOLS = new Set<string>([
@@ -85,7 +165,13 @@ function targetOf(args: Record<string, unknown>, result: Record<string, unknown>
  * resolving — the app moved under a recording, which is a finding about the RECORDING rather than
  * proof the feature broke, and collapsing it into "failed" would send somebody to fix working code.
  */
-export const ReplayOutcome = { OK: 'ok', DRIFT: 'drift', ERROR: 'error' } as const;
+export const ReplayOutcome = {
+  OK: 'ok',
+  DRIFT: 'drift',
+  ERROR: 'error',
+  /** Stopped at a step the flow marks destructive: not run, which is not a regression. */
+  GUARDED: 'guarded',
+} as const;
 
 export function replayedFlows(
   toolCalls: readonly ToolOutcome[],
@@ -94,9 +180,16 @@ export function replayedFlows(
   for (const call of toolCalls) {
     if (ReticleTool.FLOW_REPLAY !== call.name) continue;
     const name = asString(asRecord(call.args)['flowName']) ?? 'a flow';
+    const result = asRecord(call.result);
+    const message =
+      asString(asRecord(result['error'])['message']) ?? asString(result['error']) ?? '';
+    const status = call.isError ? ReplayOutcome.ERROR : asString(result['status']);
     out.push({
       name,
-      status: call.isError ? ReplayOutcome.ERROR : asString(asRecord(call.result)['status']),
+      status:
+        ReplayOutcome.ERROR === status && message.includes(DESTRUCTIVE_REFUSAL)
+          ? ReplayOutcome.GUARDED
+          : status,
     });
   }
   return out;
@@ -134,10 +227,13 @@ function describeClaim(until: unknown): string | undefined {
 /** Reduce the raw call log to the actions that actually drove the app. */
 export function drivenSteps(toolCalls: readonly ToolOutcome[]): DrivenStep[] {
   const steps: DrivenStep[] = [];
-  for (const call of toolCalls) {
+  for (const [index, call] of toolCalls.entries()) {
     if (!DRIVING_TOOLS.has(call.name)) continue;
     const args = asRecord(call.args);
     const result = asRecord(call.result);
+    // The gate's refusal never reached the app; listed beside the confirmed retry, it read as "the
+    // refund was blocked" to the agent reading this, about a refund that had gone through.
+    if (refusedAsDestructive(call)) continue;
     const action =
       ReticleTool.NAVIGATE === call.name ? 'navigate' : (asString(args['action']) ?? 'act');
     steps.push({
@@ -146,6 +242,9 @@ export function drivenSteps(toolCalls: readonly ToolOutcome[]): DrivenStep[] {
       verified: call.isError ? 'error' : asString(result['verified']),
       because: call.isError ? asString(result['error']) : asString(result['because']),
       claimed: describeClaim(args['until']),
+      evidence: call.isError
+        ? []
+        : [...evidenceOf(result), ...openedADialog(result, toolCalls.slice(index + 1))],
     });
   }
   return steps;
@@ -160,20 +259,73 @@ export function drivenSteps(toolCalls: readonly ToolOutcome[]): DrivenStep[] {
  * rather than as a failure — it calls for a better check, not a code change, and collapsing the two
  * would send an agent to rewrite working code.
  */
+/** Every `__reticle_*` query parameter, wherever it sits in the route. */
+const RETICLE_PARAMS = /[?&]__reticle_[^&#]*/g;
+
 /** The pages the drive's own snapshots reported, in order, each distinct page once. */
 function pagesReached(toolCalls: readonly ToolOutcome[]): string[] {
   const pages: string[] = [];
   for (const call of toolCalls) {
     if (ReticleTool.SNAPSHOT !== call.name || call.isError) continue;
-    const route = asString(asRecord(asRecord(call.result)['status'])['route']);
+    const raw = asString(asRecord(asRecord(call.result)['status'])['route']);
+    // Reticle's own parameters (a leased tab's session and project) are not part of the page.
+    const route = raw?.replace(RETICLE_PARAMS, '').replace(/^\/\?(?=#|$)/, '/');
     if (route !== undefined && !pages.includes(route)) pages.push(route);
   }
   return pages;
 }
 
+/** How the drive's checks came out: act_and_wait with an `until`, and asserts. */
+export function checkTally(toolCalls: readonly ToolOutcome[]): {
+  held: number;
+  failed: number;
+  undecided: number;
+} {
+  // One check per control and claim, at its worst: a live drive pressed "Sign in" fifteen times and
+  // reported "15 of 15 check(s) held" for one fact proved fifteen times over.
+  const worst = new Map<string, 'held' | 'failed' | 'undecided'>();
+  for (const call of toolCalls) {
+    const args = asRecord(call.args);
+    const isCheck =
+      ReticleTool.ASSERT === call.name ||
+      (ReticleTool.ACT_AND_WAIT === call.name && args['until'] !== undefined);
+    if (!isCheck || call.isError) continue;
+    const result = asRecord(call.result);
+    const effect = asRecord(result['effect']);
+    const control =
+      asString(effect['testid']) ??
+      `${asString(effect['role']) ?? ''} ${asString(effect['name']) ?? asString(args['ref']) ?? ''}`;
+    const key = `${call.name}|${control}|${JSON.stringify(args['until'] ?? args['predicate'] ?? null)}`;
+    const verified = asString(result['verified']);
+    const now =
+      Verified.YES === verified ? 'held' : Verified.NO === verified ? 'failed' : 'undecided';
+    const before = worst.get(key);
+    if (before === undefined || 'failed' === now || ('undecided' === now && 'held' === before))
+      worst.set(key, now);
+  }
+  const tally = { held: 0, failed: 0, undecided: 0 };
+  for (const verdict of worst.values()) tally[verdict] += 1;
+  return tally;
+}
+
+/**
+ * The first line a caller reads, and the one the HUD ends on. A drive whose only passing check was
+ * a page change, beside a refund that failed, is NOT "proved its checks"; that line ended a run
+ * where the journey it was asked to prove had failed.
+ */
+export function verdictLine(tally: { held: number; failed: number; undecided: number }): string {
+  const total = tally.held + tally.failed + tally.undecided;
+  if (0 === total) return 'NOT PROVED: the drive ran no check.';
+  const counts = `${String(tally.held)} of ${String(total)} check(s) held, ${String(tally.failed)} failed, ${String(tally.undecided)} undecided`;
+  if (0 < tally.failed) return `NOT PROVED — ${counts}. The failures below are findings.`;
+  if (0 < tally.undecided) return `NOT PROVED — ${counts}.`;
+  return `PROVED — ${counts}.`;
+}
+
 export function describeDrive(
   toolCalls: readonly ToolOutcome[],
   savedFlows: readonly string[],
+  unverifiedFlows: readonly string[] = [],
 ): string {
   const steps = drivenSteps(toolCalls);
   const replays = replayedFlows(toolCalls);
@@ -192,13 +344,19 @@ export function describeDrive(
           const held = replays.filter((r) => ReplayOutcome.OK === r.status);
           const failed = replays.filter((r) => ReplayOutcome.ERROR === r.status);
           const drifted = replays.filter((r) => ReplayOutcome.DRIFT === r.status);
+          const guarded = replays.filter((r) => ReplayOutcome.GUARDED === r.status);
           const lines = [
             `Replayed ${String(replays.length)} recorded journey(s) with NO model in the loop: ` +
-              `${String(held.length)} still hold, ${String(failed.length)} failed, ${String(drifted.length)} drifted.`,
+              `${String(held.length)} still hold, ${String(failed.length)} failed, ${String(drifted.length)} drifted` +
+              `${0 === guarded.length ? '' : `, ${String(guarded.length)} not run`}.`,
           ];
           if (0 < failed.length)
             lines.push(
               `  FAILED: ${failed.map((r) => r.name).join(', ')} — regressions in journeys that used to pass.`,
+            );
+          if (0 < guarded.length)
+            lines.push(
+              `  NOT RUN: ${guarded.map((r) => r.name).join(', ')} — stopped at a step marked destructive. Not a regression: replay with confirmDangerous to run it.`,
             );
           if (0 < drifted.length)
             lines.push(
@@ -221,6 +379,7 @@ export function describeDrive(
 
   const pages = pagesReached(toolCalls);
   const lines: string[] = [
+    verdictLine(checkTally(toolCalls)),
     ...(replayLine === undefined ? [] : [replayLine]),
     `Drove ${String(steps.length)} action(s): ${String(proved.length)} proved, ` +
       `${String(failed.length)} failed, ${String(undecided.length)} not decided.`,
@@ -229,9 +388,14 @@ export function describeDrive(
     ...(0 === pages.length
       ? []
       : [`Reached ${String(pages.length)} page(s): ${pages.join(' → ')}.`]),
+    ...appFindings(toolCalls),
   ];
 
-  for (const step of steps.slice(0, MAX_LISTED)) {
+  const listed = [...failed, ...proved, ...undecided].slice(
+    0,
+    Math.max(MAX_LISTED, Math.min(failed.length, MAX_FAILED)),
+  );
+  for (const step of listed) {
     const verdict = step.verified ?? 'nothing declared';
     const because = step.because === undefined ? '' : ` — ${step.because}`;
     // The claim, on failures only: it is what separates "the app is broken" from "the drive guessed
@@ -244,8 +408,22 @@ export function describeDrive(
         ? ` (claimed ${step.claimed})`
         : '';
     lines.push(`  ${step.action} ${step.target}: ${verdict}${claimed}${because}`);
+    for (const line of step.evidence) lines.push(`      ${line}`);
   }
-  if (MAX_LISTED < steps.length) lines.push(`  … and ${String(steps.length - MAX_LISTED)} more.`);
+  if (listed.length < steps.length) {
+    const unlistedFailed = Math.max(0, failed.length - MAX_FAILED);
+    lines.push(
+      `  … and ${String(steps.length - listed.length)} more` +
+        (0 === unlistedFailed
+          ? ', none of them failed.'
+          : `, ${String(unlistedFailed)} of them failed.`),
+    );
+  }
+  const confirmed = confirmedDestructive(toolCalls);
+  if (0 < confirmed)
+    lines.push(
+      `${String(confirmed)} destructive action(s) were confirmed and REALLY RAN against the app (the drive confirms one only after the gate refuses it; the refusal itself changed nothing).`,
+    );
 
   if (0 < failed.length)
     lines.push(
@@ -255,9 +433,17 @@ export function describeDrive(
     lines.push(
       `${String(undecided.length)} action(s) were NOT PROVED. That is undecided evidence, not a failure: it calls for a better check, not a code change.`,
     );
-  if (0 < savedFlows.length)
+  // A flow with no step that asserts anything replays as "verified nothing": offered as a replay it
+  // reads as evidence, so it is named for what it is instead.
+  const empty = new Set(unverifiedFlows);
+  const replayable = savedFlows.filter((name) => !empty.has(name));
+  if (0 < replayable.length)
     lines.push(
-      `Replay any of this without a model: reticle_verify { action: "flows" } — saved ${savedFlows.join(', ')}.`,
+      `Replay any of this without a model: reticle_verify { action: "flows" } — saved ${replayable.join(', ')}.`,
+    );
+  for (const name of unverifiedFlows)
+    lines.push(
+      `Saved ${name}, but ${name} checks nothing: no step asserts a consequence, so its replay will verify nothing. Drive again naming the end state, or add an expect to its last step.`,
     );
 
   return lines.join('\n');

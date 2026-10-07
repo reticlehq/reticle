@@ -5,6 +5,7 @@
  * unexplained flake that blocks a merge destroys trust in the red. Pure decision; the CLI computes the
  * inputs (git diff → affected → run artifacts + flake ledger) and maps `pass` to the exit code.
  */
+import { RunFlowStatus, type RunFlowResult } from '@reticlehq/core';
 
 /** A flow whose assertions were WEAKENED since its last passing run. */
 interface DowngradedFlow {
@@ -85,4 +86,26 @@ export function gateDecision(input: GateInput): GateResult {
     coverageRegressed,
     unexecuted,
   };
+}
+
+/**
+ * The flows a run lets the gate count as passing.
+ *
+ * Every PASS or HEALED flow by its own name, as before. A generated copy of a template also credits
+ * the template, but only on a STRICT pass that proved a consequence (#1321): a suite replays runtime
+ * copies with fixture parameters and deletes them, so their own names match no saved flow. A healed
+ * anchor, a failed or unverifiable replay, and a pass that checked nothing credit nothing.
+ */
+export function passingFlowNames(flows: readonly RunFlowResult[]): string[] {
+  const names = new Set<string>();
+  for (const f of flows) {
+    if (f.status !== RunFlowStatus.PASS && f.status !== RunFlowStatus.HEALED) continue;
+    names.add(f.name);
+    const proved =
+      f.oracle !== undefined ||
+      (f.stepResults ?? []).some((s) => s.ok && s.consequence !== undefined);
+    if (f.template !== undefined && f.status === RunFlowStatus.PASS && proved)
+      names.add(f.template);
+  }
+  return [...names];
 }

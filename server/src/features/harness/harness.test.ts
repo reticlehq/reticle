@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ReticleTool } from '@reticlehq/core';
 import {
   FINISH_TOOL,
   StopReason,
@@ -40,15 +41,93 @@ function toolset(invoke: HarnessToolset['invoke']): HarnessToolset {
 const OK = (): Promise<unknown> => Promise.resolve({ ok: true });
 
 describe('the harness loop', () => {
-  it('finishes when the model says it is done, and keeps its summary', async () => {
+  it('finishes when the model says it is done after proving something, and keeps its summary', async () => {
     const result = await runHarness(
-      scripted([{ text: 'done', calls: [call(FINISH_TOOL.name, { summary: 'drove login' })] }]),
+      scripted([
+        {
+          text: '',
+          calls: [
+            call(ReticleTool.ACT_AND_WAIT, {
+              ref: 'e1',
+              action: 'click',
+              until: { kind: 'text', text: 'Welcome' },
+            }),
+          ],
+        },
+        { text: 'done', calls: [call(FINISH_TOOL.name, { summary: 'drove login' })] },
+      ]),
       toolset(OK),
     );
 
     expect(result.stopReason).toBe(StopReason.FINISHED);
     expect(result.summary).toBe('drove login');
+    expect(result.steps).toBe(2);
+    expect(result.proved).toBe(true);
+  });
+
+  /**
+   * A real drive asked to "click the counter twice and check it reads 2" clicked once, asserted
+   * nothing, finished, and saved a flow whose replay verifies nothing. Finishing before anything is
+   * proved is refused once, with the move that would prove it.
+   */
+  it('refuses a finish that proved nothing, once, and says how to prove it', async () => {
+    const seen: string[] = [];
+    const driver: ModelDriver = {
+      turn: ({ history }) => {
+        const last = history[history.length - 1];
+        if ('tool' === last?.role) seen.push(JSON.stringify(last.outcomes.map((o) => o.result)));
+        return Promise.resolve({
+          text: '',
+          calls: [call(FINISH_TOOL.name, { summary: 'clicked it' })],
+        });
+      },
+    };
+    const result = await runHarness(driver, toolset(OK));
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toContain(ReticleTool.ACT_AND_WAIT);
+    expect(seen[0]).toContain('until');
+    // Asked once, not forever: the second finish ends the drive, honestly marked as unproved.
+    expect(result.stopReason).toBe(StopReason.FINISHED);
+    expect(result.steps).toBe(2);
+    expect(result.proved).toBe(false);
+  });
+
+  it('runs a check sent in the same turn as finish, and accepts the finish it proves', async () => {
+    const result = await runHarness(
+      scripted([
+        {
+          text: '',
+          calls: [
+            call(ReticleTool.ACT_AND_WAIT, {
+              ref: 'e1',
+              action: 'click',
+              until: { kind: 'text', text: '2' },
+            }),
+            call(FINISH_TOOL.name, { summary: 'clicked twice' }),
+          ],
+        },
+      ]),
+      toolset(OK),
+    );
+    expect(result.stopReason).toBe(StopReason.FINISHED);
     expect(result.steps).toBe(1);
+    expect(result.proved).toBe(true);
+  });
+
+  it('does not count a check that errored as proof', async () => {
+    const result = await runHarness(
+      scripted([
+        { text: '', calls: [call(ReticleTool.ASSERT, { action: 'now' })] },
+        { text: '', calls: [call(FINISH_TOOL.name, { summary: 'done' })] },
+        { text: '', calls: [call(FINISH_TOOL.name, { summary: 'done' })] },
+      ]),
+      toolset((name) =>
+        ReticleTool.ASSERT === name ? Promise.reject(new Error('no session')) : OK(),
+      ),
+    );
+    expect(result.proved).toBe(false);
+    expect(result.steps).toBe(3);
   });
 
   it('answers every call the model asked for, failures included', async () => {
