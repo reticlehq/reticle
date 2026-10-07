@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/engine` — a throttled miss with target-specific render evidence is now graded `no`, not `unknown`.** On a throttled tab, every failed assertion was stamped `inconclusive` even when the evidence proved the page rendered. The throttle annotation now checks for target-specific proof: a `splitText` match (the requested string was found on the page) or a state near-miss (the target element exists but in the wrong state). Unrelated evidence — present testids from a static shell, or a role-only near-miss that does not prove the named target rendered — no longer overrides the starvation caveat. Closes [#1253](https://github.com/reticlehq/reticle/issues/1253).

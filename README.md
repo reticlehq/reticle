@@ -34,85 +34,31 @@ It drives your real running app, reads what actually happened, and hands back **
 
 ## Install
 
-You need Node **20.11+**. Install Reticle once on your machine, then connect each app you want to verify. The installer registers Reticle's tools with the coding agents it finds; the project command wires your app and checks that a browser session actually connects.
-
-### 1. Install once on your machine
-
-**macOS · Linux**
+One command. Needs Node 20.11+ (no Node? `brew install node` or [nodejs.org](https://nodejs.org)).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh | sh
 ```
 
-**Windows** (PowerShell)
+Windows: `irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex`
 
-```powershell
-irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex
-```
-
-The installer installs the `reticle` CLI, registers its MCP server with supported agents, and configures approval for Reticle's own tools where the agent supports it. **Run it in a terminal before opening your coding agent.** If your agent is already open, restart it once so it loads the new tools. Codex CLI needs a manual TOML entry; the installer prints the exact lines and location.
-
-### 2. Wire your app
-
-From your app's directory, run:
-
-```bash
-RETICLE_INSTALL_SOURCE=readme reticle init
-```
-
-This installs the dev-only SDK, wires your build config, starts your dev server, and proves that the app connected. No account needed, and nothing from your project leaves your machine. To preview the app changes first, run `reticle init --dry-run`. The `RETICLE_INSTALL_SOURCE` prefix is optional; it only tells us which page you installed from.
-
-Skip this step and your agent will remind you: when it starts in a web app Reticle has never connected to, it says so in its first reply and offers to run `init`, in Claude Code, Codex, Cursor and any other agent that reads MCP server instructions.
-
-**Want a dashboard?** Run `reticle connect --project "My App"` instead, or afterwards. It does everything `init` does, then opens a browser for sign-in approval, links this folder to your cloud project, and sends any Reticle history already on this machine. Approve the short code shown in both the browser and terminal; you do not need to copy an API key. [See exactly what can sync](docs/what-is-recorded.md).
-
-### Check it and start verifying
-
-```bash
-reticle doctor    # is the app connected?
-reticle whoami    # which cloud project is this folder linked to?
-```
-
-Open or restart your coding agent, then ask: _“Verify one flow in my running app with Reticle.”_ Reticle returns a pass, fail, or couldn't-tell verdict with evidence. Your dashboard fills after the first recorded run; a new app has no results to sync yet. If your dev server was already running before Reticle wired it, restart that server once to load the new config.
+It registers Reticle with your coding agents and shows it verifying a demo app, in seconds. Then open your agent in your app's folder and ask: _"Verify one flow in my running app with Reticle."_ The first time it uses Reticle there, it wires the app itself (the same thing `reticle init` does) and tells you every file it changed. No account needed, and nothing from your project leaves your machine.
 
 <a id="manual-install"></a>
 <details>
-<summary><b>Manual install</b> (no pipe to shell)</summary>
+<summary>Other ways to install</summary>
 
 <br/>
 
-```bash
-npm install -g @reticlehq/server   # 1. the CLI
-npx @reticlehq/server setup mcp    # 2. register it with your agents
-```
+**Claude Code plugin:** `/plugin marketplace add reticlehq/reticle`, then `/plugin install reticle@reticlehq`.
 
-Step 2 registers the same agents as the installer, writes the `/reticle` skill where the agent supports one, and pre-approves Reticle's own tools the same way. To register nothing automatically, skip step 2 and add the server to your client yourself, which leaves its approval prompts as they are:
+**Skills CLI** (Cursor, Codex, Copilot, Gemini and others): `npx skills add reticlehq/reticle`
 
-```jsonc
-{ "mcpServers": { "reticle": { "command": "npx", "args": ["@reticlehq/server", "mcp"] } } }
-```
+**No pipe to shell:** `npm install -g @reticlehq/server && reticle setup mcp`
 
-Then run `reticle init` in your app directory, or `reticle connect --project "My App"` to also link a cloud dashboard.
+**Any MCP client, by hand:** `{ "mcpServers": { "reticle": { "command": "npx", "args": ["@reticlehq/server", "mcp"] } } }`
 
-</details>
-
-<details>
-<summary><b>Claude Code plugin</b> (skill + MCP in one step)</summary>
-
-<br/>
-
-```text
-/plugin marketplace add reticlehq/reticle
-/plugin install reticle@reticlehq
-```
-
-Registers the MCP server and installs the Reticle skill together. Reopen Claude Code in your app's directory: the first session offers to run `init` there, which wires the app so the tools have something to verify.
-
-For other agents that support the skills CLI:
-
-```bash
-npx skills add reticlehq/reticle
-```
+Wire your app yourself instead of letting your agent do it: `reticle init` in the app's folder. Want a cloud dashboard? `reticle connect --project "My App"`. Not sure it worked? `reticle doctor`.
 
 </details>
 
@@ -301,7 +247,7 @@ Faster for a structural reason rather than a browser-speed one: a time-gated tra
 | **Partial** | races around a single action. It detects `request-never-settled` and `duplicate-request`; it is not a scheduler-level race analyser |
 | **Can't see yet** | IndexedDB, Web Workers, closed shadow roots, cross-origin iframes |
 
-**When Reticle can't see something, it says so.** A verdict is `yes`, `no`, or `unknown`, where `unknown` means the evidence couldn't decide. Never a quiet pass.
+**When Reticle can't see something, it says so.** A verdict is `yes`, `no`, `unknown` (the evidence couldn't decide) or `no-fault` (nothing was declared to prove). Only `yes` is a pass; never a quiet one.
 
 **Pairs well with:** a visual testing tool for pixel-level diffs, Playwright for sites you don't own and a cross-browser matrix, axe for full WCAG audits, and a security scanner for vulnerability discovery. Reticle checks what your own app does; those tools cover the rest.
 
@@ -313,7 +259,7 @@ Faster for a structural reason rather than a browser-speed one: a time-gated tra
 - **Localhost-only bridge.** The daemon binds `127.0.0.1`, and an app pairs with it using a token stored owner-only at `~/.reticle/pairing-token`, so another page on your machine cannot drive your session.
 - **No arbitrary code.** The SDK runs a fixed set of commands (look, act, read state, navigate). There is no "evaluate this JavaScript" tool.
 - **Credentials redacted at the source.** Passwords, tokens, API keys and card numbers in captured request and response bodies, storage and state are replaced with `[REDACTED]` before they reach the agent.
-- **Your app's data stays on your machine.** DOM, network bodies, console output, state and source are never sent anywhere. You need no account, and a verdict is produced locally. If you choose to connect a project (`reticle connect`, or `RETICLE_API_KEY` in CI), what syncs is yours to set with `reticle config --runs/--memory/--flows on|off`, and [what each contains is written down](docs/what-is-recorded.md).
+- **Your app's data stays on your machine.** DOM, network bodies, console output, state and source are never sent anywhere, with one exception you switch on yourself: when the Harness drives with a model (yours or the platform's), that model sees the steps it drives. You need no account, and a verdict is produced locally. If you choose to connect a project (`reticle connect`, or `RETICLE_API_KEY` in CI), what syncs is yours to set with `reticle config --runs/--memory/--flows on|off`, and [what each contains is written down](docs/what-is-recorded.md).
 - **Anonymous usage counts are sent by default:** which commands ran, which tools an agent called, whether a verdict was produced, with a random id and nothing from your app. `reticle telemetry disable`, `RETICLE_TELEMETRY=0` or `DO_NOT_TRACK=1` turns them off. [The complete list](docs/telemetry.md).
 - **You see the plan first.** `init --dry-run` writes nothing; `--no-mcp` skips agent registration; `--files-only` writes the files and stops. Reporting a security issue: [SECURITY.md](SECURITY.md).
 
@@ -332,11 +278,20 @@ Faster for a structural reason rather than a browser-speed one: a time-gated tra
 
 ---
 
-## On the roadmap
+## The open-source tool, the Harness, and the dashboard
 
-**Routing verification flows with [TypeSafe AI](https://typesafe.ai)'s [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev).** A verification run makes a lot of small decisions — is this page settled, is this finding worth chasing, does this failure warrant a full capture — and today an LLM answers each one at LLM latency and LLM cost. Jev is a System One model: it returns a typed, probabilistic choice from a fixed set instead of prose, in 70–500ms. That is the exact shape of a routing decision inside Reticle's infra, so when we build that layer, Jev is what decides which flow a run takes. That layer is the roadmap item; it does not ship yet.
+**The open-source tool is the whole verify loop, on your machine.** The SDK in your app, the local daemon, the MCP tools your agent calls, and the HUD in the corner of your page where you watch it work: what the agent is doing, every verdict, the flows it saved, the notes you pin on the page. No account, and nothing from your app leaves your machine.
 
-What DOES ship, since 3.2.0, is Jev driving the app rather than routing inside it: `reticle_verify { action: "explore", driver: "jev" }` explores a page by selecting from candidates Reticle enumerated off the DOM, so the model chooses and never composes. See [docs/autodrive.md](docs/autodrive.md).
+**The Harness drives the app for you.** Describe a person and a journey (_"a returning customer reorders and pays"_) and the Harness drives it in your browser, proves each step, and saves what it drove as flows that replay with no model at all. Your agent spends one call instead of a context full of snapshots: on our explore benchmark the caller used 11.9× fewer tokens for the same verdict. It runs on the Reticle platform, on [TypeSafe AI](https://typesafe.ai)'s [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev), a System One model built for fast, typed choices, and every plan includes it: Free comes with Harness credits each month, Pro with more, Enterprise with what you agree. You watch it in the HUD as it happens ("Reticle Harness is driving"), and you can switch it off mid-run from the same panel. Call it with `reticle_verify { action: "explore", persona: "…" }`; see [docs/autodrive.md](docs/autodrive.md).
+
+**[app.reticle.sh](https://app.reticle.sh) is the dashboard.** Run `reticle connect` in your app, sign in, and everything your machine verified syncs on its own, whichever agent did the driving:
+
+- every run, with what was checked, what held, and who drove it (your agent or the Harness)
+- the bugs Reticle caught, to triage, assign, and push to GitHub
+- saved flows, Reticle Coverage (routes reached, controls proved), and the notes people pinned in the HUD
+- a team view of all of it, and a shareable proof link for any run
+
+The open-source tool never needs the dashboard. The dashboard is where a team sees what its agents proved, and where the platform's Harness runs, on every plan, Free included.
 
 ## Docs
 

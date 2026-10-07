@@ -9,6 +9,10 @@ import { REPORT_CSS } from './presenter-report-styles.js';
 import { OFFER_CSS } from './carousel/offer-card.js';
 import { TALK_CSS } from './carousel/talk-card.js';
 import { CAROUSEL_CSS } from './carousel/carousel.js';
+import { CHAT_VIEWS_CSS } from './presenter-chat-views.js';
+import { PLAN_CSS } from './presenter-plan.js';
+import { FRAME_CSS } from './presenter-frame.js';
+import { PRESENTER_DESIGN_TOKENS_CSS } from './presenter-design-tokens.js';
 /**
  * All presenter overlay CSS - glow border, synthetic cursor/ring/ripple, and the floating HUD shell.
  * Assembled from the shell-styles, controls and log modules.
@@ -17,6 +21,7 @@ import { CAROUSEL_CSS } from './carousel/carousel.js';
 export { Z_OVERLAY };
 
 export const PRESENTER_CSS = `
+${PRESENTER_DESIGN_TOKENS_CSS}
 [data-reticle-overlay]{position:fixed;inset:0;pointer-events:none;z-index:${String(Z_OVERLAY)};}
 /**
  * The session glow: the page itself says an agent is here, and BREATHES while it is working.
@@ -76,4 +81,7 @@ ${OFFER_CSS}
 ${TALK_CSS}
 ${CAROUSEL_CSS}
 ${LOG_CSS}
-${CONTROLS_CSS}`;
+${CHAT_VIEWS_CSS}
+${PLAN_CSS}
+${CONTROLS_CSS}
+${FRAME_CSS}`;

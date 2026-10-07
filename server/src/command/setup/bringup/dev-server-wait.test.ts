@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  devServerDiedMessage,
   announcedUrl,
   judgeWait,
   portBusyMessage,
@@ -135,5 +136,17 @@ describe('the quiet budget is the callers to set', () => {
     expect(judgeWait(facts({ quietMeansHungMs: 180_000, elapsedMs: WAIT_CEILING_MS }))).toBe(
       WaitVerdict.HUNG,
     );
+  });
+});
+
+describe('a dev server that died before serving', () => {
+  it('quotes the end of what it printed, so the cause is on screen', () => {
+    const said = devServerDiedMessage('> app@1.0.0 dev\n> vite\n\nsh: vite: command not found\n');
+    expect(said).toContain('sh: vite: command not found');
+    expect(said).toContain('exited without serving anything');
+  });
+
+  it('says it printed nothing when it printed nothing', () => {
+    expect(devServerDiedMessage('')).toContain('printed nothing');
   });
 });

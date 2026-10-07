@@ -169,6 +169,7 @@ const cmdLoginDevice = async (
   project: string | undefined,
   link: Linker,
   autoLink: boolean,
+  open: (url: string) => void = openBrowser,
 ): Promise<number> => {
   const url = baseUrl(null, explicitUrl);
   const started = DeviceStartSchema.parse(
@@ -177,7 +178,7 @@ const cmdLoginDevice = async (
   hint(
     `Opening ${started.verificationUri} — confirm this code in the browser: ${started.userCode}`,
   );
-  openBrowser(started.verificationUriComplete);
+  open(started.verificationUriComplete);
   const intervalMs = Math.max(1, started.interval) * 1000;
   for (;;) {
     await sleep(intervalMs);
@@ -281,3 +282,42 @@ export const cmdLogout = async (argv: readonly string[] = []): Promise<number> =
   emit({ loggedOut: true, url });
   return 0;
 };
+
+/** The daemon signs in for the panel and links nothing: its working directory is not the user's app. */
+const NO_LINK: Linker = () => Promise.resolve(0);
+
+/**
+ * The panel's Sign in: the same browser approval `reticle login` opens, started by the daemon, which
+ * owns `~/.reticle`. One flow at a time, and a second press while it is pending reopens its approval
+ * page rather than doing nothing: somebody who closed that tab must be able to get it back.
+ * `onSignedIn` runs when the approval lands so every open panel can repaint. A failure stays in the
+ * daemon log: the panel copied `reticle login` as it was clicked, which is the way through.
+ */
+export function hudSignIn(
+  onSignedIn: () => void,
+  start: (open: (url: string) => void) => Promise<number> = (open) =>
+    cmdLoginDevice(undefined, undefined, NO_LINK, false, open),
+  opener: (url: string) => void = openBrowser,
+): () => void {
+  let running = false;
+  let pending: string | undefined;
+  return () => {
+    if (running) {
+      if (pending !== undefined) opener(pending);
+      return;
+    }
+    running = true;
+    void start((url) => {
+      pending = url;
+      opener(url);
+    })
+      .then((code) => {
+        if (0 === code) onSignedIn();
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        running = false;
+        pending = undefined;
+      });
+  };
+}

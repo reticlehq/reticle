@@ -8,6 +8,7 @@ import {
 } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { formatStepAddress } from 'open-verification';
+import { refFor } from './flow-anchor.js';
 import type { RecordedStep, CompiledProgram } from './recording/tape/recordings.js';
 import type { Session } from '@/portal/session/session.js';
 import { asRecord, asString } from '@reticlehq/core';
@@ -19,6 +20,10 @@ import { asRecord, asString } from '@reticlehq/core';
  */
 export function ambiguousTestidNote(value: string): string {
   return `ambiguous testid '${value}', used first match`;
+}
+
+function ambiguousRoleNote(role: string, name: string): string {
+  return `ambiguous ${role} named '${name}', used first match`;
 }
 
 /**
@@ -96,6 +101,11 @@ export function pathOf(url: string | undefined): string | undefined {
   }
 }
 
+/** What a saved flow could not keep, and the fix. See RecordedStep.unkeptExpect. */
+export const UNKEPT_EXPECT =
+  'its proved `until` names something a saved flow cannot replay (a session ref such as e12): ' +
+  'name the element by testid, role and name, or text, and the check is kept';
+
 /**
  * Capture an act into every in-flight recording, or do nothing when none is running.
  *
@@ -104,11 +114,16 @@ export function pathOf(url: string | undefined): string | undefined {
  * saved a flow with zero steps.
  */
 export function captureAct(
-  recordings: { active: () => string[]; capture: (step: RecordedStep, route?: string) => void },
+  recordings: {
+    active: () => string[];
+    capture: (step: RecordedStep, route?: string, session?: string) => void;
+  },
   args: Record<string, unknown>,
   res: unknown,
   /** Where this step ran, so the ambient tape can be cut into journeys. See RecordedStep.route. */
   route?: string,
+  /** The session that acted: only recordings it started take the step. */
+  session?: string,
 ): void {
   // NO `active()` gate. `RecordingStore.capture` opens the AMBIENT tape on its first step, and that
   // branch was unreachable from here: this returned early whenever nothing was open, and the only
@@ -124,12 +139,14 @@ export function captureAct(
   // success means — the large majority of calls carry one — and dropping it produced a flow graded
   // "assertion-free: it will pass even if the feature is broken", which is the regression-suite
   // story failing at its last step. See enforceableExpect below.
-  const expect = enforceableExpect(args['until'] ?? args['predicate']);
+  const declared = args['until'] ?? args['predicate'];
+  const expect = enforceableExpect(declared);
   if (expect !== undefined) step.expect = expect;
+  else if (declared !== undefined) step.unkeptExpect = UNKEPT_EXPECT;
   if (route !== undefined) step.page = route;
   const intent = asString(args['intent'])?.trim();
   if (intent !== undefined && intent.length > 0) step.intent = intent;
-  recordings.capture(step, route);
+  recordings.capture(step, route, session);
 }
 
 /**
@@ -144,18 +161,20 @@ export function captureVerdictedAct(
   res: unknown,
   route: string | undefined,
   verified: string | undefined,
+  session?: string,
 ): void {
   const { until: _until, predicate: _predicate, ...unproved } = args;
-  captureAct(recordings, Verified.YES === verified ? args : unproved, res, route);
+  captureAct(recordings, Verified.YES === verified ? args : unproved, res, route, session);
 }
 
 /** Fold a PASSING standalone assertion into the step it proved. See RecordingStore.attachExpect. */
 export function captureAssertion(
-  recordings: { attachExpect: (expect: Predicate) => void },
+  recordings: { attachExpect: (expect: Predicate, session?: string) => void },
   raw: unknown,
+  session?: string,
 ): void {
   const expect = enforceableExpect(raw);
-  if (expect !== undefined) recordings.attachExpect(expect);
+  if (expect !== undefined) recordings.attachExpect(expect, session);
 }
 
 /**
@@ -237,6 +256,10 @@ function compileAnchorArgs(
       args: actArgs,
     };
     if (source !== undefined) roleArgs['source'] = source;
+    if ('number' === typeof r['nth'] && 'number' === typeof r['of']) {
+      roleArgs['nth'] = r['nth'];
+      roleArgs['of'] = r['of'];
+    }
     return { args: roleArgs, stable: true };
   }
   const component = asString(r['component']);
@@ -297,6 +320,8 @@ async function resolveRef(
     name?: unknown;
     component?: unknown;
     source?: unknown;
+    nth?: unknown;
+    of?: unknown;
   },
 ): Promise<{ ref: string; note?: string }> {
   const by = asString(step.by);
@@ -316,11 +341,13 @@ async function resolveRef(
     const query: Record<string, unknown> = { by, value, ...(name === undefined ? {} : { name }) };
     const result = await session.command(ReticleCommand.QUERY, query);
     if (!result.ok) throw new Error(result.error ?? 'query failed');
-    const ref = queryRefs(result)[0];
+    const refs = queryRefs(result);
+    const meant = refFor(step, refs);
+    const ref = meant ?? refs[0];
     if (ref === undefined) {
       throw new Error(`${value} named '${String(name)}' did not resolve in current page`);
     }
-    return { ref };
+    return meant === undefined ? { ref, note: ambiguousRoleNote(value, String(name)) } : { ref };
   }
   if (by === QueryBy.COMPONENT) {
     const component = asString(step.component);

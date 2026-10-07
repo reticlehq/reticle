@@ -40,7 +40,7 @@ export const ACCOUNT_SIGNOUT_ATTR = 'data-reticle-account-signout';
 
 export const ACCOUNT_TEXT = {
   SIGNED_OUT: 'Sign in',
-  SIGNIN_TITLE: 'Run `reticle login` in your terminal — click to copy the command',
+  SIGNIN_TITLE: 'Sign in through your browser. Also copies `reticle login`, for a terminal',
   SIGNIN_COMMAND: 'reticle login',
   DASHBOARD_TITLE: 'Open this project on the dashboard',
   /** "Now", not "sync" — the timer already syncs, this only stops somebody wondering when. */
@@ -55,9 +55,10 @@ export const ACCOUNT_TEXT = {
   /** Linking is a terminal step for the same reason signing in is: only the CLI can write the file. */
   LINK_HINT: 'Not linked — run `reticle link` to keep a record on the dashboard',
   LINK_COMMAND: 'reticle link',
-  SIGNOUT_ACTION: 'Sign out',
-  SIGNOUT_TITLE: 'Run `reticle logout` in your terminal — click to copy the command',
+  SIGNOUT_ACTION: 'Copy sign-out command',
+  SIGNOUT_TITLE: 'Copy `reticle logout` to run in your terminal',
   SIGNOUT_COMMAND: 'reticle logout',
+  SIGNOUT_COPY_FAILED: 'Run reticle logout in terminal',
   PROJECT_LABEL: 'Project',
   HOST_LABEL: 'Host',
   VERDICTS_LABEL: 'Verdicts',
@@ -233,7 +234,7 @@ export function syncButtonHtml(dashboardUrl: string | undefined): string {
  * Returns its own teardown. The caller owns an `AbortController` for everything else, and this hands
  * back a function rather than taking a signal so it can be called from a panel that has none.
  */
-export function mountAccountControl(root: HTMLElement): () => void {
+export function mountAccountControl(root: HTMLElement, onSignIn?: () => void): () => void {
   const controller = new AbortController();
   const { signal } = controller;
 
@@ -250,13 +251,29 @@ export function mountAccountControl(root: HTMLElement): () => void {
   };
 
   /** Flash the control's own label, so the feedback is where the click was. */
-  const flashCopied = (el: HTMLElement): void => {
+  const flashLabel = (el: HTMLElement, value: string): void => {
     const label = el.querySelector('span') ?? el;
     const previous = label.textContent;
-    label.textContent = ACCOUNT_TEXT.COPIED;
+    label.textContent = value;
     setTimeout(() => {
       label.textContent = previous;
     }, ACCOUNT_COPIED_MS);
+  };
+
+  /** Clipboard can be absent or denied in an embedded page; never make that failure look like success. */
+  const copyCommand = async (command: string, el: HTMLElement): Promise<void> => {
+    try {
+      if (navigator.clipboard === undefined) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(command);
+      flashLabel(el, ACCOUNT_TEXT.COPIED);
+    } catch {
+      flashLabel(
+        el,
+        command === ACCOUNT_TEXT.SIGNOUT_COMMAND
+          ? ACCOUNT_TEXT.SIGNOUT_COPY_FAILED
+          : `Run ${command} in terminal`,
+      );
+    }
   };
 
   root.addEventListener(
@@ -280,28 +297,28 @@ export function mountAccountControl(root: HTMLElement): () => void {
         return;
       }
 
-      // Every command this menu names is a TERMINAL step -- login, link and logout all write to
-      // `~/.reticle`, which a page cannot do. So the control copies the command rather than
-      // pretending to start it: a button that quietly does nothing is worse than a line of text,
-      // because the person waits for it.
+      // Link and logout write `~/.reticle`, which a page cannot do, so those controls copy the
+      // command rather than pretend to run it. Sign in (below) is the exception: the daemon starts
+      // the browser approval itself.
       const copier = target.closest('[data-reticle-copy]');
       if (copier instanceof HTMLElement) {
         event.preventDefault();
         event.stopPropagation();
         const command = copier.getAttribute('data-reticle-copy') ?? '';
-        if (command.length > 0) void navigator.clipboard?.writeText(command).catch(() => undefined);
-        flashCopied(copier);
+        if (command.length > 0) void copyCommand(command, copier);
         return;
       }
 
       // The bare Sign in control carries no `data-reticle-copy`, because it predates the menu and
       // three surfaces plus their tests assert on its attribute.
+      // It asks the daemon to open the browser sign-in, and still copies `reticle login`: the copy is
+      // the fallback for an older daemon that ignores the request, and costs nobody anything.
       const signin = target.closest(`[${ACCOUNT_SIGNIN_ATTR}]`);
       if (signin instanceof HTMLElement) {
         event.preventDefault();
         event.stopPropagation();
-        void navigator.clipboard?.writeText(ACCOUNT_TEXT.SIGNIN_COMMAND).catch(() => undefined);
-        flashCopied(signin);
+        onSignIn?.();
+        void copyCommand(ACCOUNT_TEXT.SIGNIN_COMMAND, signin);
         return;
       }
 

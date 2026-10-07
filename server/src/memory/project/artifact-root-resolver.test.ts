@@ -212,3 +212,39 @@ describe('a project two checkouts declare, served from one of them', () => {
     expect(looked).toBe(false);
   });
 });
+
+/**
+ * Sync reads this list. It used to keep its own without the announced dev servers, so the merchant
+ * dashboard's runs were written to its `.reticle/runs/` and never sent: 52 sync cycles in one drive
+ * pushed other directories' impact and not one of that app's runs.
+ */
+describe('the projects this machine knows', () => {
+  it('include a project known only through the dev server it is running', async () => {
+    const { mkdtempSync, writeFileSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join: joinPath } = await import('node:path');
+    const { devServerRegistryFileName, ReticleEnv } = await import('@reticlehq/core');
+    const { knownProjectCandidates } = await import('./artifact-root-resolver.js');
+    const state = mkdtempSync(joinPath(tmpdir(), 'reticle-state-'));
+    const app = mkdtempSync(joinPath(tmpdir(), 'merchant-'));
+    writeFileSync(
+      joinPath(state, devServerRegistryFileName(5273)),
+      JSON.stringify({
+        port: 5273,
+        pid: 1,
+        root: app,
+        url: 'http://localhost:5273',
+        startedAt: 1,
+        projectId: 'merchant-1',
+      }),
+    );
+    const previous = process.env[ReticleEnv.STATE_DIR];
+    process.env[ReticleEnv.STATE_DIR] = state;
+    try {
+      expect(knownProjectCandidates().map((c) => c.directory)).toContain(app);
+    } finally {
+      if (previous === undefined) delete process.env[ReticleEnv.STATE_DIR];
+      else process.env[ReticleEnv.STATE_DIR] = previous;
+    }
+  });
+});

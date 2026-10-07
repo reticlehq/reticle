@@ -113,8 +113,11 @@ export function anchorForStep(args: Record<string, unknown>): {
   if (by === QueryBy.ROLE && value !== undefined) {
     const name = asString(args['name']);
     if (name !== undefined && name.length > 0) {
-      // The schema carries role + name only; provenance lives on the step, not the anchor.
-      return { anchor: { kind: AnchorKind.ROLE, role: value, name }, degraded: false };
+      // Provenance lives on the step, not the anchor; the position among namesakes is identity.
+      const nth = args['nth'];
+      const of = args['of'];
+      const among = 'number' === typeof nth && 'number' === typeof of ? { nth, of } : {};
+      return { anchor: { kind: AnchorKind.ROLE, role: value, name, ...among }, degraded: false };
     }
   }
   if (by === QueryBy.COMPONENT) {

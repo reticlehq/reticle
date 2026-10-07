@@ -34,6 +34,7 @@ const MAP = {
   message: 'chat-bubble-left-ellipsis',
   gear: 'cog-6-tooth',
   layout: 'squares-2x2',
+  notes: 'clipboard-document-list',
   trash: 'trash',
   help: 'question-mark-circle',
   'caret-right': 'chevron-right',
@@ -55,12 +56,14 @@ const TOGGLE_SOLID_MAP = {
 /**
  * Bodies we spell out instead of taking from the pack.
  *
- * The installed @iconify-json/heroicons-outline is the v1 set, whose paper-airplane points straight
- * up and reads as an arrow rather than a send button. This is the v2 outline paper-airplane - the
- * tilted plane the HUD had before - from the same MIT icon family.
+ * The installed icon set's pause and stop variants are circled controls. The HUD already has a
+ * circular button target, so un-circled glyphs read cleaner and keep the action shape singular.
  */
 const BODY_OVERRIDES = {
   send: '<path d="M6 12 3.269 3.126A59.768 59.768 0 0 1 21.485 12 59.77 59.77 0 0 1 3.27 20.876L5.999 12Zm0 0h7.5"/>',
+  pause: '<path d="M8 5v14M16 5v14"/>',
+  play: '<path d="M8 5.75v12.5L18 12 8 5.75Z"/>',
+  stop: '<rect x="6.5" y="6.5" width="11" height="11" rx="2"/>',
 };
 
 const bodies = {};

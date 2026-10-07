@@ -54,7 +54,8 @@ export function remainingSteps(p: Progress): string[] {
         '`reticle_*` tools, ending in `reticle_act_and_wait` or `reticle_assert` — those two are ' +
         'what produce a verdict. Or hand the whole drive to Reticle with `reticle_verify { action: ' +
         '"explore", persona: "<who does what>" }`, which records what it drove so later runs replay ' +
-        'with no model in the loop; that route needs ANTHROPIC_API_KEY.',
+        'with no model in the loop; that route runs on the Reticle platform and needs a linked ' +
+        'project (`reticle connect`); every plan, Free included, has monthly Harness credits.',
     );
   }
   // Whether anything is actually outstanding, read BEFORE the docs pointer is added -- that line is

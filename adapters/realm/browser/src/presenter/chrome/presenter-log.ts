@@ -1,5 +1,12 @@
 import { PresenterMode } from '@reticlehq/core';
-import { LOG_KIND, LOG_RESULT, type LogKind, type LogResult } from './log-kinds.js';
+import {
+  LOG_ACTOR,
+  LOG_KIND,
+  LOG_RESULT,
+  type LogActor,
+  type LogKind,
+  type LogResult,
+} from './log-kinds.js';
 import { nativeSetTimeout } from '@/timers/native/native-timers.js';
 import {
   PresenterIcon,
@@ -16,8 +23,8 @@ import {
 /** Default cap on accumulated activity-log rows (bounds DOM). Presenter-local UI tunable. */
 const DEFAULT_LOG_MAX = 50;
 /** Activity-log entry kinds (presenter-only UI; never a wire string). */
-export { LOG_KIND, LOG_RESULT };
-export type { LogKind, LogResult };
+export { LOG_ACTOR, LOG_KIND, LOG_RESULT };
+export type { LogActor, LogKind, LogResult };
 
 const LOG_CHIP: Record<LogKind, string> = { read: 'READ', act: 'ACT', narration: '', human: '' };
 const LOG_CHIP_ICON: Partial<Record<LogKind, PresenterIconName>> = {
@@ -37,7 +44,17 @@ const LOG_CHIP_MODE: Record<LogKind, PresenterMode> = {
   narration: PresenterMode.IDLE,
   human: PresenterMode.IDLE,
 };
-const RESULT_GLYPH: Record<LogResult, string> = { pass: '', fail: 'Fail' };
+const RESULT_GLYPH: Record<LogResult, string> = { pass: '✓', fail: 'Fail' };
+/** The divider written when the driver changes, so a person sees the handover as it happens. */
+const HANDOVER_TEXT: Record<LogActor, string> = {
+  agent: 'Your agent is driving',
+  harness: 'Reticle Harness is driving',
+};
+/** On the log itself: who drove the last row, so the next one knows whether a handover happened. */
+const LAST_ACTOR_ATTR = 'data-reticle-log-actor';
+const DATA_ACTOR = 'data-actor';
+const DATA_STATE = 'data-state';
+const HANDOVER_KIND = 'handover';
 const RESULT_CLASS: Record<LogResult, string> = { pass: 'reticle-pass', fail: 'reticle-fail' };
 
 export const DATA_RETICLE_LOG = 'data-reticle-log';
@@ -98,6 +115,28 @@ export const LOG_CSS = `
   padding:8px 12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);
   border-radius:16px 16px 4px 16px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);}
 [data-reticle-log-row][data-kind="human"] .reticle-log-text{color:var(--reticle-fg);font-size:12px;line-height:1.45;}
+/* Rows arrive, rather than appear: the person watching should see the log move. */
+[data-reticle-log-row]{animation:reticle-row-in .22s var(--reticle-hud-ease,ease) both;}
+@keyframes reticle-row-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){[data-reticle-log-row]{animation:none;}}
+/* The step in flight pulses until its verdict lands; then it says how it ended. */
+[data-reticle-log-row][data-state="running"] .reticle-res{display:inline-block;width:6px;height:6px;margin-top:5px;
+  border-radius:50%;background:var(--reticle-c-active);opacity:1;animation:reticle-row-pulse 1s ease-in-out infinite;}
+@keyframes reticle-row-pulse{0%,100%{opacity:.35;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}
+[data-reticle-log] .reticle-res.reticle-pass{display:inline;color:#4ade80;font-size:10px;opacity:.9;}
+[data-reticle-log] .reticle-res.reticle-fail{color:#fca5a5;background:rgba(239,68,68,.16);border-radius:999px;padding:1px 6px;font-size:8px;opacity:1;}
+/* The Harness's rows wear its own colour, so two drivers never read as one. */
+[data-reticle-log-row][data-actor="harness"]{--reticle-row-accent:#a78bfa;}
+[data-reticle-log-row][data-actor="harness"] .reticle-chip{color:#a78bfa;}
+[data-reticle-log-row][data-actor="harness"]:not([data-kind="handover"]){box-shadow:inset 2px 0 0 color-mix(in srgb,#a78bfa 55%,transparent);padding-left:8px;}
+[data-reticle-log-row][data-kind="handover"]{align-items:center;gap:8px;margin:8px 0 4px;padding:0;
+  font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--reticle-row-accent,var(--reticle-c-active));}
+[data-reticle-log-row][data-kind="handover"]::before,[data-reticle-log-row][data-kind="handover"]::after{
+  content:"";flex:1;height:1px;background:color-mix(in srgb,var(--reticle-row-accent,var(--reticle-c-active)) 40%,transparent);}
+[data-reticle-log-row][data-kind="handover"] .reticle-log-text{flex:none;color:inherit;}
+/* What the Harness or the daemon says about a drive reads as a notice, not an aside. */
+[data-reticle-log-row][data-kind="narration"]{font-style:normal;color:var(--reticle-fg);margin:4px 0;padding:7px 10px;
+  border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);}
 ` as string;
 
 /**
@@ -109,7 +148,15 @@ export const LOG_CSS = `
  */
 function scrollLogToLatest(container: HTMLElement): void {
   container.scrollTop = container.scrollHeight;
+  // A log with more than fits must take the wheel, even while the card lets clicks through (#992).
+  container.toggleAttribute(
+    LOG_SCROLLABLE_ATTR,
+    container.scrollHeight > container.clientHeight + 1,
+  );
 }
+
+/** Set while the log holds more than it shows, so it keeps scrolling when the card is click-through. */
+export const LOG_SCROLLABLE_ATTR = 'data-reticle-log-scrollable';
 
 /**
  * Pin the feed to its newest row once the panel has actually laid out.
@@ -190,10 +237,27 @@ export function appendLogRow(
   text: string,
   ts: string,
   logMax: number,
+  actor: LogActor = LOG_ACTOR.AGENT,
 ): LogHandle {
+  // A handover is shown where it happens, so a person watching sees the Harness take the wheel.
+  const driven = kind === LOG_KIND.ACT || kind === LOG_KIND.READ;
+  if (driven && (container.getAttribute(LAST_ACTOR_ATTR) ?? LOG_ACTOR.AGENT) !== actor) {
+    const divider = document.createElement('div');
+    divider.setAttribute(DATA_RETICLE_LOG_ROW, '');
+    divider.setAttribute(DATA_KIND, HANDOVER_KIND);
+    divider.setAttribute(DATA_ACTOR, actor);
+    const label = document.createElement('span');
+    label.className = LOG_TEXT_CLASS;
+    label.textContent = HANDOVER_TEXT[actor];
+    divider.appendChild(label);
+    container.appendChild(divider);
+  }
+  if (driven) container.setAttribute(LAST_ACTOR_ATTR, actor);
   const row = document.createElement('div');
   row.setAttribute(DATA_RETICLE_LOG_ROW, '');
   row.setAttribute(DATA_KIND, kind); // styles the human row as an accent chat bubble
+  row.setAttribute(DATA_ACTOR, actor);
+  if (kind === LOG_KIND.ACT) row.setAttribute(DATA_STATE, 'running');
 
   const tsEl = document.createElement('span');
   tsEl.setAttribute(LOG_TIME_ATTR, '');
@@ -237,8 +301,9 @@ export function appendLogRow(
 
   return {
     result: (r: LogResult): void => {
+      row.setAttribute(DATA_STATE, r);
       if (r === LOG_RESULT.PASS) {
-        resEl.textContent = '';
+        resEl.textContent = RESULT_GLYPH.pass;
         resEl.className = `${LOG_RES_CLASS} ${RESULT_CLASS.pass}`;
         return;
       }

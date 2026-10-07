@@ -67,3 +67,20 @@ describe('HUD use, rolled into the session summary', () => {
     expect(m.empty).toBe(true);
   });
 });
+
+describe('rail slide impressions', () => {
+  it('counts each slide id shown, and refuses anything shaped like text', () => {
+    const hud = new HudMetrics(() => 0);
+    hud.record({ slide: 'harness-drive' });
+    hud.record({ slide: 'harness-drive' });
+    hud.record({ slide: 'notice-reorder' });
+    expect(hud.summarize().hudSlides).toEqual({ 'harness-drive': 2, 'notice-reorder': 1 });
+    hud.record({ slide: 'Buy now at evil.example' });
+    expect(Object.keys(hud.summarize().hudSlides ?? {})).toEqual([
+      'harness-drive',
+      'notice-reorder',
+    ]);
+    hud.reset();
+    expect(hud.summarize().hudSlides).toBeUndefined();
+  });
+});

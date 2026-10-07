@@ -5,7 +5,12 @@
 
 import { describe, expect, it } from 'vitest';
 import { SESSION_AUTO } from '@reticlehq/core';
-import { RETICLE_URL_PARAM, reticleParamsFromSearch, resolveConnectIdentity } from './reticle.js';
+import {
+  RETICLE_URL_PARAM,
+  hudWithoutPanel,
+  reticleParamsFromSearch,
+  resolveConnectIdentity,
+} from './reticle.js';
 
 describe('reticleParamsFromSearch', () => {
   it('extracts session and projectId from namespaced params', () => {
@@ -57,5 +62,26 @@ describe('resolveConnectIdentity', () => {
     expect(resolveConnectIdentity({ projectId: 'mine' }, search).projectId).toBe('mine');
     expect(resolveConnectIdentity({}, search).projectId).toBe('acme');
     expect(resolveConnectIdentity({}, '').projectId).toBeUndefined();
+  });
+});
+
+/**
+ * A page Reticle opened for a platform drive says on its address how the HUD starts, so a drive
+ * asked for no HUD never paints one; and a HUD asked for before the panel mounts is not lost.
+ */
+describe('how the HUD starts', () => {
+  it('reads the HUD the launcher asked for, and nothing it does not know', () => {
+    expect(reticleParamsFromSearch(`?${RETICLE_URL_PARAM.HUD}=removed`)).toEqual({
+      hud: 'removed',
+    });
+    expect(reticleParamsFromSearch(`?${RETICLE_URL_PARAM.HUD}=sideways`)).toEqual({});
+  });
+
+  it('answers a HUD asked for before the panel mounts: hidden or removed already hold', () => {
+    expect(hudWithoutPanel('hidden')).toEqual({ remember: 'hidden', placed: ['hidden'] });
+    expect(hudWithoutPanel('removed')).toEqual({ remember: 'removed', placed: ['removed'] });
+    // Shown is not true until the panel mounts: remembered, and not claimed.
+    expect(hudWithoutPanel('shown')).toEqual({ remember: 'shown', placed: [] });
+    expect(hudWithoutPanel(undefined)).toEqual({ placed: [] });
   });
 });

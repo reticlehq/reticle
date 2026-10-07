@@ -499,6 +499,37 @@ describe('the connect proof without a system browser', () => {
     expect(r.ok).toBe(true);
   });
 
+  // The lease hands a page with no SDK of its own a reader Reticle injects (`zeroInstall`), so that
+  // session dialling in proves Reticle's reader, not this install. Counting it made the break
+  // matrix's `dev-server-binds-ipv6-only` and `dev-server-serves-only-a-base-path` exit 0 with
+  // ok:true over a plain server that was never instrumented.
+  it('does not count a lease that had to inject its own reader as the install connecting', async () => {
+    let released = 0;
+    let leased = false;
+    const w = leasingWorld({
+      openLease: () => {
+        leased = true;
+        return Promise.resolve({
+          sessionId: 'lease-1',
+          zeroInstall: true,
+          release: () => {
+            released += 1;
+            return Promise.resolve();
+          },
+        });
+      },
+      // The injected reader dials in once the lease is open, exactly as the daemon reports it.
+      listSessions: () => Promise.resolve(leased ? [{ sessionId: 'lease-1', url: URL_ }] : []),
+      probePage: () => Promise.resolve({ served: true, sdkInPage: false }),
+    });
+    const r = await runSetupPhases({ ...INPUT, openBrowser: false }, w.fx);
+    expect(r.ok).toBe(false);
+    expect(r.reachedPhase).toBe(SetupPhase.CONNECT);
+    expect(released).toBe(1);
+    expect(w.lines.join(' ')).toContain('SDK is NOT in the page');
+    expect(w.lines.join(' ')).not.toMatch(/Connected\./);
+  });
+
   it('says why when the lease itself could not open', async () => {
     const w = leasingWorld({
       openLease: () => Promise.resolve({ failed: 'no Chromium, Chrome or Edge on this machine' }),
@@ -551,6 +582,28 @@ describe('the dev-server diagnoses name their cause', () => {
       devServerQuietForMs: () => 60_000,
     });
     expect(out).toContain('neither printed a URL nor bound a port');
+  });
+
+  // `--timeout` made the budget message win outright, so a server that printed nothing and bound
+  // nothing was reported only as "did not become ready within 3000ms" — the break matrix's
+  // `dev-server-never-prints-a-url` lost the half that says the ports were checked too.
+  it('still says it checked BOTH when the caller named a startup budget', async () => {
+    let clock = 0;
+    const out = await notesFrom(
+      {
+        devServerOutput: () => 'starting...',
+        observedPorts: () => [],
+        probePage: () => Promise.resolve({ served: false, sdkInPage: false }),
+        now: () => clock,
+        sleep: (ms) => {
+          clock += ms;
+          return Promise.resolve();
+        },
+      },
+      { startupBudgetMs: 3_000, pollMs: 250 },
+    );
+    expect(out).toContain('neither printed a URL nor bound a port');
+    expect(out).toContain('3000ms');
   });
 });
 

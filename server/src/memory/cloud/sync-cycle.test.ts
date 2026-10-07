@@ -22,6 +22,18 @@ const NOW = 1_700_000_000_000;
 const IMPACT = { counts: { calls: 3, failed: 1 }, days: [] };
 
 /** A scripted server: hand it the bodies to answer with, read back what it was asked. */
+/**
+ * What the real handler answers when the script does not say: a `runs` result for every request,
+ * accepting each run it was sent, as the platform's sync route does. It used to answer `{}`, which no
+ * real server sends, and which hid that a 200 saying nothing about runs was recorded as delivered.
+ */
+function realAnswer(body: string | undefined): unknown {
+  const parsed: unknown = body === undefined ? {} : JSON.parse(body);
+  const runs =
+    'object' === typeof parsed && null !== parsed ? (parsed as { runs?: unknown }).runs : undefined;
+  return { runs: { accepted: Array.isArray(runs) ? runs.length : 0, rejected: [] } };
+}
+
 function server(script: {
   status?: unknown;
   statusCode?: number;
@@ -61,7 +73,7 @@ function server(script: {
     }
     return Promise.resolve({
       status: script.syncCode ?? 200,
-      text: JSON.stringify(script.sync ?? {}),
+      text: JSON.stringify(script.sync ?? realAnswer(init.body)),
     });
   };
 
@@ -142,12 +154,15 @@ describe('a quiet machine costs nothing', () => {
      * gets its own sentence. Conflating them cost a full investigation: a linked repo answered
      * "nothing to send" straight after two verdicts had been driven through it.
      */
+    // "Already pushed" includes this machine's own record of the push. Without it the run is sent
+    // again, and only a fake server answering `{}` used to make that look like nothing was sent.
     const quiet = await cycle(
       { status: { knownRunIds: ['a'], stateHashes: { impact: hashPayload(IMPACT) } } },
       source({
         runs: () => [{ runId: 'a', payload: { runId: 'a' } }],
         derived: (kind) => ('impact' === kind ? IMPACT : undefined),
       }),
+      { sentRunHashes: { a: hashPayload({ runId: 'a' }) } },
     );
     expect(describeSync(quiet.report)).toBe('nothing to send');
 

@@ -18,6 +18,7 @@
  *    it, which is what lets the whole thing be tested against a scripted model with no API key.
  */
 
+import { ReticleTool, asRecord } from '@reticlehq/core';
 import { withTimeout } from './with-timeout.js';
 
 /** One tool as the model sees it. JSON Schema, because that is what the wire wants. */
@@ -111,7 +112,12 @@ export const StopReason = {
   STALLED: 'stalled',
   /** The toolset or the model itself failed in a way the loop cannot continue through. */
   BROKEN: 'broken',
+  /** A person switched autonomous driving off while it was driving. Not a failure. */
+  STOPPED: 'stopped',
 } as const;
+
+/** Thrown by a driver when a person, not a fault, ended the drive. */
+export class DriveStoppedError extends Error {}
 export type StopReason = (typeof StopReason)[keyof typeof StopReason];
 
 export interface HarnessResult {
@@ -123,6 +129,39 @@ export interface HarnessResult {
   usage: TokenUsage;
   /** Set when `stopReason` is BROKEN. */
   error?: string;
+  /**
+   * Whether the drive ran at least one check: an `act_and_wait` with an `until`, or an `assert`,
+   * that did not error. A drive without one clicked things and proved nothing.
+   */
+  proved: boolean;
+  /**
+   * Whether the drive reached its whole goal, as the platform judged when it finished. Checks that
+   * held are not the goal reached: "open each section" passed on two presses of Sign in.
+   */
+  goalMet?: boolean;
+}
+
+/** The finish's judgement of the goal, when it carried one. */
+function goalMetOf(args: Record<string, unknown>): { goalMet?: boolean } {
+  const met = args['goalMet'];
+  return 'boolean' === typeof met ? { goalMet: met } : {};
+}
+
+/**
+ * The answer to a `finish` that came before anything was proved. Sent once per drive: a real drive
+ * asked to "click twice and check it reads 2" clicked once, finished, and saved a flow whose replay
+ * verifies nothing, which is the paid feature producing an empty pass.
+ */
+export const MSG_FINISH_UNPROVED =
+  `Not finished: nothing has been proved yet. Before finishing, end the journey with ` +
+  `${ReticleTool.ACT_AND_WAIT} and an \`until\` naming the end state it must reach, or ` +
+  `${ReticleTool.ASSERT} on it. A drive that proves nothing replays as "verified nothing".`;
+
+/** A check that ran: the only thing that turns a drive into evidence. */
+function isProof(outcome: ToolOutcome): boolean {
+  if (outcome.isError) return false;
+  if (ReticleTool.ASSERT === outcome.name) return true;
+  return ReticleTool.ACT_AND_WAIT === outcome.name && asRecord(outcome.args)['until'] !== undefined;
 }
 
 /**
@@ -242,6 +281,8 @@ export async function runHarness(
   const history: HistoryEntry[] = [{ role: 'user', text: OPENING }];
   const toolCalls: ToolOutcome[] = [];
   const usage: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+  const proved = (): boolean => toolCalls.some(isProof);
+  let askedToProve = false;
 
   for (let step = 0; step < maxSteps; step += 1) {
     let turn: ModelTurn;
@@ -253,11 +294,12 @@ export async function runHarness(
       );
     } catch (error) {
       return {
-        stopReason: StopReason.BROKEN,
+        stopReason: error instanceof DriveStoppedError ? StopReason.STOPPED : StopReason.BROKEN,
         summary: '',
         steps: step,
         toolCalls,
         usage,
+        proved: proved(),
         error: error instanceof Error ? error.message : String(error),
       };
     }
@@ -277,12 +319,42 @@ export async function runHarness(
         steps: step + 1,
         toolCalls,
         usage,
+        proved: proved(),
       };
     }
 
     history.push({ role: 'assistant', text: turn.text, calls: turn.calls });
 
     const finish = turn.calls.find((call) => FINISH_TOOL.name === call.name);
+    if (finish !== undefined && !proved() && !askedToProve) {
+      // Whatever else the turn asked for runs first: a check sent alongside `finish` is proof.
+      const others = await Promise.all(
+        turn.calls.filter((c) => c !== finish).map((c) => invokeOne(toolset, c)),
+      );
+      toolCalls.push(...others);
+      if (proved()) {
+        const summary = finish.args['summary'];
+        return {
+          stopReason: StopReason.FINISHED,
+          summary: 'string' === typeof summary ? summary : turn.text,
+          steps: step + 1,
+          toolCalls,
+          usage,
+          proved: true,
+          ...goalMetOf(finish.args),
+        };
+      }
+      askedToProve = true;
+      const refused: ToolOutcome = {
+        id: finish.id,
+        name: finish.name,
+        args: finish.args,
+        result: { error: MSG_FINISH_UNPROVED },
+        isError: true,
+      };
+      history.push({ role: 'tool', outcomes: [...others, refused] });
+      continue;
+    }
     if (finish !== undefined) {
       const summary = finish.args['summary'];
       return {
@@ -291,6 +363,8 @@ export async function runHarness(
         steps: step + 1,
         toolCalls,
         usage,
+        proved: proved(),
+        ...goalMetOf(finish.args),
       };
     }
 
@@ -302,7 +376,14 @@ export async function runHarness(
     history.push({ role: 'tool', outcomes });
   }
 
-  return { stopReason: StopReason.BUDGET, summary: '', steps: maxSteps, toolCalls, usage };
+  return {
+    stopReason: StopReason.BUDGET,
+    summary: '',
+    steps: maxSteps,
+    toolCalls,
+    usage,
+    proved: proved(),
+  };
 }
 
 /**

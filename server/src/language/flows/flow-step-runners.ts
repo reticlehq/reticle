@@ -29,6 +29,7 @@ import { anchorFieldName } from './flows.js';
 import type { FlowReplaySession, Sleep } from './flow-replay-types.js';
 import {
   ambiguityDrift,
+  refFor,
   anchorLabel,
   componentLabel,
   componentQueryArgs,
@@ -120,7 +121,7 @@ export async function runRoleStep(
   if (ambiguous !== null) {
     return { step: index, tool: step.tool, anchor: label, ok: false, drift: ambiguous };
   }
-  const ref = refs[0];
+  const ref = refFor(anchor, refs);
   if (ref === undefined) {
     // `nearest` used to be the literal null, so heal answered "no nearest match cleared the
     // confidence floor" for EVERY role-anchored drift — a structural limit reported as a judgement
@@ -528,7 +529,7 @@ export async function runSequenceStep(
     if (ambiguous !== null) {
       return { stop: { step: index, tool: step.tool, anchor: label, ok: false, drift: ambiguous } };
     }
-    const ref = refs[0];
+    const ref = afterRerender ? refFor(sub.anchor, refs) : refs[0];
     if (ref === undefined) {
       return {
         stop: {

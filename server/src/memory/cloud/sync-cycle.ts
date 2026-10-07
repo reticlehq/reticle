@@ -41,10 +41,10 @@ const SYNC_PULL_PATH = '/v1/sync/pull';
 /**
  * The derived records that ride along with runs, and the file each one lives in.
  *
- * A list rather than three hand-written blocks so adding a fourth is one line and cannot be
- * half-done — the bundle, the hashing and the reporting all walk this.
+ * One list, so adding a record is one line and cannot be half-done: the bundle, the hashing, the
+ * reporting and the disk source (`sync-disk.ts`) all read it.
  */
-const DERIVED_RECORDS = [
+export const DERIVED_RECORDS = [
   { kind: 'impact', file: ReticleDir.IMPACT_FILE },
   { kind: 'flake', file: ReticleDir.FLAKE_FILE },
   { kind: 'intent', file: ReticleDir.INTENT_FILE },
@@ -52,6 +52,10 @@ const DERIVED_RECORDS = [
   // cannot tell a server a page that drifted from one that always behaved that way.
   { kind: 'envelopes', file: ReticleDir.ENVELOPES_FILE },
   { kind: 'assertion-tiers', file: ReticleDir.TIERS_FILE },
+  // Reticle Coverage: what the platform's Overview shows as controls proved and routes reached.
+  { kind: 'coverage', file: ReticleDir.COVERAGE_FILE },
+  // The notes a human pinned in the HUD, pending and resolved: the review trail a team reads.
+  { kind: 'notes', file: ReticleDir.NOTES_FILE },
 ] as const;
 
 type DerivedKind = (typeof DERIVED_RECORDS)[number]['kind'];
@@ -273,6 +277,10 @@ const FLOW_VERSION_FIX = 'update the platform or remove `compare` from the flow'
 const RUN_VERSION_FIX = 'update the platform';
 
 /** The server's per-part answer: accepted count and rejection list, each read defensively. */
+/** A 200 that never confirmed the runs it was sent. Kept queued, and said, rather than dropped. */
+export const MSG_RUNS_UNCONFIRMED =
+  'sync 200 without a runs result: the server did not confirm the runs it was sent, so they stay queued';
+
 function partResult(body: Record<string, unknown>, part: string) {
   const raw = isRecord(body[part]) ? body[part] : {};
   const accepted = 'number' === typeof raw['accepted'] ? raw['accepted'] : 0;
@@ -543,6 +551,13 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
         break;
       }
       const answer = isRecord(pushed.json) ? pushed.json : {};
+      // Runs were sent and the answer says nothing about them: a proxy's 200 page, an empty body.
+      // Delivered means the server said so. Recording them as sent here dropped them for good while
+      // the cycle reported ok; they stay queued, and the reason is the cycle's error.
+      if (batch.length > 0 && !isRecord(answer['runs'])) {
+        pushError = MSG_RUNS_UNCONFIRMED;
+        break;
+      }
       const runs = partResult(answer, 'runs');
       runsSent += runs.accepted;
       // Accepted means the server has it. A rejected run was refused by index, so it is exactly as

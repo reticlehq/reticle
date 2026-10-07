@@ -190,6 +190,49 @@ const KEY_REPEAT_MS = 33;
 const KEY_REPEAT_DELAY_MS = 500;
 
 /**
+ * The legacy `keyCode` a keyboard gives each named key. Read by a great many handlers still
+ * (`if (e.keyCode === 13)`), and `KeyboardEvent`'s constructor cannot set it: a synthetic event
+ * reads 0, so those handlers ignore it while the press reports success. TodoMVC is one.
+ */
+const LEGACY_KEY_CODES: Readonly<Record<string, number>> = {
+  Backspace: 8,
+  Tab: 9,
+  Enter: 13,
+  Shift: 16,
+  Control: 17,
+  Alt: 18,
+  Escape: 27,
+  ' ': 32,
+  PageUp: 33,
+  PageDown: 34,
+  End: 35,
+  Home: 36,
+  ArrowLeft: 37,
+  ArrowUp: 38,
+  ArrowRight: 39,
+  ArrowDown: 40,
+  Delete: 46,
+  Meta: 91,
+};
+const SINGLE_ALNUM = /^[a-z0-9]$/i;
+
+/** The keyCode a keyboard would report for `key`: named keys by table, a letter or digit by its upper-case code. */
+export const legacyKeyCode = (key: string): number =>
+  LEGACY_KEY_CODES[key] ?? (SINGLE_ALNUM.test(key) ? key.toUpperCase().charCodeAt(0) : 0);
+
+/** A KeyboardEvent as a keyboard sends it, `keyCode` and `which` included. */
+export function keyboardEvent(
+  type: string,
+  init: KeyboardEventInit & { key: string },
+): KeyboardEvent {
+  const event = new KeyboardEvent(type, init);
+  const code = legacyKeyCode(init.key);
+  for (const legacy of ['keyCode', 'which'] as const)
+    Object.defineProperty(event, legacy, { get: () => code });
+  return event;
+}
+
+/**
  * Hold one key down for `ms`, emitting the `repeat: true` keydowns a browser sends while it is held.
  *
  * The repeats are the point rather than decoration: an app that counts keydowns to drive a
@@ -208,7 +251,7 @@ export async function holdKey(
   while (Date.now() - started < ms) {
     asSyntheticInput(() =>
       el.dispatchEvent(
-        new KeyboardEvent('keydown', {
+        keyboardEvent('keydown', {
           key,
           code,
           bubbles: true,
@@ -250,7 +293,7 @@ export async function pressCombo(
     const code = pressCode({}, key);
     return asSyntheticInput(() =>
       el.dispatchEvent(
-        new KeyboardEvent(type, { key, code, bubbles: true, cancelable: true, ...held }),
+        keyboardEvent(type, { key, code, bubbles: true, cancelable: true, ...held }),
       ),
     );
   };

@@ -78,6 +78,9 @@ describe('nothing still reaches for the composer', () => {
     // The controls that DO remain are still listed — this must not pass by emptying the selector.
     expect(HUD_DRAG_IGNORE_SEL).toContain('data-reticle-pause');
     expect(HUD_DRAG_IGNORE_SEL).toContain('data-reticle-export');
+    // The toolbar itself is a drag handle. Its newer view buttons must bypass the drag recognizer,
+    // or pointerdown is prevented before Flows, Notes and Impact can receive their clicks.
+    expect(HUD_DRAG_IGNORE_SEL).toContain('.reticle-toolbar-chrome button');
   });
 
   it('opening the chat does not try to focus a deleted input', () => {

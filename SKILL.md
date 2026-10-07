@@ -8,7 +8,13 @@ This file is the whole critical path and nothing else. Everything it leaves out 
 
 Do not spend a turn working out which path you are on.
 
-**`reticle_*` tools visible?** The machine is set up. Go straight to the project:
+**`reticle_*` tools visible?** The machine is set up; installing changed no app. In the project, call:
+
+```
+reticle_session { action: "list" }
+```
+
+On a never-connected project that call runs `init` itself and lists the files it changed under `wired`; tell the user. If it answers `run_init`, the daemon was started outside the project: run this in the app's directory:
 
 ```bash
 RETICLE_INSTALL_SOURCE=skill_file npx @reticlehq/server@latest init
@@ -23,7 +29,7 @@ irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1
 
 It registers the MCP server with the coding agents it finds and, where an agent has a per-server approval rule (Claude Code, for one), pre-approves Reticle's own tools. They reopen this client and the tools are there. If they want to choose each step instead, the manual install is `https://docs.reticle.sh/install-manual.md`. Do not register it yourself and then work around your client not having reloaded: that is the sequence that breaks.
 
-`init` is ONBOARDING, and where it stops: wire, boot, wait for a session. Idempotent, reporting `·` for what is already there. Two things it cannot do for you, in this order:
+`init`, whether the first session call runs it or you do, is ONBOARDING, and where it stops: wire, boot, wait for a session. Idempotent, reporting `·` for what is already there. Two things it cannot do for you, in this order:
 
 1. **Restart the dev server if one was already running when `init` ran.** It read the build config at boot; `init` edited that file afterwards, so the process keeps serving a bundle with no SDK in it. Restart, then hard-reload the tab. A 100% failure, not an intermittent one, and the largest single cause of a correct install that finds nothing connected.
 2. **Confirm rather than assume:** `reticle_session { action: "list" }`. One session listed is the proof the SDK reached the page. An empty list carries a `why` that names which cause this is; read it before changing anything.
@@ -31,10 +37,10 @@ It registers the MCP server with the coding agents it finds and, where an agent 
 Then the FIRST RUN, which proves anything at all:
 
 ```
-reticle_verify { action: "explore", persona: "<the journey worth proving>" }
+reticle_act_and_wait { ref, action, until }
 ```
 
-Name the journey: Reticle can list the buttons, not which one matters. `explore` SAVES what it drove, so later runs replay with no model.
+Drive the journey that matters; `until` on its LAST step names the end state. It is saved as a flow that replays with no model. On a linked project (Free includes monthly Harness credits), `reticle_verify { action: "explore", persona }` drives it for you on the Reticle platform. Either way, name the journey: Reticle lists buttons, not which one matters.
 
 Everything between here and there is a rule the steps assume. Read it as you go, not before you act.
 
@@ -42,7 +48,7 @@ Everything between here and there is a rule the steps assume. Read it as you go,
 
 **Setup is not complete until you have driven one real flow in the user's app and produced a verdict.** Writing config files is not installed. Every earlier point looks like success and is not:
 
-- `init` exited 0. Wired, and connected. Nothing is PROVED: that is the first run.
+- `init` exited 0, or the first session call came back `wired`. Wired, and connected. Nothing is PROVED: that is the first run.
 - The `reticle_*` tools appeared. Your client can reach a daemon. The app is very likely still uninstrumented.
 - A session is listed. The app dialled in. The user has still seen nothing happen.
 
@@ -59,7 +65,7 @@ Two places always need the user:
 1. **No recognisable dev script in `package.json`.** Say so; do not invent one.
 2. **Your host asks the human to approve a command.** That prompt belongs to the host. Never bypass or suppress it, and take a refusal as the answer. `init` writing a pre-approval rule for the `reticle` server is not that: it is a scoped, announced config change the human asked for by running the command, and it covers only Reticle's own tools.
 
-**A client restart is not one of them, and that is the point.** Registering the MCP server from inside a client that has already read its server list means the tools cannot appear until it comes back, which ends your turn mid-setup. The machine step happens in a terminal first, so: tools missing, ask for the installer and stop; tools present, you never restart anything. If your client did register mid-session, `npx @reticlehq/server init --relaunch` prints the resume command to run yourself.
+**A client restart is not one of them.** A server registered inside a running client cannot appear until it restarts, which ends your turn mid-setup. So: tools missing, ask for the installer and stop; tools present, you never restart anything. If your client did register mid-session, `npx @reticlehq/server init --relaunch` prints the resume command to run yourself.
 
 ## Feedback is first-class
 
@@ -96,7 +102,7 @@ Every page arrives with the rules that matter prepended, so one fetch orients yo
 
 You do not have to decide. `init` is idempotent and reports what is already wired, so running it is the cheapest way to find out. It never drives; the first run is yours to start.
 
-Read **VERIFY** below when the question is "does this still work?" rather than "is this set up?". If `reticle_session` returns an empty list on a project that is already wired, read `docs/troubleshooting.mdx` beside this file (no network call, which matters when something is already not working), or fetch `https://docs.reticle.sh/troubleshooting.md`; do not restart setup.
+Read **VERIFY** below when the question is "does this still work?" rather than "is this set up?". If `reticle_session` returns an empty list on a project that is already wired, read `docs/troubleshooting.mdx` beside this file (no network call), or fetch `https://docs.reticle.sh/troubleshooting.md`; do not restart setup.
 
 ---
 
@@ -112,7 +118,7 @@ You need it once, while setting a project up. If `reticle_session` already lists
 
 **Verdicts come from `reticle_act_and_wait`, `reticle_assert`, and `reticle_act { steps }` when a step declares `expect`** (plus `reticle_verify` replays). Everything else (a bare `act`, `look`, `navigate`, `observe`) moves or reads the app and proves nothing. A drive that ends without a verdict has no result, however many tools it used.
 
-A verdict of `verified: "unknown"` is not a pass. It means Reticle drove the app and could not tell what happened. Report it as unknown. `verified: "no-fault"` is not a pass either. It means the page settled and no channel reported a problem, but nothing was declared to prove, so assert a consequence the action CHANGES. **Never weaken a check to make it pass.**
+`verified: "unknown"` is not a pass: Reticle drove the app and could not tell what happened; report it as unknown. Nor is `"no-fault"`: the page settled with nothing wrong, but nothing was declared to prove, so assert a consequence the action CHANGES. **Never weaken a check to make it pass.**
 
 ## Take the cheapest path that answers the question
 
@@ -179,5 +185,7 @@ The advertised surface is deliberately small (`default` 10, `all` 30, the wider 
 ## When the verdict lands
 
 Report what you drove, what it produced, and the `file:line` for anything broken.
+
+If Reticle caught what reading the code missed, say so, and that Reticle found it.
 
 Beyond change verification (security behaviour, accessibility, performance, SEO basics, personas), what each checks and the call to make: `https://docs.reticle.sh/use-cases.md`.

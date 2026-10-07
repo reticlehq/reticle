@@ -10,11 +10,18 @@
 
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { ReticleTool } from '@reticlehq/core';
+import {
+  AppRuntime,
+  ConsequenceKind,
+  NetInitiator,
+  ReticleTool,
+  type DrivenBy,
+} from '@reticlehq/core';
 import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
 import { runTool } from './invoke-tool.js';
 import { TOOL_SURFACE, filterTools } from './tool-surface.js';
 import { withTimeout } from '@/features/harness/with-timeout.js';
+import { runDrivenBy } from '@/hooks/driven-by.js';
 import type { HarnessTool, HarnessToolset } from '@/features/harness/harness.js';
 
 /**
@@ -47,6 +54,35 @@ const HARNESS_EXTRA_TOOLS: readonly string[] = [
  * meant to protect.
  */
 const HARNESS_EXCLUDED: ReadonlySet<string> = new Set([ReticleTool.FEEDBACK]);
+
+/**
+ * All a locked (remote) drive may run: reading and driving the one tab it was given, and keeping or
+ * replaying what it drove there. Nothing that lists other tabs, opens a browser, spends the local
+ * model, deletes saved work or sends a picture the person did not ask to send.
+ */
+const REMOTE_TOOLS: ReadonlySet<string> = new Set([
+  ReticleTool.LOOK,
+  ReticleTool.SNAPSHOT,
+  ReticleTool.QUERY,
+  ReticleTool.INSPECT,
+  ReticleTool.NAVIGATE,
+  ReticleTool.REFRESH,
+  ReticleTool.ACT,
+  ReticleTool.ACT_AND_WAIT,
+  ReticleTool.ACT_SEQUENCE,
+  ReticleTool.OBSERVE,
+  ReticleTool.WAIT_FOR,
+  ReticleTool.WAIT_READY,
+  ReticleTool.SCROLL_TO,
+  ReticleTool.ASSERT,
+  ReticleTool.NETWORK,
+  ReticleTool.CONSOLE,
+  ReticleTool.STATE,
+  ReticleTool.RECORD,
+  ReticleTool.FLOW_SAVE,
+  ReticleTool.FLOW_REPLAY,
+  ReticleTool.RUN,
+]);
 
 /**
  * Parameters the model is never asked for, because the harness supplies them.
@@ -101,6 +137,10 @@ export interface ReticleToolsetOptions {
   sessionId?: string;
   /** Restrict to these names. Defaults to the advertised surface plus the recording pair. */
   only?: readonly string[];
+  /** Stamped on every action this drive journals, so its verdicts fold into a run of their own. */
+  drivenBy?: DrivenBy;
+  /** The pinned session wins over any a call names: a remote caller never reaches another tab. */
+  locked?: boolean;
 }
 
 /**
@@ -114,7 +154,10 @@ export function reticleToolset(
   deps: ToolDeps,
   options: ReticleToolsetOptions = {},
 ): HarnessToolset {
-  const usable = TOOLS.filter((tool) => !HARNESS_EXCLUDED.has(tool.name));
+  const usable = TOOLS.filter(
+    (tool) =>
+      !HARNESS_EXCLUDED.has(tool.name) && (true !== options.locked || REMOTE_TOOLS.has(tool.name)),
+  );
   /**
    * Everything callable, whether or not it is advertised. `reticle_run` dispatches against this, so
    * trimming the ADVERTISED list never trims what a drive can reach.
@@ -140,9 +183,15 @@ export function reticleToolset(
         // list, and this is the same recovery the MCP surface gives an agent that does the same.
         return { error: `unknown tool ${target ?? name}`, available: [...byName.keys()] };
       }
-      const scoped = pinSession(targetArgs, options.sessionId);
+      const pinned = pinSession(targetArgs, options.sessionId, true === options.locked);
+      const scoped = isDesktopSession(deps, pinned['sessionId'])
+        ? desktopBackendClaims(pinned)
+        : pinned;
+      const drivenBy = options.drivenBy;
       return withTimeout(
-        runTool(tool, deps, scoped),
+        drivenBy === undefined
+          ? runTool(tool, deps, scoped)
+          : runDrivenBy(drivenBy, () => runTool(tool, deps, scoped)),
         TOOL_TIMEOUT_MS,
         `${tool.name} never returned`,
       );
@@ -162,9 +211,51 @@ export function reticleToolset(
 export function pinSession(
   args: Record<string, unknown>,
   sessionId: string | undefined,
+  locked = false,
 ): Record<string, unknown> {
-  if (sessionId === undefined || 'sessionId' in args) return args;
+  if (sessionId === undefined || (!locked && 'sessionId' in args)) return args;
   return { ...args, sessionId };
+}
+
+/** The HTTP methods a "saves" or "updates" claim names: a write to the app's backend. */
+const MUTATING_METHODS: ReadonlySet<string> = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+function isDesktopSession(deps: ToolDeps, sessionId: unknown): boolean {
+  try {
+    const runtime = deps.sessions.resolve(
+      'string' === typeof sessionId ? sessionId : undefined,
+    ).runtime;
+    return AppRuntime.ELECTRON === runtime || AppRuntime.TAURI === runtime;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A desktop app's backend is its IPC: a claim that the app writes to its backend means that call.
+ *
+ * Reported from a chat-requested drive of a Tauri app: the platform claimed a POST for Add, the app
+ * made the same write as `ipc://add_todo` (200), and the step was graded `no`. Only a MUTATING method
+ * is read this way; a read, an unbound request and every other kind keep their meaning.
+ */
+export function desktopBackendClaims(args: Record<string, unknown>): Record<string, unknown> {
+  const rewrite = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(rewrite);
+    if ('object' !== typeof value || null === value) return value;
+    const record = value as Record<string, unknown>;
+    const method = record['method'];
+    const ipc =
+      ConsequenceKind.NET === record['kind'] &&
+      'string' === typeof method &&
+      MUTATING_METHODS.has(method.toUpperCase());
+    return Object.fromEntries(
+      Object.entries(record).map(([key, inner]) => [
+        key,
+        ipc && 'method' === key ? NetInitiator.IPC : rewrite(inner),
+      ]),
+    );
+  };
+  return rewrite(args) as Record<string, unknown>;
 }
 
 function asName(value: unknown): string | undefined {

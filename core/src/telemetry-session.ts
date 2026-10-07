@@ -370,11 +370,13 @@ export const SessionSummarySchema = z.object({
    * `hudControls` counts presses per control id (a toggle as `id:on` / `id:off`), `hudViewMs` and
    * `hudPanelMs` time how the HUD sat (bubble / collapsed / expanded) and which panel was showing,
    * and `hudJourney` is the window's presses and view changes in order, cut at 60 with
-   * `hudJourneyCut`. Every key is a control id from core's closed list: names, never values.
+   * `hudJourneyCut`. `hudSlides` counts how often each rail slide was shown, by its id. Every key
+   * is a control or slide id Reticle authored: names, never values.
    */
   hudControls: z.record(z.number()).optional(),
   hudViewMs: z.record(z.number()).optional(),
   hudPanelMs: z.record(z.number()).optional(),
+  hudSlides: z.record(z.number()).optional(),
   hudJourney: z.array(z.string().max(64)).max(60).optional(),
   hudJourneyCut: z.literal(true).optional(),
   /** Was this a clean shutdown, or a periodic flush of a still-running session? */

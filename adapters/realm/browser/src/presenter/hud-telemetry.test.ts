@@ -102,6 +102,42 @@ describe('every HUD control is counted by name', () => {
 });
 
 describe('reporting HUD use', () => {
+  // Which rail slides were actually seen: an impression when one becomes the visible slide.
+  it('reports a rail slide each time a different one is shown in the Agent Log', async () => {
+    const seen: HudUseData[] = [];
+    const presenter = new Presenter({ onHudUse: (u) => seen.push(u) });
+    presenter.mount();
+    document.querySelector<HTMLElement>('[data-reticle-fab]')?.click();
+    await flush();
+    const first = seen.filter((u) => u.slide !== undefined);
+    expect(first).toHaveLength(1);
+    document.querySelector<HTMLElement>('[data-reticle-carousel-next]')?.click();
+    await flush();
+    const slides = seen.flatMap((u) => (u.slide === undefined ? [] : [u.slide]));
+    expect(slides).toHaveLength(2);
+    expect(slides[0]).not.toBe(slides[1]);
+    presenter.destroy();
+  });
+
+  // Time per page, not only per panel: Flows and Notes live inside the Agent Log panel.
+  it('reports the Flows and Notes pages as their own panels', async () => {
+    const seen: HudUseData[] = [];
+    const presenter = new Presenter({ onHudUse: (u) => seen.push(u) });
+    presenter.mount();
+    document.querySelector<HTMLElement>('[data-reticle-fab]')?.click();
+    await flush();
+    document.querySelector<HTMLElement>('[data-reticle-chat-view-btn="flows"]')?.click();
+    await flush();
+    expect(seen).toContainEqual({ view: HudView.EXPANDED, panel: HudPanel.FLOWS });
+    document.querySelector<HTMLElement>('[data-reticle-chat-view-btn="annotations"]')?.click();
+    await flush();
+    expect(seen).toContainEqual({ view: HudView.EXPANDED, panel: HudPanel.NOTES });
+    document.querySelector<HTMLElement>('[data-reticle-chat-view-btn="activity"]')?.click();
+    await flush();
+    expect(seen.at(-1)).toEqual({ view: HudView.EXPANDED, panel: HudPanel.CHAT });
+    presenter.destroy();
+  });
+
   it('reports a press, a toggle with the state it landed in, and where the HUD sits', async () => {
     const seen: HudUseData[] = [];
     const presenter = new Presenter({ onHudUse: (u) => seen.push(u) });

@@ -27,7 +27,7 @@ describe('accessible-name round trip', () => {
     const el = document.querySelector('input') as HTMLInputElement;
     const role = getRole(el);
     const name = getAccessibleName(el);
-    expect({ role, name }).toEqual({ role: 'textbox', name: 'Search User' });
+    expect({ role, name }).toEqual({ role: 'searchbox', name: 'Search User' });
     expect(matchQuery({ role, name }).matched, 'reported, therefore matchable').toBe(true);
   });
 
@@ -51,8 +51,9 @@ describe('accessible-name round trip', () => {
 
   it('uses the role Reticle reports, not a second library role', () => {
     document.body.innerHTML = '<input type="search" placeholder="Search User" />';
+    // HTML-AAM reports searchbox for input[type=search], and textbox queries remain backward-compatible.
     expect(matchQuery({ role: 'textbox', name: 'Search User' }).matched).toBe(true);
-    expect(matchQuery({ role: 'searchbox', name: 'Search User' }).matched).toBe(false);
+    expect(matchQuery({ role: 'searchbox', name: 'Search User' }).matched).toBe(true);
   });
 
   it('the ordinary label path is unchanged', () => {

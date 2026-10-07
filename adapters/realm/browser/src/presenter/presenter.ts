@@ -1,5 +1,7 @@
 import {
   ActionType,
+  HudCorner,
+  HudVisibility,
   HumanControlKind,
   ReticleCommand,
   PresenterMode,
@@ -22,6 +24,7 @@ import {
   appendLogRow,
   clearLogRows,
   trimLogRows,
+  type LogActor,
   type LogKind,
   type LogResult,
   type LogHandle,
@@ -29,9 +32,18 @@ import {
 import { PRESENTER_CSS } from './presenter-styles.js';
 import { HudShell } from './presenter-shell.js';
 import { parseImpactSnapshot } from './chrome/presenter-report-copy.js';
+import { scheduleSyncDockLayout } from './presenter-dock-layout.js';
+import {
+  applyHudPosition,
+  clampHudPosition,
+  hudLayoutBox,
+  resetHudDockPosition,
+} from './presenter-hud-position.js';
 import {
   BorderMode,
   DEFAULT_BORDER_MODE,
+  DOCK_ATTR,
+  HIDDEN_UNTIL_RESTART_ATTR,
   DATA_BUSY,
   BUSY_OFF,
   effectivePaceMs,
@@ -66,6 +78,7 @@ import {
   CONTROLS_FLOWS_HTML,
   CONTROLS_MARKS_HTML,
   CONTROLS_FOOT_HTML,
+  CONTROLS_STATUS_HTML,
   ENDED_FADE_MS,
   ControlPanel,
   type ControlHandler,
@@ -81,6 +94,13 @@ import {
 import { Annotator, type AnnotatorChrome } from '@/review/annotator.js';
 import { shouldAutoOpenChat } from './presenter-shell.js';
 import { installHudTelemetry } from './hud-telemetry.js';
+import { PLAN_HTML, PlanBoard, parsePlanView } from './presenter-plan.js';
+import {
+  claimLog,
+  readRememberedLog,
+  rememberLog,
+  type RememberedRow,
+} from './chrome/log-memory.js';
 
 /** How long the copy button shows it worked. */
 const COPIED_FLASH_MS = 1600;
@@ -134,6 +154,9 @@ export class Presenter {
   // v2: narration + action status accumulate in a persistent, timestamped, scrollable log.
   #logMax: number;
   #log: HTMLElement | undefined;
+  #plan = new PlanBoard();
+  /** The rows on screen, as they are kept across a reload. */
+  #remembered: RememberedRow[] = [];
   /** now of the first row, the baseline for the +elapsed timestamps. */
   #logBaseMs: number | undefined;
   // Live-control panel: the two-way control surface (Pause/Resume + End + message Send).
@@ -179,11 +202,15 @@ export class Presenter {
       // The panel's sync button, onto the same browser→bridge channel the pause, resume and ▶
       // replay controls already use. A new control on an existing channel, not a new channel.
       onSyncNow: () => this.#onControl?.({ kind: HumanControlKind.SYNC }),
+      onSignIn: () => this.#onControl?.({ kind: HumanControlKind.SIGNIN }),
+      onHarness: (enabled) =>
+        this.#onControl?.({ kind: HumanControlKind.HARNESS, text: enabled ? 'on' : 'off' }),
       settings: {
         onBeforeOpen: () => {
           if (this.#shell.isCollapsed()) this.#shell.expand();
         },
         onHideUntilRestart: () => this.#applyHideUntilRestart(),
+        onKill: () => options.onKill?.(),
         onSettingsChange: (s) => this.#onSettingsChange(s),
         // Emitted like every other human control. The panel does not store this: the platform owns
         // it, because the dashboard offers the same switch.
@@ -218,6 +245,12 @@ export class Presenter {
   handlePush(command: { name: string; args: Record<string, unknown> }): void {
     const a = command.args;
     if (command.name === ReticleCommand.FLOWS) return void this.#panel.setFlows(a['flows']);
+    if (command.name === ReticleCommand.FLOW_PROGRESS) return void this.#panel.setFlowProgress(a);
+    if (command.name === ReticleCommand.PLAN) {
+      const view = parsePlanView(a);
+      if (view !== undefined) this.#plan.paint(view);
+      return;
+    }
     if (command.name === ReticleCommand.IMPACT) {
       const snapshot = parseImpactSnapshot(a['snapshot']);
       if (snapshot !== undefined) {
@@ -229,9 +262,12 @@ export class Presenter {
         // describe different moments. Project counts, not machine-wide: the question the menu answers
         // is "what has happened HERE".
         // The one thing this HUD advertises, from the same snapshot as everything else it shows.
-        this.#shell.paintOffer(snapshot.harnessOffer);
+        this.#shell.paintOffer(snapshot.harnessOffer, snapshot.notices);
         // Same snapshot, same moment: the switch cannot disagree with the card above it.
         this.#shell.paintHarness(snapshot.harnessConfig);
+        this.#shell.paintImpact(snapshot.project.counts.verdicts);
+        const owner = true === snapshot.account?.signedIn ? snapshot.account.email : undefined;
+        if (claimLog(owner)) this.#clearRunLog();
         this.#shell.paintAccount(snapshot.account, snapshot.dashboardUrl, {
           projectName: snapshot.projectName,
           dashboardUrl: snapshot.dashboardUrl,
@@ -266,13 +302,13 @@ export class Presenter {
     // A sibling BELOW the strip, hidden except while reading or acting, would pop a block into the
     // panel and take it away again on every tool call — which reads as a second UI flashing in rather
     // than as the one status line changing what it says.
-    const actStrip = `<div class="reticle-act-strip" data-liveness="idle"><span class="reticle-act-dot" aria-hidden="true"></span><span class="reticle-act">${ACT_STRIP.READY}</span><span class="reticle-chip" data-reticle-chip></span></div>`;
+    const actStrip = `<div class="reticle-act-strip" data-liveness="idle"><span class="reticle-act-dot" aria-hidden="true"></span><span class="reticle-act">${ACT_STRIP.READY}</span>${CONTROLS_BANNER_HTML}<span class="reticle-chip" data-reticle-chip></span><div class="reticle-act-actions">${CONTROLS_STATUS_HTML}</div></div>`;
     root.innerHTML = `
       ${blockerHtml()}
       <div data-reticle-glow></div>
       <div data-reticle-cursor></div>
       <div data-reticle-ring></div>
-      ${HudShell.dockHtml(actStrip, CONTROLS_BANNER_HTML, DATA_RETICLE_LOG, CONTROLS_MARKS_HTML + CONTROLS_FLOWS_HTML, CONTROLS_FOOT_HTML)}`;
+      ${HudShell.dockHtml(actStrip, PLAN_HTML, DATA_RETICLE_LOG, CONTROLS_MARKS_HTML + CONTROLS_FLOWS_HTML, CONTROLS_FOOT_HTML)}`;
     document.body.appendChild(root);
     this.#root = root;
     this.#glow = root.querySelector<HTMLElement>('[data-reticle-glow]') ?? undefined;
@@ -293,11 +329,30 @@ export class Presenter {
     this.#glowCtl.setElements(this.#glow, this.#cursor);
     // The panel queries its refs, binds listeners, and paints the initial active state.
     this.#panel.mount(root, this.#glow);
+    this.#plan.mount(root);
     if (this.#onHudUse !== undefined) {
       this.#hudTelemetryTeardown = installHudTelemetry(document, root, this.#onHudUse);
     }
     this.setMode(this.#mode);
+    this.#restoreLog();
     this.#renderTally();
+  }
+  /** Repaint the rows this tab showed before the page reloaded. */
+  #restoreLog(): void {
+    const log = this.#log;
+    if (log === undefined || 0 < this.#remembered.length) return;
+    for (const row of readRememberedLog().slice(-this.#logMax)) {
+      const handle = appendLogRow(log, row.kind, row.text, row.ts, this.#logMax, row.actor);
+      if (row.result !== undefined) handle.result(row.result);
+      this.#logBaseMs = this.#now() - row.at;
+      this.#runLog.push({
+        at: row.at,
+        kind: row.kind,
+        text: row.text,
+        ...(row.result === undefined ? {} : { result: row.result }),
+      });
+      this.#remembered.push(row);
+    }
   }
   /** Wire annotation chrome; expanding the HUD enters annotate mode. */
   bindAnnotator(annotator: Annotator): void {
@@ -311,13 +366,14 @@ export class Presenter {
     const row = root.querySelector(`[${MARKS_ROW_ATTR}]`);
     const chrome: AnnotatorChrome = {};
     if (row instanceof HTMLElement) chrome.copyRow = row;
-    // The first note opens the chat, where the row saying what notes are for and how to hand them
-    // to an agent lives. Only the first: somebody who closes it again while marking is not argued with.
+    // The first note brings the Notes page forward, where the list, copy and clear live. It used to
+    // open the chat, which pulled somebody adding several notes off the page they were working in.
     let marks = annotator.markCount;
     chrome.onCount = (n) => {
-      if (0 === marks && n > 0) this.#shell.openChat();
+      if (0 === marks && n > 0) this.#shell.openView('annotations');
       marks = n;
     };
+    chrome.onMarksChange = (items) => this.#shell.paintAnnotations(items);
     if (copy instanceof HTMLElement) {
       copy.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -362,6 +418,9 @@ export class Presenter {
     this.#sessionActive = false;
     this.#logBaseMs = undefined;
     this.#log = undefined;
+    // Taken down on purpose (disconnect, or the agent removed the HUD), not by a reload: start clean.
+    this.#remembered = [];
+    rememberLog([]);
     this.#root?.remove();
     document.querySelectorAll('style[data-reticle-overlay]').forEach((s) => s.remove());
     this.#root = undefined;
@@ -588,6 +647,47 @@ export class Presenter {
       this.#heartbeatTimer = undefined;
     }
   }
+  /**
+   * Hide, remove, restore or move the HUD, for an agent whose test it is in the way of.
+   *
+   * The person can drag it or hide it from Settings; an agent had no way at all, so a HUD sitting
+   * over the control under test made that control untestable. Returns what was applied.
+   */
+  placeHud(visibility: HudVisibility | undefined, corner: HudCorner | undefined): string[] {
+    const root = this.#root;
+    if (root === undefined) return [];
+    const applied: string[] = [];
+    if (HudVisibility.REMOVED === visibility) {
+      this.destroy();
+      return [visibility];
+    }
+    if (HudVisibility.HIDDEN === visibility) root.setAttribute(HIDDEN_UNTIL_RESTART_ATTR, '1');
+    if (HudVisibility.SHOWN === visibility) root.removeAttribute(HIDDEN_UNTIL_RESTART_ATTR);
+    if (visibility !== undefined) applied.push(visibility);
+    const dock = root.querySelector(`[${DOCK_ATTR}]`);
+    if (corner !== undefined && dock instanceof HTMLElement) {
+      if (HudCorner.BOTTOM_RIGHT === corner) resetHudDockPosition(dock);
+      else {
+        const box = hudLayoutBox(dock);
+        const left = corner.endsWith('left') ? 0 : window.innerWidth;
+        const top = corner.startsWith('top') ? 0 : window.innerHeight;
+        const at = clampHudPosition(
+          left,
+          top,
+          box.width,
+          box.height,
+          window.innerWidth,
+          window.innerHeight,
+        );
+        applyHudPosition(dock, at.left, at.top);
+      }
+      applied.push(corner);
+      // Which side the panel opens on follows where the HUD now sits, as it does after a drag.
+      scheduleSyncDockLayout(dock, root);
+    }
+    return applied;
+  }
+
   /** Agent-tunable idle-end window (reticle_session). Floored so it can't be set uselessly small. */
   setIdleEndMs(ms: number): void {
     if (!Number.isFinite(ms)) return;
@@ -625,6 +725,8 @@ export class Presenter {
   }
   #clearRunLog(): void {
     this.#runLog = [];
+    this.#remembered = [];
+    rememberLog([]);
     this.#tallied = { passes: 0, fails: 0 };
     if (this.#log !== undefined) clearLogRows(this.#log);
     this.#renderTally();
@@ -640,17 +742,16 @@ export class Presenter {
     } else {
       this.#renderTally();
     }
-    if (this.#root !== undefined) {
-      const live = SessionState.ACTIVE === this.#panel.state && !this.#shell.isCollapsed();
-      syncPageBlocker(this.#root, settings, live);
-    }
+    // The same rule as everywhere else, from the one place that states it: block only while notes are
+    // being added. Recomputing it here from session state blocked the app on any settings change.
+    this.#syncAnnotator();
   }
   /**
    * Append an activity-log row. Accumulates (never overwrites): each call adds a timestamped row
    * with a mode chip + text. Returns a handle to stamp the row's outcome glyph (✓/✗) later, or
    * undefined when unmounted / when the text is empty after trimming.
    */
-  log(kind: LogKind, text: string, result?: LogResult): LogHandle | undefined {
+  log(kind: LogKind, text: string, result?: LogResult, actor?: LogActor): LogHandle | undefined {
     const ms = this.#now();
     this.#glowCtl.markActivity(ms);
     if (this.#log === undefined) return undefined;
@@ -665,8 +766,19 @@ export class Presenter {
     this.#runLog.push(entry);
     while (this.#runLog.length > this.#logMax) this.#runLog.shift();
     const ts = formatElapsed(ms - this.#logBaseMs);
-    const handle = appendLogRow(this.#log, kind, trimmed, ts, this.#logMax);
+    const handle = appendLogRow(this.#log, kind, trimmed, ts, this.#logMax, actor);
     if (result !== undefined) handle.result(result);
+    const kept: RememberedRow = {
+      kind,
+      text: trimmed,
+      ts,
+      at: ms - this.#logBaseMs,
+      ...(actor === undefined ? {} : { actor }),
+      ...(result === undefined ? {} : { result }),
+    };
+    this.#remembered.push(kept);
+    while (this.#remembered.length > this.#logMax) this.#remembered.shift();
+    rememberLog(this.#remembered);
     if (this.#shell.isCollapsed()) this.#shell.pulseFab(true);
     this.#renderTally();
     // Wrap the handle so a later outcome stamp updates BOTH the DOM glyph and the run-log entry.
@@ -674,6 +786,8 @@ export class Presenter {
       result: (r: LogResult) => {
         handle.result(r);
         entry.result = r;
+        kept.result = r;
+        rememberLog(this.#remembered);
         this.#renderTally(); // a deferred ✓/✗ stamp bumps the header tally
       },
     };

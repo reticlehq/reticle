@@ -3,6 +3,8 @@ import { asProjectId, type ChannelId, type ImpactSnapshot, type ProjectId } from
 import type { HandshakeFacts } from './facts/handshake-facts.js';
 import { refusedResult } from './page-commands/undeclared-command.js';
 import { recordImpact } from '@/memory/impact/impact-recorder.js';
+import { recordNotes } from './human/notes-ledger.js';
+import { commandPayload } from './command-payload.js';
 import { LastAct } from './last-act.js';
 import { GapLedger } from '@reticlehq/engine/evidence/gap-ledger.js';
 import { CaptureLedger } from '@/surface/tools/feature-capture.js';
@@ -26,7 +28,6 @@ import {
   HumanMarkDataSchema,
   HudUseDataSchema,
   ReticleCommand,
-  MessageKind,
   parseEventPayload,
   PresenterTone,
   SESSION_HEALTH,
@@ -150,6 +151,8 @@ export class Session implements HandshakeFacts {
   /** Which browser the page said it is (chrome/edge/arc/…). Undefined on an SDK too old to report one. */
   #brand: BrowserBrand | undefined;
   #focused = true;
+  /** The desktop window this is and its document's HTTP status, merged from every PAGE_HEALTH. */
+  readonly page: ReturnType<typeof readHealthEvent>['page'] = {};
   /** Liveness: wall-clock of the last AGENT command (distinct from browser chatter / lastSeen). */
   #lastAgentActivityAt: number;
   /** Server-side mirror of the agent-tuned idle window, so the reaper honors reticle_session. */
@@ -158,7 +161,7 @@ export class Session implements HandshakeFacts {
   #autoEnded = false;
   readonly #live = new LiveControl();
   /** Human review marks: mistakes the human pinned to elements, for the agent to drain and fix. */
-  readonly #review = new ReviewStore();
+  readonly #review = new ReviewStore((marks) => recordNotes(this.artifactRoot, marks));
   /** Whether the session_lease has already been returned (fire-once per session). */
   #firstCommandDone = false;
   /** Durable causal-journal recorder; undefined when journaling is off (opt-out or not yet attached). */
@@ -294,6 +297,7 @@ export class Session implements HandshakeFacts {
       runtime: this.#runtime,
       versionSkew: this.versionSkew,
       hidden: this.#hidden,
+      page: this.page,
       health: () => this.health(),
       staleMs: () => this.staleMs(),
       pendingMarkCount: () => this.#review.pendingCount(),
@@ -356,6 +360,7 @@ export class Session implements HandshakeFacts {
     if (event.editEpoch !== undefined) this.#editEpoch = event.editEpoch;
     if (event.type === EventType.PAGE_HEALTH) {
       const r = readHealthEvent(event.data);
+      Object.assign(this.page, r.page);
       this.applyHealth(
         r.hidden ?? this.#hidden,
         r.focused ?? this.#focused,
@@ -380,8 +385,7 @@ export class Session implements HandshakeFacts {
       const parsed = HumanMarkDataSchema.safeParse(event.data);
       if (parsed.success) {
         this.#review.add(parsed.data, this.elapsed());
-        // The impact record's `marks` field existed and nothing ever wrote it: the report would
-        // have shown a permanent zero next to a page covered in pins.
+        // Without this the report shows a permanent zero next to a page covered in pins.
         recordImpact({ marks: 1 }, {}, this.artifactRoot);
       }
     }
@@ -678,13 +682,7 @@ export class Session implements HandshakeFacts {
     const successor = this.#liveSuccessor();
     if (successor !== undefined) return successor.command(name, args, timeoutMs);
     const id = this.#pending.nextId(COMMAND_ID_PREFIX);
-    const payload = JSON.stringify({
-      kind: MessageKind.COMMAND,
-      id,
-      sessionId: this.id,
-      name,
-      args,
-    });
+    const payload = commandPayload(id, this.id, name, args);
     // The timeout message is built LAZILY: health can change while a command is in flight, and the
     // diagnosis should describe the page as it was when the command actually gave up.
     const awaited = this.#pending.track(id, timeoutMs, () =>
@@ -911,6 +909,14 @@ export class Session implements HandshakeFacts {
     this.#post(ReticleCommand.NARRATE, { text, level: 'info' });
   }
 
+  /** A HUD replay's progress, or the Harness's drive plan: pictures the HUD redraws as they change. */
+  pushView(
+    name: typeof ReticleCommand.FLOW_PROGRESS | typeof ReticleCommand.PLAN,
+    args: object,
+  ): void {
+    this.#post(name, { ...args });
+  }
+
   /** The one-time lease block on the first agent command, then undefined forever after. */
   takeSessionLease(): SessionLease | undefined {
     if (this.#firstCommandDone) return undefined;
@@ -984,13 +990,7 @@ export class Session implements HandshakeFacts {
       if ('string' === typeof ref) this.recordActedRef(ref);
     }
     const id = this.#pending.nextId(COMMAND_ID_PREFIX);
-    const payload = JSON.stringify({
-      kind: MessageKind.COMMAND,
-      id,
-      sessionId: this.id,
-      name,
-      args,
-    });
+    const payload = commandPayload(id, this.id, name, args);
     try {
       this.#socket.send(payload);
     } catch {
