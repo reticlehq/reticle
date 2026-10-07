@@ -2,6 +2,8 @@ import { applyHarnessSwitch, harnessConfigsByRoot } from '@/memory/cloud/harness
 import { coveragePercents } from './features/exhaust/ledger.js';
 import { firstRunWiring } from './portal/session/first-run-wiring.js';
 import { fetchPlatformConfig } from '@/features/harness/platform-config.js';
+import { watchAccountFiles } from './memory/impact/account-watch.js';
+import { SESSION_FILE } from './command/cli/cloud-kit.js';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { linkedCloudPort, platformEnvPort } from './memory/cloud/cloud-config.js';
@@ -659,6 +661,15 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   // The panel's harness switch, written through to the platform so console and panel cannot disagree.
   if (options.hudSignIn !== undefined)
     bridge.attachSigninRequest(options.hudSignIn(() => repaint()));
+  // Sign-out and linking happen in another process, so nothing here pushed them: watch the two
+  // files they write and repaint, the way the HUD's own Sign in already does. See account-watch.ts.
+  const accountFiles = watchAccountFiles(() => repaint());
+  accountFiles.watch(join(homedir(), ReticleDir.ROOT, SESSION_FILE));
+  accountFiles.watch(join(reticleRoot, ReticleDir.CLOUD_LINK_FILE));
+  // On ready, not create: the session's project root is stamped by a create handler of its own.
+  bridge.attachSessionReady((s) =>
+    accountFiles.watch(join(s.artifactRoot ?? reticleRoot, ReticleDir.CLOUD_LINK_FILE)),
+  );
   bridge.attachHarnessRequest((on, s) => {
     const root = s.artifactRoot ?? reticleRoot;
     applyHarnessSwitch(configForRoot, root, on, platformEnvFor(root));
@@ -841,6 +852,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
       if (vh !== undefined) await new Promise<void>((resolve) => vh.server.close(() => resolve()));
       leaseReaper.stop();
       remoteDrives.stop();
+      accountFiles.close();
       await cloudSync.flush(); // not stop(): the last run written is the one nobody has yet
       await loopbackAlias.close?.();
       await pool.shutdown();
