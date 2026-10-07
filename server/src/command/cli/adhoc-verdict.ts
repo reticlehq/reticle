@@ -123,14 +123,18 @@ function sameDocument(a: string, b: string): boolean {
 export async function acquireLease(
   caller: ToolCaller,
   url: string,
-): Promise<{ leased: string } | { failed: string[] }> {
+): Promise<{ leased: string; zeroInstall: boolean } | { failed: string[] }> {
   const acquired = await caller.call(
     ReticleTool.RUN,
     { tool: ReticleTool.LEASE, args: { action: LeaseAction.ACQUIRE, url } },
     LEASE_TIMEOUT_MS,
   );
-  const sessionId = verdictOf(acquired, 'sessionId')?.['sessionId'];
-  if ('string' === typeof sessionId) return { leased: sessionId };
+  const report = verdictOf(acquired, 'sessionId');
+  const sessionId = report?.['sessionId'];
+  // `zeroInstall`: the page never dialled in, so the lease supplied Reticle's own reader.
+  if ('string' === typeof sessionId) {
+    return { leased: sessionId, zeroInstall: true === report?.['zeroInstall'] };
+  }
   const why = verdictOf(acquired, 'error')?.['error'];
   return {
     failed: [
