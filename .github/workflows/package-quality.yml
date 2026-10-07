@@ -125,10 +125,17 @@ jobs:
           # cannot move to the server, which sits 35KB under its own ceiling below. The follow-up
           # is a slimmer reader (no HUD), which would bring this back down; until then the margin
           # is ~40KB, on the same terms as above.
+          #
+          # 1,180,000 -> 1,380,000 in 3.6.0. MEASURED: 1,339,597 bytes, after the duplicate
+          # single-file build came out (1,897,301 before). reticle-inject.js is 564,690 (it was
+          # 472,597) and the rest is ~775KB (it was 663,995): the presenter grew across 3.4-3.6
+          # (chat views, settings, controls) and the reader carries it a second time, because it
+          # still bundles the HUD. The slimmer reader named above is still the follow-up, and it
+          # is what brings this back down. Margin ~40KB, on the same terms.
           bytes=$(cd adapters/realm/browser && npm pack --dry-run --json 2>/dev/null | node -e "process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d)[0].unpackedSize))")
           echo "browser SDK unpacked: $bytes bytes"
-          if [ "$bytes" -gt 1180000 ]; then
-            echo "::error::@reticlehq/browser unpacked size $bytes exceeds the 1180KB budget"
+          if [ "$bytes" -gt 1380000 ]; then
+            echo "::error::@reticlehq/browser unpacked size $bytes exceeds the 1380KB budget"
             exit 1
           fi
 
