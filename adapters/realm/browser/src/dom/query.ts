@@ -516,6 +516,7 @@ export function matchQuery(
   query: ElementQuery,
   state?: ElementState,
   limit: number = MAX_DESCRIBED,
+  fullText = false,
 ): MatchResult {
   // NO blanket try/catch here. It would turn ANY exception during candidate-finding into
   // `elements = []`, which is the same lie as the `default` arm above: a query that could not run
@@ -533,13 +534,18 @@ export function matchQuery(
   const filtered =
     state === undefined ? elements : elements.filter((el) => inState(el, state, visMemo));
   const attrs = query.attrs;
-  const described = filtered.slice(0, Math.max(0, Math.min(limit, MAX_DESCRIBED)));
+  // Full text is bounded by how MANY elements carry it, so the response stays inside the transport's
+  // character budget; `count` still says how many matched.
+  const cap = fullText
+    ? Math.min(MAX_DESCRIBED, TRANSPORT_LIMITS.MAX_FULL_TEXT_ELEMENTS)
+    : MAX_DESCRIBED;
+  const described = filtered.slice(0, Math.max(0, Math.min(limit, cap)));
   // Stamp `inViewport` when more than one match is described (ambiguity ranking, #886) OR when the
   // caller explicitly filtered by that state (so the evidence proves the verdict, #1279). Omitted
   // from unfiltered single-match and snapshot-wide describes to avoid bloat (#398).
   const stampViewport = described.length > 1 || ElementState.IN_VIEWPORT === state;
   const descriptors: ElementDescriptor[] = described.map((el) => {
-    let base = describe(el, visMemo);
+    let base = describe(el, visMemo, fullText);
     if (
       stampViewport &&
       isInViewport(el, visMemo) &&
@@ -555,6 +561,7 @@ export function matchQuery(
     matched: filtered.length > 0,
     count: filtered.length,
     elements: descriptors,
+    ...(fullText ? { fullText: true as const } : {}),
     ...(scopeMissing ? { scopeMissing: true } : {}),
     // On a MISS, carry the same diagnosis `runQuery` has always returned. MATCH is the command every
     // PREDICATE uses, so without this a failed assertion was a dead end ("no element matched") while

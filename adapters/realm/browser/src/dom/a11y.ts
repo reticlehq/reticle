@@ -3,6 +3,7 @@ import {
   DEFAULT_TESTID_ATTR,
   ElementState,
   REDACTED_VALUE,
+  TRANSPORT_LIMITS,
   type ElementDescriptor,
 } from '@reticlehq/core';
 import {
@@ -523,18 +524,23 @@ export function isVisible(el: Element, memo?: Map<Element, boolean>): boolean {
   return result;
 }
 
-const MAX_TEXT = 80;
-
-function getVisibleText(el: Element): string {
+function getVisibleText(el: Element, fullText: boolean): string {
   const text = collapse(el.textContent ?? '');
-  return text.length > MAX_TEXT ? `${text.slice(0, MAX_TEXT)}…` : text;
+  const max = fullText ? TRANSPORT_LIMITS.MAX_FULL_TEXT : TRANSPORT_LIMITS.MAX_DESCRIBED_TEXT;
+  return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
 /** Build the compact descriptor surfaced to the agent. `memo` (optional) shares the per-call
- * visibility cache with the query's state filter so ancestors aren't re-walked per element. */
-export function describe(el: Element, memo?: Map<Element, boolean>): ElementDescriptor {
+ * visibility cache with the query's state filter so ancestors aren't re-walked per element.
+ * `fullText` is for a verdict that has to JUDGE the text rather than show it: the descriptor carries
+ * up to `TRANSPORT_LIMITS.MAX_FULL_TEXT` characters instead of the display-sized 80. */
+export function describe(
+  el: Element,
+  memo?: Map<Element, boolean>,
+  fullText = false,
+): ElementDescriptor {
   const value = getValue(el);
-  const text = getVisibleText(el);
+  const text = getVisibleText(el, fullText);
   const name = getAccessibleName(el);
   const visible = isVisible(el, memo); // O(depth) style walk — computed ONCE and reused by getStates
   const base: ElementDescriptor = {
@@ -545,7 +551,9 @@ export function describe(el: Element, memo?: Map<Element, boolean>): ElementDesc
     visible,
   };
   if (value !== undefined && value.length > 0) base.value = value;
-  if (text.length > 0 && text !== name) base.text = text;
+  // Skipped when it only repeats the name, to save the bytes. Not in full-text mode: a fieldset's name
+  // IS its legend, and the caller there is going to judge the text, so a missing one reads as empty.
+  if (text.length > 0 && (fullText || text !== name)) base.text = text;
   // DOM-only lookup on purpose: describe() runs once per matched element, so the adapter's fiber walk
   // would turn a broad query into thousands of tree traversals. The stamped attribute answers the
   // same question for a fraction of the cost, and single-element paths that can afford the better

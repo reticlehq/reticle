@@ -17,6 +17,7 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import {
+  clipBody,
   parseJsonObject,
   readField,
   redactedOnPath,
@@ -25,7 +26,7 @@ import {
 } from './predicate-eval-kit.js';
 import type { Predicate } from './predicate-schema.js';
 import type { PredicateSession } from './predicate-session.js';
-import { evalElement, joinedText } from './predicate-element.js';
+import { evalElement, wholeTextOf } from './predicate-element.js';
 import { evalState } from './predicate-state.js';
 
 type ComparePredicate = Extract<Predicate, { kind: typeof PredicateKind.COMPARE }>;
@@ -33,8 +34,16 @@ type ComparePredicate = Extract<Predicate, { kind: typeof PredicateKind.COMPARE 
 type CompareSource = ComparePredicate['left'];
 type Scalar = string | number | boolean | null;
 
-/** One side, read: its value and how to name it, or the result that ends the comparison. */
-type Reading = { value: Scalar; label: string } | { result: EvalResult };
+/**
+ * One side, read: its value, how to name it and, when the value is too long to quote, the bounded
+ * slice that is quoted in its place; or the result that ends the comparison.
+ */
+type Reading = { value: Scalar; label: string; shown?: Scalar } | { result: EvalResult };
+
+/** What a verdict quotes of a reading: the slice when there is one, the value as it is otherwise. */
+function quoted(reading: { value: Scalar; shown?: Scalar }): Scalar {
+  return reading.shown ?? reading.value;
+}
 
 const REMEDY_BODY_CAPTURE =
   'enable it where the app calls connect(): reticle({ captureNetworkBodies: true })';
@@ -192,15 +201,20 @@ async function readText(
   diagnose: boolean,
 ): Promise<Reading> {
   const label = `text of ${source.scope}`;
+  // Read in full: two texts that differ only past the display form's 80 characters would otherwise
+  // compare equal, and the equality would be a verdict on a string the page never showed.
   const found = await evalElement(
     session,
     { scope: source.scope, self: true },
     undefined,
     false,
     diagnose,
+    true,
   );
   if (!found.pass) return { result: found };
-  return { value: joinedText(found.evidence), label };
+  const whole = wholeTextOf(found.evidence, source.scope, 'the comparison');
+  if ('result' in whole) return whole;
+  return { value: whole.text, label, shown: clipBody(whole.text) };
 }
 
 function readSide(
@@ -229,7 +243,8 @@ function readSide(
 const NUMBER_TOKEN = /(?:-(?:[\p{Sc}]\s*)?|[\p{Sc}]\s*-?)?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?/gu;
 
 /** One number out of a reading, or why there is not exactly one. */
-function numberOf(value: Scalar): { n: number } | { why: string } {
+function numberOf(reading: { value: Scalar; shown?: Scalar }): { n: number } | { why: string } {
+  const { value } = reading;
   if ('number' === typeof value)
     return Number.isFinite(value) ? { n: value } : { why: 'is not finite' };
   if ('string' !== typeof value) return { why: `is ${JSON.stringify(value)}, not a number` };
@@ -237,7 +252,7 @@ function numberOf(value: Scalar): { n: number } | { why: string } {
   const [only] = tokens;
   if (1 !== tokens.length || only === undefined) {
     return {
-      why: `holds ${String(tokens.length)} numbers in ${JSON.stringify(value)}, so which one was meant is a guess — narrow the scope to one value`,
+      why: `holds ${String(tokens.length)} numbers in ${JSON.stringify(quoted(reading))}, so which one was meant is a guess — narrow the scope to one value`,
     };
   }
   const isNegative = only.includes('-');
@@ -264,8 +279,8 @@ function closeEnough(a: number, b: number, tolerance: number): boolean {
   return Math.abs(a - b) <= tolerance + LAST_PLACE_NOISE * Math.max(Math.abs(a), Math.abs(b));
 }
 
-function describe(reading: { value: Scalar; label: string }): string {
-  return `${reading.label} is ${JSON.stringify(reading.value)}`;
+function describe(reading: { value: Scalar; label: string; shown?: Scalar }): string {
+  return `${reading.label} is ${JSON.stringify(quoted(reading))}`;
 }
 
 export async function evalCompare(
@@ -285,12 +300,12 @@ export async function evalCompare(
     return results.find((r) => r.inconclusive !== undefined) ?? results[0] ?? { pass: false };
   }
   const evidence = {
-    left: { source: left.label, value: left.value },
-    right: { source: right.label, value: right.value },
+    left: { source: left.label, value: quoted(left) },
+    right: { source: right.label, value: quoted(right) },
   };
   if (CompareAs.NUMBER === p.as) {
-    const a = numberOf(left.value);
-    const b = numberOf(right.value);
+    const a = numberOf(left);
+    const b = numberOf(right);
     if ('why' in a || 'why' in b) {
       const why =
         'why' in a ? `${left.label} ${a.why}` : `${right.label} ${'why' in b ? b.why : ''}`;
@@ -309,16 +324,22 @@ export async function evalCompare(
     };
   }
   if (left.value === right.value) return { pass: true, evidence };
-  const numeric = numberOf(left.value);
-  const other = numberOf(right.value);
+  const numeric = numberOf(left);
+  const other = numberOf(right);
   const hint =
     'n' in numeric && 'n' in other && closeEnough(numeric.n, other.n, 0)
       ? ' — they hold the same number in different forms; compare them with `as: "number"`'
       : '';
+  // Two long texts that differ only past what is quoted would read as equal in the message that says
+  // they are not, so say where the difference is.
+  const unquoted =
+    quoted(left) === quoted(right)
+      ? ' — they agree on the part quoted here and differ further on'
+      : '';
   return {
     pass: false,
-    failureReason: `${describe(left)}, but ${describe(right)}${hint}`,
-    observed: `${JSON.stringify(left.value)} against ${JSON.stringify(right.value)}`,
+    failureReason: `${describe(left)}, but ${describe(right)}${hint}${unquoted}`,
+    observed: `${JSON.stringify(quoted(left))} against ${JSON.stringify(quoted(right))}`,
     expected: 'the two values to be equal',
     assertion: 'compare.value',
     evidence,

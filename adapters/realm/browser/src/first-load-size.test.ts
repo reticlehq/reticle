@@ -319,6 +319,18 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  */
 const MAX_FIRST_LOAD_BYTES = 253_000;
 /*
+ * Re-measured after rebasing onto current main. The ceiling stays 253,000. main 252,517; this
+ * branch 252,776, which is 259 B. The pair 247,983 -> 248,242 was the previous main and is not
+ * this measurement.
+ *
+ * The 259 B is the page reading the whole text a text predicate judges. Rebundling both trees
+ * with this file's bundler: `dom/query.js` 7,158 -> 7,232 (+74), `constants.js` 3,384 -> 3,450
+ * (+66), `dom/a11y.js` 6,504 -> 6,547 (+43), the new `match-args.js` (+30), `commands/commands.js`
+ * 4,868 -> 4,896 (+28). Those inputs sum to 241; the other 18 B is how the chunks split.
+ *
+ * 224 B of the ceiling is left. The next change that spends it raises the number here.
+ */
+/*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The
  * impact snapshot's loose `coverage` record is in the same measurement.

@@ -8,8 +8,10 @@
  */
 
 import {
+  MatchArg,
   QueryBy,
   ReticleCommand,
+  TRANSPORT_LIMITS,
   type ElementDescriptor,
   type ElementQuery,
   ElementState,
@@ -26,6 +28,7 @@ import {
 // runtime. `PredicateSession` is the predicate layer's interface to a session and belongs with the
 // evaluator that defines it.
 import type { PredicateSession } from './predicate-session.js';
+import { clipBody } from './predicate-eval-kit.js';
 import { describeTestidMiss } from './testid-near-miss.js';
 import { describeSplitTextMiss } from './split-text-miss.js';
 import { satisfiesProperty, type Baseline, type PropertyAssertion } from './property.js';
@@ -71,8 +74,13 @@ async function matchOnce(
   session: PredicateSession,
   query: ElementQuery,
   state: ElementState | undefined,
+  fullText = false,
 ): Promise<MatchResult> {
-  const res = await session.command(ReticleCommand.MATCH, { query, state });
+  const res = await session.command(ReticleCommand.MATCH, {
+    query,
+    state,
+    ...(fullText ? { [MatchArg.FULL_TEXT]: true } : {}),
+  });
   if (!res.ok) return { matched: false, count: 0, elements: [] };
   return (res.result ?? { matched: false, count: 0, elements: [] }) as MatchResult;
 }
@@ -157,6 +165,8 @@ export async function evalElement(
   state: ElementState | undefined,
   absent: boolean,
   diagnose: boolean,
+  /** Describe the matches with their full text, for a caller that will JUDGE it (see `withTextProperty`). */
+  fullText = false,
 ): Promise<EvalResult> {
   const tooOld = stateTheSdkPredates(session.sdkVersion, state);
   if (tooOld !== undefined) {
@@ -181,8 +191,26 @@ export async function evalElement(
     const reason = describeUnusableElementQuery(query, residual.unusable);
     return { pass: false, failureReason: reason, inconclusive: reason };
   }
-  let match = await matchOnce(session, query, state);
+  let match = await matchOnce(session, query, state, fullText);
   const subject = JSON.stringify(query);
+  // Full text was asked for to JUDGE it, so a reading that is not the full text is not graded.
+  if (fullText && !absent && match.matched) {
+    // A page too old to know the argument ignores it and answers with the 80-character display form,
+    // which looks exactly like a short text. It cannot say so, which is why the page echoes the ask.
+    if (true !== match.fullText) {
+      const reason =
+        `the page's SDK did not return the whole text of ${subject}, so a property of it was not ` +
+        `decided. Update the page's @reticlehq packages`;
+      return { pass: false, failureReason: reason, inconclusive: reason };
+    }
+    // `elements` is only the described prefix, and a text property is judged on all that matched.
+    if (match.count > match.elements.length) {
+      const reason =
+        `${String(match.count)} elements matched ${subject} and only ${String(match.elements.length)} ` +
+        `were read in full, so a property of their text was not decided on all of it. Narrow the locator`;
+      return { pass: false, failureReason: reason, inconclusive: reason };
+    }
+  }
   // A residual narrows the SET; `count` is every match while `elements` is only the described prefix,
   // so a locator broad enough to be truncated cannot be narrowed honestly. Say so instead of guessing.
   if (residual.checks.length > 0 && match.count > match.elements.length) {
@@ -384,6 +412,51 @@ export function joinedText(evidence: unknown): string {
   return described.map(textOf).join(' ').trim();
 }
 
+/**
+ * A match re-bounded to the text an agent is shown.
+ *
+ * The property was judged on the full text; the verdict that carries the match back is output,
+ * and judging more must not make it bigger.
+ */
+function shownBounded(element: unknown): unknown {
+  if ('object' !== typeof element || null === element) return element;
+  const max = TRANSPORT_LIMITS.MAX_DESCRIBED_TEXT;
+  const text = textOf(element);
+  return text.length > max ? { ...element, text: `${text.slice(0, max)}…` } : element;
+}
+
+/**
+ * Whether a described text was cut at the full-text bound. A cut text is that many characters and
+ * an ellipsis, so only a cut one is ever longer than the bound.
+ */
+function wasCutAtFullBound(element: unknown): boolean {
+  return textOf(element).length > TRANSPORT_LIMITS.MAX_FULL_TEXT;
+}
+
+/**
+ * The whole text of a passing match read in full (see `evalElement`'s `fullText`), or the result that
+ * says it was cut short.
+ *
+ * Whatever judges the text on a reading that stopped short could pass or fail on the part not read,
+ * so it is not judged: the same refusal a truncated state value gets. `undecided` names what was
+ * left undecided, so the caller's own question is the one the message answers.
+ */
+export function wholeTextOf(
+  evidence: unknown,
+  subject: string,
+  undecided: string,
+): { text: string } | { result: EvalResult } {
+  const matched = Array.isArray(evidence) ? evidence : [];
+  if (matched.some(wasCutAtFullBound)) {
+    const reason =
+      `the text of ${subject} is longer than the ${String(TRANSPORT_LIMITS.MAX_FULL_TEXT)} characters ` +
+      `Reticle reads to judge it, so ${undecided} was not decided on all of it. ` +
+      `Scope the predicate to a smaller element`;
+    return { result: { pass: false, failureReason: reason, inconclusive: reason } };
+  }
+  return { text: joinedText(matched) };
+}
+
 export function withTextProperty(
   base: EvalResult,
   assertion: PropertyAssertion,
@@ -391,8 +464,11 @@ export function withTextProperty(
   baseline?: Baseline,
 ): EvalResult {
   if (!base.pass) return base;
-  const described = Array.isArray(base.evidence) ? base.evidence : [];
-  const text = joinedText(described);
+  const matched = Array.isArray(base.evidence) ? base.evidence : [];
+  const whole = wholeTextOf(matched, subject, assertion.property);
+  if ('result' in whole) return whole.result;
+  const { text } = whole;
+  const described = matched.map(shownBounded);
   const result = satisfiesProperty(text, assertion, baseline);
   // Nothing was compared — a relative property with no before-reading. See the twin in `evalState`.
   if (true === result.unevaluated) {
@@ -404,7 +480,7 @@ export function withTextProperty(
   return {
     pass: false,
     failureReason: `text of ${subject} ${result.because}`,
-    observed: `text of ${subject} = ${JSON.stringify(text)}`,
+    observed: `text of ${subject} = ${JSON.stringify(clipBody(text))}`,
     expected: `text of ${subject} to satisfy ${assertion.property}`,
     assertion: `text.${assertion.property}`,
     evidence: described,

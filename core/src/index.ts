@@ -26,6 +26,7 @@ export * from './artifacts/flow-select.js'; // selectFlows — which flows a run
 export * from './artifacts/flow-unreached.js'; // unreachedRoutes — known routes this run never visited
 export * from './artifacts/flow-mutation-target.js'; // what a flow says it depends on: mutationTargetsFor + perturbationFor
 export * from './wire/constants/constants.js'; // EventType, ActionType, wire constants, TRANSPORT_LIMITS, …
+export * from './wire/constants/lease-not-ready.js'; // why a lease came back ready: false
 export * from './identity/source-constants.js'; // DATA_RETICLE_SOURCE_ATTR, RETICLE_ROOT_GLOBAL
 export * from './identity/testid-attribute.js'; // DEFAULT_TESTID_ATTR, ALTERNATIVE_TESTID_ATTRS
 export * from './wire/event-classification.js'; // CHURN_TYPES — shared eviction priority for buffer/queue
@@ -38,6 +39,7 @@ export * from './verdict/verify-progress.js'; // VerifyPhase — what a run is d
 export * from './wire/constants/session-constants.js';
 export * from './wire/constants/hud-use.js'; // where the HUD sits, for HUD_USED events
 export * from './wire/platform-link.js'; // daemon <-> platform: capabilities, drive spec, tool session
+export * from './wire/constants/match-args.js'; // the arguments of the `match` command
 export * from './wire/constants/discovery.js'; // the call-the-founder invitation, one link for every surface
 export * from './identity/document-identity.js'; // which document an observation belongs to
 export * from './identity/edit-epoch.js'; // which round of source edits an observation belongs to

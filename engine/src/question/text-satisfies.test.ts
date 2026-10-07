@@ -8,7 +8,12 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { ReticleCommand, type CommandResult, type ElementDescriptor } from '@reticlehq/core';
+import {
+  MatchArg,
+  ReticleCommand,
+  type CommandResult,
+  type ElementDescriptor,
+} from '@reticlehq/core';
 import { evaluatePredicate } from '@/question/predicate/predicate.js';
 import { parsePredicate } from '@/question/predicate/predicate-parse.js';
 import type { PredicateSession } from '@/question/predicate/predicate-session.js';
@@ -22,14 +27,21 @@ function pageShowing(elements: ElementDescriptor[]): PredicateSession {
     url: 'http://localhost/compose',
     elapsed: () => 0,
     eventsSince: () => [],
-    command: (name: string): Promise<CommandResult> =>
+    // Answers the way a current page does, which includes echoing a full-text request: a page that
+    // did not echo it is one the engine refuses to grade a property on.
+    command: (name: string, args: Record<string, unknown> = {}): Promise<CommandResult> =>
       Promise.resolve({
         kind: 'command_result',
         id: 'c',
         ok: true,
         result:
           name === ReticleCommand.MATCH
-            ? { matched: elements.length > 0, count: elements.length, elements }
+            ? {
+                matched: elements.length > 0,
+                count: elements.length,
+                elements,
+                ...(true === args[MatchArg.FULL_TEXT] ? { fullText: true } : {}),
+              }
             : {},
       } as CommandResult),
   } as unknown as PredicateSession;

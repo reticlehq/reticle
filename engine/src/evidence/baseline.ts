@@ -13,7 +13,7 @@
  * arbitrary named checkpoints. A `snapshot("cart")` / `compare("cart")` pair is a different feature
  * and has no evidence behind it.
  */
-import { PredicateKind, ReticleCommand } from '@reticlehq/core';
+import { MatchArg, PredicateKind, ReticleCommand } from '@reticlehq/core';
 import type { Predicate } from '@/question/predicate/predicate.js';
 import type { Baseline } from '@/question/predicate/property.js';
 import type { PredicateSession } from '@/question/predicate/predicate-session.js';
@@ -90,7 +90,12 @@ async function readText(
       ? {}
       : { scope: predicate.scope, ...(true === predicate.self ? { self: true } : {}) }),
   };
-  const match = await session.command(ReticleCommand.MATCH, { query });
+  // Read the way the property will read it after the action: a before-reading of the 80-character
+  // display form against an after-reading of the whole text would call every long text "changed".
+  const match = await session.command(ReticleCommand.MATCH, {
+    query,
+    [MatchArg.FULL_TEXT]: true,
+  });
   if (!match.ok) return undefined;
   const elements = ((match.result ?? {}) as { elements?: unknown }).elements;
   if (!Array.isArray(elements)) return undefined;

@@ -369,6 +369,12 @@ export const TRANSPORT_LIMITS = {
   MAX_STACK_LENGTH: 4000,
   MAX_SERIALIZE_DEPTH: 8,
   MAX_COLLECTION_ITEMS: 200,
+  /** What a descriptor carries of an element's text for an agent to READ: 80 characters and an ellipsis. */
+  MAX_DESCRIBED_TEXT: 80,
+  /** What a descriptor carries when a verdict has to JUDGE the text (`MatchArg.FULL_TEXT`); a text MORE than this long was cut. */
+  MAX_FULL_TEXT: 4000,
+  /** Elements a MATCH describes in full-text mode, about half the transport's character budget; `count` still reports all. */
+  MAX_FULL_TEXT_ELEMENTS: 32,
   MAX_OBJECT_KEYS: 200,
   MAX_STRING_LENGTH: 64 * 1024,
   /** Human review marks: the note the human types when flagging a mistake on the page. */
@@ -982,19 +988,3 @@ export const MessageKind = {
 } as const;
 export type MessageKind = (typeof MessageKind)[keyof typeof MessageKind];
 
-/**
- * WHY a lease came back `ready: false` — the two situations that were one word.
- *
- * `ready: false` meant exactly one thing on the mint path: the SDK never dialled in, so the app
- * probably does not embed `@reticlehq/core`. A REUSED lease can fail readiness a second way, and it
- * is the opposite problem: an SDK did dial in, and has since stopped answering. The next action
- * differs — check the install versus recover the tab — so the two get names rather than sharing a
- * bare `false`.
- */
-export const LeaseNotReadyReason = {
-  /** No SDK dialled in within the wait. The install is the thing to look at. */
-  SDK_NEVER_DIALLED: 'sdk_never_dialled',
-  /** One dialled in and stopped answering: the tab is attached but wedged. */
-  SDK_STOPPED_ANSWERING: 'sdk_stopped_answering',
-} as const;
-export type LeaseNotReadyReason = (typeof LeaseNotReadyReason)[keyof typeof LeaseNotReadyReason];

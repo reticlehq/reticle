@@ -141,6 +141,13 @@ export interface MatchResult {
   count: number;
   elements: ElementDescriptor[];
   /**
+   * Present, and true, only when the page honoured `MatchArg.FULL_TEXT`: each element's `text` is
+   * then the full-form reading, not the 80-character display one. A page too old to know the
+   * argument ignores it and answers with the short form, which looks exactly like a short text, so
+   * the caller needs this to tell the two apart before it judges a property on what it was given.
+   */
+  fullText?: true;
+  /**
    * True when a `scope` was given but resolved to nothing (the container was unmounted or the selector
    * matched no element). The search returns zero matches WITHOUT falling back to the whole page, and
    * this flag says why — so "element absent" and "scope vanished" stay distinguishable. Without it, a

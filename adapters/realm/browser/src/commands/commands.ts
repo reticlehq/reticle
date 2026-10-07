@@ -1,6 +1,7 @@
 import {
   ComponentStateReason,
   ElementQuerySchema,
+  MatchArg,
   ReticleCommand,
   SnapshotMode,
   TRANSPORT_LIMITS,
@@ -320,6 +321,8 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
     matchQuery(
       ElementQuerySchema.parse(record(args['query'])),
       str(args['state']) as ElementState | undefined,
+      undefined,
+      true === args[MatchArg.FULL_TEXT],
     ),
   );
   reg.set(ReticleCommand.ACT, (args) => {

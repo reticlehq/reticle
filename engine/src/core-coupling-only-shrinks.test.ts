@@ -122,7 +122,17 @@ const MAX_FILES_IMPORTING_CORE = 45;
  * comparison with. The source TYPE is derived from `Predicate` rather than imported, because that one
  * could be. Like the predicate contract above, these are the claim language, not Reticle's event nouns.
  */
-const MAX_DISTINCT_SYMBOLS = 62;
+/*
+ * 62 -> 63 for the `match` command's `fullText` argument, the same case as the two raises above it.
+ *
+ * A `text` predicate's `satisfies` was graded on the 80-character display form of the element's
+ * text, so the evaluator has to ask the page for all of it. The argument's name crosses the wire,
+ * so it lives in core as `MatchArg` and rule 3 forbids spelling it here; inlining the string would
+ * keep this number flat by breaking the rule the number exists to protect. One more symbol in the
+ * two files that already import core, so the file count is unmoved. The bound it asks for,
+ * `TRANSPORT_LIMITS.MAX_FULL_TEXT`, is a constant the engine already borrowed the container of.
+ */
+const MAX_DISTINCT_SYMBOLS = 63;
 
 /*
  * `node:path`'s dirname, not a hand-rolled one.
