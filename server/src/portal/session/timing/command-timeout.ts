@@ -1,4 +1,4 @@
-import { realmOf, AppRuntime, isOpaqueOrigin } from '@reticlehq/core';
+import { realmOf, AppRuntime, isOpaqueOrigin, ReticleTool } from '@reticlehq/core';
 
 /**
  * Turn a bare command timeout into something the reader can act on.
@@ -63,6 +63,24 @@ const HIDDEN_ADVICE =
   'off-screen rather than calling hide. If neither fits, the page is reachable but not executing, ' +
   'which is worth reporting.';
 
+/**
+ * A hidden page in an ordinary browser. Its frames and timers are throttled, so a command can time
+ * out while the SDK keeps reporting in, which is exactly the state ONE_WAY_ADVICE reads as a
+ * transport fault. Sending the agent to debug its own network there costs attempts and finds
+ * nothing (#1416): the way out is a tab nobody else is looking at, which a lease is.
+ */
+const HIDDEN_TAB_ADVICE =
+  'The page last reported itself hidden: it is a background tab, and the browser throttles a hidden ' +
+  "tab's frames and timers, so commands can time out while the page still reports in. This is not a " +
+  `network fault. Bring the tab to the front, or drive a tab Reticle owns: ${ReticleTool.LEASE} ` +
+  '{ action: "acquire", url: "%URL%" }.';
+
+/** True when the page runs in an ordinary browser tab, as the SDK reported or the URL shows. */
+function isWebTab(context: TimeoutContext): boolean {
+  if (context.runtime !== undefined) return AppRuntime.WEB === context.runtime;
+  return /^https?:/.test(context.url);
+}
+
 /** True when this session is a WebKit desktop shell — the only runtime that suffers this. */
 function isWebKitDesktop(context: TimeoutContext): boolean {
   if (realmOf(context.runtime).usesWebKit) return true;
@@ -77,6 +95,12 @@ export function commandTimeoutMessage(
   context: TimeoutContext,
 ): string {
   const base = `command '${name}' timed out after ${String(timeoutMs)}ms`;
+  // A hidden WEB tab first, before the recently-heard branch: a background tab keeps reporting in
+  // while its throttled frames miss the command, so "heard recently" is expected there and says
+  // nothing about the transport. Desktop shells keep the order below unchanged.
+  if (context.hidden && isWebTab(context)) {
+    return `${base}. ${HIDDEN_TAB_ADVICE.replace('%URL%', context.url)}`;
+  }
   // Checked FIRST, and it overrides the visibility story: a page that was heard from moments ago is
   // executing JavaScript, so "hidden, hung or never presented" cannot be the explanation whatever
   // `hidden` says. Deduced from the invariant, not from a measured incident — the Tauri case that

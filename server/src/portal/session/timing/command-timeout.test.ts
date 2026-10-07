@@ -160,4 +160,55 @@ describe('commandTimeoutMessage — an 8s timeout should say what to DO', () => 
     });
     expect(message).toContain('WKWebView');
   });
+
+  /**
+   * A background web tab keeps reporting in while its throttled frames miss the command, so it hit
+   * the one-way-transport branch, and the agent went debugging its own network (#1416).
+   */
+  describe('a hidden web tab', () => {
+    it('names the hidden tab and the lease, not the transport, even when recently heard', () => {
+      const message = commandTimeoutMessage('match', 8000, {
+        url: WEB,
+        hidden: true,
+        runtime: 'web',
+        lastSeenMs: 120,
+      });
+      expect(message).toContain("command 'match' timed out after 8000ms");
+      expect(message).toMatch(/background tab/);
+      expect(message).toContain(`reticle_lease { action: "acquire", url: "${WEB}" }`);
+      expect(message).not.toMatch(/OUT and not back IN|bridge→page/);
+    });
+
+    it('says the same before the first health report names the runtime', () => {
+      const message = commandTimeoutMessage('match', 8000, { url: WEB, hidden: true });
+      expect(message).toMatch(/background tab/);
+    });
+
+    it('keeps the one-way advice for a visible page that was heard recently', () => {
+      const message = commandTimeoutMessage('match', 8000, {
+        url: WEB,
+        hidden: false,
+        runtime: 'web',
+        lastSeenMs: 120,
+      });
+      expect(message).toMatch(/OUT and not back IN/);
+      expect(message).not.toMatch(/background tab|reticle_lease/);
+    });
+
+    it('leaves the Tauri and Electron paths as they were', () => {
+      const tauri = commandTimeoutMessage('snapshot', 8000, {
+        url: TAURI,
+        hidden: true,
+        runtime: 'tauri',
+      });
+      expect(tauri).toContain('WKWebView');
+      expect(tauri).not.toMatch(/background tab/);
+      const electron = commandTimeoutMessage('snapshot', 8000, {
+        url: ELECTRON,
+        hidden: true,
+        runtime: 'electron',
+      });
+      expect(electron).not.toMatch(/background tab/);
+    });
+  });
 });
