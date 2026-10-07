@@ -1,0 +1,3 @@
+### Changed
+
+- **`@reticlehq/engine` — an `absent` check on an element the app hid now says it is hidden.** `absent: true` means removed from the DOM, so an element still mounted with `display: none` correctly fails it, but the reason only said "expected element to be absent but found 1" beside `visible: false` evidence, which reads as a stuck UI. When every match is hidden, the reason now says so and points at `state: "hidden"`, the predicate for "no longer shown". The verdict is unchanged, and so is the text when any match is visible. Closes [#1360](https://github.com/reticlehq/reticle/issues/1360).
