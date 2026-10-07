@@ -25,7 +25,16 @@ describe('reading the driver preference from the platform', () => {
       harnessEnabled: true,
       harnessEntitled: true,
       providerReady: true,
+      platformUrl: 'https://app.reticle.sh',
     });
+  });
+
+  it('says which platform answered, so the HUD links to it rather than the hosted one', async () => {
+    const got = await fetchPlatformConfig(
+      { RETICLE_API_KEY: 'k', RETICLE_CLOUD_URL: 'http://localhost:4100/' },
+      answering({ provider: 'jev' }),
+    );
+    expect(got?.platformUrl).toBe('http://localhost:4100');
   });
 
   it('sends the platform key as a bearer, to the config path', async () => {
@@ -89,6 +98,7 @@ describe('reading the driver preference from the platform', () => {
       harnessEnabled: true,
       harnessEntitled: false,
       providerReady: true,
+      platformUrl: 'https://app.reticle.sh',
     });
   });
 

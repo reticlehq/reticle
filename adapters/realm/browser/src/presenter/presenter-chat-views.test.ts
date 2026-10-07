@@ -94,6 +94,36 @@ describe('chat views and harness access states', () => {
     expect(root.querySelector('[data-reticle-harness-switch]')).toBeNull();
   });
 
+  /*
+   * A daemon pointed at a self-hosted or local platform sent every link to the hosted one. The base
+   * is the platform the daemon read this config from, else the host this machine signed in to.
+   */
+  it('links to the platform the daemon talks to, not always the hosted one', () => {
+    const { root, views } = mountViews();
+    views.paintAccount({ signedIn: true, host: 'http://localhost:4100' });
+    views.paintHarness(undefined);
+    expect(root.querySelector('.reticle-harness-link')?.getAttribute('href')).toBe(
+      'http://localhost:4100/settings?group=project#model',
+    );
+    views.paintHarness({
+      ...entitled,
+      harnessEntitled: false,
+      platformUrl: 'https://reticle.internal.test',
+    });
+    expect(root.querySelector('.reticle-harness-link')?.getAttribute('href')).toBe(
+      'https://reticle.internal.test/settings?group=billing',
+    );
+  });
+
+  it('never links to a base that is not http(s)', () => {
+    const { root, views } = mountViews();
+    views.paintAccount({ signedIn: true, host: 'javascript:alert(1)' });
+    views.paintHarness(undefined);
+    expect(root.querySelector('.reticle-harness-link')?.getAttribute('href')).toBe(
+      'https://app.reticle.sh/settings?group=project#model',
+    );
+  });
+
   it('toggles only when the server reports an entitled, ready workspace', () => {
     const { root, views, onHarness } = mountViews();
     views.paintAccount({ signedIn: true });
