@@ -35,8 +35,16 @@ export function runWithClientDirectory<T>(directory: string, fn: () => T): T {
 export function clientDirectoryFromHeader(headers: IncomingHttpHeaders): string | undefined {
   const raw = headers[MCP_CLIENT_DIRECTORY_HEADER];
   const value = Array.isArray(raw) ? raw[0] : raw;
-  if ('string' !== typeof value || !isAbsolute(value)) return undefined;
-  return resolve(value);
+  if ('string' !== typeof value) return undefined;
+  // The proxy percent-encodes the path. A raw absolute path still decodes to itself.
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(value);
+  } catch {
+    return undefined;
+  }
+  if (!isAbsolute(decoded)) return undefined;
+  return resolve(decoded);
 }
 
 /**

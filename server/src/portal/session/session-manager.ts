@@ -535,6 +535,11 @@ export class SessionManager {
     return last;
   }
 
+  /** Every departed session's URL, oldest first. The port scan has to see all of them, not only the newest. */
+  tombstoneUrls(): readonly string[] {
+    return [...this.#tombstones.values()].map((record) => record.url);
+  }
+
   /**
    * A dead `sessionId`, answered with what the caller needs to recover — not with an errand.
    *

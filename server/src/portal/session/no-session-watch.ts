@@ -156,6 +156,8 @@ interface NoSessionWatchOptions {
  */
 export function startNoSessionWatch(options: NoSessionWatchOptions): () => void {
   let listening: readonly number[] = [];
+  /** Ports the last scan was asked about. A port absent from this set was not observed, so it is not "down". */
+  let probed = new Set<number>();
   /**
    * Ports that accepted a connection and then answered nothing in time.
    *
@@ -316,6 +318,12 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
     const known = options.sessions.lastKnown?.();
     const knownPort = known === undefined ? undefined : portOfUrl(known.url);
     if (knownPort !== undefined) ports.add(knownPort);
+    // Every departed project, not only the newest. B can still be serving on :3005 after A leaves
+    // on :5173, and a scan that never asked :3005 would report B's app as stopped.
+    for (const url of options.sessions.tombstoneUrls?.() ?? []) {
+      const port = portOfUrl(url);
+      if (port !== undefined) ports.add(port);
+    }
     return [...ports];
   };
 
@@ -371,6 +379,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
         : options.probe(candidates)
     )
       .then(async (ports) => {
+        probed = new Set(candidates);
         listening = ports;
         siblingListeners =
           options.occupiedSiblings !== undefined
@@ -460,6 +469,11 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
       if (port !== undefined) ownPorts.add(port);
     }
     const heard = listening.filter((port) => ownPorts.has(port));
+    // Not in the last scan means we have not looked, not that the server stopped. Treating the
+    // gap as "down" is what tells a still-running app to start a second one.
+    for (const port of ownPorts) {
+      if (!probed.has(port) && !heard.includes(port)) heard.push(port);
+    }
     const slow = slowListeners.filter((port) => ownPorts.has(port));
     const closure = options.sessions.lastClosure?.();
     const refusalIsThisProject =

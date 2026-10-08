@@ -79,7 +79,9 @@ describe('MCP POST transport', () => {
     }) satisfies Parameters<typeof postToSession>[2];
 
     await expect(postToSession('http://127.0.0.1:4400/session', '{}', request)).resolves.toBeNull();
-    expect(named).toBe(process.cwd());
+    const namedDirectory = encodeURIComponent(process.cwd());
+    expect(named).toBe(namedDirectory);
+    expect([...namedDirectory].every((char) => char.charCodeAt(0) < 128)).toBe(true);
   });
 
   it('retries one unsent ENOBUFS request and then succeeds', async () => {

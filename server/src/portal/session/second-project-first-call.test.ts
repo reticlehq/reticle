@@ -194,6 +194,135 @@ describe("a second project is not the first project's closed tab", () => {
     expect(fromA?.command).toContain(APP_A_URL);
     expect(fromA?.command ?? '').not.toContain('5174/inbox');
 
+    if (sessionsTool === undefined) throw new Error('reticle_session is not on the surface');
+    const deps = { sessions, reticleRoot: join(appA, '.reticle') } as unknown as ToolDeps;
+    const listedA = (await runWithClientDirectory(appA, () => sessionsTool.handler(deps, {}))) as {
+      lastKnown?: { url: string };
+    };
+    const listedB = (await runWithClientDirectory(appB, () => sessionsTool.handler(deps, {}))) as {
+      lastKnown?: { url: string };
+    };
+    expect(listedA.lastKnown?.url).toBe(APP_A_URL);
+    expect(listedB.lastKnown?.url).toBe('http://localhost:5174/inbox');
+
+    stop();
+  });
+
+  it("wires B while A's tab is still open", async () => {
+    const root = tempDir();
+    const appA = join(root, 'a');
+    const appB = join(root, 'b');
+    const stateDir = join(root, 'state');
+    mkdirSync(appA);
+    mkdirSync(appB);
+    mkdirSync(stateDir);
+    writeFileSync(join(appA, '.reticle.json'), JSON.stringify({ projectId: 'app-a' }));
+    writeFileSync(
+      join(appB, 'package.json'),
+      JSON.stringify({ scripts: { dev: 'vite' }, devDependencies: { vite: '6' } }),
+    );
+    const sessions = new SessionManager();
+    sessions.add(
+      new Session(
+        {
+          kind: MessageKind.HELLO,
+          protocolVersion: RETICLE_PROTOCOL_VERSION,
+          sessionId: 'tab-a',
+          projectId: 'app-a',
+          url: APP_A_URL,
+          title: 'A',
+          adapters: [],
+          hasCapabilities: false,
+        },
+        { send: (): void => undefined } as unknown as WebSocket,
+        () => 0,
+      ),
+    );
+    const wiredIn: string[] = [];
+    const run: RunCli = (_args, cwd) => {
+      wiredIn.push(cwd);
+      const at = PLAN.indexOf('{');
+      return Promise.resolve({ code: 0, stdout: PLAN.slice(at), stderr: PLAN.slice(0, at) });
+    };
+    const stop = startNoSessionWatch({
+      sessions,
+      port: 4400,
+      initialized: true,
+      directory: appA,
+      stateDir,
+      probe: () => Promise.resolve([5173]),
+      routeStatus: () => Promise.resolve(undefined),
+    });
+    if (sessionsTool === undefined) throw new Error('reticle_session is not on the surface');
+    const deps = {
+      sessions,
+      reticleRoot: join(appA, '.reticle'),
+      firstRun: firstRunWiring({ port: 4400, cliPath: 'reticle', run }),
+    } as unknown as ToolDeps;
+    const result = (await runWithClientDirectory(appB, () => sessionsTool.handler(deps, {}))) as {
+      wired?: { directory: string };
+      sessions: { projectId?: string }[];
+    };
+    expect(wiredIn).toEqual([appB]);
+    expect(result.wired?.directory).toBe(appB);
+    expect(result.sessions.some((session) => 'app-a' === session.projectId)).toBe(true);
+    stop();
+  });
+
+  it("does not call B's running server stopped because A departed later", async () => {
+    const root = tempDir();
+    const appA = join(root, 'a');
+    const appB = join(root, 'b');
+    const stateDir = join(root, 'state');
+    mkdirSync(appA);
+    mkdirSync(appB);
+    mkdirSync(stateDir);
+    writeFileSync(join(appA, '.reticle.json'), JSON.stringify({ projectId: 'app-a' }));
+    writeFileSync(join(appB, '.reticle.json'), JSON.stringify({ projectId: 'app-b' }));
+    const sessions = new SessionManager();
+    const depart = (sessionId: string, projectId: string, url: string): void => {
+      const tab = new Session(
+        {
+          kind: MessageKind.HELLO,
+          protocolVersion: RETICLE_PROTOCOL_VERSION,
+          sessionId,
+          projectId,
+          url,
+          title: sessionId,
+          adapters: [],
+          hasCapabilities: false,
+        },
+        { send: (): void => undefined } as unknown as WebSocket,
+        () => 0,
+      );
+      sessions.add(tab);
+      sessions.remove(tab);
+    };
+    const appBUrl = 'http://localhost:3005/inbox';
+    depart('tab-b', 'app-b', appBUrl);
+    depart('tab-a', 'app-a', APP_A_URL);
+    const asked: number[][] = [];
+    const stop = startNoSessionWatch({
+      sessions,
+      port: 4400,
+      initialized: true,
+      directory: appA,
+      stateDir,
+      probe: (ports) => {
+        asked.push([...ports]);
+        return Promise.resolve(ports.filter((port) => 3005 === port));
+      },
+      routeStatus: () => Promise.resolve(undefined),
+    });
+    await settleProbe();
+
+    expect(asked.some((ports) => ports.includes(3005))).toBe(true);
+    const fromB = runWithClientDirectory(appB, () => sessions.noSessionNextAction());
+    expect(fromB?.action).toBe(NoSessionAction.REOPEN_APP);
+    expect(fromB?.command).toContain(appBUrl);
+    const fromA = runWithClientDirectory(appA, () => sessions.noSessionNextAction());
+    expect(fromA?.command ?? '').not.toContain('3005');
+
     stop();
   });
 });

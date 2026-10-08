@@ -74,8 +74,9 @@ export function postToSession(
           'Content-Type': 'application/json',
           'Content-Length': bodyBuf.byteLength,
           // The project this proxy was started in. The daemon serves every project; without this
-          // it can only see the directory it itself started in.
-          [MCP_CLIENT_DIRECTORY_HEADER]: process.cwd(),
+          // it can only see the directory it itself started in. Percent-encoded: a cwd such as
+          // `/work/项目` is not a legal header value, and Node throws before the request is sent.
+          [MCP_CLIENT_DIRECTORY_HEADER]: encodeURIComponent(process.cwd()),
         },
       };
       // A keep-alive socket carries historical bytes; retry safety depends on this request's delta.
