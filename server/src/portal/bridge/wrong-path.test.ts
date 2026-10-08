@@ -44,10 +44,13 @@ describe('a dial on the wrong bridge path', () => {
     await dial(port, '/ws?token=pairing-secret-123');
 
     const reason = bridge.sessions.lastClosure()?.reason ?? '';
-    expect(reason).toContain('on /ws ');
+    expect(reason).toContain('asked for /ws ');
     expect(reason).toContain(`listens on ${RETICLE_WS_PATH} only`);
     expect(reason).toContain('http://localhost:5173');
     expect(reason).not.toContain('pairing-secret-123');
+    // Answered before any origin check, so it is not proof the user's app is running.
+    expect(reason).toContain('If that was your app');
+    expect(reason).not.toMatch(/stopped dev server|is running/);
   });
 
   it('reaches the agent through the no-session error', async () => {
@@ -57,7 +60,7 @@ describe('a dial on the wrong bridge path', () => {
 
     await dial(port, '/socket');
 
-    expect(() => bridge.sessions.resolve()).toThrow(/dialled this daemon on \/socket/);
+    expect(() => bridge.sessions.resolve()).toThrow(/asked for \/socket and got a 400/);
   });
 
   it('is recorded on a bridge sharing the daemon HTTP server too', async () => {
@@ -70,7 +73,7 @@ describe('a dial on the wrong bridge path', () => {
 
     await dial((srv.address() as AddressInfo).port, '/ws');
 
-    expect(bridge.sessions.lastClosure()?.reason ?? '').toContain('on /ws ');
+    expect(bridge.sessions.lastClosure()?.reason ?? '').toContain('asked for /ws ');
   });
 
   it('records nothing for a dial on the bridge path', async () => {

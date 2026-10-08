@@ -20,14 +20,18 @@ export function requestedPath(url: string | undefined): string {
   return shown.length > MAX_PATH_SHOWN ? `${shown.slice(0, MAX_PATH_SHOWN)}…` : shown;
 }
 
-/** What the no-session diagnosis says about it. The path is in it because the path is the fix. */
+/**
+ * What the no-session diagnosis says about it. The path is in it because the path is the fix. It
+ * says only what the record shows: a wrong-path upgrade is answered before any origin check, so
+ * the client could be anything, and a sentence promising the app is running would send the agent
+ * away from a dev server that really is stopped.
+ */
 export function wrongPathReason(path: string, origin: string | undefined): string {
-  const from = origin === undefined || 0 === origin.length ? 'a client' : `a page on ${origin}`;
+  const from = origin === undefined || 0 === origin.length ? 'a client with no Origin' : origin;
   return (
-    `${from} dialled this daemon on ${path} and got a 400: the bridge listens on ` +
-    `${RETICLE_WS_PATH} only. Point the URL given to connect({ url }) at the bridge path, for ` +
-    `example ws://localhost:<port>${RETICLE_WS_PATH}. The app is running and instrumented, it ` +
-    'dialled the wrong path, so do not go looking for a stopped dev server.'
+    `a WebSocket upgrade from ${from} asked for ${path} and got a 400: the bridge listens on ` +
+    `${RETICLE_WS_PATH} only. If that was your app, point the URL given to connect({ url }) at ` +
+    `the bridge path, for example ws://localhost:<port>${RETICLE_WS_PATH}.`
   );
 }
 
