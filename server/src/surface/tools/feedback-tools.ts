@@ -263,9 +263,8 @@ const FEEDBACK_PROMPT = {
  * outputSchema, returns the whole verdict block, and its own description calls it "one hop for the
  * act->observe->assert loop" — it IS the verification path most agents take. The guard that should
  * have caught the omission keyed on the tool NAME (/assert|verify/), which act_and_wait does not
- * match, so it slipped through in silence. Measured over a day of real telemetry: act_and_wait 14
- * calls, assert ZERO, verification_completed 2. Agents were verifying the entire time and the metric
- * could not see it. The contract test now checks the SHAPE instead.
+ * match, so it slipped through in silence: agents verified through act_and_wait the entire time,
+ * and the metric could not see it. The contract test now checks the SHAPE instead.
  */
 export const VERDICT_TOOLS: ReadonlySet<string> = new Set([
   ReticleTool.ACT_AND_WAIT,

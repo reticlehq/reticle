@@ -1,0 +1,28 @@
+---
+title: reticle_verify
+description: Prove what is and is not working, by action. Replay saved flows for a change or for the whole suite, list coverage, crawl, explore, mutate or heal.
+icon: shield-check
+---
+
+`reticle_verify` answers "is this proved?" in one call. It has no default `action`: every call names one, because some actions really click.
+
+```json
+{ "action": "change", "files": ["src/App.tsx"] }
+```
+
+| `action` | What it does | Verdict? |
+| --- | --- | --- |
+| `change` | Replays the saved flows that cover the `files` you edited (or the files changed `since` a git ref). One `verified` plus `because`. `unknown` when no saved flow covers the change: nothing ran, so nothing was proved | yes |
+| `flows` | Replays every saved flow, with no model in the loop, for one suite verdict. `names` or `labels` narrow it | yes |
+| `affected` | Names the saved flows that must re-verify for `files` or `since`, without running them | no |
+| `coverage` | Lists the controls you have and have not driven this session | no |
+| `crawl` | Drives every reachable control itself and reports faults and contradictions. **Destructive:** it really clicks | no |
+| `explore` | The Harness, Reticle's model-driven explorer, drives the journey you name in `persona` and saves what it drove as flows. Runs on the Reticle platform: run `reticle connect` first. Free includes monthly Harness credits. **Destructive** | no |
+| `mutate` | Grades a saved flow: breaks the endpoint it depends on and replays it. A flow that stays green is a click sequence, not a test | no |
+| `heal` | Rebinds a flow whose locator was renamed. Re-asserts the saved consequence first and refuses if it stops firing. `apply: true` writes the fix | no |
+
+Only `verified: "yes"` is a pass. `unknown` means Reticle could not tell, and `no-fault` means nothing was declared to prove.
+
+Replay before you drive: a covered journey re-verifies for a few hundred tokens, where driving it again costs tens of thousands.
+
+From a terminal, `reticle verify <url>` replays the saved flows and exits `0` on pass. See [`reticle verify`](/cli/verify).

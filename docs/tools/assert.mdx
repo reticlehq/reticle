@@ -6,7 +6,7 @@ icon: gavel
 
 `reticle_assert` evaluates a predicate against what the app actually did and returns a verdict: `verified` plus `pass`, evidence when it holds, and `expected` versus `observed` when it does not. Reach for it when you want a verdict on something you did not just cause, or on several actions at once.
 
-It is the second of the two tools that produce a verdict, the other being [`reticle_act_and_wait`](/tools/act-and-wait). It takes the same predicate grammar and evaluates it against what already happened.
+Verdicts come from [`reticle_act_and_wait`](/tools/act-and-wait), `reticle_assert`, `reticle_act { steps }` when a step declares `expect`, and `reticle_verify` (`change`/`flows`). Everything else moves or reads the app and proves nothing. Only `verified: "yes"` is a pass: `unknown` means Reticle could not tell, and `no-fault` means nothing was declared to prove. `reticle_assert` takes the same predicate grammar as `until` and evaluates it against what already happened.
 
 ## A real failure
 

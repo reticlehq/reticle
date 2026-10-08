@@ -11,7 +11,7 @@ icon: layer-group
   `allowedTools` allowlist or an MCP permission rule naming it refuses before Reticle is asked.
 </Warning>
 
-`reticle_act_sequence` runs several actions in order in a single round trip. Reach for it whenever a journey needs more than one step, such as fill, fill, submit, and then prove the outcome once with [`reticle_act_and_wait`](/tools/act-and-wait), because a sequence itself produces no verdict.
+`reticle_act_sequence` runs several actions in order in a single round trip. Reach for it whenever a journey needs more than one step, such as fill, fill, submit. A step that carries an `expect` (the same predicate shape as `until`) proves its consequence: the result then carries `verified`, and `stopped_at` plus the un-run `tail` if a step's `expect` did not hold. With `onDeviation: "continue"` it drives every step and reports every miss instead of stopping. A sequence with no `expect` anywhere proves nothing.
 
 A login is three actions. Driving it one call at a time costs three round trips and three turns of context. `reticle_act_sequence` does it in one.
 
@@ -109,10 +109,9 @@ Real response. Each `effects[]` entry also carries `targetMatched`, `visible`, `
 That password was wrong. The app rejected it. And this tool still reported `ok: true`, correctly, because `ok` means _the three actions were dispatched_, which they were.
 
 <Warning>
-  This is the whole reason `act` and `act_sequence` do not produce verdicts. `ok: true` is a
-  statement about the input, not about the outcome. Follow a sequence with
-  [`reticle_act_and_wait`](/tools/act-and-wait) on the final step, or with an
-  [`reticle_assert`](/tools/assert), or you have proved nothing.
+  `ok: true` is a statement about the input, not about the outcome. A step with no `expect` proves
+  nothing. Put an `expect` on the step that ends the journey, or finish with
+  [`reticle_act_and_wait`](/tools/act-and-wait) or [`reticle_assert`](/tools/assert).
 </Warning>
 
 The honest pattern is: batch the setup, prove the outcome.
@@ -132,7 +131,7 @@ then
 { "ref": "e605", "action": "click", "until": { "kind": "signal", "name": "auth:granted" } }
 ```
 
-which returns the verdict the sequence could not:
+which returns the verdict. Putting `"expect": { "kind": "signal", "name": "auth:granted" }` on the click step inside the sequence gets the same verdict in one call:
 
 ```json
 {

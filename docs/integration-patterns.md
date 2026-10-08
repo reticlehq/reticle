@@ -24,7 +24,7 @@ Adoption is **free → cheap → targeted**. You don't instrument everything; yo
 
 **1. Reuse your existing `data-testid` (free).** If you already test with Playwright or Cypress, your testids work in Reticle unchanged; `reticle_look({ action: "find", by: 'testid', value: 'checkout' })` matches them exactly. No new markup, no new code.
 
-**2. Advertise the surface from your existing constants (cheap).** You already keep a `TestIds` constant object for your E2E suite. Pass it straight in. Now `reticle_capabilities()` tells a fresh agent your whole surface without reading source.
+**2. Advertise the surface from your existing constants (cheap).** You already keep a `TestIds` constant object for your E2E suite. Pass it straight in. Now `reticle_run({ tool: "reticle_capabilities", args: {} })` tells a fresh agent your whole surface without reading source.
 
 ```ts
 import { registerCapabilities } from '@reticlehq/browser';
@@ -133,7 +133,7 @@ import { registerReticleDomain } from '@reticlehq/browser';
 registerReticleDomain({ testids: ['search-input'], signals: ['search:ran'] });
 ```
 
-Importing both modules in dev makes `reticle_capabilities()` return the merged surface (`testids: ['section-list', 'section-add', 'search-input']`, `signals: ['section:reordered', 'search:ran']`, `stores: ['workspace']`). `registerReticleDomain` is a thin convenience over `registerCapabilities`, with the same merge-idempotent, HMR-safe semantics, so it composes with §1's "use your existing constants." (Named flows stay an explicit `registerCapabilities({ flows })` concern: their last-writer-wins semantics don't fit "accumulate from many domains.")
+Importing both modules in dev makes `reticle_run({ tool: "reticle_capabilities", args: {} })` return the merged surface (`testids: ['section-list', 'section-add', 'search-input']`, `signals: ['section:reordered', 'search:ran']`, `stores: ['workspace']`). `registerReticleDomain` is a thin convenience over `registerCapabilities`, with the same merge-idempotent, HMR-safe semantics, so it composes with §1's "use your existing constants." (Named flows stay an explicit `registerCapabilities({ flows })` concern: their last-writer-wins semantics don't fit "accumulate from many domains.")
 
 ## 5. Keep the signal layer from rotting (`@reticlehq/eslint-plugin`)
 
@@ -171,7 +171,7 @@ When that happens, `reticle_session { action: "list" }` and every act/assert res
 - [ ] One `app/emit.ts` is the **only** module importing `@reticlehq/browser`; components import the emitter.
 - [ ] `reticle.connect()` is dev-gated; the prod bundle has no `@reticlehq/browser`.
 - [ ] Signals fire from the store layer (middleware or `commitAndSignal`); view-level exceptions are explicit.
-- [ ] Each domain self-registers via `registerReticleDomain`; `reticle_capabilities()` returns the full surface.
+- [ ] Each domain self-registers via `registerReticleDomain`; `reticle_run({ tool: "reticle_capabilities", args: {} })` returns the full surface.
 - [ ] Existing Playwright/Cypress testids are reused, not duplicated.
 - [ ] `reticle/require-signal-on-mutation` is enabled with your `mutators` + `signalCallee`.
 - [ ] The team knows `reticle drive <url>` for un-scriptable tabs.

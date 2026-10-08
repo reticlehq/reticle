@@ -44,7 +44,7 @@ The platform plans every drive (link the project once with `reticle connect`, or
 
 Called with no `persona`, explore writes the whole drive down before it starts, as a drive plan:
 
-- **Journeys.** Each saved flow worth replaying, plus one open journey for each persona the platform proposes, for the request the user declared (`reticle_intent { action: "declare" }`), and for each intent nobody has proved. Replays need no model; only open journeys reach one.
+- **Journeys.** Each saved flow worth replaying, plus one open journey for each persona the platform proposes, for the request the user declared (`reticle_run { tool: "reticle_intent", args: { action: "declare" } }`), and for each intent nobody has proved. Replays need no model; only open journeys reach one.
 - **Order.** A flow that `needs` another runs after it. An open journey runs after the flow everything else needs, usually sign-in.
 - **Lanes.** Each journey nothing else needs gets a lane holding what it needs, in order. Lanes run side by side, each in its own leased browser context, four at a time. A journey that needs one from another lane waits for it, and is blocked if that journey failed. A prerequisite that commits something (a payment, an email) runs in one lane only, and the others wait on it rather than commit it twice.
 - **Branches.** Flows that start with the same steps become one journey. The shared steps are driven once and marked as a checkpoint, then each flow continues from that point. Every flow after the first replays back to the checkpoint first, so none of them starts from the page the previous one left.

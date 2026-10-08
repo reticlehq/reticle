@@ -431,10 +431,10 @@ registerCapabilities({
   signals: ['order:saved', 'cart:updated'],
   stores: ['cart'],
 });
-// agent: reticle_capabilities()  → the whole testable surface
+// agent: reticle_run({ tool: "reticle_capabilities", args: {} })  → the whole testable surface
 ```
 
-> **Multi-domain apps:** prefer `registerReticleDomain({ testids, signals, stores })` co-located in one `reticle.ts` per domain. Each self-registers and `reticle_capabilities()` assembles the union, so there's no central map to forget. See [integration-patterns.md](integration-patterns.md).
+> **Multi-domain apps:** prefer `registerReticleDomain({ testids, signals, stores })` co-located in one `reticle.ts` per domain. Each self-registers and `reticle_run({ tool: "reticle_capabilities", args: {} })` assembles the union, so there's no central map to forget. See [integration-patterns.md](integration-patterns.md).
 
 > Watch the agent work: pass `present: true` to `reticle.connect()` for a glowing border, a cursor that flies to targets, and a HUD; the agent can call `reticle_session({ action: "narrate", text })` to show its intent. See [usage §16](usage.md#16-presenter-mode-narration--fake-clock-watch--control).
 

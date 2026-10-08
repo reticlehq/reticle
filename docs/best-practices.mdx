@@ -27,7 +27,7 @@ An agent that acts first and then decides what counts as success will always fin
 
 ## A drive that ends on `reticle_act` proved nothing
 
-Only `reticle_act_and_wait` and `reticle_assert` produce a verdict. Everything else moves or reads the app.
+Verdicts come from `reticle_act_and_wait`, `reticle_assert`, `reticle_act { steps }` when a step declares `expect`, and `reticle_verify` (`change`/`flows`). Everything else moves or reads the app and proves nothing. Only `verified: "yes"` is a pass: `unknown` means Reticle could not tell, and `no-fault` means nothing was declared to prove.
 
 This is not pedantry. Here is a real `act_sequence` response:
 

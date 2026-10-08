@@ -1,0 +1,24 @@
+---
+title: reticle_look
+description: Read the page without changing it. The rendered tree, a locator resolved to refs, one element in full, or the app's store.
+icon: magnifying-glass
+---
+
+`reticle_look` reads the page and changes nothing. Pick what to read with `action`. With no `action`, it reads the page.
+
+```json
+{ "action": "find", "by": "testid", "value": "submit" }
+```
+
+| `action` | What it returns | Unmerged name | Details |
+| --- | --- | --- | --- |
+| `page` (default) | The semantic snapshot of what is rendered, with a `ref` for each control. `mode: "interactive"` keeps only what you can act on; `diff: true` returns only what changed since the last look | `reticle_snapshot` | [Snapshot](/tools/snapshot) |
+| `find` | A locator (testid, role, text, label, component) resolved to refs you can act on. `limit` caps the list; `count_only` returns just the count | `reticle_query` | [Query](/tools/query) |
+| `element` | Everything about one `ref`: geometry, scroll, design tokens, and on React the source `file:line` | `reticle_inspect` | [Inspect](/tools/inspect) |
+| `state` | A registered store's value. Scope it with `store`, `path` and `depth` | `reticle_state` | [State](/tools/state) |
+
+A `ref` like `e7` stays valid until its element leaves the DOM, so you do not re-look between actions.
+
+`reticle_look` never produces a verdict. Verdicts come from `reticle_act_and_wait`, `reticle_assert`, `reticle_act { steps }` when a step declares `expect`, and `reticle_verify` (`change`/`flows`). Everything else moves or reads the app and proves nothing. Only `verified: "yes"` is a pass: `unknown` means Reticle could not tell, and `no-fault` means nothing was declared to prove.
+
+With `RETICLE_ADVERTISE_ALL_TOOLS=1`, the daemon advertises the four unmerged names instead of `reticle_look`.
