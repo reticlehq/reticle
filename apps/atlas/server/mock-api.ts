@@ -1,7 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 /**
- * Atlas's backend, as a Vite middleware.
+ * Atlas's backend: one request handler, mounted by the Vite dev server (`atlasApi`) and by the
+ * standalone demo server (`serve.ts`).
  *
  * Deliberately NOT a stub that echoes what it is given. The behaviours below are the ones that make
  * verification hard in real systems, and each exists so a client-side "it worked" can be wrong:
@@ -87,8 +88,8 @@ function buildShipments(): Shipment[] {
   });
 }
 
-const shipments = buildShipments();
-const byId = new Map(shipments.map((s) => [s.id, s]));
+let shipments = buildShipments();
+let byId = new Map(shipments.map((s) => [s.id, s]));
 
 /** Idempotency ledger: key → the response first returned for it. */
 const idempotency = new Map<string, unknown>();
@@ -139,6 +140,18 @@ function startScanFeed(): NodeJS.Timeout {
 // the revert a coin flip, which is not a test.
 let reconciled = 0;
 
+/**
+ * Back to the seeded starting state: every visitor mutation, idempotency key and pending
+ * reconciliation is dropped. The public demo calls this on a timer so it never accumulates state.
+ */
+export function resetState(): void {
+  shipments = buildShipments();
+  byId = new Map(shipments.map((s) => [s.id, s]));
+  idempotency.clear();
+  reconciling.clear();
+  reconciled = 0;
+}
+
 function startReconciler(): NodeJS.Timeout {
   return setInterval(() => {
     const now = Date.now();
@@ -163,9 +176,19 @@ const json = (res: ServerResponse, status: number, body: unknown): void => {
   res.end(payload);
 };
 
+/** A public demo takes requests from anyone: no body this app sends is near this size. */
+const MAX_BODY_BYTES = 64 * 1024;
+/** Event streams held open at once, so a public demo cannot be held open into exhaustion. */
+const MAX_SSE_CLIENTS = 500;
+
 const readBody = async (req: IncomingMessage): Promise<Record<string, unknown>> => {
   const chunks: Buffer[] = [];
-  for await (const chunk of req) chunks.push(chunk as Buffer);
+  let size = 0;
+  for await (const chunk of req) {
+    size += (chunk as Buffer).length;
+    if (size > MAX_BODY_BYTES) return {};
+    chunks.push(chunk as Buffer);
+  }
   try {
     return JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>;
   } catch {
@@ -175,116 +198,131 @@ const readBody = async (req: IncomingMessage): Promise<Record<string, unknown>> 
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
+export async function handleApi(
+  req: IncomingMessage,
+  res: ServerResponse,
+  next: () => void,
+): Promise<void> {
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  if (!url.pathname.startsWith('/api/')) {
+    next();
+    return;
+  }
+
+  // ── SSE: scan + reconciliation events ────────────────────────────────────────────────
+  if (url.pathname === '/api/events') {
+    if (sseClients.size >= MAX_SSE_CLIENTS) {
+      json(res, 503, { error: 'busy' });
+      return;
+    }
+    res.writeHead(200, {
+      'content-type': 'text/event-stream',
+      'cache-control': 'no-cache',
+      connection: 'keep-alive',
+    });
+    res.write(': connected\n\n');
+    sseClients.add(res);
+    req.on('close', () => sseClients.delete(res));
+    return;
+  }
+
+  // ── list: paginated, filterable, and CHUNKED (no content-length) ─────────────────────
+  if (url.pathname === '/api/shipments' && req.method === 'GET') {
+    const status = url.searchParams.get('status');
+    const search = url.searchParams.get('search');
+    const page = Number(url.searchParams.get('page') ?? '1');
+    const size = Number(url.searchParams.get('size') ?? '50');
+    // The slow path is the unfiltered one, so racing two filter clicks lands them out of
+    // order — the ordering hazard, produced by latency rather than by a planted flag.
+    await sleep(status === null || status === 'all' ? 700 : 90);
+    let rows = shipments;
+    if (status !== null && status !== 'all') rows = rows.filter((s) => s.status === status);
+    if (search !== null && search.length > 0) {
+      rows = rows.filter((s) => s.ref.toLowerCase().includes(search.toLowerCase()));
+    }
+    const start = (page - 1) * size;
+    json(res, 200, {
+      rows: rows.slice(start, start + size),
+      total: rows.length,
+      page,
+      size,
+    });
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/shipments/') && req.method === 'GET') {
+    const id = url.pathname.split('/')[3] ?? '';
+    await sleep(120);
+    const shipment = byId.get(id);
+    if (shipment === undefined) {
+      json(res, 404, { error: 'not_found' });
+      return;
+    }
+    json(res, 200, shipment);
+    return;
+  }
+
+  // ── dispatch: 202 + async reconciliation, with idempotency ───────────────────────────
+  if (url.pathname === '/api/dispatch' && req.method === 'POST') {
+    const body = await readBody(req);
+    const key = String(req.headers['idempotency-key'] ?? '');
+    await sleep(180);
+    if (key.length > 0 && idempotency.has(key)) {
+      // A replay returns the ORIGINAL result. Two submits, two 202s, one dispatch.
+      json(res, 202, idempotency.get(key));
+      return;
+    }
+    const id = String(body['shipmentId'] ?? '');
+    const shipment = byId.get(id);
+    if (shipment === undefined) {
+      json(res, 404, { error: 'not_found' });
+      return;
+    }
+    const result = { accepted: true, shipmentId: id, reconcileIn: 1200 };
+    if (key.length > 0) idempotency.set(key, result);
+    reconciling.set(`${id}:${String(Date.now())}`, { shipmentId: id, at: Date.now() });
+    json(res, 202, result);
+    return;
+  }
+
+  // ── bulk hold: 200 with per-item failures INSIDE the body ────────────────────────────
+  if (url.pathname === '/api/bulk-hold' && req.method === 'POST') {
+    const body = await readBody(req);
+    const ids = Array.isArray(body['ids']) ? (body['ids'] as string[]) : [];
+    await sleep(260);
+    const results = ids.map((id, i) => {
+      const shipment = byId.get(id);
+      if (shipment === undefined) return { id, ok: false, error: 'not_found' };
+      // Every third one fails validation. The envelope is still 200.
+      if (i % 3 === 2) return { id, ok: false, error: 'carrier_locked' };
+      shipment.status = 'held';
+      shipment.version += 1;
+      return { id, ok: true };
+    });
+    json(res, 200, { results, requested: ids.length });
+    return;
+  }
+
+  json(res, 404, { error: 'no_route' });
+}
+
+/**
+ * Scan feed + reconciler. Started by whoever serves the API, never at module scope: module-level
+ * timers keep the Node process alive, so `vite build` — which imports this config — never exited
+ * and the whole repo's build hung. A fixture that cannot be built is not a fixture.
+ */
+export function startTimers(): NodeJS.Timeout[] {
+  const timers = [startScanFeed(), startReconciler()];
+  for (const timer of timers) timer.unref();
+  return timers;
+}
+
 export function atlasApi() {
   return {
     name: 'atlas-mock-api',
     configureServer(server: { middlewares: { use: (fn: unknown) => void } }) {
-      // Started HERE, not at module scope. Module-level timers keep the Node process alive, so
-      // `vite build` — which imports this config — never exited and the whole repo's build hung.
-      // A fixture that cannot be built is not a fixture.
-      const timers = [startScanFeed(), startReconciler()];
-      for (const timer of timers) timer.unref?.();
-      server.middlewares.use(
-        async (req: IncomingMessage, res: ServerResponse, next: () => void): Promise<void> => {
-          const url = new URL(req.url ?? '/', 'http://localhost');
-          if (!url.pathname.startsWith('/api/')) {
-            next();
-            return;
-          }
-
-          // ── SSE: scan + reconciliation events ────────────────────────────────────────────────
-          if (url.pathname === '/api/events') {
-            res.writeHead(200, {
-              'content-type': 'text/event-stream',
-              'cache-control': 'no-cache',
-              connection: 'keep-alive',
-            });
-            res.write(': connected\n\n');
-            sseClients.add(res);
-            req.on('close', () => sseClients.delete(res));
-            return;
-          }
-
-          // ── list: paginated, filterable, and CHUNKED (no content-length) ─────────────────────
-          if (url.pathname === '/api/shipments' && req.method === 'GET') {
-            const status = url.searchParams.get('status');
-            const search = url.searchParams.get('search');
-            const page = Number(url.searchParams.get('page') ?? '1');
-            const size = Number(url.searchParams.get('size') ?? '50');
-            // The slow path is the unfiltered one, so racing two filter clicks lands them out of
-            // order — the ordering hazard, produced by latency rather than by a planted flag.
-            await sleep(status === null || status === 'all' ? 700 : 90);
-            let rows = shipments;
-            if (status !== null && status !== 'all') rows = rows.filter((s) => s.status === status);
-            if (search !== null && search.length > 0) {
-              rows = rows.filter((s) => s.ref.toLowerCase().includes(search.toLowerCase()));
-            }
-            const start = (page - 1) * size;
-            json(res, 200, {
-              rows: rows.slice(start, start + size),
-              total: rows.length,
-              page,
-              size,
-            });
-            return;
-          }
-
-          if (url.pathname.startsWith('/api/shipments/') && req.method === 'GET') {
-            const id = url.pathname.split('/')[3] ?? '';
-            await sleep(120);
-            const shipment = byId.get(id);
-            if (shipment === undefined) {
-              json(res, 404, { error: 'not_found' });
-              return;
-            }
-            json(res, 200, shipment);
-            return;
-          }
-
-          // ── dispatch: 202 + async reconciliation, with idempotency ───────────────────────────
-          if (url.pathname === '/api/dispatch' && req.method === 'POST') {
-            const body = await readBody(req);
-            const key = String(req.headers['idempotency-key'] ?? '');
-            await sleep(180);
-            if (key.length > 0 && idempotency.has(key)) {
-              // A replay returns the ORIGINAL result. Two submits, two 202s, one dispatch.
-              json(res, 202, idempotency.get(key));
-              return;
-            }
-            const id = String(body['shipmentId'] ?? '');
-            const shipment = byId.get(id);
-            if (shipment === undefined) {
-              json(res, 404, { error: 'not_found' });
-              return;
-            }
-            const result = { accepted: true, shipmentId: id, reconcileIn: 1200 };
-            if (key.length > 0) idempotency.set(key, result);
-            reconciling.set(`${id}:${String(Date.now())}`, { shipmentId: id, at: Date.now() });
-            json(res, 202, result);
-            return;
-          }
-
-          // ── bulk hold: 200 with per-item failures INSIDE the body ────────────────────────────
-          if (url.pathname === '/api/bulk-hold' && req.method === 'POST') {
-            const body = await readBody(req);
-            const ids = Array.isArray(body['ids']) ? (body['ids'] as string[]) : [];
-            await sleep(260);
-            const results = ids.map((id, i) => {
-              const shipment = byId.get(id);
-              if (shipment === undefined) return { id, ok: false, error: 'not_found' };
-              // Every third one fails validation. The envelope is still 200.
-              if (i % 3 === 2) return { id, ok: false, error: 'carrier_locked' };
-              shipment.status = 'held';
-              shipment.version += 1;
-              return { id, ok: true };
-            });
-            json(res, 200, { results, requested: ids.length });
-            return;
-          }
-
-          json(res, 404, { error: 'no_route' });
-        },
-      );
+      startTimers();
+      server.middlewares.use(handleApi);
     },
   };
 }
