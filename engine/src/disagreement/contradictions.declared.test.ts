@@ -121,7 +121,10 @@ describe('a declared expected failure is not a contradiction', () => {
 });
 
 describe('a signal acknowledging a declared refusal', () => {
-  const orderVerdict = (signal: string) => {
+  const orderVerdict = (
+    signal: string,
+    stateChanges: readonly { path: string; value: unknown }[] = [],
+  ) => {
     const declared = declaredExpectations({
       kind: PredicateKind.ALL_OF,
       predicates: [
@@ -134,6 +137,7 @@ describe('a signal acknowledging a declared refusal', () => {
         ev(EventType.DOM_ADDED, { name: 'Order refused' }),
         failedCall('POST', '/orders', 403),
         ev(EventType.SIGNAL, { name: signal }),
+        ...stateChanges.map((change) => ev(EventType.STATE_CHANGE, change)),
       ],
       { expectedFailures: declared.netFailures, actionSince: 0 },
     );
@@ -185,6 +189,32 @@ describe('a signal acknowledging a declared refusal', () => {
       expect(kindsOf(verdict.contradictions)).toContain(ContradictionKind.SIGNAL_CONTRADICTED);
     },
   );
+
+  it.each([
+    { path: 'checkout.blocking', value: false },
+    { path: 'checkout.blocked', value: false },
+    { path: 'checkout.forbidden', value: false },
+    { path: 'checkout.refused', value: false },
+    { path: 'checkout.not_allowed', value: false },
+    { path: 'checkout.status', value: 'blocking' },
+  ])('does not read $path=$value as a failure acknowledgement', (change) => {
+    const verdict = orderVerdict('order:placed', [change]);
+    expect(verdict).toMatchObject({
+      verified: Verified.NO,
+      verifiedReason: VerifiedReason.CONTRADICTED,
+    });
+    expect(kindsOf(verdict.contradictions)).toContain(ContradictionKind.SIGNAL_CONTRADICTED);
+  });
+
+  it('still accepts a refusal signal when a loading flag is cleared', () => {
+    expect(
+      orderVerdict('order:refused', [{ path: 'checkout.blocking', value: false }]),
+    ).toMatchObject({
+      verified: Verified.YES,
+      verifiedReason: VerifiedReason.PROVED,
+      contradictions: [],
+    });
+  });
 });
 
 describe('a declared denial on screen is proof of the 401, not a contradiction', () => {
