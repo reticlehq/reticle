@@ -294,6 +294,20 @@ describe('parseCliArgs', () => {
     });
   });
 
+  it('verify <url> --results-json names where the per-journey verdicts are written', () => {
+    expect(parseCliArgs(['verify', URL, '--results-json', 'r.json'], PORT)).toEqual({
+      kind: 'verify',
+      url: URL,
+      headless: true,
+      port: PORT,
+      resultsJson: 'r.json',
+    });
+    expect(parseCliArgs(['verify', URL, '--results-json'], PORT)).toEqual({
+      kind: 'error',
+      message: '--results-json needs a value',
+    });
+  });
+
   it('verify accepts --select more than once, because a set is a union', () => {
     expect(parseCliArgs(['verify', URL, '--select', 'smoke', '--select', 'money'], PORT)).toEqual({
       kind: 'verify',

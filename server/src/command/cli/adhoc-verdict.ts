@@ -143,10 +143,15 @@ function sameDocument(a: string, b: string): boolean {
 export async function acquireLease(
   caller: ToolCaller,
   url: string,
+  /** Open it in a window somebody can watch, whatever the daemon was started as. */
+  headed?: boolean,
 ): Promise<{ leased: string; zeroInstall: boolean } | { failed: string[] }> {
   const acquired = await caller.call(
     ReticleTool.RUN,
-    { tool: ReticleTool.LEASE, args: { action: LeaseAction.ACQUIRE, url } },
+    {
+      tool: ReticleTool.LEASE,
+      args: { action: LeaseAction.ACQUIRE, url, ...(true === headed ? { headed } : {}) },
+    },
     LEASE_TIMEOUT_MS,
   );
   const report = verdictOf(acquired, 'sessionId');

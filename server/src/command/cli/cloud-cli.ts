@@ -24,6 +24,7 @@ import { defaultProjectFor } from './project-name.js';
 import { RETICLE_CONFIG_BASENAME } from './ports/resolve/cli-port.js';
 import { normalizeUrl } from './auth/cloud-session.js';
 import { cmdLogin, cmdLogout } from './cloud-login.js';
+import { cmdTry } from './try-command.js';
 import {
   api,
   baseUrl,
@@ -65,6 +66,7 @@ import { diskSink, diskSource, readCloudIssues, readCloudState } from '@/memory/
 const CLOUD_COMMANDS: ReadonlySet<string> = new Set([
   'login',
   'connect',
+  'try',
   'logout',
   'whoami',
   'link',
@@ -858,6 +860,11 @@ export const runCloudCommand = async (argv: readonly string[]): Promise<number> 
         return await cmdLogin(rest, cmdLink);
       case 'connect':
         return await cmdConnect(rest);
+      case 'try':
+        return await cmdTry(rest, {
+          push: () => cmdSync([]),
+          dashboardUrl: async (c) => (await validateKey(c.url, c.apiKey))?.dashboardUrl,
+        });
       case 'logout':
         return await cmdLogout(rest);
       case 'whoami':
