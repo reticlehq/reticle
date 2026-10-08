@@ -7,7 +7,7 @@ icon: window-maximize
 `reticle open` is the one-command "show me the app". It resolves the port, makes sure a daemon is up, and then either reuses the tab that is already connected or opens a new one.
 
 ```bash
-npx @reticlehq/server open [url] [--port N]
+npx @reticlehq/server open [url] [--port N] [--navigate]
 ```
 
 ## Arguments and flags
@@ -16,17 +16,20 @@ npx @reticlehq/server open [url] [--port N]
 | --- | --- | --- | --- |
 | `url` | string, positional, optional | unset | The URL to open. Omit it to reuse a connected tab |
 | `--port N` | number | `4400` (or `RETICLE_PORT`, or the port in `.reticle.json`) | Bridge port. If nothing is on it, `open` discovers a running daemon rather than making you hunt |
+| `--navigate` | flag | off | When a tab of this project on the url's origin is connected but on another page, move that tab to the url and wait for it to arrive. Exits `1` when the move fails. Without it the tab is left where it is |
 
 It is idempotent. Re-running never piles up duplicate tabs.
 
 ## What it prints
 
-One `reticle_open` line, whose fields say which of four things happened.
+One `reticle_open` line, whose fields say which of these happened.
 
 | Fields | Meaning |
 | --- | --- |
 | `reusing` | A connected tab was already on the right page. Nothing was opened |
 | `reusing` + `requested` + `note` | A tab is connected on that origin but sitting on a different page. It was **left there**, not navigated. Drive it with `reticle_navigate` or open the URL yourself |
+| `navigated` + `sessionId` (+ `landedOn`) | With `--navigate`: that tab was moved to the url and arrived. `sessionId` is the session it reconnected as, and `landedOn` names a redirect when the page ended somewhere else |
+| `requested` + `note` (with `--navigate`) | The browser accepted the navigation but no page on the url reconnected in the wait window, so arrival was not observed |
 | `opened` + `connected: true` | A browser was launched and a Reticle session appeared |
 | `opened` + `connected: false` + `note` | The URL went to the system default browser and no session showed up within 8 seconds. Almost always means the app carries no SDK, or dials a different port |
 | `error` | No app connected and no URL given, or the browser could not be launched |

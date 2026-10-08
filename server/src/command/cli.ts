@@ -85,6 +85,7 @@ import {
   openInBrowser,
   openCommand,
 } from './cli/launch/cli-launch.js';
+import { NAVIGATE_NO_SESSION_ID, navigateLeftTab, openCandidates } from './cli/open-navigate.js';
 import { fetchStatus } from './daemon/binding/daemon-status-probe.js';
 import { handleDrive } from './cli/drive/drive-command.js';
 import { handleVerify } from './cli/cli-verify.js';
@@ -457,7 +458,11 @@ async function waitForNewSession(port: number, before: number): Promise<boolean>
   return false;
 }
 
-function handleOpen(requestedPort: number, url: string | undefined): void {
+/** What to do about a same-origin tab `open` left where it was. */
+const OPEN_LEFT_AS_IS_REMEDY =
+  'Pass --navigate to move it, drive it with reticle_navigate, or open the url in the browser yourself.';
+
+function handleOpen(requestedPort: number, url: string | undefined, navigate = false): void {
   // Our project's daemon first: `discoverDaemonPort` returns the LOWEST live daemon on the machine,
   // whoever it belongs to, so on a machine running two projects `reticle open` could drive the other
   // one's browser. It stays as the last resort for a caller with no project id, where any daemon is
@@ -474,7 +479,10 @@ function handleOpen(requestedPort: number, url: string | undefined): void {
     .then(async (port) => {
       await ensureDaemon(port);
       const { sessions } = summarizeStatus(await fetchStatus(port));
-      const decision = decideOpen(sessions, url);
+      // `--navigate` MOVES a tab, so it may only pick one of ours: on a daemon serving two projects,
+      // the origin match alone could hand it the other project's tab. Reuse and the note are read-only.
+      const candidates = openCandidates(sessions, navigate, myProject);
+      const decision = decideOpen(candidates, url);
       if ('need-url' === decision.action) {
         log('reticle_open', {
           port,
@@ -491,16 +499,30 @@ function handleOpen(requestedPort: number, url: string | undefined): void {
       // A tab on the right origin, on the WRONG page. Kept (that is what stops a tab piling up per
       // run) but never reported as done: `reusing` here read as "your url is open" for a page nobody
       // had opened.
+      if ('left-as-is' === decision.action && navigate && decision.sessionId !== undefined) {
+        const moved = await navigateLeftTab({
+          port,
+          sessionId: decision.sessionId,
+          url: decision.requested,
+        });
+        log('reticle_open', { port, ...moved });
+        // A loop or CI step reads the exit code, so a failed move must not exit 0.
+        if (moved['error'] !== undefined) process.exit(1);
+        return;
+      }
       if ('left-as-is' === decision.action) {
+        // `--navigate` was asked for and could not be honoured: the tab never reported a session id
+        // to move. Suggesting `--navigate` back to someone who just passed it reads as being ignored.
+        const remedy = navigate ? NAVIGATE_NO_SESSION_ID : OPEN_LEFT_AS_IS_REMEDY;
         log('reticle_open', {
           port,
           reusing: decision.url,
           requested: decision.requested,
           note:
             `a tab is connected on this origin but sitting on ${decision.url} — it was LEFT THERE, ` +
-            `not navigated to ${decision.requested}. Drive it with reticle_navigate, or open the url ` +
-            'in the browser yourself.',
+            `not navigated to ${decision.requested}. ${remedy}`,
         });
+        if (navigate) process.exit(1);
         return;
       }
       const launchError = await openInBrowser(decision.url);
@@ -859,7 +881,7 @@ export function main(): void {
       process.stdout.write(`${renderTutorial(parsed.audience)}\n`);
       break;
     case 'open':
-      handleOpen(parsed.port, parsed.url);
+      handleOpen(parsed.port, parsed.url, parsed.navigate);
       break;
     case 'drive':
       handleDrive(parsed, readProjectId(process.cwd()));
