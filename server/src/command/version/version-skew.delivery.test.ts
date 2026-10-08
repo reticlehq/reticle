@@ -142,7 +142,7 @@ describe('a skewed page is reported on the next tool result', () => {
     const result = (await call('reticle_sessions')) as {
       version_skew?: { pair: string; action: string };
     };
-    expect(result.version_skew?.pair).toBe('sdk');
+    expect(result.version_skew?.pair).toBe('sdk_behind');
     expect(result.version_skew?.action).toContain('0.0.1');
   });
 });

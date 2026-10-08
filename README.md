@@ -158,7 +158,7 @@ npm install -g @reticlehq/server
 reticle setup mcp
 ```
 
-**✅ It worked when** it finishes with a verdict on Reticle's own demo app. It doesn't touch your project. **Run it before you open your coding agent**; an agent that's already open needs one restart to see the new tools.
+**✅ It worked when** it finishes with "Reticle is installed on this machine. It is not in your app yet." It doesn't touch your project. **Run it before you open your coding agent**; an agent that's already open needs one restart to see the new tools.
 
 <details>
 <summary>What the installer does, and other ways to install</summary>

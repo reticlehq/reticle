@@ -49,7 +49,7 @@ import { affectedSavedFlows } from '@/language/flows/change/flow-sources.js';
 
 import { availableUpdate } from './update/update-nudge.js';
 import { handleUpdate, handleRollback } from './cli/cli-update-commands.js';
-import { headlessByDefault } from './cli/launch/headless-default.js';
+import { headlessByDefault } from './cli/daemon-start-options.js';
 
 import { startDaemon } from '@/index.js';
 import { isCloudCommand, runCloudCommand } from './cli/cloud-cli.js';

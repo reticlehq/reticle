@@ -96,19 +96,19 @@ async function waitForSession(running: RunningServer, now: () => number): Promis
 }
 
 /**
- * Run the tour, and report whether it ended at a proof.
- *
- * A step that cannot be taken stops the tour and says which one. Carrying on past a failed step
- * would end at a verdict taken against a page the earlier steps never reached — which is precisely
- * the false green the fourth step is there to warn about.
- */
-/**
  * From the field: a session connecting and `verified: yes` read as "Reticle is in my app", and the
  * person went looking for their app on the dashboard. The demo says whose app it drove.
  */
 const DEMO_IS_NOT_YOUR_APP =
   "That was Reticle's demo app. Yours is not wired yet: run `reticle init` in your app's folder.";
 
+/**
+ * Run the tour, and report whether it ended at a proof.
+ *
+ * A step that cannot be taken stops the tour and says which one. Carrying on past a failed step
+ * would end at a verdict taken against a page the earlier steps never reached — which is precisely
+ * the false green the fourth step is there to warn about.
+ */
 export async function runDemoTour(options: DemoTourOptions): Promise<DemoTourResult> {
   const now = options.now ?? ((): number => Date.now());
   const steps = new Map(tutorialScript(TutorialAudience.HUMAN).map((s) => [s.id, s]));

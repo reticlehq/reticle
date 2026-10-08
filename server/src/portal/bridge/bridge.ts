@@ -764,7 +764,7 @@ export class Bridge {
             const behind = describeSdkBehind(parsed.sdkVersion, SERVER_VERSION, fixForThisProject);
             if (behind !== undefined && parsed.sdkVersion !== undefined) {
               log('sdk_behind', { sessionId: session.id, sdk: parsed.sdkVersion });
-              noteVersionSkew(SkewPair.SDK, behind);
+              noteVersionSkew(SkewPair.SDK_BEHIND, behind);
               session.pushNarration(SDK_BEHIND_NARRATION(parsed.sdkVersion, SERVER_VERSION));
             }
           }

@@ -138,8 +138,8 @@ main() {
   installed="$(date +%s)"
   # Registration and its telemetry stay Node's. The WORDING after it is ours: this file is served
   # from main, so what a new user reads changes on merge instead of waiting for an npm release.
-  # The tour and "Next" list `setup install` closes with are cut at their first line -- the demo
-  # below shows those steps happening. If that line is ever reworded, the cut finds nothing and the
+  # The tour and "Next" list `setup install` closes with are cut at their first line -- the one next
+  # step below replaces them. If that line is ever reworded, the cut finds nothing and the
   # full text prints: noisy, never broken. Seconds, not milliseconds -- `date +%s%3N` is GNU-only.
   say "[3/3] Registering Reticle with the coding agents on this machine"
   out="$(mktemp)"

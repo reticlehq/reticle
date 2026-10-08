@@ -71,6 +71,33 @@ describe('handleUpdate', () => {
     expect(exec).not.toHaveBeenCalled();
   });
 
+  it('never downgrades an app whose SDK is newer than this CLI', async () => {
+    // An old CLI that could not reach the registry reads as "current" and used to pin a newer app
+    // back to its own version.
+    checkForUpdate.mockResolvedValueOnce({});
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await handleUpdate(appWithSdk('999.0.0'));
+
+    expect(exec).not.toHaveBeenCalled();
+  });
+
+  it('leaves an app that links its Reticle packages locally alone', async () => {
+    checkForUpdate.mockResolvedValueOnce({ latestVersion: SERVER_VERSION });
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const dir = appWithSdk('0.0.1');
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({ devDependencies: { '@reticlehq/react': 'workspace:*' } }),
+    );
+
+    await handleUpdate(dir);
+
+    expect(exec).not.toHaveBeenCalled();
+  });
+
   it('says where to run it when this folder has no Reticle SDK', async () => {
     checkForUpdate.mockResolvedValueOnce({ latestVersion: SERVER_VERSION });
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true);

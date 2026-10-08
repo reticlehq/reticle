@@ -6,7 +6,7 @@
  * for entirely different reasons.
  */
 import { checkForUpdate } from '@/command/update/update-checker.js';
-import { updateTarget } from '@/command/update/update-nudge.js';
+import { isNewerVersion, updateTarget } from '@/command/update/update-nudge.js';
 import { applyUpdate, rollback } from '@/command/update/updater.js';
 import { refreshAgentRules, detectPackageManager, buildNodeIo, SILENT_HOST } from '@reticlehq/init';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
@@ -28,6 +28,23 @@ const MSG_SDK_SYNCED = (version: string): string =>
   'a running dev server keeps serving the old SDK, overlay included.';
 const MSG_SDK_SYNC_FAILED = (command: string): string =>
   `Could not update this app's Reticle SDK. Run \`${command}\`, then restart your dev server.`;
+const MSG_SDK_LINKED =
+  'This app links its Reticle packages locally, so `reticle update` leaves them as they are.';
+/** Dependency specs that point at a local copy, not the registry: rewriting one to a pin breaks it. */
+const LOCAL_SPEC = /^(workspace|link|file|portal):/;
+
+function linksLocally(manifest: unknown, packages: readonly string[]): boolean {
+  if ('object' !== typeof manifest || null === manifest) return false;
+  const m = manifest as Record<string, unknown>;
+  return packages.some((name) =>
+    ['dependencies', 'devDependencies'].some((field) => {
+      const deps = m[field];
+      if ('object' !== typeof deps || null === deps) return false;
+      const spec = (deps as Record<string, unknown>)[name];
+      return 'string' === typeof spec && LOCAL_SPEC.test(spec);
+    }),
+  );
+}
 const MSG_NO_SDK_HERE =
   "No Reticle SDK in this folder, so only the CLI was checked. Run `reticle update` in your app's " +
   'folder to bring its SDK up too.';
@@ -53,6 +70,10 @@ function syncProjectSdk(target: string, cwd: string): void {
     return; // not an app directory
   }
   const packages = reticleDepsOf(manifest);
+  if (linksLocally(manifest, packages)) {
+    say(MSG_SDK_LINKED);
+    return;
+  }
   // Nothing to trace and nothing to report: this reads the manifest and runs one package-manager
   // command. It never enters `runInit`, so there is no init outcome for a host to carry.
   const io = buildNodeIo(cwd, SILENT_HOST);
@@ -90,7 +111,9 @@ export async function handleUpdate(cwd: string = process.cwd()): Promise<void> {
       // answered "already on the latest version" and left the old overlay in the page.
       const installed = installedSdkVersion(cwd, readTextFile);
       if (installed === undefined) say(MSG_NO_SDK_HERE);
-      else if (installed !== SERVER_VERSION) syncProjectSdk(SERVER_VERSION, cwd);
+      // Only UP. A CLI that could not reach the registry also lands here, and an older one must
+      // never pin a newer app back to itself.
+      else if (isNewerVersion(SERVER_VERSION, installed)) syncProjectSdk(SERVER_VERSION, cwd);
       log('reticle_update', {
         ok: false,
         message: 'already on the latest version',

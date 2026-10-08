@@ -14,9 +14,6 @@
 import { z } from 'zod';
 import { unprovedGoals } from '@/features/harness/goals.js';
 import { ReticleTool, asRecord } from '@reticlehq/core';
-
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  'object' === typeof v && null !== v && !Array.isArray(v);
 import { stepCountSchema } from './args/numeric-bounds.js';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
 import { runTool } from './invoke-tool.js';
@@ -30,6 +27,9 @@ import {
 import { EXPLORE_NEEDS } from '@/features/harness/drivers.js';
 import { checkTally, describeDrive, replayedFlows } from '@/features/harness/drive-report.js';
 import { StopReason, type HarnessResult } from '@/features/harness/harness.js';
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  'object' === typeof v && null !== v && !Array.isArray(v);
 
 export const EXPLORE_TOOLS: ToolDef[] = [
   {

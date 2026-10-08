@@ -116,8 +116,9 @@ Cloud (link this project to Reticle; runs/flows recorded on the dashboard):
   reticle push | sync [--watch]                        (one sync cycle: send the difference, collect decisions)
   reticle runs | regression | share <runId>            (read cloud state; regression exits 3 if any flow broke)
 
-A browser Reticle opens is shown by default, so you can watch the run. --headless hides it; CI,
-RETICLE_HEADLESS=1, or a Linux machine with no display hides it too.`;
+A browser Reticle opens for your agent (serve, mcp, drive) is shown, so you can watch the run;
+verify and tutorial --run stay hidden. --headed / --headless override; CI, RETICLE_HEADLESS=1, or a
+Linux machine with no display hides it.`;
 
 const INIT_COMMAND = 'init';
 const SERVE_COMMAND = 'serve';

@@ -90,6 +90,7 @@ import {
   OutputDetail,
   syncPageBlocker,
   type PresenterSettings,
+  paintSdkVersion,
 } from './presenter-settings.js';
 import { Annotator, type AnnotatorChrome } from '@/review/annotator.js';
 import { shouldAutoOpenChat } from './presenter-shell.js';
@@ -241,6 +242,10 @@ export class Presenter {
   /** Re-scope the replay-flow chips to the current page (called by the SDK on route change). */
   refilterFlows() {
     this.#panel.refilterFlows();
+  }
+  /** Name the SDK version this page runs, in settings. Called by the SDK, which holds it. */
+  showSdkVersion(version: string | undefined): void {
+    if (this.#root !== undefined) paintSdkVersion(this.#root, version);
   }
   handlePush(command: { name: string; args: Record<string, unknown> }): void {
     const a = command.args;

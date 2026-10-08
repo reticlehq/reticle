@@ -32,6 +32,12 @@ export const SkewPair = {
   SDK: 'sdk',
   /** Another Reticle process — a CLI, or the MCP server an agent spawned — vs this daemon. */
   DAEMON: 'daemon',
+  /**
+   * The SDK in the page is a minor or more behind, on the same contract: compatible, so it is news
+   * and not a cause. Its own pair so it never displaces an untold real skew, and never stands in for
+   * the advice on an error it did not cause (see takeVersionSkewOnto).
+   */
+  SDK_BEHIND: 'sdk_behind',
 } as const;
 export type SkewPair = (typeof SkewPair)[keyof typeof SkewPair];
 
@@ -196,6 +202,11 @@ function compareVersions(a: string | undefined, b: string): number | undefined {
   return 0;
 }
 
+/** The same fact for the person looking at the page, on its overlay. */
+export const SDK_BEHIND_NARRATION = (sdk: string, daemon: string): string =>
+  `This app runs Reticle SDK ${sdk}, older than Reticle ${daemon}. Run \`reticle update\` in the ` +
+  "app's folder, then restart its dev server.";
+
 /**
  * A page whose SDK is a minor release or more behind this daemon.
  *
@@ -206,11 +217,6 @@ function compareVersions(a: string | undefined, b: string): number | undefined {
  * running. Patch releases stay silent for the cry-wolf reason in the header. `fix` is a thunk
  * because reading the project's manifest is only worth it when the page IS behind.
  */
-/** The same fact for the person looking at the page, on its overlay. */
-export const SDK_BEHIND_NARRATION = (sdk: string, daemon: string): string =>
-  `This app runs Reticle SDK ${sdk}, older than Reticle ${daemon}. Run \`reticle update\` in the ` +
-  "app's folder, then restart its dev server.";
-
 export function describeSdkBehind(
   sdk: string | undefined,
   daemon: string,
