@@ -100,7 +100,7 @@ A verification tool has to sit inside the app it verifies, the way React DevTool
 | A local service on `127.0.0.1:4400` | The bridge between the page and your agent | Loopback only, paired with a token stored owner-only in `~/.reticle/` |
 | A Chromium browser | To drive the app | Your own machine |
 
-**What leaves the machine:** nothing from your app (DOM, network bodies, console, state, source) unless you link a project with `reticle connect` (or set `RETICLE_API_KEY` in CI). A verdict is produced locally and needs no account. Once linked, `reticle config --runs/--memory/--flows on|off` sets what syncs, and [what each contains is written down](docs/what-is-recorded.md). When the Harness drives, the platform's model sees the steps it drives, while secret fields stay on your machine as `RETICLE_SECRET_<FIELD>`. Separately, Reticle sends anonymous usage counts by default (which commands and tools ran, with a random id, nothing from your app). `reticle telemetry disable`, `RETICLE_TELEMETRY=0` or `DO_NOT_TRACK=1` turns them off, along with every other optional outbound call. [The complete list](docs/telemetry.md).
+**What leaves the machine:** nothing from your app (DOM, network bodies, console, state, source) unless you link a project with `reticle connect` (or set `RETICLE_API_KEY` in CI). A verdict is produced locally and needs no account. Once linked, `reticle config --runs/--memory/--flows on|off` sets what syncs, and [what each contains is written down](docs/what-is-recorded.md). When the Harness drives, the platform sees the steps it drives; secret field values never leave your machine. Separately, Reticle sends anonymous usage counts by default (which commands and tools ran, with a random id, nothing from your app). `reticle telemetry disable`, `RETICLE_TELEMETRY=0` or `DO_NOT_TRACK=1` turns them off, along with every other optional outbound call. [The complete list](docs/telemetry.md).
 
 **What it never does:** run arbitrary JavaScript in the page (there is no "evaluate" tool), ship in a production build, or bypass your client's permission prompts. Passwords, tokens and card numbers in captured data are replaced with `[REDACTED]` before you see them.
 
@@ -278,7 +278,7 @@ reticle init --json             # one JSON object, for agents
 reticle init --no-mcp           # skip agent registration and rule files
 ```
 
-**What you commit.** The edits above, and from `.reticle/`: saved flows (`.reticle/flows/`), `contract.json`, `intent.json` and `capsules/`, so a teammate or CI can replay them. Everything else there (session journals, run artifacts) stays local: Reticle writes `.reticle/.gitignore` for it, because journals hold request bodies and page text.
+**What you commit.** The edits above, and your saved flows in `.reticle/flows/`, so a teammate or CI can replay them. The rest of `.reticle/` is local (session journals hold request bodies and page text), and Reticle writes a `.reticle/.gitignore` that keeps it out of git.
 
 **Undoing it.** Revert the edits `init` listed, remove the two dev dependencies, and delete `.reticle.json`, `.reticle/` and the `reticle-dev` file. Your production build never contained Reticle.
 
@@ -295,7 +295,6 @@ The agent finds your app with `reticle_session`, clicks and types with `reticle_
 ```jsonc
 {
   "verified": "yes",
-  "because": "assertion held at presence grade over a clean capture with no channel disagreeing",
   "effect": {
     "action": "click",
     "name": "Sign up",
@@ -324,7 +323,7 @@ On Windows PowerShell, which mangles those quotes, put the JSON in a file and pa
 reticle connect --project "My App"
 ```
 
-It opens your browser so you can sign in, or create a free account, then links this folder to that project on [app.reticle.sh](https://app.reticle.sh) and sends the runs already on your machine. It runs step 2 first if the app isn't wired yet. The Free plan includes monthly Harness credits.
+It opens your browser so you can sign in, or create a free account, then links this folder to that project on [app.reticle.sh](https://app.reticle.sh) and sends the runs already on your machine. It runs step 2 first if the app isn't wired yet.
 
 After that, runs sync on their own. To sync right now:
 
@@ -749,7 +748,7 @@ Faster for a structural reason rather than a browser-speed one: a time-gated tra
 |  |  |
 | --- | --- |
 | **Strong** | silent failed requests, state that disagrees with the screen, stale caches, double-submits, a write that failed while the UI moved on |
-| **Partial** | races around a single action. It detects `request-never-settled` and `duplicate-request`; it is not a scheduler-level race analyser |
+| **Partial** | races around a single action. It catches a request that never finished and a request sent twice; it is not a full race analyser |
 | **Can't see yet** | IndexedDB, Web Workers, closed shadow roots, cross-origin iframes |
 
 **When Reticle can't see something, it says so.** A verdict is `yes`, `no`, `unknown` (the evidence couldn't decide) or `no-fault` (nothing was declared to prove). Only `yes` is a pass; never a quiet one.
@@ -775,7 +774,7 @@ Faster for a structural reason rather than a browser-speed one: a time-gated tra
 
 **The open-source tool is the whole verify loop, on your machine.** The SDK in your app, the local daemon, the MCP tools your agent calls, and the HUD in the corner of your page where you watch it work: what the agent is doing, every verdict, the flows it saved, the notes you pin on the page. No account, and nothing from your app leaves your machine.
 
-**The Harness drives the app for you.** Describe a person and a journey (_"a returning customer reorders and pays"_) and the Harness drives it in your browser, proves each step, and saves what it drove as flows that replay with no model at all. Your agent spends one call instead of a context full of snapshots. It runs on the Reticle platform, on [TypeSafe AI](https://typesafe.ai)'s [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev), a System One model built for fast, typed choices, and every plan includes it: Free comes with Harness credits each month, Pro with more, Enterprise with what you agree. You watch it in the HUD as it happens ("Reticle Harness is driving"), and you can switch it off mid-run from the same panel. Call it with `reticle_verify { action: "explore", persona: "…" }`; see [docs/autodrive.md](docs/autodrive.md).
+**The Harness drives the app for you.** Describe a person and a journey (_"a returning customer reorders and pays"_) and the Harness drives it in your browser, proves each step, and saves what it drove as flows that replay with no model at all. Your agent spends one call instead of a context full of snapshots. It runs on the Reticle platform, and a free account includes monthly Harness credits. You watch it in the HUD as it happens ("Reticle Harness is driving"), and you can switch it off mid-run from the same panel. Call it with `reticle_verify { action: "explore", persona: "…" }`; see [docs/autodrive.md](docs/autodrive.md).
 
 **[app.reticle.sh](https://app.reticle.sh) is the dashboard.** Run `reticle connect` in your app, sign in, and everything your machine verified syncs on its own, whichever agent did the driving:
 
@@ -784,7 +783,7 @@ Faster for a structural reason rather than a browser-speed one: a time-gated tra
 - saved flows, Reticle Coverage (routes reached, controls proved), and the notes people pinned in the HUD
 - a team view of all of it, and a shareable proof link for any run
 
-The open-source tool never needs the dashboard. The dashboard is where a team sees what its agents proved, and where the platform's Harness runs, on every plan, Free included.
+The open-source tool never needs the dashboard. The dashboard is where a team sees what its agents proved, and where the Harness runs.
 
 ## Docs
 
