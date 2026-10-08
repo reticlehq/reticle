@@ -128,6 +128,23 @@ function withoutIdentityParams(value: unknown): unknown {
   return parsed.toString();
 }
 
+/**
+ * A `?query` with Reticle's own params removed, in the one encoding both sides of a start-path
+ * comparison use. A recording keeps the app's query in `startPath` and replay compares against it,
+ * so a leased tab's `__reticle_*` params must be dropped on both sides or a tab already on the page
+ * reads as somewhere else (#1411).
+ */
+function searchWithoutIdentityParams(search: string): string {
+  if ('' === search) return '';
+  const cleaned = withoutIdentityParams(search.startsWith('?') ? search : `?${search}`);
+  return 'string' === typeof cleaned ? cleaned : '';
+}
+
+/** A route as a navigable path, pathname + app query + hash, with Reticle's own params dropped. */
+export function navigablePath(parts: Pick<RouteParts, 'docPath' | 'search' | 'hash'>): string {
+  return `${parts.docPath}${searchWithoutIdentityParams(parts.search)}${parts.hash}`;
+}
+
 /** The event payload as evidence: every URL-ish field scrubbed of our own params. */
 function routeEvidence(data: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(
