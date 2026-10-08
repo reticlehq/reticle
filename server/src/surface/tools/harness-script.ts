@@ -48,7 +48,7 @@ import {
   reportPlanResults,
   type JourneyResult,
 } from '@/features/harness/platform/script.js';
-import { checkGoals, goalsIn } from '@/features/harness/goals.js';
+import { checkExpect, checkGoals, goalsIn, type GoalCheck } from '@/features/harness/goals.js';
 import { serverOptionsFromEnv } from '@/features/harness/platform/server-driver.js';
 import {
   MSG_HARNESS_DISABLED,
@@ -305,9 +305,10 @@ export async function exploreScript(
     unverifiedFlows,
     // The texts a named journey quoted must be on the page at the end, checked as the persona
     // drive always checked them.
-    goals: await checkGoals(
+    goals: await endGoals(
       (name, args) => ports.toolset(pinned(options).sessionId, focus).invoke(name, args),
       options.goals ?? goalsIn(focus),
+      options.expect,
     ),
     ...(0 === runIds.length ? {} : { runIds }),
     planLines: [
@@ -315,6 +316,18 @@ export async function exploreScript(
       ...run.lines,
     ],
   };
+}
+
+/** The quoted texts, then the declared outcome, each graded on the page the drive ended on. */
+async function endGoals(
+  invoke: (name: string, args: Record<string, unknown>) => Promise<unknown>,
+  texts: readonly string[],
+  expect: Record<string, unknown> | undefined,
+): Promise<GoalCheck[]> {
+  return [
+    ...(await checkGoals(invoke, texts)),
+    ...(expect === undefined ? [] : [await checkExpect(invoke, expect)]),
+  ];
 }
 
 /** What the project still owes, in its own words: the user's recent request, then open intents. */

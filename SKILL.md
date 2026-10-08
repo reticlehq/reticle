@@ -118,7 +118,7 @@ You need it once, while setting a project up. If `reticle_session` already lists
 
 **Verdicts come from `reticle_act_and_wait`, `reticle_assert`, `reticle_act { steps }` when a step declares `expect`, and `reticle_verify` (`change`/`flows`).** Everything else (a bare `act`, `look`, `navigate`, `observe`) moves or reads the app and proves nothing. A drive that ends without a verdict has no result, however many tools it used.
 
-`verified: "unknown"` is not a pass: Reticle drove the app and could not tell what happened; report it as unknown. Nor is `"no-fault"`: the page settled with nothing wrong, but nothing was declared to prove, so assert a consequence the action CHANGES. **Never weaken a check to make it pass.**
+`verified: "unknown"` is not a pass: Reticle drove the app and could not tell what happened; report it as "not proved", not "failed". Nor is `"no-fault"`: the page settled with nothing wrong, but nothing was declared to prove, so assert a consequence the action CHANGES. **Never weaken a check to make it pass.**
 
 ## Take the cheapest path that answers the question
 

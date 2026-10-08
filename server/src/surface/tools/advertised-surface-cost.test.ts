@@ -297,7 +297,10 @@ describe('advertised surface cost', () => {
 // 149_500 -> 149_700 for `window` and `documentStatus` on reticle_sessions and `disconnected` on
 // session end (149,593 B): two windows of one desktop app share a url, and a validating client strips
 // an undeclared field, so the label that tells them apart has to be in the schema.
-const ALL_SURFACE_BYTE_BUDGET = 149_700;
+// 149_700 -> 149_800 for `expect` on reticle_verify explore (149,734 B): a drive graded only on
+// quoted text passed without using the app, so the outcome it must end in has to be declarable.
+// Typed as a plain record, not the predicate schema, which would have cost ~700 tokens.
+const ALL_SURFACE_BYTE_BUDGET = 149_800;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {

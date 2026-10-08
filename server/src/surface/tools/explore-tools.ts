@@ -14,6 +14,9 @@
 import { z } from 'zod';
 import { unprovedGoals } from '@/features/harness/goals.js';
 import { ReticleTool, asRecord } from '@reticlehq/core';
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  'object' === typeof v && null !== v && !Array.isArray(v);
 import { stepCountSchema } from './args/numeric-bounds.js';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
 import { runTool } from './invoke-tool.js';
@@ -39,8 +42,12 @@ export const EXPLORE_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe(
-          'The journey in plain words; any "quoted text" must be on the page when it ends (checked).',
+          'The journey in plain words; "quoted text" must show at the end. Outcome goes in `expect`.',
         ),
+      expect: z
+        .record(z.string(), z.unknown())
+        .optional()
+        .describe('Predicate it must end in (route, net, state), asserted after.'),
       maxSteps: stepCountSchema
         .optional()
         .describe('Ceiling on model turns; the drive is graded however it ends.'),
@@ -108,6 +115,7 @@ export const EXPLORE_TOOLS: ToolDef[] = [
       const persona = args['persona'];
       const maxSteps = args['maxSteps'];
       const sessionId = args['sessionId'];
+      const expect = args['expect'];
       const {
         drive,
         savedFlows,
@@ -122,6 +130,7 @@ export const EXPLORE_TOOLS: ToolDef[] = [
         ...('string' === typeof persona ? { focus: persona } : {}),
         ...('number' === typeof maxSteps ? { maxSteps } : {}),
         ...('string' === typeof sessionId ? { sessionId } : {}),
+        ...(isRecord(expect) ? { expect } : {}),
       });
       return {
         stopReason: drive.stopReason,
