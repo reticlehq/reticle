@@ -11,7 +11,7 @@
 
 It drives your real running app, reads what actually happened, and hands back **pass · fail · couldn't tell** with the `file:line` to fix.
 
-<a href="https://discord.gg/BwAbzv9ZRz"><img src="https://img.shields.io/badge/Join_the_Reticle_community_on_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join the Reticle community on Discord" height="36" /></a>
+<a href="https://discord.gg/BwAbzv9ZRz"><img src="https://dcbadge.limes.pink/api/server/BwAbzv9ZRz?style=for-the-badge" alt="Join the Reticle community on Discord" height="36" /></a>
 
 <sub>Ask anything, see what's being built, and help decide what ships next.</sub>
 
@@ -558,7 +558,7 @@ You don't start Reticle yourself. Your agent starts it when it first calls a Ret
 
 <div align="center">
 
-<a href="https://discord.gg/BwAbzv9ZRz"><img src="https://img.shields.io/badge/Join_the_Reticle_community_on_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join the Reticle community on Discord" height="36" /></a>
+<a href="https://discord.gg/BwAbzv9ZRz"><img src="https://dcbadge.limes.pink/api/server/BwAbzv9ZRz?style=for-the-badge" alt="Join the Reticle community on Discord" height="36" /></a>
 
 </div>
 
