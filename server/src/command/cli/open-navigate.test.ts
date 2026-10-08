@@ -10,7 +10,12 @@ import { ReticleTool } from '@reticlehq/core';
 import type { ToolCaller } from './adhoc-verdict.js';
 import { parseCliArgs } from './cli-parse.js';
 import { decideOpen } from './launch/cli-launch.js';
-import { NAVIGATE_UNCONFIRMED_NOTE, navigateLeftTab } from './open-navigate.js';
+import {
+  NAVIGATE_NO_SESSION_ID,
+  NAVIGATE_UNCONFIRMED_NOTE,
+  navigateLeftTab,
+  openCandidates,
+} from './open-navigate.js';
 
 function fakeDaemon(answer: Record<string, unknown>): {
   connect: (endpoint: URL) => Promise<ToolCaller>;
@@ -140,5 +145,42 @@ describe('reticle open --navigate', () => {
     });
 
     expect(String(out['error'])).toContain('ECONNREFUSED');
+  });
+});
+
+// `--navigate` moves a tab, so on a daemon serving two projects it may only pick one of this
+// project's: the origin match alone would hand it a sibling project's tab on the same origin.
+describe('the tabs open may pick from', () => {
+  const tabs = [
+    { url: 'http://localhost:3000/a', sessionId: 'mine', projectId: 'shop' },
+    { url: 'http://localhost:3000/b', sessionId: 'theirs', projectId: 'admin' },
+    { url: 'http://localhost:3000/c', sessionId: 'unknown' },
+  ];
+
+  it("with --navigate, keeps this project's tabs and tabs with no project, never a sibling's", () => {
+    const picked = openCandidates(tabs, true, 'shop').map((t) => t.sessionId);
+    expect(picked).toEqual(['mine', 'unknown']);
+    // The decision made over them cannot land on the sibling's tab.
+    const decision = decideOpen(
+      openCandidates(
+        tabs.filter((t) => 'theirs' === t.sessionId),
+        true,
+        'shop',
+      ),
+      'http://localhost:3000/x',
+    );
+    expect('sessionId' in decision ? decision.sessionId : undefined).not.toBe('theirs');
+  });
+
+  it('without --navigate, or with no project to scope by, keeps every tab', () => {
+    expect(openCandidates(tabs, false, 'shop')).toHaveLength(3);
+    expect(openCandidates(tabs, true, undefined)).toHaveLength(3);
+  });
+});
+
+describe('when --navigate cannot move the tab', () => {
+  it('says why instead of suggesting --navigate', () => {
+    expect(NAVIGATE_NO_SESSION_ID).toContain('reported no session id');
+    expect(NAVIGATE_NO_SESSION_ID).not.toMatch(/pass --navigate/i);
   });
 });

@@ -3,6 +3,7 @@
  * The parser stays pure and unit-testable; `cli.ts` owns the side-effecting handlers and dispatch,
  * and re-exports this surface.
  */
+import { implicitSince, parseTargetArgs } from './cli-parse-target.js';
 import { TutorialAudience } from './tutorial.js';
 import { parseFeedbackArgs, type ParsedFeedback } from './cli-parse-feedback.js';
 import { parseVerifySuffix } from './cli-parse-verify.js';
@@ -672,41 +673,6 @@ function parseInitFlags(args: string[]): InitFlags {
   };
 }
 
-/** Pure CLI arg parser — exported for unit tests. argv = process.argv.slice(2). */
-const SINCE_FLAG = '--since';
-
-/** Parse `[--since <ref>] [file...]` shared by `affected` and `gate`. */
-/**
- * What `reticle gate` / `reticle affected` mean with NOTHING after them: the working tree.
- *
- * They used to mean a usage error — while the rule `reticle init` writes into the agent's own
- * instruction file says, in as many words, "run `reticle gate`". An instruction the tool rejects is
- * worse than no instruction: the agent spends a turn on it and concludes Reticle is broken.
- *
- * HEAD is the ref that answers the question being asked. Explicit files or an explicit --since still
- * win; this only fills the empty case.
- */
-const WORKING_TREE_REF = 'HEAD';
-
-function implicitSince(files: readonly string[]): string | undefined {
-  return 0 === files.length ? WORKING_TREE_REF : undefined;
-}
-
-function parseTargetArgs(rest: string[]): { files: string[]; since?: string } {
-  const files: string[] = [];
-  let since: string | undefined;
-  for (let i = 0; i < rest.length; i += 1) {
-    const arg = rest[i];
-    if (arg === SINCE_FLAG) {
-      since = rest[i + 1];
-      i += 1;
-      continue;
-    }
-    if (arg !== undefined && !arg.startsWith('-')) files.push(arg);
-  }
-  return since === undefined ? { files } : { files, since };
-}
-
 /**
  * Whether this command talks to a daemon on the resolved port, and so must not run when
  * the workspace port conflict (cli-port) has said the port is a guess. `init` carries a port but resolves the
@@ -724,6 +690,7 @@ export function dialsTheDaemon(parsed: CliResult): boolean {
  *   `cli.ts` decides it from `CI`. The product default is FALSE: showing the run is what makes it
  *   trustworthy, and asking people to opt into seeing their own app was backwards.
  */
+/** Pure CLI arg parser — exported for unit tests. argv = process.argv.slice(2). */
 export function parseCliArgs(
   argv: string[],
   defaultPort: number,

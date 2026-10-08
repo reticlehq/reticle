@@ -118,3 +118,25 @@ export async function navigateLeftTab(
     await caller.close().catch(() => undefined);
   }
 }
+
+/** `--navigate` found a tab on the origin, but the tab never said which session it is. */
+export const NAVIGATE_NO_SESSION_ID =
+  '--navigate could not move it: that tab reported no session id. Drive it with reticle_navigate, ' +
+  'or open the url in the browser yourself.';
+
+/**
+ * The tabs `open` may pick from.
+ *
+ * `--navigate` MOVES a tab, so it may only pick one of this project's: on a daemon serving two
+ * projects, the origin match alone could hand it the other project's tab. A tab that reports no
+ * project is kept, since nothing says it is someone else's. Reuse and the left-as-is note only read,
+ * so without `--navigate`, or with no project to scope by, every tab stays a candidate.
+ */
+export function openCandidates<T extends { projectId?: string | undefined }>(
+  sessions: T[],
+  navigate: boolean,
+  myProject: string | undefined,
+): T[] {
+  if (!navigate || myProject === undefined) return sessions;
+  return sessions.filter((s) => s.projectId === undefined || s.projectId === myProject);
+}

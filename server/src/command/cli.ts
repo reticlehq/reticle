@@ -85,7 +85,7 @@ import {
   openInBrowser,
   openCommand,
 } from './cli/launch/cli-launch.js';
-import { navigateLeftTab } from './cli/open-navigate.js';
+import { NAVIGATE_NO_SESSION_ID, navigateLeftTab, openCandidates } from './cli/open-navigate.js';
 import { fetchStatus } from './daemon/binding/daemon-status-probe.js';
 import { handleDrive } from './cli/drive/drive-command.js';
 import { handleVerify } from './cli/cli-verify.js';
@@ -481,10 +481,7 @@ function handleOpen(requestedPort: number, url: string | undefined, navigate = f
       const { sessions } = summarizeStatus(await fetchStatus(port));
       // `--navigate` MOVES a tab, so it may only pick one of ours: on a daemon serving two projects,
       // the origin match alone could hand it the other project's tab. Reuse and the note are read-only.
-      const candidates =
-        navigate && myProject !== undefined
-          ? sessions.filter((s) => s.projectId === undefined || s.projectId === myProject)
-          : sessions;
+      const candidates = openCandidates(sessions, navigate, myProject);
       const decision = decideOpen(candidates, url);
       if ('need-url' === decision.action) {
         log('reticle_open', {
@@ -514,14 +511,18 @@ function handleOpen(requestedPort: number, url: string | undefined, navigate = f
         return;
       }
       if ('left-as-is' === decision.action) {
+        // `--navigate` was asked for and could not be honoured: the tab never reported a session id
+        // to move. Suggesting `--navigate` back to someone who just passed it reads as being ignored.
+        const remedy = navigate ? NAVIGATE_NO_SESSION_ID : OPEN_LEFT_AS_IS_REMEDY;
         log('reticle_open', {
           port,
           reusing: decision.url,
           requested: decision.requested,
           note:
             `a tab is connected on this origin but sitting on ${decision.url} — it was LEFT THERE, ` +
-            `not navigated to ${decision.requested}. ${OPEN_LEFT_AS_IS_REMEDY}`,
+            `not navigated to ${decision.requested}. ${remedy}`,
         });
+        if (navigate) process.exit(1);
         return;
       }
       const launchError = await openInBrowser(decision.url);
