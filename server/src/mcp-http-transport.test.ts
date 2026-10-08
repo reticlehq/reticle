@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { MCP_MESSAGE_PATH, MCP_SSE_PATH } from '@reticlehq/core';
+import { MCP_CLIENT_DIRECTORY_HEADER, MCP_MESSAGE_PATH, MCP_SSE_PATH } from '@reticlehq/core';
+import { callingClientDirectory } from '@/hooks/client-directory.js';
 import { createSharedServer, type SharedServer } from './surface/http-server.js';
 
 /**
@@ -42,6 +43,9 @@ async function mcpServerWithPing(): Promise<McpServer> {
   const server = new McpServer({ name: 'reticle-test', version: '0' });
   server.registerTool('ping', { description: 'answers pong' }, () => ({
     content: [{ type: 'text' as const, text: 'pong' }],
+  }));
+  server.registerTool('where', { description: 'the project this call named' }, () => ({
+    content: [{ type: 'text' as const, text: callingClientDirectory() ?? 'none' }],
   }));
   return server;
 }
@@ -123,7 +127,12 @@ function openSse(port: number, path: string = MCP_SSE_PATH): Promise<SseSession>
   });
 }
 
-function post(port: number, path: string, body: string): Promise<{ status: number; body: string }> {
+function post(
+  port: number,
+  path: string,
+  body: string,
+  extra: http.OutgoingHttpHeaders = {},
+): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     const req = http.request(
       {
@@ -134,6 +143,7 @@ function post(port: number, path: string, body: string): Promise<{ status: numbe
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(body),
+          ...extra,
         },
       },
       (res) => {
@@ -236,6 +246,27 @@ describe('the SSE handshake', () => {
     const content = (JSON.parse(called.data) as { result: { content: { text?: string }[] } }).result
       .content;
     expect(content[0]?.text).toBe('pong');
+
+    sse.close();
+  });
+
+  it("carries the calling project's directory into the tool, and only when the call names one", async () => {
+    const port = await startDaemon();
+    const { sse, endpoint } = await handshake(port);
+
+    await post(port, endpoint, rpc(4, 'tools/call', { name: 'where', arguments: {} }), {
+      [MCP_CLIENT_DIRECTORY_HEADER]: '/work/shop',
+    });
+    const named = await sse.waitFor((f) => 4 === idOf(f));
+    const namedText = (JSON.parse(named.data) as { result: { content: { text?: string }[] } })
+      .result.content[0]?.text;
+    expect(namedText).toBe('/work/shop');
+
+    await post(port, endpoint, rpc(5, 'tools/call', { name: 'where', arguments: {} }));
+    const unnamed = await sse.waitFor((f) => 5 === idOf(f));
+    const unnamedText = (JSON.parse(unnamed.data) as { result: { content: { text?: string }[] } })
+      .result.content[0]?.text;
+    expect(unnamedText).toBe('none');
 
     sse.close();
   });

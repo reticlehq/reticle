@@ -105,6 +105,7 @@ describe("a second project is not the first project's closed tab", () => {
       directory: appA,
       stateDir,
       probe: () => Promise.resolve([5173]),
+      routeStatus: () => Promise.resolve(undefined),
     });
     await settleProbe();
 
@@ -179,6 +180,7 @@ describe("a second project is not the first project's closed tab", () => {
       directory: appA,
       stateDir,
       probe: () => Promise.resolve([5173, 5174]),
+      routeStatus: () => Promise.resolve(undefined),
     });
     await settleProbe();
 

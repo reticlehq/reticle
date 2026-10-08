@@ -15,7 +15,7 @@ import { probeDevServerStates } from './dev-server/dev-server-probe.js';
 import type { NoSessionReason } from '@reticlehq/core/telemetry';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { callingClientDirectory } from '@/hooks/client-directory.js';
 import { registeredElsewhere } from '@/memory/recall/registered-projects.js';
 import { explainNoSession } from './no-session-diagnosis.js';
@@ -690,7 +690,11 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
     const caller = callerAnswer();
     if (caller !== undefined) {
       const { message, detail } = explainNoSession(caller.facts);
-      const lead = `${message} ${renderNextAction(caller.next)}`;
+      // The attach failure is about the daemon's own project. A call from that project still hears
+      // it. A call from another project must not be told that opening this one failed.
+      const callerDir = callingClientDirectory();
+      const ownProject = callerDir !== undefined && resolve(callerDir) === resolve(directory);
+      const lead = `${message} ${renderNextAction(caller.next)}${ownProject ? (attachFailure ?? '') : ''}`;
       return { lead, full: undefined === detail ? lead : `${lead} ${detail}` };
     }
     const scope = projectScopeFacts();
