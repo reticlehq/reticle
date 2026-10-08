@@ -596,7 +596,7 @@ export default [
 ];
 ```
 
-`mutators` lists the callee names that change state; `signalCallee` (default `['reticleSignal', 'signal']`) is the name that counts as firing a signal. See [`adapters/lint/eslint/README.md`](../adapters/lint/eslint/README.md) for scoping and matching details.
+`mutators` lists the callee names that change state; `signalCallee` (default `['reticleSignal', 'signal']`) is the name that counts as firing a signal. See [`adapters/lint/eslint/README.md`](https://github.com/reticlehq/reticle/blob/main/adapters/lint/eslint/README.md) for scoping and matching details.
 
 ---
 

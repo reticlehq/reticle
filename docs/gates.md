@@ -110,7 +110,7 @@ Each gate exists because the ones above it are blind to something. That blindnes
 | **Unit** | `pnpm test:unit` | every package's unit tests, no browser | anything crossing a package boundary at runtime | `verify` |
 | **Repo guards** | `turbo run test:guards` | the `@reticlehq/server` tests that scan OTHER trees (docs, `apps/`, `bench/`, the workflows, the skills), held apart from the unit suite so the wide cache key is 2 seconds rather than 40 | anything inside a package | `verify` (inside `pnpm test:unit`) |
 | **Format** | `pnpm format:check` | Prettier | n/a | `verify` |
-| **JavaScript security audit** | `node scripts/check-js-audit.mjs --self-test && node scripts/check-js-audit.mjs` | high/critical dependency advisories fail except two exact, unpatched development-tool paths documented in [repository settings](../.github/REPOSITORY-SETTINGS.md); changed paths, versions, dependency placement, or patch availability fail | vulnerabilities absent from the advisory registry; the reviewed exceptions until patched | `verify` (CI only) |
+| **JavaScript security audit** | `node scripts/check-js-audit.mjs --self-test && node scripts/check-js-audit.mjs` | high/critical dependency advisories fail except two exact, unpatched development-tool paths documented in [repository settings](https://github.com/reticlehq/reticle/blob/main/.github/REPOSITORY-SETTINGS.md); changed paths, versions, dependency placement, or patch availability fail | vulnerabilities absent from the advisory registry; the reviewed exceptions until patched | `verify` (CI only) |
 | **Integration** | `pnpm test:integration` | real headless Chromium: browser pool, crash isolation, framework adapters, `withReticle` | the MCP surface, the daemon | `e2e` |
 | **Web e2e battery** | `pnpm test:e2e` | **39** specs against 3 booted servers and a real browser (the tool surface, the daemon lifecycle, transport faults, telemetry, trace shape), plus the soak | desktop runtimes; the install | `e2e` |
 | **Desktop battery** | `pnpm test:e2e:desktop` | two real Electron main processes (plain Vite + electron-vite) and a **packaged** Tauri binary, driven headless | web-only paths | `desktop-e2e` |
@@ -152,7 +152,7 @@ These are real and they work; they are not on the PR path, so they only run when
 
 ## 4. `bench/` is not a gate
 
-`bench/` is **measurement and research**. Most of it blocks nothing and is allowed to bit-rot in a way a gate is not. But "nothing runs in CI" is no longer true, and was left standing here for a release after it stopped being: `ci.yml` has a `bench` job, gated on `changes.bench`, that runs `pnpm bench:full` and then `pnpm bench:gate`. It is the only thing in CI that measures TOKEN COST, which is how a release once shipped a measurable token regression with every other gate green. Read [`bench/README.md`](../bench/README.md) before touching it: it says which scripts are live and which are one-off studies kept as evidence for a published claim.
+`bench/` is **measurement and research**. Most of it blocks nothing and is allowed to bit-rot in a way a gate is not. But "nothing runs in CI" is no longer true, and was left standing here for a release after it stopped being: `ci.yml` has a `bench` job, gated on `changes.bench`, that runs `pnpm bench:full` and then `pnpm bench:gate`. It is the only thing in CI that measures TOKEN COST, which is how a release once shipped a measurable token regression with every other gate green. Read [`bench/README.md`](https://github.com/reticlehq/reticle/blob/main/bench/README.md) before touching it: it says which scripts are live and which are one-off studies kept as evidence for a published claim.
 
 The one exception worth knowing: `pnpm bench` + `pnpm bench:gate` is a working regression gate for the replay numbers, and it is run by hand before a release.
 
@@ -164,10 +164,10 @@ Sometimes it is. The specific failures worth recognising:
 
 - **`EADDRINUSE` / "died during boot".** A previous run left something on `:8787`, `:4310`, or `:3100`. `run-ci.sh` stops its own fixture processes on exit. An occupied port is refused; identify its owner before stopping anything.
 - **Killing port 4400 with `lsof -ti tcp:4400 | xargs kill -9`.** This SIGKILLs the `reticle mcp` proxy too, because the proxy holds a _client_ socket on the bridge port. Do not kill by port. The web and desktop batteries now default to `14400` (`RETICLE_PORT` overrides it), and cleanup requires recorded process ownership. Framework integration uses `15400` (`RETICLE_INTEGRATION_PORT`); conformance uses `15401` (`CONFORMANCE_BRIDGE_PORT`).
-- **A timing assertion.** If a test asserts `Date.now() - t < N`, that is a bug in the test, not a flake to re-run. Assert the bound (output size, a truncation flag), or use a generous per-test timeout. See [`harness-rules.md`](../apps/e2e/harness-rules.md).
+- **A timing assertion.** If a test asserts `Date.now() - t < N`, that is a bug in the test, not a flake to re-run. Assert the bound (output size, a truncation flag), or use a generous per-test timeout. See [`harness-rules.md`](https://github.com/reticlehq/reticle/blob/main/apps/e2e/harness-rules.md).
 - **An `INCONCLUSIVE` verdict.** The harness is telling you the transport did not stay up, so it is claiming nothing about the product. That is the harness working, not the product failing.
 
-The four rules every tier obeys, and the incident behind each, are in [`apps/e2e/harness-rules.md`](../apps/e2e/harness-rules.md).
+The four rules every tier obeys, and the incident behind each, are in [`apps/e2e/harness-rules.md`](https://github.com/reticlehq/reticle/blob/main/apps/e2e/harness-rules.md).
 
 ## Reorganising a directory
 

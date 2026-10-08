@@ -11,7 +11,7 @@ Everything here is written from a run of these exact steps, including the places
 ## Before you start
 
 ```bash
-node --version   # 22 or newer
+node --version   # 22.12 or newer
 pnpm --version   # this is a pnpm workspace; npm will not resolve it
 ```
 
@@ -123,6 +123,6 @@ Run the fast gate before every commit. The others only when you touch what they 
 
 ## Where to go next
 
-- [`CONTRIBUTING.md`](../CONTRIBUTING.md): the rules, the layout, and the PR flow
+- [`CONTRIBUTING.md`](https://github.com/reticlehq/reticle/blob/main/CONTRIBUTING.md): the rules, the layout, and the PR flow
 - [`architecture.md`](architecture.md): how the pieces fit
 - Issues labelled **good first issue**. Each names the file to start in, how to reproduce, and how you will know you are done. If one is still too vague, say so on the issue; that feedback is worth more than a guess.

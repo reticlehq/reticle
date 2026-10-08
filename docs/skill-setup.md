@@ -34,7 +34,7 @@ The command reads the repository. It cannot read the request, and three things l
 
 `⚠` lines and a non-zero exit are a to-do list, not a failed install. The command names the cause and prints the REMAINING steps from wherever it stopped, and it will not tell you to redo a phase that already worked. Do those, and re-run; re-running is safe.
 
-**It is not finished until a verdict exists.** Writing files is not an install, and neither is a connected session. If it exits non-zero, the app is wired and something is still outstanding; say so plainly rather than reporting success.
+**It is not finished until a verdict exists.** A session listed means the SDK reached the page. Setup is finished when the first run returns a verdict. Writing files is not an install. If it exits non-zero, the app is wired and something is still outstanding; say so plainly rather than reporting success.
 
 **If the user gave you a license key**, see [License key](#license-key) below.
 

@@ -47,7 +47,11 @@ With no `--email`, it runs a browser device flow like `gh auth login`: fetch a d
 
 ### `reticle logout`
 
-Empties `session.json`. Per-project keys in `credentials.json` stay. Prints `{ "loggedOut": true }`.
+```bash
+npx @reticlehq/server logout [--url <cloud origin>]
+```
+
+Signs out of ONE host. Which host: `--url`, else `RETICLE_CLOUD_URL`, else the active session. Every other host stays signed in, and per-project keys in `credentials.json` stay. Prints `{ "loggedOut": true, "url": "…" }`, naming the host it signed out of.
 
 ### `reticle whoami`
 
@@ -114,6 +118,12 @@ reticle: no .reticle/cloud.json here ... run `reticle link` first
 Sends local run artifacts from `.reticle` to the linked project, honoring the sync policy. With `sync.runs` off it does nothing and says so. Prints `{ ok, project, sent, pulled }`, where `sent` carries the accepted counts and, when the server refused anything, a `rejected` array naming each run's index and reason and a `refused` array for flows, capsules and derived records. `sent.records` lists only the records the server accepted.
 
 Runs go up in batches, so a large backlog is never one oversized request.
+
+`reticle sync` is the same command under another name. Add `--watch` to either to keep syncing: it runs one cycle, waits, and runs the next, until you stop it with `Ctrl+C`. The wait is 60 seconds by default; set `RETICLE_SYNC_INTERVAL_MS` to change it.
+
+```bash
+npx @reticlehq/server push --watch
+```
 
 What the platform cannot read is not sent at all, and a `notSent` array says why: a record kind an older platform does not know yet (this one alone leaves `ok` true), or a flow or run in a file version it does not read. Sending those would only be refused again on every cycle.
 

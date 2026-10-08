@@ -115,7 +115,9 @@
                 "group": "CLI commands",
                 "pages": [
                   "cli",
+                  "cli/tutorial",
                   "cli/init",
+                  "cli/setup",
                   "cli/doctor",
                   "cli/status",
                   "cli/serve",

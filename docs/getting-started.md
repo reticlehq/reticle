@@ -14,7 +14,9 @@ This walks you from zero to your agent verifying your app, step by step, with re
 
 - [What you're setting up](#what-youre-setting-up)
 - [Prerequisites](#prerequisites)
-- [Step 1: Connect your coding agent (MCP)](#step-1-connect-your-coding-agent-mcp)
+- [Step 1: Connect your coding agent (MCP), once](#step-1-connect-your-coding-agent-mcp-once)
+- [Wire your app: on the first run, or `reticle init`](#wire-your-app-on-the-first-run-or-reticle-init)
+- [Add a cloud dashboard: `reticle connect`](#add-a-cloud-dashboard-reticle-connect)
 - [Step 2: Embed the SDK in your app](#step-2-embed-the-sdk-in-your-app)
   - [Vite + React](#vite--react)
   - [Next.js](#nextjs)
@@ -58,54 +60,6 @@ Everything is **dev-only** and **localhost-only**. It's tree-shaken out of produ
 
 ---
 
-## Wire your app: on the first run, or `reticle init`
-
-Installing Reticle changes nothing in your project. The first time your agent uses Reticle in a project that has never connected (its first `reticle_session { action: "list" }`), Reticle runs `init` there itself and returns the files it changed under `wired`, so you can skip straight to asking your agent to verify a flow. Run `init` yourself to wire a project ahead of time, to preview the changes, or when the agent's MCP server was started outside the project (the call then answers `run_init` with this same command), or when Reticle is already running for another project: the automatic wiring covers the project the daemon started in.
-
-From your project root:
-
-```bash
-RETICLE_INSTALL_SOURCE=docs_site npx @reticlehq/server init
-```
-
-It detects your framework, package manager, and React version, then:
-
-- **registers the Reticle MCP server once, globally, for each agent you have installed** (Claude Code via `claude mcp add reticle -s user`, plus every other agent config it finds: Cursor, VS Code, Codex, Zed and the rest listed in the quickstart), so every project on this machine gets it; you never re-add it per project,
-- **writes a verification rule into your agent's instruction file** (`CLAUDE.md`, `.cursor/rules/reticle.mdc`, or `AGENTS.md`), so the agent knows to verify a feature with Reticle _after building it_, not only when you remember to ask (idempotent; appended below anything you already have),
-- installs the SDK kit (`@reticlehq/react`) and the right build plugin (`@reticlehq/vite-plugin` or `@reticlehq/next`) as dev dependencies,
-- **Vite:** adds the `reticle()` plugin to your config, which wires source mapping _and_ `reticle.connect()` for you, so there is nothing else to edit,
-- **Next / other:** creates the dev component and prints the exact `withReticle` / mount / connect snippets to paste (it never half-edits a build config).
-
-The bridge + MCP server is a single process that serves all your projects, so it's registered at **user scope**, not in a per-project `.mcp.json`. Only the SDK (the `reticle()` plugin / connect call) is added per project.
-
-Re-running is safe: already-registered and already-patched steps are skipped, and on a wired project it goes straight to proving the app still works. Preview without writing via `npx @reticlehq/server init --dry-run`.
-
-`init` does not stop at writing files. It starts your dev server, opens the app, and waits for a session to connect from inside it. That connection is the whole proof that onboarding worked. If a dev server was already running without Reticle, restart it once: it read the build config before `init` edited it. It exits non-zero if nothing connected and prints what is left to do. It does NOT drive. Then prove a flow. That is the FIRST RUN, and it is a separate call: drive one journey with `reticle_act_and_wait` and an `until` on its last step. On a project linked with `reticle connect`, `reticle_verify { action: "explore", persona: "<who does what>" }` lets the Reticle Harness drive it on the platform instead (every plan includes Harness credits, Free too). Either way what was driven is saved as a flow, so later checks replay it with no model in the loop.
-
-These carry what the command cannot work out for itself:
-
-| Flag | What only you know |
-| --- | --- |
-| `persona: "<what>"` | Belongs to the first run, not to `init`. Which journey proves the thing you care about: Reticle can list the buttons on your page; it cannot know that checkout matters and the theme toggle does not. |
-| `--env KEY=VALUE` | What your app needs to reach a usable state: the key from `.env.example`, the mock backend, the variable that skips an auth wall. Repeatable. |
-| `--app <dir>` | Which app in a monorepo. It finds the servable ones; only you know which you are working in. |
-
-The rest are dials: `--license <key>` (writes it to `.env` and keeps `.env` out of git), `--json` (one object for an agent to read), `--files-only` (write, register, pre-approve, and stop, which is what `init` did before it learned to boot the app, and what an existing install re-runs to pick up new wiring), `--relaunch` (prints the command that restarts the conversation you are in, with the tools loaded: the restart step most installs stall on, and it composes with `--files-only`), `--no-open`, `--dry-run`, `--port N`, `--no-mcp`, `--no-install`.
-
-If you ran `--files-only` with a dev server already running, restart it, then skip to [Step 4](#step-4-run-it-and-verify-the-connection). The manual steps below explain what `init` sets up, if you prefer to wire it yourself.
-
----
-
-## Add a cloud dashboard: `reticle connect`
-
-Optional. Instead of, or after, `init`, run this in your app directory:
-
-```bash
-npx @reticlehq/server connect --project "My App"
-```
-
-Approve the short browser code if Reticle asks you to sign in. The browser asks you to sign in, or to create a free account at app.reticle.sh. The Free plan includes monthly Harness credits. What syncs, and how to switch each part off, is in [What is recorded](what-is-recorded.md). The command then links this folder and sends any history already on the machine. Open or restart your coding agent and ask it to verify one real journey. For a new project, the dashboard has no result until that first run is recorded.
-
 ## Step 1: Connect your coding agent (MCP), once
 
 You don't start the server manually; your agent starts it via MCP. Register Reticle **once, at the user (global) scope** so every project picks it up. There's nothing to add per project.
@@ -142,6 +96,54 @@ Other MCP clients (Windsurf, Claude Desktop, …) use the same `command`/`args` 
 > Want a different port? Set `RETICLE_PORT` in the server `env` and pass the same URL to `reticle.connect({ url })` in Step 2.
 
 ---
+
+## Wire your app: on the first run, or `reticle init`
+
+Installing Reticle changes nothing in your project. The first time your agent uses Reticle in a project that has never connected (its first `reticle_session { action: "list" }`), Reticle runs `init` there itself and returns the files it changed under `wired`, so you can skip straight to asking your agent to verify a flow. Run `init` yourself to wire a project ahead of time, to preview the changes, or when the agent's MCP server was started outside the project (the call then answers `run_init` with this same command), or when Reticle is already running for another project: the automatic wiring covers the project the daemon started in.
+
+From your project root:
+
+```bash
+RETICLE_INSTALL_SOURCE=docs_site npx @reticlehq/server init
+```
+
+It detects your framework, package manager, and React version, then:
+
+- **registers the Reticle MCP server once, globally, for each agent you have installed** (Claude Code via `claude mcp add reticle -s user`, plus every other agent config it finds: Cursor, VS Code, Zed and the rest listed in the quickstart; for Codex CLI it prints the lines to paste), so every project on this machine gets it; you never re-add it per project,
+- **writes a verification rule into your agent's instruction file** (`CLAUDE.md`, `.cursor/rules/reticle.mdc`, or `AGENTS.md`), so the agent knows to verify a feature with Reticle _after building it_, not only when you remember to ask (idempotent; appended below anything you already have),
+- installs the SDK kit (`@reticlehq/react`) and the right build plugin (`@reticlehq/vite-plugin` or `@reticlehq/next`) as dev dependencies,
+- **Vite:** adds the `reticle()` plugin to your config, which wires source mapping _and_ `reticle.connect()` for you, so there is nothing else to edit,
+- **Next / other:** creates the dev component and prints the exact `withReticle` / mount / connect snippets to paste (it never half-edits a build config).
+
+The bridge + MCP server is a single process that serves all your projects, so it's registered at **user scope**, not in a per-project `.mcp.json`. Only the SDK (the `reticle()` plugin / connect call) is added per project.
+
+Re-running is safe: already-registered and already-patched steps are skipped, and on a wired project it goes straight to proving the app still works. Preview without writing via `npx @reticlehq/server init --dry-run`.
+
+`init` does not stop at writing files. It starts your dev server, opens the app, and waits for a session to connect from inside it. That connection is the whole proof that onboarding worked. If a dev server was already running without Reticle, restart it once: it read the build config before `init` edited it. It exits non-zero if nothing connected and prints what is left to do. It does NOT drive. Then prove a flow. That is the FIRST RUN, and it is a separate call: drive one journey with `reticle_act_and_wait` and an `until` on its last step. On a project linked with `reticle connect`, `reticle_verify { action: "explore", persona: "<who does what>" }` lets the Reticle Harness drive it on the platform instead (every plan includes Harness credits, Free too). Either way what was driven is saved as a flow, so later checks replay it with no model in the loop.
+
+These carry what the command cannot work out for itself:
+
+| Flag | What only you know |
+| --- | --- |
+| `persona: "<what>"` | Belongs to the first run, not to `init`. Which journey proves the thing you care about: Reticle can list the buttons on your page; it cannot know that checkout matters and the theme toggle does not. |
+| `--env KEY=VALUE` | What your app needs to reach a usable state: the key from `.env.example`, the mock backend, the variable that skips an auth wall. Repeatable. |
+| `--app <dir>` | Which app in a monorepo. It finds the servable ones; only you know which you are working in. |
+
+The rest are dials: `--license <key>` (writes it to `.env` and keeps `.env` out of git), `--json` (one object for an agent to read), `--files-only` (write, register, pre-approve, and stop, which is what `init` did before it learned to boot the app, and what an existing install re-runs to pick up new wiring), `--relaunch` (prints the command that restarts the conversation you are in, with the tools loaded: the restart step most installs stall on, and it composes with `--files-only`), `--no-open`, `--dry-run`, `--port N`, `--no-mcp`, `--no-install`.
+
+If you ran `--files-only` with a dev server already running, restart it, then skip to [Step 4](#step-4-run-it-and-verify-the-connection). The manual steps below explain what `init` sets up, if you prefer to wire it yourself.
+
+---
+
+## Add a cloud dashboard: `reticle connect`
+
+Optional. Instead of, or after, `init`, run this in your app directory:
+
+```bash
+npx @reticlehq/server connect --project "My App"
+```
+
+Approve the short browser code if Reticle asks you to sign in. The browser asks you to sign in, or to create a free account at app.reticle.sh. The Free plan includes monthly Harness credits. What syncs, and how to switch each part off, is in [What is recorded](what-is-recorded.md). The command then links this folder and sends any history already on the machine. Open or restart your coding agent and ask it to verify one real journey. For a new project, the dashboard has no result until that first run is recorded.
 
 ## Step 2: Embed the SDK in your app
 

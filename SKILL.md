@@ -31,7 +31,7 @@ It registers the MCP server with the coding agents it finds and, where an agent 
 
 `init`, whether the first session call runs it or you do, is ONBOARDING, and where it stops: wire, boot, wait for a session. Idempotent, reporting `·` for what is already there. Two things it cannot do for you, in this order:
 
-1. **Restart the dev server if one was already running when `init` ran.** It read the build config at boot; `init` edited that file afterwards, so the process keeps serving a bundle with no SDK in it. Restart, then hard-reload the tab. A 100% failure, not an intermittent one, and the largest single cause of a correct install that finds nothing connected.
+1. **Restart the dev server if one was already running when `init` ran.** It read the build config at boot; `init` edited that file afterwards, so the process keeps serving a bundle with no SDK in it. Restart, then hard-reload the tab. A 100% failure, not an intermittent one, and a common cause of a correct install that finds nothing connected.
 2. **Confirm rather than assume:** `reticle_session { action: "list" }`. One session listed is the proof the SDK reached the page. An empty list carries a `why` that names which cause this is; read it before changing anything.
 
 Then the FIRST RUN, which proves anything at all:
@@ -50,7 +50,7 @@ Everything between here and there is a rule the steps assume. Read it as you go,
 
 - `init` exited 0, or the first session call came back `wired`. Wired, and connected. Nothing is PROVED: that is the first run.
 - The `reticle_*` tools appeared. Your client can reach a daemon. The app is very likely still uninstrumented.
-- A session is listed. The app dialled in. The user has still seen nothing happen.
+- A session is listed: the SDK reached the page. Setup is finished when the first run returns a verdict.
 
 **Do not tell the user Reticle is set up until a verdict exists.** The common failure is an agent that writes the config, reports success, and leaves an uninstrumented page. The command then exits non-zero: believe the exit code.
 
@@ -77,7 +77,7 @@ The moment Reticle breaks, lies, cannot see something you needed, costs too many
 reticle_session { action: "feedback", kind, text }
 ```
 
-`kind` is one of `bug`, `gap`, `ambiguity`, `feature_request`, `improvement`. One call, then carry on with the task. If the tools are unreachable (setup unfinished, daemon down), file the same report from the shell:
+`kind` is one of `bug`, `gap`, `ambiguity`, `feature_request`, `improvement`, `experience`. One call, then carry on with the task. If the tools are unreachable (setup unfinished, daemon down), file the same report from the shell:
 
 ```bash
 npx @reticlehq/server feedback --agent --kind <kind> "what happened"
@@ -100,7 +100,7 @@ Every page arrives with the rules that matter prepended, so one fetch orients yo
 
 ## Which path am I on
 
-You do not have to decide. `init` is idempotent and reports what is already wired, so running it is the cheapest way to find out. It never drives; the first run is yours to start.
+`init` is idempotent: running it is the cheapest way to find out what is wired. It never drives.
 
 Read **VERIFY** below when the question is "does this still work?" rather than "is this set up?". If `reticle_session` returns an empty list on a project that is already wired, read `docs/troubleshooting.mdx` beside this file (no network call), or fetch `https://docs.reticle.sh/troubleshooting.md`; do not restart setup.
 
@@ -116,7 +116,7 @@ You need it once, while setting a project up. If `reticle_session` already lists
 
 # VERIFY
 
-**Verdicts come from `reticle_act_and_wait`, `reticle_assert`, and `reticle_act { steps }` when a step declares `expect`** (plus `reticle_verify` replays). Everything else (a bare `act`, `look`, `navigate`, `observe`) moves or reads the app and proves nothing. A drive that ends without a verdict has no result, however many tools it used.
+**Verdicts come from `reticle_act_and_wait`, `reticle_assert`, `reticle_act { steps }` when a step declares `expect`, and `reticle_verify` (`change`/`flows`).** Everything else (a bare `act`, `look`, `navigate`, `observe`) moves or reads the app and proves nothing. A drive that ends without a verdict has no result, however many tools it used.
 
 `verified: "unknown"` is not a pass: Reticle drove the app and could not tell what happened; report it as unknown. Nor is `"no-fault"`: the page settled with nothing wrong, but nothing was declared to prove, so assert a consequence the action CHANGES. **Never weaken a check to make it pass.**
 
@@ -153,9 +153,9 @@ The verdict that passes is the one that proves it. Declared it separately with `
 
 ## Record once, replay cheaply
 
-The first drive is expensive; the rest should not be, and you need not ask: **what you drive by hand is saved as a flow automatically**. From then on that journey re-verifies in one deterministic call, and `{action:"change"}` answers `yes` or `no` for those files instead of `unknown`.
+The first drive is expensive; the rest should not be: **when the session ends, what you drove by hand is saved as a flow**, if at least one step declared a consequence. From then on that journey re-verifies in one deterministic call, and `{action:"change"}` answers `yes` or `no` for those files instead of `unknown`.
 
-Whether that flow is worth anything depends on how you drove it. A step keeps a consequence only if you declared one, so `reticle_act_and_wait({ ref, action, until })` replays as a test while a bare `reticle_act` replays as a click that passes even when the feature is broken.
+A step keeps a consequence only if you declared one: `reticle_act_and_wait({ ref, action, until })` replays as a test, a bare `reticle_act` as a click that passes even when the feature is broken.
 
 ## Before you say you are done
 
@@ -177,7 +177,7 @@ reticle_act_and_wait({ sessionId, ref, action: "click", until: { kind: "allOf", 
 
 `until` names the consequence **before** the action, which makes it a check. Add `durable: true` when the change should survive a reload.
 
-The advertised surface is deliberately small (`default` 10, `all` 30, the wider one behind `RETICLE_ADVERTISE_ALL_TOOLS=1`), and is not all there is. `reticle_tools` lists EVERY registered tool, `{ names: [...] }` loads full argument grammar, and `reticle_run { tool, args }` calls any of them, advertised or not. A retired name answers with where it went, not "not found".
+The advertised surface is deliberately small (`default` 10, `all` 30 behind `RETICLE_ADVERTISE_ALL_TOOLS=1`, which switches to unmerged names such as `snapshot` for `look`; examples here use the default names), and is not all there is. `reticle_tools` lists EVERY registered tool, `{ names: [...] }` loads full argument grammar, and `reticle_run { tool, args }` calls any of them, advertised or not. A retired name answers with where it went, not "not found".
 
 - Every predicate and action: `https://docs.reticle.sh/predicates.md`, `https://docs.reticle.sh/actions.md`
 - The complete tool surface: `https://docs.reticle.sh/usage.md`

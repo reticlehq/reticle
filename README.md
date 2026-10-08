@@ -62,7 +62,7 @@ The full agent guide is [SKILL.md](SKILL.md). These are the rules that matter mo
 - If the dev server was already running when `init` ran, restart it and reload the tab. Until you do, the app is serving a bundle without the SDK.
 - Only run `reticle connect` if the user asked for the dashboard. It needs a person to approve the sign-in in a browser.
 - If the `reticle_*` tools aren't in your client, ask the user to run the installer and restart the client, then stop. If they were registered while you were running, `reticle init --relaunch` prints the command that resumes this conversation with them loaded.
-- Setup isn't done until the first run returns a verdict. A connected app only proves the SDK is on the page.
+- A session listed means the SDK reached the page. Setup is finished when the first run returns a verdict.
 - `unknown` is not a pass. Report it as "couldn't tell", with the reason Reticle gives.
 - Stuck? Run `reticle doctor` and report what it says. To report a problem with Reticle: `reticle feedback --agent --kind bug "…"`.
 
@@ -330,7 +330,7 @@ Faster for a structural reason rather than a browser-speed one: a time-gated tra
 | --- | --- |
 | **Web** | React + Vite, Next.js, Remix and Astro are driven to a verdict in CI; more frameworks are install-gated or wired. **[Frameworks](docs/frameworks.mdx) is the one list of what is proven, and how far** |
 | **Desktop** | Electron, Tauri, including the IPC boundary a browser-only tool can't see |
-| **Agents** | anything that speaks MCP. Config written automatically for Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, Copilot CLI, OpenCode, Warp, Kiro, Amazon Q, Cline, Amp, Continue, Factory Droid. Codex CLI is a printed four-line paste |
+| **Agents** | anything that speaks MCP. Config written automatically for Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, Copilot CLI, OpenCode, Antigravity, Warp, Kiro, Amazon Q, Cline, Roo Code, Amp, Continue, Factory Droid. Codex CLI is a printed four-line paste |
 | **Browsers** | the SDK runs in the tab you already have open; the tested and driven browser is Chromium, plus Electron and Tauri webviews |
 | **State** | zustand and Redux need no adapter. Shipped: TanStack Query, Jotai, XState, Valtio, MobX, Recoil, Svelte stores, Pinia |
 | **OS** | macOS, Linux, Windows |

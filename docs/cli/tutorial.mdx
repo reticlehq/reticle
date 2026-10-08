@@ -1,0 +1,28 @@
+---
+title: reticle tutorial
+description: Watch Reticle verify a demo app in seconds, before you wire your own.
+icon: graduation-cap
+---
+
+`reticle tutorial` shows the loop Reticle is built on, on a demo app: look at the page, act, and get a verdict. No project needed.
+
+```bash
+npx @reticlehq/server tutorial            # print the tour
+npx @reticlehq/server tutorial --run      # drive the demo for real
+```
+
+## Flags
+
+| Flag | Default | What it does |
+| --- | --- | --- |
+| `--run` | off | Drive the demo instead of describing it. Starts a daemon and opens a browser |
+| `--headed` | off | Show the browser while `--run` drives. Hidden by default |
+| `--headless` | on | Accepted for symmetry; hidden is already the default |
+| `--port N` | `4400` | Bridge port for the daemon `--run` starts |
+| `--agent` | off | Print the tour for an agent: the exact call and the shape of the answer, not prose |
+
+## How you know it worked
+
+With `--run`, the last step prints a verdict. That is the whole point of the tour: it ends at a verdict, because looking at a page is not verifying it.
+
+The tour does not wire your app. For that, run [`reticle init`](/cli/init) in your app's folder.

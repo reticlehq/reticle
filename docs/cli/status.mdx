@@ -4,7 +4,7 @@ description: Ask whether the Reticle daemon is up and which app sessions have co
 icon: heart-pulse
 ---
 
-`reticle status` is the command that tells you whether the install actually finished. Not a tick in a checklist: a connected app.
+`reticle status` tells you whether the daemon is up and which pages connected. A session listed means the SDK reached the page. Setup is finished when the first run returns a verdict.
 
 ```bash
 npx @reticlehq/server status [--port N] [--json]

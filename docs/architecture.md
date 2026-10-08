@@ -119,7 +119,7 @@ This is plain, reviewable, version-controllable data, not a black box.
 - The **server / CLI** is under the **Functional Source License (FSL-1.1, Apache-2.0 future)**: source-available, converts to Apache-2.0 over time.
 - Enterprise-only features live behind a license gate and are clearly separated.
 
-See [LICENSE](../LICENSE) and each package's own `LICENSE` file. The licensing _mechanism_ is open and inspectable; activation is offline (no phone-home).
+See [LICENSE](https://github.com/reticlehq/reticle/blob/main/LICENSE) and each package's own `LICENSE` file. The licensing _mechanism_ is open and inspectable; activation is offline (no phone-home).
 
 ---
 
@@ -128,4 +128,4 @@ See [LICENSE](../LICENSE) and each package's own `LICENSE` file. The licensing _
 - [getting-started.md](getting-started.md) wires Reticle into your app in a couple of minutes.
 - [benchmarks.md](benchmarks.md) covers how we measure, and the honest results vs the alternatives.
 - [usage.md](usage.md) is the full tool reference and advanced modes.
-- [CONTRIBUTING.md](../CONTRIBUTING.md) has the development loop and the rules.
+- [CONTRIBUTING.md](https://github.com/reticlehq/reticle/blob/main/CONTRIBUTING.md) has the development loop and the rules.

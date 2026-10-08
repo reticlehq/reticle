@@ -65,7 +65,7 @@ Afterwards, use it whenever you change any user-facing behaviour.
 <Tip>
   Prefer installing the skills instead? `npx skills add reticlehq/reticle` on most agents, or
   `/plugin marketplace add reticlehq/reticle` then `/plugin install reticle@reticlehq` on Claude
-  Code, which registers the MCP server and all eleven skills in one step. Then type `/reticle` and
+  Code, which registers the MCP server and the Reticle skill in one step. Then type `/reticle` and
   the agent runs this same setup from the skill.
 </Tip>
 
@@ -143,7 +143,7 @@ That `ℹ` line is the one people skim past, so here it is in full:
 
 ## What it actually changes
 
-Four files in your project, none of them mysterious.
+The files it writes in your project, none of them mysterious.
 
 <AccordionGroup>
   <Accordion title=".reticle.json (project config)">
@@ -278,13 +278,13 @@ Two things to know afterwards:
 - **A GUI client reads its config at startup.** Cursor, Antigravity, Claude Desktop and VS Code need a window reload before the new rules take effect. The CLIs pick them up on their next run.
 - **The pre-approval is scoped to `reticle` alone**, never a blanket rule for every MCP server, and never a global auto-run switch. If a client's approval file did not exist before, `init` says so in a line, because in Cursor's case that file supersedes what you had approved inside the app.
 
-Drop `--files-only` to get the full run: boot the app, drive a flow, return a verdict.
+Drop `--files-only` for the full run: boot the app and wait for a session to connect. Proving a flow is the first run, a separate call.
 
-## The two restarts you no longer have to think about
+## The two restarts, and when you need them
 
-**Your dev server: `init` handles it.** A dev server that was already running read your build config before `init` edited it, so it keeps serving the old bundle and nothing connects. `init` restarts it and waits for the port to answer, rather than telling you to.
+**Your dev server: restart it once.** One that was already running read your build config before `init` edited it, so it keeps serving a bundle without the SDK. Restart it and hard-reload the tab. `init` names this case when it finds it.
 
-**Your agent: not on the critical path any more.** Your agent read its MCP server list at startup, before Reticle existed, and no slash command re-reads it. `/mcp` manages servers already loaded, so it cannot pick up a new one. That used to mean stopping the install to restart. It does not now: the flow is driven by a child agent process started after registration, which reads the list `init` just wrote. Your own session picks the tools up whenever you next start it, and nothing is waiting on that. This is a once-per-machine annoyance in any case, because Reticle registers globally.
+**Your agent: restart it once, if the tools are missing.** An agent reads its MCP server list when it starts. If it started before Reticle was registered, the `reticle_*` tools are not in this session, and no slash command re-reads the list (`/mcp` manages servers already loaded). Restart the agent once. `reticle init --relaunch` prints the exact command that resumes this conversation with the tools loaded. Until then, `npx @reticlehq/server verify <url> --expect '<predicate JSON>'` proves a flow from the shell. Reticle registers globally, so this happens once per machine.
 
 ## Confirm it worked
 
@@ -292,7 +292,7 @@ Drop `--files-only` to get the full run: boot the app, drive a flow, return a ve
 npx @reticlehq/server status
 ```
 
-It confirms the app connected, or tells you exactly why it hasn't. A session in the list is the install actually finished. Not a green tick. A connected app.
+It confirms the app connected, or tells you exactly why it hasn't. A session listed means the SDK reached the page. Setup is finished when the first run returns a verdict.
 
 <Card title="Something marked ⚠?" icon="screwdriver-wrench" href="/install-manual">
   The manual install covers every step `init` can't automate, per agent and per framework.

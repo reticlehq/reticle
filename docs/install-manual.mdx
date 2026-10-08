@@ -86,7 +86,7 @@ Same shape, different file and root key. Cursor and Windsurf use `mcpServers`; V
 
 ### Codex CLI
 
-TOML, in `~/.codex/config.toml` (`init` and the installer write it for you; by hand it is):
+TOML, in `~/.codex/config.toml`. Reticle does not rewrite this file: `init` and the installer print these lines for you to paste.
 
 ```toml
 [mcp_servers.reticle]
@@ -204,9 +204,9 @@ IPC observation needs nothing on the Rust side. An `invoke('load_todos')` alread
 npx @reticlehq/server status
 ```
 
-A session in the output means the app connected. That, not a tick in a checklist, is when the install is finished.
+A session listed means the SDK reached the page. Setup is finished when the first run returns a verdict.
 
-If it says nothing connected, the usual causes are a port disagreement between your app and the daemon, or a hand-wired `connect()` without the pairing token. The browser console will carry `[Reticle] this page could not open a websocket to …` naming the exact address it tried; set it explicitly with `VITE_RETICLE_WS_URL=ws://localhost:4400/reticle` or `reticle.connect({ url })`.
+If it says nothing connected, the usual causes are a port disagreement between your app and the daemon, or a hand-wired `connect()` without the pairing token. The browser console will carry `[Reticle] this page could not open a websocket to …` naming the exact address it tried; set it explicitly with `RETICLE_PORT=4400 pnpm dev` (Vite plugin), `reticle({ port: 4400 })` in `vite.config`, or `reticle.connect({ url: 'ws://localhost:4400/reticle' })` by hand.
 
 Still stuck? `npx @reticlehq/server doctor` checks Chromium, the daemon and the port in one command.
 

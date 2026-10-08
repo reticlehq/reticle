@@ -68,7 +68,7 @@ If you believe an `unknown` is wrong, report it. Reticle's own response says as 
 </Accordion>
 
 <Accordion title="Does my data leave the machine?">
-  Your app's data, no. Reticle is dev-only and localhost-only, and nothing from the app under test (DOM, network bodies, console, state, source) is sent. Credential-shaped values are redacted before they leave the page. You will see `[REDACTED]` in request bodies without configuring anything.
+  Reticle is dev-only and localhost-only. Nothing from your app leaves the machine until you link a project (`reticle connect`, or `RETICLE_API_KEY` in CI). After that, what syncs is set by `reticle config`, and when the Harness drives, the platform sees the steps it drives. Secret values never leave. Credential-shaped values are redacted before they leave the page. You will see `[REDACTED]` in request bodies without configuring anything.
 
 Anonymous usage counts are sent by default, separately, and carry nothing from your app. `reticle telemetry disable`, `RETICLE_TELEMETRY=0` or `DO_NOT_TRACK=1` turns them off.
 
