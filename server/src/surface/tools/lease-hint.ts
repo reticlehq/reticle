@@ -133,8 +133,8 @@ export function leaseNotConnectedHint(
       `this daemon is on ${String(port)}, so the dial never reached it. Nothing about the app's ` +
       `wiring is in question. Either start the daemon on ${String(dialled)}, or point the app at ` +
       `${String(port)} — the app's port comes from its build config (\`.reticle.json\`, ` +
-      `RETICLE_PORT, or the build plugin's \`port\`), and \`VITE_RETICLE_WS_URL\` overrides it ` +
-      `outright.${marker} ${RELEASE}`
+      `RETICLE_PORT, or the build plugin's \`port\`), and \`reticle.connect({ url })\` ` +
+      `overrides it outright.${marker} ${RELEASE}`
     );
   }
 

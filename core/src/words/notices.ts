@@ -54,7 +54,7 @@ export const BUFFER_EVICTION_WARNING =
  * so the two no-session paths now agree.
  */
 export const NO_SESSION_CONNECTED_ERROR =
-  "no browser session connected. Two things to check: (1) your app is running with @reticlehq/browser enabled, and (2) it points at THIS daemon's port — a mismatch between the app's reticle({ port }) / VITE_RETICLE_WS_URL and the daemon's RETICLE_PORT is the usual cause. Call reticle_session { action: \"list\" } for the diagnosis — it names which of these it is, and what to do next — rather than retrying this call.";
+  "no browser session connected. Two things to check: (1) your app is running with @reticlehq/browser enabled, and (2) it points at THIS daemon's port — a mismatch between the port the app dials (the build plugin's reticle({ port }), or RETICLE_PORT when the dev server started) and the daemon's port is the usual cause. Call reticle_session { action: \"list\" } for the diagnosis — it names which of these it is, and what to do next — rather than retrying this call.";
 
 /**
  * Explains an unconfirmed navigation that did reconnect, but at a different URL.

@@ -72,6 +72,9 @@ describe('a page that dialled somewhere else', () => {
     });
     expect(hint).toContain('4460');
     expect(hint).toContain('4400');
+    // The override it names must be one something reads. VITE_RETICLE_WS_URL never was.
+    expect(hint).not.toContain('VITE_RETICLE_WS_URL');
+    expect(hint).toContain('reticle.connect({ url })');
   });
 
   it('outranks every inferred cause, because it is the only one with proof', () => {

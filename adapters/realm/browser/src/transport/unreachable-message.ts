@@ -19,8 +19,8 @@ export function unreachableMessage(url: string, attempts: number): string {
     `that is not there from one it is not allowed to reach, so this is not evidence about the ` +
     `daemon. What answers it: run \`npx @reticlehq/server status\` to see whether one is listening ` +
     `and on which port. If your app runs in a container, devcontainer or WSL, the daemon is on a ` +
-    `different host, so set the URL explicitly (Vite: VITE_RETICLE_WS_URL, or ` +
-    `reticle.connect({ url })). An https page cannot open a ws:// socket at all. Still retrying…`
+    `different host, so point the page at it explicitly (Vite plugin: RETICLE_PORT or ` +
+    `reticle({ port }); by hand: reticle.connect({ url })). An https page cannot open a ws:// socket at all. Still retrying…`
   );
 }
 
