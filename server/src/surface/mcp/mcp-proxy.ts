@@ -5,6 +5,7 @@ import {
   isHandshakeLine,
   drainLines,
   MAX_STDIN_LINE_BYTES,
+  parseLine as parseJsonRpc,
 } from './proxy/proxy-handshake.js';
 import { isToolCallRequest, isToolsListRequest, ToolCatalogCache } from './tool-catalog-cache.js';
 import { rememberEnumerated, rememberProxyStarted, rememberToolCalled } from './attach-memory.js';
@@ -91,20 +92,6 @@ export const MAX_RECONNECT_ATTEMPTS = ((): number => {
 
 /** JSON-RPC id the proxy uses for its own replayed `initialize` — never one the client could send. */
 export const RECONNECT_INITIALIZE_ID = '__reticle_proxy_reinit';
-
-interface JsonRpcLike {
-  id?: unknown;
-  method?: unknown;
-}
-
-function parseJsonRpc(line: string): JsonRpcLike | null {
-  try {
-    const parsed: unknown = JSON.parse(line);
-    return 'object' === typeof parsed && parsed !== null ? parsed : null;
-  } catch {
-    return null;
-  }
-}
 
 const INITIALIZE_METHOD = 'initialize';
 /**
