@@ -41,18 +41,18 @@ Then persist it to disk so it's committed and any agent can read it:
 
 | Tool | What it does |
 | --- | --- |
-| `reticle_capabilities()` | the live testable surface `{ testids, signals, stores, flows }` |
-| `reticle_contract_save()` | write the live capabilities to `.reticle/contract.json` (versioned, diffable) |
+| `reticle_run({ tool: "reticle_capabilities", args: {} })` | the live testable surface `{ testids, signals, stores, flows }` |
+| `reticle_run({ tool: "reticle_contract_save", args: {} })` | write the live capabilities to `.reticle/contract.json` (versioned, diffable) |
 
 ## Create a flow
 
 **(a) Agent-recorded.** The agent drives, then saves:
 
 ```jsonc
-reticle_record {action:"start"}({ recordingName: "create-task" })
+reticle_run({ tool: "reticle_record", args: { action: "start", recordingName: "create-task" } })
 reticle_act({ ref: "e7", action: "click" })        // … drive the golden path …
-reticle_record {action:"stop"}({ recordingName: "create-task" })
-reticle_flow_save({ flowName: "create-task" })          // → .reticle/flows/create-task.json
+reticle_run({ tool: "reticle_record", args: { action: "stop", recordingName: "create-task" } })
+reticle_run({ tool: "reticle_flow_save", args: { flowName: "create-task" } })          // → .reticle/flows/create-task.json
 ```
 
 **(b) Human-recorded (the recorder toolbar).** With the presenter on (`present: true`), the floating panel hosts a recorder: a human clicks the golden path in the page and Reticle captures each interaction as a **semantic-anchored** step (testid, else role+name), then persists it via `reticle_flow_save_recorded`. The agent then runs and maintains it. _(First cut: structured annotations only, see below; free natural-language annotations are future work.)_
@@ -82,16 +82,16 @@ Each step binds to a **semantic anchor**, never a `eXX` ref: a `testid`/`signal`
 ## Run a flow
 
 ```jsonc
-reticle_flow {action:"list"}()                                    // → flows on disk
-reticle_flow {action:"load"}({ flowName: "create-task" })   // → the flow JSON
-reticle_flow_replay({ flowName: "create-task" }) // re-resolve each anchor against the LIVE DOM, run it
+reticle_run({ tool: "reticle_flow", args: { action: "list" } })                                    // → flows on disk
+reticle_run({ tool: "reticle_flow", args: { action: "load", flowName: "create-task" } })   // → the flow JSON
+reticle_run({ tool: "reticle_flow_replay", args: { flowName: "create-task" } }) // re-resolve each anchor against the LIVE DOM, run it
 ```
 
 ### Resume from a step
 
 ```jsonc
-reticle_flow_replay({ flowName: "create-task", from: 3 })          // by 0-based index
-reticle_flow_replay({ flowName: "create-task", from: "submit" })   // or by a step's `id`
+reticle_run({ tool: "reticle_flow_replay", args: { flowName: "create-task", from: 3 } })          // by 0-based index
+reticle_run({ tool: "reticle_flow_replay", args: { flowName: "create-task", from: "submit" } })   // or by a step's `id`
 ```
 
 There is no state to restore, so the steps before `from` run again quickly as setup: their actions run, their `expect`s are not checked, and they are not reported. Replay is then checked and reported from `from` on. If a setup step fails, it is reported, because the resume never reached the step you asked for. A setup step declared `"effect": "commits"` refuses the resume and the whole flow replays, so resuming never re-sends a payment or a message silently. A `from` that names no step is an error, not a full replay.
@@ -109,12 +109,12 @@ Every session's driving is saved as a flow at teardown when it declared a conseq
 ## Delete a flow
 
 ```jsonc
-reticle_flow {action:"delete"}({ flowName: "create-task" })  // → { deleted: true }
+reticle_run({ tool: "reticle_flow", args: { action: "delete", flowName: "create-task" } })  // → { deleted: true }
 ```
 
-A renamed or obsolete flow otherwise lingers in `reticle_flow {action:"list"}` and in every `reticle_verify {action:"flows"}` suite run, where it fails forever against a screen nobody intends to keep.
+A renamed or obsolete flow otherwise lingers in `reticle_run { tool: "reticle_flow", args: { action: "list" } }` and in every `reticle_verify { action: "flows" }` suite run, where it fails forever against a screen nobody intends to keep.
 
-**Deleting a flow that is not there is an error, not a no-op.** It answers `{ error, code: "not_found" }` rather than `{ deleted: true }`, so a mistyped name cannot read as a completed cleanup while the real flow stays in the suite. Check the spelling against `reticle_flow {action:"list"}` and try again.
+**Deleting a flow that is not there is an error, not a no-op.** It answers `{ error, code: "not_found" }` rather than `{ deleted: true }`, so a mistyped name cannot read as a completed cleanup while the real flow stays in the suite. Check the spelling against `reticle_run { tool: "reticle_flow", args: { action: "list" } }` and try again.
 
 **Watch it replay on the page.** When the presenter is on (`present: true`), a replay isn't silent. Each step drives the real page, so the synthetic cursor flies to the element, the focus ring lands, and the activity log streams the journey live. You (or a teammate) literally watch the saved journey re-walk itself on your app, then see the verdict land. It's the fastest way to _see_ that a flow still works, not just read a green checkmark.
 
@@ -144,7 +144,7 @@ This is the feedback a human reviewer used to give, made machine-actionable, so 
 
 ## Verify the whole suite in one call
 
-`reticle_verify {action:"flows"}` replays **every** saved flow (or a named subset) deterministically, with no LLM per flow, and returns one consolidated verdict. This is the regression check to run after any change:
+`reticle_verify { action: "flows" }` replays **every** saved flow (or a named subset) deterministically, with no LLM per flow, and returns one consolidated verdict. This is the regression check to run after any change:
 
 ```jsonc
 reticle_verify({ action: "flows" })
@@ -154,7 +154,7 @@ reticle_verify({ action: "flows" })
 //                  whatChanged: "...", whereInSource: "src/...:NN", nextAction: "..." }] }
 ```
 
-Passing flows are counted; only failures carry detail (token-cheap). Build → `reticle_verify {action:"flows"}` → fix from each failure's `nextAction` → repeat: the autonomous regression loop.
+Passing flows are counted; only failures carry detail (token-cheap). Build → `reticle_verify { action: "flows" }` → fix from each failure's `nextAction` → repeat: the autonomous regression loop.
 
 ## Self-healing: the agent maintains the flow
 
@@ -185,17 +185,19 @@ With `apply: false` the flow file is **never modified**; you get the proposed di
 
 ## Tool reference
 
+Only `reticle_verify` is advertised by default. Call every other tool here as `reticle_run({ tool: "<name>", args: { … } })`, with the args shown.
+
 | Tool | Args | Returns |
 | --- | --- | --- |
 | `reticle_contract_save` | `{ sessionId? }` | writes `.reticle/contract.json` |
-| `reticle_record {action:"start"}` / `reticle_record {action:"stop"}` | `{ recordingName }` | start/stop capturing the agent's acts |
+| `reticle_run { tool: "reticle_record", args: { action: "start" } }` / `reticle_run { tool: "reticle_record", args: { action: "stop" } }` | `{ recordingName }` | start/stop capturing the agent's acts |
 | `reticle_flow_save` | `{ flowName }` | persist the recording → `.reticle/flows/<flowName>.json` |
 | `reticle_flow_save_recorded` | `{ flowName? }` | persist a human-recorded (toolbar) flow |
-| `reticle_flow {action:"list"}` | `{}` | flows on disk |
-| `reticle_flow {action:"load"}` | `{ flowName }` | the flow JSON |
-| `reticle_flow {action:"delete"}` | `{ flowName }` | `{ deleted: true }`, or `{ error, code }` (`not_found` when no such flow) |
+| `reticle_run { tool: "reticle_flow", args: { action: "list" } }` | `{}` | flows on disk |
+| `reticle_run { tool: "reticle_flow", args: { action: "load" } }` | `{ flowName }` | the flow JSON |
+| `reticle_run { tool: "reticle_flow", args: { action: "delete" } }` | `{ flowName }` | `{ deleted: true }`, or `{ error, code }` (`not_found` when no such flow) |
 | `reticle_flow_replay` | `{ flowName, from?, sweep? }` | `{ status, steps, decision? }` (decision on drift/fail); `from` resumes at a step |
-| `reticle_verify {action:"flows"}` | `{ names?, sessionId? }` | suite verdict `{ status, passed, failed, failures[] }` |
+| `reticle_verify { action: "flows" }` | `{ names?, sessionId? }` | suite verdict `{ status, passed, failed, failures[] }` |
 | `reticle_verify { action: "heal" }` | `{ flowName, apply? }` | propose / apply nearest-match rebind |
 | `reticle_annotate` | `{ kind, … }` | compile a structured annotation into the flow |
 

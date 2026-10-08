@@ -17,6 +17,7 @@ Reticle works with none of these set. Each one changes a single behaviour, and m
 | `RETICLE_ALLOWED_ORIGINS` | daemon | Comma-separated WebSocket origins the bridge accepts. |
 | `RETICLE_STATE_DIR` | daemon, CLI | Daemon state: pid files, the discovery registry and logs. Defaults to `~/.reticle`. |
 | `RETICLE_DAEMON_READY_TIMEOUT_MS` | MCP proxy | How long the MCP proxy waits for a daemon to come up before reporting it unreachable. |
+| `RETICLE_NO_VERSION_MATCH` | CLI | `1` turns off version matching: when the project's SDK is a different major version from the CLI you ran, the CLI normally hands the command to the matching server version. |
 | `RETICLE_DEV` | `@reticlehq/next` | Instrument even when `NODE_ENV` says production, for `NODE_ENV=production next dev`. |
 
 ## Daemon lifetime
@@ -41,7 +42,7 @@ Reticle works with none of these set. Each one changes a single behaviour, and m
 
 | Variable | Read by | What it does |
 | --- | --- | --- |
-| `RETICLE_ADVERTISE_ALL_TOOLS` | daemon | Advertise every tool directly instead of the default surface. Everything is reachable either way, through `reticle_run`. |
+| `RETICLE_ADVERTISE_ALL_TOOLS` | daemon | Advertise 30 tools directly instead of the default ten, under their unmerged names (`reticle_snapshot` instead of `reticle_look { action: "page" }`, and so on). Everything is reachable either way, through `reticle_run`. |
 | `RETICLE_VERIFY_SURFACE` | daemon | Advertise the smallest surface that can still produce a verdict. |
 | `RETICLE_TOOL_PROFILE` | daemon | Retired. Any value it used to accept still resolves to a sensible surface, and the daemon says which one it used instead. |
 | `RETICLE_ENCODING` | daemon | How tool results are written for the agent. Compact JSON by default; `pretty` indents it, and `toon` is a denser tabular form. The typed result is the same in every encoding. |
@@ -62,14 +63,9 @@ Reticle works with none of these set. Each one changes a single behaviour, and m
 | `RETICLE_API_KEY` | CLI, daemon | The API key minted on the platform. |
 | `RETICLE_CLOUD_KEY` | CLI, daemon | The key's earlier name. Still honoured. |
 | `RETICLE_CLOUD_URL`, `RETICLE_URL` | CLI, daemon | The platform host. `RETICLE_CLOUD_URL` wins when both are set. |
-| `RETICLE_SYNC_INTERVAL_MS` | `reticle sync --watch` | How often the watching sync runs. Every 60 seconds by default. |
-| `ANTHROPIC_API_KEY` | autonomous drive | The key the drive's model uses when no coding agent is in the loop. Without it, the drive is unavailable and everything else is unaffected. |
-| `RETICLE_HARNESS_MODEL` | autonomous drive | The model the drive uses. A small one by default. |
-| `RETICLE_HARNESS_BASE_URL` | autonomous drive | A proxy or gateway in front of the model API. |
-| `RETICLE_HARNESS_MAX_STEPS` | autonomous drive | A hard ceiling on model turns in one drive. It bounds cost. |
-| `RETICLE_HARNESS_DRIVER` | autonomous drive | Which model drives: `anthropic` (the default) or `jev`. |
-| `JEV_API_KEY`, `RETICLE_HARNESS_JEV_URL` | autonomous drive | A direct key and base URL for the `jev` driver. The usual path is `RETICLE_API_KEY` through the platform. |
-| `OPENAI_API_KEY`, `RETICLE_HARNESS_OPENAI_MODEL` | autonomous drive | A direct key and model for the OpenAI driver. |
+| `RETICLE_SYNC_INTERVAL_MS` | `reticle push --watch`, `reticle sync --watch` | How often the watching sync runs. Every 60 seconds by default. |
+| `RETICLE_HARNESS_MAX_STEPS` | autonomous drive | A hard ceiling on steps in one drive. It bounds cost. The drive itself runs on the platform and needs a linked project; every plan, Free included, has monthly Harness credits. |
+| `RETICLE_SECRET_<FIELD>` | autonomous drive, replay | The value of a secret field, typed in on this machine. Only the field's name goes to the platform. |
 
 ## Licensing
 
@@ -85,4 +81,5 @@ Reticle works with none of these set. Each one changes a single behaviour, and m
 | `RETICLE_TELEMETRY_FILE` | CLI, daemon | Write telemetry to a local JSONL file and send nothing, so you can read exactly what would be sent. |
 | `RETICLE_TELEMETRY_URL`, `RETICLE_TELEMETRY_KEY` | CLI, daemon | Send telemetry to a different host or project, such as an EU region or your own instance. |
 | `RETICLE_FEEDBACK` | daemon | Turns off the feedback channel only. Usage telemetry follows `RETICLE_TELEMETRY`. |
+| `RETICLE_INSTALL_SOURCE` | `init`, installer, plugin | Names the published route an install came through (`docs_site`, `skill_file`, `plugin`). Self-declared, carries nothing about you, and changes nothing about the install. |
 | `RETICLE_TRACE` | daemon, CLI | Verbose internal tracing for people working on Reticle itself. Off by default. |

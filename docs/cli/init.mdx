@@ -7,7 +7,9 @@ icon: wand-magic-sparkles
 `reticle init` is the one command a person runs before anything else. It inspects the directory it is standing in, works out the framework, and writes every piece of wiring Reticle needs: the MCP server registration, the agent rule files, the dev dependencies, `.reticle.json`, and the bundler plugin.
 
 ```bash
-npx @reticlehq/server init [--dry-run] [--port N] [--no-mcp] [--no-install] [--app <dir>] [--yes]
+npx @reticlehq/server init [--env KEY=VALUE]... [--app <dir>] [--license <key>] [--json]
+                           [--files-only] [--relaunch] [--no-open] [--no-agents] [--url <app url>]
+                           [--timeout S] [--dry-run] [--hooks] [--port N] [--no-mcp] [--no-install]
 ```
 
 ## Flags
@@ -20,6 +22,15 @@ npx @reticlehq/server init [--dry-run] [--port N] [--no-mcp] [--no-install] [--a
 | `--no-install` | boolean | `false` (deps are installed) | Do not run the install. The step becomes `[⚠]` and prints the `add -D` command for you to run by hand, rather than vanishing from the plan |
 | `--app <dir>` | string | unset | Pick which app to wire in a monorepo, without changing directory |
 | `--hooks` | boolean | `false` | Also add a print-only Stop hook to `.claude/settings.json`, merged into what is there. When the agent stops without a claim that held, it prints one line; it never blocks. See [`reticle report`](/cli/report) |
+| `--env KEY=VALUE` | string, repeatable | none | What the app needs to reach a usable state: a key from `.env.example`, a mock backend, a variable that skips an auth wall. A value may contain spaces and `=` |
+| `--license <key>` | string | unset | Write an enterprise license key to `.env` and keep `.env` out of git |
+| `--json` | boolean | `false` | Put the result on stdout as one object, for an agent to read |
+| `--files-only` | boolean | `false` | Write the files, register the MCP server and pre-approve the tools, then stop: no dev server, no browser. Also the upgrade path for an existing install |
+| `--relaunch` | boolean | `false` | Print the exact command that restarts this agent conversation with the `reticle_*` tools loaded. Refuses when the session has no transcript behind it. Works with `--files-only` |
+| `--no-open` | boolean | `false` | Do not open a browser window. The connect is checked in a hidden tab instead |
+| `--no-agents` | boolean | `false` | Do not register the MCP server with the other agents on this machine |
+| `--url <app url>` | string | unset | The app is already running at this URL: use it instead of starting a dev server |
+| `--timeout S` | seconds | the framework's own budget | How long to wait for the dev server and for a session to connect |
 | `--yes` | boolean | `false` | Accepted for scripting. `init` has no interactive prompts today, so it is a no-op |
 
 <Warning>
@@ -29,7 +40,7 @@ npx @reticlehq/server init [--dry-run] [--port N] [--no-mcp] [--no-install] [--a
 
 ## What it prints
 
-A plan, one line per step, each with a status mark: `✓` written, `·` already in place or left alone, `⚠` needs a hand, `–` deliberately skipped by a flag. Captured from a real `--dry-run` inside `apps/bench-app`:
+A plan, one line per step, each with a status mark: `✓` written, `·` already in place or left alone, `⚠` needs a hand, `–` deliberately skipped by a flag, `ℹ` done, but incomplete in a way that matters. Captured from a real `--dry-run` inside `apps/bench-app`:
 
 ```
 reticle init (dry run, no files written)
@@ -99,10 +110,10 @@ In the two captures above, the punctuation that separates the two halves of the 
 
 ## Exit codes
 
-| Code | Meaning                                                                                 |
-| ---- | --------------------------------------------------------------------------------------- |
-| `0`  | The plan ran. Steps marked `⚠` still need a hand, and do not change the code            |
-| `1`  | Init failed, an unknown flag was passed, or several apps were found and none was chosen |
+| Code | Meaning |
+| --- | --- |
+| `0` | The app connected. Steps marked `⚠` still need a hand, and do not change the code |
+| `1` | No session connected, init failed, an unknown flag was passed, or several apps were found and none was chosen |
 
 An unknown flag is rejected by name: `reticle init --bogus` prints `unknown argument '--bogus'`, then the full usage block, and exits `1`.
 
@@ -116,5 +127,5 @@ npx @reticlehq/server status             # confirm the app actually connected
 ```
 
 <Card title="The install, step by step" icon="wand-magic-sparkles" href="/install-agentic">
-  What each step writes and how to read the four status marks.
+  What each step writes and how to read the five status marks.
 </Card>

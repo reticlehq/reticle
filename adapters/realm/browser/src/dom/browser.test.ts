@@ -82,9 +82,12 @@ describe('snapshot', () => {
   });
 
   it('interactive mode lists only actionable elements', () => {
-    render('<div><h1>Title</h1><button>Click</button></div>');
+    render(
+      '<div><h1>Title</h1><button>Click</button><input type="search" aria-label="Find item" /></div>',
+    );
     const snap = buildSnapshot({ mode: SnapshotMode.INTERACTIVE });
     expect(snap.tree).toContain('button "Click"');
+    expect(snap.tree).toContain('searchbox "Find item"');
     expect(snap.tree).not.toContain('heading');
   });
 

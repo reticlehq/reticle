@@ -25,6 +25,9 @@ import {
   pickDaemonPort,
   type DaemonRegistryEntry,
 } from '@reticlehq/core/artifacts';
+import { ReticleEnv } from '@reticlehq/core';
+
+const RETICLE_PORT_ENV = ReticleEnv.PORT;
 
 /**
  * Every well-formed registry entry in `home`.
@@ -137,6 +140,42 @@ export function daemonsServingProjectElsewhere(
     .sort((a, b) => a - b);
 }
 
+/** Live daemons that serve a named project, on any port but `myPort`. */
+export function projectDaemonsElsewhere(
+  myPort: number,
+  home: string,
+  alive: (pid: number) => boolean,
+): { port: number; projectId: string }[] {
+  return readDaemonRegistry(home)
+    .filter((entry) => entry.port !== myPort && alive(entry.pid))
+    .flatMap((entry) =>
+      entry.projectId === undefined || 0 === entry.projectId.length
+        ? []
+        : [{ port: entry.port, projectId: entry.projectId }],
+    )
+    .sort((a, b) => a.port - b.port);
+}
+
+/**
+ * The sentence for a daemon started outside any project while projects run their own daemons, or
+ * `undefined` when there are none. Its sessions are empty because the apps dial their own ports,
+ * and "check your scope" is not something an agent inside an editor can act on (#1240).
+ */
+export function projectlessNote(
+  myPort: number,
+  others: readonly { port: number; projectId: string }[],
+): string | undefined {
+  const first = others[0];
+  if (first === undefined) return undefined;
+  const listed = others.map((o) => `${o.projectId} on :${String(o.port)}`).join(', ');
+  return (
+    `this daemon on :${String(myPort)} was started outside any project, and the projects on this ` +
+    `machine run their own daemons: ${listed}. Their apps connect there, not here. Point the MCP ` +
+    `server at one — set ${RETICLE_PORT_ENV}=${String(first.port)} in its config, or launch it from ` +
+    'that project directory.'
+  );
+}
+
 /**
  * The sentence for a split brain, or `undefined` when there is none.
  *
@@ -214,7 +253,14 @@ export async function resolveMcpPort(
 ): Promise<number> {
   const mine = resolveDaemonForProject(projectId, home, deps.alive);
   if (mine !== undefined) return mine;
-  if (!(await deps.daemonPresent(preferred))) return preferred;
+  if (!(await deps.daemonPresent(preferred))) {
+    // A caller outside any project (an editor's user-scope MCP, launched from $HOME) used to dial the
+    // default and never see the one project that had moved off it (#1240). With exactly one project
+    // daemon live, that is the one; with several, the no-session answer names them instead.
+    const projects =
+      projectId === undefined ? projectDaemonsElsewhere(preferred, home, deps.alive) : [];
+    return 1 === projects.length ? (projects[0]?.port ?? preferred) : preferred;
+  }
   return adoptable(daemonProjectAt(preferred, home), projectId)
     ? preferred
     : deps.pickPort(preferred);

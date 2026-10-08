@@ -106,9 +106,9 @@ Your app dials a port; the daemon listens on one. When they disagree, the app ru
 failed. That is everything the page can see: from inside the browser it cannot tell a daemon that
 is not there from one it is not allowed to reach, so this is not evidence about the daemon. What
 answers it: run `npx @reticlehq/server status` to see whether one is listening and on which port.
-If your app runs in a container, devcontainer or WSL, the daemon is on a different host, so set
-the URL explicitly (Vite: VITE_RETICLE_WS_URL, or reticle.connect({ url })). An https page cannot
-open a ws:// socket at all. Still retrying…
+If your app runs in a container, devcontainer or WSL, the daemon is on a different host, so point
+the page at it explicitly (Vite plugin: RETICLE_PORT or reticle({ port }); by hand:
+reticle.connect({ url })). An https page cannot open a ws:// socket at all. Still retrying…
 ```
 
 **You should not have to read this page to find that out.** If the agent opened the app with `reticle_lease`, which is the path `init` steers it to, the daemon reads that address off the page's own console, compares it with the port it is bound to, and puts the mismatch in the tool result:
@@ -123,8 +123,10 @@ Neither side can work that out alone: the page cannot see the daemon, and the da
 That message names the exact address it tried. Compare its port with `bridge port` from `doctor` and set whichever is wrong:
 
 ```bash
-VITE_RETICLE_WS_URL=ws://localhost:4400/reticle pnpm dev
+RETICLE_PORT=4400 pnpm dev
 ```
+
+That works with the Vite plugin, which reads `RETICLE_PORT` when the dev server starts. You can also set `reticle({ port: 4400 })` in `vite.config`, or pass `reticle.connect({ url: 'ws://localhost:4400/reticle' })` if you wired `connect()` by hand.
 
 <Warning>
   The bridge port is **not** your dev-server port. A dev server on 4312 and a daemon on 4400 is
@@ -201,7 +203,7 @@ Before concluding "no request fired", read the buffer note:
 
 ## The agent cannot find an element
 
-- `reticle_look { action: "page" } { mode: "interactive" }` shows everything actionable.
+- `reticle_look { action: "page", mode: "interactive" }` shows everything actionable.
 - Add a `data-testid` for a stable handle.
 - Narrow with `scope`. A CSS selector or a ref.
 

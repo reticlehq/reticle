@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { mergedNameRedirect } from './merged-name-redirect.js';
+import { mergedNameRedirect, retiredToolNames } from './merged-name-redirect.js';
 import { unadvertisedToolHelp } from './unadvertised-help.js';
 import { ReticleTool } from '@reticlehq/core';
 import { TOOLS, MERGED_TOOLS } from './tools.js';
@@ -76,5 +76,14 @@ describe('an old member name points at where the capability went', () => {
       10,
     );
     expect(dead.filter((n) => mergedNameRedirect(n) === undefined)).toEqual([]);
+  });
+});
+
+describe('the retired list in reticle_tools', () => {
+  it('never lists a tool that is live on the merged surface as retired', () => {
+    // reticle_assert and reticle_observe are advertised tools; their bare (no action) form redirects
+    // to an action, which the list printed as "reticle_assert: retired" to every agent reading it.
+    const live = new Set(MERGED_TOOLS.map((t) => t.name));
+    expect(Object.keys(retiredToolNames()).filter((name) => live.has(name))).toEqual([]);
   });
 });

@@ -133,7 +133,7 @@ The shape is identical (in-app SDK in the template → verify in the sandbox →
 2. Since the runtime is in-browser, drive via the connected session (the SDK dials the bridge) rather than `--drive`; call verify from the Bolt agent after a build.
 3. Same act-on-verdict: gate + self-heal with the repair packets. (Bolt already detects terminal/compile errors; Reticle adds the _runtime program-truth_ layer it's blind to.)
 
-> Honest note: a platform can build a verification step itself. Reticle's case is the depth (program-state and source mapping), the determinism (0% flake, no LLM in the loop), the un-hallucinatable verdict, and a stable drop-in artifact. The reproducible benchmark in [`bench/`](../bench/README.md) measures the observation-cost and detection differences against other browser-automation MCPs.
+> Honest note: a platform can build a verification step itself. Reticle's case is the depth (program-state and source mapping), the determinism (0% flake, no LLM in the loop), the un-hallucinatable verdict, and a stable drop-in artifact. The reproducible benchmark in [`bench/`](https://github.com/reticlehq/reticle/blob/main/bench/README.md) measures the observation-cost and detection differences against other browser-automation MCPs.
 
 ---
 

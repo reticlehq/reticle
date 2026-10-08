@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ElementState } from '@reticlehq/core';
-import { isInViewport } from './a11y.js';
+import { isInViewport, isVisible } from './a11y.js';
 import { matchQuery } from './query.js';
 
 /**
@@ -58,6 +58,62 @@ describe('isInViewport (#398)', () => {
     expect(
       isInViewport(boxed({ top: 100, left: 100, bottom: 100, right: 100, width: 0, height: 0 })),
     ).toBe(false);
+  });
+
+  it('keeps an off-window box visible when no ancestor clips it', () => {
+    const el = boxed({ top: 2000, left: 100, bottom: 2120, right: 260, width: 160, height: 120 });
+    expect(isVisible(el)).toBe(true);
+    expect(isInViewport(el)).toBe(false);
+  });
+
+  it.each(['auto', 'scroll'])(
+    'keeps overflow:%s viewport checks relative to the window',
+    (overflow) => {
+      const scrollport = boxed({
+        top: 0,
+        left: 0,
+        bottom: 100,
+        right: 100,
+        width: 100,
+        height: 100,
+      });
+      scrollport.style.overflow = overflow;
+      scrollport.style.overflowX = overflow;
+      scrollport.style.overflowY = overflow;
+      const el = boxed({ top: 120, left: 10, bottom: 140, right: 90, width: 80, height: 20 });
+      scrollport.append(el);
+      expect(isVisible(el)).toBe(true);
+      expect(isInViewport(el)).toBe(true);
+      el.getBoundingClientRect = () => new DOMRect(10, 2000, 80, 20);
+      expect(isVisible(el)).toBe(true);
+      expect(isInViewport(el)).toBe(false);
+    },
+  );
+
+  it('excludes fully clipped boxes inside the window while retaining partial overlaps', () => {
+    const clip = boxed({ top: 0, left: 0, bottom: 100, right: 100, width: 100, height: 100 });
+    clip.style.overflow = 'hidden';
+    clip.style.overflowX = 'hidden';
+    clip.style.overflowY = 'hidden';
+    const el = boxed({ top: 120, left: 10, bottom: 140, right: 90, width: 80, height: 20 });
+    el.dataset.testid = 'clipped';
+    clip.append(el);
+    expect(isInViewport(el)).toBe(false);
+    expect(matchQuery({ testid: 'clipped' }, ElementState.IN_VIEWPORT).count).toBe(0);
+    el.getBoundingClientRect = () => new DOMRect(10, 90, 80, 20);
+    expect(isInViewport(el)).toBe(true);
+    expect(matchQuery({ testid: 'clipped' }, ElementState.IN_VIEWPORT).count).toBe(1);
+  });
+
+  it('requires the portion surviving ancestor clipping to intersect the viewport', () => {
+    const clip = boxed({ top: 10, left: -100, bottom: 30, right: -50, width: 50, height: 20 });
+    clip.style.overflow = 'hidden';
+    clip.style.overflowX = 'hidden';
+    clip.style.overflowY = 'hidden';
+    const el = boxed({ top: 10, left: -100, bottom: 30, right: 100, width: 200, height: 20 });
+    clip.append(el);
+    expect(isVisible(el)).toBe(true);
+    expect(isInViewport(el)).toBe(false);
   });
 
   it('the element predicate filters by inViewport end to end', () => {

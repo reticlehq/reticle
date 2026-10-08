@@ -64,10 +64,11 @@ const NAME_FROM_CONTENT = new Set([
   'alert',
 ]);
 
-const INPUT_TEXT_TYPES = new Set(['text', 'email', 'tel', 'url', 'search', 'password', '']);
+const INPUT_TEXT_TYPES = new Set(['text', 'email', 'tel', 'url', 'password', '']);
 
 function inputRole(input: HTMLInputElement): string {
   const type = input.type.toLowerCase();
+  if ('search' === type) return 'searchbox';
   if (INPUT_TEXT_TYPES.has(type)) return 'textbox';
   if ('checkbox' === type) return 'checkbox';
   if ('radio' === type) return 'radio';
@@ -410,17 +411,26 @@ function hiddenInsideClosedDetails(el: Element): boolean {
 }
 
 /**
+ * Opacity 0 because a fade-in is stalled, not because the app hides it. A hidden tab's animations do
+ * not advance, so a fading element sits at its first frame and every "visible?" asked of it disagreed
+ * with the element being rendered (#793). Only on a hidden tab, and only with an animation still live
+ * on the element; at rest, opacity 0 is hidden.
+ */
+function stalledFade(el: Element): boolean {
+  if (!el.ownerDocument.hidden || !('getAnimations' in el)) return false;
+  return el.getAnimations().some((a) => 'running' === a.playState || a.pending);
+}
+
+/**
  * Whether the element's OWN box hides it — one forced-style resolution, no composed ancestor
  * walk. The one ancestor reading is `hiddenInsideClosedDetails`, which consults only the nearest
  * `<details>` boundary; composing the chain is still isVisible's job.
  */
-function selfHidden(el: Element): boolean {
+function selfHidden(el: Element, style: CSSStyleDeclaration | null): boolean {
   if ('true' === el.getAttribute('aria-hidden')) return true;
   if (isHtmlElement(el) && el.hidden) return true;
   if (hiddenInsideClosedDetails(el)) return true;
-  const view = el.ownerDocument.defaultView;
-  if (view !== null) {
-    const style = view.getComputedStyle(el);
+  if (style !== null) {
     if (
       'none' === style.display ||
       'hidden' === style.visibility ||
@@ -428,7 +438,7 @@ function selfHidden(el: Element): boolean {
     ) {
       return true;
     }
-    if (0 === Number.parseFloat(style.opacity || '1')) return true;
+    if (0 === Number.parseFloat(style.opacity || '1') && !stalledFade(el)) return true;
   }
   return false;
 }
@@ -472,41 +482,290 @@ function parentAcrossShadowBoundary(el: Element): Element | null {
   return host ?? null;
 }
 
+const CLIPPING_OVERFLOW = new Set(['hidden', 'clip']);
+const NON_CLIPPING_DISPLAY = new Set([
+  'contents',
+  'table-row',
+  'table-row-group',
+  'table-header-group',
+  'table-footer-group',
+  'table-column',
+  'table-column-group',
+]);
+const TRANSFORM_CONTAINING_BLOCK_PROPERTIES = new Set([
+  'transform',
+  'translate',
+  'rotate',
+  'scale',
+  'perspective',
+]);
+const CONTAINING_BLOCK_PROPERTIES = new Set([
+  ...TRANSFORM_CONTAINING_BLOCK_PROPERTIES,
+  'filter',
+  'backdrop-filter',
+]);
+const CONTAINING_BLOCK_CONTAIN = new Set(['layout', 'paint', 'strict', 'content']);
+const REPLACED_INLINE_TAGS = new Set([
+  'img',
+  'video',
+  'audio',
+  'canvas',
+  'iframe',
+  'embed',
+  'object',
+  'input',
+  'textarea',
+  'select',
+]);
+
+type VisibleBounds = Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom' | 'width' | 'height'>;
+interface VisibilityInfo {
+  hidden: boolean;
+  style: CSSStyleDeclaration | null;
+  parent: Element | null;
+  clipX: boolean;
+  clipY: boolean;
+  hasClipping: boolean;
+  clipBox?: VisibleBounds;
+}
+
+// Keyed by the caller's ONE synchronous pass, so shared style/box reads live exactly as long as
+// that pass. The boolean memo still stores only the result for the target itself: a parent's box
+// can be clipped while a descendant overflowing back into the clipping region remains visible.
+const visibilityInfoMemos = new WeakMap<Map<Element, boolean>, Map<Element, VisibilityInfo>>();
+
+function visibilityInfoMemo(memo?: Map<Element, boolean>): Map<Element, VisibilityInfo> {
+  if (memo === undefined) return new Map();
+  let info = visibilityInfoMemos.get(memo);
+  if (info === undefined) {
+    info = new Map();
+    visibilityInfoMemos.set(memo, info);
+  }
+  return info;
+}
+
+function ownVisibilityInfo(el: Element, memo: Map<Element, VisibilityInfo>): VisibilityInfo {
+  let info = memo.get(el);
+  if (info === undefined) {
+    const style = el.ownerDocument.defaultView?.getComputedStyle(el) ?? null;
+    // Own hiding needs no ancestor metadata: preserve the early return for hidden targets,
+    // including deeply nested ones. This cached CSS result never stands for clipped geometry.
+    if (selfHidden(el, style)) {
+      info = { hidden: true, style, parent: null, clipX: false, clipY: false, hasClipping: false };
+      memo.set(el, info);
+      return info;
+    }
+    const parent = parentAcrossShadowBoundary(el);
+    const inherited = null === parent ? undefined : ownVisibilityInfo(parent, memo);
+    const [overflowX, overflowY] = overflowAxes(style);
+    const root = el.ownerDocument.documentElement;
+    // Root/body overflow propagated to the viewport stays separate from element visibility.
+    const viewportOverflow =
+      el === root ||
+      (el === el.ownerDocument.body &&
+        overflowAxes(ownVisibilityInfo(root, memo).style).every((axis) => 'visible' === axis));
+    const hasClipBox =
+      !viewportOverflow &&
+      !NON_CLIPPING_DISPLAY.has(style?.display ?? '') &&
+      !(isHtmlElement(el) && 'inline' === style?.display);
+    const clipX = hasClipBox && CLIPPING_OVERFLOW.has(overflowX);
+    const clipY = hasClipBox && CLIPPING_OVERFLOW.has(overflowY);
+    info = {
+      hidden: true === inherited?.hidden,
+      style,
+      parent,
+      clipX,
+      clipY,
+      hasClipping: clipX || clipY || true === inherited?.hasClipping,
+    };
+    memo.set(el, info);
+  }
+  return info;
+}
+
+function overflowAxes(style: CSSStyleDeclaration | null): [string, string] {
+  const shorthand = style?.overflow ?? '';
+  const [x = 'visible', y = x] = ('' === shorthand ? 'visible' : shorthand).split(/\s+/);
+  return [
+    null === style || '' === style.overflowX ? x : style.overflowX,
+    null === style || '' === style.overflowY ? y : style.overflowY,
+  ];
+}
+
+function positionedContainingBlock(
+  el: Element,
+  fixed: boolean,
+  memo: Map<Element, VisibilityInfo>,
+): Element | null {
+  for (
+    let parent = ownVisibilityInfo(el, memo).parent;
+    parent !== null;
+    parent = ownVisibilityInfo(parent, memo).parent
+  ) {
+    const style = ownVisibilityInfo(parent, memo).style;
+    if (null === style || 'contents' === style.display) continue;
+    if (!fixed && '' !== style.position && 'static' !== style.position) return parent;
+    // Transforms/containment do not apply to ordinary inline boxes. Filters still establish
+    // containing blocks there; individual identity transforms do on transformable boxes.
+    const transformable =
+      !(
+        'inline' === style.display &&
+        isHtmlElement(parent) &&
+        !REPLACED_INLINE_TAGS.has(parent.localName)
+      ) &&
+      'table-column' !== style.display &&
+      'table-column-group' !== style.display;
+    const applies = (property: string): boolean =>
+      transformable || !TRANSFORM_CONTAINING_BLOCK_PROPERTIES.has(property);
+    if (
+      [...CONTAINING_BLOCK_PROPERTIES].some((property) => {
+        const value = style.getPropertyValue(property);
+        return applies(property) && '' !== value && 'none' !== value;
+      }) ||
+      style.willChange
+        .split(',')
+        .some(
+          (property) =>
+            CONTAINING_BLOCK_PROPERTIES.has(property.trim()) && applies(property.trim()),
+        ) ||
+      (transformable &&
+        !NON_CLIPPING_DISPLAY.has(style.display) &&
+        (style.contain.split(/\s+/).some((value) => CONTAINING_BLOCK_CONTAIN.has(value)) ||
+          'auto' === style.contentVisibility))
+    )
+      return parent;
+  }
+  return null;
+}
+
+function clippingBox(el: Element, info: VisibilityInfo): VisibleBounds {
+  if (info.clipBox !== undefined) return info.clipBox;
+  const rect = el.getBoundingClientRect();
+  const style = info.style;
+  const px = (value: string | undefined): number => Number.parseFloat(value ?? '') || 0;
+  const border = (value: string | undefined, kind: string | undefined): number =>
+    kind === undefined || '' === kind || 'none' === kind || 'hidden' === kind ? 0 : px(value);
+  const scaleX = isHtmlElement(el) && el.offsetWidth > 0 ? rect.width / el.offsetWidth : 1;
+  const scaleY = isHtmlElement(el) && el.offsetHeight > 0 ? rect.height / el.offsetHeight : 1;
+  const left =
+    isHtmlElement(el) && el.offsetWidth > 0
+      ? rect.left + el.clientLeft * scaleX
+      : rect.left + border(style?.borderLeftWidth, style?.borderLeftStyle);
+  const top =
+    isHtmlElement(el) && el.offsetHeight > 0
+      ? rect.top + el.clientTop * scaleY
+      : rect.top + border(style?.borderTopWidth, style?.borderTopStyle);
+  const right =
+    isHtmlElement(el) && el.offsetWidth > 0
+      ? left + el.clientWidth * scaleX
+      : rect.right - border(style?.borderRightWidth, style?.borderRightStyle);
+  const bottom =
+    isHtmlElement(el) && el.offsetHeight > 0
+      ? top + el.clientHeight * scaleY
+      : rect.bottom - border(style?.borderBottomWidth, style?.borderBottomStyle);
+  const margin = (style?.overflowClipMargin ?? '').split(/\s+/);
+  const outset = px(margin.at(-1));
+  const borderBox = margin.includes('border-box');
+  const contentBox = margin.includes('content-box');
+  const [x, y] = overflowAxes(style);
+  const clipLeft =
+    'clip' === x
+      ? (borderBox ? rect.left : left + (contentBox ? px(style?.paddingLeft) * scaleX : 0)) -
+        outset * scaleX
+      : left;
+  const clipRight =
+    'clip' === x
+      ? (borderBox ? rect.right : right - (contentBox ? px(style?.paddingRight) * scaleX : 0)) +
+        outset * scaleX
+      : right;
+  const clipTop =
+    'clip' === y
+      ? (borderBox ? rect.top : top + (contentBox ? px(style?.paddingTop) * scaleY : 0)) -
+        outset * scaleY
+      : top;
+  const clipBottom =
+    'clip' === y
+      ? (borderBox ? rect.bottom : bottom - (contentBox ? px(style?.paddingBottom) * scaleY : 0)) +
+        outset * scaleY
+      : bottom;
+  info.clipBox = {
+    left: clipLeft,
+    right: clipRight,
+    top: clipTop,
+    bottom: clipBottom,
+    width: clipRight - clipLeft,
+    height: clipBottom - clipTop,
+  };
+  return info.clipBox;
+}
+
+/** Undefined means no box was needed; null means hidden. Only real clipping reads layout. */
+function visibleBounds(
+  el: Element,
+  memo: Map<Element, VisibilityInfo>,
+  initial?: VisibleBounds,
+): VisibleBounds | null | undefined {
+  let bounds = initial;
+  const target = ownVisibilityInfo(el, memo);
+  if (target.hidden) return null;
+  // CSS hiding composes, geometry does not. An unclipped ancestor chain needs no layout reads
+  // or repeated walk; a clipped parent can still have a descendant overflowing back into view.
+  if (null === target.parent || !ownVisibilityInfo(target.parent, memo).hasClipping) return bounds;
+  let clipFrom: Element | null | undefined;
+  for (
+    let current: Element | null = el;
+    current !== null;
+    current = ownVisibilityInfo(current, memo).parent
+  ) {
+    const info = ownVisibilityInfo(current, memo);
+    if (info.hidden) return null;
+    if (current === clipFrom) clipFrom = undefined;
+    const style = info.style;
+    if (current !== el && undefined === clipFrom && (info.clipX || info.clipY)) {
+      bounds ??= el.getBoundingClientRect();
+      // Preserve the existing visibility semantics for elements without an own layout box
+      // (including display:contents); inViewport still requires a positive-size box.
+      if (bounds.width > 0 && bounds.height > 0) {
+        const clip = clippingBox(current, info);
+        const left = info.clipX ? Math.max(bounds.left, clip.left) : bounds.left;
+        const right = info.clipX ? Math.min(bounds.right, clip.right) : bounds.right;
+        const top = info.clipY ? Math.max(bounds.top, clip.top) : bounds.top;
+        const bottom = info.clipY ? Math.min(bounds.bottom, clip.bottom) : bounds.bottom;
+        if (right <= left || bottom <= top) return null;
+        bounds = { left, right, top, bottom, width: right - left, height: bottom - top };
+      }
+    }
+    // Positioned subtrees escape clips before their containing block. Find it in the composed
+    // tree: offsetParent is retargeted outside shadow roots and misses positioned slot wrappers.
+    if (clipFrom === undefined && ('absolute' === style?.position || 'fixed' === style?.position)) {
+      clipFrom = positionedContainingBlock(current, 'fixed' === style?.position, memo);
+    }
+  }
+  return bounds;
+}
+
 /**
- * Whether the element is actually visible (not display:none/hidden/aria-hidden/opacity:0/inside a
- * closed `<details>`), walking to root across shadow boundaries. This is an O(depth) forced-style
- * walk PER node; `memo` (optional, scoped to ONE synchronous query pass) caches the full inherited
- * result per element so a broad state-filtered query stops re-resolving getComputedStyle up the
- * same ancestor chain for every sibling. Sound because the DOM is static for the pass's duration —
- * the cache MUST be a per-call Map, never module-level (that would go stale the instant the app
- * mutates, the same trap the shadow-root note in query.ts documents).
- */
-/**
- * True when the element is inside the viewport right now: visible AND its bounding box intersects
- * the window. This is what makes a scroll assertable (#398) — content below the fold of a scrolling
- * container is `visible`/`present` before any scroll, so only a viewport-intersection check can tell
- * "scrolled into view" from "was always in the DOM". Uses getBoundingClientRect (viewport-relative,
- * already accounts for scroll position), not an IntersectionObserver, so it stays synchronous inside
- * the predicate pass.
+ * True when the visible portion of the element's box intersects the window. Ordinary off-window
+ * document content remains `visible`/`present`, so this separate state makes a scroll assertable
+ * (#398). getBoundingClientRect already accounts for scrolling; ancestor clips further constrain
+ * the region that can intersect the viewport. The check stays synchronous inside the predicate pass.
  */
 export function isInViewport(el: Element, memo?: Map<Element, boolean>): boolean {
   if (!isVisible(el, memo)) return false;
   const view = el.ownerDocument.defaultView;
   if (null === view) return false;
-  const r = el.getBoundingClientRect();
+  const r = visibleBounds(el, visibilityInfoMemo(memo), el.getBoundingClientRect());
+  if (null === r || undefined === r) return false;
   if (r.width <= 0 || r.height <= 0) return false;
   return r.bottom > 0 && r.right > 0 && r.top < view.innerHeight && r.left < view.innerWidth;
 }
 
+/** Visibility combines inherited CSS/ARIA hiding with this target's surviving clipping region. */
 export function isVisible(el: Element, memo?: Map<Element, boolean>): boolean {
   if (!el.isConnected) return false;
   const cached = memo?.get(el);
   if (cached !== undefined) return cached;
-  const parent = parentAcrossShadowBoundary(el);
-  // Each cached boolean already folds in that node's own aria-hidden/[hidden]/display/visibility/opacity,
-  // so inherited visibility composes by AND up the chain and a sibling short-circuits at the first
-  // cached ancestor.
-  const result = !selfHidden(el) && (null === parent || isVisible(parent, memo));
+  const result = visibleBounds(el, visibilityInfoMemo(memo)) !== null;
   if (memo !== undefined) memo.set(el, result);
   return result;
 }

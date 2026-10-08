@@ -22,10 +22,16 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { Verified } from '@reticlehq/core';
+import { Verified, VerifiedReason } from '@reticlehq/core';
 import { decideVerified } from './verified.js';
 import { buildHonestyBlock, HonestyGrade } from './honesty.js';
-import { readsDomState, alreadyTrueHiddenMatch } from './already-true.js';
+import {
+  readsDomState,
+  alreadyTrueHiddenMatch,
+  hiddenMatchNote,
+  HIDDEN_MATCH_NOTE,
+} from './already-true.js';
+import type { Predicate } from '@/question/predicate/predicate.js';
 
 const clean = buildHonestyBlock({ grade: HonestyGrade.PRESENCE, attribution: 'window' });
 
@@ -201,5 +207,56 @@ describe('which predicates need the before-check at all (combinators)', () => {
     expect(readsDomState({ kind: 'anyOf', predicates: [{ kind: 'signal', name: 'a' }] })).toBe(
       false,
     );
+  });
+});
+
+/**
+ * #1408: a `text` check passed on `<p hidden>Thank you</p>` beside a `net` clause, as a clean `yes`.
+ * The hidden-match caveat above ran only when the whole `until` was already true, and a `net` clause
+ * can never be. So the same test now runs on the post-action evidence of every clause that held.
+ */
+describe('hiddenMatchNote — did a green rest on a match nobody can see', () => {
+  const hidden = { ref: 'e1', role: 'paragraph', name: 'Thank you', visible: false };
+  const visible = { ref: 'e2', role: 'paragraph', name: 'Thank you', visible: true };
+  const text: Predicate = { kind: 'text', contains: 'Thank you' };
+  const net: Predicate = { kind: 'net', method: 'POST', urlContains: '/submit', status: 200 };
+  const both: Predicate = { kind: 'allOf', predicates: [net, text] };
+  const posted = { matched: 1 };
+
+  it('names the hidden match and `visible: true` inside an allOf beside a net clause', () => {
+    const note = hiddenMatchNote(both, [posted, [hidden]]);
+    expect(note).toContain('hidden');
+    expect(note).toContain('visible: true');
+  });
+
+  it('names a bare text match that is hidden', () => {
+    expect(hiddenMatchNote(text, [hidden])).toContain('visible: true');
+  });
+
+  it('is silent for a visible match, and for one visible match among several hidden', () => {
+    expect(hiddenMatchNote(both, [posted, [visible]])).toBeUndefined();
+    expect(hiddenMatchNote(text, [hidden, visible, hidden])).toBeUndefined();
+  });
+
+  it('is silent when the caller already asked for visibility, or for a state', () => {
+    expect(
+      hiddenMatchNote({ kind: 'text', contains: 'Thank you', visible: true }, [hidden]),
+    ).toBeUndefined();
+    expect(
+      hiddenMatchNote({ kind: 'element', query: { testid: 'x' }, state: 'hidden' }, [hidden]),
+    ).toBeUndefined();
+  });
+
+  it('grades a green that rests on it unknown, never yes', () => {
+    expect(hiddenMatchNote(both, [posted, [hidden]])).toBe(HIDDEN_MATCH_NOTE);
+    const verdict = decideVerified({
+      pass: true,
+      honesty: clean,
+      settled: true,
+      hiddenMatch: HIDDEN_MATCH_NOTE,
+    });
+    expect(verdict.verified).toBe(Verified.UNKNOWN);
+    expect(verdict.verifiedReason).toBe(VerifiedReason.HIDDEN_MATCH);
+    expect(verdict.because).toContain('visible: true');
   });
 });

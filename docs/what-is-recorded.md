@@ -5,7 +5,7 @@ description: What Reticle keeps on your machine, what is redacted, and what it t
 
 Reticle drives your app and reads what it did. That means it holds real content from real pages, so this page says exactly what it keeps, where it keeps it, and what it takes to make any of it leave.
 
-If you read one line: **a verdict is entirely local and needs no account.** Nothing from your project is sent anywhere until you run `reticle login` and `reticle link`. Without them there is nowhere for it to go. (Anonymous usage counts, which carry nothing from your app, are separate and described in [Telemetry](telemetry.md).)
+If you read one line: **a verdict is entirely local and needs no account.** Nothing from your app leaves the machine until you link a project (`reticle connect`, or `RETICLE_API_KEY` in CI). After that, what syncs is set by `reticle config`, and when the Harness drives, the platform sees the steps it drives. Secret values never leave. (Anonymous usage counts, which carry nothing from your app, are separate and described in [Telemetry](telemetry.md).)
 
 ## On your machine
 
@@ -15,7 +15,7 @@ Everything lands in `.reticle/` in your project, and it is yours. Three kinds of
 | --- | --- | --- |
 | **runs** | a verdict and its evidence | what was claimed, whether it held, the request or state change that decided it, and the `file:line` of the element driven |
 | **flows** | a journey you drove, saved so it can be replayed | the steps, the anchors they resolve by, and the values that were typed |
-| **memory** | what this project has learned across sessions | intents you declared, envelopes of normal behaviour, notes about anchors that drift |
+| **memory** | what this project has learned across sessions | intents you declared, envelopes of normal behaviour, notes about anchors that drift, the coverage ledger (`coverage.json`), the notes people pinned in the HUD (`notes.json`), and the user's latest request as the agent relayed it (`request.json`, local only) |
 
 `.reticle/` splits into a part meant for git and a part meant to stay local. Flows are the part worth committing: a saved flow is a regression test. Evidence is the part that is not.
 
@@ -39,6 +39,14 @@ Once linked, you choose what syncs:
 npx @reticlehq/server config --runs on|off --flows on|off --memory on|off
 ```
 
+`--memory` covers the coverage ledger and the HUD notes as well, and the notes are the words people typed. The user's request (`request.json`, the prompt the agent relayed, redacted) goes to the platform with the runs from a linked project, so the dashboard can show what each run was for; `"shareRequests": false` in `.reticle.json` keeps it on the machine. An unlinked project sends it nowhere, and it is kept out of git either way.
+
+The Harness runs on the platform, so the platform sees what it drives: each step's result goes there so it can choose the next one. A secret field is sent by name only; its value is typed in on your machine.
+
+**Your apps, for the platform's chat.** While a project is linked, the daemon tells the platform every ten seconds, with or without an app open, which apps on this machine have Reticle connected, so the chat can list them and you can pick one instead of typing an address. For each app it sends: a key made from a hash of this machine and the project's folder (the folder path itself never leaves), the project's name (its package name, else its folder's name), the address the app is open at with Reticle's own query parameters removed, the page title, what it is built with (`react`, `vite`, `electron`, …), this machine's name, the Reticle version, and what this daemon can do for the platform. The platform keeps the last report for each app until the project is deleted. Its answer can ask this machine to open one of those apps again, or show you a short notice (for example, to update Reticle), which appears in the daemon's log and on the HUD.
+
+**Drives asked for from the platform's chat.** When someone in your workspace asks the chat to drive one of your apps, the daemon drives it here, on your machine: in the tab you have open, or in a browser of its own, headless or in a window, as the chat asked. It only opens addresses on this machine or apps already open here. On a recent platform, the platform decides each step: it sends Reticle tool calls from a fixed list (reading the page, acting on it, asserting, recording and replaying flows), the daemon runs them in that one tab, and sends back what each returned, which includes what the page showed. On an older platform, the daemon drives and sends back each step's result and how the drive ended. Either way the platform keeps the drive as a check you can open in Runs. Unless the request said not to record, the daemon also sends a picture of the tab it is driving, a JPEG about once a second, so the chat can show the drive live and replay it afterwards. Pictures are kept with that check (at most a few minutes' worth per drive) and deleted with the project. A tab the daemon opened, headless or in a window, can be pictured, with Reticle's own panel left out; so can the window `reticle drive` opened, which is pictured as you see it, panel included. A tab in your own browser sends steps only. Unlinking the project stops all of it.
+
 ## Telemetry, which is separate from all of the above
 
 The CLI sends anonymous usage events: event names and a random installation id. No code, no page content, no URLs from your app. It is how we know which parts of the product are reached at all.
@@ -49,7 +57,9 @@ DO_NOT_TRACK=1               # the convention, honoured
 npx @reticlehq/server telemetry disable   # this machine, permanently
 ```
 
-Feedback is the only free text that ever leaves, it is never collected passively, and `RETICLE_FEEDBACK=0` disables it.
+Telemetry carries no free text. Free text leaves in three ways, each one something you chose: a feedback report (never collected passively; `RETICLE_FEEDBACK=0` disables it), HUD notes on a linked project with `--memory on`, and the user's request from a linked project unless `"shareRequests": false`.
+
+The daemon also fetches a small public file, `https://reticle.sh/hud/notices.v1.json`, for the notices in the HUD's rail. The request carries nothing about you or your project. `RETICLE_TELEMETRY=0` or `DO_NOT_TRACK=1` stops it, and `RETICLE_HUD_NOTICES_URL` points it elsewhere.
 
 ## What `init` writes to your project
 

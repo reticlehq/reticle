@@ -1,7 +1,7 @@
 {
   "name": "@reticlehq/example-next",
   "private": true,
-  "version": "3.5.0",
+  "version": "3.6.0",
   "description": "Minimal Next.js (App Router) app — verifies Reticle via withReticle + a dev-only client connect.",
   "scripts": {
     "dev": "next dev --webpack -p 5302",
@@ -10,7 +10,7 @@
   "dependencies": {
     "@reticlehq/next": "workspace:*",
     "@reticlehq/react": "workspace:*",
-    "next": "^16.3.6",
+    "next": "^16.3.8",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

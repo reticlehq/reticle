@@ -73,12 +73,18 @@ describe('the tour says what to do when it ends', () => {
     }
   });
 
-  it('names the command that instruments a project, which is what the reader still lacks', () => {
-    expect(tutorialNextSteps(TutorialAudience.HUMAN)).toContain('reticle init');
+  // Installation wires nothing; the first time the agent uses Reticle in a project, it does.
+  it('says what comes next: ask the agent, which wires the app on first use', () => {
+    const next = tutorialNextSteps(TutorialAudience.HUMAN);
+    expect(next).toContain('Ask your agent to verify one real flow');
+    expect(next).toContain('Reticle wires the app');
+    expect(next).not.toContain('reticle init');
   });
 
   it('renders that closing block, so it is not merely available to callers', () => {
-    expect(renderTutorial(TutorialAudience.HUMAN)).toContain('reticle init');
+    expect(renderTutorial(TutorialAudience.HUMAN)).toContain(
+      'Ask your agent to verify one real flow',
+    );
   });
 });
 
@@ -113,7 +119,7 @@ describe('the installer shows the tour, every time', () => {
 
   it('does not point at a panel nobody can see yet', () => {
     expect(installClosing()).not.toContain('That panel is Reticle');
-    expect(installClosing()).toContain('Once `reticle init` wires your app');
+    expect(installClosing()).toContain('The first time your agent uses Reticle in a project');
   });
 
   it('keeps the reasons for `reticle tutorial`, one line a step here', () => {
@@ -124,8 +130,8 @@ describe('the installer shows the tour, every time', () => {
     expect(installClosing()).not.toContain('reticle tutorial');
   });
 
-  it('leaves the reader knowing the one command that comes next', () => {
-    expect(installClosing()).toContain('reticle init');
+  it('leaves the reader knowing what comes next, and that the install changed no app', () => {
+    expect(installClosing()).toContain('Nothing in your app changed at install');
   });
 
   // The regression that matters: anything that makes this depend on the environment brings back a

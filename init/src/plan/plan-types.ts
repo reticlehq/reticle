@@ -240,10 +240,12 @@ export interface PlanInput {
   /** The generated `reticle.proxy.mjs`, when a previous run left one (idempotency). */
   angularProxySource?: string | null | undefined;
   /**
-   * The plain-HTML app's `index.html`, when it has one — so a re-run over a page that already
-   * carries the connect snippet reports it as done instead of "will NOT connect".
+   * The plain-HTML app's `index.html`, when it has one — patched on the first run, recognised on
+   * later runs, and left manual only when there is no page to write into.
    */
   htmlIndexSource?: string | null | undefined;
+  /** Current token module and .gitignore beside the HTML page, for idempotent token-file writes. */
+  htmlLocalSources?: Record<string, string | null> | undefined;
   /** CRA's bundled entry (src/index.tsx or .js) — where the connect import has to go. */
   craEntry?: { path: string; source: string } | null;
   /** Existing .env.development.local, so an unrelated variable in it survives. */

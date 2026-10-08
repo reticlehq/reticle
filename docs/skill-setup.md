@@ -6,7 +6,7 @@ icon: wrench
 
 You only need this page while you are setting Reticle up, which happens once per project. Once an app is connected, the everyday loop lives in `SKILL.md` and you never need to come back here.
 
-**One command. It does all of it, and it ends with a verdict.**
+**One command. It wires the app and proves a session connected. The verdict is the first run, after it.**
 
 ```bash
 RETICLE_INSTALL_SOURCE=skill_file npx @reticlehq/server@latest init
@@ -14,7 +14,7 @@ RETICLE_INSTALL_SOURCE=skill_file npx @reticlehq/server@latest init
 
 `@latest` is deliberate: `npx` caches, and a stale cached CLI is the most common silent setup failure. Never pin a version here.
 
-That single command detects the framework and package manager, wires the build config, installs the SDK, registers the MCP server, starts the dev server, opens the app, and waits for a session to connect from inside it. It exits non-zero if nothing connected, and prints exactly what is left to do. Then prove a flow. That is the FIRST RUN, and it is a separate call: `reticle_verify { action: "explore", persona: "<who does what>" }`. It drives with a model inside the daemon and records what it drove, so later checks replay it with no model in the loop.
+That single command detects the framework and package manager, wires the build config, installs the SDK, registers the MCP server, starts the dev server, opens the app, and waits for a session to connect from inside it. It exits non-zero if nothing connected, and prints exactly what is left to do. Then prove a flow. That is the FIRST RUN, and it is a separate call: drive one journey with `reticle_act_and_wait` and an `until` on its last step. On a project linked with `reticle connect`, `reticle_verify { action: "explore", persona: "<who does what>" }` lets the Reticle Harness drive it on the platform instead. Either way what was driven is saved as a flow, so later checks replay it with no model in the loop.
 
 ## What YOU decide, and pass in
 
@@ -34,7 +34,7 @@ The command reads the repository. It cannot read the request, and three things l
 
 `⚠` lines and a non-zero exit are a to-do list, not a failed install. The command names the cause and prints the REMAINING steps from wherever it stopped, and it will not tell you to redo a phase that already worked. Do those, and re-run; re-running is safe.
 
-**It is not finished until a verdict exists.** Writing files is not an install, and neither is a connected session. If it exits non-zero, the app is wired and something is still outstanding; say so plainly rather than reporting success.
+**It is not finished until a verdict exists.** A session listed means the SDK reached the page. Setup is finished when the first run returns a verdict. Writing files is not an install. If it exits non-zero, the app is wired and something is still outstanding; say so plainly rather than reporting success.
 
 **If the user gave you a license key**, see [License key](#license-key) below.
 
@@ -48,7 +48,7 @@ Use it only when ONE of these is true, and you can say which:
 
 - `init` exited without ever printing `starting:` or `▸ WATCH`, which means the CLI on this machine predates the runtime phases and stopped after writing files.
 - `init` printed a to-do list, you did those things, re-ran it, and it stopped in the same place twice.
-- There is no Node 18 or newer on this machine, so nothing can run.
+- There is no Node 20.11 or newer on this machine, so nothing can run.
 
 Anything else is not a reason: not a `⚠` in the report, not a step you would rather do yourself, not a feeling that you should check its work. Re-run the command. It is idempotent, it reports what is already wired, and it names what is still outstanding.
 

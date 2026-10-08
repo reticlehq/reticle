@@ -25,32 +25,31 @@ MCP is **pull-based**: the agent only receives data when it calls a tool. Reticl
 The floating panel (bottom-center, `present: true`) gives you:
 
 - **Pause / Resume**: one toggle. Paused turns the panel + page border **amber** with a `PAUSED` badge.
-- **Message box + send.** Type a correction ("check the error state first"), hit Send (or Enter). Your message shows as a `🧑 you:` bubble in the transcript **and** is delivered to the agent.
 - **End** ends the session: panel turns **emerald**, shows `Session ended · <summary>`, then fades away.
 - **Minimise (▾)** collapses the panel to a bar that streams only the live line; click the bar to restore.
-- **Flag a bug**, the button in the corner. Toggle it on, click the element that looks wrong, type what's wrong (⌘/Ctrl+Enter to send, Esc to back out). Reticle pins a numbered marker, logs your flag in the panel, and hands the agent a structured mark.
+- **Flag a bug**, the button in the corner. Toggle it on, click the element that looks wrong, type what's wrong (⌘/Ctrl+Enter to send, Esc to back out). Reticle pins a numbered marker, logs your flag in the panel, and hands the agent a structured mark. Notes are kept in `.reticle/notes.json` (pending and resolved), so a reload or a daemon restart does not lose them, and a linked project syncs them to the dashboard.
 
 ## Flag a bug: annotate the mistake where you see it
 
 You don't have to describe a bug in prose. **Point at it.** The flag captures the element's re-resolvable anchor _and_ the source `file:line` (when the framework stamped one), so the agent fixes the exact element and code, not a guess. The loop:
 
 1. **You** flag the element and type the problem → Reticle emits a `HUMAN_MARK`.
-2. **The agent** drains it with `reticle_session {action:"review"}`, getting note + element label + `source: { file, line }` + a ready-to-act `fix` hint. `reticle_session { action: "list" }` also reports `pendingMarks` so the agent notices flags.
-3. **The agent** opens the file, fixes it, and calls `reticle_session {action:"review"}({ resolve: "m1" })`.
+2. **The agent** drains it with `reticle_session { action: "review" }`, getting note + element label + `source: { file, line }` + a ready-to-act `fix` hint. `reticle_session { action: "list" }` also reports `pendingMarks` so the agent notices flags.
+3. **The agent** opens the file, fixes it, and calls `reticle_session({ action: "review", resolve: "m1" })`.
 4. **You** see **"✓ fixed: \<your note\>"** land in the panel. Flag → fix → confirmation.
 
-See [`reticle_session {action:"review"}` in the usage guide](/usage) for the tool shape. Suppress the button with `annotate: false` if you don't want it.
+See [`reticle_session { action: "review" }` in the usage guide](/usage) for the tool shape. Suppress the button with `annotate: false` if you don't want it.
 
 ## From the agent (the tools)
 
 | Tool | Args | Effect |
 | --- | --- | --- |
-| `reticle_session {action:"end"}` | `{ summary?, sessionId? }` | end the session; the panel shows "Session ended · summary" |
-| `reticle_session {action:"resume"}` | `{ sessionId? }` | clear a pause and continue |
-| `reticle_session {action:"messages"}` | `{ sessionId? }` | drain + read pending human messages (explicit poll) |
-| `reticle_session {action:"review"}` | `{ resolve?, all?, sessionId? }` | list the bugs the human flagged; resolve one once fixed |
+| `reticle_session { action: "end" }` | `{ summary?, sessionId? }` | end the session; the panel shows "Session ended · summary" |
+| `reticle_session { action: "resume" }` | `{ sessionId? }` | clear a pause and continue |
+| `reticle_session { action: "messages" }` | `{ sessionId? }` | drain + read pending human messages (explicit poll) |
+| `reticle_session { action: "review" }` | `{ resolve?, all?, sessionId? }` | list the bugs the human flagged; resolve one once fixed |
 
-When paused, every action tool short-circuits with the human's guidance, so the agent learns of the pause on its very next action. The agent's expected behavior: **read the guidance, adjust the plan, then call `reticle_session {action:"resume"}`** (or wait for the human to click Resume). The agent can also end the run itself with `reticle_session {action:"end"}({ summary })` when it's done. Either path shows the same "ended" state.
+When paused, every action tool short-circuits with the human's guidance, so the agent learns of the pause on its very next action. The agent's expected behavior: **read the guidance, adjust the plan, then call `reticle_session { action: "resume" }`** (or wait for the human to click Resume). The agent can also end the run itself with `reticle_session({ action: "end", summary })` when it's done. Either path shows the same "ended" state.
 
 ## Piggybacked guidance
 
@@ -66,4 +65,4 @@ Even without a pause, action/observe/assert results carry a `control` block when
 
 Add this to your operating prompt / `CLAUDE.md` (see the [agent cheat-sheet](agent-cheatsheet.md)):
 
-> The human may pause you or send guidance from the Reticle panel. On any `reticle_act` result with `paused: true`, stop, read `guidance`, adjust, then call `reticle_session {action:"resume"}`. Treat a `control.guidance` field on any result as a live instruction from the human.
+> The human may pause you or send guidance from the Reticle panel. On any `reticle_act` result with `paused: true`, stop, read `guidance`, adjust, then call `reticle_session { action: "resume" }`. Treat a `control.guidance` field on any result as a live instruction from the human.

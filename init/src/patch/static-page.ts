@@ -26,7 +26,7 @@ export const HTML_INDEX_PATH = 'index.html';
 
 /** The gitignored module beside the page that holds this machine's pairing token. */
 export const STATIC_TOKEN_MODULE = 'reticle.local.js';
-const GITIGNORE_PATH = '.gitignore';
+export const STATIC_GITIGNORE_PATH = '.gitignore';
 
 /** Opens the block `init` writes; a re-run looks for it. */
 export const STATIC_SNIPPET_MARKER = '<!-- reticle:connect (dev only, written by reticle init) -->';
@@ -86,12 +86,12 @@ export function staticTokenFiles(
   const files: Record<string, string> = {};
   const module = staticTokenModule(pairingToken);
   if (readFile(STATIC_TOKEN_MODULE) !== module) files[STATIC_TOKEN_MODULE] = module;
-  const ignore = readFile(GITIGNORE_PATH) ?? '';
+  const ignore = readFile(STATIC_GITIGNORE_PATH) ?? '';
   const covered = ignore
     .split('\n')
     .some((l) => [STATIC_TOKEN_MODULE, `/${STATIC_TOKEN_MODULE}`].includes(l.trim()));
   if (!covered) {
-    files[GITIGNORE_PATH] =
+    files[STATIC_GITIGNORE_PATH] =
       `${'' === ignore ? '' : ignore.replace(/\n*$/, '\n')}${STATIC_TOKEN_MODULE}\n`;
   }
   return files;

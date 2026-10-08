@@ -1,5 +1,7 @@
 # Jev scorecard — what happens when the driver cannot generate a tool call
 
+> **Historical.** The Harness's drivers have since moved to the Reticle platform, and the runner below was retired with them. The numbers are kept as the record they are.
+>
 > The harness is the loop inside the daemon that drives a connected app: it picks what to touch next and states the consequence it expects, and the ENGINE decides the verdict from evidence. This measures replacing the model in that loop with a System One model, which answers typed questions and cannot emit prose. Runner: `bench/harness/jev-vs-llm.mjs`; de-risk: `bench/harness/jev-probe.mjs`; raw: `bench/raw/jev-vs-llm.json`. **Re-run before quoting** — a benchmark nobody re-derives is a claim.
 
 ## Headline

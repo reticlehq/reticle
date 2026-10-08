@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { isReticleOverlay, isIgnored, isReticleUi, RETICLE_OVERLAY } from './dom-ignore.js';
+import { RETICLE_OVERLAY_SELECTOR } from '@reticlehq/core';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -177,5 +178,13 @@ describe('the first-run tour is Reticle UI, not the app', () => {
 
   it('is named in the shared overlay selector, so every consumer of it agrees', () => {
     expect(RETICLE_OVERLAY).toContain('data-reticle-tour');
+  });
+});
+
+// The daemon hides this same list from every screenshot (#1355), so it lives in core and the SDK reads
+// it from there: one list, or a new piece of Reticle UI is hidden from snapshots and not from pixels.
+describe('RETICLE_OVERLAY', () => {
+  it("is core's selector list", () => {
+    expect(RETICLE_OVERLAY).toBe(RETICLE_OVERLAY_SELECTOR);
   });
 });

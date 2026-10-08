@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ActionWarning, ReticleCommand } from '@reticlehq/core';
+import { ActionType, ActionWarning, ReticleCommand } from '@reticlehq/core';
 import { executeAction, executeSequence } from './actions.js';
 import { createCommandRegistry } from '@/commands/commands.js';
 import { registerAdapter, type ReticleAdapter } from '@/registry/stores/adapters.js';
@@ -31,6 +31,25 @@ describe('action effect: happy path', () => {
 });
 
 describe('action effect: enabled / visible probes', () => {
+  it.each(['auto', 'scroll'])(
+    'keeps a target beyond an overflow:%s scrollport visible in the receipt',
+    async (overflow) => {
+      const scrollport = document.createElement('div');
+      scrollport.style.overflow = overflow;
+      scrollport.style.overflowX = overflow;
+      scrollport.style.overflowY = overflow;
+      scrollport.getBoundingClientRect = () => new DOMRect(0, 0, 100, 100);
+      const button = document.createElement('button');
+      button.textContent = 'Below the fold';
+      button.getBoundingClientRect = () => new DOMRect(10, 2000, 80, 20);
+      scrollport.append(button);
+      document.body.append(scrollport);
+      const result = await executeAction(refs.refFor(button), ActionType.FOCUS);
+      expect(result.effect.visible).toBe(true);
+      expect(result.effect.dispatched).toBe(true);
+    },
+  );
+
   it('enabled=false for a disabled button', async () => {
     document.body.innerHTML = '<button disabled>Save</button>';
     const r = await executeAction(refOf('button'), 'click');

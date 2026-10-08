@@ -19,6 +19,21 @@ export const JOURNAL_FILE_VERSION = 1;
  * to attribute events to this action (`attribution:"window"`); `effect` is a bounded summary of what
  * the tool returned. Args are already edge-redacted by the browser before they reach here.
  */
+/**
+ * Who drove an action when it was not the agent on the other end of the connection: the Harness,
+ * dispatching through the same tools. A run folded from the journal splits on it, so a person can
+ * tell what their agent proved from what the Harness proved.
+ */
+export const DrivenBySchema = z.object({
+  /** One Harness drive; every action it took carries the same id. */
+  harness: z.string().min(1).max(TRANSPORT_LIMITS.MAX_REF_LENGTH),
+  /** Which model drove it: `server` is the platform's Harness. */
+  driver: z.string().min(1).max(TRANSPORT_LIMITS.MAX_COMMAND_NAME_LENGTH),
+  /** The journey it was asked to complete, when one was named. */
+  persona: z.string().max(1000).optional(),
+});
+export type DrivenBy = z.infer<typeof DrivenBySchema>;
+
 export const JournalActionSchema = z.object({
   v: z.literal(JOURNAL_FILE_VERSION),
   /** The command correlation id (`c<n>`) — the natural, cross-side-stable action identity. */
@@ -39,6 +54,8 @@ export const JournalActionSchema = z.object({
   tRange: z.object({ from: z.number().int().min(0), to: z.number().int().min(0) }),
   /** Elapsed-ms timestamp the action was recorded at (clock injected by the writer). */
   at: z.number().int().min(0),
+  /** Set only when the Harness drove this action; absent means the connected agent did. */
+  drivenBy: DrivenBySchema.optional(),
 });
 export type JournalAction = z.infer<typeof JournalActionSchema>;
 

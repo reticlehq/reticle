@@ -67,6 +67,10 @@ const DECLARED_CROSSINGS: Record<string, string> = {
   'telemetry/install-source.ts':
     'Re-exports `configWithInstallSource`. `init` is the only thing that writes `.reticle.json`, so ' +
     'the writer lives with it; this module stays the one place to read about install attribution.',
+  'portal/session/first-run-wiring.ts':
+    'Reads `isWebApp`, the rule init uses to tell an app from a library or API package. The daemon ' +
+    'asks it before wiring a folder unasked; a second copy would let the two disagree about what an ' +
+    'app is, and the copy that said "any package.json" wrote a config into a library. No code path.',
   'portal/session/dev-server/dev-command.ts':
     'Reads `desktopLaunch`, the pure manifest rule that says a Tauri or Electron Forge app starts ' +
     'through its own CLI rather than its renderer’s `dev` script. init spawns that command, and ' +

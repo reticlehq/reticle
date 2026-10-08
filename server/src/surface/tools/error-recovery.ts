@@ -9,7 +9,7 @@
  * baseline stores). No clock, no IO — unit-testable in isolation.
  */
 
-import { RefusalReason, ReticleEnv, TRANSPORT_LIMITS } from '@reticlehq/core';
+import { RefusalReason, ReticleEnv, TRANSPORT_LIMITS, UNISSUED_REF_REFUSAL } from '@reticlehq/core';
 import { SELF_RECOVERING_MARKER } from '@/portal/session/no-session-diagnosis.js';
 import { BODY_CLAUSE_REFUSAL_OPENING } from '@reticlehq/engine/evidence/body-capture-remedy.js';
 import {
@@ -73,6 +73,17 @@ const SELF_RECOVERING: readonly { readonly match: RegExp; readonly reason: Refus
   { match: literally(BODY_CLAUSE_REFUSAL_OPENING), reason: RefusalReason.UNSUPPORTED },
 ];
 
+/**
+ * The refusal for a `ref` Reticle never minted — decided BEFORE every other rule, not by one inside
+ * the table. The message echoes the caller's own string, and every pattern below matches on words:
+ * a ref reading `Connected right now:` was read as a missing session, and one opening with the
+ * Chromium-path prefix as browser configuration. The marker is Reticle's own wording, so testing it
+ * first classifies the refusal by what it IS rather than by what the caller typed into it.
+ */
+function isUnissuedRefRefusal(message: string): boolean {
+  return message.includes(UNISSUED_REF_REFUSAL);
+}
+
 /** A message that already carries its own concrete next action, so nothing should be appended. */
 function isSelfRecovering(message: string): boolean {
   if (message.includes(SELF_RECOVERING_MARKER)) return true;
@@ -111,7 +122,17 @@ export const RECOVERY = {
     'navigated, opened a modal, re-sorted a list or changed the page invalidates every ref taken ' +
     'before it. Reticle refuses here rather than clicking whatever now occupies that slot. Call ' +
     'reticle_query again for a fresh ref and retry the action — and prefer reticle_act_and_wait ' +
-    '{ until } when an action changes the page, so the next ref is taken after it settles.',
+    '{ until } when an action changes the page, so the next ref is taken after it settles. On a ' +
+    'page that keeps re-rendering (a dashboard that refetches), skip the ref and pass ' +
+    '`target: { role, name }`, `{ label }` or `{ text }` instead: it is looked up in the same call ' +
+    'as the action, which shrinks the window a re-render can invalidate it in, though a render ' +
+    'landing between the lookup and the action can still refuse it — retry once if it does.',
+  UNISSUED_REF:
+    'The `ref` was not one Reticle handed out, so nothing was looked up and nothing was acted on. ' +
+    'Refs are minted by reticle_snapshot / reticle_query and look like e12. To name an element by ' +
+    'what it shows, pass `target` instead — { label }, { role, name }, { text } or { testid } — and ' +
+    'it is found in the same call. This is an invalid call, not a Reticle defect: there is nothing ' +
+    'to report.',
   STALE_REF_AFTER_EDIT:
     'That ref went stale because YOUR OWN EDIT landed: the dev server hot-updated the module named ' +
     'in the message above and the framework re-rendered, so the node the ref pointed at was ' +
@@ -269,6 +290,16 @@ export const RECOVERY = {
     'months. This is a deliberate refusal and there is nothing to report: drive the app yourself ' +
     'through the MCP tools — reticle_navigate, then reticle_act_and_wait with an `until` — which is ' +
     'the same verification without a model driving it.',
+  /**
+   * The Harness asked for on a project that is not linked to the platform. The call was valid, and
+   * the refusal names reticle_act_and_wait as the alternative, which the catch-all below read as an
+   * agent's malformed call: it was then told to fix arguments that were never wrong.
+   */
+  HARNESS_NOT_LINKED:
+    'This project is not linked to the Reticle platform, where the Harness runs. The call itself was ' +
+    'valid. Either the human runs `npx @reticlehq/server connect` once in the app directory, or you ' +
+    'drive the journey yourself: reticle_navigate, then reticle_act_and_wait with an `until` on its ' +
+    'last step. There is nothing to report.',
 } as const;
 
 /**
@@ -295,6 +326,8 @@ const REASON_OF: Record<keyof typeof RECOVERY, RefusalReason> = {
   MISSING_RECORDING: RefusalReason.NO_MATCH,
   STALE_REF: RefusalReason.NO_MATCH,
   STALE_REF_AFTER_EDIT: RefusalReason.NO_MATCH,
+  // The caller passed something that was never a ref: a malformed call, not a page that moved.
+  UNISSUED_REF: RefusalReason.BAD_ARGS,
   NO_SUCH_OPTION: RefusalReason.NO_MATCH,
   TARGET_MISSED: RefusalReason.NO_MATCH,
   // Target resolution failed to name one element. NO_MATCH rather than BAD_ARGS: the arguments were
@@ -310,6 +343,8 @@ const REASON_OF: Record<keyof typeof RECOVERY, RefusalReason> = {
   INVALID_NAME: RefusalReason.BAD_ARGS,
   // Nothing about the app or the call is wrong; the feature is switched off or unpaid for.
   HARNESS_OFF: RefusalReason.UNSUPPORTED,
+  // Nothing about the call is wrong either; the project is not linked yet.
+  HARNESS_NOT_LINKED: RefusalReason.UNSUPPORTED,
 };
 
 /** Hint text back to its reason. The hints are distinct strings, so this inverts cleanly. */
@@ -335,6 +370,7 @@ const RULES: readonly { readonly match: RegExp; readonly hint: string }[] = [
     match: /Autonomous driving is turned OFF|no harness entitlement/i,
     hint: RECOVERY.HARNESS_OFF,
   },
+  { match: /The Reticle Harness runs on the Reticle platform/, hint: RECOVERY.HARNESS_NOT_LINKED },
   // Three conditions the daemon understands perfectly and still asked for a bug report about. Each
   // needs its own rule: none of them contains "no browser session connected" (the scope miss is
   // "no browser session FOR project 'x'", which is the opposite claim — sessions exist).
@@ -438,6 +474,7 @@ const RULES: readonly { readonly match: RegExp; readonly hint: string }[] = [
  * saying a server is running and the recovery saying to go start one.
  */
 export function recoveryFor(message: string): string | undefined {
+  if (isUnissuedRefRefusal(message)) return RECOVERY.UNISSUED_REF;
   if (isSelfRecovering(message)) return undefined;
   for (const rule of RULES) {
     if (rule.match.test(message)) return rule.hint;
@@ -455,6 +492,7 @@ export function recoveryFor(message: string): string | undefined {
  */
 export function refusalReasonFor(rawMessage: string): RefusalReason {
   const message = zodArrayAsSentence(rawMessage);
+  if (isUnissuedRefRefusal(message)) return RefusalReason.BAD_ARGS;
   // The no-session diagnosis inspected the machine and named the cause itself, so it never reaches
   // the recovery table. It is the single largest refusal there is; missing it would gut the metric.
   if (message.includes(SELF_RECOVERING_MARKER)) return RefusalReason.NO_SESSION;
@@ -597,6 +635,7 @@ export function buildErrorPayload(rawMessage: string): ErrorPayload {
   // Render the zod array BEFORE capping: the cap would otherwise truncate the JSON mid-issue and
   // leave an unparseable fragment as the agent's error text — the worst of both shapes.
   const message = capMessage(zodArrayAsSentence(rawMessage));
+  if (isUnissuedRefRefusal(message)) return { error: message, recovery: RECOVERY.UNISSUED_REF };
   // A self-diagnosing message gets NEITHER a generic recovery nor the feedback ask. It already
   // inspected the machine and named the cause; a second, contradictory hint is noise, and inviting a
   // bug report about a condition Reticle diagnosed itself is exactly backwards.

@@ -25,6 +25,18 @@ describe('nextActionFor', () => {
     expect(next.command).toBe('pnpm run dev');
   });
 
+  it('nothing listening: an app one directory down is handed over with its cd', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: true,
+      listening: [],
+      dev: { command: 'npm run dev', script: 'dev', directory: 'frontend' },
+    });
+    expect(next.action).toBe(NoSessionAction.START_DEV_SERVER);
+    expect(next.command).toBe('cd frontend && npm run dev');
+    expect(next.reason).toContain('frontend');
+  });
+
   it('nothing listening and no dev script: says so, and returns NO command', () => {
     const next = nextActionFor({
       everConnected: false,
@@ -209,20 +221,79 @@ describe('nextActionFor', () => {
     expect(next.port).toBe(5173);
   });
 
-  // First run on a machine with another project's dev server on 5173: the app was on 5190, the
-  // scan does not cover 5190, and the one command handed back opened the OTHER project. The daemon
-  // had the right url in hand — it was already quoted in the prose beside the command.
+  // First run on a machine with another project's dev server on 5173: the app was on 5190, and
+  // the one command handed back opened the OTHER project. The daemon had the right url in hand —
+  // it was already quoted in the prose beside the command. The scan covers the departed port, so
+  // 5190 answering is what makes reopening it right.
   it('reopens the url the departed session was on, not a port the scan happened to find', () => {
     const next = nextActionFor({
       everConnected: true,
       initialized: true,
-      listening: [5173],
+      listening: [5173, 5190],
       dev: DEV,
       lastKnownUrl: 'http://localhost:5190/counter?__reticle_session=lease-1&tab=2',
     });
     expect(next.action).toBe(NoSessionAction.REOPEN_APP);
     expect(next.command).toBe('reticle open http://localhost:5190/counter?tab=2');
     expect(next.port).toBe(5190);
+  });
+
+  // The dev server was stopped, and the port the departed session was on is gone with it. "Reopen
+  // that — do not start a second stack" then points at a dead socket AND forbids the one action
+  // that helps, so the restart command has to win (reticle#1421).
+  it('the departed port is gone and nothing listens: restart, do not reopen the dead url', () => {
+    const next = nextActionFor({
+      everConnected: true,
+      initialized: true,
+      listening: [],
+      dev: DEV,
+      lastKnownUrl: 'http://127.0.0.1:44549/orders',
+    });
+    expect(next.action).toBe(NoSessionAction.START_DEV_SERVER);
+    expect(next.command).toBe('pnpm run dev');
+    expect(next.reason).toContain('44549');
+    expect(next.reason).toMatch(/gone|stopped/i);
+  });
+
+  // The original #1421 bug survived an empty-scan guard: any other project listening (a second
+  // repo on :3000) kept "reopen the dead url" in place. The departed port itself is the evidence.
+  it('the departed port is gone while ANOTHER port listens: still restart, do not reopen', () => {
+    const next = nextActionFor({
+      everConnected: true,
+      initialized: true,
+      listening: [3000],
+      dev: DEV,
+      lastKnownUrl: 'http://127.0.0.1:44549/orders',
+    });
+    expect(next.action).toBe(NoSessionAction.START_DEV_SERVER);
+    expect(next.command).toBe('pnpm run dev');
+    expect(next.reason).toContain('44549');
+    expect(next.reason).not.toMatch(/nothing is listening on the ports Reticle scans/i);
+  });
+
+  it('the departed port is slow, not gone: reopen it rather than start a second stack', () => {
+    const next = nextActionFor({
+      everConnected: true,
+      initialized: true,
+      listening: [],
+      slowListeners: [44549],
+      dev: DEV,
+      lastKnownUrl: 'http://127.0.0.1:44549/orders',
+    });
+    expect(next.action).toBe(NoSessionAction.REOPEN_APP);
+    expect(next.command).toBe('reticle open http://127.0.0.1:44549/orders');
+  });
+
+  it('the departed port still answers: reopen it, as before', () => {
+    const next = nextActionFor({
+      everConnected: true,
+      initialized: true,
+      listening: [44549],
+      dev: DEV,
+      lastKnownUrl: 'http://127.0.0.1:44549/orders',
+    });
+    expect(next.action).toBe(NoSessionAction.REOPEN_APP);
+    expect(next.command).toBe('reticle open http://127.0.0.1:44549/orders');
   });
 });
 

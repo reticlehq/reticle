@@ -23,6 +23,17 @@ import { asNumber, asString } from '@reticlehq/core';
 import { submitFeedback, feedbackDisabled } from '@/telemetry/feedback.js';
 import { getTelemetry } from '@/telemetry/telemetry.js';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
+import { dirname } from 'node:path';
+import { sessionRoot } from '@/memory/project/session-root.js';
+
+/** The project folder this call's session belongs to, when one can be told. */
+function projectDir(deps: ToolDeps, sessionId: string | undefined): { cwd?: string } {
+  try {
+    return { cwd: dirname(sessionRoot(deps, sessionId)) };
+  } catch {
+    return {};
+  }
+}
 
 /** One optional string arg, present only when the agent actually supplied it. */
 function optionalText(args: Record<string, unknown>, key: string): Record<string, string> {
@@ -213,6 +224,9 @@ export const FEEDBACK_TOOLS: ToolDef[] = [
         },
         {
           session: sessionFacts(deps, asString(args['sessionId'])),
+          // A report that cannot be sent is written into the project being verified, never into
+          // whatever folder the daemon happened to start in.
+          ...projectDir(deps, asString(args['sessionId'])),
           // The AGENT does not wait for the network. `reticle feedback` (a human, at a terminal,
           // watching for an answer) still does — see submitFeedback's `background`.
           background: true,
@@ -249,9 +263,8 @@ const FEEDBACK_PROMPT = {
  * outputSchema, returns the whole verdict block, and its own description calls it "one hop for the
  * act->observe->assert loop" — it IS the verification path most agents take. The guard that should
  * have caught the omission keyed on the tool NAME (/assert|verify/), which act_and_wait does not
- * match, so it slipped through in silence. Measured over a day of real telemetry: act_and_wait 14
- * calls, assert ZERO, verification_completed 2. Agents were verifying the entire time and the metric
- * could not see it. The contract test now checks the SHAPE instead.
+ * match, so it slipped through in silence: agents verified through act_and_wait the entire time,
+ * and the metric could not see it. The contract test now checks the SHAPE instead.
  */
 export const VERDICT_TOOLS: ReadonlySet<string> = new Set([
   ReticleTool.ACT_AND_WAIT,

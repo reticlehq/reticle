@@ -1,4 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { randomUUID } from 'node:crypto';
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { isPredicateParam } from '@reticlehq/engine/question/predicate/predicate-eval.js';
@@ -14,7 +15,7 @@ import {
 import { ReticleTool } from '@reticlehq/core';
 import { SHARED_PARAM_SHORT } from './shared-params.js';
 import { buildDynamicTools } from '@/surface/tools/dynamic-tools.js';
-import { runTool, SESSION_BOUND_TOOLS } from '@/surface/tools/invoke-tool.js';
+import { runTool } from '@/surface/tools/invoke-tool.js';
 import { sessionEnvelopeShape, newSnapshotCache } from '@/surface/tools/tool-kit.js';
 import { buildErrorPayload } from '@/surface/tools/error-recovery.js';
 import { takeVersionSkewOnto } from '@/command/version/version-nudge.js';
@@ -48,16 +49,20 @@ import { reportMcpConnected } from '@/telemetry/mcp-connection.js';
 import { parsePredicate } from '@reticlehq/engine/question/predicate/predicate-parse.js';
 
 /**
- * Merge the runtime-spliced envelope (health/lease/age/control) into a session-bound tool's declared
- * outputSchema so structuredContent validation keeps those fields instead of dropping them. The tool's
- * own keys win over the permissive envelope defaults (e.g. ACT keeps its typed `session` shape).
- * Non-session-bound tools (and tools with no outputSchema) are returned unchanged.
+ * Merge the runtime-spliced envelope into a tool's declared outputSchema so structuredContent
+ * validation keeps those fields instead of rejecting the call. The tool's own keys win over the
+ * permissive envelope defaults (e.g. ACT keeps its typed `session` shape).
+ *
+ * EVERY tool with an output schema, not only the session-bound ones: `runTool` adds `next`,
+ * `update_available`, `version_skew` and the feedback keys to any tool's result, and a session-exempt
+ * tool with a strict schema (`reticle_context`) failed the whole call on a validating client the
+ * first time one of them rode on it.
  */
 export function withSessionEnvelope(
-  name: string,
+  _name: string,
   outputSchema: z.ZodRawShape | undefined,
 ): z.ZodRawShape | undefined {
-  if (outputSchema === undefined || !SESSION_BOUND_TOOLS.has(name)) return outputSchema;
+  if (outputSchema === undefined) return outputSchema;
   return { ...sessionEnvelopeShape, ...outputSchema };
 }
 
@@ -154,7 +159,11 @@ const COMPACT_PREDICATE_DESCRIPTION = `${PREDICATE_KINDS}${PREDICATE_FIELD_GRAMM
  * schema cost; the first clause keeps each param's purpose and any enum hints. Params without a
  * description pass through unchanged. Predicate params are replaced wholesale — see above.
  */
-function leanZodShape(shape: z.ZodRawShape, predicateAnchor?: string): z.ZodRawShape {
+function leanZodShape(
+  shape: z.ZodRawShape,
+  advertised: ReadonlySet<string>,
+  predicateAnchor?: string,
+): z.ZodRawShape {
   const out: z.ZodRawShape = {};
   // The navigation hint is said ONCE per turn, so it is anchored to one parameter — not one tool.
   // A tool can carry two predicate parameters (a canonical name plus a neighbouring tool's alias),
@@ -180,8 +189,13 @@ function leanZodShape(shape: z.ZodRawShape, predicateAnchor?: string): z.ZodRawS
       out[key] = schema.describe(shared);
       continue;
     }
+    // Through the same rewrite as tool descriptions: a parameter that says "a ref from
+    // reticle_snapshot" names a tool this surface does not have.
     const desc = schema.description;
-    out[key] = 'string' === typeof desc ? schema.describe(firstSentence(desc)) : schema;
+    out[key] =
+      'string' === typeof desc
+        ? schema.describe(liveCallText(firstSentence(desc), advertised))
+        : schema;
   }
   return out;
 }
@@ -346,14 +360,22 @@ export function advertisedConfig(
       // Against the advertised set, for the same reason results are: `reticle_navigate`'s own
       // description told the reader to confirm a reload with `reticle_sessions`, on the surface
       // where that name is gone. A description is advice like any other.
-      liveCallText(
-        terse ? firstSentence(tool.description) : tool.description,
-        new Set(advertised.map((each) => each.name)),
-      ),
+      // Not on the meta-tools: they exist to name what is reachable only through `reticle_run`,
+      // and rewriting those names to advertised ones turned `reticle_tools` into nonsense.
+      isMetaTool
+        ? tool.description
+        : liveCallText(
+            terse ? firstSentence(tool.description) : tool.description,
+            new Set(advertised.map((each) => each.name)),
+          ),
       tool.example,
     ),
     inputSchema: terse
-      ? leanZodShape(tool.inputSchema, tool.name === anchor ? undefined : anchor)
+      ? leanZodShape(
+          tool.inputSchema,
+          new Set(advertised.map((each) => each.name)),
+          tool.name === anchor ? undefined : anchor,
+        )
       : tool.inputSchema,
     ...(outputSchema !== undefined ? { outputSchema } : {}),
   };
@@ -587,7 +609,7 @@ export function createMcpServer(
    * runs once per client connection, which makes it the right owner; a caller that supplies its own
    * store keeps it.
    */
-  const deps = { snapshots: newSnapshotCache(), ...rawDeps };
+  const deps = { snapshots: newSnapshotCache(), attachId: randomUUID(), ...rawDeps };
   const encoding = (process.env[ENCODING_ENV] ?? '').toLowerCase();
   // Which surface this daemon advertises. The 18-tool default and the 48-tool full surface are
   // different products from inside an agent's context, so outcomes are only comparable when the

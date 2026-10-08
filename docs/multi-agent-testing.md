@@ -4,7 +4,7 @@ description: 'Several apps at once, ports that shift between runs, and many agen
 icon: users
 ---
 
-Many agents can drive the same app at once without a browser each: `reticle_lease {action:"acquire"}` hands each one an **isolated context** (its own cookies, storage and DOM) from a single shared headless Chromium. One daemon per machine, and identity is the **app** (a stable `projectId` stamped by the build plugin), not the port, so an app that boots on `:3001` today is still the same app.
+Many agents can drive the same app at once without a browser each: `reticle_run { tool: "reticle_lease", args: { action: "acquire" } }` hands each one an **isolated context** (its own cookies, storage and DOM) from a single shared headless Chromium. One daemon per machine, and identity is the **app** (a stable `projectId` stamped by the build plugin), not the port, so an app that boots on `:3001` today is still the same app.
 
 Reticle is built for the messy real world: several apps running at once, ports that shift between runs, and many agents driving different flows of the same app in parallel, without each one spinning up its own Chromium. This page explains how that works and how to use it.
 
@@ -20,27 +20,45 @@ Reticle is built for the messy real world: several apps running at once, ports t
 1. Add the plugin (Vite/Next) or one `reticle.connect()` call. (See [getting-started](./getting-started.md).)
 2. Start your app as you normally do.
 3. Open it in a browser; the in-page panel shows Reticle is connected.
-4. Click around; flag anything that looks wrong with the "Flag a bug" annotator. The agent drains those with `reticle_session {action:"review"}`.
+4. Click around; flag anything that looks wrong with the "Flag a bug" annotator. The agent drains those with `reticle_session { action: "review" }`.
 
 ## Agent testing: ~2 minutes
 
 With the app running and instrumented, an agent drives a flow end to end:
 
 ```text
-reticle_lease {action:"acquire"} { url: "http://localhost:3000/dashboard" }
+reticle_run { tool: "reticle_lease", args: { action: "acquire", url: "http://localhost:3000/dashboard" } }
   → { sessionId: "lease-…", ready: true, leased: 1, queued: 0 }
 reticle_act    { sessionId, ... }      # drive the flow
 reticle_assert { sessionId, ... }      # verify intent
-reticle_lease {action:"release"} { sessionId }    # free the slot
+reticle_run { tool: "reticle_lease", args: { action: "release", sessionId } }    # free the slot
 ```
 
-`reticle_lease {action:"acquire"}` opens a fresh isolated headless context against your **already-running** app, stamps the lease identity into the URL so the app's own SDK registers under a sessionId you can target, and waits until that tab has connected (`ready: true`) before returning, so the sessionId is usable immediately. Release when the flow finishes.
+`reticle_run { tool: "reticle_lease", args: { action: "acquire" } }` opens a fresh isolated headless context against your **already-running** app, stamps the lease identity into the URL so the app's own SDK registers under a sessionId you can target, and waits until that tab has connected (`ready: true`) before returning, so the sessionId is usable immediately. Release when the flow finishes.
+
+## Permissions
+
+A lease starts with every permission undecided. Pass `permissions` to grant some on the app's origin before the first navigation, so the first render already sees them:
+
+```text
+reticle_lease {action:"acquire"} { url: "http://localhost:3000/map", permissions: ["geolocation"] }
+```
+
+Acquiring again on an origin that already has a lease returns that lease, and its grants never change there, because it may be another agent's live tab. The same list is a plain reuse and a different one is refused. To change them, release the lease and acquire again. Names are Playwright's, such as `geolocation`, `clipboard-read`, `clipboard-write` and `notifications`; one the browser does not know is refused with its reason.
+
+| What the page reads | Without `permissions` | After a grant |
+| --- | --- | --- |
+| `navigator.permissions.query({ name })` | `prompt` | `granted` |
+| `Notification.permission`, in Playwright's headless shell (the default) | `denied` | still `denied` |
+| `Notification.permission`, in an installed Chrome the pool falls back to | `default` | `granted` |
+
+The headless shell has no notification support, so a notifications grant never reaches `Notification.permission` there. When you ask for `notifications`, the lease reads the value back from the page and says so in `hint` whenever the page cannot see the grant.
 
 ## 10 agents, 10 flows, one dashboard
 
 This is the design target, and it needs no special setup:
 
-- Each agent calls `reticle_lease {action:"acquire"}` for the same dashboard URL → its own isolated context (own cookies/storage) in the **one** shared Chromium.
+- Each agent calls `reticle_run { tool: "reticle_lease", args: { action: "acquire" } }` for the same dashboard URL → its own isolated context (own cookies/storage) in the **one** shared Chromium.
 - The pool caps simultaneous contexts (`RETICLE_MAX_CONTEXTS`, default scales with CPU under a ceiling); extra acquires queue and proceed as slots free.
 - Flows can't bleed into each other: contexts are isolated and every session is scoped by `projectId`.
 - A single crashed page is reclaimed on its own, and if an agent crashes or hangs its lease stops being touched and the **lease reaper** reclaims the context after a TTL, freeing the slot. One dead agent never starves the others.

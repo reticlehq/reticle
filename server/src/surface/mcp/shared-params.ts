@@ -23,7 +23,7 @@
 /** The short form left in the per-turn schema. Must still make sense with no instructions at all. */
 export const SHARED_PARAM_SHORT: Readonly<Record<string, string>> = {
   sessionId: 'Target a specific tab. Omit unless you mean one — see instructions.',
-  since: 'Cursor from a prior reticle_act/reticle_observe.',
+  since: 'Cursor from a prior act/observe, or a git ref.',
   limit: 'Cap descriptors to the first N.',
 };
 
@@ -32,7 +32,7 @@ export const SHARED_PARAM_GUIDANCE =
   'Arguments that mean the same thing on every tool: `sessionId` — omit unless you mean a specific ' +
   'tab; Reticle scopes to your project, prefers the active one, and refuses rather than guesses when ' +
   'ambiguous. `since` — a cursor from a prior act/observe, bounding an observation to what came ' +
-  'after it. `limit` — caps returned descriptors, cutting tokens on broad queries.';
+  'after it, or a git ref when verifying a change. `limit` — caps returned descriptors, cutting tokens on broad queries.';
 
 /** Is this a parameter whose guidance now lives in the instructions block? */
 export function isSharedParam(name: string): boolean {

@@ -1,4 +1,5 @@
 import { TRANSPORT_LIMITS, asRef, type Ref } from '@reticlehq/core';
+import { ReticleStorageKey } from '@/storage-keys.js';
 /**
  * Stable, human-meaningful element handles. Each element gets a ref like `e7`; the same
  * element keeps its ref across snapshots, and a ref re-resolves to its element as long as
@@ -69,7 +70,7 @@ const SWEEP_EVERY_MINTS = 1000;
  * reason session continuity uses it (survives reloads and same-tab navigations, not shared with
  * another tab, which is a different session with its own registry anyway).
  */
-const REF_BASE_KEY = '__reticle_ref_base';
+const REF_BASE_KEY = ReticleStorageKey.REF_BASE;
 
 /**
  * How many numbers a document claims at once.

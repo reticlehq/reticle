@@ -7,7 +7,7 @@ icon: screwdriver-wrench
 
 **Installing Reticle by hand is two independent halves: register the MCP server so your agent gets the `reticle_*` tools, then add the SDK to your app so there is something for those tools to talk to.** You need both, in that order.
 
-Do only the first half and the tools appear but every call reports no session. Do only the second and your app connects to a daemon nobody is asking questions. Stop after the first half and your agent offers to run `init`.
+Do only the first half and the tools appear but every call reports no session. Do only the second and your app connects to a daemon nobody is asking questions. Stop after the first half and your agent's first Reticle call wires the app itself when you ask it to verify something, and offers to otherwise.
 
 <Warning>
   **You probably do not need this page.** Two commands do all of it:
@@ -43,7 +43,7 @@ There is no config file that all agents share. Each harness has its own path and
 | VS Code | `.vscode/mcp.json` | `servers` | no |
 | Windsurf | `~/.codeium/windsurf/mcp_config.json` | `mcpServers` | no |
 | OpenCode | `opencode.json` | `mcp` | `"local"` required |
-| Codex CLI | `.codex/config.toml` | `[mcp_servers.reticle]` | no |
+| Codex CLI | `~/.codex/config.toml` | `[mcp_servers.reticle]` | no |
 | Zed | `~/.config/zed/settings.json` | `context_servers` | no |
 
 ### Claude Code
@@ -86,7 +86,7 @@ Same shape, different file and root key. Cursor and Windsurf use `mcpServers`; V
 
 ### Codex CLI
 
-TOML, in `.codex/config.toml`. This is the one `init` cannot write for you:
+TOML, in `~/.codex/config.toml`. Reticle does not rewrite this file: `init` and the installer print these lines for you to paste.
 
 ```toml
 [mcp_servers.reticle]
@@ -133,17 +133,25 @@ export default defineConfig({
 });
 ```
 
-That's the whole web install. The plugin stamps source locations onto elements. The thing that turns a DOM node into `src/components/Login.tsx:81`. And injects `connect()` so you can't forget it.
+That's the whole web install. The plugin stamps source locations onto elements. That is what turns a DOM node into `src/components/Login.tsx:81`. It also injects `connect()` with the pairing token, so you can't forget either.
 
 ### Anything without the plugin
 
-If you're not on Vite or Next, call `connect()` yourself, guarded so it never reaches production:
+Run `npx @reticlehq/server init` even here: it wires plain HTML, Angular, Remix, Astro, SvelteKit and the rest, and it is the part that gets the **pairing token** to the page without writing it into anything you ship.
+
+If you really are wiring `connect()` by hand, pass the token. The daemon writes it to `~/.reticle/pairing-token` on first start and refuses a page that does not present it, on localhost too. Without it the page console says `bridge refused the connection: authentication failed`.
 
 ```ts
-import { reticle } from '@reticlehq/browser';
+import { reticle, SESSION_AUTO } from '@reticlehq/browser';
 
-if (import.meta.env.DEV) reticle.connect();
+if (import.meta.env.DEV) {
+  // The contents of ~/.reticle/pairing-token, supplied at dev time (here as a Vite env var).
+  // Never commit it, and never let it reach a production build.
+  reticle.connect({ session: SESSION_AUTO, token: import.meta.env.VITE_RETICLE_TOKEN });
+}
 ```
+
+Start the dev server with `VITE_RETICLE_TOKEN="$(cat ~/.reticle/pairing-token)"`, or pin your own secret with `RETICLE_TOKEN=<secret>` in the MCP server's environment and give the page the same value. Set it on the dev command only, never in a `.env` file: a production build reads `.env` and would embed the token in the JavaScript it ships. Not on Vite? Do the same with your bundler's dev-only flag and its way of passing a value to the browser.
 
 <Note>
   `connect()` is dev-only by design. Guard it with whatever your bundler gives you:
@@ -151,7 +159,7 @@ if (import.meta.env.DEV) reticle.connect();
   self-guards, but two locks on a door that leads to your users is a reasonable number.
 </Note>
 
-### Tauri. and the step whose failure is silent
+### Tauri, and the step whose failure is silent
 
 The frontend is identical to any web app. The CSP is not optional:
 
@@ -175,7 +183,7 @@ Screenshots and headless mode need the Rust crate, which is versioned independen
 
 ```toml
 [dependencies]
-reticle-tauri = "3.5"
+reticle-tauri = "3.6"
 ```
 
 ```rust
@@ -196,9 +204,9 @@ IPC observation needs nothing on the Rust side. An `invoke('load_todos')` alread
 npx @reticlehq/server status
 ```
 
-A session in the output means the app connected. That. Not a tick in a checklist, is the install finished.
+A session listed means the SDK reached the page. Setup is finished when the first run returns a verdict.
 
-If it says nothing connected, the usual cause is a port disagreement between your app and the daemon. The browser console will carry `[Reticle] this page could not open a websocket to …` naming the exact address it tried; set it explicitly with `VITE_RETICLE_WS_URL=ws://localhost:4400/reticle` or `reticle.connect({ url })`.
+If it says nothing connected, the usual causes are a port disagreement between your app and the daemon, or a hand-wired `connect()` without the pairing token. The browser console will carry `[Reticle] this page could not open a websocket to …` naming the exact address it tried; set it explicitly with `RETICLE_PORT=4400 pnpm dev` (Vite plugin), `reticle({ port: 4400 })` in `vite.config`, or `reticle.connect({ url: 'ws://localhost:4400/reticle' })` by hand.
 
 Still stuck? `npx @reticlehq/server doctor` checks Chromium, the daemon and the port in one command.
 

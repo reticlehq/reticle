@@ -50,18 +50,18 @@ Measured live, all servers in one run, same tokenizer (`bench/harness/schema-tax
 
 | MCP server                               | tools | schema tokens |
 | ---------------------------------------- | ----: | ------------: |
-| **Reticle, the tool surface**            |    18 |    **~4,930** |
+| **Reticle, the default surface**         |    10 |    **~4,650** |
 | Playwright MCP                           |    23 |         3,725 |
 | Chrome DevTools MCP                      |    29 |         5,116 |
-| Reticle, `RETICLE_ADVERTISE_ALL_TOOLS=1` |    30 |       ~30,200 |
+| Reticle, `RETICLE_ADVERTISE_ALL_TOOLS=1` |    30 |       ~35,000 |
 
-_Measured 2026-08-12 (`bench/raw/schema-tax.json`). Reticle's default surface has gained a tool since, so treat the first row as a floor._
+_Reticle rows measured 2026-10-08 with `node bench/harness/schema-tax.mjs reticle`. The Playwright and Chrome DevTools rows are from the full run of 2026-08-12 (`bench/raw/schema-tax.json`) and were not re-measured. Re-derive before quoting._
 
-The default surface is the verify loop plus `reticle_tools` and `reticle_run`. The cold tail is un-advertised rather than unreachable: `reticle_run { tool, args }` calls any registered tool by name, and `RETICLE_ADVERTISE_ALL_TOOLS=1` advertises the whole table outright for suites that prefer that. Dropping the hatch was tried, and it left eleven registered tools callable by nothing at all.
+The default surface is the verify loop plus `reticle_tools` and `reticle_run`: ten tools, under merged names (`reticle_look { action }`, `reticle_observe { action }`). Examples in these docs use that spelling. The cold tail is un-advertised rather than unreachable: `reticle_run { tool, args }` calls any registered tool by name, and `RETICLE_ADVERTISE_ALL_TOOLS=1` advertises 30 of them outright for suites that prefer that. Dropping the hatch was tried, and it left eleven registered tools callable by nothing at all.
 
-`RETICLE_ADVERTISE_ALL_TOOLS=1` advertises everything WITH output schemas. It is a verification switch for suites that call by name, not a mode to run agents in. It is roughly 7x the per-turn cost, which is why it is opt-in.
+`RETICLE_ADVERTISE_ALL_TOOLS=1` advertises 30 tools WITH output schemas, and switches to the unmerged spelling: `reticle_snapshot`/`reticle_query`/`reticle_inspect`/`reticle_state` replace `reticle_look`, `reticle_network`/`reticle_console` replace `reticle_observe { action }`, `reticle_wait_for` replaces `reticle_assert { action: "wait" }`, `reticle_sessions`/`reticle_feedback` replace `reticle_session` list/feedback, and `reticle_act_sequence` replaces `reticle_act { steps }`. It is a verification switch for suites that call by name, not a mode to run agents in. It is roughly 7x the per-turn cost, which is why it is opt-in.
 
-**Every absolute number in this section is a dated reading, not a current value.** The table above was measured on 2026-08-12; a later `tools/list` read on 2026-08-14 put the default surface at 21,468 bytes and the full one at 134,368. The surface has grown a tool since, so both readings are already low. The _shape_ of the gap is the durable claim; the counts themselves are asserted by `surface-sizes.test.ts`, which reads them off the live surface, and that is the only place to trust them.
+**Every absolute number in this section is a dated reading, not a current value.** The _shape_ of the gap is the durable claim; the tool counts are asserted by `server/src/surface/tools/surface-sizes.test.ts`, which reads them off the live surface.
 
 The typed result object still travels as `structuredContent` either way; the default surface simply does not advertise the output schema, which an agent reading the `text` block never consumed.
 

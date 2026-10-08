@@ -31,6 +31,8 @@ suite(
       const result = matchQuery({ by: 'testid', value: 'row' }, 'visible');
 
       expect(result.count).toBe(30); // every visible match counted — correctness preserved
+      // Resolve each candidate and unique ancestor once, even when collecting clipping metadata.
+      expect(spy.mock.calls.length).toBeLessThanOrEqual(30 + depth + 2);
       // 30 candidates × (8 ancestors + self) would be ~270 without the memo; with it, each unique node's
       // style resolves at most once. Assert we are well under the naive product.
       expect(spy.mock.calls.length).toBeLessThan(30 * depth);

@@ -97,3 +97,33 @@ export function alreadyTrueHiddenMatch(predicate: Predicate, evidence: unknown):
   if (!isDescriptorArray(evidence) || 0 === evidence.length) return false;
   return evidence.every((el) => !el.visible);
 }
+
+/** What a green resting on hidden matches says instead of `yes`. See `hiddenMatchNote`. */
+export const HIDDEN_MATCH_NOTE =
+  'the declared consequence held only on a hidden element: a text or element check matches DOM ' +
+  'presence, not visibility, by default, so nothing here shows it is on screen. Add `visible: true` ' +
+  'if you meant "this is showing", not merely "this exists"';
+
+/**
+ * #1408: the post-action half of `alreadyTrueHiddenMatch`. A `text` clause beside a `net` clause is
+ * never already true, so a success template still hidden in the DOM passed with no caveat at all.
+ * Returns the note when any clause the green rests on matched only hidden elements.
+ *
+ * `evidence` is the passing result's: an `allOf` carries one entry per clause, in order, and an
+ * `anyOf` carries only the branch that held, which is why each branch is tried against it.
+ */
+export function hiddenMatchNote(predicate: Predicate, evidence: unknown): string | undefined {
+  return restsOnHiddenMatch(predicate, evidence) ? HIDDEN_MATCH_NOTE : undefined;
+}
+
+function restsOnHiddenMatch(predicate: Predicate, evidence: unknown): boolean {
+  if (PredicateKind.ALL_OF === predicate.kind) {
+    if (!Array.isArray(evidence)) return false;
+    const each: unknown[] = evidence;
+    return predicate.predicates.some((clause, i) => restsOnHiddenMatch(clause, each[i]));
+  }
+  if (PredicateKind.ANY_OF === predicate.kind) {
+    return predicate.predicates.some((clause) => restsOnHiddenMatch(clause, evidence));
+  }
+  return alreadyTrueHiddenMatch(predicate, evidence);
+}

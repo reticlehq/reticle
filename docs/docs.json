@@ -32,7 +32,7 @@
   "navigation": {
     "versions": [
       {
-        "version": "3.5.0",
+        "version": "3.6.0",
         "default": true,
         "tabs": [
           {
@@ -89,6 +89,8 @@
                 "group": "Tools",
                 "pages": [
                   "tools/overview",
+                  "tools/look",
+                  "tools/verify",
                   "tools/snapshot",
                   "tools/query",
                   "tools/inspect",
@@ -115,7 +117,9 @@
                 "group": "CLI commands",
                 "pages": [
                   "cli",
+                  "cli/tutorial",
                   "cli/init",
+                  "cli/setup",
                   "cli/doctor",
                   "cli/status",
                   "cli/serve",
@@ -448,8 +452,7 @@
   "markdown": {
     "instructions": [
       "Reticle is a dev-only, localhost-only verification layer for AI coding agents. It reads program truth (network, state, console, routing, animations, framework state) from inside a running web app and returns a deterministic verdict with evidence. It is not a screenshot tool and not a browser automation library.",
-      "Only `reticle_act_and_wait` and `reticle_assert` produce a verdict. Every other tool moves or reads the app and proves nothing. A drive that ends without one of those two has no result, however many tools it used.",
-      "A verdict of `verified: \"unknown\"` is not a pass. It means Reticle drove the app and could not tell what happened. Report it as unknown; never weaken a check to make it pass.",
+      "Verdicts come from `reticle_act_and_wait`, `reticle_assert`, `reticle_act { steps }` when a step declares `expect`, and `reticle_verify` (`change`/`flows`). Everything else moves or reads the app and proves nothing. Only `verified: \"yes\"` is a pass: `unknown` means Reticle could not tell, and `no-fault` means nothing was declared to prove. A drive that ends without a verdict has no result, however many tools it used. Never weaken a check to make it pass.",
       "Package names are scoped `@reticlehq/*`. Run every CLI command as `npx @reticlehq/server <command>`, for example `npx @reticlehq/server init`. `reticle` is a bin name that `@reticlehq/server` installs once it is on your PATH, NOT a package on npm: `npx reticle` fetches an unrelated package published by somebody else, so never run that. The complete tool surface is on the `/usage` page; `/agent-cheatsheet` is the one-screen version."
     ]
   },

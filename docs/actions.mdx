@@ -22,8 +22,11 @@ Every action Reticle can perform takes the same shape: a `ref` from [`reticle_lo
 | `select` | `{ value }` | For `<select>` |
 | `check` / `uncheck` | none | Checkbox and radio, or a `role="checkbox"`/`role="switch"` element (fails if `aria-checked` does not change) |
 | `submit` | none | Submits the element's `<form>` |
-| `press` | `{ text }` | The key **name**: `Escape`, `Tab`, `Enter` |
+| `press` | `{ text, modifiers?, holdMs?, keys?, code? }` | `text` is the key **name**: `Escape`, `Tab`, `Enter`. `key` is an accepted alias. `modifiers` is an array of `Meta`, `Control`, `Shift`, `Alt`. `holdMs` holds the key down; `keys` holds several together; `code` names the physical key |
 | `scrollIntoView` | none |  |
+| `scroll` | `{ dy?, dx?, fraction? }` | Scrolls the nearest scrollable container (or the page, with no `ref`) by `dy`/`dx` pixels, either direction. `fraction` (0 to 1) jumps to that point of the height. No args steps down most of a screen |
+| `tap` | `{ holdMs? }` | A touch tap: pointer and touch events, then `click`. `holdMs` makes it a long press |
+| `zoom` | none | Page zoom. Refused inside the page, because CSS zoom changes how a page looks without changing its layout, and a passing check on it would be false |
 | `upload` | `{ content?, name?, type?, path? }` | Sets a file on `<input type="file">`. Inline bytes default to `"reticle test file"` / `"file.txt"` / `"text/plain"`. `path` reads a file from disk, scoped to the project root plus any opt-in directories listed in `.reticle.json` as `"uploadRoots": ["~/Downloads", "/Volumes/fixtures"]`. A refusal names every allowed root. |
 | `drag` | `{ toRef }` | Pointer-based drag (dnd-kit, react-beautiful-dnd) plus HTML5 DnD. `target` is an alias |
 
@@ -71,7 +74,7 @@ This one has history worth knowing. The implementation used to read `args.key` a
 
 Three consequences, worst last: the requested key never arrived, so Escape-to-close and Tab-traversal went unverified while looking verified; nothing in the result said the argument had been ignored; and `Enter` is not a neutral substitute. On a focused field inside a form it **submits it**. A request to close a dialog could file the form behind it.
 
-Two field reports were exactly this, both diagnosed as "synthetic events don't reach the app". Wrong root cause: the event reached the app perfectly well and simply said `Enter`.
+This is often misdiagnosed as "synthetic events don't reach the app". That is the wrong root cause: the event reached the app perfectly well and simply said `Enter`.
 
 </Warning>
 
@@ -112,7 +115,7 @@ Several actions in one round trip:
 
 Fields sitting at their uninformative default are **omitted**, so a clean action collapses to its consequence. A missing `visible` means `true`, not `false`. Read an absence as "nothing to report" rather than as a failure.
 
-`occluded` is the answer to a large share of "the button doesn't work" reports: the click landed on the modal overlay sitting on top of it.
+`occluded` is often the answer to "the button doesn't work": the click landed on the modal overlay sitting on top of it.
 
 <Card title="Full field-by-field walkthrough" icon="hand-pointer" href="/tools/act">
   What each effect field tells you, with a real response.

@@ -303,8 +303,44 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * holding for longer through one route than the other, which is the defect the clamp exists to stop.
  *
  * Raised by 1,000 over the measurement (247,238), rounded down to the hundred, per the note above.
+ *
+ * Raised again to 249,700 when the project-chosen test-id attribute (#1395) met this release's HUD
+ * work: every query, observer and recorder now reads the attribute name instead of a literal, and
+ * the two together measured 248,736.
+ *
+ * Raised to 250,800 when an act started reporting which of several same-named controls it hit, so a
+ * recorded step replays the same one: measured 249,804.
+ *
+ * Raised to 251,800 when page health started naming the desktop window (Tauri's label) and the
+ * status its document was served with, so a hidden 404 webview is never taken for the app: 77 B,
+ * 250,752 -> 250,829 measured on this tree.
+ * Raised to 253,000 (252,035 measured) when the storage observer began skipping the SDK's own
+ * keys: the list has to be on the page for the observer to read it, not only in the lazy HUD.
  */
-const MAX_FIRST_LOAD_BYTES = 248_200;
+/*
+ * Raised to 256,200 for target-specific overflow visibility. Rebuilding this tree with only the
+ * a11y and visible-text production changes removed measured 252,517 B; restoring them measured
+ * 256,176 B (+3,659 B). This buys composed ancestor clipping and positioned containing-block
+ * handling so an Expand click proves newly visible text instead of reporting `already_true`.
+ * The per-pass CSS/clipping cache adds 243 B versus the first PR revision and avoids repeat
+ * ancestor/style reads on unclipped lists. Only hidden/clip constrain visibility; auto/scroll
+ * keep their previous semantics. No dependency or protocol schema was added. Re-measured at
+ * 256,176 B after merging main. Main then gained the keypress key codes, the image-alt check and the
+ * unreachable-warning text, and the merge measured 256,653 B; the ceiling is that rounded up to the
+ * next hundred.
+ */
+const MAX_FIRST_LOAD_BYTES = 256_700;
+/*
+ * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
+ * string, its shape checked in the daemon where it is counted, as control ids already are. The
+ * impact snapshot's loose `coverage` record is in the same measurement.
+ */
+/*
+ * Raised 248_200 -> 248_300 for the HUD's per-page time: `HudPanel` gained `flows` and `notes`, the
+ * two pages that open inside the Agent Log. The enum is in the wire schema that validates every
+ * `hud.used` event, so it loads with the page. Measured 248,212 on this commit. The notices schema
+ * that landed beside it costs nothing here: it is on the lazy `@reticlehq/core/hud` subpath.
+ */
 /*
  * Raised a fifth time, 233_300 -> 233_400, for a route to be assertable in a SAVED flow. 57 B.
  *

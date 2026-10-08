@@ -24,6 +24,7 @@ export const StepTitle = {
   CONNECT_MODULE: 'Reticle connect module',
   PAIRING_TOKEN: 'Pairing token',
   PAIRING_TOKEN_PER_MACHINE: 'Pairing token is per-machine',
+  STATIC_PAIRING_TOKEN: 'Pairing token (static page)',
   CONNECT_SNIPPET_CRA: 'Connect snippet (CRA)',
   CONNECT_SNIPPET_NUXT: 'Connect snippet (Nuxt)',
   NUXT_CONFIG: 'Nuxt config (token + watcher)',
@@ -103,6 +104,10 @@ export const CONNECT_STEP_TITLES: ReadonlySet<StepTitle> = new Set<StepTitle>([
   // not, and `gate:install` scaffolds no CRA app, so that change would ship with no coverage of the
   // path it changes. It is worth doing, and worth doing with a scaffold behind it.
   StepTitle.VITE_PLUGIN,
+  // A plain page imports its token from a gitignored sibling module. Unlike CRA's, this step never
+  // goes MANUAL by plan: it is ⚠ only when the write itself failed — no token module means the page
+  // is refused, and no ignore entry means the token is on disk without the protection we promised.
+  StepTitle.STATIC_PAIRING_TOKEN,
   // electron-vite's connect IS the renderer plugin. Without it the SDK never injects, and the
   // preload/capture steps are not enough to produce a session.
   StepTitle.ELECTRON_VITE_PLUGIN,

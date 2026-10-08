@@ -66,6 +66,14 @@ describe('the unreachable warning states an observation, not a cause', () => {
     expect(text, 'the explicit-URL escape hatch').toContain('reticle.connect');
   });
 
+  it('names only settings something reads', () => {
+    // It used to name VITE_RETICLE_WS_URL, which no shipped package reads, so a reader who set it
+    // got the same warning back. The Vite plugin reads RETICLE_PORT and its own `port` option.
+    const text = message();
+    expect(text).not.toContain('VITE_RETICLE_WS_URL');
+    expect(text).toContain('RETICLE_PORT');
+  });
+
   it('says it is still retrying, so the reader does not act as though it stopped', () => {
     expect(message().toLowerCase()).toContain('retrying');
   });

@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getAccessibleName, isVisible } from './a11y.js';
 import { installShadowRegistry } from './shadow-registry.js';
+import { matchQuery } from './query.js';
 
 describe('name from content for roles that allow it', () => {
   // A segmented filter written as `<button role="radio">held</button>` is an extremely ordinary
@@ -175,6 +176,31 @@ describe('a closed native <details> hides what the summary does not contain', ()
       outer.remove();
     }
   });
+});
+
+describe('own hiding short-circuits ancestor metadata', () => {
+  it.each(['hidden', 'aria-hidden', 'display:none'])(
+    'does not resolve ancestor styles for a target hidden by %s',
+    (signal) => {
+      const outer = document.createElement('div');
+      const inner = document.createElement('div');
+      const button = document.createElement('button');
+      if ('hidden' === signal) button.hidden = true;
+      else if ('aria-hidden' === signal) button.setAttribute('aria-hidden', 'true');
+      else button.style.display = 'none';
+      inner.append(button);
+      outer.append(inner);
+      document.body.append(outer);
+      const styles = vi.spyOn(window, 'getComputedStyle');
+      try {
+        expect(isVisible(button, new Map())).toBe(false);
+        expect(styles.mock.calls.every(([element]) => element === button)).toBe(true);
+      } finally {
+        styles.mockRestore();
+        outer.remove();
+      }
+    },
+  );
 });
 
 describe('visibility composes across a shadow boundary', () => {
@@ -475,4 +501,423 @@ describe('fieldset named by its legend', () => {
     fieldset.append(legend);
     expect(getAccessibleName(fieldset)).toBe('Override');
   });
+});
+
+/**
+ * #793: on a hidden tab the browser stalls animations, so a fade-in sits at opacity 0 and every
+ * surface that asked "visible?" disagreed about a node that was rendered. Opacity 0 mid-animation on
+ * a hidden tab is a stalled fade, not a hidden element; at rest it is still hidden.
+ */
+describe('a fade-in stalled by a hidden tab', () => {
+  const faded = (animating: boolean): HTMLElement => {
+    const el = document.createElement('div');
+    el.style.opacity = '0';
+    el.textContent = 'Total: 42';
+    (
+      el as unknown as { getAnimations: () => { playState: string; pending: boolean }[] }
+    ).getAnimations = () => (animating ? [{ playState: 'running', pending: false }] : []);
+    document.body.appendChild(el);
+    return el;
+  };
+  const hide = (hidden: boolean): void => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+  };
+  afterEach(() => {
+    hide(false);
+    document.body.innerHTML = '';
+  });
+
+  it('reads visible while its animation is stalled on a hidden tab', () => {
+    hide(true);
+    expect(isVisible(faded(true))).toBe(true);
+  });
+
+  it('still reads hidden at rest, or on a tab that is running its animations', () => {
+    hide(true);
+    expect(isVisible(faded(false))).toBe(false);
+    hide(false);
+    expect(isVisible(faded(true))).toBe(false);
+  });
+});
+
+describe('visibility inside overflow clipping ancestors', () => {
+  // jsdom has no layout: every box participating in a clipping test is explicit and coherent.
+  function box(el: Element, x: number, y: number, width: number, height: number): void {
+    el.getBoundingClientRect = () => new DOMRect(x, y, width, height);
+  }
+
+  function mount(overflow = 'hidden'): { clip: HTMLElement; child: HTMLElement } {
+    const clip = document.createElement('div');
+    clip.style.overflow = overflow;
+    // jsdom does not expand this shorthand into its computed overflow longhands.
+    clip.style.overflowX = overflow;
+    clip.style.overflowY = overflow;
+    const child = document.createElement('p');
+    child.textContent = 'Later paragraph';
+    clip.append(child);
+    document.body.append(clip);
+    box(clip, 0, 0, 100, 100);
+    box(child, 10, 120, 80, 20);
+    return { clip, child };
+  }
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it.each(['hidden', 'clip'])(
+    'hides a box completely below an overflow:%s ancestor',
+    (overflow) => {
+      const { child } = mount(overflow);
+      expect(isVisible(child)).toBe(false);
+    },
+  );
+
+  it.each(['auto', 'scroll'])(
+    'keeps a box outside an overflow:%s scrollport visible without reading layout',
+    (overflow) => {
+      const { clip, child } = mount(overflow);
+      const clipRect = vi.spyOn(clip, 'getBoundingClientRect');
+      const childRect = vi.spyOn(child, 'getBoundingClientRect');
+      expect(isVisible(child, new Map())).toBe(true);
+      expect(clipRect).not.toHaveBeenCalled();
+      expect(childRect).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['auto', 'scroll'])(
+    'keeps below-the-fold overflow:%s text in visible queries',
+    (overflow) => {
+      const { child } = mount(overflow);
+      child.dataset.testid = 'scroll-row';
+      box(child, 10, 2000, 80, 20);
+      expect(matchQuery({ testid: 'scroll-row' }, 'visible').count).toBe(1);
+      expect(matchQuery({ text: 'Later paragraph' }, 'visible').count).toBe(1);
+    },
+  );
+
+  it.each(['auto', 'scroll'])(
+    'still applies an outer hidden clip around an overflow:%s scrollport',
+    (overflow) => {
+      const { clip, child } = mount(overflow);
+      const outer = document.createElement('div');
+      outer.style.overflow = 'hidden';
+      outer.style.overflowX = 'hidden';
+      outer.style.overflowY = 'hidden';
+      clip.replaceWith(outer);
+      outer.append(clip);
+      box(outer, 0, 0, 100, 100);
+      expect(isVisible(child)).toBe(false);
+    },
+  );
+
+  it.each(['auto', 'scroll'])(
+    'still applies an inner hidden clip inside an overflow:%s scrollport',
+    (overflow) => {
+      const { clip, child } = mount();
+      const outer = document.createElement('div');
+      outer.style.overflow = overflow;
+      outer.style.overflowX = overflow;
+      outer.style.overflowY = overflow;
+      clip.replaceWith(outer);
+      outer.append(clip);
+      box(outer, 0, 0, 100, 100);
+      expect(isVisible(child)).toBe(false);
+    },
+  );
+
+  it.each(['overflowX', 'overflowY'] as const)(
+    'clips the hidden %s axis while preserving the other auto axis',
+    (axis) => {
+      const { clip, child } = mount('auto');
+      clip.style[axis] = 'hidden';
+      box(child, 120, 120, 20, 20);
+      expect(isVisible(child)).toBe(false);
+      box(child, 'overflowX' === axis ? 10 : 120, 'overflowY' === axis ? 10 : 120, 20, 20);
+      expect(isVisible(child)).toBe(true);
+    },
+  );
+
+  it.each([
+    [-30, 10],
+    [100, 10],
+    [10, -30],
+    [10, 100],
+  ])('hides a box outside the clipping edge at (%s, %s)', (x, y) => {
+    const { child } = mount();
+    box(child, x, y, 20, 20);
+    expect(isVisible(child)).toBe(false);
+  });
+
+  it.each([
+    [-10, 10],
+    [90, 10],
+    [10, -10],
+    [10, 90],
+  ])('keeps a partly clipped box at (%s, %s) visible', (x, y) => {
+    const { child } = mount();
+    box(child, x, y, 20, 20);
+    expect(isVisible(child)).toBe(true);
+  });
+
+  it('allows overflow:visible content outside its parent box', () => {
+    const { child } = mount('visible');
+    expect(isVisible(child)).toBe(true);
+  });
+
+  it.each(['inline', 'contents', 'table-row', 'table-row-group'])(
+    'ignores overflow on a display:%s ancestor',
+    (display) => {
+      const { clip, child } = mount();
+      clip.style.display = display;
+      expect(isVisible(child)).toBe(true);
+    },
+  );
+
+  it.each(['html', 'body'])('keeps viewport overflow on %s separate from visibility', (tag) => {
+    const { clip, child } = mount('visible');
+    const root = 'html' === tag ? document.documentElement : document.body;
+    const previous = root.style.overflow;
+    root.style.overflow = 'hidden';
+    box(root, 0, 0, 100, 100);
+    box(clip, 0, 0, 100, 200);
+    try {
+      expect(isVisible(child)).toBe(true);
+    } finally {
+      root.style.overflow = previous;
+    }
+  });
+
+  it.each(['overflowX', 'overflowY'] as const)('clips only the %s axis', (axis) => {
+    const { clip, child } = mount('visible');
+    clip.style[axis] = 'clip';
+    box(child, 120, 120, 20, 20);
+    expect(isVisible(child)).toBe(false);
+    box(child, 'overflowX' === axis ? 10 : 120, 'overflowY' === axis ? 10 : 120, 20, 20);
+    expect(isVisible(child)).toBe(true);
+  });
+
+  it('hides a positive-size child of a collapsed clipping box', () => {
+    const { clip, child } = mount();
+    box(clip, 0, 0, 100, 0);
+    box(child, 10, 0, 80, 20);
+    expect(isVisible(child)).toBe(false);
+  });
+
+  it('clips at the padding edge rather than letting the border keep hidden content visible', () => {
+    const { clip, child } = mount();
+    clip.style.border = '20px solid transparent';
+    box(clip, 0, 0, 140, 140);
+    box(child, 5, 5, 10, 10);
+    expect(isVisible(child)).toBe(false);
+    box(child, 15, 15, 10, 10);
+    expect(isVisible(child)).toBe(true);
+  });
+
+  it('honours overflow-clip-margin without expanding hidden overflow', () => {
+    const { clip, child } = mount('clip');
+    clip.style.overflowClipMargin = '20px';
+    box(child, 10, -15, 20, 10);
+    expect(isVisible(child)).toBe(true);
+    clip.style.overflowX = 'hidden';
+    clip.style.overflowY = 'hidden';
+    expect(isVisible(child)).toBe(false);
+  });
+
+  it.each(['absolute', 'fixed'])(
+    'keeps a %s child visible when its containing block escapes the clip',
+    (position) => {
+      const { child } = mount();
+      child.style.position = position;
+      Object.defineProperty(child, 'offsetParent', { value: null });
+      expect(isVisible(child)).toBe(true);
+    },
+  );
+
+  it.each(['absolute', 'fixed'])(
+    'clips a %s child whose containing block is the clipping ancestor',
+    (position) => {
+      const { clip, child } = mount();
+      if ('absolute' === position) clip.style.position = 'relative';
+      else clip.style.transform = 'translateZ(0)';
+      child.style.position = position;
+      Object.defineProperty(child, 'offsetParent', { value: clip });
+      expect(isVisible(child)).toBe(false);
+    },
+  );
+
+  it('keeps descendants of an escaped fixed subtree visible', () => {
+    const { child: fixed } = mount();
+    fixed.style.position = 'fixed';
+    Object.defineProperty(fixed, 'offsetParent', { value: null });
+    const child = document.createElement('span');
+    fixed.append(child);
+    box(child, 10, 120, 80, 20);
+    expect(isVisible(child)).toBe(true);
+  });
+
+  it.each(['translate:0px', 'rotate:0deg', 'scale:1'])(
+    'clips positioned children when %s establishes their containing block',
+    (transform) => {
+      const { clip, child } = mount();
+      clip.style.cssText += `;${transform}`;
+      for (const position of ['absolute', 'fixed']) {
+        child.style.position = position;
+        expect(isVisible(child)).toBe(false);
+      }
+    },
+  );
+
+  it.each([
+    'transform:translateZ(0)',
+    'translate:0px',
+    'perspective:10px',
+    'will-change:transform',
+    'contain:paint',
+    'contain:layout',
+    'content-visibility:auto',
+  ])(
+    'does not establish a containing block for %s on a non-replaced inline ancestor',
+    (transform) => {
+      const { child } = mount();
+      const inline = document.createElement('span');
+      inline.style.cssText = `display:inline;${transform}`;
+      child.replaceWith(inline);
+      inline.append(child);
+      child.style.position = 'fixed';
+      expect(isVisible(child)).toBe(true);
+    },
+  );
+
+  it('intersects all clipping ancestors, not just the nearest one', () => {
+    const { clip: outer, child } = mount();
+    const inner = document.createElement('div');
+    inner.style.overflow = 'hidden';
+    inner.style.overflowX = 'hidden';
+    inner.style.overflowY = 'hidden';
+    outer.append(inner);
+    inner.append(child);
+    box(outer, 0, 0, 40, 100);
+    box(inner, 60, 0, 40, 100);
+    box(child, 20, 10, 60, 20);
+    // Each ancestor overlaps the target, but there is no region surviving both clips.
+    expect(isVisible(child)).toBe(false);
+    box(inner, 30, 0, 70, 100);
+    expect(isVisible(child)).toBe(true);
+  });
+
+  it('does not inherit a clipped ancestor result when a descendant overflows back into view', () => {
+    const { clip, child: parent } = mount();
+    box(parent, 120, 10, 20, 20);
+    const child = document.createElement('span');
+    parent.append(child);
+    box(child, 20, 10, 20, 20);
+    const memo = new Map<Element, boolean>();
+    expect(isVisible(parent, memo)).toBe(false);
+    expect(isVisible(child, memo)).toBe(true);
+    clip.style.display = 'none';
+    expect(isVisible(child, new Map())).toBe(false);
+  });
+
+  it.each([true, false])(
+    'keeps sibling geometry independent (clipped first: %s)',
+    (clippedFirst) => {
+      const { clip, child: clipped } = mount();
+      const visible = document.createElement('p');
+      clip.append(visible);
+      box(visible, 10, 10, 80, 20);
+      const memo = new Map<Element, boolean>();
+      const siblings = clippedFirst ? [clipped, visible] : [visible, clipped];
+      expect(siblings.map((el) => isVisible(el, memo))).toEqual(
+        clippedFirst ? [false, true] : [true, false],
+      );
+    },
+  );
+
+  it('recomputes visibility and visible-text queries after expanding the clip', () => {
+    const { clip, child } = mount();
+    const query = { text: 'Later paragraph' };
+    expect(matchQuery(query).elements[0]?.visible).toBe(false);
+    expect(matchQuery(query, 'visible').count).toBe(0);
+    box(clip, 0, 0, 100, 160);
+    expect(isVisible(child, new Map())).toBe(true);
+    expect(matchQuery(query, 'visible').count).toBe(1);
+  });
+
+  it.each(['open', 'closed'] as const)('clips shadow content across a %s root', (mode) => {
+    const { clip, child: host } = mount();
+    box(host, 10, 10, 80, 20);
+    const shadow = host.attachShadow({ mode });
+    const child = document.createElement('span');
+    shadow.append(child);
+    box(child, 10, 120, 80, 20);
+    expect(isVisible(child)).toBe(false);
+    box(child, 10, 90, 80, 20);
+    expect(isVisible(child)).toBe(true);
+    clip.remove();
+  });
+
+  it.each(['open', 'closed'] as const)(
+    'clips light-DOM content where its %s-root slot renders',
+    (mode) => {
+      const uninstall = installShadowRegistry();
+      try {
+        const host = document.createElement('div');
+        const root = host.attachShadow({ mode });
+        const clip = document.createElement('div');
+        clip.style.overflow = 'hidden';
+        clip.style.overflowX = 'hidden';
+        clip.style.overflowY = 'hidden';
+        clip.append(document.createElement('slot'));
+        root.append(clip);
+        const child = document.createElement('span');
+        host.append(child);
+        document.body.append(host);
+        box(host, 0, 0, 100, 200);
+        box(clip, 0, 0, 100, 100);
+        box(child, 10, 120, 80, 20);
+        expect(isVisible(child)).toBe(false);
+        box(child, 10, 90, 80, 20);
+        expect(isVisible(child)).toBe(true);
+      } finally {
+        uninstall();
+      }
+    },
+  );
+
+  it.each(['open', 'closed'] as const)(
+    'finds positioned containing blocks inside a %s shadow root',
+    (mode) => {
+      const uninstall = installShadowRegistry();
+      try {
+        const host = document.createElement('div');
+        const root = host.attachShadow({ mode });
+        const clip = document.createElement('div');
+        clip.style.overflowX = 'hidden';
+        clip.style.overflowY = 'hidden';
+        clip.style.position = 'relative';
+        clip.append(document.createElement('slot'));
+        root.append(clip);
+        const child = document.createElement('div');
+        child.style.position = 'absolute';
+        host.append(child);
+        document.body.append(host);
+        box(clip, 0, 0, 100, 100);
+        box(child, 10, 120, 20, 20);
+        // offsetParent is retargeted outside the shadow root and cannot identify this clip.
+        Object.defineProperty(child, 'offsetParent', { value: document.body });
+        expect(isVisible(child)).toBe(false);
+        clip.style.transform = 'translateZ(0)';
+        child.style.position = 'fixed';
+        expect(isVisible(child)).toBe(false);
+        box(child, 10, 90, 20, 20);
+        expect(isVisible(child)).toBe(true);
+      } finally {
+        uninstall();
+      }
+    },
+  );
 });

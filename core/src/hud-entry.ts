@@ -7,3 +7,5 @@
  * loaded panel ever reads it. `first-load-size` measured it.
  */
 export * from './wire/constants/hud-controls.js';
+// The rail's notices: read by the daemon that chooses them and the lazy panel that renders them.
+export * from './artifacts/hud-notices.js';

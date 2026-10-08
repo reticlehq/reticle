@@ -24,6 +24,7 @@
  * So the composite cases are handled where they mean what v1 meant, and left alone everywhere else.
  */
 import { PredicateKind } from './consequence.js';
+import { TRANSPORT_LIMITS } from '@/wire/constants/constants.js';
 import type { Predicate } from './predicate.js';
 
 /**
@@ -150,6 +151,30 @@ export function expectLabel(predicate: Predicate | undefined): string {
  * address inside ONE session's numbering, not an identity.
  */
 export const SESSION_REF = /^e\d+$/;
+
+/**
+ * The stable part of the refusal for a `ref` Reticle never minted. The server's recovery table keys
+ * on it, so it is one constant rather than two spellings that could drift.
+ */
+export const UNISSUED_REF_REFUSAL = 'is not a ref Reticle issued';
+
+/**
+ * Why an act refused a `ref` that does not have the minted shape.
+ *
+ * The browser's ref table answers a miss with null, and an unknown string and a detached element
+ * reached the same refusal: "that ref is stale: refs are invalidated whenever the DOM re-renders".
+ * For `find:aria-label=Open menu` — never a ref at all — that diagnosis is wrong, and the agent
+ * retried the same mistake. A string that cannot have been minted is answered for what it is, and
+ * pointed at `target`, which is what the caller was reaching for.
+ */
+export function unissuedRefRefusal(ref: string): string {
+  const max = TRANSPORT_LIMITS.MAX_REF_LENGTH;
+  const echoed = max >= ref.length ? ref : `${ref.slice(0, max)}…`;
+  return (
+    `${JSON.stringify(echoed)} ${UNISSUED_REF_REFUSAL}; refs look like e12. To address an element ` +
+    'by what it shows, pass target: { label }, { role, name }, { text } or { testid }.'
+  );
+}
 
 /** Why a flow refused a predicate holding a ref, naming the field. */
 export function sessionRefRefusal(field: string): string {

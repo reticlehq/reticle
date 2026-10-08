@@ -111,6 +111,47 @@ export function pressCode(args: Record<string, unknown>, key: string): string {
 }
 
 /**
+ * Dispatch the legacy `keypress` event a real browser still emits for character-producing keys.
+ *
+ * `keypress` is deprecated, but kiosk/POS apps and scanner integrations still listen for it. A
+ * synthetic `press` that only sends keydown/keyup therefore reports success while those apps never
+ * receive the scan. Keep this deliberately narrow: printable single-character keys and Enter only,
+ * never navigation or modifier keys.
+ *
+ * The caller is responsible for checking the preceding keydown result. Browsers do not emit
+ * keypress when keydown was cancelled.
+ */
+export function dispatchKeypress(
+  el: ActionTarget,
+  key: string,
+  code: string,
+  mods: ModifierFlags,
+  repeat = false,
+): void {
+  if (ENTER_KEY !== key && 1 !== key.length) return;
+  const event = new KeyboardEvent('keypress', {
+    key,
+    code,
+    bubbles: true,
+    cancelable: true,
+    repeat,
+    ...mods,
+  });
+  // A real keypress carries the character code in all three legacy fields, and scanner handlers read
+  // them. The constructor leaves them at 0 in every engine, so they are set on the instance.
+  const legacy = ENTER_KEY === key ? ENTER_CHAR_CODE : key.charCodeAt(0);
+  for (const field of LEGACY_KEY_CODE_FIELDS) {
+    Object.defineProperty(event, field, { value: legacy });
+  }
+  asSyntheticInput(() => el.dispatchEvent(event));
+}
+
+const ENTER_KEY = 'Enter';
+/** The carriage return a browser reports as Enter's keypress code. */
+const ENTER_CHAR_CODE = 13;
+const LEGACY_KEY_CODE_FIELDS = ['keyCode', 'charCode', 'which'] as const;
+
+/**
  * Named keys whose `code` equals their `key`. An allow-list rather than a shape test: `Zzz` looks
  * exactly like `Tab` to a regex, and inventing `code: "Zzz"` would be a confident fabrication.
  */
@@ -190,6 +231,49 @@ const KEY_REPEAT_MS = 33;
 const KEY_REPEAT_DELAY_MS = 500;
 
 /**
+ * The legacy `keyCode` a keyboard gives each named key. Read by a great many handlers still
+ * (`if (e.keyCode === 13)`), and `KeyboardEvent`'s constructor cannot set it: a synthetic event
+ * reads 0, so those handlers ignore it while the press reports success. TodoMVC is one.
+ */
+const LEGACY_KEY_CODES: Readonly<Record<string, number>> = {
+  Backspace: 8,
+  Tab: 9,
+  Enter: 13,
+  Shift: 16,
+  Control: 17,
+  Alt: 18,
+  Escape: 27,
+  ' ': 32,
+  PageUp: 33,
+  PageDown: 34,
+  End: 35,
+  Home: 36,
+  ArrowLeft: 37,
+  ArrowUp: 38,
+  ArrowRight: 39,
+  ArrowDown: 40,
+  Delete: 46,
+  Meta: 91,
+};
+const SINGLE_ALNUM = /^[a-z0-9]$/i;
+
+/** The keyCode a keyboard would report for `key`: named keys by table, a letter or digit by its upper-case code. */
+export const legacyKeyCode = (key: string): number =>
+  LEGACY_KEY_CODES[key] ?? (SINGLE_ALNUM.test(key) ? key.toUpperCase().charCodeAt(0) : 0);
+
+/** A KeyboardEvent as a keyboard sends it, `keyCode` and `which` included. */
+export function keyboardEvent(
+  type: string,
+  init: KeyboardEventInit & { key: string },
+): KeyboardEvent {
+  const event = new KeyboardEvent(type, init);
+  const code = legacyKeyCode(init.key);
+  for (const legacy of ['keyCode', 'which'] as const)
+    Object.defineProperty(event, legacy, { get: () => code });
+  return event;
+}
+
+/**
  * Hold one key down for `ms`, emitting the `repeat: true` keydowns a browser sends while it is held.
  *
  * The repeats are the point rather than decoration: an app that counts keydowns to drive a
@@ -206,9 +290,9 @@ export async function holdKey(
   const started = Date.now();
   if (ms > KEY_REPEAT_DELAY_MS) await sleep(KEY_REPEAT_DELAY_MS);
   while (Date.now() - started < ms) {
-    asSyntheticInput(() =>
+    const down = asSyntheticInput(() =>
       el.dispatchEvent(
-        new KeyboardEvent('keydown', {
+        keyboardEvent('keydown', {
           key,
           code,
           bubbles: true,
@@ -218,6 +302,7 @@ export async function holdKey(
         }),
       ),
     );
+    if (down) dispatchKeypress(el, key, code, mods, true);
     await sleep(Math.min(KEY_REPEAT_MS, Math.max(0, ms - (Date.now() - started))));
   }
 }
@@ -250,7 +335,7 @@ export async function pressCombo(
     const code = pressCode({}, key);
     return asSyntheticInput(() =>
       el.dispatchEvent(
-        new KeyboardEvent(type, { key, code, bubbles: true, cancelable: true, ...held }),
+        keyboardEvent(type, { key, code, bubbles: true, cancelable: true, ...held }),
       ),
     );
   };
@@ -292,6 +377,7 @@ export async function pressCombo(
     if (flag !== undefined) pressFlag(flag);
     const ok = dispatch('keydown', key);
     if (!ok) prevented = true;
+    if (ok) dispatchKeypress(el, key, pressCode({}, key), held);
     // The same default a single Escape gets: `keys: ["Escape"]` is the same key.
     closeModalOnEscape(el, key, ok);
   }

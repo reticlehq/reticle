@@ -22,4 +22,7 @@ export function mirroredNarration(sessionId: string, text: string): string {
 export const MIRRORED_COMMANDS: ReadonlySet<string> = new Set<string>([
   ReticleCommand.NARRATE,
   ReticleCommand.IMPACT,
+  // A replay usually reloads the page, so its progress has to reach whichever tab is there now.
+  ReticleCommand.FLOW_PROGRESS,
+  ReticleCommand.PLAN,
 ]);

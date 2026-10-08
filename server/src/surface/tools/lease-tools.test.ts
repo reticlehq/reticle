@@ -45,12 +45,23 @@ function tool(name: string): (deps: ToolDeps, args: Record<string, unknown>) => 
 /** A pool stub that records acquire calls and tracks active count. */
 function fakePool(): {
   pool: BrowserPool;
-  acquired: { url: string; sessionId: string | undefined; seedStorage?: unknown }[];
+  acquired: {
+    url: string;
+    sessionId: string | undefined;
+    seedStorage?: unknown;
+    headed?: boolean;
+  }[];
   /** Every (registeredId, leaseId) pair the lease told the pool about. */
   aliased: [string, string][];
   released: string[];
 } {
-  const acquired: { url: string; sessionId: string | undefined; seedStorage?: unknown }[] = [];
+  const acquired: {
+    url: string;
+    sessionId: string | undefined;
+    seedStorage?: unknown;
+    headed?: boolean;
+  }[] = [];
+  const headedIds = new Set<string>();
   let active = 0;
   const released: string[] = [];
   const aliased: [string, string][] = [];
@@ -62,11 +73,22 @@ function fakePool(): {
       return undefined;
     }
   };
+  const owners = new Map<string, string | undefined>();
   const pool = {
-    acquire(url: string, opts: { sessionId?: string; seedStorage?: unknown } = {}): Promise<Lease> {
-      acquired.push({ url, sessionId: opts.sessionId, seedStorage: opts.seedStorage });
+    acquire(
+      url: string,
+      opts: { sessionId?: string; seedStorage?: unknown; owner?: string; headed?: boolean } = {},
+    ): Promise<Lease> {
+      acquired.push({
+        url,
+        sessionId: opts.sessionId,
+        seedStorage: opts.seedStorage,
+        ...(opts.headed === undefined ? {} : { headed: opts.headed }),
+      });
+      if (true === opts.headed && opts.sessionId !== undefined) headedIds.add(opts.sessionId);
       active += 1;
       const sessionId = opts.sessionId ?? 'gen';
+      owners.set(sessionId, opts.owner);
       const origin = originOf(url);
       if (origin !== undefined) byOrigin.set(origin, sessionId);
       return Promise.resolve({ sessionId, url, release: () => Promise.resolve() });
@@ -83,8 +105,13 @@ function fakePool(): {
     queuedCount: () => 0,
     leasedSessionIds: () => [...byOrigin.values()],
     leaseTtlMs: () => 300_000,
-    leaseIdOnOrigin: (origin: string) => byOrigin.get(origin),
+    // The real pool's rule: only the caller that took a lease is handed it again.
+    leaseIdOnOrigin: (origin: string, owner: string | undefined) => {
+      const id = byOrigin.get(origin);
+      return id !== undefined && owner !== undefined && owners.get(id) === owner ? id : undefined;
+    },
     touch: () => undefined,
+    isHeaded: (id: string) => headedIds.has(id),
     alias: (registeredId: string, leaseId: string) => {
       aliased.push([registeredId, leaseId]);
     },
@@ -94,7 +121,10 @@ function fakePool(): {
 
 // A sessions stub where the leased tab is already "connected", so acquire's wait-for-ready resolves
 // immediately (no real polling) in the happy path.
-const baseDeps = { sessions: { get: () => ({ id: 'live' }) } } as unknown as ToolDeps;
+const baseDeps = {
+  sessions: { get: () => ({ id: 'live' }) },
+  attachId: 'agent-1',
+} as unknown as ToolDeps;
 
 describe('appendReticleParams', () => {
   it('adds the namespaced session (and project) params to a normal url', () => {
@@ -111,6 +141,36 @@ describe('appendReticleParams', () => {
     expect(u.searchParams.get('tab')).toBe('2');
     expect(u.searchParams.get(RETICLE_URL_PARAM.SESSION)).toBe('lease-9');
     expect(u.searchParams.has(RETICLE_URL_PARAM.PROJECT)).toBe(false);
+  });
+});
+
+describe('a lease the platform opens for a drive', () => {
+  it('says on its address how the HUD starts, so it never paints one it was asked not to', () => {
+    const u = new URL(
+      appendReticleParams('http://localhost:3000/', 'lease-1', undefined, 'hidden'),
+    );
+    expect(u.searchParams.get(RETICLE_URL_PARAM.HUD)).toBe('hidden');
+    expect(
+      new URL(appendReticleParams('http://localhost:3000/', 'l')).searchParams.has(
+        RETICLE_URL_PARAM.HUD,
+      ),
+    ).toBe(false);
+  });
+
+  it('opens a window when asked, and never hands back the headless tab on the same origin', async () => {
+    const { pool, acquired } = fakePool();
+    const headless = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/' },
+    )) as { sessionId: string };
+    const headed = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/', headed: true, hud: 'removed' },
+    )) as { sessionId: string; reused?: boolean };
+    expect(headed.sessionId).not.toBe(headless.sessionId);
+    expect(headed.reused).toBeUndefined();
+    expect(acquired.map((a) => a.headed)).toEqual([undefined, true]);
+    expect(new URL(acquired[1]?.url ?? '').searchParams.get(RETICLE_URL_PARAM.HUD)).toBe('removed');
   });
 });
 
@@ -138,6 +198,7 @@ describe('reticle_lease_acquire failure surfaces a clean message', () => {
     const pool = {
       acquire: () =>
         Promise.reject(new Error('page.goto: net::ERR_CONNECTION_REFUSED at http://x/')),
+      leaseIdOnOrigin: () => undefined,
       activeCount: () => 0,
       queuedCount: () => 0,
     } as unknown as BrowserPool;
@@ -146,6 +207,31 @@ describe('reticle_lease_acquire failure surfaces a clean message', () => {
     ).rejects.toThrow(
       /could not open http:\/\/localhost:3000\/ — is the app running there\? \(net::ERR_CONNECTION_REFUSED\)/,
     );
+  });
+
+  // A cold dev server compiling a route for the first time can outlast the navigation budget. The
+  // app is running; "is the app running there?" sends the agent hunting for a missing server
+  // instead of retrying (#1460).
+  it('a navigation timeout says the page did not finish loading, and leads with the retry', async () => {
+    const pool = {
+      acquire: () =>
+        Promise.reject(
+          new Error(
+            'page.goto: Timeout 30000ms exceeded.\nCall log:\n  - navigating to "http://localhost:3000/", waiting until "load"',
+          ),
+        ),
+      leaseIdOnOrigin: () => undefined,
+      activeCount: () => 0,
+      queuedCount: () => 0,
+    } as unknown as BrowserPool;
+    const acquire = tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/' },
+    );
+    await expect(acquire).rejects.toThrow(
+      /could not open http:\/\/localhost:3000\/ — the page did not finish loading within 30 s \(navigation timed out\)\. If the app is running, .*retry the acquire\. If it is not running, start it first\./,
+    );
+    await expect(acquire).rejects.not.toThrow(/is the app running there/);
   });
 });
 
@@ -238,6 +324,28 @@ describe('reticle_lease_acquire', () => {
     expect(navUrl.searchParams.get(RETICLE_URL_PARAM.SESSION)).toBe(result.sessionId);
     expect(navUrl.searchParams.get(RETICLE_URL_PARAM.PROJECT)).toBe('acme');
     expect(acquired[0]?.sessionId).toBe(result.sessionId);
+  });
+
+  it('gives a second agent on the same origin its own tab, and never releases the first (#1226)', async () => {
+    const { pool, acquired, released } = fakePool();
+    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/login' },
+    )) as { sessionId: string };
+    const other = { ...baseDeps, pool, attachId: 'agent-2' } as ToolDeps;
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(other, {
+      url: 'http://localhost:3000/login',
+    })) as { sessionId: string; reused?: boolean };
+    const seeded = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...other, attachId: 'agent-3' },
+      { url: 'http://localhost:3000/login', seedStorage: { local: { token: 'x' } } },
+    )) as { sessionId: string };
+
+    expect(second.sessionId).not.toBe(first.sessionId);
+    expect(second.reused).toBeUndefined();
+    expect(seeded.sessionId).not.toBe(first.sessionId);
+    expect(acquired).toHaveLength(3);
+    expect(released).toEqual([]);
   });
 
   it('reuses a live lease on the same origin rather than minting a second tab', async () => {
@@ -474,6 +582,50 @@ describe('reticle_lease_acquire', () => {
     // A generous per-test budget, not a duration assertion: this is the ONLY case that pays the
     // real readiness wait, because proving "no SDK ever dialled in" means letting it run out.
   }, 20_000);
+
+  it('does not report a freshly minted lease ready while its tab is hidden (#1351)', async () => {
+    // A hidden tab throttles timers and rAF: the SDK dialled in, yet nothing on the page can be
+    // verified. Neither existing reason fits — the install is fine and the tab is answering.
+    const { pool } = fakePool();
+    const hiddenTab = {
+      info: () => ({ hidden: true }),
+      command: () => Promise.resolve({ ok: true }),
+    };
+    const sessions = { get: () => hiddenTab, all: () => [] };
+
+    const result = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool, sessions } as unknown as ToolDeps,
+      { url: 'http://localhost:3000/' },
+    )) as { ready: boolean; notReadyReason?: string };
+
+    expect(result.ready).toBe(false);
+    expect(result.notReadyReason).toBe(LeaseNotReadyReason.TAB_HIDDEN);
+  });
+
+  it('does not report a reused lease ready while its tab is hidden', async () => {
+    const { pool } = fakePool();
+    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/' },
+    )) as { sessionId: string };
+    const hiddenTab = {
+      info: () => ({ hidden: true }),
+      command: () => Promise.resolve({ ok: true }),
+    };
+    const sessions = {
+      get: (i: string) => (i === first.sessionId ? hiddenTab : undefined),
+      all: () => [],
+    };
+
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool, sessions } as unknown as ToolDeps,
+      { url: 'http://localhost:3000/' },
+    )) as { ready: boolean; reused?: boolean; notReadyReason?: string };
+
+    expect(second.reused).toBe(true);
+    expect(second.ready).toBe(false);
+    expect(second.notReadyReason).toBe(LeaseNotReadyReason.TAB_HIDDEN);
+  });
 
   it('treats a session it cannot probe as alive, rather than failing a working lease', async () => {
     // Fail OPEN. A registry entry with no `command` is a shape this code did not put there, and

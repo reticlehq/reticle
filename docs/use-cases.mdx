@@ -122,8 +122,8 @@ After navigating to the old `/plans` URL, require the redirect and the page's ma
 
 ## Personas and simulation
 
-- **Drive the app as a user.** `explore` takes a persona in plain words, drives that whole journey with a model inside the daemon, and saves what it drove as a flow that later replays with no model.
-- **One context per role.** `reticle_lease { action: "acquire" }` opens an isolated browser context (its own cookies, storage and DOM) and can seed storage or cookies first, so an admin and a viewer drive the same app side by side. Reach it with `reticle_run`, or use `reticle verify <url> --storage-state <file>` from a terminal.
+- **Drive the app as a user.** `explore` takes a persona in plain words, drives that whole journey with the Harness, Reticle's model-driven explorer, which runs on the Reticle platform (run `reticle connect` first; Free includes monthly Harness credits), and saves what it drove as a flow that later replays with no model.
+- **One context per role.** `reticle_run { tool: "reticle_lease", args: { action: "acquire" } }` opens an isolated browser context (its own cookies, storage and DOM) and can seed storage or cookies first, so an admin and a viewer drive the same app side by side. Reach it with `reticle_run`, or use `reticle verify <url> --storage-state <file>` from a terminal.
 - **Reachability testing.** Signed in as a role, a control that role must not have is absent, and the call behind it never fires. `reticle_verify { action: "coverage" }` lists the controls you have and have not driven this session.
 - **Multi-agent runs.** Several agents lease contexts from one shared headless Chromium, capped and queued, instead of starting a browser each. See [Multi-agent](/multi-agent-testing).
 

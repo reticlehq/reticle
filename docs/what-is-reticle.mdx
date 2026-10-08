@@ -31,7 +31,9 @@ Reticle sits next to several familiar categories, and it works alongside each of
 
 **Monitoring.** Reticle runs against environments you control (a dev server, a staging or preview deployment) and replays saved flows in CI. The SDK refuses to connect in a production build, so it complements an APM or error tracker rather than watching live traffic.
 
-**Your agent.** Reticle has no model of its own for the verify loop. It gives the agent you already use a way to see the running app. Your agent, your model, your keys. (`explore` can drive a journey for you with a model inside the daemon; see [Autodrive](/autodrive).)
+**Not an accessibility auditor.** `reticle_look { action: "page" }` addresses elements by role and name, which is not the same as auditing contrast, focus order, or screen reader behaviour. Use a dedicated accessibility tool for that.
+
+**Your agent.** Reticle has no model of its own for the verify loop. It gives the agent you already use a way to see the running app. Your agent, your model, your keys. (On a linked project, `explore` has the Reticle Harness drive a journey for you on the Reticle platform; see [Autodrive](/autodrive).)
 
 **The verdict.** A verdict of `unknown` means Reticle drove the app and could not tell. It is deliberately not rounded up to a pass.
 
@@ -40,7 +42,7 @@ Reticle sits next to several familiar categories, and it works alongside each of
 - **A web application you can run**, with a dev build. `init` starts its dev server for you.
 - **A build step it can hook**, or two lines added by hand. [Frameworks](/frameworks) lists what is proven for each.
 - **An agent that speaks MCP.** Claude Code, Cursor, Codex, Copilot, Windsurf, OpenCode and others.
-- **Node 20 or newer.**
+- **Node 20.11 or newer.**
 
 Electron and Tauri desktop applications are supported, including the IPC boundary a browser-based tool cannot observe at all.
 

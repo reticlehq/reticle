@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`: one malformed message no longer disconnects a live page for good.** Every frame that failed validation was closed with the policy code the SDK reads as permanent, so an event kind from a newer SDK, or any frame that tripped the schema, ended the session mid-drive, and only a manual page reload brought it back. After the page has connected, such a frame is now dropped and logged (its kind and event type, never its payload), and the socket stays open. The drop is recorded as a transport gap in that window, so a verdict over it is downgraded rather than graded over evidence that was thrown away. Before the hello, a bad frame is still refused as before. Closes [#1413](https://github.com/reticlehq/reticle/issues/1413).

@@ -39,6 +39,11 @@ class FakePage implements PooledPage {
   onDialog(handler: (dialog: PooledDialog) => void): void {
     this.#onDialog = handler;
   }
+  failFront = false;
+  bringToFront(): Promise<void> {
+    this.callOrder.push('bringToFront');
+    return this.failFront ? Promise.reject(new Error('target closed')) : Promise.resolve();
+  }
   disposedScripts = 0;
   evaluated: string[] = [];
   evaluate(script: string): Promise<unknown> {
@@ -203,14 +208,29 @@ describe('BrowserPool', () => {
     const { launch } = fakeLauncher();
     const pool = new BrowserPool(launch, { maxContexts: 4, genSessionId: counterIds() });
 
-    const a = await pool.acquire('http://localhost:3000/a');
-    await pool.acquire('http://localhost:4000/other');
-    expect(pool.leaseIdOnOrigin('http://localhost:3000')).toBe(a.sessionId);
-    expect(pool.leaseIdOnOrigin('http://localhost:4000')).toBe('s2');
-    expect(pool.leaseIdOnOrigin('http://localhost:9999')).toBeUndefined();
+    const a = await pool.acquire('http://localhost:3000/a', { owner: 'agent-1' });
+    await pool.acquire('http://localhost:4000/other', { owner: 'agent-1' });
+    expect(pool.leaseIdOnOrigin('http://localhost:3000', 'agent-1')).toBe(a.sessionId);
+    expect(pool.leaseIdOnOrigin('http://localhost:4000', 'agent-1')).toBe('s2');
+    expect(pool.leaseIdOnOrigin('http://localhost:9999', 'agent-1')).toBeUndefined();
 
     pool.alias('app-name', a.sessionId);
-    expect(pool.leaseIdOnOrigin('http://localhost:3000')).toBe('app-name');
+    expect(pool.leaseIdOnOrigin('http://localhost:3000', 'agent-1')).toBe('app-name');
+  });
+
+  // #1226: two agents on one origin were handed the same tab, so each one's verdicts could rest on
+  // the other's clicks, and a seeded acquire released the other agent's lease from under it.
+  it('hands a lease back only to the caller that took it', async () => {
+    const { launch } = fakeLauncher();
+    const pool = new BrowserPool(launch, { maxContexts: 4, genSessionId: counterIds() });
+
+    const a = await pool.acquire('http://localhost:3000/a', { owner: 'agent-1' });
+    expect(pool.leaseIdOnOrigin('http://localhost:3000', 'agent-1')).toBe(a.sessionId);
+    expect(pool.leaseIdOnOrigin('http://localhost:3000', 'agent-2')).toBeUndefined();
+    // A caller with no name cannot be told apart from any other, so it is never handed one.
+    expect(pool.leaseIdOnOrigin('http://localhost:3000', undefined)).toBeUndefined();
+    await pool.acquire('http://localhost:3000/b');
+    expect(pool.leaseIdOnOrigin('http://localhost:3000', undefined)).toBeUndefined();
   });
 
   it('release frees the slot and closes the context', async () => {
@@ -667,6 +687,41 @@ describe('BrowserPool', () => {
     expect(pool.lastDialogMessage(lease.sessionId)).toBeUndefined();
   });
 
+  it('foregrounds the leased page after navigating, so its tab is not hidden behind another (#1351)', async () => {
+    // A pooled page opened beside other tabs can start hidden, and a hidden tab throttles timers and
+    // rAF — the lease then comes back ready and nothing on it can be verified.
+    const { launch, browsers } = fakeLauncher();
+    const pool = new BrowserPool(launch, { maxContexts: 4, genSessionId: counterIds() });
+
+    await pool.acquire('http://localhost:3000/');
+
+    const page = browsers[0]?.contexts[0]?.pages[0];
+    expect(page?.callOrder).toEqual(['goto:http://localhost:3000/', 'bringToFront']);
+  });
+
+  it('a page that refuses to come to the front still yields its lease', async () => {
+    // Best-effort: the caller reports a tab that stayed hidden by name, so failing the lease here
+    // would turn a reportable condition into a lost one.
+    const page = new FakePage();
+    page.failFront = true;
+    const launch: Launcher = () => {
+      const b = new FakeBrowser();
+      const originalNewContext = b.newContext.bind(b);
+      b.newContext = async () => {
+        const ctx = await originalNewContext();
+        ctx.newPage = () => Promise.resolve(page);
+        return ctx;
+      };
+      return Promise.resolve(b);
+    };
+    const pool = new BrowserPool(launch, { maxContexts: 4, genSessionId: counterIds() });
+
+    const lease = await pool.acquire('http://localhost:3000/');
+
+    expect(lease.sessionId).toBe('s1');
+    expect(page.callOrder).toContain('bringToFront');
+  });
+
   it('seeds cookies, localStorage, and sessionStorage before page.goto and disposes init script immediately after', async () => {
     const { launch, browsers } = fakeLauncher();
     const pool = new BrowserPool(launch, { maxContexts: 4, genSessionId: counterIds() });
@@ -700,6 +755,7 @@ describe('BrowserPool', () => {
       'addInitScript',
       'goto:http://localhost:3000/dashboard',
       'disposeInitScript',
+      'bringToFront',
     ]);
     expect(page?.disposedScripts).toBe(1);
   });
@@ -734,7 +790,7 @@ describe('BrowserPool', () => {
 
     expect(context?.cookies).toHaveLength(0);
     expect(page?.initScripts).toHaveLength(0);
-    expect(page?.callOrder).toEqual(['goto:http://localhost:3000/dashboard']);
+    expect(page?.callOrder).toEqual(['goto:http://localhost:3000/dashboard', 'bringToFront']);
   });
 
   it('preserves isolation between multiple leases with different seedStorage', async () => {
@@ -763,5 +819,58 @@ describe('BrowserPool', () => {
       session: undefined,
       targetOrigin: 'http://localhost:3000',
     });
+  });
+});
+
+/**
+ * The platform chat can ask for a drive the person watches in a window, beside the headless ones it
+ * already runs. One pool, two browsers: a headed one launched only when first asked for.
+ */
+describe('a headed lease', () => {
+  it('opens in a browser of its own, launched only when first asked for', async () => {
+    const headless = fakeLauncher();
+    const headed = fakeLauncher();
+    const pool = new BrowserPool(headless.launch, {
+      maxContexts: 4,
+      genSessionId: counterIds(),
+      launchHeaded: headed.launch,
+    });
+    await pool.acquire('http://localhost:3000/');
+    expect([headless.browsers.length, headed.browsers.length]).toEqual([1, 0]);
+    const lease = await pool.acquire('http://localhost:3000/cart', { headed: true });
+    expect([headless.browsers.length, headed.browsers.length]).toEqual([1, 1]);
+    expect(headed.browsers[0]?.contexts[0]?.pages[0]?.gotoUrls).toEqual([
+      'http://localhost:3000/cart',
+    ]);
+    expect(pool.isHeaded(lease.sessionId)).toBe(true);
+  });
+
+  it('drops only its own leases when the headed browser dies', async () => {
+    const headless = fakeLauncher();
+    const headed = fakeLauncher();
+    const pool = new BrowserPool(headless.launch, {
+      maxContexts: 4,
+      genSessionId: counterIds(),
+      launchHeaded: headed.launch,
+    });
+    const kept = await pool.acquire('http://localhost:3000/');
+    await pool.acquire('http://localhost:3000/', { headed: true });
+    headed.browsers[0]?.crash();
+    expect(pool.activeCount()).toBe(1);
+    expect(pool.isHeaded(kept.sessionId)).toBe(false);
+    // The next headed lease relaunches it.
+    await pool.acquire('http://localhost:3000/', { headed: true });
+    expect(headed.browsers).toHaveLength(2);
+  });
+
+  it('is refused where no headed browser can be launched', async () => {
+    const pool = new BrowserPool(fakeLauncher().launch, {
+      maxContexts: 4,
+      genSessionId: counterIds(),
+    });
+    await expect(pool.acquire('http://localhost:3000/', { headed: true })).rejects.toThrow(
+      /no headed browser/,
+    );
+    expect(pool.activeCount()).toBe(0);
   });
 });

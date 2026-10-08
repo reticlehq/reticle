@@ -132,6 +132,34 @@ async function desktopCapture(
 }
 
 /**
+ * One picture of the tab a chat-requested drive is driving, or undefined when there is none to take.
+ *
+ * The leased browser first, when this daemon launched the tab; then the desktop window's own capture,
+ * the same route `reticle_screenshot` takes. Without the second, a drive of a desktop app sent its
+ * steps to the chat and never a picture. Never throws: a frame is a courtesy, and a tab that has
+ * gone mid-drive must not break the drive.
+ */
+export async function driveFrame(
+  deps: ToolDeps,
+  sessionId: string,
+  jpegQuality: number,
+): Promise<Uint8Array | undefined> {
+  try {
+    const leased = await deps.pool?.screenshotLease(sessionId, { jpegQuality });
+    if (leased !== undefined) return leased;
+    // The window `reticle drive` opened: neither a lease nor a desktop shell, but its page is ours.
+    const url = deps.sessions.resolve(sessionId).url;
+    if (true === (await deps.realInput?.isAvailableFor(url))) {
+      const shot = await deps.realInput?.screenshot?.(url, { jpegQuality });
+      if (shot !== undefined) return shot;
+    }
+    return (await desktopCapture(deps, sessionId, false)).png;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Only read a capture the shell wrote. The path arrives from the PAGE, and the daemon must not
  * become a file-read oracle for whatever a compromised renderer names.
  *
@@ -202,9 +230,21 @@ async function capture(
   sessionId: string | undefined,
   args: Record<string, unknown>,
 ): Promise<{ png?: Uint8Array; reason?: string; runtime?: string | undefined }> {
-  const provider = screenshotProvider(deps);
-  if (provider !== undefined) {
-    const session = deps.sessions.resolve(sessionId);
+  /*
+   * Only a provider driving THIS session's page. A launched provider photographs the one page it
+   * owns whatever url it is handed, so asking it about another session saved the driven tab's pixels
+   * under that session's name and answered `saved: true` (#1407). Real input asks the same question
+   * before every gesture.
+   */
+  const candidate = screenshotProvider(deps);
+  const session = candidate === undefined ? undefined : deps.sessions.resolve(sessionId);
+  const provider =
+    candidate !== undefined &&
+    session !== undefined &&
+    (await candidate.isAvailableFor(session.url))
+      ? candidate
+      : undefined;
+  if (provider !== undefined && session !== undefined) {
     const png = await provider.screenshot(session.url, await buildOpts(deps, sessionId, args));
     // A driven browser renders the session's URL in a BROWSER — so the pixels are web even when the
     // session named is a desktop window. Scoping those under the desktop runtime would corrupt that

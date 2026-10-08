@@ -15,6 +15,7 @@ import {
 import { AppRuntime } from '@reticlehq/core/telemetry';
 import { Session } from './session.js';
 import { SessionManager } from './session-manager.js';
+import { tabHidden } from '@/surface/tools/lease-readiness.js';
 
 const HELLO: HelloMessage = {
   kind: MessageKind.HELLO,
@@ -82,6 +83,15 @@ describe('session health', () => {
     session.applyHealth(true, false);
     expect(session.throttled()).toBe(true);
     expect(session.health().focused).toBe(false);
+  });
+
+  it('exposes hidden in the shape the lease readiness check reads (#1351)', () => {
+    // The lease reads visibility off the registry entry by duck type, so its fakes cannot prove the
+    // real Session carries it. This does: a renamed field would leave every hidden lease ready.
+    const { session } = makeSession();
+    expect(tabHidden(session)).toBe(false);
+    session.applyHealth(true, false);
+    expect(tabHidden(session)).toBe(true);
   });
 
   it('is not throttled when visible and recently seen', () => {

@@ -312,3 +312,32 @@ describe('an expect this tool cannot parse', () => {
     ).not.toThrow();
   });
 });
+
+/**
+ * A ref that was never minted is refused for the whole sequence, up front.
+ *
+ * Checked only when its step ran, a malformed ref in step three was found after steps one and two
+ * had already clicked and filled the page — the half-applied journey this preflight exists to stop.
+ */
+describe('a step whose ref Reticle never issued', () => {
+  it('refuses the sequence before any step runs, naming the step', () => {
+    expect(() =>
+      assertSequenceSteps([
+        { ref: 'e1', action: 'click' },
+        { ref: 'e2', action: 'fill', args: { value: 'x' } },
+        { ref: 'find:aria-label=Open menu', action: 'click' },
+      ]),
+    ).toThrow(
+      /step 2: "find:aria-label=Open menu" is not a ref Reticle issued.*Nothing was acted on/s,
+    );
+  });
+
+  it('still accepts minted-shape refs, and a target beside them', () => {
+    expect(() =>
+      assertSequenceSteps([
+        { ref: 'e12', action: 'click' },
+        { target: { role: 'button', name: 'Save' }, action: 'click' },
+      ]),
+    ).not.toThrow();
+  });
+});

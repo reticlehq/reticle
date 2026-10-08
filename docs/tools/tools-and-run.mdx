@@ -14,23 +14,19 @@ icon: boxes-stacked
 {}
 ```
 
-Returns every tool with a one-line summary. A sample of what lives in the cold tail:
+Returns every tool with a one-line summary. A sample of what lives in the cold tail. (`reticle_verify` is advertised, so its `flows`, `change`, `crawl` and `coverage` actions need no hop.)
 
-| Tool | What it does |
-| --- | --- |
+| Tool                   | What it does                                                           |
+| ---------------------- | ---------------------------------------------------------------------- |
 | `reticle_capabilities` | The app's advertised testable surface, testids, signals, stores, flows |
-| `reticle_verify` (`flows`) | Replay every saved flow, return one consolidated suite verdict |
-| `reticle_screenshot` | Pixel screenshot of the driven page, saved as a visual baseline |
-| `reticle_visual_diff` | Perceptually diff the live page against that baseline |
-| `reticle_network_mock` | Force a 500, go offline, or delay a response |
-| `reticle_viewport` | Pin the viewport so screenshots are reproducible across machines |
-| `reticle_verify` (`crawl`) | Click every reachable control and report anomalies, with no script |
-| `reticle_clock` | Freeze time or fast-forward timers, toasts, debounces, auto-dismiss |
-| `reticle_storage` | localStorage, sessionStorage and readable cookies |
-| `reticle_verify` (`coverage`) | Which controls you have driven this session, and which you have not |
-| `reticle_verify` (`change`) | Give it the files you edited; it replays the flows that cover them |
-| `reticle_reconcile` | Compare what the API returned against what the page actually renders |
-| `reticle_scroll_to` | Find a row in a virtualised list that has not rendered yet |
+| `reticle_screenshot`   | Pixel screenshot of the driven page, saved as a visual baseline        |
+| `reticle_visual_diff`  | Perceptually diff the live page against that baseline                  |
+| `reticle_network_mock` | Force a 500, go offline, or delay a response                           |
+| `reticle_viewport`     | Pin the viewport so screenshots are reproducible across machines       |
+| `reticle_clock`        | Freeze time or fast-forward timers, toasts, debounces, auto-dismiss    |
+| `reticle_storage`      | localStorage, sessionStorage and readable cookies                      |
+| `reticle_reconcile`    | Compare what the API returned against what the page actually renders   |
+| `reticle_scroll_to`    | Find a row in a virtualised list that has not rendered yet             |
 
 The response also tells you which surface is active:
 
@@ -45,7 +41,7 @@ The response also tells you which surface is active:
 }
 ```
 
-That capture is from a daemon started with `RETICLE_ADVERTISE_ALL_TOOLS=1`. On a default daemon, `active` reads `default` and names the environment variable as unset.
+That capture is from a daemon started with `RETICLE_ADVERTISE_ALL_TOOLS=1`. On a default daemon, `active` reads `merged`, the ten-tool default surface.
 
 <Warning>
   "Read once at daemon startup" is doing real work in that sentence. Setting the environment
@@ -129,9 +125,9 @@ Real response from an instrumented app, trimmed:
 
 The full response on this fixture carries 49 testids and 16 signals. `source: "live"` means it was read from the running app; pass `{ "fromDisk": true }` to read the git-checked `.reticle/contract.json` instead, which works with no browser attached at all.
 
-## Start here, not with a snapshot
+## Then this, not a snapshot
 
-That `reticle_capabilities` output is the single best first call on an unfamiliar app. It is the app telling you what it considers testable: the elements worth driving, the signals that mean success, and the flows somebody already thought were important.
+Your first move is always `reticle_session { action: "list" }`, to find the connected tab. After that, the `reticle_capabilities` output is the best next call on an unfamiliar app. It is the app telling you what it considers testable: the elements worth driving, the signals that mean success, and the flows somebody already thought were important.
 
 Compared with snapshotting the page and guessing from element names, it is both cheaper and more truthful. `auth:granted` is what the app means by "logged in", and no amount of looking at the DOM will tell you that.
 

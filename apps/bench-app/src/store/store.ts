@@ -128,15 +128,19 @@ export const useApp = create<AppState>((set, get) => ({
           set({ savedItems: [...get().savedItems, item] });
           emit(Sig.ITEM_SAVED, { id: item.id, label: item.label });
         } else {
-          // Broken: response arrived but render deferred. The function returns here — BEFORE
-          // the render fires — so act_and_wait sees the POST settle with no state movement.
-          // After the 300ms grace elapses with nothing moved, response-ignored fires.
-          // The setTimeout is fire-and-forget: saveItem resolves NOW, not after the delay.
-          setTimeout(() => {
-            set({ savedItems: [...get().savedItems, item] });
-            emit(Sig.ITEM_SAVED, { id: item.id, label: item.label });
-          }, renderDelayMs);
-          return; // return immediately — the delayed render is fire-and-forget
+          // Broken: response arrived but render deferred, so the POST settles with nothing on the
+          // client moving and response-ignored fires. saveItem resolves only AFTER the deferred
+          // render: the view clears its input when this resolves, and clearing it at response time
+          // would be a DOM change — the client visibly answering the write — which makes the
+          // broken variant not broken.
+          await new Promise<void>((resolve) => {
+            setTimeout(() => {
+              set({ savedItems: [...get().savedItems, item] });
+              emit(Sig.ITEM_SAVED, { id: item.id, label: item.label });
+              resolve();
+            }, renderDelayMs);
+          });
+          return;
         }
       }
       // Dropped-response variant: server returned 200 OK but no id — write silently lost.

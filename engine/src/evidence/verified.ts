@@ -184,6 +184,8 @@ interface VerifiedInputs {
   unsettled?: UnsettledWindow;
   /** A passing absence assertion targeted a region that the current capture could not observe. */
   absenceBlindSpot?: string;
+  /** The green rested on matches that are all hidden; the sentence that says so. See `hiddenMatchNote`. */
+  hiddenMatch?: string;
 }
 
 interface VerifiedVerdict {
@@ -496,6 +498,17 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
         (true === inputs.alreadyTrueHiddenMatch
           ? '. That prior match was against a HIDDEN element — this predicate checks DOM presence, not visibility, by default; add `visible: true` if you meant "this is showing", not merely "this exists"'
           : ''),
+    };
+  }
+
+  // A green whose text or element clause matched only hidden nodes says the node exists, not that it
+  // is showing (#1408). UNKNOWN, not NO: the node may be hidden by design and the caller asked only
+  // for presence.
+  if (true === pass && inputs.hiddenMatch !== undefined) {
+    return {
+      verified: Verified.UNKNOWN,
+      verifiedReason: VerifiedReason.HIDDEN_MATCH,
+      because: inputs.hiddenMatch,
     };
   }
 

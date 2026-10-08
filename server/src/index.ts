@@ -1,20 +1,19 @@
-import { writeHarnessSwitch } from '@/memory/cloud/harness-switch.js';
-import { harnessConfigSource } from '@/memory/cloud/harness-config.js';
+import { applyHarnessSwitch, harnessConfigsByRoot } from '@/memory/cloud/harness-config.js';
+import { coveragePercents } from './features/exhaust/ledger.js';
+import { firstRunWiring } from './portal/session/first-run-wiring.js';
 import { fetchPlatformConfig } from '@/features/harness/platform-config.js';
+import { watchAccountFiles } from './memory/impact/account-watch.js';
+import { SESSION_FILE } from './command/cli/cloud-kit.js';
 import { join } from 'node:path';
-import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { linkedCloudPort, platformEnvPort } from './memory/cloud/cloud-config.js';
+import { linkedCloudPort, platformEnvPort, sessionCloudPort } from './memory/cloud/cloud-config.js';
+import { sessionRoot } from './memory/project/session-root.js';
 import { attachCloudSync } from './memory/cloud/sync-daemon.js';
 import { wireHooks } from './hooks/hook-commands.js';
-import {
-  PROJECT_REGISTRY_FILE,
-  parseProjectRegistry,
-  projectCandidates,
-} from '@reticlehq/core/artifacts';
-import { discoverProjectConfigs } from './command/cli/config/config-discovery.js';
+import { currentDrivenBy } from './hooks/driven-by.js';
 import {
   artifactRootResolver,
+  knownProjectCandidates,
   projectDirectoryFor,
 } from './memory/project/artifact-root-resolver.js';
 import { servingDirectoryOf } from './portal/session/serving-directory.js';
@@ -28,14 +27,12 @@ import {
   ReticleDir,
   ReticleEnv,
   LOOPBACK_HOST,
-  ReplayStatus,
   EventType,
 } from '@reticlehq/core';
-import type { FlowReplayResult } from '@reticlehq/core';
 import { originOf } from './portal/session/session-manager.js';
 import { setBrowserMode, BrowserMode } from './telemetry/browser-mode.js';
 import type { NetworkDetail } from './portal/input/network-detail.js';
-import { replayAndLearn } from './language/flows/flow-learning.js';
+import { replayFromHud } from './language/flows/replay-from-hud.js';
 import { createSharedServer } from './surface/http-server.js';
 import { openLoopbackAlias } from './command/daemon/binding/loopback-alias.js';
 import { reportAppInstrumented } from './telemetry/app-instrumented.js';
@@ -48,7 +45,7 @@ import { connectionSkew } from './command/version/version-nudge.js';
 import { SERVER_VERSION } from './command/version/identity/server-version.js';
 import { BaselineStore } from './memory/project/baselines.js';
 import { RecordingStore } from './language/flows/recording/tape/recordings.js';
-import { initImpact } from './memory/impact/impact-recorder.js';
+import { initImpact, impactSnapshot } from './memory/impact/impact-recorder.js';
 import { flowAuthor } from './language/flows/flow-author.js';
 import { FlowStore } from './language/flows/flows.js';
 import { buildFlowChips } from './language/flows/flow-scope.js';
@@ -65,6 +62,7 @@ import { startVerifyServer } from './judgement/runs/verify-server.js';
 import { createMcpServer } from './surface/mcp/mcp.js';
 import { instructionStateAt } from './surface/mcp/mcp-proxy.js';
 import { LEASE_ACQUIRE_TOOL } from './surface/tools/lease-tools.js';
+import { startChatDrives } from './surface/tools/chat-drives.js';
 import { runTool } from './surface/tools/invoke-tool.js';
 import {
   SessionReaper,
@@ -102,15 +100,7 @@ import {
   type InjectedConnect,
 } from './portal/pool/zero-install.js';
 
-/** A human-facing one-liner for a panel replay verdict — ✓ passed / ⚠ drifted / ✗ errored / ? unverifiable. */
-export function replayVerdictLine(result: FlowReplayResult): string {
-  if (result.status === ReplayStatus.OK) return `✓ "${result.name}" passed`;
-  if (result.status === ReplayStatus.DRIFT)
-    return `⚠ "${result.name}" drifted — a step no longer matches`;
-  if (result.status === ReplayStatus.UNVERIFIABLE)
-    return `? "${result.name}" unverifiable — ${result.unverifiable?.reason ?? 'could not be graded'}`;
-  return `✗ "${result.name}" failed — ${result.error?.message ?? 'could not replay'}`;
-}
+export { replayVerdictLine } from './language/flows/replay-from-hud.js';
 
 // Re-exported from the contract, where the names now live: a consumer importing the server should
 // not have to know that the vocabulary moved.
@@ -234,6 +224,7 @@ function createBrowserPool(headless: boolean, reader: InjectedConnect): BrowserP
     maxContexts,
     genSessionId,
     zeroInstallScript,
+    launchHeaded: playwrightLauncher({ headless: false }),
   });
 }
 
@@ -360,24 +351,7 @@ function sdkFixForProject(projectId?: string): string {
  * not. Deciding that here would mean reading every cloud.json on every tick.
  */
 function knownProjectRoots(): string[] {
-  const roots = new Set<string>();
-  try {
-    const path = join(homedir(), ReticleDir.ROOT, PROJECT_REGISTRY_FILE);
-    if (existsSync(path)) {
-      const registry = parseProjectRegistry(JSON.parse(readFileSync(path, 'utf8')));
-      for (const candidate of projectCandidates(registry))
-        roots.add(join(candidate.directory, ReticleDir.ROOT));
-    }
-  } catch {
-    // A registry that cannot be read is an empty one — never a reason to stop syncing.
-  }
-  try {
-    for (const config of discoverProjectConfigs(process.cwd()).found)
-      roots.add(join(config.directory, ReticleDir.ROOT));
-  } catch {
-    // Same: a diagnostic walk that throws must not take the sync loop with it.
-  }
-  return [...roots];
+  return [...new Set(knownProjectCandidates().map((c) => join(c.directory, ReticleDir.ROOT)))];
 }
 
 /** This project's platform credential (stored, else the env key), as the env the platform readers take. */
@@ -388,20 +362,22 @@ const platformEnvFor = (root: string | undefined) =>
     homedir(),
     process.env,
   );
+const loadHarnessConfig = async (root: string) => fetchPlatformConfig(await platformEnvFor(root)());
 
 export async function start(options: StartOptions = {}): Promise<RunningServer> {
   const port = options.port ?? RETICLE_DEFAULT_PORT;
+  const configForRoot = harnessConfigsByRoot(loadHarnessConfig);
   // Open the user's impact record before anything can connect. Not inside the MCP branch: a daemon
   // serving a browser with no agent attached still has a HUD to answer, and a report that reads
   // "nothing recorded yet" over a month of history on disk is the worst version of this feature.
   initImpact({
+    sdkVersion: SERVER_VERSION,
     reticleRoot: options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT),
     // The daemon owns both sides of this seam, so it is the layer that may join them: the cache
     // lives in cloud memory, the platform read lives in the harness feature, and neither is allowed
     // to reach for the other.
-    config: harnessConfigSource(async () =>
-      fetchPlatformConfig(await platformEnvFor(options.reticleRoot)()),
-    ),
+    configForRoot,
+    coverageForRoot: (root: string) => () => coveragePercents(root),
   });
   const uninstallHooks = wireHooks(
     options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT),
@@ -420,7 +396,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     bridge.sessions.setDefaultScope({ projectId: activeProjectId });
   }
   const baselines = new BaselineStore();
-  const recordings = new RecordingStore();
+  const recordings = new RecordingStore(() => currentDrivenBy() !== undefined);
   // drive precedence: driveUrl (launch+own a browser) → CDP (attach) → none.
   let pool: BrowserPool | undefined;
   let leaseReaper: LeaseReaper | undefined;
@@ -433,6 +409,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     routeNetworkDetail,
   );
 
+  let chatDrives: { stop: () => void } | undefined;
   if (options.mcp !== false) {
     // cwd/Date.now are confined to start — never inside reticle-dir.ts's pure logic (rule 7).
     const fs = createNodeFileSystem();
@@ -500,8 +477,22 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       ...(activeProjectId === undefined ? {} : { projectId: activeProjectId }),
     };
     const profile = resolveToolSurface(options.toolProfile);
+    const toolDeps = realInput !== undefined ? { ...deps, realInput } : deps;
+    // The platform chat sees this app too: `reticle drive` in a window runs here, not in a daemon.
+    chatDrives = startChatDrives(
+      toolDeps,
+      bridge.sessions,
+      fs,
+      {
+        sessionCloud: sessionCloudPort(fs, homedir(), process.env, (id) =>
+          sessionRoot(toolDeps, id),
+        ),
+        version: SERVER_VERSION,
+      },
+      log,
+    );
     const server = createMcpServer(
-      realInput !== undefined ? { ...deps, realInput } : deps,
+      toolDeps,
       profile,
       instructionStateAt(port, bridge.sessions.count()),
     );
@@ -524,6 +515,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       uninstallHooks();
       await cleanupCaptureDirectories();
       leaseReaper?.stop();
+      chatDrives?.stop();
       await pool?.shutdown();
       await owned?.dispose();
       await bridge.close();
@@ -539,19 +531,21 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
  */
 export async function startDaemon(options: StartOptions = {}): Promise<RunningServer> {
   const port = options.port ?? RETICLE_DEFAULT_PORT;
+  let pushHarnessConfig: (root: string) => void = () => undefined;
+  const configForRoot = harnessConfigsByRoot(loadHarnessConfig, (root) => pushHarnessConfig(root));
   // The SAME line as in `start`, because these are two entry points that each wire their own world
   // and the daemon is the one that actually serves people. Wired only in `start`, the impact record
   // was never opened in the process the HUD talks to: tool calls still recorded (the dispatch
   // chokepoint opens it lazily), but a tab that connected before the first tool call was pushed
   // nothing, so the report read "nothing recorded yet" over a file with history in it.
   initImpact({
+    sdkVersion: SERVER_VERSION,
     reticleRoot: options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT),
     // The daemon owns both sides of this seam, so it is the layer that may join them: the cache
     // lives in cloud memory, the platform read lives in the harness feature, and neither is allowed
     // to reach for the other.
-    config: harnessConfigSource(async () =>
-      fetchPlatformConfig(await platformEnvFor(options.reticleRoot)()),
-    ),
+    configForRoot,
+    coverageForRoot: (root: string) => () => coveragePercents(root),
   });
 
   const security = await resolveBridgeSecurityWithAutoToken(options);
@@ -562,6 +556,14 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     sdkFix: sdkFixForProject,
     ...security,
   });
+  const repaint = (only?: string): void => {
+    for (const session of bridge.sessions.all()) {
+      const root =
+        session.artifactRoot ?? options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT);
+      if (only === undefined || only === root) session.pushImpact(() => impactSnapshot(root), true);
+    }
+  };
+  pushHarnessConfig = repaint;
   // The daemon owns listen (below), so the real bind error is reported there; absorb bridge.ready's
   // mirror rejection so a port collision can't surface as an unhandled promise rejection.
   void bridge.ready.catch(() => undefined);
@@ -614,7 +616,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   const flows = new FlowStore(fs, reticleRoot, { now });
   // Built here rather than inside `deps` below, so teardown can save what a drive recorded. Both
   // paths pass the same pair — `daemon-parity.test.ts` is what keeps them from drifting apart.
-  const recordings = new RecordingStore();
+  const recordings = new RecordingStore(() => currentDrivenBy() !== undefined);
   /*
    * Bound AFTER the sync daemon exists, read only when a run is actually written.
    *
@@ -667,13 +669,19 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   // `syncNow`, not `nudge`: a nudge schedules a cycle soon, which is right for "a run landed" and
   // wrong for a button somebody is watching. Never awaited.
   bridge.attachSyncRequest(() => void cloudSync.syncNow());
-  // The panel's harness switch. Written through to the platform rather than kept locally, so the
-  // console and the panel cannot disagree about a setting they both offer. Nothing is awaited and a
-  // failure is not surfaced: the next snapshot re-reads the platform, so a lost write shows up as
-  // the switch springing back, which is the truthful outcome.
-  bridge.attachHarnessRequest(
-    (enabled) => void platformEnvFor(reticleRoot)().then((env) => writeHarnessSwitch(env, enabled)),
+  // The panel's harness switch, written through to the platform so console and panel cannot disagree.
+  if (options.hudSignIn !== undefined)
+    bridge.attachSigninRequest(options.hudSignIn(() => repaint()));
+  // logout and link run in another process: repaint when their files change. See account-watch.ts.
+  const accountFiles = watchAccountFiles(() => repaint());
+  accountFiles.watch(join(homedir(), ReticleDir.ROOT, SESSION_FILE));
+  bridge.attachSessionReady((s) =>
+    accountFiles.watch(join(s.artifactRoot ?? reticleRoot, ReticleDir.CLOUD_LINK_FILE)),
   );
+  bridge.attachHarnessRequest((on, s) => {
+    const root = s.artifactRoot ?? reticleRoot;
+    applyHarnessSwitch(configForRoot, root, on, platformEnvFor(root));
+  });
   // Scope auto-selection to the active project (from .reticle.json) so a stray tab from another app is
   // never picked when the agent omits a sessionId. Explicit per-call scope/sessionId still overrides.
   // Scope + the no-session diagnosis: "no browser session connected" is the error that ends most
@@ -712,8 +720,10 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     now,
     bridgePort: port,
     browserProbe: probeLaunchableChromium,
+    firstRun: firstRunWiring({ port, cliPath: process.argv[1] ?? '' }),
     // A finished verification should not sit behind a one-minute timer — see ToolDeps.onRunPersisted.
     onRunPersisted: (): void => cloudSync.nudge(),
+    syncNow: () => cloudSync.syncNow(),
   };
   const profile = resolveToolSurface(options.toolProfile);
   const effectiveDeps = realInput !== undefined ? { ...deps, realInput } : deps;
@@ -728,11 +738,21 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
       instructionStateAt(port, bridge.sessions.count()),
     ),
   );
-  // `reticle drive <url>` when this daemon already owns the port: it asks HERE instead of trying to
-  // bind a port we are holding, and gets the same pooled context an agent's reticle_lease returns —
-  // through runTool, so it is counted and reported like any other call rather than being a second,
-  // invisible dispatch path. See cli/drive/drive-attach.ts for why attaching beats refereeing the race.
+  // `reticle drive <url>` against this daemon's port, through runTool. See cli/drive/drive-attach.ts.
   shared.attachDrive((url) => runTool(LEASE_ACQUIRE_TOOL, effectiveDeps, { url }));
+  // The platform chat's apps and drives, run here. See chat-drives.ts.
+  const chatDrives = startChatDrives(
+    effectiveDeps,
+    bridge.sessions,
+    fs,
+    {
+      sessionCloud: sessionCloudPort(fs, homedir(), process.env, (id) =>
+        sessionRoot(effectiveDeps, id),
+      ),
+      version: SERVER_VERSION,
+    },
+    log,
+  );
 
   // Optional OEM/CI verify endpoint: a host platform POSTs to /verify and gets an ReticleVerificationRun,
   // driving the same flow-replay machinery the agent uses — no MCP stdio, no human. Each verdict is
@@ -755,15 +775,8 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   // verdict into the same activity log they watch the agent in. The page animates via the normal
   // replay path, so they see it re-drive and the ✓/⚠/✗ land.
   bridge.attachReplay((sessionId, flowName) => {
-    const session = bridge.sessions.get(sessionId);
-    if (session === undefined) return;
-    session.pushNarration(`▶ Replaying "${flowName}"…`);
-    replayAndLearn(effectiveDeps, { flowName, sessionId })
-      .then((result) => session.pushNarration(replayVerdictLine(result)))
-      .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error);
-        session.pushNarration(`✗ Replay "${flowName}" failed — ${message}`);
-      });
+    if (bridge.sessions.get(sessionId) === undefined) return;
+    void replayFromHud(effectiveDeps, (id) => bridge.sessions.get(id), sessionId, flowName);
   });
   // On connect, hand the panel the replayable flows so it can render the ▶ list. Scoped to the
   // connecting session's project (a shared daemon serves many apps; each panel shows only its own
@@ -838,6 +851,8 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
       const vh = verifyHttp;
       if (vh !== undefined) await new Promise<void>((resolve) => vh.server.close(() => resolve()));
       leaseReaper.stop();
+      chatDrives.stop();
+      accountFiles.close();
       await cloudSync.flush(); // not stop(): the last run written is the one nobody has yet
       await loopbackAlias.close?.();
       await pool.shutdown();
@@ -848,12 +863,8 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   };
 }
 
-// The OpenVerification binding, exported so a conformance run can be driven from outside this package.
-//
-// It was written and then not reachable: `conformanceClient` takes a `WebRealm`, a `WebRealm`
-// takes a live `Session`, and a `Session` exists only inside a running daemon. A runner that
-// cannot import it cannot score anything, which would have made the whole conformance chain
-// complete and unusable.
+// The OpenVerification binding, exported so a conformance run can be driven from outside this
+// package: a `WebRealm` needs a live `Session`, which exists only inside a running daemon.
 export { WebRealm, type WebRealmDeps } from './portal/realm/web-realm.js';
 export { conformanceClient, type ConformanceClient } from './portal/realm/conformance-client.js';
 

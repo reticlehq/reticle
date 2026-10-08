@@ -10,6 +10,8 @@
  * at every qualifying moment by choice, and "not now" is not "never".
  */
 
+import { ReticleStorageKey } from '@/storage-keys.js';
+
 /** Root of the carousel — the one element the log keeps above its rows. */
 export const CAROUSEL_ATTR = 'data-reticle-carousel';
 /** Each slide, carrying its id. */
@@ -18,8 +20,11 @@ export const CAROUSEL_SLIDE_ATTR = 'data-reticle-carousel-slide';
 export const CAROUSEL_DOT_ATTR = 'data-reticle-carousel-dot';
 /** The close control. */
 export const CAROUSEL_CLOSE_ATTR = 'data-reticle-carousel-close';
+export const CAROUSEL_PREV_ATTR = 'data-reticle-carousel-prev';
+export const CAROUSEL_NEXT_ATTR = 'data-reticle-carousel-next';
+export const CAROUSEL_POSITION_ATTR = 'data-reticle-carousel-position';
 /** Where "close" is remembered — session storage, so it lasts this tab and no longer. */
-export const CAROUSEL_DISMISSED_KEY = 'reticle.carousel.dismissed';
+export const CAROUSEL_DISMISSED_KEY = ReticleStorageKey.CAROUSEL_DISMISSED;
 
 const CLOSE_LABEL = 'Close';
 
@@ -47,7 +52,10 @@ function prefersReducedMotion(): boolean {
 /** Show slide `index`, and mark its dot. The one path dots and rotation both take. */
 function show(root: HTMLElement, index: number): void {
   root.setAttribute('data-active', String(index));
-  root.querySelectorAll(`[${CAROUSEL_SLIDE_ATTR}]`).forEach((slide, i) => {
+  const slides = root.querySelectorAll(`[${CAROUSEL_SLIDE_ATTR}]`);
+  const position = root.querySelector(`[${CAROUSEL_POSITION_ATTR}]`);
+  if (position !== null) position.textContent = `${String(index + 1)} / ${String(slides.length)}`;
+  slides.forEach((slide, i) => {
     (slide as HTMLElement).hidden = i !== index;
   });
   root.querySelectorAll(`[${CAROUSEL_DOT_ATTR}]`).forEach((dot, i) => {
@@ -74,20 +82,22 @@ export function carouselHtml(slides: readonly Slide[], active: number): string {
         `<div ${CAROUSEL_SLIDE_ATTR}="${slide.id}" class="reticle-carousel-slide"${i === current ? '' : ' hidden'}>${slide.html}</div>`,
     )
     .join('');
-  // One slide needs no dots: there is nowhere to go.
-  const dots =
+  // One slide needs no navigation; multi-slide cards have explicit arrows, dots, and position.
+  const controls =
     1 === slides.length
       ? ''
-      : `<div class="reticle-carousel-dots">${slides
+      : `<div class="reticle-carousel-controls"><button type="button" ${CAROUSEL_PREV_ATTR} aria-label="Previous message" class="reticle-carousel-arrow">‹</button><div class="reticle-carousel-dots">${slides
           .map(
             (slide, i) =>
-              `<button type="button" ${CAROUSEL_DOT_ATTR}="${String(i)}" class="reticle-carousel-dot" aria-label="${slide.id}" aria-current="${String(i === current)}"></button>`,
+              `<button type="button" ${CAROUSEL_DOT_ATTR}="${String(i)}" class="reticle-carousel-dot" aria-label="Show ${slide.id}" aria-current="${String(i === current)}"></button>`,
           )
-          .join('')}</div>`;
+          .join(
+            '',
+          )}</div><span ${CAROUSEL_POSITION_ATTR} aria-live="polite">${String(current + 1)} / ${String(slides.length)}</span><button type="button" ${CAROUSEL_NEXT_ATTR} aria-label="Next message" class="reticle-carousel-arrow">›</button></div>`;
   return `<div ${CAROUSEL_ATTR} class="reticle-carousel" role="region" aria-label="Reticle" data-active="${String(current)}">
       <button type="button" ${CAROUSEL_CLOSE_ATTR} class="reticle-carousel-close" aria-label="${CLOSE_LABEL}" title="${CLOSE_LABEL}">×</button>
       <div class="reticle-carousel-track">${track}</div>
-      ${dots}
+      ${controls}
     </div>`;
 }
 
@@ -137,6 +147,16 @@ export function paintCarousel(
       show(root, Number(dot.getAttribute(CAROUSEL_DOT_ATTR)));
     });
   }
+  root.querySelector(`[${CAROUSEL_PREV_ATTR}]`)?.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    show(root, (Number(root.getAttribute('data-active')) + slides.length - 1) % slides.length);
+  });
+  root.querySelector(`[${CAROUSEL_NEXT_ATTR}]`)?.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    show(root, (Number(root.getAttribute('data-active')) + 1) % slides.length);
+  });
   startRotation(log, root, slides.length);
 }
 
@@ -178,7 +198,7 @@ function startRotation(log: HTMLElement, root: HTMLElement, count: number): void
  * Styles. The track's fixed height is what keeps a slide change from moving the log; the cards
  * inside lose their own frame so the carousel draws one.
  */
-export const CAROUSEL_CSS = `
+export const CAROUSEL_CSS: string = `
 .reticle-carousel{position:relative;margin:8px 10px;padding:10px 12px 8px;border:1px solid var(--reticle-line,#2a2f3a);border-radius:10px;background:var(--reticle-surface-inset,rgba(255,255,255,.03));}
 .reticle-carousel-track{height:100px;overflow:hidden;}
 .reticle-carousel-slide .reticle-offer,.reticle-carousel-slide .reticle-talk{margin:0;padding:0;border:0;background:none;}
@@ -187,4 +207,13 @@ export const CAROUSEL_CSS = `
 .reticle-carousel-dots{display:flex;justify-content:center;gap:6px;margin-top:6px;}
 .reticle-carousel-dot{width:6px;height:6px;padding:0;border:0;border-radius:999px;background:currentColor;opacity:.3;cursor:pointer;}
 .reticle-carousel-dot[aria-current="true"]{opacity:.9;}
+.reticle-carousel-controls{display:flex;align-items:center;gap:8px;margin-top:6px;}
+.reticle-carousel-arrow{width:24px;height:24px;flex:none;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--reticle-line);border-radius:6px;background:rgba(255,255,255,.04);color:var(--reticle-fg);font:inherit;font-size:18px;line-height:1;cursor:pointer;}
+.reticle-carousel-arrow:hover{border-color:var(--reticle-accent);background:var(--reticle-accent-soft);}
+.reticle-carousel-position{margin-left:auto;color:var(--reticle-muted);font-size:10px;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.reticle-carousel-slide .reticle-offer{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:3px 8px;margin:0;padding:0;border:0;background:none;}
+.reticle-carousel-slide .reticle-offer-title{grid-column:1/-1;overflow:hidden;padding:0;font-size:11px;text-overflow:ellipsis;white-space:nowrap;}
+.reticle-carousel-slide .reticle-offer-body{grid-column:1;grid-row:2;margin:0;overflow:hidden;font-size:10px;line-height:1.2;text-overflow:ellipsis;white-space:nowrap;}
+.reticle-carousel-slide .reticle-offer-claim{grid-column:2;grid-row:2;padding:3px 7px;font-size:10px;white-space:nowrap;}
+.reticle-carousel-slide .reticle-offer-claimed{overflow:hidden;margin:0;text-overflow:ellipsis;white-space:nowrap;}
 `;

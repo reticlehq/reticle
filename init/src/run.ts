@@ -23,11 +23,15 @@ import {
   Framework,
   type DetectInput,
   type PackageManager,
-  UiLibrary,
 } from './detect/detect.js';
 import { ANGULAR_PROXY_PATH, angularEntry } from './patch/angular.js';
-import { HTML_INDEX_PATH } from './patch/static-page.js';
+import {
+  HTML_INDEX_PATH,
+  STATIC_GITIGNORE_PATH,
+  STATIC_TOKEN_MODULE,
+} from './patch/static-page.js';
 import { initWithoutPackageJson } from './no-package-json.js';
+import { sdkPackagesDeclared, sdkPackagesPresent } from './sdk-packages.js';
 import { wasMcpRegistered } from './register/mcp-registered.js';
 import { pickAstroHost } from './patch/astro-host.js';
 import {
@@ -63,7 +67,6 @@ function craEntryOf(io: InitIo): { path: string; source: string } | null {
 import {
   DEPS_TARGET,
   RETICLE_CONFIG_FILE,
-  frameworkPackages,
   MCP_TARGET,
   buildPlan,
   StepStatus,
@@ -90,7 +93,6 @@ import { resolveLockfiles } from './detect/lockfiles.js';
 // Re-exported: it moved to its own module, and every existing importer says `run.js`.
 export { resolveLockfiles };
 
-const NODE_MODULES_DIR = 'node_modules';
 const SVELTEKIT_HOOKS = 'src/hooks.client.ts';
 const REACT_ROUTER_ENTRY = 'app/entry.client.tsx';
 const TANSTACK_START_ROOT_CANDIDATES = [
@@ -460,7 +462,13 @@ function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown): PlanIn
     })(),
     ...(Framework.ANGULAR === detection.framework ? angularInputs(io) : {}),
     ...(Framework.HTML === detection.framework
-      ? { htmlIndexSource: io.readFile(HTML_INDEX_PATH) }
+      ? {
+          htmlIndexSource: io.readFile(HTML_INDEX_PATH),
+          htmlLocalSources: {
+            [STATIC_TOKEN_MODULE]: io.readFile(STATIC_TOKEN_MODULE),
+            [STATIC_GITIGNORE_PATH]: io.readFile(STATIC_GITIGNORE_PATH),
+          },
+        }
       : {}),
     craEntry: craEntryOf(io),
     craEnv: io.readFile(CRA_ENV_PATH),
@@ -635,32 +643,6 @@ function report(
  * MODULE_NOT_FOUND, so the app stops booting *because* Reticle was installed. A skipped step is a
  * message; a half-wired app is a broken project.
  */
-/**
- * Are the SDK packages actually on disk, whatever the install step reported?
- *
- * `dependsOnInstall` exists to stop init writing a `next.config.ts` that imports a package which is
- * not there — that took a dev server down once, and installing Reticle must never be why an app
- * stops booting. The invariant it protects is "the import RESOLVES", but it was gated on "our
- * install subprocess exited 0", and those come apart in exactly the situation the failure creates:
- * init tells the user to install by hand, they do, they re-run init, the install step fails again
- * (wrong package manager, not on PATH) and every wiring step is skipped a second time. Reported from
- * a Next 16 app where npm had already installed both packages successfully — leaving an init that
- * could not be retried into working, which is the shape this guard was written to prevent.
- *
- * Reading node_modules answers the real question and costs one `exists` call per package.
- */
-function sdkPackagesPresent(
-  framework: Framework,
-  uiLibrary: UiLibrary,
-  io: Pick<InitIo, 'exists'>,
-): boolean {
-  const packages = frameworkPackages(framework, uiLibrary);
-  return (
-    packages.length > 0 &&
-    packages.every((p) => io.exists(`${NODE_MODULES_DIR}/${p}/${PACKAGE_JSON}`))
-  );
-}
-
 function applyEffects(plan: Plan, io: InitIo, packageManager: PackageManager): Effects {
   const why = new Map<string, string>();
   const failed = new Set<string>();
@@ -734,14 +716,17 @@ function applyEffects(plan: Plan, io: InitIo, packageManager: PackageManager): E
         continue;
       }
       // Verify, don't re-run: give the install step itself the same sdkPackagesPresent benefit
-      // already given to the wiring it gates below (#683).
-      if (s.target === DEPS_TARGET && sdkPackagesPresent(plan.framework, plan.uiLibrary, io))
-        continue;
+      // already given to the wiring it gates below (#683) — but only when package.json DECLARES
+      // them. Reported from a Tauri + Next app: `pnpm add` died on ERR_PNPM_UNEXPECTED_STORE, the
+      // packages happened to resolve, init printed success, and the manifest never gained them.
+      const present =
+        s.target === DEPS_TARGET && sdkPackagesPresent(plan.framework, plan.uiLibrary, io);
+      if (present && sdkPackagesDeclared(plan.framework, plan.uiLibrary, io)) continue;
       failed.add(s.target);
       // A failed install only blocks the wiring when the packages are genuinely ABSENT. See
       // sdkPackagesPresent: the guard protects "the import resolves", not "our subprocess exited 0".
       if (s.target === DEPS_TARGET) {
-        installFailed = true;
+        installFailed = !present;
         const explained = explainInstallFailure(io, packageManager, exec, s.detail);
         if (explained !== undefined) why.set(s.target, explained);
       }

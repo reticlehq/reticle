@@ -44,6 +44,8 @@ export const HudUseDataSchema = z.object({
   toggle: z.nativeEnum(HudToggle).optional(),
   view: z.nativeEnum(HudView).optional(),
   panel: z.nativeEnum(HudPanel).optional(),
+  /** A rail slide that became the visible one. Its shape is checked where it is counted. */
+  slide: z.string().max(56).optional(),
 });
 export type HudUseData = z.infer<typeof HudUseDataSchema>;
 
@@ -265,12 +267,20 @@ export const HelloMessageSchema = z.object({
 export type HelloMessage = z.infer<typeof HelloMessageSchema>;
 
 /** Agent -> browser request, routed by the bridge with a correlation id. */
+/** Who sent a command: the Harness, or (when absent) the agent connected to the daemon. */
+export const CommandActor = {
+  HARNESS: 'harness',
+} as const;
+export type CommandActor = (typeof CommandActor)[keyof typeof CommandActor];
+
 export const CommandMessageSchema = z.object({
   kind: z.literal(MessageKind.COMMAND),
   id: z.string().min(1).max(TRANSPORT_LIMITS.MAX_COMMAND_ID_LENGTH),
   sessionId: sessionIdSchema.optional(),
   name: z.string().min(1).max(TRANSPORT_LIMITS.MAX_COMMAND_NAME_LENGTH),
   args: z.record(z.unknown()).default({}),
+  /** Set when the Harness sent it, so the HUD can say who is driving. */
+  by: z.nativeEnum(CommandActor).optional(),
 });
 export type CommandMessage = z.infer<typeof CommandMessageSchema>;
 

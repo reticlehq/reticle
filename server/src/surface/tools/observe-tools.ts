@@ -236,8 +236,11 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         asNumber(args['max_events']) ?? DEFAULT_OBSERVE_EVENT_LIMIT,
       );
       const report = buildReactionReport(budgeted, windowMs);
-      // Run over the FILTERED-but-unbudgeted window: a contradiction must not vanish because the
-      // timeline was capped for tokens. Detection is cheap; the events are already in hand.
+      // Run over the WHOLE window: neither unfiltered nor unbudgeted is a display choice. A contradiction
+      // must not vanish because the timeline was capped for tokens, and it must not APPEAR because a
+      // filter removed its counter-evidence: `filters: ["route"]` dropped the DOM events proving a
+      // destination rendered, and the call reported `route-rendered-nothing` the unfiltered call did
+      // not (#1359). Detection is cheap; the events are already in hand.
       // The act that opened this window is not in `args` — observe is a separate call — so its action
       // and in-target mutation count are read back off the session. Without them the "this click did
       // nothing" check is unreachable on the ordinary act-then-observe flow, which is most of them.
@@ -246,7 +249,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       // never asked about.
       const actCursor = session.lastAct.cursor();
       const judgingTheAct = actCursor !== undefined && actCursor >= since;
-      const contradictions = findContradictions(filtered, {
+      const contradictions = findContradictions(events, {
         currentDocumentId: session.currentDocumentId,
         currentEditEpoch: session.currentEditEpoch,
         appOrigin: session.url,
@@ -360,7 +363,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       const bodyRefusal = bodyClauseRefusal(predicate, session);
       if (bodyRefusal !== undefined) throw new Error(bodyRefusal);
       // Honesty: explicit since wins; else default to the last act's cursor; else the whole buffer.
-      let since = asNumber(args['since']) ?? session.lastAct.cursor() ?? 0;
+      const since = asNumber(args['since']) ?? session.lastAct.cursor() ?? 0;
       // See the note on the assert handler below: a wait cut off by a full-document navigation is
       // followed to the document that took over, rather than graded as a lost observation there.
       const predicateStarted = session.elapsed();
@@ -372,7 +375,6 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         predicateStarted,
         reevaluate: (next, budget) => waitForPredicate(next, predicate, budget, 0),
       });
-      if (followed.followed) since = 0;
       session = followed.session;
       const verdict = followed.verdict;
       // match reticle_assert — wrap with control + session health (throttle matters most while blocking)
@@ -604,7 +606,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       // explicit `since` may reach back past the last step, where replay would not find it. The
       // store itself refuses when a navigation came after that step: see RecordingStore.markNavigated.
       if (Verified.YES === decision['verified'] && args['since'] === undefined) {
-        captureAssertion(deps.recordings, predicate);
+        captureAssertion(deps.recordings, predicate, session.id);
       }
       return withControl(session, {
         ...decision,

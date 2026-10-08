@@ -89,6 +89,9 @@ export function mergedNameRedirect(name: string): MergedNameRedirect | undefined
 export function retiredToolNames(): Readonly<Record<string, string>> {
   const tombstones: Record<string, string> = {};
   for (const [old, redirect] of BY_OLD_NAME) {
+    // A bare call that redirects to an action on the SAME tool (`reticle_assert` → `{ action: "now" }`)
+    // is a live tool, not a retired one. Listing it here told every reader not to use it.
+    if (old === redirect.tool) continue;
     tombstones[old] =
       redirect.action === undefined
         ? `retired; ${redirect.note ?? `use ${redirect.tool}`}`

@@ -4,7 +4,7 @@ description: Act on an element and wait for a named consequence in one call. Thi
 icon: circle-check
 ---
 
-`reticle_act_and_wait` performs one action on an element and waits for a named consequence, returning a verdict in the same call. Reach for it whenever an action is supposed to cause something: it is one of only two Reticle tools that produce a verdict, the other being [`reticle_assert`](/tools/assert).
+`reticle_act_and_wait` performs one action on an element and waits for a named consequence, returning a verdict in the same call. Reach for it whenever an action is supposed to cause something: it produces a verdict. Verdicts come from `reticle_act_and_wait`, [`reticle_assert`](/tools/assert), `reticle_act { steps }` when a step declares `expect`, and `reticle_verify` (`change`/`flows`). Everything else moves or reads the app and proves nothing. Only `verified: "yes"` is a pass: `unknown` means Reticle could not tell, and `no-fault` means nothing was declared to prove.
 
 This is the tool Reticle exists for. It does the act, observe and assert steps in one round trip, and it makes you name the expected consequence **before** the action runs.
 
@@ -135,7 +135,7 @@ The app itself declared success. This is the highest grade of evidence, and it r
 
 ## Reading `verified`
 
-<CardGroup cols={3}>
+<CardGroup cols={2}>
   <Card title="yes" icon="circle-check">
     The named consequence happened, with evidence attached.
   </Card>
@@ -144,6 +144,10 @@ The app itself declared success. This is the highest grade of evidence, and it r
   </Card>
   <Card title="unknown" icon="circle-question">
     Reticle could not tell. **Not a pass.** Report it as unknown.
+  </Card>
+  <Card title="no-fault" icon="circle-minus">
+    The page settled with nothing wrong, but nothing was declared to prove. **Not a pass.** Add an
+    `until` the action changes.
   </Card>
 </CardGroup>
 
@@ -158,10 +162,12 @@ A verification tool that cannot describe the quality of its own evidence is aski
 | Argument | What it does |
 | --- | --- |
 | `ref`, `action`, `args` | As [`reticle_act`](/tools/act) |
+| `target` | Find the element and act in one call, instead of a `ref`: `{ testid }`, `{ text }`, `{ role, name }` or `{ label }`. Refuses if it matches more than one |
 | `until` | The predicate to wait for. Omit it to wait for the page to settle |
 | `predicate` | Alias for `until`, the name `assert` and `wait_for` use |
 | `timeout_ms` | Maximum wait, defaulting to 4000. `0` evaluates the predicate once, no wait |
 | `refuseWhenThrottled` | Throw rather than act on a throttled tab |
+| `intent` | What the change is supposed to make true, in prose, or the id of an intent declared earlier. Recorded on the verdict |
 | `durable` | After a `yes`, reload the page and require the element, text and state parts of `until` to hold again. A consequence that is gone after the reload turns the verdict into `no`: the UI advanced, the change did not persist |
 
 Omitting `until` waits for network and DOM idle, which is the deterministic replacement for a fixed sleep. To assert a consequence **and** settle, combine them:

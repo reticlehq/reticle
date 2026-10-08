@@ -10,15 +10,17 @@ icon: comments
 
 The presenter panel in your app shows a live transcript of what the agent is doing. It reads "live" until the agent says otherwise. So an agent that wanders off without a word leaves a panel claiming work is in progress forever.
 
-| Action     | What it does                                                             |
-| ---------- | ------------------------------------------------------------------------ |
-| `yield`    | Hand control back between turns. `mode: "waiting"` or `"ask"`. Revivable |
-| `end`      | The task is done. Frees the session; revives on the next action          |
-| `tune`     | Adjust session behaviour, such as `idleEndMs`, the idle-end window       |
-| `resume`   | Clear a pause the human applied                                          |
-| `messages` | Drain the human-to-agent inbox                                           |
-| `review`   | List, and with `resolve`, retire the mistakes a human pinned to elements |
-| `narrate`  | State your intent on the presenter panel, with an optional `level`       |
+| Action | What it does |
+| --- | --- |
+| `list` | Which tabs are connected, and whether they can be driven. Your first call. An empty list carries a `why` naming the cause |
+| `feedback` | Tell the maintainers Reticle got something wrong. Takes the fields described under [reticle_feedback](#reticle-feedback) below |
+| `yield` | Hand control back between turns. `mode: "waiting"` or `"ask"`. Revivable |
+| `end` | The task is done. Frees the session; revives on the next action |
+| `tune` | Adjust session behaviour: `idleEndMs`, the idle-end window, or `hud`: `hidden`, `shown`, `removed` (until reload), or a corner (`top-left`, `top-right`, `bottom-left`, `bottom-right`) when the HUD covers a control you must test |
+| `resume` | Clear a pause the human applied |
+| `messages` | Drain the human-to-agent inbox |
+| `review` | List, and with `resolve`, retire the mistakes a human pinned to elements |
+| `narrate` | State your intent on the presenter panel, with an optional `level` |
 
 ```json
 { "action": "yield", "mode": "waiting" }
@@ -51,6 +53,10 @@ And each lease carries the rule in the payload itself:
 </Tip>
 
 ## reticle_feedback
+
+<Note>
+  `reticle_feedback` is not advertised by default. Call `reticle_session { action: "feedback", kind, text }`: the same fields, routed on `action`. The old name answers with the new call.
+</Note>
 
 Reticle is built for agents, which creates an unusual problem: the primary user's experience vanishes the moment its context does. If an agent hits a gap and works around it silently, nobody ever learns the gap existed.
 

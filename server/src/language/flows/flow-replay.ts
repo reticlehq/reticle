@@ -13,6 +13,7 @@ export { nearestIsAmbiguous, nearestTestid, resolveQuery } from './flow-anchor.j
 import type { FlowReplaySession, WaitForSignal, Sleep } from './flow-replay-types.js';
 export type { FlowReplaySession, WaitForSignal, Sleep } from './flow-replay-types.js';
 import { routeOfEvent, routeOfUrl } from '@reticlehq/engine/question/predicate/predicate-route.js';
+import { evalConsole } from '@reticlehq/engine/question/predicate/predicate-console.js';
 import { stepEffect } from '@reticlehq/engine/evidence/step-effect.js';
 import {
   AnchorKind,
@@ -26,6 +27,7 @@ import {
   type FlowStepResult,
   type ReticleEvent,
   PredicateKind,
+  ReplayStatus,
 } from '@reticlehq/core';
 import { asString, isConsequenceDrift } from '@reticlehq/core';
 import { anchorFieldName } from './fields/flow-secret-field.js';
@@ -131,11 +133,54 @@ function summarizeConsequence(events: ReticleEvent[]): string | undefined {
     const status = 'number' === typeof data['status'] ? ` ${data['status']}` : '';
     parts.push(`${method} ${path}${status}`.trim());
   }
-  const errors = events.filter(
-    (e) => e.type === EventType.CONSOLE_ERROR || e.type === EventType.ERROR_UNCAUGHT,
-  ).length;
+  const errors = events.filter(isConsoleError).length;
   if (errors > 0) parts.push(`${errors} console error${errors > 1 ? 's' : ''}`);
   return parts.length > 0 ? parts.join('; ') : undefined;
+}
+
+const isConsoleError = (e: ReticleEvent): boolean =>
+  e.type === EventType.CONSOLE_ERROR || e.type === EventType.ERROR_UNCAUGHT;
+
+/** At most this many console errors travel on one step; its `digest` still counts them all. */
+const CONSOLE_ERRORS_PER_STEP = 5;
+
+/** The console errors a step's window saw, for the run artifact's evidence. See FlowStepResult. */
+function consoleErrorsIn(events: ReticleEvent[]): FlowStepResult['consoleErrors'] {
+  const errors = events
+    .filter(isConsoleError)
+    .slice(0, CONSOLE_ERRORS_PER_STEP)
+    .map((e) => ({ level: e.type, message: asString(e.data['message']) ?? '', at: e.t }));
+  return errors.length > 0 ? errors : undefined;
+}
+
+type StepExpect = NonNullable<FlowStep['expect']>;
+type ConsoleClause = Extract<StepExpect, { kind: typeof PredicateKind.CONSOLE }>;
+
+/** The console-absent clauses an expect cannot pass without: itself, or any `allOf` member. */
+function requiredConsoleAbsences(expect: StepExpect): ConsoleClause[] {
+  if (PredicateKind.ALL_OF === expect.kind)
+    return expect.predicates.flatMap(requiredConsoleAbsences);
+  return PredicateKind.CONSOLE === expect.kind && true === expect.absent ? [expect] : [];
+}
+
+/**
+ * A console-absent expect, read again over the step's WHOLE window.
+ *
+ * The wait that graded the expect ends before the window does, so an error landing between the two
+ * was counted by the step's consequence and missed by its verdict (#1344). The window wins.
+ */
+function lateConsoleDrift(expect: StepExpect, events: ReticleEvent[]): Drift | undefined {
+  for (const clause of requiredConsoleAbsences(expect)) {
+    const read = evalConsole(events, clause);
+    if (read.pass) continue;
+    return {
+      reasonKind: DriftReason.SIGNAL_NOT_OBSERVED,
+      reason: read.failureReason ?? "the step's declared consequence did not hold",
+      anchor: expectLabel(expect),
+      nearest: null,
+    };
+  }
+  return undefined;
 }
 
 /** Run one testid-anchored step: re-resolve via QUERY, then ACT on the live ref, else drift. */
@@ -356,6 +401,11 @@ async function runSignalStep(
  */
 export interface ReplayFromOptions {
   /**
+   * Told after every step it reports: how many are done, of how many, and whether this one held.
+   * The HUD's replay chip draws its progress from this; it must never throw into the replay.
+   */
+  onStep?: (done: number, total: number, held: boolean) => void;
+  /**
    * Resume at this step: an index, or a step's `id` (which survives edits that shift indices).
    *
    * There is no state to restore, so the steps before it are re-driven — quickly, as setup: their
@@ -364,6 +414,16 @@ export interface ReplayFromOptions {
    * for, and swallowing that would report the run as starting where it did not.
    */
   from?: number | string;
+  /**
+   * Stop before this step index: drive the journey only as far as a point, such as a dialog that
+   * several journeys branch from. Absent means the whole flow.
+   */
+  to?: number;
+  /**
+   * Continue at this step on the page as it is: earlier steps are not driven at all, because the
+   * caller already drove an identical prefix (another flow replayed `to` this step).
+   */
+  at?: number;
   /**
    * How to load a flow this one INVOKES. Absent means invocations cannot be followed.
    *
@@ -406,6 +466,21 @@ export function resumeIndex(
   const at = 'number' === typeof from ? from : steps.findIndex((step) => step.id === from);
   if (at < 0 || at >= steps.length || !Number.isInteger(at)) return undefined;
   return steps.slice(0, at).some((step) => StepEffect.COMMITS === step.effect) ? 0 : at;
+}
+
+/** How far a replay drives: `to` stops before a step, `at` picks up at one. Positive indices only. */
+export function replayWindow(args: Record<string, unknown>): { to?: number; at?: number } {
+  const index = (raw: unknown): number | undefined =>
+    'number' === typeof raw && Number.isInteger(raw) && 0 < raw ? raw : undefined;
+  const to = index(args['to']);
+  const at = index(args['at']);
+  return { ...(to === undefined ? {} : { to }), ...(at === undefined ? {} : { at }) };
+}
+
+/** A part-way replay's status, from the steps it drove. */
+export function partialStatus(steps: readonly FlowStepResult[]): ReplayStatus {
+  if (steps.some((step) => step.drift !== undefined)) return ReplayStatus.DRIFT;
+  return steps.every((step) => step.ok) ? ReplayStatus.OK : ReplayStatus.ERROR;
 }
 
 /** The `from` argument, narrowed: a step index or a step id. */
@@ -468,7 +543,8 @@ async function runInvokeStep(
   }
   // `from` is an offset into the CALLER's steps. A sub-journey invoked from the setup prefix runs
   // whole and unchecked (from = its length); one invoked at or after the resume point runs normally.
-  const { from: _outer, ...rest } = options;
+  // Nor the progress callback: a sub-flow's steps are one step of the flow the chip is drawing.
+  const { from: _outer, onStep: _progress, to: _to, at: _at, ...rest } = options;
   const carried = setup ? { ...rest, from: sub.steps.length } : rest;
   const nested = await replayFlow(
     session,
@@ -523,8 +599,24 @@ export async function replayFlow(
   const waitFor = (step: FlowStep): number =>
     step.timeoutMs ?? flow.signalTimeoutMs ?? signalTimeoutMs;
   let index = 0;
+  const tell = (result: FlowStepResult | undefined): void => {
+    try {
+      options.onStep?.(
+        index + 1,
+        flow.steps.length,
+        true === result?.ok && result.drift === undefined,
+      );
+    } catch {
+      /* progress is a picture of the replay, never a reason to stop it */
+    }
+  };
   try {
     for (const step of flow.steps) {
+      if (options.to !== undefined && index >= options.to) break;
+      if (options.at !== undefined && index < options.at) {
+        index += 1;
+        continue;
+      }
       if (step.invoke !== undefined) {
         results.push(
           await runInvokeStep(
@@ -542,6 +634,7 @@ export async function replayFlow(
         );
         const last = results[results.length - 1];
         if (last !== undefined && index < from && last.ok) results.pop();
+        tell(last);
         if (last !== undefined && false === last.ok) break;
         index += 1;
         continue;
@@ -640,6 +733,16 @@ export async function replayFlow(
       const windowEvents = session.eventsSince(cursorBefore).filter((e) => e.t >= cursorBefore);
       const consequence = summarizeConsequence(windowEvents);
       if (consequence !== undefined) result.consequence = consequence;
+      const consoleErrors = consoleErrorsIn(windowEvents);
+      if (consoleErrors !== undefined) result.consoleErrors = consoleErrors;
+      for (const expectation of checked) {
+        if (!result.ok || result.drift !== undefined) break;
+        const late = lateConsoleDrift(expectation, windowEvents);
+        if (late !== undefined) {
+          result.ok = false;
+          result.drift = late;
+        }
+      }
       // Per-step wall time is NOT shipped: it is `window.until - window.since`, computed from two numbers
       // the next line already puts in the same object, under the same emission condition. A step used to
       // carry the subtraction AND both operands, on every step of every replay.
@@ -663,6 +766,7 @@ export async function replayFlow(
       }
       if (index < from) result.note = `setup step for resuming at step ${String(from)} failed`;
       results.push(result);
+      tell(result);
       // Under `sweep`, a failure whose action still RAN does not stop the run — the page is where the
       // step left it, so the next step is as meaningful as it was going to be. Anything else halts.
       const sweepPast =

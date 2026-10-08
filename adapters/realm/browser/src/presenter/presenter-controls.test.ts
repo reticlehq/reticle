@@ -108,13 +108,16 @@ describe('presenter-controls / live-control panel', () => {
     expect(banner?.textContent).toBe('Session ended');
   });
 
-  it('10 ended disables all controls', () => {
-    // The composer is gone, so there is no input or send button left to disable. Pause and end are
-    // the controls an ended session still renders, and they are the ones that must go inert.
+  it('10 replaces Pause and Stop with Copy and Export when ended', () => {
     mount();
     click(endBtn());
-    expect(pauseBtn()?.disabled).toBe(true);
-    expect(endBtn()?.disabled).toBe(true);
+    expect(pauseBtn()?.hidden).toBe(true);
+    expect(endBtn()?.hidden).toBe(true);
+    expect(q('[data-reticle-copy]')?.hidden).toBe(false);
+    expect(q('[data-reticle-export]')?.hidden).toBe(false);
+    expect(q('[data-reticle-copy]')?.closest('.reticle-act-actions')).not.toBeNull();
+    expect(q('[data-reticle-export]')?.closest('.reticle-act-actions')).not.toBeNull();
+    expect(q('[data-reticle-copy]')?.closest('[data-reticle-hud]')).toBeNull();
   });
 
   it('11 clicking pause/end after ended emits nothing more', () => {
@@ -137,7 +140,7 @@ describe('presenter-controls / live-control panel', () => {
     await flush();
     expect(q('[data-reticle-glow]')?.getAttribute('data-on')).toBe('0'); // border cleared (testing over)
     expect(q('[data-reticle-hud]')?.getAttribute('data-on')).toBe('1'); // panel PERSISTS for analysis
-    expect(stateAttr()).toBe('ended'); // → CSS reveals the Copy/Export row
+    expect(stateAttr()).toBe('ended');
     expect(q('[data-reticle-copy]')).not.toBeNull();
     expect(q('[data-reticle-export]')).not.toBeNull();
   });
@@ -189,7 +192,7 @@ describe('presenter-controls / live-control panel', () => {
     expect(panelRoot.getAttribute('data-reticle-tone')).toBe('ask');
   });
 
-  const pushFlows = (presenter: Presenter, flows: { name: string }[]): void =>
+  const pushFlows = (presenter: Presenter, flows: { name: string; start?: string }[]): void =>
     presenter.handlePush({ name: 'flows', args: { flows } });
 
   it('14e a FLOWS push renders ▶ chips; a click replays that flow (no agent)', () => {
@@ -197,30 +200,61 @@ describe('presenter-controls / live-control panel', () => {
     pushFlows(presenter, [{ name: 'checkout' }, { name: 'login' }]);
     const flows = q('[data-reticle-flows]');
     expect(flows?.getAttribute('data-has')).toBe('1');
-    const chips = document.querySelectorAll<HTMLElement>('[data-reticle-replay]');
+    const chips = document.querySelectorAll<HTMLElement>(
+      '[data-reticle-flow-strip] [data-reticle-replay]',
+    );
     expect(chips.length).toBe(2);
     expect(chips[0]?.textContent).toBe('▶ checkout');
     click(chips[0]);
     expect(onControl).toHaveBeenCalledWith({ kind: HumanControlKind.REPLAY, text: 'checkout' });
   });
 
+  it('14e2 the Saved flows page lists each flow as a readable row that still replays', () => {
+    const { presenter, onControl } = mount();
+    pushFlows(presenter, [
+      { name: 'checkout-with-saved-card', start: 'not-on-this-page' },
+      { name: 'login' },
+    ]);
+    const rows = document.querySelectorAll<HTMLButtonElement>(
+      '[data-reticle-all-flows] [data-reticle-replay]',
+    );
+    expect(rows).toHaveLength(2);
+    const blocked = Array.from(rows).find(
+      (r) => 'checkout-with-saved-card' === r.getAttribute('data-reticle-replay'),
+    );
+    // The slug is read as words; the raw name stays the replay key and the tooltip.
+    expect(blocked?.querySelector('.reticle-flow-name')?.textContent).toBe(
+      'Checkout with saved card',
+    );
+    expect(blocked?.querySelector('.reticle-flow-meta')?.textContent).toBe(
+      'Starts on another page',
+    );
+    expect(blocked?.disabled).toBe(true);
+    const login = Array.from(rows).find((r) => 'login' === r.getAttribute('data-reticle-replay'));
+    expect(login?.querySelector('.reticle-flow-meta')?.textContent).toBe('Replay without an agent');
+    click(login);
+    expect(onControl).toHaveBeenCalledWith({ kind: HumanControlKind.REPLAY, text: 'login' });
+  });
+
   it('14f a FLOWS push with no flows hides the row and rebuilds cleanly', () => {
     const { presenter } = mount();
     pushFlows(presenter, [{ name: 'a' }, { name: 'b' }]);
-    expect(document.querySelectorAll('[data-reticle-replay]').length).toBe(2);
+    expect(
+      document.querySelectorAll('[data-reticle-flow-strip] [data-reticle-replay]').length,
+    ).toBe(2);
     pushFlows(presenter, []); // a re-push replaces, never appends
-    expect(document.querySelectorAll('[data-reticle-replay]').length).toBe(0);
+    expect(
+      document.querySelectorAll('[data-reticle-flow-strip] [data-reticle-replay]').length,
+    ).toBe(0);
     expect(q('[data-reticle-flows]')?.getAttribute('data-has')).toBe('0');
   });
 
-  it('14g the flows row is height-capped + self-scrolling so a long list never hides the log/input', () => {
-    // Regression: without flex:none + max-height + overflow-y, a long replay list grows and pushes the
-    // composer (message input) past the panel's overflow:hidden clip, and squeezes the log to nothing.
+  it('14g the flows preview is horizontally scrolling and cannot grow into the log', () => {
     const start = CONTROLS_CSS.indexOf('.reticle-flows{');
     const rule = CONTROLS_CSS.slice(start, CONTROLS_CSS.indexOf('}', start));
     expect(rule).toContain('flex:none');
-    expect(rule).toContain('max-height:');
-    expect(rule).toContain('overflow-y:auto');
+    expect(CONTROLS_CSS).toContain('.reticle-flow-strip{display:flex;');
+    expect(CONTROLS_CSS).toContain('overflow-x:auto');
   });
 
   it('14h shows only flows whose start testid is present on the page; re-scopes on route change', () => {
@@ -240,7 +274,7 @@ describe('presenter-controls / live-control panel', () => {
       },
     });
     const shown = (): string[] =>
-      Array.from(document.querySelectorAll('[data-reticle-replay]'))
+      Array.from(document.querySelectorAll('[data-reticle-flow-strip] [data-reticle-replay]'))
         .map((b) => b.getAttribute('data-reticle-replay') ?? '')
         .sort();
     expect(shown()).toEqual(['add-task', 'global-search']);
@@ -277,6 +311,17 @@ describe('presenter-controls / live-control panel', () => {
     expect(snap.tree).not.toContain('PAUSED');
     expect(snap.tree).not.toContain('Session ended');
     expect(snap.tree).not.toContain('reticle-brand-mini');
+  });
+
+  it('places run controls with status and annotation actions on their own page', () => {
+    mount();
+    const status = q('.reticle-act-strip');
+    const annotations = q('[data-reticle-chat-view="annotations"]');
+    expect(status?.contains(pauseBtn())).toBe(true);
+    expect(status?.contains(endBtn())).toBe(true);
+    expect(annotations?.querySelector('[data-reticle-markers-btn]')).not.toBeNull();
+    expect(annotations?.querySelector('[data-reticle-clear-marks]')).not.toBeNull();
+    expect(q('.reticle-chat-nav')).not.toBeNull();
   });
 
   // Pause and End are instructions to the AGENT. Annotation is the person's own channel, so it
@@ -347,5 +392,55 @@ describe('presenter-controls / live-control panel', () => {
       signals.every((s) => s.aborted),
       'a signalled listener outlived destroy()',
     ).toBe(true);
+  });
+});
+
+describe('the replay row', () => {
+  it('has a See all that opens the Flows page', () => {
+    document.body.innerHTML = '';
+    const presenter = new Presenter({});
+    presenter.mount();
+    const flowsTab = document.querySelector<HTMLElement>('[data-reticle-chat-view-btn="flows"]');
+    let opened = false;
+    flowsTab?.addEventListener('click', () => {
+      opened = true;
+    });
+    document.querySelector<HTMLElement>('[data-reticle-flows-all]')?.click();
+    expect(opened).toBe(true);
+    presenter.destroy();
+  });
+});
+
+describe('a replay started from a chip', () => {
+  it('plays on the chip, step by step, and says how it ended', () => {
+    document.body.innerHTML = '';
+    const presenter = new Presenter({});
+    presenter.mount();
+    presenter.handlePush({ name: 'flows', args: { flows: [{ name: 'refund' }] } });
+    const chip = (): HTMLElement | null =>
+      document.querySelector('.reticle-flow[data-reticle-replay="refund"]');
+    presenter.handlePush({
+      name: 'flow.progress',
+      args: { name: 'refund', done: 2, total: 4, status: 'playing' },
+    });
+    expect(chip()?.getAttribute('data-state')).toBe('playing');
+    expect(chip()?.style.getPropertyValue('--reticle-flow-progress')).toBe('50%');
+    const seeLogs = document.querySelector<HTMLElement>('[data-reticle-see-logs]');
+    expect(seeLogs?.hidden).toBe(false);
+    let opened = false;
+    document
+      .querySelector('[data-reticle-chat-view-btn="activity"]')
+      ?.addEventListener('click', () => {
+        opened = true;
+      });
+    seeLogs?.click();
+    expect(opened).toBe(true);
+    presenter.handlePush({
+      name: 'flow.progress',
+      args: { name: 'refund', done: 4, total: 4, status: 'passed' },
+    });
+    expect(chip()?.getAttribute('data-state')).toBe('passed');
+    expect(chip()?.textContent).toBe('✓ refund');
+    presenter.destroy();
   });
 });

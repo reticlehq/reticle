@@ -5,7 +5,7 @@ description: Install Reticle, connect your coding agent, and get a real verdict 
 icon: rocket
 ---
 
-**Run the installer once, then run `reticle init` in your project.** Reticle embeds a dev-only SDK in your running app and proves a browser session connected. No account needed. Add `reticle connect` later if you want a cloud dashboard.
+**Four steps: run the installer once per machine, run `reticle init` once per project, then optionally `reticle connect` for the dashboard and `reticle push` to sync.** Skip `init` and your agent's first `reticle_session` call wires the app instead. Reticle embeds a dev-only SDK in your running app and proves a browser session connected. No account needed for steps 1 and 2.
 
 By the end of this page your agent will click a button in your app and prove what happened: the request that fired, the state that changed, and the file to open if it didn't.
 
@@ -16,7 +16,7 @@ By the end of this page your agent will click a button in your app and prove wha
 
 ## Prerequisites
 
-- Node 20 or newer
+- Node 20.11 or newer
 - A web app you can run locally, and its dev server
 - A coding agent that speaks MCP (Claude Code, Cursor, Codex, OpenCode, Windsurf, VS Code)
 
@@ -36,7 +36,7 @@ irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1
 
 </CodeGroup>
 
-This puts `reticle` on your PATH and registers the MCP server with every coding agent it can reach: Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, Copilot CLI, OpenCode, Warp, Kiro, Amazon Q, Cline, Amp, Continue and Factory Droid. Nothing is asked.
+This puts `reticle` on your PATH and registers the MCP server with every coding agent it can reach: Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, Copilot CLI, OpenCode, Antigravity, Warp, Kiro, Amazon Q, Cline, Roo Code, Amp, Continue and Factory Droid. Nothing is asked. Then it verifies a demo app, so you see a verdict before you touch your own. It does not wire your app: that is step 2.
 
 Codex CLI keeps a TOML config that Reticle will not rewrite, so the installer prints the lines to paste and the file to paste them into.
 
@@ -61,16 +61,17 @@ In your project directory, before opening your coding agent:
 RETICLE_INSTALL_SOURCE=docs_site npx @reticlehq/server init
 ```
 
-This installs the dev-only SDK, wires your build config, starts the dev server, and checks that a browser session connected. Nothing from your project leaves your machine. Open your coding agent once this command finishes; if it was already open during installation, restart it to load the new tools. The `RETICLE_INSTALL_SOURCE` prefix is optional and only tells us which page you installed from.
+This installs the dev-only SDK, wires your build config, starts the dev server, and checks that a browser session connected. Nothing from your project leaves your machine. If your dev server was already running, restart it once and hard-reload the tab: it read your build config before `init` edited it. Open your coding agent once this command finishes; if it was already open during installation, restart it to load the new tools. The `RETICLE_INSTALL_SOURCE` prefix is optional and only tells us which page you installed from. It is idempotent: run it twice and the second run reports what was already done rather than doing it again.
 
 Step 1 is once per machine. This step is once per project. **Skipping it is the most common reason Reticle "does nothing":** the agent has the tools, but there is no app on the other end for them to see.
 
-Want a cloud dashboard too? Run `npx @reticlehq/server connect --project "My App"` instead of, or after, `init`. It does everything `init` does, then opens browser sign-in approval, links this folder to the named cloud project, and sends existing local history. Approve the short code shown in the browser and terminal; the command resumes by itself.
-
 <Note>
-  **Skipped this step?** In a web app Reticle has never connected to, your agent's first reply
-  offers to run `init`, and runs it only if you say yes. This works in Claude Code, Codex, Cursor
-  and other agents that read MCP server instructions.
+  **Skipped this step?** Ask your agent to verify something in the app. Its first `reticle_session`
+  call finds a project that has never connected, runs `init` there itself, and lists every file it
+  changed under `wired`. Asked about something unrelated, it offers to wire the app instead of doing
+  it. This works in Claude Code, Codex, Cursor and other MCP agents. If Reticle is already running
+  for another project, run `npx @reticlehq/server init` in this one: the automatic wiring covers the
+  project the daemon started in.
 </Note>
 
 Prefer to install the skill and let the agent run setup itself? On Claude Code the plugin registers the MCP server and the skill in one step:
@@ -92,6 +93,7 @@ Useful flags for the local-only `reticle init` path:
 
 ```
 reticle init  [--dry-run] [--port N] [--no-mcp] [--no-install] [--app <dir>]
+              [--env KEY=VALUE]... [--files-only] [--json] [--relaunch]
               --app picks WHICH app in a monorepo, when several are found
               --no-mcp skips MORE than the server registration: also the agent rule files
               (CLAUDE.md / AGENTS.md / .cursor) and the /reticle command, because all three
@@ -101,13 +103,37 @@ reticle init  [--dry-run] [--port N] [--no-mcp] [--no-install] [--app <dir>]
 Start with `reticle init --dry-run` if you want to see the app changes before anything is written.
 
 <Tip>
-  In a monorepo, `init` will find several apps and ask which one you mean. `--app packages/web`
-  skips the question.
+  In a monorepo, `init` run at the root lists every app it found, each with its own
+  `reticle init --app <dir>` line, and stops. Run the line for the app you want. With only one
+  app, it wires that one without asking.
 </Tip>
 
 Prefer to wire it yourself? See [Manual install](/install-manual). It is about ten lines, and worth reading once even if you let the agent do it, because it explains what the agent actually changed.
 
-## Step 3. Check the setup
+## Step 3. Connect the dashboard (optional)
+
+Skip this if you only want local verdicts. Everything above works without an account.
+
+```bash
+npx @reticlehq/server connect --project "My App"
+```
+
+`connect` runs Step 2 first if this project isn't wired yet, so you can use it in place of `init`. Then it:
+
+1. Opens a browser so you can sign in, or create a free account at app.reticle.sh. Approve the short code shown in the browser and in the terminal, and the command carries on by itself.
+2. Links this folder to the cloud project you named, creating it if it doesn't exist. `npx @reticlehq/server whoami` shows the link.
+3. Sends the runs and flows already on this machine.
+
+After that, every verified run syncs on its own. To sync right now, for example before showing a teammate:
+
+```bash
+npx @reticlehq/server push            # one sync
+npx @reticlehq/server push --watch    # keep syncing while you work
+```
+
+The Free plan includes monthly Harness credits. What syncs, and how to switch each part off (`reticle config --runs/--memory/--flows on|off`), is in [What is recorded](/what-is-recorded). In CI, set `RETICLE_API_KEY` instead of signing in.
+
+## Step 4. Check the setup
 
 ```bash
 npx @reticlehq/server doctor
@@ -115,9 +141,9 @@ npx @reticlehq/server doctor
 
 `doctor` diagnoses the whole setup in one command: Chromium, the daemon, the port. If something is wrong this is the page you want before you start debugging your app instead.
 
-## Step 4. Open your app again when you need it
+## Step 5. Open your app again when you need it
 
-`connect` already started the dev server and opened the app. On a later day, start your dev server as usual, then:
+`init` (or `connect`) already started the dev server and opened the app. On a later day, start your dev server as usual, then:
 
 ```bash
 npx @reticlehq/server open
@@ -127,12 +153,13 @@ This reuses the tab you already have open, or opens one if you don't. The SDK co
 
 <Warning>
   If the browser console says `[Reticle] this page could not open a websocket to …`, your app and
-  the daemon disagree about the port. Set it explicitly:
-  `VITE_RETICLE_WS_URL=ws://localhost:4400/reticle` for Vite, or `reticle.connect({url})`. This is
+  the daemon disagree about the port. Set it explicitly: `RETICLE_PORT=4400 pnpm dev` (Vite
+  plugin), `reticle({ port: 4400 })` in `vite.config`, or
+  `reticle.connect({ url: 'ws://localhost:4400/reticle' })` by hand. This is
   the single most common setup problem, and the console message names the exact address it tried.
 </Warning>
 
-## Step 5. Look at the page
+## Step 6. Look at the page
 
 Ask your agent to take a snapshot. This is what came back from a real app:
 
@@ -154,7 +181,7 @@ The whole snapshot cost **61 tokens**. This is `mode: "interactive"`, which retu
 
 Each control has a `ref` like `e5`. That's the handle for the next step, and it stays valid until the element leaves the DOM, so you don't re-snapshot between actions.
 
-## Step 6. Act, and prove it
+## Step 7. Act, and prove it
 
 Here is the whole idea of Reticle in one call. Your agent names the expected consequence **before** it acts:
 
@@ -224,7 +251,7 @@ Read what that actually proves:
 
 ## What "verified" can say
 
-<CardGroup cols={3}>
+<CardGroup cols={2}>
   <Card title="yes" icon="circle-check">
     The consequence you named actually happened, and the evidence is attached.
   </Card>
@@ -233,6 +260,9 @@ Read what that actually proves:
   </Card>
   <Card title="unknown" icon="circle-question">
     Reticle drove the app and could not tell. **This is not a pass.** Report it as unknown.
+  </Card>
+  <Card title="no-fault" icon="circle-minus">
+    Nothing was declared to prove, so nothing was checked. **Not a pass either:** add an `until`.
   </Card>
 </CardGroup>
 
@@ -262,10 +292,12 @@ That third state is the one that matters. Most tools have two outcomes and quiet
 </Accordion>
 
 <Accordion title="Does my code or my app's data leave my machine?">
-  No. The daemon runs on your machine and the SDK runs in your browser. No application code, DOM,
-  network traffic or console output leaves it. Anonymous product analytics are sent unless you opt
-  out with `npx @reticlehq/server telemetry disable`, and they never include your code or your app's
-  data.
+  Not unless you link a project. The daemon runs on your machine and the SDK runs in your browser.
+  Nothing from your app leaves the machine until you link a project (`reticle connect`, or
+  `RETICLE_API_KEY` in CI). After that, what syncs is set by `reticle config`, and when the Harness
+  drives, the platform sees the steps it drives. Secret values never leave. Anonymous product
+  analytics are sent unless you opt out with `npx @reticlehq/server telemetry disable`, and they
+  never include your code or your app's data.
 </Accordion>
 
 <Accordion title="What if my framework is not React or Next.js?">
@@ -289,7 +321,8 @@ That third state is the one that matters. Most tools have two outcomes and quiet
     Emit signals like `auth:granted` so your verdicts get stronger than "the DOM changed".
   </Card>
   <Card title="Every tool" icon="list" href="/tools/overview">
-    The 18 tools your agent sees by default, and the 30 more it can reach on demand.
+    The 10 tools your agent sees by default, and the rest it reaches through `reticle_tools` and
+    `reticle_run`.
   </Card>
   <Card title="Run it in CI" icon="circle-check" href="/testing">
     Turn this session into a suite that blocks a bad merge.

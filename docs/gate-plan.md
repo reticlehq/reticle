@@ -6,7 +6,7 @@ icon: list-check
 
 Two gates, not one: a **merge gate** that answers "does this PR break anything" and runs on every PR in minutes, and a **release gate** that answers "does this version work in the clients people use" and runs on a release candidate over hours. Phases 0, 1, 2 and 4 are built; Phase 3 (the client matrix) is blocked on `init` learning each client, and Tier 2 is blocked on a token that cannot be created from inside this repo.
 
-> What has to be true before a PR merges and before a release ships, why each piece exists, and what is built so far. Derived from [`system-map.md`](./system-map.md); the harness rules every tier obeys are in [`harness-rules.md`](../apps/e2e/harness-rules.md).
+> What has to be true before a PR merges and before a release ships, why each piece exists, and what is built so far. Derived from [`system-map.md`](./system-map.md); the harness rules every tier obeys are in [`harness-rules.md`](https://github.com/reticlehq/reticle/blob/main/apps/e2e/harness-rules.md).
 
 ## Two gates, not one
 

@@ -4,7 +4,7 @@ description: 'One screen to get fluent: the look → act → observe → assert 
 icon: bolt
 ---
 
-The loop is **look → act → observe → assert**, and verdicts come from `reticle_act_and_wait`, `reticle_assert`, and `reticle_act { steps }` when a step declares `expect`. Reach for `reticle_act_and_wait({ ref, action, until })` first: it names the expected consequence before the action, which is the difference between a check and a rationalisation. `verified: "unknown"` is not a pass.
+The loop is **look → act → observe → assert**. Verdicts come from `reticle_act_and_wait`, `reticle_assert`, `reticle_act { steps }` when a step declares `expect`, and `reticle_verify` (`change`/`flows`). Everything else moves or reads the app and proves nothing. Only `verified: "yes"` is a pass: `unknown` means Reticle could not tell, and `no-fault` means nothing was declared to prove. Reach for `reticle_act_and_wait({ ref, action, until })` first: it names the expected consequence before the action, which is the difference between a check and a rationalisation.
 
 One screen to get fluent. Reticle is the **proof layer for AI agents**: no screenshots, no vision model, evidence not prose. Everything below returns structured data. Full guide: [usage.md](usage.md).
 
@@ -14,18 +14,18 @@ One screen to get fluent. Reticle is the **proof layer for AI agents**: no scree
 | --- | --- | --- |
 | **look** | `reticle_look { action: "page" }` / `reticle_look { action: "find" }` | See the page (semantic tree) / find one specific element. |
 | **act** | **`reticle_act_and_wait`** / `reticle_act { steps: [...] }` / `reticle_act` | **Act + name the consequence, one hop. Reach for this first.** / batch a whole journey in one hop / move the app and prove nothing. |
-| **observe** | `reticle_observe` / `reticle_assert { action: "wait" }` | Everything the app did after `since` / block until true. |
+| **observe** | `reticle_observe` / `reticle_assert { action: "wait" }` | Everything the app did after `since` / block until true. The wait returns `pass` with no `verified`: it is not a verdict. |
 | **assert** | `reticle_assert` | Evaluate a predicate → `{ pass, evidence, failureReason? }`. The end of every loop. |
 
-> **Verdicts come from `reticle_act_and_wait`, `reticle_assert`, and `reticle_act { steps }` when a step declares `expect`.** Everything else moves or reads the app and proves nothing, so a drive ending without a verdict has no result however many tools it used. `reticle_act` is the tool agents reach for by habit and it catches nothing; `act_and_wait` is where defects actually surface. And `verified: "unknown"` is not a pass: it means Reticle drove the app and could not tell what happened. Report it as unknown.
+> **Verdicts come from `reticle_act_and_wait`, `reticle_assert`, `reticle_act { steps }` when a step declares `expect`, and `reticle_verify` (`change`/`flows`). Everything else moves or reads the app and proves nothing. Only `verified: "yes"` is a pass: `unknown` means Reticle could not tell, and `no-fault` means nothing was declared to prove.** A drive ending without a verdict has no result however many tools it used. `reticle_act` is the tool agents reach for by habit and it catches nothing; `act_and_wait` is where defects actually surface. Report `unknown` as unknown.
 
-`reticle_act` returns a `since` cursor; pass it to `reticle_observe({ since })` to scope the window. Elements are addressed by stable refs (`e7`) from `snapshot`/`query`; they re-resolve across re-renders.
+`reticle_act` returns a `since` cursor; pass it to `reticle_observe({ since })` to scope the window. Elements are addressed by stable refs (`e7`) from `reticle_look { action: "page" }` or `{ action: "find" }`; they re-resolve across re-renders.
 
 **`assert`/`wait_for` are auto-scoped to your last act.** By default they only count events buffered _since_ the most recent act, so a stale signal from a previous step can't fake a pass. Pass an explicit `since` to override. **Clicks run the code, not pixels:** `reticle_act` click fires the full pointer sequence on the element (no coordinate gesture for the HUD to intercept), reports `occluded:true` when something covers the target, and stays synthetic even with CDP configured (use `args:{ native:true }` for a trusted native click).
 
 **Never sleep. Wait deterministically.** Fixed sleeps are the #1 cause of flaky agent tests. Instead:
 
-- `reticle_act_and_wait({ ref, action })` with **no `until`** waits for the page to _settle_ (network + structural DOM idle; ambient count-up/spinner churn is ignored so an animated page still settles) before returning: the one-call replacement for "click then sleep 500ms".
+- `reticle_act_and_wait({ ref, action })` with **no `until`** waits for the page to _settle_ (settle: nothing new happening for a short quiet window, measured as network + structural DOM idle; ambient count-up/spinner churn is ignored so an animated page still settles) before returning: the one-call replacement for "click then sleep 500ms".
 - Need to wait without acting? `reticle_assert({ action: "wait", predicate: { kind: "settled", quietMs } })`.
 - Waiting for a specific outcome? Pass that consequence as the predicate (`{ signal }` / `{ net }`), or `allOf` it with `{ kind: "settled" }` to wait for both the event _and_ the page going quiet.
 
@@ -37,21 +37,19 @@ One screen to get fluent. Reticle is the **proof layer for AI agents**: no scree
 | `{ kind: "element", role: "button", text: "Save" }` | `{ kind: "element", query: { role, text } }` |
 | `{ kind: "route", url: "/checkout" }` | `{ kind: "route", contains: "/checkout" }` |
 
-**New in 2.8.0, and it changes what some existing assertions mean.** An element predicate now CHECKS `value` and `text` instead of quietly folding them into the locator and ignoring them.
+**An element predicate CHECKS `value` and `text`.** They are not folded into the locator and ignored.
 
 ```jsonc
-// Now a real assertion about the field's contents. Before 2.8.0 this passed
-// whatever the input held, because `value` was read as a locator operand and,
-// with no `by`, silently did nothing.
+// A real assertion about the field's contents.
 { "kind": "element", "role": "textbox", "name": "GST amount", "value": "274.58" }
 ```
 
-Two consequences worth knowing before you write your next predicate:
+Two consequences worth knowing:
 
-- **You can now assert what a field contains.** That was not possible before; agents worked around it by reading the value out of band with `reticle_look { action: "find" }` and comparing in prose, which produces no verdict and therefore does not count as verification.
-- **`{ role, text }` now checks the text.** It used to match on role alone, so it matched every button on the page. If an assertion you have used for months starts failing, that is the likely reason, and the failure is the truth arriving late.
+- **You can assert what a field contains.** Do not read the value with `reticle_look { action: "find" }` and compare it in prose: that produces no verdict and does not count as verification.
+- **`{ role, text }` checks the text,** so it does not match every button with that role.
 
-Fields that nothing can check are refused rather than ignored: `by` without a `value`, and `label`, `placeholder`, `testid`, `alt` or `component` when a higher-precedence field already selected the element. An element query is a first-match dispatch, not a conjunction.
+Fields that nothing can check are refused rather than ignored: `by` without a `value`, and `label`, `placeholder`, `testid` or `component` when a higher-precedence field already selected the element. `alt` is the one that can still be checked beside another locator: on an image it is compared with the image's `alt` attribute (so `alt: ""` passes on a decorative image but not on one missing its alt), and on anything that is not an image it is refused, with a hint to use `name`. An element query is a first-match dispatch, not a conjunction.
 
 **Combinators take `predicates`, not a bare array.** This is the shape most often got wrong, and it is the one that produces no verdict at all:
 
@@ -113,9 +111,9 @@ A claim is real only when the layers agree. Check more than the UI:
 
 ## Core tool set
 
-The tools you are shown, plus `reticle_run`, which calls any registered tool by name whether or not it is advertised.
+The ten tools you are shown. `reticle_run` is one of them: it calls any registered tool by name, advertised or not.
 
-`reticle_navigate` · `reticle_act` · `reticle_act_and_wait` · `reticle_assert` · `reticle_look` · `reticle_observe` · `reticle_session` · `reticle_verify` · `reticle_tools`
+`reticle_navigate` · `reticle_act` · `reticle_act_and_wait` · `reticle_assert` · `reticle_look` · `reticle_observe` · `reticle_session` · `reticle_verify` · `reticle_tools` · `reticle_run`
 
 Most of what used to be a tool of its own is now an action on one of them:
 
@@ -125,17 +123,17 @@ Call an old name and you are told the new one. `reticle_tools` prints the live s
 
 - `reticle_verify`: **the only core tool that CONCLUDES.** `{ action:"crawl" }` drives every reachable control itself and reports the whole fault set in one call (destructive: it really clicks). `{ action:"flows" }` replays every saved flow with no model in the loop. Reach for it when you think you are done: every other tool here answers "here is more to look at".
 
-Not on this surface at all, but one hop away: `reticle_run { tool, args }` calls any registered tool by name, advertised or not, and `reticle_tools { names: [...] }` loads its arguments. That reaches `reticle_capabilities` (the app's whole testable surface in one call), `reticle_domain` (learn the app + gaps), `reticle_baseline {action:"diff"}`, `reticle_project` (run history), `reticle_screenshot`, `reticle_visual_diff`, `reticle_storage`, `reticle_network_mock` and `reticle_clock`. A daemon started with `RETICLE_ADVERTISE_ALL_TOOLS=1` advertises them directly instead.
+Not on this surface at all, but one hop away: `reticle_run { tool, args }` calls any registered tool by name, advertised or not, and `reticle_tools { names: [...] }` loads its arguments. That reaches `reticle_capabilities` (the app's whole testable surface in one call), `reticle_domain` (learn the app + gaps), `reticle_run { tool: "reticle_baseline", args: { action: "diff" } }`, `reticle_project` (run history), `reticle_screenshot`, `reticle_visual_diff`, `reticle_storage`, `reticle_network_mock` and `reticle_clock`. A daemon started with `RETICLE_ADVERTISE_ALL_TOOLS=1` advertises them directly instead. It also switches to the unmerged spelling: `reticle_snapshot`/`reticle_query`/`reticle_inspect`/`reticle_state` replace `reticle_look`, `reticle_network`/`reticle_console` replace `reticle_observe { action }`, `reticle_wait_for` replaces `reticle_assert { action: "wait" }`, `reticle_sessions`/`reticle_feedback` replace `reticle_session` list/feedback, and `reticle_act_sequence` replaces `reticle_act { steps }`. Examples on this page use the default spelling.
 
-**What the wider surface adds, through `reticle_run` or advertised directly with `RETICLE_ADVERTISE_ALL_TOOLS=1`:** record/replay a journey (`reticle_record {action:"start"}/stop`, `reticle_replay`), persist a self-healing golden flow (`reticle_flow_save*` / `reticle_flow_replay` / `reticle_verify { action: "heal" }`), compile annotations (`reticle_annotate`), explore autonomously (`reticle_explore` lists controls; `reticle_verify {action:"crawl"}` is now advertised directly, clicks them all and reports anomalies, and is **destructive**), reveal a virtualized off-screen row (`reticle_scroll_to`, for when `reticle_look { action: "find" }` finds nothing because a windowed list hasn't rendered it yet), visual-check (`reticle_screenshot` / `reticle_visual_diff`, pinned with `reticle_viewport` for reproducible baselines), test error/edge states by stubbing the network (`reticle_network_mock`: 500 / offline / delay, driven or leased), control time for toasts/debounces/auto-dismiss (`reticle_clock { freeze | advanceMs | reset }`), or work with a human (`reticle_session {action:"end"}` / `reticle_session {action:"resume"}` / `reticle_session {action:"messages"}`, and **`reticle_session {action:"review"}`** to drain + fix the bugs the human flagged from the panel).
+**What the wider surface adds, through `reticle_run` or advertised directly with `RETICLE_ADVERTISE_ALL_TOOLS=1`:** record/replay a journey (`reticle_run { tool: "reticle_record", args: { action: "start" } }/stop`, `reticle_replay`), persist a self-healing golden flow (`reticle_flow_save*` / `reticle_flow_replay` / `reticle_verify { action: "heal" }`), compile annotations (`reticle_annotate`), explore autonomously (`reticle_explore` lists controls; `reticle_verify { action: "crawl" }` is now advertised directly, clicks them all and reports anomalies, and is **destructive**), reveal a virtualized off-screen row (`reticle_scroll_to`, for when `reticle_look { action: "find" }` finds nothing because a windowed list hasn't rendered it yet), visual-check (`reticle_screenshot` / `reticle_visual_diff`, pinned with `reticle_viewport` for reproducible baselines), test error/edge states by stubbing the network (`reticle_network_mock`: 500 / offline / delay, driven or leased), control time for toasts/debounces/auto-dismiss (`reticle_clock { freeze | advanceMs | reset }`), or work with a human (`reticle_session { action: "end" }` / `reticle_session { action: "resume" }` / `reticle_session { action: "messages" }`, and **`reticle_session { action: "review" }`** to drain + fix the bugs the human flagged from the panel).
 
 ## flows vs baselines vs project.json (the persistence layers)
 
 | Artifact | Tool(s) | What it is |
 | --- | --- | --- |
 | **flows** | `reticle_flow_save*` / `reticle_flow_replay` / `reticle_verify { action: "heal" }` | Replayable **golden journeys**, anchored to testids/signals; drift is legible and self-heals. |
-| **baselines** | `reticle_baseline {action:"save"}` / `reticle_baseline {action:"diff"}` | Structural **"before" snapshots**; `reticle_baseline {action:"diff"}` flags regressions against them. |
-| **project.json** | `reticle_project` | Cross-run **run-history**: "did it behave like last run?" read via `reticle_project`. |
+| **baselines** | `reticle_run { tool: "reticle_baseline", args: { action: "save" } }` / `reticle_run { tool: "reticle_baseline", args: { action: "diff" } }` | Structural **"before" snapshots**; `reticle_run { tool: "reticle_baseline", args: { action: "diff" } }` flags regressions against them. |
+| **project.json** | `reticle_project` | Cross-run **run-history**: "did it behave like last run?" read via `reticle_project`. Its `cloud.sync` says where this project's runs stand with the platform (on it, waiting, refused, last push); `push: true` syncs before answering. |
 
 > `reticle_project` / `project.json` are the **run-history layer**. flows answer "does the journey still work?"; baselines answer "did the structure change?"; project.json answers "is this run consistent with prior runs?".
 
@@ -147,9 +145,9 @@ Recent additions, each of which answers a question agents were previously asking
 
 | Field | On | What it tells you |
 | --- | --- | --- |
-| `expiresInMs` | `reticle_lease { action: "acquire" }` | How long the lease lives if untouched, reset by every call that targets it. Plan a pass to finish inside it, or re-acquire deliberately, rather than losing a measurement to a silent expiry. |
+| `expiresInMs` | `reticle_run { tool: "reticle_lease", args: { action: "acquire" } }` | How long the lease lives if untouched, reset by every call that targets it. Plan a pass to finish inside it, or re-acquire deliberately, rather than losing a measurement to a silent expiry. |
 | `scroll` | `reticle_look { action: "element" }` | `scrollTop`, `scrollHeight`, `clientHeight`, `overflowY`. Whether the element scrolls, which you cannot infer from geometry alone. |
-| `timeline_omitted` | `reticle_record { action: "stop" }` | The raw event timeline is not in the response. It says how many events there were and names the call that returns them, with the cursor filled in. |
+| `timeline_omitted` | `reticle_run { tool: "reticle_record", args: { action: "stop" } }` | The raw event timeline is not in the response. It says how many events there were and names the call that returns them, with the cursor filled in. |
 | `elided` | `reticle_act_and_wait` | Some diff arrays were capped. The count is real even when the list is trimmed, so a small array does not mean a quiet app. |
 | `colorTokens`, `themeScope` | `reticle_look { action: "element" }` | Every design token matching a colour, not one arbitrary winner, and which theme the reading was taken under. The singular `colorToken` is `null` when several tokens share a colour, because naming one of them was the defect. |
 | `why` | `reticle_session { action: "list" }`, when the list is empty | Why nothing is connected, and the next action. An empty list is never the end of the road. |
@@ -160,9 +158,8 @@ Recent additions, each of which answers a question agents were previously asking
 
 ## Start here
 
-0. Just ran `reticle init` / started the dev server? Poll `reticle_session({ action: "list" })` until your tab appears. Readiness is server-internal now, so the first live call already blocks until the SDK connects.
-1. `reticle_session { action: "list" }` finds the connected tab (omit `sessionId` if there's only one). **An empty list is not a dead end: read the `why` field.** It names which case this is (no app running, an app running that has never dialled this daemon, a project that never went through `init`, or a tab that closed) and the fix for each. Do not fall back to static reasoning until you have read it.
-2. `reticle_domain` learns the app BEFORE testing: the saved flows, what each asserts, and the **gaps** (declared signals/testids that no flow verifies, i.e. untested intent). Tells you what to test and where the real risk is without crawling the whole app. Falls back to `reticle_capabilities` for the raw testable surface (`testids`, `signals`, `stores`, `flows`).
+1. **First move, always:** `reticle_session { action: "list" }` finds the connected tab. Just ran `reticle init` or restarted the dev server? You do not need to poll: live tools wait briefly for a tab that is about to connect. Omit `sessionId` if there's only one tab. **An empty list is not a dead end: read the `why` field.** It names which case this is (no app running, an app running that has never dialled this daemon, a project that never went through `init`, or a tab that closed) and the fix for each. Do not fall back to static reasoning until you have read it.
+2. `reticle_run({ tool: "reticle_domain", args: {} })` learns the app BEFORE testing: the saved flows, what each asserts, and the **gaps** (declared signals/testids that no flow verifies, i.e. untested intent). Tells you what to test and where the real risk is without crawling the whole app. Falls back to `reticle_run({ tool: "reticle_capabilities", args: {} })` for the raw testable surface (`testids`, `signals`, `stores`, `flows`).
 3. Run the loop: **look → act → observe → assert**, cross-checking the 4 layers on anything that matters.
 
 ## Token note
@@ -172,4 +169,4 @@ Recent additions, each of which answers a question agents were previously asking
 - **Cap broad reads.** `reticle_look { action: "find" }` takes `limit` (caps descriptors; reports `total`/`truncated`) and `count_only` (just the match count). `reticle_observe { action: "network" }` / `reticle_observe { action: "console" }` take `limit` (most-recent-N, reports `droppedOldest`) and carry the same `cost` hint, so a busy page or wide window never floods your context unnoticed.
 - **A saved flow tells you if it's a real test.** `reticle_flow_save` returns `assertions.grade` (`asserted` / `presence-only` / `assertion-free`); if it's not `asserted`, add a consequence (`reticle_annotate` assert-signal/assert-net or a success-state) so it can't pass while broken. On replay, an ambiguous heal (two testids tie) is surfaced, never auto-applied. And an `apply` heal re-replays the rebound flow and **refuses to write** if the success consequence no longer fires (`status:consequence_broken`): it heals the locator, never the intent.
 - **Predicate schema is not bloated.** The recursive predicate DSL used by `reticle_assert` / `reticle_assert { action: "wait" }` / `reticle_act_and_wait` is **factored, not inlined**: when converted to the JSON Schema MCP sends, the predicate body is emitted **once** (~2.7k chars ≈ **~685 tokens** per tool) and recursion is handled by self-`$ref` (`#/properties/predicate`), with no per-recursion duplication. No action needed.
-- **One tool surface, and a hatch behind it.** Reticle advertises navigate/act/act_and_wait/assert/look/observe/session/verify, plus `reticle_tools` and `reticle_run`. That is the whole detect loop, the file-pointer, the feedback channel, the handback, and the one tool that CONCLUDES, reached by an `action` argument rather than by a name each. `reticle_tools` discovers: no args lists every registered tool name and summary, `names:[…]` loads full params on demand. `reticle_run { tool, args }` then calls any of them, advertised or not, which is what keeps recording a flow, screenshots, visual diff, storage, network mocking and the clock reachable without spending a slot on each. A daemon started with `RETICLE_ADVERTISE_ALL_TOOLS=1` (read at startup, so restart it) advertises the full table outright, with output schemas. `reticle_verify` is advertised: `{ action:"flows" }` replays every saved flow with no model in the loop, and `{ action:"crawl" }` drives every reachable control itself and reports the whole fault set in one call. **Sizes are deliberately not quoted here.** A count in prose goes stale, and has three times already. `reticle_tools` reports the live surface, and SKILL.md carries the one gated table.
+- **One tool surface, and a hatch behind it.** Reticle advertises navigate/act/act_and_wait/assert/look/observe/session/verify, plus `reticle_tools` and `reticle_run`. That is the whole detect loop, the file-pointer, the feedback channel, the handback, and the one tool that CONCLUDES, reached by an `action` argument rather than by a name each. `reticle_tools` discovers: no args lists every registered tool name and summary, `names:[…]` loads full params on demand. `reticle_run { tool, args }` then calls any of them, advertised or not, which is what keeps recording a flow, screenshots, visual diff, storage, network mocking and the clock reachable without spending a slot on each. A daemon started with `RETICLE_ADVERTISE_ALL_TOOLS=1` (read at startup, so restart it) advertises the full table outright, with output schemas, under the unmerged names listed above. `reticle_verify` is advertised: `{ action:"flows" }` replays every saved flow with no model in the loop, and `{ action:"crawl" }` drives every reachable control itself and reports the whole fault set in one call. **Sizes are deliberately not quoted here.** A count in prose goes stale, and has three times already. `reticle_tools` reports the live surface, and SKILL.md carries the one gated table.

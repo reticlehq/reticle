@@ -8,6 +8,7 @@
  * Sync is best-effort: a network failure NEVER fails the local save. The flow is already on disk; the
  * cloud copy is an enhancement, so a push error is logged and swallowed.
  */
+import { shareableRun } from '@reticlehq/core/artifacts';
 import { z } from 'zod';
 import {
   VERIFY_PROGRESS_MAX_EVENTS,
@@ -125,6 +126,20 @@ export async function cloudFetch(
   }
 }
 
+/**
+ * One sync request, status and body, under the same timeout every cloud call has. The sync daemon
+ * and `reticle sync` each called a bare `fetch`: one accepted-but-silent connection left the daemon's
+ * cycle running forever, and the dashboard stopped updating with nothing logged.
+ */
+export async function syncRequest(
+  url: string,
+  init: { method: string; headers: Record<string, string>; body?: string },
+  timeoutMs: number = CLOUD_FETCH_TIMEOUT_MS,
+): Promise<{ status: number; text: string }> {
+  const res = await cloudFetch(url, init, timeoutMs);
+  return { status: res.status, text: await res.text() };
+}
+
 export const SyncOutcome = {
   SYNCED: 'synced',
   SKIPPED: 'skipped',
@@ -198,7 +213,8 @@ export async function syncRunToCloud(
         'content-type': 'application/json',
         authorization: `Bearer ${config.apiKey}`,
       },
-      body: JSON.stringify(run),
+      // The prompt context leaves the machine only when the project opted in.
+      body: JSON.stringify(shareableRun(run)),
     });
     return res.ok
       ? { outcome: SyncOutcome.SYNCED, status: res.status }

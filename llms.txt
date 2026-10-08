@@ -70,8 +70,8 @@ domain: https://docs.reticle.sh/use-cases
   name, every link with its `href` (`attrs: ["href"]`), redirects via the `route` predicate, and
   `reticle_verify { action: "crawl" }` for dead controls and failed requests. It does not read `<head>`
   meta tags.
-- **Personas and simulation.** `reticle_verify { action: "explore", persona: "<who does what>" }` drives
-  a journey described in plain words and saves it as a replayable flow; `reticle_lease` gives each role
+- **Personas and simulation.** `reticle_verify { action: "explore", persona: "<who does what>" }` (on a project
+  linked with `reticle connect`; Free includes Harness credits) drives a journey described in plain words and saves it as a replayable flow; `reticle_lease` gives each role
   an isolated context (seeded cookies/storage); several agents share one pooled Chromium.
 
 **Pairs well with:** a visual testing tool (pixel diffs), Playwright (sites you don't own, cross-browser
@@ -103,7 +103,7 @@ registered tool by name. Verdicts come from `reticle_act_and_wait`, `reticle_ass
 `reticle_act` performs an action and reports no verdict; an agent that only calls it has verified
 nothing, which was the single largest cause of un-verified sessions. `reticle_act { steps }` collapses
 a multi-step flow (a login form, a checkout) into one call. A returned `verified: "unknown"` is **not**
-a pass — it means Reticle could not tell.
+a pass — it means Reticle could not tell — and neither is `"no-fault"`, which means nothing was declared to prove.
 
 The **verdict artifact** (`ReticleVerificationRun`, defined in `@reticlehq/core`) is stable and
 versioned: `verdict` (pass/fail/partial, confidence, blocking risks, reasons), `flows[]`, `checks[]`,
@@ -121,7 +121,7 @@ wires it unattended and (b) whether a DOM node maps back to the component and so
 
 The one authoritative list is https://docs.reticle.sh/frameworks. In short: React + Vite, Next.js,
 Remix and Astro are driven to a verdict in CI; SvelteKit, Nuxt, React Router framework mode, Create
-React App and Vue have their install gated (scaffolded from scratch and connected on every change) but
+React App, Vue and Angular 17+ have their install gated (scaffolded from scratch and connected on every change) but
 no verdict gate; TanStack Start, Preact, plain HTML and server-rendered apps are wired and documented
 but not gated. Anything else works via a manual `connect()` call. The driven browser is Chromium.
 
@@ -139,7 +139,7 @@ Svelte stores, Pinia. Anything else works through the generic `pushStore`.
 
 ## How it's used (four ways)
 
-1. **Agent, on your own app (the default).** Two steps, in this order, and the order matters.
+1. **Agent, on your own app (the default).** Four steps, in this order: install (once per machine), `reticle init` (once per project), then optionally `reticle connect` and `reticle push`.
 
    First, ONCE PER MACHINE, in a terminal before any coding agent is open:
    `curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh | sh`
@@ -152,8 +152,15 @@ Svelte stores, Pinia. Anything else works through the generic `pushStore`.
    the lines to paste instead of claiming it registered.
 
    Then, ONCE PER PROJECT, in the repo: `npx @reticlehq/server init`. This is the per-project step in
-   the sense `npm init` is: it installs the dev-only SDK, wires the build config, restarts the dev
-   server and opens the app to prove a session connected.
+   the sense `npm init` is: it installs the dev-only SDK, wires the build config, starts the dev
+   server if none is running and opens the app to prove a session connected. A dev server that was
+   already running must be restarted once: it read the build config before `init` edited it. Skip
+   this step and the agent's first `reticle_session` call wires the app instead. A session listed
+   means the SDK reached the page. Setup is finished when the first run returns a verdict.
+
+   Optional, for the dashboard: `reticle connect` wires the app if needed, signs you in in the
+   browser (or creates a free account), links the folder to a project (creating it if missing) and
+   sends local history. `reticle push` sends what has not synced yet.
 
    On Claude Code the plugin does the machine step and the skill together:
    `/plugin marketplace add reticlehq/reticle` then `/plugin install reticle@reticlehq`.
@@ -258,15 +265,15 @@ not lie, with proof attached. In the 88-bug head-to-head that is 1 false green a
 
 ## Built to be safe to install
 
-- **Your app's data stays on your machine.** Nothing from the app under test — no DOM, no network
-  bodies, no console output, no state, no source — is transmitted. License checks are offline. The one
-  exception is opt-in: `reticle login` + `reticle link` syncs runs/flows/memory you choose with
-  `reticle config`.
+- **Your app's data stays on your machine until you link a project.** Nothing from your app leaves the
+  machine until you link a project (`reticle connect`, or `RETICLE_API_KEY` in CI). After that, what
+  syncs is set by `reticle config`, and when the Harness drives, the platform sees the steps it
+  drives. Secret values never leave. License checks are offline.
 - **Anonymous usage counts are sent by default** (which commands run, which tools agents call, whether a
   verdict was produced) with nothing from your app. Turn them off with `reticle telemetry disable`,
   `RETICLE_TELEMETRY=0` or `DO_NOT_TRACK=1`; the complete list of what is sent is
   [docs/telemetry.md](https://github.com/reticlehq/reticle/blob/main/docs/telemetry.md). So "no
-  telemetry" is not accurate; "no app data leaves the machine" is.
+  telemetry" is not accurate; "no app data leaves the machine until you link a project" is.
 - **Dev-only SDK**, tree-shaken from production builds, with a runtime guard that refuses to connect
   when the build reports `NODE_ENV=production`.
 - **Localhost-only** bridge (binds `127.0.0.1`), paired with a token stored owner-only in

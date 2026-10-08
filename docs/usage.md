@@ -4,7 +4,7 @@ description: 'The full reference and cookbook: every tool, flag, and workflow, w
 icon: book
 ---
 
-Every Reticle drive is the same four steps: **look** (`reticle_look { action: "page" }` / `reticle_look { action: "find" }`), **act** (`reticle_act` / `reticle_act { steps: [...] }`), **observe** (`reticle_observe` / `reticle_observe { action: "network" }` / `reticle_look { action: "state" }`), **assert** (`reticle_assert`). Verdicts come from `reticle_act_and_wait`, `reticle_assert`, and `reticle_act { steps }` when a step declares `expect`, so a run that ends anywhere else proved nothing. This page is the full reference for every tool, predicate, action and flag in that loop.
+Every Reticle drive is the same four steps: **look** (`reticle_look { action: "page" }` / `reticle_look { action: "find" }`), **act** (`reticle_act` / `reticle_act { steps: [...] }`), **observe** (`reticle_observe` / `reticle_observe { action: "network" }` / `reticle_look { action: "state" }`), **assert** (`reticle_assert`). Verdicts come from `reticle_act_and_wait`, `reticle_assert`, `reticle_act { steps }` when a step declares `expect`, and `reticle_verify` (`change`/`flows`). Everything else moves or reads the app and proves nothing. Only `verified: "yes"` is a pass: `unknown` means Reticle could not tell, and `no-fault` means nothing was declared to prove. This page is the full reference for every tool, predicate, action and flag in that loop. Tools outside the ten advertised by default are called through `reticle_run({ tool, args })`, and examples use the default tool names.
 
 If you haven't set up Reticle yet, start with [Getting Started](getting-started.md).
 
@@ -72,7 +72,7 @@ Who benefits most: anyone shipping **dashboards, internal tools, SaaS apps**. Be
 3. **Observe** with `reticle_observe({ since })`: everything the app did _after_ that action.
 4. **Assert** with `reticle_assert({ predicate })`. Verify it, get evidence.
 
-**Refs.** Elements are addressed by stable handles like `e7`. You get them from `snapshot` or `query`, then pass them to `act`/`inspect`. A ref re-resolves to its element across re-renders; if the element is gone, you get a clear error.
+**Refs.** Elements are addressed by stable handles like `e7`. You get them from `reticle_look { action: "page" }` or `reticle_look { action: "find" }`, then pass them to `act`/`inspect`. A ref re-resolves to its element across re-renders; if the element is gone, you get a clear error.
 
 **Evidence, not prose.** Every tool returns structured data (counts, the matching network call, the snapshot delta) so the agent reasons over facts, not a vibe.
 
@@ -132,7 +132,7 @@ Perform one action / several in order.
 - **`reticle_act { steps: [...] }` args:** `steps: [{ ref | target, action, args? }]`. Each step takes `ref` (from a snapshot/query) or `target` (`{ testid }` / `{ label }` / `{ role, name }` / `{ text }`). That is the same locator `reticle_act` accepts. → `{ since, dispatched, result }` where `result = { ok, count, effects: [...], steps: [...] }` (one `effect` per step; each step carries its own `dispatched`/`settled`/`settleReason`).
 - See [§5](#5-actions-full-list) for the action list.
 
-**Dispatch vs settle.** The action is two phases: the **dispatch** (the synchronous click/fill, which is what can fail) and the **settle** (waiting one animation frame so React's commit lands before we return). The settle is **bounded** (~200ms): in a throttled/background tab `requestAnimationFrame` never fires, so Reticle falls back to a timer and resolves anyway. A settle timeout is therefore **never an error**: `reticle_act` resolves with `settled:false, settleReason:"timeout"` and the dispatch (the click) has still landed. Only a real dispatch failure (stale ref, wrong element type) throws.
+**Dispatch vs settle.** (Settle means the page has stopped changing for now.) The action is two phases: the **dispatch** (the synchronous click/fill, which is what can fail) and the **settle** (waiting one animation frame so React's commit lands before we return). The settle is **bounded** (~200ms): in a throttled/background tab `requestAnimationFrame` never fires, so Reticle falls back to a timer and resolves anyway. A settle timeout is therefore **never an error**: `reticle_act` resolves with `settled:false, settleReason:"timeout"` and the dispatch (the click) has still landed. Only a real dispatch failure (stale ref, wrong element type) throws.
 
 | top-level field | meaning |
 | --- | --- |
@@ -184,11 +184,11 @@ The timeline + summary of what happened.
 Act, then wait for a predicate: the whole act→observe→assert loop in one hop.
 
 - **args:** `ref`, `action`, `args?`, `until: <predicate>`, `timeout_ms?` (default 4000; 0 = evaluate once), `refuseWhenThrottled?`, `intent?`, `durable?` (after a yes, reload and require `until`'s element/text/state parts to hold again), `sessionId?`.
-- **returns:** `{ effect, verdict, trace, session, warning? }`. `effect` is the action result (`{ ok, ref, action }`), `verdict` is `{ pass, evidence?, failureReason? }`, `trace` is the reaction report of everything the app did after the action, and `session` is the tab-health block `{ lastSeenMs, throttled, focused }` (with a `warning` when throttled). A failing `verdict` still returns `effect` + `trace` so you can see what _did_ happen. The predicate is automatically floored at this act's cursor, so it only matches events the action actually caused.
+- **returns:** `{ verified, because, effect, verdict, trace, summary, honesty, since, session, … }`. **Gate on `verified`** (`yes` / `no` / `unknown` / `no-fault`; only `yes` is a pass) and read `because` for the deciding evidence. `effect` is the action result (`{ ok, ref, action }`), `verdict` is `{ pass, evidence?, failureReason? }` plus `verifiedReason`, the clause that decided it, `trace` is the reaction report of everything the app did after the action, and `session` is the tab-health block `{ lastSeenMs, throttled, focused }` (with a `warning` when throttled). A failing `verdict` still returns `effect` + `trace` so you can see what _did_ happen. The predicate is automatically floored at this act's cursor, so it only matches events the action actually caused.
 
 ### `reticle_assert { action: "wait" }`
 
-Block until a predicate holds (or time out). Looks both backward (recent buffer) and forward.
+Block until a predicate holds (or time out). Looks both backward (recent buffer) and forward. It returns `pass` and evidence with no `verified`: a wait is not a verdict. Put the consequence on `reticle_act_and_wait` or `reticle_assert` to get one.
 
 - **args:** `predicate`, `timeout_ms?` (default 4000), `since?`, `sessionId?`.
 - **No stale-signal false passes.** By default the evaluation window is floored at your **last act's cursor**, so a signal/network/console/animation event buffered _before_ the action can never satisfy the predicate (the report's "validation 68 == 68 was a lie" footgun). Pass an explicit `since` (an act/observe cursor) to widen or narrow the window deliberately. Element/text predicates query the live DOM and are unaffected by `since`.
@@ -218,13 +218,13 @@ Fast targeted lookups without a full timeline.
 
 - `reticle_observe({ action: "network", since?, method?, urlContains?, status?, bodies? })` → `{ calls }`. Pass `bodies: false` for a body-free listing (method/url/status/timing only); bodies dominate the payload, so the common "did POST /x return 200?" read gets much cheaper.
 - `reticle_observe({ action: "console", level?, since? })` → `{ logs }`
-- `reticle_animations()` → running/recent animations.
+- `reticle_run({ tool: "reticle_animations", args: {} })` → running/recent animations.
 
 ### `reticle_capabilities`
 
 The app-advertised testable surface (registered via `reticle.describe`). Call this first to learn what to assert on without reading source.
 
-- `reticle_capabilities({ sessionId? })` → `{ testids, signals, stores, flows }`
+- `reticle_run({ tool: "reticle_capabilities", args: { sessionId? } })` → `{ testids, signals, stores, flows }`
 
 `reticle_session { action: "list" }` also surfaces a `hasCapabilities` flag per session so you know when it's worth calling. Returns empty arrays (never errors) if the app advertised nothing.
 
@@ -232,7 +232,7 @@ The app-advertised testable surface (registered via `reticle.describe`). Call th
 
 Read the app's domain model **before testing**: a synthesis of every saved flow + the registered capabilities. Tells you what to test and where the real risk is without crawling the app. Reads `.reticle/flows/` + `.reticle/contract.json`, no browser needed.
 
-- `reticle_domain({})` → `{ flowCount, flows: [{ name, steps, grade, asserts, signals, testids, warning?, risk? }], declared: { testids, signals, stores }, coverage: { asserted, presenceOnly, assertionFree }, gaps: { unassertedFlows, declaredUntestedSignals, declaredUntestedTestids }, riskRanked, summary }`
+- `reticle_run({ tool: "reticle_domain", args: {} })` → `{ flowCount, flows: [{ name, steps, grade, asserts, signals, testids, warning?, risk? }], declared: { testids, signals, stores }, coverage: { asserted, presenceOnly, assertionFree }, gaps: { unassertedFlows, declaredUntestedSignals, declaredUntestedTestids }, riskRanked, summary }`
 - **`gaps`** is the point: `declaredUntestedSignals` are intents the app emits that **no flow asserts** (untested behavior); `unassertedFlows` act but verify no consequence. Close them with a flow + a consequence assertion (`reticle_annotate`).
 - **`riskRanked`** orders flow names worst-first by combining run history (`.reticle/project.json`: recently failed/drifted, or passed-with-errors) with assertion quality (a green assertion-free flow is still risky). **Test these first.** Each flow's `risk` carries `{ level, reason, lastStatus? }`.
 
@@ -269,17 +269,17 @@ reticle_look({ action: "state", store: "__reticle_renders", path: "commits" })  
 
 A render storm shows up as a commit count that climbs with no corresponding DOM mutation: a perf regression invisible to any outside-the-page tool.
 
-### `reticle_session {action:"narrate"}` / `reticle_clock`
+### `reticle_session { action: "narrate" }` / `reticle_clock`
 
 Show the agent's intent on the page, and control time (toasts/debounces/auto-dismiss). See [§16](#16-presenter-mode-narration--fake-clock-watch--control).
 
-### `reticle_baseline {action:"save"}` / `reticle_baseline {action:"list"}` / `reticle_baseline {action:"diff"}`
+### `reticle_run { tool: "reticle_baseline", args: { action: "save" } }` / `reticle_run { tool: "reticle_baseline", args: { action: "list" } }` / `reticle_run { tool: "reticle_baseline", args: { action: "diff" } }`
 
 Regression detection. See [§8](#8-regression-baselines--diff).
 
-### `reticle_record {action:"start"}` / `reticle_record {action:"stop"}` / `reticle_replay`
+### `reticle_run { tool: "reticle_record", args: { action: "start" } }` / `reticle_run { tool: "reticle_record", args: { action: "stop" } }` / `reticle_replay`
 
-Capture a flow's reaction report and compile it into a replayable program. See [§9](#9-recording-a-flow). `reticle_record {action:"stop"}` also returns a `cost:{ events, bytes }` hint alongside the reaction report so you can gauge the recording's size.
+Capture a flow's reaction report and compile it into a replayable program. See [§9](#9-recording-a-flow). `reticle_run { tool: "reticle_record", args: { action: "stop" } }` also returns a `cost:{ events, bytes }` hint alongside the reaction report so you can gauge the recording's size.
 
 ### `reticle_explore`
 
@@ -287,28 +287,28 @@ List interactive elements + console-error count for autonomous exploration. See 
 
 ### Flows, recorder & self-healing (`.reticle/`)
 
-`reticle_contract_save`, `reticle_flow_save` / `reticle_flow_save_recorded` / `reticle_flow {action:"list"}` / `reticle_flow {action:"load"}` / `reticle_flow_replay` / `reticle_verify {action:"flows"}`, `reticle_verify { action: "heal" }`, `reticle_annotate`: record once, replay forever (anchored on testid/signal, or on an auto-derived component/source anchor when there's no testid), with legible drift + self-heal. Full guide: [Flows, the recorder & self-healing](flows.md).
+`reticle_contract_save`, `reticle_flow_save` / `reticle_flow_save_recorded` / `reticle_run { tool: "reticle_flow", args: { action: "list" } }` / `reticle_run { tool: "reticle_flow", args: { action: "load" } }` / `reticle_flow_replay` / `reticle_verify { action: "flows" }`, `reticle_verify { action: "heal" }`, `reticle_annotate`: record once, replay forever (anchored on testid/signal, or on an auto-derived component/source anchor when there's no testid), with legible drift + self-heal. Full guide: [Flows, the recorder & self-healing](flows.md).
 
 - **`reticle_verify({ action: "flows", names?, sessionId? })`** is the regression-suite call: it replays EVERY saved flow (or a subset) deterministically and returns one verdict `{ status, passed, failed, failures: [{ flow, verdict, whatChanged, whereInSource, nextAction }] }`. Passing flows are counted; only failures carry detail. Run it after any change: one call, no LLM per flow.
-- **Decision envelope:** on a drift/fail, `reticle_flow_replay` (and each `reticle_verify {action:"flows"}` failure) returns the actionable fix: `whatChanged`, `whereInSource` (`file:line`), and a one-line `nextAction` (e.g. "rebind the anchor to 'new-deploy', or update the flow if intended").
+- **Decision envelope:** on a drift/fail, `reticle_flow_replay` (and each `reticle_verify { action: "flows" }` failure) returns the actionable fix: `whatChanged`, `whereInSource` (`file:line`), and a one-line `nextAction` (e.g. "rebind the anchor to 'new-deploy', or update the flow if intended").
 
 ### Human-in-the-loop control
 
-`reticle_session {action:"end"}`, `reticle_session {action:"resume"}`, `reticle_session {action:"messages"}`: the human can pause the agent, send it a correction, or end the session from the floating panel; the agent receives guidance on its next tool call. Full guide: [Human-in-the-loop control](human-control.md).
+`reticle_session { action: "end" }`, `reticle_session { action: "resume" }`, `reticle_session { action: "messages" }`: the human can pause the agent, send it a correction, or end the session from the floating panel; the agent receives guidance on its next tool call. Full guide: [Human-in-the-loop control](human-control.md).
 
-### `reticle_session {action:"review"}`: drain the bugs the human flagged on the page
+### `reticle_session { action: "review" }`: drain the bugs the human flagged on the page
 
 The dev clicks **"Flag a bug"** in the running app, points at the element that looks wrong, and types what's wrong (⌘/Ctrl+Enter to send). Each flag becomes a **mark** the agent drains:
 
 ```
-reticle_session {action:"review"}({ sessionId })
+reticle_session({ action: "review", sessionId })
 → { marks: [{ id: "m1", note: "this button is misaligned", label: "button \"Pay\"",
               source: { file: "src/Checkout.tsx", line: 42 },
-              fix: "Open src/Checkout.tsx:42 and fix: this button is misaligned. Then reticle_session {action:"review"} { resolve: \"m1\" }" }],
+              fix: "Open src/Checkout.tsx:42 and fix: this button is misaligned. Then reticle_session { action: "review" } { resolve: \"m1\" }" }],
     pendingCount: 1 }
 ```
 
-Each pending mark carries the human note, the element label, the source **`file:line`** (when the framework stamped one), and a ready-to-act `fix` hint. Open the file, apply the fix, then `reticle_session {action:"review"}({ resolve: "m1" })`. The human watching the panel sees **"✓ fixed: …"** land. Reading never consumes a mark, so you can list → fix → verify → resolve. `reticle_session { action: "list" }` also reports `pendingMarks` so you notice flagged bugs during normal orientation.
+Each pending mark carries the human note, the element label, the source **`file:line`** (when the framework stamped one), and a ready-to-act `fix` hint. Open the file, apply the fix, then `reticle_session({ action: "review", resolve: "m1" })`. The human watching the panel sees **"✓ fixed: …"** land. Reading never consumes a mark, so you can list → fix → verify → resolve. `reticle_session { action: "list" }` also reports `pendingMarks` so you notice flagged bugs during normal orientation.
 
 ### `reticle_network_mock`: stub the network for error-state testing
 
@@ -334,9 +334,9 @@ reticle_run({ tool: "reticle_viewport", args: { width: 1280, height: 800 } })   
 
 This is one of three knobs for **CI-stable visual regression**. Set them together:
 
-1. **`reticle_viewport({ width, height })`** gives the same dimensions on every machine.
-2. **`reticle_clock({ freeze: true })`** kills animation/time jitter so the pixels are stable.
-3. **`reticle_visual_diff({ baseline, masks: [{ x, y, width, height }] })`** neutralizes volatile regions (clocks, avatars, ids) so only real changes fail.
+1. **`reticle_run({ tool: "reticle_viewport", args: { width, height } })`** gives the same dimensions on every machine.
+2. **`reticle_run({ tool: "reticle_clock", args: { freeze: true } })`** kills animation/time jitter so the pixels are stable.
+3. **`reticle_run({ tool: "reticle_visual_diff", args: { baseline, masks: [{ x, y, width, height }] } })`** neutralizes volatile regions (clocks, avatars, ids) so only real changes fail.
 
 ---
 
@@ -381,6 +381,8 @@ A **predicate** declares what should be true. `reticle_assert` / `reticle_assert
 { "kind": "state", "store": "app", "path": "deployments.0.status", "equals": "live" }
 ```
 
+`visible` excludes elements whose boxes are fully clipped by an ancestor's `overflow:hidden` or `overflow:clip`; a partly clipped element stays visible. Expanding a clamped card can therefore prove that its previously hidden paragraph became visible. `overflow:auto` and `overflow:scroll` keep their existing visibility semantics, including content beyond the scrollport. Ordinary document content outside the window remains visible; `inViewport` checks the window intersection after any hidden/clip ancestor clipping, without introducing scrollport clipping.
+
 A `state` assertion is graded as a **consequence** (a wrong element or stale render cannot fake it), and is usable the same three ways anywhere predicates flow: ad-hoc (`reticle_assert` / `reticle_act_and_wait` `until`), as a flow step invariant (`reticle_annotate { kind: "assert-state", statePath, store?, equals? }`), and as a flow's golden end-condition (`reticle_annotate { kind: "success-state", statePath, … }`). On a miss it names the real store value and the keys that were available: legible, not a blind fail.
 
 ### Combinators
@@ -415,8 +417,11 @@ A `state` assertion is graded as a **consequence** (a wrong element or stale ren
 | `select` | `{ value }` | `<select>` option |
 | `check` / `uncheck` | n/a | checkbox/radio |
 | `submit` | n/a | submits the element's `<form>` |
-| `press` | `{ key, modifiers?, holdMs?, keys?, code? }` | keydown/up (default `Enter`); `modifiers`: an array of `Meta` / `Control` / `Shift` / `Alt` for Cmd+K-style shortcuts. With a `ref` the key is dispatched AT that element; with NO ref it is a document key (Escape, Tab, a shortcut) and goes through the real keyboard, so it can actually move focus. `holdMs` keeps the key DOWN for that long (hold-to-confirm, hold-to-reveal). `keys` holds several keys together, pressed in order and released in reverse, and `code` names the physical key: both stay on the in-page dispatcher, which is the only path that can express them |
+| `press` | `{ text, modifiers?, holdMs?, keys?, code? }` | keydown/up (default `Enter`). `text` is the key name (`Escape`, `Tab`); `key` is an accepted alias; `modifiers`: an array of `Meta` / `Control` / `Shift` / `Alt` for Cmd+K-style shortcuts. With a `ref` the key is dispatched AT that element; with NO ref it is a document key (Escape, Tab, a shortcut) and goes through the real keyboard, so it can actually move focus. `holdMs` keeps the key DOWN for that long (hold-to-confirm, hold-to-reveal). `keys` holds several keys together, pressed in order and released in reverse, and `code` names the physical key: both stay on the in-page dispatcher, which is the only path that can express them |
 | `scrollIntoView` | n/a |  |
+| `scroll` | `{ dy?, dx?, fraction? }` | Scrolls the nearest scrollable container (or the page, with no `ref`) by `dy`/`dx` pixels, either direction. `fraction` (0 to 1) jumps to that point of the height. No args steps down most of a screen |
+| `tap` | `{ holdMs? }` | A touch tap: pointer and touch events, then `click`. `holdMs` makes it a long press |
+| `zoom` | n/a | Page zoom. Refused inside the page, because CSS zoom changes how a page looks without changing its layout, and a passing check on it would be false |
 | `upload` | `{ name, content?, type? }` | sets a file on `<input type=file>` |
 | `drag` | `{ toRef }` | pointer-based drag (dnd-kit / rbd) + HTML5 DnD |
 
@@ -491,7 +496,7 @@ reticle_assert({ timeout_ms: 3000, predicate: { kind: "element",
   query: { text: "Invoice #4821", scope: "[data-testid=item-list]" }, state: "visible" } })
 ```
 
-> Note: if your list is **virtualized** (react-window/virtuoso), an off-screen row is not in the DOM at all, so `reticle_look { action: "find" }` correctly finds nothing. Use **`reticle_scroll_to`** to scroll the windowed container until the row renders, then query it: `reticle_scroll_to({ by: "text", value: "Invoice #4821", container: "[data-testid=item-list]" })`. Asserting against the data with `reticle.signal` or `reticle_look { action: "state" }` also works and is cheaper.
+> Note: if your list is **virtualized** (react-window/virtuoso), an off-screen row is not in the DOM at all, so `reticle_look { action: "find" }` correctly finds nothing. Use **`reticle_scroll_to`** to scroll the windowed container until the row renders, then query it: `reticle_run({ tool: "reticle_scroll_to", args: { by: "text", value: "Invoice #4821", container: "[data-testid=item-list]" } })`. Asserting against the data with `reticle.signal` or `reticle_look { action: "state" }` also works and is cheaper.
 
 ### "Login form: does it actually authorize?"
 
@@ -568,7 +573,7 @@ reticle.describe({
 });
 ```
 
-The agent reads this back with `reticle_capabilities()`; see [§3](#3-the-tools-full-reference).
+The agent reads this back with `reticle_run({ tool: "reticle_capabilities", args: {} })`; see [§3](#3-the-tools-full-reference).
 
 ```jsonc
 reticle_assert({ timeout_ms: 30000, predicate: {
@@ -596,7 +601,7 @@ export default [
 ];
 ```
 
-`mutators` lists the callee names that change state; `signalCallee` (default `['reticleSignal', 'signal']`) is the name that counts as firing a signal. See [`adapters/lint/eslint/README.md`](../adapters/lint/eslint/README.md) for scoping and matching details.
+`mutators` lists the callee names that change state; `signalCallee` (default `['reticleSignal', 'signal']`) is the name that counts as firing a signal. See [`adapters/lint/eslint/README.md`](https://github.com/reticlehq/reticle/blob/main/adapters/lint/eslint/README.md) for scoping and matching details.
 
 ---
 
@@ -606,10 +611,10 @@ The "did anything silently break/disappear?" workflow.
 
 ```jsonc
 // after you've confirmed a screen is good:
-reticle_baseline {action:"save"}({ name: "checkout-ok" })
+reticle_run({ tool: "reticle_baseline", args: { action: "save", name: "checkout-ok" } })
 
 // later, after a change:
-reticle_baseline {action:"diff"}({ baseline: "checkout-ok" })
+reticle_run({ tool: "reticle_baseline", args: { action: "diff", baseline: "checkout-ok" } })
 // → { removed: ["- button \"Export\""], added: ["- alert \"Card declined\""],
 //     consoleErrors: 2, routeChanged: false }
 ```
@@ -618,7 +623,7 @@ reticle_baseline {action:"diff"}({ baseline: "checkout-ok" })
 
 ### Pixel-perfect visual regression that's stable in CI (driven mode)
 
-The semantic `reticle_baseline {action:"diff"}` above never flakes. For an actual **pixel** diff (`reticle_screenshot` + `reticle_visual_diff`, driven mode), three knobs make it CI-stable instead of flaky:
+The semantic `reticle_run { tool: "reticle_baseline", args: { action: "diff" } }` above never flakes. For an actual **pixel** diff (`reticle_screenshot` + `reticle_visual_diff`, driven mode), three knobs make it CI-stable instead of flaky:
 
 ```jsonc
 reticle_run({ tool: "reticle_viewport", args: { width: 1280, height: 800 } }) // 1. same size on every machine
@@ -638,9 +643,9 @@ Without all three, a pixel diff fails on a different window size, a mid-animatio
 Capture everything that happens across a span. Useful for "run my whole checkout flow and tell me what happened," or to keep a known-good trace.
 
 ```jsonc
-reticle_record {action:"start"}({ recordingName: "checkout" })
+reticle_run({ tool: "reticle_record", args: { action: "start", recordingName: "checkout" } })
 // …agent performs the flow (reticle_act, single or with steps)…
-reticle_record {action:"stop"}({ recordingName: "checkout" })
+reticle_run({ tool: "reticle_record", args: { action: "stop", recordingName: "checkout" } })
 // → {
 //     recordingName,
 //     program: { version, steps: [{ tool, args: { by:"testid", value, action, args }, stable }] },
@@ -650,7 +655,7 @@ reticle_record {action:"stop"}({ recordingName: "checkout" })
 //   }
 ```
 
-`reticle_record {action:"stop"}` returns a compiled, replayable `program`: the agent's `reticle_act` / `reticle_act { steps: [...] }` invocations captured during the span, with each ref normalized to its element's `data-testid` where resolvable. Re-run it later:
+`reticle_run { tool: "reticle_record", args: { action: "stop" } }` returns a compiled, replayable `program`: the agent's `reticle_act` / `reticle_act { steps: [...] }` invocations captured during the span, with each ref normalized to its element's `data-testid` where resolvable. Re-run it later:
 
 ```jsonc
 reticle_run({ tool: "reticle_replay", args: { recordingName: "checkout" } })
@@ -658,7 +663,7 @@ reticle_run({ tool: "reticle_replay", args: { recordingName: "checkout" } })
 // → { recordingName, ok, steps: [{ tool, ok, error?, note? }] }   // stops at the first failure
 ```
 
-**Limitation.** Normalization to a stable testid only works for elements that have a `data-testid`. A step whose element has none is stored in ref form (`stable: false`) and `reticle_record {action:"stop"}` returns a `warning`; replay best-effort re-uses the stored ref, which is only valid within the same live session and is not portable across reloads. Add `data-testid` to the elements you want replay-stable.
+**Limitation.** Normalization to a stable testid only works for elements that have a `data-testid`. A step whose element has none is stored in ref form (`stable: false`) and `reticle_run { tool: "reticle_record", args: { action: "stop" } }` returns a `warning`; replay best-effort re-uses the stored ref, which is only valid within the same live session and is not portable across reloads. Add `data-testid` to the elements you want replay-stable.
 
 ---
 
@@ -754,7 +759,7 @@ Each is a session; pass `sessionId` to any tool when more than one is connected 
 ## 15. Security & privacy
 
 - **Dev-only, localhost-only by default.** The bridge binds `127.0.0.1`; the SDK is meant for dev builds.
-- **No app data leaves your machine.** Baselines/recordings are local. The CLI sends anonymous, opt-out usage metrics only (random id + event names, no code and no PII; see [telemetry](telemetry.md)); opt out with `reticle telemetry disable`, `RETICLE_TELEMETRY=0`, or `DO_NOT_TRACK=1`. Feedback you or your agent deliberately send (`reticle feedback` / `reticle_session { action: "feedback" }`) is the only free text that ever leaves the machine: never passive, redacted first, and separately disabled with `RETICLE_FEEDBACK=0`.
+- **No app data leaves your machine until you link a project.** Nothing from your app leaves the machine until you link a project (`reticle connect`, or `RETICLE_API_KEY` in CI). After that, what syncs is set by `reticle config`, and when the Harness (Reticle's model-driven explorer, which runs on the Reticle platform) drives, the platform sees the steps it drives. Secret values never leave. Baselines/recordings are local. The CLI sends anonymous, opt-out usage metrics only (random id + event names, no code and no PII; see [telemetry](telemetry.md)); opt out with `reticle telemetry disable`, `RETICLE_TELEMETRY=0`, or `DO_NOT_TRACK=1`. Feedback you or your agent deliberately send (`reticle feedback` / `reticle_session { action: "feedback" }`) is the only free text that ever leaves the machine: never passive, redacted first, and separately disabled with `RETICLE_FEEDBACK=0`.
 - **Network bodies aren't captured by default:** only method/url/status/timing. Body capture is opt-in and runs through a redactor (drop `password`/`token`/`secret`/… + your patterns).
 - **Additive & reversible.** Reticle patches `fetch`/History/console defensively and restores them on disconnect; it will not break the app under test.
 
@@ -809,21 +814,21 @@ All presenter DOM uses `data-reticle-*` and is excluded from snapshots/observers
 
 #### Session liveness: the HUD never gets stuck "running"
 
-A session starts on the agent's first activity and must reliably end even when the agent misbehaves. Reticle is an MCP tool, so the agent (Claude) can crash, disconnect, or simply forget to call `reticle_session {action:"end"}`, and a backgrounded tab's own timers are throttled by the browser. So **the Node server owns liveness, not the browser tab:**
+A session starts on the agent's first activity and must reliably end even when the agent misbehaves. Reticle is an MCP tool, so the agent (Claude) can crash, disconnect, or simply forget to call `reticle_session { action: "end" }`, and a backgrounded tab's own timers are throttled by the browser. So **the Node server owns liveness, not the browser tab:**
 
 - **Agent goes idle / forgets to end** → a server-side reaper (immune to tab throttling) ends the session after `idleEndMs` of no agent commands and pushes the end to the browser. A backgrounded tab still receives that push, so you can switch windows and come back to a correctly-ended HUD.
 - **Agent (MCP client) disconnects cleanly** → every active session ends at once.
 - **Agent kills the Reticle server process** (so no push can arrive) → the SDK self-ends the session after it can't reach the bridge for `BRIDGE_LOST_MS` (~15s), showing "lost connection to Reticle."
-- **Slow-but-alive agent** → if it goes quiet long enough to auto-end and then acts again, the session **revives** automatically (an explicit `reticle_session {action:"end"}` stays terminal).
+- **Slow-but-alive agent** → if it goes quiet long enough to auto-end and then acts again, the session **revives** automatically (an explicit `reticle_session { action: "end" }` stays terminal).
 
-Tune the idle window with `reticle_session({ action: "tune", idleEndMs })`; it updates both the browser timer and the server reaper. The human keeps the panel (with Copy/Export of the run) after any end.
+Tune the idle window with `reticle_session({ action: "tune", idleEndMs })`; it updates both the browser timer and the server reaper. When the HUD covers a control you have to test, `reticle_session({ action: "tune", hud: "top-left" })` moves it (any corner), and `hud: "hidden"`, `"shown"` or `"removed"` (until the page reloads) take it out of the way; the call fails rather than pretending if the page could not apply it. The human keeps the panel (with Copy/Export of the run) after any end.
 
-### `reticle_session {action:"narrate"}`: show the agent's intent
+### `reticle_session { action: "narrate" }`: show the agent's intent
 
 So the human sees _what the agent is about to do and why_:
 
 ```jsonc
-reticle_session {action:"narrate"}({ text: "Adding a beat, then checking the section count goes up" })
+reticle_session({ action: "narrate", text: "Adding a beat, then checking the section count goes up" })
 ```
 
 It renders on the HUD. (The agent's private reasoning isn't visible to Reticle; narration is how it surfaces intent on the page.)
@@ -1027,7 +1032,7 @@ reticle_run({ tool: "reticle_capabilities", args: {} })   // → { testids, sign
 
 ### `reticle_replay`: recordings become re-runnable programs
 
-`reticle_record {action:"start"}` → drive the flow → `reticle_record {action:"stop"}` returns a **compiled program** (steps bound to testids/signals, not volatile refs). `reticle_replay({ recordingName })` re-executes it, so your flow becomes a deterministic regression run, not a checklist.
+`reticle_run { tool: "reticle_record", args: { action: "start" } }` → drive the flow → `reticle_run { tool: "reticle_record", args: { action: "stop" } }` returns a **compiled program** (steps bound to testids/signals, not volatile refs). `reticle_run({ tool: "reticle_replay", args: { recordingName } })` re-executes it, so your flow becomes a deterministic regression run, not a checklist.
 
 ---
 
@@ -1089,6 +1094,6 @@ That's it. Reticle correlates the CDP page to your SDK session by URL; pointer a
 
 > **SPA navigation is handled.** The URL correlation tracks client-side route changes (`pushState`/`replaceState`/`popstate`), so real input keeps working after your app navigates into a sub-route, e.g. the hover/quick-edit cluster on a `/workspace` view stays drivable. (If you see `inputModeReason:"page-not-correlated-to-a-cdp-target"`, the reported session URL isn't correlated to a CDP target and real input silently falls back to synthetic.)
 
-> **Watching the agent (presenter).** With `present: true` the activity border now glows once while the agent is busy and fades when idle (no per-action strobe); the HUD sits **bottom-center**, shows a **READING** vs **ACTING** chip so you can tell observation from action at a glance, and `reticle_session {action:"narrate"}` lines are **queued** with a minimum on-screen dwell so none flash by unread.
+> **Watching the agent (presenter).** With `present: true` the activity border now glows once while the agent is busy and fades when idle (no per-action strobe); the HUD sits **bottom-center**, shows a **READING** vs **ACTING** chip so you can tell observation from action at a glance, and `reticle_session { action: "narrate" }` lines are **queued** with a minimum on-screen dwell so none flash by unread.
 
 > **Limitation: un-scriptable tabs.** Reticle observes/drives a tab through the in-page SDK + (optionally) CDP; it **cannot bring to front or recover a browser tab the OS won't let it script** (e.g. a backgrounded or non-default-browser tab reporting `hidden:true`/`throttled:true`). When that happens, `reticle_session { action: "list" }` and every act/assert result carry a `session.recommendation` saying so and pointing to `reticle drive <url>` for a guaranteed scriptable context. Refocus the tab, or use `reticle drive`.

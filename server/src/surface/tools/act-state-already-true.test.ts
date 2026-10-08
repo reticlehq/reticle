@@ -171,7 +171,7 @@ describe('#864 — pre-existing STATE bypasses alreadyTrue in act_and_wait', () 
     });
 
     const res = (await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
-      ref: 'btn-inert',
+      ref: 'e1',
       action: 'click',
       timeout_ms: 0,
       until: {
@@ -201,7 +201,7 @@ describe('#864 — pre-existing STATE bypasses alreadyTrue in act_and_wait', () 
     });
 
     const res = (await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
-      ref: 'btn-inert',
+      ref: 'e1',
       action: 'click',
       timeout_ms: 0,
       until: {
@@ -234,7 +234,7 @@ describe('#864 — pre-existing STATE bypasses alreadyTrue in act_and_wait', () 
     });
 
     const res = (await tool(ReticleTool.ACT_AND_WAIT).handler(ctx.deps, {
-      ref: 'btn-add-to-cart',
+      ref: 'e2',
       action: 'click',
       timeout_ms: 0,
       until: {
@@ -277,7 +277,7 @@ describe('#864 — pre-existing STATE bypasses alreadyTrue in act_and_wait', () 
     });
 
     const res = (await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
-      ref: 'btn-inert',
+      ref: 'e1',
       action: 'click',
       timeout_ms: 0,
       until: {
@@ -298,7 +298,7 @@ describe('#864 — pre-existing STATE bypasses alreadyTrue in act_and_wait', () 
     });
 
     const res = (await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
-      ref: 'btn-inert',
+      ref: 'e1',
       action: 'click',
       timeout_ms: 0,
       until: {
@@ -338,7 +338,7 @@ describe('what an already_true verdict tells the agent about the pre-action stat
     });
 
     const res = (await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
-      ref: 'btn-inert',
+      ref: 'e1',
       action: 'click',
       timeout_ms: 0,
       until: { kind: PredicateKind.STATE, path: 'cart.count', equals: 3 },
@@ -361,7 +361,7 @@ describe('what an already_true verdict tells the agent about the pre-action stat
     });
 
     const res = (await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
-      ref: 'btn-add',
+      ref: 'e3',
       action: 'click',
       timeout_ms: 0,
       until: { kind: PredicateKind.STATE, path: 'cart.count', equals: 1 },
@@ -384,7 +384,7 @@ describe('the recorded step keeps its consequence only when the verdict proved i
   it('a no-fault (already true) verdict records the action without the expectation', async () => {
     const { deps } = createStateSession({ initialStore: { app: { cart: { count: 3 } } } });
     await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
-      ref: 'btn',
+      ref: 'e4',
       action: 'click',
       timeout_ms: 0,
       until,
@@ -400,7 +400,7 @@ describe('the recorded step keeps its consequence only when the verdict proved i
       onAct: (set) => set({ app: { cart: { count: 3 } }, cart: { count: 3 } }),
     });
     await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
-      ref: 'btn',
+      ref: 'e4',
       action: 'click',
       timeout_ms: 0,
       until,
@@ -415,7 +415,7 @@ describe('act, then assert: the assertion is kept on the step it proved', () => 
       initialStore: { app: { cart: { count: 0 } }, cart: { count: 0 } },
       onAct: (set) => set({ app: { cart: { count: 3 } }, cart: { count: 3 } }),
     });
-    await tool(ReticleTool.ACT).handler(deps, { ref: 'btn', action: 'click' });
+    await tool(ReticleTool.ACT).handler(deps, { ref: 'e4', action: 'click' });
     const check = { kind: PredicateKind.STATE, path: 'cart.count', equals: 3 };
     const res = (await tool(ReticleTool.ASSERT).handler(deps, { predicate: check })) as Record<
       string,
@@ -435,7 +435,7 @@ describe('act, then assert: the assertion is kept on the step it proved', () => 
       initialStore: { app: { cart: { count: 0 } }, cart: { count: 0 } },
       onAct: (set) => set({ app: { cart: { count: 3 } }, cart: { count: 3 } }),
     });
-    await tool(ReticleTool.ACT).handler(deps, { ref: 'btn', action: 'click' });
+    await tool(ReticleTool.ACT).handler(deps, { ref: 'e4', action: 'click' });
     // A reload through the tool, as an agent would do it. The fake page comes back at once.
     (deps.sessions as unknown as { get: () => unknown }).get = () => undefined;
     let clock = 0;
@@ -468,7 +468,7 @@ describe('a proved act is remembered as a proved control', () => {
     (yes.session as unknown as { recordProvedFrom: (p: unknown) => void }).recordProvedFrom = (p) =>
       proved.push(p);
     await tool(ReticleTool.ACT_AND_WAIT).handler(yes.deps, {
-      ref: 'b',
+      ref: 'e5',
       action: 'click',
       timeout_ms: 0,
       until,
@@ -480,7 +480,7 @@ describe('a proved act is remembered as a proved control', () => {
       p,
     ) => proved.push(p);
     await tool(ReticleTool.ACT_AND_WAIT).handler(already.deps, {
-      ref: 'b',
+      ref: 'e5',
       action: 'click',
       timeout_ms: 0,
       until,

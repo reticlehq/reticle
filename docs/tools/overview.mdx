@@ -5,7 +5,7 @@ description: The tools your agent sees every turn, the many more it can reach on
 icon: wrench
 ---
 
-Reticle's table holds 45 tools. Your agent is shown **nine**: `reticle_act`, `reticle_act_and_wait`, `reticle_assert`, `reticle_look`, `reticle_navigate`, `reticle_observe`, `reticle_session`, `reticle_tools` and `reticle_verify`. Only `reticle_act_and_wait` and `reticle_assert` produce a verdict.
+Your agent is shown **ten** tools by default: `reticle_navigate`, `reticle_look`, `reticle_act`, `reticle_act_and_wait`, `reticle_observe`, `reticle_assert`, `reticle_session`, `reticle_verify`, `reticle_tools` and `reticle_run`. Verdicts come from `reticle_act_and_wait`, `reticle_assert`, `reticle_act { steps }` when a step declares `expect`, and `reticle_verify` (`change`/`flows`). Everything else moves or reads the app and proves nothing. Only `verified: "yes"` is a pass: `unknown` means Reticle could not tell, and `no-fault` means nothing was declared to prove.
 
 Most of the rest were not removed. They were **merged**. `reticle_snapshot` is `reticle_look { action: "page" }`; `reticle_console` is `reticle_observe { action: "console" }`. One tool, one action argument, same work. Calling a retired name returns the call that replaced it, and `reticle_tools` prints the whole mapping.
 
@@ -13,45 +13,46 @@ That is not a limitation, it's the design. MCP re-sends every advertised tool de
 
 A wider surface costs tokens on every message. Less obviously, it makes the model wander: give it fifty ways to look at a page and it will try several before doing anything useful.
 
-What the verify loop does **not** advertise are the specialised tools: `reticle_screenshot`, `reticle_visual_diff`, `reticle_storage`, `reticle_network_mock`, `reticle_clock`. Each is one `reticle_run { tool, args }` hop away, and a daemon started with `RETICLE_ADVERTISE_ALL_TOOLS=1` advertises them outright.
+What the verify loop does **not** advertise are the specialised tools: `reticle_screenshot`, `reticle_visual_diff`, `reticle_storage`, `reticle_network_mock`, `reticle_clock`. Each is one `reticle_run { tool, args }` hop away.
+
+A daemon started with `RETICLE_ADVERTISE_ALL_TOOLS=1` advertises 30 tools outright, and it **switches to the unmerged spelling**: `reticle_snapshot`, `reticle_query`, `reticle_inspect` and `reticle_state` replace `reticle_look`; `reticle_network` and `reticle_console` replace `reticle_observe { action }`; `reticle_wait_for` replaces `reticle_assert { action: "wait" }`; `reticle_sessions` and `reticle_feedback` replace `reticle_session` list and feedback; `reticle_act_sequence` replaces `reticle_act { steps }`. Examples in these docs use the default spelling. The counts are asserted by `server/src/surface/tools/surface-sizes.test.ts`.
 
 <Note>
-  Measured off the real wire on 2026-09-16, by reading `tools/list` from a fresh daemon: the default
-  surface is **9 tools at 17,663 bytes**, against **30 tools at 126,954 bytes** when
-  `RETICLE_ADVERTISE_ALL_TOOLS` is set, 7.2x more and charged on every message.
-  [`bench/harness/schema-tax.mjs`](/token-efficiency) converts those bytes to tokens by putting
-  every server through one tokenizer in a single pass. Re-measure before quoting any of it; the
-  surface grows, and the figures this note replaced were a year out of date and described a surface
-  that no longer existed.
+  Measured with [`bench/harness/schema-tax.mjs`](/token-efficiency) on 2026-10-08: the default
+  surface is **10 tools, about 4,650 schema tokens**, against **30 tools, about 35,000 tokens** with
+  `RETICLE_ADVERTISE_ALL_TOOLS=1`, charged on every message. Re-measure before quoting; the surface
+  grows.
 </Note>
 
-## The default 19
-
-Grouped by the job they do in the verify loop.
+## The ten, by job
 
 <CardGroup cols={2}>
   <Card title="Look" icon="magnifying-glass">
-    `reticle_snapshot` · `reticle_query` · `reticle_inspect` · `reticle_sessions` ·
-    `reticle_capabilities`
+    `reticle_look { action: "page" | "find" | "element" | "state" }`
   </Card>
   <Card title="Act" icon="hand-pointer">
-    `reticle_act` · `reticle_act_and_wait` · `reticle_act_sequence` · `reticle_navigate`
+    `reticle_act` · `reticle_act { steps }` · `reticle_act_and_wait` · `reticle_navigate`
   </Card>
   <Card title="Observe" icon="satellite-dish">
-    `reticle_observe` · `reticle_network` · `reticle_console` · `reticle_state` · `reticle_wait_for`
+    `reticle_observe` · `{ action: "network" }` · `{ action: "console" }`
   </Card>
-  <Card title="Prove & discover" icon="circle-check">
-    `reticle_assert` · `reticle_tools` · `reticle_run`
+  <Card title="Prove" icon="circle-check">
+    `reticle_act_and_wait` · `reticle_assert` · `reticle_verify`
+  </Card>
+  <Card title="Discover" icon="compass">
+    `reticle_tools` · `reticle_run`
   </Card>
   <Card title="Session & feedback" icon="comment">
-    `reticle_session` · `reticle_feedback`
+    `reticle_session { action: "list" | "feedback" | "yield" | … }`
   </Card>
 </CardGroup>
 
 <Warning>
-  Only **`reticle_act_and_wait`** and **`reticle_assert`** produce a verdict. Everything else moves
-  or reads the app and proves nothing. A drive that ends without one of those two has no result,
-  however many tools it used and however confident the summary sounds.
+  Verdicts come from `reticle_act_and_wait`, `reticle_assert`, `reticle_act {steps}` when a step
+  declares `expect`, and `reticle_verify` (`change`/`flows`). Everything else moves or reads the app
+  and proves nothing. Only `verified: "yes"` is a pass: `unknown` means Reticle could not tell, and
+  `no-fault` means nothing was declared to prove. A drive that ends without a verdict has no result,
+  however many tools it used.
 </Warning>
 
 ## Why these and not others
@@ -66,8 +67,6 @@ It used to be reachable only through `reticle_run`, which meant an agent had to 
 
 Those repeats were not retries. The calls succeeded and got repeated, because the batching tool was invisible. A tool an agent must already know about is a tool that never gets called.
 
-Direct `reticle_network` and `reticle_console` stay advertised even though `reticle_observe` can filter for both, because two obvious tools beat one clever tool with a filter grammar.
-
 <Tip>
   Trimming further has a floor. An eight-tool cut measurably dropped real-agent accuracy, because
   the model loses scaffolding and wanders on harder flows. That reading is old enough to be dated
@@ -75,7 +74,7 @@ Direct `reticle_network` and `reticle_console` stay advertised even though `reti
   good; empty is not.
 </Tip>
 
-## Reaching the other 29
+## Reaching every other tool
 
 ```json
 { "tool": "reticle_verify", "args": { "action": "flows" } }
@@ -119,6 +118,8 @@ A tool that says "no requests found" when it actually means "I lost the ones you
 
 ## Reference
 
+These pages are named for the unmerged tools. Each one gives the default spelling (`reticle_look { action: "page" }` for `reticle_snapshot`, and so on).
+
 ### Look
 
 | Tool | Answers |
@@ -154,10 +155,10 @@ A tool that says "no requests found" when it actually means "I lost the ones you
 | --- | --- |
 | [`reticle_assert`](/tools/assert) | Did the named consequence hold? **Produces a verdict** |
 | [`reticle_tools`](/tools/tools-and-run) | What else is available, and what are its arguments? |
-| [`reticle_run`](/tools/tools-and-run) | Invoke any of the other 29 |
+| [`reticle_run`](/tools/tools-and-run) | Invoke any other registered tool by name |
 | [`reticle_session`](/tools/session-and-feedback) | Hand control back to the human |
-| [`reticle_feedback`](/tools/session-and-feedback) | Tell the maintainers Reticle got something wrong |
+| [`reticle_session { action: "feedback" }`](/tools/session-and-feedback) | Tell the maintainers Reticle got something wrong (`reticle_feedback` is its unmerged name, not advertised by default) |
 
 <Card title="The complete reference" icon="book" href="/usage">
-  Every tool, every argument, including the 29 in the cold tail.
+  Every tool, every argument, including the cold tail.
 </Card>

@@ -13,7 +13,11 @@ import { takeJsCoverage, type ScriptCoverage } from './js-coverage.js';
 import type { Browser, Page } from 'playwright';
 import { stampedDriveUrl } from './drive-url-stamp.js';
 import { launchChromium } from '@/launch-chromium.js';
-import { chromiumLaunchHint, gotoOptions } from '@/portal/pool/playwright-launcher.js';
+import {
+  chromiumLaunchHint,
+  gotoOptions,
+  SCREENSHOT_DETERMINISM,
+} from '@/portal/pool/playwright-launcher.js';
 import { BrowserLaunchKind } from '@reticlehq/core/telemetry';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import { classifyConnectFailure } from '@/telemetry/connect-failure.js';
@@ -101,6 +105,11 @@ export interface ScreenshotOpts {
   fullPage?: boolean;
   /** Restrict the capture to one element/region (viewport CSS px). */
   clip?: ElementBox;
+  /**
+   * A live picture, as a JPEG at this quality: what a person is watching, taken as it is. The
+   * baseline tweaks (hiding the HUD, stopping animations) would make their window flicker each second.
+   */
+  jpegQuality?: number;
 }
 
 /** The capability surface reticle_act depends on. A FAKE implementing this is injected in tests. */
@@ -453,26 +462,18 @@ export async function performGesture(
 }
 
 /**
- * Reticle paints its own dev overlay (presenter HUD + border glow) into the page. That chrome is
- * time-varying — the activity log and border state change with every command — so capturing it
- * makes a fresh screenshot of an unchanged page differ from its baseline. Hide it during capture
- * (Playwright applies this stylesheet only for the shot, then reverts) so visual baselines reflect
- * the app, not Reticle. Disabling animations settles any remaining transitions for determinism.
- */
-const HIDE_RETICLE_CHROME_CSS = '[data-reticle-overlay]{display:none !important}';
-const SCREENSHOT_DETERMINISM = { style: HIDE_RETICLE_CHROME_CSS, animations: 'disabled' } as const;
-
-/**
  * Capture a PNG from a Playwright page. Shared by the CDP + launched providers so the
  * screenshot path lives in one place (mirrors performGesture). Returns the raw PNG bytes.
  */
 export async function capturePage(page: Page, opts: ScreenshotOpts): Promise<Uint8Array> {
   const buf = await page.screenshot(
-    opts.clip !== undefined
-      ? { ...SCREENSHOT_DETERMINISM, clip: opts.clip }
-      : true === opts.fullPage
-        ? { ...SCREENSHOT_DETERMINISM, fullPage: true }
-        : { ...SCREENSHOT_DETERMINISM },
+    opts.jpegQuality !== undefined
+      ? { type: 'jpeg', quality: opts.jpegQuality }
+      : opts.clip !== undefined
+        ? { ...SCREENSHOT_DETERMINISM, clip: opts.clip }
+        : true === opts.fullPage
+          ? { ...SCREENSHOT_DETERMINISM, fullPage: true }
+          : { ...SCREENSHOT_DETERMINISM },
   );
   return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
 }

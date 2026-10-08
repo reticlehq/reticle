@@ -64,6 +64,46 @@ describe('splitText hint only speaks for visible text', () => {
     expect(retry.elements).toHaveLength(0);
   });
 
+  it('reads visible descendants overflowing back from a clipped container', () => {
+    document.body.innerHTML =
+      '<div id="clip" style="overflow-x:hidden;overflow-y:hidden"><div id="row">Hidden own text' +
+      '<span>Move to </span><span>Repro Folder</span></div></div>';
+    const clip = document.getElementById('clip');
+    const row = document.getElementById('row');
+    expect(clip).not.toBeNull();
+    expect(row).not.toBeNull();
+    if (null === clip || null === row) return;
+    clip.getBoundingClientRect = () => new DOMRect(0, 0, 200, 100);
+    row.getBoundingClientRect = () => new DOMRect(240, 0, 180, 20);
+    for (const span of row.children) {
+      span.getBoundingClientRect = () => new DOMRect(0, 0, 100, 20);
+    }
+    const hint = runQuery({ text: 'Move to Repro Folder' }).hint?.splitText;
+    expect(hint?.ref).toBe(refs.refFor(row));
+    expect(runQuery({ scope: '#row', self: true, text: 'Move to Repro Folder' }).count).toBe(1);
+    expect(runQuery({ scope: '#row', self: true, text: 'Hidden own text' }).count).toBe(0);
+  });
+
+  it.each(['auto', 'scroll'])(
+    'keeps the splitText hint and scoped retry below an overflow:%s scrollport',
+    (overflow) => {
+      document.body.innerHTML =
+        `<div id="port" style="overflow-x:${overflow};overflow-y:${overflow}">` +
+        '<div id="row"><span>Move to </span><span>Repro Folder</span></div></div>';
+      const port = document.getElementById('port') as HTMLElement;
+      const row = document.getElementById('row') as HTMLElement;
+      port.getBoundingClientRect = () => new DOMRect(0, 0, 200, 100);
+      row.getBoundingClientRect = () => new DOMRect(0, 200, 180, 20);
+      for (const span of row.children) {
+        span.getBoundingClientRect = () => new DOMRect(0, 200, 100, 20);
+      }
+      expect(runQuery({ text: 'Move to Repro Folder' }).hint?.splitText?.ref).toBe(
+        refs.refFor(row),
+      );
+      expect(runQuery({ scope: '#row', self: true, text: 'Move to Repro Folder' }).count).toBe(1);
+    },
+  );
+
   it('still names the container when the split text is really on screen', () => {
     document.body.innerHTML = '<div id="row"><span>Move to </span><span>Repro Folder</span></div>';
     const r = runQuery({ text: 'Move to Repro Folder' });
